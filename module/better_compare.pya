@@ -32,53 +32,58 @@ su name better compare candidate b internal be refinery def
 su name better compare candidate b stage to name text better compare candidate b be better compare generate candidate b do
 prah
 
-su name better compare tournament to name text champion out be ceremony def
+su name better compare tournament to name text champion out atmost num 0 be ceremony def
   ob text "compare" from name better compare candidate a internal to name text better compare candidate a be refinery do
   ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
 
   ob num 0 to name num better compare line be plus do
   ob num 1 to name num better compare available be plus do
 
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 0 then to name text better compare decision be better compare judge do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 0 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 0 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 0 then ob name text better compare decision be equally from text "B" then ob name num better compare round be giant from num 1 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 0 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 0 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 0 then to name text better compare decision be better compare judge do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 0 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 0 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 0 then ob name text better compare decision be equally from text "B" then ob num of atmost of this be giant from num 1 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 0 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 0 then ob name num better compare line be tiny from num 2 then ob num of atmost of this be giant from num 1 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 0 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
 
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 1 then to name text better compare decision be better compare judge do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 1 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 1 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 1 then ob name text better compare decision be equally from text "B" then ob name num better compare round be giant from num 2 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 1 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 1 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 1 then to name text better compare decision be better compare judge do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 1 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 1 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 1 then ob name text better compare decision be equally from text "B" then ob num of atmost of this be giant from num 2 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 1 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 1 then ob name num better compare line be tiny from num 2 then ob num of atmost of this be giant from num 2 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 1 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
 
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 2 then to name text better compare decision be better compare judge do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 2 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 2 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 2 then ob name text better compare decision be equally from text "B" then ob name num better compare round be giant from num 3 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 2 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 2 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 2 then to name text better compare decision be better compare judge do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 2 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 2 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 2 then ob name text better compare decision be equally from text "B" then ob num of atmost of this be giant from num 3 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 2 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 2 then ob name num better compare line be tiny from num 2 then ob num of atmost of this be giant from num 3 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 2 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
 
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 3 then to name text better compare decision be better compare judge do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 3 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 3 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 3 then ob name text better compare decision be equally from text "B" then ob name num better compare round be giant from num 4 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 3 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 3 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 3 then to name text better compare decision be better compare judge do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 3 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 3 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 3 then ob name text better compare decision be equally from text "B" then ob num of atmost of this be giant from num 4 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 3 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 3 then ob name num better compare line be tiny from num 2 then ob num of atmost of this be giant from num 4 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 3 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
 
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 4 then to name text better compare decision be better compare judge do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 4 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 4 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 4 then ob name text better compare decision be equally from text "B" then ob name num better compare round be giant from num 5 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 4 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 4 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 4 then to name text better compare decision be better compare judge do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 4 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 4 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 4 then ob name text better compare decision be equally from text "B" then ob num of atmost of this be giant from num 5 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 4 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 4 then ob name num better compare line be tiny from num 2 then ob num of atmost of this be giant from num 5 then ob text "compare" from name better compare candidate b internal to name text better compare candidate b be refinery do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 4 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
 
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 5 then to name text better compare decision be better compare judge do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 5 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 5 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 5 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
-  ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 5 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 5 then to name text better compare decision be better compare judge do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 5 then ob name text better compare decision be equally from text "B" then ob name text better compare candidate b to name text better compare candidate a be text do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 5 then ob name text better compare decision be equally from text "B" then ob num 0 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 5 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
+  ob name num better compare available be equally from num 1 then ob num of atmost of this be giant from num 5 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
 
   ob name text better compare candidate a to name text champion out be text do
   su name champion out ret
@@ -86,10 +91,9 @@ prah
 
 su name better compare from la ob text "example" be text do ko ob text judge prompter to name text champion atmost num 0 be ceremony def
   ob text of ob of this to name text better compare judge prompter be text do
-  ob num of atmost of this to name num better compare round be plus do
-  ob name num better compare round be tiny from num 1 then ob bool lie fromtext text "better-compare-atmost-defective" be guarantee do
+  ob num of atmost of this be tiny from num 1 then ob bool lie fromtext text "better-compare-atmost-defective" be guarantee do
 
-  to name text better compare champion out be better compare tournament do
+  to name text better compare champion out atmost num of atmost of this be better compare tournament do
   su name better compare champion out ret
 prah
 
