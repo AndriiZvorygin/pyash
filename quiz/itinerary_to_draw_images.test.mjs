@@ -3,22 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { parseArgs, promptFromCut } from "../command/itinerary_to_draw_images.mjs";
-
-function execFileAsync(file, args, opts = {}) {
-  return new Promise((resolve, reject) => {
-    execFile(file, args, opts, (err, stdout, stderr) => {
-      if (err) {
-        err.stdout = stdout;
-        err.stderr = stderr;
-        reject(err);
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
-}
+import { parseArgs, promptFromCut, runItineraryToDrawImages } from "../command/itinerary_to_draw_images.mjs";
 
 test("itinerary to draw images dry-run writes deterministic output plan", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-itinerary-draw-"));
@@ -34,9 +19,10 @@ test("itinerary to draw images dry-run writes deterministic output plan", async 
     "utf8"
   );
 
-  const { stdout } = await execFileAsync(
-    process.execPath,
+  let stdout = "";
+  await runItineraryToDrawImages(
     [
+      "node",
       "command/itinerary_to_draw_images.mjs",
       input,
       outDir,
@@ -46,7 +32,9 @@ test("itinerary to draw images dry-run writes deterministic output plan", async 
       "2",
       "--dry-run"
     ],
-    { cwd: "/workplace" }
+    {
+      writeOut: (text) => { stdout += text; }
+    }
   );
 
   const lines = stdout.trim().split(/\r?\n/);

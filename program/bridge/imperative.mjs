@@ -99,7 +99,20 @@ export function resolveIoGenitives(sentence, { state, memory } = {}) {
     const tail = chainArr.at(-1);
     if (!GENITIVE_TEXT_TAILS.has(tail)) continue;
     const resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
-    if (resolved === null || resolved === undefined) continue;
+    if (resolved === null || resolved === undefined) {
+      if (chainArr.length > 1) {
+        const parentResolved = resolveGenitiveLiteral({ chain: chainArr.slice(0, -1) }, { state, memory });
+        if (parentResolved && typeof parentResolved === "object") {
+          throwErrorSentence({
+            name: "typed genitive defective",
+            message: `typed genitive defective: resolved ${tail} to [object Object]`,
+            from: { name: "interpret" },
+            raw: { key, tail, resolved: parentResolved }
+          });
+        }
+      }
+      continue;
+    }
     if (String(resolved).trim() === "[object Object]") {
       throwErrorSentence({
         name: "genitive io defective",
@@ -141,6 +154,7 @@ function resolveTypedGenitives(sentence, { state, memory } = {}) {
     if (skipKeys.has(key)) continue;
     if (!value?.genitive) continue;
     if (typeof value !== "object") continue;
+    if (key === "to") continue;
     const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
     const tail = String(chainArr.at(-1) ?? "").toLowerCase();
     if (!GENITIVE_TYPE_TAILS.has(tail)) {

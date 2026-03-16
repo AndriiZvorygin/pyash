@@ -43,7 +43,7 @@ test("srt to itinerary writes series with since until and ob text", async () => 
     out,
     "--name",
     "teaching cuts"
-  ], { cwd: "/workplace" });
+  ], { cwd: path.resolve(".") });
 
   const text = await fs.readFile(out, "utf8");
   assert.match(text, /^su name teaching cuts be series def/m);

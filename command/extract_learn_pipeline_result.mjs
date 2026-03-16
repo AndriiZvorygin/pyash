@@ -8,7 +8,7 @@ function readInput() {
   return fs.readFileSync(0, "utf8");
 }
 
-function extractFinalResult(text) {
+export function extractFinalResult(text) {
   const raw = String(text ?? "");
   const fileLine = raw
     .split("\n")
@@ -30,5 +30,10 @@ function extractFinalResult(text) {
   return raw.trim();
 }
 
-const input = readInput();
-process.stdout.write(extractFinalResult(input));
+export function runExtractLearnPipelineResult(input = readInput()) {
+  return extractFinalResult(input);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  process.stdout.write(runExtractLearnPipelineResult());
+}

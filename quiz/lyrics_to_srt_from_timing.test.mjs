@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { runLyricsToSrt } from "../command/lyrics_to_srt_from_timing.mjs";
 
 function parseSrtRows(text) {
   const blocks = String(text ?? "").trim().split(/\n\s*\n/u).filter(Boolean);
@@ -58,10 +58,7 @@ test("lyrics_to_srt_from_timing keeps repeated chorus lines distributed across t
   await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
   await fs.writeFile(timingPath, `${timing}\n`, "utf8");
 
-  const run = spawnSync("node", ["command/lyrics_to_srt_from_timing.mjs", lyricsPath, timingPath, outputPath], {
-    encoding: "utf8"
-  });
-  assert.equal(run.status, 0, run.stderr || run.stdout);
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath]);
 
   const outText = await fs.readFile(outputPath, "utf8");
   const rows = parseSrtRows(outText);
@@ -102,11 +99,10 @@ test("lyrics_to_srt_from_timing fails fast on obvious lyrics mismatch", async ()
   await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
   await fs.writeFile(timingPath, `${timing}\n`, "utf8");
 
-  const run = spawnSync("node", ["command/lyrics_to_srt_from_timing.mjs", lyricsPath, timingPath, outputPath], {
-    encoding: "utf8"
-  });
-  assert.notEqual(run.status, 0);
-  assert.match(String(run.stderr || run.stdout), /lyrics mismatch/u);
+  await assert.rejects(
+    () => runLyricsToSrt([lyricsPath, timingPath, outputPath]),
+    /lyrics mismatch/u
+  );
 });
 
 test("lyrics_to_srt_from_timing avoids chorus freeze from overly wide repeated-token matches", async () => {
@@ -163,10 +159,7 @@ test("lyrics_to_srt_from_timing avoids chorus freeze from overly wide repeated-t
   await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
   await fs.writeFile(timingPath, `${timing}\n`, "utf8");
 
-  const run = spawnSync("node", ["command/lyrics_to_srt_from_timing.mjs", lyricsPath, timingPath, outputPath], {
-    encoding: "utf8"
-  });
-  assert.equal(run.status, 0, run.stderr || run.stdout);
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath]);
 
   const outText = await fs.readFile(outputPath, "utf8");
   const rows = parseSrtRows(outText);
@@ -230,10 +223,7 @@ test("lyrics_to_srt_from_timing keeps repeated dense chorus windows bounded", as
   await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
   await fs.writeFile(timingPath, `${timing}\n`, "utf8");
 
-  const run = spawnSync("node", ["command/lyrics_to_srt_from_timing.mjs", lyricsPath, timingPath, outputPath], {
-    encoding: "utf8"
-  });
-  assert.equal(run.status, 0, run.stderr || run.stdout);
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath]);
 
   const outText = await fs.readFile(outputPath, "utf8");
   const rows = parseSrtRows(outText);

@@ -96,17 +96,22 @@ async function runDraw({ prompt, output, host, workflowName, width, height, nega
 
 export { promptFromCut, outputPathForCut, runDraw, parseArgs };
 
-export async function main() {
-  const opts = parseArgs(process.argv);
-  const text = await fs.readFile(opts.input, "utf8");
+export async function runItineraryToDrawImages(argv = process.argv, {
+  readFile = fs.readFile,
+  mkdir = fs.mkdir,
+  writeOut = (text) => process.stdout.write(text),
+  draw = runDraw
+} = {}) {
+  const opts = parseArgs(argv);
+  const text = await readFile(opts.input, "utf8");
   const itinerary = parseItineraryPya(text);
   const cuts = itinerary.cuts.slice(0, Math.floor(opts.limit));
-  await fs.mkdir(opts.outputDir, { recursive: true });
+  await mkdir(opts.outputDir, { recursive: true });
   for (const cut of cuts) {
     const output = outputPathForCut(opts.outputDir, opts.prefix, cut);
     const prompt = promptFromCut(cut, opts.prompter, opts.systemPrompt);
     if (!opts.dryRun) {
-      await runDraw({
+      await draw({
         prompt,
         output,
         host: opts.host,
@@ -116,8 +121,12 @@ export async function main() {
         height: opts.height
       });
     }
-    process.stdout.write(`${cut.index}\t${output}\n`);
+    writeOut(`${cut.index}\t${output}\n`);
   }
+}
+
+export async function main() {
+  await runItineraryToDrawImages(process.argv);
 }
 
 const isDirect = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

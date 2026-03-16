@@ -221,6 +221,7 @@ export function createAgentCommand({
   resolveRootDirFromArgs,
   resolveConfiguredAgentHouse,
   pathExists,
+  ensureDir = (dir) => fs.mkdir(dir, { recursive: true }),
   codexCommand,
   projectCodexRunToPyash,
   installRoot,
@@ -266,7 +267,7 @@ export function createAgentCommand({
       textOut(`latest pyash codex session: ${latestSession || "(none)"}`);
       return 0;
     }
-    await fs.mkdir(codexHome, { recursive: true });
+    await ensureDir(codexHome);
     const startedAtMs = Date.now();
 
     const resolvedCodexArgs = await resolveResumeArgs(agentHouse, parsed.codexArgs);

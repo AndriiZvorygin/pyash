@@ -60,6 +60,7 @@ test("agent command defaults to global codex home for normal codex runs", async 
       resolveRootDirFromArgs: async () => "/workplace",
       resolveConfiguredAgentHouse: (worldRoot, agentName) => path.join(worldRoot, "house", agentName),
       pathExists: async () => true,
+      ensureDir: async () => {},
       codexCommand: async (args, options) => {
         calls.push({ args, options });
         return 0;
@@ -102,6 +103,7 @@ test("agent command uses agent codex home for --oss runs", async () => {
       resolveRootDirFromArgs: async () => "/workplace",
       resolveConfiguredAgentHouse: (worldRoot, agentName) => path.join(worldRoot, "house", agentName),
       pathExists: async () => true,
+      ensureDir: async () => {},
       codexCommand: async (args, options) => {
         calls.push({ args, options });
         return 0;
@@ -147,6 +149,7 @@ test("agent command resume uses projected session id when available", async () =
       resolveRootDirFromArgs: async () => root,
       resolveConfiguredAgentHouse: (worldRoot, agentName) => path.join(worldRoot, "house", agentName),
       pathExists: async () => true,
+      ensureDir: async () => {},
       codexCommand: async (args, options) => {
         calls.push({ args, options });
         return 0;
@@ -181,6 +184,7 @@ test("agent command resume falls back to --last when no projection exists", asyn
       resolveRootDirFromArgs: async () => root,
       resolveConfiguredAgentHouse: (worldRoot, agentName) => path.join(worldRoot, "house", agentName),
       pathExists: async () => true,
+      ensureDir: async () => {},
       codexCommand: async (args, options) => {
         calls.push({ args, options });
         return 0;
@@ -234,6 +238,7 @@ test("agent command status prints projection summary without launching codex", a
     resolveRootDirFromArgs: async () => root,
     resolveConfiguredAgentHouse: (worldRoot, agentName) => path.join(worldRoot, "house", agentName),
     pathExists: async () => true,
+    ensureDir: async () => {},
     codexCommand: async (args, options) => {
       calls.push({ args, options });
       return 0;

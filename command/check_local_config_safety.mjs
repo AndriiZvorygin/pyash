@@ -32,42 +32,50 @@ function detectViolations(text) {
   return violations;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
+export async function checkLocalConfigSafety(args = process.argv.slice(2), {
+  readFile = fs.readFile,
+  stdout = (text) => process.stdout.write(`${text}\n`),
+  stderr = (text) => process.stderr.write(`${text}\n`)
+} = {}) {
   const rootFlag = parseArgValue(args, "--root");
   const rootDir = path.resolve(rootFlag || process.cwd());
   const secretPath = path.join(rootDir, "configure", "secret.pya");
 
   let text = "";
   try {
-    text = await fs.readFile(secretPath, "utf8");
+    text = await readFile(secretPath, "utf8");
   } catch (err) {
     if (err?.code === "ENOENT") {
-      console.log(`config safety: skip (${secretPath} not found)`);
-      return;
+      stdout(`config safety: skip (${secretPath} not found)`);
+      return 0;
     }
     throw err;
   }
 
   const violations = detectViolations(text);
   if (violations.length === 0) {
-    console.log("config safety: pass");
-    return;
+    stdout("config safety: pass");
+    return 0;
   }
 
-  console.error("config safety: fail");
-  console.error("container-specific hosts found in configure/secret.pya");
+  stderr("config safety: fail");
+  stderr("container-specific hosts found in configure/secret.pya");
   for (const item of violations) {
-    console.error(`- line ${item.line}: ${item.marker} :: ${item.text}`);
+    stderr(`- line ${item.line}: ${item.marker} :: ${item.text}`);
   }
-  console.error("how to fix:");
-  console.error("1. Move container routing values from configure/secret.pya to configure/container.pya");
-  console.error("2. Keep configure/secret.pya for secrets and host-local endpoints (for example localhost)");
-  console.error("3. Re-run: npm run config:safety");
-  process.exit(1);
+  stderr("how to fix:");
+  stderr("1. Move container routing values from configure/secret.pya to configure/container.pya");
+  stderr("2. Keep configure/secret.pya for secrets and host-local endpoints (for example localhost)");
+  stderr("3. Re-run: npm run config:safety");
+  return 1;
+}
+
+async function main() {
+  const code = await checkLocalConfigSafety();
+  process.exit(code);
 }
 
 main().catch((err) => {
-  console.error(err?.stack || err?.message || String(err));
+  process.stderr.write(`${err?.stack || err?.message || String(err)}\n`);
   process.exit(1);
 });

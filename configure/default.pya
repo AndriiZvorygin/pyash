@@ -23,7 +23,6 @@ from filename "./module/read_html_markdown_plain.pya" ob name read to name read 
 from filename "./module/read_pdf_markdown.pya" ob name read to name read pdf markdown be import do
 from filename "./module/read_pdf_markdown_plain.pya" ob name read to name read pdf markdown plain be import do
 from filename "./module/see_vl.pya" ob name see to name see be import do
-from filename "./module/draw_comfyui.pya" ob name draw to name draw be import do
 from filename "./module/footnote_video.pya" ob name footnote to name footnote be import do
 from filename "./module/thumbnail_heading.pya" ob name thumbnail heading burn to name thumbnail heading burn be import do
 from filename "./module/compile_photograph_text.pya" ob name compile to name compile be import do
