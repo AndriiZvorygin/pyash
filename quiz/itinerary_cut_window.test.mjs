@@ -124,6 +124,23 @@ test("cut from text as sentence splits manuscript into sentence itinerary rows",
   assert.match(String(series[2]?.ob?.text ?? ""), /Athens changed/u);
 });
 
+test("cut from text as sentence keeps markdown-wrapped bold sentences without losing coverage", async () => {
+  const out = await cutFromTextToNameItinerary({
+    mood: "do",
+    be: "cut",
+    from: {
+      text: "**Canada has land. People are denied it.**"
+    },
+    as: { text: "sentence" },
+    to: { name: "markdown wrapped sentences", nameTypeWords: ["itinerary"] }
+  });
+
+  const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
+  assert.equal(series.length, 2);
+  assert.match(String(series[0]?.ob?.text ?? ""), /Canada has land/u);
+  assert.match(String(series[1]?.ob?.text ?? ""), /People are denied it/u);
+});
+
 test("cut from text as sentence keeps closing quote with sentence and avoids orphan quote cut", async () => {
   const out = await cutFromTextToNameItinerary({
     mood: "do",
