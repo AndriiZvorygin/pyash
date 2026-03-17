@@ -6,8 +6,11 @@ exists su name text module manuscript paragraph break ob text quoted.text.
 .text.quoted be text ya
 
 exists su name module manuscript mind be mind as name "qwen3.5:9b" fromtext text "You write clear spoken teaching manuscripts from source text." ya
+exists su name module manuscript fit mind be mind fromtext name module manuscript fit prompt ya
+exists su name module manuscript roles mind be mind fromtext name module manuscript roles prompt ya
 exists su name module manuscript hook mind be mind fromtext name module manuscript hook prompt ya
 exists su name module manuscript promise mind be mind fromtext name module manuscript promise prompt ya
+exists su name module manuscript promise fit mind be mind fromtext name module manuscript promise fit prompt ya
 exists su name module manuscript roadmap mind be mind fromtext name module manuscript roadmap prompt ya
 exists su name module manuscript segment one mind be mind fromtext name module manuscript segment one prompt ya
 exists su name module manuscript segment two mind be mind fromtext name module manuscript segment two prompt ya
@@ -29,6 +32,22 @@ Rules:
 - Prefer urgency, clarity, and curiosity over vagueness.
 - Focus on tension or truth, not setup or summary..text.quoted be text ya
 
+exists su name module manuscript fit prompt ob text quoted.text.You rewrite spoken teaching manuscript sections so they fit a strict word-count band while preserving role, meaning, and clarity.
+
+Task:
+- Rewrite the supplied draft.
+- Obey TARGET_WORDS exactly.
+- Aim for GOAL_WORDS when possible.
+- Preserve the same stage role and main claims.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Do not add unrelated new concepts.
+- Prefer tightening or compressing before expanding.
+- Obey FEEDBACK when it is present.
+- Return only the rewritten section..text.quoted be text ya
+
 exists su name module manuscript promise prompt ob text quoted.text.You are writing the promise segment for a long-form teaching manuscript.
 
 Task:
@@ -42,6 +61,40 @@ Rules:
 - Stay grounded in the source.
 - Speak like a narrator, not a list.
 - The promise should describe the outcome of all three segments together, not just the next section..text.quoted be text ya
+
+exists su name module manuscript roles prompt ob text quoted.text.You extract a three-stage teaching arc from source text.
+
+Task:
+- Write exactly 3 lines.
+- Line 1 is Segment 1 and must establish.
+- Line 2 is Segment 2 and must reveal.
+- Line 3 is Segment 3 and must expand.
+
+Requirements:
+- Segment 1: define the core idea, system, or situation; explain the basic mechanism; imply one simple concrete example.
+- Segment 2: expose the hidden layer, misunderstanding, dependency, tension, or contradiction; explain the deeper mechanism; sharpen or correct the first understanding.
+- Segment 3: show the consequence, implication, application, outcome, or larger meaning; connect the idea to lived reality, behaviour, systems, or future stakes.
+
+Rules:
+- Plain prose only.
+- One line per segment role.
+- No numbering, no labels, no markdown, no surrounding quotes.
+- Each line should be 8 to 18 words.
+- Stay grounded in the source..text.quoted be text ya
+
+exists su name module manuscript promise fit prompt ob text quoted.text.You rewrite a spoken teaching promise so it fits a strict word-count band without losing its meaning.
+
+Task:
+- Rewrite the draft promise.
+- Keep it between 18 and 24 words.
+- Preserve the same core outcome and spoken tone.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Do not add new claims.
+- Prefer tightening over expanding.
+- Return one clean sentence only..text.quoted be text ya
 
 exists su name module manuscript roadmap prompt ob text quoted.text.You are writing the roadmap segment for a long-form teaching manuscript.
 
@@ -194,7 +247,7 @@ Rules:
 - Fit naturally after the recap..text.quoted be text ya
 
 su name module manuscript hook checked to name text output be ceremony def
-  su name module manuscript hook write stage ob name text module manuscript hook request for name module manuscript hook mind to name text output be write do
+  su name module manuscript hook write stage ob name text module manuscript hook request for name module manuscript hook mind to name text output by num 0 atmost num 16 be write do
   su name module manuscript hook verify stage be verify as wo word count atleast num 6 atmost num 8 from name text output to name map module manuscript hook verify do
   ob text of pass of module manuscript hook verify to name text module manuscript hook pass be text do
   fromindex num 1 toindex num 3 be module manuscript hook retry do
@@ -203,15 +256,25 @@ su name module manuscript hook checked to name text output be ceremony def
   su name module manuscript hook return stage ob name text output be text do
 prah
 
+su name module manuscript roles checked to name text output be ceremony def
+  su name module manuscript roles write stage ob name text module manuscript roles request for name module manuscript roles mind to name text module manuscript roles raw by num 0 atmost num 120 be write do
+  su name output stage ob name text module manuscript roles raw to name text output be text do
+  su name output ret
+prah
+
 su name module manuscript hook retry fromindex num 0 toindex num 0 be ceremony def
   ob name text module manuscript hook pass be equally from text true then be depart do
-  su name module manuscript hook retry write stage ob name text module manuscript hook request for name module manuscript hook mind to name text output be write do
+  su name module manuscript hook retry request role stage ob text "ROLE:\nHook centered on tension or truth.\n\nTARGET_WORDS:\n6-8\n\nGOAL_WORDS:\n7\n\nFEEDBACK:\nShorten hard. Keep exactly one spoken line near 7 words. Keep the tension or truth sharp.\n\nDRAFT:\n" to name text module manuscript hook retry request be text do
+  su name module manuscript hook retry request draft stage ob name text output to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request source stage ob name text module manuscript source to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry write stage ob name text module manuscript hook retry request for name module manuscript fit mind to name text output by num 0 atmost num 16 be write do
   su name module manuscript hook retry verify stage be verify as wo word count atleast num 6 atmost num 8 from name text output to name map module manuscript hook retry verify do
   ob text of pass of module manuscript hook retry verify to name text module manuscript hook pass be text do
 prah
 
 su name module manuscript promise checked to name text output be ceremony def
-  su name module manuscript promise write stage ob name text module manuscript promise request for name module manuscript promise mind to name text output be write do
+  su name module manuscript promise write stage ob name text module manuscript promise request for name module manuscript promise mind to name text output by num 0 atmost num 36 be write do
   su name module manuscript promise verify stage be verify as wo word count atleast num 18 atmost num 24 from name text output to name map module manuscript promise verify do
   ob text of pass of module manuscript promise verify to name text module manuscript promise pass be text do
   fromindex num 1 toindex num 3 be module manuscript promise retry do
@@ -222,13 +285,17 @@ prah
 
 su name module manuscript promise retry fromindex num 0 toindex num 0 be ceremony def
   ob name text module manuscript promise pass be equally from text true then be depart do
-  su name module manuscript promise retry write stage ob name text module manuscript promise request for name module manuscript promise mind to name text output be write do
+  su name module manuscript promise retry request begin stage ob text "TARGET_WORDS:\n18-24\n\nGOAL_WORDS:\n21\n\nFEEDBACK:\nShorten hard. Keep one sentence near 21 words. Promise the outcome of the full teaching arc, not the next section.\n\nDRAFT:\n" to name text module manuscript promise retry request be text do
+  su name module manuscript promise retry request draft stage ob name text output to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request source stage ob name text module manuscript source to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry write stage ob name text module manuscript promise retry request for name module manuscript promise fit mind to name text output by num 0 atmost num 34 be write do
   su name module manuscript promise retry verify stage be verify as wo word count atleast num 18 atmost num 24 from name text output to name map module manuscript promise retry verify do
   ob text of pass of module manuscript promise retry verify to name text module manuscript promise pass be text do
 prah
 
 su name module manuscript roadmap checked to name text output be ceremony def
-  su name module manuscript roadmap write stage ob name text module manuscript roadmap request for name module manuscript roadmap mind to name text output be write do
+  su name module manuscript roadmap write stage ob name text module manuscript roadmap request for name module manuscript roadmap mind to name text output by num 0 atmost num 32 be write do
   su name module manuscript roadmap verify stage be verify as wo word count atleast num 16 atmost num 20 from name text output to name map module manuscript roadmap verify do
   ob text of pass of module manuscript roadmap verify to name text module manuscript roadmap pass be text do
   fromindex num 1 toindex num 3 be module manuscript roadmap retry do
@@ -239,13 +306,17 @@ prah
 
 su name module manuscript roadmap retry fromindex num 0 toindex num 0 be ceremony def
   ob name text module manuscript roadmap pass be equally from text true then be depart do
-  su name module manuscript roadmap retry write stage ob name text module manuscript roadmap request for name module manuscript roadmap mind to name text output be write do
+  su name module manuscript roadmap retry request role stage ob text "ROLE:\nRoadmap naming the three stages in order: establish, reveal, expand.\n\nTARGET_WORDS:\n16-20\n\nGOAL_WORDS:\n18\n\nFEEDBACK:\nShorten hard. Use one sentence near 18 words. Name the three stages in order with one short clause each: establish, reveal, expand. Cut examples and modifiers.\n\nDRAFT:\n" to name text module manuscript roadmap retry request be text do
+  su name module manuscript roadmap retry request draft stage ob name text output to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request source stage ob name text module manuscript source to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry write stage ob name text module manuscript roadmap retry request for name module manuscript fit mind to name text output by num 0 atmost num 28 be write do
   su name module manuscript roadmap retry verify stage be verify as wo word count atleast num 16 atmost num 20 from name text output to name map module manuscript roadmap retry verify do
   ob text of pass of module manuscript roadmap retry verify to name text module manuscript roadmap pass be text do
 prah
 
 su name module manuscript segment one checked to name text output be ceremony def
-  su name module manuscript segment one write stage ob name text module manuscript segment one request for name module manuscript segment one mind to name text output be write do
+  su name module manuscript segment one write stage ob name text module manuscript segment one request for name module manuscript segment one mind to name text output by num 0 atmost num 140 be write do
   su name module manuscript segment one verify stage be verify as wo word count atleast num 85 atmost num 100 from name text output to name map module manuscript segment one verify do
   ob text of pass of module manuscript segment one verify to name text module manuscript segment one pass be text do
   fromindex num 1 toindex num 3 be module manuscript segment one retry do
@@ -256,13 +327,17 @@ prah
 
 su name module manuscript segment one retry fromindex num 0 toindex num 0 be ceremony def
   ob name text module manuscript segment one pass be equally from text true then be depart do
-  su name module manuscript segment one retry write stage ob name text module manuscript segment one request for name module manuscript segment one mind to name text output be write do
+  su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the system. Define it clearly, explain the basic mechanism, and give a simple example.\n\nTARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n92\n\nFEEDBACK:\nKeep the establish role clear. Stay near 92 words. Define the system, explain the mechanism, and give one simple example. Do not jump to large consequences.\n\nDRAFT:\n" to name text module manuscript segment one retry request be text do
+  su name module manuscript segment one retry request draft stage ob name text output to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry request source stage ob name text module manuscript source to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry write stage ob name text module manuscript segment one retry request for name module manuscript fit mind to name text output by num 0 atmost num 132 be write do
   su name module manuscript segment one retry verify stage be verify as wo word count atleast num 85 atmost num 100 from name text output to name map module manuscript segment one retry verify do
   ob text of pass of module manuscript segment one retry verify to name text module manuscript segment one pass be text do
 prah
 
 su name module manuscript segment two checked to name text output be ceremony def
-  su name module manuscript segment two write stage ob name text module manuscript segment two request for name module manuscript segment two mind to name text output be write do
+  su name module manuscript segment two write stage ob name text module manuscript segment two request for name module manuscript segment two mind to name text output by num 0 atmost num 150 be write do
   su name module manuscript segment two verify stage be verify as wo word count atleast num 95 atmost num 115 from name text output to name map module manuscript segment two verify do
   ob text of pass of module manuscript segment two verify to name text module manuscript segment two pass be text do
   fromindex num 1 toindex num 3 be module manuscript segment two retry do
@@ -273,13 +348,17 @@ prah
 
 su name module manuscript segment two retry fromindex num 0 toindex num 0 be ceremony def
   ob name text module manuscript segment two pass be equally from text true then be depart do
-  su name module manuscript segment two retry write stage ob name text module manuscript segment two request for name module manuscript segment two mind to name text output be write do
+  su name module manuscript segment two retry request role stage ob text "ROLE:\nSegment 2 reveals the hidden layer. Expose a false or incomplete understanding, explain the deeper mechanism, and sharpen the contrast with Segment 1.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n104\n\nFEEDBACK:\nKeep the reveal role clear. Stay near 104 words. Expose the false or incomplete understanding, explain the deeper mechanism, and sharpen the contrast with Segment 1 without repeating its phrasing.\n\nDRAFT:\n" to name text module manuscript segment two retry request be text do
+  su name module manuscript segment two retry request draft stage ob name text output to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request source stage ob name text module manuscript source to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry write stage ob name text module manuscript segment two retry request for name module manuscript fit mind to name text output by num 0 atmost num 144 be write do
   su name module manuscript segment two retry verify stage be verify as wo word count atleast num 95 atmost num 115 from name text output to name map module manuscript segment two retry verify do
   ob text of pass of module manuscript segment two retry verify to name text module manuscript segment two pass be text do
 prah
 
 su name module manuscript segment three checked to name text output be ceremony def
-  su name module manuscript segment three write stage ob name text module manuscript segment three request for name module manuscript segment three mind to name text output be write do
+  su name module manuscript segment three write stage ob name text module manuscript segment three request for name module manuscript segment three mind to name text output by num 0 atmost num 150 be write do
   su name module manuscript segment three verify stage be verify as wo word count atleast num 95 atmost num 115 from name text output to name map module manuscript segment three verify do
   ob text of pass of module manuscript segment three verify to name text module manuscript segment three pass be text do
   fromindex num 1 toindex num 3 be module manuscript segment three retry do
@@ -290,13 +369,17 @@ prah
 
 su name module manuscript segment three retry fromindex num 0 toindex num 0 be ceremony def
   ob name text module manuscript segment three pass be equally from text true then be depart do
-  su name module manuscript segment three retry write stage ob name text module manuscript segment three request for name module manuscript segment three mind to name text output be write do
+  su name module manuscript segment three retry request role stage ob text "ROLE:\nSegment 3 expands to consequence. Show the outcome, scale the idea outward, and connect it to lived reality.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n104\n\nFEEDBACK:\nKeep the expand role clear. Stay near 104 words. Show the consequence, scale it outward, and connect it to lived reality without re-explaining the mechanism.\n\nDRAFT:\n" to name text module manuscript segment three retry request be text do
+  su name module manuscript segment three retry request draft stage ob name text output to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request source stage ob name text module manuscript source to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry write stage ob name text module manuscript segment three retry request for name module manuscript fit mind to name text output by num 0 atmost num 144 be write do
   su name module manuscript segment three retry verify stage be verify as wo word count atleast num 95 atmost num 115 from name text output to name map module manuscript segment three retry verify do
   ob text of pass of module manuscript segment three retry verify to name text module manuscript segment three pass be text do
 prah
 
 su name module manuscript recap checked to name text output be ceremony def
-  su name module manuscript recap write stage ob name text module manuscript recap request for name module manuscript recap mind to name text output be write do
+  su name module manuscript recap write stage ob name text module manuscript recap request for name module manuscript recap mind to name text output by num 0 atmost num 72 be write do
   su name module manuscript recap verify stage be verify as wo word count atleast num 40 atmost num 50 from name text output to name map module manuscript recap verify do
   ob text of pass of module manuscript recap verify to name text module manuscript recap pass be text do
   fromindex num 1 toindex num 3 be module manuscript recap retry do
@@ -307,13 +390,17 @@ prah
 
 su name module manuscript recap retry fromindex num 0 toindex num 0 be ceremony def
   ob name text module manuscript recap pass be equally from text true then be depart do
-  su name module manuscript recap retry write stage ob name text module manuscript recap request for name module manuscript recap mind to name text output be write do
+  su name module manuscript recap retry request role stage ob text "ROLE:\nRecap compressing Segment 1, Segment 2, and Segment 3 into one clear truth.\n\nTARGET_WORDS:\n40-50\n\nGOAL_WORDS:\n45\n\nFEEDBACK:\nCompress harder. Stay near 45 words. Keep one clear truth that unifies Segment 1, Segment 2, and Segment 3. Do not introduce new ideas.\n\nDRAFT:\n" to name text module manuscript recap retry request be text do
+  su name module manuscript recap retry request draft stage ob name text output to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request source stage ob name text module manuscript source to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry write stage ob name text module manuscript recap retry request for name module manuscript fit mind to name text output by num 0 atmost num 68 be write do
   su name module manuscript recap retry verify stage be verify as wo word count atleast num 40 atmost num 50 from name text output to name map module manuscript recap retry verify do
   ob text of pass of module manuscript recap retry verify to name text module manuscript recap pass be text do
 prah
 
 su name module manuscript cta checked to name text output be ceremony def
-  su name module manuscript cta write stage ob name text module manuscript cta request for name module manuscript cta mind to name text output be write do
+  su name module manuscript cta write stage ob name text module manuscript cta request for name module manuscript cta mind to name text output by num 0 atmost num 42 be write do
   su name module manuscript cta verify stage be verify as wo word count atleast num 20 atmost num 25 from name text output to name map module manuscript cta verify do
   ob text of pass of module manuscript cta verify to name text module manuscript cta pass be text do
   fromindex num 1 toindex num 3 be module manuscript cta retry do
@@ -324,7 +411,11 @@ prah
 
 su name module manuscript cta retry fromindex num 0 toindex num 0 be ceremony def
   ob name text module manuscript cta pass be equally from text true then be depart do
-  su name module manuscript cta retry write stage ob name text module manuscript cta request for name module manuscript cta mind to name text output be write do
+  su name module manuscript cta retry request role stage ob text "ROLE:\nCall to action extending or embodying the insight.\n\nTARGET_WORDS:\n20-25\n\nGOAL_WORDS:\n22\n\nFEEDBACK:\nKeep one practical invitation near 22 words. Make it actionable and natural after the recap.\n\nDRAFT:\n" to name text module manuscript cta retry request be text do
+  su name module manuscript cta retry request draft stage ob name text output to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request source stage ob name text module manuscript source to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry write stage ob name text module manuscript cta retry request for name module manuscript fit mind to name text output by num 0 atmost num 38 be write do
   su name module manuscript cta retry verify stage be verify as wo word count atleast num 20 atmost num 25 from name text output to name map module manuscript cta retry verify do
   ob text of pass of module manuscript cta retry verify to name text module manuscript cta pass be text do
 prah
@@ -332,52 +423,32 @@ prah
 su name module manuscript run be refinery def
   su name source stage from filename of ob of source become wo text to name text module manuscript source be read do
 
-  su name module manuscript hook request hint header stage ob text "HOOK HINT:\n" to name text module manuscript hook request be text do
-  su name module manuscript hook request hint stage ob name text hook_hint to name module manuscript hook request be plus do
-  su name module manuscript hook request source header stage ob text "\n\nSOURCE:\n" to name module manuscript hook request be plus do
-  su name module manuscript hook request source stage ob name text module manuscript source to name module manuscript hook request be plus do
-  su name module manuscript hook stage to name text module manuscript hook out be module manuscript hook checked do
+  su name module manuscript roles request hint header stage ob text "HOOK HINT:\n" to name text module manuscript roles request be text do
+  su name module manuscript roles request hint stage ob name text hook_hint to name module manuscript roles request be plus do
+  su name module manuscript roles request source header stage ob text "\n\nSOURCE:\n" to name module manuscript roles request be plus do
+  su name module manuscript roles request source stage ob name text module manuscript source to name module manuscript roles request be plus do
+  su name module manuscript roles stage to name text module manuscript roles raw out be module manuscript roles checked do
+  ob name text module manuscript roles raw out by wo newline to name vec module manuscript roles vec be distribute do
+  su name module manuscript role one stage ob name module manuscript roles vec at num 0 be read to name text module manuscript role one do
+  su name module manuscript role two stage ob name module manuscript roles vec at num 1 be read to name text module manuscript role two do
+  su name module manuscript role three stage ob name module manuscript roles vec at num 2 be read to name text module manuscript role three do
 
-  su name module manuscript promise request begin stage ob text "HOOK HINT:\n" to name text module manuscript promise request be text do
-  su name module manuscript promise request hint stage ob name text hook_hint to name module manuscript promise request be plus do
-  su name module manuscript promise request hook header stage ob text "\n\nHOOK:\n" to name module manuscript promise request be plus do
-  su name module manuscript promise request hook stage ob name text module manuscript hook out to name module manuscript promise request be plus do
-  su name module manuscript promise request source header stage ob text "\n\nSOURCE:\n" to name module manuscript promise request be plus do
-  su name module manuscript promise request source stage ob name text module manuscript source to name module manuscript promise request be plus do
-  su name module manuscript promise stage to name text module manuscript promise out be module manuscript promise checked do
-
-  su name module manuscript roadmap request begin stage ob text "HOOK HINT:\n" to name text module manuscript roadmap request be text do
-  su name module manuscript roadmap request hint stage ob name text hook_hint to name module manuscript roadmap request be plus do
-  su name module manuscript roadmap request hook header stage ob text "\n\nHOOK:\n" to name module manuscript roadmap request be plus do
-  su name module manuscript roadmap request hook stage ob name text module manuscript hook out to name module manuscript roadmap request be plus do
-  su name module manuscript roadmap request promise header stage ob text "\n\nPROMISE:\n" to name module manuscript roadmap request be plus do
-  su name module manuscript roadmap request promise stage ob name text module manuscript promise out to name module manuscript roadmap request be plus do
-  su name module manuscript roadmap request source header stage ob text "\n\nSOURCE:\n" to name module manuscript roadmap request be plus do
-  su name module manuscript roadmap request source stage ob name text module manuscript source to name module manuscript roadmap request be plus do
-  su name module manuscript roadmap stage to name text module manuscript roadmap out be module manuscript roadmap checked do
-
-  su name module manuscript segment one request begin stage ob text "HOOK HINT:\n" to name text module manuscript segment one request be text do
-  su name module manuscript segment one request hint stage ob name text hook_hint to name module manuscript segment one request be plus do
-  su name module manuscript segment one request hook header stage ob text "\n\nHOOK:\n" to name module manuscript segment one request be plus do
-  su name module manuscript segment one request hook stage ob name text module manuscript hook out to name module manuscript segment one request be plus do
-  su name module manuscript segment one request promise header stage ob text "\n\nPROMISE:\n" to name module manuscript segment one request be plus do
-  su name module manuscript segment one request promise stage ob name text module manuscript promise out to name module manuscript segment one request be plus do
-  su name module manuscript segment one request roadmap header stage ob text "\n\nROADMAP:\n" to name module manuscript segment one request be plus do
-  su name module manuscript segment one request roadmap stage ob name text module manuscript roadmap out to name module manuscript segment one request be plus do
+  su name module manuscript segment one request begin stage ob text "SEGMENT_ROLE:\n" to name text module manuscript segment one request be text do
+  su name module manuscript segment one request role stage ob name text module manuscript role one to name module manuscript segment one request be plus do
   su name module manuscript segment one request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment one request be plus do
   su name module manuscript segment one request source stage ob name text module manuscript source to name module manuscript segment one request be plus do
   su name module manuscript segment one stage to name text module manuscript segment one out be module manuscript segment one checked do
 
-  su name module manuscript segment two request begin stage ob text "HOOK HINT:\n" to name text module manuscript segment two request be text do
-  su name module manuscript segment two request hint stage ob name text hook_hint to name module manuscript segment two request be plus do
+  su name module manuscript segment two request begin stage ob text "SEGMENT_ROLE:\n" to name text module manuscript segment two request be text do
+  su name module manuscript segment two request role stage ob name text module manuscript role two to name module manuscript segment two request be plus do
   su name module manuscript segment two request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript segment two request be plus do
   su name module manuscript segment two request prior stage ob name text module manuscript segment one out to name module manuscript segment two request be plus do
   su name module manuscript segment two request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment two request be plus do
   su name module manuscript segment two request source stage ob name text module manuscript source to name module manuscript segment two request be plus do
   su name module manuscript segment two stage to name text module manuscript segment two out be module manuscript segment two checked do
 
-  su name module manuscript segment three request begin stage ob text "HOOK HINT:\n" to name text module manuscript segment three request be text do
-  su name module manuscript segment three request hint stage ob name text hook_hint to name module manuscript segment three request be plus do
+  su name module manuscript segment three request begin stage ob text "SEGMENT_ROLE:\n" to name text module manuscript segment three request be text do
+  su name module manuscript segment three request role stage ob name text module manuscript role three to name module manuscript segment three request be plus do
   su name module manuscript segment three request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript segment three request be plus do
   su name module manuscript segment three request segment one stage ob name text module manuscript segment one out to name module manuscript segment three request be plus do
   su name module manuscript segment three request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript segment three request be plus do
@@ -386,8 +457,42 @@ su name module manuscript run be refinery def
   su name module manuscript segment three request source stage ob name text module manuscript source to name module manuscript segment three request be plus do
   su name module manuscript segment three stage to name text module manuscript segment three out be module manuscript segment three checked do
 
-  su name module manuscript recap request begin stage ob text "HOOK HINT:\n" to name text module manuscript recap request be text do
-  su name module manuscript recap request hint stage ob name text hook_hint to name module manuscript recap request be plus do
+  su name module manuscript roadmap request begin stage ob text "HOOK HINT:\n" to name text module manuscript roadmap request be text do
+  su name module manuscript roadmap request hint stage ob name text hook_hint to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment one stage ob name text module manuscript segment one out to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment two stage ob name text module manuscript segment two out to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment three stage ob name text module manuscript segment three out to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request source header stage ob text "\n\nSOURCE:\n" to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request source stage ob name text module manuscript source to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap stage to name text module manuscript roadmap out be module manuscript roadmap checked do
+
+  su name module manuscript promise request begin stage ob text "HOOK HINT:\n" to name text module manuscript promise request be text do
+  su name module manuscript promise request hint stage ob name text hook_hint to name module manuscript promise request be plus do
+  su name module manuscript promise request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request segment one stage ob name text module manuscript segment one out to name module manuscript promise request be plus do
+  su name module manuscript promise request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request segment two stage ob name text module manuscript segment two out to name module manuscript promise request be plus do
+  su name module manuscript promise request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request segment three stage ob name text module manuscript segment three out to name module manuscript promise request be plus do
+  su name module manuscript promise request source header stage ob text "\n\nSOURCE:\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request source stage ob name text module manuscript source to name module manuscript promise request be plus do
+  su name module manuscript promise stage to name text module manuscript promise out be module manuscript promise checked do
+
+  su name module manuscript hook request hint header stage ob text "HOOK HINT:\n" to name text module manuscript hook request be text do
+  su name module manuscript hook request hint stage ob name text hook_hint to name module manuscript hook request be plus do
+  su name module manuscript hook request promise header stage ob text "\n\nPROMISE:\n" to name module manuscript hook request be plus do
+  su name module manuscript hook request promise stage ob name text module manuscript promise out to name module manuscript hook request be plus do
+  su name module manuscript hook request source header stage ob text "\n\nSOURCE:\n" to name module manuscript hook request be plus do
+  su name module manuscript hook request source stage ob name text module manuscript source to name module manuscript hook request be plus do
+  su name module manuscript hook stage to name text module manuscript hook out be module manuscript hook checked do
+
+  su name module manuscript recap request begin stage ob text "HOOK:\n" to name text module manuscript recap request be text do
+  su name module manuscript recap request hook stage ob name text module manuscript hook out to name module manuscript recap request be plus do
+  su name module manuscript recap request roadmap header stage ob text "\n\nROADMAP:\n" to name module manuscript recap request be plus do
+  su name module manuscript recap request roadmap stage ob name text module manuscript roadmap out to name module manuscript recap request be plus do
   su name module manuscript recap request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript recap request be plus do
   su name module manuscript recap request segment one stage ob name text module manuscript segment one out to name module manuscript recap request be plus do
   su name module manuscript recap request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript recap request be plus do
@@ -398,8 +503,8 @@ su name module manuscript run be refinery def
   su name module manuscript recap request source stage ob name text module manuscript source to name module manuscript recap request be plus do
   su name module manuscript recap stage to name text module manuscript recap out be module manuscript recap checked do
 
-  su name module manuscript cta request begin stage ob text "HOOK HINT:\n" to name text module manuscript cta request be text do
-  su name module manuscript cta request hint stage ob name text hook_hint to name module manuscript cta request be plus do
+  su name module manuscript cta request begin stage ob text "HOOK:\n" to name text module manuscript cta request be text do
+  su name module manuscript cta request hook stage ob name text module manuscript hook out to name module manuscript cta request be plus do
   su name module manuscript cta request recap header stage ob text "\n\nRECAP:\n" to name module manuscript cta request be plus do
   su name module manuscript cta request recap stage ob name text module manuscript recap out to name module manuscript cta request be plus do
   su name module manuscript cta request source header stage ob text "\n\nSOURCE:\n" to name module manuscript cta request be plus do
