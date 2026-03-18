@@ -27,10 +27,13 @@ Rules:
 - Prefer present-tense realis teaching statements over commands, promises, or hypotheticals.
 - Each section should default to declarative teaching statements, not advice commands.
 - When a practice is important, describe the practice as something we do, cultivate, or observe rather than telling the reader what to do.
+- Keep affirmative definitional material and corrective contrast in separate lanes when the source allows it.
+- Prefer SEED CONCEPT and CARDINAL TRAINING SENTENCE to say what the teaching is and how it works, not mainly what it is not.
+- Put paradoxes, corrections, negation-heavy clarifications, and common misunderstandings mainly in SURPRISES AND MISUNDERSTANDINGS rather than loading them into SEED CONCEPT.
 
 Section rules:
-- SEED CONCEPT: 1 short paragraph or 1-2 sentences.
-- CARDINAL TRAINING SENTENCE: exactly 1 sentence, clear enough for a 12 year old, and written as a declarative teaching sentence rather than a command.
+- SEED CONCEPT: 1 short paragraph or 1-2 sentences. Prefer positive declarative explanation of the core idea, system, or reality named by the source. Focus on what it is, how it works, or what kind of truth it states. Avoid making this section mainly contrastive, corrective, or misunderstanding-driven when the source provides enough affirmative material.
+- CARDINAL TRAINING SENTENCE: exactly 1 sentence, clear enough for a 12 year old, and written as a declarative teaching sentence rather than a command. Prefer a short affirmative operating truth, not a negation-heavy warning or correction, unless the source gives no stronger declarative line.
 - ORTHOGONAL FEATURES: 3-5 short lines.
 - SURPRISES AND MISUNDERSTANDINGS: 2-5 short lines naming source-supported paradoxes, corrections, surprises, or common misunderstandings clarified by the source.
 - AFFAIRS OR ACTIVITIES: 2-5 short lines describing practices in declarative communal or neutral phrasing.
@@ -67,6 +70,8 @@ Rules:
 - Do not invent claims that are not supported by the chunk cards.
 - This is a schema-preserving merge, not a generic summary.
 - Prefer communal declarative phrasing over direct instruction.
+- Keep affirmative definition concentrated in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the cards support it.
+- Move contrastive or corrective material toward SURPRISES AND MISUNDERSTANDINGS instead of letting it dominate the seed sections.
 
 Formatting rules:
 - Plain text only.
@@ -97,6 +102,8 @@ Rules:
 - Prefer communal declarative phrasing over direct instruction.
 - Prefer brief memory phrases that feel declarative and reusable.
 - Do not add new claims not already present in the draft card.
+- Strengthen affirmative declarative wording in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the draft already supports it.
+- Move corrective, paradox, or misunderstanding-heavy wording toward SURPRISES AND MISUNDERSTANDINGS when the draft mixes those lanes together.
 
 Formatting rules:
 - Plain text only.
