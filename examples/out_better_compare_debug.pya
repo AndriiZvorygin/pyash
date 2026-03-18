@@ -1,0 +1,11 @@
+exists su name provider auto discharge ob bool lie ya
+exists su name mind be mind as name "qwen3-vl:8b-instruct" ya
+from filename "../module/better_compare.pya" ob name better compare to name better compare be import do
+exists su name text judge prompter ob text quoted.text.pick better.text.quoted be text ya
+su name source draft ob text source to name text manuscript out be ceremony def
+  su name manuscript out ob text "draft x" be text do
+  su name manuscript out ret
+prah
+exists su name source text ob text "task" be default ya
+su name final stage from la ob text of ob of source text to name text scratch be source draft do ko ob text of ob of judge prompter to name text final atmost num 2 be better compare do
+su name final ob name text final be write do
