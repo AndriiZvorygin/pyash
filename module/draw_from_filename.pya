@@ -1,0 +1,88 @@
+exists su name draw prompt system ob text quoted.text.You are an image prompt director.
+Read SOURCE_TEXT and write one concise generation prompt for a still image.
+
+Rules:
+- One single line only.
+- 12 to 40 words.
+- Describe visible subjects, setting, lighting, and composition.
+- Include exactly one quoted overlay phrase of 1 to 3 words (for example: "Final Warning").
+- No camera metadata, no model names, no workflow names.
+- No markdown, no bullets, no labels, no surrounding quotes.
+- Keep overlay text brief and highly readable like a thumbnail.
+- Keep it concrete and faithful to SOURCE_TEXT.
+.text.quoted be text ya
+
+su name draw from filename source be ceremony def
+  ob filename of from of this to name filename source filename be filename do
+  ob text of ob of source filename to name text source path be text do
+
+  ob text "basename \"" to name text stem cmd be text do
+  ob name source path to name stem cmd be plus do
+  ob text "\" | sed 's/\\.[^.]*$//' | sed 's/[^[:alnum:]_-]/_/g' | tr -s '_' | sed 's/^_//;s/_$//' | cut -c1-96 | tr -d '\\n'" to name stem cmd be plus do
+  su name stem safe stage ob name text stem cmd be command do
+
+  ob text "artifacts/" to name text artifacts dir path be text do
+  ob name run id to name artifacts dir path be plus do
+  ob text "know/produce" to name text produce dir path be text do
+
+  ob name artifacts dir path to name text artifacts image path be plus do
+  ob text "/" to name artifacts image path be plus do
+  ob name stem safe stage to name artifacts image path be plus do
+  ob text ".png" to name artifacts image path be plus do
+  su name artifacts image filename stage ob name text artifacts image path to name filename artifacts image filename be filename do
+
+  ob name produce dir path to name text produce image path be plus do
+  ob text "/" to name produce image path be plus do
+  ob name stem safe stage to name produce image path be plus do
+  ob text ".png" to name produce image path be plus do
+  su name produce image filename stage ob name text produce image path to name filename produce image filename be filename do
+
+  ob text "mkdir -p \"" to name text artifacts mkdir cmd be text do
+  ob name artifacts dir path to name artifacts mkdir cmd be plus do
+  ob text "\"" to name artifacts mkdir cmd be plus do
+  su name artifacts mkdir stage ob name text artifacts mkdir cmd be command do
+
+  ob text "mkdir -p \"" to name text produce mkdir cmd be text do
+  ob name produce dir path to name produce mkdir cmd be plus do
+  ob text "\"" to name produce mkdir cmd be plus do
+  su name produce mkdir stage ob name text produce mkdir cmd be command do
+
+  ob text "cat -- \"" to name text source read cmd be text do
+  ob name source path to name source read cmd be plus do
+  ob text "\"" to name source read cmd be plus do
+  su name source read stage ob text of source read cmd to name text source text be command do
+
+  su name prompt request stage ob text "SOURCE_TEXT:\n" to name text draw prompt request be text do
+  ob name text source text to name draw prompt request be plus do
+  ob name text draw prompt request fromtext name draw prompt system for name mind to name text draw prompt by num 0 atmost num 140 be write do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name draw prompt to name text draw prompt be command do
+  be discharge as wo mind do
+
+  ob name draw workflow default to name text workflow be text do
+  ob name draw host to name text host be text do
+  ob text "node command/draw_comfyui_runner.mjs --prompt-stdin" to name text draw cmd be text do
+  ob text " --workflow-name \"" to name draw cmd be plus do
+  ob name workflow to name draw cmd be plus do
+  ob text "\"" to name draw cmd be plus do
+  ob text " --host \"" to name draw cmd be plus do
+  ob name host to name draw cmd be plus do
+  ob text "\"" to name draw cmd be plus do
+  ob text " --output \"" to name draw cmd be plus do
+  ob name artifacts image path to name draw cmd be plus do
+  ob text "\"" to name draw cmd be plus do
+  su name draw stage ob text of draw cmd fromtext name draw prompt be command do
+
+  ob text "cp \"" to name text copy cmd be text do
+  ob name artifacts image path to name copy cmd be plus do
+  ob text "\" \"" to name copy cmd be plus do
+  ob name produce image path to name copy cmd be plus do
+  ob text "\"" to name copy cmd be plus do
+  su name produce copy stage ob name text copy cmd be command do
+
+  be discharge as wo draw do
+
+  su name result stage ob filename of ob of artifacts image filename stage be filename do
+  su name result stage ret
+prah
+
+exists su name draw be export ya

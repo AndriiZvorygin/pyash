@@ -25,6 +25,7 @@ from filename "./module/read_pdf_markdown_plain.pya" ob name read to name read p
 from filename "./module/see_vl.pya" ob name see to name see be import do
 from filename "./module/footnote_video.pya" ob name footnote to name footnote be import do
 from filename "./module/thumbnail_heading.pya" ob name thumbnail heading burn to name thumbnail heading burn be import do
+from filename "./module/draw_from_filename.pya" ob name draw to name draw be import do
 from filename "./module/compile_photograph_text.pya" ob name compile to name compile be import do
 from filename "./module/brief_video.pya" ob name brief video to name brief video be import do
 from filename "./module/brief_video.pya" ob name teaching video to name teaching video be import do
