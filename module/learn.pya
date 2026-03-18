@@ -184,7 +184,8 @@ su name learn extract card from text source with text learning focus to name tex
   ob text "\n\nSOURCE TEXT:\n" to name learning request be plus do
   ob name text learn source text to name learning request be plus do
 
-  su name teaching stage ob name text learning request fromtext name learning distillation prompt for name mind to name text teaching out be write do
+  su name teaching raw stage ob name text learning request fromtext name learning distillation prompt for name mind to name text teaching raw by num 0 atmost num 260 be write do
+  ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   su name learning source support verify stage from text of ob of learn source text with text of ob of teaching out to name text learning source support pass be learning source support do
   ob text of ob of learning source support pass be equally from text "FAIL" then
   ob bool lie fromtext text "learning source support defective" be guarantee do
@@ -202,7 +203,8 @@ su name learn merge cards from text cards with text learning focus to name text 
   ob text "\n\nCHUNK CARDS:\n" to name learning merge request be plus do
   ob name text learn cards text to name learning merge request be plus do
 
-  su name teaching stage ob name text learning merge request fromtext name learning merge prompt for name mind to name text teaching out be write do
+  su name teaching raw stage ob name text learning merge request fromtext name learning merge prompt for name mind to name text teaching raw by num 0 atmost num 280 be write do
+  ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   su name teaching out ret
 prah
 
@@ -217,7 +219,8 @@ su name learn refine card from text card with text learning focus to name text t
   ob text "\n\nDRAFT CARD:\n" to name learning refine request be plus do
   ob name text learn card text to name learning refine request be plus do
 
-  su name teaching stage ob name text learning refine request fromtext name learning refine prompt for name mind to name text teaching out be write do
+  su name teaching raw stage ob name text learning refine request fromtext name learning refine prompt for name mind to name text teaching raw by num 0 atmost num 280 be write do
+  ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   su name teaching out ret
 prah
 
