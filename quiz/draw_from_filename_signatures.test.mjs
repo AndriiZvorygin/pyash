@@ -20,6 +20,8 @@ test("draw from filename module registers auto-output signature", async () => {
 
 test("draw from filename module writes artifacts and know produce outputs", async () => {
   const text = await fs.readFile("module/draw_from_filename.pya", "utf8");
+  assert.match(text, /Include exactly one quoted overlay phrase of 1 to 3 words/);
+  assert.match(text, /Keep overlay text brief and highly readable like a thumbnail/);
   assert.match(text, /ob text "artifacts\/" to name text artifacts dir path be text do/);
   assert.match(text, /ob name run id to name artifacts dir path be plus do/);
   assert.match(text, /ob text "know\/produce" to name text produce dir path be text do/);
@@ -29,4 +31,9 @@ test("draw from filename module writes artifacts and know produce outputs", asyn
   assert.match(text, /ob name draw workflow default to name text workflow be text do/);
   assert.match(text, /ob name draw host to name text host be text do/);
   assert.match(text, /su name produce copy stage ob name text copy cmd be command do/);
+  assert.match(
+    text,
+    /normalize_escaped_newlines\.mjs[\s\S]*?be discharge as wo mind do[\s\S]*?draw_comfyui_runner\.mjs/
+  );
+  assert.match(text, /su name produce copy stage ob name text copy cmd be command do[\s\S]*?be discharge as wo draw do/);
 });
