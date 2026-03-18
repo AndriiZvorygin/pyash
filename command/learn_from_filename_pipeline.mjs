@@ -97,8 +97,11 @@ export function parseLearningPipelineRequest(text) {
   }
   const sourceFilename = (lines.slice(sourceIdx + 1, focusIdx).find((line) => line.trim().length > 0) ?? "").trim();
   const focusBlock = lines.slice(focusIdx + 1).join("\n").trim();
-  if (!sourceFilename || !focusBlock) {
-    throw new Error("learn filename pipeline defective: malformed request");
+  if (!sourceFilename) {
+    throw new Error("learn filename pipeline defective: missing source filename");
+  }
+  if (!focusBlock) {
+    throw new Error("learn filename pipeline defective: missing learning focus");
   }
   return {
     sourceFilename,
@@ -251,6 +254,12 @@ export async function runLearnFilenamePipeline({
   runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel }),
   runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel })
 }) {
+  if (!String(sourceFilename ?? "").trim()) {
+    throw new Error("learn filename pipeline defective: missing source filename");
+  }
+  if (!String(learningFocus ?? "").trim()) {
+    throw new Error("learn filename pipeline defective: missing learning focus");
+  }
   const takeFixtureResponses = createMindFixtureAllocator(process.env.PYA_MIND_RESPONSE);
   const sourceText = await readFileFn(sourceFilename);
   const artifactRoot = resolvePipelineArtifactRoot();

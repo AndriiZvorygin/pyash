@@ -21,6 +21,7 @@ test("learn module exports text and filename learning ceremonies", async () => {
   assert.match(text, /exists su name learning refine prompt ob text quoted\.text\./u);
   assert.match(text, /Strengthen affirmative declarative wording in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the draft already supports it\./u);
   assert.match(text, /su name learn extract card from text source with text learning focus to name text teaching out be ceremony def/u);
+  assert.match(text, /learning focus defective: give a non-empty learning focus/u);
   assert.match(text, /su name learn merge cards from text cards with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /su name learn refine card from text card with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /node command\/learn_from_filename_pipeline\.mjs/u);

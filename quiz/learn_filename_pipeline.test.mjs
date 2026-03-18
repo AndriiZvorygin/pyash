@@ -10,6 +10,13 @@ test("parseLearningPipelineRequest reads labeled stdin payload", () => {
   });
 });
 
+test("parseLearningPipelineRequest rejects empty learning focus clearly", () => {
+  assert.throws(
+    () => parseLearningPipelineRequest("SOURCE_FILENAME:\nknow/input/source.txt\n\nLEARNING_FOCUS:\n"),
+    /learn filename pipeline defective: missing learning focus/u
+  );
+});
+
 test("splitIntoOverlappingChunks keeps small text in one chunk", () => {
   const chunks = splitIntoOverlappingChunks("short text");
   assert.deepEqual(chunks, ["short text"]);
@@ -71,6 +78,17 @@ test("runLearnFilenamePipeline uses direct path for small sources", async () => 
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
   }
+});
+
+test("runLearnFilenamePipeline rejects empty learning focus clearly", async () => {
+  await assert.rejects(
+    () => runLearnFilenamePipeline({
+      sourceFilename: "small.txt",
+      learningFocus: "",
+      readFileFn: async () => "short source"
+    }),
+    /learn filename pipeline defective: missing learning focus/u
+  );
 });
 
 test("runLearnFilenamePipeline uses chunk extract then merge-refine for large sources", async () => {
