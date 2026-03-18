@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { extractFinalResult } from "./extract_learn_pipeline_result.mjs";
 
-export const DEFAULT_CHUNK_SIZE = 16 * 1024;
+export const DEFAULT_CHUNK_SIZE = 8 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
 const PARAGRAPH_BOUNDARY = /\n\s*\n/gmu;
 const CHILD_OLLAMA_TIMEOUT_MS = "600000";

@@ -1,10 +1,10 @@
 su name mind ob text payload be ceremony def
-  exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs" be text ya
   ob text of ob of this to name text payload text local be text do
   ob text of cmd fromtext name payload text local be command do
 prah
 su name mind ob text payload vyah stream be ceremony def
-  exists su name cmd ob text "node command/mind_ollama_runner.mjs --stream" be text ya
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs --stream" be text ya
   ob text of ob of this to name text payload text local be text do
   su name run ob text of cmd fromtext name payload text local vyah stream be command do
   su name run ret
@@ -17,7 +17,7 @@ su name begin ob text model be ceremony def
   ob text ",\"host\":\"" to name payload be plus do
   ob name host to name payload be plus do
   ob text "\"}" to name payload be plus do
-  exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs" be text ya
   ob text of cmd fromtext text of payload be command do
   ob text "ollama mind begun" ret
 prah
@@ -29,7 +29,7 @@ su name begin ob text model to name text target be ceremony def
   ob text ",\"host\":\"" to name payload be plus do
   ob name host to name payload be plus do
   ob text "\"}" to name payload be plus do
-  exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs" be text ya
   ob text of cmd fromtext text of payload be command do
   ob text "ollama mind begun" ret
 prah
@@ -41,7 +41,7 @@ su name discharge ob text model be ceremony def
   ob text ",\"host\":\"" to name payload be plus do
   ob name host to name payload be plus do
   ob text "\"}" to name payload be plus do
-  exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs" be text ya
   ob text of cmd fromtext text of payload be command do
   ob text "ollama mind discharged" ret
 prah
@@ -53,7 +53,7 @@ su name discharge ob text model to name text target be ceremony def
   ob text ",\"host\":\"" to name payload be plus do
   ob name host to name payload be plus do
   ob text "\"}" to name payload be plus do
-  exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs" be text ya
   ob text of cmd fromtext text of payload be command do
   ob text "ollama mind discharged" ret
 prah
