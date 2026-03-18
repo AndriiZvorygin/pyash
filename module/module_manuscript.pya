@@ -1,0 +1,1251 @@
+exists su name run result ob bool truth be default ya
+exists su name text module manuscript paragraph break ob text quoted.text.
+
+.text.quoted be text ya
+
+exists su name module manuscript mind be mind as name "qwen3.5:9b" fromtext text "You write clear spoken teaching manuscripts from source text." ya
+exists su name module manuscript fit mind be mind fromtext name module manuscript fit prompt ya
+exists su name module manuscript roles mind be mind fromtext name module manuscript roles prompt ya
+exists su name module manuscript hook mind be mind fromtext name module manuscript hook prompt ya
+exists su name module manuscript hook fit mind be mind fromtext name module manuscript hook fit prompt ya
+exists su name module manuscript promise mind be mind fromtext name module manuscript promise prompt ya
+exists su name module manuscript promise fit mind be mind fromtext name module manuscript promise fit prompt ya
+exists su name module manuscript roadmap mind be mind fromtext name module manuscript roadmap prompt ya
+exists su name module manuscript roadmap fit mind be mind fromtext name module manuscript roadmap fit prompt ya
+exists su name module manuscript segment one mind be mind fromtext name module manuscript segment one prompt ya
+exists su name module manuscript segment two mind be mind fromtext name module manuscript segment two prompt ya
+exists su name module manuscript segment three mind be mind fromtext name module manuscript segment three prompt ya
+exists su name module manuscript recap mind be mind fromtext name module manuscript recap prompt ya
+exists su name module manuscript cta mind be mind fromtext name module manuscript cta prompt ya
+exists su name module manuscript platform verify mind be mind fromtext name module manuscript platform verify prompt ya
+exists su name module manuscript source thrust verify mind be mind fromtext name module manuscript source thrust verify prompt ya
+exists su name module manuscript source thrust verdict mind be mind fromtext name module manuscript source thrust verdict prompt ya
+exists su name module manuscript role verify mind be mind fromtext name module manuscript role verify prompt ya
+exists su name module manuscript role verdict mind be mind fromtext name module manuscript role verdict prompt ya
+exists su name module manuscript distinct verify mind be mind fromtext name module manuscript distinct verify prompt ya
+exists su name module manuscript distinct verdict mind be mind fromtext name module manuscript distinct verdict prompt ya
+
+exists su name module manuscript hook prompt ob text quoted.text.You are writing the hook for a long-form teaching manuscript.
+
+Task:
+- Write exactly one short spoken line.
+- This is the 0 to 3 second hook.
+- Keep it between 6 and 8 words.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Match the source topic.
+- Prefer urgency, clarity, and curiosity over vagueness.
+- Focus on tension or truth, not setup or summary..text.quoted be text ya
+
+exists su name module manuscript hook fit prompt ob text quoted.text.You rewrite a spoken hook so it fits a strict short-word band.
+
+Task:
+- Rewrite the draft hook.
+- Keep it between 6 and 8 words.
+- Aim for 7 words.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Return exactly one short spoken line.
+- Preserve the same core tension or truth.
+- Cut extra clauses before changing the meaning.
+- Do not turn it into setup or summary..text.quoted be text ya
+
+exists su name module manuscript fit prompt ob text quoted.text.You rewrite spoken teaching manuscript sections so they fit a strict word-count band while preserving role, meaning, and clarity.
+
+Task:
+- Rewrite the supplied draft.
+- Obey TARGET_WORDS exactly.
+- Aim for GOAL_WORDS when possible.
+- Preserve the same stage role and main claims.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Do not add unrelated new concepts.
+- Prefer tightening or compressing before expanding.
+- Obey FEEDBACK when it is present.
+- Return only the rewritten section..text.quoted be text ya
+
+exists su name module manuscript promise prompt ob text quoted.text.You are writing the promise segment for a long-form teaching manuscript.
+
+Task:
+- Write the 3 to 12 second promise.
+- Keep it between 18 and 24 words.
+- Make a clear promise about what the listener will understand, see, or be able to notice by the end of the full teaching arc.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Stay grounded in the source.
+- Speak like a narrator, not a list.
+- The promise should describe the outcome of all three segments together, not just the next section.
+- It should imply the full arc: what humility really is, what hidden correction it reveals, and why that matters in lived experience.
+- Prefer one sentence with three short movements that mirror the manuscript arc.
+- Do not focus on only one metaphor or only one section's payoff..text.quoted be text ya
+
+exists su name module manuscript promise fit prompt ob text quoted.text.You rewrite a spoken teaching promise so it fits a strict word-count band without losing its meaning.
+
+Task:
+- Rewrite the draft promise.
+- Keep it between 18 and 24 words.
+- Preserve the same core outcome and spoken tone.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Do not add new claims.
+- Prefer tightening over expanding.
+- Return one clean sentence only..text.quoted be text ya
+
+exists su name module manuscript roles prompt ob text quoted.text.You extract a three-stage teaching arc from source text.
+
+Task:
+- Write exactly 3 lines.
+- Line 1 is Segment 1 and must establish.
+- Line 2 is Segment 2 and must reveal.
+- Line 3 is Segment 3 and must expand.
+
+Requirements:
+- Segment 1: define the core idea, system, or situation; explain the basic mechanism; imply one simple concrete example.
+- Segment 2: expose the hidden layer, misunderstanding, dependency, tension, or contradiction; explain the deeper mechanism; sharpen or correct the first understanding.
+- Segment 3: show the consequence, implication, application, outcome, or larger meaning; connect the idea to lived reality, behaviour, systems, or future stakes.
+
+Rules:
+- Plain prose only.
+- One line per segment role.
+- No numbering, no labels, no markdown, no surrounding quotes.
+- Each line should be 8 to 18 words.
+- Stay grounded in the source..text.quoted be text ya
+
+exists su name module manuscript roadmap prompt ob text quoted.text.You are writing the roadmap segment for a long-form teaching manuscript.
+
+Task:
+- Write the 12 to 20 second roadmap.
+- Keep it between 16 and 20 words.
+- Tell the listener what the manuscript will cover in sequence.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Keep the roadmap concrete and easy to follow.
+- Do not repeat the hook or promise wording.
+- The roadmap must mirror the three segment roles in order: establish, reveal, expand..text.quoted be text ya
+
+exists su name module manuscript roadmap fit prompt ob text quoted.text.You rewrite a spoken roadmap so it fits a strict short-word band.
+
+Task:
+- Rewrite the roadmap.
+- Keep it between 16 and 20 words.
+- Aim for 18 words.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Keep the three-stage order clear.
+- Use one sentence.
+- Preserve the actual establish, reveal, expand progression.
+- Cut repetition before changing meaning..text.quoted be text ya
+
+exists su name module manuscript segment one prompt ob text quoted.text.You are writing Segment 1 of a long-form teaching manuscript.
+
+Task:
+- Write the 20 to 60 second segment.
+- Keep it between 85 and 100 words.
+- This segment establishes the system.
+- Its job is to give the listener a stable mental model.
+
+Rules:
+- The hook already defines the topic, so do not re-introduce the topic from scratch.
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Use complete sentences.
+- Ground the segment in the source text.
+
+Internal structure:
+- Light orientation.
+- Clear claim.
+- Basic mechanism.
+- Simple concrete example.
+- Small immediate implication.
+
+Must cover:
+- define the system clearly
+- explain the basic mechanism
+- give a simple example
+
+What it should feel like:
+- Okay, I understand what this is.
+
+What to avoid:
+- deep complexity
+- big conclusions
+- abstract language
+- hidden contradictions
+- jumping to large consequences..text.quoted be text ya
+
+exists su name module manuscript segment two prompt ob text quoted.text.You are writing Segment 2 of a long-form teaching manuscript.
+
+Task:
+- Write the 60 to 105 second segment.
+- Keep it between 95 and 115 words.
+- This segment reveals the hidden layer.
+- Its job is to expose a common misunderstanding about the topic and reveal the deeper mechanism in the source.
+
+Rules:
+- The hook already defines the topic, so do not re-introduce the topic from scratch.
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Use complete sentences.
+- Ground the segment in the source text.
+- Add new substance rather than repeating Segment 1.
+- Treat Segment 1 as already known background.
+- Do not reuse Segment 1's main framing, examples, or payoff sentences.
+- Spend most of the segment on the hidden correction, overlooked dependency, or subtle contradiction.
+- Correct a misunderstanding about the topic itself, not about Segment 1.
+- Reveal a deeper mechanism from the source that Segment 1 has not already covered.
+- Prefer only source-explicit hidden tensions and mechanisms.
+- Stay very close to source wording for the hidden-layer claim instead of inventing cleaner abstractions.
+- Prefer source-grounded tensions such as subtle spiritual pride, fallible guides, blocked energy, fear, opacity, or the channel not being the source, only when the source states them clearly.
+- Avoid generalized framings like "many assume", "people think", or "we often believe" unless the source explicitly supports that social framing.
+- Do not introduce new moral framings like failure, virtue, or self-esteem unless the source states them.
+
+Internal structure:
+- Minimal orientation.
+- Strong claim.
+- Deeper mechanism.
+- More specific example.
+- Stronger implication.
+
+Must cover:
+- expose a common false or incomplete understanding about the topic
+- explain the deeper or hidden mechanism from the source
+- add understanding that Segment 1 did not already cover
+
+What it should feel like:
+- Wait, I did not realize that.
+
+What to avoid:
+- repeating segment 1
+- surface-level explanation
+- repeating Segment 1 phrasing
+- re-establishing the basic model from segment 1
+- reusing segment 1's example as the main example
+- acting like Segment 1 itself is what needs correction
+- unsupported social generalizations
+- unsupported abstractions that are cleaner than the source..text.quoted be text ya
+
+exists su name module manuscript segment three prompt ob text quoted.text.You are writing Segment 3 of a long-form teaching manuscript.
+
+Task:
+- Write the 105 to 150 second segment.
+- Keep it between 95 and 115 words.
+- This segment expands into the consequence layer.
+- Its job is to show the clear consequences, real-world effects, and larger significance of the topic.
+
+Rules:
+- The hook already defines the topic, so do not re-introduce the topic from scratch.
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Use complete sentences.
+- Ground the segment in the source text.
+- Complete the main teaching arc with clear progression.
+- Assume Segment 1 and Segment 2 are already done.
+- Do not spend the segment re-explaining the basic model or the hidden correction.
+- Spend the words on consequence, propagation, lived effects, behavior, systems, or future stakes.
+
+Internal structure:
+- Very fast setup.
+- Clear consequence.
+- System-level mechanism.
+- Broader real-world scenario.
+- Strong implication.
+
+Must cover:
+- show the consequence or outcome
+- scale the idea outward
+- connect it to lived reality
+- make clear why the listener should care outside the explanation itself
+
+What it should feel like:
+- Oh, this actually matters.
+
+What to avoid:
+- re-explaining mechanics
+- staying small-scale
+- introducing new unrelated concepts
+- spending multiple sentences on setup before the consequence lands..text.quoted be text ya
+
+exists su name module manuscript recap prompt ob text quoted.text.You are writing the recap for a long-form teaching manuscript.
+
+Task:
+- Write the 150 to 170 second recap.
+- Keep it between 40 and 50 words.
+- Summarize the core lesson in a compact way by compressing Segment 1, Segment 2, and Segment 3 into one clear truth.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Do not introduce new major ideas.
+- Make the recap feel earned and clarifying..text.quoted be text ya
+
+exists su name module manuscript cta prompt ob text quoted.text.You are writing the call to action for a long-form teaching manuscript.
+
+Task:
+- Write the 170 to 180 second CTA.
+- Keep it between 20 and 25 words.
+- End with a clear, practical invitation or response that extends or embodies the insight.
+
+Rules:
+- Plain prose only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+- Keep it actionable, human, and concise.
+- Fit naturally after the recap..text.quoted be text ya
+
+exists su name module manuscript platform verify prompt ob text quoted.text.You verify whether a spoken teaching section fits its assigned task.
+
+Rules:
+- Be practical and not overly strict.
+- Prefer PASS when the candidate plausibly fulfills the task.
+- Fail on clear task mismatch, clear instruction break, or clear count break.
+- Use the TASK and CANDIDATE exactly as provided.
+- If TASK includes `TARGET_WORDS: X-Y`, count words and fail when the candidate is outside that inclusive range.
+- If TASK includes `PRIOR SEGMENT:`, fail when the candidate mostly repeats the prior segment wording or same core point.
+
+Output:
+- First output one short reasoning paragraph.
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name module manuscript source thrust verify prompt ob text quoted.text.Verify whether the CANDIDATE stays faithful to the SOURCE while fulfilling the stated INTENT.
+
+SOURCE-THRUST VERIFICATION RUBRIC
+
+Goal:
+- Determine whether the candidate stays grounded in the source text.
+
+Pass when:
+- the candidate's core claims are supported by the source
+- compression or spoken paraphrase stays within the same teaching meaning
+- examples or implications are plausible outgrowths of the source rather than new unrelated content
+
+Fail when:
+- the candidate introduces a new core claim, mechanism, contradiction, or conclusion not supported by the source
+- the candidate shifts the source into a materially different teaching
+- the candidate adds unrelated concepts that are not grounded in the source
+
+Tie-break:
+- If the wording is more spoken but the meaning stays faithful, choose PASS.
+- If support is plausible and the drift is minor, choose PASS.
+- Fail only on clear meaning drift or unsupported additions.
+
+Output:
+- First output one short paragraph.
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name module manuscript source thrust verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the candidate drifts from the source or adds unsupported content.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name module manuscript role verify prompt ob text quoted.text.Verify whether the CANDIDATE fulfills the ROLE_INTENT and TASK.
+
+Pass when:
+- the candidate clearly performs the assigned cognitive job
+- the section emphasis matches the role
+- the candidate follows the intended progression and avoids the main failure modes
+
+Fail when:
+- the candidate mainly performs a different role
+- the candidate misses one of the core required moves
+- the candidate mostly repeats prior material when progression is required
+- the candidate violates an explicit must-not in the role intent
+
+Output:
+- First output one short paragraph.
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name module manuscript role verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the candidate misses its role, repeats prior material, or breaks a stated task.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name module manuscript distinct verify prompt ob text quoted.text.Verify whether CANDIDATE meaningfully advances beyond PRIOR while staying in the same teaching arc.
+
+Pass when:
+- the candidate adds new understanding
+- the candidate has a clearly different function or consequence than the prior section
+
+Fail when:
+- the candidate mostly restates the prior section
+- the candidate repeats the same mechanism or example without meaningful advancement
+
+Output:
+- First output one short paragraph.
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name module manuscript distinct verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the candidate mostly repeats the prior section.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name module manuscript roles intent ob text quoted.text.Extract exactly three stage-role lines from the source. Line 1 must establish the core idea and mechanism. Line 2 must reveal the hidden layer or correction. Line 3 must expand into consequence or application. The lines must stay faithful to the source and name real teaching moves rather than vague themes..text.quoted be text ya
+exists su name module manuscript segment one intent ob text quoted.text.Establish the system. Define the core idea clearly, explain the basic mechanism, and give a simple concrete example. Do not introduce hidden contradictions or jump to large consequences..text.quoted be text ya
+exists su name module manuscript segment two intent ob text quoted.text.Reveal the hidden layer. Correct a source-supported misunderstanding or incomplete understanding about the topic, explain the deeper mechanism from the source, and add understanding that segment one did not already cover. Use only hidden tensions that are explicit or very near-explicit in the source. Do not act like segment one itself is what needs correction, do not mostly repeat segment one, and do not lean on unsupported social generalizations..text.quoted be text ya
+exists su name module manuscript segment three intent ob text quoted.text.Expand the teaching outward. Assume segment one and segment two are already done, then show consequence, implication, application, or larger meaning. Connect the idea to lived reality, behavior, systems, or future stakes. Do not mainly re-explain the mechanism or the hidden correction..text.quoted be text ya
+exists su name module manuscript roadmap intent ob text quoted.text.Name the three understanding stages in order so the roadmap mirrors the actual manuscript progression: establish, reveal, expand..text.quoted be text ya
+exists su name module manuscript promise intent ob text quoted.text.Promise the outcome of the full three-stage teaching arc, not just the setup. Stay faithful to what the actual manuscript will deliver..text.quoted be text ya
+exists su name module manuscript hook intent ob text quoted.text.Open with immediate tension or truth that fits the promise and source. Create curiosity or value without drifting from the teaching..text.quoted be text ya
+exists su name module manuscript recap intent ob text quoted.text.Compress segment one, segment two, and segment three into one portable truth. Do not introduce new ideas..text.quoted be text ya
+exists su name module manuscript cta intent ob text quoted.text.End with a practical invitation that extends or embodies the insight from the full manuscript. Keep it actionable and natural..text.quoted be text ya
+exists su name module manuscript segment two distinct intent ob text quoted.text.Segment two must advance beyond segment one by focusing on the hidden correction, deeper mechanism, or overlooked dependency. It should not restate the basic model, reuse the same example as the main example, or repeat the same payoff..text.quoted be text ya
+exists su name module manuscript segment three distinct intent ob text quoted.text.Segment three must advance beyond segments one and two by focusing on clear consequence, application, real-world effect, or larger significance. It should not mainly restate the hidden correction or re-explain the same mechanism..text.quoted be text ya
+
+exists su name module manuscript source thrust request template ob text quoted.text.SOURCE:
+[[source]]
+
+INTENT:
+[[intent]]
+
+CANDIDATE:
+[[candidate]].text.quoted be text ya
+
+exists su name module manuscript role request template ob text quoted.text.TASK:
+[[task]]
+
+ROLE_INTENT:
+[[intent]]
+
+SOURCE:
+[[source]]
+
+PRIOR:
+[[prior]]
+
+CANDIDATE:
+[[candidate]].text.quoted be text ya
+
+exists su name module manuscript distinct request template ob text quoted.text.PRIOR:
+[[prior]]
+
+ROLE_INTENT:
+[[intent]]
+
+CANDIDATE:
+[[candidate]].text.quoted be text ya
+
+exists su name module manuscript replacement source ob text "" be text ya
+exists su name module manuscript replacement intent ob text "" be text ya
+exists su name module manuscript replacement candidate ob text "" be text ya
+exists su name module manuscript replacement task ob text "" be text ya
+exists su name module manuscript replacement prior ob text "" be text ya
+exists su name module manuscript current intent ob text "" be text ya
+exists su name module manuscript current task ob text "" be text ya
+exists su name module manuscript current prior ob text "" be text ya
+
+su name module manuscript request replacements be map def
+  su text "[[source]]" ob name text module manuscript replacement source ya
+  su text "[[intent]]" ob name text module manuscript replacement intent ya
+  su text "[[candidate]]" ob name text module manuscript replacement candidate ya
+  su text "[[task]]" ob name text module manuscript replacement task ya
+  su text "[[prior]]" ob name text module manuscript replacement prior ya
+prah
+
+su name module manuscript roles checks be series def
+  su name word_min ob num 12 ya
+  su name word_max ob num 54 ya
+prah
+
+su name module manuscript hook checks be series def
+  su name word_min ob num 6 ya
+  su name word_max ob num 8 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name module manuscript promise checks be series def
+  su name word_min ob num 18 ya
+  su name word_max ob num 24 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name module manuscript roadmap checks be series def
+  su name word_min ob num 16 ya
+  su name word_max ob num 20 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name module manuscript segment one checks be series def
+  su name word_min ob num 85 ya
+  su name word_max ob num 100 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name module manuscript segment two checks be series def
+  su name word_min ob num 95 ya
+  su name word_max ob num 115 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name module manuscript segment three checks be series def
+  su name word_min ob num 95 ya
+  su name word_max ob num 115 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name module manuscript recap checks be series def
+  su name word_min ob num 40 ya
+  su name word_max ob num 50 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name module manuscript cta checks be series def
+  su name word_min ob num 20 ya
+  su name word_max ob num 25 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name module manuscript stage pass ob text packet to name text verdict be ceremony def
+  ob text PASS to name text verdict be text do
+prah
+
+su name module manuscript section verify accordingto name checks series for name platform mind from text request to name text output be ceremony def
+  su name module manuscript section verify run platform ob text of from of this for name of for of this among name module manuscript stage pass accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 8 to name text output be verify platform do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name output to name text output be command do
+  su name output ret
+prah
+
+su name module manuscript source thrust checked to name text pass be ceremony def
+  su name module manuscript source thrust write stage ob name text module manuscript source thrust request for name module manuscript source thrust verify mind to name text module manuscript source thrust review by num 0 atmost num 280 be write do
+  ob text "false" to name text module manuscript source thrust pass be text do
+  ob text "false" to name text module manuscript source thrust verdict known be text do
+  ob name text module manuscript source thrust review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text module manuscript source thrust verdict known be text do
+  ob text "true" to name text module manuscript source thrust pass be text do
+  ob name text module manuscript source thrust review from text "/\\bFAIL\\s*$/i" be resemble then
+  ob text "true" to name text module manuscript source thrust verdict known be text do
+  ob text "false" to name text module manuscript source thrust pass be text do
+  ob name text module manuscript source thrust verdict known be equally from text false then
+  su name module manuscript source thrust verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text module manuscript source thrust verdict request be text do
+  ob name text module manuscript source thrust review to name text module manuscript source thrust verdict request be plus do
+  ob name text module manuscript source thrust verdict request for name module manuscript source thrust verdict mind to name text module manuscript source thrust verdict raw by num 0 atmost num 8 be write do
+  ob name text module manuscript source thrust verdict raw atmost num 1 to name text module manuscript source thrust verdict line be line tail do
+  ob name text module manuscript source thrust verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
+  ob text "true" to name text module manuscript source thrust verdict known be text do
+  ob name text module manuscript source thrust verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text module manuscript source thrust pass be text do
+  ob name text module manuscript source thrust verdict known be equally from text false then
+  su name module manuscript source thrust verdict guarantee stage ob bool lie fromtext text "module manuscript source thrust verdict defective" be guarantee do
+  su name module manuscript source thrust pass ret
+prah
+
+su name module manuscript source thrust from text source with text candidate to name text pass be ceremony def
+  ob text of from of this to name text module manuscript replacement source be text do
+  ob text of with of this to name text module manuscript replacement candidate be text do
+  ob name text module manuscript current intent to name text module manuscript replacement intent be text do
+  su name module manuscript source thrust request stage ob name map module manuscript request replacements in name text module manuscript source thrust request template to name text module manuscript source thrust request be instead do
+  su name pass stage to name text pass be module manuscript source thrust checked do
+  su name pass ret
+prah
+
+su name module manuscript role checked to name text pass be ceremony def
+  su name module manuscript role write stage ob name text module manuscript role request for name module manuscript role verify mind to name text module manuscript role review by num 0 atmost num 280 be write do
+  ob text "false" to name text module manuscript role pass be text do
+  ob text "false" to name text module manuscript role verdict known be text do
+  ob name text module manuscript role review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text module manuscript role verdict known be text do
+  ob text "true" to name text module manuscript role pass be text do
+  ob name text module manuscript role review from text "/\\bFAIL\\s*$/i" be resemble then
+  ob text "true" to name text module manuscript role verdict known be text do
+  ob text "false" to name text module manuscript role pass be text do
+  ob name text module manuscript role verdict known be equally from text false then
+  su name module manuscript role verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text module manuscript role verdict request be text do
+  ob name text module manuscript role review to name text module manuscript role verdict request be plus do
+  ob name text module manuscript role verdict request for name module manuscript role verdict mind to name text module manuscript role verdict raw by num 0 atmost num 8 be write do
+  ob name text module manuscript role verdict raw atmost num 1 to name text module manuscript role verdict line be line tail do
+  ob name text module manuscript role verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
+  ob text "true" to name text module manuscript role verdict known be text do
+  ob name text module manuscript role verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text module manuscript role pass be text do
+  ob name text module manuscript role verdict known be equally from text false then
+  su name module manuscript role verdict guarantee stage ob bool lie fromtext text "module manuscript role verdict defective" be guarantee do
+  su name module manuscript role pass ret
+prah
+
+su name module manuscript role pass from text source with text candidate to name text pass be ceremony def
+  ob text of from of this to name text module manuscript replacement source be text do
+  ob name text module manuscript current task to name text module manuscript replacement task be text do
+  ob text of with of this to name text module manuscript replacement candidate be text do
+  ob name text module manuscript current intent to name text module manuscript replacement intent be text do
+  ob name text module manuscript current prior to name text module manuscript replacement prior be text do
+  su name module manuscript role request stage ob name map module manuscript request replacements in name text module manuscript role request template to name text module manuscript role request be instead do
+  su name pass stage to name text pass be module manuscript role checked do
+  su name pass ret
+prah
+
+su name module manuscript distinct checked to name text pass be ceremony def
+  su name module manuscript distinct write stage ob name text module manuscript distinct request for name module manuscript distinct verify mind to name text module manuscript distinct review by num 0 atmost num 220 be write do
+  ob text "false" to name text module manuscript distinct pass be text do
+  ob text "false" to name text module manuscript distinct verdict known be text do
+  ob name text module manuscript distinct review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text module manuscript distinct verdict known be text do
+  ob text "true" to name text module manuscript distinct pass be text do
+  ob name text module manuscript distinct review from text "/\\bFAIL\\s*$/i" be resemble then
+  ob text "true" to name text module manuscript distinct verdict known be text do
+  ob text "false" to name text module manuscript distinct pass be text do
+  ob name text module manuscript distinct verdict known be equally from text false then
+  su name module manuscript distinct verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text module manuscript distinct verdict request be text do
+  ob name text module manuscript distinct review to name text module manuscript distinct verdict request be plus do
+  ob name text module manuscript distinct verdict request for name module manuscript distinct verdict mind to name text module manuscript distinct verdict raw by num 0 atmost num 8 be write do
+  ob name text module manuscript distinct verdict raw atmost num 1 to name text module manuscript distinct verdict line be line tail do
+  ob name text module manuscript distinct verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
+  ob text "true" to name text module manuscript distinct verdict known be text do
+  ob name text module manuscript distinct verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text module manuscript distinct pass be text do
+  ob name text module manuscript distinct verdict known be equally from text false then
+  su name module manuscript distinct verdict guarantee stage ob bool lie fromtext text "module manuscript distinct verdict defective" be guarantee do
+  su name module manuscript distinct pass ret
+prah
+
+su name module manuscript distinct pass from text candidate with text prior to name text pass be ceremony def
+  ob text of from of this to name text module manuscript replacement candidate be text do
+  ob text of with of this to name text module manuscript replacement prior be text do
+  ob name text module manuscript current intent to name text module manuscript replacement intent be text do
+  su name module manuscript distinct request stage ob name map module manuscript request replacements in name text module manuscript distinct request template to name text module manuscript distinct request be instead do
+  su name pass stage to name text pass be module manuscript distinct checked do
+  su name pass ret
+prah
+
+su name module manuscript roles checked to name text output be ceremony def
+  su name module manuscript roles platform stage accordingto name module manuscript roles checks for name module manuscript roles mind from text of ob of module manuscript roles request to name text output be module manuscript section verify do
+  ob name text module manuscript roles intent to name text module manuscript current intent be text do
+  ob name text module manuscript roles request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript roles source thrust stage from text of ob of module manuscript source with text of ob of output to name text module manuscript roles source thrust pass be module manuscript source thrust do
+  ob text "true" to name text module manuscript roles role pass be text do
+  fromindex num 1 toindex num 3 be module manuscript roles retry do
+  ob name text module manuscript roles source thrust pass be equally from text false then
+  su name module manuscript roles source guarantee stage ob bool lie fromtext text "module manuscript roles source thrust defective" be guarantee do
+  su name output ret
+prah
+
+su name module manuscript roles retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript roles source thrust pass be equally from text true then
+  ob name text module manuscript roles role pass be equally from text true then be depart do
+  su name module manuscript roles retry request begin stage ob text "TARGET_WORDS:\n24-54\n\nFEEDBACK:\nReturn exactly three short lines. Line 1 must establish. Line 2 must reveal. Line 3 must expand. Keep each line grounded in the source and name a real understanding step.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript roles retry request be text do
+  su name module manuscript roles retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript roles retry request be plus do
+  su name module manuscript roles retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript roles retry request be plus do
+  su name module manuscript roles retry request role stage ob name text module manuscript role review to name module manuscript roles retry request be plus do
+  su name module manuscript roles retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript roles retry request be plus do
+  su name module manuscript roles retry request source stage ob name text module manuscript source to name module manuscript roles retry request be plus do
+  su name module manuscript roles retry draft stage ob name text module manuscript roles retry request for name module manuscript fit mind to name text output by num 0 atmost num 80 be write do
+  su name module manuscript roles retry platform stage accordingto name module manuscript roles checks for name module manuscript roles mind from text of ob of module manuscript roles retry request to name text output be module manuscript section verify do
+  ob name text module manuscript roles intent to name text module manuscript current intent be text do
+  ob name text module manuscript roles retry request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript roles source thrust retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript roles source thrust pass be module manuscript source thrust do
+  ob text "true" to name text module manuscript roles role pass be text do
+prah
+
+su name module manuscript hook checked to name text output be ceremony def
+  su name module manuscript hook platform stage accordingto name module manuscript hook checks for name module manuscript hook mind from text of ob of module manuscript hook request to name text output be module manuscript section verify do
+  ob name text module manuscript hook intent to name text module manuscript current intent be text do
+  ob name text module manuscript hook request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript hook source thrust stage from text of ob of module manuscript hook request with text of ob of output to name text module manuscript hook source thrust pass be module manuscript source thrust do
+  su name module manuscript hook role stage from text of ob of module manuscript source with text of ob of output to name text module manuscript hook role pass be module manuscript role pass do
+  ob name text module manuscript hook source thrust pass be equally from text true then
+  ob name text module manuscript hook role pass be equally from text true then
+  ob text "true" to name text module manuscript hook pass be text do
+  fromindex num 1 toindex num 5 be module manuscript hook retry do
+  ob name text module manuscript hook source thrust pass be equally from text false then
+  su name module manuscript hook source guarantee stage ob bool lie fromtext text "module manuscript hook source thrust defective" be guarantee do
+  ob name text module manuscript hook role pass be equally from text false then
+  su name module manuscript hook role guarantee stage ob bool lie fromtext text "module manuscript hook role defective" be guarantee do
+  su name module manuscript hook return stage ob name text output be text do
+prah
+
+su name module manuscript hook retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript hook source thrust pass be equally from text true then
+  ob name text module manuscript hook role pass be equally from text true then
+  ob text "true" to name text module manuscript hook pass be text do
+  ob name text module manuscript hook pass be equally from text true then be depart do
+  su name module manuscript hook retry request role stage ob text "ROLE:\nHook centered on tension or truth.\n\nTARGET_WORDS:\n6-8\n\nGOAL_WORDS:\n7\n\nFEEDBACK:\nWrite exactly one spoken line of 7 words. Lead with tension or truth. No setup, no explanation, no extra clause.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript hook retry request be text do
+  su name module manuscript hook retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request role review stage ob name text module manuscript role review to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request hint header stage ob text "\n\nHOOK HINT:\n" to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request hint stage ob name text hook_hint to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request promise header stage ob text "\n\nPROMISE:\n" to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request promise stage ob name text module manuscript promise out to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry request draft stage ob name text output to name module manuscript hook retry request be plus do
+  su name module manuscript hook retry draft stage ob name text module manuscript hook retry request for name module manuscript hook fit mind to name text output by num 0 atmost num 10 be write do
+  su name module manuscript hook retry platform stage accordingto name module manuscript hook checks for name module manuscript hook fit mind from text of ob of module manuscript hook retry request to name text output be module manuscript section verify do
+  ob name text module manuscript hook intent to name text module manuscript current intent be text do
+  ob name text module manuscript hook retry request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript hook source thrust retry stage from text of ob of module manuscript hook retry request with text of ob of output to name text module manuscript hook source thrust pass be module manuscript source thrust do
+  su name module manuscript hook role retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript hook role pass be module manuscript role pass do
+  ob name text module manuscript hook source thrust pass be equally from text true then
+  ob name text module manuscript hook role pass be equally from text true then
+  ob text "true" to name text module manuscript hook pass be text do
+prah
+
+su name module manuscript promise checked to name text output be ceremony def
+  su name module manuscript promise platform stage accordingto name module manuscript promise checks for name module manuscript promise mind from text of ob of module manuscript promise request to name text output be module manuscript section verify do
+  ob name text module manuscript promise intent to name text module manuscript current intent be text do
+  ob name text module manuscript promise request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript promise source thrust stage from text of ob of module manuscript promise request with text of ob of output to name text module manuscript promise source thrust pass be module manuscript source thrust do
+  su name module manuscript promise role stage from text of ob of module manuscript source with text of ob of output to name text module manuscript promise role pass be module manuscript role pass do
+  ob name text module manuscript promise source thrust pass be equally from text true then
+  ob name text module manuscript promise role pass be equally from text true then
+  ob text "true" to name text module manuscript promise pass be text do
+  fromindex num 1 toindex num 5 be module manuscript promise retry do
+  ob name text module manuscript promise source thrust pass be equally from text false then
+  su name module manuscript promise source guarantee stage ob bool lie fromtext text "module manuscript promise source thrust defective" be guarantee do
+  ob name text module manuscript promise role pass be equally from text false then
+  su name module manuscript promise role guarantee stage ob bool lie fromtext text "module manuscript promise role defective" be guarantee do
+  su name module manuscript promise return stage ob name text output be text do
+prah
+
+su name module manuscript promise retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript promise source thrust pass be equally from text true then
+  ob name text module manuscript promise role pass be equally from text true then
+  ob text "true" to name text module manuscript promise pass be text do
+  ob name text module manuscript promise pass be equally from text true then be depart do
+  su name module manuscript promise retry request begin stage ob text "TARGET_WORDS:\n18-24\n\nGOAL_WORDS:\n21\n\nFEEDBACK:\nWrite one sentence near 21 words. Promise the outcome of the full teaching arc, not the next section. Keep it spoken and concrete. Use three short movements in one sentence: first what humility truly is, second what hidden correction it reveals, third what consequence follows in lived experience. Do not focus on only one metaphor or one section's payoff.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript promise retry request be text do
+  su name module manuscript promise retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request role review stage ob name text module manuscript role review to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request segment one stage ob name text module manuscript segment one out to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request segment two stage ob name text module manuscript segment two out to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request segment three stage ob name text module manuscript segment three out to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry request draft stage ob name text output to name module manuscript promise retry request be plus do
+  su name module manuscript promise retry draft stage ob name text module manuscript promise retry request for name module manuscript promise fit mind to name text output by num 0 atmost num 28 be write do
+  su name module manuscript promise retry platform stage accordingto name module manuscript promise checks for name module manuscript promise fit mind from text of ob of module manuscript promise retry request to name text output be module manuscript section verify do
+  ob name text module manuscript promise intent to name text module manuscript current intent be text do
+  ob name text module manuscript promise retry request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript promise source thrust retry stage from text of ob of module manuscript promise retry request with text of ob of output to name text module manuscript promise source thrust pass be module manuscript source thrust do
+  su name module manuscript promise role retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript promise role pass be module manuscript role pass do
+  ob name text module manuscript promise source thrust pass be equally from text true then
+  ob name text module manuscript promise role pass be equally from text true then
+  ob text "true" to name text module manuscript promise pass be text do
+prah
+
+su name module manuscript roadmap checked to name text output be ceremony def
+  su name module manuscript roadmap platform stage accordingto name module manuscript roadmap checks for name module manuscript roadmap mind from text of ob of module manuscript roadmap request to name text output be module manuscript section verify do
+  ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
+  ob name text module manuscript roadmap request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript roadmap source thrust stage from text of ob of module manuscript roadmap request with text of ob of output to name text module manuscript roadmap source thrust pass be module manuscript source thrust do
+  su name module manuscript roadmap role stage from text of ob of module manuscript source with text of ob of output to name text module manuscript roadmap role pass be module manuscript role pass do
+  ob name text module manuscript roadmap source thrust pass be equally from text true then
+  ob name text module manuscript roadmap role pass be equally from text true then
+  ob text "true" to name text module manuscript roadmap pass be text do
+  fromindex num 1 toindex num 5 be module manuscript roadmap retry do
+  ob name text module manuscript roadmap source thrust pass be equally from text false then
+  su name module manuscript roadmap source guarantee stage ob bool lie fromtext text "module manuscript roadmap source thrust defective" be guarantee do
+  ob name text module manuscript roadmap role pass be equally from text false then
+  su name module manuscript roadmap role guarantee stage ob bool lie fromtext text "module manuscript roadmap role defective" be guarantee do
+  su name module manuscript roadmap return stage ob name text output be text do
+prah
+
+su name module manuscript roadmap retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript roadmap source thrust pass be equally from text true then
+  ob name text module manuscript roadmap role pass be equally from text true then
+  ob text "true" to name text module manuscript roadmap pass be text do
+  ob name text module manuscript roadmap pass be equally from text true then be depart do
+  su name module manuscript roadmap retry request role stage ob text "ROLE:\nRoadmap naming the three stages in order: establish, reveal, expand.\n\nTARGET_WORDS:\n16-20\n\nGOAL_WORDS:\n18\n\nFEEDBACK:\nWrite exactly one sentence of 18 words. Use three short clauses in order: first establish, then reveal, finally expand. No examples or payoff language.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript roadmap retry request be text do
+  su name module manuscript roadmap retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request role review stage ob name text module manuscript role review to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request role one header stage ob text "\n\nSEGMENT 1 ROLE:\n" to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request role one stage ob name text module manuscript role one to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request role two header stage ob text "\n\nSEGMENT 2 ROLE:\n" to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request role two stage ob name text module manuscript role two to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request role three header stage ob text "\n\nSEGMENT 3 ROLE:\n" to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request role three stage ob name text module manuscript role three to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry request draft stage ob name text output to name module manuscript roadmap retry request be plus do
+  su name module manuscript roadmap retry draft stage ob name text module manuscript roadmap retry request for name module manuscript roadmap fit mind to name text output by num 0 atmost num 20 be write do
+  su name module manuscript roadmap retry platform stage accordingto name module manuscript roadmap checks for name module manuscript roadmap fit mind from text of ob of module manuscript roadmap retry request to name text output be module manuscript section verify do
+  ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
+  ob name text module manuscript roadmap retry request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript roadmap source thrust retry stage from text of ob of module manuscript roadmap retry request with text of ob of output to name text module manuscript roadmap source thrust pass be module manuscript source thrust do
+  su name module manuscript roadmap role retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript roadmap role pass be module manuscript role pass do
+  ob name text module manuscript roadmap source thrust pass be equally from text true then
+  ob name text module manuscript roadmap role pass be equally from text true then
+  ob text "true" to name text module manuscript roadmap pass be text do
+prah
+
+su name module manuscript segment one checked to name text output be ceremony def
+  su name module manuscript segment one platform stage accordingto name module manuscript segment one checks for name module manuscript segment one mind from text of ob of module manuscript segment one request to name text output be module manuscript section verify do
+  ob name text module manuscript segment one intent to name text module manuscript current intent be text do
+  ob name text module manuscript segment one request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript segment one source thrust stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment one source thrust pass be module manuscript source thrust do
+  su name module manuscript segment one role stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment one role pass be module manuscript role pass do
+  ob name text module manuscript segment one source thrust pass be equally from text true then
+  ob name text module manuscript segment one role pass be equally from text true then
+  ob text "true" to name text module manuscript segment one pass be text do
+  fromindex num 1 toindex num 5 be module manuscript segment one retry do
+  ob name text module manuscript segment one source thrust pass be equally from text false then
+  su name module manuscript segment one source guarantee stage ob bool lie fromtext text "module manuscript segment one source thrust defective" be guarantee do
+  ob name text module manuscript segment one role pass be equally from text false then
+  su name module manuscript segment one role guarantee stage ob bool lie fromtext text "module manuscript segment one role defective" be guarantee do
+  su name module manuscript segment one return stage ob name text output be text do
+prah
+
+su name module manuscript segment one retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript segment one source thrust pass be equally from text true then
+  ob name text module manuscript segment one role pass be equally from text true then
+  ob text "true" to name text module manuscript segment one pass be text do
+  ob name text module manuscript segment one pass be equally from text true then be depart do
+  su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the system. Define it clearly, explain the basic mechanism, and give a simple example.\n\nTARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n92\n\nFEEDBACK:\nKeep the establish role clear. Keep this rewrite between 88 and 96 words. Use 4 or 5 complete sentences: one orientation sentence, two mechanism sentences, one simple example sentence, and one small implication. Do not introduce hidden contradictions or jump to large consequences.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment one retry request be text do
+  su name module manuscript segment one retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry request role review stage ob name text module manuscript role review to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry request draft stage ob name text output to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry request source stage ob name text module manuscript source to name module manuscript segment one retry request be plus do
+  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript fit mind to name text output by num 0 atmost num 220 be write do
+  su name module manuscript segment one retry platform stage accordingto name module manuscript segment one checks for name module manuscript fit mind from text of ob of module manuscript segment one retry request to name text output be module manuscript section verify do
+  ob name text module manuscript segment one intent to name text module manuscript current intent be text do
+  ob name text module manuscript segment one retry request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript segment one source thrust retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment one source thrust pass be module manuscript source thrust do
+  su name module manuscript segment one role retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment one role pass be module manuscript role pass do
+  ob name text module manuscript segment one source thrust pass be equally from text true then
+  ob name text module manuscript segment one role pass be equally from text true then
+  ob text "true" to name text module manuscript segment one pass be text do
+prah
+
+su name module manuscript segment two checked to name text output be ceremony def
+  su name module manuscript segment two platform stage accordingto name module manuscript segment two checks for name module manuscript segment two mind from text of ob of module manuscript segment two request to name text output be module manuscript section verify do
+  ob name text module manuscript segment two intent to name text module manuscript current intent be text do
+  ob name text module manuscript segment two request to name text module manuscript current task be text do
+  ob name text module manuscript segment one out to name text module manuscript current prior be text do
+  su name module manuscript segment two source thrust stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment two source thrust pass be module manuscript source thrust do
+  su name module manuscript segment two role stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment two role pass be module manuscript role pass do
+  ob name text module manuscript segment two distinct intent to name text module manuscript current intent be text do
+  su name module manuscript segment two distinct stage from text of ob of output with text of ob of module manuscript segment one out to name text module manuscript segment two distinct pass be module manuscript distinct pass do
+  ob name text module manuscript segment two source thrust pass be equally from text true then
+  ob name text module manuscript segment two role pass be equally from text true then
+  ob name text module manuscript segment two distinct pass be equally from text true then
+  ob text "true" to name text module manuscript segment two pass be text do
+  fromindex num 1 toindex num 5 be module manuscript segment two retry do
+  ob name text module manuscript segment two source thrust pass be equally from text false then
+  su name module manuscript segment two source guarantee stage ob bool lie fromtext text "module manuscript segment two source thrust defective" be guarantee do
+  ob name text module manuscript segment two role pass be equally from text false then
+  su name module manuscript segment two role guarantee stage ob bool lie fromtext text "module manuscript segment two role defective" be guarantee do
+  ob name text module manuscript segment two distinct pass be equally from text false then
+  su name module manuscript segment two distinct guarantee stage ob bool lie fromtext text "module manuscript segment two distinct defective" be guarantee do
+  su name module manuscript segment two return stage ob name text output be text do
+prah
+
+su name module manuscript segment two retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript segment two source thrust pass be equally from text true then
+  ob name text module manuscript segment two role pass be equally from text true then
+  ob name text module manuscript segment two distinct pass be equally from text true then
+  ob text "true" to name text module manuscript segment two pass be text do
+  ob name text module manuscript segment two pass be equally from text true then be depart do
+  su name module manuscript segment two retry request role stage ob text "ROLE:\nSegment 2 reveals the hidden layer. Correct a source-supported misunderstanding about the topic, explain the deeper mechanism from the source, and add understanding Segment 1 did not already cover.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n102\n\nFEEDBACK:\nKeep the reveal role clear. Keep this rewrite between 100 and 106 words. Use exactly 5 complete sentences. Sentence 1 corrects a source-supported misunderstanding or incomplete understanding about the topic. Sentence 2 explains the hidden mechanism. Sentence 3 gives one concrete source-grounded example. Sentence 4 sharpens the insight without treating Segment 1 itself as the error. Sentence 5 lands the implication. Treat Segment 1 as already established background. Do not restate its basic model, reuse its main example, or repeat its payoff. Spend the words on the hidden correction itself. Use only hidden tensions that are explicit or very near-explicit in the source. Stay close to source wording for the hidden-layer claim. Prefer specific source tensions like subtle spiritual pride, blocked energy, fallible guides, opacity, or the channel not being the source only when the source clearly supports them. Avoid generalized framings like many assume, people think, or we often believe unless the source explicitly supports that framing. Do not introduce fresh abstractions like moral virtue, failure, or self-esteem unless the source states them.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment two retry request be text do
+  su name module manuscript segment two retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request role review stage ob name text module manuscript role review to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request distinct header stage ob text "\n\nDISTINCTNESS_FEEDBACK:\n" to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request distinct stage ob name text module manuscript distinct review to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request draft stage ob name text output to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry request source stage ob name text module manuscript source to name module manuscript segment two retry request be plus do
+  su name module manuscript segment two retry draft stage ob name text module manuscript segment two retry request for name module manuscript fit mind to name text output by num 0 atmost num 220 be write do
+  su name module manuscript segment two retry platform stage accordingto name module manuscript segment two checks for name module manuscript fit mind from text of ob of module manuscript segment two retry request to name text output be module manuscript section verify do
+  ob name text module manuscript segment two intent to name text module manuscript current intent be text do
+  ob name text module manuscript segment two retry request to name text module manuscript current task be text do
+  ob name text module manuscript segment one out to name text module manuscript current prior be text do
+  su name module manuscript segment two source thrust retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment two source thrust pass be module manuscript source thrust do
+  su name module manuscript segment two role retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment two role pass be module manuscript role pass do
+  ob name text module manuscript segment two distinct intent to name text module manuscript current intent be text do
+  su name module manuscript segment two distinct retry stage from text of ob of output with text of ob of module manuscript segment one out to name text module manuscript segment two distinct pass be module manuscript distinct pass do
+  ob name text module manuscript segment two source thrust pass be equally from text true then
+  ob name text module manuscript segment two role pass be equally from text true then
+  ob name text module manuscript segment two distinct pass be equally from text true then
+  ob text "true" to name text module manuscript segment two pass be text do
+prah
+
+su name module manuscript segment three checked to name text output be ceremony def
+  su name module manuscript segment three platform stage accordingto name module manuscript segment three checks for name module manuscript segment three mind from text of ob of module manuscript segment three request to name text output be module manuscript section verify do
+  ob name text module manuscript segment three intent to name text module manuscript current intent be text do
+  ob name text module manuscript segment three request to name text module manuscript current task be text do
+  ob name text module manuscript segment two out to name text module manuscript current prior be text do
+  su name module manuscript segment three source thrust stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment three source thrust pass be module manuscript source thrust do
+  su name module manuscript segment three role stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment three role pass be module manuscript role pass do
+  ob name text module manuscript segment three distinct intent to name text module manuscript current intent be text do
+  su name module manuscript segment three distinct stage from text of ob of output with text of ob of module manuscript segment two out to name text module manuscript segment three distinct pass be module manuscript distinct pass do
+  ob name text module manuscript segment three source thrust pass be equally from text true then
+  ob name text module manuscript segment three role pass be equally from text true then
+  ob name text module manuscript segment three distinct pass be equally from text true then
+  ob text "true" to name text module manuscript segment three pass be text do
+  fromindex num 1 toindex num 5 be module manuscript segment three retry do
+  ob name text module manuscript segment three source thrust pass be equally from text false then
+  su name module manuscript segment three source guarantee stage ob bool lie fromtext text "module manuscript segment three source thrust defective" be guarantee do
+  ob name text module manuscript segment three role pass be equally from text false then
+  su name module manuscript segment three role guarantee stage ob bool lie fromtext text "module manuscript segment three role defective" be guarantee do
+  ob name text module manuscript segment three distinct pass be equally from text false then
+  su name module manuscript segment three distinct guarantee stage ob bool lie fromtext text "module manuscript segment three distinct defective" be guarantee do
+  su name module manuscript segment three return stage ob name text output be text do
+prah
+
+su name module manuscript segment three retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript segment three source thrust pass be equally from text true then
+  ob name text module manuscript segment three role pass be equally from text true then
+  ob name text module manuscript segment three distinct pass be equally from text true then
+  ob text "true" to name text module manuscript segment three pass be text do
+  ob name text module manuscript segment three pass be equally from text true then be depart do
+  su name module manuscript segment three retry request role stage ob text "ROLE:\nSegment 3 expands to consequence. Show the outcome, scale the idea outward, and connect it to lived reality.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n104\n\nFEEDBACK:\nKeep the expand role clear. Keep this rewrite between 100 and 108 words. Assume Segment 1 and Segment 2 are already complete. Use at most one brief setup sentence, then move directly into consequence, propagation, lived effects, or future stakes. Use one direct consequence sentence, one outward scaling sentence, one real-world or behavioral sentence, and one closing implication. Cut repeated mechanism language. If the draft feels short, add one concrete real-world consequence rather than re-explaining the topic or the hidden correction.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment three retry request be text do
+  su name module manuscript segment three retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request role review stage ob name text module manuscript role review to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request distinct header stage ob text "\n\nDISTINCTNESS_FEEDBACK:\n" to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request distinct stage ob name text module manuscript distinct review to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request draft stage ob name text output to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry request source stage ob name text module manuscript source to name module manuscript segment three retry request be plus do
+  su name module manuscript segment three retry draft stage ob name text module manuscript segment three retry request for name module manuscript fit mind to name text output by num 0 atmost num 220 be write do
+  su name module manuscript segment three retry platform stage accordingto name module manuscript segment three checks for name module manuscript fit mind from text of ob of module manuscript segment three retry request to name text output be module manuscript section verify do
+  ob name text module manuscript segment three intent to name text module manuscript current intent be text do
+  ob name text module manuscript segment three retry request to name text module manuscript current task be text do
+  ob name text module manuscript segment two out to name text module manuscript current prior be text do
+  su name module manuscript segment three source thrust retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment three source thrust pass be module manuscript source thrust do
+  su name module manuscript segment three role retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript segment three role pass be module manuscript role pass do
+  ob name text module manuscript segment three distinct intent to name text module manuscript current intent be text do
+  su name module manuscript segment three distinct retry stage from text of ob of output with text of ob of module manuscript segment two out to name text module manuscript segment three distinct pass be module manuscript distinct pass do
+  ob name text module manuscript segment three source thrust pass be equally from text true then
+  ob name text module manuscript segment three role pass be equally from text true then
+  ob name text module manuscript segment three distinct pass be equally from text true then
+  ob text "true" to name text module manuscript segment three pass be text do
+prah
+
+su name module manuscript recap checked to name text output be ceremony def
+  su name module manuscript recap platform stage accordingto name module manuscript recap checks for name module manuscript recap mind from text of ob of module manuscript recap request to name text output be module manuscript section verify do
+  ob name text module manuscript recap intent to name text module manuscript current intent be text do
+  ob name text module manuscript recap request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript recap source thrust stage from text of ob of module manuscript recap request with text of ob of output to name text module manuscript recap source thrust pass be module manuscript source thrust do
+  su name module manuscript recap role stage from text of ob of module manuscript source with text of ob of output to name text module manuscript recap role pass be module manuscript role pass do
+  ob name text module manuscript recap source thrust pass be equally from text true then
+  ob name text module manuscript recap role pass be equally from text true then
+  ob text "true" to name text module manuscript recap pass be text do
+  fromindex num 1 toindex num 7 be module manuscript recap retry do
+  ob name text module manuscript recap source thrust pass be equally from text false then
+  su name module manuscript recap source guarantee stage ob bool lie fromtext text "module manuscript recap source thrust defective" be guarantee do
+  ob name text module manuscript recap role pass be equally from text false then
+  su name module manuscript recap role guarantee stage ob bool lie fromtext text "module manuscript recap role defective" be guarantee do
+  su name module manuscript recap return stage ob name text output be text do
+prah
+
+su name module manuscript recap retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript recap source thrust pass be equally from text true then
+  ob name text module manuscript recap role pass be equally from text true then
+  ob text "true" to name text module manuscript recap pass be text do
+  ob name text module manuscript recap pass be equally from text true then be depart do
+  su name module manuscript recap retry request role stage ob text "ROLE:\nRecap compressing Segment 1, Segment 2, and Segment 3 into one clear truth.\n\nTARGET_WORDS:\n40-50\n\nGOAL_WORDS:\n44\n\nFEEDBACK:\nWrite exactly 2 sentences and keep the whole recap between 42 and 46 words. Sentence 1 unifies Segment 1 and Segment 2 into one truth. Sentence 2 shows the lived consequence from Segment 3. Do not introduce new ideas.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript recap retry request be text do
+  su name module manuscript recap retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request role review stage ob name text module manuscript role review to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request segment one stage ob name text module manuscript segment one out to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request segment two stage ob name text module manuscript segment two out to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request segment three stage ob name text module manuscript segment three out to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry request draft stage ob name text output to name module manuscript recap retry request be plus do
+  su name module manuscript recap retry draft stage ob name text module manuscript recap retry request for name module manuscript fit mind to name text output by num 0 atmost num 60 be write do
+  su name module manuscript recap retry platform stage accordingto name module manuscript recap checks for name module manuscript fit mind from text of ob of module manuscript recap retry request to name text output be module manuscript section verify do
+  ob name text module manuscript recap intent to name text module manuscript current intent be text do
+  ob name text module manuscript recap retry request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript recap source thrust retry stage from text of ob of module manuscript recap retry request with text of ob of output to name text module manuscript recap source thrust pass be module manuscript source thrust do
+  su name module manuscript recap role retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript recap role pass be module manuscript role pass do
+  ob name text module manuscript recap source thrust pass be equally from text true then
+  ob name text module manuscript recap role pass be equally from text true then
+  ob text "true" to name text module manuscript recap pass be text do
+prah
+
+su name module manuscript cta checked to name text output be ceremony def
+  su name module manuscript cta platform stage accordingto name module manuscript cta checks for name module manuscript cta mind from text of ob of module manuscript cta request to name text output be module manuscript section verify do
+  ob name text module manuscript cta intent to name text module manuscript current intent be text do
+  ob name text module manuscript cta request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript cta source thrust stage from text of ob of module manuscript cta request with text of ob of output to name text module manuscript cta source thrust pass be module manuscript source thrust do
+  su name module manuscript cta role stage from text of ob of module manuscript source with text of ob of output to name text module manuscript cta role pass be module manuscript role pass do
+  ob name text module manuscript cta source thrust pass be equally from text true then
+  ob name text module manuscript cta role pass be equally from text true then
+  ob text "true" to name text module manuscript cta pass be text do
+  fromindex num 1 toindex num 5 be module manuscript cta retry do
+  ob name text module manuscript cta source thrust pass be equally from text false then
+  su name module manuscript cta source guarantee stage ob bool lie fromtext text "module manuscript cta source thrust defective" be guarantee do
+  ob name text module manuscript cta role pass be equally from text false then
+  su name module manuscript cta role guarantee stage ob bool lie fromtext text "module manuscript cta role defective" be guarantee do
+  su name module manuscript cta return stage ob name text output be text do
+prah
+
+su name module manuscript cta retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text module manuscript cta source thrust pass be equally from text true then
+  ob name text module manuscript cta role pass be equally from text true then
+  ob text "true" to name text module manuscript cta pass be text do
+  ob name text module manuscript cta pass be equally from text true then be depart do
+  su name module manuscript cta retry request role stage ob text "ROLE:\nCall to action extending or embodying the insight.\n\nTARGET_WORDS:\n20-25\n\nGOAL_WORDS:\n22\n\nFEEDBACK:\nWrite one practical invitation near 22 words. Extend the insight naturally from the recap. Keep it actionable and human.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript cta retry request be text do
+  su name module manuscript cta retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request role review stage ob name text module manuscript role review to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request hook header stage ob text "\n\nHOOK:\n" to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request hook stage ob name text module manuscript hook out to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request recap header stage ob text "\n\nRECAP:\n" to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request recap stage ob name text module manuscript recap out to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry request draft stage ob name text output to name module manuscript cta retry request be plus do
+  su name module manuscript cta retry draft stage ob name text module manuscript cta retry request for name module manuscript fit mind to name text output by num 0 atmost num 32 be write do
+  su name module manuscript cta retry platform stage accordingto name module manuscript cta checks for name module manuscript fit mind from text of ob of module manuscript cta retry request to name text output be module manuscript section verify do
+  ob name text module manuscript cta intent to name text module manuscript current intent be text do
+  ob name text module manuscript cta retry request to name text module manuscript current task be text do
+  ob text "" to name text module manuscript current prior be text do
+  su name module manuscript cta source thrust retry stage from text of ob of module manuscript cta retry request with text of ob of output to name text module manuscript cta source thrust pass be module manuscript source thrust do
+  su name module manuscript cta role retry stage from text of ob of module manuscript source with text of ob of output to name text module manuscript cta role pass be module manuscript role pass do
+  ob name text module manuscript cta source thrust pass be equally from text true then
+  ob name text module manuscript cta role pass be equally from text true then
+  ob text "true" to name text module manuscript cta pass be text do
+prah
+
+su name module manuscript from text source with text hook hint to name text manuscript out be ceremony def
+  su name source stage ob text of from of this to name text module manuscript source be text do
+  su name hint stage ob text of with of this to name text hook_hint be text do
+
+  su name module manuscript roles request hint header stage ob text "HOOK HINT:\n" to name text module manuscript roles request be text do
+  su name module manuscript roles request hint stage ob name text hook_hint to name module manuscript roles request be plus do
+  su name module manuscript roles request source header stage ob text "\n\nSOURCE:\n" to name module manuscript roles request be plus do
+  su name module manuscript roles request source stage ob name text module manuscript source to name module manuscript roles request be plus do
+  su name module manuscript roles stage to name text module manuscript roles raw out be module manuscript roles checked do
+  ob name text module manuscript roles raw out by wo newline to name vec module manuscript roles vec be distribute do
+  su name module manuscript role one stage ob name module manuscript roles vec at num 0 be read to name text module manuscript role one do
+  su name module manuscript role two stage ob name module manuscript roles vec at num 1 be read to name text module manuscript role two do
+  su name module manuscript role three stage ob name module manuscript roles vec at num 2 be read to name text module manuscript role three do
+
+  su name module manuscript segment one request begin stage ob text "SEGMENT_ROLE:\n" to name text module manuscript segment one request be text do
+  su name module manuscript segment one request role stage ob name text module manuscript role one to name module manuscript segment one request be plus do
+  su name module manuscript segment one request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment one request be plus do
+  su name module manuscript segment one request source stage ob name text module manuscript source to name module manuscript segment one request be plus do
+  su name module manuscript segment one stage to name text module manuscript segment one out be module manuscript segment one checked do
+
+  su name module manuscript segment two request begin stage ob text "SEGMENT_ROLE:\n" to name text module manuscript segment two request be text do
+  su name module manuscript segment two request role stage ob name text module manuscript role two to name module manuscript segment two request be plus do
+  su name module manuscript segment two request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript segment two request be plus do
+  su name module manuscript segment two request prior stage ob name text module manuscript segment one out to name module manuscript segment two request be plus do
+  su name module manuscript segment two request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment two request be plus do
+  su name module manuscript segment two request source stage ob name text module manuscript source to name module manuscript segment two request be plus do
+  su name module manuscript segment two stage to name text module manuscript segment two out be module manuscript segment two checked do
+
+  su name module manuscript segment three request begin stage ob text "SEGMENT_ROLE:\n" to name text module manuscript segment three request be text do
+  su name module manuscript segment three request role stage ob name text module manuscript role three to name module manuscript segment three request be plus do
+  su name module manuscript segment three request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript segment three request be plus do
+  su name module manuscript segment three request segment one stage ob name text module manuscript segment one out to name module manuscript segment three request be plus do
+  su name module manuscript segment three request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript segment three request be plus do
+  su name module manuscript segment three request segment two stage ob name text module manuscript segment two out to name module manuscript segment three request be plus do
+  su name module manuscript segment three request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment three request be plus do
+  su name module manuscript segment three request source stage ob name text module manuscript source to name module manuscript segment three request be plus do
+  su name module manuscript segment three stage to name text module manuscript segment three out be module manuscript segment three checked do
+
+  su name module manuscript roadmap request begin stage ob text "HOOK HINT:\n" to name text module manuscript roadmap request be text do
+  su name module manuscript roadmap request hint stage ob name text hook_hint to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment one stage ob name text module manuscript segment one out to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment two stage ob name text module manuscript segment two out to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request segment three stage ob name text module manuscript segment three out to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request source header stage ob text "\n\nSOURCE:\n" to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap request source stage ob name text module manuscript source to name module manuscript roadmap request be plus do
+  su name module manuscript roadmap stage to name text module manuscript roadmap out be module manuscript roadmap checked do
+
+  su name module manuscript promise request begin stage ob text "HOOK HINT:\n" to name text module manuscript promise request be text do
+  su name module manuscript promise request hint stage ob name text hook_hint to name module manuscript promise request be plus do
+  su name module manuscript promise request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request segment one stage ob name text module manuscript segment one out to name module manuscript promise request be plus do
+  su name module manuscript promise request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request segment two stage ob name text module manuscript segment two out to name module manuscript promise request be plus do
+  su name module manuscript promise request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request segment three stage ob name text module manuscript segment three out to name module manuscript promise request be plus do
+  su name module manuscript promise request source header stage ob text "\n\nSOURCE:\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request source stage ob name text module manuscript source to name module manuscript promise request be plus do
+  su name module manuscript promise stage to name text module manuscript promise out be module manuscript promise checked do
+
+  su name module manuscript hook request hint header stage ob text "HOOK HINT:\n" to name text module manuscript hook request be text do
+  su name module manuscript hook request hint stage ob name text hook_hint to name module manuscript hook request be plus do
+  su name module manuscript hook request promise header stage ob text "\n\nPROMISE:\n" to name module manuscript hook request be plus do
+  su name module manuscript hook request promise stage ob name text module manuscript promise out to name module manuscript hook request be plus do
+  su name module manuscript hook request source header stage ob text "\n\nSOURCE:\n" to name module manuscript hook request be plus do
+  su name module manuscript hook request source stage ob name text module manuscript source to name module manuscript hook request be plus do
+  su name module manuscript hook stage to name text module manuscript hook out be module manuscript hook checked do
+
+  su name module manuscript recap request begin stage ob text "HOOK:\n" to name text module manuscript recap request be text do
+  su name module manuscript recap request hook stage ob name text module manuscript hook out to name module manuscript recap request be plus do
+  su name module manuscript recap request roadmap header stage ob text "\n\nROADMAP:\n" to name module manuscript recap request be plus do
+  su name module manuscript recap request roadmap stage ob name text module manuscript roadmap out to name module manuscript recap request be plus do
+  su name module manuscript recap request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript recap request be plus do
+  su name module manuscript recap request segment one stage ob name text module manuscript segment one out to name module manuscript recap request be plus do
+  su name module manuscript recap request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript recap request be plus do
+  su name module manuscript recap request segment two stage ob name text module manuscript segment two out to name module manuscript recap request be plus do
+  su name module manuscript recap request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript recap request be plus do
+  su name module manuscript recap request segment three stage ob name text module manuscript segment three out to name module manuscript recap request be plus do
+  su name module manuscript recap request source header stage ob text "\n\nSOURCE:\n" to name module manuscript recap request be plus do
+  su name module manuscript recap request source stage ob name text module manuscript source to name module manuscript recap request be plus do
+  su name module manuscript recap stage to name text module manuscript recap out be module manuscript recap checked do
+
+  su name module manuscript cta request begin stage ob text "HOOK:\n" to name text module manuscript cta request be text do
+  su name module manuscript cta request hook stage ob name text module manuscript hook out to name module manuscript cta request be plus do
+  su name module manuscript cta request recap header stage ob text "\n\nRECAP:\n" to name module manuscript cta request be plus do
+  su name module manuscript cta request recap stage ob name text module manuscript recap out to name module manuscript cta request be plus do
+  su name module manuscript cta request source header stage ob text "\n\nSOURCE:\n" to name module manuscript cta request be plus do
+  su name module manuscript cta request source stage ob name text module manuscript source to name module manuscript cta request be plus do
+  su name module manuscript cta stage to name text module manuscript cta out be module manuscript cta checked do
+
+  su name module manuscript hook final verify stage be verify as wo word count atleast num 6 atmost num 8 from name text module manuscript hook out to name map module manuscript hook final verify do
+  ob text of pass of module manuscript hook final verify to name text module manuscript hook pass be text do
+  su name module manuscript hook final output stage ob name text module manuscript hook out to name text output be text do
+  ob name text module manuscript hook pass be equally from text false then
+  fromindex num 1 toindex num 5 be module manuscript hook retry do
+  ob name text module manuscript hook pass be equally from text false then
+  su name module manuscript hook final guarantee stage ob bool lie fromtext text "module manuscript hook word count defective" be guarantee do
+  su name module manuscript hook repaired stage ob name text output to name text module manuscript hook out be text do
+
+  su name module manuscript promise final verify stage be verify as wo word count atleast num 18 atmost num 24 from name text module manuscript promise out to name map module manuscript promise final verify do
+  ob text of pass of module manuscript promise final verify to name text module manuscript promise pass be text do
+  su name module manuscript promise final output stage ob name text module manuscript promise out to name text output be text do
+  ob name text module manuscript promise pass be equally from text false then
+  fromindex num 1 toindex num 5 be module manuscript promise retry do
+  ob name text module manuscript promise pass be equally from text false then
+  su name module manuscript promise final guarantee stage ob bool lie fromtext text "module manuscript promise word count defective" be guarantee do
+  su name module manuscript promise repaired stage ob name text output to name text module manuscript promise out be text do
+
+  su name module manuscript roadmap final verify stage be verify as wo word count atleast num 16 atmost num 20 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
+  ob text of pass of module manuscript roadmap final verify to name text module manuscript roadmap pass be text do
+  su name module manuscript roadmap final output stage ob name text module manuscript roadmap out to name text output be text do
+  ob name text module manuscript roadmap pass be equally from text false then
+  fromindex num 1 toindex num 5 be module manuscript roadmap retry do
+  ob name text module manuscript roadmap pass be equally from text false then
+  su name module manuscript roadmap final guarantee stage ob bool lie fromtext text "module manuscript roadmap word count defective" be guarantee do
+  su name module manuscript roadmap repaired stage ob name text output to name text module manuscript roadmap out be text do
+
+  su name module manuscript segment one final verify stage be verify as wo word count atleast num 85 atmost num 100 from name text module manuscript segment one out to name map module manuscript segment one final verify do
+  ob text of pass of module manuscript segment one final verify to name text module manuscript segment one pass be text do
+  su name module manuscript segment one final output stage ob name text module manuscript segment one out to name text output be text do
+  ob name text module manuscript segment one pass be equally from text false then
+  fromindex num 1 toindex num 5 be module manuscript segment one retry do
+  ob name text module manuscript segment one pass be equally from text false then
+  su name module manuscript segment one final guarantee stage ob bool lie fromtext text "module manuscript segment one word count defective" be guarantee do
+  su name module manuscript segment one repaired stage ob name text output to name text module manuscript segment one out be text do
+
+  su name module manuscript segment two final verify stage be verify as wo word count atleast num 95 atmost num 115 from name text module manuscript segment two out to name map module manuscript segment two final verify do
+  ob text of pass of module manuscript segment two final verify to name text module manuscript segment two pass be text do
+  su name module manuscript segment two final output stage ob name text module manuscript segment two out to name text output be text do
+  ob name text module manuscript segment two pass be equally from text false then
+  fromindex num 1 toindex num 5 be module manuscript segment two retry do
+  ob name text module manuscript segment two pass be equally from text false then
+  su name module manuscript segment two final guarantee stage ob bool lie fromtext text "module manuscript segment two word count defective" be guarantee do
+  su name module manuscript segment two repaired stage ob name text output to name text module manuscript segment two out be text do
+
+  su name module manuscript segment three final verify stage be verify as wo word count atleast num 95 atmost num 115 from name text module manuscript segment three out to name map module manuscript segment three final verify do
+  ob text of pass of module manuscript segment three final verify to name text module manuscript segment three pass be text do
+  su name module manuscript segment three final output stage ob name text module manuscript segment three out to name text output be text do
+  ob name text module manuscript segment three pass be equally from text false then
+  fromindex num 1 toindex num 5 be module manuscript segment three retry do
+  ob name text module manuscript segment three pass be equally from text false then
+  su name module manuscript segment three final guarantee stage ob bool lie fromtext text "module manuscript segment three word count defective" be guarantee do
+  su name module manuscript segment three repaired stage ob name text output to name text module manuscript segment three out be text do
+
+  su name module manuscript recap final verify stage be verify as wo word count atleast num 40 atmost num 50 from name text module manuscript recap out to name map module manuscript recap final verify do
+  ob text of pass of module manuscript recap final verify to name text module manuscript recap pass be text do
+  su name module manuscript recap final output stage ob name text module manuscript recap out to name text output be text do
+  ob name text module manuscript recap pass be equally from text false then
+  fromindex num 1 toindex num 7 be module manuscript recap retry do
+  ob name text module manuscript recap pass be equally from text false then
+  su name module manuscript recap final guarantee stage ob bool lie fromtext text "module manuscript recap word count defective" be guarantee do
+  su name module manuscript recap repaired stage ob name text output to name text module manuscript recap out be text do
+
+  su name module manuscript cta final verify stage be verify as wo word count atleast num 20 atmost num 25 from name text module manuscript cta out to name map module manuscript cta final verify do
+  ob text of pass of module manuscript cta final verify to name text module manuscript cta pass be text do
+  su name module manuscript cta final output stage ob name text module manuscript cta out to name text output be text do
+  ob name text module manuscript cta pass be equally from text false then
+  fromindex num 1 toindex num 5 be module manuscript cta retry do
+  ob name text module manuscript cta pass be equally from text false then
+  su name module manuscript cta final guarantee stage ob bool lie fromtext text "module manuscript cta word count defective" be guarantee do
+  su name module manuscript cta repaired stage ob name text output to name text module manuscript cta out be text do
+
+  su name module manuscript out hook stage ob name text module manuscript hook out to name text module manuscript out be text do
+  ob name text module manuscript paragraph break to name module manuscript out be plus do
+  ob name text module manuscript promise out to name module manuscript out be plus do
+  ob name text module manuscript paragraph break to name module manuscript out be plus do
+  ob name text module manuscript roadmap out to name module manuscript out be plus do
+  ob name text module manuscript paragraph break to name module manuscript out be plus do
+  ob name text module manuscript segment one out to name module manuscript out be plus do
+  ob name text module manuscript paragraph break to name module manuscript out be plus do
+  ob name text module manuscript segment two out to name module manuscript out be plus do
+  ob name text module manuscript paragraph break to name module manuscript out be plus do
+  ob name text module manuscript segment three out to name module manuscript out be plus do
+  ob name text module manuscript paragraph break to name module manuscript out be plus do
+  ob name text module manuscript recap out to name module manuscript out be plus do
+  ob name text module manuscript paragraph break to name module manuscript out be plus do
+  ob name text module manuscript cta out to name module manuscript out be plus do
+
+  su name manuscript return stage ob name text module manuscript out to name text manuscript out be text do
+  su name manuscript out ret
+prah
+
+su name module manuscript from filename source with text hook hint to name text manuscript out be ceremony def
+  su name source stage from filename of from of this become wo text to name text module manuscript source be read do
+  su name manuscript stage from text of ob of module manuscript source with text of with of this to name text manuscript out be module manuscript do
+  su name manuscript out ret
+prah
+
+su name manuscript as wo module from text source with text hook hint to name text manuscript out be ceremony def
+  su name draft stage from text of from of this with text of with of this to name text manuscript out be module manuscript do
+  su name manuscript out ret
+prah
+
+su name manuscript as wo module from filename source with text hook hint to name text manuscript out be ceremony def
+  su name draft stage from filename of from of this with text of with of this to name text manuscript out be module manuscript do
+  su name manuscript out ret
+prah
+
+exists su name module manuscript be export ya
+exists su name manuscript as wo module be export ya

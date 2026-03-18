@@ -9,6 +9,8 @@ test("learn module exports text and filename learning ceremonies", async () => {
   assert.match(text, /Prefer communal declarative phrasing that states what is true, practiced, or learned\./u);
   assert.match(text, /Avoid direct second-person instruction and bare imperative phrasing when a declarative teaching line will do\./u);
   assert.match(text, /Each section should default to declarative teaching statements, not advice commands\./u);
+  assert.match(text, /SURPRISES AND MISUNDERSTANDINGS/u);
+  assert.match(text, /SURPRISES AND MISUNDERSTANDINGS: 2-5 short lines naming source-supported paradoxes, corrections, surprises, or common misunderstandings clarified by the source\./u);
   assert.match(text, /BRIEF MEMORY PHRASES: 4-10 short lines, each 2-8 words, preferably short declarative refrain-like phrases rather than commands\./u);
   assert.match(text, /exists su name learning merge prompt ob text quoted\.text\./u);
   assert.match(text, /exists su name learning refine prompt ob text quoted\.text\./u);

@@ -1,0 +1,102 @@
+ob ve filename text source text text hook_hint be input ya
+su name provider auto discharge ob bool lie ya
+
+from filename "../../module/module_manuscript.pya" ob name manuscript as wo module to name manuscript as wo module be import do
+from filename "../../module/better_compare.pya" ob name better compare to name better compare be import do
+
+exists su name mind be mind as name "qwen3.5:9b" fromtext text "You are a strict pairwise manuscript judge. Return only A or B." ya
+
+exists su name text better compare module manuscript judge prompter ob text quoted.text.Choose the better manuscript for retention, clarity, and modular reuse.
+
+Evaluate each manuscript on these criteria:
+
+1. Promise fidelity:
+Does it deliver what the hook and promise imply?
+
+2. Segment progression:
+Does Segment 1 establish the core idea, Segment 2 reveal or correct a deeper layer, and Segment 3 expand into consequence, application, or significance?
+
+3. Non-repetition:
+Does each segment add new understanding rather than restating prior points?
+
+4. Clarity on first listen:
+Is the wording easy to follow in spoken form, with low cognitive load and minimal abstraction drift?
+
+5. Concreteness:
+Does it ground ideas with examples, lived situations, or intuitive images?
+
+6. Roadmap alignment:
+Does the roadmap accurately describe the manuscript's actual understanding steps?
+
+7. Recap quality:
+Does the recap compress the whole teaching into one clear portable truth?
+
+8. Modularity:
+Can each segment stand as its own useful unit, and can clips be extracted cleanly?
+
+9. Hook strength:
+Does the opening create immediate curiosity, tension, or clear value?
+
+10. Share/save value:
+Is the manuscript likely to feel meaningful enough to save, share, or remember?
+
+Prefer the manuscript that is easier to remember, easier to clip, and more structurally coherent across the full teaching arc.
+
+Reply with only A or B..text.quoted be text ya
+
+ob filename of ob of source to name filename module manuscript source filename be filename do
+ob text of ob of module manuscript source filename to name text module manuscript source path be text do
+ob text "basename \"" to name text module manuscript stem cmd be text do
+ob name text module manuscript source path to name module manuscript stem cmd be plus do
+ob text "\" | sed 's/\\.[^.]*$//' | sed 's/[^[:alnum:]_-]/_/g' | tr -s '_' | sed 's/^_//;s/_$//' | tr -d '\\n'" to name module manuscript stem cmd be plus do
+su name module manuscript stem safe stage ob name text module manuscript stem cmd be command do
+
+su name module manuscript compare run id stage ob name run id to name text module manuscript compare run id be text do
+ob name text module manuscript compare run id be equally from text "" then ob text "manual" to name text module manuscript compare run id be text do
+
+ob text "artifacts/" to name text module manuscript artifacts dir be text do
+ob name text module manuscript compare run id to name module manuscript artifacts dir be plus do
+ob name text module manuscript artifacts dir to name text module manuscript candidates dir be text do
+ob text "/candidates" to name module manuscript candidates dir be plus do
+ob text "know/produce" to name text module manuscript produce dir be text do
+
+ob text "mkdir -p \"" to name text module manuscript artifacts mkdir cmd be text do
+ob name text module manuscript artifacts dir to name module manuscript artifacts mkdir cmd be plus do
+ob text "\" \"" to name module manuscript artifacts mkdir cmd be plus do
+ob name text module manuscript candidates dir to name module manuscript artifacts mkdir cmd be plus do
+ob text "\" \"" to name module manuscript artifacts mkdir cmd be plus do
+ob name text module manuscript produce dir to name module manuscript artifacts mkdir cmd be plus do
+ob text "\"" to name module manuscript artifacts mkdir cmd be plus do
+su name module manuscript artifacts mkdir stage ob name text module manuscript artifacts mkdir cmd be command do
+
+su name module manuscript source stage from filename of ob of source become wo text to name text module manuscript source be read do
+exists su name module manuscript draft count ob num 0 be number ya
+
+su name module manuscript source draft ob text source to name text manuscript out be ceremony def
+  ob num 1 to name module manuscript draft count be plus do
+  su name module manuscript draft run stage from text of ob of this with text of ob of hook_hint to name text manuscript out be manuscript as wo module do
+  ob name text module manuscript candidates dir to name text module manuscript draft path be text do
+  ob text "/module-manuscript-draft-" to name module manuscript draft path be plus do
+  ob text of ob of module manuscript draft count to name text module manuscript draft count text be text do
+  ob name text module manuscript draft count text to name module manuscript draft path be plus do
+  ob text ".txt" to name module manuscript draft path be plus do
+  su name module manuscript draft filename stage ob name text module manuscript draft path to name filename module manuscript draft filename be filename do
+  su name module manuscript draft artifact stage ob name text manuscript out to filename of ob of module manuscript draft filename stage be write do
+  su name manuscript out ret
+prah
+
+su name module manuscript final stage from la ob text of ob of module manuscript source to name text module manuscript scratch be module manuscript source draft do ko ob text of ob of better compare module manuscript judge prompter to name text module manuscript final atmost num 3 be better compare do
+
+su name produce path stage ob name text module manuscript artifacts dir to name text produce path be text do
+ob text "/produce.txt" to name produce path be plus do
+su name produce filename stage ob name text produce path to name filename produce filename be filename do
+su name module manuscript produce stage ob name text module manuscript final to filename of ob of produce filename stage be write do
+su name module manuscript produce copy path stage ob name text module manuscript produce dir to name text module manuscript produce copy path be text do
+ob text "/" to name module manuscript produce copy path be plus do
+ob name module manuscript stem safe stage to name module manuscript produce copy path be plus do
+ob text "-compare.txt" to name module manuscript produce copy path be plus do
+su name module manuscript produce copy filename stage ob name text module manuscript produce copy path to name filename module manuscript produce copy filename be filename do
+su name module manuscript produce copy stage ob name text module manuscript final to filename of ob of module manuscript produce copy filename stage be write do
+su name module manuscript final ob name text module manuscript final be write do
+
+as wo ollama be discharge do

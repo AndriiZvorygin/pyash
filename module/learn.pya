@@ -6,6 +6,7 @@ Given SOURCE TEXT and LEARNING FOCUS, return one plain-text teaching block with 
 SEED CONCEPT
 CARDINAL TRAINING SENTENCE
 ORTHOGONAL FEATURES
+SURPRISES AND MISUNDERSTANDINGS
 AFFAIRS OR ACTIVITIES
 CAUSATIVE AND CONSEQUENCE
 CARDINAL SCENES AND IDIOMS
@@ -31,6 +32,7 @@ Section rules:
 - SEED CONCEPT: 1 short paragraph or 1-2 sentences.
 - CARDINAL TRAINING SENTENCE: exactly 1 sentence, clear enough for a 12 year old, and written as a declarative teaching sentence rather than a command.
 - ORTHOGONAL FEATURES: 3-5 short lines.
+- SURPRISES AND MISUNDERSTANDINGS: 2-5 short lines naming source-supported paradoxes, corrections, surprises, or common misunderstandings clarified by the source.
 - AFFAIRS OR ACTIVITIES: 2-5 short lines describing practices in declarative communal or neutral phrasing.
 - CAUSATIVE AND CONSEQUENCE: 2-5 short lines showing practice and result.
 - CARDINAL SCENES AND IDIOMS: 2-6 short lines.
@@ -51,6 +53,7 @@ Given CHUNK CARDS and LEARNING FOCUS, return one plain-text teaching block with 
 SEED CONCEPT
 CARDINAL TRAINING SENTENCE
 ORTHOGONAL FEATURES
+SURPRISES AND MISUNDERSTANDINGS
 AFFAIRS OR ACTIVITIES
 CAUSATIVE AND CONSEQUENCE
 CARDINAL SCENES AND IDIOMS
@@ -80,6 +83,7 @@ Given DRAFT CARD and LEARNING FOCUS, return one plain-text teaching block with t
 SEED CONCEPT
 CARDINAL TRAINING SENTENCE
 ORTHOGONAL FEATURES
+SURPRISES AND MISUNDERSTANDINGS
 AFFAIRS OR ACTIVITIES
 CAUSATIVE AND CONSEQUENCE
 CARDINAL SCENES AND IDIOMS
