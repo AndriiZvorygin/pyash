@@ -5,9 +5,10 @@ Rules:
 - One single line only.
 - 12 to 40 words.
 - Describe visible subjects, setting, lighting, and composition.
+- Include exactly one quoted overlay phrase of 1 to 3 words (for example: "Final Warning").
 - No camera metadata, no model names, no workflow names.
 - No markdown, no bullets, no labels, no surrounding quotes.
-- Avoid visible text in the image.
+- Keep overlay text brief and highly readable like a thumbnail.
 - Keep it concrete and faithful to SOURCE_TEXT.
 .text.quoted be text ya
 
@@ -55,6 +56,7 @@ su name draw from filename source be ceremony def
   ob name text source text to name draw prompt request be plus do
   ob name text draw prompt request fromtext name draw prompt system for name mind to name text draw prompt by num 0 atmost num 140 be write do
   ob text "node command/normalize_escaped_newlines.mjs" fromtext name draw prompt to name text draw prompt be command do
+  be discharge as wo mind do
 
   ob name draw workflow default to name text workflow be text do
   ob name draw host to name text host be text do
@@ -76,6 +78,8 @@ su name draw from filename source be ceremony def
   ob name produce image path to name copy cmd be plus do
   ob text "\"" to name copy cmd be plus do
   su name produce copy stage ob name text copy cmd be command do
+
+  be discharge as wo draw do
 
   su name result stage ob filename of ob of artifacts image filename stage be filename do
   su name result stage ret
