@@ -5,12 +5,14 @@ Given SOURCE TEXT and LEARNING FOCUS, return one plain-text teaching block with 
 
 SEED CONCEPT
 CARDINAL TRAINING SENTENCE
+TEACHING PROGRESSION
 ORTHOGONAL FEATURES
 SURPRISES AND MISUNDERSTANDINGS
 AFFAIRS OR ACTIVITIES
 CAUSATIVE AND CONSEQUENCE
 CARDINAL SCENES AND IDIOMS
 BRIEF MEMORY PHRASES
+CONCEPT RELATIONS
 
 Rules:
 - Stay faithful to the source text.
@@ -38,14 +40,16 @@ Rules:
 Section rules:
 - SEED CONCEPT: 1 short paragraph or 1-2 sentences. Prefer positive declarative explanation of the core idea, system, or reality named by the source. Focus on what it is, how it works, or what kind of truth it states. Avoid making this section mainly contrastive, corrective, or misunderstanding-driven when the source provides enough affirmative material. Rewrite contrast-shaped source material into positive declarative teaching whenever the meaning can stay faithful.
 - SEED CONCEPT: do not collapse a spiritually, symbolically, or metaphysically specific teaching into a generic definition that could fit an unrelated textbook or management guide.
-- CARDINAL TRAINING SENTENCE: exactly 1 sentence, clear enough for a 12 year old, and written as a declarative teaching sentence rather than a command. Prefer a short affirmative operating truth, not a negation-heavy warning or correction, unless the source gives no stronger declarative line. Prefer a positive teaching sentence over contrastive wording when the same meaning can be stated cleanly.
+- CARDINAL TRAINING SENTENCE: exactly 1 short sentence, clear enough for a 12 year old, and written as a declarative teaching sentence rather than a command. Prefer a short affirmative operating truth, not a negation-heavy warning or correction, unless the source gives no stronger declarative line. Prefer a positive teaching sentence over contrastive wording when the same meaning can be stated cleanly. Avoid subordinate explanation, stacked clauses, or multi-step summary inside this sentence.
 - CARDINAL TRAINING SENTENCE: keep the sentence native to the source's actual teaching world; do not rewrite it into generic institutional or behavioral advice that the source itself does not support.
+- TEACHING PROGRESSION: 3-6 short lines showing the main stages by which the concept becomes understandable and teachable. Prefer ordered conceptual movement, not a generic summary. Keep these lines about unfolding understanding, not about misunderstanding correction, polemic contrast, or downstream consequence.
 - ORTHOGONAL FEATURES: 3-5 short lines.
 - SURPRISES AND MISUNDERSTANDINGS: 2-5 short lines naming source-supported paradoxes, corrections, surprises, or common misunderstandings clarified by the source.
 - AFFAIRS OR ACTIVITIES: 2-5 short lines describing practices in declarative communal or neutral phrasing.
 - CAUSATIVE AND CONSEQUENCE: 2-5 short lines showing practice and result.
 - CARDINAL SCENES AND IDIOMS: 2-6 short lines.
-- BRIEF MEMORY PHRASES: 4-10 short lines, each 2-8 words, preferably short declarative refrain-like phrases rather than commands.
+- BRIEF MEMORY PHRASES: 4-8 short lines, each 2-6 words, preferably short declarative refrain-like phrases rather than commands. Do not restate whole teachings or explanations here.
+- CONCEPT RELATIONS: 2-4 short lines showing how this concept connects to nearby ideas in the same source document. Keep these links brief and specific; do not let this section become another summary of the full concept.
 
 Formatting rules:
 - Plain text only.
@@ -61,12 +65,14 @@ Given CHUNK CARDS and LEARNING FOCUS, return one plain-text teaching block with 
 
 SEED CONCEPT
 CARDINAL TRAINING SENTENCE
+TEACHING PROGRESSION
 ORTHOGONAL FEATURES
 SURPRISES AND MISUNDERSTANDINGS
 AFFAIRS OR ACTIVITIES
 CAUSATIVE AND CONSEQUENCE
 CARDINAL SCENES AND IDIOMS
 BRIEF MEMORY PHRASES
+CONCEPT RELATIONS
 
 Rules:
 - Keep the same schema exactly.
@@ -79,6 +85,10 @@ Rules:
 - Keep affirmative definition concentrated in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the cards support it.
 - Move contrastive or corrective material toward SURPRISES AND MISUNDERSTANDINGS instead of letting it dominate the seed sections.
 - Rewrite contrast-shaped seed wording into positive declarative form when the merged cards already support the same meaning.
+- Keep CARDINAL TRAINING SENTENCE short and portable. Do not let it absorb extra explanation that belongs in other sections.
+- Keep TEACHING PROGRESSION focused on the ordered unfolding of understanding. Move correction-heavy, paradox-heavy, and consequence-heavy lines into the sections built for them.
+- Keep CONCEPT RELATIONS brief and local to nearby source ideas instead of using it as a second summary section.
+- Keep BRIEF MEMORY PHRASES genuinely brief and refrain-like; trim explanatory phrases.
 - Do not merge toward the lowest-common-denominator summary if the cards share a more specific spiritual, symbolic, or metaphysical teaching world.
 
 Formatting rules:
@@ -95,12 +105,14 @@ Given DRAFT CARD and LEARNING FOCUS, return one plain-text teaching block with t
 
 SEED CONCEPT
 CARDINAL TRAINING SENTENCE
+TEACHING PROGRESSION
 ORTHOGONAL FEATURES
 SURPRISES AND MISUNDERSTANDINGS
 AFFAIRS OR ACTIVITIES
 CAUSATIVE AND CONSEQUENCE
 CARDINAL SCENES AND IDIOMS
 BRIEF MEMORY PHRASES
+CONCEPT RELATIONS
 
 Rules:
 - Keep the same schema exactly.
@@ -113,6 +125,10 @@ Rules:
 - Strengthen affirmative declarative wording in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the draft already supports it.
 - Move corrective, paradox, or misunderstanding-heavy wording toward SURPRISES AND MISUNDERSTANDINGS when the draft mixes those lanes together.
 - Rewrite rather-than, instead-of, or not-this-but-that seed wording into positive declarative teaching when the draft already supports the same meaning.
+- Shorten CARDINAL TRAINING SENTENCE until it feels like one portable operating truth rather than a compressed paragraph.
+- Keep TEACHING PROGRESSION as ordered understanding steps, not a hidden misunderstanding section or a hidden consequence section.
+- Trim CONCEPT RELATIONS into brief nearby links rather than another explanatory section.
+- Trim BRIEF MEMORY PHRASES into short refrain-like fragments rather than mini-summaries.
 - Do not refine the card into a more generic, secular, institutional, or textbook-sounding artifact than the draft already is.
 
 Formatting rules:
