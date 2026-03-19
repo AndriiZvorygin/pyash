@@ -65,6 +65,11 @@ This guide keeps contributions consistent for the Pyash codebase.
 - If runtime behavior diverges from spec, fix the source contract (signatures/defaults/data flow) instead of adding wildcard matching or hidden fallback paths.
 - Keep one canonical default per behavior (for example shared prefixes or output handles) so producer/consumer stages stay deterministic.
 - When a quick mitigation is used during debugging, replace it with a spec-aligned implementation before considering the task complete.
+- Never "fix" a runtime mismatch by lying in the declared contract. Do not change a ceremony signature, return type, or produced shape to an incorrect type just to silence an interpreter or registry error.
+- If a value is semantically a map, its signature and call sites must stay map-shaped. Do not relabel it as `num`, `text`, or any other type as a workaround.
+- When a declared signature and runtime value disagree, treat that as a real bug in the producer, importer, or dispatcher. Fix the mismatch at the source rather than mutating downstream contracts to fit the broken state.
+- Do not leave temporary contract hacks in place. Any debugging workaround that changes semantic types, signatures, or data-shape truth must be removed before the work is considered complete.
+- When refactoring verifier or retry flows, prefer consolidating state into one truthful produced structure per stage rather than spreading truth across multiple pass flags and compensating with signature workarounds.
 
 ## Skills Discipline
 - Check the `skills/` folder for relevant skills before starting a task.
