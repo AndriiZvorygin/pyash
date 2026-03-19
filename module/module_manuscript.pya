@@ -904,8 +904,8 @@ su name module manuscript hook checked to name text output be ceremony def
   ob text "true" to name text module manuscript hook pass be text do
   ob name text module manuscript hook pass be equally from text true then be depart do
   fromindex num 1 toindex num 4 be module manuscript hook retry do
-  ob name text module manuscript hook pass be equally from text false then
   su name module manuscript hook semantic defect text stage from text "module manuscript hook semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
+  ob name text module manuscript hook pass be equally from text false then
   su name module manuscript hook semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript hook return stage ob name text output be text do
 prah
@@ -944,8 +944,8 @@ su name module manuscript promise checked to name text output be ceremony def
   ob text "true" to name text module manuscript promise pass be text do
   ob name text module manuscript promise pass be equally from text true then be depart do
   fromindex num 1 toindex num 4 be module manuscript promise retry do
-  ob name text module manuscript promise pass be equally from text false then
   su name module manuscript promise semantic defect text stage from text "module manuscript promise semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
+  ob name text module manuscript promise pass be equally from text false then
   su name module manuscript promise semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript promise return stage ob name text output be text do
 prah
@@ -992,8 +992,8 @@ su name module manuscript roadmap checked to name text output be ceremony def
   ob text "true" to name text module manuscript roadmap pass be text do
   ob name text module manuscript roadmap pass be equally from text true then be depart do
   fromindex num 1 toindex num 4 be module manuscript roadmap retry do
-  ob name text module manuscript roadmap pass be equally from text false then
   su name module manuscript roadmap semantic defect text stage from text "module manuscript roadmap semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
+  ob name text module manuscript roadmap pass be equally from text false then
   su name module manuscript roadmap semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript roadmap return stage ob name text output be text do
 prah
@@ -1032,8 +1032,8 @@ su name module manuscript segment one checked to name text output be ceremony de
   ob text "true" to name text module manuscript segment one pass be text do
   ob name text module manuscript segment one pass be equally from text true then be depart do
   fromindex num 1 toindex num 4 be module manuscript segment one retry do
-  ob name text module manuscript segment one pass be equally from text false then
   su name module manuscript segment one semantic defect text stage from text "module manuscript segment one semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
+  ob name text module manuscript segment one pass be equally from text false then
   su name module manuscript segment one semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript segment one return stage ob name text output be text do
 prah
@@ -1074,8 +1074,8 @@ su name module manuscript segment two checked to name text output be ceremony de
   ob text "true" to name text module manuscript segment two pass be text do
   ob name text module manuscript segment two pass be equally from text true then be depart do
   fromindex num 1 toindex num 4 be module manuscript segment two retry do
-  ob name text module manuscript segment two pass be equally from text false then
   su name module manuscript segment two semantic defect text stage from text "module manuscript segment two semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
+  ob name text module manuscript segment two pass be equally from text false then
   su name module manuscript segment two semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript segment two return stage ob name text output be text do
 prah
@@ -1116,8 +1116,8 @@ su name module manuscript segment three checked to name text output be ceremony 
   ob text "true" to name text module manuscript segment three pass be text do
   ob name text module manuscript segment three pass be equally from text true then be depart do
   fromindex num 1 toindex num 4 be module manuscript segment three retry do
-  ob name text module manuscript segment three pass be equally from text false then
   su name module manuscript segment three semantic defect text stage from text "module manuscript segment three semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
+  ob name text module manuscript segment three pass be equally from text false then
   su name module manuscript segment three semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript segment three return stage ob name text output be text do
 prah
@@ -1159,8 +1159,8 @@ su name module manuscript recap checked to name text output be ceremony def
   ob text "true" to name text module manuscript recap pass be text do
   ob name text module manuscript recap pass be equally from text true then be depart do
   fromindex num 1 toindex num 5 be module manuscript recap retry do
-  ob name text module manuscript recap pass be equally from text false then
   su name module manuscript recap semantic defect text stage from text "module manuscript recap semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
+  ob name text module manuscript recap pass be equally from text false then
   su name module manuscript recap semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript recap return stage ob name text output be text do
 prah
@@ -1201,8 +1201,8 @@ su name module manuscript cta checked to name text output be ceremony def
   ob text "true" to name text module manuscript cta pass be text do
   ob name text module manuscript cta pass be equally from text true then be depart do
   fromindex num 1 toindex num 4 be module manuscript cta retry do
-  ob name text module manuscript cta pass be equally from text false then
   su name module manuscript cta semantic defect text stage from text "module manuscript cta semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
+  ob name text module manuscript cta pass be equally from text false then
   su name module manuscript cta semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript cta return stage ob name text output be text do
 prah
