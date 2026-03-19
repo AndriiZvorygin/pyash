@@ -17,10 +17,20 @@ function resolveBool(ob, { rememberFn = remember } = {}) {
   return null;
 }
 
+function resolveText(fromtext, { rememberFn = remember } = {}) {
+  if (!fromtext || typeof fromtext !== "object") return null;
+  if (typeof fromtext.text === "string") return fromtext.text;
+  if (typeof fromtext.name === "string") {
+    const fact = rememberFn(fromtext.name);
+    if (typeof fact?.ob?.text === "string") return fact.ob.text;
+  }
+  return null;
+}
+
 export function guarantee(sentence, { remember: rememberFn = remember } = {}) {
   const ok = resolveBool(sentence?.ob, { rememberFn });
   if (ok === true) return { ob: { boolean: true }, be: "truth" };
-  const message = sentence?.fromtext?.text ?? "guarantee defective";
+  const message = resolveText(sentence?.fromtext, { rememberFn }) ?? "guarantee defective";
   throwErrorSentence({
     name: "guarantee defective",
     message: String(message),
@@ -39,7 +49,12 @@ export const signatures = [
   { signatureWords: ["be", "guarantee", "fromtext", "text", "ob", "boolean"], handler: guarantee },
   { signatureWords: ["be", "guarantee", "fromtext", "text", "ob", "name", "bool"], handler: guarantee },
   { signatureWords: ["be", "guarantee", "fromtext", "text", "ob", "name", "boolean"], handler: guarantee },
-  { signatureWords: ["be", "guarantee", "fromtext", "text", "ob", "text"], handler: guarantee }
+  { signatureWords: ["be", "guarantee", "fromtext", "text", "ob", "text"], handler: guarantee },
+  { signatureWords: ["be", "guarantee", "fromtext", "name", "text", "ob", "bool"], handler: guarantee },
+  { signatureWords: ["be", "guarantee", "fromtext", "name", "text", "ob", "boolean"], handler: guarantee },
+  { signatureWords: ["be", "guarantee", "fromtext", "name", "text", "ob", "name", "bool"], handler: guarantee },
+  { signatureWords: ["be", "guarantee", "fromtext", "name", "text", "ob", "name", "boolean"], handler: guarantee },
+  { signatureWords: ["be", "guarantee", "fromtext", "name", "text", "ob", "text"], handler: guarantee }
 ];
 
 export default guarantee;

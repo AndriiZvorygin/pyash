@@ -11,6 +11,9 @@ seed line
 CARDINAL TRAINING SENTENCE
 train line
 
+TEACHING PROGRESSION
+- first stage
+
 ORTHOGONAL FEATURES
 - feature
 
@@ -19,6 +22,9 @@ SURPRISES AND MISUNDERSTANDINGS
 
 AFFAIRS OR ACTIVITIES
 - activity
+
+CONCEPT RELATIONS
+- relation
 `.trim();
 
   assert.equal(

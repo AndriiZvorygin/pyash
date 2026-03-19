@@ -11,6 +11,9 @@ test("validateLearnCard accepts a full learn card", () => {
     "CARDINAL TRAINING SENTENCE",
     "sentence",
     "",
+    "TEACHING PROGRESSION",
+    "- first understand",
+    "",
     "ORTHOGONAL FEATURES",
     "- feature",
     "",
@@ -27,7 +30,10 @@ test("validateLearnCard accepts a full learn card", () => {
     "- scene",
     "",
     "BRIEF MEMORY PHRASES",
-    "- phrase"
+    "- phrase",
+    "",
+    "CONCEPT RELATIONS",
+    "- relation"
   ].join("\n");
 
   assert.equal(validateLearnCard(card), "");
@@ -42,7 +48,7 @@ test("validateLearnCard rejects missing headings", () => {
     "sentence"
   ].join("\n");
 
-  assert.match(validateLearnCard(card), /missing heading ORTHOGONAL FEATURES/u);
+  assert.match(validateLearnCard(card), /missing heading TEACHING PROGRESSION/u);
 });
 
 test("validateLearnCard rejects empty sections", () => {
@@ -52,6 +58,9 @@ test("validateLearnCard rejects empty sections", () => {
     "",
     "CARDINAL TRAINING SENTENCE",
     "sentence",
+    "",
+    "TEACHING PROGRESSION",
+    "- first understand",
     "",
     "ORTHOGONAL FEATURES",
     "- feature",
@@ -69,7 +78,10 @@ test("validateLearnCard rejects empty sections", () => {
     "- scene",
     "",
     "BRIEF MEMORY PHRASES",
-    "- phrase"
+    "- phrase",
+    "",
+    "CONCEPT RELATIONS",
+    "- relation"
   ].join("\n");
 
   assert.match(validateLearnCard(card), /empty section CAUSATIVE AND CONSEQUENCE/u);
