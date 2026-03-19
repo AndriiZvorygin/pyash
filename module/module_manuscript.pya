@@ -37,8 +37,7 @@ Positive rules:
 - Match the source topic.
 - Prefer urgency, clarity, and curiosity over vagueness.
 - Focus on tension or truth, not setup or summary.
-
-Negative rules:
+- A short direct truth line is acceptable when it is source-faithful and strong enough to open the manuscript.
 - Do not summarize the promise.
 - Do not jump straight to payoff language like joy, healing, or transformation unless framed as immediate tension or truth.
 - Do not sound like a recap, lesson, or conclusion..text.quoted be text ya
@@ -80,26 +79,24 @@ exists su name module manuscript promise prompt ob text quoted.text.You are writ
 Task:
 - Write the 3 to 12 second promise.
 - Keep it between 18 and 24 words.
-- Make a clear promise about what the listener will understand, see, or be able to notice by the end of the full teaching arc.
+- The promise must give the listener a clear reason to keep listening by stating the main benefit or understanding they will gain from the full manuscript.
 
 Positive rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 - Stay grounded in the source.
 - Speak like a narrator, not a list.
-- The promise should describe the outcome of all three segments together, not just the next section.
-- It should imply the full arc: what humility really is, what hidden correction it reveals, and why that matters in lived experience.
-- Prefer one sentence with three short movements that mirror the manuscript arc.
+- Make it feel like a payoff, not a roadmap.
+- Reflect the whole teaching arc, but do not list the three stages or sound like an outline.
+- Prefer a concrete shift in understanding, perception, or practical noticing.
+- Make it easy to understand on first hearing and specific rather than vague.
 - Target 21 words.
-- Movement 1 should name what humility is or how it should be understood.
-- Movement 2 should name the key misunderstanding or hidden correction from Segment 2.
-- Movement 3 should name the lived consequence or effect from Segment 3.
-- Keep the sentence outcome-focused: tell the listener what they will come to see or notice.
 
 Negative rules:
+- Avoid abstract filler, generic uplift, or structural wording.
+- Do not sound like an outline, summary taxonomy, or stage list.
 - Do not focus on only one metaphor or only one section's payoff.
-- Do not collapse the sentence into only setup plus payoff while omitting the hidden correction.
-- Do not merely summarize tone; explicitly name the understanding, the correction, and the consequence..text.quoted be text ya
+- Stay faithful to what the manuscript actually delivers..text.quoted be text ya
 
 exists su name module manuscript promise fit prompt ob text quoted.text.You rewrite a spoken teaching promise so it fits a strict word-count band without losing its meaning.
 
@@ -112,7 +109,7 @@ Rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 - Do not add new claims.
-- Preserve the three-part arc: understanding, correction, consequence.
+- Preserve the same main payoff and practical understanding gain.
 - Prefer tightening over expanding.
 - Target 21 words and cut hard before adding.
 - Return one clean sentence only..text.quoted be text ya
@@ -128,13 +125,15 @@ Rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 - Keep the roadmap concrete, plain, and easy to follow on first listen.
-- Mirror the manuscript's actual three-stage progression in order: establish, reveal, expand.
-- Name what each stage does more than what it feels like.
-- Use short spoken clauses, not a list.
+- Mirror the manuscript's actual three-stage progression in order.
+- Lean toward what the listener will get from staying with the manuscript.
+- Make it sound like a preview of what is coming next, not like a compressed thesis statement.
+- Keep the three understanding moves visible in sequence.
+- Use short spoken clauses with clear roadmap language such as first, then, and finally when that helps the line sound like a roadmap.
 - Do not repeat the hook or promise wording.
-- Light payoff is allowed when it clearly matches what the finished segments actually deliver.
+- Payoff wording is preferred when it clearly matches what the finished segments actually deliver.
 - Avoid extra imagery, metaphor, doctrinal flourish, or inflated payoff beyond the finished segments.
-- Do not summarize the topic generally when the segments already name the actual steps..text.quoted be text ya
+- Do not summarize the topic generally when the segments already show the actual steps..text.quoted be text ya
 
 exists su name module manuscript roadmap fit prompt ob text quoted.text.You rewrite a spoken roadmap so it fits a strict short-word band.
 
@@ -147,9 +146,12 @@ Rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 - Use one sentence.
-- Keep the three-stage order clear.
-- Preserve the actual establish, reveal, expand progression.
-- Prefer plain stage-action wording, but allow compact payoff wording when it stays faithful to the finished segments.
+- Keep the three-step order clear.
+- Preserve the actual segment progression.
+- Prefer payoff-led spoken wording when it stays faithful to the finished segments.
+- The line may imply the stage labels through concrete benefits or understanding gains; it does not need to say establish, reveal, or expand literally.
+- Make it sound like a preview of what is coming next rather than a finished conclusion.
+- Prefer simple roadmap connectors like first, then, and finally when they help the line read naturally.
 - Cut repetition before changing meaning..text.quoted be text ya
 
 exists su name module manuscript segment one prompt ob text quoted.text.You are writing Segment 1 of a long-form teaching manuscript.
@@ -173,6 +175,7 @@ Rules:
 - Do not take the main idea from SURPRISES AND MISUNDERSTANDINGS.
 - Do not frame the segment as correcting a misconception.
 - Prefer affirmative declarative language over contrastive or defensive phrasing.
+- Name the topic directly and naturally from the hook and source instead of opening with generic labels like `the system`.
 - Define what the system is and how it works more than what it is not.
 - Prefer the balance between pride and false humility, the fallible-brothers-and-sisters frame, and the raw-material/perfect-possibility frame.
 - Do not make transparent-vessel, channel, or flow language the main mechanism if another establish framing from SEED CONCEPT or CARDINAL TRAINING SENTENCE can do the job.
@@ -208,7 +211,7 @@ Task:
 - Write the 60 to 105 second segment.
 - Keep it between 95 and 115 words.
 - This segment reveals the hidden layer.
-- Its job is to expose a common misunderstanding about the topic and reveal the deeper mechanism in the source.
+- Its job is to expose a source-supported misunderstanding about the topic and clarify what the source is actually saying.
 
 Positive rules:
 - The hook already defines the topic, so do not re-introduce the topic from scratch.
@@ -219,14 +222,14 @@ Positive rules:
 - Add new substance rather than repeating Segment 1.
 - Treat Segment 1 as already known background.
 - You may borrow a BRIEF MEMORY PHRASE that has not already been used in earlier segments.
-- Spend most of the segment on the hidden correction, overlooked dependency, or subtle contradiction.
+- Spend most of the segment on the hidden correction, surprising clarification, or overlooked tension in the source.
 - Correct a misunderstanding about the topic itself, not about Segment 1.
-- Reveal a deeper mechanism from the source that Segment 1 has not already covered.
 - Build the segment around one explicit line from SURPRISES AND MISUNDERSTANDINGS.
 - Use one misunderstanding family, or at most two closely complementary misunderstandings, for one coherent reveal arc.
-- Use ORTHOONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE only as support for that chosen correction.
+- You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support for that chosen clarification.
+- If you use an activity or scene, prefer one that was not the main grounding move in earlier segments.
 - Treat SEED CONCEPT and CARDINAL TRAINING SENTENCE as background only, not as the main source lane for this segment.
-- Prefer only source-explicit hidden tensions and mechanisms.
+- Prefer only source-explicit misunderstandings, surprises, tensions, and clarifications.
 - Stay very close to source wording for the hidden-layer claim instead of inventing cleaner abstractions.
 - If Segment 1 already used the channel, transparent-vessel, flow, or quiet-knowledge framing, choose a different correction family for Segment 2, such as weakness, false authority, love not running out, or gradual maturity.
 - Prefer a different wording surface from Segment 1 instead of echoing its key nouns and phrases.
@@ -245,13 +248,13 @@ Negative rules:
 Internal structure:
 - Minimal orientation.
 - Strong claim.
-- Deeper mechanism.
-- More specific example.
+- Clarifying explanation.
+- More specific grounding example, scene, or activity.
 - Stronger implication.
 
 Must cover:
 - expose a common false or incomplete understanding about the topic
-- explain the deeper or hidden mechanism from the source
+- clarify what the source is actually saying about that misunderstanding
 - add understanding that Segment 1 did not already cover
 
 What it should feel like:
@@ -285,18 +288,20 @@ Positive rules:
 - Complete the main teaching arc with clear progression.
 - Assume Segment 1 and Segment 2 are already done.
 - You may borrow a BRIEF MEMORY PHRASE that has not already been used in earlier segments.
-- Spend the words on consequence, propagation, lived effects, behavior, systems, or future stakes.
+- Spend the words on CAUSATIVE AND CONSEQUENCE first: consequence, propagation, lived effects, behavior, systems, or future stakes.
+- You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support.
+- If you use an activity or scene, prefer one that was not the main grounding move in earlier segments.
 
 Negative rules:
 - Do not spend the segment re-explaining the basic model or the hidden correction.
 - Do not mainly echo Segment 1 or Segment 2 phrasing.
 - Do not repeat the hook or promise wording.
+- Do not treat SURPRISES AND MISUNDERSTANDINGS as the main lane when CAUSATIVE AND CONSEQUENCE already gives the outcome path.
 
 Internal structure:
 - Very fast setup.
 - Clear consequence.
-- System-level mechanism.
-- Broader real-world scenario.
+- Broader real-world scenario or activity.
 - Strong implication.
 
 Must cover:
@@ -402,15 +407,23 @@ Pass when:
 - the candidate clearly performs the assigned cognitive job
 - the section emphasis matches the role
 - the candidate follows the intended progression and avoids the main failure modes
+- for hook tasks, a short direct truth line may pass when it is source-faithful, clear, and strong enough to open the manuscript, even if it is not maximally clever or curiosity-heavy
+- for segment two tasks, a reveal may pass when it cleanly names a source-supported misunderstanding or incomplete understanding, clarifies what the source says instead, and adds a meaningful correction beyond segment one, even if it does not introduce a separate mechanism layer
+- for cta tasks, a practical invitation may pass when it is source-faithful, actionable, and a natural extension of the recap, even if it is not maximally vivid or emotionally sharp
 
 Fail when:
 - the candidate mainly performs a different role
 - the candidate misses one of the core required moves
 - the candidate mostly repeats prior material when progression is required
 - the candidate violates an explicit must-not in the role intent
+- for hook tasks, fail only when the line is clearly too flat to open the manuscript and you can state a materially stronger 6 to 8 word replacement that still fits the source and promise
+- for segment two tasks, fail only when the paragraph does not actually land a misunderstanding-plus-clarification reveal, mostly restates segment one's basic establish function, or you can point to a materially clearer correction from the same source lane
+- for cta tasks, fail only when the line is clearly not actionable, not connected to the insight, or you can state a materially stronger 20 to 25 word replacement that still fits the source and recap
 
 Output:
 - First output one short paragraph.
+- If you fail a hook task, include one replacement line in the reasoning paragraph as `Better hook: ...`
+- If you fail a cta task, include one replacement line in the reasoning paragraph as `Better cta: ...`
 - Final line must be exactly PASS or FAIL.
 - No bullets, no labels, no markdown.
 - No text after the final verdict line..text.quoted be text ya
@@ -449,14 +462,14 @@ Rules:
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
 exists su name module manuscript segment one intent ob text quoted.text.Establish the system. Define the core idea clearly, explain the basic mechanism, and give a simple concrete example. Stay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE, with at most one light example from AFFAIRS OR ACTIVITIES. Prefer affirmative declarative language that says what the system is and how it works, rather than contrastive language about what it is not. Prefer balance, fallible service, and raw-material/perfect-possibility framings before channel or transparent-vessel language. Do not introduce hidden contradictions, jump to large consequences, or frame the segment as a correction..text.quoted be text ya
-exists su name module manuscript segment two intent ob text quoted.text.Reveal the hidden layer. Correct a source-supported misunderstanding or incomplete understanding about the topic, preferably one named in SURPRISES AND MISUNDERSTANDINGS, explain the deeper mechanism from the source, and add understanding that segment one did not already cover. Use only hidden tensions that are explicit or very near-explicit in the source. Do not act like segment one itself is what needs correction, do not mostly repeat segment one, do not lean on unsupported social generalizations, do not reuse the transparent-vessel or channel explanation as the main point, and prefer a different wording surface from segment one instead of echoing its key phrases..text.quoted be text ya
-exists su name module manuscript segment three intent ob text quoted.text.Expand the teaching outward. Assume segment one and segment two are already done, then show consequence, implication, application, or larger meaning. Connect the idea to lived reality, behavior, systems, or future stakes. Do not mainly re-explain the mechanism or the hidden correction..text.quoted be text ya
-exists su name module manuscript roadmap intent ob text quoted.text.Name the three understanding stages in order so the roadmap mirrors the actual manuscript progression: establish, reveal, expand. Stay close to the actual finished segments. Prefer plain stage actions, but allow compressed payoff wording when it is a faithful summary of what the segments actually deliver. Do not invent a stronger conclusion than the segments support..text.quoted be text ya
-exists su name module manuscript promise intent ob text quoted.text.Promise the outcome of the full three-stage teaching arc, not just the setup. Stay faithful to what the actual manuscript will deliver. The sentence must cover all three movements: what humility is, what misunderstanding it corrects, and what lived consequence follows..text.quoted be text ya
-exists su name module manuscript hook intent ob text quoted.text.Open with immediate tension or truth that fits the promise and source. Create curiosity or value without drifting from the teaching..text.quoted be text ya
+exists su name module manuscript segment two intent ob text quoted.text.Reveal the hidden layer. Correct a source-supported misunderstanding or incomplete understanding about the topic, preferably one named in SURPRISES AND MISUNDERSTANDINGS, and clarify what the source is actually saying instead. Add understanding that segment one did not already cover. A strong misunderstanding-plus-clarification reveal is enough; segment two does not need to invent a separate mechanism layer beyond what the source already gives. Use only misunderstandings, surprises, tensions, and clarifications that are explicit or very near-explicit in the source. You may ground the clarification with AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE, but they are optional supports rather than required ingredients. Do not act like segment one itself is what needs correction, do not mostly repeat segment one, do not reuse the transparent-vessel or channel explanation as the main point, and prefer a different wording surface from segment one instead of echoing its key phrases. Generalized lead-ins are acceptable only when they stay close to a misunderstanding the source itself names or strongly implies..text.quoted be text ya
+exists su name module manuscript segment three intent ob text quoted.text.Expand the teaching outward. Assume segment one and segment two are already done, then show consequence, implication, application, or larger meaning. Stay mainly with CAUSATIVE AND CONSEQUENCE. You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support, but they are optional supports rather than required ingredients. Connect the idea to lived reality, behavior, systems, or future stakes. Do not mainly re-explain the system or the hidden correction..text.quoted be text ya
+exists su name module manuscript roadmap intent ob text quoted.text.Give the listener a concrete reason to keep watching by previewing what the manuscript will deliver in three ordered understanding moves. The roadmap should sound like a real preview of what comes next, not like a compressed thesis or recap. Mirror the actual finished segments, and use simple ordered wording when that helps the sequence feel obvious on first listen. Stay close to the actual segment arc. Do not invent a stronger conclusion than the segments support..text.quoted be text ya
+exists su name module manuscript promise intent ob text quoted.text.Promise the main benefit or understanding the listener will gain from the full manuscript. Make it feel like payoff, not outline. Stay faithful to what the actual manuscript will deliver, and prefer a concrete shift in understanding, perception, or practical noticing over structural wording..text.quoted be text ya
+exists su name module manuscript hook intent ob text quoted.text.Open with immediate tension or truth that fits the promise and source. A short direct truth line is acceptable when it is source-faithful, clear, and strong enough to open the manuscript. Do not fail a modest direct truth line unless a materially stronger opening is obvious from the same source and promise. Create curiosity or value without drifting from the teaching..text.quoted be text ya
 exists su name module manuscript recap intent ob text quoted.text.Compress segment one, segment two, and segment three into one portable truth. Do not introduce new ideas..text.quoted be text ya
 exists su name module manuscript cta intent ob text quoted.text.End with a practical invitation that extends or embodies the insight from the full manuscript. Keep it actionable and natural..text.quoted be text ya
-exists su name module manuscript segment two distinct intent ob text quoted.text.Segment two must advance beyond segment one by focusing on one clear reveal arc from SURPRISES AND MISUNDERSTANDINGS, then supporting it with a deeper mechanism or image from nearby source lanes. Aim for roughly 80 percent new understanding and at most about 20 percent shared anchor language or teaching world with segment one. Shared topic words, one anchor phrase, or one repeated motif are acceptable. Fail only when segment two mostly restates segment one's main mechanism, example, or payoff. It should not reuse the same example as the main example, repeat the same payoff, or fall back to the same transparent-vessel, channel, pipe, water, "love flows through us", or "Creator expresses through us" frame as the main explanation. It should also avoid heavy echo of segment one's dominant nouns and phrases when another valid correction family is available. Segment two may use one misunderstanding family, or at most two closely complementary misunderstandings, but it should not turn into a grab bag of several corrections. If segment one already used that frame, segment two should switch toward a different reveal lane such as weakness, false authority, love not running out, or the fantasy of instant maturity..text.quoted be text ya
+exists su name module manuscript segment two distinct intent ob text quoted.text.Segment two may stay on the same topic, same source cluster, and same overall teaching arc as segment one. Shared topic words, repeated anchor imagery, and some overlap in vocabulary are acceptable when they support a real reveal. Segment two only needs to advance functionally: it should add a misunderstanding, correction, paradox, tension, or clarification that was not the main job of segment one. Fail only when segment two mostly restates segment one's main mechanism, example, or payoff without adding a meaningful reveal. Do not fail merely because the same channel, service, humility, fear, worth, or Creator language appears again. Segment two may use one misunderstanding family, or at most two closely complementary misunderstandings, so long as they form one coherent reveal arc rather than a grab bag of unrelated corrections..text.quoted be text ya
 exists su name module manuscript segment three distinct intent ob text quoted.text.Segment three must advance beyond segments one and two by focusing on clear consequence, application, real-world effect, or larger significance. It should not mainly restate the hidden correction or re-explain the same mechanism..text.quoted be text ya
 
 exists su name module manuscript source thrust request template ob text quoted.text.SOURCE:
@@ -691,7 +704,7 @@ su name module manuscript hook retry fromindex num 0 toindex num 0 be ceremony d
   ob name text module manuscript hook role pass be equally from text true then
   ob text "true" to name text module manuscript hook pass be text do
   ob name text module manuscript hook pass be equally from text true then be depart do
-  su name module manuscript hook retry request role stage ob text "ROLE:\nHook centered on tension or truth.\n\nTARGET_WORDS:\n6-8\n\nGOAL_WORDS:\n7\n\nFEEDBACK:\nWrite exactly one spoken line of 7 words. Lead with tension or truth. No setup, no explanation, no extra clause. Do not summarize the promise. Do not jump straight to payoff language like joy, healing, transformation, or shared suffering. Make it feel like an opening contradiction, warning, or truth the listener wants resolved.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript hook retry request be text do
+  su name module manuscript hook retry request role stage ob text "ROLE:\nHook centered on tension or truth.\n\nTARGET_WORDS:\n6-8\n\nGOAL_WORDS:\n7\n\nFEEDBACK:\nWrite exactly one spoken line of 7 words. Lead with tension or truth. No setup, no explanation, no extra clause. Do not summarize the promise. Do not jump straight to payoff language like joy, healing, transformation, or shared suffering. A direct truth line is acceptable when it is clear, source-faithful, and strong enough to open the manuscript; it does not need to force a contradiction or warning. If ROLE_FEEDBACK gives a better hook line, prefer using that stronger line or a close improvement.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript hook retry request be text do
   su name module manuscript hook retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript hook retry request be plus do
   su name module manuscript hook retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript hook retry request be plus do
   su name module manuscript hook retry request role review stage ob name text module manuscript role review to name module manuscript hook retry request be plus do
@@ -736,7 +749,7 @@ su name module manuscript promise retry fromindex num 0 toindex num 0 be ceremon
   ob name text module manuscript promise role pass be equally from text true then
   ob text "true" to name text module manuscript promise pass be text do
   ob name text module manuscript promise pass be equally from text true then be depart do
-  su name module manuscript promise retry request begin stage ob text "TARGET_WORDS:\n18-24\n\nGOAL_WORDS:\n21\n\nFEEDBACK:\nWrite exactly one sentence of 21 words. Promise the outcome of the full teaching arc, not the next section. Keep it spoken and concrete. Use exactly three short movements in one sentence. Movement 1 names what humility is. Movement 2 names the key misunderstanding or hidden correction from Segment 2. Movement 3 names the lived consequence from Segment 3. Cut hard before adding. Do not collapse the sentence into only a setup and payoff. Do not focus on only one metaphor or one section's payoff.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript promise retry request be text do
+  su name module manuscript promise retry request begin stage ob text "TARGET_WORDS:\n18-24\n\nGOAL_WORDS:\n21\n\nFEEDBACK:\nWrite exactly one sentence of 21 words. Give the listener a clear reason to keep listening by naming the main benefit or understanding they will gain from the full manuscript. Make it feel like payoff, not roadmap. Keep it spoken, concrete, and easy to understand on first hearing. Reflect the whole arc, but do not list the stages or sound like an outline. Prefer a concrete shift in understanding, perception, or practical noticing. Avoid abstract filler, generic uplift, or structural wording. Cut hard before adding. Stay faithful to what the manuscript actually delivers.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript promise retry request be text do
   su name module manuscript promise retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript promise retry request be plus do
   su name module manuscript promise retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript promise retry request be plus do
   su name module manuscript promise retry request role review stage ob name text module manuscript role review to name module manuscript promise retry request be plus do
@@ -789,7 +802,7 @@ su name module manuscript roadmap retry fromindex num 0 toindex num 0 be ceremon
   ob name text module manuscript roadmap role pass be equally from text true then
   ob text "true" to name text module manuscript roadmap pass be text do
   ob name text module manuscript roadmap pass be equally from text true then be depart do
-  su name module manuscript roadmap retry request role stage ob text "ROLE:\nRoadmap naming the three stages in order: establish, reveal, expand.\n\nTARGET_WORDS:\n16-20\n\nGOAL_WORDS:\n18\n\nFEEDBACK:\nGenerate a fresh roadmap from the finished segments and verifier feedback, not from the failed draft. Write exactly one sentence of 18 words. Use three short clauses in order: first establish, then reveal, finally expand. Name the actual understanding steps from the finished segments. Keep the wording plain. Light payoff is allowed only when it is clearly supported by the finished segments. No examples, no metaphor, no doctrinal flourish, and no stronger conclusion than the segments support. If the line becomes too short, add one more plain stage-action phrase rather than vague payoff wording.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript roadmap retry request be text do
+  su name module manuscript roadmap retry request role stage ob text "ROLE:\nRoadmap previewing what the listener will get from the manuscript in three ordered understanding moves.\n\nTARGET_WORDS:\n16-20\n\nGOAL_WORDS:\n18\n\nFEEDBACK:\nGenerate a fresh roadmap from the finished segments and verifier feedback, not from the failed draft. Write exactly one sentence of 18 words. Use three short clauses in order. Let the line lean toward what the listener will understand, notice, or gain by staying with the manuscript. The sequence still needs to mirror the finished segments, but you do not need to say establish, reveal, or expand literally if the progression is obvious from the payoff wording. Keep it concrete and spoken. No examples, no metaphor, no doctrinal flourish, and no stronger conclusion than the segments support. If the line becomes too short, add one more concrete gain or step rather than vague hype.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript roadmap retry request be text do
   su name module manuscript roadmap retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request role review stage ob name text module manuscript role review to name module manuscript roadmap retry request be plus do
@@ -881,7 +894,7 @@ su name module manuscript segment two retry fromindex num 0 toindex num 0 be cer
   ob name text module manuscript segment two distinct pass be equally from text true then
   ob text "true" to name text module manuscript segment two pass be text do
   ob name text module manuscript segment two pass be equally from text true then be depart do
-  su name module manuscript segment two retry request role stage ob text "ROLE:\nSegment 2 reveals the hidden layer. Correct a source-supported misunderstanding about the topic, explain the deeper mechanism from the source, and add understanding Segment 1 did not already cover.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n102\n\nFEEDBACK:\nGenerate a fresh Segment 2 from the full source, Segment 1 background, and verifier feedback, not from the failed draft. Keep this rewrite between 100 and 106 words. Use exactly 5 complete sentences. Sentence 1 names an explicit misunderstanding from SURPRISES AND MISUNDERSTANDINGS, preferably using the source's own framing. Sentence 2 explains the deeper mechanism behind that reveal. Sentence 3 gives one concrete source-grounded image, scene, or consequence tied to the same reveal arc. Sentence 4 sharpens the insight without treating Segment 1 itself as the error. Sentence 5 lands the implication. Treat Segment 1 as already established background. Keep roughly 80 percent of the paragraph on a new reveal lane and allow at most about 20 percent shared anchor language or teaching world from Segment 1. Do not restate Segment 1's basic model, reuse its main example, or repeat its payoff. Use one misunderstanding family, or at most two closely complementary misunderstandings, for one coherent reveal arc. Use SURPRISES AND MISUNDERSTANDINGS as the main lane, with the rest of the source only as support. Stay close to source wording for the hidden-layer claim, but prefer a different wording surface from Segment 1 instead of echoing its key nouns and phrases. Do not pile on unrelated surprises, scenes, or metaphors. Avoid generalized framings like many assume, people think, or we often believe unless the source explicitly supports that framing. Do not introduce fresh abstractions like moral virtue, failure, or self-esteem unless the source states them. Do not reuse the transparent-vessel, pipe, water, channel, or Creator-expresses-through-us explanation as the main mechanism.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment two retry request be text do
+  su name module manuscript segment two retry request role stage ob text "ROLE:\nSegment 2 reveals the hidden layer. Correct a source-supported misunderstanding about the topic and clarify what the source is actually saying instead.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n102\n\nFEEDBACK:\nGenerate a fresh Segment 2 from the full source, Segment 1 background, and verifier feedback, not from the failed draft. Keep this rewrite between 100 and 106 words. Use exactly 5 complete sentences. Sentence 1 names an explicit misunderstanding from SURPRISES AND MISUNDERSTANDINGS, preferably using the source's own framing. Sentence 2 clarifies what the source is actually saying instead. Sentence 3 may give one concrete source-grounded image, scene, activity, or consequence tied to the same reveal arc when that helps grounding. Sentence 4 sharpens the insight without treating Segment 1 itself as the error. Sentence 5 lands the implication. Treat Segment 1 as already established background. Shared topic words, overlap in source cluster, and some repeated anchor language are acceptable. The goal is not a different topic but a different function: add a reveal, correction, paradox, tension, or clarification that was not Segment 1's main job. Do not restate Segment 1's basic model, reuse its main example as the main example again, or simply repeat its payoff. Use one misunderstanding family, or at most two closely complementary misunderstandings, for one coherent reveal arc. Use SURPRISES AND MISUNDERSTANDINGS as the main lane. You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support, and if you do, prefer a different grounding move than earlier segments when the source offers one. Stay close to source wording for the hidden-layer claim, but prefer a somewhat fresh sentence surface when possible. Do not pile on unrelated surprises, scenes, or metaphors. Avoid generalized framings like many assume, people think, or we often believe unless the source explicitly supports that framing. Do not introduce fresh abstractions like moral virtue, failure, or self-esteem unless the source states them.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment two retry request be text do
   su name module manuscript segment two retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript segment two retry request be plus do
   su name module manuscript segment two retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript segment two retry request be plus do
   su name module manuscript segment two retry request role review stage ob name text module manuscript role review to name module manuscript segment two retry request be plus do
@@ -935,7 +948,7 @@ su name module manuscript segment three retry fromindex num 0 toindex num 0 be c
   ob name text module manuscript segment three distinct pass be equally from text true then
   ob text "true" to name text module manuscript segment three pass be text do
   ob name text module manuscript segment three pass be equally from text true then be depart do
-  su name module manuscript segment three retry request role stage ob text "ROLE:\nSegment 3 expands to consequence. Show the outcome, scale the idea outward, and connect it to lived reality.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n104\n\nFEEDBACK:\nGenerate a fresh Segment 3 from the source and verifier feedback, not from the failed draft. Keep this rewrite between 100 and 108 words. Assume Segment 1 and Segment 2 are already complete. Use at most one brief setup sentence, then move directly into consequence, propagation, lived effects, or future stakes. Use one direct consequence sentence, one outward scaling sentence, one real-world or behavioral sentence, and one closing implication. Cut repeated mechanism language. Prefer source-strength wording like can, opens, makes room, or begins instead of instantly, immediately, all room, or without restriction. If the section feels short, add one concrete real-world consequence rather than re-explaining the topic or the hidden correction.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment three retry request be text do
+  su name module manuscript segment three retry request role stage ob text "ROLE:\nSegment 3 expands to consequence. Show the outcome, scale the idea outward, and connect it to lived reality.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n104\n\nFEEDBACK:\nGenerate a fresh Segment 3 from the source and verifier feedback, not from the failed draft. Keep this rewrite between 100 and 108 words. Assume Segment 1 and Segment 2 are already complete. Stay mainly with CAUSATIVE AND CONSEQUENCE. You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support, and if you do, prefer a different grounding move than earlier segments when the source offers one. Use at most one brief setup sentence, then move directly into consequence, propagation, lived effects, or future stakes. Use one direct consequence sentence, one outward scaling sentence, one real-world, behavioral, or activity-grounded sentence, and one closing implication. Cut repeated explanation of the system or the hidden correction. Prefer source-strength wording like can, opens, makes room, or begins instead of instantly, immediately, all room, or without restriction. If the section feels short, add one concrete real-world consequence rather than re-explaining the topic or the hidden correction.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment three retry request be text do
   su name module manuscript segment three retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript segment three retry request be plus do
   su name module manuscript segment three retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript segment three retry request be plus do
   su name module manuscript segment three retry request role review stage ob name text module manuscript role review to name module manuscript segment three retry request be plus do
@@ -1059,27 +1072,27 @@ su name module manuscript from text source with text hook hint to name text manu
   su name hint stage ob text of with of this to name text hook_hint be text do
 
   su name module manuscript segment one request begin stage ob text "SOURCE:\n" to name text module manuscript segment one request be text do
-  su name module manuscript segment one request lane stage ob text "Use SEED CONCEPT and CARDINAL TRAINING SENTENCE as the main lane. Prefer balance, fallible service, and raw-material/perfect-possibility framing. Use AFFAIRS OR ACTIVITIES only for one small example. Avoid taking the main mechanism from SURPRISES AND MISUNDERSTANDINGS or from channel or transparent-vessel language when other establish framing is available.\n\n" to name module manuscript segment one request be plus do
+  su name module manuscript segment one request lane stage ob text "Use SEED CONCEPT and CARDINAL TRAINING SENTENCE as the main lane. Name the topic directly and naturally from the hook and source instead of opening with generic labels like the system, this framework, or this teaching. Prefer balance, fallible service, and raw-material/perfect-possibility framing. Use AFFAIRS OR ACTIVITIES only for one small example. Avoid taking the main mechanism from SURPRISES AND MISUNDERSTANDINGS or from channel or transparent-vessel language when other establish framing is available.\n\n" to name module manuscript segment one request be plus do
   su name module manuscript segment one request source stage ob name text module manuscript source to name module manuscript segment one request be plus do
   su name module manuscript segment one stage to name text module manuscript segment one out be module manuscript segment one checked do
 
-  su name module manuscript segment two request begin stage ob text "PRIMARY_SOURCE_LANE:\nUse SURPRISES AND MISUNDERSTANDINGS as the main lane for this segment.\n\nSECONDARY_SOURCE_LANES:\nUse the rest of the source only as support.\n\nPOSITIVE_GOAL:\nBuild one coherent reveal arc from one misunderstanding family, or at most two closely complementary misunderstandings, in the source.\n\nSOURCE:\n" to name text module manuscript segment two request be text do
+  su name module manuscript segment two request begin stage ob text "PRIMARY_SOURCE_LANE:\nUse SURPRISES AND MISUNDERSTANDINGS as the main lane for this segment.\n\nOPTIONAL_SUPPORT_LANES:\nYou may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support.\n\nPOSITIVE_GOAL:\nBuild one coherent reveal arc from one misunderstanding family, or at most two closely complementary misunderstandings, in the source. Clarify what the source is actually saying instead of turning the segment into a mechanism lecture.\n\nSOURCE:\n" to name text module manuscript segment two request be text do
   su name module manuscript segment two request source stage ob name text module manuscript source to name module manuscript segment two request be plus do
   su name module manuscript segment two request avoid header stage ob text "\n\nAVOID_REPEATING_THIS_SEGMENT_1:\n" to name module manuscript segment two request be plus do
   su name module manuscript segment two request prior stage ob name text module manuscript segment one out to name module manuscript segment two request be plus do
   su name module manuscript segment two request avoid lane stage ob text "\n\nNEGATIVE_GUIDANCE:\nDo not build Segment 2 mainly from SEED CONCEPT, CARDINAL TRAINING SENTENCE, or the same explanatory lane already used in Segment 1. Prefer a different misunderstanding family and a different wording surface from Segment 1 whenever the source gives you multiple valid options.\n" to name module manuscript segment two request be plus do
   su name module manuscript segment two stage to name text module manuscript segment two out be module manuscript segment two checked do
 
-  su name module manuscript segment three request begin stage ob text "PRIMARY_GOAL:\nShow the consequence, outcome, real-world effect, or larger meaning that follows from the first two segments.\n\nSOURCE:\n" to name text module manuscript segment three request be text do
+  su name module manuscript segment three request begin stage ob text "PRIMARY_SOURCE_LANE:\nUse CAUSATIVE AND CONSEQUENCE as the main lane for this segment.\n\nOPTIONAL_SUPPORT_LANES:\nYou may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support.\n\nPRIMARY_GOAL:\nShow the consequence, outcome, real-world effect, or larger meaning that follows from the first two segments.\n\nSOURCE:\n" to name text module manuscript segment three request be text do
   su name module manuscript segment three request source stage ob name text module manuscript source to name module manuscript segment three request be plus do
   su name module manuscript segment three request prior one header stage ob text "\n\nSEGMENT 1_BACKGROUND:\n" to name module manuscript segment three request be plus do
   su name module manuscript segment three request segment one stage ob name text module manuscript segment one out to name module manuscript segment three request be plus do
   su name module manuscript segment three request prior two header stage ob text "\n\nSEGMENT 2_BACKGROUND:\n" to name module manuscript segment three request be plus do
   su name module manuscript segment three request segment two stage ob name text module manuscript segment two out to name module manuscript segment three request be plus do
-  su name module manuscript segment three request avoid stage ob text "\n\nNEGATIVE_GUIDANCE:\nDo not mainly re-explain the system or the hidden correction. Use the earlier segments as background and move quickly into consequence, propagation, lived effect, or stakes.\n" to name module manuscript segment three request be plus do
+  su name module manuscript segment three request avoid stage ob text "\n\nNEGATIVE_GUIDANCE:\nDo not mainly re-explain the system or the hidden correction. Do not use SURPRISES AND MISUNDERSTANDINGS as the main lane when CAUSATIVE AND CONSEQUENCE already gives the outcome path. Use the earlier segments as background and move quickly into consequence, propagation, lived effect, or stakes.\n" to name module manuscript segment three request be plus do
   su name module manuscript segment three stage to name text module manuscript segment three out be module manuscript segment three checked do
 
-  su name module manuscript roadmap request begin stage ob text "HOOK HINT:\n" to name text module manuscript roadmap request be text do
+  su name module manuscript roadmap request begin stage ob text "POSITIVE_GOAL:\nWrite one sentence that sounds like a roadmap preview of what comes next. Keep the three steps visible in order, lean toward what the listener will get, and use simple roadmap wording like first, then, and finally when it helps.\n\nHOOK HINT:\n" to name text module manuscript roadmap request be text do
   su name module manuscript roadmap request hint stage ob name text hook_hint to name module manuscript roadmap request be plus do
   su name module manuscript roadmap request segment one header stage ob text "\n\nSEGMENT 1:\n" to name module manuscript roadmap request be plus do
   su name module manuscript roadmap request segment one stage ob name text module manuscript segment one out to name module manuscript roadmap request be plus do
@@ -1091,13 +1104,13 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript roadmap request source stage ob name text module manuscript source to name module manuscript roadmap request be plus do
   su name module manuscript roadmap stage to name text module manuscript roadmap out be module manuscript roadmap checked do
 
-  su name module manuscript promise request begin stage ob text "POSITIVE_GOAL:\nWrite one sentence that promises the outcome of the full three-stage arc.\nMovement 1 names what humility is.\nMovement 2 names the hidden correction.\nMovement 3 names the lived consequence.\n\nSEGMENT 1:\n" to name text module manuscript promise request be text do
+  su name module manuscript promise request begin stage ob text "POSITIVE_GOAL:\nWrite one sentence that gives the listener a clear reason to keep listening by naming the main benefit or understanding they will gain from the full manuscript. Make it feel like payoff, not roadmap. Reflect the whole arc without listing the stages or sounding like an outline.\n\nSEGMENT 1:\n" to name text module manuscript promise request be text do
   su name module manuscript promise request segment one stage ob name text module manuscript segment one out to name module manuscript promise request be plus do
   su name module manuscript promise request segment two header stage ob text "\n\nSEGMENT 2:\n" to name module manuscript promise request be plus do
   su name module manuscript promise request segment two stage ob name text module manuscript segment two out to name module manuscript promise request be plus do
   su name module manuscript promise request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript promise request be plus do
   su name module manuscript promise request segment three stage ob name text module manuscript segment three out to name module manuscript promise request be plus do
-  su name module manuscript promise request negative header stage ob text "\n\nNEGATIVE_GUIDANCE:\nDo not rely on only one section's payoff. Do not omit the hidden correction. Do not write only tone or inspiration; name the arc clearly.\n" to name module manuscript promise request be plus do
+  su name module manuscript promise request negative header stage ob text "\n\nNEGATIVE_GUIDANCE:\nDo not sound like an outline, stage list, or structural summary. Do not rely on only one section's payoff. Do not use generic uplift or abstract filler. Stay faithful to what the finished manuscript actually delivers.\n" to name module manuscript promise request be plus do
   su name module manuscript promise request source header stage ob text "\n\nSOURCE:\n" to name module manuscript promise request be plus do
   su name module manuscript promise request source stage ob name text module manuscript source to name module manuscript promise request be plus do
   su name module manuscript promise stage to name text module manuscript promise out be module manuscript promise checked do
@@ -1170,11 +1183,11 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript segment one repaired stage ob name text output to name text module manuscript segment one out be text do
 
   su name module manuscript segment two final verify stage be verify as wo word count atleast num 95 atmost num 115 from name text module manuscript segment two out to name map module manuscript segment two final verify do
-  ob text of pass of module manuscript segment two final verify to name text module manuscript segment two pass be text do
+  ob text of pass of module manuscript segment two final verify to name text module manuscript segment two final verify pass be text do
   su name module manuscript segment two final output stage ob name text module manuscript segment two out to name text output be text do
-  ob name text module manuscript segment two pass be equally from text false then
+  ob name text module manuscript segment two final verify pass be equally from text false then
   fromindex num 1 toindex num 5 be module manuscript segment two retry do
-  ob name text module manuscript segment two pass be equally from text false then
+  ob name text module manuscript segment two final verify pass be equally from text false then
   su name module manuscript segment two final guarantee stage ob bool lie fromtext text "module manuscript segment two word count defective" be guarantee do
   su name module manuscript segment two repaired stage ob name text output to name text module manuscript segment two out be text do
 
@@ -1188,20 +1201,20 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript segment three repaired stage ob name text output to name text module manuscript segment three out be text do
 
   su name module manuscript recap final verify stage be verify as wo word count atleast num 40 atmost num 50 from name text module manuscript recap out to name map module manuscript recap final verify do
-  ob text of pass of module manuscript recap final verify to name text module manuscript recap pass be text do
+  ob text of pass of module manuscript recap final verify to name text module manuscript recap final verify pass be text do
   su name module manuscript recap final output stage ob name text module manuscript recap out to name text output be text do
-  ob name text module manuscript recap pass be equally from text false then
+  ob name text module manuscript recap final verify pass be equally from text false then
   fromindex num 1 toindex num 7 be module manuscript recap retry do
-  ob name text module manuscript recap pass be equally from text false then
+  ob name text module manuscript recap final verify pass be equally from text false then
   su name module manuscript recap final guarantee stage ob bool lie fromtext text "module manuscript recap word count defective" be guarantee do
   su name module manuscript recap repaired stage ob name text output to name text module manuscript recap out be text do
 
   su name module manuscript cta final verify stage be verify as wo word count atleast num 20 atmost num 25 from name text module manuscript cta out to name map module manuscript cta final verify do
-  ob text of pass of module manuscript cta final verify to name text module manuscript cta pass be text do
+  ob text of pass of module manuscript cta final verify to name text module manuscript cta final verify pass be text do
   su name module manuscript cta final output stage ob name text module manuscript cta out to name text output be text do
-  ob name text module manuscript cta pass be equally from text false then
+  ob name text module manuscript cta final verify pass be equally from text false then
   fromindex num 1 toindex num 5 be module manuscript cta retry do
-  ob name text module manuscript cta pass be equally from text false then
+  ob name text module manuscript cta final verify pass be equally from text false then
   su name module manuscript cta final guarantee stage ob bool lie fromtext text "module manuscript cta word count defective" be guarantee do
   su name module manuscript cta repaired stage ob name text output to name text module manuscript cta out be text do
 
