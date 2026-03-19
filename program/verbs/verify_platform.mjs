@@ -1,5 +1,6 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { state } from "../bridge/state.mjs";
 
 async function resolveInterpret() {
   const mod = await import("../bridge/index.mjs");
@@ -31,6 +32,15 @@ function resolveTextFromValue(value) {
     return String(fact?.ob?.text ?? "");
   }
   return "";
+}
+
+function mergeMissingFieldsFromEvoke(sentence) {
+  const evoke = state.currentEvokeRef || state.currentEvoke;
+  if (!evoke || evoke === sentence || typeof evoke !== "object") return sentence;
+  return {
+    ...evoke,
+    ...sentence
+  };
 }
 
 function resolveFactText(name) {
@@ -133,7 +143,7 @@ function isSentenceComplete(text) {
   );
 }
 
-async function invokeMind({ mindName, prompt, outputName }) {
+async function invokeMind({ mindName, prompt, outputName, maxTokens = null }) {
   const interpret = await resolveInterpret();
   const call = {
     mood: "do",
@@ -143,6 +153,9 @@ async function invokeMind({ mindName, prompt, outputName }) {
     to: { name: outputName, nameTypeWords: ["text"] },
     by: { num: 0 }
   };
+  if (Number.isFinite(Number(maxTokens))) {
+    call.atmost = { num: Number(maxTokens) };
+  }
   await interpret(call);
   return resolveFactText(outputName);
 }
@@ -170,11 +183,11 @@ async function invokeCeremony({ ceremonyName, prompt, outputName }) {
   return resolveFactText(outputName);
 }
 
-async function invokePlatform({ platformName, prompt, outputName }) {
+async function invokePlatform({ platformName, prompt, outputName, maxTokens = null }) {
   const fact = remember(platformName);
   const isMind = fact?.be === "mind";
   if (isMind) {
-    return invokeMind({ mindName: platformName, prompt, outputName });
+    return invokeMind({ mindName: platformName, prompt, outputName, maxTokens });
   }
   const refineryTarget = await resolveRefineryTarget(platformName);
   const isRefinery = Boolean(refineryTarget ?? await resolveIsRefinery(platformName));
@@ -371,24 +384,28 @@ function evaluateDeterministicChecks(candidate, checks, sentence) {
 }
 
 export async function verifyPlatform(sentence) {
-  const task = resolveTextFromValue(sentence?.ob);
-  const generatorName = String(sentence?.for?.name ?? sentence?.for?.text ?? "").trim();
-  const outputName = String(sentence?.to?.name ?? "").trim();
-  const verifierNames = resolveVerifierNames(sentence);
-  const checkSeries = resolveCheckSeries(sentence);
+  const effectiveSentence = mergeMissingFieldsFromEvoke(sentence);
+  const task = resolveTextFromValue(effectiveSentence?.ob);
+  const generatorName = String(effectiveSentence?.for?.name ?? effectiveSentence?.for?.text ?? "").trim();
+  const outputName = String(effectiveSentence?.to?.name ?? "").trim();
+  const verifierNames = resolveVerifierNames(effectiveSentence);
+  const checkSeries = resolveCheckSeries(effectiveSentence);
 
-  const minScore = Number.isFinite(Number(sentence?.atleast?.num))
-    ? Number(sentence.atleast.num)
+  const minScore = Number.isFinite(Number(effectiveSentence?.atleast?.num))
+    ? Number(effectiveSentence.atleast.num)
     : 0.8;
-  const rawMaxScore = sentence?.atmost?.num;
-  const maxScore = Number.isFinite(Number(rawMaxScore)) ? Number(rawMaxScore) : null;
+  const rawGenerationAtmost = Number(effectiveSentence?.atmost?.num);
+  const generationAtmost = Number.isFinite(rawGenerationAtmost) && rawGenerationAtmost > 0
+    ? rawGenerationAtmost
+    : null;
+  const maxScore = null;
 
-  const fromIndex = Number.isFinite(Number(sentence?.fromindex?.num))
-    ? Math.max(1, Math.trunc(Number(sentence.fromindex.num)))
+  const fromIndex = Number.isFinite(Number(effectiveSentence?.fromindex?.num))
+    ? Math.max(1, Math.trunc(Number(effectiveSentence.fromindex.num)))
     : 1;
-  const toIndex = Number.isFinite(Number(sentence?.toindex?.num))
-    ? Math.max(1, Math.trunc(Number(sentence.toindex.num)))
-    : (sentence?.fromindex?.num !== undefined ? fromIndex : 3);
+  const toIndex = Number.isFinite(Number(effectiveSentence?.toindex?.num))
+    ? Math.max(1, Math.trunc(Number(effectiveSentence.toindex.num)))
+    : (effectiveSentence?.fromindex?.num !== undefined ? fromIndex : 3);
 
   if (!task) {
     throwVerifyPlatformError("verify platform defective: missing input text", sentence);
@@ -418,7 +435,8 @@ export async function verifyPlatform(sentence) {
       finalDraft = await invokePlatform({
         platformName: generatorName,
         prompt: latestPrompt,
-        outputName: draftName
+        outputName: draftName,
+        maxTokens: generationAtmost
       });
     } catch (error) {
       generationErrorText = errorToText(error);
@@ -483,7 +501,7 @@ export async function verifyPlatform(sentence) {
     let checkRows = [];
     let checksPass = true;
     if (allVerifierPass && checkSeries.length) {
-      checkRows = evaluateDeterministicChecks(finalDraft, checkSeries, sentence);
+      checkRows = evaluateDeterministicChecks(finalDraft, checkSeries, effectiveSentence);
       checksPass = checkRows.every(row => row.pass);
     }
     lastCheckFeedback = checkRows;
@@ -556,11 +574,13 @@ const CHECK_TYPES = [
 
 function buildVerifyPlatformSignature({
   obType,
+  includeFor,
   forType,
   amongType,
   scoreMode,
   includeRetryRange,
-  checkType
+  checkType,
+  includeTo
 }) {
   const words = ["be", "verify", "platform"];
   if (checkType) words.push("accordingto", ...checkType);
@@ -568,10 +588,10 @@ function buildVerifyPlatformSignature({
   if (scoreMode === "atleast") words.push("atleast", "num");
   if (scoreMode === "atmost") words.push("atmost", "num");
   if (scoreMode === "both") words.push("atleast", "num", "atmost", "num");
-  words.push("for", ...forType);
+  if (includeFor) words.push("for", ...forType);
   if (includeRetryRange) words.push("fromindex", "num");
   words.push("ob", ...obType);
-  words.push("to", "name", "text");
+  if (includeTo) words.push("to", "name", "text");
   if (includeRetryRange) words.push("toindex", "num");
   return words;
 }
@@ -580,23 +600,30 @@ const signatureSet = new Set();
 const signatureEntries = [];
 
 for (const obType of OB_TYPES) {
-  for (const forType of FOR_TYPES) {
-    for (const amongType of AMONG_TYPES) {
-      for (const scoreMode of ["none", "atleast", "atmost", "both"]) {
-        for (const includeRetryRange of [false, true]) {
-          for (const checkType of CHECK_TYPES) {
-            const words = buildVerifyPlatformSignature({
-              obType,
-              forType,
-              amongType,
-              scoreMode,
-              includeRetryRange,
-              checkType
-            });
-            const key = words.join(" ");
-            if (signatureSet.has(key)) continue;
-            signatureSet.add(key);
-            signatureEntries.push({ signatureWords: words, handler: verifyPlatform });
+  for (const includeFor of [true, false]) {
+    for (const forType of FOR_TYPES) {
+      if (!includeFor && forType !== FOR_TYPES[0]) continue;
+      for (const amongType of AMONG_TYPES) {
+        for (const scoreMode of ["none", "atleast", "atmost", "both"]) {
+          for (const includeRetryRange of [false, true]) {
+            for (const checkType of CHECK_TYPES) {
+              for (const includeTo of [true, false]) {
+                const words = buildVerifyPlatformSignature({
+                  obType,
+                  includeFor,
+                  forType,
+                  amongType,
+                  scoreMode,
+                  includeRetryRange,
+                  checkType,
+                  includeTo
+                });
+                const key = words.join(" ");
+                if (signatureSet.has(key)) continue;
+                signatureSet.add(key);
+                signatureEntries.push({ signatureWords: words, handler: verifyPlatform });
+              }
+            }
           }
         }
       }

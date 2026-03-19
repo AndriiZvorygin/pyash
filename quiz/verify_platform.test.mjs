@@ -153,3 +153,39 @@ test("verify platform supports line_count_min and line_count_max checks", async 
   assert.equal(remember("result")?.ob?.text, "line one\nline two");
   assert.equal(remember("verify platform stop reason")?.ob?.text, "pass");
 });
+
+test("verify platform source carries generator atmost support for mind calls", async () => {
+  const source = await import("node:fs/promises").then(fs => fs.readFile(new URL("../program/verbs/verify_platform.mjs", import.meta.url), "utf8"));
+
+  assert.match(source, /call\.atmost = \{ num: Number\(maxTokens\) \};/u);
+  assert.match(source, /const generationAtmost = Number\.isFinite\(rawGenerationAtmost\) && rawGenerationAtmost > 0/u);
+  assert.match(source, /maxTokens: generationAtmost/u);
+});
+
+test("verify platform inherits missing fields from the ceremony evoke sentence", async () => {
+  forget();
+
+  await run("su name alpha ob text task to name text draft out be ceremony def");
+  await run(`ob text quoted.text.alpha line one
+alpha line two
+alpha line three
+alpha line four.text.quoted to name text draft out be text do`);
+  await run("prah");
+
+  await run("su name pass verifier ob text packet to name text verdict be ceremony def");
+  await run("ob text PASS to name text verdict be text do");
+  await run("prah");
+
+  await run("su name checks be series def");
+  await run("su name line_count_min ob num 4 ya");
+  await run("su name line_count_max ob num 4 ya");
+  await run("prah");
+
+  await run("su name helper accordingto name checks for name platform from text request atleast num 0.8 atmost num 9 fromindex num 1 toindex num 1 to name text result be ceremony def");
+  await run("  su name inner ob text of from of this among name pass verifier be verify platform do");
+  await run("  su name inner ret");
+  await run("prah");
+
+  await run("su name first from text \"x\" for name alpha accordingto name checks to name text output atleast num 0.8 atmost num 9 fromindex num 1 toindex num 1 be helper do");
+  assert.match(String(remember("output")?.ob?.text ?? ""), /^alpha line one/mu);
+});
