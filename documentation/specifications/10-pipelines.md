@@ -37,6 +37,13 @@ ob text "task" from name plan loop to name text result be refinery do
 - bounded retry behavior,
 - replay visibility through run recording.
 
+Native sub-refinery invocation rule:
+- a refinery call may target either a registered refinery name or a refinery-backed `.pya` program file,
+- canonical file-backed call shape is `from filename "<program>.pya" ob name <bindings map> to name map <result> be refinery do`,
+- the bindings map keys must match the target program's `be input ya` handles,
+- the result map should expose the child `produce`, child `kind`, child `run id`, child `artifacts folder`, and child `result file`,
+- child artifacts should nest under the parent run id when a parent run id exists.
+
 Dependency encoding rule:
 - use `from name <dep>` when exactly one dependency is referenced,
 - use `from ve name <dep1> name <dep2> ...` when multiple dependencies are referenced.
