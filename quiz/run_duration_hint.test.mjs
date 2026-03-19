@@ -45,6 +45,9 @@ test("run writes nested artifact folders when run id contains hierarchy", async 
 
   assert.match(stderr, /artifacts folder: .+artifacts[\\/]parent-run[\\/]learn-pipeline[\\/]direct/);
   const nestedProduce = path.join(tmpDir, "artifacts", "parent-run", "learn-pipeline", "direct", "produce.txt");
+  const nestedResult = path.join(tmpDir, "artifacts", "parent-run", "learn-pipeline", "direct", "result.pya");
   const text = await fs.readFile(nestedProduce, "utf8");
+  const resultText = await fs.readFile(nestedResult, "utf8");
   assert.equal(text.trim(), "nested");
+  assert.match(resultText, /su name result ob text "nested" be text ya/u);
 });
