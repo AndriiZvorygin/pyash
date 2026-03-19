@@ -163,6 +163,15 @@ export function sanitizeRunId(value) {
     .replace(/\s+/g, "-") || "run";
 }
 
+export function artifactRunPath(value) {
+  const parts = String(value ?? "")
+    .trim()
+    .split(/[\\/]+/g)
+    .map(part => sanitizeRunId(part))
+    .filter(Boolean);
+  return parts.join("/") || "run";
+}
+
 export function normalizeRunRoot(value) {
   return String(value ?? "").replace(/[\\]+/g, "/");
 }
@@ -240,7 +249,7 @@ function isObject(value) {
 
 async function latestVideoArtifactSource({ cwd, runId, memoryFacts }) {
   const root = path.resolve(cwd ?? process.cwd());
-  const runToken = runId ? `artifacts/${sanitizeRunId(runId)}/` : "artifacts/";
+  const runToken = runId ? `artifacts/${artifactRunPath(runId)}/` : "artifacts/";
   const entries = Array.isArray(memoryFacts) ? memoryFacts : [];
   for (let idx = entries.length - 1; idx >= 0; idx -= 1) {
     const fact = entries[idx];
@@ -257,7 +266,7 @@ async function latestVideoArtifactSource({ cwd, runId, memoryFacts }) {
 
 function latestVideoArtifactFromNewspaper({ cwd, runId, newspaperLines }) {
   const root = path.resolve(cwd ?? process.cwd());
-  const runToken = runId ? `artifacts/${sanitizeRunId(runId)}/` : "artifacts/";
+  const runToken = runId ? `artifacts/${artifactRunPath(runId)}/` : "artifacts/";
   const lines = Array.isArray(newspaperLines) ? newspaperLines : [];
   for (let idx = lines.length - 1; idx >= 0; idx -= 1) {
     const line = String(lines[idx] ?? "").trim();

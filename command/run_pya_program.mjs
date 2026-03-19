@@ -23,7 +23,7 @@ import { setRunNewspaperLines } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
-import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, formatRunDurationMs, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
+import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, formatRunDurationMs, readFlagValue, sanitizeRunId, artifactRunPath, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const NEWSPAPER_TEXT_ARTIFACT_THRESHOLD = 2048;
@@ -272,7 +272,7 @@ function rewriteSentenceTextForNewspaper(sentence, {
           const idx = typeof nextTextArtifactIndex === "function" ? nextTextArtifactIndex() : 1;
           const relLocator = path.join(
             "artifacts",
-            sanitizeRunId(runId || "run"),
+            artifactRunPath(runId || "run"),
             "newspaper",
             `text-${String(idx).padStart(6, "0")}.txt`
           ).replace(/[\\]+/g, "/");
@@ -877,7 +877,7 @@ async function main() {
     console.warn("warning: MCP servers were still running at exit; add `be discharge ob name <server> as wo mcp do` to shut them down explicitly.");
   }
   const printArtifactsFolderHint = () => {
-    const abs = path.resolve(process.cwd(), "artifacts", String(runId));
+    const abs = path.resolve(process.cwd(), "artifacts", artifactRunPath(runId));
     console.error(`artifacts folder: ${abs}`);
   };
   const printRunTimingHint = () => {
@@ -894,7 +894,7 @@ async function main() {
   const writeProduceTextArtifact = async () => {
     let artifactFile = null;
     if (result?.ob?.text !== undefined) {
-      const dir = path.resolve(process.cwd(), "artifacts", String(runId));
+      const dir = path.resolve(process.cwd(), "artifacts", artifactRunPath(runId));
       await fs.mkdir(dir, { recursive: true });
       artifactFile = path.join(dir, "produce.txt");
       let payload = String(result.ob.text ?? "");
