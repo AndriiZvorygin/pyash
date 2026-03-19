@@ -40,3 +40,14 @@ test("module manuscript module wires semantic verifiers into the module flow", a
   assert.match(moduleSource, /module manuscript current intent/u);
   assert.match(wrapperSource, /module_manuscript\.pya/u);
 });
+
+test("module manuscript final word checks do not overwrite semantic pass state", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.match(moduleSource, /module manuscript segment two final verify pass/u);
+  assert.match(moduleSource, /module manuscript recap final verify pass/u);
+  assert.match(moduleSource, /module manuscript cta final verify pass/u);
+  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript segment two final verify to name text module manuscript segment two pass be text do/u);
+  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript recap final verify to name text module manuscript recap pass be text do/u);
+  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript cta final verify to name text module manuscript cta pass be text do/u);
+});
