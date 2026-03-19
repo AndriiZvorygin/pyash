@@ -35,12 +35,15 @@ test("learn module exports text and filename learning ceremonies", async () => {
   assert.match(text, /su name learn extract card from text source with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /fromtext name learning distillation prompt for name mind to name text teaching raw by num 0 atmost num 1400 be write do/u);
   assert.match(text, /node command\/extract_learn_pipeline_result\.mjs" fromtext name teaching raw to name text teaching out be command do/u);
+  assert.match(text, /node command\/normalize_learn_card\.mjs" fromtext name teaching out to name text teaching out be command do/u);
+  assert.match(text, /learning merge prompt for name mind to name text teaching raw by num 0 atmost num 2600 be write do/u);
+  assert.match(text, /learning refine prompt for name mind to name text teaching raw by num 0 atmost num 2600 be write do/u);
   assert.match(text, /node command\/validate_learn_card\.mjs" fromtext name teaching out to name text learning card valid be command do/u);
   assert.match(text, /learning focus defective: give a non-empty learning focus/u);
   assert.match(text, /su name learn merge cards from text cards with text learning focus to name text teaching out be ceremony def/u);
-  assert.match(text, /fromtext name learning merge prompt for name mind to name text teaching raw by num 0 atmost num 1400 be write do/u);
+  assert.match(text, /fromtext name learning merge prompt for name mind to name text teaching raw by num 0 atmost num 2600 be write do/u);
   assert.match(text, /su name learn refine card from text card with text learning focus to name text teaching out be ceremony def/u);
-  assert.match(text, /fromtext name learning refine prompt for name mind to name text teaching raw by num 0 atmost num 1400 be write do/u);
+  assert.match(text, /fromtext name learning refine prompt for name mind to name text teaching raw by num 0 atmost num 2600 be write do/u);
   assert.match(text, /node command\/learn_from_filename_pipeline\.mjs/u);
   assert.match(text, /PYA_COMMAND_TIMEOUT_MS=900000 node command\/learn_from_filename_pipeline\.mjs/u);
   assert.match(text, /su name teaching raw stage ob text of ob of learning pipeline cmd to name text teaching raw be command do/u);
