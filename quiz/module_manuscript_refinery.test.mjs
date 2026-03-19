@@ -129,11 +129,11 @@ test("module manuscript stage guarantees are gated by section pass flags", async
   assert.match(moduleSource, /ob text "false" to name text module manuscript roadmap pass be text do/u);
   assert.match(moduleSource, /ob text "false" to name text module manuscript segment one pass be text do/u);
   assert.match(moduleSource, /to name map module manuscript hook semantic produce be module manuscript semantic pass do/u);
-  assert.match(moduleSource, /ob name text module manuscript hook pass be equally from text false then\s+su name module manuscript hook semantic defect text stage[\s\S]*?su name module manuscript hook semantic guarantee stage/u);
+  assert.match(moduleSource, /su name module manuscript hook semantic defect text stage[\s\S]*?ob name text module manuscript hook pass be equally from text false then\s+su name module manuscript hook semantic guarantee stage/u);
   assert.match(moduleSource, /to name map module manuscript roadmap semantic produce be module manuscript semantic pass do/u);
-  assert.match(moduleSource, /ob name text module manuscript roadmap pass be equally from text false then\s+su name module manuscript roadmap semantic defect text stage[\s\S]*?su name module manuscript roadmap semantic guarantee stage/u);
+  assert.match(moduleSource, /su name module manuscript roadmap semantic defect text stage[\s\S]*?ob name text module manuscript roadmap pass be equally from text false then\s+su name module manuscript roadmap semantic guarantee stage/u);
   assert.match(moduleSource, /to name map module manuscript segment one semantic produce be module manuscript semantic pass do/u);
-  assert.match(moduleSource, /ob name text module manuscript segment one pass be equally from text false then\s+su name module manuscript segment one semantic defect text stage[\s\S]*?su name module manuscript segment one semantic guarantee stage/u);
+  assert.match(moduleSource, /su name module manuscript segment one semantic defect text stage[\s\S]*?ob name text module manuscript segment one pass be equally from text false then\s+su name module manuscript segment one semantic guarantee stage/u);
   assert.match(moduleSource, /fromtext name module manuscript semantic defect text be guarantee do/u);
 });
 
