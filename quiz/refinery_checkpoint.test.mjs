@@ -103,3 +103,51 @@ test("refinery checkpoint replay preserves series payload in result", async (t) 
   assert.equal(entries.length, 1);
   assert.equal(entries[0]?.ob?.text, "alpha");
 });
+
+test("refinery checkpoint replay preserves map payload in result", async (t) => {
+  if (!canCaptureNodeChildStdout) t.skip("environment cannot capture node child stdout");
+  const tmpDir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "pyash-refinery-checkpoint-map-"));
+  const sourceFilename = path.join(tmpDir, "source.txt");
+  const childFilename = path.join(tmpDir, "child.pya");
+  const programPath = path.join(tmpDir, "program.pya");
+  await fs.writeFile(sourceFilename, "hello from child\n", "utf8");
+  await fs.writeFile(childFilename, [
+    "ob filename text source be input ya",
+    "su name source text from filename of ob of source become wo text to name text source text be read do",
+    "su name result out ob text of ob of source text be write do",
+    ""
+  ].join("\n"), "utf8");
+  await fs.writeFile(programPath, [
+    "su name bindings be map def",
+    `su name source ob filename ${JSON.stringify(sourceFilename)} ya`,
+    "prah",
+    `from filename ${JSON.stringify(childFilename)} ob name bindings to name map result be refinery do`,
+    ""
+  ].join("\n"), "utf8");
+
+  const __filename = fileURLToPath(import.meta.url);
+  const repoRoot = path.join(path.dirname(__filename), "..");
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+
+  await execFileAsync("node", [
+    runPath,
+    "--gross",
+    "--run-id", "run-checkpoint-map",
+    "--run-time", "2025-01-01T00:00:00Z",
+    programPath
+  ], { cwd: repoRoot, timeout: 120000 });
+
+  const second = await execFileAsync("node", [
+    runPath,
+    "--gross",
+    "--run-id", "run-checkpoint-map",
+    "--run-time", "2025-01-01T00:00:01Z",
+    programPath
+  ], { cwd: repoRoot, timeout: 120000 });
+
+  const parsed = JSON.parse(second.stdout.trim());
+  assert.equal(parsed?.result?.be, "map");
+  assert.equal(parsed?.result?.ob?.map?.produce?.text, "hello from child\n");
+  assert.equal(parsed?.result?.ob?.map?.kind?.text, "write");
+  assert.equal(parsed?.result?.ob?.map?.passing?.boolean, true);
+});

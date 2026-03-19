@@ -282,8 +282,14 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     : (preferredVal ?? updatedTarget?.ob ?? mainTarget?.ob ?? evoke.ob);
   const effectiveObj = mergedObj; // avoid unconditional defaults for non-numeric signatures
   const inferredBe = inferObjectBe(effectiveObj);
+  const preferredStructuredBe = (
+    updatedTarget?.be === "json map" || updatedTarget?.be === "csv map" ? updatedTarget.be
+      : mainTarget?.be === "json map" || mainTarget?.be === "csv map" ? mainTarget.be
+        : evoke?.be === "json map" || evoke?.be === "csv map" ? evoke.be
+          : null
+  );
   const mergedBe = targetLooksMap
-    ? (updatedTarget?.be ?? mainTarget?.be ?? evoke.be ?? "result")
+    ? (preferredStructuredBe ?? updatedTarget?.be ?? mainTarget?.be ?? evoke.be ?? "result")
     : (updatedTarget?.be ?? mainTarget?.be ?? inferredBe ?? evoke.be ?? "result");
 
   if (mergedObj === undefined && preferredVal === undefined && numericSignature) {
