@@ -443,6 +443,14 @@ export async function verifyPlatform(sentence) {
       finalDraft = "";
     }
 
+    let checkRows = [];
+    let checksPass = true;
+    if (!generationErrorText && checkSeries.length) {
+      checkRows = evaluateDeterministicChecks(finalDraft, checkSeries, effectiveSentence);
+      checksPass = checkRows.every(row => row.pass);
+    }
+    lastCheckFeedback = checkRows;
+
     let allVerifierPass = true;
     const verifierRows = [];
     if (generationErrorText) {
@@ -456,7 +464,7 @@ export async function verifyPlatform(sentence) {
       };
       verifierRows.push(row);
       allVerifierPass = false;
-    } else {
+    } else if (checksPass) {
       for (let idx = 0; idx < verifierNames.length; idx += 1) {
         const verifierName = verifierNames[idx];
         const reviewPrompt = buildVerifierPrompt({
@@ -497,14 +505,6 @@ export async function verifyPlatform(sentence) {
       }
     }
     lastVerifierFeedback = verifierRows;
-
-    let checkRows = [];
-    let checksPass = true;
-    if (allVerifierPass && checkSeries.length) {
-      checkRows = evaluateDeterministicChecks(finalDraft, checkSeries, effectiveSentence);
-      checksPass = checkRows.every(row => row.pass);
-    }
-    lastCheckFeedback = checkRows;
 
     if (allVerifierPass && checksPass) {
       stopReason = "pass";

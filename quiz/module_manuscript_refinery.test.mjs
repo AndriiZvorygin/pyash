@@ -111,6 +111,17 @@ test("module manuscript verifier flow short-circuits explicit fail analyses befo
   assert.match(moduleSource, /module manuscript source thrust review atmost num 1 to name text module manuscript source thrust review line be line tail do/u);
 });
 
+test("module manuscript semantic layer does not treat source-faithful segment one restatement as a fail by itself", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.match(moduleSource, /meaningful advancement beyond PRIOR only when PRIOR is provided and the stage actually requires progression beyond earlier material/u);
+  assert.match(moduleSource, /it mostly repeats the prior section without adding a meaningful new reveal, consequence, or advancement only when PRIOR is provided and progression is required/u);
+  assert.match(moduleSource, /if PRIOR is empty, do not fail a source-faithful role-correct paragraph merely because it closely paraphrases or restates the source/u);
+  assert.match(moduleSource, /functional restatement when PRIOR is provided and progression is required/u);
+  assert.match(moduleSource, /repeats prior material without meaningful advancement when PRIOR is provided/u);
+  assert.match(moduleSource, /repeats prior material when PRIOR is provided, or breaks a stated task/u);
+});
+
 test("module manuscript roadmap is derived from finished segments rather than raw source", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
@@ -133,7 +144,7 @@ test("module manuscript stage guarantees are gated by section pass flags", async
   assert.match(moduleSource, /to name map module manuscript roadmap semantic produce be module manuscript semantic pass do/u);
   assert.match(moduleSource, /su name module manuscript roadmap semantic defect text stage[\s\S]*?ob name text module manuscript roadmap pass be equally from text false then\s+su name module manuscript roadmap semantic guarantee stage/u);
   assert.match(moduleSource, /to name map module manuscript segment one semantic produce be module manuscript semantic pass do/u);
-  assert.match(moduleSource, /su name module manuscript segment one semantic defect text stage[\s\S]*?ob name text module manuscript segment one pass be equally from text false then\s+su name module manuscript segment one semantic guarantee stage/u);
+  assert.match(moduleSource, /su name module manuscript segment one semantic defect text stage[\s\S]*?ob name text module manuscript segment one pass be equally from text false then[\s\S]*?su name module manuscript segment one semantic guarantee stage/u);
   assert.match(moduleSource, /fromtext name module manuscript semantic defect text be guarantee do/u);
 });
 
@@ -149,10 +160,18 @@ test("module manuscript segment two role verifier does not police overlap that d
 test("module manuscript segment one treats example and implication as optional add-ons", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
+  assert.match(moduleSource, /first teachable unit/u);
   assert.match(moduleSource, /Optional add-ons:/u);
   assert.match(moduleSource, /You may use one small example from AFFAIRS OR ACTIVITIES/u);
   assert.match(moduleSource, /You may include one small immediate implication/u);
-  assert.match(moduleSource, /Treat 92 words as the spoken target, not just the minimum/u);
+  assert.match(moduleSource, /If you use an example, confine it to at most one brief sentence/u);
+  assert.match(moduleSource, /If the paragraph only needs a few more words to land cleanly, you may use one short memory phrase or one brief activity\/example detail instead of repeating the definition/u);
+  assert.match(moduleSource, /Do not list multiple practices, activities, or examples in this segment/u);
+  assert.match(moduleSource, /Do not let AFFAIRS OR ACTIVITIES become a second source lane or the paragraph's organizing frame/u);
+  assert.match(moduleSource, /A clean definition plus mechanism can pass without any example or implication when it already feels complete/u);
+  assert.match(moduleSource, /One clear definition plus one mechanism is enough for Segment 1/u);
+  assert.match(moduleSource, /Treat 80 words as the spoken target, not just the minimum/u);
+  assert.match(moduleSource, /trying to cover the whole teaching arc/u);
   assert.match(moduleSource, /One light contrast phrase may remain when the paragraph's main move stays affirmative and system-establishing/u);
   assert.match(moduleSource, /[Ff]ail only when contrast becomes a repeated organizing frame or turns the segment into a correction/u);
   assert.match(moduleSource, /If you use an example, keep it brief and subordinate/u);
@@ -172,11 +191,58 @@ test("module manuscript recap retries regenerate with the recap model instead of
 test("module manuscript segment one retry caps stay tight enough to curb overshoot", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
-  assert.match(moduleSource, /su name module manuscript segment one checks be series def[\s\S]*?su name word_max ob num 105 ya/u);
+  assert.match(moduleSource, /su name module manuscript segment one checks be series def[\s\S]*?su name word_min ob num 72 ya[\s\S]*?su name word_max ob num 92 ya/u);
+  assert.match(moduleSource, /su name module manuscript segment one platform checks be series def[\s\S]*?su name word_min ob num 68 ya[\s\S]*?su name word_max ob num 96 ya/u);
   assert.match(moduleSource, /su name module manuscript section verify accordingto name checks series for name platform mind from text request to name text output atleast num 0\.8 atmost num 0 fromindex num 1 toindex num 4 be ceremony def/u);
-  assert.match(moduleSource, /module manuscript section verify run platform ob text of from of this among name module manuscript stage pass be verify platform do/u);
+  assert.match(moduleSource, /module manuscript section verify run platform ob text of from of this among name module manuscript stage pass to name text module manuscript section verify raw output be verify platform do/u);
+  assert.match(moduleSource, /node command\/normalize_escaped_newlines\.mjs" fromtext name module manuscript section verify raw output to name text output be command do/u);
   assert.match(moduleSource, /module manuscript segment one platform stage accordingto name module manuscript segment one platform checks for name module manuscript segment one mind from text of ob of module manuscript segment one request to name text output atleast num 0\.8 atmost num 150 be module manuscript section verify do/u);
-  assert.match(moduleSource, /Aim for about 90 words as the real spoken target, not merely the lower bound/u);
-  assert.match(moduleSource, /for name module manuscript fit mind to name text output by num 0 atmost num 150 be write do/u);
-  assert.match(moduleSource, /for name module manuscript segment one mind to name text output by num 0 atmost num 150 be write do/u);
+  assert.match(moduleSource, /Aim for about 80 words as the real spoken target, not merely the lower bound/u);
+  assert.match(moduleSource, /Keep the paragraph centered on one definition and one mechanism/u);
+  assert.match(moduleSource, /If you include an example, allow at most one brief activity\/example sentence/u);
+  assert.match(moduleSource, /If the draft only needs a few extra words, prefer one short memory phrase or one brief activity\/example detail instead of repeating the main definition/u);
+  assert.match(moduleSource, /A clean establish paragraph with no example or implication can still pass when the definition and mechanism already land clearly/u);
+  assert.match(moduleSource, /Remove extra restatement, stacked examples, optional implication, and parallel practice clauses before changing the main claim/u);
+  assert.match(moduleSource, /TARGET_WORDS:\\n72-88\\n\\nGOAL_WORDS:\\n80/u);
+  assert.match(moduleSource, /keep the result between 76 and 84 words/u);
+  assert.match(moduleSource, /segment one fit retry platform/u);
+  assert.match(moduleSource, /for name module manuscript fit mind from text of ob of module manuscript segment one retry request to name text output atleast num 0\.8 atmost num 150 be module manuscript section verify do/u);
+  assert.match(moduleSource, /for name module manuscript segment one mind from text of ob of module manuscript segment one retry request to name text output atleast num 0\.8 atmost num 150 be module manuscript section verify do/u);
+  assert.doesNotMatch(moduleSource, /segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript fit mind to name text output by num 0 atmost num 150 be write do/u);
+});
+
+test("module manuscript segment one final verify uses the post-retry draft rather than stale output", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.match(moduleSource, /ob text "" to name text module manuscript segment one retry output be text do/u);
+  assert.match(moduleSource, /su name module manuscript segment one retry platform stage[\s\S]*?ob name text output to name text module manuscript segment one retry output be text do/u);
+  assert.match(moduleSource, /fromindex num 1 toindex num 4 be module manuscript segment one retry do\s+ob name text module manuscript segment one retry output to name text output be text do/u);
+});
+
+test("module manuscript segment one keeps canonical stage state for the surviving draft", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.match(moduleSource, /ob text "\{\}" to name segment_one_state be import do/u);
+  assert.match(moduleSource, /to draft_initial of segment_one_state be text do/u);
+  assert.match(moduleSource, /to draft_current of segment_one_state be text do/u);
+  assert.match(moduleSource, /to draft_retry of segment_one_state be text do/u);
+  assert.match(moduleSource, /to draft_semantic_passed of segment_one_state be text do/u);
+  assert.match(moduleSource, /to draft_final_passed of segment_one_state be text do/u);
+  assert.match(moduleSource, /to stop_reason of segment_one_state be text do/u);
+});
+
+test("module manuscript segment one fit retry uses the fit platform when prior semantic output already passed", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.match(moduleSource, /ob text of passing of module manuscript segment one semantic produce be equally from text true then\s+ob text "segment one fit retry platform"/u);
+  assert.match(moduleSource, /ob text of passing of module manuscript segment one semantic produce be equally from text true then\s+su name module manuscript segment one fit retry platform stage accordingto name module manuscript segment one checks for name module manuscript fit mind/u);
+  assert.doesNotMatch(moduleSource, /ob text of passing of module manuscript segment one semantic produce be equally from text false then\s+ob text "segment one fit retry platform"/u);
+});
+
+test("module manuscript segment one first pass source basis stays on establish sections", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.match(moduleSource, /node command\/extract_learn_sections\.mjs 'SEED CONCEPT' 'CARDINAL TRAINING SENTENCE'/u);
+  assert.doesNotMatch(moduleSource, /node command\/extract_learn_sections\.mjs 'SEED CONCEPT' 'CARDINAL TRAINING SENTENCE' 'AFFAIRS OR ACTIVITIES'/u);
+  assert.match(moduleSource, /Use AFFAIRS OR ACTIVITIES only for one small example if later verifier feedback clearly asks for more grounding/u);
 });

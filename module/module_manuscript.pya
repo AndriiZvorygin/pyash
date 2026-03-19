@@ -170,11 +170,11 @@ exists su name module manuscript segment one prompt ob text quoted.text.You are 
 
 Task:
 - Write the 20 to 60 second segment.
-- Keep it between 85 and 100 words.
-- Aim for about 92 words.
-- Treat 92 words as the spoken target, not just the minimum.
+- Keep it between 72 and 88 words.
+- Aim for about 80 words.
+- Treat 80 words as the spoken target, not just the minimum.
 - This segment establishes the system.
-- Its job is to give the listener a stable mental model.
+- Its job is to give the listener the first teachable unit and a stable mental model.
 
 Rules:
 - The hook already defines the topic, so do not re-introduce the topic from scratch.
@@ -185,14 +185,18 @@ Rules:
 Positive rules:
 - Focus mostly on SEED CONCEPT and CARDINAL TRAINING SENTENCE.
 - Name the topic directly and naturally from the hook and source instead of opening with generic labels like `the system`.
-- Define what the system is and how it works more than what it is not.
+- Define what the system is and one basic mechanism more than what it is not.
+- One clear definition plus one mechanism is enough for Segment 1.
 - Prefer affirmative declarative language over contrastive or defensive phrasing.
 
 Optional add-ons:
 - You may use one small example from AFFAIRS OR ACTIVITIES when it helps ground the segment.
 - If you use an example, keep it brief and subordinate to the main definition and mechanism.
+- If you use an example, confine it to at most one brief sentence.
 - You may borrow one brief memory phrase when it strengthens clarity, but do not make the segment depend on slogans.
+- If the paragraph only needs a few more words to land cleanly, you may use one short memory phrase or one brief activity/example detail instead of repeating the definition.
 - You may include one small immediate implication when it follows naturally from the definition and mechanism.
+- A clean definition plus mechanism can pass without any example or implication when it already feels complete.
 
 Negative rules:
 - Do not take the main idea from SURPRISES AND MISUNDERSTANDINGS.
@@ -200,6 +204,8 @@ Negative rules:
 - Avoid leading with negation or contrast words such as not, rather than, instead of, unlike, or however.
 - Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move when the source offers a cleaner affirmative lane.
 - Do not make transparent-vessel, channel, or flow language the main mechanism if another establish framing from SEED CONCEPT or CARDINAL TRAINING SENTENCE can do the job.
+- Do not list multiple practices, activities, or examples in this segment.
+- Do not let AFFAIRS OR ACTIVITIES become a second source lane or the paragraph's organizing frame.
 
 What it should feel like:
 - Okay, I understand what this is.
@@ -207,6 +213,7 @@ What it should feel like:
 What to avoid:
 - deep complexity
 - big conclusions
+- trying to cover the whole teaching arc
 - abstract language
 - hidden contradictions
 - jumping to large consequences
@@ -428,7 +435,7 @@ Pass when:
 Fail when:
 - the candidate mainly performs a different role
 - the candidate misses one of the core required moves
-- the candidate mostly repeats prior material when progression is required
+- the candidate mostly repeats prior material when PRIOR is provided and progression is required
 - the candidate violates an explicit must-not in the role intent
 - for hook tasks, fail only when the line is clearly too flat to open the manuscript and you can state a materially stronger 6 to 8 word replacement that still fits the source and promise
 - for segment two tasks, fail only when the paragraph does not actually land a misunderstanding-plus-clarification reveal, or you can point to a materially clearer correction from the same source lane
@@ -446,7 +453,7 @@ Output:
 exists su name module manuscript role verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
 
 Rules:
-- Return FAIL only when the analysis clearly says the candidate misses its role, repeats prior material, or breaks a stated task.
+- Return FAIL only when the analysis clearly says the candidate misses its role, repeats prior material when PRIOR is provided, or breaks a stated task.
 - Otherwise return PASS.
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
@@ -478,25 +485,26 @@ SEMANTIC VERIFICATION RUBRIC
 Judge all non-deterministic semantic concerns together:
 - source faithfulness
 - role fulfillment
-- meaningful advancement beyond PRIOR when PRIOR is provided
+- meaningful advancement beyond PRIOR only when PRIOR is provided and the stage actually requires progression beyond earlier material
 
 Pass when:
 - the candidate stays grounded in the source
 - it performs the assigned role and task
-- it does not mostly restate PRIOR when PRIOR is relevant
+- it does not mostly restate PRIOR when PRIOR is relevant and progression is required
 - shared topic language or anchor imagery remains acceptable because the candidate still adds a real new move
 
 Fail when:
 - the candidate drifts from the source or adds unsupported claims
 - it misses the role or task
-- it mostly repeats the prior section without adding a meaningful new reveal, consequence, or advancement
+- it mostly repeats the prior section without adding a meaningful new reveal, consequence, or advancement only when PRIOR is provided and progression is required
 - it breaks a stated semantic rule in the task or intent
 
 Tie-break:
 - if the wording is more spoken but the meaning stays faithful, choose PASS
 - if the candidate is imperfect but still clearly performs the stage, choose PASS
 - if overlap with PRIOR is topical only and the function still advances, choose PASS
-- fail only on clear semantic miss, unsupported drift, or functional restatement
+- if PRIOR is empty, do not fail a source-faithful role-correct paragraph merely because it closely paraphrases or restates the source
+- fail only on clear semantic miss, unsupported drift, or functional restatement when PRIOR is provided and progression is required
 
 Output:
 - First output one short paragraph.
@@ -507,7 +515,7 @@ Output:
 exists su name module manuscript semantic verdict prompt ob text quoted.text.SYSTEM: Read the verifier analysis and output exactly one word: PASS or FAIL.
 
 Rules:
-- Return FAIL only when the analysis clearly says the candidate drifts from the source, misses its role or task, repeats prior material without meaningful advancement, or breaks a stated semantic rule.
+- Return FAIL only when the analysis clearly says the candidate drifts from the source, misses its role or task, repeats prior material without meaningful advancement when PRIOR is provided, or breaks a stated semantic rule.
 - Otherwise return PASS.
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
@@ -520,7 +528,8 @@ Rules:
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
-exists su name module manuscript segment one intent ob text quoted.text.Establish the system. Define the core idea clearly and explain the basic mechanism. Stay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works. A small example from AFFAIRS OR ACTIVITIES is optional when it helps ground the segment, and a small immediate implication is optional when it follows naturally from the definition and mechanism. Prefer to avoid negation-led or contrast-led phrasing like not, rather than, instead of, or however, but allow one light contrast phrase when the paragraph's main move remains affirmative and system-establishing. If the source contains nearby contrast, prefer absorbing its meaning into a positive statement instead of repeating the contrast wording, and fail only when contrast becomes a main organizing frame or turns the segment into a correction. Keep misunderstanding, counterfeit, blockage, scarcity, or domination language out of the segment's main move whenever the source offers a cleaner affirmative establish lane. Prefer balance, fallible service, and raw-material/perfect-possibility framings before channel or transparent-vessel language. Do not introduce hidden contradictions, jump to large consequences, or frame the segment as a correction..text.quoted be text ya
+exists su name module manuscript segment one intent ob text quoted.text.Establish the system. Define the core idea clearly and explain the basic mechanism. Stay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works. A small example from AFFAIRS OR ACTIVITIES is optional when it helps ground the segment, and a small immediate implication is optional when it follows naturally from the definition and mechanism. A clean definition plus mechanism can still pass without either add-on when the paragraph already feels complete. Prefer to avoid negation-led or contrast-led phrasing like not, rather than, instead of, or however, but allow one light contrast phrase when the paragraph's main move remains affirmative and system-establishing. If the source contains nearby contrast, prefer absorbing its meaning into a positive statement instead of repeating the contrast wording, and fail only when contrast becomes a main organizing frame or turns the segment into a correction. Keep misunderstanding, counterfeit, blockage, scarcity, or domination language out of the segment's main move whenever the source offers a cleaner affirmative establish lane. Prefer balance, fallible service, and raw-material/perfect-possibility framings before channel or transparent-vessel language. Do not introduce hidden contradictions, jump to large consequences, or frame the segment as a correction..text.quoted be text ya
+exists su name module manuscript segment one intent ob text quoted.text.Establish the system's first teachable unit. Define the core idea clearly and explain one basic mechanism. Stay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works. One clear definition plus one mechanism is enough for Segment 1; do not try to cover the whole teaching arc yet. A small example from AFFAIRS OR ACTIVITIES is optional when it helps ground the segment, and a small immediate implication is optional when it follows naturally from the definition and mechanism. A clean definition plus mechanism can still pass without either add-on when the paragraph already feels complete. Prefer to avoid negation-led or contrast-led phrasing like not, rather than, instead of, or however, but allow one light contrast phrase when the paragraph's main move remains affirmative and system-establishing. If the source contains nearby contrast, prefer absorbing its meaning into a positive statement instead of repeating the contrast wording, and fail only when contrast becomes a main organizing frame or turns the segment into a correction. Keep misunderstanding, counterfeit, blockage, scarcity, or domination language out of the segment's main move whenever the source offers a cleaner affirmative establish lane. Prefer balance, fallible service, and raw-material/perfect-possibility framings before channel or transparent-vessel language. Do not introduce hidden contradictions, jump to large consequences, or frame the segment as a correction..text.quoted be text ya
 exists su name module manuscript segment two intent ob text quoted.text.Reveal the hidden layer. Correct a source-supported misunderstanding or incomplete understanding about the topic, preferably one named in SURPRISES AND MISUNDERSTANDINGS, and clarify what the source is actually saying instead. Add understanding that segment one did not already cover. A strong misunderstanding-plus-clarification reveal is enough; segment two does not need to invent a separate mechanism layer beyond what the source already gives. Segment two must choose a misunderstanding family whose main claim, correction shape, and explanatory lane do not resemble the lane already used by segment one. A more specific correction nested inside the same broad field may pass only when it clearly sharpens into a materially different misuse, counterfeit, blockage, paradox, or correction than segment one used. Use only misunderstandings, surprises, tensions, and clarifications that are explicit or very near-explicit in the source. You may ground the clarification with AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE, but they are optional supports rather than required ingredients. Do not act like segment one itself is what needs correction, do not mostly repeat segment one, do not reuse segment one's main explanatory lane, and prefer a different wording surface from segment one instead of echoing its key phrases. Generalized lead-ins are acceptable only when they stay close to a misunderstanding the source itself names or strongly implies..text.quoted be text ya
 exists su name module manuscript segment three intent ob text quoted.text.Expand the teaching outward. Assume segment one and segment two are already done, then show consequence, implication, application, or larger meaning. Stay mainly with CAUSATIVE AND CONSEQUENCE. You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support, but they are optional supports rather than required ingredients. Connect the idea to lived reality, behavior, systems, or future stakes. Do not mainly re-explain the system or the hidden correction..text.quoted be text ya
 exists su name module manuscript roadmap intent ob text quoted.text.Give the listener a concrete reason to keep watching by previewing what the manuscript will deliver in three ordered understanding moves. The roadmap should sound like a real preview of what comes next, not like a compressed thesis or recap. Preview one specific insight from each finished segment in order: the core idea, the correction, and the consequence. Use simple ordered wording and lightly forward-looking language when that helps the sequence feel obvious on first listen, such as we will see, you will see, or what changes next. Stay close to the actual segment arc and do not invent a stronger conclusion than the segments support..text.quoted be text ya
@@ -634,14 +643,14 @@ su name module manuscript roadmap platform checks be series def
 prah
 
 su name module manuscript segment one checks be series def
-  su name word_min ob num 85 ya
-  su name word_max ob num 105 ya
+  su name word_min ob num 72 ya
+  su name word_max ob num 92 ya
   su name sentence_complete ob bool truth ya
 prah
 
 su name module manuscript segment one platform checks be series def
-  su name word_min ob num 80 ya
-  su name word_max ob num 110 ya
+  su name word_min ob num 68 ya
+  su name word_max ob num 96 ya
   su name sentence_complete ob bool truth ya
 prah
 
@@ -698,8 +707,8 @@ su name module manuscript stage pass ob text packet to name text verdict be cere
 prah
 
 su name module manuscript section verify accordingto name checks series for name platform mind from text request to name text output atleast num 0.8 atmost num 0 fromindex num 1 toindex num 4 be ceremony def
-  su name module manuscript section verify run platform ob text of from of this among name module manuscript stage pass be verify platform do
-  ob text "node command/normalize_escaped_newlines.mjs" fromtext name output to name text output be command do
+  su name module manuscript section verify run platform ob text of from of this among name module manuscript stage pass to name text module manuscript section verify raw output be verify platform do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name module manuscript section verify raw output to name text output be command do
   su name output ret
 prah
 
@@ -1022,43 +1031,63 @@ prah
 
 su name module manuscript segment one checked to name text output be ceremony def
   ob text "false" to name text module manuscript segment one pass be text do
+  ob text "" to name text module manuscript segment one retry output be text do
+  ob text "{}" to name segment_one_state be import do
   ob text "segment one platform" to name text module manuscript platform be text do
   su name module manuscript segment one platform stage accordingto name module manuscript segment one platform checks for name module manuscript segment one mind from text of ob of module manuscript segment one request to name text output atleast num 0.8 atmost num 150 be module manuscript section verify do
+  ob name text output to draft_initial of segment_one_state be text do
+  ob name text output to draft_current of segment_one_state be text do
+  ob text "initial platform pass" to stop_reason of segment_one_state be text do
   ob name text module manuscript segment one intent to name text module manuscript current intent be text do
   ob name text module manuscript segment one request to name text module manuscript current task be text do
   ob text "" to name text module manuscript current prior be text do
   su name module manuscript segment one semantic stage from text of ob of module manuscript segment one source basis with text of ob of output to name map module manuscript segment one semantic produce be module manuscript semantic pass do
   ob text of passing of module manuscript segment one semantic produce be equally from text true then
   ob text "true" to name text module manuscript segment one pass be text do
+  ob text of passing of module manuscript segment one semantic produce be equally from text true then
+  ob name text output to draft_semantic_passed of segment_one_state be text do
+  ob text "semantic pass initial" to stop_reason of segment_one_state be text do
   ob name text module manuscript segment one pass be equally from text true then be depart do
   fromindex num 1 toindex num 4 be module manuscript segment one retry do
+  ob name text module manuscript segment one retry output to name text output be text do
+  ob name text output to draft_current of segment_one_state be text do
   su name module manuscript segment one semantic defect text stage from text "module manuscript segment one semantic defective" to name text module manuscript semantic defect text be module manuscript semantic defect do
   ob name text module manuscript segment one pass be equally from text false then
+  ob text "semantic fail after retry" to stop_reason of segment_one_state be text do
   su name module manuscript segment one semantic guarantee stage ob bool lie fromtext name module manuscript semantic defect text be guarantee do
   su name module manuscript segment one return stage ob name text output be text do
 prah
 
 su name module manuscript segment one retry fromindex num 0 toindex num 0 be ceremony def
-  su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the system. Define it clearly and explain the basic mechanism.\n\nTARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nPOSITIVE_RULES:\nStay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works.\n\nOPTIONAL_ADD_ONS:\nYou may include one small example from AFFAIRS OR ACTIVITIES when it helps ground the segment. If you use an example, keep it brief and supportive rather than letting it become the paragraph's main job. Practice language is acceptable when it stays inside a simple illustration of how the teaching works. You may include one small immediate implication when it follows naturally from the definition and mechanism.\n\nNEGATIVE_RULES:\nPrefer to avoid negation-led or contrast-led phrasing like not, rather than, instead of, unlike, or however. If the source carries a contrast, translate it into a positive sentence about what the thing is or does when possible. One light contrast phrase may remain when the paragraph's main move stays affirmative and system-establishing. Fail only when contrast becomes a repeated organizing frame or turns the segment into a correction. Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move when the source offers a cleaner affirmative lane. Prefer the fallible-service and raw-material/perfect-possibility frame before channel, transparent-vessel, or flow language. Do not introduce hidden contradictions, jump to large consequences, or turn the segment into a correction of misunderstanding.\n\nFEEDBACK:\nGenerate a fresh Segment 1 from the source and verifier feedback, not from the failed draft. Aim for about 90 words as the real spoken target, not merely the lower bound, and keep the result between 88 and 94 words. Use complete sentences. Cut before adding. If the section starts getting long, remove extra restatement instead of adding another explanation.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment one retry request be text do
+  su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the first teachable unit. Define it clearly and explain one basic mechanism.\n\nTARGET_WORDS:\n72-88\n\nGOAL_WORDS:\n80\n\nPOSITIVE_RULES:\nStay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works. One clear definition plus one mechanism is enough for Segment 1.\n\nOPTIONAL_ADD_ONS:\nYou may include one small example from AFFAIRS OR ACTIVITIES when it helps ground the segment. If you use an example, keep it brief and supportive rather than letting it become the paragraph's main job. Keep any example to at most one brief sentence. Practice language is acceptable when it stays inside a simple illustration of how the teaching works. You may borrow one brief memory phrase when it strengthens clarity, but do not make the segment depend on slogans. If the paragraph only needs a few more words to land cleanly, prefer one short memory phrase or one brief activity/example detail instead of restating the definition. You may include one small immediate implication when it follows naturally from the definition and mechanism. A clean definition plus mechanism can still pass without either add-on when the paragraph already feels complete.\n\nNEGATIVE_RULES:\nPrefer to avoid negation-led or contrast-led phrasing like not, rather than, instead of, unlike, or however. If the source carries a contrast, translate it into a positive sentence about what the thing is or does when possible. One light contrast phrase may remain when the paragraph's main move stays affirmative and system-establishing. Fail only when contrast becomes a repeated organizing frame or turns the segment into a correction. Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move when the source offers a cleaner affirmative lane. Prefer the fallible-service and raw-material/perfect-possibility frame before channel, transparent-vessel, or flow language. Do not introduce hidden contradictions, jump to large consequences, or turn the segment into a correction of misunderstanding. Do not list multiple practices, activities, or examples. Do not let AFFAIRS OR ACTIVITIES become a second source lane or the paragraph's organizing frame. Do not try to cover the whole teaching arc in this segment.\n\nFEEDBACK:\nGenerate a fresh Segment 1 from the source and verifier feedback, not from the failed draft. Aim for about 80 words as the real spoken target, not merely the lower bound, and keep the result between 76 and 84 words. Use complete sentences. Keep the paragraph centered on one definition and one mechanism. If you include an example, allow at most one brief activity/example sentence. If the draft only needs a few extra words, prefer one short memory phrase or one brief activity/example detail instead of repeating the main definition. A clean establish paragraph with no example or implication can still pass when the definition and mechanism already land clearly. Remove extra restatement, stacked examples, optional implication, and parallel practice clauses before changing the main claim.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment one retry request be text do
   su name module manuscript segment one retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript segment one retry request be plus do
   su name module manuscript segment one retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript segment one retry request be plus do
   su name module manuscript segment one retry request role review stage ob name text module manuscript role review to name module manuscript segment one retry request be plus do
   su name module manuscript segment one retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment one retry request be plus do
   su name module manuscript segment one retry request source stage ob name text module manuscript segment one source basis to name module manuscript segment one retry request be plus do
   ob text of passing of module manuscript segment one semantic produce be equally from text true then
-  ob text "TARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nFEEDBACK:\nThe draft is already source-faithful and role-correct. Rewrite only to fit the word band. Cut hard before adding. Remove 12 to 25 words. Preserve the same establish job, main claim, and basic mechanism. If the draft already has a small example or implication, keep it only when it still fits cleanly. Remove repeated explanation, stacked adjectives, and optional extra detail before changing meaning.\n\nDRAFT:\n" to name text module manuscript segment one retry request be text do
+  ob text "TARGET_WORDS:\n72-88\n\nGOAL_WORDS:\n80\n\nFEEDBACK:\nThe draft is already source-faithful and role-correct. Rewrite only to fit the word band. Cut hard before adding. Remove 8 to 20 words. Preserve the same establish job, main claim, and single basic mechanism. If the draft already has a small example or implication, keep it only when it still fits cleanly. Remove repeated explanation, stacked adjectives, optional implication, and extra detail before changing meaning.\n\nDRAFT:\n" to name text module manuscript segment one retry request be text do
   ob name text output to name module manuscript segment one retry request be plus do
-  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript fit mind to name text output by num 0 atmost num 150 be write do
+  ob text of passing of module manuscript segment one semantic produce be equally from text true then
+  ob text "segment one fit retry platform" to name text module manuscript platform be text do
+  ob text of passing of module manuscript segment one semantic produce be equally from text true then
+  su name module manuscript segment one fit retry platform stage accordingto name module manuscript segment one checks for name module manuscript fit mind from text of ob of module manuscript segment one retry request to name text output atleast num 0.8 atmost num 150 be module manuscript section verify do
   ob text of passing of module manuscript segment one semantic produce be equally from text false then
-  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript segment one mind to name text output by num 0 atmost num 150 be write do
   ob text "segment one retry platform" to name text module manuscript platform be text do
+  ob text of passing of module manuscript segment one semantic produce be equally from text false then
   su name module manuscript segment one retry platform stage accordingto name module manuscript segment one checks for name module manuscript segment one mind from text of ob of module manuscript segment one retry request to name text output atleast num 0.8 atmost num 150 be module manuscript section verify do
+  ob name text output to name text module manuscript segment one retry output be text do
+  ob name text output to draft_retry of segment_one_state be text do
+  ob name text output to draft_current of segment_one_state be text do
   ob name text module manuscript segment one intent to name text module manuscript current intent be text do
   ob name text module manuscript segment one retry request to name text module manuscript current task be text do
   ob text "" to name text module manuscript current prior be text do
   su name module manuscript segment one semantic retry stage from text of ob of module manuscript segment one source basis with text of ob of output to name map module manuscript segment one semantic produce be module manuscript semantic pass do
   ob text of passing of module manuscript segment one semantic produce be equally from text true then
   ob text "true" to name text module manuscript segment one pass be text do
+  ob text of passing of module manuscript segment one semantic produce be equally from text true then
+  ob name text output to draft_semantic_passed of segment_one_state be text do
+  ob text "semantic pass after retry" to stop_reason of segment_one_state be text do
 prah
 
 su name module manuscript segment two checked to name text output be ceremony def
@@ -1232,12 +1261,12 @@ prah
 su name module manuscript from text source with text hook hint to name text manuscript out be ceremony def
   su name source stage ob text of from of this to name text module manuscript source be text do
   su name hint stage ob text of with of this to name text hook_hint be text do
-  su name module manuscript segment one source basis stage ob text "node command/extract_learn_sections.mjs 'SEED CONCEPT' 'CARDINAL TRAINING SENTENCE' 'AFFAIRS OR ACTIVITIES'" fromtext name module manuscript source to name text module manuscript segment one source basis be command do
+  su name module manuscript segment one source basis stage ob text "node command/extract_learn_sections.mjs 'SEED CONCEPT' 'CARDINAL TRAINING SENTENCE'" fromtext name module manuscript source to name text module manuscript segment one source basis be command do
   su name module manuscript segment two source basis stage ob text "node command/extract_learn_sections.mjs 'SURPRISES AND MISUNDERSTANDINGS' 'ORTHOGONAL FEATURES' 'AFFAIRS OR ACTIVITIES' 'CARDINAL SCENES AND IDIOMS' 'BRIEF MEMORY PHRASES'" fromtext name module manuscript source to name text module manuscript segment two source basis be command do
   su name module manuscript segment three source basis stage ob text "node command/extract_learn_sections.mjs 'CAUSATIVE AND CONSEQUENCE' 'AFFAIRS OR ACTIVITIES' 'ORTHOGONAL FEATURES' 'CARDINAL SCENES AND IDIOMS' 'BRIEF MEMORY PHRASES'" fromtext name module manuscript source to name text module manuscript segment three source basis be command do
 
   su name module manuscript segment one request begin stage ob text "SOURCE:\n" to name text module manuscript segment one request be text do
-  su name module manuscript segment one request lane stage ob text "Use SEED CONCEPT and CARDINAL TRAINING SENTENCE as the main lane. Name the topic directly and naturally from the hook and source instead of opening with generic labels like the system, this framework, or this teaching. Prefer balance, fallible service, and raw-material/perfect-possibility framing. Use AFFAIRS OR ACTIVITIES only for one small example. Keep scarcity, domination, blockage, counterfeit, and misunderstanding language out of the paragraph's main establish move when a cleaner affirmative lane is available. Avoid taking the main mechanism from SURPRISES AND MISUNDERSTANDINGS or from channel or transparent-vessel language when other establish framing is available.\n\n" to name module manuscript segment one request be plus do
+  su name module manuscript segment one request lane stage ob text "Use SEED CONCEPT and CARDINAL TRAINING SENTENCE as the main lane. Name the topic directly and naturally from the hook and source instead of opening with generic labels like the system, this framework, or this teaching. Prefer balance, fallible service, and raw-material/perfect-possibility framing. Keep the paragraph centered on one definition and one mechanism. Do not list multiple practices, activities, or examples. Use AFFAIRS OR ACTIVITIES only for one small example if later verifier feedback clearly asks for more grounding. Keep scarcity, domination, blockage, counterfeit, and misunderstanding language out of the paragraph's main establish move when a cleaner affirmative lane is available. Avoid taking the main mechanism from SURPRISES AND MISUNDERSTANDINGS or from channel or transparent-vessel language when other establish framing is available.\n\n" to name module manuscript segment one request be plus do
   su name module manuscript segment one request source stage ob name text module manuscript segment one source basis to name module manuscript segment one request be plus do
   su name module manuscript segment one stage to name text module manuscript segment one out be module manuscript segment one checked do
 
@@ -1345,15 +1374,24 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript roadmap final guarantee stage ob bool lie fromtext text "module manuscript roadmap word count defective" be guarantee do
   su name module manuscript roadmap repaired stage ob name text output to name text module manuscript roadmap out be text do
 
-  su name module manuscript segment one final verify stage be verify as wo word count atleast num 85 atmost num 105 from name text module manuscript segment one out to name map module manuscript segment one final verify do
+  su name module manuscript segment one final verify stage be verify as wo word count atleast num 72 atmost num 92 from name text module manuscript segment one out to name map module manuscript segment one final verify do
   ob text of pass of module manuscript segment one final verify to name text module manuscript segment one final verify pass be text do
   su name module manuscript segment one final output stage ob name text module manuscript segment one out to name text output be text do
+  ob name text module manuscript segment one out to draft_current of segment_one_state be text do
+  ob name text module manuscript segment one final verify pass be equally from text true then
+  ob name text module manuscript segment one out to draft_final_passed of segment_one_state be text do
+  ob text "final word pass initial" to stop_reason of segment_one_state be text do
   ob name text module manuscript segment one final verify pass be equally from text false then
   fromindex num 1 toindex num 4 be module manuscript segment one retry do
   ob name text output to name text module manuscript segment one out be text do
-  su name module manuscript segment one final verify retry stage be verify as wo word count atleast num 85 atmost num 105 from name text module manuscript segment one out to name map module manuscript segment one final verify do
+  ob name text module manuscript segment one out to draft_current of segment_one_state be text do
+  su name module manuscript segment one final verify retry stage be verify as wo word count atleast num 72 atmost num 92 from name text module manuscript segment one out to name map module manuscript segment one final verify do
   ob text of pass of module manuscript segment one final verify retry to name text module manuscript segment one final verify pass be text do
+  ob name text module manuscript segment one final verify pass be equally from text true then
+  ob name text module manuscript segment one out to draft_final_passed of segment_one_state be text do
+  ob text "final word pass after retry" to stop_reason of segment_one_state be text do
   ob name text module manuscript segment one final verify pass be equally from text false then
+  ob text "final word fail" to stop_reason of segment_one_state be text do
   su name module manuscript segment one final guarantee stage ob bool lie fromtext text "module manuscript segment one word count defective" be guarantee do
   su name module manuscript segment one repaired stage ob name text output to name text module manuscript segment one out be text do
 
