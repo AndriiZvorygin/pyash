@@ -12,6 +12,183 @@ const defaults = new Map();
 
 let sandpits = [];
 
+function cloneValue(value) {
+  if (Array.isArray(value)) return value.map(cloneValue);
+  if (!value || typeof value !== "object") return value;
+  const cloned = { ...value };
+  for (const [key, entry] of Object.entries(cloned)) {
+    cloned[key] = cloneValue(entry);
+  }
+  return cloned;
+}
+
+function inferBeFromOb(ob) {
+  if (!ob || typeof ob !== "object" || Array.isArray(ob)) return null;
+  if (ob.map && typeof ob.map === "object" && !Array.isArray(ob.map)) return "map";
+  if (ob.ve?.values) return "vector";
+  if (typeof ob.text === "string") return "text";
+  if (typeof ob.filename === "string") return "filename";
+  if (typeof ob.num === "number") return "number";
+  if (typeof ob.boolean === "boolean") return "bool";
+  if (ob.series) return "series";
+  return null;
+}
+
+function toObValue(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (value.ob !== undefined) return cloneValue(value.ob);
+    if (
+      value.text !== undefined
+      || value.filename !== undefined
+      || value.num !== undefined
+      || value.boolean !== undefined
+      || value.map !== undefined
+      || value.ve !== undefined
+      || value.series !== undefined
+      || value.hollow !== undefined
+    ) return cloneValue(value);
+  }
+  if (typeof value === "string") return { text: value };
+  if (typeof value === "number") return { num: value };
+  if (typeof value === "boolean") return { boolean: value };
+  return cloneValue(value);
+}
+
+function rawRemember(name) {
+  if (!name) return undefined;
+  for (let i = memory.length - 1; i >= 0; i--) {
+    const s = memory[i];
+    if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
+    if (s.mood === "do") continue;
+    if (s.su?.name === name) return s;
+  }
+  return defaults.get(name);
+}
+
+function resolveNicknameTarget(ref, seen = new Set()) {
+  if (!ref || typeof ref !== "object") return null;
+  if (ref.name) {
+    const targetName = String(ref.name);
+    if (seen.has(targetName)) return null;
+    seen.add(targetName);
+    const fact = rawRemember(targetName);
+    if (!fact) return null;
+    if (fact.be === "nickname") return resolveNicknameTarget(fact.ob, seen);
+    return { kind: "name", name: targetName, fact };
+  }
+  const chainArr = Array.isArray(ref.genitive?.chain) ? ref.genitive.chain : [];
+  if (!chainArr.length) return null;
+  const [root, ...rest] = chainArr;
+  let curr;
+  if (root === "this") {
+    curr = state.currentEvokeRef || state.currentEvoke;
+  } else if (typeof root === "string") {
+    if (seen.has(root)) return null;
+    seen.add(root);
+    const fact = rawRemember(root);
+    if (!fact) return null;
+    if (fact.be === "nickname") {
+      const forwarded = resolveNicknameTarget(fact.ob, seen);
+      curr = forwarded?.fact ?? forwarded?.value ?? null;
+    } else {
+      curr = fact;
+    }
+  } else {
+    curr = null;
+  }
+
+  let parent = null;
+  let key = null;
+  let containerBe = null;
+  for (const part of rest) {
+    if (curr && typeof curr === "object" && curr.be === "nickname") {
+      const forwarded = resolveNicknameTarget(curr.ob, seen);
+      curr = forwarded?.fact ?? forwarded?.value ?? null;
+    }
+    if (curr && typeof curr === "object" && curr.name) {
+      const fact = rawRemember(curr.name);
+      if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
+    }
+    if (curr && typeof curr === "object" && curr.map && Object.prototype.hasOwnProperty.call(curr.map, part)) {
+      parent = curr.map;
+      key = part;
+      curr = curr.map[part];
+      continue;
+    }
+    if (curr && typeof curr === "object" && curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+      parent = curr.ob.map;
+      key = part;
+      containerBe = curr.be ?? containerBe;
+      curr = curr.ob.map[part];
+      continue;
+    }
+    if (curr && typeof curr === "object" && curr.ob && curr.ob[part] !== undefined) {
+      parent = curr.ob;
+      key = part;
+      curr = curr.ob[part];
+      continue;
+    }
+    parent = curr;
+    key = part;
+    curr = curr?.[part];
+  }
+  if (!parent || !key) return null;
+  return { kind: "genitive", parent, key, value: curr, containerBe };
+}
+
+function synthesizeNicknameFact(aliasName, aliasFact, target) {
+  if (!target) return aliasFact;
+  if (target.kind === "name" && target.fact) {
+    const fact = target.fact;
+    return {
+      ...cloneValue(fact),
+      su: { name: aliasName }
+    };
+  }
+  const ob = toObValue(target.value);
+  const be = inferBeFromOb(ob) ?? aliasFact?.be ?? "result";
+  return {
+    mood: "ya",
+    su: { name: aliasName },
+    be,
+    ob
+  };
+}
+
+function writeThroughNickname(aliasFact, sentence) {
+  const target = resolveNicknameTarget(aliasFact?.ob);
+  if (!target) return false;
+  if (target.kind === "name" && target.name) {
+    doRemember({
+      ...sentence,
+      su: { name: target.name }
+    });
+    return true;
+  }
+
+  const normalizedOb = toObValue(sentence.ob);
+  const existing = target.value;
+  if (target.containerBe === "json map") {
+    target.parent[target.key] = cloneValue(normalizedOb);
+    history.push(sentence);
+    return true;
+  }
+  if (existing && typeof existing === "object" && existing.ob !== undefined) {
+    existing.ob = cloneValue(normalizedOb);
+    if (sentence.be !== undefined) existing.be = sentence.be;
+    history.push(sentence);
+    return true;
+  }
+  target.parent[target.key] = {
+    mood: "ya",
+    su: { name: String(target.key) },
+    be: sentence.be ?? inferBeFromOb(normalizedOb) ?? "result",
+    ob: cloneValue(normalizedOb)
+  };
+  history.push(sentence);
+  return true;
+}
+
 function upsertDefinition(name, index, end = undefined, signatureWords = null) {
   const entries = definitionIndex.get(name) ?? [];
   const signatureKey = Array.isArray(signatureWords) && signatureWords.length
@@ -58,6 +235,10 @@ export function doRemember(sentence) {
   const subjName = sentence.su?.name;
   const isDef = sentence.mood === "def";
   const isPrah = sentence.mood === "prah";
+  const aliasFact = subjName && sentence.be !== "nickname" ? rawRemember(subjName) : null;
+  if (aliasFact?.be === "nickname" && writeThroughNickname(aliasFact, sentence)) {
+    return;
+  }
 
   // Sandpits run in a temporary memory context (see `pushMemoryContext`). In that mode we must not
   // splice the shared memory array because doing so would corrupt the global `definitionIndex`
@@ -99,13 +280,10 @@ export function doRemember(sentence) {
 
 export function remember(name) {
   if (!name) return undefined;
-  for (let i = memory.length - 1; i >= 0; i--) {
-    const s = memory[i];
-    if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
-    if (s.mood === "do") continue;
-    if (s.su?.name === name) return s;
-  }
-  return defaults.get(name);
+  const fact = rawRemember(name);
+  if (fact?.be !== "nickname") return fact;
+  const target = resolveNicknameTarget(fact.ob, new Set([String(name)]));
+  return synthesizeNicknameFact(String(name), fact, target);
 }
 
 export function allRemember() {
@@ -115,6 +293,8 @@ export function allRemember() {
 export function dumpHistory() {
   return history;
 }
+
+export { rawRemember as rememberRaw };
 
 export function getDefinition(name) {
   if (!name) return undefined;
