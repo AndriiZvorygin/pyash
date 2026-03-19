@@ -30,10 +30,11 @@ Rules:
 - Keep affirmative definitional material and corrective contrast in separate lanes when the source allows it.
 - Prefer SEED CONCEPT and CARDINAL TRAINING SENTENCE to say what the teaching is and how it works, not mainly what it is not.
 - Put paradoxes, corrections, negation-heavy clarifications, and common misunderstandings mainly in SURPRISES AND MISUNDERSTANDINGS rather than loading them into SEED CONCEPT.
+- When the source expresses a valid idea in contrastive form, prefer rewriting it into positive declarative form for SEED CONCEPT and CARDINAL TRAINING SENTENCE rather than carrying over wording like rather than, instead of, not this but that, or unlike.
 
 Section rules:
-- SEED CONCEPT: 1 short paragraph or 1-2 sentences. Prefer positive declarative explanation of the core idea, system, or reality named by the source. Focus on what it is, how it works, or what kind of truth it states. Avoid making this section mainly contrastive, corrective, or misunderstanding-driven when the source provides enough affirmative material.
-- CARDINAL TRAINING SENTENCE: exactly 1 sentence, clear enough for a 12 year old, and written as a declarative teaching sentence rather than a command. Prefer a short affirmative operating truth, not a negation-heavy warning or correction, unless the source gives no stronger declarative line.
+- SEED CONCEPT: 1 short paragraph or 1-2 sentences. Prefer positive declarative explanation of the core idea, system, or reality named by the source. Focus on what it is, how it works, or what kind of truth it states. Avoid making this section mainly contrastive, corrective, or misunderstanding-driven when the source provides enough affirmative material. Rewrite contrast-shaped source material into positive declarative teaching whenever the meaning can stay faithful.
+- CARDINAL TRAINING SENTENCE: exactly 1 sentence, clear enough for a 12 year old, and written as a declarative teaching sentence rather than a command. Prefer a short affirmative operating truth, not a negation-heavy warning or correction, unless the source gives no stronger declarative line. Prefer a positive teaching sentence over contrastive wording when the same meaning can be stated cleanly.
 - ORTHOGONAL FEATURES: 3-5 short lines.
 - SURPRISES AND MISUNDERSTANDINGS: 2-5 short lines naming source-supported paradoxes, corrections, surprises, or common misunderstandings clarified by the source.
 - AFFAIRS OR ACTIVITIES: 2-5 short lines describing practices in declarative communal or neutral phrasing.
@@ -72,6 +73,7 @@ Rules:
 - Prefer communal declarative phrasing over direct instruction.
 - Keep affirmative definition concentrated in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the cards support it.
 - Move contrastive or corrective material toward SURPRISES AND MISUNDERSTANDINGS instead of letting it dominate the seed sections.
+- Rewrite contrast-shaped seed wording into positive declarative form when the merged cards already support the same meaning.
 
 Formatting rules:
 - Plain text only.
@@ -104,6 +106,7 @@ Rules:
 - Do not add new claims not already present in the draft card.
 - Strengthen affirmative declarative wording in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the draft already supports it.
 - Move corrective, paradox, or misunderstanding-heavy wording toward SURPRISES AND MISUNDERSTANDINGS when the draft mixes those lanes together.
+- Rewrite rather-than, instead-of, or not-this-but-that seed wording into positive declarative teaching when the draft already supports the same meaning.
 
 Formatting rules:
 - Plain text only.
