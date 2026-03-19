@@ -141,6 +141,24 @@ Implementations MAY also record a fully-resolved copy of the evoker sentence
 (with `to` bound to its resolved target) when that is useful for reuse, but the
 primary result fact is the `su name <id> … ya` sentence above.
 
+## 3.2 Nickname bindings (normative)
+
+`nickname` creates a live alias binding.
+
+Form:
+- `exists su name <alias> ob name <source> be nickname ya`
+- `exists su name <alias> ob <genitive-path> be nickname ya`
+
+Rules:
+- A nickname aliases either a plain remembered name or a genitive path.
+- Reading the nickname must resolve to the current underlying value, not a snapshot.
+- Writing through the nickname must update the underlying binding or slot, not replace the nickname declaration itself.
+- Genitive nickname targets must support the same observable slot updates as direct writes to that path.
+
+Examples:
+- `exists su name bucket alias ob name bucket be nickname ya`
+- `exists su name score alias ob score of profile be nickname ya`
+
 ## 4. Error contracts
 - Invalid conditionals or unknown verbs raise `be error do`.
 
