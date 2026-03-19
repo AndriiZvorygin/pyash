@@ -1,0 +1,7 @@
+from filename "../../module/module_manuscript_scored.pya" ob name manuscript as wo module to name manuscript as wo module be import do
+
+ob ve filename text source text text hook_hint be input ya
+su name provider auto discharge ob bool lie ya
+
+su name manuscript stage from filename of ob of source with text of ob of hook_hint to name text result be manuscript as wo module do
+su name manuscript out ob name text result be write do
