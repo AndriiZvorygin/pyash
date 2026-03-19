@@ -7,6 +7,7 @@ import { extractFinalResult } from "./extract_learn_pipeline_result.mjs";
 
 export const DEFAULT_CHUNK_SIZE = 8 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
+export const DEFAULT_MERGE_GROUP_SIZE = 4;
 const PARAGRAPH_BOUNDARY = /\n\s*\n/gmu;
 const CHILD_OLLAMA_TIMEOUT_MS = "600000";
 
@@ -38,6 +39,34 @@ function summarizeCard(text) {
   if (seed) parts.push(`seed=${seed}`);
   if (memory) parts.push(`memory=${memory}`);
   return parts.join(" | ") || "(empty)";
+}
+
+export function buildMergeGroups(items = [], groupSize = DEFAULT_MERGE_GROUP_SIZE) {
+  const size = Math.max(2, Math.floor(Number(groupSize) || DEFAULT_MERGE_GROUP_SIZE));
+  const groups = [];
+  for (let i = 0; i < items.length; i += size) {
+    groups.push(items.slice(i, i + size));
+  }
+  return groups;
+}
+
+export function planMergeLayers(items = [], groupSize = DEFAULT_MERGE_GROUP_SIZE) {
+  const layers = [];
+  let count = Array.isArray(items) ? items.length : 0;
+  let layerIndex = 0;
+  while (count > 1) {
+    const groups = buildMergeGroups(new Array(count).fill(null), groupSize).map((group, index) => ({
+      index: index + 1,
+      size: group.length
+    }));
+    layers.push({
+      index: layerIndex + 1,
+      groups
+    });
+    count = groups.length;
+    layerIndex += 1;
+  }
+  return layers;
 }
 
 function normalizeStageResult(result) {
@@ -308,9 +337,9 @@ export async function runLearnFilenamePipeline({
   readFileFn = (file) => fsp.readFile(file, "utf8"),
   mkdtempFn = (prefix) => fsp.mkdtemp(prefix),
   writeFileFn = (file, text) => fsp.writeFile(file, text),
-  runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel }),
-  runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel }),
-  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel })
+  runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel, childRunId }),
+  runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel, childRunId }),
+  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel, childRunId })
 }) {
   if (!String(sourceFilename ?? "").trim()) {
     throw new Error("learn filename pipeline defective: missing source filename");
@@ -365,25 +394,52 @@ export async function runLearnFilenamePipeline({
     logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} ok`);
     chunkCards.push(card.resultText);
   }
+  const mergePlan = planMergeLayers(chunkCards, DEFAULT_MERGE_GROUP_SIZE);
+  if (mergePlan.length) {
+    logVerbose(`[learn pipeline] merge layers: ${mergePlan.length}`);
+    for (const layer of mergePlan) {
+      logVerbose(`[learn pipeline] merge layer ${layer.index}: groups=${layer.groups.length} sizes=${layer.groups.map(group => group.size).join(",")}`);
+    }
+  }
 
-  const cardsText = chunkCards
-    .map((card, idx) => `CHUNK CARD ${idx + 1}\n${card}`)
-    .join("\n\n=====\n\n");
-  const cardsFilename = path.join(tempRoot, "chunk-cards.txt");
-  await writeFileFn(cardsFilename, cardsText);
-  logVerbose("[learn pipeline] merge/refine starting");
-  const finalCard = normalizeStageResult(await runMergeRefineFn({
-    sourceFilename,
-    cardsFilename,
-    learningFocus,
-    envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
-    traceDir: tempRoot,
-    traceLabel: "merge-refine",
-    childRunId: buildChildRunId(process.env.PYA_RUN_ID, "merge-refine", path.basename(tempRoot))
-  }));
-  if (finalCard.traceFilename) logVerbose(`[learn pipeline] merge/refine trace: ${finalCard.traceFilename}`);
-  logVerbose(`[learn pipeline] final card: ${summarizeCard(finalCard.resultText)}`);
-  return finalCard.resultText;
+  let currentCards = chunkCards;
+  for (let layerIndex = 0; layerIndex < mergePlan.length; layerIndex += 1) {
+    const layerNumber = layerIndex + 1;
+    const layerLabel = `merge-layer-${String(layerNumber).padStart(2, "0")}`;
+    const layerDir = path.join(tempRoot, layerLabel);
+    await fsp.mkdir(layerDir, { recursive: true });
+    const groups = buildMergeGroups(currentCards, DEFAULT_MERGE_GROUP_SIZE);
+    const mergedCards = [];
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const groupNumber = groupIndex + 1;
+      const groupLabel = `group-${String(groupNumber).padStart(3, "0")}`;
+      const groupDir = path.join(layerDir, groupLabel);
+      await fsp.mkdir(groupDir, { recursive: true });
+      const cardsText = groups[groupIndex]
+        .map((card, idx) => `CHUNK CARD ${idx + 1}\n${card}`)
+        .join("\n\n=====\n\n");
+      const cardsFilename = path.join(groupDir, "chunk-cards.txt");
+      await writeFileFn(cardsFilename, cardsText);
+      logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} starting (${groups[groupIndex].length} cards)`);
+      const merged = normalizeStageResult(await runMergeRefineFn({
+        sourceFilename,
+        cardsFilename,
+        learningFocus,
+        envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
+        traceDir: groupDir,
+        traceLabel: "merge-refine",
+        childRunId: buildChildRunId(process.env.PYA_RUN_ID, `${layerLabel}/${groupLabel}`, path.basename(tempRoot))
+      }));
+      if (merged.traceFilename) logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} trace: ${merged.traceFilename}`);
+      logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} ok`);
+      mergedCards.push(merged.resultText);
+    }
+    currentCards = mergedCards;
+  }
+
+  const finalCardText = String(currentCards[0] ?? "").trim();
+  logVerbose(`[learn pipeline] final card: ${summarizeCard(finalCardText)}`);
+  return finalCardText;
 }
 
 async function main() {
