@@ -727,6 +727,25 @@ su name module manuscript scored state from name map checkpoint with name series
   ob text of name of with of this to history of state be text do
 prah
 
+su name module manuscript scored promote from name map checkpoint with name map state to name map nextstate be ceremony def
+  ob text quoted.text.{"best attempt":"","current attempt":"","best score":0,"passing":"false","candidate":"","review":"","score":0,"history":""}.text.quoted to name map nextstate be import do
+  ob text of history of with of this to history of nextstate be text do
+  ob text of attempt name of from of this to current attempt of nextstate be text do
+  ob text of passing of from of this to passing of nextstate be text do
+  ob text of candidate of from of this to candidate of nextstate be text do
+  ob text of review of from of this to review of nextstate be text do
+  ob num of score of from of this to score of nextstate be plus do
+  ob num of score of from of this be giant from num of best score of with of this then
+  ob text of attempt name of from of this to best attempt of nextstate be text do
+  ob num of score of from of this to best score of nextstate be plus do
+  ob num of score of from of this be tiny from num of best score of with of this then
+  ob text of best attempt of with of this to best attempt of nextstate be text do
+  ob num of best score of with of this to best score of nextstate be plus do
+  ob num of score of from of this be equally from num of best score of with of this then
+  ob text of best attempt of with of this to best attempt of nextstate be text do
+  ob num of best score of with of this to best score of nextstate be plus do
+prah
+
 su name module manuscript scored semantic score from text source with text candidate to name map produce be ceremony def
   ob text of from of this to name text module manuscript replacement source be text do
   ob text of with of this to name text module manuscript replacement candidate be text do
@@ -1539,5 +1558,6 @@ exists su name module manuscript be export ya
 exists su name manuscript as wo module be export ya
 exists su name module manuscript scored checkpoint be export ya
 exists su name module manuscript scored history be export ya
+exists su name module manuscript scored promote be export ya
 exists su name module manuscript scored semantic score be export ya
 exists su name module manuscript scored state be export ya
