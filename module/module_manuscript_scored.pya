@@ -678,12 +678,14 @@ su name module manuscript section verify accordingto name checks series for name
   su name output ret
 prah
 
-su name module manuscript scored checkpoint from text candidate with text review to name map checkpoint be ceremony def
-  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false"}.text.quoted to name map checkpoint be import do
+su name module manuscript scored checkpoint from text candidate with text review by num trying as text attempt name to name map checkpoint be ceremony def
+  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt name":"","best":"false"}.text.quoted to name map checkpoint be import do
   ob text of from of this to name text module manuscript scored candidate be text do
   ob text of with of this to name text module manuscript scored review be text do
   ob name text module manuscript scored candidate to candidate of checkpoint be text do
   ob name text module manuscript scored review to review of checkpoint be text do
+  ob num of by of this to attempt of checkpoint be plus do
+  ob text of as of this to attempt name of checkpoint be text do
   ob name text module manuscript scored review atmost num 1 to name text module manuscript scored score line be line tail do
   ob name text module manuscript scored score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
   ob name text module manuscript scored score line from num 0 to num 1 become name num to name num module manuscript scored score be cast do
@@ -692,17 +694,37 @@ su name module manuscript scored checkpoint from text candidate with text review
   ob text "true" to passing of checkpoint be text do
 prah
 
-su name module manuscript scored checkpoint from name text candidate with text review to name map checkpoint be ceremony def
-  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false"}.text.quoted to name map checkpoint be import do
+su name module manuscript scored checkpoint from name text candidate with text review by num trying as text attempt name to name map checkpoint be ceremony def
+  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt name":"","best":"false"}.text.quoted to name map checkpoint be import do
   ob name text candidate to candidate of checkpoint be text do
   ob text of with of this to name text module manuscript scored review be text do
   ob name text module manuscript scored review to review of checkpoint be text do
+  ob num of by of this to attempt of checkpoint be plus do
+  ob text of as of this to attempt name of checkpoint be text do
   ob name text module manuscript scored review atmost num 1 to name text module manuscript scored score line be line tail do
   ob name text module manuscript scored score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
   ob name text module manuscript scored score line from num 0 to num 1 become name num to name num module manuscript scored score be cast do
   ob name num module manuscript scored score to score of checkpoint be plus do
   ob name num module manuscript scored score be giant from num 0.79 then
   ob text "true" to passing of checkpoint be text do
+prah
+
+su name module manuscript scored history from name map checkpoint to name series history be ceremony def
+  su name history be series def
+  su name module manuscript scored attempt row ob text of attempt name of from of this by num of attempt of from of this be text ya
+  prah
+prah
+
+su name module manuscript scored state from name map checkpoint with name series history to name map state be ceremony def
+  ob text quoted.text.{"best attempt":"","current attempt":"","best score":0,"passing":"false","candidate":"","review":"","score":0,"history":""}.text.quoted to name map state be import do
+  ob text of attempt name of from of this to current attempt of state be text do
+  ob text of attempt name of from of this to best attempt of state be text do
+  ob num of score of from of this to best score of state be plus do
+  ob text of passing of from of this to passing of state be text do
+  ob text of candidate of from of this to candidate of state be text do
+  ob text of review of from of this to review of state be text do
+  ob num of score of from of this to score of state be plus do
+  ob text of name of with of this to history of state be text do
 prah
 
 su name module manuscript scored semantic score from text source with text candidate to name map produce be ceremony def
@@ -713,7 +735,7 @@ su name module manuscript scored semantic score from text source with text candi
   ob name text module manuscript current prior to name text module manuscript replacement prior be text do
   su name module manuscript scored semantic request stage ob name map module manuscript request replacements in name text module manuscript role request template to name text module manuscript scored semantic request be instead do
   ob name text module manuscript scored semantic request for name module manuscript scored semantic score mind to name text module manuscript scored semantic review by num 0 atmost num 320 be write do
-  su name module manuscript scored checkpoint stage from name text module manuscript replacement candidate with text of ob of module manuscript scored semantic review to name map produce be module manuscript scored checkpoint do
+  su name module manuscript scored checkpoint stage from name text module manuscript replacement candidate with text of ob of module manuscript scored semantic review by num 1 as text "attempt 1" to name map produce be module manuscript scored checkpoint do
 prah
 
 su name module manuscript source thrust checked to name map produce be ceremony def
@@ -1516,4 +1538,6 @@ prah
 exists su name module manuscript be export ya
 exists su name manuscript as wo module be export ya
 exists su name module manuscript scored checkpoint be export ya
+exists su name module manuscript scored history be export ya
 exists su name module manuscript scored semantic score be export ya
+exists su name module manuscript scored state be export ya
