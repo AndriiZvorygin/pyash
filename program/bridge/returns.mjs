@@ -28,6 +28,7 @@ export function handleReturn(sentence, state, remember) {
     if (!fact) throw new Error(`ret: unknown binding ${sourceName}`);
     merged = {
       ...merged,
+      be: fact.be ?? merged.be,
       ob: fact.ob ?? merged.ob,
       to: fact.to ?? merged.to,
       from: fact.from ?? merged.from,
@@ -56,7 +57,7 @@ export function handleReturn(sentence, state, remember) {
   if (sentence.as) merged.as = sentence.as;
 
   merged.mood = state.currentEvokeRef.mood;
-  merged.be = state.currentEvokeRef.be;
+  if (!sourceName) merged.be = state.currentEvokeRef.be;
 
   Object.assign(state.currentEvokeRef, merged);
   return { returned: "evoke", value: merged.ob ?? merged };
