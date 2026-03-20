@@ -1498,6 +1498,10 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript hook final reverify stage be verify as wo word count atleast num 6 atmost num 8 from name text module manuscript hook out to name map module manuscript hook final verify do
   ob text of pass of module manuscript hook final verify to name text module manuscript hook final verify pass be text do
   ob name text module manuscript hook final verify pass be equally from text false then
+  ob num of words of module manuscript hook final verify be tiny from num 6 then
+  su name module manuscript hook final tiny guarantee stage ob bool lie fromtext text "module manuscript hook word count tiny defective" be guarantee do
+  ob num of words of module manuscript hook final verify be giant from num 8 then
+  su name module manuscript hook final giant guarantee stage ob bool lie fromtext text "module manuscript hook word count giant defective" be guarantee do
   su name module manuscript hook final guarantee stage ob bool lie fromtext text "module manuscript hook word count defective" be guarantee do
   su name module manuscript hook repaired stage ob name text output to name text module manuscript hook out be text do
 
@@ -1510,6 +1514,10 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript promise final reverify stage be verify as wo word count atleast num 18 atmost num 26 from name text module manuscript promise out to name map module manuscript promise final verify do
   ob text of pass of module manuscript promise final verify to name text module manuscript promise final verify pass be text do
   ob name text module manuscript promise final verify pass be equally from text false then
+  ob num of words of module manuscript promise final verify be tiny from num 18 then
+  su name module manuscript promise final tiny guarantee stage ob bool lie fromtext text "module manuscript promise word count tiny defective" be guarantee do
+  ob num of words of module manuscript promise final verify be giant from num 26 then
+  su name module manuscript promise final giant guarantee stage ob bool lie fromtext text "module manuscript promise word count giant defective" be guarantee do
   su name module manuscript promise final guarantee stage ob bool lie fromtext text "module manuscript promise word count defective" be guarantee do
   su name module manuscript promise repaired stage ob name text output to name text module manuscript promise out be text do
 
@@ -1522,6 +1530,10 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript roadmap final reverify stage be verify as wo word count atleast num 15 atmost num 22 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
   ob text of pass of module manuscript roadmap final verify to name text module manuscript roadmap final verify pass be text do
   ob name text module manuscript roadmap final verify pass be equally from text false then
+  ob num of words of module manuscript roadmap final verify be tiny from num 15 then
+  su name module manuscript roadmap final tiny guarantee stage ob bool lie fromtext text "module manuscript roadmap word count tiny defective" be guarantee do
+  ob num of words of module manuscript roadmap final verify be giant from num 22 then
+  su name module manuscript roadmap final giant guarantee stage ob bool lie fromtext text "module manuscript roadmap word count giant defective" be guarantee do
   su name module manuscript roadmap final guarantee stage ob bool lie fromtext text "module manuscript roadmap word count defective" be guarantee do
   su name module manuscript roadmap repaired stage ob name text output to name text module manuscript roadmap out be text do
 
@@ -1534,6 +1546,10 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript segment one final reverify stage be verify as wo word count atleast num 85 atmost num 105 from name text module manuscript segment one out to name map module manuscript segment one final verify do
   ob text of pass of module manuscript segment one final verify to name text module manuscript segment one final verify pass be text do
   ob name text module manuscript segment one final verify pass be equally from text false then
+  ob num of words of module manuscript segment one final verify be tiny from num 85 then
+  su name module manuscript segment one final tiny guarantee stage ob bool lie fromtext text "module manuscript segment one word count tiny defective" be guarantee do
+  ob num of words of module manuscript segment one final verify be giant from num 105 then
+  su name module manuscript segment one final giant guarantee stage ob bool lie fromtext text "module manuscript segment one word count giant defective" be guarantee do
   su name module manuscript segment one final guarantee stage ob bool lie fromtext text "module manuscript segment one word count defective" be guarantee do
   su name module manuscript segment one repaired stage ob name text output to name text module manuscript segment one out be text do
 
@@ -1546,6 +1562,10 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript segment two final reverify stage be verify as wo word count atleast num 95 atmost num 120 from name text module manuscript segment two out to name map module manuscript segment two final verify do
   ob text of pass of module manuscript segment two final verify to name text module manuscript segment two final verify pass be text do
   ob name text module manuscript segment two final verify pass be equally from text false then
+  ob num of words of module manuscript segment two final verify be tiny from num 95 then
+  su name module manuscript segment two final tiny guarantee stage ob bool lie fromtext text "module manuscript segment two word count tiny defective" be guarantee do
+  ob num of words of module manuscript segment two final verify be giant from num 120 then
+  su name module manuscript segment two final giant guarantee stage ob bool lie fromtext text "module manuscript segment two word count giant defective" be guarantee do
   su name module manuscript segment two final guarantee stage ob bool lie fromtext text "module manuscript segment two word count defective" be guarantee do
   su name module manuscript segment two repaired stage ob name text output to name text module manuscript segment two out be text do
 
@@ -1558,6 +1578,10 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript segment three final reverify stage be verify as wo word count atleast num 95 atmost num 120 from name text module manuscript segment three out to name map module manuscript segment three final verify do
   ob text of pass of module manuscript segment three final verify to name text module manuscript segment three final verify pass be text do
   ob name text module manuscript segment three final verify pass be equally from text false then
+  ob num of words of module manuscript segment three final verify be tiny from num 95 then
+  su name module manuscript segment three final tiny guarantee stage ob bool lie fromtext text "module manuscript segment three word count tiny defective" be guarantee do
+  ob num of words of module manuscript segment three final verify be giant from num 120 then
+  su name module manuscript segment three final giant guarantee stage ob bool lie fromtext text "module manuscript segment three word count giant defective" be guarantee do
   su name module manuscript segment three final guarantee stage ob bool lie fromtext text "module manuscript segment three word count defective" be guarantee do
   su name module manuscript segment three repaired stage ob name text output to name text module manuscript segment three out be text do
 
@@ -1570,6 +1594,10 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript recap final reverify stage be verify as wo word count atleast num 40 atmost num 52 from name text module manuscript recap out to name map module manuscript recap final verify do
   ob text of pass of module manuscript recap final verify to name text module manuscript recap final verify pass be text do
   ob name text module manuscript recap final verify pass be equally from text false then
+  ob num of words of module manuscript recap final verify be tiny from num 40 then
+  su name module manuscript recap final tiny guarantee stage ob bool lie fromtext text "module manuscript recap word count tiny defective" be guarantee do
+  ob num of words of module manuscript recap final verify be giant from num 52 then
+  su name module manuscript recap final giant guarantee stage ob bool lie fromtext text "module manuscript recap word count giant defective" be guarantee do
   su name module manuscript recap final guarantee stage ob bool lie fromtext text "module manuscript recap word count defective" be guarantee do
   su name module manuscript recap repaired stage ob name text output to name text module manuscript recap out be text do
 
@@ -1582,6 +1610,10 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript cta final reverify stage be verify as wo word count atleast num 18 atmost num 26 from name text module manuscript cta out to name map module manuscript cta final verify do
   ob text of pass of module manuscript cta final verify to name text module manuscript cta final verify pass be text do
   ob name text module manuscript cta final verify pass be equally from text false then
+  ob num of words of module manuscript cta final verify be tiny from num 18 then
+  su name module manuscript cta final tiny guarantee stage ob bool lie fromtext text "module manuscript cta word count tiny defective" be guarantee do
+  ob num of words of module manuscript cta final verify be giant from num 26 then
+  su name module manuscript cta final giant guarantee stage ob bool lie fromtext text "module manuscript cta word count giant defective" be guarantee do
   su name module manuscript cta final guarantee stage ob bool lie fromtext text "module manuscript cta word count defective" be guarantee do
   su name module manuscript cta repaired stage ob name text output to name text module manuscript cta out be text do
 
