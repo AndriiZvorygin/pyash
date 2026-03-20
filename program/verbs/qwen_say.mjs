@@ -9,7 +9,7 @@ import { renderSayValue } from "./say.mjs";
 import { emitExchangeSentence, recordArtifact } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
-import { resolveConfigBool, resolveConfigMapText, resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
 import { parseItineraryPya } from "../../command/itinerary_io.mjs";
 
 function resolveHost({ rememberFn = remember } = {}) {
@@ -47,6 +47,61 @@ function resolvePostProcessFilter({ rememberFn = remember } = {}) {
     resolveConfigText("qwen say post process filter", { rememberFn }) ||
     "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB"
   );
+}
+
+function resolveKeepChunkArtifacts({ rememberFn = remember } = {}) {
+  return resolveConfigBool("qwen say keep chunks", { rememberFn }) === true;
+}
+
+function resolveClipVerifyEnabled({ rememberFn = remember } = {}) {
+  return resolveConfigBool("qwen say clip verify enabled", { rememberFn }) === true;
+}
+
+function resolveClipVerifyMaxRetries({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say clip verify max retries", { rememberFn });
+  if (Number.isFinite(configured) && configured >= 0) return Math.trunc(configured);
+  return 3;
+}
+
+function resolveClipVerifyTailWords({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say clip verify tail words", { rememberFn });
+  if (Number.isFinite(configured) && configured >= 1) return Math.trunc(configured);
+  return 2;
+}
+
+function resolveClipVerifyWindowMs({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say clip verify window ms", { rememberFn });
+  if (Number.isFinite(configured) && configured >= 60) return Number(configured);
+  return 120;
+}
+
+function resolveClipVerifyPeakDb({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say clip verify peak db", { rememberFn });
+  if (Number.isFinite(configured)) return Number(configured);
+  return -12;
+}
+
+function resolveClipVerifyDeltaDb({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say clip verify delta db", { rememberFn });
+  if (Number.isFinite(configured)) return Number(configured);
+  return 1;
+}
+
+function resolveClipVerifyHost({ rememberFn = remember } = {}) {
+  return (
+    resolveConfigText("hear qwen host", { rememberFn }) ||
+    resolveConfigText("say host", { rememberFn }) ||
+    resolveConfigText("draw host", { rememberFn }) ||
+    "http://localhost:8188"
+  );
+}
+
+function resolveClipVerifyWorkflowRoot({ rememberFn = remember } = {}) {
+  return resolveConfigText("hear workflow root", { rememberFn }) || "./hear/";
+}
+
+function resolveClipVerifyWorkflowName({ rememberFn = remember } = {}) {
+  return resolveConfigText("hear workflow default", { rememberFn }) || "qwen3-asr-timestamps-attn2";
 }
 
 function quotePyashText(value) {
@@ -521,6 +576,193 @@ async function concatAudioChunks({ inputs = [], output }) {
   }
 }
 
+async function runToolWithStderr(tool, args = []) {
+  return await new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    const proc = spawn(String(tool), args.map((entry) => String(entry)), { stdio: ["ignore", "pipe", "pipe"] });
+    proc.stdout.on("data", chunk => { stdout += String(chunk ?? ""); });
+    proc.stderr.on("data", chunk => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve({ stdout, stderr });
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`qwen say defective: ${tool} failed status=${code}: ${clipped}`));
+      }
+    });
+  });
+}
+
+async function probeDurationSeconds(input = "") {
+  const { stdout } = await runToolWithStderr("ffprobe", [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration",
+    "-of",
+    "default=nokey=1:noprint_wrappers=1",
+    input
+  ]);
+  const duration = Number(String(stdout ?? "").trim());
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error("qwen say defective: invalid chunk duration");
+  }
+  return duration;
+}
+
+function parseLastAstatsMetric(stderr = "", metric = "") {
+  const rx = new RegExp(`${String(metric)}:\\s*(-?\\d+(?:\\.\\d+)?)`, "gu");
+  let found = null;
+  for (const match of String(stderr ?? "").matchAll(rx)) found = match;
+  if (!found) throw new Error(`qwen say defective: astats metric missing ${metric}`);
+  return Number(found[1]);
+}
+
+function normalizeWordToken(value = "") {
+  return String(value ?? "").toLowerCase().replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+}
+
+function tokenizedWords(value = "") {
+  return String(value ?? "")
+    .split(/\s+/u)
+    .map((token) => normalizeWordToken(token))
+    .filter(Boolean);
+}
+
+function expectedTailTokens(text = "", count = 2) {
+  const tokens = tokenizedWords(text);
+  const n = Math.max(1, Number(count) || 2);
+  return tokens.slice(-n);
+}
+
+function verifyAsrTailMatch({ expectedTail = [], transcript = "" } = {}) {
+  const expected = Array.isArray(expectedTail) ? expectedTail.filter(Boolean) : [];
+  if (!expected.length) return { pass: true, matched: 0, expected: 0 };
+  const tokens = tokenizedWords(transcript);
+  if (!tokens.length) return { pass: false, matched: 0, expected: expected.length };
+  const searchFrom = Math.max(0, tokens.length - Math.max(16, expected.length * 8));
+  let cursor = searchFrom;
+  let matched = 0;
+  for (const want of expected) {
+    let found = -1;
+    for (let i = cursor; i < tokens.length; i += 1) {
+      if (tokens[i] === want) {
+        found = i;
+        break;
+      }
+    }
+    if (found < 0) return { pass: false, matched, expected: expected.length };
+    matched += 1;
+    cursor = found + 1;
+  }
+  return { pass: true, matched, expected: expected.length };
+}
+
+function tightenRetryChunkText(text = "") {
+  const raw = String(text ?? "").trim();
+  if (!raw) return "";
+  if (raw.endsWith("...")) return raw.slice(0, -3).trimEnd() + ".";
+  if (raw.endsWith("..")) return raw.slice(0, -2).trimEnd() + ".";
+  return raw;
+}
+
+async function detectHotTailSuspect({
+  input = "",
+  windowMs = 120,
+  peakDbThreshold = -12,
+  deltaDbThreshold = 1
+} = {}) {
+  const duration = await probeDurationSeconds(input);
+  const windowSeconds = Math.max(0.06, Number(windowMs) / 1000);
+  const prevStart = Math.max(0, duration - (windowSeconds * 2));
+  const prevEnd = Math.max(0, duration - windowSeconds);
+  const tailStart = prevEnd;
+  const tailEnd = duration;
+  const prev = await runToolWithStderr("ffmpeg", [
+    "-hide_banner",
+    "-nostats",
+    "-v",
+    "info",
+    "-i",
+    input,
+    "-af",
+    `atrim=start=${prevStart.toFixed(6)}:end=${prevEnd.toFixed(6)},astats=metadata=1:reset=1`,
+    "-f",
+    "null",
+    "-"
+  ]);
+  const tail = await runToolWithStderr("ffmpeg", [
+    "-hide_banner",
+    "-nostats",
+    "-v",
+    "info",
+    "-i",
+    input,
+    "-af",
+    `atrim=start=${tailStart.toFixed(6)}:end=${tailEnd.toFixed(6)},astats=metadata=1:reset=1`,
+    "-f",
+    "null",
+    "-"
+  ]);
+  const prevRmsDb = parseLastAstatsMetric(prev.stderr, "RMS level dB");
+  const tailRmsDb = parseLastAstatsMetric(tail.stderr, "RMS level dB");
+  const tailPeakDb = parseLastAstatsMetric(tail.stderr, "Peak level dB");
+  const deltaDb = tailRmsDb - prevRmsDb;
+  const suspect = tailPeakDb > Number(peakDbThreshold) && deltaDb > Number(deltaDbThreshold);
+  return {
+    suspect,
+    durationSeconds: duration,
+    prevRmsDb,
+    tailRmsDb,
+    tailPeakDb,
+    deltaDb,
+    windowMs: Number(windowMs),
+    peakDbThreshold: Number(peakDbThreshold),
+    deltaDbThreshold: Number(deltaDbThreshold)
+  };
+}
+
+async function verifyChunkTailWithQwenAsr({
+  input = "",
+  host = "",
+  workflowRoot = "",
+  workflowName = "",
+  expectedTail = []
+} = {}) {
+  const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../command/hear_comfyui_runner.mjs");
+  const args = [
+    runner,
+    "--input",
+    input,
+    "--host",
+    host,
+    "--workflow-root",
+    workflowRoot,
+    "--workflow-name",
+    workflowName,
+    "--return-timestamps",
+    "false"
+  ];
+  const { stdout } = await runToolWithStderr(process.execPath, args);
+  const lines = String(stdout ?? "").trim().split(/\r?\n/u).filter(Boolean);
+  const payloadText = lines[lines.length - 1] ?? "{}";
+  let payload = {};
+  try {
+    payload = JSON.parse(payloadText);
+  } catch {
+    payload = {};
+  }
+  const transcript = String(payload?.transcript ?? "").trim();
+  const verdict = verifyAsrTailMatch({ expectedTail, transcript });
+  return {
+    pass: verdict.pass,
+    transcript,
+    matched: verdict.matched,
+    expected: verdict.expected
+  };
+}
+
 export async function qwenSay(
   sentence,
   {
@@ -529,7 +771,9 @@ export async function qwenSay(
     concatAudioFn = concatAudioChunks,
     pathExistsFn = pathExists,
     postProcessFn = postProcessQwenSayAudio,
-    planChunkInstructsFn = planChunkInstructs
+    planChunkInstructsFn = planChunkInstructs,
+    detectHotTailFn = detectHotTailSuspect,
+    verifyChunkTailFn = verifyChunkTailWithQwenAsr
   } = {}
 ) {
   if (sentence?.ob?.hollow) {
@@ -593,7 +837,19 @@ export async function qwenSay(
   }
   const postProcessEnabled = resolvePostProcessEnabled({ rememberFn });
   const postProcessFilter = resolvePostProcessFilter({ rememberFn });
+  const keepChunkArtifacts = resolveKeepChunkArtifacts({ rememberFn });
+  const clipVerifyEnabled = resolveClipVerifyEnabled({ rememberFn });
+  const clipVerifyMaxRetries = resolveClipVerifyMaxRetries({ rememberFn });
+  const clipVerifyTailWords = resolveClipVerifyTailWords({ rememberFn });
+  const clipVerifyWindowMs = resolveClipVerifyWindowMs({ rememberFn });
+  const clipVerifyPeakDb = resolveClipVerifyPeakDb({ rememberFn });
+  const clipVerifyDeltaDb = resolveClipVerifyDeltaDb({ rememberFn });
+  const clipVerifyHost = resolveClipVerifyHost({ rememberFn });
+  const clipVerifyWorkflowRoot = resolveClipVerifyWorkflowRoot({ rememberFn });
+  const clipVerifyWorkflowName = resolveClipVerifyWorkflowName({ rememberFn });
   let postProcessApplied = false;
+  let chunkArtifactsDir = "";
+  const chunkVerification = [];
   const preparedChunks = chunks.map((chunk, index) => ({
     index,
     raw: String(chunk ?? ""),
@@ -621,25 +877,107 @@ export async function qwenSay(
       output: outputPath
     });
   } else {
-    const chunkDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-say-chunks-"));
+    const outputParsed = path.parse(outputPath);
+    const chunkDir = keepChunkArtifacts
+      ? path.join(outputParsed.dir, `${outputParsed.name}.qwen-say-chunks`)
+      : await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-say-chunks-"));
     const chunkFiles = [];
     try {
+      if (keepChunkArtifacts) {
+        await fs.rm(chunkDir, { recursive: true, force: true });
+        await fs.mkdir(chunkDir, { recursive: true });
+      }
       for (let i = 0; i < chunks.length; i += 1) {
-        const chunkText = preparedChunks[i]?.text ?? "";
+        let chunkText = preparedChunks[i]?.text ?? "";
         const chunkOutput = path.join(chunkDir, `chunk-${String(i + 1).padStart(3, "0")}.wav`);
-        await runSayFn({
-          text: chunkText,
-          instruct: chunkInstructs[i] ?? toneDefault,
-          workflowName,
-          workflowRoot,
-          host,
-          output: chunkOutput
-        });
+        const verificationRecord = {
+          index: i,
+          retries: 0,
+          suspect: false,
+          asrChecked: false,
+          asrPass: null,
+          expectedTail: expectedTailTokens(chunkText, clipVerifyTailWords),
+          hotTail: null
+        };
+        while (true) {
+          await runSayFn({
+            text: chunkText,
+            instruct: chunkInstructs[i] ?? toneDefault,
+            workflowName,
+            workflowRoot,
+            host,
+            output: chunkOutput
+          });
+          if (!clipVerifyEnabled) break;
+          let suspect = false;
+          try {
+            verificationRecord.hotTail = await detectHotTailFn({
+              input: chunkOutput,
+              windowMs: clipVerifyWindowMs,
+              peakDbThreshold: clipVerifyPeakDb,
+              deltaDbThreshold: clipVerifyDeltaDb
+            });
+            suspect = verificationRecord.hotTail?.suspect === true;
+          } catch (err) {
+            verificationRecord.hotTail = { suspect: true, error: String(err?.message ?? err) };
+            suspect = true;
+          }
+          verificationRecord.suspect = suspect;
+          if (!suspect) break;
+          verificationRecord.asrChecked = true;
+          const asrResult = await verifyChunkTailFn({
+            input: chunkOutput,
+            host: clipVerifyHost,
+            workflowRoot: clipVerifyWorkflowRoot,
+            workflowName: clipVerifyWorkflowName,
+            expectedTail: verificationRecord.expectedTail
+          });
+          verificationRecord.asrPass = asrResult?.pass === true;
+          verificationRecord.asrMatched = Number(asrResult?.matched ?? 0);
+          verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
+          verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
+          if (verificationRecord.asrPass) break;
+          if (verificationRecord.retries >= clipVerifyMaxRetries) {
+            throwErrorSentence({
+              name: "qwen say defective",
+              message: `qwen say defective: clipped chunk retries exhausted at chunk ${i + 1}`,
+              from: { name: "qwen say" },
+              raw: {
+                chunkIndex: i + 1,
+                retries: verificationRecord.retries,
+                expectedTail: verificationRecord.expectedTail,
+                transcript: verificationRecord.asrTranscript
+              }
+            });
+          }
+          verificationRecord.retries += 1;
+          chunkText = tightenRetryChunkText(chunkText);
+        }
+        verificationRecord.text = chunkText;
+        chunkVerification.push(verificationRecord);
         chunkFiles.push(chunkOutput);
+      }
+      if (keepChunkArtifacts) {
+        const manifestPath = path.join(chunkDir, "chunks.metadata.json");
+        const manifest = {
+          kind: "qwen say chunk artifacts",
+          output: outputPath,
+          chunks: chunkFiles.map((filename, index) => ({
+            index,
+            filename,
+            text: chunkVerification[index]?.text ?? preparedChunks[index]?.text ?? "",
+            instruct: chunkInstructs[index] ?? toneDefault,
+            verification: chunkVerification[index] ?? null
+          }))
+        };
+        await fs.writeFile(manifestPath, canonicalJsonStringify(manifest), "utf8");
+        chunkArtifactsDir = chunkDir;
       }
       await concatAudioFn({ inputs: chunkFiles, output: outputPath });
     } finally {
-      await fs.rm(chunkDir, { recursive: true, force: true });
+      if (!keepChunkArtifacts) {
+        await fs.rm(chunkDir, { recursive: true, force: true });
+      }
     }
   }
 
@@ -679,6 +1017,16 @@ export async function qwenSay(
     format: "wav",
     streaming: false,
     chunks: chunks.length,
+    keepChunkArtifacts,
+    chunkArtifactsDir: chunkArtifactsDir || undefined,
+    clipVerifyEnabled,
+    clipVerifyMaxRetries,
+    clipVerifyTailWords,
+    clipVerifyWindowMs,
+    clipVerifyPeakDb,
+    clipVerifyDeltaDb,
+    clipVerifyHost,
+    clipVerifyWorkflowName,
     tone: toneOverride || chunkInstructs[0] || toneDefault,
     toneStrategy: toneStrategyResolved,
     postProcess: postProcessEnabled,

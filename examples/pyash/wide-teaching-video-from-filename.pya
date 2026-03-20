@@ -2,6 +2,8 @@ from filename "../../module/brief_video.pya" ob name teaching video to name teac
 
 ob filename text manuscript be input ya
 exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name hear backend default ob text "qwen" be default ya
+exists su name hear whisperx fallback qwen ob bool truth be default ya
 exists su name draw widescreen mode ob text "truth" be default ya
 
 su name teaching demo from filename of ob of manuscript be teaching video do

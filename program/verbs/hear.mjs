@@ -10,7 +10,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { state } from "../bridge/state.mjs";
 import { canonicalJsonStringify, sha256 } from "./hear/hash.mjs";
-import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel, resolveHearWhisperxDevice, resolveHearHfToken, resolveHearQwenHost, resolveHearWorkflowRoot, resolveHearWorkflowDefault, resolveHearQwenChunkMaxSeconds, resolveHearQwenChunkOverlapSeconds, resolveHearQwenChunkForceSeconds } from "./hear/config.mjs";
+import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel, resolveHearWhisperxDevice, resolveHearHfToken, resolveHearWhisperxFallbackQwen, resolveHearQwenHost, resolveHearWorkflowRoot, resolveHearWorkflowDefault, resolveHearQwenChunkMaxSeconds, resolveHearQwenChunkOverlapSeconds, resolveHearQwenChunkForceSeconds } from "./hear/config.mjs";
 import { resolveOutputPath, metadataPathForOutput, readInputBytes } from "./hear/paths.mjs";
 import { isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStreamStdoutWriter, startFileTail } from "./hear/stream.mjs";
 import { handleHearStream } from "./hear/run_stream.mjs";
@@ -101,6 +101,7 @@ export async function hear(
   sentence,
   {
     remember: rememberFn = remember,
+    transcribeWhisperxFn = transcribeWithWhisperx,
     transcribeQwenFn = transcribeWithQwenComfyui,
     transcribeQwenChunkedFn = transcribeWithQwenComfyuiChunked
   } = {}
@@ -470,7 +471,7 @@ export async function hear(
         emitExchangeSentence(requestSentence);
         try {
           const whisperxLogLines = [];
-          const payload = await transcribeWithWhisperx({
+          const payload = await transcribeWhisperxFn({
             host,
             inputPath,
             outputPath,
@@ -514,12 +515,76 @@ export async function hear(
           if (Number.isFinite(statusNum)) resultSentence.by = { num: statusNum };
           emitExchangeSentence(resultSentence);
         } catch (err) {
-          throwErrorSentence({
-            name: "hear defective",
-            message: `hear defective: ${err?.message ?? "whisperx failed"}`,
-            from: { name: "hear" },
-            raw: { host, inputPath, outputPath, error: err?.message ?? String(err) }
-          });
+          const fallbackToQwen = resolveHearWhisperxFallbackQwen({ rememberFn });
+          if (fallbackToQwen) {
+            const qwenHost = resolveHearQwenHost({ rememberFn });
+            const workflowRoot = resolveHearWorkflowRoot({ rememberFn });
+            const workflowName = resolveHearWorkflowDefault({ rememberFn });
+            const context = resolveHearPrompt(sentence);
+            const maxChunkSeconds = resolveHearQwenChunkMaxSeconds({ rememberFn });
+            const overlapSeconds = resolveHearQwenChunkOverlapSeconds({ rememberFn });
+            emitExchangeSentence({
+              mood: "ya",
+              su: { name: "hear whisperx fallback qwen" },
+              from: { filename: inputPath },
+              to: { filename: outputPath },
+              fromstate: { text: host },
+              as: { text: whisperxModel },
+              tostate: { text: qwenHost },
+              become: { text: workflowName },
+              fromtext: { text: clipLogText(err?.message ?? "whisperx failed", 800) },
+              be: "hear"
+            });
+            try {
+              const chunkedPayload = await transcribeQwenChunkedFn({
+                inputPath,
+                host: qwenHost,
+                workflowRoot,
+                workflowName,
+                language,
+                context,
+                maxChunkSeconds,
+                overlapSeconds,
+                returnTimestamps: true,
+                useSegmentsForTranscript: true,
+                transcribeFn: transcribeQwenFn
+              });
+              transcript = String(chunkedPayload?.srt ?? "");
+              backend = "qwen-comfyui-fallback";
+              model = workflowName;
+              emitExchangeSentence({
+                mood: "ya",
+                su: { name: "hear result qwen chunked fallback" },
+                from: { filename: inputPath },
+                ob: { filename: outputPath },
+                fromstate: { text: qwenHost },
+                as: { text: workflowName },
+                by: { num: Number(chunkedPayload?.chunkCount ?? 0) },
+                fromtext: chunkedPayload?.timestampsRaw ? { text: clipLogText(chunkedPayload.timestampsRaw, 1200) } : undefined,
+                be: "hear"
+              });
+            } catch (fallbackErr) {
+              throwErrorSentence({
+                name: "hear defective",
+                message: `hear defective: ${fallbackErr?.message ?? err?.message ?? "whisperx failed"}`,
+                from: { name: "hear" },
+                raw: {
+                  host,
+                  inputPath,
+                  outputPath,
+                  whisperxError: err?.message ?? String(err),
+                  fallbackError: fallbackErr?.message ?? String(fallbackErr)
+                }
+              });
+            }
+          } else {
+            throwErrorSentence({
+              name: "hear defective",
+              message: `hear defective: ${err?.message ?? "whisperx failed"}`,
+              from: { name: "hear" },
+              raw: { host, inputPath, outputPath, error: err?.message ?? String(err) }
+            });
+          }
         }
       } else {
         const whisperBin = resolveWhisperBinary({ rememberFn });
