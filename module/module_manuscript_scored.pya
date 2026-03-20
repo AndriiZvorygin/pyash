@@ -679,71 +679,135 @@ su name module manuscript section verify accordingto name checks series for name
 prah
 
 su name module manuscript scored checkpoint from text candidate with text review by num trying as text attempt name to name map checkpoint be ceremony def
-  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt name":"","best":"false"}.text.quoted to name map checkpoint be import do
+  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt_name":"","best":"false"}.text.quoted to name map checkpoint be import do
+  exists su name module manuscript scored checkpoint candidate slot ob candidate of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint review slot ob review of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint attempt slot ob attempt of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint attempt name slot ob attempt_name of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint score slot ob score of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint passing slot ob passing of checkpoint be nickname ya
   ob text of from of this to name text module manuscript scored candidate be text do
   ob text of with of this to name text module manuscript scored review be text do
-  ob name text module manuscript scored candidate to candidate of checkpoint be text do
-  ob name text module manuscript scored review to review of checkpoint be text do
-  ob num of by of this to attempt of checkpoint be plus do
-  ob text of as of this to attempt name of checkpoint be text do
+  ob name text module manuscript scored candidate to name module manuscript scored checkpoint candidate slot be text do
+  ob name text module manuscript scored review to name module manuscript scored checkpoint review slot be text do
+  ob num of by of this to name module manuscript scored checkpoint attempt slot be plus do
+  ob text of as of this to name module manuscript scored checkpoint attempt name slot be text do
   ob name text module manuscript scored review atmost num 1 to name text module manuscript scored score line be line tail do
   ob name text module manuscript scored score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
   ob name text module manuscript scored score line from num 0 to num 1 become name num to name num module manuscript scored score be cast do
-  ob name num module manuscript scored score to score of checkpoint be plus do
+  ob name num module manuscript scored score to name module manuscript scored checkpoint score slot be plus do
   ob name num module manuscript scored score be giant from num 0.79 then
-  ob text "true" to passing of checkpoint be text do
+  ob text "true" to name module manuscript scored checkpoint passing slot be text do
 prah
 
 su name module manuscript scored checkpoint from name text candidate with text review by num trying as text attempt name to name map checkpoint be ceremony def
-  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt name":"","best":"false"}.text.quoted to name map checkpoint be import do
-  ob name text candidate to candidate of checkpoint be text do
+  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt_name":"","best":"false"}.text.quoted to name map checkpoint be import do
+  exists su name module manuscript scored checkpoint candidate slot ob candidate of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint review slot ob review of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint attempt slot ob attempt of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint attempt name slot ob attempt_name of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint score slot ob score of checkpoint be nickname ya
+  exists su name module manuscript scored checkpoint passing slot ob passing of checkpoint be nickname ya
+  ob name text candidate to name module manuscript scored checkpoint candidate slot be text do
   ob text of with of this to name text module manuscript scored review be text do
-  ob name text module manuscript scored review to review of checkpoint be text do
-  ob num of by of this to attempt of checkpoint be plus do
-  ob text of as of this to attempt name of checkpoint be text do
+  ob name text module manuscript scored review to name module manuscript scored checkpoint review slot be text do
+  ob num of by of this to name module manuscript scored checkpoint attempt slot be plus do
+  ob text of as of this to name module manuscript scored checkpoint attempt name slot be text do
   ob name text module manuscript scored review atmost num 1 to name text module manuscript scored score line be line tail do
   ob name text module manuscript scored score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
   ob name text module manuscript scored score line from num 0 to num 1 become name num to name num module manuscript scored score be cast do
-  ob name num module manuscript scored score to score of checkpoint be plus do
+  ob name num module manuscript scored score to name module manuscript scored checkpoint score slot be plus do
   ob name num module manuscript scored score be giant from num 0.79 then
-  ob text "true" to passing of checkpoint be text do
+  ob text "true" to name module manuscript scored checkpoint passing slot be text do
 prah
 
 su name module manuscript scored history from name map checkpoint to name series history be ceremony def
+  exists su name module manuscript scored history checkpoint attempt name ob attempt_name of from of this be nickname ya
+  exists su name module manuscript scored history checkpoint attempt ob attempt of from of this be nickname ya
   su name history be series def
-  su name module manuscript scored attempt row ob text of attempt name of from of this by num of attempt of from of this be text ya
+  su name module manuscript scored attempt row ob name module manuscript scored history checkpoint attempt name by num of name module manuscript scored history checkpoint attempt be text ya
+  prah
+prah
+
+su name module manuscript scored history from name map first with name map second to name series history be ceremony def
+  exists su name module manuscript scored history first attempt name ob attempt_name of from of this be nickname ya
+  exists su name module manuscript scored history first attempt ob attempt of from of this be nickname ya
+  exists su name module manuscript scored history second attempt name ob attempt_name of with of this be nickname ya
+  exists su name module manuscript scored history second attempt ob attempt of with of this be nickname ya
+  su name history be series def
+  su name module manuscript scored attempt row one ob name module manuscript scored history first attempt name by num of name module manuscript scored history first attempt be text ya
+  su name module manuscript scored attempt row two ob name module manuscript scored history second attempt name by num of name module manuscript scored history second attempt be text ya
   prah
 prah
 
 su name module manuscript scored state from name map checkpoint with name series history to name map state be ceremony def
-  ob text quoted.text.{"best attempt":"","current attempt":"","best score":0,"passing":"false","candidate":"","review":"","score":0,"history":""}.text.quoted to name map state be import do
-  ob text of attempt name of from of this to current attempt of state be text do
-  ob text of attempt name of from of this to best attempt of state be text do
-  ob num of score of from of this to best score of state be plus do
-  ob text of passing of from of this to passing of state be text do
-  ob text of candidate of from of this to candidate of state be text do
-  ob text of review of from of this to review of state be text do
-  ob num of score of from of this to score of state be plus do
-  ob text of name of with of this to history of state be text do
+  ob text quoted.text.{"best_attempt":"","current_attempt":"","best_score":0,"passing":"false","candidate":"","review":"","score":0,"history":""}.text.quoted to name map state be import do
+  exists su name module manuscript scored state current attempt slot ob current_attempt of state be nickname ya
+  exists su name module manuscript scored state best attempt slot ob best_attempt of state be nickname ya
+  exists su name module manuscript scored state best score slot ob best_score of state be nickname ya
+  exists su name module manuscript scored state passing slot ob passing of state be nickname ya
+  exists su name module manuscript scored state candidate slot ob candidate of state be nickname ya
+  exists su name module manuscript scored state review slot ob review of state be nickname ya
+  exists su name module manuscript scored state score slot ob score of state be nickname ya
+  exists su name module manuscript scored state history slot ob history of state be nickname ya
+  ob text of attempt_name of from of this to name module manuscript scored state current attempt slot be text do
+  ob text of attempt_name of from of this to name module manuscript scored state best attempt slot be text do
+  ob num of score of from of this to name module manuscript scored state best score slot be plus do
+  ob text of passing of from of this to name module manuscript scored state passing slot be text do
+  ob text of candidate of from of this to name module manuscript scored state candidate slot be text do
+  ob text of review of from of this to name module manuscript scored state review slot be text do
+  ob num of score of from of this to name module manuscript scored state score slot be plus do
+  ob text of name of with of this to name module manuscript scored state history slot be text do
 prah
 
 su name module manuscript scored promote from name map checkpoint with name map state to name map nextstate be ceremony def
-  ob text quoted.text.{"best attempt":"","current attempt":"","best score":0,"passing":"false","candidate":"","review":"","score":0,"history":""}.text.quoted to name map nextstate be import do
-  ob text of history of with of this to history of nextstate be text do
-  ob text of attempt name of from of this to current attempt of nextstate be text do
-  ob text of passing of from of this to passing of nextstate be text do
-  ob text of candidate of from of this to candidate of nextstate be text do
-  ob text of review of from of this to review of nextstate be text do
-  ob num of score of from of this to score of nextstate be plus do
-  ob num of score of from of this be giant from num of best score of with of this then
-  ob text of attempt name of from of this to best attempt of nextstate be text do
-  ob num of score of from of this to best score of nextstate be plus do
-  ob num of score of from of this be tiny from num of best score of with of this then
-  ob text of best attempt of with of this to best attempt of nextstate be text do
-  ob num of best score of with of this to best score of nextstate be plus do
-  ob num of score of from of this be equally from num of best score of with of this then
-  ob text of best attempt of with of this to best attempt of nextstate be text do
-  ob num of best score of with of this to best score of nextstate be plus do
+  ob text quoted.text.{"best_attempt":"","current_attempt":"","best_score":0,"passing":"false","candidate":"","review":"","score":0,"history":""}.text.quoted to name map nextstate be import do
+  exists su name module manuscript scored promote history slot ob history of nextstate be nickname ya
+  exists su name module manuscript scored promote current attempt slot ob current_attempt of nextstate be nickname ya
+  exists su name module manuscript scored promote passing slot ob passing of nextstate be nickname ya
+  exists su name module manuscript scored promote candidate slot ob candidate of nextstate be nickname ya
+  exists su name module manuscript scored promote review slot ob review of nextstate be nickname ya
+  exists su name module manuscript scored promote score slot ob score of nextstate be nickname ya
+  exists su name module manuscript scored promote best attempt slot ob best_attempt of nextstate be nickname ya
+  exists su name module manuscript scored promote best score slot ob best_score of nextstate be nickname ya
+  exists su name module manuscript scored promote candidate attempt name ob attempt_name of from of this be nickname ya
+  exists su name module manuscript scored promote candidate score ob score of from of this be nickname ya
+  exists su name module manuscript scored promote candidate passing ob passing of from of this be nickname ya
+  exists su name module manuscript scored promote candidate text ob candidate of from of this be nickname ya
+  exists su name module manuscript scored promote candidate review ob review of from of this be nickname ya
+  ob text "history" to name module manuscript scored promote history slot be text do
+  ob name module manuscript scored promote candidate attempt name to name module manuscript scored promote current attempt slot be text do
+  ob name module manuscript scored promote candidate passing to name module manuscript scored promote passing slot be text do
+  ob name module manuscript scored promote candidate text to name module manuscript scored promote candidate slot be text do
+  ob name module manuscript scored promote candidate review to name module manuscript scored promote review slot be text do
+  ob num of name module manuscript scored promote candidate score to name module manuscript scored promote score slot be plus do
+  ob name module manuscript scored promote candidate attempt name to name module manuscript scored promote best attempt slot be text do
+  ob num of name module manuscript scored promote candidate score to name module manuscript scored promote best score slot be plus do
+prah
+
+su name module manuscript scored collect pair from name map first with name map second to name map state be ceremony def
+  ob text quoted.text.{"best_attempt":"","current_attempt":"","best_score":0,"passing":"false","candidate":"","review":"","score":0,"history":""}.text.quoted to name map state be import do
+  exists su name module manuscript scored collect pair best attempt slot ob best_attempt of state be nickname ya
+  exists su name module manuscript scored collect pair current attempt slot ob current_attempt of state be nickname ya
+  exists su name module manuscript scored collect pair best score slot ob best_score of state be nickname ya
+  exists su name module manuscript scored collect pair passing slot ob passing of state be nickname ya
+  exists su name module manuscript scored collect pair candidate slot ob candidate of state be nickname ya
+  exists su name module manuscript scored collect pair review slot ob review of state be nickname ya
+  exists su name module manuscript scored collect pair score slot ob score of state be nickname ya
+  exists su name module manuscript scored collect pair history slot ob history of state be nickname ya
+  exists su name module manuscript scored collect pair source attempt name ob attempt_name of from of this be nickname ya
+  exists su name module manuscript scored collect pair source score ob score of from of this be nickname ya
+  exists su name module manuscript scored collect pair source passing ob passing of from of this be nickname ya
+  exists su name module manuscript scored collect pair source candidate ob candidate of from of this be nickname ya
+  exists su name module manuscript scored collect pair source review ob review of from of this be nickname ya
+  ob text "history" to name module manuscript scored collect pair history slot be text do
+  ob name module manuscript scored collect pair source attempt name to name module manuscript scored collect pair best attempt slot be text do
+  ob name module manuscript scored collect pair source attempt name to name module manuscript scored collect pair current attempt slot be text do
+  ob num of name module manuscript scored collect pair source score to name module manuscript scored collect pair best score slot be plus do
+  ob name module manuscript scored collect pair source passing to name module manuscript scored collect pair passing slot be text do
+  ob name module manuscript scored collect pair source candidate to name module manuscript scored collect pair candidate slot be text do
+  ob name module manuscript scored collect pair source review to name module manuscript scored collect pair review slot be text do
+  ob num of name module manuscript scored collect pair source score to name module manuscript scored collect pair score slot be plus do
 prah
 
 su name module manuscript scored semantic score from text source with text candidate to name map produce be ceremony def
@@ -1558,6 +1622,7 @@ exists su name module manuscript be export ya
 exists su name manuscript as wo module be export ya
 exists su name module manuscript scored checkpoint be export ya
 exists su name module manuscript scored history be export ya
+exists su name module manuscript scored collect pair be export ya
 exists su name module manuscript scored promote be export ya
 exists su name module manuscript scored semantic score be export ya
 exists su name module manuscript scored state be export ya
