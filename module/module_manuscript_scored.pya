@@ -97,7 +97,9 @@ Rules:
 
 Output:
 - First output one short paragraph.
-- Final non-empty line must be exactly one numeric score from 0 to 1.
+- Final non-empty line must be exactly one numeric score from 0 to 1, or PASS, or FAIL.
+- PASS means score 1.0.
+- FAIL means score 0.0.
 - No labels, no bullets, no markdown.
 - No text after the final score line..text.quoted be text ya
 
@@ -678,7 +680,7 @@ su name module manuscript section verify accordingto name checks series for name
   su name output ret
 prah
 
-su name module manuscript scored checkpoint from text candidate with text review by num trying as text attempt name to name map checkpoint be ceremony def
+su name module manuscript scored checkpoint from text candidate with text review to name map checkpoint be ceremony def
   ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt_name":"","best":"false"}.text.quoted to name map checkpoint be import do
   exists su name module manuscript scored checkpoint candidate slot ob candidate of checkpoint be nickname ya
   exists su name module manuscript scored checkpoint review slot ob review of checkpoint be nickname ya
@@ -690,30 +692,15 @@ su name module manuscript scored checkpoint from text candidate with text review
   ob text of with of this to name text module manuscript scored review be text do
   ob name text module manuscript scored candidate to name module manuscript scored checkpoint candidate slot be text do
   ob name text module manuscript scored review to name module manuscript scored checkpoint review slot be text do
-  ob num of by of this to name module manuscript scored checkpoint attempt slot be plus do
-  ob text of as of this to name module manuscript scored checkpoint attempt name slot be text do
+  ob num 1 to name module manuscript scored checkpoint attempt slot be plus do
+  ob text "attempt 1" to name module manuscript scored checkpoint attempt name slot be text do
   ob name text module manuscript scored review atmost num 1 to name text module manuscript scored score line be line tail do
-  ob name text module manuscript scored score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
-  ob name text module manuscript scored score line from num 0 to num 1 become name num to name num module manuscript scored score be cast do
-  ob name num module manuscript scored score to name module manuscript scored checkpoint score slot be plus do
-  ob name num module manuscript scored score be giant from num 0.79 then
+  ob name text module manuscript scored score line from text "/^\\s*PASS\\b/i" be resemble then
+  ob num 1 to name module manuscript scored checkpoint score slot be plus do
   ob text "true" to name module manuscript scored checkpoint passing slot be text do
-prah
-
-su name module manuscript scored checkpoint from name text candidate with text review by num trying as text attempt name to name map checkpoint be ceremony def
-  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt_name":"","best":"false"}.text.quoted to name map checkpoint be import do
-  exists su name module manuscript scored checkpoint candidate slot ob candidate of checkpoint be nickname ya
-  exists su name module manuscript scored checkpoint review slot ob review of checkpoint be nickname ya
-  exists su name module manuscript scored checkpoint attempt slot ob attempt of checkpoint be nickname ya
-  exists su name module manuscript scored checkpoint attempt name slot ob attempt_name of checkpoint be nickname ya
-  exists su name module manuscript scored checkpoint score slot ob score of checkpoint be nickname ya
-  exists su name module manuscript scored checkpoint passing slot ob passing of checkpoint be nickname ya
-  ob name text candidate to name module manuscript scored checkpoint candidate slot be text do
-  ob text of with of this to name text module manuscript scored review be text do
-  ob name text module manuscript scored review to name module manuscript scored checkpoint review slot be text do
-  ob num of by of this to name module manuscript scored checkpoint attempt slot be plus do
-  ob text of as of this to name module manuscript scored checkpoint attempt name slot be text do
-  ob name text module manuscript scored review atmost num 1 to name text module manuscript scored score line be line tail do
+  ob name text module manuscript scored score line from text "/^\\s*FAIL\\b/i" be resemble then
+  ob num 0 to name module manuscript scored checkpoint score slot be plus do
+  ob text "false" to name module manuscript scored checkpoint passing slot be text do
   ob name text module manuscript scored score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
   ob name text module manuscript scored score line from num 0 to num 1 become name num to name num module manuscript scored score be cast do
   ob name num module manuscript scored score to name module manuscript scored checkpoint score slot be plus do
@@ -740,7 +727,7 @@ su name module manuscript scored history from name map first with name map secon
   prah
 prah
 
-su name module manuscript scored state from name map checkpoint with name series history to name map state be ceremony def
+su name module manuscript scored settle from name map checkpoint with name series history to name map state be ceremony def
   ob text quoted.text.{"best_attempt":"","current_attempt":"","best_score":0,"passing":"false","candidate":"","review":"","score":0,"history":""}.text.quoted to name map state be import do
   exists su name module manuscript scored state current attempt slot ob current_attempt of state be nickname ya
   exists su name module manuscript scored state best attempt slot ob best_attempt of state be nickname ya
@@ -808,7 +795,7 @@ su name module manuscript scored semantic score from text source with text candi
   ob name text module manuscript current prior to name text module manuscript replacement prior be text do
   su name module manuscript scored semantic request stage ob name map module manuscript request replacements in name text module manuscript role request template to name text module manuscript scored semantic request be instead do
   ob name text module manuscript scored semantic request for name module manuscript scored semantic score mind to name text module manuscript scored semantic review by num 0 atmost num 320 be write do
-  su name module manuscript scored checkpoint stage from name text module manuscript replacement candidate with text of ob of module manuscript scored semantic review by num 1 as text "attempt 1" to name map produce be module manuscript scored checkpoint do
+  su name module manuscript scored checkpoint stage from text of ob of module manuscript replacement candidate with text of ob of module manuscript scored semantic review to name map produce be module manuscript scored checkpoint do
 prah
 
 su name module manuscript source thrust checked to name map produce be ceremony def
@@ -1118,25 +1105,20 @@ su name module manuscript segment one checked to name text output be ceremony de
   ob text "" to name text module manuscript current prior be text do
   su name module manuscript segment one source thrust stage from text of ob of module manuscript segment one source basis with text of ob of output to name map module manuscript segment one sources produce be module manuscript source thrust do
   su name module manuscript segment one role stage from text of ob of module manuscript segment one source basis with text of ob of output to name map module manuscript segment one roles produce be module manuscript role pass do
-  ob text of passing of module manuscript segment one sources produce be equally from text true then
-  ob text of passing of module manuscript segment one roles produce be equally from text true then
+  su name module manuscript segment one scored checkpoint stage from text of ob of module manuscript segment one source basis with text of ob of output to name map module manuscript segment one scored checkpoint be module manuscript scored semantic score do
+  su name module manuscript segment one scored history stage from name map module manuscript segment one scored checkpoint to name series module manuscript segment one scored history be module manuscript scored history do
+  su name module manuscript segment one scored state stage from name map module manuscript segment one scored checkpoint with name series module manuscript segment one scored history to name map module manuscript segment one scored state be module manuscript scored settle do
+  ob text of passing of module manuscript segment one scored checkpoint be equally from text true then
   ob text "true" to name text module manuscript segment one pass be text do
   fromindex num 1 toindex num 4 be module manuscript segment one retry do
-  ob text of passing of module manuscript segment one sources produce be equally from text true then
-  ob text of passing of module manuscript segment one roles produce be equally from text true then
+  ob text of passing of module manuscript segment one scored state be equally from text true then
   ob text "true" to name text module manuscript segment one pass be text do
-  ob name text module manuscript segment one pass be equally from text false then
-  ob text of passing of module manuscript segment one sources produce be equally from text false then
-  su name module manuscript segment one source guarantee stage ob bool lie fromtext text "module manuscript segment one source thrust defective" be guarantee do
-  ob name text module manuscript segment one pass be equally from text false then
-  ob text of passing of module manuscript segment one roles produce be equally from text false then
-  su name module manuscript segment one role guarantee stage ob bool lie fromtext text "module manuscript segment one role defective" be guarantee do
+  ob text of candidate of module manuscript segment one scored state to name text output be text do
   su name module manuscript segment one return stage ob name text output be text do
 prah
 
 su name module manuscript segment one retry fromindex num 0 toindex num 0 be ceremony def
-  ob text of passing of module manuscript segment one sources produce be equally from text true then
-  ob text of passing of module manuscript segment one roles produce be equally from text true then
+  ob text of passing of module manuscript segment one scored state be equally from text true then
   ob text "true" to name text module manuscript segment one pass be text do
   ob name text module manuscript segment one pass be equally from text true then be depart do
   su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the system. Define it clearly and explain the basic mechanism.\n\nTARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nPOSITIVE_RULES:\nStay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works.\n\nOPTIONAL_ADD_ONS:\nYou may include one small example from AFFAIRS OR ACTIVITIES when it helps ground the segment. If you use an example, keep it brief and supportive rather than letting it become the paragraph's main job. Practice language is acceptable when it stays inside a simple illustration of how the teaching works. You may include one small immediate implication when it follows naturally from the definition and mechanism.\n\nNEGATIVE_RULES:\nAvoid negation-led or contrast-led phrasing like not, rather than, instead of, unlike, or however. If the source carries a contrast, translate it into a positive sentence about what the thing is or does. Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move when the source offers a cleaner affirmative lane. Prefer the fallible-service and raw-material/perfect-possibility frame before channel, transparent-vessel, or flow language. Do not introduce hidden contradictions, jump to large consequences, or turn the segment into a correction of misunderstanding.\n\nFEEDBACK:\nGenerate a fresh Segment 1 from the source and verifier feedback, not from the failed draft. Write about 90 words, and keep the result between 88 and 94 words. Use complete sentences. Cut before adding. If the section starts getting long, remove extra restatement instead of adding another explanation.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment one retry request be text do
@@ -1163,9 +1145,11 @@ su name module manuscript segment one retry fromindex num 0 toindex num 0 be cer
   ob text "" to name text module manuscript current prior be text do
   su name module manuscript segment one source thrust retry stage from text of ob of module manuscript segment one source basis with text of ob of output to name map module manuscript segment one sources produce be module manuscript source thrust do
   su name module manuscript segment one role retry stage from text of ob of module manuscript segment one source basis with text of ob of output to name map module manuscript segment one roles produce be module manuscript role pass do
-  ob text of passing of module manuscript segment one sources produce be equally from text true then
-  ob text of passing of module manuscript segment one roles produce be equally from text true then
+  su name module manuscript segment one scored retry checkpoint stage from text of ob of module manuscript segment one source basis with text of ob of output to name map module manuscript segment one scored checkpoint be module manuscript scored semantic score do
+  su name module manuscript segment one scored retry state stage from name map module manuscript segment one scored checkpoint with name map module manuscript segment one scored state to name map module manuscript segment one scored state be module manuscript scored promote do
+  ob text of passing of module manuscript segment one scored state be equally from text true then
   ob text "true" to name text module manuscript segment one pass be text do
+  ob text of candidate of module manuscript segment one scored state to name text output be text do
 prah
 
 su name module manuscript segment two checked to name text output be ceremony def
@@ -1615,4 +1599,4 @@ exists su name module manuscript scored history be export ya
 exists su name module manuscript scored collect pair be export ya
 exists su name module manuscript scored promote be export ya
 exists su name module manuscript scored semantic score be export ya
-exists su name module manuscript scored state be export ya
+exists su name module manuscript scored settle be export ya
