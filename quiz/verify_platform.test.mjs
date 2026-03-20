@@ -203,6 +203,67 @@ test("verify platform output can be piped into a command within the same ceremon
   assert.equal(remember("output")?.ob?.text, "line one\nline two");
 });
 
+test("verify platform firehose deterministic failures never invoke verifiers", async () => {
+  forget();
+
+  await run("exists su name verifier count ob num 0 be number ya");
+  await run("exists su name draft count ob num 0 be number ya");
+
+  await run("su name draft maker ob text task to name text draft out be ceremony def");
+  await run("ob num 1 to name draft count be plus do");
+  await run('ob text "this candidate is intentionally long and always fails deterministic word cap checks." to name text draft out be text do');
+  await run("prah");
+
+  await run("su name counting verifier ob text packet to name text verdict be ceremony def");
+  await run("ob num 1 to name verifier count be plus do");
+  await run("ob text PASS to name text verdict be text do");
+  await run("prah");
+
+  await run("su name checks be series def");
+  await run("su name word_max ob num 3 ya");
+  await run("prah");
+
+  await assert.rejects(
+    () => run("ob text \"task\" for name draft maker among name counting verifier accordingto name checks fromindex num 1 toindex num 25 to name text result be verify platform do"),
+    /verify platform defective: retries exhausted/
+  );
+
+  assert.equal(remember("draft count")?.ob?.num, 25);
+  assert.equal(remember("verifier count")?.ob?.num, 0);
+  assert.equal(remember("verify platform attempts used")?.ob?.num, 25);
+  assert.equal(remember("verify platform stop reason")?.ob?.text, "max retries");
+});
+
+test("verify platform firehose calls verifier only after deterministic checks pass", async () => {
+  forget();
+
+  await run("exists su name verifier count ob num 0 be number ya");
+  await run("exists su name draft count ob num 0 be number ya");
+
+  await run("su name draft maker ob text task to name text draft out be ceremony def");
+  await run("ob num 1 to name draft count be plus do");
+  await run("ob name draft count be tiny from num 10 then ob text \"this candidate is intentionally long and fails until late retry.\" to name text draft out be text do");
+  await run("ob name draft count be giant from num 9 then ob text \"ok.\" to name text draft out be text do");
+  await run("prah");
+
+  await run("su name counting verifier ob text packet to name text verdict be ceremony def");
+  await run("ob num 1 to name verifier count be plus do");
+  await run("ob text PASS to name text verdict be text do");
+  await run("prah");
+
+  await run("su name checks be series def");
+  await run("su name word_max ob num 1 ya");
+  await run("prah");
+
+  await run("ob text \"task\" for name draft maker among name counting verifier accordingto name checks fromindex num 1 toindex num 20 to name text result be verify platform do");
+
+  assert.equal(remember("result")?.ob?.text, "ok.");
+  assert.equal(remember("draft count")?.ob?.num, 10);
+  assert.equal(remember("verifier count")?.ob?.num, 1);
+  assert.equal(remember("verify platform attempts used")?.ob?.num, 10);
+  assert.equal(remember("verify platform stop reason")?.ob?.text, "pass");
+});
+
 test("verify platform source carries generator atmost support for mind calls", async () => {
   const source = await import("node:fs/promises").then(fs => fs.readFile(new URL("../program/verbs/verify_platform.mjs", import.meta.url), "utf8"));
 

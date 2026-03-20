@@ -163,9 +163,46 @@ test("module manuscript scored section verify retries hook generation until dete
   }
 });
 
+test("module manuscript scored retry flow does not short-circuit pass before platform checks", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.doesNotMatch(
+    moduleSource,
+    /module manuscript hook retry draft verify[\s\S]{0,260}module manuscript hook pass be text do/u
+  );
+  assert.doesNotMatch(
+    moduleSource,
+    /module manuscript promise retry draft stage[\s\S]{0,260}module manuscript promise pass be text do/u
+  );
+  assert.doesNotMatch(
+    moduleSource,
+    /module manuscript roadmap retry draft stage[\s\S]{0,260}module manuscript roadmap pass be text do/u
+  );
+  assert.doesNotMatch(
+    moduleSource,
+    /module manuscript segment one retry draft stage[\s\S]{0,260}module manuscript segment one pass be text do/u
+  );
+  assert.doesNotMatch(
+    moduleSource,
+    /module manuscript recap retry draft stage[\s\S]{0,260}module manuscript recap pass be text do/u
+  );
+  assert.doesNotMatch(
+    moduleSource,
+    /module manuscript cta retry draft stage[\s\S]{0,260}module manuscript cta pass be text do/u
+  );
+
+  assert.match(moduleSource, /module manuscript hook retry platform stage accordingto name module manuscript hook checks/u);
+  assert.match(moduleSource, /module manuscript promise retry platform stage accordingto name module manuscript promise checks/u);
+  assert.match(moduleSource, /module manuscript roadmap retry platform stage accordingto name module manuscript roadmap checks/u);
+  assert.match(moduleSource, /module manuscript segment one retry platform stage accordingto name module manuscript segment one checks/u);
+  assert.match(moduleSource, /module manuscript recap retry platform stage accordingto name module manuscript recap checks/u);
+  assert.match(moduleSource, /module manuscript cta retry platform stage accordingto name module manuscript cta checks/u);
+});
+
 test("module manuscript scored segment one retry adapts atmost from prior word count", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
+  assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*word_min ob num 6[\s\S]*word_max ob num 8/u);
   assert.match(moduleSource, /module manuscript segment one retry length stage be verify as wo word count atleast num 85 atmost num 105 from name text output to name map module manuscript segment one retry length do/u);
   assert.match(moduleSource, /ob num 112 to name num module manuscript segment one retry cap be plus do/u);
   assert.match(moduleSource, /ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 104 to name num module manuscript segment one retry cap be plus do/u);

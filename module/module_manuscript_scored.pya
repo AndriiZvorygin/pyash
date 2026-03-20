@@ -581,8 +581,8 @@ su name module manuscript hook checks be series def
 prah
 
 su name module manuscript hook platform checks be series def
-  su name word_min ob num 5 ya
-  su name word_max ob num 10 ya
+  su name word_min ob num 6 ya
+  su name word_max ob num 8 ya
   su name sentence_complete ob bool truth ya
 prah
 
@@ -990,10 +990,6 @@ su name module manuscript hook retry fromindex num 0 toindex num 0 be ceremony d
   su name module manuscript hook retry draft stage ob name text module manuscript hook retry request for name module manuscript hook fit mind to name text output by num 0 atmost num 16 be write do
   su name module manuscript hook retry draft verify stage be verify as wo word count atleast num 6 atmost num 8 from name text output to name map module manuscript hook retry verify do
   ob text of pass of module manuscript hook retry verify to name text module manuscript hook retry verify pass be text do
-  ob name text module manuscript hook retry verify pass be equally from text true then
-  ob text "true" to name text module manuscript hook pass be text do
-  ob name text module manuscript hook pass be equally from text true then
-  be depart do
   ob text "hook retry platform" to name text module manuscript platform be text do
   su name module manuscript hook retry platform stage accordingto name module manuscript hook checks for name module manuscript hook fit mind from text of ob of module manuscript hook retry request to name text output be module manuscript section verify do
   ob name text module manuscript hook intent to name text module manuscript current intent be text do
@@ -1049,8 +1045,6 @@ su name module manuscript promise retry fromindex num 0 toindex num 0 be ceremon
   su name module manuscript promise retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript promise retry request be plus do
   su name module manuscript promise retry request draft stage ob name text output to name module manuscript promise retry request be plus do
   su name module manuscript promise retry draft stage ob name text module manuscript promise retry request for name module manuscript promise fit mind to name text output by num 0 atmost num 40 be write do
-  ob text "true" to name text module manuscript promise pass be text do
-  ob name text module manuscript promise pass be equally from text true then be depart do
   ob text "promise retry platform" to name text module manuscript platform be text do
   su name module manuscript promise retry platform stage accordingto name module manuscript promise checks for name module manuscript promise fit mind from text of ob of module manuscript promise retry request to name text output be module manuscript section verify do
   ob name text module manuscript promise intent to name text module manuscript current intent be text do
@@ -1107,8 +1101,6 @@ su name module manuscript roadmap retry fromindex num 0 toindex num 0 be ceremon
   su name module manuscript roadmap retry request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request segment three stage ob name text module manuscript segment three out to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry draft stage ob name text module manuscript roadmap retry request for name module manuscript roadmap fit mind to name text output by num 0 atmost num 36 be write do
-  ob text "true" to name text module manuscript roadmap pass be text do
-  ob name text module manuscript roadmap pass be equally from text true then be depart do
   ob text "roadmap retry platform" to name text module manuscript platform be text do
   su name module manuscript roadmap retry platform stage accordingto name module manuscript roadmap checks for name module manuscript roadmap fit mind from text of ob of module manuscript roadmap retry request to name text output be module manuscript section verify do
   ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
@@ -1161,8 +1153,6 @@ su name module manuscript segment one retry fromindex num 0 toindex num 0 be cer
   ob text "TARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nFEEDBACK:\nThe draft is already source-faithful and role-correct. Rewrite only to fit the word band. Cut hard before adding. Remove 12 to 25 words. Preserve the same establish job, main claim, and basic mechanism. If the draft already has a small example or implication, keep it only when it still fits cleanly. Remove repeated explanation, stacked adjectives, and optional extra detail before changing meaning.\n\nDRAFT:\n" to name text module manuscript segment one retry request be text do
   ob name text output to name module manuscript segment one retry request be plus do
   su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript fit mind to name text output by num 0 atmost num of name module manuscript segment one retry cap be write do
-  ob text "true" to name text module manuscript segment one pass be text do
-  ob name text module manuscript segment one pass be equally from text true then be depart do
   ob text of passing of module manuscript segment one sources produce be equally from text false then
   su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript segment one mind to name text output by num 0 atmost num of name module manuscript segment one retry cap be write do
   ob text of passing of module manuscript segment one roles produce be equally from text false then
@@ -1343,8 +1333,6 @@ su name module manuscript recap retry fromindex num 0 toindex num 0 be ceremony 
   su name module manuscript recap retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript recap retry request be plus do
   su name module manuscript recap retry request draft stage ob name text output to name module manuscript recap retry request be plus do
   su name module manuscript recap retry draft stage ob name text module manuscript recap retry request for name module manuscript fit mind to name text output by num 0 atmost num 80 be write do
-  ob text "true" to name text module manuscript recap pass be text do
-  ob name text module manuscript recap pass be equally from text true then be depart do
   ob text "recap retry platform" to name text module manuscript platform be text do
   su name module manuscript recap retry platform stage accordingto name module manuscript recap checks for name module manuscript fit mind from text of ob of module manuscript recap retry request to name text output be module manuscript section verify do
   ob name text module manuscript recap intent to name text module manuscript current intent be text do
@@ -1395,8 +1383,6 @@ su name module manuscript cta retry fromindex num 0 toindex num 0 be ceremony de
   su name module manuscript cta retry request draft header stage ob text "\n\nDRAFT:\n" to name module manuscript cta retry request be plus do
   su name module manuscript cta retry request draft stage ob name text output to name module manuscript cta retry request be plus do
   su name module manuscript cta retry draft stage ob name text module manuscript cta retry request for name module manuscript fit mind to name text output by num 0 atmost num 40 be write do
-  ob text "true" to name text module manuscript cta pass be text do
-  ob name text module manuscript cta pass be equally from text true then be depart do
   ob text "cta retry platform" to name text module manuscript platform be text do
   su name module manuscript cta retry platform stage accordingto name module manuscript cta checks for name module manuscript fit mind from text of ob of module manuscript cta retry request to name text output be module manuscript section verify do
   ob name text module manuscript cta intent to name text module manuscript current intent be text do
