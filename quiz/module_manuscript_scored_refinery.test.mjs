@@ -155,3 +155,14 @@ test("module manuscript scored section verify retries hook generation until dete
     else process.env.PYA_MIND_RESPONSE = original;
   }
 });
+
+test("module manuscript scored segment one retry adapts atmost from prior word count", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.match(moduleSource, /module manuscript segment one retry length stage be verify as wo word count atleast num 85 atmost num 105 from name text output to name map module manuscript segment one retry length do/u);
+  assert.match(moduleSource, /ob num 112 to name num module manuscript segment one retry atmost be plus do/u);
+  assert.match(moduleSource, /ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 96 to name num module manuscript segment one retry atmost be plus do/u);
+  assert.match(moduleSource, /ob num of words of module manuscript segment one retry length be tiny from num 85 then ob num 140 to name num module manuscript segment one retry atmost be plus do/u);
+  assert.match(moduleSource, /for name module manuscript fit mind to name text output by num 0 atmost num of name module manuscript segment one retry atmost be write do/u);
+  assert.match(moduleSource, /for name module manuscript segment one mind to name text output by num 0 atmost num of name module manuscript segment one retry atmost be write do/u);
+});
