@@ -264,6 +264,42 @@ test("verify platform firehose calls verifier only after deterministic checks pa
   assert.equal(remember("verify platform stop reason")?.ob?.text, "pass");
 });
 
+test("verify platform variant firehose uses latest candidate not stale historical output", async () => {
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = JSON.stringify([
+    "BAD_COPY_ALPHA tiny.",
+    "BAD_COPY_BETA words are enough now.",
+    "GOOD_COPY_GAMMA words are enough now."
+  ]);
+
+  try {
+    forget();
+
+    await run("exists su name verifier count ob num 0 be number ya");
+    await run("exists su name draft maker be mind as name \"fixture-draft\" fromtext text \"fixture\" ya");
+
+    await run("su name latest only verifier ob text packet to name text verdict be ceremony def");
+    await run("ob num 1 to name verifier count be plus do");
+    await run("ob text FAIL to name text verdict be text do");
+    await run("ob name verifier count be giant from num 1 then ob text PASS to name text verdict be text do");
+    await run("prah");
+
+    await run("su name checks be series def");
+    await run("su name word_min ob num 4 ya");
+    await run("prah");
+
+    await run("ob text \"task\" for name draft maker among name latest only verifier accordingto name checks fromindex num 1 toindex num 5 to name text result be verify platform do");
+
+    assert.equal(remember("result")?.ob?.text, "GOOD_COPY_GAMMA words are enough now.");
+    assert.equal(remember("verifier count")?.ob?.num, 2);
+    assert.equal(remember("verify platform attempts used")?.ob?.num, 3);
+    assert.equal(remember("verify platform stop reason")?.ob?.text, "pass");
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test("verify platform source carries generator atmost support for mind calls", async () => {
   const source = await import("node:fs/promises").then(fs => fs.readFile(new URL("../program/verbs/verify_platform.mjs", import.meta.url), "utf8"));
 
