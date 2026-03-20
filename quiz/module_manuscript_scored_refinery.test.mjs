@@ -111,3 +111,24 @@ test("module manuscript scored collect pair builds history and promotes best", a
   assert.equal(out.review?.ob?.text ?? out.review?.text, "second review");
   assert.equal(out.history?.ob?.text ?? out.history?.text, "history");
 });
+
+test("module manuscript scored fixture mind review supports deterministic score extraction", async () => {
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "Source-faithful and stage-fit with clear progression.\n0.86";
+
+  try {
+    forget();
+    await run('from filename "./module/module_manuscript_scored.pya" ob name manuscript as wo module to name scored be import do');
+    await run('ob text "score this candidate" to name text request be text do');
+    await run("ob name text request for name mind to name text review by num 0 atmost num 320 be write do");
+    await run("ob name text review atmost num 1 to name text score line be line tail do");
+    await run("ob name text score line from num 0 to num 1 become name num to name num score be cast do");
+
+    assert.equal(remember("review")?.ob?.text, "Source-faithful and stage-fit with clear progression.\n0.86");
+    assert.equal(remember("score line")?.ob?.text, "0.86");
+    assert.equal(remember("score")?.ob?.num, 0.86);
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
