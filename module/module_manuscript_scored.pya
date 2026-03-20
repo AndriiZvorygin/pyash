@@ -795,7 +795,29 @@ su name module manuscript scored semantic score from text source with text candi
   ob name text module manuscript current prior to name text module manuscript replacement prior be text do
   su name module manuscript scored semantic request stage ob name map module manuscript request replacements in name text module manuscript role request template to name text module manuscript scored semantic request be instead do
   ob name text module manuscript scored semantic request for name module manuscript scored semantic score mind to name text module manuscript scored semantic review by num 0 atmost num 320 be write do
-  su name module manuscript scored checkpoint stage from text of ob of module manuscript replacement candidate with text of ob of module manuscript scored semantic review to name map produce be module manuscript scored checkpoint do
+  ob text quoted.text.{"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt_name":"","best":"false"}.text.quoted to name map produce be import do
+  exists su name module manuscript scored semantic candidate slot ob candidate of produce be nickname ya
+  exists su name module manuscript scored semantic review slot ob review of produce be nickname ya
+  exists su name module manuscript scored semantic attempt slot ob attempt of produce be nickname ya
+  exists su name module manuscript scored semantic attempt name slot ob attempt_name of produce be nickname ya
+  exists su name module manuscript scored semantic score slot ob score of produce be nickname ya
+  exists su name module manuscript scored semantic passing slot ob passing of produce be nickname ya
+  ob name text module manuscript replacement candidate to name module manuscript scored semantic candidate slot be text do
+  ob name text module manuscript scored semantic review to name module manuscript scored semantic review slot be text do
+  ob num 1 to name module manuscript scored semantic attempt slot be plus do
+  ob text "attempt 1" to name module manuscript scored semantic attempt name slot be text do
+  ob name text module manuscript scored semantic review atmost num 1 to name text module manuscript scored semantic score line be line tail do
+  ob name text module manuscript scored semantic score line from text "/^\\s*PASS\\b/i" be resemble then
+  ob num 1 to name module manuscript scored semantic score slot be plus do
+  ob text "true" to name module manuscript scored semantic passing slot be text do
+  ob name text module manuscript scored semantic score line from text "/^\\s*FAIL\\b/i" be resemble then
+  ob num 0 to name module manuscript scored semantic score slot be plus do
+  ob text "false" to name module manuscript scored semantic passing slot be text do
+  ob name text module manuscript scored semantic score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
+  ob name text module manuscript scored semantic score line from num 0 to num 1 become name num to name num module manuscript scored semantic score be cast do
+  ob name num module manuscript scored semantic score to name module manuscript scored semantic score slot be plus do
+  ob name num module manuscript scored semantic score be giant from num 0.79 then
+  ob text "true" to name module manuscript scored semantic passing slot be text do
 prah
 
 su name module manuscript source thrust checked to name map produce be ceremony def
@@ -1125,9 +1147,9 @@ su name module manuscript segment one retry fromindex num 0 toindex num 0 be cer
   ob text "true" to name text module manuscript segment one pass be text do
   ob name text module manuscript segment one pass be equally from text true then be depart do
   su name module manuscript segment one retry length stage be verify as wo word count atleast num 85 atmost num 105 from name text output to name map module manuscript segment one retry length do
-  ob num 112 to name num module manuscript segment one retry atmost be plus do
-  ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 96 to name num module manuscript segment one retry atmost be plus do
-  ob num of words of module manuscript segment one retry length be tiny from num 85 then ob num 140 to name num module manuscript segment one retry atmost be plus do
+  ob num 112 to name num module manuscript segment one retry cap be plus do
+  ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 104 to name num module manuscript segment one retry cap be plus do
+  ob num of words of module manuscript segment one retry length be tiny from num 85 then ob num 128 to name num module manuscript segment one retry cap be plus do
   su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the system. Define it clearly and explain the basic mechanism.\n\nTARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nPOSITIVE_RULES:\nStay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works.\n\nOPTIONAL_ADD_ONS:\nYou may include one small example from AFFAIRS OR ACTIVITIES when it helps ground the segment. If you use an example, keep it brief and supportive rather than letting it become the paragraph's main job. Practice language is acceptable when it stays inside a simple illustration of how the teaching works. You may include one small immediate implication when it follows naturally from the definition and mechanism.\n\nNEGATIVE_RULES:\nAvoid negation-led or contrast-led phrasing like not, rather than, instead of, unlike, or however. If the source carries a contrast, translate it into a positive sentence about what the thing is or does. Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move when the source offers a cleaner affirmative lane. Prefer the fallible-service and raw-material/perfect-possibility frame before channel, transparent-vessel, or flow language. Do not introduce hidden contradictions, jump to large consequences, or turn the segment into a correction of misunderstanding.\n\nFEEDBACK:\nGenerate a fresh Segment 1 from the source and verifier feedback, not from the failed draft. Write about 90 words, and keep the result between 88 and 94 words. Use complete sentences. Cut before adding. If the section starts getting long, remove extra restatement instead of adding another explanation.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment one retry request be text do
   su name module manuscript segment one retry request source thrust stage ob name text module manuscript source thrust review to name module manuscript segment one retry request be plus do
   su name module manuscript segment one retry request role header stage ob text "\n\nROLE_FEEDBACK:\n" to name module manuscript segment one retry request be plus do
@@ -1138,13 +1160,13 @@ su name module manuscript segment one retry fromindex num 0 toindex num 0 be cer
   ob text of passing of module manuscript segment one roles produce be equally from text true then
   ob text "TARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nFEEDBACK:\nThe draft is already source-faithful and role-correct. Rewrite only to fit the word band. Cut hard before adding. Remove 12 to 25 words. Preserve the same establish job, main claim, and basic mechanism. If the draft already has a small example or implication, keep it only when it still fits cleanly. Remove repeated explanation, stacked adjectives, and optional extra detail before changing meaning.\n\nDRAFT:\n" to name text module manuscript segment one retry request be text do
   ob name text output to name module manuscript segment one retry request be plus do
-  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript fit mind to name text output by num 0 atmost num of name module manuscript segment one retry atmost be write do
+  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript fit mind to name text output by num 0 atmost num of name module manuscript segment one retry cap be write do
   ob text "true" to name text module manuscript segment one pass be text do
   ob name text module manuscript segment one pass be equally from text true then be depart do
   ob text of passing of module manuscript segment one sources produce be equally from text false then
-  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript segment one mind to name text output by num 0 atmost num of name module manuscript segment one retry atmost be write do
+  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript segment one mind to name text output by num 0 atmost num of name module manuscript segment one retry cap be write do
   ob text of passing of module manuscript segment one roles produce be equally from text false then
-  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript segment one mind to name text output by num 0 atmost num of name module manuscript segment one retry atmost be write do
+  su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript segment one mind to name text output by num 0 atmost num of name module manuscript segment one retry cap be write do
   ob text "segment one retry platform" to name text module manuscript platform be text do
   su name module manuscript segment one retry platform stage accordingto name module manuscript segment one checks for name module manuscript segment one mind from text of ob of module manuscript segment one retry request to name text output be module manuscript section verify do
   ob name text module manuscript segment one intent to name text module manuscript current intent be text do
