@@ -55,6 +55,13 @@ exists su name qwen say tone promptify instruction ob text "Return exactly one s
 exists su name mind keep alive ob num 300 be default ya
 exists su name qwen say post process ob bool truth be default ya
 exists su name qwen say post process filter ob text "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB" be default ya
+exists su name qwen say keep chunks ob bool lie be default ya
+exists su name qwen say clip verify enabled ob bool lie be default ya
+exists su name qwen say clip verify max retries ob num 3 be default ya
+exists su name qwen say clip verify tail words ob num 2 be default ya
+exists su name qwen say clip verify window ms ob num 120 be default ya
+exists su name qwen say clip verify peak db ob num -12 be default ya
+exists su name qwen say clip verify delta db ob num 1 be default ya
 exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow root ob filename "./draw/" be default ya
 exists su name draw workflow default ob text "Z-Image-TSV" be default ya
@@ -76,6 +83,7 @@ exists su name hear backend default ob text "whisper" be default ya
 exists su name hear host ob text "http://localhost:8000" be default ya
 exists su name hear whisperx model ob text "large-v3" be default ya
 exists su name hear whisperx device ob text "cpu" be default ya
+exists su name hear whisperx fallback qwen ob bool lie be default ya
 exists su name hear qwen host ob text "http://localhost:8188" be default ya
 exists su name hear workflow root ob filename "./hear/" be default ya
 exists su name hear workflow default ob text "qwen3-asr-timestamps-attn2" be default ya
@@ -112,3 +120,5 @@ exists su name review long prompter ob text "Review TASK, ANSWER, and FLOW TRANS
 exists su name review mind brief be mind as name "bespoke-minicheck:latest" fromtext name review brief prompter ya
 exists su name review mind long be mind as name "tensortemplar/patronus-lynx:8b-instruct-q4_K_M" fromtext name review long prompter ya
 exists su hear be default ob name whisper command hear ya
+exists su name qwen say clip verify enabled ob bool truth be default ya
+

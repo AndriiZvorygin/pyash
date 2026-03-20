@@ -1,7 +1,7 @@
 import fsSync from "node:fs";
 import path from "node:path";
 
-import { resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
+import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
 import { lookupArtifactLocator } from "../../bridge/exchange.mjs";
 
 function resolveComputer() {
@@ -87,6 +87,11 @@ function resolveHearHfToken({ rememberFn } = {}) {
   return resolveConfigText("hear hf token", { rememberFn }) || "";
 }
 
+function resolveHearWhisperxFallbackQwen({ rememberFn } = {}) {
+  const configured = resolveConfigBool("hear whisperx fallback qwen", { rememberFn });
+  return configured === true;
+}
+
 function resolveHearQwenHost({ rememberFn } = {}) {
   return (
     resolveConfigText("hear qwen host", { rememberFn }) ||
@@ -155,6 +160,7 @@ export {
   resolveHearWhisperxModel,
   resolveHearWhisperxDevice,
   resolveHearHfToken,
+  resolveHearWhisperxFallbackQwen,
   resolveHearQwenHost,
   resolveHearWorkflowRoot,
   resolveHearWorkflowDefault,

@@ -267,3 +267,62 @@ test("hear whisperx replaces pre-existing non-writable srt output", async () => 
     clearExchangeRecorder();
   }
 });
+
+test("hear whisperx fallback qwen retries chunked srt when whisperx fails", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "hear-whisperx-fallback-"));
+  const inputPath = path.join(dir, "input.wav");
+  const outputPath = path.join(dir, "output.srt");
+  await fs.writeFile(inputPath, "fake-audio", "utf8");
+
+  const remember = (name) => {
+    if (name === "hear backend default") return { ob: { text: "whisperx" } };
+    if (name === "hear host") return { ob: { text: "http://whisperx:8000" } };
+    if (name === "hear whisperx model") return { ob: { text: "large-v3" } };
+    if (name === "hear language") return { ob: { text: "en" } };
+    if (name === "hear whisperx fallback qwen") return { ob: { boolean: true } };
+    if (name === "hear qwen host") return { ob: { text: "http://localhost:8188" } };
+    if (name === "hear workflow default") return { ob: { text: "qwen3-asr-timestamps-attn2" } };
+    if (name === "hear qwen chunk max seconds") return { ob: { num: 55 } };
+    if (name === "hear qwen chunk overlap seconds") return { ob: { num: 1.5 } };
+    return null;
+  };
+
+  let qwenChunkedCalled = false;
+  const exchange = [];
+  setExchangeRecorder({ record: (s) => exchange.push(s), runRoot: process.cwd() });
+  try {
+    const result = await hear({
+      mood: "do",
+      be: "hear",
+      from: { filename: inputPath },
+      to: { filename: outputPath },
+      become: { wo: "srt" }
+    }, {
+      remember,
+      transcribeWhisperxFn: async () => {
+        throw new Error("whisperx defective: worker exception");
+      },
+      transcribeQwenChunkedFn: async () => {
+        qwenChunkedCalled = true;
+        return {
+          srt: "1\n00:00:00,000 --> 00:00:01,000\nfallback\n",
+          chunkCount: 1,
+          timestampsRaw: "[{\"start\":0,\"end\":1,\"text\":\"fallback\"}]"
+        };
+      },
+      transcribeQwenFn: async () => {
+        throw new Error("direct qwen path should not run for whisperx fallback");
+      }
+    });
+    assert.equal(result?.be, "hear");
+    assert.equal(result?.ob?.filename, outputPath);
+    assert.equal(qwenChunkedCalled, true);
+    assert.ok(exchange.some((s) => s?.be === "hear" && s?.su?.name === "hear whisperx fallback qwen"));
+    assert.ok(exchange.some((s) => s?.be === "hear" && s?.su?.name === "hear result qwen chunked fallback"));
+    const text = await fs.readFile(outputPath, "utf8");
+    assert.match(text, /fallback/u);
+  } finally {
+    clearExchangeRecorder();
+  }
+});
