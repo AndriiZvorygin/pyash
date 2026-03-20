@@ -78,6 +78,13 @@ test("module manuscript scored module exports checkpoint-first helper ceremonies
   assert.ok(moduleSource.includes('module manuscript scored semantic score line from text "/^\\\\s*PASS\\\\b/i" be resemble then'));
   assert.ok(moduleSource.includes('module manuscript scored semantic score line from text "/^\\\\s*FAIL\\\\b/i" be resemble then'));
   assert.match(moduleSource, /If the candidate is source-faithful and plausibly does the stage job, score at least 0\.8/u);
+  assert.match(moduleSource, /module manuscript stage contract accordingto name checks series for name platform mind from text request to name text output be ceremony def/u);
+  assert.match(moduleSource, /module manuscript stage contract repair accordingto name checks series for name platform mind from text request with text repair_duty to name text output be ceremony def/u);
+  assert.match(moduleSource, /module manuscript stage contract duty/u);
+  assert.match(moduleSource, /module manuscript stage contract professor/u);
+  assert.match(moduleSource, /module manuscript stage contract probes/u);
+  assert.match(moduleSource, /module manuscript section verify run platform stage from text of from of this for name of for of this accordingto name of accordingto of this to name text output be module manuscript stage contract do/u);
+  assert.match(moduleSource, /module manuscript stage contract run platform ob text of from of this for name of for of this among name module manuscript stage pass accordingto name of accordingto of this atleast num 0\.8 fromindex num 1 toindex num 4 to name text output be verify platform do/u);
   assert.match(moduleSource, /exists su name module manuscript scored checkpoint be export ya/u);
   assert.match(moduleSource, /exists su name module manuscript scored history be export ya/u);
   assert.match(moduleSource, /exists su name module manuscript scored collect pair be export ya/u);

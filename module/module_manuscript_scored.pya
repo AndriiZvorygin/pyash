@@ -674,9 +674,25 @@ su name module manuscript stage pass ob text packet to name text verdict be cere
   ob text PASS to name text verdict be text do
 prah
 
-su name module manuscript section verify accordingto name checks series for name platform mind from text request to name text output be ceremony def
-  su name module manuscript section verify run platform ob text of from of this for name of for of this among name module manuscript stage pass accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 4 to name text output be verify platform do
+exists su name module manuscript stage contract repair duty ob text "" be text ya
+
+su name module manuscript stage contract accordingto name checks series for name platform mind from text request to name text output be ceremony def
+  ob text of from of this to name text module manuscript stage contract duty be text do
+  ob text of name of for of this to name text module manuscript stage contract professor be text do
+  ob text of name of accordingto of this to name text module manuscript stage contract probes be text do
+  su name module manuscript stage contract run platform ob text of from of this for name of for of this among name module manuscript stage pass accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 4 to name text output be verify platform do
   ob text "node command/normalize_escaped_newlines.mjs" fromtext name output to name text output be command do
+  su name output ret
+prah
+
+su name module manuscript stage contract repair accordingto name checks series for name platform mind from text request with text repair_duty to name text output be ceremony def
+  ob text of with of this to name text module manuscript stage contract repair duty be text do
+  su name module manuscript stage contract repair run stage from text of with of this for name of for of this accordingto name of accordingto of this to name text output be module manuscript stage contract do
+  su name output ret
+prah
+
+su name module manuscript section verify accordingto name checks series for name platform mind from text request to name text output be ceremony def
+  su name module manuscript section verify run platform stage from text of from of this for name of for of this accordingto name of accordingto of this to name text output be module manuscript stage contract do
   su name output ret
 prah
 
