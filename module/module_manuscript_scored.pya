@@ -770,19 +770,14 @@ su name module manuscript scored promote from name map checkpoint with name map 
   exists su name module manuscript scored promote score slot ob score of nextstate be nickname ya
   exists su name module manuscript scored promote best attempt slot ob best_attempt of nextstate be nickname ya
   exists su name module manuscript scored promote best score slot ob best_score of nextstate be nickname ya
-  exists su name module manuscript scored promote candidate attempt name ob attempt_name of from of this be nickname ya
-  exists su name module manuscript scored promote candidate score ob score of from of this be nickname ya
-  exists su name module manuscript scored promote candidate passing ob passing of from of this be nickname ya
-  exists su name module manuscript scored promote candidate text ob candidate of from of this be nickname ya
-  exists su name module manuscript scored promote candidate review ob review of from of this be nickname ya
   ob text "history" to name module manuscript scored promote history slot be text do
-  ob name module manuscript scored promote candidate attempt name to name module manuscript scored promote current attempt slot be text do
-  ob name module manuscript scored promote candidate passing to name module manuscript scored promote passing slot be text do
-  ob name module manuscript scored promote candidate text to name module manuscript scored promote candidate slot be text do
-  ob name module manuscript scored promote candidate review to name module manuscript scored promote review slot be text do
-  ob num of name module manuscript scored promote candidate score to name module manuscript scored promote score slot be plus do
-  ob name module manuscript scored promote candidate attempt name to name module manuscript scored promote best attempt slot be text do
-  ob num of name module manuscript scored promote candidate score to name module manuscript scored promote best score slot be plus do
+  ob text of attempt_name of map of from of this to name module manuscript scored promote current attempt slot be text do
+  ob text of passing of map of from of this to name module manuscript scored promote passing slot be text do
+  ob text of candidate of map of from of this to name module manuscript scored promote candidate slot be text do
+  ob text of review of map of from of this to name module manuscript scored promote review slot be text do
+  ob num of score of map of from of this to name module manuscript scored promote score slot be plus do
+  ob text of attempt_name of map of from of this to name module manuscript scored promote best attempt slot be text do
+  ob num of score of map of from of this to name module manuscript scored promote best score slot be plus do
 prah
 
 su name module manuscript scored collect pair from name map first with name map second to name map state be ceremony def
@@ -795,19 +790,14 @@ su name module manuscript scored collect pair from name map first with name map 
   exists su name module manuscript scored collect pair review slot ob review of state be nickname ya
   exists su name module manuscript scored collect pair score slot ob score of state be nickname ya
   exists su name module manuscript scored collect pair history slot ob history of state be nickname ya
-  exists su name module manuscript scored collect pair source attempt name ob attempt_name of from of this be nickname ya
-  exists su name module manuscript scored collect pair source score ob score of from of this be nickname ya
-  exists su name module manuscript scored collect pair source passing ob passing of from of this be nickname ya
-  exists su name module manuscript scored collect pair source candidate ob candidate of from of this be nickname ya
-  exists su name module manuscript scored collect pair source review ob review of from of this be nickname ya
   ob text "history" to name module manuscript scored collect pair history slot be text do
-  ob name module manuscript scored collect pair source attempt name to name module manuscript scored collect pair best attempt slot be text do
-  ob name module manuscript scored collect pair source attempt name to name module manuscript scored collect pair current attempt slot be text do
-  ob num of name module manuscript scored collect pair source score to name module manuscript scored collect pair best score slot be plus do
-  ob name module manuscript scored collect pair source passing to name module manuscript scored collect pair passing slot be text do
-  ob name module manuscript scored collect pair source candidate to name module manuscript scored collect pair candidate slot be text do
-  ob name module manuscript scored collect pair source review to name module manuscript scored collect pair review slot be text do
-  ob num of name module manuscript scored collect pair source score to name module manuscript scored collect pair score slot be plus do
+  ob text of attempt_name of map of from of this to name module manuscript scored collect pair best attempt slot be text do
+  ob text of attempt_name of map of from of this to name module manuscript scored collect pair current attempt slot be text do
+  ob num of score of map of from of this to name module manuscript scored collect pair best score slot be plus do
+  ob text of passing of map of from of this to name module manuscript scored collect pair passing slot be text do
+  ob text of candidate of map of from of this to name module manuscript scored collect pair candidate slot be text do
+  ob text of review of map of from of this to name module manuscript scored collect pair review slot be text do
+  ob num of score of map of from of this to name module manuscript scored collect pair score slot be plus do
 prah
 
 su name module manuscript scored semantic score from text source with text candidate to name map produce be ceremony def
