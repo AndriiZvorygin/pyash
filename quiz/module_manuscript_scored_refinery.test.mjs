@@ -133,3 +133,25 @@ test("module manuscript scored fixture mind review supports deterministic score 
     else process.env.PYA_MIND_RESPONSE = original;
   }
 });
+
+test("module manuscript scored section verify retries hook generation until deterministic hook checks pass", async () => {
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = JSON.stringify([
+    "Too short",
+    "True power opens your hidden potential."
+  ]);
+
+  try {
+    forget();
+    await run('from filename "./module/module_manuscript_scored.pya" ob name manuscript as wo module to name scored be import do');
+    await run('ob text "ROLE:\\nHook centered on tension or truth.\\n\\nTARGET_WORDS:\\n6-8\\n\\nGOAL_WORDS:\\n7\\n\\nDRAFT:\\nToo short" to name text hook request be text do');
+    await run("su name hook section verify stage accordingto name module manuscript scored internal module manuscript hook checks for name module manuscript scored internal module manuscript hook fit mind from text of ob of hook request to name text output be module manuscript section verify do");
+    await run("su name hook retry verify stage be verify as wo word count atleast num 6 atmost num 8 from name text output to name map hook retry verify do");
+
+    assert.equal(remember("output")?.ob?.text, "True power opens your hidden potential.");
+    assert.equal(remember("hook retry verify")?.ob?.map?.pass, true);
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
