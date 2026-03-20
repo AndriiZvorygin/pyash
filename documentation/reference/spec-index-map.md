@@ -9,6 +9,7 @@ Use this when the cheat sheet is not enough.
 - **Configuration defaults (dynamic)** → `02-core-execution.md`
 - **`vyah` aspects (stream/eval/start/await/cancel)** → `03-vyah-and-aspect.md`
 - **Runtime primitives (streams/tasks/IR)** → `04-runtime-primitives.md`
+- **Reusable stage contract for `verify platform` (`professor`/`verifiers`/`probes`/`duty`/`repair_duty`)** → `documentation/reference/verify-platform-stage-contract.md`
 - **Map-driven text replacement (`be instead`)** → `documentation/reference/instead-replacement.md`
 - **Run recording, newspaper, artifacts, again-mode** → `05-run-recording-and-artifacts.md`
 - **Maps / JSON / YAML / CSV formats** → `06-data-formats.md`

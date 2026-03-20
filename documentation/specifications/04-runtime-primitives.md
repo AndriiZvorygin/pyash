@@ -192,7 +192,42 @@ Checks series contract:
 
 If any deterministic check fails, attempt fails and retry proceeds.
 
-### 10.6 Conformance
+### 10.6 Stage Contract Profile (Pyash Vocabulary)
+
+For reusable stage wiring (especially manuscript refineries), implementations SHOULD model stage config with these handles:
+
+- `professor`: generator platform name (mind/ceremony/refinery).
+- `verifiers`: ordered verifier selector (`series` or inline `among ve name ...`).
+- `probes`: deterministic checks series used by `accordingto`.
+- `duty`: generation task packet text.
+- `repair_duty` (optional): retry-time rewrite packet text for failed candidates.
+- `retry_min` / `retry_max`: bounded retry window (`fromindex`/`toindex`).
+- `score_min` / `score_max`: score gates (`atleast`/`atmost`).
+
+Normative intent:
+- `duty` drives first-pass generation.
+- `repair_duty` is used only after failed attempts and should preserve role/meaning while fixing probe/verifier defects.
+- `probes` run deterministically and are the first guardrail for count/shape constraints.
+
+Canonical invocation shape (abstract):
+
+```pyash
+ob text <duty or repair_duty>
+for name <professor>
+among name <verifiers>
+accordingto name <probes>
+atleast num <score_min>
+atmost num <score_max>
+fromindex num <retry_min>
+toindex num <retry_max>
+to name text <output>
+be verify platform do
+```
+
+Reference profile:
+- `documentation/reference/verify-platform-stage-contract.md`
+
+### 10.7 Conformance
 
 Conformance requires:
 - deterministic retry count behavior,
