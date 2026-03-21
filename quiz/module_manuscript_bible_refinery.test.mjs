@@ -40,20 +40,29 @@ test("module manuscript bible wrapper points to bible module path", async () => 
   assert.match(wrapperSource, /module_manuscript_bible\.pya/u);
 });
 
-test("module manuscript bible requires citation in prompts and deterministic checks", async () => {
+test("module manuscript bible requires citation only in segment 1 2 3 prompts and checks", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
-  assert.match(moduleSource, /Include one relevant Bible citation in parentheses, like \(John 3:16\)\./u);
-  assert.match(moduleSource, /Keep one relevant Bible citation in parentheses, like \(John 3:16\)\./u);
-  const mustMatchCount = (moduleSource.match(/su name must_match_pattern ob text "\\\\\([^\n]+\\\)"/gu) ?? []).length;
-  assert.ok(mustMatchCount >= 16);
+  assert.match(moduleSource, /Include exactly one relevant Bible citation in parentheses, like \(John 3:16\)\./u);
+  assert.match(moduleSource, /directly support the segment's main definition or mechanism/u);
+  assert.match(moduleSource, /directly support the misunderstanding-plus-clarification move/u);
+  assert.match(moduleSource, /directly support the consequence or lived-application move/u);
+  assert.match(moduleSource, /Prefer a different citation from Segment 1 when the source supports multiple fitting options/u);
+  assert.match(moduleSource, /Prefer a different citation from Segment 1 and Segment 2 when the source supports multiple fitting options/u);
 
-  assert.match(moduleSource, /module manuscript hook checks be series def[\s\S]*must_match_pattern/u);
-  assert.match(moduleSource, /module manuscript promise checks be series def[\s\S]*must_match_pattern/u);
-  assert.match(moduleSource, /module manuscript roadmap checks be series def[\s\S]*must_match_pattern/u);
-  assert.match(moduleSource, /module manuscript segment one checks be series def[\s\S]*must_match_pattern/u);
-  assert.match(moduleSource, /module manuscript segment two checks be series def[\s\S]*must_match_pattern/u);
-  assert.match(moduleSource, /module manuscript segment three checks be series def[\s\S]*must_match_pattern/u);
-  assert.match(moduleSource, /module manuscript recap checks be series def[\s\S]*must_match_pattern/u);
-  assert.match(moduleSource, /module manuscript cta checks be series def[\s\S]*must_match_pattern/u);
+  const mustMatchCount = (moduleSource.match(/su name must_match_pattern ob text "\\\\\([^\n]+\\\)"/gu) ?? []).length;
+  assert.equal(mustMatchCount, 6);
+
+  assert.match(moduleSource, /module manuscript segment one checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.match(moduleSource, /module manuscript segment one platform checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.match(moduleSource, /module manuscript segment two checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.match(moduleSource, /module manuscript segment two platform checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.match(moduleSource, /module manuscript segment three checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.match(moduleSource, /module manuscript segment three platform checks be series def[\s\S]{0,240}must_match_pattern/u);
+
+  assert.doesNotMatch(moduleSource, /module manuscript hook checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.doesNotMatch(moduleSource, /module manuscript promise checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.doesNotMatch(moduleSource, /module manuscript roadmap checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.doesNotMatch(moduleSource, /module manuscript recap checks be series def[\s\S]{0,240}must_match_pattern/u);
+  assert.doesNotMatch(moduleSource, /module manuscript cta checks be series def[\s\S]{0,240}must_match_pattern/u);
 });
