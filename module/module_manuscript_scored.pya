@@ -56,6 +56,7 @@ Rules:
 - Return exactly one short spoken line.
 - Preserve the same core tension or truth.
 - Cut extra clauses before changing the meaning.
+- End as one complete thought; terminal punctuation is optional.
 - Do not turn it into setup or summary.
 - Do not turn it into payoff or conclusion language..text.quoted be text ya
 
@@ -606,12 +607,14 @@ prah
 su name module manuscript hook checks be series def
   su name word_min ob num 6 ya
   su name word_max ob num 8 ya
-  su name sentence_complete ob bool truth ya
+  su name must_not_match_pattern ob text "[,;:]\\s*$" ya
+  su name must_not_match_pattern ob text "\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\\s*[.!?]*\\s*$" ya
 prah
 
 su name module manuscript hook platform checks be series def
   su name word_max ob num 8 ya
-  su name sentence_complete ob bool truth ya
+  su name must_not_match_pattern ob text "[,;:]\\s*$" ya
+  su name must_not_match_pattern ob text "\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\\s*[.!?]*\\s*$" ya
 prah
 
 su name module manuscript promise checks be series def

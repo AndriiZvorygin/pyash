@@ -183,6 +183,25 @@ test("module manuscript scored section verify retries hook generation until dete
   }
 });
 
+test("module manuscript scored hook checks allow complete short hooks without terminal punctuation", async () => {
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = JSON.stringify([
+    "True power is love reshaping your world now"
+  ]);
+
+  try {
+    forget();
+    await run('from filename "./module/module_manuscript_scored.pya" ob name manuscript as wo module to name scored be import do');
+    await run('ob text "ROLE:\\nHook centered on tension or truth.\\n\\nTARGET_WORDS:\\n6-8\\n\\nGOAL_WORDS:\\n7\\n\\nDRAFT:\\nTrue power is love reshaping your world now" to name text hook request be text do');
+    await run("su name hook section verify stage accordingto name module manuscript scored internal module manuscript hook checks for name module manuscript scored internal module manuscript hook fit mind from text of ob of hook request to name text output be module manuscript section verify do");
+
+    assert.equal(remember("output")?.ob?.text, "True power is love reshaping your world now");
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test("module manuscript scored retry flow does not short-circuit pass before platform checks", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
@@ -222,7 +241,9 @@ test("module manuscript scored retry flow does not short-circuit pass before pla
 test("module manuscript scored segment one retry adapts atmost from prior word count", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
-  assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*word_max ob num 8[\s\S]*sentence_complete ob bool truth/u);
+  assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*word_max ob num 8/u);
+  assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*must_not_match_pattern ob text "\[,;:\]\\\\s\*\$"/u);
+  assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*must_not_match_pattern ob text "\\\\b\(\?:and\|or\|but\|so\|because\|if\|when\|while\|than\|that\|which\|who\|whom\|whose\|a\|an\|the\)\\\\s\*\[\.!\?\]\*\\\\s\*\$"/u);
   assert.match(moduleSource, /module manuscript segment one retry length stage be verify as wo word count atleast num 85 atmost num 105 from name text output to name map module manuscript segment one retry length do/u);
   assert.match(moduleSource, /ob num 112 to name num module manuscript segment one retry cap be plus do/u);
   assert.match(moduleSource, /ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 104 to name num module manuscript segment one retry cap be plus do/u);
