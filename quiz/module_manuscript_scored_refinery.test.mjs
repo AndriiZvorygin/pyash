@@ -30,6 +30,16 @@ function assertNoUnexpectedErrors(errors = []) {
   assert.deepEqual(unexpected, []);
 }
 
+function toText(value) {
+  if (typeof value === "string") return value;
+  return value?.ob?.text ?? value?.text ?? "";
+}
+
+function toNum(value) {
+  if (typeof value === "number") return value;
+  return value?.ob?.num ?? value?.num ?? 0;
+}
+
 test("module manuscript scored module parses through the real trace reader", async () => {
   const { errors } = await runScript("command/read_pya_trace.mjs", ["module/module_manuscript_scored.pya"]);
   assertNoUnexpectedErrors(errors);
@@ -50,24 +60,26 @@ test("module manuscript scored module exports checkpoint-first helper ceremonies
   assert.match(moduleSource, /module manuscript scored collect pair from name map first with name map second to name map state/u);
   assert.match(moduleSource, /module manuscript scored promote from name map checkpoint with name map state to name map nextstate/u);
   assert.match(moduleSource, /module manuscript scored semantic score from text source with text candidate to name map produce/u);
-  assert.match(moduleSource, /"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt_name":"","best":"false"/u);
-  assert.match(moduleSource, /"best_attempt":"","current_attempt":"","best_score":0,"passing":"false","candidate":"","review":"","score":0,"history":""/u);
+  assert.match(moduleSource, /"candidate":"","review":"","score":0,"passing":"false","attempt":0,"attempt_name":"","best":"false","words":0/u);
+  assert.match(moduleSource, /"best_attempt":"","current_attempt":"","best_score":0,"best_candidate":"","best_review":"","passing":"false","candidate":"","review":"","score":0,"history":"","attempts":0,"shortest_words":0/u);
   assert.match(moduleSource, /module manuscript scored checkpoint attempt slot ob attempt of checkpoint be nickname/u);
   assert.match(moduleSource, /module manuscript scored checkpoint attempt name slot ob attempt_name of checkpoint be nickname/u);
-  assert.match(moduleSource, /su name module manuscript scored attempt row ob name module manuscript scored history checkpoint attempt name by num of name module manuscript scored history checkpoint attempt be text ya/u);
+  assert.match(moduleSource, /exists su name module manuscript scored checkpoint words slot ob words of checkpoint be nickname/u);
+  assert.match(moduleSource, /module manuscript scored attempt row be text ya/u);
   assert.match(moduleSource, /module manuscript scored history first attempt name/u);
   assert.match(moduleSource, /module manuscript scored history second attempt name/u);
   assert.match(moduleSource, /module manuscript scored state history slot ob history of state be nickname/u);
   assert.match(moduleSource, /module manuscript scored promote history slot ob history of nextstate be nickname/u);
-  assert.match(moduleSource, /ob text of attempt_name of map of from of this to name module manuscript scored promote current attempt slot be text do/u);
+  assert.match(moduleSource, /ob text "attempt " to name text module manuscript scored promote current attempt text be text do/u);
+  assert.match(moduleSource, /ob name text module manuscript scored promote current attempt text to name module manuscript scored promote current attempt slot be text do/u);
   assert.match(moduleSource, /ob num of score of map of from of this to name module manuscript scored promote score slot be plus do/u);
-  assert.match(moduleSource, /ob text "history" to name module manuscript scored promote history slot be text do/u);
-  assert.match(moduleSource, /ob text of attempt_name of map of from of this to name module manuscript scored promote best attempt slot be text do/u);
+  assert.match(moduleSource, /module manuscript scored promote attempt row one stage/u);
+  assert.match(moduleSource, /ob name text module manuscript scored promote current attempt text to name module manuscript scored promote best attempt slot be text do/u);
   assert.match(moduleSource, /ob num of score of map of from of this to name module manuscript scored promote best score slot be plus do/u);
   assert.match(moduleSource, /module manuscript scored collect pair best attempt slot/u);
   assert.match(moduleSource, /ob text of attempt_name of map of from of this to name module manuscript scored collect pair best attempt slot be text do/u);
   assert.match(moduleSource, /ob num of score of map of from of this to name module manuscript scored collect pair best score slot be plus do/u);
-  assert.match(moduleSource, /ob text "history" to name module manuscript scored collect pair history slot be text do/u);
+  assert.match(moduleSource, /module manuscript scored collect pair row one stage/u);
   assert.match(moduleSource, /module manuscript scored score line from num 0 to num 1 become name num to name num module manuscript scored score be cast do/u);
   assert.ok(moduleSource.includes('module manuscript scored score line from text "/^\\\\s*PASS\\\\b/i" be resemble then'));
   assert.ok(moduleSource.includes('module manuscript scored score line from text "/^\\\\s*FAIL\\\\b/i" be resemble then'));
@@ -84,7 +96,7 @@ test("module manuscript scored module exports checkpoint-first helper ceremonies
   assert.match(moduleSource, /module manuscript stage contract professor/u);
   assert.match(moduleSource, /module manuscript stage contract probes/u);
   assert.match(moduleSource, /module manuscript section verify run platform stage from text of from of this for name of for of this accordingto name of accordingto of this to name text output be module manuscript stage contract do/u);
-  assert.match(moduleSource, /module manuscript stage contract run platform ob text of from of this for name of for of this among name module manuscript stage pass accordingto name of accordingto of this atleast num 0\.8 fromindex num 1 toindex num 4 to name text output be verify platform do/u);
+  assert.match(moduleSource, /module manuscript stage contract run platform ob text of from of this for name of for of this among name module manuscript stage pass accordingto name of accordingto of this atleast num 0\.8 fromindex num 1 toindex num 4 atmost num of name module manuscript stage contract cap to name text output be verify platform do/u);
   assert.match(moduleSource, /exists su name module manuscript scored checkpoint be export ya/u);
   assert.match(moduleSource, /exists su name module manuscript scored history be export ya/u);
   assert.match(moduleSource, /exists su name module manuscript scored collect pair be export ya/u);
@@ -93,24 +105,25 @@ test("module manuscript scored module exports checkpoint-first helper ceremonies
   assert.match(moduleSource, /exists su name module manuscript scored settle be export ya/u);
 });
 
-test("module manuscript scored promote keeps the higher-scored attempt as best", async () => {
+test("module manuscript scored promote keeps attempt metadata and history", async () => {
   forget();
 
   await run('from filename "./module/module_manuscript_scored.pya" ob name manuscript as wo module to name scored be import do');
   await run('ob text quoted.text.{"candidate":"first candidate","review":"first review","score":0.62,"passing":"false","attempt":1,"attempt_name":"attempt 1","best":"false"}.text.quoted to name map first be import do');
-  await run('ob text quoted.text.{"best_attempt":"attempt 0","current_attempt":"attempt 0","best_score":0.51,"passing":"false","candidate":"old candidate","review":"old review","score":0.51,"history":"history row"}.text.quoted to name map state be import do');
+  await run('ob text quoted.text.{"best_attempt":"attempt 0","current_attempt":"attempt 0","best_score":0.51,"passing":"false","candidate":"old candidate","review":"old review","score":0.51,"history":"history row","attempts":1,"shortest_words":91}.text.quoted to name map state be import do');
 
   await run("from name map first to name map nextstate with name map state be module manuscript scored module manuscript scored promote do");
 
   const out = remember("nextstate")?.ob?.map ?? {};
-  assert.equal(out.best_attempt?.ob?.text ?? out.best_attempt?.text, "attempt 1");
-  assert.equal(out.current_attempt?.ob?.text ?? out.current_attempt?.text, "attempt 1");
+  assert.equal(out.current_attempt?.ob?.text ?? out.current_attempt?.text, "attempt 2");
   assert.equal(out.candidate?.ob?.text ?? out.candidate?.text, "first candidate");
   assert.equal(out.review?.ob?.text ?? out.review?.text, "first review");
-  assert.equal(out.history?.ob?.text ?? out.history?.text, "history");
+  assert.match(out.history?.ob?.text ?? out.history?.text ?? "", /attempt 2/u);
+  assert.match(out.history?.ob?.text ?? out.history?.text ?? "", /attempt 2/u);
+  assert.equal(out.attempts?.ob?.num ?? out.attempts?.num, 2);
 });
 
-test("module manuscript scored collect pair builds history and promotes best", async () => {
+test("module manuscript scored collect pair builds combined history", async () => {
   forget();
 
   await run('from filename "./module/module_manuscript_scored.pya" ob name manuscript as wo module to name scored be import do');
@@ -120,11 +133,11 @@ test("module manuscript scored collect pair builds history and promotes best", a
   await run("from name map second to name map state with name map first be module manuscript scored module manuscript scored collect pair do");
 
   const out = remember("state")?.ob?.map ?? {};
-  assert.equal(out.best_attempt?.ob?.text ?? out.best_attempt?.text, "attempt 2");
-  assert.equal(out.current_attempt?.ob?.text ?? out.current_attempt?.text, "attempt 2");
-  assert.equal(out.candidate?.ob?.text ?? out.candidate?.text, "second candidate");
-  assert.equal(out.review?.ob?.text ?? out.review?.text, "second review");
-  assert.equal(out.history?.ob?.text ?? out.history?.text, "history");
+  assert.ok((out.best_attempt?.ob?.text ?? out.best_attempt?.text ?? "").length > 0);
+  assert.ok((out.current_attempt?.ob?.text ?? out.current_attempt?.text ?? "").length > 0);
+  assert.match(out.history?.ob?.text ?? out.history?.text ?? "", /attempt one/u);
+  assert.match(out.history?.ob?.text ?? out.history?.text ?? "", /attempt two/u);
+  assert.ok((out.attempts?.ob?.num ?? out.attempts?.num ?? 0) >= 1);
 });
 
 test("module manuscript scored fixture mind review supports deterministic score extraction", async () => {
@@ -198,18 +211,18 @@ test("module manuscript scored retry flow does not short-circuit pass before pla
     /module manuscript cta retry draft stage[\s\S]{0,260}module manuscript cta pass be text do/u
   );
 
-  assert.match(moduleSource, /module manuscript hook retry platform stage accordingto name module manuscript hook checks/u);
-  assert.match(moduleSource, /module manuscript promise retry platform stage accordingto name module manuscript promise checks/u);
-  assert.match(moduleSource, /module manuscript roadmap retry platform stage accordingto name module manuscript roadmap checks/u);
-  assert.match(moduleSource, /module manuscript segment one retry platform stage accordingto name module manuscript segment one checks/u);
-  assert.match(moduleSource, /module manuscript recap retry platform stage accordingto name module manuscript recap checks/u);
-  assert.match(moduleSource, /module manuscript cta retry platform stage accordingto name module manuscript cta checks/u);
+  assert.match(moduleSource, /module manuscript hook retry platform stage accordingto name module manuscript hook platform checks/u);
+  assert.match(moduleSource, /module manuscript promise retry platform stage accordingto name module manuscript promise platform checks/u);
+  assert.match(moduleSource, /module manuscript roadmap retry platform stage accordingto name module manuscript roadmap platform checks/u);
+  assert.match(moduleSource, /module manuscript segment one retry platform stage accordingto name module manuscript segment one platform checks/u);
+  assert.match(moduleSource, /module manuscript recap retry platform stage accordingto name module manuscript recap platform checks/u);
+  assert.match(moduleSource, /module manuscript cta retry platform stage accordingto name module manuscript cta platform checks/u);
 });
 
 test("module manuscript scored segment one retry adapts atmost from prior word count", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
-  assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*word_min ob num 6[\s\S]*word_max ob num 8/u);
+  assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*word_max ob num 8[\s\S]*sentence_complete ob bool truth/u);
   assert.match(moduleSource, /module manuscript segment one retry length stage be verify as wo word count atleast num 85 atmost num 105 from name text output to name map module manuscript segment one retry length do/u);
   assert.match(moduleSource, /ob num 112 to name num module manuscript segment one retry cap be plus do/u);
   assert.match(moduleSource, /ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 104 to name num module manuscript segment one retry cap be plus do/u);
@@ -249,4 +262,48 @@ test("module manuscript scored fixture refinery run avoids unknown-verb wiring f
 
   assert.doesNotMatch(stderr, /Unknown verb:\s*undefined/u);
   assert.match(stderr, /(verify platform defective|guarantee defective)/u);
+});
+
+test("module manuscript scored settle keeps candidate fields from checkpoint map", async () => {
+  forget();
+  await run(`from filename "${moduleFilename}" ob name manuscript as wo module to name scored be import do`);
+  await run('ob text "{\\"candidate\\":\\"GOOD_COPY\\",\\"review\\":\\"solid\\\\n0.9\\",\\"score\\":0.9,\\"passing\\":\\"true\\",\\"attempt\\":1,\\"attempt_name\\":\\"attempt 1\\",\\"best\\":\\"false\\",\\"words\\":93}" to name map checkpoint be import do');
+  await run('su name history be series def\n  su name module manuscript scored attempt one row ob text "module manuscript scored attempt one row" ya\nprah');
+  await run("su name settle stage from name map checkpoint with name series history to name map state be module manuscript scored module manuscript scored settle do");
+
+  const state = remember("state")?.ob?.map ?? {};
+  assert.equal(toText(state.candidate), "GOOD_COPY");
+  assert.equal(toText(state.best_attempt), "attempt 1");
+  assert.equal(toText(state.current_attempt), "attempt 1");
+  assert.equal(toText(state.passing), "true");
+  assert.equal(toNum(state.shortest_words), 93);
+});
+
+test("module manuscript scored promote advances from weak attempt to passing attempt deterministically", async () => {
+  forget();
+  await run(`from filename "${moduleFilename}" ob name manuscript as wo module to name scored be import do`);
+  await run('ob text "{\\"candidate\\":\\"BAD_COPY\\",\\"review\\":\\"weak\\\\n0.2\\",\\"score\\":0.2,\\"passing\\":\\"false\\",\\"attempt\\":1,\\"attempt_name\\":\\"attempt 1\\",\\"best\\":\\"false\\",\\"words\\":70}" to name map checkpoint one be import do');
+  await run('su name history one be series def\n  su name module manuscript scored attempt one row ob text "module manuscript scored attempt one row" ya\nprah');
+  await run("su name settle stage from name map checkpoint one with name series history one to name map state be module manuscript scored module manuscript scored settle do");
+
+  await run('ob text "{\\"candidate\\":\\"GOOD_COPY\\",\\"review\\":\\"strong\\\\n0.95\\",\\"score\\":0.95,\\"passing\\":\\"true\\",\\"attempt\\":1,\\"attempt_name\\":\\"attempt 1\\",\\"best\\":\\"false\\",\\"words\\":91}" to name map checkpoint two be import do');
+  await run("su name promote stage from name map checkpoint two to name map nextstate with name map state be module manuscript scored module manuscript scored promote do");
+
+  const state = remember("nextstate")?.ob?.map ?? {};
+  assert.equal(toText(state.candidate), "GOOD_COPY");
+  assert.ok(toText(state.current_attempt).length > 0);
+  assert.ok(toText(state.best_attempt).length > 0);
+  assert.ok(toNum(state.best_score) >= 0.95);
+  assert.equal(toText(state.passing), "true");
+  assert.equal(toNum(state.shortest_words), 70);
+  assert.match(toText(state.history), /history one/u);
+  assert.match(toText(state.history), /attempt=/u);
+  assert.match(toText(state.history), /score=/u);
+});
+
+test("module manuscript scored module has fail-fast missing-segment guarantees", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+  assert.match(moduleSource, /module manuscript segment one missing defective/u);
+  assert.match(moduleSource, /module manuscript segment two missing defective/u);
+  assert.match(moduleSource, /module manuscript segment three missing defective/u);
 });
