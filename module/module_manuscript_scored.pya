@@ -632,7 +632,7 @@ su name module manuscript roadmap checks be series def
 prah
 
 su name module manuscript roadmap platform checks be series def
-  su name word_max ob num 22 ya
+  su name word_max ob num 26 ya
   su name sentence_complete ob bool truth ya
 prah
 
@@ -1269,7 +1269,7 @@ prah
 su name module manuscript roadmap checked to name text output be ceremony def
   ob text "false" to name text module manuscript roadmap pass be text do
   ob text "roadmap platform" to name text module manuscript platform be text do
-  ob num 22 to name num module manuscript stage contract cap be plus do
+  ob num 18 to name num module manuscript stage contract cap be plus do
   su name module manuscript roadmap platform stage accordingto name module manuscript roadmap platform checks for name module manuscript roadmap mind from text of ob of module manuscript roadmap request to name text output be module manuscript section verify do
   ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
   ob name text module manuscript roadmap request to name text module manuscript current task be text do
@@ -1302,9 +1302,9 @@ su name module manuscript roadmap retry fromindex num 0 toindex num 0 be ceremon
   su name module manuscript roadmap retry request segment two stage ob name text module manuscript segment two out to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request segment three stage ob name text module manuscript segment three out to name module manuscript roadmap retry request be plus do
-  su name module manuscript roadmap retry draft stage ob name text module manuscript roadmap retry request for name module manuscript roadmap fit mind to name text output by num 0 atmost num 22 be write do
+  su name module manuscript roadmap retry draft stage ob name text module manuscript roadmap retry request for name module manuscript roadmap fit mind to name text output by num 0 atmost num 18 be write do
   ob text "roadmap retry platform" to name text module manuscript platform be text do
-  ob num 22 to name num module manuscript stage contract cap be plus do
+  ob num 18 to name num module manuscript stage contract cap be plus do
   su name module manuscript roadmap retry platform stage accordingto name module manuscript roadmap platform checks for name module manuscript roadmap fit mind from text of ob of module manuscript roadmap retry request to name text output be module manuscript section verify do
   ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
   ob name text module manuscript roadmap retry request to name text module manuscript current task be text do
@@ -1664,17 +1664,17 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript promise final giant guarantee stage ob bool lie fromtext text "module manuscript promise word count giant defective" be guarantee do
   su name module manuscript promise repaired stage ob name text output to name text module manuscript promise out be text do
 
-  su name module manuscript roadmap final verify stage be verify as wo word count atleast num 14 atmost num 22 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
+  su name module manuscript roadmap final verify stage be verify as wo word count atleast num 14 atmost num 26 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
   ob text of pass of module manuscript roadmap final verify to name text module manuscript roadmap final verify pass be text do
   su name module manuscript roadmap final output stage ob name text module manuscript roadmap out to name text output be text do
   ob name text module manuscript roadmap final verify pass be equally from text false then
   fromindex num 1 toindex num 4 be module manuscript roadmap retry do
   ob name text output to name text module manuscript roadmap out be text do
-  su name module manuscript roadmap final reverify stage be verify as wo word count atleast num 14 atmost num 22 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
+  su name module manuscript roadmap final reverify stage be verify as wo word count atleast num 14 atmost num 26 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
   ob text of pass of module manuscript roadmap final verify to name text module manuscript roadmap final verify pass be text do
   ob name text module manuscript roadmap final verify pass be equally from text false then
   ob num of words of module manuscript roadmap final verify be tiny from num 14 then
-  ob num of words of module manuscript roadmap final verify be giant from num 22 then
+  ob num of words of module manuscript roadmap final verify be giant from num 26 then
   su name module manuscript roadmap final giant guarantee stage ob bool lie fromtext text "module manuscript roadmap word count giant defective" be guarantee do
   su name module manuscript roadmap repaired stage ob name text output to name text module manuscript roadmap out be text do
 
