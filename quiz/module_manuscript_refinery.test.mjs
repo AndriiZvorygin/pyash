@@ -35,113 +35,30 @@ test("module manuscript module stays importable from another pya file", async ()
   assertNoUnexpectedErrors(errors);
 });
 
-test("module manuscript module wires semantic verifiers into the module flow", async () => {
-  const [moduleSource, wrapperSource] = await Promise.all([
-    fs.readFile(moduleFilename, "utf8"),
-    fs.readFile(wrapperFilename, "utf8")
-  ]);
-
-  assert.match(moduleSource, /module manuscript source thrust verify prompt/u);
-  assert.match(moduleSource, /module manuscript role verify prompt/u);
-  assert.match(moduleSource, /module manuscript distinct verify prompt/u);
-  assert.match(moduleSource, /module manuscript section verify/u);
-  assert.match(moduleSource, /source thrust defective/u);
-  assert.match(moduleSource, /role defective/u);
-  assert.match(moduleSource, /distinct defective/u);
-  assert.match(moduleSource, /module manuscript current intent/u);
+test("module manuscript wrapper points to promoted module path", async () => {
+  const wrapperSource = await fs.readFile(wrapperFilename, "utf8");
   assert.match(wrapperSource, /module_manuscript\.pya/u);
 });
 
-test("module manuscript final word checks do not overwrite semantic pass state", async () => {
+test("module manuscript uses single scored semantic verifier in stage flow", async () => {
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
-  assert.match(moduleSource, /module manuscript hook final verify pass/u);
-  assert.match(moduleSource, /module manuscript promise final verify pass/u);
-  assert.match(moduleSource, /module manuscript roadmap final verify pass/u);
-  assert.match(moduleSource, /module manuscript segment one final verify pass/u);
-  assert.match(moduleSource, /module manuscript segment two final verify pass/u);
-  assert.match(moduleSource, /module manuscript segment three final verify pass/u);
-  assert.match(moduleSource, /module manuscript recap final verify pass/u);
-  assert.match(moduleSource, /module manuscript cta final verify pass/u);
-  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript hook final verify to name text module manuscript hook pass be text do/u);
-  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript promise final verify to name text module manuscript promise pass be text do/u);
-  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript roadmap final verify to name text module manuscript roadmap pass be text do/u);
-  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript segment one final verify to name text module manuscript segment one pass be text do/u);
-  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript segment two final verify to name text module manuscript segment two pass be text do/u);
-  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript segment three final verify to name text module manuscript segment three pass be text do/u);
-  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript recap final verify to name text module manuscript recap pass be text do/u);
-  assert.doesNotMatch(moduleSource, /ob text of pass of module manuscript cta final verify to name text module manuscript cta pass be text do/u);
-});
-
-test("module manuscript final word retries reverify the repaired stage before guaranteeing", async () => {
-  const moduleSource = await fs.readFile(moduleFilename, "utf8");
-
-  assert.match(moduleSource, /fromindex num 1 toindex num 4 be module manuscript hook retry do\s+ob name text output to name text module manuscript hook out be text do\s+su name module manuscript hook final reverify stage/u);
-  assert.match(moduleSource, /fromindex num 1 toindex num 4 be module manuscript promise retry do\s+ob name text output to name text module manuscript promise out be text do\s+su name module manuscript promise final reverify stage/u);
-  assert.match(moduleSource, /fromindex num 1 toindex num 4 be module manuscript roadmap retry do\s+ob name text output to name text module manuscript roadmap out be text do\s+su name module manuscript roadmap final reverify stage/u);
-  assert.match(moduleSource, /fromindex num 1 toindex num 4 be module manuscript segment one retry do\s+ob name text output to name text module manuscript segment one out be text do\s+su name module manuscript segment one final reverify stage/u);
-  assert.match(moduleSource, /fromindex num 1 toindex num 4 be module manuscript segment two retry do\s+ob name text output to name text module manuscript segment two out be text do\s+su name module manuscript segment two final reverify stage/u);
-  assert.match(moduleSource, /fromindex num 1 toindex num 4 be module manuscript segment three retry do\s+ob name text output to name text module manuscript segment three out be text do\s+su name module manuscript segment three final reverify stage/u);
-  assert.match(moduleSource, /fromindex num 1 toindex num 5 be module manuscript recap retry do\s+ob name text output to name text module manuscript recap out be text do\s+su name module manuscript recap final reverify stage/u);
-  assert.match(moduleSource, /fromindex num 1 toindex num 4 be module manuscript cta retry do\s+ob name text output to name text module manuscript cta out be text do\s+su name module manuscript cta final reverify stage/u);
-});
-
-test("module manuscript verifier flow short-circuits explicit fail analyses before verdict model fallback", async () => {
-  const moduleSource = await fs.readFile(moduleFilename, "utf8");
-
-  assert.match(moduleSource, /drifts from the source\|unsupported \(content\|addition\|claim\|mechanism\|conclusion\)\|materially different teaching/u);
-  assert.match(moduleSource, /misses \(its\|the\) role\|violates an explicit must-not\|breaks a stated task\|clear task mismatch/u);
-  assert.match(moduleSource, /near-paraphrase of the prior section\|mostly restates the prior section\|no clear new turn at all\|adds no meaningful new reveal/u);
-  assert.match(moduleSource, /module manuscript role review atmost num 1 to name text module manuscript role review line be line tail do/u);
-  assert.match(moduleSource, /module manuscript distinct review atmost num 1 to name text module manuscript distinct review line be line tail do/u);
-  assert.match(moduleSource, /module manuscript source thrust review atmost num 1 to name text module manuscript source thrust review line be line tail do/u);
-});
-
-test("module manuscript roadmap is derived from finished segments rather than raw source", async () => {
-  const moduleSource = await fs.readFile(moduleFilename, "utf8");
-
-  assert.match(moduleSource, /module manuscript roadmap source basis begin/u);
-  assert.match(moduleSource, /module manuscript roadmap role stage from text of ob of module manuscript roadmap source basis/u);
-  assert.doesNotMatch(moduleSource, /module manuscript roadmap request source header stage/u);
-  assert.match(moduleSource, /sound forward-looking, as a preview of what comes next/u);
-  assert.match(moduleSource, /we will see, you will see, or what changes next/u);
-  assert.match(moduleSource, /Make it sound forward-looking rather than like a summary of completed points/u);
-});
-
-test("module manuscript stage guarantees are gated by section pass flags", async () => {
-  const moduleSource = await fs.readFile(moduleFilename, "utf8");
-
-  assert.match(moduleSource, /ob text "false" to name text module manuscript hook pass be text do/u);
-  assert.match(moduleSource, /ob text "false" to name text module manuscript roadmap pass be text do/u);
-  assert.match(moduleSource, /ob text "false" to name text module manuscript segment one pass be text do/u);
-  assert.match(moduleSource, /to name map module manuscript hook sources produce be module manuscript source thrust do/u);
-  assert.match(moduleSource, /to name map module manuscript hook roles produce be module manuscript role pass do/u);
-  assert.match(moduleSource, /ob name text module manuscript hook pass be equally from text false then\s+ob text of passing of module manuscript hook roles produce be equally from text false then/u);
-  assert.match(moduleSource, /to name map module manuscript roadmap sources produce be module manuscript source thrust do/u);
-  assert.match(moduleSource, /to name map module manuscript roadmap roles produce be module manuscript role pass do/u);
-  assert.match(moduleSource, /ob name text module manuscript roadmap pass be equally from text false then\s+ob text of passing of module manuscript roadmap roles produce be equally from text false then/u);
-  assert.match(moduleSource, /to name map module manuscript segment one sources produce be module manuscript source thrust do/u);
-  assert.match(moduleSource, /to name map module manuscript segment one roles produce be module manuscript role pass do/u);
-  assert.match(moduleSource, /ob name text module manuscript segment one pass be equally from text false then\s+ob text of passing of module manuscript segment one roles produce be equally from text false then/u);
-});
-
-test("module manuscript segment two role verifier does not police overlap that distinctness already handles", async () => {
-  const moduleSource = await fs.readFile(moduleFilename, "utf8");
-
-  assert.match(moduleSource, /for segment two tasks, prefer PASS when the paragraph lands any clear source-supported correction, paradox, consequence, or clarifying angle beyond segment one/u);
-  assert.match(moduleSource, /a more specific correction nested inside the same broad misunderstanding field may still pass/u);
-  assert.match(moduleSource, /do not fail merely because the reveal stays inside the same broad contrast cluster as segment one/u);
-  assert.match(moduleSource, /prefer to let the distinct verifier judge it rather than failing role on that basis alone/u);
-});
-
-test("module manuscript segment one treats example and implication as optional add-ons", async () => {
-  const moduleSource = await fs.readFile(moduleFilename, "utf8");
-
-  assert.match(moduleSource, /Optional add-ons:/u);
-  assert.match(moduleSource, /You may use one small example from AFFAIRS OR ACTIVITIES/u);
-  assert.match(moduleSource, /You may include one small immediate implication/u);
-  assert.match(moduleSource, /If you use an example, keep it brief and subordinate/u);
-  assert.match(moduleSource, /Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move/u);
-  assert.doesNotMatch(moduleSource, /give a simple example/u);
-  assert.doesNotMatch(moduleSource, /Use exactly 4 complete sentences/u);
+  assert.match(moduleSource, /module manuscript scored semantic score prompt/u);
+  assert.match(moduleSource, /Scoring dimensions:\n- source faithfulness\n- role and task fit\n- progression beyond PRIOR only when PRIOR is actually provided/u);
+  assert.match(moduleSource, /Source faithfulness rubric:/u);
+  assert.match(moduleSource, /Role and task fit rubric:/u);
+  assert.match(moduleSource, /Progression and distinctness rubric:/u);
+  assert.match(moduleSource, /Tie-break policy:/u);
+  assert.match(moduleSource, /module manuscript stage contract run platform .* atleast num 0\.8 .* atmost num of name module manuscript stage contract cap/u);
+  assert.match(moduleSource, /module manuscript hook scored checkpoint stage/u);
+  assert.match(moduleSource, /module manuscript promise scored checkpoint stage/u);
+  assert.match(moduleSource, /module manuscript roadmap scored checkpoint stage/u);
+  assert.match(moduleSource, /module manuscript segment one scored checkpoint stage/u);
+  assert.match(moduleSource, /module manuscript segment two scored checkpoint stage/u);
+  assert.match(moduleSource, /module manuscript segment three scored checkpoint stage/u);
+  assert.match(moduleSource, /module manuscript recap scored checkpoint stage/u);
+  assert.match(moduleSource, /module manuscript cta scored checkpoint stage/u);
+  assert.doesNotMatch(moduleSource, /be module manuscript source thrust do/u);
+  assert.doesNotMatch(moduleSource, /be module manuscript role pass do/u);
+  assert.doesNotMatch(moduleSource, /be module manuscript distinct pass do/u);
 });
