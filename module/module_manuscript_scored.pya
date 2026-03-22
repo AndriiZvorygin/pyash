@@ -609,12 +609,14 @@ prah
 su name module manuscript hook checks be series def
   su name word_min ob num 6 ya
   su name word_max ob num 8 ya
+  su name not_prefix_of ob name text module manuscript promise out ya
   su name must_not_match_pattern ob text "[,;:]\\s*$" ya
   su name must_not_match_pattern ob text "\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\\s*[.!?]*\\s*$" ya
 prah
 
 su name module manuscript hook platform checks be series def
   su name word_max ob num 8 ya
+  su name not_prefix_of ob name text module manuscript promise out ya
   su name must_not_match_pattern ob text "[,;:]\\s*$" ya
   su name must_not_match_pattern ob text "\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\\s*[.!?]*\\s*$" ya
 prah

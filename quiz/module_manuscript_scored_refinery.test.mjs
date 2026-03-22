@@ -242,6 +242,7 @@ test("module manuscript scored segment one retry adapts atmost from prior word c
   const moduleSource = await fs.readFile(moduleFilename, "utf8");
 
   assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*word_max ob num 8/u);
+  assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*not_prefix_of ob name text module manuscript promise out/u);
   assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*must_not_match_pattern ob text "\[,;:\]\\\\s\*\$"/u);
   assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*must_not_match_pattern ob text "\\\\b\(\?:and\|or\|but\|so\|because\|if\|when\|while\|than\|that\|which\|who\|whom\|whose\|a\|an\|the\)\\\\s\*\[\.!\?\]\*\\\\s\*\$"/u);
   assert.match(moduleSource, /module manuscript segment one retry length stage be verify as wo word count atleast num 85 atmost num 105 from name text output to name map module manuscript segment one retry length do/u);

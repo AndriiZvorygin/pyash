@@ -117,6 +117,29 @@ test("verify platform accepts qualified deterministic check names", async () => 
   assert.equal(remember("verify platform stop reason")?.ob?.text, "pass");
 });
 
+test("verify platform supports not_prefix_of check with named reference text", async () => {
+  forget();
+
+  await run("exists su name promise out ob text \"True power arises when you choose service over control.\" be text ya");
+
+  await run("su name draft maker ob text task to name text draft out be ceremony def");
+  await run("ob text \"True power arises when you choose service\" to name text draft out be text do");
+  await run("prah");
+
+  await run("su name pass verifier ob text packet to name text verdict be ceremony def");
+  await run("ob text PASS to name text verdict be text do");
+  await run("prah");
+
+  await run("su name checks be series def");
+  await run("su name not_prefix_of ob name text promise out ya");
+  await run("prah");
+
+  await assert.rejects(
+    () => run("ob text \"task\" for name draft maker among name pass verifier accordingto name checks fromindex num 1 toindex num 1 to name text result be verify platform do"),
+    /verify platform defective: retries exhausted/
+  );
+});
+
 test("verify platform treats generator platform errors as retryable", async () => {
   forget();
 
