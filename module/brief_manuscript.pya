@@ -1,4 +1,4 @@
-exists su name brief video script mind be mind fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
+exists su name brief video script mind be mind fromtext text "You are a master Shorts script writer for source-grounded teaching content." ya
 exists su name brief video script hook mind be mind fromtext name brief video script hook prompt ya
 exists su name brief video script cta mind be mind fromtext name brief video script cta prompt ya
 exists su name brief video script fact one mind be mind fromtext name brief video script fact one prompt ya
@@ -7,21 +7,21 @@ exists su name brief video script uplift mind be mind fromtext name brief video 
 exists su name brief video script platform verify mind be mind fromtext name brief video script platform verify prompt ya
 exists su name brief video script source thrust verify mind be mind fromtext name brief video script source thrust verify prompt ya
 exists su name brief video script source thrust verdict mind be mind fromtext name brief video script source thrust verdict prompt ya
-exists su name brief video script source thrust intent ob text quoted.text.The generator is asked to write a short spoken script that combines transcript-grounded historical facts with present-day parallels and a call to action. Treat present-day parallels as commentary by default. Only fail for historical grounding when the script adds or distorts concrete historical facts (people, events, laws, mechanisms) beyond the transcript..text.quoted be text ya
+exists su name brief video script source thrust intent ob text quoted.text.The generator is asked to write a short spoken script that combines transcript-grounded source facts with present-day parallels and a call to action. Treat present-day parallels as commentary by default. Only fail for source grounding when the script adds or distorts concrete source facts (people, events, actions, mechanisms) beyond the transcript..text.quoted be text ya
 
-exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second history short.
+exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second short.
 
 Task:
 - Write exactly 2 short spoken sentences.
-- Sentence 1: one surprising historical fact from the transcript.
+- Sentence 1: one surprising fact from the transcript.
 - Sentence 2: how that fact relates directly to the viewer today.
 - Keep this segment between 20 and 44 words.
 
 Rules:
 - Dramatic, authoritative tone.
-- Historical claims must come only from the provided transcript.
-- Prefer wording that stays close to the transcript instead of polished historical paraphrase.
-- Do not turn a broad historical description into a stronger causal claim unless that causal wording appears in the transcript.
+- Source claims must come only from the provided transcript.
+- Prefer wording that stays close to the transcript instead of polished paraphrase.
+- Do not turn a broad source description into a stronger causal claim unless that causal wording appears in the transcript.
 - Do not introduce new people, places, events, or policies not present in the transcript.
 - Do not add summary phrases like "because elites hoarded land" or "survived through reforms" unless the transcript says that directly.
 - Do not add exact years, dates, reigns, or named rulers unless that exact detail appears in the transcript.
@@ -34,22 +34,22 @@ exists su name brief video script fact two prompt ob text quoted.text.You are wr
 
 Task:
 - Write exactly 2 short spoken sentences.
-- Use a different shocking historical fact than the one already used.
+- Use a different shocking fact than the one already used.
 - Prefer another explicit crisis, fall, or reform example that is plainly stated in the transcript.
-- Sentence 1: one surprising historical fact from the transcript.
+- Sentence 1: one surprising fact from the transcript.
 - Sentence 2: how that fact relates directly to the viewer today.
 - Keep this segment between 20 and 44 words.
 
 Rules:
 - Do not repeat the same person/event/core claim from the prior segment.
-- Prefer a clearly different historical section than the prior segment.
+- Prefer a clearly different source section than the prior segment.
 - Prefer details that can stay close to the transcript's own wording.
 - Dramatic, authoritative tone.
-- Historical claims must come only from the provided transcript.
+- Source claims must come only from the provided transcript.
 - Do not use universal or repeated-pattern claims like "every", "always", "never", "consistently", or "after each" unless the transcript says that directly.
 - Do not introduce new people, places, events, or policies not present in the transcript.
-- Do not synthesize a new historical mechanism by combining distant parts of the transcript.
-- Do not turn a broad historical description into a stronger causal claim unless that causal wording appears in the transcript.
+- Do not synthesize a new source mechanism by combining distant parts of the transcript.
+- Do not turn a broad source description into a stronger causal claim unless that causal wording appears in the transcript.
 - Do not add summary phrases like "because elites hoarded land" or "survived through reforms" unless the transcript says that directly.
 - Do not add exact years, dates, reigns, or named rulers unless that exact detail appears in the transcript.
 - If a detail feels uncertain, omit it instead of guessing.
@@ -101,7 +101,7 @@ exists su name brief video script platform verify prompt ob text quoted.text.You
 Rules:
 - Be practical and not overly strict.
 - Prefer PASS when support is plausible and constraints are mostly satisfied.
-- Fail only on clear mismatch, clear unsupported historical claims, or clear instruction break.
+- Fail only on clear mismatch, clear unsupported source claims, or clear instruction break.
 - Use the TASK and CANDIDATE exactly as provided.
 - If TASK includes `TARGET_WORDS: X-Y`, count candidate words and fail when outside that inclusive range.
 - If TASK includes `PRIOR SEGMENT:`, fail when CANDIDATE repeats the prior segment wording or same core claim.
@@ -112,25 +112,25 @@ Output:
 - No bullets, no labels, no markdown.
 - No text after the final verdict line..text.quoted be text ya
 
-exists su name brief video script source thrust verify prompt ob text quoted.text.Good. Here is a much cleaner rubric, with a hard boundary between history and present-day commentary.
+exists su name brief video script source thrust verify prompt ob text quoted.text.Good. Here is a much cleaner rubric, with a hard boundary between source-grounded content and present-day commentary.
 
 SOURCE-THRUST VERIFICATION RUBRIC
 
-Goal: Determine whether the historical content of the SCRIPT is grounded in the TRANSCRIPT.
+Goal: Determine whether the source-grounded content of the SCRIPT is grounded in the TRANSCRIPT.
 
 GENERATOR INTENT:
-- The script is intentionally written to connect historical facts to present-day parallels and a call to action.
-- Treat present-day parallels as commentary unless they introduce new concrete historical claims.
+- The script is intentionally written to connect source-grounded facts to present-day parallels and a call to action.
+- Treat present-day parallels as commentary unless they introduce new concrete source claims.
 
 Step 1 - Separate Content Types
 
-A) Historical content
+A) Source-grounded content
 Any sentence that refers to:
 
-- named historical person
-- historical event
+- named person
+- event
 - law, reform, policy
-- specific historical action or mechanism
+- specific action or mechanism
 
 B) Present-day parallels and commentary
 Any sentence about:
@@ -142,15 +142,15 @@ Any sentence about:
 Only evaluate A.
 Ignore B completely when deciding PASS or FAIL.
 
-Step 2 - Evaluate Historical Accuracy
+Step 2 - Evaluate Source Accuracy
 
-For historical sentences only, judge:
+For source-grounded sentences only, judge:
 
 1. Factual Presence
 Are the core elements of the claim present in the TRANSCRIPT, even if the SCRIPT compresses them into shorter spoken phrasing?
 
 2. Added Specificity
-Does the SCRIPT add concrete historical details that do not appear in the TRANSCRIPT?
+Does the SCRIPT add concrete source details that do not appear in the TRANSCRIPT?
 
 3. Meaning Drift
 Does the SCRIPT materially exaggerate or alter what the TRANSCRIPT says?
@@ -159,29 +159,29 @@ Decision Rules
 
 PASS if:
 
-- Every historical claim is supported by the TRANSCRIPT, including faithful spoken compression
+- Every source-grounded claim is supported by the TRANSCRIPT, including faithful spoken compression
 - Spoken compression may merge nearby transcript details into one short line when the merged line does not add a new actor, date, law, or mechanism.
 - Compressed paraphrase may restate the practical implication of nearby transcript sentences in shorter spoken wording.
-- No new historical facts are introduced
+- No new source facts are introduced
 - No major exaggeration or distortion occurs
 
 FAIL if:
 
-- Any historical claim introduces a genuinely new historical fact or mechanism not present in the TRANSCRIPT
-- Any new historical fact is added
-- The meaning of a historical reform, event, or mechanism is materially altered
+- Any source-grounded claim introduces a genuinely new source fact or mechanism not present in the TRANSCRIPT
+- Any new source fact is added
+- The meaning of a source-grounded reform, event, or mechanism is materially altered
 
 Tie-break policy:
 - If support is plausible but phrasing is rhetorical, choose PASS.
-- If the SCRIPT compresses multiple nearby transcript details into one short spoken line without adding a new historical actor, date, law, or mechanism, choose PASS.
+- If the SCRIPT compresses multiple nearby transcript details into one short spoken line without adding a new actor, date, law, or mechanism, choose PASS.
 - If the SCRIPT shortens a transcript mechanism into a tighter spoken paraphrase but stays inside the same nearby idea cluster, choose PASS.
 - If the SCRIPT uses simpler spoken wording for a transcript mechanism without changing who did what or how it works, choose PASS.
 - If the SCRIPT states an implication that is an obvious reading of the transcript rather than a new fact, choose PASS.
-- Fail only on clear unsupported historical claims or clear added historical facts.
+- Fail only on clear unsupported source claims or clear added source facts.
 - Do not fail only for style, intensity, or modern-parallel rhetoric.
 
 Output rules:
-- First output one short paragraph (1-2 sentences, max 70 words) explaining the historical support judgment.
+- First output one short paragraph (1-2 sentences, max 70 words) explaining the source support judgment.
 - Final line must be exactly PASS or FAIL.
 - No bullets, no labels, no markdown.
 - No text after the final verdict line.text.quoted be text ya
@@ -189,7 +189,7 @@ Output rules:
 exists su name brief video script source thrust verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
 
 Rules:
-- Return FAIL only when the analysis clearly says historical claims are unsupported, added, or materially distorted.
+- Return FAIL only when the analysis clearly says source claims are unsupported, added, or materially distorted.
 - If the analysis says compression, paraphrase, or merged nearby transcript details are acceptable, return PASS.
 - Otherwise return PASS.
 - One word only.
@@ -198,16 +198,16 @@ Rules:
 exists su name manuscript fact one request template ob text quoted.text.TARGET_WORDS: 20-44
 STRUCTURE:
 - Exactly 2 complete sentences.
-- Sentence 1 must state one surprising transcript-grounded historical fact.
+- Sentence 1 must state one surprising transcript-grounded fact.
 - Sentence 2 must connect that fact to the viewer today.
-SAFE_HISTORY_RULES:
-- Use only historical details stated in the transcript.
+SAFE_SOURCE_RULES:
+- Use only source details stated in the transcript.
 - Prefer one explicit event, reform, or mechanism rather than a blended summary.
-- Stay close to the transcript's wording for the historical claim.
+- Stay close to the transcript's wording for the source claim.
 - Do not strengthen the transcript into a cleaner cause-and-effect claim unless that stronger wording is explicitly present.
 - Do not rewrite a specific reform into a shorter summary if the shorter summary changes the mechanism.
 - Do not add exact years, dates, reigns, or named rulers unless the transcript states them.
-- If unsure, keep the historical wording broader rather than more specific.
+- If unsure, keep the source wording broader rather than more specific.
 
 TRANSCRIPT:
 [[source]].text.quoted be text ya
@@ -215,16 +215,16 @@ TRANSCRIPT:
 exists su name manuscript fact two request template ob text quoted.text.TARGET_WORDS: 20-44
 STRUCTURE:
 - Exactly 2 complete sentences.
-- Sentence 1 must state one surprising transcript-grounded historical fact that is different from prior segment.
+- Sentence 1 must state one surprising transcript-grounded fact that is different from prior segment.
 - Sentence 2 must connect that fact to the viewer today.
-SAFE_HISTORY_RULES:
-- Use only historical details stated in the transcript.
+SAFE_SOURCE_RULES:
+- Use only source details stated in the transcript.
 - Prefer one explicit event, reform, or mechanism rather than a blended summary.
-- Stay close to the transcript's wording for the historical claim.
+- Stay close to the transcript's wording for the source claim.
 - Do not strengthen the transcript into a cleaner cause-and-effect claim unless that stronger wording is explicitly present.
 - Do not rewrite a specific reform into a shorter summary if the shorter summary changes the mechanism.
 - Do not add exact years, dates, reigns, or named rulers unless the transcript states them.
-- If unsure, keep the historical wording broader rather than more specific.
+- If unsure, keep the source wording broader rather than more specific.
 
 PRIOR SEGMENT:
 [[prior]]
