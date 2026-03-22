@@ -477,7 +477,11 @@ function resolveFromTextPrompt(value, rememberFn) {
   if (typeof value?.text === "string") return value.text;
   if (typeof value?.name === "string" && rememberFn) {
     const fact = rememberFn(value.name);
-    return String(fact?.ob?.text ?? "");
+    if (typeof fact?.ob?.text === "string") return fact.ob.text;
+    // Support aliased text facts (e.g. ob name text other_name) and other renderable values.
+    const rendered = renderSayValue({ name: value.name }, { rememberFn });
+    if (rendered !== undefined && rendered !== null) return String(rendered);
+    return "";
   }
   return "";
 }
@@ -1182,6 +1186,9 @@ export async function drawFromNameItinerary(sentence, { remember: rememberFn = r
       by: { num: cut.index },
       be: "draw"
     };
+    if (typeof sentence?.fromtext?.name === "string" && sentence.fromtext.name.trim()) {
+      requestSentence.accordingto = { name: sentence.fromtext.name.trim() };
+    }
     if (negativePrompt) requestSentence.fromtext = { text: `negative prompt: ${negativePrompt}` };
     if (workflowName) requestSentence.as = { text: workflowName };
     emitExchangeSentence(requestSentence);
