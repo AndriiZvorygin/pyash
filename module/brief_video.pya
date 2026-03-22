@@ -372,18 +372,30 @@ su name teaching video section concatenate mapper ob filename section cuts fromi
   su name section video output stage ret
 prah
 
-su name teaching video section footnote mapper ob filename section video fromindex num 0 be ceremony def
+su name teaching video section footnote mapper ob text section manuscript fromindex num 0 be ceremony def
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
 
-  su name section footnote srt stage from num of ob of section index stage with text "captions.srt" to name filename section footnote srt be teaching video section leaf do
+  su name section timing srt stage from num of ob of section index stage with text "captions.srt" to name filename section timing srt be teaching video section leaf do
+  su name section source text stage from num of ob of section index stage with text "captions-source.txt" to name filename section source text be teaching video section leaf do
+  su name section aligned srt stage from num of ob of section index stage with text "captions-aligned.srt" to name filename section aligned srt be teaching video section leaf do
   su name section footnote video input stage from num of ob of section index stage with text "section.mp4" to name filename section footnote video input be teaching video section leaf do
   su name section footnote clip stage from num of ob of section index stage with text "section-footnote.mp4" to name filename section footnote clip be teaching video section leaf do
+
+  su name section source text write stage ob text of ob of this to filename of ob of section source text stage be write do
+  ob text "node command/lyrics_to_srt_from_timing.mjs \"" to name text section align cmd be text do
+  ob text of ob of section source text stage to name section align cmd be plus do
+  ob text "\" \"" to name section align cmd be plus do
+  ob text of ob of section timing srt stage to name section align cmd be plus do
+  ob text "\" \"" to name section align cmd be plus do
+  ob text of ob of section aligned srt stage to name section align cmd be plus do
+  ob text "\"" to name section align cmd be plus do
+  su name section align stage ob name text section align cmd be command do
 
   su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
   su name footnote mode stage to name text footnote mode current be current footnote mode do
 
-  su name section clip output stage from filename of ob of section footnote srt stage with filename of ob of section footnote video input stage to filename of ob of section footnote clip stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode stage be footnote mode do
+  su name section clip output stage from filename of ob of section aligned srt stage with filename of ob of section footnote video input stage to filename of ob of section footnote clip stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode stage be footnote mode do
   su name section clip output stage ret
 prah
 
@@ -442,7 +454,7 @@ su name teaching video from text manuscript be ceremony def
   ob name text footnote clip glob to name section clip scrub command be plus do
   ob text "; fi" to name section clip scrub command be plus do
   ob name text section clip scrub command be command do
-  su name section clip series stage from name teaching section videos by name teaching video section footnote mapper to name text teaching section clips be series map do
+  su name section clip series stage from name teaching sections by name teaching video section footnote mapper to name text teaching section clips be series map do
   su name section clip manifest write stage ob name section clip series stage to filename of ob of section clip manifest filename stage be write do
 
   su name final concatenate stage from name teaching section clips fromstate wo itinerary become wo video be concatenate do

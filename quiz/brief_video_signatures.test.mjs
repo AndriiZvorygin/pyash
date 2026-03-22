@@ -185,7 +185,7 @@ test("teaching video thumbnail comes from section draw output (no extra thumbnai
   );
 });
 
-test("section mappers normalize current item to filename before media verbs", async () => {
+test("section mappers use section text for cut/footnote alignment and filename inputs for media verbs", async () => {
   const source = await fs.readFile("module/brief_video.pya", "utf8");
   assert.match(
     source,
@@ -197,11 +197,15 @@ test("section mappers normalize current item to filename before media verbs", as
   );
   assert.match(
     source,
-    /teaching video section video mapper[\s\S]*ob filename of ob of this to name filename section srt input be filename do[\s\S]*from filename of ob of section srt input stage during/u
+    /teaching video section video mapper[\s\S]*from text of ob of this as text "sentence" during sentence 1 to name itinerary section cuts itinerary/u
   );
   assert.match(
     source,
-    /teaching video section footnote mapper[\s\S]*with text "section\.mp4" to name filename section footnote video input be teaching video section leaf do[\s\S]*from filename of ob of section footnote srt stage with filename of ob of section footnote video input stage to filename of ob of section footnote clip stage[\s\S]*be footnote mode do/u
+    /teaching video section footnote mapper[\s\S]*with text "captions-source\.txt" to name filename section source text be teaching video section leaf do[\s\S]*with text "captions-aligned\.srt" to name filename section aligned srt be teaching video section leaf do[\s\S]*node command\/lyrics_to_srt_from_timing\.mjs[\s\S]*from filename of ob of section aligned srt stage with filename of ob of section footnote video input stage to filename of ob of section footnote clip stage[\s\S]*be footnote mode do/u
+  );
+  assert.match(
+    source,
+    /section clip series stage from name teaching sections by name teaching video section footnote mapper/u
   );
   assert.match(
     source,
