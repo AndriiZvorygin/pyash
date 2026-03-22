@@ -1123,14 +1123,28 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
     });
   }
   validateSectionCoverage({ sourceText, sections, mode, sentence });
-  const requestedDuration = Number(sentence?.during?.num);
-  const hasRequestedDuration = Number.isFinite(requestedDuration) && requestedDuration > 0;
-  const sectionDuration = hasRequestedDuration ? (requestedDuration / sections.length) : 1;
+  const requestedDurationTotal = Number(sentence?.during?.num);
+  const requestedSentenceDuration = Number(sentence?.during?.sentence);
+  const hasRequestedTotalDuration = Number.isFinite(requestedDurationTotal) && requestedDurationTotal > 0;
+  const hasRequestedSentenceDuration = Number.isFinite(requestedSentenceDuration) && requestedSentenceDuration > 0;
+  const sectionDuration = hasRequestedTotalDuration
+    ? (requestedDurationTotal / sections.length)
+    : hasRequestedSentenceDuration
+    ? requestedSentenceDuration
+    : 1;
   const series = sections.map((sectionText, index) => ({
     mood: "ya",
     su: { name: `cut ${String(index + 1).padStart(3, "0")}` },
-    since: { num: hasRequestedDuration ? Number(index * sectionDuration) : Number(index) },
-    until: { num: hasRequestedDuration ? Number((index + 1) * sectionDuration) : Number(index + 1) },
+    since: {
+      num: (hasRequestedTotalDuration || hasRequestedSentenceDuration)
+        ? Number(index * sectionDuration)
+        : Number(index)
+    },
+    until: {
+      num: (hasRequestedTotalDuration || hasRequestedSentenceDuration)
+        ? Number((index + 1) * sectionDuration)
+        : Number(index + 1)
+    },
     ob: { text: sectionText },
     be: "cut"
   }));
@@ -1636,21 +1650,31 @@ export const signatures = [
   { signatureWords: ["be", "cut", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "during", "num", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "during", "sentence", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "from", "text", "during", "num", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "from", "text", "during", "sentence", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "during", "num", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "during", "sentence", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "from", "name", "text", "during", "num", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "from", "name", "text", "during", "sentence", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "by", "num", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "by", "num", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "from", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "from", "name", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "during", "num", "from", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "during", "sentence", "from", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "from", "text", "as", "text", "during", "num", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "from", "text", "as", "text", "during", "sentence", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "during", "num", "from", "name", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "during", "sentence", "from", "name", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "from", "name", "text", "as", "text", "during", "num", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "from", "name", "text", "as", "text", "during", "sentence", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "as", "text", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "as", "text", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "as", "text", "during", "num", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "as", "text", "during", "sentence", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "as", "text", "during", "num", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "as", "text", "during", "sentence", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "as", "text", "by", "num", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "as", "text", "by", "num", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "by", "num", "from", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },

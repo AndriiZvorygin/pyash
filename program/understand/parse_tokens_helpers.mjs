@@ -5,6 +5,7 @@ export const UNIT_TYPE_ALIASES = {
   hours: "hour",
   days: "day",
   weeks: "week",
+  sentences: "sentence",
   lines: "line",
   bytes: "byte"
 };

@@ -15,8 +15,10 @@ from filename "./video_common.pya" ob name shorts subtitle margin ratio to name 
 from filename "./video_common.pya" ob name widescreen footnote mode to name widescreen footnote mode be import do
 from filename "./video_common.pya" ob name shorts footnote mode to name shorts footnote mode be import do
 
-exists su name draw system prompt default ob text "Québec bande dessinée illustration, realistic proportions, precise linework, expressive faces with visible sclera and defined irises, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be text ya
-exists su name draw system prompt ob text "Québec bande dessinée illustration, realistic proportions, precise linework, expressive faces with visible sclera and defined irises, flat colours with soft shading, muted natural palette, balanced composition, mature comic storytelling, matte printed surface." be text ya
+exists su name draw system prompt default ob text "Québec bande dessinée illustration, precise linework, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be text ya
+exists su name draw system prompt ob text "Québec bande dessinée illustration, precise linework, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be text ya
+exists su name draw prompt style default ob text "If people are present, ensure expressive faces with clearly visible irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
+exists su name draw prompt style ob text "If people are present, ensure expressive faces with clearly visible irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
 exists su name qwen say sanitize map be map def
 su name percent ob text "percent" ya
 su name reference separator ob text "." ya
@@ -25,7 +27,7 @@ su name ordinal 2nd ob text "second" ya
 su name ordinal 3rd ob text "third" ya
 su name point word ob text "point" ya
 prah
-exists su name draw promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2.
+exists su name draw promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, style_prompt, draw_prompt_style, previous_prompt_1, previous_prompt_2.
 
 Follow these rules:
 CORE PRIORITY
@@ -38,7 +40,7 @@ ANCHORING
 
 CONTEXT USE
 5. Use full_script, previous_cut, and next_cut only to resolve ambiguity.
-6. Use previous_prompt_1 and previous_prompt_2 only to increase novelty.
+6. Make each scene uniquely grounded in current_cut and visibly different from the two prior prompts (previous_prompt_1 and previous_prompt_2).
 
 GROUP AND INTERACTION RULES
 7. If current_cut implies multiple actors or entities, depict multiple distinct elements.
@@ -58,32 +60,33 @@ SCENE STRUCTURE
 15. Scene surfaces contain no typography or interface elements.
 
 PEOPLE
-16. Include people only when current_cut implies or names them. If people appear, keep attire context-appropriate and non-distracting.
+16. Include people only when current_cut implies or names them. If people appear, apply draw_prompt_style only when relevant to the depicted people.
+17. If people appear, depict facial expressions and body language that match the scene mood and action.
 
 COMPOSITION
-17. Specify one framing: close shot, medium shot, or wide shot.
-18. Use natural perspective: eye level or slightly elevated.
+18. Specify one framing: close shot, medium shot, or wide shot.
+19. Use natural perspective: eye level or slightly elevated.
 
 LIGHTING
-19. Specify time of day such as morning, midday, evening, or overcast, with soft natural light.
+20. Specify time of day such as morning, midday, evening, or overcast, with soft natural light.
 
 FORMAT
-20. Keep the final prompt concise and concrete, about 30 to 70 words.
-21. Output exactly one line.
+21. Keep the final prompt concise and concrete, about 30 to 70 words.
+22. Output exactly one line.
 
 SENTENCE STRUCTURE
-22. Use exactly 4 short sentences in this order:
+23. Use exactly 4 short sentences in this order:
     sentence one: primary elements plus strong visible action
     sentence two: interaction, mechanism, or visible consequence of that action
     sentence three: environment with concrete location details
     sentence four: mood plus lighting plus time of day
-23. Mention clothing only when it is necessary for historical era, role clarity, or narrative accuracy, and keep it inside sentence three.
+24. Mention clothing only when it is necessary for historical era, role clarity, or narrative accuracy, and keep it inside sentence three.
 
 ACTION RULE
-24. Sentence one includes a clear physical action. With multiple elements, the action involves interaction.
+25. Sentence one includes a clear physical action. With multiple elements, the action involves interaction.
 
 STYLE CONSISTENCY
-25. Match style_prompt consistently across all outputs.
+26. Match style_prompt consistently across all outputs and apply draw_prompt_style only when people are present.
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be text ya
 exists su name draw promptify packet template ob text quoted.text.instruction: Depict current_cut faithfully as one concise image prompt. If prior context differs, switch scene to current_cut. Return only the prompt text.
@@ -92,10 +95,12 @@ previous_cut: [[previous_cut]]
 next_cut: [[next_cut]]
 full_script: [[full_script]]
 style_prompt: [[style_prompt]]
+draw_prompt_style: [[draw_prompt_style]]
 previous_prompt_1: [[previous_prompt_1]]
 previous_prompt_2: [[previous_prompt_2]].text.quoted be text ya
 su name draw promptify packet style replacements be map def
   su text "[[style_prompt]]" ob name text draw system prompt ya
+  su text "[[draw_prompt_style]]" ob name text draw prompt style ya
 prah
 exists su name qwen say tone promptify instruction ob text quoted.text.Return exactly one single-line speaking direction sentence for TTS.
 
@@ -196,7 +201,7 @@ su name brief video from text manuscript be ceremony def
   su name qwen say discharge before hear stage as wo "qwen say" be discharge do
   su name hear platform from name telling become wo srt be hear do
 
-  su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
+  su name cut platform from text of ob of manuscript out as text "sentence" during sentence 1 to name itinerary teaching cuts be cut do
 
   su name hear discharge before prompt stage as wo hear be discharge do
   su name prompt packet stage ob name map draw promptify packet style replacements in name text draw promptify packet template to name text draw promptify packet be instead do
@@ -307,14 +312,13 @@ su name teaching video section hear mapper ob filename section audio fromindex n
   su name section srt output stage ret
 prah
 
-su name teaching video section video mapper ob filename section srt fromindex num 0 be ceremony def
+su name teaching video section video mapper ob text section manuscript fromindex num 0 be ceremony def
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
-  su name section srt input stage ob filename of ob of this to name filename section srt input be filename do
 
   su name section cuts stage from num of ob of section index stage with text "section-cuts.series.pya" to name filename section cuts be teaching video section leaf do
 
-  su name section cut stage from filename of ob of section srt input stage during num of ob of teaching video section window seconds to name itinerary section cuts itinerary by num of ob of section index stage be cut do
+  su name section cut stage from text of ob of this as text "sentence" during sentence 1 to name itinerary section cuts itinerary by num of ob of section index stage be cut do
   su name section cuts copy stage ob filename of ob of section cut stage to filename of ob of section cuts stage be copy do
   su name section cuts output stage ob filename of ob of section cuts stage be filename do
   su name section cuts output stage ret
@@ -407,7 +411,7 @@ su name teaching video from text manuscript be ceremony def
   su name section srt series stage from name teaching section audios by name teaching video section hear mapper to name text teaching section srts be series map do
 
   su name hear discharge stage as wo hear be discharge do
-  su name section cut series stage from name teaching section srts by name teaching video section video mapper to name text teaching section cuts be series map do
+  su name section cut series stage from name teaching sections by name teaching video section video mapper to name text teaching section cuts be series map do
 
   su name section prompt series stage from name teaching section cuts by name teaching video section prompt mapper to name text teaching section prompts be series map do
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube title (max 90 chars). Plain text only." for name mind to name text video title be write do
@@ -455,6 +459,7 @@ su name teaching video from text manuscript with text style prompt be ceremony d
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt to name text teaching draw style prompt be text do
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt default to name text teaching draw style prompt be text do
   su name draw system prompt ob text of ob of teaching draw style prompt ya
+  su name draw prompt style ob text of ob of draw prompt style default ya
   su name result from text of from of this be teaching video do
   su name result ret
 prah
@@ -477,6 +482,7 @@ su name teaching video from text manuscript with text style prompt to filename v
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt to name text teaching draw style prompt be text do
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt default to name text teaching draw style prompt be text do
   su name draw system prompt ob text of ob of teaching draw style prompt ya
+  su name draw prompt style ob text of ob of draw prompt style default ya
   su name result from text of from of this to filename of to of this be teaching video do
   su name result ret
 prah

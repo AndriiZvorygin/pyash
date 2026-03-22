@@ -60,6 +60,8 @@ export const TYPE_TOKENS = [
   "days",
   "week",
   "weeks",
+  "sentence",
+  "sentences",
   "line",
   "lines",
   "byte",

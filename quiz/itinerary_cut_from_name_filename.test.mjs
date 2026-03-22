@@ -104,3 +104,28 @@ test("cut from name text sentence mode during num applies even durations", async
   assert.equal(series[2]?.since?.num, 20);
   assert.equal(series[2]?.until?.num, 30);
 });
+
+test("cut from name text sentence mode during sentence applies per-sentence duration", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "lyrics source" },
+    ob: { text: "First line. Second line. Third line." },
+    be: "text"
+  });
+
+  await interpret(
+    parse('su name cut stage from name lyrics source as text "sentence" during sentence 1 to name itinerary lyric cuts be cut do')
+  );
+
+  const itinerary = remember("lyric cuts");
+  assert.equal(itinerary?.be, "itinerary");
+  const series = Array.isArray(itinerary?.ob?.series) ? itinerary.ob.series : [];
+  assert.equal(series.length, 3);
+  assert.equal(series[0]?.since?.num, 0);
+  assert.equal(series[0]?.until?.num, 1);
+  assert.equal(series[1]?.since?.num, 1);
+  assert.equal(series[1]?.until?.num, 2);
+  assert.equal(series[2]?.since?.num, 2);
+  assert.equal(series[2]?.until?.num, 3);
+});

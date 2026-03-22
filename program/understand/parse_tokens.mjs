@@ -436,7 +436,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         const value = tokenValue(raw);
         target.date = value;
         i++;
-      } else if (t === "month" || t === "months" || t === "second" || t === "seconds" || t === "minute" || t === "minutes" || t === "hour" || t === "hours" || t === "day" || t === "days" || t === "week" || t === "weeks" || t === "line" || t === "lines" || t === "byte" || t === "bytes") {
+      } else if (t === "month" || t === "months" || t === "second" || t === "seconds" || t === "minute" || t === "minutes" || t === "hour" || t === "hours" || t === "day" || t === "days" || t === "week" || t === "weeks" || t === "sentence" || t === "sentences" || t === "line" || t === "lines" || t === "byte" || t === "bytes") {
         const raw = words[i + 1];
         const value = tokenValue(raw);
         const unit = UNIT_TYPE_ALIASES[t] ?? t;
