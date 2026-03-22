@@ -57,6 +57,7 @@ Rules:
 - Preserve the same core tension or truth.
 - Derive the opening tension or truth from PROMISE_DIRECTION_ONLY.
 - If HOOK_HINT is non-empty, integrate its concrete wording or image when source-faithful.
+- Use a different phrasing surface from PROMISE_DIRECTION_ONLY; avoid starting with the same opening phrase.
 - Cut extra clauses before changing the meaning.
 - End as one complete thought; terminal punctuation is optional.
 - Do not turn it into setup or summary.
@@ -1203,7 +1204,7 @@ su name module manuscript hook retry fromindex num 0 toindex num 0 be ceremony d
   ob text of passing of map of module manuscript hook scored state be equally from text true then
   ob text "true" to name text module manuscript hook pass be text do
   ob name text module manuscript hook pass be equally from text true then be depart do
-  su name module manuscript hook retry request role stage ob text "ROLE:\nHook centered on tension or truth.\n\nTARGET_WORDS:\n6-8\n\nGOAL_WORDS:\n7\n\nFEEDBACK:\nWrite exactly one spoken line of 7 words. Lead with tension or truth. No setup, no explanation, no extra clause. Derive the line from PROMISE_DIRECTION_ONLY. If HOOK_HINT is provided, integrate it as concrete wording or image when source-faithful. Do not summarize the promise. Do not jump straight to payoff language like joy, healing, transformation, or shared suffering. A direct truth line is acceptable when it is clear, source-faithful, and strong enough to open the manuscript; it does not need to force a contradiction or warning. If ROLE_FEEDBACK gives a better hook line, prefer using that stronger line or a close improvement.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript hook retry request be text do
+  su name module manuscript hook retry request role stage ob text "ROLE:\nHook centered on tension or truth.\n\nTARGET_WORDS:\n6-8\n\nGOAL_WORDS:\n7\n\nFEEDBACK:\nWrite exactly one spoken line of 7 words. Lead with tension or truth. No setup, no explanation, no extra clause. Derive the line from PROMISE_DIRECTION_ONLY. If HOOK_HINT is provided, integrate it as concrete wording or image when source-faithful. Use a different phrasing surface from the promise and avoid the same opening phrase. Do not summarize the promise. Do not jump straight to payoff language like joy, healing, transformation, or shared suffering. A direct truth line is acceptable when it is clear, source-faithful, and strong enough to open the manuscript; it does not need to force a contradiction or warning. If ROLE_FEEDBACK gives a better hook line, prefer using that stronger line or a close improvement.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript hook retry request be text do
   su name module manuscript hook retry request hint header stage ob text "\n\nHOOK HINT:\n" to name module manuscript hook retry request be plus do
   su name module manuscript hook retry request hint stage ob name text hook_hint to name module manuscript hook retry request be plus do
   su name module manuscript hook retry request promise header stage ob text "\n\nPROMISE:\n" to name module manuscript hook retry request be plus do
