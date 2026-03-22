@@ -1617,7 +1617,7 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript hook request promise stage ob name text module manuscript promise out to name module manuscript hook request be plus do
   su name module manuscript hook request hint header stage ob text "\n\nHOOK_HINT:\n" to name module manuscript hook request be plus do
   su name module manuscript hook request hint stage ob name text hook_hint to name module manuscript hook request be plus do
-  su name module manuscript hook request negative stage ob text "\n\nNEGATIVE_GUIDANCE:\nDo not summarize the promise. Use it only as direction for what tension or truth should open the manuscript. If HOOK_HINT is non-empty, integrate it as a concrete anchor rather than ignoring it.\n" to name module manuscript hook request be plus do
+  su name module manuscript hook request negative stage ob text "\n\nNEGATIVE_GUIDANCE:\nDo not summarize the promise. Use it only as direction for what tension or truth should open the manuscript.\n\nHOOK_HINT_GUIDANCE:\nWhen HOOK_HINT is non-empty, carry it into the hook as a concrete anchor while keeping the line source-faithful and promise-derived.\n" to name module manuscript hook request be plus do
   su name module manuscript hook stage to name text module manuscript hook out be module manuscript hook checked do
 
   su name module manuscript recap request begin stage ob text "HOOK:\n" to name text module manuscript recap request be text do
