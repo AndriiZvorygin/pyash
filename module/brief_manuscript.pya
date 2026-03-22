@@ -12,9 +12,9 @@ exists su name brief video script source thrust intent ob text quoted.text.The g
 exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second history short.
 
 Task:
-- Write 2-3 short spoken sentences.
-- Use one shocking historical fact from the transcript.
-- Tie it to a clear modern parallel.
+- Write exactly 2 short spoken sentences.
+- Sentence 1: one surprising historical fact from the transcript.
+- Sentence 2: how that fact relates directly to the viewer today.
 - Keep this segment between 20 and 44 words.
 
 Rules:
@@ -33,10 +33,11 @@ Rules:
 exists su name brief video script fact two prompt ob text quoted.text.You are writing the next spoken segment for the same short.
 
 Task:
-- Write 2-3 short spoken sentences.
+- Write exactly 2 short spoken sentences.
 - Use a different shocking historical fact than the one already used.
 - Prefer another explicit crisis, fall, or reform example that is plainly stated in the transcript.
-- Tie it to a clear modern parallel.
+- Sentence 1: one surprising historical fact from the transcript.
+- Sentence 2: how that fact relates directly to the viewer today.
 - Keep this segment between 20 and 44 words.
 
 Rules:
@@ -195,6 +196,10 @@ Rules:
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
 exists su name manuscript fact one request template ob text quoted.text.TARGET_WORDS: 20-44
+STRUCTURE:
+- Exactly 2 complete sentences.
+- Sentence 1 must state one surprising transcript-grounded historical fact.
+- Sentence 2 must connect that fact to the viewer today.
 SAFE_HISTORY_RULES:
 - Use only historical details stated in the transcript.
 - Prefer one explicit event, reform, or mechanism rather than a blended summary.
@@ -208,6 +213,10 @@ TRANSCRIPT:
 [[source]].text.quoted be text ya
 
 exists su name manuscript fact two request template ob text quoted.text.TARGET_WORDS: 20-44
+STRUCTURE:
+- Exactly 2 complete sentences.
+- Sentence 1 must state one surprising transcript-grounded historical fact that is different from prior segment.
+- Sentence 2 must connect that fact to the viewer today.
 SAFE_HISTORY_RULES:
 - Use only historical details stated in the transcript.
 - Prefer one explicit event, reform, or mechanism rather than a blended summary.
@@ -283,12 +292,14 @@ prah
 su name manuscript fact one checks be series def
   su name word_min ob num 20 ya
   su name word_max ob num 44 ya
+  su name must_match_pattern ob text "^[^.!?]*[.!?]\\s+[^.!?]*[.!?]\\s*$" ya
   su name sentence_complete ob bool truth ya
 prah
 
 su name manuscript fact two checks be series def
   su name word_min ob num 20 ya
   su name word_max ob num 44 ya
+  su name must_match_pattern ob text "^[^.!?]*[.!?]\\s+[^.!?]*[.!?]\\s*$" ya
   su name sentence_complete ob bool truth ya
 prah
 
