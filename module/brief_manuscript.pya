@@ -200,6 +200,8 @@ STRUCTURE:
 - Exactly 2 complete sentences.
 - Sentence 1 must state one surprising transcript-grounded fact.
 - Sentence 2 must connect that fact to the viewer today.
+HOOK_HINT:
+[[hook_hint]]
 SAFE_SOURCE_RULES:
 - Use only source details stated in the transcript.
 - Prefer one explicit event, reform, or mechanism rather than a blended summary.
@@ -217,6 +219,8 @@ STRUCTURE:
 - Exactly 2 complete sentences.
 - Sentence 1 must state one surprising transcript-grounded fact that is different from prior segment.
 - Sentence 2 must connect that fact to the viewer today.
+HOOK_HINT:
+[[hook_hint]]
 SAFE_SOURCE_RULES:
 - Use only source details stated in the transcript.
 - Prefer one explicit event, reform, or mechanism rather than a blended summary.
@@ -243,6 +247,8 @@ TRANSCRIPT:
 [[source]].text.quoted be text ya
 
 exists su name manuscript hook request template ob text quoted.text.TARGET_WORDS: 6-9
+HOOK_HINT:
+[[hook_hint]]
 HOOK CONTEXT:
 [[body]].text.quoted be text ya
 
@@ -271,6 +277,7 @@ exists su name manuscript replacement body ob text "" be text ya
 exists su name manuscript replacement transcript ob text "" be text ya
 exists su name manuscript replacement intent ob text "" be text ya
 exists su name manuscript replacement script ob text "" be text ya
+exists su name manuscript replacement hook hint ob text "" be text ya
 
 exists su name manuscript fact one generator ob name brief video script fact one platform ya
 exists su name manuscript fact two generator ob name brief video script fact two platform ya
@@ -287,6 +294,7 @@ su name manuscript request replacements be map def
   su text "[[transcript]]" ob name text manuscript replacement transcript ya
   su text "[[intent]]" ob name text manuscript replacement intent ya
   su text "[[script]]" ob name text manuscript replacement script ya
+  su text "[[hook_hint]]" ob name text manuscript replacement hook hint ya
 prah
 
 su name manuscript fact one checks be series def
@@ -440,13 +448,16 @@ prah
 
 su name manuscript draft verify from text manuscript to name text manuscript out be ceremony def
   su name script source platform ob text of from of this to name text brief video script source be text do
+  ob text "" to name text brief video script hook hint be text do
 
   ob name text brief video script source to name text manuscript replacement source be text do
+  ob name text brief video script hook hint to name text manuscript replacement hook hint be text do
   su name manuscript fact one request platform ob name map manuscript request replacements in name text manuscript fact one request template to name text manuscript fact one request be instead do
   su name manuscript fact one platform from text of ob of brief video script source to name text manuscript fact one out be manuscript fact one verify do
 
   ob name text manuscript fact one out to name text manuscript replacement prior be text do
   ob name text brief video script source to name text manuscript replacement source be text do
+  ob name text brief video script hook hint to name text manuscript replacement hook hint be text do
   su name manuscript fact two request platform ob name map manuscript request replacements in name text manuscript fact two request template to name text manuscript fact two request be instead do
   su name manuscript fact two platform to name text manuscript fact two out be manuscript fact two verify do
 
@@ -463,6 +474,7 @@ su name manuscript draft verify from text manuscript to name text manuscript out
   su name manuscript body uplift platform ob name text manuscript uplift out to name manuscript body out be plus do
 
   ob name text manuscript body out to name text manuscript replacement body be text do
+  ob name text brief video script hook hint to name text manuscript replacement hook hint be text do
   su name manuscript hook request platform ob name map manuscript request replacements in name text manuscript hook request template to name text manuscript hook request be instead do
   su name manuscript hook platform ob text of ob of manuscript hook request for name brief video script hook platform among name brief video script platform pass accordingto name manuscript hook checks atleast num 0.8 fromindex num 1 toindex num 5 to name text manuscript hook out be verify platform do
 
@@ -504,6 +516,20 @@ prah
 
 su name brief manuscript from text manuscript to name text manuscript out be ceremony def
   su name script source platform ob text of from of this to name text brief video script source be text do
+  ob text "" to name text brief video script hook hint be text do
+
+  su name manuscript draft platform from text of ob of brief video script source to name text manuscript out be manuscript draft verify do
+  su name manuscript source thrust verify platform from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do
+  fromindex num 1 toindex num 3 be manuscript source thrust retry do
+  ob name text manuscript source thrust pass be equally from text false then
+  su name manuscript source thrust guarantee platform ob bool lie fromtext text "manuscript source thrust defective" be guarantee do
+
+  su name manuscript out ret
+prah
+
+su name brief manuscript from text manuscript with text hook hint to name text manuscript out be ceremony def
+  su name script source platform ob text of from of this to name text brief video script source be text do
+  su name hook hint source platform ob text of with of this to name text brief video script hook hint be text do
 
   su name manuscript draft platform from text of ob of brief video script source to name text manuscript out be manuscript draft verify do
   su name manuscript source thrust verify platform from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do
@@ -517,6 +543,12 @@ prah
 su name brief manuscript from filename manuscript to name text manuscript out be ceremony def
   su name source platform from filename of from of this become wo text to name text manuscript source be read do
   su name manuscript platform from text of ob of manuscript source to name text manuscript out be brief manuscript do
+  su name manuscript out ret
+prah
+
+su name brief manuscript from filename manuscript with text hook hint to name text manuscript out be ceremony def
+  su name source platform from filename of from of this become wo text to name text manuscript source be read do
+  su name manuscript platform from text of ob of manuscript source with text of with of this to name text manuscript out be brief manuscript do
   su name manuscript out ret
 prah
 

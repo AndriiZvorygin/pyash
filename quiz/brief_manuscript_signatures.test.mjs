@@ -13,7 +13,10 @@ test("brief manuscript module registers text and filename signatures", async () 
 
   const calls = [
     'su name demo from text "Solon banned debt bondage." to name text script be brief manuscript do',
+    'su name demo from text "Solon banned debt bondage." with text "Debt cancelled for families" to name text script be brief manuscript do',
     'su name demo from filename "quiz/fixtures/ramblings.txt" to name text script be brief manuscript do'
+    ,
+    'su name demo from filename "quiz/fixtures/ramblings.txt" with text "Debt cancelled for families" to name text script be brief manuscript do'
   ];
 
   for (const line of calls) {
@@ -120,6 +123,11 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /exists su name manuscript cta request template ob text quoted\.text\.TARGET_WORDS: 2-4/);
   assert.match(text, /exists su name manuscript paragraph break ob text quoted\.text\.\n\n\.text\.quoted be text ya/);
   assert.match(text, /exists su name manuscript source thrust request template ob text quoted\.text\.TRANSCRIPT:/);
+  assert.match(text, /exists su name manuscript replacement hook hint ob text "" be text ya/);
+  assert.match(text, /su text "\[\[hook_hint\]\]" ob name text manuscript replacement hook hint ya/);
+  assert.match(text, /HOOK_HINT:\n\[\[hook_hint\]\]/);
+  assert.match(text, /su name brief manuscript from text manuscript with text hook hint to name text manuscript out be ceremony def/);
+  assert.match(text, /su name brief manuscript from filename manuscript with text hook hint to name text manuscript out be ceremony def/);
   assert.match(text, /exists su name manuscript fact one generator ob name brief video script fact one platform ya/);
   assert.match(text, /exists su name manuscript fact two generator ob name brief video script fact two platform ya/);
   assert.match(text, /exists su name manuscript uplift generator ob name brief video script uplift platform ya/);
