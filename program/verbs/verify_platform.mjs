@@ -309,6 +309,9 @@ function resolveCheckNum(value, sentence, fieldName) {
 
 function resolveCheckText(value, sentence, fieldName) {
   if (typeof value?.text === "string") return value.text;
+  if (typeof value?.name === "string" && value.name.trim()) {
+    return resolveFactText(value.name.trim());
+  }
   throwVerifyPlatformError(`verify platform defective: ${fieldName} check expects text`, sentence);
 }
 
@@ -368,6 +371,20 @@ function evaluateDeterministicChecks(candidate, checks, sentence) {
       } catch {
         pass = false;
         detail = `pattern invalid=${pattern}`;
+      }
+    } else if (name === "not_prefix_of") {
+      const reference = resolveCheckText(entry?.ob, sentence, "not_prefix_of");
+      const candidateNorm = String(candidate ?? "").trim().toLowerCase();
+      const referenceNorm = String(reference ?? "").trim().toLowerCase();
+      if (!referenceNorm || !candidateNorm) {
+        pass = true;
+        detail = "reference or candidate empty";
+      } else {
+        pass = !(
+          referenceNorm.startsWith(candidateNorm)
+          || candidateNorm.startsWith(referenceNorm)
+        );
+        detail = "prefix divergence check";
       }
     } else {
       throwVerifyPlatformError("verify platform defective: unknown deterministic check", sentence);
