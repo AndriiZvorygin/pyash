@@ -7,10 +7,9 @@ import { extractFinalResult } from "./extract_learn_pipeline_result.mjs";
 
 export const DEFAULT_CHUNK_SIZE = 8 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
+export const DEFAULT_MERGE_GROUP_SIZE = 4;
 const PARAGRAPH_BOUNDARY = /\n\s*\n/gmu;
 const CHILD_OLLAMA_TIMEOUT_MS = "600000";
-const START_MARKER = "[learn pipeline] final result start";
-const END_MARKER = "[learn pipeline] final result end";
 
 function isVerbose() {
   return process.env.PYA_RUN_VERBOSE === "1";
@@ -40,6 +39,34 @@ function summarizeCard(text) {
   if (seed) parts.push(`seed=${seed}`);
   if (memory) parts.push(`memory=${memory}`);
   return parts.join(" | ") || "(empty)";
+}
+
+export function buildMergeGroups(items = [], groupSize = DEFAULT_MERGE_GROUP_SIZE) {
+  const size = Math.max(2, Math.floor(Number(groupSize) || DEFAULT_MERGE_GROUP_SIZE));
+  const groups = [];
+  for (let i = 0; i < items.length; i += size) {
+    groups.push(items.slice(i, i + size));
+  }
+  return groups;
+}
+
+export function planMergeLayers(items = [], groupSize = DEFAULT_MERGE_GROUP_SIZE) {
+  const layers = [];
+  let count = Array.isArray(items) ? items.length : 0;
+  let layerIndex = 0;
+  while (count > 1) {
+    const groups = buildMergeGroups(new Array(count).fill(null), groupSize).map((group, index) => ({
+      index: index + 1,
+      size: group.length
+    }));
+    layers.push({
+      index: layerIndex + 1,
+      groups
+    });
+    count = groups.length;
+    layerIndex += 1;
+  }
+  return layers;
 }
 
 function normalizeStageResult(result) {
@@ -158,6 +185,63 @@ function parseProduceFilePath(outputText) {
   return matches[matches.length - 1][1].trim();
 }
 
+function looksLikeLearnCard(text) {
+  const raw = String(text ?? "");
+  return raw.includes("SEED CONCEPT\n") && raw.includes("\nCARDINAL TRAINING SENTENCE\n");
+}
+
+export function extractChildDefect(text) {
+  const raw = String(text ?? "");
+  const guaranteeMatch = raw.match(/(?:^|\n)su name guarantee defective ob text "([^"]+)"/u);
+  if (guaranteeMatch?.[1]) return guaranteeMatch[1];
+  const commandMatch = raw.match(/(?:^|\n)command defective:[^\n]*/u);
+  if (commandMatch?.[0]) return commandMatch[0];
+  const pipelineMatch = raw.match(/(?:^|\n)(learn filename pipeline defective:[^\n]*)/u);
+  if (pipelineMatch?.[1]) return pipelineMatch[1];
+  return "";
+}
+
+export function buildChildRunId(parentRunId, traceLabel, fallbackStem = "") {
+  const parent = String(parentRunId ?? "").trim();
+  const label = String(traceLabel ?? "stage").trim();
+  const fallback = String(fallbackStem ?? "").trim();
+  if (parent) return `${parent}/learn-pipeline/${label}`;
+  if (fallback) return `${fallback}-${label}`;
+  return label;
+}
+
+export function resolveChildArtifactProduceFilename({ cwd = process.cwd(), runId }) {
+  return path.resolve(String(cwd ?? process.cwd()), "artifacts", String(runId ?? "").trim(), "produce.txt");
+}
+
+export async function resolveChildArtifactResult({
+  cwd = process.cwd(),
+  runId,
+  readFileFn = (file) => fsp.readFile(file, "utf8")
+} = {}) {
+  const filename = resolveChildArtifactProduceFilename({ cwd, runId });
+  return String(await readFileFn(filename)).trim();
+}
+
+export async function resolvePyashExampleResult({ stdoutText = "", stderrText = "", readFileFn = (file) => fsp.readFile(file, "utf8") } = {}) {
+  const combinedText = [stdoutText, stderrText].filter(Boolean).join("\n");
+  let resultText = extractFinalResult(stdoutText);
+  if (!resultText) {
+    resultText = extractFinalResult(combinedText);
+  }
+  if (!resultText || !looksLikeLearnCard(resultText)) {
+    const produceFile = parseProduceFilePath(combinedText);
+    if (produceFile) {
+      const producedText = await readFileFn(produceFile);
+      const producedResult = extractFinalResult(producedText);
+      if (producedResult && (!resultText || looksLikeLearnCard(producedResult))) {
+        resultText = producedResult;
+      }
+    }
+  }
+  return String(resultText ?? "");
+}
+
 function streamChildText(text, { traceLabel = "stage", channel = "stdout" } = {}) {
   if (!isVerbose()) return;
   const normalized = String(text ?? "").replace(/\r\n?/gu, "\n");
@@ -181,11 +265,9 @@ export function resolveRunProgramPath(cwd = process.cwd()) {
   return path.resolve(String(cwd ?? process.cwd()), "run");
 }
 
-async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir = "", traceLabel = "stage" } = {}) {
-  const runArgs = [examplePath, ...args];
-  if (isVerbose()) {
-    runArgs.push("--verbose", "--run-id", `learn-pipeline-${traceLabel}`);
-  }
+async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir = "", traceLabel = "stage", childRunId = "" } = {}) {
+  const effectiveRunId = String(childRunId ?? "").trim() || buildChildRunId(process.env.PYA_RUN_ID, traceLabel);
+  const runArgs = ["--verbose", "--run-id", effectiveRunId, examplePath, ...args];
   runArgs.push("--no-checkpoint");
   const childEnv = {
     ...process.env,
@@ -223,19 +305,24 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
       reject(err);
     });
   });
-  const combinedText = [stdoutText, stderrText].filter(Boolean).join("\n");
   let traceFilename = "";
-  let resultText = extractFinalResult(stdoutText);
+  const combinedText = [stdoutText, stderrText].filter(Boolean).join("\n");
+  const childDefect = extractChildDefect(combinedText);
+  if (childDefect) {
+    const err = new Error(`learn filename pipeline defective: child stage failed: ${childDefect}`);
+    err.stdout = stdoutText;
+    err.stderr = stderrText;
+    throw err;
+  }
+  let resultText = "";
+  try {
+    resultText = await resolveChildArtifactResult({ cwd: process.cwd(), runId: effectiveRunId });
+  } catch {
+    resultText = await resolvePyashExampleResult({ stdoutText, stderrText });
+  }
   if (isVerbose() && traceDir) {
     traceFilename = path.join(traceDir, `${traceLabel}.trace.txt`);
     await fsp.writeFile(traceFilename, combinedText, "utf8");
-  }
-  const produceFile = parseProduceFilePath(combinedText);
-  if (produceFile) {
-    const producedText = await fsp.readFile(produceFile, "utf8");
-    resultText = producedText.trim();
-  } else if (!resultText) {
-    resultText = extractFinalResult(combinedText);
   }
   if (traceDir) {
     const produceCopyFilename = path.join(traceDir, `${traceLabel}.produce.txt`);
@@ -250,9 +337,9 @@ export async function runLearnFilenamePipeline({
   readFileFn = (file) => fsp.readFile(file, "utf8"),
   mkdtempFn = (prefix) => fsp.mkdtemp(prefix),
   writeFileFn = (file, text) => fsp.writeFile(file, text),
-  runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel }),
-  runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel }),
-  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel })
+  runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel, childRunId }),
+  runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel, childRunId }),
+  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel, childRunId })
 }) {
   if (!String(sourceFilename ?? "").trim()) {
     throw new Error("learn filename pipeline defective: missing source filename");
@@ -276,7 +363,8 @@ export async function runLearnFilenamePipeline({
       learningFocus,
       envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
       traceDir: tempRoot,
-      traceLabel: "direct"
+      traceLabel: "direct",
+      childRunId: buildChildRunId(process.env.PYA_RUN_ID, "direct", path.basename(tempRoot))
     }));
     if (direct.traceFilename) logVerbose(`[learn pipeline] direct trace: ${direct.traceFilename}`);
     logVerbose(`[learn pipeline] refined card: ${summarizeCard(direct.resultText)}`);
@@ -299,30 +387,59 @@ export async function runLearnFilenamePipeline({
       learningFocus,
       envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(1) ?? process.env.PYA_MIND_RESPONSE },
       traceDir: tempRoot,
-      traceLabel: `chunk-${String(idx + 1).padStart(3, "0")}`
+      traceLabel: `chunk-${String(idx + 1).padStart(3, "0")}`,
+      childRunId: buildChildRunId(process.env.PYA_RUN_ID, `chunk-${String(idx + 1).padStart(3, "0")}`, path.basename(tempRoot))
     }));
     if (card.traceFilename) logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} trace: ${card.traceFilename}`);
     logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} ok`);
     chunkCards.push(card.resultText);
   }
+  const mergePlan = planMergeLayers(chunkCards, DEFAULT_MERGE_GROUP_SIZE);
+  if (mergePlan.length) {
+    logVerbose(`[learn pipeline] merge layers: ${mergePlan.length}`);
+    for (const layer of mergePlan) {
+      logVerbose(`[learn pipeline] merge layer ${layer.index}: groups=${layer.groups.length} sizes=${layer.groups.map(group => group.size).join(",")}`);
+    }
+  }
 
-  const cardsText = chunkCards
-    .map((card, idx) => `CHUNK CARD ${idx + 1}\n${card}`)
-    .join("\n\n=====\n\n");
-  const cardsFilename = path.join(tempRoot, "chunk-cards.txt");
-  await writeFileFn(cardsFilename, cardsText);
-  logVerbose("[learn pipeline] merge/refine starting");
-  const finalCard = normalizeStageResult(await runMergeRefineFn({
-    sourceFilename,
-    cardsFilename,
-    learningFocus,
-    envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
-    traceDir: tempRoot,
-    traceLabel: "merge-refine"
-  }));
-  if (finalCard.traceFilename) logVerbose(`[learn pipeline] merge/refine trace: ${finalCard.traceFilename}`);
-  logVerbose(`[learn pipeline] final card: ${summarizeCard(finalCard.resultText)}`);
-  return finalCard.resultText;
+  let currentCards = chunkCards;
+  for (let layerIndex = 0; layerIndex < mergePlan.length; layerIndex += 1) {
+    const layerNumber = layerIndex + 1;
+    const layerLabel = `merge-layer-${String(layerNumber).padStart(2, "0")}`;
+    const layerDir = path.join(tempRoot, layerLabel);
+    await fsp.mkdir(layerDir, { recursive: true });
+    const groups = buildMergeGroups(currentCards, DEFAULT_MERGE_GROUP_SIZE);
+    const mergedCards = [];
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const groupNumber = groupIndex + 1;
+      const groupLabel = `group-${String(groupNumber).padStart(3, "0")}`;
+      const groupDir = path.join(layerDir, groupLabel);
+      await fsp.mkdir(groupDir, { recursive: true });
+      const cardsText = groups[groupIndex]
+        .map((card, idx) => `CHUNK CARD ${idx + 1}\n${card}`)
+        .join("\n\n=====\n\n");
+      const cardsFilename = path.join(groupDir, "chunk-cards.txt");
+      await writeFileFn(cardsFilename, cardsText);
+      logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} starting (${groups[groupIndex].length} cards)`);
+      const merged = normalizeStageResult(await runMergeRefineFn({
+        sourceFilename,
+        cardsFilename,
+        learningFocus,
+        envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
+        traceDir: groupDir,
+        traceLabel: "merge-refine",
+        childRunId: buildChildRunId(process.env.PYA_RUN_ID, `${layerLabel}/${groupLabel}`, path.basename(tempRoot))
+      }));
+      if (merged.traceFilename) logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} trace: ${merged.traceFilename}`);
+      logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} ok`);
+      mergedCards.push(merged.resultText);
+    }
+    currentCards = mergedCards;
+  }
+
+  const finalCardText = String(currentCards[0] ?? "").trim();
+  logVerbose(`[learn pipeline] final card: ${summarizeCard(finalCardText)}`);
+  return finalCardText;
 }
 
 async function main() {

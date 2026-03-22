@@ -1,6 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseLearningPipelineRequest, splitIntoOverlappingChunks, runLearnFilenamePipeline, DEFAULT_CHUNK_SIZE, resolveRunProgramPath } from "../command/learn_from_filename_pipeline.mjs";
+import path from "node:path";
+import {
+  parseLearningPipelineRequest,
+  splitIntoOverlappingChunks,
+  runLearnFilenamePipeline,
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_MERGE_GROUP_SIZE,
+  resolveRunProgramPath,
+  resolvePyashExampleResult,
+  extractChildDefect,
+  buildChildRunId,
+  resolveChildArtifactProduceFilename,
+  resolveChildArtifactResult,
+  planMergeLayers
+} from "../command/learn_from_filename_pipeline.mjs";
 
 test("parseLearningPipelineRequest reads labeled stdin payload", () => {
   const parsed = parseLearningPipelineRequest("SOURCE_FILENAME:\nknow/input/source.txt\n\nLEARNING_FOCUS:\nhumility");
@@ -33,8 +47,52 @@ test("splitIntoOverlappingChunks creates two overlapping chunks for just-over-li
   assert.ok(chunks[1].includes(overlapNeedle.slice(0, 120)), "expected overlapping carryover between neighbouring chunks");
 });
 
+test("planMergeLayers builds bounded merge tree for many cards", () => {
+  const plan = planMergeLayers(new Array(9).fill("card"), DEFAULT_MERGE_GROUP_SIZE);
+  assert.deepEqual(plan, [
+    {
+      index: 1,
+      groups: [
+        { index: 1, size: 4 },
+        { index: 2, size: 4 },
+        { index: 3, size: 1 }
+      ]
+    },
+    {
+      index: 2,
+      groups: [
+        { index: 1, size: 3 }
+      ]
+    }
+  ]);
+});
+
 test("resolveRunProgramPath follows the current checkout root", () => {
   assert.equal(resolveRunProgramPath("/tmp/example-repo"), "/tmp/example-repo/run");
+});
+
+test("buildChildRunId derives child stages from parent run id", () => {
+  assert.equal(buildChildRunId("20260319-053-refinery", "chunk-001"), "20260319-053-refinery/learn-pipeline/chunk-001");
+  assert.equal(buildChildRunId("", "merge-refine", "pyash-learn-chunks-abc"), "pyash-learn-chunks-abc-merge-refine");
+});
+
+test("resolveChildArtifactProduceFilename follows the runner artifact convention", () => {
+  assert.equal(
+    resolveChildArtifactProduceFilename({ cwd: "/tmp/repo", runId: "run-123" }),
+    "/tmp/repo/artifacts/run-123/produce.txt"
+  );
+});
+
+test("resolveChildArtifactResult reads the child run produce artifact", async () => {
+  const result = await resolveChildArtifactResult({
+    cwd: "/tmp/repo",
+    runId: "run-123",
+    readFileFn: async (file) => {
+      assert.equal(file, "/tmp/repo/artifacts/run-123/produce.txt");
+      return "SEED CONCEPT\nPower lives within.\n";
+    }
+  });
+  assert.equal(result, "SEED CONCEPT\nPower lives within.");
 });
 
 test("runLearnFilenamePipeline uses direct path for small sources", async () => {
@@ -145,7 +203,7 @@ test("runLearnFilenamePipeline uses chunk extract then merge-refine for large so
     }
     assert.equal(calls.at(-1)[0], "merge-refine");
     assert.equal(calls.at(-1)[1], "large.txt");
-    assert.equal(calls.at(-1)[2], "/tmp/learn-test/chunk-cards.txt");
+    assert.equal(calls.at(-1)[2], "/tmp/learn-test/merge-layer-01/group-001/chunk-cards.txt");
     assert.equal(calls.at(-1)[3], "love and wisdom");
     const mergeFixture = JSON.parse(calls.at(-1)[4]);
     assert.equal(mergeFixture.length, 4);
@@ -154,4 +212,115 @@ test("runLearnFilenamePipeline uses chunk extract then merge-refine for large so
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
   }
+});
+
+test("runLearnFilenamePipeline progressively merges very large sources in bounded groups", async () => {
+  const writes = new Map();
+  const calls = [];
+  const paragraph = "Paragraph about humility and hidden teachings. ".repeat(220);
+  const largeSource = new Array(9).fill(`${paragraph}\n\n`).join("");
+  const expectedChunks = splitIntoOverlappingChunks(largeSource, DEFAULT_CHUNK_SIZE, 1800);
+  assert.ok(expectedChunks.length > DEFAULT_MERGE_GROUP_SIZE, "fixture should require progressive merge layers");
+  const mergePlan = planMergeLayers(new Array(expectedChunks.length).fill("card"), DEFAULT_MERGE_GROUP_SIZE);
+  const expectedMergeCalls = mergePlan.reduce((sum, layer) => sum + layer.groups.length, 0);
+
+  const output = await runLearnFilenamePipeline({
+    sourceFilename: "huge.txt",
+    learningFocus: "humility",
+    readFileFn: async (file) => {
+      if (file === "huge.txt") return largeSource;
+      return writes.get(file) ?? "";
+    },
+    mkdtempFn: async () => "/tmp/learn-huge-test",
+    writeFileFn: async (file, text) => {
+      writes.set(file, text);
+    },
+    runExtractFn: async ({ sourceFilename }) => {
+      calls.push(["extract", sourceFilename]);
+      return `CARD from ${path.basename(sourceFilename)}`;
+    },
+    runMergeRefineFn: async ({ cardsFilename, traceDir, traceLabel, childRunId }) => {
+      calls.push(["merge-refine", cardsFilename, traceDir, traceLabel, childRunId]);
+      return `MERGED from ${path.basename(path.dirname(cardsFilename))}`;
+    }
+  });
+
+  const mergeCalls = calls.filter(call => call[0] === "merge-refine");
+  assert.equal(mergeCalls.length, expectedMergeCalls);
+  assert.match(String(mergeCalls[0][1]), /merge-layer-01[\\/]group-001[\\/]chunk-cards\.txt/u);
+  assert.match(String(mergeCalls[0][4]), /merge-layer-01\/group-001/u);
+  assert.match(String(mergeCalls.at(-1)?.[1] ?? ""), /merge-layer-02[\\/]group-001[\\/]chunk-cards\.txt/u);
+  assert.equal(output, "MERGED from group-001");
+});
+
+test("runLearnFilenamePipeline forwards child run ids to all default stage wrappers", async () => {
+  const calls = [];
+  await runLearnFilenamePipeline({
+    sourceFilename: "small.txt",
+    learningFocus: "humility",
+    readFileFn: async () => "short source",
+    runDirectFn: async ({ childRunId }) => {
+      calls.push(childRunId);
+      return "FINAL CARD";
+    }
+  });
+  assert.equal(calls.length, 1);
+  assert.match(String(calls[0] ?? ""), /direct/u);
+});
+
+test("resolvePyashExampleResult prefers stdout card over verbose produce trace", async () => {
+  const card = [
+    "SEED CONCEPT",
+    "Power is intelligent energy within consciousness.",
+    "",
+    "CARDINAL TRAINING SENTENCE",
+    "True power flows through aligned love and wisdom."
+  ].join("\n");
+  const stderr = [
+    "produce file: /tmp/fake-produce.txt",
+    "run start: 2026-03-19T00:00:00Z"
+  ].join("\n");
+  const result = await resolvePyashExampleResult({
+    stdoutText: card,
+    stderrText: stderr,
+    readFileFn: async () => "exists su name trace ob text \"garbage\" ya"
+  });
+  assert.equal(result, card);
+});
+
+test("resolvePyashExampleResult can still recover a card from verbose chatter as fallback", async () => {
+  const stderr = [
+    "produce file: /tmp/fake-produce.txt",
+    "run start: 2026-03-19T00:00:00Z",
+    "artifacts folder: /tmp/repo/artifacts/run-123"
+  ].join("\n");
+  const result = await resolvePyashExampleResult({
+    stdoutText: "",
+    stderrText: stderr,
+    readFileFn: async () => [
+      "SEED CONCEPT",
+      "Power is inner light.",
+      "",
+      "CARDINAL TRAINING SENTENCE",
+      "Power becomes visible through loving action."
+    ].join("\n")
+  });
+  assert.match(result, /^SEED CONCEPT$/mu);
+});
+
+test("extractChildDefect detects guarantee failures in child traces", () => {
+  assert.equal(
+    extractChildDefect('su name guarantee defective ob text "learning source support defective" ya'),
+    "learning source support defective"
+  );
+});
+
+test("extractChildDefect ignores traced source text that only mentions a defect string", () => {
+  const trace = [
+    "exists su name evoke-10 ob la ob bool lie fromtext text \"learning source support defective\" be guarantee do ko be evoke ya",
+    "su name result ob text \"PASS\" be answer ya",
+    "SEED CONCEPT",
+    "True humility is balanced service."
+  ].join("\n");
+  assert.equal(extractChildDefect(trace), "");
 });
