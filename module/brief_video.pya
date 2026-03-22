@@ -15,7 +15,8 @@ from filename "./video_common.pya" ob name shorts subtitle margin ratio to name 
 from filename "./video_common.pya" ob name widescreen footnote mode to name widescreen footnote mode be import do
 from filename "./video_common.pya" ob name shorts footnote mode to name shorts footnote mode be import do
 
-exists su name draw system prompt ob text "stylized editorial illustration, painterly rendering, simplified forms with consistent proportions, clean edges, soft muted natural colour palette, gentle diffuse lighting, subtle brush texture, balanced composition with clear foreground and background separation, medium detail, stable cohesive style" be text ya
+exists su name draw system prompt default ob text "Québec bande dessinée illustration, realistic proportions, precise linework, expressive faces with visible sclera and defined pupils, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be text ya
+exists su name draw system prompt ob name text draw system prompt default ya
 exists su name qwen say sanitize map be map def
 su name percent ob text "percent" ya
 su name reference separator ob text "." ya
@@ -451,6 +452,7 @@ prah
 su name teaching video from text manuscript with text style prompt be ceremony def
   ob text of with of this to name text teaching draw style prompt be text do
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt to name text teaching draw style prompt be text do
+  ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt default to name text teaching draw style prompt be text do
   su name draw system prompt ob name text teaching draw style prompt ya
   su name result from text of from of this be teaching video do
   su name result ret
@@ -472,6 +474,7 @@ prah
 su name teaching video from text manuscript with text style prompt to filename video short be ceremony def
   ob text of with of this to name text teaching draw style prompt be text do
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt to name text teaching draw style prompt be text do
+  ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt default to name text teaching draw style prompt be text do
   su name draw system prompt ob name text teaching draw style prompt ya
   su name result from text of from of this to filename of to of this be teaching video do
   su name result ret

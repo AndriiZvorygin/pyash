@@ -8,7 +8,7 @@ from filename "./video_common.pya" ob name current video heading y ratio to name
 from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
 from filename "./video_common.pya" ob name footnote mode to name footnote mode be import do
 
-exists su name draw system prompt ob text "stylized editorial illustration, painterly rendering, simplified forms with consistent proportions, clean edges, soft muted natural colour palette, gentle diffuse lighting, subtle brush texture, balanced composition with clear foreground and background separation, medium detail, stable cohesive style" be default ya
+exists su name draw system prompt ob text "Québec bande dessinée illustration, realistic proportions, precise linework, expressive faces with visible sclera and defined pupils, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be default ya
 exists su name audio cue text ob text "Sound On 🎧" be default ya
 exists su name audio cue y ratio ob num 0.68 be default ya
 exists su name audio cue font scale ob num 0.42 be default ya
