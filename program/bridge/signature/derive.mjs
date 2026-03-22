@@ -81,6 +81,7 @@ function caseTypeWords(value) {
   if (value.hour !== undefined) words.push("hour");
   if (value.day !== undefined) words.push("day");
   if (value.week !== undefined) words.push("week");
+  if (value.sentence !== undefined) words.push("sentence");
   if (value.line !== undefined || value.lines !== undefined) words.push("line");
   if (value.byte !== undefined || value.bytes !== undefined) words.push("byte");
   if (value.boolean !== undefined) words.push("bool");
@@ -134,6 +135,7 @@ function normalizeDefinitionTypeWords(typeWords) {
       t === "hour" ||
       t === "day" ||
       t === "week" ||
+      t === "sentence" ||
       t === "line" ||
       t === "byte"
     )];
@@ -302,6 +304,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (factObj?.hour !== undefined) return ["name", "hour"];
     if (factObj?.day !== undefined) return ["name", "day"];
     if (factObj?.week !== undefined) return ["name", "week"];
+    if (factObj?.sentence !== undefined) return ["name", "sentence"];
     if (factObj?.num !== undefined) return ["name", "num"];
     if (factObj?.boolean !== undefined) return ["name", "bool"];
     if (factObj?.text !== undefined) return ["name", "text"];
@@ -324,6 +327,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   if (value.hour !== undefined) return ["hour"];
   if (value.day !== undefined) return ["day"];
   if (value.week !== undefined) return ["week"];
+  if (value.sentence !== undefined) return ["sentence"];
   if (value.month !== undefined) return ["month"];
   if (value.wo !== undefined) {
     if (caseKey === "ob") return ["wo"];
