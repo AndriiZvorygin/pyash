@@ -33,10 +33,10 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /- Must end with "\." or "\?"\./);
   assert.match(text, /- Do not add exact years, dates, reigns, or named rulers unless that exact detail appears in the transcript\./);
   assert.match(text, /- If a detail feels uncertain, omit it instead of guessing\./);
-  assert.match(text, /- Prefer a clearly different historical section than the prior segment\./);
+  assert.match(text, /- Prefer a clearly different source section than the prior segment\./);
   assert.match(text, /- Prefer another explicit crisis, fall, or reform example that is plainly stated in the transcript\./);
   assert.match(text, /- Prefer details that can stay close to the transcript's own wording\./);
-  assert.match(text, /- Do not synthesize a new historical mechanism by combining distant parts of the transcript\./);
+  assert.match(text, /- Do not synthesize a new source mechanism by combining distant parts of the transcript\./);
   assert.doesNotMatch(text, /brief video script hook retry mind/u);
   assert.doesNotMatch(text, /brief video script cta retry mind/u);
   assert.doesNotMatch(text, /brief video script fact one retry mind/u);
@@ -110,11 +110,11 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /exists su name manuscript fact one request template ob text quoted\.text\.TARGET_WORDS: 20-44/);
   assert.match(text, /exists su name manuscript fact two request template ob text quoted\.text\.TARGET_WORDS: 20-44/);
   assert.match(text, /- Do not use universal or repeated-pattern claims like "every", "always", "never", "consistently", or "after each" unless the transcript says that directly\./);
-  assert.match(text, /SAFE_HISTORY_RULES:/);
-  assert.match(text, /- Use only historical details stated in the transcript\./);
+  assert.match(text, /SAFE_SOURCE_RULES:/);
+  assert.match(text, /- Use only source details stated in the transcript\./);
   assert.match(text, /- Prefer one explicit event, reform, or mechanism rather than a blended summary\./);
-  assert.match(text, /- Stay close to the transcript's wording for the historical claim\./);
-  assert.match(text, /- If unsure, keep the historical wording broader rather than more specific\./);
+  assert.match(text, /- Stay close to the transcript's wording for the source claim\./);
+  assert.match(text, /- If unsure, keep the source wording broader rather than more specific\./);
   assert.match(text, /exists su name manuscript uplift request template ob text quoted\.text\.TARGET_WORDS: 18-40/);
   assert.match(text, /exists su name manuscript hook request template ob text quoted\.text\.TARGET_WORDS: 6-9/);
   assert.match(text, /exists su name manuscript cta request template ob text quoted\.text\.TARGET_WORDS: 2-4/);
