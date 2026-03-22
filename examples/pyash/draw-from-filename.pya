@@ -1,3 +1,7 @@
-ob filename text source be input ya
+from filename "../../module/draw_from_filename.pya" ob name draw to name draw be import do
 
-su name output stage from filename of ob of source be draw from do
+exists su name style_prompt ob text "" be default ya
+ob ve filename text source text text style_prompt be input ya
+
+su name output stage from filename of ob of source with text of ob of style_prompt be draw from do
+su name result out ob text of ob of output stage be write do

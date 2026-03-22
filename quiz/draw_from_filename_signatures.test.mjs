@@ -18,6 +18,39 @@ test("draw from filename module registers auto-output signature", async () => {
   assert.ok(resolved, `missing signature: ${signature}`);
 });
 
+test("draw from filename with style text registers auto-output signature", async () => {
+  forget();
+  await interpret(parse('from filename "./module/draw_from_filename.pya" to name draw be import do'));
+
+  const signature = joinSignatureWords(
+    deriveSignatureFromCall(parse('su name demo from filename "quiz/fixtures/ramblings.txt" with text "watercolor editorial" be draw from do'))
+  );
+  const resolved = lookupSignature(signature);
+  assert.ok(resolved, `missing signature: ${signature}`);
+});
+
+test("draw thumbnail from filename module registers auto-output signature", async () => {
+  forget();
+  await interpret(parse('from filename "./module/draw_from_filename.pya" to name draw as wo thumbnail be import do'));
+
+  const signature = joinSignatureWords(
+    deriveSignatureFromCall(parse('su name demo from filename "quiz/fixtures/ramblings.txt" be draw as wo thumbnail do'))
+  );
+  const resolved = lookupSignature(signature);
+  assert.ok(resolved, `missing signature: ${signature}`);
+});
+
+test("draw thumbnail from filename with style text registers auto-output signature", async () => {
+  forget();
+  await interpret(parse('from filename "./module/draw_from_filename.pya" to name draw as wo thumbnail be import do'));
+
+  const signature = joinSignatureWords(
+    deriveSignatureFromCall(parse('su name demo from filename "quiz/fixtures/ramblings.txt" with text "1960s editorial" be draw as wo thumbnail do'))
+  );
+  const resolved = lookupSignature(signature);
+  assert.ok(resolved, `missing signature: ${signature}`);
+});
+
 test("draw from filename module writes artifacts and know produce outputs", async () => {
   const text = await fs.readFile("module/draw_from_filename.pya", "utf8");
   assert.match(text, /Include exactly one quoted overlay phrase of 1 to 3 words/);
@@ -28,6 +61,19 @@ test("draw from filename module writes artifacts and know produce outputs", asyn
   assert.match(text, /su name source read stage ob text of source read cmd to name text source text be command do/);
   assert.match(text, /for name mind to name text draw prompt by num 0 atmost num 140 be write do/);
   assert.match(text, /node command\/draw_comfyui_runner\.mjs --prompt-stdin/);
+  assert.match(text, /draw thumbnail prompt system/);
+  assert.match(text, /draw thumbnail prompt system template/);
+  assert.match(text, /draw prompt system template/);
+  assert.match(text, /draw prompt replacements be map def/);
+  assert.match(text, /in name text draw prompt system template to name text draw prompt system be instead do/);
+  assert.match(text, /Style hint: \[\[style_hint\]\]/);
+  assert.match(text, /draw thumbnail prompt replacements be map def/);
+  assert.match(text, /in name text draw thumbnail prompt system template to name text draw thumbnail prompt system be instead do/);
+  assert.match(text, /Include exactly one quoted overlay phrase of 2 to 3 words/);
+  assert.match(text, /ob text " --width \\""/);
+  assert.match(text, /ob num of width of draw size thumbnail to name draw cmd be plus do/);
+  assert.match(text, /ob text " --height \\""/);
+  assert.match(text, /ob num of height of draw size thumbnail to name draw cmd be plus do/);
   assert.match(text, /ob name draw workflow default to name text workflow be text do/);
   assert.match(text, /ob name draw host to name text host be text do/);
   assert.match(text, /su name produce copy stage ob name text copy cmd be command do/);

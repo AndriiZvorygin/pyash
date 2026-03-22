@@ -5,10 +5,10 @@ from filename "../../module/video_common.pya" ob name footnote mode to name foot
 exists su name draw size widescreen be map def
 su name width ob num 1280 ya
 su name height ob num 720 ya
-su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text, chinese characters, hanzi, kanji, kana, korean characters, hangul, glyphs, symbols, calligraphy" ya
+su name negative prompt ob text "blurry, ugly, bad, crying, nudity, naked, breasts, genitals" ya
 prah
 
-exists su name draw system prompt ob text "Educational lyrical illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, expressive emotion, high detail. There is no text." be text ya
+exists su name draw system prompt ob text "1960s mid-century editorial illustration, vintage magazine style, gouache painting, warm muted color palette, soft golden tones, gentle brush texture, simplified stylized figures, elegant composition, subtle shading, nostalgic refined atmosphere, non-photorealistic, illustration, soft edges" be text ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear qwen chunk max seconds ob num 30 be default ya
 exists su name subtitle margin ratio override ob num 0.10 be num ya

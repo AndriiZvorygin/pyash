@@ -9,6 +9,7 @@ prah
 
 exists su name draw system prompt ob text "Educational lyrical illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, expressive emotion, high detail. There is no text." be text ya
 exists su name hear backend default ob text "qwen" be default ya
+exists su name hear qwen chunk max seconds ob num 30 be default ya
 exists su name subtitle margin ratio override ob num 0.40 be num ya
 exists su name opening heading text ob text "" be default ya
 exists su name opening heading instruction ob text "Create one short opening heading for this music video. Must be 3-6 words only. Plain text only. One line. No quotes, hashtags, or punctuation." be default ya
@@ -24,10 +25,24 @@ current_cut: [[current_cut]]
 previous_cut: [[previous_cut]]
 next_cut: [[next_cut]]
 full_script: [[full_script]]
+style_prompt: [[style_prompt]]
 previous_prompt_1: [[previous_prompt_1]]
 previous_prompt_2: [[previous_prompt_2]].text.quoted be text ya
 exists su name lyric promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2.
-Focus on current_cut and output only one concise image-generation prompt line (about 18-45 words), no quotes, no markdown, no explanation, no visible text in scene. Treat each cut as its own lyric moment and hard switch scenes when the lyric changes..text.quoted be text ya
+Focus on current_cut and output only one concise image-generation prompt line (about 30-70 words), no quotes, no markdown, no explanation.
+If a visible person is present, use exactly four sentences in this order: sentence one subject plus action, sentence two clothing, sentence three environment, sentence four mood plus lighting.
+If no visible person is present, use exactly three sentences in this order: sentence one subject plus action, sentence two environment, sentence three mood plus lighting.
+Sentence one must describe a concrete visible action using a strong verb and object; avoid static posing, standing, or looking-only portraits.
+Treat each cut as its own lyric moment and hard switch scenes when the lyric changes.
+Keep scene surfaces typography-free: no letters, captions, logos, signage, or interface elements.
+If people appear, depict modest opaque full-coverage clothing that covers chest, midriff, and hips.
+When a person is visible, sentence two must state concrete clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
+The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
+Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
+Keep the final prompt line visual-only and descriptive; exclude moderation or policy terms..text.quoted be text ya
+su name lyric promptify style replacements be map def
+su text "[[style_prompt]]" ob name text draw system prompt ya
+prah
 exists su name refinery name ob text "music video dense lyrics audio" be text ya
 
 su name music video dense lyrics audio be refinery def
@@ -90,7 +105,8 @@ su name captions stage ob name text captions cmd be command do
 su name cut stage from filename of ob of captions filename stage to name itinerary lyric cuts be cut do
 
 su name draw discharge pre mind stage as wo draw be discharge do
-su name prompt stage from name itinerary lyric cuts ob text "Turn current_cut into one concise image prompt for a dense music-lyric video." fromtext name lyric promptify instruction for name mind to name itinerary lyric draw prompts be promptify do
+su name prompt packet stage ob name map lyric promptify style replacements in name text lyric promptify packet to name text lyric promptify packet text be instead do
+su name prompt stage from name itinerary lyric cuts ob text of ob of lyric promptify packet text fromtext name lyric promptify instruction for name mind to name itinerary lyric draw prompts be promptify do
 su name mind discharge stage as wo mind be discharge do
 su name ollama discharge stage as wo ollama be discharge do
 su name mind discharge settle stage ob text "sleep 3" be command do
