@@ -125,10 +125,19 @@ Current generic runner behavior:
 - if a mirrored target already exists, runner allocates one shared bundle suffix such as `-02`, `-03`, ... across the whole mirrored output set
 - intermediate refinery files, manifests, checks, and other run artifacts stay under `artifacts/`; runner does not mirror them into `know/produce/`
 
+Internal pipeline composition rule:
+- every run SHOULD materialize its final surfaced result sentence at `artifacts/<run id>/result.pya`
+- when a child run also has a text result payload, it SHOULD additionally materialize `artifacts/<run id>/produce.txt`
+- generic parent/child orchestration SHOULD treat `result.pya` as the canonical typed machine result and `produce.txt` as the convenience text payload when present
+- human-facing `stdout`/`stderr` chatter, including verbose mind traces, timing lines, and `produce file:` hints, is presentation only and MUST NOT be treated as the semantic transport channel between parent and child stages
+- parent pipelines MAY mirror child verbose output live for observability, but they MUST read the child result from the artifact path keyed by the child run id
+- when a child stage is part of a parent run, its child run id SHOULD nest under the parent run artifact tree (for example `artifacts/<parent-run-id>/learn-pipeline/<stage>/produce.txt`) rather than creating a sibling top-level run folder
+
 Examples:
 ```bash
 ./run program.pya "know/input/topic.txt"
 # writes artifacts/<run id>/produce.txt
+# writes artifacts/<run id>/result.pya
 # also writes know/produce/topic.txt
 
 ./run program.pya "know/input/history/solon.md"

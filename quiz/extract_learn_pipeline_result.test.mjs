@@ -45,6 +45,9 @@ test("extract_learn_pipeline_result falls back to the last full schema block in 
     "CARDINAL TRAINING SENTENCE",
     "We practice humility together in ordinary service.",
     "",
+    "TEACHING PROGRESSION",
+    "- first see the idea",
+    "",
     "ORTHOGONAL FEATURES",
     "- Shared seeking keeps pride small.",
     "",
@@ -61,7 +64,10 @@ test("extract_learn_pipeline_result falls back to the last full schema block in 
     "- rough stone shaped by love",
     "",
     "BRIEF MEMORY PHRASES",
-    "- Humility steadies the path"
+    "- Humility steadies the path",
+    "",
+    "CONCEPT RELATIONS",
+    "- humility supports service"
   ].join("\n");
 
   const stdout = runExtractLearnPipelineResult(input);
@@ -72,6 +78,9 @@ test("extract_learn_pipeline_result falls back to the last full schema block in 
     "CARDINAL TRAINING SENTENCE",
     "We practice humility together in ordinary service.",
     "",
+    "TEACHING PROGRESSION",
+    "- first see the idea",
+    "",
     "ORTHOGONAL FEATURES",
     "- Shared seeking keeps pride small.",
     "",
@@ -88,6 +97,9 @@ test("extract_learn_pipeline_result falls back to the last full schema block in 
     "- rough stone shaped by love",
     "",
     "BRIEF MEMORY PHRASES",
-    "- Humility steadies the path"
+    "- Humility steadies the path",
+    "",
+    "CONCEPT RELATIONS",
+    "- humility supports service"
   ].join("\n"));
 });

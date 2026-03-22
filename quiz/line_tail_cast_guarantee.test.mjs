@@ -32,3 +32,12 @@ test("guarantee passes on truth and fails on lie", async () => {
     (err) => err?.sentence?.su?.name === "guarantee defective" && String(err?.sentence?.ob?.text ?? "").includes("must stay true")
   );
 });
+
+test("guarantee can read its defect text from a named text fact", async () => {
+  forget();
+  await run('ob text "must stay true" to name text guarantee message be text do');
+  await assert.rejects(
+    async () => run("ob bool lie fromtext name guarantee message be guarantee do"),
+    (err) => err?.sentence?.su?.name === "guarantee defective" && String(err?.sentence?.ob?.text ?? "").includes("must stay true")
+  );
+});

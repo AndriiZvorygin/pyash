@@ -17,27 +17,20 @@ function readInput() {
   return fs.readFileSync(0, "utf8");
 }
 
-function normalizeHeading(raw) {
-  return String(raw ?? "").trim().toUpperCase();
-}
-
-export function extractLearnSections(text, requestedHeadings = []) {
+export function validateLearnCard(text) {
   const source = String(text ?? "").replace(/\r\n?/gu, "\n");
   const lines = source.split("\n");
-  const wanted = new Set(requestedHeadings.map(normalizeHeading).filter(Boolean));
-  const sections = [];
+  const sections = new Map();
   let currentHeading = "";
   let currentLines = [];
 
   function flush() {
-    if (!currentHeading || !wanted.has(currentHeading)) return;
-    const body = currentLines.join("\n").trim();
-    if (!body) return;
-    sections.push(`${currentHeading}\n${body}`);
+    if (!currentHeading) return;
+    sections.set(currentHeading, currentLines.join("\n").trim());
   }
 
   for (const line of lines) {
-    const heading = normalizeHeading(line);
+    const heading = String(line ?? "").trim().toUpperCase();
     if (SCHEMA_HEADINGS.includes(heading)) {
       flush();
       currentHeading = heading;
@@ -48,10 +41,22 @@ export function extractLearnSections(text, requestedHeadings = []) {
   }
   flush();
 
-  return sections.join("\n\n").trim();
+  for (const heading of SCHEMA_HEADINGS) {
+    if (!sections.has(heading)) {
+      return `learn card defective: missing heading ${heading}`;
+    }
+    const body = String(sections.get(heading) ?? "").trim();
+    if (!body || body === "-") {
+      return `learn card defective: empty section ${heading}`;
+    }
+  }
+  return "";
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const headings = process.argv.slice(2);
-  process.stdout.write(extractLearnSections(readInput(), headings));
+  const defect = validateLearnCard(readInput());
+  if (defect) {
+    process.stderr.write(`${defect}\n`);
+    process.exit(1);
+  }
 }

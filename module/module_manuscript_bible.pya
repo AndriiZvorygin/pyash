@@ -50,12 +50,14 @@ Task:
 - Keep it between 6 and 8 words.
 - Aim for 7 words.
 
-Rules:
+Positive rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 - Return exactly one short spoken line.
 - Preserve the same core tension or truth.
 - Cut extra clauses before changing the meaning.
+
+Negative rules:
 - Do not turn it into setup or summary.
 - Do not turn it into payoff or conclusion language..text.quoted be text ya
 
@@ -67,13 +69,15 @@ Task:
 - Aim for GOAL_WORDS when possible.
 - Preserve the same stage role and main claims.
 
-Rules:
+Positive rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
-- Do not add unrelated new concepts.
 - Prefer tightening or compressing before expanding.
 - Obey FEEDBACK when it is present.
-- Return only the rewritten section..text.quoted be text ya
+- Return only the rewritten section.
+
+Negative rules:
+- Do not add unrelated new concepts..text.quoted be text ya
 
 exists su name module manuscript scored semantic score prompt ob text quoted.text.You score whether a manuscript stage candidate is good enough to keep.
 
@@ -162,14 +166,16 @@ Task:
 - Keep it between 18 and 24 words.
 - Preserve the same core outcome and spoken tone.
 
-Rules:
+Positive rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
-- Do not add new claims.
 - Preserve the same main payoff and practical understanding gain.
 - Prefer tightening over expanding.
 - Target 21 words and cut hard before adding.
-- Return one clean sentence only..text.quoted be text ya
+- Return one clean sentence only.
+
+Negative rules:
+- Do not add new claims..text.quoted be text ya
 
 exists su name module manuscript roadmap prompt ob text quoted.text.You are writing the roadmap segment for a long-form teaching manuscript.
 
@@ -178,7 +184,7 @@ Task:
 - Keep it between 16 and 20 words.
 - Tell the listener what the manuscript will cover in sequence.
 
-Rules:
+Positive rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 - Keep the roadmap concrete, plain, and easy to follow on first listen.
@@ -193,8 +199,10 @@ Rules:
 - Clause 2 should preview the correction or misunderstanding from Segment 2.
 - Clause 3 should preview the consequence, application, or lived effect from Segment 3.
 - Prefer specific previews like what something is, what goes wrong, and what changes, over generic verbs like cover, explore, or learn.
-- Do not repeat the hook or promise wording.
 - Payoff wording is preferred when it clearly matches what the finished segments actually deliver.
+
+Negative rules:
+- Do not repeat the hook or promise wording.
 - Avoid extra imagery, metaphor, doctrinal flourish, or inflated payoff beyond the finished segments.
 - Do not summarize the topic generally when the segments already show the actual steps..text.quoted be text ya
 
@@ -205,7 +213,7 @@ Task:
 - Keep it between 16 and 20 words.
 - Aim for 18 words.
 
-Rules:
+Positive rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 - Use one sentence.
@@ -219,7 +227,10 @@ Rules:
 - Use lightly future-looking preview wording such as we will see, you will see, or what changes next when that helps the line clearly feel like a preview.
 - Use exactly three short clauses: core idea, correction, consequence.
 - Each clause should preview a specific insight, not just name a stage or summarize the topic.
-- Cut repetition before changing meaning..text.quoted be text ya
+- Cut repetition before changing meaning.
+
+Negative rules:
+- Do not collapse into a finished conclusion or static summary wording..text.quoted be text ya
 
 exists su name module manuscript segment one prompt ob text quoted.text.You are writing Segment 1 of a long-form teaching manuscript.
 
@@ -230,13 +241,15 @@ Task:
 - This segment establishes the system.
 - Its job is to give the listener a stable mental model.
 
-Rules:
+Positive rules:
 - The hook already defines the topic, so do not re-introduce the topic from scratch.
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
+- Include exactly one relevant Bible citation in parentheses, like (John 3:16).
+- The citation must directly support the segment's main definition or mechanism.
 - Use complete sentences.
 - Ground the segment in the source text.
-Positive rules:
+Core emphasis:
 - Focus mostly on SEED CONCEPT and CARDINAL TRAINING SENTENCE.
 - Name the topic directly and naturally from the hook and source instead of opening with generic labels like `the system`.
 - Define what the system is and how it works more than what it is not.
@@ -281,6 +294,9 @@ Positive rules:
 - The hook already defines the topic, so do not re-introduce the topic from scratch.
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
+- Include exactly one relevant Bible citation in parentheses, like (John 3:16).
+- The citation must directly support the misunderstanding-plus-clarification move in this segment.
+- Prefer a different citation from Segment 1 when the source supports multiple fitting options.
 - Use complete sentences.
 - Ground the segment in the source text.
 - Add new substance rather than repeating Segment 1.
@@ -348,6 +364,9 @@ Positive rules:
 - The hook already defines the topic, so do not re-introduce the topic from scratch.
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
+- Include exactly one relevant Bible citation in parentheses, like (John 3:16).
+- The citation must directly support the consequence or lived-application move in this segment.
+- Prefer a different citation from Segment 1 and Segment 2 when the source supports multiple fitting options.
 - Use complete sentences.
 - Ground the segment in the source text.
 - Complete the main teaching arc with clear progression.
@@ -391,11 +410,13 @@ Task:
 - Keep it between 40 and 50 words.
 - Summarize the core lesson in a compact way by compressing Segment 1, Segment 2, and Segment 3 into one clear truth.
 
-Rules:
+Positive rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
-- Do not introduce new major ideas.
-- Make the recap feel earned and clarifying..text.quoted be text ya
+- Make the recap feel earned and clarifying.
+
+Negative rules:
+- Do not introduce new major ideas..text.quoted be text ya
 
 exists su name module manuscript cta prompt ob text quoted.text.You are writing the call to action for a long-form teaching manuscript.
 
@@ -404,11 +425,14 @@ Task:
 - Keep it between 20 and 25 words.
 - End with a clear, practical invitation or response that extends or embodies the insight.
 
-Rules:
+Positive rules:
 - Plain prose only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 - Keep it actionable, human, and concise.
-- Fit naturally after the recap..text.quoted be text ya
+- Fit naturally after the recap.
+
+Negative rules:
+- Do not introduce a new doctrine or topic shift in the final line..text.quoted be text ya
 
 exists su name module manuscript platform verify prompt ob text quoted.text.You verify whether a spoken teaching section fits its assigned task.
 
@@ -640,33 +664,39 @@ su name module manuscript segment one checks be series def
   su name word_min ob num 85 ya
   su name word_max ob num 105 ya
   su name sentence_complete ob bool truth ya
+  su name must_match_pattern ob text "\\([1-3]?\\s?[A-Za-z]+(?:\\s+[A-Za-z]+){0,2}\\s+\\d+:\\d+(?:-\\d+)?\\)" ya
 prah
 
 su name module manuscript segment one platform checks be series def
   su name word_max ob num 110 ya
   su name sentence_complete ob bool truth ya
+  su name must_match_pattern ob text "\\([1-3]?\\s?[A-Za-z]+(?:\\s+[A-Za-z]+){0,2}\\s+\\d+:\\d+(?:-\\d+)?\\)" ya
 prah
 
 su name module manuscript segment two checks be series def
   su name word_min ob num 95 ya
   su name word_max ob num 115 ya
   su name sentence_complete ob bool truth ya
+  su name must_match_pattern ob text "\\([1-3]?\\s?[A-Za-z]+(?:\\s+[A-Za-z]+){0,2}\\s+\\d+:\\d+(?:-\\d+)?\\)" ya
 prah
 
 su name module manuscript segment two platform checks be series def
   su name word_max ob num 120 ya
   su name sentence_complete ob bool truth ya
+  su name must_match_pattern ob text "\\([1-3]?\\s?[A-Za-z]+(?:\\s+[A-Za-z]+){0,2}\\s+\\d+:\\d+(?:-\\d+)?\\)" ya
 prah
 
 su name module manuscript segment three checks be series def
   su name word_min ob num 95 ya
   su name word_max ob num 115 ya
   su name sentence_complete ob bool truth ya
+  su name must_match_pattern ob text "\\([1-3]?\\s?[A-Za-z]+(?:\\s+[A-Za-z]+){0,2}\\s+\\d+:\\d+(?:-\\d+)?\\)" ya
 prah
 
 su name module manuscript segment three platform checks be series def
   su name word_max ob num 120 ya
   su name sentence_complete ob bool truth ya
+  su name must_match_pattern ob text "\\([1-3]?\\s?[A-Za-z]+(?:\\s+[A-Za-z]+){0,2}\\s+\\d+:\\d+(?:-\\d+)?\\)" ya
 prah
 
 su name module manuscript recap checks be series def
@@ -1269,7 +1299,7 @@ prah
 su name module manuscript roadmap checked to name text output be ceremony def
   ob text "false" to name text module manuscript roadmap pass be text do
   ob text "roadmap platform" to name text module manuscript platform be text do
-  ob num 22 to name num module manuscript stage contract cap be plus do
+  ob num 20 to name num module manuscript stage contract cap be plus do
   su name module manuscript roadmap platform stage accordingto name module manuscript roadmap platform checks for name module manuscript roadmap mind from text of ob of module manuscript roadmap request to name text output be module manuscript section verify do
   ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
   ob name text module manuscript roadmap request to name text module manuscript current task be text do
@@ -1302,9 +1332,9 @@ su name module manuscript roadmap retry fromindex num 0 toindex num 0 be ceremon
   su name module manuscript roadmap retry request segment two stage ob name text module manuscript segment two out to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request segment three stage ob name text module manuscript segment three out to name module manuscript roadmap retry request be plus do
-  su name module manuscript roadmap retry draft stage ob name text module manuscript roadmap retry request for name module manuscript roadmap fit mind to name text output by num 0 atmost num 22 be write do
+  su name module manuscript roadmap retry draft stage ob name text module manuscript roadmap retry request for name module manuscript roadmap fit mind to name text output by num 0 atmost num 20 be write do
   ob text "roadmap retry platform" to name text module manuscript platform be text do
-  ob num 22 to name num module manuscript stage contract cap be plus do
+  ob num 20 to name num module manuscript stage contract cap be plus do
   su name module manuscript roadmap retry platform stage accordingto name module manuscript roadmap platform checks for name module manuscript roadmap fit mind from text of ob of module manuscript roadmap retry request to name text output be module manuscript section verify do
   ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
   ob name text module manuscript roadmap retry request to name text module manuscript current task be text do
@@ -1359,7 +1389,7 @@ su name module manuscript segment one retry fromindex num 0 toindex num 0 be cer
   ob num 112 to name num module manuscript segment one retry cap be plus do
   ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 104 to name num module manuscript segment one retry cap be plus do
   ob num of words of module manuscript segment one retry length be tiny from num 85 then ob num 128 to name num module manuscript segment one retry cap be plus do
-  su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the system. Define it clearly and explain the basic mechanism.\n\nTARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nPOSITIVE_RULES:\nStay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works.\n\nOPTIONAL_ADD_ONS:\nYou may include one small example from AFFAIRS OR ACTIVITIES when it helps ground the segment. If you use an example, keep it brief and supportive rather than letting it become the paragraph's main job. Practice language is acceptable when it stays inside a simple illustration of how the teaching works. You may include one small immediate implication when it follows naturally from the definition and mechanism.\n\nNEGATIVE_RULES:\nAvoid negation-led or contrast-led phrasing like not, rather than, instead of, unlike, or however. If the source carries a contrast, translate it into a positive sentence about what the thing is or does. Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move when the source offers a cleaner affirmative lane. Prefer the fallible-service and raw-material/perfect-possibility frame before channel, transparent-vessel, or flow language. Do not introduce hidden contradictions, jump to large consequences, or turn the segment into a correction of misunderstanding.\n\nFEEDBACK:\nGenerate a fresh Segment 1 from the source and verifier feedback, not from the failed draft. Write about 90 words, and keep the result between 88 and 94 words. Use complete sentences. Cut before adding. If the section starts getting long, remove extra restatement instead of adding another explanation.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment one retry request be text do
+  su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the system. Define it clearly and explain the basic mechanism.\n\nTARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nPOSITIVE_RULES:\nStay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works.\n\nOPTIONAL_ADD_ONS:\nYou may include one small example from AFFAIRS OR ACTIVITIES when it helps ground the segment. If you use an example, keep it brief and supportive rather than letting it become the paragraph's main job. Practice language is acceptable when it stays inside a simple illustration of how the teaching works. You may include one small immediate implication when it follows naturally from the definition and mechanism.\n\nNEGATIVE_RULES:\nAvoid negation-led or contrast-led phrasing like not, rather than, instead of, unlike, or however. If the source carries a contrast, translate it into a positive sentence about what the thing is or does. Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move when the source offers a cleaner affirmative lane. Prefer the fallible-service and raw-material/perfect-possibility frame before channel, transparent-vessel, or flow language. Do not introduce hidden contradictions, jump to large consequences, or turn the segment into a correction of misunderstanding.\n\nFEEDBACK:\nGenerate a fresh Segment 1 from the source and verifier feedback, not from the failed draft. Write about 90 words, and keep the result between 88 and 94 words. Use complete sentences. Cut before adding. If the section starts getting long, remove extra restatement instead of adding another explanation. Include exactly one relevant Bible citation in parentheses that directly supports the main definition or mechanism.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment one retry request be text do
   su name module manuscript segment one retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment one retry request be plus do
   su name module manuscript segment one retry request source stage ob name text module manuscript segment one source basis to name module manuscript segment one retry request be plus do
   ob text of passing of module manuscript segment one sources produce be equally from text true then
@@ -1406,7 +1436,7 @@ su name module manuscript segment two retry fromindex num 0 toindex num 0 be cer
   ob text of passing of map of module manuscript segment two scored state be equally from text true then
   ob text "true" to name text module manuscript segment two pass be text do
   ob name text module manuscript segment two pass be equally from text true then be depart do
-  su name module manuscript segment two retry request role stage ob text "ROLE:\nSegment 2 reveals the hidden layer. Correct a source-supported misunderstanding about the topic and clarify what the source is actually saying instead.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n102\n\nFEEDBACK:\nGenerate a fresh Segment 2 from the source basis, Segment 1 background, and verifier feedback, not from the failed draft. Keep this rewrite between 100 and 106 words. Use exactly 5 complete sentences. Sentence 1 names an explicit misunderstanding from SURPRISES AND MISUNDERSTANDINGS, preferably using the source's own framing. Sentence 2 clarifies what the source is actually saying instead. Sentence 3 may give one concrete source-grounded image, scene, activity, or consequence tied to the same reveal arc when that helps grounding. Sentence 4 sharpens the insight without treating Segment 1 itself as the error. Sentence 5 lands the implication. Treat Segment 1 as already established background. Shared topic words, overlap in source cluster, and some repeated anchor language are acceptable. The goal is not a different topic but a different function: add a reveal, correction, paradox, tension, or clarification that was not Segment 1's main job. A more specific correction nested inside the same broad misunderstanding field may still pass when Segment 1 established the general terrain and Segment 2 sharpens the misuse, counterfeit, blockage, or paradox within it. Do not restate Segment 1's basic model, reuse its main example as the main example again, or simply repeat its payoff. If Segment 1 already used one correction, contrast cluster, or misunderstanding family, do not reuse that same family as Segment 2's main reveal. Use one misunderstanding family, or at most two closely complementary misunderstandings, for one coherent reveal arc. Use SURPRISES AND MISUNDERSTANDINGS as the main lane. You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support, and if you do, prefer a different grounding move than earlier segments when the source offers one. Stay close to source wording for the hidden-layer claim, but prefer a somewhat fresh sentence surface when possible. Do not pile on unrelated surprises, scenes, or metaphors. Avoid generalized framings like many assume, people think, or we often believe unless the source explicitly supports that framing. Do not introduce fresh abstractions like moral virtue, failure, or self-esteem unless the source states them.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment two retry request be text do
+  su name module manuscript segment two retry request role stage ob text "ROLE:\nSegment 2 reveals the hidden layer. Correct a source-supported misunderstanding about the topic and clarify what the source is actually saying instead.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n102\n\nFEEDBACK:\nGenerate a fresh Segment 2 from the source basis, Segment 1 background, and verifier feedback, not from the failed draft. Keep this rewrite between 100 and 106 words. Use exactly 5 complete sentences. Sentence 1 names an explicit misunderstanding from SURPRISES AND MISUNDERSTANDINGS, preferably using the source's own framing. Sentence 2 clarifies what the source is actually saying instead. Sentence 3 may give one concrete source-grounded image, scene, activity, or consequence tied to the same reveal arc when that helps grounding. Sentence 4 sharpens the insight without treating Segment 1 itself as the error. Sentence 5 lands the implication. Treat Segment 1 as already established background. Shared topic words, overlap in source cluster, and some repeated anchor language are acceptable. The goal is not a different topic but a different function: add a reveal, correction, paradox, tension, or clarification that was not Segment 1's main job. A more specific correction nested inside the same broad misunderstanding field may still pass when Segment 1 established the general terrain and Segment 2 sharpens the misuse, counterfeit, blockage, or paradox within it. Do not restate Segment 1's basic model, reuse its main example as the main example again, or simply repeat its payoff. If Segment 1 already used one correction, contrast cluster, or misunderstanding family, do not reuse that same family as Segment 2's main reveal. Use one misunderstanding family, or at most two closely complementary misunderstandings, for one coherent reveal arc. Use SURPRISES AND MISUNDERSTANDINGS as the main lane. You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support, and if you do, prefer a different grounding move than earlier segments when the source offers one. Stay close to source wording for the hidden-layer claim, but prefer a somewhat fresh sentence surface when possible. Do not pile on unrelated surprises, scenes, or metaphors. Avoid generalized framings like many assume, people think, or we often believe unless the source explicitly supports that framing. Do not introduce fresh abstractions like moral virtue, failure, or self-esteem unless the source states them. Include exactly one relevant Bible citation in parentheses that directly supports this misunderstanding-plus-clarification move, and prefer a different citation than Segment 1 when possible.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment two retry request be text do
   su name module manuscript segment two retry request prior header stage ob text "\n\nSEGMENT 1_BACKGROUND:\n" to name module manuscript segment two retry request be plus do
   su name module manuscript segment two retry request prior stage ob name text module manuscript segment one out to name module manuscript segment two retry request be plus do
   su name module manuscript segment two retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment two retry request be plus do
@@ -1447,7 +1477,7 @@ su name module manuscript segment three retry fromindex num 0 toindex num 0 be c
   ob text of passing of map of module manuscript segment three scored state be equally from text true then
   ob text "true" to name text module manuscript segment three pass be text do
   ob name text module manuscript segment three pass be equally from text true then be depart do
-  su name module manuscript segment three retry request role stage ob text "ROLE:\nSegment 3 expands to consequence. Show the outcome, scale the idea outward, and connect it to lived reality.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n104\n\nFEEDBACK:\nGenerate a fresh Segment 3 from the source and verifier feedback, not from the failed draft. Keep this rewrite between 100 and 108 words. Assume Segment 1 and Segment 2 are already complete. Stay mainly with CAUSATIVE AND CONSEQUENCE. You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support, and if you do, prefer a different grounding move than earlier segments when the source offers one. Use at most one brief setup sentence, then move directly into consequence, propagation, lived effects, or future stakes. Use one direct consequence sentence, one outward scaling sentence, one real-world, behavioral, or activity-grounded sentence, and one closing implication. Cut repeated explanation of the system or the hidden correction. Prefer source-strength wording like can, opens, makes room, or begins instead of instantly, immediately, all room, or without restriction. If the section feels short, add one concrete real-world consequence rather than re-explaining the topic or the hidden correction.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment three retry request be text do
+  su name module manuscript segment three retry request role stage ob text "ROLE:\nSegment 3 expands to consequence. Show the outcome, scale the idea outward, and connect it to lived reality.\n\nTARGET_WORDS:\n95-115\n\nGOAL_WORDS:\n104\n\nFEEDBACK:\nGenerate a fresh Segment 3 from the source and verifier feedback, not from the failed draft. Keep this rewrite between 100 and 108 words. Assume Segment 1 and Segment 2 are already complete. Stay mainly with CAUSATIVE AND CONSEQUENCE. You may use AFFAIRS OR ACTIVITIES, ORTHOGONAL FEATURES, CARDINAL SCENES AND IDIOMS, or one unused BRIEF MEMORY PHRASE as support, and if you do, prefer a different grounding move than earlier segments when the source offers one. Use at most one brief setup sentence, then move directly into consequence, propagation, lived effects, or future stakes. Use one direct consequence sentence, one outward scaling sentence, one real-world, behavioral, or activity-grounded sentence, and one closing implication. Cut repeated explanation of the system or the hidden correction. Prefer source-strength wording like can, opens, makes room, or begins instead of instantly, immediately, all room, or without restriction. If the section feels short, add one concrete real-world consequence rather than re-explaining the topic or the hidden correction. Include exactly one relevant Bible citation in parentheses that directly supports the consequence or lived-application move, and prefer a different citation than Segment 1 and Segment 2 when possible.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment three retry request be text do
   su name module manuscript segment three retry request prior one header stage ob text "\n\nSEGMENT 1_BACKGROUND:\n" to name module manuscript segment three retry request be plus do
   su name module manuscript segment three retry request prior one stage ob name text module manuscript segment one out to name module manuscript segment three retry request be plus do
   su name module manuscript segment three retry request prior two header stage ob text "\n\nSEGMENT 2_BACKGROUND:\n" to name module manuscript segment three retry request be plus do

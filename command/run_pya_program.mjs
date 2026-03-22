@@ -23,10 +23,17 @@ import { setRunNewspaperLines } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
-import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, formatRunDurationMs, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
+import { collectInputDeclarations } from "../program/runtime/input_ports.mjs";
+import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, formatRunDurationMs, readFlagValue, sanitizeRunId, artifactRunPath, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const NEWSPAPER_TEXT_ARTIFACT_THRESHOLD = 2048;
+
+function normalizeToken(token) {
+  const text = String(token ?? "");
+  if (text.startsWith(QUOTED_TEXT_PREFIX)) return text.slice(QUOTED_TEXT_PREFIX.length);
+  return text;
+}
 
 function renderSeriesSentence(sentence) {
   const name = sentence?.su?.name ?? "result";
@@ -79,81 +86,6 @@ function detectNestedLoops(parsedSentences) {
     }
   }
   return false;
-}
-
-function normalizeToken(token) {
-  const text = String(token ?? "");
-  if (text.startsWith(QUOTED_TEXT_PREFIX)) return text.slice(QUOTED_TEXT_PREFIX.length);
-  return text;
-}
-
-function parsePortTriples(tokens = [], startIndex = 0, stopWords = new Set()) {
-  const ports = [];
-  let index = startIndex;
-  if (tokens[index] === "ve") index += 1;
-  while (index < tokens.length) {
-    const token = tokens[index];
-    if (stopWords.has(token)) break;
-    const transport = tokens[index];
-    const kind = tokens[index + 1];
-    const handle = tokens[index + 2];
-    if (!transport || !kind || !handle || stopWords.has(kind) || stopWords.has(handle)) {
-      return { error: "input declaration malformed port triple" };
-    }
-    ports.push({
-      transport: String(transport),
-      kind: String(kind),
-      handle: String(handle)
-    });
-    index += 3;
-  }
-  return { ports, index };
-}
-
-function parseInputDeclarationLine(rawLine = "") {
-  const tokens = tokenize(String(rawLine).trim()).map(normalizeToken);
-  if (tokens.length < 3) return null;
-  const beIndex = tokens.lastIndexOf("be");
-  if (beIndex < 0) return null;
-  if (tokens[beIndex + 1] !== "input") return null;
-  if (tokens[beIndex + 2] !== "ya") {
-    return { error: "input declaration must end with be input ya" };
-  }
-  const obIndex = tokens.indexOf("ob");
-  if (obIndex < 0 || obIndex >= beIndex) return { error: "input declaration missing ob ports" };
-  const toIndex = tokens.indexOf("to");
-  const obStops = new Set(toIndex > obIndex && toIndex < beIndex ? ["to", "be"] : ["be"]);
-  const obResult = parsePortTriples(tokens, obIndex + 1, obStops);
-  if (obResult.error) return { error: obResult.error };
-  let outputs = [];
-  if (toIndex > obIndex && toIndex < beIndex) {
-    const toResult = parsePortTriples(tokens, toIndex + 1, new Set(["be"]));
-    if (toResult.error) return { error: toResult.error };
-    outputs = toResult.ports ?? [];
-  }
-  return { inputs: obResult.ports ?? [], outputs };
-}
-
-function collectInputDeclarations(entries = []) {
-  const inputs = [];
-  const outputs = [];
-  for (const entry of entries) {
-    const line = String(entry?.text ?? "").trim();
-    if (!line) continue;
-    const parsed = parseInputDeclarationLine(line);
-    if (!parsed) continue;
-    if (parsed.error) {
-      throwErrorSentence({
-        name: "input declaration defective",
-        message: `input declaration defective: ${parsed.error}`,
-        from: { name: "run" },
-        raw: { line }
-      });
-    }
-    if (Array.isArray(parsed.inputs)) inputs.push(...parsed.inputs);
-    if (Array.isArray(parsed.outputs)) outputs.push(...parsed.outputs);
-  }
-  return { inputs, outputs };
 }
 
 function parseBindingTailWords(bindingWords = []) {
@@ -272,7 +204,7 @@ function rewriteSentenceTextForNewspaper(sentence, {
           const idx = typeof nextTextArtifactIndex === "function" ? nextTextArtifactIndex() : 1;
           const relLocator = path.join(
             "artifacts",
-            sanitizeRunId(runId || "run"),
+            artifactRunPath(runId || "run"),
             "newspaper",
             `text-${String(idx).padStart(6, "0")}.txt`
           ).replace(/[\\]+/g, "/");
@@ -877,7 +809,7 @@ async function main() {
     console.warn("warning: MCP servers were still running at exit; add `be discharge ob name <server> as wo mcp do` to shut them down explicitly.");
   }
   const printArtifactsFolderHint = () => {
-    const abs = path.resolve(process.cwd(), "artifacts", String(runId));
+    const abs = path.resolve(process.cwd(), "artifacts", artifactRunPath(runId));
     console.error(`artifacts folder: ${abs}`);
   };
   const printRunTimingHint = () => {
@@ -891,10 +823,19 @@ async function main() {
       console.error(`produce file: ${file}`);
     }
   };
+  const writeResultSentenceArtifact = async () => {
+    if (!result?.mood) return null;
+    const dir = path.resolve(process.cwd(), "artifacts", artifactRunPath(runId));
+    await fs.mkdir(dir, { recursive: true });
+    const artifactFile = path.join(dir, "result.pya");
+    const text = `${sentenceToPyash(surfaceErrorSentence(result))}\n`;
+    await fs.writeFile(artifactFile, text, "utf8");
+    return artifactFile;
+  };
   const writeProduceTextArtifact = async () => {
     let artifactFile = null;
     if (result?.ob?.text !== undefined) {
-      const dir = path.resolve(process.cwd(), "artifacts", String(runId));
+      const dir = path.resolve(process.cwd(), "artifacts", artifactRunPath(runId));
       await fs.mkdir(dir, { recursive: true });
       artifactFile = path.join(dir, "produce.txt");
       let payload = String(result.ob.text ?? "");
@@ -924,6 +865,7 @@ async function main() {
     printArtifactsFolderHint();
     throw runError;
   }
+  const resultSentenceFile = await writeResultSentenceArtifact();
   const produceFiles = await writeProduceTextArtifact();
 
   if (full) {
@@ -938,6 +880,7 @@ async function main() {
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
     else process.env.PYA_RUN_ID = priorRunId;
+    if (resultSentenceFile) console.error(`result file: ${resultSentenceFile}`);
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -950,6 +893,7 @@ async function main() {
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
     else process.env.PYA_RUN_ID = priorRunId;
+    if (resultSentenceFile) console.error(`result file: ${resultSentenceFile}`);
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -970,6 +914,7 @@ async function main() {
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
     else process.env.PYA_RUN_ID = priorRunId;
+    if (resultSentenceFile) console.error(`result file: ${resultSentenceFile}`);
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -983,6 +928,7 @@ async function main() {
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
     else process.env.PYA_RUN_ID = priorRunId;
+    if (resultSentenceFile) console.error(`result file: ${resultSentenceFile}`);
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -996,6 +942,7 @@ async function main() {
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
     else process.env.PYA_RUN_ID = priorRunId;
+    if (resultSentenceFile) console.error(`result file: ${resultSentenceFile}`);
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -1017,6 +964,7 @@ async function main() {
   else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
   if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
   else process.env.PYA_RUN_ID = priorRunId;
+  if (resultSentenceFile) console.error(`result file: ${resultSentenceFile}`);
   printProduceFileHint();
   printRunTimingHint();
   printArtifactsFolderHint();

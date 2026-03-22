@@ -56,6 +56,7 @@ Rules:
 - Return exactly one short spoken line.
 - Preserve the same core tension or truth.
 - Cut extra clauses before changing the meaning.
+- End as one complete thought; terminal punctuation is optional.
 - Do not turn it into setup or summary.
 - Do not turn it into payoff or conclusion language..text.quoted be text ya
 
@@ -606,12 +607,14 @@ prah
 su name module manuscript hook checks be series def
   su name word_min ob num 6 ya
   su name word_max ob num 8 ya
-  su name sentence_complete ob bool truth ya
+  su name must_not_match_pattern ob text "[,;:]\\s*$" ya
+  su name must_not_match_pattern ob text "\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\\s*[.!?]*\\s*$" ya
 prah
 
 su name module manuscript hook platform checks be series def
   su name word_max ob num 8 ya
-  su name sentence_complete ob bool truth ya
+  su name must_not_match_pattern ob text "[,;:]\\s*$" ya
+  su name must_not_match_pattern ob text "\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\\s*[.!?]*\\s*$" ya
 prah
 
 su name module manuscript promise checks be series def
@@ -632,7 +635,7 @@ su name module manuscript roadmap checks be series def
 prah
 
 su name module manuscript roadmap platform checks be series def
-  su name word_max ob num 22 ya
+  su name word_max ob num 26 ya
   su name sentence_complete ob bool truth ya
 prah
 
@@ -1176,7 +1179,7 @@ prah
 su name module manuscript hook checked to name text output be ceremony def
   ob text "false" to name text module manuscript hook pass be text do
   ob text "hook platform" to name text module manuscript platform be text do
-  ob num 8 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 8 be number ya
   su name module manuscript hook platform stage accordingto name module manuscript hook platform checks for name module manuscript hook mind from text of ob of module manuscript hook request to name text output be module manuscript section verify do
   ob name text module manuscript hook intent to name text module manuscript current intent be text do
   ob name text module manuscript hook request to name text module manuscript current task be text do
@@ -1207,7 +1210,7 @@ su name module manuscript hook retry fromindex num 0 toindex num 0 be ceremony d
   su name module manuscript hook retry draft verify stage be verify as wo word count atleast num 0 atmost num 8 from name text output to name map module manuscript hook retry verify do
   ob text of pass of module manuscript hook retry verify to name text module manuscript hook retry verify pass be text do
   ob text "hook retry platform" to name text module manuscript platform be text do
-  ob num 8 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 8 be number ya
   su name module manuscript hook retry platform stage accordingto name module manuscript hook platform checks for name module manuscript hook fit mind from text of ob of module manuscript hook retry request to name text output be module manuscript section verify do
   ob name text module manuscript hook intent to name text module manuscript current intent be text do
   ob name text module manuscript hook retry request to name text module manuscript current task be text do
@@ -1224,7 +1227,7 @@ prah
 su name module manuscript promise checked to name text output be ceremony def
   ob text "false" to name text module manuscript promise pass be text do
   ob text "promise platform" to name text module manuscript platform be text do
-  ob num 26 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 26 be number ya
   su name module manuscript promise platform stage accordingto name module manuscript promise platform checks for name module manuscript promise mind from text of ob of module manuscript promise request to name text output be module manuscript section verify do
   ob name text module manuscript promise intent to name text module manuscript current intent be text do
   ob name text module manuscript promise request to name text module manuscript current task be text do
@@ -1255,7 +1258,7 @@ su name module manuscript promise retry fromindex num 0 toindex num 0 be ceremon
   su name module manuscript promise retry request draft stage ob name text output to name module manuscript promise retry request be plus do
   su name module manuscript promise retry draft stage ob name text module manuscript promise retry request for name module manuscript promise fit mind to name text output by num 0 atmost num 26 be write do
   ob text "promise retry platform" to name text module manuscript platform be text do
-  ob num 26 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 26 be number ya
   su name module manuscript promise retry platform stage accordingto name module manuscript promise platform checks for name module manuscript promise fit mind from text of ob of module manuscript promise retry request to name text output be module manuscript section verify do
   ob name text module manuscript promise intent to name text module manuscript current intent be text do
   ob name text module manuscript promise retry request to name text module manuscript current task be text do
@@ -1269,7 +1272,7 @@ prah
 su name module manuscript roadmap checked to name text output be ceremony def
   ob text "false" to name text module manuscript roadmap pass be text do
   ob text "roadmap platform" to name text module manuscript platform be text do
-  ob num 22 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 18 be number ya
   su name module manuscript roadmap platform stage accordingto name module manuscript roadmap platform checks for name module manuscript roadmap mind from text of ob of module manuscript roadmap request to name text output be module manuscript section verify do
   ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
   ob name text module manuscript roadmap request to name text module manuscript current task be text do
@@ -1302,9 +1305,9 @@ su name module manuscript roadmap retry fromindex num 0 toindex num 0 be ceremon
   su name module manuscript roadmap retry request segment two stage ob name text module manuscript segment two out to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request segment three header stage ob text "\n\nSEGMENT 3:\n" to name module manuscript roadmap retry request be plus do
   su name module manuscript roadmap retry request segment three stage ob name text module manuscript segment three out to name module manuscript roadmap retry request be plus do
-  su name module manuscript roadmap retry draft stage ob name text module manuscript roadmap retry request for name module manuscript roadmap fit mind to name text output by num 0 atmost num 22 be write do
+  su name module manuscript roadmap retry draft stage ob name text module manuscript roadmap retry request for name module manuscript roadmap fit mind to name text output by num 0 atmost num 18 be write do
   ob text "roadmap retry platform" to name text module manuscript platform be text do
-  ob num 22 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 18 be number ya
   su name module manuscript roadmap retry platform stage accordingto name module manuscript roadmap platform checks for name module manuscript roadmap fit mind from text of ob of module manuscript roadmap retry request to name text output be module manuscript section verify do
   ob name text module manuscript roadmap intent to name text module manuscript current intent be text do
   ob name text module manuscript roadmap retry request to name text module manuscript current task be text do
@@ -1318,7 +1321,7 @@ prah
 su name module manuscript segment one checked to name text output be ceremony def
   ob text "false" to name text module manuscript segment one pass be text do
   ob text "segment one platform" to name text module manuscript platform be text do
-  ob num 122 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 122 be number ya
   su name module manuscript segment one platform stage accordingto name module manuscript segment one platform checks for name module manuscript segment one mind from text of ob of module manuscript segment one request to name text output be module manuscript section verify do
   ob name text module manuscript segment one intent to name text module manuscript current intent be text do
   ob name text module manuscript segment one request to name text module manuscript current task be text do
@@ -1372,7 +1375,7 @@ su name module manuscript segment one retry fromindex num 0 toindex num 0 be cer
   ob text of passing of module manuscript segment one roles produce be equally from text false then
   su name module manuscript segment one retry draft stage ob name text module manuscript segment one retry request for name module manuscript segment one mind to name text output by num 0 atmost num of name module manuscript segment one retry cap be write do
   ob text "segment one retry platform" to name text module manuscript platform be text do
-  ob num of module manuscript segment one retry cap to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num of module manuscript segment one retry cap be number ya
   su name module manuscript segment one retry platform stage accordingto name module manuscript segment one platform checks for name module manuscript segment one mind from text of ob of module manuscript segment one retry request to name text output be module manuscript section verify do
   ob name text module manuscript segment one intent to name text module manuscript current intent be text do
   ob name text module manuscript segment one retry request to name text module manuscript current task be text do
@@ -1386,7 +1389,7 @@ prah
 su name module manuscript segment two checked to name text output be ceremony def
   ob text "false" to name text module manuscript segment two pass be text do
   ob text "segment two platform" to name text module manuscript platform be text do
-  ob num 120 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 120 be number ya
   su name module manuscript segment two platform stage accordingto name module manuscript segment two platform checks for name module manuscript segment two mind from text of ob of module manuscript segment two request to name text output be module manuscript section verify do
   ob name text module manuscript segment two intent to name text module manuscript current intent be text do
   ob name text module manuscript segment two request to name text module manuscript current task be text do
@@ -1413,7 +1416,7 @@ su name module manuscript segment two retry fromindex num 0 toindex num 0 be cer
   su name module manuscript segment two retry request source stage ob name text module manuscript segment two source basis to name module manuscript segment two retry request be plus do
   su name module manuscript segment two retry draft stage ob name text module manuscript segment two retry request for name module manuscript segment two mind to name text output by num 0 atmost num 120 be write do
   ob text "segment two retry platform" to name text module manuscript platform be text do
-  ob num 120 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 120 be number ya
   su name module manuscript segment two retry platform stage accordingto name module manuscript segment two platform checks for name module manuscript segment two mind from text of ob of module manuscript segment two retry request to name text output be module manuscript section verify do
   ob name text module manuscript segment two intent to name text module manuscript current intent be text do
   ob name text module manuscript segment two retry request to name text module manuscript current task be text do
@@ -1427,7 +1430,7 @@ prah
 su name module manuscript segment three checked to name text output be ceremony def
   ob text "false" to name text module manuscript segment three pass be text do
   ob text "segment three platform" to name text module manuscript platform be text do
-  ob num 120 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 120 be number ya
   su name module manuscript segment three platform stage accordingto name module manuscript segment three platform checks for name module manuscript segment three mind from text of ob of module manuscript segment three request to name text output be module manuscript section verify do
   ob name text module manuscript segment three intent to name text module manuscript current intent be text do
   ob name text module manuscript segment three request to name text module manuscript current task be text do
@@ -1456,7 +1459,7 @@ su name module manuscript segment three retry fromindex num 0 toindex num 0 be c
   su name module manuscript segment three retry request source stage ob name text module manuscript segment three source basis to name module manuscript segment three retry request be plus do
   su name module manuscript segment three retry draft stage ob name text module manuscript segment three retry request for name module manuscript segment three mind to name text output by num 0 atmost num 120 be write do
   ob text "segment three retry platform" to name text module manuscript platform be text do
-  ob num 120 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 120 be number ya
   su name module manuscript segment three retry platform stage accordingto name module manuscript segment three platform checks for name module manuscript segment three mind from text of ob of module manuscript segment three retry request to name text output be module manuscript section verify do
   ob name text module manuscript segment three intent to name text module manuscript current intent be text do
   ob name text module manuscript segment three retry request to name text module manuscript current task be text do
@@ -1470,7 +1473,7 @@ prah
 su name module manuscript recap checked to name text output be ceremony def
   ob text "false" to name text module manuscript recap pass be text do
   ob text "recap platform" to name text module manuscript platform be text do
-  ob num 50 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 50 be number ya
   su name module manuscript recap platform stage accordingto name module manuscript recap platform checks for name module manuscript recap mind from text of ob of module manuscript recap request to name text output be module manuscript section verify do
   ob name text module manuscript recap intent to name text module manuscript current intent be text do
   ob name text module manuscript recap request to name text module manuscript current task be text do
@@ -1501,7 +1504,7 @@ su name module manuscript recap retry fromindex num 0 toindex num 0 be ceremony 
   su name module manuscript recap retry request draft stage ob name text output to name module manuscript recap retry request be plus do
   su name module manuscript recap retry draft stage ob name text module manuscript recap retry request for name module manuscript fit mind to name text output by num 0 atmost num 50 be write do
   ob text "recap retry platform" to name text module manuscript platform be text do
-  ob num 50 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 50 be number ya
   su name module manuscript recap retry platform stage accordingto name module manuscript recap platform checks for name module manuscript fit mind from text of ob of module manuscript recap retry request to name text output be module manuscript section verify do
   ob name text module manuscript recap intent to name text module manuscript current intent be text do
   ob name text module manuscript recap retry request to name text module manuscript current task be text do
@@ -1515,7 +1518,7 @@ prah
 su name module manuscript cta checked to name text output be ceremony def
   ob text "false" to name text module manuscript cta pass be text do
   ob text "cta platform" to name text module manuscript platform be text do
-  ob num 34 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 34 be number ya
   su name module manuscript cta platform stage accordingto name module manuscript cta platform checks for name module manuscript cta mind from text of ob of module manuscript cta request to name text output be module manuscript section verify do
   ob name text module manuscript cta intent to name text module manuscript current intent be text do
   ob name text module manuscript cta request to name text module manuscript current task be text do
@@ -1544,7 +1547,7 @@ su name module manuscript cta retry fromindex num 0 toindex num 0 be ceremony de
   su name module manuscript cta retry request draft stage ob name text output to name module manuscript cta retry request be plus do
   su name module manuscript cta retry draft stage ob name text module manuscript cta retry request for name module manuscript fit mind to name text output by num 0 atmost num 34 be write do
   ob text "cta retry platform" to name text module manuscript platform be text do
-  ob num 34 to name num module manuscript stage contract cap be plus do
+  su name module manuscript stage contract cap ob num 34 be number ya
   su name module manuscript cta retry platform stage accordingto name module manuscript cta platform checks for name module manuscript fit mind from text of ob of module manuscript cta retry request to name text output be module manuscript section verify do
   ob name text module manuscript cta intent to name text module manuscript current intent be text do
   ob name text module manuscript cta retry request to name text module manuscript current task be text do
@@ -1664,17 +1667,17 @@ su name module manuscript from text source with text hook hint to name text manu
   su name module manuscript promise final giant guarantee stage ob bool lie fromtext text "module manuscript promise word count giant defective" be guarantee do
   su name module manuscript promise repaired stage ob name text output to name text module manuscript promise out be text do
 
-  su name module manuscript roadmap final verify stage be verify as wo word count atleast num 14 atmost num 22 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
+  su name module manuscript roadmap final verify stage be verify as wo word count atleast num 14 atmost num 26 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
   ob text of pass of module manuscript roadmap final verify to name text module manuscript roadmap final verify pass be text do
   su name module manuscript roadmap final output stage ob name text module manuscript roadmap out to name text output be text do
   ob name text module manuscript roadmap final verify pass be equally from text false then
   fromindex num 1 toindex num 4 be module manuscript roadmap retry do
   ob name text output to name text module manuscript roadmap out be text do
-  su name module manuscript roadmap final reverify stage be verify as wo word count atleast num 14 atmost num 22 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
+  su name module manuscript roadmap final reverify stage be verify as wo word count atleast num 14 atmost num 26 from name text module manuscript roadmap out to name map module manuscript roadmap final verify do
   ob text of pass of module manuscript roadmap final verify to name text module manuscript roadmap final verify pass be text do
   ob name text module manuscript roadmap final verify pass be equally from text false then
   ob num of words of module manuscript roadmap final verify be tiny from num 14 then
-  ob num of words of module manuscript roadmap final verify be giant from num 22 then
+  ob num of words of module manuscript roadmap final verify be giant from num 26 then
   su name module manuscript roadmap final giant guarantee stage ob bool lie fromtext text "module manuscript roadmap word count giant defective" be guarantee do
   su name module manuscript roadmap repaired stage ob name text output to name text module manuscript roadmap out be text do
 
