@@ -1,5 +1,5 @@
 from filename "../../module/brief_manuscript.pya" ob name brief manuscript to name brief manuscript be import do
 
-ob filename text manuscript be input ya
+ob ve filename text manuscript text text hook_hint be input ya
 
-su name manuscript from filename of ob of manuscript to name text manuscript out be brief manuscript do
+su name manuscript from filename of ob of manuscript with text of ob of hook_hint to name text manuscript out be brief manuscript do
