@@ -1,0 +1,7 @@
+from filename "../../module/draw_from_filename.pya" ob name draw as wo thumbnail to name draw as wo thumbnail be import do
+
+exists su name style_prompt ob text "" be default ya
+ob ve filename text source text text style_prompt be input ya
+
+su name output stage from filename of ob of source with text of ob of style_prompt be draw as wo thumbnail do
+su name result out ob text of ob of output stage be write do

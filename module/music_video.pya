@@ -8,7 +8,7 @@ from filename "./video_common.pya" ob name current video heading y ratio to name
 from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
 from filename "./video_common.pya" ob name footnote mode to name footnote mode be import do
 
-exists su name draw system prompt ob text "Educational editorial illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, clean shapes, soft natural light, high detail." be default ya
+exists su name draw system prompt ob text "stylized editorial illustration, painterly rendering, simplified forms with consistent proportions, clean edges, soft muted natural colour palette, gentle diffuse lighting, subtle brush texture, balanced composition with clear foreground and background separation, medium detail, stable cohesive style" be default ya
 exists su name audio cue text ob text "Sound On 🎧" be default ya
 exists su name audio cue y ratio ob num 0.68 be default ya
 exists su name audio cue font scale ob num 0.42 be default ya
@@ -25,8 +25,16 @@ Follow these rules:
 7. If current_cut references a problem, debt, oppression, or harm, output a negative sentiment prompt that visibly features causes and harms.
 8. Use split-scene only when current_cut explicitly describes contrast or before/after.
 9. Minimize garbage: no random symbols, no abstract filler metaphors, no unrelated props, no camera jargon lists, no style spam.
-10. No visible text in the image.
-11. Keep the final prompt concise and concrete (about 18-45 words).
+10. Keep scene surfaces typography-free: no letters, captions, logos, signage, or interface elements.
+11. If people appear, depict modest opaque full-coverage clothing that covers chest, midriff, and hips.
+12. Keep the final prompt line visual-only and descriptive; exclude moderation or policy terms.
+13. Keep the final prompt concise and concrete (about 30-70 words).
+14. If a visible person is present, use exactly four sentences in this order: sentence one subject plus action, sentence two clothing, sentence three environment, sentence four mood plus lighting.
+15. If no visible person is present, use exactly three sentences in this order: sentence one subject plus action, sentence two environment, sentence three mood plus lighting.
+16. Sentence one must describe a concrete visible action using a strong verb and object; avoid static posing, standing, or looking-only portraits.
+17. When a person is visible, sentence two must state concrete clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
+18. The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
+19. Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be default ya
 
@@ -35,8 +43,12 @@ current_cut: [[current_cut]]
 previous_cut: [[previous_cut]]
 next_cut: [[next_cut]]
 full_script: [[full_script]]
+style_prompt: [[style_prompt]]
 previous_prompt_1: [[previous_prompt_1]]
 previous_prompt_2: [[previous_prompt_2]].text.quoted be default ya
+su name draw promptify packet style replacements be map def
+  su text "[[style_prompt]]" ob name text draw system prompt ya
+prah
 
 exists su name thumbnail system prompt ob text quoted.text.You are a YouTube Shorts thumbnail prompt director.
 
@@ -105,7 +117,8 @@ su name music video from filename audio be ceremony def
   su name captions text stage from filename of ob of captions output stage become wo text to name text manuscript out be read do
   su name cut stage from filename of ob of captions output stage during num of ob of teaching video section window seconds to name itinerary teaching cuts by num 0 be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
+  su name prompt packet stage ob name map draw promptify packet style replacements in name text draw promptify packet template to name text draw promptify packet be instead do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube title (max 90 chars). Plain text only." for name mind to name text video title be write do
   su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-7 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
   su name summary stage ob name text manuscript out fromtext text "Write one concise summary sentence for this music video in plain text (max 180 chars)." for name mind to name text video summary be write do

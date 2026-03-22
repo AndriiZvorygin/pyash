@@ -30,8 +30,11 @@ test("teaching video module registers text and filename signatures", async () =>
 
   const calls = [
     'su name demo from text "Hook line. Body line. CTA line." be teaching video do',
+    'su name demo from text "Hook line. Body line. CTA line." with text "1960s editorial illustration" be teaching video do',
     'su name demo from filename "quiz/fixtures/ramblings.txt" be teaching video do',
-    'su name demo from filename "quiz/fixtures/ramblings.txt" to filename "artifacts/video/test.mp4" be teaching video do'
+    'su name demo from filename "quiz/fixtures/ramblings.txt" with text "1960s editorial illustration" be teaching video do',
+    'su name demo from filename "quiz/fixtures/ramblings.txt" to filename "artifacts/video/test.mp4" be teaching video do',
+    'su name demo from filename "quiz/fixtures/ramblings.txt" with text "1960s editorial illustration" to filename "artifacts/video/test.mp4" be teaching video do'
   ];
 
   for (const line of calls) {
@@ -221,10 +224,12 @@ test("qwen tone promptify instruction enforces single-line style with example ou
 test("draw promptify instruction anchors literal named subjects, especially humans", async () => {
   const briefSource = await fs.readFile("module/brief_video.pya", "utf8");
   const musicSource = await fs.readFile("module/music_video.pya", "utf8");
-  for (const source of [briefSource, musicSource]) {
-    assert.match(
-      source,
-      /If current_cut names a specific person, people, species, animal, object, place, or era, depict that literal subject\./u
-    );
-  }
+  assert.match(
+    briefSource,
+    /If current_cut names a specific person, people, species, object, place, or era, depict that exact entity\./u
+  );
+  assert.match(
+    musicSource,
+    /If current_cut names a specific person, people, species, animal, object, place, or era, depict that literal subject\./u
+  );
 });
