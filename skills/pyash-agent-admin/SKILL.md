@@ -42,6 +42,9 @@ Companion recipe: `documentation/recipes/pyash-agent-admin.md`.
 - Internal identity: agent house name (`world/house/<agent>/`)
 - External identity: per-channel username (for example Matrix user id)
 - Keep them separate by default; only rename houses as a controlled migration when the old house name is obsolete.
+- Every agent MUST use its own external channel credentials.
+- Never reuse another agent's token/password/auth cache for a different agent.
+- If an agent is re-bound to a different channel username, refresh that agent's auth cache and verify `whoami` matches the configured user.
 
 For Matrix appservice mode:
 - Source of sender identity: `configure/secret/matrix.yaml` (`sender_localpart`)
@@ -61,6 +64,9 @@ When changing appservice sender:
 4. Verify:
    - `pyash configure channel matrix test --json`
    - ensure `whoami.userId` is expected sender
+5. Credential isolation check:
+   - confirm `world/house/<agent>/conduct/matrix-auth.pya` does not contain another agent's user/token
+   - confirm no copied token from `world/house/<other-agent>/conduct/matrix-auth.pya`
 
 ## Obsolete agent rename migration
 
@@ -114,6 +120,7 @@ Use this when an old internal agent name must be retired.
 - Agent replying to itself in loops
   - Check `pyash channel log ...` for self events.
   - Ensure per-agent channel user matches actual sender identity.
+  - Ensure sender token belongs to that same per-agent user (`whoami`), not another agent.
   - Re-run channel configure and restart calendar.
 
 - `no mind configured yet`
