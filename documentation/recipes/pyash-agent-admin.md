@@ -69,6 +69,8 @@ pyash configure agent delete --agent "<name>"
 Notes:
 - Agent house name is internal identity (`world/house/<agent>/`).
 - Channel username is external identity and can differ by platform.
+- Each agent must have its own channel login identity and credentials.
+- Do not reuse another agent's token/password/auth cache to bootstrap a new agent.
 - Agent configure runtime flow is backend-first:
   - choose backend
   - choose model (from matching relay models when available)
@@ -114,6 +116,17 @@ cat world/house/<agent>/conduct/calendar.pya
 ```
 
 Expected managed block includes `matrix poll` (minute 1).
+
+Identity isolation checks:
+
+```bash
+pyash configure channel matrix test --agent "<agent>" --json
+```
+
+Confirm:
+- `config.userId` is the intended per-agent username.
+- `whoami.userId` in checks matches that same username.
+- `world/house/<agent>/conduct/matrix-auth.pya` does not contain another agent's user/token.
 
 ## 7. Files to inspect
 
