@@ -37,6 +37,8 @@ export async function detectProjectRoot(startDir = process.cwd()) {
 export async function resolveRootDirFromArgs(args = []) {
   const explicitRoot = parseArgValue(args, "--root");
   if (explicitRoot) return path.resolve(explicitRoot);
+  const envRoot = String(process.env.PYASH_ROOT || process.env.PYA_ROOT || "").trim();
+  if (envRoot) return path.resolve(envRoot);
   return await detectProjectRoot(process.cwd()) || process.cwd();
 }
 
