@@ -1,0 +1,12 @@
+ob ve filename text source text text summary_focus be input ya
+
+ob text of ob of summary_focus be equally from text "" then
+ob text "the newsworthy juicy bits" to name text summary_focus be text do
+
+su name source filename stage ob filename of ob of source to name filename source_filename be filename do
+su name source path stage ob text of ob of source_filename to name text source_path be text do
+su name cmd begin stage ob text "node command/summarize_from_filename_layered.mjs \"" to name text run_cmd be text do
+ob name text source_path to name run_cmd be plus do
+ob text "\"" to name run_cmd be plus do
+su name summary stage ob text of run_cmd fromtext name text summary_focus to name text summary_out be command do
+ob name text summary_out be write do
