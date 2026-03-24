@@ -115,15 +115,17 @@ function createMindFixtureAllocator(raw) {
 }
 
 export function parseLearningPipelineRequest(text) {
-  const raw = String(text ?? "").replace(/\r\n?/gu, "\n");
-  const lines = raw.split("\n");
-  const sourceIdx = lines.findIndex((line) => line.trim() === "SOURCE_FILENAME:");
-  const focusIdx = lines.findIndex((line) => line.trim() === "LEARNING_FOCUS:");
-  if (sourceIdx === -1 || focusIdx === -1 || focusIdx <= sourceIdx) {
+  const raw = String(text ?? "")
+    .replace(/\r\n?/gu, "\n")
+    .replace(/\\r\\n/gu, "\n")
+    .replace(/\\n/gu, "\n");
+  const compact = raw.replace(/[ \t]+/gu, " ").trim();
+  const blockMatch = compact.match(/SOURCE_FILENAME:\s*([\s\S]*?)\s*LEARNING_FOCUS:\s*([\s\S]*)$/u);
+  if (!blockMatch) {
     throw new Error("learn filename pipeline defective: malformed request");
   }
-  const sourceFilename = (lines.slice(sourceIdx + 1, focusIdx).find((line) => line.trim().length > 0) ?? "").trim();
-  const focusBlock = lines.slice(focusIdx + 1).join("\n").trim();
+  const sourceFilename = String(blockMatch[1] ?? "").trim();
+  const focusBlock = String(blockMatch[2] ?? "").trim();
   if (!sourceFilename) {
     throw new Error("learn filename pipeline defective: missing source filename");
   }
