@@ -273,12 +273,11 @@ prah
 su name learn from filename source with text learning focus to name text teaching out be ceremony def
   ob text of with of this be equally from text "" then
   ob bool lie fromtext text "learning focus defective: give a non-empty learning focus" be guarantee do
-  su name learning pipeline cmd begin stage ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/learn_from_filename_pipeline.mjs \"" to name text learning pipeline cmd be text do
-  ob text of from of this to name learning pipeline cmd be plus do
-  ob text "\" \"" to name learning pipeline cmd be plus do
-  ob text of with of this to name learning pipeline cmd be plus do
-  ob text "\"" to name learning pipeline cmd be plus do
-  su name teaching raw stage ob text of ob of learning pipeline cmd to name text teaching raw be command do
+  su name learning pipeline request begin stage ob text "SOURCE_FILENAME:\n" to name text learning pipeline request be text do
+  ob text of from of this to name text learning pipeline request be plus do
+  ob text "\n\nLEARNING_FOCUS:\n" to name text learning pipeline request be plus do
+  ob text of with of this to name text learning pipeline request be plus do
+  su name teaching raw stage ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/learn_from_filename_pipeline.mjs" to name text teaching raw fromtext name text learning pipeline request be command do
   ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   su name teaching out ret
 prah
