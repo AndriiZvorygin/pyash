@@ -1,17 +1,18 @@
-exists su name boundary classifier be mind via state "qwen3-vl:8b-instruct" fromtext text "You read the first gross chip (user content). Identify the document kind and explain how to detect section boundaries in this document type. Your output is a prompt that will be given to small LLMs to find section boundaries in each chip and return a single exact boundary marker quote. The prompt must instruct the model to avoid seam duplicates: do not return a marker that is identical to the immediately previous chip marker when possible, and prefer the first new heading after the first 80 characters of the chip when available. Output exactly two paragraphs: (1) Document kind and cues. (2) Boundary detection guidance with examples anchored to the chip text and a final sentence stating the required output format (single boundary marker quote only). Use short, concrete sentences. No bullet lists." ya
+ob filename text source be input ya
+from filename "../../module/chip_refinery.pya" ob name chip to name chip be import do
+
+exists su name chip style prompt ob text quoted.text.Split this source into coherent wise chips using heading boundaries when available. Keep each chip topically complete and avoid tiny fragments..text.quoted be text ya
 
 su name boundary refinery be refinery def
-su name load source from filename "documentation/specifications/01-sentence-and-grammar.md" become wo text to name text source be read do
-su name gross chip from name text source atmost byte 2400 to name text gross chips be gross chip do
-su name show chip ob text of ob of 0 of series of ob of gross chips be write do
-su name classify prompt ob text of ob of 0 of series of ob of gross chips for name boundary classifier to name text boundary prompt be write do
-su name show prompt ob text of ob of boundary prompt be write do
-exists su name boundary swallower be mind via state "qwen3-vl:8b-instruct" fromtext name boundary prompt ya
-su name boundary proposal map from name gross chips by name boundary swallower to name text boundary proposals be series map do
-su name show proposal ob text of ob of 0 of series of ob of boundary proposals be write do
-su name resolve wise from name text source by name text boundary proposals atleast byte 800 atmost byte 2600 to name text wise chips be wise chip do
-su name abridge wise from name wise chips by name abridge to name text abridged series be series map do
-su name show abridged ob text of ob of 0 of series of ob of abridged series be write do
+  ob filename of ob of source to name filename source filename be filename do
+  from filename of ob of source filename become wo text to name text source text be read do
+  from name text source text ob name chip style prompt to name series wise chips be chip llm do
+
+  ob name wise chips to filename "know/produce/wise-chip-refinery-inline-wise.series.pya" be write do
+  ob text "node command/summarize_wise_series.mjs \"know/produce/wise-chip-refinery-inline-wise.series.pya\" \"know/produce/wise-chip-refinery-inline-summary.series.pya\"" to name text summarize command output be command do
+  from filename "know/produce/wise-chip-refinery-inline-summary.series.pya" become wo text to name text summary series text be read do
+
+  ob name text summary series text be write do
 prah
 
 from name boundary refinery be refinery do
