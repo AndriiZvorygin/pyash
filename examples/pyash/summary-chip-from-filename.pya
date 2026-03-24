@@ -1,4 +1,4 @@
-ob filename text source be input ya
+ob ve filename text source text summary focus be input ya
 from filename "../../module/chip_refinery.pya" ob name chip to name chip be import do
 
 ob filename of ob of source to name filename source filename be filename do
@@ -11,7 +11,7 @@ exists su name summary wise chips output filename ob filename "know/produce/summ
 ob name summary wise chips to filename of ob of summary wise chips output filename be write do
 
 exists su name summary chips output filename ob filename "know/produce/summary-chip-from-filename-output.series.pya" be text ya
-ob text "node command/summarize_wise_series.mjs \"know/produce/summary-chip-from-filename-wise-chips.series.pya\" \"know/produce/summary-chip-from-filename-output.series.pya\"" to name text summarize command output be command do
+ob text "node command/summarize_wise_series.mjs \"know/produce/summary-chip-from-filename-wise-chips.series.pya\" \"know/produce/summary-chip-from-filename-output.series.pya\"" fromtext name text summary focus to name text summarize command output be command do
 from filename of ob of summary chips output filename become wo text to name text summary chips output text be read do
 ob name text summary chips output text to filename of ob of summary chips output filename be write do
 ob name text summary chips output text be write do

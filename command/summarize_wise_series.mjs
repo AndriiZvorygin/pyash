@@ -25,9 +25,11 @@ function parseSeriesTexts(pyaText) {
   return out;
 }
 
-async function askSummary(chunk) {
+async function askSummary(chunk, focus) {
+  const focusLine = String(focus || "").trim();
   const prompt = [
     "Summarize this CHUNK in plain English.",
+    focusLine ? `Focus: prioritize details about ${focusLine}.` : "",
     "",
     "Rules:",
     "- Keep only facts supported by CHUNK.",
@@ -76,16 +78,27 @@ function toSeriesPya(name, texts) {
 async function main() {
   const inPath = process.argv[2];
   const outPath = process.argv[3];
+  const focusArg = process.argv[4] || "";
   if (!inPath || !outPath) {
-    process.stderr.write("usage: node command/summarize_wise_series.mjs <in.series.pya> <out.series.pya>\n");
+    process.stderr.write("usage: node command/summarize_wise_series.mjs <in.series.pya> <out.series.pya> [focus]\n");
     process.exit(2);
   }
+
+  let focus = String(focusArg || "");
+  if (!focus.trim()) {
+    try {
+      if (!process.stdin.isTTY) focus = fs.readFileSync(0, "utf8");
+    } catch {
+      // best effort: leave focus empty
+    }
+  }
+  focus = String(focus || "").trim();
 
   const source = fs.readFileSync(inPath, "utf8");
   const chunks = parseSeriesTexts(source);
   const summaries = [];
   for (const chunk of chunks) {
-    summaries.push(await askSummary(chunk));
+    summaries.push(await askSummary(chunk, focus));
   }
 
   const outText = toSeriesPya("wise chunk summaries", summaries);
