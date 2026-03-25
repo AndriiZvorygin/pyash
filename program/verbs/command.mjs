@@ -387,8 +387,11 @@ function parseAbsolutePathTokens(commandText = "") {
 function rewriteRunRootCommandPath(commandText, { cwd, rememberFn = remember } = {}) {
   const text = String(commandText ?? "").trim();
   if (!text) return text;
-  const match = text.match(/^node\s+command\/([^\s]+)([\s\S]*)$/u);
+  const match = text.match(/^((?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)node\s+command\/([^\s]+)([\s\S]*)$/u);
   if (!match) return text;
+  const prefix = match[1] ?? "";
+  const commandFile = match[2] ?? "";
+  const suffix = match[3] ?? "";
   const runRootRaw =
     rememberFn("run root")?.ob?.filename
     ?? rememberFn("run root")?.ob?.text
@@ -405,7 +408,7 @@ function rewriteRunRootCommandPath(commandText, { cwd, rememberFn = remember } =
   if (!runRoot) {
     let cursor = baseCwd;
     for (;;) {
-      const probe = path.join(cursor, "command", match[1]);
+      const probe = path.join(cursor, "command", commandFile);
       if (fsSync.existsSync(probe)) {
         runRoot = cursor;
         break;
@@ -416,12 +419,12 @@ function rewriteRunRootCommandPath(commandText, { cwd, rememberFn = remember } =
     }
   }
   if (!runRoot) return text;
-  const target = path.resolve(runRoot, "command", match[1]);
+  const target = path.resolve(runRoot, "command", commandFile);
   const rel = path.relative(baseCwd, target);
   if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
-    return `node ${path.posix.normalize(rel || target)}${match[2] ?? ""}`;
+    return `${prefix}node ${path.posix.normalize(rel || target)}${suffix}`;
   }
-  return `node ./${path.posix.normalize(rel)}${match[2] ?? ""}`;
+  return `${prefix}node ./${path.posix.normalize(rel)}${suffix}`;
 }
 
 function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
@@ -452,8 +455,21 @@ function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
     ?? resolveConfigMapSeries("sandbox configure", "env allowlist", { rememberFn })
     ?? resolveConfigSeries("command env allowlist", { rememberFn })
     ?? DEFAULT_ENV_ALLOWLIST;
+  const runRootRaw =
+    rememberFn("run root")?.ob?.filename
+    ?? rememberFn("run root")?.ob?.text
+    ?? rememberFn("run root")?.ob?.name
+    ?? rememberFn("world root")?.ob?.filename
+    ?? rememberFn("world root")?.ob?.text
+    ?? rememberFn("world root")?.ob?.name
+    ?? "";
+  let runRoot = path.resolve(String(runRootRaw || cwd));
+  if (runRoot.endsWith(`${path.sep}world`) || runRoot.endsWith("/world")) {
+    runRoot = path.dirname(runRoot);
+  }
   return {
     cwd,
+    runRoot,
     commandRoots,
     writableRoots,
     networkAllowed,
@@ -463,7 +479,7 @@ function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
   };
 }
 
-function buildAllowedEnv({ allowlist = [], cwd } = {}) {
+function buildAllowedEnv({ allowlist = [], cwd, runRoot } = {}) {
   const env = {};
   for (const key of Object.keys(process.env)) {
     if (!key.startsWith("PYA_")) continue;
@@ -480,6 +496,11 @@ function buildAllowedEnv({ allowlist = [], cwd } = {}) {
   if (process.env.AI_HOST) env.AI_HOST = process.env.AI_HOST;
   if (!env.PATH && process.env.PATH) env.PATH = process.env.PATH;
   if (!env.HOME && process.env.HOME) env.HOME = process.env.HOME;
+  const resolvedRunRoot = path.resolve(String(runRoot || cwd || process.cwd()));
+  if (!env.PYA_DRAW_WORKFLOW_ROOT) env.PYA_DRAW_WORKFLOW_ROOT = path.join(resolvedRunRoot, "draw");
+  if (!env.PYA_SAY_WORKFLOW_ROOT) env.PYA_SAY_WORKFLOW_ROOT = path.join(resolvedRunRoot, "say");
+  if (!env.PYA_HEAR_WORKFLOW_ROOT) env.PYA_HEAR_WORKFLOW_ROOT = path.join(resolvedRunRoot, "hear");
+  if (!env.PYA_MUSIC_WORKFLOW_ROOT) env.PYA_MUSIC_WORKFLOW_ROOT = path.join(resolvedRunRoot, "music");
   env.PWD = cwd;
   return env;
 }
@@ -736,7 +757,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   const cmd = rewriteRunRootCommandPath(rawCmd, { cwd: sandbox.cwd, rememberFn });
   const commandClass = classifyCommandText(cmd);
   const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
-  const commandEnv = buildAllowedEnv({ allowlist: sandbox.envAllowlist, cwd: sandbox.cwd });
+  const commandEnv = buildAllowedEnv({ allowlist: sandbox.envAllowlist, cwd: sandbox.cwd, runRoot: sandbox.runRoot });
   const requestId = nextAuditId();
   if (shouldDeny({ sentence, policy, commandClass })) {
     emitCommandAudit({ requestId, stage: "policy", commandClass, policy, decision: "deny", sentence, rememberFn });
@@ -911,6 +932,13 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     cwd: sandbox.cwd,
     env: commandEnv,
     maxOutputBytes: sandbox.maxOutputBytes,
+    onStdout: process.env.PYA_RUN_VERBOSE === "1"
+      ? (text) => {
+          try {
+            process.stdout.write(text);
+          } catch {}
+        }
+      : null,
     onStderr: process.env.PYA_RUN_VERBOSE === "1"
       ? (text) => {
           try {

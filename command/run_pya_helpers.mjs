@@ -67,6 +67,12 @@ async function findConfigRoots({ cwd, entryPath }) {
   return roots;
 }
 
+export async function resolveRunRoot({ cwd, entryPath }) {
+  const roots = await findConfigRoots({ cwd, entryPath });
+  const chosen = roots.length > 0 ? roots[roots.length - 1] : null;
+  return normalizeRunRoot(path.resolve(chosen || cwd || process.cwd()));
+}
+
 export async function loadDefaultConfig({ cwd, interpretFn, entryPath }) {
   const roots = await findConfigRoots({ cwd, entryPath });
   for (const root of roots) {
