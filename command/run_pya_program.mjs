@@ -24,7 +24,7 @@ import { closeMcpServers } from "../program/motor/mcp.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
 import { collectInputDeclarations } from "../program/runtime/input_ports.mjs";
-import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, formatRunDurationMs, readFlagValue, sanitizeRunId, artifactRunPath, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
+import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, formatRunDurationMs, readFlagValue, sanitizeRunId, artifactRunPath, normalizeRunRoot, resolveRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const NEWSPAPER_TEXT_ARTIFACT_THRESHOLD = 2048;
@@ -408,7 +408,7 @@ async function main() {
     registerSignatureHandler(sig);
   }
   await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret, entryPath: resolved });
-  const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
+  const runRoot = await resolveRunRoot({ cwd: process.cwd(), entryPath: resolved });
   if (!remember("run root")) {
     doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
   }
