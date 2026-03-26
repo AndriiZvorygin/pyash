@@ -324,6 +324,81 @@ test("runLearnFilenamePipeline keeps highest scored fallback when support checks
   assert.equal(extractCalls.length, expectedChunks.length + 2, "first chunk should exhaust retries then continue");
 });
 
+test("runLearnFilenamePipeline keeps scored fallback when a later retry times out", async () => {
+  const writes = new Map();
+  const calls = [];
+  const attemptsByChunk = new Map();
+  const source = ("Paragraph about forgiveness and catalyst. ".repeat(500)) + "\n\n" + ("Another paragraph. ".repeat(500));
+  const expectedChunks = splitIntoOverlappingChunks(source, DEFAULT_CHUNK_SIZE, 1800);
+  assert.ok(expectedChunks.length >= 2, "fixture should produce multiple chunks");
+
+  const output = await runLearnFilenamePipeline({
+    sourceFilename: "fallback-timeout-large.txt",
+    learningFocus: "forgiveness",
+    readFileFn: async (file) => {
+      if (file === "fallback-timeout-large.txt") return source;
+      return writes.get(file) ?? "";
+    },
+    mkdtempFn: async () => "/tmp/learn-fallback-timeout-test",
+    writeFileFn: async (file, text) => {
+      writes.set(file, text);
+    },
+    runExtractFn: async ({ sourceFilename }) => {
+      const prev = attemptsByChunk.get(sourceFilename) ?? 0;
+      const next = prev + 1;
+      attemptsByChunk.set(sourceFilename, next);
+      calls.push(["extract", sourceFilename, next]);
+      if (sourceFilename.endsWith("chunk-001.txt") && next === 1) {
+        const e1 = new Error("learn filename pipeline defective: child stage failed: learning source support defective: score=0.31");
+        e1.resultText = [
+          "SEED CONCEPT",
+          "Fallback seed card",
+          "",
+          "CARDINAL TRAINING SENTENCE",
+          "Fallback line",
+          "",
+          "TEACHING PROGRESSION",
+          "- one",
+          "",
+          "ORTHOGONAL FEATURES",
+          "- one",
+          "",
+          "SURPRISES AND MISUNDERSTANDINGS",
+          "- one",
+          "",
+          "AFFAIRS OR ACTIVITIES",
+          "- one",
+          "",
+          "CAUSATIVE AND CONSEQUENCE",
+          "- one",
+          "",
+          "CARDINAL SCENES AND IDIOMS",
+          "- one",
+          "",
+          "BRIEF MEMORY PHRASES",
+          "- one",
+          "",
+          "CONCEPT RELATIONS",
+          "- one"
+        ].join("\n");
+        throw e1;
+      }
+      if (sourceFilename.endsWith("chunk-001.txt") && next === 2) {
+        throw new Error("child run defective: status=1 signal= timeout after 900000ms");
+      }
+      return `CARD from ${path.basename(sourceFilename)}`;
+    },
+    runMergeRefineFn: async ({ cardsFilename }) => {
+      calls.push(["merge-refine", cardsFilename]);
+      return "FINAL FROM TIMEOUT FALLBACK";
+    }
+  });
+
+  assert.equal(output, "FINAL FROM TIMEOUT FALLBACK");
+  const firstChunkCalls = calls.filter((call) => call[0] === "extract" && String(call[1]).endsWith("chunk-001.txt"));
+  assert.equal(firstChunkCalls.length, 2, "first chunk should stop retrying after timeout and keep fallback");
+});
+
 test("runLearnFilenamePipeline progressively merges very large sources in bounded groups", async () => {
   const writes = new Map();
   const calls = [];
