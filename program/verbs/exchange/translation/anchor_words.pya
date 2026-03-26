@@ -17,7 +17,9 @@ su name observation ob text "observe" as wo verb ya
 su name glider ob text "glide" as wo verb ya
 su name scroll-bar ob text "scroll" as wo verb ya
 su name waiting ob text "wait" as wo verb ya
+su name identity ob text "identify" as wo verb ya
 prah
+
 
 
 
