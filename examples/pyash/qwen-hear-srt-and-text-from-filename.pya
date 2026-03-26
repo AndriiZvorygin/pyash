@@ -1,0 +1,13 @@
+exists su name hear backend default ob text "qwen" be default ya
+ob filename text recording be input ya
+
+from filename of ob of recording become wo srt to filename "artifacts/hear/qwen-hear-srt-and-text-from-filename.srt" be hear do
+
+ob text "cp \"artifacts/hear/qwen-hear-srt-and-text-from-filename.srt.plain.txt\" \"artifacts/hear/qwen-hear-srt-and-text-from-filename.txt\"" be command do
+
+su name qwen hear outputs be map def
+su name srt filename ob filename "artifacts/hear/qwen-hear-srt-and-text-from-filename.srt" ya
+su name text filename ob filename "artifacts/hear/qwen-hear-srt-and-text-from-filename.txt" ya
+prah
+
+ob name qwen hear outputs be write do

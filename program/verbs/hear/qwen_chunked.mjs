@@ -114,17 +114,53 @@ function mergeChunkTranscriptText(chunkResults = [], mergedSegments = []) {
       .filter(Boolean)
       .join("\n");
   }
-  const lines = [];
+  const normalizeWord = (word = "") => String(word ?? "")
+    .toLowerCase()
+    .replace(/[`'’]/gu, "")
+    .replace(/[^a-z0-9]+/gu, "");
+  const tokenize = (text = "") => String(text ?? "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+  const mergedTokens = [];
+  const maxOverlapWords = 120;
   for (const chunk of chunkResults) {
-    const transcript = normalizePlainTranscript(chunk?.transcript ?? "");
-    for (const line of transcript.split(/\r?\n/u)) {
-      const trimmed = String(line ?? "").trim();
-      if (!trimmed) continue;
-      if (lines.length && lines[lines.length - 1] === trimmed) continue;
-      lines.push(trimmed);
+    const transcript = normalizePlainTranscript(chunk?.transcript ?? "")
+      .replace(/\s+/gu, " ")
+      .trim();
+    if (!transcript) continue;
+    const chunkTokens = tokenize(transcript);
+    if (!chunkTokens.length) continue;
+    if (!mergedTokens.length) {
+      mergedTokens.push(...chunkTokens);
+      continue;
     }
+
+    const left = mergedTokens;
+    const right = chunkTokens;
+    const limit = Math.min(maxOverlapWords, left.length, right.length);
+    let overlap = 0;
+    for (let k = limit; k >= 1; k -= 1) {
+      let ok = true;
+      for (let i = 0; i < k; i += 1) {
+        const a = normalizeWord(left[left.length - k + i]);
+        const b = normalizeWord(right[i]);
+        if (!a || !b || a !== b) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        overlap = k;
+        break;
+      }
+    }
+    mergedTokens.push(...right.slice(overlap));
   }
-  return lines.join("\n");
+
+  return mergedTokens.join(" ").trim();
 }
 
 export async function probeAudioDurationSeconds(inputPath) {

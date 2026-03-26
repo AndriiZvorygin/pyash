@@ -1,0 +1,8 @@
+ob filename text source be input ya
+ob filename of ob of source to name filename source filename be filename do
+ob text of ob of source filename to name text source path be text do
+ob text "node command/summary_from_filename_scored.mjs \"" to name text run cmd be text do
+ob name text source path to name run cmd be plus do
+ob text "\"" to name run cmd be plus do
+su name summary cmd stage ob text of run cmd to name text summary out be command do
+ob name text summary out be write do

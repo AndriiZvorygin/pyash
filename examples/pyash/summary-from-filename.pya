@@ -1,0 +1,60 @@
+ob filename text source be input ya
+su name provider auto discharge ob bool lie ya
+
+ob filename of ob of source to name filename source filename be filename do
+from filename of ob of source filename become wo text to name text source text be read do
+from name text source text atmost byte 14000 to name text source focused be abridge do
+
+exists su name summary mind be mind as name "qwen3.5:9b" fromtext text "You are a concise, factual summarizer." ya
+exists su name summary semantic verifier mind be mind as name "qwen3.5:9b" fromtext text "You are a strict semantic verifier. Return PASS or FAIL only." ya
+
+exists su name summary request template ob text quoted.text.Summarize the SOURCE in plain English.
+
+Rules:
+- Keep only facts supported by SOURCE.
+- Be concise and concrete.
+- No speculation.
+- No markdown bullets.
+- Keep output under 180 words.
+
+SOURCE:
+[[source]].text.quoted be text ya
+
+exists su name summary verify request template ob text quoted.text.Check whether SUMMARY is semantically faithful to SOURCE.
+
+Pass when:
+- every concrete claim in SUMMARY is supported by SOURCE
+- wording may be compressed but meaning remains faithful
+
+Fail when:
+- SUMMARY adds unsupported concrete facts
+- SUMMARY materially overstates, distorts, or contradicts SOURCE
+
+Output:
+- PASS or FAIL only
+
+SOURCE:
+[[source]]
+
+SUMMARY:
+[[summary]].text.quoted be text ya
+
+exists su name replacement source ob text "" be text ya
+exists su name replacement summary ob text "" be text ya
+ob name text source focused to name text replacement source be text do
+
+su name replacements be map def
+  su text "[[source]]" ob name text replacement source ya
+  su text "[[summary]]" ob name text replacement summary ya
+prah
+
+su name request stage ob name map replacements in name text summary request template to name text summary request be instead do
+su name summary stage ob name text summary request for name summary mind to name text summary out by num 0 atmost num 220 be write do
+ob name text summary out to name text replacement summary be text do
+
+su name verify request stage ob name map replacements in name text summary verify request template to name text summary verify request be instead do
+su name verify stage ob name text summary verify request for name summary semantic verifier mind to name text summary verify raw by num 0 atmost num 8 be write do
+ob name text summary verify raw atmost num 1 to name text summary semantic verdict be line tail do
+ob name text summary semantic verdict be equally from text FAIL then su name summary semantic abort stage ob bool lie fromtext text "summary semantic verifier failed" be guarantee do
+
+ob name text summary out be write do

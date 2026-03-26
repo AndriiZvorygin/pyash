@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
-import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { parseSrtToCuts } from "./itinerary_io.mjs";
 
 function usage() {
-  return "Usage: node command/lyrics_to_srt_from_timing.mjs <lyrics.txt> <timing.srt> <output.srt> [--include-sections]";
+  return "Usage: node command/lyrics_to_srt_from_timing.mjs <lyrics.txt> <timing.srt> <output.srt> [--include-sections] [--sentence-cues]";
 }
 
 function formatSrtTime(seconds) {
@@ -21,8 +20,40 @@ function normalizeSectionName(raw) {
   return String(raw ?? "").trim().replace(/\s+/g, " ");
 }
 
-function normalizeLyricsCuts(text, { includeSections = false } = {}) {
+function splitNaturalSentences(text) {
+  const source = String(text ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!source) return [];
+
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
+    const out = [];
+    for (const segment of segmenter.segment(source)) {
+      const s = String(segment?.segment ?? "").trim();
+      if (s) out.push(s);
+    }
+    if (out.length) return out;
+  }
+
+  return source
+    .split(/(?<=[.!?])\s+/u)
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean);
+}
+
+function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = false } = {}) {
   const source = String(text ?? "");
+  if (sentenceCues) {
+    const sentenceCuts = splitNaturalSentences(source)
+      .map((entry) => String(entry || "").trim())
+      .filter(Boolean)
+      .filter((line) => !/^\[[^\]]+\]$/u.test(line));
+    if (sentenceCuts.length) return sentenceCuts;
+  }
+
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const lineCuts = [];
   let activeSection = "";
@@ -40,7 +71,7 @@ function normalizeLyricsCuts(text, { includeSections = false } = {}) {
   }
   if (lineCuts.length > 1) return lineCuts;
 
-  const sentenceCuts = splitSentences(source, { includeThen: true })
+  const sentenceCuts = splitNaturalSentences(source)
     .map((entry) => String(entry || "").trim())
     .filter(Boolean)
     .filter((line) => !/^\[[^\]]+\]$/u.test(line));
@@ -315,7 +346,8 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
   writeOut = (text) => process.stdout.write(text)
 } = {}) {
   const includeSections = args.includes("--include-sections");
-  const positional = args.filter((part) => part !== "--include-sections");
+  const sentenceCues = args.includes("--sentence-cues");
+  const positional = args.filter((part) => part !== "--include-sections" && part !== "--sentence-cues");
   const [lyricsPath, timingSrtPath, outputPath] = positional;
   if (!lyricsPath || !timingSrtPath || !outputPath) {
     throw new Error(usage());
@@ -323,7 +355,7 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
 
   const lyricsText = await readFile(lyricsPath, "utf8");
   const timingText = await readFile(timingSrtPath, "utf8");
-  const lyricCuts = normalizeLyricsCuts(lyricsText, { includeSections });
+  const lyricCuts = normalizeLyricsCuts(lyricsText, { includeSections, sentenceCues });
   const timingCuts = parseSrtToCuts(timingText);
   const aligned = buildTimingRows(lyricCuts, timingCuts);
   const rows = aligned.rows;
