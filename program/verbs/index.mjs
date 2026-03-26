@@ -87,6 +87,7 @@ import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itiner
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
 import android, { signatures as androidSignatures } from "./android.mjs";
 import extract, { signatures as extractSignatures } from "./extract.mjs";
+import speakerIdentity, { signatures as speakerIdentitySignatures } from "./speaker_identity.mjs";
 
 export {
   plus,
@@ -164,7 +165,8 @@ export {
   itineraryMedia,
   drawTextImage,
   android,
-  extract
+  extract,
+  speakerIdentity
 };
 
 export const builtInSignatures = [
@@ -257,4 +259,5 @@ export const builtInSignatures = [
   ...drawTextImageSignatures,
   ...androidSignatures,
   ...extractSignatures,
+  ...speakerIdentitySignatures,
 ];

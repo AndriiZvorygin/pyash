@@ -30,6 +30,7 @@ Use this when the cheat sheet is not enough.
 - **Hymn manuscript refinery profile (reference)** → `documentation/reference/hymn-manuscript-refinery.md`
 - **Learning distillation refinery profile (reference)** → `documentation/reference/learning-distillation-refinery.md`
 - **Music module profile (reference)** → `documentation/reference/music-module.md`
+- **Speaker identification profile (reference)** → `documentation/reference/speaker-identification.md`
 - **Instead replacement profile (reference)** → `documentation/reference/instead-replacement.md`
 - **External TUI session projection (Codex/others)** → `documentation/reference/agent-tui-session-projection.md`
 - **Sleep + gold + LoRA/SFT training contract** → `documentation/reference/sleep-gold-training.md`

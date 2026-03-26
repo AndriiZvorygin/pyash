@@ -269,6 +269,30 @@ ensure_pyash_link() {
   return 0
 }
 
+ensure_python_speaker_deps() {
+  local speaker_ready
+  speaker_ready="$(
+    docker exec pyash bash -lc 'python3 - <<'"'"'PY'"'"'
+import importlib.util
+mods = ("numpy", "torch", "torchaudio", "speechbrain", "torchcodec")
+ok = all(importlib.util.find_spec(name) is not None for name in mods)
+print("1" if ok else "0")
+PY'
+  )"
+  if [[ "$speaker_ready" == "1" ]]; then
+    return 0
+  fi
+
+  echo "Installing Python speaker worker dependencies..."
+  if ! docker exec pyash bash -lc 'python3 -m pip install --no-cache-dir --break-system-packages numpy torch torchaudio speechbrain torchcodec "huggingface_hub<1.0" >/tmp/pyash-speaker-deps.log 2>&1'; then
+    echo "warning: speaker worker dependency install failed inside container." >&2
+    docker exec pyash bash -lc 'tail -n 40 /tmp/pyash-speaker-deps.log 2>/dev/null || true' >&2 || true
+    return 0
+  fi
+  echo "Speaker worker dependencies ready."
+  return 0
+}
+
 ensure_calendar_running() {
   if [[ "${PYASH_CALENDAR_AUTOSTART:-truth}" != "truth" ]]; then
     return 0
@@ -331,6 +355,7 @@ ensure_android_worker_running() {
 
 ensure_node_modules
 ensure_pyash_link
+ensure_python_speaker_deps
 ensure_calendar_running
 ensure_android_worker_running
 

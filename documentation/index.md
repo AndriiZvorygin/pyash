@@ -15,6 +15,7 @@
 - `documentation/reference/verify-envelope.md` — provisional sentence envelope for `verify` outcomes.
 - `documentation/reference/verify-count-modes.md` — reference profile for `verify` word/letter count modes.
 - `documentation/reference/music-module.md` — reference profile for `music video` and `music say` contracts.
+- `documentation/reference/speaker-identification.md` — reference profile for persistent speaker identification/enrollment from audio.
 - `documentation/release-preview-0.1.md` — initial release gate, smoke route, and known limits.
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
 - `documentation/pyac.txt` — broader 2019 language/spec background.

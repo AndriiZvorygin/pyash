@@ -26,6 +26,7 @@ from filename "./module/see_vl.pya" ob name see to name see be import do
 from filename "./module/footnote_video.pya" ob name footnote to name footnote be import do
 from filename "./module/thumbnail_heading.pya" ob name thumbnail heading burn to name thumbnail heading burn be import do
 from filename "./module/draw_from_filename.pya" ob name draw to name draw be import do
+from filename "./module/speaker_identity.pya" ob name identify to name identify be import do
 from filename "./module/compile_photograph_text.pya" ob name compile to name compile be import do
 from filename "./module/brief_video.pya" ob name brief video to name brief video be import do
 from filename "./module/brief_video.pya" ob name teaching video to name teaching video be import do
@@ -121,4 +122,3 @@ exists su name review mind brief be mind as name "bespoke-minicheck:latest" from
 exists su name review mind long be mind as name "tensortemplar/patronus-lynx:8b-instruct-q4_K_M" fromtext name review long prompter ya
 exists su hear be default ob name whisper command hear ya
 exists su name qwen say clip verify enabled ob bool truth be default ya
-
