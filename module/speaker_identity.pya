@@ -1,0 +1,26 @@
+su name begin as wo speaker identity be ceremony def
+  su name result be speaker identity as wo begin do
+  su name result ret
+prah
+
+su name stop as wo speaker identity be ceremony def
+  su name result be speaker identity as wo stop do
+  su name result ret
+prah
+
+su name discharge as wo speaker identity be ceremony def
+  su name result be speaker identity as wo discharge do
+  su name result ret
+prah
+
+su name identify fromstate wo audio from filename source to name text speaker be ceremony def
+  su name result fromstate wo audio from filename of from of this be speaker identity do
+  su name result ret
+prah
+
+su name identify fromstate wo audio from filename source ob text speaker label to name text speaker be ceremony def
+  su name result fromstate wo audio from filename of from of this ob text of ob of this be speaker identity do
+  su name result ret
+prah
+
+exists su name identify be export ya

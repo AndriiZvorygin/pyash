@@ -18,6 +18,8 @@ Self-contained assets for the Pyash dev container.
 - Start/enter: `./container/pyash/command/begin.sh`
 - Restart: `./container/pyash/command/restart.sh`
 
+`begin.sh` also verifies Python speaker worker prerequisites (`numpy`, `torch`, `torchaudio`, `speechbrain`) and installs speaker compatibility dependencies (`torchcodec`, `huggingface_hub<1.0`) in-container if missing.
+
 Optional publish defaults can be set in `configure/secret.pya` with:
 - `container image repo`
 - `container image push`

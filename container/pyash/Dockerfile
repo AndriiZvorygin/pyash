@@ -64,6 +64,15 @@ RUN apt-get update \
 # uvx (MCP helpers)
 RUN python3 -m pip install --no-cache-dir --break-system-packages uv
 
+# Speaker identification worker dependencies (ECAPA embeddings)
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+  numpy \
+  torch \
+  torchaudio \
+  speechbrain \
+  torchcodec \
+  "huggingface_hub<1.0"
+
 # Node.js (LTS)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get update \
