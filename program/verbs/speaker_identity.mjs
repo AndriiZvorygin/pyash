@@ -17,6 +17,8 @@ function resolveVoicesDir(sentence) {
   const text = sentence?.fromstate?.text;
   if (typeof text !== "string") return "";
   const trimmed = text.trim();
+  // `fromstate wo audio` sets `fromstate.text` to "audio"; do not treat media type as voices directory.
+  if (!trimmed || trimmed.toLowerCase() === "audio") return "";
   return trimmed || "";
 }
 
