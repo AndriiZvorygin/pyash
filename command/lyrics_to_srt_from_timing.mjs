@@ -20,6 +20,32 @@ function normalizeSectionName(raw) {
   return String(raw ?? "").trim().replace(/\s+/g, " ");
 }
 
+const PROTECTED_DOT = "__PYA_DOT__";
+
+function protectAbbreviationDots(input) {
+  let text = String(input ?? "");
+  // Common honorifics, civic titles, and shorthand forms that should not split sentences.
+  text = text.replace(
+    /\b(Mr|Mrs|Ms|Dr|Prof|Hon|Rev|Fr|Sr|Jr|Sgt|Capt|Col|Gen|Lt|St|Mt|No|Nos|Co|Corp|Inc|Ltd|Cllr|Counc)\./giu,
+    (_, token) => `${token}${PROTECTED_DOT}`
+  );
+  // Time abbreviations.
+  text = text.replace(/\b([ap])\.m\./giu, (_, token) => `${token}${PROTECTED_DOT}m.`);
+  // Latin abbreviations and similar.
+  text = text.replace(/\b(e)\.g\./giu, (_, token) => `${token}${PROTECTED_DOT}g${PROTECTED_DOT}`);
+  text = text.replace(/\b(i)\.e\./giu, (_, token) => `${token}${PROTECTED_DOT}e${PROTECTED_DOT}`);
+  text = text.replace(/\b(v)\.s\./giu, (_, token) => `${token}${PROTECTED_DOT}s${PROTECTED_DOT}`);
+  text = text.replace(/\b(etc)\./giu, (_, token) => `${token}${PROTECTED_DOT}`);
+  // Initials and dotted acronyms (e.g., "A. Smith", "U.S.A.").
+  text = text.replace(/\b([A-Z])\.(?=\s*[A-Z]\b|\s+[A-Z][a-z])/gu, (_, token) => `${token}${PROTECTED_DOT}`);
+  text = text.replace(/\b(?:[A-Z]\.){2,}/gu, (match) => match.replace(/\./g, PROTECTED_DOT));
+  return text;
+}
+
+function restoreProtectedDots(input) {
+  return String(input ?? "").replace(new RegExp(PROTECTED_DOT, "g"), ".");
+}
+
 function splitNaturalSentences(text) {
   const source = String(text ?? "")
     .replace(/\r\n/g, "\n")
@@ -27,20 +53,21 @@ function splitNaturalSentences(text) {
     .replace(/\s+/g, " ")
     .trim();
   if (!source) return [];
+  const safeSource = protectAbbreviationDots(source);
 
   if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
     const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
     const out = [];
-    for (const segment of segmenter.segment(source)) {
-      const s = String(segment?.segment ?? "").trim();
+    for (const segment of segmenter.segment(safeSource)) {
+      const s = restoreProtectedDots(String(segment?.segment ?? "")).trim();
       if (s) out.push(s);
     }
     if (out.length) return out;
   }
 
-  return source
+  return safeSource
     .split(/(?<=[.!?])\s+/u)
-    .map((entry) => String(entry || "").trim())
+    .map((entry) => restoreProtectedDots(String(entry || "")).trim())
     .filter(Boolean);
 }
 

@@ -472,6 +472,7 @@ class SpeakerWorker:
 
     def command_rename(self, payload: Dict) -> Dict:
         root = self._resolve_voices_dir(payload.get("voices_dir") or payload.get("voicesDir"))
+        global_root = self._resolve_voices_dir(self.default_voices_dir)
         old = safe_name(payload.get("from", ""))
         new = safe_name(payload.get("to", ""))
         if not old or not new:
@@ -503,7 +504,48 @@ class SpeakerWorker:
         metadata["updated_at"] = now
         metadata["name"] = new
         self._write_pya_map(new_meta, metadata)
-        return {"speaker": new, "action": "renamed", "from": old}
+        result = {"speaker": new, "action": "renamed", "from": old}
+
+        # Optional/automatic promotion path:
+        # if renaming an anonymous speaker_* key from a non-global voices namespace,
+        # also mirror the renamed identity into global voices for reuse.
+        old_is_anon = bool(re.match(r"^speaker_\d+$", old))
+        can_promote = old_is_anon and root.resolve() != global_root.resolve()
+        if can_promote:
+            global_npy = self._npy_path(global_root, new)
+            global_meta = self._meta_path(global_root, new)
+            global_wav = global_root / f"{new}.wav"
+            source_wav_candidates = [
+                root / f"{new}.wav",
+                root / f"{old}.wav",
+                root / "samples" / f"{new}.wav",
+                root / "samples" / f"{old}.wav",
+            ]
+
+            promoted = False
+            if not global_npy.exists() and not global_meta.exists():
+                shutil.copy2(new_npy, global_npy)
+                meta_copy = dict(metadata)
+                meta_copy["speaker"] = new
+                meta_copy["name"] = new
+                meta_copy["origin"] = "promoted_from_local_rename"
+                meta_copy["source_speaker"] = old
+                meta_copy["updated_at"] = now
+                self._write_pya_map(global_meta, meta_copy)
+                promoted = True
+
+            if not global_wav.exists():
+                for candidate in source_wav_candidates:
+                    if candidate.exists() and candidate.is_file():
+                        shutil.copy2(candidate, global_wav)
+                        promoted = True
+                        break
+
+            if promoted:
+                result["promoted_to_global"] = True
+                result["global_speaker"] = new
+
+        return result
 
     def command_discharge(self) -> Dict:
         had_model = self.model is not None
