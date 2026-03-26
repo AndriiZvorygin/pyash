@@ -212,9 +212,9 @@ su name learn extract card from text source with text learning focus to name tex
   ob text "node command/validate_learn_card.mjs" fromtext name teaching out to name text learning card valid be command do
   su name learning source support verify stage from text of ob of learn source text with text of ob of teaching out to name text learning source support score be learning source support do
   ob text of ob of learning source support score from num 0 to num 1 become name num to name num learning source support score num be cast do
-  ob name num learning source support score num be tiny from num 0.8 then
   ob text "learning source support defective: score=" to name text learning source support defect be text do
   ob text of ob of learning source support score to name learning source support defect be plus do
+  ob name num learning source support score num be tiny from num 0.8 then
   ob bool lie fromtext name text learning source support defect be guarantee do
   su name teaching out ret
 prah
@@ -262,9 +262,9 @@ su name learn from text source with text learning focus to name text teaching ou
   su name teaching stage from text of ob of teaching card with text of with of this to name text teaching out be learn refine card do
   su name learning source support verify stage from text of from of this with text of ob of teaching out to name text learning source support score be learning source support do
   ob text of ob of learning source support score from num 0 to num 1 become name num to name num learning source support score num be cast do
-  ob name num learning source support score num be tiny from num 0.8 then
   ob text "learning source support defective: score=" to name text learning source support defect be text do
   ob text of ob of learning source support score to name learning source support defect be plus do
+  ob name num learning source support score num be tiny from num 0.8 then
   ob bool lie fromtext name text learning source support defect be guarantee do
   su name mind discharge stage as wo mind be discharge do
   su name teaching out ret

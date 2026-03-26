@@ -12,6 +12,6 @@ su name learning source support verify stage from text of ob of learn source tex
 ob text of ob of learning source support score from num 0 to num 1 become name num to name num learning source support score num be cast do
 ob name num learning source support score num be tiny from num 0.8 then
 ob text "learning source support defective: score=" to name text learning source support defect be text do
-ob text of ob of learning source support score to name learning source support defect be plus do
-ob bool lie fromtext name text learning source support defect be guarantee do
+ob name num learning source support score num be tiny from num 0.8 then ob text of ob of learning source support score to name learning source support defect be plus do
+ob name num learning source support score num be tiny from num 0.8 then ob bool lie fromtext name text learning source support defect be guarantee do
 su name result out ob text of ob of refined card be write do
