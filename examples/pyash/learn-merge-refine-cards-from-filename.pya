@@ -8,7 +8,10 @@ su name source stage from filename of ob of source become wo text to name text l
 su name cards stage from filename of ob of cards become wo text to name text learn cards text be read do
 su name merged card stage from text of ob of learn cards text with text of ob of learning_focus to name text merged card be learn merge cards do
 su name refined card stage from text of ob of merged card with text of ob of learning_focus to name text refined card be learn refine card do
-su name learning source support verify stage from text of ob of learn source text with text of ob of refined card to name text learning source support pass be learning source support do
-ob text of ob of learning source support pass be equally from text "FAIL" then
-ob bool lie fromtext text "learning source support defective" be guarantee do
+su name learning source support verify stage from text of ob of learn source text with text of ob of refined card to name text learning source support score be learning source support do
+ob text of ob of learning source support score from num 0 to num 1 become name num to name num learning source support score num be cast do
+ob name num learning source support score num be tiny from num 0.8 then
+ob text "learning source support defective: score=" to name text learning source support defect be text do
+ob text of ob of learning source support score to name learning source support defect be plus do
+ob bool lie fromtext name text learning source support defect be guarantee do
 su name result out ob text of ob of refined card be write do

@@ -106,20 +106,47 @@ function shouldRetryStageError(error) {
     || /learning source support defective/u.test(combined);
 }
 
+function parseSupportScoreFromError(error) {
+  const message = String(error?.message ?? "");
+  const stderr = String(error?.stderr ?? "");
+  const combined = `${message}\n${stderr}`;
+  const direct = combined.match(/learning source support defective:\s*score\s*=\s*([0-9]*\.?[0-9]+)/iu);
+  if (direct?.[1]) return Number(direct[1]);
+  return Number.NaN;
+}
+
 async function runStageWithRetries(stageLabel, runStage) {
   const retries = stageRetryCount();
   let attempt = 0;
   let lastError = null;
+  let bestFailed = null;
   while (attempt < retries) {
     attempt += 1;
     try {
       return await runStage({ attempt, retries });
     } catch (error) {
       lastError = error;
+      if (/learning source support defective/u.test(String(error?.message ?? ""))) {
+        const score = parseSupportScoreFromError(error);
+        const candidateText = String(error?.resultText ?? "").trim();
+        if (candidateText && looksLikeLearnCard(candidateText)) {
+          const numericScore = Number.isFinite(score) ? score : 0;
+          if (!bestFailed || numericScore > bestFailed.score) {
+            bestFailed = { score: numericScore, resultText: candidateText };
+          }
+        }
+      }
       const canRetry = attempt < retries && shouldRetryStageError(error);
-      if (!canRetry) throw error;
+      if (!canRetry) {
+        if (shouldRetryStageError(error)) break;
+        throw error;
+      }
       logVerbose(`[learn pipeline] ${stageLabel} retry ${attempt}/${retries} after: ${oneLine(error?.message ?? error)}`);
     }
+  }
+  if (bestFailed?.resultText) {
+    logVerbose(`[learn pipeline] ${stageLabel} using best scored fallback after retries (score=${bestFailed.score.toFixed(3)})`);
+    return { resultText: bestFailed.resultText, traceFilename: "" };
   }
   throw lastError ?? new Error(`learn filename pipeline defective: stage failed without error (${stageLabel})`);
 }
@@ -447,6 +474,7 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
       const err = new Error(`child run defective: status=${code ?? 0} signal=${signal ?? ""}`);
       err.stdout = stdout;
       err.stderr = stderr;
+      err.resultText = extractFinalResult([stdout, stderr].filter(Boolean).join("\n"));
       reject(err);
     });
   });
