@@ -23,4 +23,21 @@ su name identify fromstate wo audio from filename source ob text speaker label t
   su name result ret
 prah
 
+su name identify fromstate wo audio from filename source with name map options to name text speaker be ceremony def
+  su name result fromstate wo audio from filename of from of this with name of with of this be speaker identity do
+  su name result ret
+prah
+
+su name identify fromstate wo audio from filename source ob text speaker label with name map options to name text speaker be ceremony def
+  su name result fromstate wo audio from filename of from of this ob text of ob of this with name of with of this be speaker identity do
+  su name result ret
+prah
+
+su name rename speaker from text speaker old to text speaker new be ceremony def
+  su name rename speaker stage from text of from of this to text of to of this be speaker identity do
+  su name result ob text of ob of rename speaker stage be text do
+  su name result ret
+prah
+
 exists su name identify be export ya
+exists su name rename speaker be export ya

@@ -154,11 +154,21 @@ export class SpeakerRunner {
     return promise;
   }
 
-  async identify({ audio, prevSpeaker = null, voicesDir = this.defaultVoicesDir } = {}) {
+  async identify({
+    audio,
+    prevSpeaker = null,
+    voicesDir = this.defaultVoicesDir,
+    sameSpeakerThreshold = null,
+    knownSpeakerThreshold = null,
+    clipSeconds = null
+  } = {}) {
     return this.request("identify", {
       audio,
       prev_speaker: prevSpeaker,
       voices_dir: voicesDir,
+      ...(Number.isFinite(Number(sameSpeakerThreshold)) ? { same_speaker_threshold: Number(sameSpeakerThreshold) } : {}),
+      ...(Number.isFinite(Number(knownSpeakerThreshold)) ? { known_speaker_threshold: Number(knownSpeakerThreshold) } : {}),
+      ...(Number.isFinite(Number(clipSeconds)) ? { clip_seconds: Number(clipSeconds) } : {}),
     });
   }
 

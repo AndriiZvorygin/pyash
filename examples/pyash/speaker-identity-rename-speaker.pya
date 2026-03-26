@@ -1,0 +1,7 @@
+from filename "../../module/speaker_identity.pya" ob name rename speaker to name rename speaker be import do
+
+ob ve text text speaker_from text text speaker_to be input ya
+su name speaker renamed stage from text of ob of speaker_from to text of ob of speaker_to be rename speaker do
+su name result out ob text of ob of speaker renamed stage be write do
+be discharge as wo speaker identity do
+be stop as wo speaker identity do
