@@ -214,6 +214,48 @@ test("runLearnFilenamePipeline uses chunk extract then merge-refine for large so
   }
 });
 
+test("runLearnFilenamePipeline retries chunk extraction when learn card schema validation fails", async () => {
+  const writes = new Map();
+  const calls = [];
+  const attemptsByChunk = new Map();
+  const largeSource = ("Paragraph about forgiveness and catalyst. ".repeat(500)) + "\n\n" + ("Another paragraph. ".repeat(500));
+  const expectedChunks = splitIntoOverlappingChunks(largeSource, DEFAULT_CHUNK_SIZE, 1800);
+  assert.ok(expectedChunks.length >= 2, "fixture should produce multiple chunks");
+
+  const output = await runLearnFilenamePipeline({
+    sourceFilename: "retry-large.txt",
+    learningFocus: "forgiveness",
+    readFileFn: async (file) => {
+      if (file === "retry-large.txt") return largeSource;
+      return writes.get(file) ?? "";
+    },
+    mkdtempFn: async () => "/tmp/learn-retry-test",
+    writeFileFn: async (file, text) => {
+      writes.set(file, text);
+    },
+    runExtractFn: async ({ sourceFilename }) => {
+      const prev = attemptsByChunk.get(sourceFilename) ?? 0;
+      const next = prev + 1;
+      attemptsByChunk.set(sourceFilename, next);
+      calls.push(["extract", sourceFilename, next]);
+      if (sourceFilename.endsWith("chunk-001.txt") && next === 1) {
+        throw new Error("learn filename pipeline defective: child stage failed: learn card defective: missing heading ORTHOGONAL FEATURES");
+      }
+      return `CARD from ${path.basename(sourceFilename)} attempt ${next}`;
+    },
+    runMergeRefineFn: async ({ cardsFilename }) => {
+      calls.push(["merge-refine", cardsFilename]);
+      return "FINAL AFTER RETRY";
+    }
+  });
+
+  assert.equal(output, "FINAL AFTER RETRY");
+  const firstChunkCalls = calls.filter((call) => call[0] === "extract" && String(call[1]).endsWith("chunk-001.txt"));
+  assert.equal(firstChunkCalls.length, 2, "first chunk should be retried once");
+  const extractCalls = calls.filter((call) => call[0] === "extract");
+  assert.equal(extractCalls.length, expectedChunks.length + 1, "one extra extract call expected due to retry");
+});
+
 test("runLearnFilenamePipeline progressively merges very large sources in bounded groups", async () => {
   const writes = new Map();
   const calls = [];
