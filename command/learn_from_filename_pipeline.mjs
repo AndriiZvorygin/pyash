@@ -106,6 +106,13 @@ function shouldRetryStageError(error) {
     || /learning source support defective/u.test(combined);
 }
 
+function isSourceSupportDefect(error) {
+  const message = String(error?.message ?? "");
+  const stderr = String(error?.stderr ?? "");
+  const combined = `${message}\n${stderr}`;
+  return /learning source support defective/u.test(combined);
+}
+
 function parseSupportScoreFromError(error) {
   const message = String(error?.message ?? "");
   const stderr = String(error?.stderr ?? "");
@@ -162,7 +169,7 @@ async function runStageWithRetries(stageLabel, runStage) {
       return await runStage({ attempt, retries });
     } catch (error) {
       lastError = error;
-      if (/learning source support defective/u.test(String(error?.message ?? ""))) {
+      if (isSourceSupportDefect(error)) {
         const score = parseSupportScoreFromError(error);
         let candidateText = String(error?.resultText ?? "").trim();
         if (!candidateText) {

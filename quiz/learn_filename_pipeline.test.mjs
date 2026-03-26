@@ -422,6 +422,75 @@ test("runLearnFilenamePipeline keeps scored fallback when a later retry times ou
   assert.equal(firstChunkCalls.length, 2, "first chunk should stop retrying after timeout and keep fallback");
 });
 
+test("runLearnFilenamePipeline captures source-support fallback when defect appears in stderr", async () => {
+  const writes = new Map();
+  const calls = [];
+  const source = ("Paragraph about forgiveness and catalyst. ".repeat(500)) + "\n\n" + ("Another paragraph. ".repeat(500));
+  const expectedChunks = splitIntoOverlappingChunks(source, DEFAULT_CHUNK_SIZE, 1800);
+  assert.ok(expectedChunks.length >= 2, "fixture should produce multiple chunks");
+
+  const output = await runLearnFilenamePipeline({
+    sourceFilename: "fallback-stderr-large.txt",
+    learningFocus: "forgiveness",
+    readFileFn: async (file) => {
+      if (file === "fallback-stderr-large.txt") return source;
+      return writes.get(file) ?? "";
+    },
+    mkdtempFn: async () => "/tmp/learn-fallback-stderr-test",
+    writeFileFn: async (file, text) => {
+      writes.set(file, text);
+    },
+    runExtractFn: async ({ sourceFilename }) => {
+      calls.push(["extract", sourceFilename]);
+      if (sourceFilename.endsWith("chunk-001.txt")) {
+        const e1 = new Error("child run defective: status=1 signal=");
+        e1.stderr = "su name guarantee defective ob text \"learning source support defective: score=0.42\"";
+        e1.resultText = [
+          "SEED CONCEPT",
+          "Recovered from stderr-scored failure",
+          "",
+          "CARDINAL TRAINING SENTENCE",
+          "Recovered line",
+          "",
+          "TEACHING PROGRESSION",
+          "- one",
+          "",
+          "ORTHOGONAL FEATURES",
+          "- one",
+          "",
+          "SURPRISES AND MISUNDERSTANDINGS",
+          "- one",
+          "",
+          "AFFAIRS OR ACTIVITIES",
+          "- one",
+          "",
+          "CAUSATIVE AND CONSEQUENCE",
+          "- one",
+          "",
+          "CARDINAL SCENES AND IDIOMS",
+          "- one",
+          "",
+          "BRIEF MEMORY PHRASES",
+          "- one",
+          "",
+          "CONCEPT RELATIONS",
+          "- one"
+        ].join("\n");
+        throw e1;
+      }
+      return `CARD from ${path.basename(sourceFilename)}`;
+    },
+    runMergeRefineFn: async ({ cardsFilename }) => {
+      calls.push(["merge-refine", cardsFilename]);
+      return "FINAL FROM STDERR FALLBACK";
+    }
+  });
+
+  assert.equal(output, "FINAL FROM STDERR FALLBACK");
+  const extractCalls = calls.filter(call => call[0] === "extract");
+  assert.equal(extractCalls.length, expectedChunks.length + 2, "first chunk should exhaust retries with fallback captured from stderr defects");
+});
+
 test("runLearnFilenamePipeline progressively merges very large sources in bounded groups", async () => {
   const writes = new Map();
   const calls = [];
