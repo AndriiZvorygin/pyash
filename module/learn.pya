@@ -277,7 +277,7 @@ su name learn from filename source with text learning focus to name text teachin
   ob text of from of this to name text learning pipeline request be plus do
   ob text "\n\nLEARNING_FOCUS:\n" to name text learning pipeline request be plus do
   ob text of with of this to name text learning pipeline request be plus do
-  su name teaching raw stage ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/learn_from_filename_pipeline.mjs" to name text teaching raw fromtext name text learning pipeline request be command do
+  su name teaching raw stage ob text "node command/learn_from_filename_pipeline.mjs" to name text teaching raw fromtext name text learning pipeline request be command do
   ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   su name teaching out ret
 prah
