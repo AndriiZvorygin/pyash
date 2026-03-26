@@ -10,6 +10,15 @@ export const DEFAULT_CHUNK_OVERLAP = 1800;
 export const DEFAULT_MERGE_GROUP_SIZE = 4;
 const PARAGRAPH_BOUNDARY = /\n\s*\n/gmu;
 const CHILD_OLLAMA_TIMEOUT_MS = "600000";
+const VERBOSE_STREAM_MAX_LINES = 24;
+const VERBOSE_STREAM_MAX_LINE_CHARS = 260;
+const VERBOSE_STREAM_SNIPPET_HEAD_LINES = 3;
+const VERBOSE_STREAM_SNIPPET_TAIL_LINES = 3;
+const verboseStreamLineCount = new Map();
+const verboseStreamSuppressed = new Set();
+const verboseSnippetHeadCount = new Map();
+const verboseSnippetTailBuffer = new Map();
+const verboseSnippetTailEnabled = new Set();
 
 function isVerbose() {
   return process.env.PYA_RUN_VERBOSE === "1";
@@ -249,12 +258,111 @@ function streamChildText(text, { traceLabel = "stage", channel = "stdout" } = {}
   const normalized = String(text ?? "").replace(/\r\n?/gu, "\n");
   if (!normalized) return;
   const prefix = `[learn pipeline][${traceLabel}][${channel}] `;
+  const clipLine = (line) => {
+    const raw = String(line ?? "");
+    return raw.length > VERBOSE_STREAM_MAX_LINE_CHARS
+      ? `${raw.slice(0, VERBOSE_STREAM_MAX_LINE_CHARS)}...`
+      : raw;
+  };
+  const isSignalLine = (line) => {
+    const t = String(line ?? "").trim();
+    if (!t) return false;
+    if (t.startsWith("exists su name command audit ")) return false;
+    if (t.startsWith("su name tool event ")) return false;
+    return (
+      /^exists su name \d{8}-/u.test(t) ||
+      /^ob filename .* be run root ya$/u.test(t) ||
+      /^su name run (start|end) time /u.test(t) ||
+      /^su name run duration ms /u.test(t) ||
+      /^result file:\s+/u.test(t) ||
+      /^run start:\s+/u.test(t) ||
+      /^run end:\s+/u.test(t) ||
+      /^run duration:\s+/u.test(t) ||
+      /^artifacts folder:\s+/u.test(t) ||
+      /^su name command defective /u.test(t) ||
+      /^command defective:/u.test(t) ||
+      /^su name guarantee defective /u.test(t) ||
+      /^FINAL_RESULT_FILE:\s+/u.test(t) ||
+      /\batindex num \d+ toindex num \d+/u.test(t)
+    );
+  };
+  const isScaffoldingLine = (line) => {
+    const t = String(line ?? "").trim();
+    if (!t) return true;
+    return (
+      /command audit/u.test(t) ||
+      /\|\s*tr\s+-d/u.test(t) ||
+      /file --mime-type/u.test(t) ||
+      /\.text\.quoted/u.test(t) ||
+      /^text\/plain$/u.test(t) ||
+      /^text$/u.test(t) ||
+      /^exists su name evoke-\d+\b/u.test(t) ||
+      /^exists su name .* since name .* be run ya$/u.test(t) ||
+      /^from filename .* be import do$/u.test(t) ||
+      /^ob ve filename text source text text learning_focus be input ya$/u.test(t) ||
+      /^ob filename .* be run root ya$/u.test(t)
+    );
+  };
   const endsWithNewline = normalized.endsWith("\n");
   const lines = normalized.split("\n");
   if (endsWithNewline) lines.pop();
-  for (const line of lines) {
-    process.stderr.write(`${prefix}${line}\n`);
+  const key = `${traceLabel}:${channel}`;
+  let count = verboseStreamLineCount.get(key) ?? 0;
+  let headCount = verboseSnippetHeadCount.get(key) ?? 0;
+  const tail = verboseSnippetTailBuffer.get(key) ?? [];
+  for (const rawLine of lines) {
+    if (count >= VERBOSE_STREAM_MAX_LINES) {
+      if (!verboseStreamSuppressed.has(key)) {
+        verboseStreamSuppressed.add(key);
+        process.stderr.write(`${prefix}... compact verbose: additional lines suppressed for ${traceLabel} ${channel} (see trace file)\n`);
+      }
+      break;
+    }
+    const line = String(rawLine ?? "");
+    const signal = isSignalLine(line);
+    if (signal) {
+      process.stderr.write(`${prefix}${clipLine(line)}\n`);
+      count += 1;
+      continue;
+    }
+    if (isScaffoldingLine(line)) continue;
+    if (headCount < VERBOSE_STREAM_SNIPPET_HEAD_LINES) {
+      process.stderr.write(`${prefix}[snippet head] ${clipLine(line)}\n`);
+      headCount += 1;
+      count += 1;
+      continue;
+    }
+    if (!verboseSnippetTailEnabled.has(key)) {
+      verboseSnippetTailEnabled.add(key);
+      process.stderr.write(`${prefix}... compact verbose: middle snippets suppressed for ${traceLabel} ${channel} (showing tail at stage end)\n`);
+      count += 1;
+    }
+    if (tail.length >= VERBOSE_STREAM_SNIPPET_TAIL_LINES) tail.shift();
+    tail.push(line);
   }
+  verboseStreamLineCount.set(key, count);
+  verboseSnippetHeadCount.set(key, headCount);
+  verboseSnippetTailBuffer.set(key, tail);
+}
+
+function flushChildTextSnippetTail({ traceLabel = "stage", channel = "stdout" } = {}) {
+  if (!isVerbose()) return;
+  const key = `${traceLabel}:${channel}`;
+  const tail = verboseSnippetTailBuffer.get(key) ?? [];
+  if (tail.length > 0 && verboseSnippetTailEnabled.has(key)) {
+    const prefix = `[learn pipeline][${traceLabel}][${channel}] `;
+    for (const line of tail) {
+      const clipped = String(line ?? "").length > VERBOSE_STREAM_MAX_LINE_CHARS
+        ? `${String(line).slice(0, VERBOSE_STREAM_MAX_LINE_CHARS)}...`
+        : String(line ?? "");
+      process.stderr.write(`${prefix}[snippet tail] ${clipped}\n`);
+    }
+  }
+  verboseSnippetTailBuffer.delete(key);
+  verboseSnippetTailEnabled.delete(key);
+  verboseSnippetHeadCount.delete(key);
+  verboseStreamLineCount.delete(key);
+  verboseStreamSuppressed.delete(key);
 }
 
 function resolvePipelineArtifactRoot() {
@@ -297,6 +405,8 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
     });
     proc.on("error", reject);
     proc.on("close", (code, signal) => {
+      flushChildTextSnippetTail({ traceLabel, channel: "stdout" });
+      flushChildTextSnippetTail({ traceLabel, channel: "stderr" });
       if (code === 0) {
         resolve({ stdoutText: stdout, stderrText: stderr });
         return;
