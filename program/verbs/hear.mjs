@@ -181,6 +181,7 @@ export async function hear(
     }
   }
   let transcript = "";
+  let plainTranscript = "";
   let backend = "fixture";
   let model = null;
   const inputPath = resolveHearInputPath(sentence, { rememberFn }) || resolveEvokeInputPath({ rememberFn });
@@ -347,7 +348,7 @@ export async function hear(
             maxChunkSeconds,
             overlapSeconds,
             returnTimestamps: true,
-            useSegmentsForTranscript: wantsSrt,
+            useSegmentsForTranscript: false,
             transcribeFn: transcribeQwenFn,
             onChunk: ({ index, total, startSeconds, endSeconds, segmentCount, transcript: chunkTranscript }) => {
               const preview = String(chunkTranscript ?? "").replace(/\s+/gu, " ").trim().slice(0, 180);
@@ -369,6 +370,9 @@ export async function hear(
             }
           });
           transcript = wantsSrt ? String(chunkedPayload?.srt ?? "") : sanitizeTranscript(chunkedPayload?.transcript ?? "");
+          if (wantsSrt) {
+            plainTranscript = sanitizeTranscript(chunkedPayload?.transcript ?? "");
+          }
           emitExchangeSentence({
             mood: "ya",
             su: { name: "hear result qwen chunked" },
@@ -409,6 +413,9 @@ export async function hear(
               returnTimestamps: wantsSrt
             });
             transcript = wantsSrt ? String(payload?.srt ?? "") : sanitizeTranscript(payload?.transcript ?? "");
+            if (wantsSrt) {
+              plainTranscript = sanitizeTranscript(payload?.transcript ?? "");
+            }
             emitExchangeSentence({
               mood: "ya",
               su: { name: "hear result qwen" },
@@ -652,6 +659,10 @@ export async function hear(
   }
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await writeTextFileReplacingIfNeeded(outputPath, transcript);
+  if (wantsSrt && plainTranscript.trim()) {
+    const plainPath = `${outputPath}.plain.txt`;
+    await writeTextFileReplacingIfNeeded(plainPath, `${plainTranscript.trim()}\n`);
+  }
 
   const transcriptBytes = Buffer.from(transcript, "utf8");
   const inputBytes = await readInputBytes(sentence);

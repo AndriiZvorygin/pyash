@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import os from "node:os";
 import { remember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { resolveAgentCwd, resolveAgentPath } from "../../library/agent_cwd.mjs";
@@ -55,6 +56,55 @@ function inferHttpOutputFilename(url) {
     // keep deterministic fallback for malformed URL text
   }
   return "download.bin";
+}
+
+function decodeHtmlEntities(text = "") {
+  return String(text)
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function looksLikeEscribePlayerUrl(urlText = "") {
+  if (!urlText) return false;
+  let parsed;
+  try {
+    parsed = new URL(urlText);
+  } catch {
+    return false;
+  }
+  const host = String(parsed.hostname || "").toLowerCase();
+  const path = String(parsed.pathname || "").toLowerCase();
+  return host.endsWith("escribemeetings.com") && path.includes("/players/isistandaloneplayer.aspx");
+}
+
+function maybeDecodeUriComponent(text = "") {
+  try {
+    return decodeURIComponent(String(text));
+  } catch {
+    return String(text);
+  }
+}
+
+async function resolveEscribePlayerMediaUrl(urlText) {
+  const tmpLeaf = `escribe-player-${Date.now()}-${Math.random().toString(36).slice(2)}.html`;
+  const tmpPath = path.join(os.tmpdir(), tmpLeaf);
+  const { status } = await runCurl({ url: urlText, outputPath: tmpPath });
+  if (status !== 0) return "";
+  const html = await fs.readFile(tmpPath, "utf8").catch(() => "");
+  await fs.unlink(tmpPath).catch(() => {});
+  if (!html) return "";
+  const clientMatch = html.match(/data-client_id=(["'])(.*?)\1/i);
+  const fileMatch = html.match(/data-file_name=(["'])(.*?)\1/i);
+  if (!clientMatch || !fileMatch) return "";
+  const clientIdRaw = decodeHtmlEntities(clientMatch[2]).trim();
+  const fileNameRaw = decodeHtmlEntities(fileMatch[2]).trim();
+  if (!clientIdRaw || !fileNameRaw) return "";
+  const clientId = encodeURIComponent(maybeDecodeUriComponent(clientIdRaw));
+  const fileName = encodeURIComponent(maybeDecodeUriComponent(fileNameRaw));
+  return `https://video.isilive.ca/${clientId}/${fileName}`;
 }
 
 export async function download_http(sentence, { scheme, intent, remember: rememberFn = remember } = {}) {
@@ -140,6 +190,15 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
       raw: { sentence }
     });
   }
+  let mediaUrl = url;
+  if (intent === "audio" && looksLikeEscribePlayerUrl(url)) {
+    try {
+      const resolvedMedia = await resolveEscribePlayerMediaUrl(url);
+      if (resolvedMedia) mediaUrl = resolvedMedia;
+    } catch {
+      // fall through to original URL; downstream error remains deterministic if unresolved
+    }
+  }
   const multi = isMultiDownload(sentence);
   const monthWindow = parseMonthWindow(sentence);
   const cwd = process.cwd();
@@ -188,7 +247,7 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
 
   const extraArgs = resolveExtraArgs(sentence, { rememberFn });
   const { status, stderr } = await runYtDlp({
-    url,
+    url: mediaUrl,
     outputPath: outputTemplate,
     intent,
     extraArgs,
@@ -204,7 +263,7 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
       name: "download defective",
       message: msg,
       from: { name: "download" },
-      raw: { url, scheme, intent }
+      raw: { url: mediaUrl, scheme, intent }
     });
   }
   if (!outputTemplate.includes("%(")) {
@@ -216,3 +275,8 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
 export async function download_missing(sentence, { scheme, intent } = {}) {
   return missingBackend(sentence, { scheme, intent });
 }
+
+export {
+  looksLikeEscribePlayerUrl,
+  resolveEscribePlayerMediaUrl
+};
