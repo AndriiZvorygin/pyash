@@ -7,7 +7,9 @@ exists su name brief video script uplift mind be mind fromtext name brief video 
 exists su name brief video script platform verify mind be mind fromtext name brief video script platform verify prompt ya
 exists su name brief video script source thrust verify mind be mind fromtext name brief video script source thrust verify prompt ya
 exists su name brief video script source thrust verdict mind be mind fromtext name brief video script source thrust verdict prompt ya
+exists su name brief video script source thrust score mind be mind fromtext name brief video script source thrust score prompt ya
 exists su name brief video script source thrust intent ob text quoted.text.The generator is asked to write a short spoken script that combines transcript-grounded source facts with present-day parallels and a call to action. Treat present-day parallels as commentary by default. Only fail for source grounding when the script adds or distorts concrete source facts (people, events, actions, mechanisms) beyond the transcript..text.quoted be text ya
+exists su name manuscript source thrust min score ob num 0.7 be number ya
 
 exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second short.
 
@@ -194,6 +196,28 @@ Rules:
 - Otherwise return PASS.
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name brief video script source thrust score prompt ob text quoted.text.Score whether SCRIPT stays faithful to TRANSCRIPT for source-grounded claims.
+
+Rules:
+- Return a single numeric score between 0 and 1 on the final line.
+- 1 means clearly faithful.
+- 0 means clearly unsupported or materially distorted.
+- Treat present-day parallels as commentary unless they add concrete source facts.
+- If the review is uncertain but plausibly grounded, prefer 0.7 to 0.9.
+- If clearly unsupported, return 0 to 0.3.
+- Output only a short rationale paragraph and the final numeric score line.
+- No labels, no bullets, no markdown.
+
+Input:
+TRANSCRIPT:
+[[transcript]]
+
+GENERATOR_INTENT:
+[[intent]]
+
+SCRIPT:
+[[script]].text.quoted be text ya
 
 exists su name manuscript fact one request template ob text quoted.text.TARGET_WORDS: 20-44
 STRUCTURE:
@@ -389,61 +413,60 @@ prah
 
 su name manuscript fact one verify from text transcript to name text output be ceremony def
   su name manuscript fact one platform ob text of ob of manuscript fact one request for name brief video script fact one platform among name brief video script platform pass accordingto name manuscript fact one checks atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
-  su name manuscript fact one source thrust platform from text of from of this with text of ob of output to name text manuscript fact one source thrust pass be manuscript source thrust do
-  fromindex num 1 toindex num 3 be manuscript fact one retry do
-  ob name text manuscript fact one source thrust pass be equally from text false then
-  su name manuscript fact one guarantee platform ob bool lie fromtext text "manuscript fact one source thrust defective" be guarantee do
   su name output ret
 prah
 
 su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text manuscript fact one source thrust pass be equally from text true then be depart do
   su name manuscript fact one retry platform ob text of ob of manuscript fact one request for name brief video script fact one platform among name brief video script platform pass accordingto name manuscript fact one checks atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
-  su name manuscript fact one source thrust retry platform from text of ob of brief video script source with text of ob of output to name text manuscript fact one source thrust pass be manuscript source thrust do
 prah
 
 su name manuscript fact two verify to name text output be ceremony def
   su name manuscript fact two platform ob text of ob of manuscript fact two request for name brief video script fact two platform among name brief video script platform pass accordingto name manuscript fact two checks atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
-  su name manuscript fact two distinct platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
-  su name manuscript fact two source thrust platform from text of ob of brief video script source with text of ob of output to name text manuscript fact two source thrust pass be manuscript source thrust do
   fromindex num 1 toindex num 5 be manuscript fact two retry do
-  ob name text manuscript fact two distinct pass be equally from text false then
-  su name manuscript fact two guarantee platform ob bool lie fromtext text "manuscript fact two constraints defective" be guarantee do
-  ob name text manuscript fact two source thrust pass be equally from text false then
-  su name manuscript fact two source thrust guarantee platform ob bool lie fromtext text "manuscript fact two source thrust defective" be guarantee do
   su name output ret
 prah
 
 su name manuscript fact two retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text manuscript fact two distinct pass be equally from text true then
-  ob name text manuscript fact two source thrust pass be equally from text true then be depart do
   su name manuscript fact two retry platform ob text of ob of manuscript fact two request for name brief video script fact two platform among name brief video script platform pass accordingto name manuscript fact two checks atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
-  su name manuscript fact two distinct retry platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
-  su name manuscript fact two source thrust retry platform from text of ob of brief video script source with text of ob of output to name text manuscript fact two source thrust pass be manuscript source thrust do
 prah
 
-su name manuscript source thrust verify to name text pass be ceremony def
-  su name manuscript source thrust write platform ob name text manuscript source thrust request for name brief video script source thrust verify mind to name text manuscript source thrust review by num 0 atmost num 280 be write do
-  ob text "false" to name text manuscript source thrust pass be text do
-  ob text "false" to name text manuscript source thrust verdict known be text do
-  ob name text manuscript source thrust review from text "/\\bPASS\\s*$/i" be resemble then
-  ob text "true" to name text manuscript source thrust verdict known be text do
-  ob text "true" to name text manuscript source thrust pass be text do
-  ob name text manuscript source thrust review from text "/\\bFAIL\\s*$/i" be resemble then
-  ob text "true" to name text manuscript source thrust verdict known be text do
-  ob text "false" to name text manuscript source thrust pass be text do
-  ob name text manuscript source thrust verdict known be equally from text false then
-  su name manuscript source thrust verdict request begin platform ob text "VERIFIER_ANALYSIS:\n" to name text manuscript source thrust verdict request be text do
-  ob name text manuscript source thrust review to name text manuscript source thrust verdict request be plus do
-  ob name text manuscript source thrust verdict request for name brief video script source thrust verdict mind to name text manuscript source thrust verdict raw by num 0 atmost num 8 be write do
-  ob name text manuscript source thrust verdict raw atmost num 1 to name text manuscript source thrust verdict line be line tail do
-  ob name text manuscript source thrust verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
-  ob text "true" to name text manuscript source thrust verdict known be text do
-  ob name text manuscript source thrust verdict line from text "/^\\s*PASS\\b/i" be resemble then
-  ob text "true" to name text manuscript source thrust pass be text do
-  ob name text manuscript source thrust verdict known be equally from text false then
-  su name manuscript source thrust verdict guarantee platform ob bool lie fromtext text "manuscript source thrust verdict defective" be guarantee do
-  su name manuscript source thrust pass ret
+su name manuscript source thrust score checked to name text score be ceremony def
+  su name manuscript source thrust write platform ob name text manuscript source thrust request for name brief video script source thrust score mind to name text manuscript source thrust review by num 0 atmost num 280 be write do
+  ob name text manuscript source thrust review atmost num 1 to name text manuscript source thrust score line be line tail do
+  ob text "0.5" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust review from text "/\\bPASS\\b/i" be resemble then
+  ob text "1" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust review from text "/\\bFAIL\\b/i" be resemble then
+  ob text "0" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*1(?:\\.0+)?(?:\\D.*)?$/" be resemble then
+  ob text "1" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.9\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.9" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.8\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.8" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.7\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.7" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.6\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.6" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.5\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.5" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.4\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.4" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.3\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.3" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.2\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.2" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0\\.1\\d*(?:\\D.*)?$/" be resemble then
+  ob text "0.1" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*0(?:\\.0+)?(?:\\D.*)?$/" be resemble then
+  ob text "0" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "1" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*FAIL\\b/i" be resemble then
+  ob text "0" to name text manuscript source thrust score be text do
+  ob name text manuscript source thrust score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
+  ob name text manuscript source thrust score line to name text manuscript source thrust score be text do
+  su name manuscript source thrust score ret
 prah
 
 su name manuscript draft verify from text manuscript to name text manuscript out be ceremony def
@@ -502,8 +525,13 @@ su name manuscript source thrust from text transcript with text script to name t
   ob name text manuscript source thrust transcript to name text manuscript replacement transcript be text do
   ob name text brief video script source thrust intent to name text manuscript replacement intent be text do
   ob name text manuscript source thrust script to name text manuscript replacement script be text do
-  su name manuscript source thrust request platform ob name map manuscript request replacements in name text manuscript source thrust request template to name text manuscript source thrust request be instead do
-  su name pass platform to name text pass be manuscript source thrust verify do
+  su name manuscript source thrust request platform ob name map manuscript request replacements in name text brief video script source thrust score prompt to name text manuscript source thrust request be instead do
+  su name manuscript source thrust score stage to name text manuscript source thrust score be manuscript source thrust score checked do
+  ob text "false" to name text pass be text do
+  ob name text manuscript source thrust score from text "/^\\s*1(?:\\.0+)?(?:\\D.*)?$/" be resemble then
+  ob text "true" to name text pass be text do
+  ob name text manuscript source thrust score from text "/^\\s*0\\.[7-9]\\d*(?:\\D.*)?$/" be resemble then
+  ob text "true" to name text pass be text do
   su name pass ret
 prah
 
@@ -519,10 +547,6 @@ su name brief manuscript from text manuscript to name text manuscript out be cer
   ob text "" to name text brief video script hook hint be text do
 
   su name manuscript draft platform from text of ob of brief video script source to name text manuscript out be manuscript draft verify do
-  su name manuscript source thrust verify platform from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do
-  fromindex num 1 toindex num 3 be manuscript source thrust retry do
-  ob name text manuscript source thrust pass be equally from text false then
-  su name manuscript source thrust guarantee platform ob bool lie fromtext text "manuscript source thrust defective" be guarantee do
 
   su name manuscript out ret
 prah
@@ -532,10 +556,6 @@ su name brief manuscript from text manuscript with text hook hint to name text m
   su name hook hint source platform ob text of with of this to name text brief video script hook hint be text do
 
   su name manuscript draft platform from text of ob of brief video script source to name text manuscript out be manuscript draft verify do
-  su name manuscript source thrust verify platform from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do
-  fromindex num 1 toindex num 3 be manuscript source thrust retry do
-  ob name text manuscript source thrust pass be equally from text false then
-  su name manuscript source thrust guarantee platform ob bool lie fromtext text "manuscript source thrust defective" be guarantee do
 
   su name manuscript out ret
 prah
