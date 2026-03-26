@@ -187,6 +187,7 @@ test("command mirrors stderr live during verbose runs", async () => {
 });
 
 test("command honors inline timeout override", async () => {
+  const priorInline = process.env.PYA_COMMAND_INLINE_TIMEOUTS;
   const rememberFn = (name) => {
     if (name !== "sandbox configure") return null;
     return {
@@ -200,7 +201,13 @@ test("command honors inline timeout override", async () => {
       }
     };
   };
-  const sentence = parse("ob text \"PYA_COMMAND_TIMEOUT_MS=1000 sleep 0.05\" be command do");
-  const result = await command(sentence, { remember: rememberFn });
-  assertCommandSucceeded(result);
+  process.env.PYA_COMMAND_INLINE_TIMEOUTS = "1";
+  try {
+    const sentence = parse("ob text \"PYA_COMMAND_TIMEOUT_MS=1000 sleep 0.05\" be command do");
+    const result = await command(sentence, { remember: rememberFn });
+    assertCommandSucceeded(result);
+  } finally {
+    if (priorInline === undefined) delete process.env.PYA_COMMAND_INLINE_TIMEOUTS;
+    else process.env.PYA_COMMAND_INLINE_TIMEOUTS = priorInline;
+  }
 });

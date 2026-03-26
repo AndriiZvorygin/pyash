@@ -446,7 +446,7 @@ function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
   const timeoutMs =
     resolveConfigMapNum("sandbox configure", "timeout ms", { rememberFn })
     ?? resolveConfigMapNum("command configure", "sandbox timeout ms", { rememberFn })
-    ?? 30000;
+    ?? 0;
   const maxOutputBytes =
     resolveConfigMapNum("sandbox configure", "max output bytes", { rememberFn })
     ?? resolveConfigMapNum("command configure", "sandbox max output bytes", { rememberFn })
@@ -591,6 +591,13 @@ function parseCommandTimeoutOverride(cmd) {
   const value = Number(match[1]);
   if (!Number.isFinite(value) || value <= 0) return null;
   return Math.max(1, Math.trunc(value));
+}
+
+function isInlineTimeoutOverrideEnabled({ rememberFn = remember } = {}) {
+  const envFlag = String(process.env.PYA_COMMAND_INLINE_TIMEOUTS ?? "").trim();
+  if (envFlag === "1" || /^true$/iu.test(envFlag)) return true;
+  return resolveConfigMapBool("command configure", "inline timeout override enabled", { rememberFn }) === true
+    || resolveConfigBool("command inline timeout override enabled", { rememberFn }) === true;
 }
 
 function startFileTail({ filename, onLine }) {
@@ -925,7 +932,10 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return { ob: { text: outputText }, be: "command" };
   }
 
-  const effectiveTimeoutMs = parseCommandTimeoutOverride(cmd) ?? sandbox.timeoutMs;
+  const inlineTimeoutMs = parseCommandTimeoutOverride(cmd);
+  const effectiveTimeoutMs = (inlineTimeoutMs !== null && isInlineTimeoutOverrideEnabled({ rememberFn }))
+    ? inlineTimeoutMs
+    : sandbox.timeoutMs;
   const res = await runCommandText(cmd, {
     input,
     timeoutMs: effectiveTimeoutMs,
