@@ -25,7 +25,7 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   const mem = allRemember();
   const sandpit = dumpSandpits().at(-1);
 
-  const invoke = [...mem].reverse().find(s => s.be === "worker" && s.mood === "do");
+  const invoke = [...mem].reverse().find(s => s.be === "number" && s.mood === "do" && s.to?.name === "target");
   const result = mem.find(s => s.su?.name === "result");
   const sandpitInvoke = sandpit?.[0];
 
@@ -33,7 +33,7 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   assert.ok(result, "result fact should be stored");
   assert.ok(sandpitInvoke, "sandpit trace should have an evoke sentence first");
   assert.equal(sandpitInvoke.mood, "do");
-  assert.equal(sandpitInvoke.be, "worker");
+  assert.equal(sandpitInvoke.be, "number");
 
   assert.ok(sandpit, "sandpit trace should exist");
   const latestTarget = [...sandpit].reverse().find(s => s.su?.name === "target");

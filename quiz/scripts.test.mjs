@@ -19,6 +19,7 @@ function assertNoUnexpectedErrors(errors = []) {
     if (text.startsWith("run end: ")) return false;
     if (text.startsWith("run duration: ")) return false;
     if (text.startsWith("produce file: ")) return false;
+    if (text.startsWith("result file: ")) return false;
     return true;
   });
   assert.deepEqual(unexpected, []);
@@ -63,7 +64,7 @@ test("read_pya_trace.mjs emits beautiful trace by default and has evoker first",
   const output = logs.join("\n");
   assert.match(output, /Beautiful Trace/);
   assert.match(output, /Sandpit 0:/);
-  assert.ok(output.includes("[0] ob num 5 to name target be worker do"), "evoker should be first sandpit sentence");
+  assert.ok(output.includes("[0] ob num 5 to name target be number do"), "evoker should be first sandpit sentence");
 });
 
 test("read_pya_trace.mjs gross mode returns sandpit JSON", async () => {
@@ -75,7 +76,7 @@ test("read_pya_trace.mjs gross mode returns sandpit JSON", async () => {
   const evoker = sandpit?.[0];
 
   assert.ok(evoker, "sandpit should have an evoker at index 0");
-  assert.equal(evoker.be, "worker");
+  assert.equal(evoker.be, "number");
   assert.equal(evoker.ob?.num, 5);
 });
 

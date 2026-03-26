@@ -38,7 +38,7 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
 
   assert.ok(evoker, "sandpit should include evoker at index 0");
   assert.equal(evoker.mood, "do", "evoker mood should be do");
-  assert.equal(evoker.be, "worker", "evoker be should match ceremony");
+  assert.equal(evoker.be, "number", "evoker be should match resolved ceremony output");
   assert.equal(evoker.fromindex?.num ?? evoker.fromindex, 3, "evoker carries fromindex register");
   assert.equal(evoker.toindex?.num ?? evoker.toindex, 5, "evoker carries toindex register");
 
