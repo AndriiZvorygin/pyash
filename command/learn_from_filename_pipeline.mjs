@@ -115,6 +115,42 @@ function parseSupportScoreFromError(error) {
   return Number.NaN;
 }
 
+export async function recoverLearnCardFromChildArtifacts({
+  cwd = process.cwd(),
+  runId = "",
+  readFileFn = (file) => fsp.readFile(file, "utf8"),
+  readdirFn = (dir) => fsp.readdir(dir)
+} = {}) {
+  const childRunId = String(runId ?? "").trim();
+  if (!childRunId) return "";
+  try {
+    const produced = String(await resolveChildArtifactResult({ cwd, runId: childRunId, readFileFn })).trim();
+    if (looksLikeLearnCard(produced)) return produced;
+  } catch {
+    // Ignore missing produce artifact and continue to newspaper recovery.
+  }
+  const newspaperDir = path.resolve(String(cwd ?? process.cwd()), "artifacts", childRunId, "newspaper");
+  let entries = [];
+  try {
+    entries = (await readdirFn(newspaperDir))
+      .filter((name) => /^text-\d+\.txt$/u.test(String(name)))
+      .sort();
+  } catch {
+    return "";
+  }
+  for (let idx = entries.length - 1; idx >= 0; idx -= 1) {
+    const candidateFile = path.join(newspaperDir, entries[idx]);
+    let text = "";
+    try {
+      text = String(await readFileFn(candidateFile));
+    } catch {
+      continue;
+    }
+    if (looksLikeLearnCard(text)) return text.trim();
+  }
+  return "";
+}
+
 async function runStageWithRetries(stageLabel, runStage) {
   const retries = stageRetryCount();
   let attempt = 0;
@@ -128,7 +164,13 @@ async function runStageWithRetries(stageLabel, runStage) {
       lastError = error;
       if (/learning source support defective/u.test(String(error?.message ?? ""))) {
         const score = parseSupportScoreFromError(error);
-        const candidateText = String(error?.resultText ?? "").trim();
+        let candidateText = String(error?.resultText ?? "").trim();
+        if (!candidateText) {
+          candidateText = await recoverLearnCardFromChildArtifacts({
+            cwd: process.cwd(),
+            runId: String(error?.childRunId ?? "").trim()
+          });
+        }
         if (candidateText && looksLikeLearnCard(candidateText)) {
           const numericScore = Number.isFinite(score) ? score : 0;
           if (!bestFailed || numericScore > bestFailed.score) {
@@ -478,6 +520,7 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
       err.stdout = stdout;
       err.stderr = stderr;
       err.resultText = extractFinalResult([stdout, stderr].filter(Boolean).join("\n"));
+      err.childRunId = effectiveRunId;
       reject(err);
     });
   });
@@ -488,6 +531,7 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
     const err = new Error(`learn filename pipeline defective: child stage failed: ${childDefect}`);
     err.stdout = stdoutText;
     err.stderr = stderrText;
+    err.childRunId = effectiveRunId;
     throw err;
   }
   let resultText = "";

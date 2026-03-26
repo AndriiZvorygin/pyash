@@ -13,7 +13,8 @@ import {
   buildChildRunId,
   resolveChildArtifactProduceFilename,
   resolveChildArtifactResult,
-  planMergeLayers
+  planMergeLayers,
+  recoverLearnCardFromChildArtifacts
 } from "../command/learn_from_filename_pipeline.mjs";
 
 test("parseLearningPipelineRequest reads labeled stdin payload", () => {
@@ -93,6 +94,28 @@ test("resolveChildArtifactResult reads the child run produce artifact", async ()
     }
   });
   assert.equal(result, "SEED CONCEPT\nPower lives within.");
+});
+
+test("recoverLearnCardFromChildArtifacts falls back to latest newspaper card", async () => {
+  const files = new Map();
+  files.set("/tmp/repo/artifacts/run-abc/newspaper/text-000001.txt", "not a card");
+  files.set(
+    "/tmp/repo/artifacts/run-abc/newspaper/text-000002.txt",
+    ["SEED CONCEPT", "Recovered card", "", "CARDINAL TRAINING SENTENCE", "Recovered line"].join("\n")
+  );
+  const card = await recoverLearnCardFromChildArtifacts({
+    cwd: "/tmp/repo",
+    runId: "run-abc",
+    readFileFn: async (file) => {
+      if (!files.has(file)) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+      return files.get(file);
+    },
+    readdirFn: async (dir) => {
+      assert.equal(dir, "/tmp/repo/artifacts/run-abc/newspaper");
+      return ["text-000001.txt", "text-000002.txt"];
+    }
+  });
+  assert.match(card, /^SEED CONCEPT$/mu);
 });
 
 test("runLearnFilenamePipeline uses direct path for small sources", async () => {
