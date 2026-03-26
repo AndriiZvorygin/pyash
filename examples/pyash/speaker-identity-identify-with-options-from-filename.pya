@@ -1,0 +1,12 @@
+ob filename text recording be input ya
+
+su name speaker identify options be map def
+su name same_speaker_threshold ob num 0.72 ya
+su name known_speaker_threshold ob num 0.68 ya
+su name clip_seconds ob num 10 ya
+prah
+
+fromstate wo audio from filename of ob of recording with name speaker identify options to name text speaker be identify do
+su name result out ob name speaker be write do
+be discharge as wo speaker identity do
+be stop as wo speaker identity do

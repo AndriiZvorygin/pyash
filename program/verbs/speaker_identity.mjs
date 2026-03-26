@@ -3,6 +3,7 @@ import {
   ensureStarted as ensureSpeakerStarted,
   identify as identifySpeaker,
   enrol as enrolSpeaker,
+  rename as renameSpeaker,
   discharge as dischargeSpeaker,
   stop as stopSpeaker,
 } from "../../command/speaker_runner.mjs";
@@ -28,10 +29,55 @@ function resolveAudioFilename(sentence) {
   return value.trim();
 }
 
+function resolveTextFromCase(value, { rememberFn = remember } = {}) {
+  if (!value || typeof value !== "object") return "";
+  if (typeof value.text === "string" && value.text.trim()) return value.text.trim();
+  if (typeof value.name === "string" && value.name.trim()) {
+    const fact = rememberFn(value.name.trim());
+    const text = String(fact?.ob?.text ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
 function resolveEnrollName(sentence) {
   const text = sentence?.ob?.text;
   if (typeof text !== "string") return "";
   return text.trim();
+}
+
+function resolveNumericFromMapEntry(entry) {
+  if (!entry || typeof entry !== "object") return null;
+  const direct = Number(entry?.num);
+  if (Number.isFinite(direct)) return direct;
+  const obNum = Number(entry?.ob?.num);
+  if (Number.isFinite(obNum)) return obNum;
+  return null;
+}
+
+function resolveTextFromMapEntry(entry) {
+  if (!entry || typeof entry !== "object") return "";
+  if (typeof entry?.text === "string" && entry.text.trim()) return entry.text.trim();
+  if (typeof entry?.ob?.text === "string" && entry.ob.text.trim()) return entry.ob.text.trim();
+  if (typeof entry?.name === "string" && entry.name.trim()) return entry.name.trim();
+  if (typeof entry?.ob?.name === "string" && entry.ob.name.trim()) return entry.ob.name.trim();
+  return "";
+}
+
+function resolveOptionsMap(sentence, { rememberFn = remember } = {}) {
+  const withName = String(sentence?.with?.name ?? "").trim();
+  if (!withName) return {};
+  const fact = rememberFn(withName);
+  const map = fact?.ob?.map;
+  if (!map || typeof map !== "object") {
+    throwErrorSentence({
+      name: "speaker identity defective",
+      message: "speaker identity defective: with name map missing",
+      from: { name: "speaker identity" },
+      raw: { withName }
+    });
+  }
+  return map;
 }
 
 export async function speakerIdentity(sentence, { remember: rememberFn = remember } = {}) {
@@ -74,6 +120,30 @@ export async function speakerIdentity(sentence, { remember: rememberFn = remembe
     return { mood: "ya", be: "stop", as: { wo: "speaker identity" }, ob: { boolean: true } };
   }
 
+  const fromText = resolveTextFromCase(sentence?.from, { rememberFn });
+  const toText = resolveTextFromCase(sentence?.to, { rememberFn });
+  if (fromText && toText && !resolveAudioFilename(sentence)) {
+    try {
+      const result = useService
+        ? await callService("/rename", { from: fromText, to: toText })
+        : await renameSpeaker({ from: fromText, to: toText });
+      const speaker = String(result?.speaker ?? "").trim() || toText;
+      return {
+        mood: "ya",
+        be: "rename",
+        from: { name: "speaker identity" },
+        ob: { text: speaker },
+      };
+    } catch (err) {
+      throwErrorSentence({
+        name: "speaker identity defective",
+        message: `speaker identity defective: ${err?.message ?? err}`,
+        from: { name: "speaker identity" },
+        raw: { sentence },
+      });
+    }
+  }
+
   const audio = resolveAudioFilename(sentence);
   if (!audio) {
     throwErrorSentence({
@@ -86,18 +156,40 @@ export async function speakerIdentity(sentence, { remember: rememberFn = remembe
 
   const voicesDir = resolveVoicesDir(sentence) || String(rememberFn("speaker voices dir")?.ob?.filename ?? "./world/voices");
   const enrollName = resolveEnrollName(sentence);
+  const optionsMap = resolveOptionsMap(sentence, { rememberFn });
+  const prevSpeaker = resolveTextFromMapEntry(optionsMap.prevSpeaker) || resolveTextFromMapEntry(optionsMap.prev_speaker);
+  const sameSpeakerThreshold = resolveNumericFromMapEntry(optionsMap.sameSpeakerThreshold) ?? resolveNumericFromMapEntry(optionsMap.same_speaker_threshold);
+  const knownSpeakerThreshold = resolveNumericFromMapEntry(optionsMap.knownSpeakerThreshold) ?? resolveNumericFromMapEntry(optionsMap.known_speaker_threshold);
+  const clipSeconds = resolveNumericFromMapEntry(optionsMap.clipSeconds) ?? resolveNumericFromMapEntry(optionsMap.clip_seconds);
+  const overrideVoicesDir = resolveTextFromMapEntry(optionsMap.voicesDir) || resolveTextFromMapEntry(optionsMap.voices_dir);
+  const effectiveVoicesDir = overrideVoicesDir || voicesDir;
 
   try {
     let result;
     if (useService) {
+      const identifyPayload = {
+        audio,
+        voices_dir: effectiveVoicesDir,
+        ...(prevSpeaker ? { prev_speaker: prevSpeaker } : {}),
+        ...(Number.isFinite(Number(sameSpeakerThreshold)) ? { same_speaker_threshold: Number(sameSpeakerThreshold) } : {}),
+        ...(Number.isFinite(Number(knownSpeakerThreshold)) ? { known_speaker_threshold: Number(knownSpeakerThreshold) } : {}),
+        ...(Number.isFinite(Number(clipSeconds)) ? { clip_seconds: Number(clipSeconds) } : {}),
+      };
       result = enrollName
-        ? await callService("/enrol", { audio, name: enrollName, voices_dir: voicesDir })
-        : await callService("/identify", { audio, voices_dir: voicesDir });
+        ? await callService("/enrol", { audio, name: enrollName, voices_dir: effectiveVoicesDir, ...(Number.isFinite(Number(clipSeconds)) ? { clip_seconds: Number(clipSeconds) } : {}) })
+        : await callService("/identify", identifyPayload);
     } else {
       await ensureSpeakerStarted();
       result = enrollName
-        ? await enrolSpeaker({ audio, name: enrollName, voicesDir })
-        : await identifySpeaker({ audio, voicesDir });
+        ? await enrolSpeaker({ audio, name: enrollName, voicesDir: effectiveVoicesDir, clipSeconds })
+        : await identifySpeaker({
+          audio,
+          voicesDir: effectiveVoicesDir,
+          prevSpeaker,
+          sameSpeakerThreshold,
+          knownSpeakerThreshold,
+          clipSeconds
+        });
     }
 
     const speaker = String(result?.speaker ?? "").trim();
@@ -127,10 +219,17 @@ export const signatures = [
   { signatureWords: ["be", "speaker", "identity", "as", "wo", "begin"], handler: speakerIdentity },
   { signatureWords: ["be", "speaker", "identity", "as", "wo", "discharge"], handler: speakerIdentity },
   { signatureWords: ["be", "speaker", "identity", "as", "wo", "stop"], handler: speakerIdentity },
+  { signatureWords: ["be", "speaker", "identity", "from", "text", "to", "text"], handler: speakerIdentity },
   { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio"], handler: speakerIdentity },
   { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "to", "name", "text"], handler: speakerIdentity },
+  { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "with", "name", "map"], handler: speakerIdentity },
+  { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "with", "name", "map", "to", "name", "text"], handler: speakerIdentity },
+  { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "to", "name", "text", "with", "name", "map"], handler: speakerIdentity },
   { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "ob", "text"], handler: speakerIdentity },
   { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "ob", "text", "to", "name", "text"], handler: speakerIdentity },
+  { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "ob", "text", "with", "name", "map"], handler: speakerIdentity },
+  { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "ob", "text", "with", "name", "map", "to", "name", "text"], handler: speakerIdentity },
+  { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "wo", "audio", "ob", "text", "to", "name", "text", "with", "name", "map"], handler: speakerIdentity },
   { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "text", "ob", "text", "to", "name", "text"], handler: speakerIdentity },
   { signatureWords: ["be", "speaker", "identity", "from", "filename", "fromstate", "text", "to", "name", "text"], handler: speakerIdentity },
 ];

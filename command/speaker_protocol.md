@@ -59,7 +59,7 @@ Behavior:
 3. If prev similarity >= same-speaker threshold, reuse `prev_speaker`.
 4. Else compare against all enrolled centroids in `voices_dir`.
 5. If best enrolled similarity >= known-speaker threshold, assign known speaker.
-6. Else create new `speaker_NNN` using `voices_dir/index.json` `next_speaker_id`.
+6. Else create new `speaker_NNN` using `voices_dir/index.pya` `next_speaker_id`.
 7. When a known/prev speaker is accepted, update centroid and `sample_count`.
 
 ### `enrol`
@@ -71,7 +71,7 @@ Payload:
 
 Behavior:
 - If speaker exists, update centroid and metadata.
-- If speaker does not exist, create `.npy` + `.json` sidecar.
+- If speaker does not exist, create `.npy` + `.pya` sidecar.
 
 ### `rename`
 
@@ -81,7 +81,7 @@ Payload:
 - `voices_dir` (optional)
 
 Behavior:
-- Renames `<from>.npy/.json` to `<to>.npy/.json`.
+- Renames `<from>.npy/.pya` to `<to>.npy/.pya` (legacy `.json` sidecars are read for compatibility).
 - Updates metadata `speaker`, `name`, `updated_at`.
 
 ### `discharge`
@@ -107,10 +107,10 @@ Behavior:
 
 For each speaker key `<speaker>` in `voices_dir`:
 - centroid embedding: `<speaker>.npy` (float32)
-- metadata sidecar: `<speaker>.json`
+- metadata sidecar: `<speaker>.pya` (Pyash map sentence file)
 
 Global index in `voices_dir`:
-- `index.json` with:
+- `index.pya` with:
   - `next_speaker_id` (int)
 
 ## Node runner API

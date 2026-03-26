@@ -29,6 +29,24 @@ Expected role of `ob text`:
 - when present, treat it as enrollment label for the provided audio slice,
 - update/create that named speaker centroid before returning speaker name.
 
+Identify with options map (thresholds, previous speaker, clip length):
+
+```pyash
+su name speaker identify options be map def
+su name prev_speaker ob text "speaker_001" ya
+su name same_speaker_threshold ob num 0.74 ya
+su name known_speaker_threshold ob num 0.69 ya
+su name clip_seconds ob num 10 ya
+prah
+su name speaker stage fromstate wo audio from filename source audio with name speaker identify options to name text speaker name be identify do
+```
+
+Rename speaker key:
+
+```pyash
+su name rename stage from text "speaker_001" to text "Andrii_Zvorygin" be rename speaker do
+```
+
 ## 3. Default behavior contract
 
 For `fromstate wo audio` input:
@@ -40,8 +58,8 @@ For `fromstate wo audio` input:
 
 Speaker persistence contract:
 - centroid embedding: `world/voices/<speaker>.npy`,
-- metadata sidecar: `world/voices/<speaker>.json`,
-- id allocator: `world/voices/index.json` with `next_speaker_id`.
+- metadata sidecar: `world/voices/<speaker>.pya`,
+- id allocator: `world/voices/index.pya` with `next_speaker_id`.
 
 Temporary audio workdir:
 - `world/temporary/speaker/`.

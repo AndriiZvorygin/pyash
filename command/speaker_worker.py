@@ -87,6 +87,10 @@ class SpeakerWorker:
 
     @staticmethod
     def _index_path(root: Path) -> Path:
+        return root / "index.pya"
+
+    @staticmethod
+    def _legacy_index_path(root: Path) -> Path:
         return root / "index.json"
 
     @staticmethod
@@ -94,7 +98,11 @@ class SpeakerWorker:
         return root / f"{key}.npy"
 
     @staticmethod
-    def _json_path(root: Path, key: str) -> Path:
+    def _meta_path(root: Path, key: str) -> Path:
+        return root / f"{key}.pya"
+
+    @staticmethod
+    def _legacy_json_path(root: Path, key: str) -> Path:
         return root / f"{key}.json"
 
     def _resolve_voices_dir(self, voices_dir: Optional[str]) -> Path:
@@ -105,17 +113,34 @@ class SpeakerWorker:
     def _ensure_voices_dir(self, root: Path):
         root.mkdir(parents=True, exist_ok=True)
         index_path = self._index_path(root)
+        legacy_index_path = self._legacy_index_path(root)
         if index_path.exists():
             try:
-                payload = json.loads(index_path.read_text(encoding="utf-8"))
+                payload = self._read_pya_map(index_path)
                 if isinstance(payload, dict) and isinstance(payload.get("next_speaker_id"), int):
                     return
             except Exception:
                 pass
-        self._write_json(index_path, {"next_speaker_id": 1})
+        if legacy_index_path.exists():
+            try:
+                payload = json.loads(legacy_index_path.read_text(encoding="utf-8"))
+                if isinstance(payload, dict) and isinstance(payload.get("next_speaker_id"), int):
+                    self._write_pya_map(index_path, payload)
+                    legacy_index_path.unlink(missing_ok=True)
+                    return
+            except Exception:
+                pass
+        self._write_pya_map(index_path, {"next_speaker_id": 1})
 
     def _load_index(self, root: Path) -> Dict:
-        payload = json.loads(self._index_path(root).read_text(encoding="utf-8"))
+        index_path = self._index_path(root)
+        if index_path.exists():
+            payload = self._read_pya_map(index_path)
+        else:
+            legacy_path = self._legacy_index_path(root)
+            if not legacy_path.exists():
+                raise RuntimeError("voices index missing")
+            payload = json.loads(legacy_path.read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
             raise RuntimeError("voices index malformed")
         next_id = payload.get("next_speaker_id")
@@ -124,12 +149,79 @@ class SpeakerWorker:
         return payload
 
     def _save_index(self, root: Path, payload: Dict):
-        self._write_json(self._index_path(root), payload)
+        self._write_pya_map(self._index_path(root), payload)
+        legacy_path = self._legacy_index_path(root)
+        if legacy_path.exists():
+            legacy_path.unlink(missing_ok=True)
 
     @staticmethod
     def _write_json(path: Path, payload: Dict):
         text = json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2) + "\n"
         path.write_text(text, encoding="utf-8")
+
+    @staticmethod
+    def _to_pya_scalar(value):
+        if isinstance(value, bool):
+            return f"bool {'truth' if value else 'lie'}"
+        if isinstance(value, int) and not isinstance(value, bool):
+            return f"num {value}"
+        if isinstance(value, float):
+            if value.is_integer():
+                return f"num {int(value)}"
+            return f"num {value}"
+        return f"text {json.dumps(str(value), ensure_ascii=True)}"
+
+    @staticmethod
+    def _write_pya_map(path: Path, payload: Dict):
+        lines = ["su name speaker metadata be map def"]
+        for key in sorted(payload.keys()):
+            key_name = safe_name(key)
+            lines.append(f"su name {key_name} ob {SpeakerWorker._to_pya_scalar(payload[key])} ya")
+        lines.append("prah")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    @staticmethod
+    def _read_pya_map(path: Path) -> Dict:
+        out: Dict = {}
+        text = path.read_text(encoding="utf-8")
+        line_re = re.compile(r'^\s*su name (.+?) ob (.+?) ya\s*$')
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            if line == "prah":
+                continue
+            if line.endswith("be map def"):
+                continue
+            match = line_re.match(line)
+            if not match:
+                continue
+            key = safe_name(match.group(1))
+            body = match.group(2).strip()
+            if body.startswith("text "):
+                quoted = body[5:].strip()
+                try:
+                    out[key] = json.loads(quoted)
+                except Exception:
+                    out[key] = quoted.strip('"')
+                continue
+            if body.startswith("num "):
+                number = body[4:].strip()
+                try:
+                    value = float(number)
+                    if value.is_integer():
+                        value = int(value)
+                    out[key] = value
+                except Exception:
+                    pass
+                continue
+            if body.startswith("bool "):
+                token = body[5:].strip().lower()
+                out[key] = token == "truth"
+                continue
+            if body.startswith("name "):
+                out[key] = body[5:].strip()
+        return out
 
     @staticmethod
     def _assert_wav(audio: str):
@@ -227,11 +319,17 @@ class SpeakerWorker:
         out: Dict[str, SpeakerRecord] = {}
         for npy_path in sorted(root.glob("*.npy")):
             key = npy_path.stem
-            json_path = self._json_path(root, key)
+            meta_path = self._meta_path(root, key)
+            legacy_json_path = self._legacy_json_path(root, key)
             metadata = {}
-            if json_path.exists():
+            if meta_path.exists():
                 try:
-                    metadata = json.loads(json_path.read_text(encoding="utf-8"))
+                    metadata = self._read_pya_map(meta_path)
+                except Exception:
+                    metadata = {}
+            elif legacy_json_path.exists():
+                try:
+                    metadata = json.loads(legacy_json_path.read_text(encoding="utf-8"))
                 except Exception:
                     metadata = {}
             try:
@@ -253,7 +351,10 @@ class SpeakerWorker:
 
     def _persist_speaker(self, root: Path, key: str, embedding: np.ndarray, metadata: Dict):
         np.save(self._npy_path(root, key), embedding.astype(np.float32))
-        self._write_json(self._json_path(root, key), metadata)
+        self._write_pya_map(self._meta_path(root, key), metadata)
+        legacy_path = self._legacy_json_path(root, key)
+        if legacy_path.exists():
+            legacy_path.unlink(missing_ok=True)
 
     def _update_centroid(self, root: Path, key: str, sample: np.ndarray) -> Dict:
         records = self._list_speakers(root)
@@ -379,17 +480,21 @@ class SpeakerWorker:
             return {"speaker": new, "action": "noop"}
 
         old_npy = self._npy_path(root, old)
-        old_json = self._json_path(root, old)
+        old_meta = self._meta_path(root, old)
+        old_json = self._legacy_json_path(root, old)
         new_npy = self._npy_path(root, new)
-        new_json = self._json_path(root, new)
+        new_meta = self._meta_path(root, new)
         if not old_npy.exists():
             raise RuntimeError(f"speaker missing: {old}")
-        if new_npy.exists() or new_json.exists():
+        if new_npy.exists() or new_meta.exists():
             raise RuntimeError(f"target exists: {new}")
 
         old_npy.rename(new_npy)
         metadata = {}
-        if old_json.exists():
+        if old_meta.exists():
+            metadata = self._read_pya_map(old_meta)
+            old_meta.unlink(missing_ok=True)
+        elif old_json.exists():
             metadata = json.loads(old_json.read_text(encoding="utf-8"))
             old_json.unlink(missing_ok=True)
         now = utc_now_iso()
@@ -397,7 +502,7 @@ class SpeakerWorker:
         metadata.setdefault("created_at", now)
         metadata["updated_at"] = now
         metadata["name"] = new
-        self._write_json(new_json, metadata)
+        self._write_pya_map(new_meta, metadata)
         return {"speaker": new, "action": "renamed", "from": old}
 
     def command_discharge(self) -> Dict:
