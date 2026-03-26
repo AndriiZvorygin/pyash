@@ -88,6 +88,6 @@ test("learn merge refine example rechecks refined card against original source",
   assert.match(text, /from filename of ob of cards become wo text to name text learn cards text be read do/u);
   assert.match(text, /from text of ob of learn cards text with text of ob of learning_focus to name text merged card be learn merge cards do/u);
   assert.match(text, /from text of ob of merged card with text of ob of learning_focus to name text refined card be learn refine card do/u);
-  assert.match(text, /from text of ob of learn source text with text of ob of refined card to name text learning source support pass be learning source support do/u);
+  assert.match(text, /from text of ob of learn source text with text of ob of refined card to name text learning source support score be learning source support do/u);
   assert.match(text, /learning source support defective/u);
 });

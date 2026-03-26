@@ -138,7 +138,7 @@ Formatting rules:
 - No markdown beyond those simple heading lines and dash list items.
 - No extra headings, no commentary before or after the block..text.quoted be text ya
 
-exists su name learning source support verify prompt ob text quoted.text.Verify whether TEACHING stays faithful to the source material in SOURCE.
+exists su name learning source support verify prompt ob text quoted.text.Score whether TEACHING stays faithful to the source material in SOURCE.
 
 GENERATOR INTENT:
 - The output is a distilled teaching artifact, not a free summary.
@@ -162,43 +162,37 @@ Do not fail merely because the distillation:
 - restates a supported relation more directly,
 - turns source-supported imagery into short memory phrases.
 
-PASS if:
-- the teaching block remains faithful to SOURCE,
-- concrete teaching statements are supported,
-- no clear major meaning drift occurs.
-
-FAIL if:
-- important teaching claims, practices, or consequences clearly lack support,
-- unsupported central images or doctrines are clearly added,
-- a source-specific spiritual, symbolic, or metaphysical teaching is flattened into generic institutional, academic, managerial, sociological, or dictionary-style language,
-- source-native causation is replaced with generic abstractions like control, resources, enforcement, persuasion, compliance, leverage, or hierarchy without clear support,
-- the requested focus clearly causes material distortion of the source.
+Scoring guidance:
+- 1.0 means strong source faithfulness.
+- 0.8 means usable and mostly faithful.
+- 0.5 means mixed or uncertain faithfulness.
+- 0.0 means clear non-faithful drift.
 
 Output rules:
 - First output one short paragraph (1-2 sentences, max 70 words).
-- Final line must be exactly PASS or FAIL.
+- Final non-empty line must be exactly one numeric score from 0 to 1, or PASS, or FAIL.
+- PASS means 1.0.
+- FAIL means 0.0.
 - No bullets, no labels, no markdown.
-- No text after the final verdict line..text.quoted be text ya
-
-exists su name learning source support verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
-
-Rules:
-- Return FAIL only when the analysis clearly says the teaching block adds important unsupported claims, important unsupported practices, important unsupported consequences, or clear material meaning drift.
-- Otherwise return PASS.
-- One word only.
-- No labels, no explanation, no punctuation..text.quoted be text ya
+- No text after the final score line..text.quoted be text ya
 
 exists su name learning source support verify mind be mind fromtext name learning source support verify prompt ya
-exists su name learning source support verdict mind be mind fromtext name learning source support verdict prompt ya
 
-su name learning source support from text source with text teaching to name text pass be ceremony def
+su name learning source support from text source with text teaching to name text score be ceremony def
   su name learning source support request begin stage ob text "SOURCE:\n" to name text learning source support request be text do
   ob text of from of this to name learning source support request be plus do
   ob text "\n\nTEACHING:\n" to name learning source support request be plus do
   ob text of with of this to name learning source support request be plus do
   su name learning source support write stage ob name text learning source support request for name learning source support verify mind to name text learning source support review by num 0 atmost num 520 be write do
-  su name learning source support verdict stage ob name text learning source support review for name learning source support verdict mind to name text learning source support pass be write do
-  su name learning source support return stage ob name text learning source support pass be text do
+  ob name text learning source support review atmost num 1 to name text learning source support score line be line tail do
+  ob text "0" to name text score be text do
+  ob name text learning source support score line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "1" to name text score be text do
+  ob name text learning source support score line from text "/^\\s*FAIL\\b/i" be resemble then
+  ob text "0" to name text score be text do
+  ob name text learning source support score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
+  ob name text learning source support score line to name text score be text do
+  su name learning source support return stage ob name text score be text do
 prah
 
 su name learn extract card from text source with text learning focus to name text teaching out be ceremony def
@@ -216,9 +210,12 @@ su name learn extract card from text source with text learning focus to name tex
   ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   ob text "node command/normalize_learn_card.mjs" fromtext name teaching out to name text teaching out be command do
   ob text "node command/validate_learn_card.mjs" fromtext name teaching out to name text learning card valid be command do
-  su name learning source support verify stage from text of ob of learn source text with text of ob of teaching out to name text learning source support pass be learning source support do
-  ob text of ob of learning source support pass be equally from text "FAIL" then
-  ob bool lie fromtext text "learning source support defective" be guarantee do
+  su name learning source support verify stage from text of ob of learn source text with text of ob of teaching out to name text learning source support score be learning source support do
+  ob text of ob of learning source support score from num 0 to num 1 become name num to name num learning source support score num be cast do
+  ob name num learning source support score num be tiny from num 0.8 then
+  ob text "learning source support defective: score=" to name text learning source support defect be text do
+  ob text of ob of learning source support score to name learning source support defect be plus do
+  ob bool lie fromtext name text learning source support defect be guarantee do
   su name teaching out ret
 prah
 
@@ -263,9 +260,12 @@ su name learn from text source with text learning focus to name text teaching ou
   ob bool lie fromtext text "learning focus defective: give a non-empty learning focus" be guarantee do
   su name teaching card stage from text of from of this with text of with of this to name text teaching card be learn extract card do
   su name teaching stage from text of ob of teaching card with text of with of this to name text teaching out be learn refine card do
-  su name learning source support verify stage from text of from of this with text of ob of teaching out to name text learning source support pass be learning source support do
-  ob text of ob of learning source support pass be equally from text "FAIL" then
-  ob bool lie fromtext text "learning source support defective" be guarantee do
+  su name learning source support verify stage from text of from of this with text of ob of teaching out to name text learning source support score be learning source support do
+  ob text of ob of learning source support score from num 0 to num 1 become name num to name num learning source support score num be cast do
+  ob name num learning source support score num be tiny from num 0.8 then
+  ob text "learning source support defective: score=" to name text learning source support defect be text do
+  ob text of ob of learning source support score to name learning source support defect be plus do
+  ob bool lie fromtext name text learning source support defect be guarantee do
   su name mind discharge stage as wo mind be discharge do
   su name teaching out ret
 prah
