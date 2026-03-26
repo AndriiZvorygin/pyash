@@ -91,6 +91,10 @@ exists su name hear workflow default ob text "qwen3-asr-timestamps-attn2" be def
 exists su name hear qwen chunk max seconds ob num 55 be default ya
 exists su name hear qwen chunk overlap seconds ob num 1.5 be default ya
 exists su name whisperx enabled ob bool lie be default ya
+exists su name speaker identity enabled ob bool lie be default ya
+exists su name speaker backend default ob text "local" be default ya
+exists su name speaker host ob text "http://speaker:8010" be default ya
+exists su name speaker voices dir ob filename "./world/voices" be default ya
 exists su name download extra ob ve text "--cookies-from-browser" "firefox" ya
 exists su name download extra default ob la be download as wo video ko with name download extra be default ya
 exists su name download extra default ob la be download as wo audio ko with name download extra be default ya

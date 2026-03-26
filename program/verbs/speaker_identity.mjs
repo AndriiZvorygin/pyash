@@ -6,6 +6,7 @@ import {
   discharge as dischargeSpeaker,
   stop as stopSpeaker,
 } from "../../command/speaker_runner.mjs";
+import { remember } from "../remember/index.mjs";
 
 function resolveAction(sentence) {
   const raw = sentence?.as?.wo ?? sentence?.as?.text ?? sentence?.as?.name ?? "";
@@ -14,9 +15,9 @@ function resolveAction(sentence) {
 
 function resolveVoicesDir(sentence) {
   const text = sentence?.fromstate?.text;
-  if (typeof text !== "string") return "./world/voices";
+  if (typeof text !== "string") return "";
   const trimmed = text.trim();
-  return trimmed || "./world/voices";
+  return trimmed || "";
 }
 
 function resolveAudioFilename(sentence) {
@@ -31,18 +32,43 @@ function resolveEnrollName(sentence) {
   return text.trim();
 }
 
-export async function speakerIdentity(sentence) {
+export async function speakerIdentity(sentence, { remember: rememberFn = remember } = {}) {
   const action = resolveAction(sentence);
+  const backend = String(rememberFn("speaker backend default")?.ob?.text ?? "local").trim().toLowerCase() || "local";
+  const host = String(rememberFn("speaker host")?.ob?.text ?? "").trim();
+  const useService = backend === "service" && host !== "";
+
+  const callService = async (endpoint, payload = {}) => {
+    const url = `${host.replace(/\/$/u, "")}${endpoint}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload ?? {})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = String(data?.error ?? `${res.status} ${res.statusText}`).trim();
+      throw new Error(`speaker service defective: ${msg}`);
+    }
+    return data;
+  };
+
   if (action === "begin") {
-    await ensureSpeakerStarted();
+    if (useService) {
+      const res = await fetch(`${host.replace(/\/$/u, "")}/health`);
+      if (!res.ok) throw new Error(`speaker service defective: ${res.status} ${res.statusText}`);
+    } else {
+      await ensureSpeakerStarted();
+    }
     return { mood: "ya", be: "begin", as: { wo: "speaker identity" }, ob: { boolean: true } };
   }
   if (action === "discharge") {
-    const result = await dischargeSpeaker();
+    const result = useService ? await callService("/discharge", {}) : await dischargeSpeaker();
     return { mood: "ya", be: "discharge", as: { wo: "speaker identity" }, ob: { boolean: Boolean(result?.alive ?? true) } };
   }
   if (action === "stop") {
-    await stopSpeaker();
+    if (useService) await callService("/stop", {});
+    else await stopSpeaker();
     return { mood: "ya", be: "stop", as: { wo: "speaker identity" }, ob: { boolean: true } };
   }
 
@@ -56,14 +82,21 @@ export async function speakerIdentity(sentence) {
     });
   }
 
-  const voicesDir = resolveVoicesDir(sentence);
+  const voicesDir = resolveVoicesDir(sentence) || String(rememberFn("speaker voices dir")?.ob?.filename ?? "./world/voices");
   const enrollName = resolveEnrollName(sentence);
 
   try {
-    await ensureSpeakerStarted();
-    const result = enrollName
-      ? await enrolSpeaker({ audio, name: enrollName, voicesDir })
-      : await identifySpeaker({ audio, voicesDir });
+    let result;
+    if (useService) {
+      result = enrollName
+        ? await callService("/enrol", { audio, name: enrollName, voices_dir: voicesDir })
+        : await callService("/identify", { audio, voices_dir: voicesDir });
+    } else {
+      await ensureSpeakerStarted();
+      result = enrollName
+        ? await enrolSpeaker({ audio, name: enrollName, voicesDir })
+        : await identifySpeaker({ audio, voicesDir });
+    }
 
     const speaker = String(result?.speaker ?? "").trim();
     if (!speaker) {

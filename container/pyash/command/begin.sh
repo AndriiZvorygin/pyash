@@ -70,6 +70,7 @@ web_search_enabled="$(get_config_value "web search enabled")"
 web_search_motor="$(get_config_value "web search motor")"
 hear_backend_default="$(get_config_value "hear backend default")"
 whisperx_enabled="$(get_config_value "whisperx enabled")"
+speaker_identity_enabled="$(get_config_value "speaker identity enabled")"
 search_only="lie"
 vnc_enabled="truth"
 restart_container="lie"
@@ -113,6 +114,9 @@ fi
 if [[ "${hear_backend_default:-}" == "whisperx" ]]; then
   whisperx_enabled="truth"
 fi
+if [[ -z "${speaker_identity_enabled:-}" ]]; then
+  speaker_identity_enabled="lie"
+fi
 
 ai_host="${ai_host/http:\/\/127.0.0.1/http:\/\/host.docker.internal}"
 ai_host="${ai_host/http:\/\/localhost/http:\/\/host.docker.internal}"
@@ -131,6 +135,7 @@ export PYASH_GITCONFIG="$HOME/.gitconfig"
 export PYASH_GITCONFIG_XDG="$HOME/.config/git/config"
 export PYASH_TZ=""
 export WHISPERX_WORKSPACE="$PROJECT_ROOT"
+export SPEAKER_WORKSPACE="$PROJECT_ROOT"
 
 mkdir -p "$PYASH_CONTAINER_HOME_DIR"
 
@@ -204,6 +209,17 @@ if [[ "$search_only" != "truth" && "${whisperx_enabled:-lie}" == "truth" ]]; the
   else
     export WHISPERX_DEVICE="cpu"
     echo "warning: Docker NVIDIA GPU runtime not detected; starting whisperx in CPU mode."
+  fi
+fi
+if [[ "$search_only" != "truth" && "${speaker_identity_enabled:-lie}" == "truth" ]]; then
+  speaker_cache_root="$PROJECT_ROOT/container/speaker/cache"
+  mkdir -p "$speaker_cache_root/huggingface" "$speaker_cache_root/torch"
+  chmod -R 0777 "$speaker_cache_root" 2>/dev/null || true
+  compose_args+=(-f "$PROJECT_ROOT/container/speaker/service/compose.yaml")
+  full_compose_args+=(-f "$PROJECT_ROOT/container/speaker/service/compose.yaml")
+  if whisperx_can_use_gpu; then
+    compose_args+=(-f "$PROJECT_ROOT/container/speaker/service/compose.gpu.yaml")
+    full_compose_args+=(-f "$PROJECT_ROOT/container/speaker/service/compose.gpu.yaml")
   fi
 fi
 

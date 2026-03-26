@@ -7,6 +7,7 @@ Each container now lives in its own self-contained folder.
 - `container/pyash/`: Pyash development container (Dockerfile, compose, scripts, generated override, minds).
 - `container/searxng/`: SearXNG + Redis container (compose, settings, scripts, env).
 - `container/whisperx/`: WhisperX transcription service (compose, API wrapper, scripts, cache).
+- `container/speaker/`: Speaker identity service (compose, API wrapper, scripts, cache).
 
 ## Standalone Git Projects
 
@@ -15,6 +16,7 @@ You can initialize and publish either subtree independently:
 - `container/pyash/`
 - `container/searxng/`
 - `container/whisperx/`
+- `container/speaker/`
 
 ## Compatibility Wrappers
 
