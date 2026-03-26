@@ -139,6 +139,9 @@ async function runStageWithRetries(stageLabel, runStage) {
       const canRetry = attempt < retries && shouldRetryStageError(error);
       if (!canRetry) {
         if (shouldRetryStageError(error)) break;
+        // If we already captured a scored source-support candidate, prefer returning
+        // that fallback over failing due to a later non-retryable error (for example timeout).
+        if (bestFailed?.resultText) break;
         throw error;
       }
       logVerbose(`[learn pipeline] ${stageLabel} retry ${attempt}/${retries} after: ${oneLine(error?.message ?? error)}`);
