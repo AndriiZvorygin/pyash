@@ -8,6 +8,7 @@ import { extractFinalResult } from "./extract_learn_pipeline_result.mjs";
 export const DEFAULT_CHUNK_SIZE = 8 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
 export const DEFAULT_MERGE_GROUP_SIZE = 4;
+export const DEFAULT_STAGE_RETRIES = 3;
 const PARAGRAPH_BOUNDARY = /\n\s*\n/gmu;
 const CHILD_OLLAMA_TIMEOUT_MS = "600000";
 const VERBOSE_STREAM_MAX_LINES = 24;
@@ -89,6 +90,38 @@ function normalizeStageResult(result) {
     resultText: String(result ?? ""),
     traceFilename: ""
   };
+}
+
+function stageRetryCount() {
+  const raw = Number(process.env.PYA_LEARN_STAGE_RETRIES);
+  if (Number.isFinite(raw) && raw >= 1) return Math.floor(raw);
+  return DEFAULT_STAGE_RETRIES;
+}
+
+function shouldRetryStageError(error) {
+  const message = String(error?.message ?? "");
+  const stderr = String(error?.stderr ?? "");
+  const combined = `${message}\n${stderr}`;
+  return /learn card defective:/u.test(combined)
+    || /learning source support defective/u.test(combined);
+}
+
+async function runStageWithRetries(stageLabel, runStage) {
+  const retries = stageRetryCount();
+  let attempt = 0;
+  let lastError = null;
+  while (attempt < retries) {
+    attempt += 1;
+    try {
+      return await runStage({ attempt, retries });
+    } catch (error) {
+      lastError = error;
+      const canRetry = attempt < retries && shouldRetryStageError(error);
+      if (!canRetry) throw error;
+      logVerbose(`[learn pipeline] ${stageLabel} retry ${attempt}/${retries} after: ${oneLine(error?.message ?? error)}`);
+    }
+  }
+  throw lastError ?? new Error(`learn filename pipeline defective: stage failed without error (${stageLabel})`);
 }
 
 function createMindFixtureAllocator(raw) {
@@ -470,14 +503,14 @@ export async function runLearnFilenamePipeline({
   logVerbose(`[learn pipeline] trace root: ${tempRoot}`);
   if (sourceText.length <= DEFAULT_CHUNK_SIZE) {
     logVerbose("[learn pipeline] mode: single-pass");
-    const direct = normalizeStageResult(await runDirectFn({
+    const direct = normalizeStageResult(await runStageWithRetries("direct", async () => runDirectFn({
       sourceFilename,
       learningFocus,
       envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
       traceDir: tempRoot,
       traceLabel: "direct",
       childRunId: buildChildRunId(process.env.PYA_RUN_ID, "direct", path.basename(tempRoot))
-    }));
+    })));
     if (direct.traceFilename) logVerbose(`[learn pipeline] direct trace: ${direct.traceFilename}`);
     logVerbose(`[learn pipeline] refined card: ${summarizeCard(direct.resultText)}`);
     return direct.resultText;
@@ -494,14 +527,14 @@ export async function runLearnFilenamePipeline({
     const chunkFilename = path.join(tempRoot, `chunk-${String(idx + 1).padStart(3, "0")}.txt`);
     await writeFileFn(chunkFilename, chunks[idx]);
     logVerbose(`[learn pipeline] extracting chunk ${idx + 1}/${chunks.length} (${chunks[idx].length} chars)`);
-    const card = normalizeStageResult(await runExtractFn({
+    const card = normalizeStageResult(await runStageWithRetries(`chunk ${idx + 1}/${chunks.length}`, async () => runExtractFn({
       sourceFilename: chunkFilename,
       learningFocus,
       envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(1) ?? process.env.PYA_MIND_RESPONSE },
       traceDir: tempRoot,
       traceLabel: `chunk-${String(idx + 1).padStart(3, "0")}`,
       childRunId: buildChildRunId(process.env.PYA_RUN_ID, `chunk-${String(idx + 1).padStart(3, "0")}`, path.basename(tempRoot))
-    }));
+    })));
     if (card.traceFilename) logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} trace: ${card.traceFilename}`);
     logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} ok`);
     chunkCards.push(card.resultText);
@@ -533,7 +566,7 @@ export async function runLearnFilenamePipeline({
       const cardsFilename = path.join(groupDir, "chunk-cards.txt");
       await writeFileFn(cardsFilename, cardsText);
       logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} starting (${groups[groupIndex].length} cards)`);
-      const merged = normalizeStageResult(await runMergeRefineFn({
+      const merged = normalizeStageResult(await runStageWithRetries(`${layerLabel} ${groupLabel}`, async () => runMergeRefineFn({
         sourceFilename,
         cardsFilename,
         learningFocus,
@@ -541,7 +574,7 @@ export async function runLearnFilenamePipeline({
         traceDir: groupDir,
         traceLabel: "merge-refine",
         childRunId: buildChildRunId(process.env.PYA_RUN_ID, `${layerLabel}/${groupLabel}`, path.basename(tempRoot))
-      }));
+      })));
       if (merged.traceFilename) logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} trace: ${merged.traceFilename}`);
       logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} ok`);
       mergedCards.push(merged.resultText);
