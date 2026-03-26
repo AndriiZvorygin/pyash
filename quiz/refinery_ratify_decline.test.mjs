@@ -16,7 +16,8 @@ function assertNoUnexpectedErrors(errors = []) {
     return !text.startsWith("artifacts folder: ")
       && !text.startsWith("run start: ")
       && !text.startsWith("run end: ")
-      && !text.startsWith("run duration: ");
+      && !text.startsWith("run duration: ")
+      && !text.startsWith("result file: ");
   });
   assert.deepEqual(unexpected, []);
 }

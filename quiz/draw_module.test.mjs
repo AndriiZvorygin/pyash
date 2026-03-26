@@ -88,7 +88,7 @@ test("draw fromstate wo text become wo image without output returns file path", 
       "ob text \"an educational schematic\" fromstate wo text become wo image be draw do",
       { env: { PYA_DRAW_FIXTURE_FILE: "quiz/fixtures/pyash_raven.png" } }
     );
-    const filename = String(result?.result?.text ?? "").trim();
+    const filename = String(result?.value?.text ?? result?.result?.text ?? "").trim();
     assert.match(filename, /artifacts\/draw\/draw-/);
     const stat = await fs.stat(path.resolve(filename));
     assert.ok(stat.size > 0);

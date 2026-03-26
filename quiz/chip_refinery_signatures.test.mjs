@@ -26,23 +26,17 @@ test("chip refinery module registers text and filename chip signatures", async (
 
 test("chip refinery module keeps adaptive staged flow", async () => {
   const text = await fs.readFile("module/chip_refinery.pya", "utf8");
-  assert.match(text, /exists su name chip classifier prompt ob text quoted\.text\.You read CHIP_STYLE_PROMPT and FIRST_GROSS_CHIP\./);
-  assert.match(text, /exists su name chip strategy analyzer prompt ob text quoted\.text\.You read CHIP_STYLE_PROMPT and FIRST_GROSS_CHIP\./);
-  assert.match(text, /exists su name chip classifier be mind via state "qwen3\.5:9b" fromtext name chip classifier prompt ya/);
-  assert.match(text, /exists su name chip strategy analyzer be mind via state "qwen3\.5:9b" fromtext name chip strategy analyzer prompt ya/);
-  assert.match(text, /su name chip classify request stage from text of from of this with text of with of this to name text chip classify request be chip classify request do/);
-  assert.match(text, /ob name text chip classify request for name chip classifier to name text chip boundary prompt be write do/);
-  assert.match(text, /ob name text chip classify request for name chip strategy analyzer to name text chip strategy raw be write do/);
-  assert.match(text, /ob name text chip strategy raw atmost num 1 to name text chip strategy be line tail do/);
-  assert.match(text, /from text of from of this with text of with of this to name text chip boundary proposals be chip programmatic boundaries do/);
+  assert.match(text, /exists su name chip llm boundary prompt ob text quoted\.text\.You inspect one gross chip and return one exact boundary marker quote for where the next wise chip should begin\./);
+  assert.match(text, /exists su name chip boundary proposer be mind via state "qwen3\.5:9b" fromtext name chip llm boundary prompt ya/);
+  assert.match(text, /CHIP_STYLE_PROMPT/);
+  assert.match(text, /ob name text chip llm boundary request for name chip boundary proposer to name text output be write do/);
+  assert.match(text, /su name chip mixed boundary ob text gross chip to name text output be ceremony def/);
+  assert.match(text, /from text of from of this by name text chip boundary proposals atleast byte 2500 atmost byte 12000 to name text output be wise chip do/);
   assert.match(text, /from text of from of this ob text of ob of this with name of with of this to name series output be chip do/);
   assert.match(text, /from text of from of this by name text chip boundary proposals with name of with of this to name text output be wise chip do/);
-  assert.match(text, /from name chip gross chips by name chip mixed boundary to name text chip boundary proposals be series map do/);
-  assert.match(text, /from name chip gross chips by name chip llm boundary to name text chip boundary proposals be series map do/);
+  assert.match(text, /from name chip gross chips by name chip llm boundary to name text chip boundary proposals llm be series map do/);
   assert.match(text, /node command\/chip_programmatic_boundary\.mjs/);
   assert.match(text, /node command\/chip_programmatic_boundaries\.mjs/);
-  assert.match(text, /exists su name chip boundary proposer be mind via state "qwen3\.5:9b" fromtext name chip boundary prompt ya/);
-  assert.match(text, /from text of from of this by name text chip boundary proposals to name text output be wise chip do/);
   assert.match(text, /from filename of from of this become wo text to name text chip source be read do/);
   assert.match(text, /exists su name chip be export ya/);
 });
