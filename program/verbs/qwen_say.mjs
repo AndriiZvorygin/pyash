@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { randomInt } from "node:crypto";
 
 import { remember } from "../remember/index.mjs";
 import { renderSayValue } from "./say.mjs";
@@ -574,12 +575,9 @@ async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, hos
   });
 }
 
-function deterministicChunkSeed({ output = "", chunkIndex = 0, retry = 0 } = {}) {
-  const source = `${String(output)}|${Number(chunkIndex)}|${Number(retry)}`;
-  const hex = sha256(Buffer.from(source, "utf8")).slice(0, 8);
-  const n = Number.parseInt(hex, 16);
-  if (!Number.isFinite(n)) return 1;
-  return (n % 2147483646) + 1;
+function randomChunkSeed() {
+  // Qwen seed expects positive 32-bit-ish ints; keep within signed 31-bit range.
+  return randomInt(1, 2147483647);
 }
 
 async function postProcessQwenSayAudio({ input, output, filter }) {
@@ -1169,7 +1167,7 @@ export async function qwenSay(
             host,
             output: chunkOutput,
             returnTranscript: clipVerifyEnabled,
-            seed: deterministicChunkSeed({ output: outputPath, chunkIndex: i, retry: verificationRecord.retries })
+            seed: randomChunkSeed()
           });
           verificationRecord.asrTailGapFail = false;
           verificationRecord.asrTailGapClamped = false;
