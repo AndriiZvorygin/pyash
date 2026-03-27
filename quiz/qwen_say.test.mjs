@@ -470,6 +470,52 @@ test("qwenSay clip verify falls back to external ASR when inline transcript tail
   }
 });
 
+test("qwenSay accepts tail match from timestamp words when transcript tail is truncated", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-ts-tail-match-"));
+  const output = path.join(outDir, "out.wav");
+  const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
+  let externalCalls = 0;
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_ts_tail_ok"));
+    const words = String(text ?? "").trim().split(/\s+/u).filter(Boolean);
+    const tailA = words[Math.max(0, words.length - 2)] ?? "line219";
+    const tailB = words[Math.max(0, words.length - 1)] ?? "line220";
+    return {
+      stdout: chunkFile,
+      outputPath: chunkFile,
+      transcript: "tail missing",
+      timestamps: `4.00-4.20: ${tailA}\n4.20-4.40: ${tailB}`
+    };
+  };
+  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 4.7 });
+  const verifyChunkTailFn = async () => {
+    externalCalls += 1;
+    return { pass: false, transcript: "", matched: 0, expected: 2 };
+  };
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_ts_tail_concat"));
+  };
+  try {
+    await qwenSay(
+      { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+      { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
+    );
+    const chunkDir = path.join(outDir, "out.qwen-say-chunks");
+    const manifest = JSON.parse(await fs.readFile(path.join(chunkDir, "chunks.metadata.json"), "utf8"));
+    const last = manifest.chunks[manifest.chunks.length - 1];
+    assert.equal(Boolean(last?.verification?.asrPass), true);
+    assert.equal(String(last?.verification?.asrMatchSource ?? ""), "timestamps");
+    assert.equal(externalCalls, 0);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
 test("qwenSay tolerates small ASR tail overshoot beyond wav duration", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
