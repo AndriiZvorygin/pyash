@@ -87,6 +87,18 @@ function resolveClipVerifyDeltaDb({ rememberFn = remember } = {}) {
   return 1;
 }
 
+function resolveClipVerifyMinTailMs({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say clip verify min tail ms", { rememberFn });
+  if (Number.isFinite(configured) && configured >= 0) return Number(configured);
+  return 120;
+}
+
+function resolveTailPadMs({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say tail pad ms", { rememberFn });
+  if (Number.isFinite(configured) && configured >= 0) return Number(configured);
+  return 160;
+}
+
 function resolveClipVerifyHost({ rememberFn = remember } = {}) {
   return (
     resolveConfigText("hear qwen host", { rememberFn }) ||
@@ -482,7 +494,7 @@ async function planChunkInstructs(
   };
 }
 
-async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, host, output, returnTranscript = false }) {
+async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, host, output, returnTranscript = false, seed = null }) {
   const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../command/say_comfyui_runner.mjs");
   const args = [
     runner,
@@ -502,6 +514,9 @@ async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, hos
   }
   if (returnTranscript) {
     args.push("--return-transcript", "true");
+  }
+  if (Number.isFinite(seed)) {
+    args.push("--seed", String(Math.trunc(seed)));
   }
   return new Promise((resolve, reject) => {
     let stdout = "";
@@ -533,6 +548,14 @@ async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, hos
       else reject(new Error(stderr.trim() || `qwen say defective: status=${code}`));
     });
   });
+}
+
+function deterministicChunkSeed({ output = "", chunkIndex = 0, retry = 0 } = {}) {
+  const source = `${String(output)}|${Number(chunkIndex)}|${Number(retry)}`;
+  const hex = sha256(Buffer.from(source, "utf8")).slice(0, 8);
+  const n = Number.parseInt(hex, 16);
+  if (!Number.isFinite(n)) return 1;
+  return (n % 2147483646) + 1;
 }
 
 async function postProcessQwenSayAudio({ input, output, filter }) {
@@ -595,6 +618,45 @@ async function concatAudioChunks({ inputs = [], output }) {
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
+}
+
+async function padAudioTail({ input = "", output = "", padMs = 0 } = {}) {
+  const padSeconds = Math.max(0, Number(padMs) / 1000);
+  if (!Number.isFinite(padSeconds) || padSeconds <= 0) {
+    await fs.copyFile(input, output);
+    return;
+  }
+  let duration = 0;
+  try {
+    duration = await probeDurationSeconds(input);
+  } catch {
+    // Test stubs may use non-audio bytes; keep original output in that case.
+    await fs.copyFile(input, output);
+    return;
+  }
+  const targetDuration = duration + padSeconds;
+  return await new Promise((resolve, reject) => {
+    let stderr = "";
+    const proc = spawn("ffmpeg", [
+      "-y",
+      "-i",
+      input,
+      "-af",
+      `apad=pad_dur=${padSeconds.toFixed(3)}`,
+      "-t",
+      targetDuration.toFixed(3),
+      output
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+    proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`qwen say defective: tail pad failed status=${code}: ${clipped}`));
+      }
+    });
+  });
 }
 
 async function runToolWithStderr(tool, args = []) {
@@ -688,6 +750,46 @@ function tightenRetryChunkText(text = "") {
   return raw;
 }
 
+function parseTailEndSeconds(timestampsRaw = "") {
+  const text = String(timestampsRaw ?? "").trim();
+  if (!text) return null;
+  const jsonCandidates = [text];
+  if (!text.startsWith("[") && !text.startsWith("{")) {
+    const firstBracket = text.indexOf("[");
+    if (firstBracket >= 0) jsonCandidates.push(text.slice(firstBracket));
+    const firstBrace = text.indexOf("{");
+    if (firstBrace >= 0) jsonCandidates.push(text.slice(firstBrace));
+  }
+  for (const candidate of jsonCandidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      const queue = [parsed];
+      let best = null;
+      while (queue.length) {
+        const cur = queue.shift();
+        if (Array.isArray(cur)) {
+          queue.push(...cur);
+          continue;
+        }
+        if (cur && typeof cur === "object") {
+          const end = Number(cur.end);
+          if (Number.isFinite(end)) best = best === null ? end : Math.max(best, end);
+          for (const value of Object.values(cur)) queue.push(value);
+        }
+      }
+      if (Number.isFinite(best)) return best;
+    } catch {
+      // ignore and try regex fallback
+    }
+  }
+  const matches = [...text.matchAll(/"end"\s*:\s*(-?\d+(?:\.\d+)?)/gu)];
+  if (matches.length) {
+    const end = Number(matches[matches.length - 1]?.[1] ?? "");
+    if (Number.isFinite(end)) return end;
+  }
+  return null;
+}
+
 async function detectHotTailSuspect({
   input = "",
   windowMs = 120,
@@ -763,7 +865,7 @@ async function verifyChunkTailWithQwenAsr({
     "--workflow-name",
     workflowName,
     "--return-timestamps",
-    "false"
+    "true"
   ];
   const { stdout } = await runToolWithStderr(process.execPath, args);
   const lines = String(stdout ?? "").trim().split(/\r?\n/u).filter(Boolean);
@@ -775,10 +877,14 @@ async function verifyChunkTailWithQwenAsr({
     payload = {};
   }
   const transcript = String(payload?.transcript ?? "").trim();
+  const timestamps = String(payload?.timestamps ?? "").trim();
   const verdict = verifyAsrTailMatch({ expectedTail, transcript });
+  const tailEndSeconds = parseTailEndSeconds(timestamps);
   return {
     pass: verdict.pass,
     transcript,
+    timestamps,
+    tailEndSeconds,
     matched: verdict.matched,
     expected: verdict.expected
   };
@@ -865,6 +971,8 @@ export async function qwenSay(
   const clipVerifyWindowMs = resolveClipVerifyWindowMs({ rememberFn });
   const clipVerifyPeakDb = resolveClipVerifyPeakDb({ rememberFn });
   const clipVerifyDeltaDb = resolveClipVerifyDeltaDb({ rememberFn });
+  const clipVerifyMinTailMs = resolveClipVerifyMinTailMs({ rememberFn });
+  const tailPadMs = resolveTailPadMs({ rememberFn });
   const clipVerifyHost = resolveClipVerifyHost({ rememberFn });
   const clipVerifyWorkflowRoot = resolveClipVerifyWorkflowRoot({ rememberFn });
   const clipVerifyWorkflowName = resolveClipVerifyWorkflowName({ rememberFn });
@@ -929,7 +1037,8 @@ export async function qwenSay(
             workflowRoot,
             host,
             output: chunkOutput,
-            returnTranscript: clipVerifyEnabled
+            returnTranscript: clipVerifyEnabled,
+            seed: deterministicChunkSeed({ output: outputPath, chunkIndex: i, retry: verificationRecord.retries })
           });
           if (!clipVerifyEnabled) break;
           let suspect = false;
@@ -950,6 +1059,7 @@ export async function qwenSay(
           if (!shouldAsrCheck) break;
           verificationRecord.asrChecked = true;
           const inlineTranscript = String(runResult?.transcript ?? "").trim();
+          const inlineTimestamps = String(runResult?.timestamps ?? "").trim();
           if (inlineTranscript) {
             const inlineVerdict = verifyAsrTailMatch({
               expectedTail: verificationRecord.expectedTail,
@@ -959,7 +1069,54 @@ export async function qwenSay(
             verificationRecord.asrMatched = Number(inlineVerdict?.matched ?? 0);
             verificationRecord.asrExpected = Number(inlineVerdict?.expected ?? verificationRecord.expectedTail.length);
             verificationRecord.asrTranscript = inlineTranscript;
+            verificationRecord.asrTimestamps = inlineTimestamps;
+            verificationRecord.asrTailEndSeconds = parseTailEndSeconds(inlineTimestamps);
             verificationRecord.asrSource = "inline";
+            const durationSeconds = Number(verificationRecord?.hotTail?.durationSeconds ?? NaN);
+            if (
+              verificationRecord.asrPass
+              && Number.isFinite(durationSeconds)
+              && Number.isFinite(verificationRecord.asrTailEndSeconds)
+              && isLastChunk
+            ) {
+              const tailGapMs = (durationSeconds - verificationRecord.asrTailEndSeconds) * 1000;
+              verificationRecord.asrTailGapMs = tailGapMs;
+              if (tailGapMs < clipVerifyMinTailMs) {
+                verificationRecord.asrPass = false;
+                verificationRecord.asrTailGapFail = true;
+              }
+            }
+            if (!verificationRecord.asrPass) {
+              const asrResult = await verifyChunkTailFn({
+                input: chunkOutput,
+                host: clipVerifyHost,
+                workflowRoot: clipVerifyWorkflowRoot,
+                workflowName: clipVerifyWorkflowName,
+                expectedTail: verificationRecord.expectedTail
+              });
+              if (asrResult?.pass === true) {
+                verificationRecord.asrPass = true;
+                verificationRecord.asrMatched = Number(asrResult?.matched ?? 0);
+                verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
+                verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
+                verificationRecord.asrTimestamps = String(asrResult?.timestamps ?? "");
+                verificationRecord.asrTailEndSeconds = Number(asrResult?.tailEndSeconds);
+                verificationRecord.asrSource = "external-fallback";
+                const durationSeconds = Number(verificationRecord?.hotTail?.durationSeconds ?? NaN);
+                if (
+                  Number.isFinite(durationSeconds)
+                  && Number.isFinite(verificationRecord.asrTailEndSeconds)
+                  && isLastChunk
+                ) {
+                  const tailGapMs = (durationSeconds - verificationRecord.asrTailEndSeconds) * 1000;
+                  verificationRecord.asrTailGapMs = tailGapMs;
+                  if (tailGapMs < clipVerifyMinTailMs) {
+                    verificationRecord.asrPass = false;
+                    verificationRecord.asrTailGapFail = true;
+                  }
+                }
+              }
+            }
           } else {
             const asrResult = await verifyChunkTailFn({
               input: chunkOutput,
@@ -972,7 +1129,23 @@ export async function qwenSay(
             verificationRecord.asrMatched = Number(asrResult?.matched ?? 0);
             verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
             verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
+            verificationRecord.asrTimestamps = String(asrResult?.timestamps ?? "");
+            verificationRecord.asrTailEndSeconds = Number(asrResult?.tailEndSeconds);
             verificationRecord.asrSource = "external";
+            const durationSeconds = Number(verificationRecord?.hotTail?.durationSeconds ?? NaN);
+            if (
+              verificationRecord.asrPass
+              && Number.isFinite(durationSeconds)
+              && Number.isFinite(verificationRecord.asrTailEndSeconds)
+              && isLastChunk
+            ) {
+              const tailGapMs = (durationSeconds - verificationRecord.asrTailEndSeconds) * 1000;
+              verificationRecord.asrTailGapMs = tailGapMs;
+              if (tailGapMs < clipVerifyMinTailMs) {
+                verificationRecord.asrPass = false;
+                verificationRecord.asrTailGapFail = true;
+              }
+            }
           }
           if (verificationRecord.asrPass) break;
           if (verificationRecord.retries >= clipVerifyMaxRetries) {
@@ -1035,6 +1208,17 @@ export async function qwenSay(
     }
   }
 
+  if (tailPadMs > 0) {
+    const parsed = path.parse(outputPath);
+    const paddedPath = path.join(parsed.dir, `${parsed.name}.padded${parsed.ext || ".wav"}`);
+    await padAudioTail({
+      input: outputPath,
+      output: paddedPath,
+      padMs: tailPadMs
+    });
+    await fs.rename(paddedPath, outputPath);
+  }
+
   const audioBytes = await fs.readFile(outputPath);
   const producer = String(sentence?.su?.name ?? "qwen say");
   const artifact = recordArtifact({
@@ -1063,6 +1247,8 @@ export async function qwenSay(
     clipVerifyWindowMs,
     clipVerifyPeakDb,
     clipVerifyDeltaDb,
+    clipVerifyMinTailMs,
+    tailPadMs,
     clipVerifyHost,
     clipVerifyWorkflowName,
     tone: toneOverride || chunkInstructs[0] || toneDefault,
