@@ -1,4 +1,5 @@
 from filename "../../module/brief_video.pya" ob name teaching video to name teaching video be import do
+from filename "../../module/draw_from_filename.pya" ob name draw as wo thumbnail to name draw as wo thumbnail be import do
 
 exists su name style_prompt ob text "" be default ya
 ob ve filename text manuscript text text style_prompt be input ya
@@ -17,5 +18,6 @@ su name footnote_mode ob text "karaoke" ya
 prah
 
 su name teaching demo from filename of ob of manuscript with text of ob of style_prompt be teaching video do
+su name thumbnail demo from filename of ob of manuscript with text of ob of style_prompt be draw as wo thumbnail do
 
 su name result out ob name teaching demo be write do
