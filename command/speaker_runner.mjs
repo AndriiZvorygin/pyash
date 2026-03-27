@@ -6,6 +6,12 @@ import path from "node:path";
 const DEFAULT_VOICES_DIR = "./world/voices";
 const DEFAULT_TEMP_DIR = "./world/temporary/speaker";
 
+function isFiniteProvidedNumber(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string" && value.trim() === "") return false;
+  return Number.isFinite(Number(value));
+}
+
 function resolvePathLike(value, fallback) {
   const raw = String(value ?? fallback ?? "").trim();
   return raw || fallback;
@@ -166,17 +172,18 @@ export class SpeakerRunner {
       audio,
       prev_speaker: prevSpeaker,
       voices_dir: voicesDir,
-      ...(Number.isFinite(Number(sameSpeakerThreshold)) ? { same_speaker_threshold: Number(sameSpeakerThreshold) } : {}),
-      ...(Number.isFinite(Number(knownSpeakerThreshold)) ? { known_speaker_threshold: Number(knownSpeakerThreshold) } : {}),
-      ...(Number.isFinite(Number(clipSeconds)) ? { clip_seconds: Number(clipSeconds) } : {}),
+      ...(isFiniteProvidedNumber(sameSpeakerThreshold) ? { same_speaker_threshold: Number(sameSpeakerThreshold) } : {}),
+      ...(isFiniteProvidedNumber(knownSpeakerThreshold) ? { known_speaker_threshold: Number(knownSpeakerThreshold) } : {}),
+      ...(isFiniteProvidedNumber(clipSeconds) ? { clip_seconds: Number(clipSeconds) } : {}),
     });
   }
 
-  async enrol({ audio, name, voicesDir = this.defaultVoicesDir } = {}) {
+  async enrol({ audio, name, voicesDir = this.defaultVoicesDir, clipSeconds = null } = {}) {
     return this.request("enrol", {
       audio,
       name,
       voices_dir: voicesDir,
+      ...(isFiniteProvidedNumber(clipSeconds) ? { clip_seconds: Number(clipSeconds) } : {}),
     });
   }
 

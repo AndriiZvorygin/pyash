@@ -80,6 +80,26 @@ function resolveOptionsMap(sentence, { rememberFn = remember } = {}) {
   return map;
 }
 
+function canonicalOptionKey(value = "") {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/gu, "");
+}
+
+function optionEntry(optionsMap = {}, aliases = []) {
+  if (!optionsMap || typeof optionsMap !== "object") return undefined;
+  for (const alias of aliases) {
+    if (Object.prototype.hasOwnProperty.call(optionsMap, alias)) return optionsMap[alias];
+  }
+  const byCanonical = new Map();
+  for (const [key, value] of Object.entries(optionsMap)) {
+    byCanonical.set(canonicalOptionKey(key), value);
+  }
+  for (const alias of aliases) {
+    const hit = byCanonical.get(canonicalOptionKey(alias));
+    if (hit !== undefined) return hit;
+  }
+  return undefined;
+}
+
 export async function speakerIdentity(sentence, { remember: rememberFn = remember } = {}) {
   const action = resolveAction(sentence);
   const backend = String(rememberFn("speaker backend default")?.ob?.text ?? "local").trim().toLowerCase() || "local";
@@ -157,11 +177,30 @@ export async function speakerIdentity(sentence, { remember: rememberFn = remembe
   const voicesDir = resolveVoicesDir(sentence) || String(rememberFn("speaker voices dir")?.ob?.filename ?? "./world/voices");
   const enrollName = resolveEnrollName(sentence);
   const optionsMap = resolveOptionsMap(sentence, { rememberFn });
-  const prevSpeaker = resolveTextFromMapEntry(optionsMap.prevSpeaker) || resolveTextFromMapEntry(optionsMap.prev_speaker);
-  const sameSpeakerThreshold = resolveNumericFromMapEntry(optionsMap.sameSpeakerThreshold) ?? resolveNumericFromMapEntry(optionsMap.same_speaker_threshold);
-  const knownSpeakerThreshold = resolveNumericFromMapEntry(optionsMap.knownSpeakerThreshold) ?? resolveNumericFromMapEntry(optionsMap.known_speaker_threshold);
-  const clipSeconds = resolveNumericFromMapEntry(optionsMap.clipSeconds) ?? resolveNumericFromMapEntry(optionsMap.clip_seconds);
-  const overrideVoicesDir = resolveTextFromMapEntry(optionsMap.voicesDir) || resolveTextFromMapEntry(optionsMap.voices_dir);
+  const prevSpeaker = resolveTextFromMapEntry(optionEntry(optionsMap, ["prevSpeaker", "prev_speaker", "prev speaker"]));
+  const sameSpeakerThreshold = resolveNumericFromMapEntry(optionEntry(optionsMap, [
+    "sameSpeakerThreshold",
+    "same_speaker_threshold",
+    "same speaker threshold",
+    "sameThreshold"
+  ]));
+  const knownSpeakerThreshold = resolveNumericFromMapEntry(optionEntry(optionsMap, [
+    "knownSpeakerThreshold",
+    "known_speaker_threshold",
+    "known speaker threshold",
+    "knownThreshold"
+  ]));
+  const clipSeconds = resolveNumericFromMapEntry(optionEntry(optionsMap, [
+    "clipSeconds",
+    "clip_seconds",
+    "clip seconds",
+    "seconds"
+  ]));
+  const overrideVoicesDir = resolveTextFromMapEntry(optionEntry(optionsMap, [
+    "voicesDir",
+    "voices_dir",
+    "voices dir"
+  ]));
   const effectiveVoicesDir = overrideVoicesDir || voicesDir;
 
   try {
