@@ -57,6 +57,12 @@ function resolveClipVerifyEnabled({ rememberFn = remember } = {}) {
   return resolveConfigBool("qwen say clip verify enabled", { rememberFn }) === true;
 }
 
+function resolveClipVerifyAllChunks({ rememberFn = remember } = {}) {
+  const configured = resolveConfigBool("qwen say clip verify all chunks", { rememberFn });
+  if (configured === false) return false;
+  return true;
+}
+
 function resolveClipVerifyMaxRetries({ rememberFn = remember } = {}) {
   const configured = resolveConfigNum("qwen say clip verify max retries", { rememberFn });
   if (Number.isFinite(configured) && configured >= 0) return Math.trunc(configured);
@@ -97,6 +103,12 @@ function resolveTailPadMs({ rememberFn = remember } = {}) {
   const configured = resolveConfigNum("qwen say tail pad ms", { rememberFn });
   if (Number.isFinite(configured) && configured >= 0) return Number(configured);
   return 160;
+}
+
+function resolveChunkTailPadMs({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say chunk tail pad ms", { rememberFn });
+  if (Number.isFinite(configured) && configured >= 0) return Number(configured);
+  return 120;
 }
 
 function resolveClipVerifyHost({ rememberFn = remember } = {}) {
@@ -742,6 +754,31 @@ function verifyAsrTailMatch({ expectedTail = [], transcript = "" } = {}) {
   return { pass: true, matched, expected: expected.length };
 }
 
+function applyTailGapGuard({
+  verificationRecord = {},
+  durationSeconds = NaN,
+  isLastChunk = false,
+  clipVerifyMinTailMs = 120
+} = {}) {
+  if (!isLastChunk) return;
+  const duration = Number(durationSeconds);
+  const tailEnd = Number(verificationRecord?.asrTailEndSeconds);
+  if (!Number.isFinite(duration) || !Number.isFinite(tailEnd)) return;
+  const overshootMs = (tailEnd - duration) * 1000;
+  verificationRecord.asrTailOvershootMs = overshootMs;
+  if (overshootMs > 0) {
+    verificationRecord.asrTailGapMs = 0;
+    verificationRecord.asrTailGapClamped = true;
+    return;
+  }
+  const tailGapMs = (duration - tailEnd) * 1000;
+  verificationRecord.asrTailGapMs = tailGapMs;
+  if (tailGapMs < clipVerifyMinTailMs) {
+    verificationRecord.asrPass = false;
+    verificationRecord.asrTailGapFail = true;
+  }
+}
+
 function tightenRetryChunkText(text = "") {
   const raw = String(text ?? "").trim();
   if (!raw) return "";
@@ -786,6 +823,15 @@ function parseTailEndSeconds(timestampsRaw = "") {
   if (matches.length) {
     const end = Number(matches[matches.length - 1]?.[1] ?? "");
     if (Number.isFinite(end)) return end;
+  }
+  const rangeMatches = [...text.matchAll(/(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)/gu)];
+  if (rangeMatches.length) {
+    let best = null;
+    for (const match of rangeMatches) {
+      const end = Number(match?.[2] ?? "");
+      if (Number.isFinite(end)) best = best === null ? end : Math.max(best, end);
+    }
+    if (Number.isFinite(best)) return best;
   }
   return null;
 }
@@ -966,6 +1012,7 @@ export async function qwenSay(
   const postProcessFilter = resolvePostProcessFilter({ rememberFn });
   const keepChunkArtifacts = resolveKeepChunkArtifacts({ rememberFn });
   const clipVerifyEnabled = resolveClipVerifyEnabled({ rememberFn });
+  const clipVerifyAllChunks = resolveClipVerifyAllChunks({ rememberFn });
   const clipVerifyMaxRetries = resolveClipVerifyMaxRetries({ rememberFn });
   const clipVerifyTailWords = resolveClipVerifyTailWords({ rememberFn });
   const clipVerifyWindowMs = resolveClipVerifyWindowMs({ rememberFn });
@@ -973,6 +1020,7 @@ export async function qwenSay(
   const clipVerifyDeltaDb = resolveClipVerifyDeltaDb({ rememberFn });
   const clipVerifyMinTailMs = resolveClipVerifyMinTailMs({ rememberFn });
   const tailPadMs = resolveTailPadMs({ rememberFn });
+  const chunkTailPadMs = resolveChunkTailPadMs({ rememberFn });
   const clipVerifyHost = resolveClipVerifyHost({ rememberFn });
   const clipVerifyWorkflowRoot = resolveClipVerifyWorkflowRoot({ rememberFn });
   const clipVerifyWorkflowName = resolveClipVerifyWorkflowName({ rememberFn });
@@ -1040,6 +1088,10 @@ export async function qwenSay(
             returnTranscript: clipVerifyEnabled,
             seed: deterministicChunkSeed({ output: outputPath, chunkIndex: i, retry: verificationRecord.retries })
           });
+          verificationRecord.asrTailGapFail = false;
+          verificationRecord.asrTailGapClamped = false;
+          verificationRecord.asrTailOvershootMs = null;
+          verificationRecord.asrTailGapMs = null;
           if (!clipVerifyEnabled) break;
           let suspect = false;
           try {
@@ -1055,7 +1107,7 @@ export async function qwenSay(
             suspect = true;
           }
           verificationRecord.suspect = suspect;
-          const shouldAsrCheck = suspect || isLastChunk;
+          const shouldAsrCheck = clipVerifyAllChunks || suspect || isLastChunk;
           if (!shouldAsrCheck) break;
           verificationRecord.asrChecked = true;
           const inlineTranscript = String(runResult?.transcript ?? "").trim();
@@ -1073,18 +1125,13 @@ export async function qwenSay(
             verificationRecord.asrTailEndSeconds = parseTailEndSeconds(inlineTimestamps);
             verificationRecord.asrSource = "inline";
             const durationSeconds = Number(verificationRecord?.hotTail?.durationSeconds ?? NaN);
-            if (
-              verificationRecord.asrPass
-              && Number.isFinite(durationSeconds)
-              && Number.isFinite(verificationRecord.asrTailEndSeconds)
-              && isLastChunk
-            ) {
-              const tailGapMs = (durationSeconds - verificationRecord.asrTailEndSeconds) * 1000;
-              verificationRecord.asrTailGapMs = tailGapMs;
-              if (tailGapMs < clipVerifyMinTailMs) {
-                verificationRecord.asrPass = false;
-                verificationRecord.asrTailGapFail = true;
-              }
+            if (verificationRecord.asrPass) {
+              applyTailGapGuard({
+                verificationRecord,
+                durationSeconds,
+                isLastChunk,
+                clipVerifyMinTailMs
+              });
             }
             if (!verificationRecord.asrPass) {
               const asrResult = await verifyChunkTailFn({
@@ -1100,21 +1147,16 @@ export async function qwenSay(
                 verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
                 verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
                 verificationRecord.asrTimestamps = String(asrResult?.timestamps ?? "");
-                verificationRecord.asrTailEndSeconds = Number(asrResult?.tailEndSeconds);
+                const fallbackTailEnd = Number(asrResult?.tailEndSeconds);
+                verificationRecord.asrTailEndSeconds = Number.isFinite(fallbackTailEnd) ? fallbackTailEnd : null;
                 verificationRecord.asrSource = "external-fallback";
                 const durationSeconds = Number(verificationRecord?.hotTail?.durationSeconds ?? NaN);
-                if (
-                  Number.isFinite(durationSeconds)
-                  && Number.isFinite(verificationRecord.asrTailEndSeconds)
-                  && isLastChunk
-                ) {
-                  const tailGapMs = (durationSeconds - verificationRecord.asrTailEndSeconds) * 1000;
-                  verificationRecord.asrTailGapMs = tailGapMs;
-                  if (tailGapMs < clipVerifyMinTailMs) {
-                    verificationRecord.asrPass = false;
-                    verificationRecord.asrTailGapFail = true;
-                  }
-                }
+                applyTailGapGuard({
+                  verificationRecord,
+                  durationSeconds,
+                  isLastChunk,
+                  clipVerifyMinTailMs
+                });
               }
             }
           } else {
@@ -1130,21 +1172,17 @@ export async function qwenSay(
             verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
             verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
             verificationRecord.asrTimestamps = String(asrResult?.timestamps ?? "");
-            verificationRecord.asrTailEndSeconds = Number(asrResult?.tailEndSeconds);
+            const externalTailEnd = Number(asrResult?.tailEndSeconds);
+            verificationRecord.asrTailEndSeconds = Number.isFinite(externalTailEnd) ? externalTailEnd : null;
             verificationRecord.asrSource = "external";
             const durationSeconds = Number(verificationRecord?.hotTail?.durationSeconds ?? NaN);
-            if (
-              verificationRecord.asrPass
-              && Number.isFinite(durationSeconds)
-              && Number.isFinite(verificationRecord.asrTailEndSeconds)
-              && isLastChunk
-            ) {
-              const tailGapMs = (durationSeconds - verificationRecord.asrTailEndSeconds) * 1000;
-              verificationRecord.asrTailGapMs = tailGapMs;
-              if (tailGapMs < clipVerifyMinTailMs) {
-                verificationRecord.asrPass = false;
-                verificationRecord.asrTailGapFail = true;
-              }
+            if (verificationRecord.asrPass) {
+              applyTailGapGuard({
+                verificationRecord,
+                durationSeconds,
+                isLastChunk,
+                clipVerifyMinTailMs
+              });
             }
           }
           if (verificationRecord.asrPass) break;
@@ -1165,6 +1203,16 @@ export async function qwenSay(
           chunkText = tightenRetryChunkText(chunkText);
         }
         verificationRecord.text = chunkText;
+        if (chunkTailPadMs > 0) {
+          const parsedChunk = path.parse(chunkOutput);
+          const paddedChunkPath = path.join(parsedChunk.dir, `${parsedChunk.name}.padded${parsedChunk.ext || ".wav"}`);
+          await padAudioTail({
+            input: chunkOutput,
+            output: paddedChunkPath,
+            padMs: chunkTailPadMs
+          });
+          await fs.rename(paddedChunkPath, chunkOutput);
+        }
         chunkVerification.push(verificationRecord);
         chunkFiles.push(chunkOutput);
       }
@@ -1242,6 +1290,7 @@ export async function qwenSay(
     keepChunkArtifacts,
     chunkArtifactsDir: chunkArtifactsDir || undefined,
     clipVerifyEnabled,
+    clipVerifyAllChunks,
     clipVerifyMaxRetries,
     clipVerifyTailWords,
     clipVerifyWindowMs,
@@ -1249,6 +1298,7 @@ export async function qwenSay(
     clipVerifyDeltaDb,
     clipVerifyMinTailMs,
     tailPadMs,
+    chunkTailPadMs,
     clipVerifyHost,
     clipVerifyWorkflowName,
     tone: toneOverride || chunkInstructs[0] || toneDefault,
