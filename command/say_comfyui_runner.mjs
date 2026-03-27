@@ -15,7 +15,8 @@ function parseArgs(argv) {
     workflowName: null,
     workflowFile: null,
     output: null,
-    returnTranscript: false
+    returnTranscript: false,
+    seed: null
   };
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -29,6 +30,7 @@ function parseArgs(argv) {
     else if (arg === "--workflow-file") out.workflowFile = args[++i] ?? null;
     else if (arg === "--output") out.output = args[++i] ?? null;
     else if (arg === "--return-transcript") out.returnTranscript = String(args[++i] ?? "true").trim().toLowerCase() !== "false";
+    else if (arg === "--seed") out.seed = args[++i] ?? null;
   }
   return out;
 }
@@ -98,6 +100,7 @@ async function readMappingPya(workflowFile) {
       if (key === "audio path") result.audioPath = value;
       if (key === "transcript path") result.transcriptPath = value;
       if (key === "timestamps path") result.timestampsPath = value;
+      if (key === "seed path") result.seedPath = value;
       if (key === "save audio prefix path") result.saveAudioPrefixPath = value;
     }
     return result;
@@ -204,6 +207,25 @@ function detectInstructPath(workflow, promptObject) {
     const input = entry.inputs;
     if (input && typeof input === "object" && Object.prototype.hasOwnProperty.call(input, "default_instruct")) {
       return `${id}.inputs.default_instruct`;
+    }
+  }
+  return null;
+}
+
+function detectSeedPath(workflow, promptObject) {
+  const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+  for (const node of nodes) {
+    const nodeId = String(node?.id ?? "");
+    if (!nodeId) continue;
+    const inputs = Array.isArray(node?.inputs) ? node.inputs : [];
+    const hasSeed = inputs.some((input) => String(input?.name ?? "").toLowerCase() === "seed");
+    if (hasSeed) return `${nodeId}.inputs.seed`;
+  }
+  for (const [id, entry] of Object.entries(promptObject ?? {})) {
+    if (!entry || typeof entry !== "object") continue;
+    const input = entry.inputs;
+    if (input && typeof input === "object" && Object.prototype.hasOwnProperty.call(input, "seed")) {
+      return `${id}.inputs.seed`;
     }
   }
   return null;
@@ -420,6 +442,13 @@ async function main() {
   if (instruct) {
     const instructPath = mapping.instructPath || detectInstructPath(workflow, promptObject);
     if (instructPath) setAtPath(promptObject, instructPath, instruct);
+  }
+  if (opts.seed !== null && opts.seed !== undefined) {
+    const seedValue = Number(opts.seed);
+    if (Number.isFinite(seedValue)) {
+      const seedPath = mapping.seedPath || detectSeedPath(workflow, promptObject);
+      if (seedPath) setAtPath(promptObject, seedPath, Math.trunc(seedValue));
+    }
   }
 
   if (mapping.saveAudioPrefixPath) {

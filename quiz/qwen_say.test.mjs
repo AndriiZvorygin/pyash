@@ -424,6 +424,52 @@ test("qwenSay clip verify prefers inline transcript from tts workflow output", a
   }
 });
 
+test("qwenSay clip verify falls back to external ASR when inline transcript tail check fails", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-inline-fallback-"));
+  const output = path.join(outDir, "out.wav");
+  const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
+  let externalCalls = 0;
+  const runSayFn = async ({ output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_inline_fail"));
+    return {
+      stdout: chunkFile,
+      outputPath: chunkFile,
+      transcript: "wrong tail text",
+      timestamps: ""
+    };
+  };
+  const detectHotTailFn = async () => ({ suspect: false });
+  const verifyChunkTailFn = async ({ input }) => {
+    externalCalls += 1;
+    if (/chunk-003\.wav$/u.test(String(input ?? ""))) {
+      return { pass: true, transcript: "line219 line220", matched: 2, expected: 2 };
+    }
+    return { pass: true, transcript: "ok", matched: 2, expected: 2 };
+  };
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_inline_fallback_concat"));
+  };
+  try {
+    await qwenSay(
+      { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+      { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
+    );
+    const chunkDir = path.join(outDir, "out.qwen-say-chunks");
+    const manifest = JSON.parse(await fs.readFile(path.join(chunkDir, "chunks.metadata.json"), "utf8"));
+    const last = manifest.chunks[manifest.chunks.length - 1];
+    assert.equal(String(last?.verification?.asrSource ?? ""), "external-fallback");
+    assert.equal(Boolean(last?.verification?.asrPass), true);
+    assert.equal(externalCalls > 0, true);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
 test("qwenSay clip verify hard fails after retry exhaustion", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
