@@ -27,6 +27,7 @@ su name ordinal 2nd ob text "second" ya
 su name ordinal 3rd ob text "third" ya
 su name point word ob text "point" ya
 prah
+exists su name qwen say tail pause markup ob text "[pause:0.3]" be default ya
 exists su name draw promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, style_prompt, draw_prompt_style, previous_prompt_1, previous_prompt_2.
 
 Follow these rules:

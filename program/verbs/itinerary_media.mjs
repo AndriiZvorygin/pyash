@@ -928,10 +928,13 @@ function metadataTextFromRemember(rememberFn, { videoFile = "", thumbnailFile = 
   return `${lines.join("\n")}\n`;
 }
 
-async function runFootnoteVideo({ inputVideo, inputSrt, outputVideo, mode, startDelaySeconds = 0 }) {
+async function runFootnoteVideo({ inputVideo, inputSrt, outputVideo, mode, startDelaySeconds = 0, marginRatio = null }) {
   const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../command/footnote_video.mjs");
   const args = [runner, inputVideo, inputSrt, outputVideo];
   if (mode) args.push("--mode", mode);
+  if (Number.isFinite(marginRatio) && marginRatio >= 0 && marginRatio <= 1) {
+    args.push("--margin-ratio", String(marginRatio));
+  }
   if (Number.isFinite(startDelaySeconds) && startDelaySeconds > 0) {
     args.push("--start-delay-seconds", String(startDelaySeconds));
   }
@@ -1555,7 +1558,10 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
   return { ob: { filename: outputResolved.resolved }, be: "concatenate" };
 }
 
-export async function footnoteVideo(sentence, { remember: rememberFn = remember } = {}) {
+export async function footnoteVideo(
+  sentence,
+  { remember: rememberFn = remember, runFootnoteVideoFn = runFootnoteVideo } = {}
+) {
   const inputSrtRaw = (() => {
     const direct = resolveFilenameFromCase(sentence?.from, rememberFn);
     if (!direct) return "";
@@ -1599,6 +1605,11 @@ export async function footnoteVideo(sentence, { remember: rememberFn = remember 
   }
   await fs.mkdir(path.dirname(outputVideo.resolved), { recursive: true });
   const mode = String(sentence?.as?.wo ?? sentence?.as?.text ?? "").trim().toLowerCase();
+  const marginRatio = (() => {
+    const raw = Number(sentence?.by?.num);
+    if (Number.isFinite(raw) && raw >= 0 && raw <= 1) return raw;
+    return null;
+  })();
   const startDelaySeconds = (() => {
     const raw = Number(sentence?.during?.num);
     if (Number.isFinite(raw) && raw >= 0) return raw;
@@ -1608,12 +1619,13 @@ export async function footnoteVideo(sentence, { remember: rememberFn = remember 
   const renderOutput = samePath
     ? path.join(path.dirname(outputVideo.resolved), `${path.basename(outputVideo.resolved, path.extname(outputVideo.resolved))}.footnote.tmp${path.extname(outputVideo.resolved) || ".mp4"}`)
     : outputVideo.resolved;
-  await runFootnoteVideo({
+  await runFootnoteVideoFn({
     inputVideo: inputVideo.resolved,
     inputSrt: inputSrt.resolved,
     outputVideo: renderOutput,
     mode: mode || undefined,
-    startDelaySeconds
+    startDelaySeconds,
+    marginRatio
   });
   if (samePath) {
     await fs.rename(renderOutput, outputVideo.resolved);
