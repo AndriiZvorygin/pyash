@@ -754,6 +754,68 @@ function verifyAsrTailMatch({ expectedTail = [], transcript = "" } = {}) {
   return { pass: true, matched, expected: expected.length };
 }
 
+function parseTimestampWordStream(timestampsRaw = "") {
+  const text = String(timestampsRaw ?? "").trim();
+  if (!text) return "";
+  const jsonCandidates = [text];
+  if (!text.startsWith("[") && !text.startsWith("{")) {
+    const firstBracket = text.indexOf("[");
+    if (firstBracket >= 0) jsonCandidates.push(text.slice(firstBracket));
+    const firstBrace = text.indexOf("{");
+    if (firstBrace >= 0) jsonCandidates.push(text.slice(firstBrace));
+  }
+  for (const candidate of jsonCandidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      const queue = [parsed];
+      const words = [];
+      while (queue.length) {
+        const cur = queue.shift();
+        if (Array.isArray(cur)) {
+          queue.push(...cur);
+          continue;
+        }
+        if (cur && typeof cur === "object") {
+          if (typeof cur.text === "string" && cur.text.trim()) words.push(cur.text.trim());
+          for (const value of Object.values(cur)) queue.push(value);
+        }
+      }
+      if (words.length) return words.join(" ");
+    } catch {
+      // ignore and use plain-line fallback
+    }
+  }
+  const words = [];
+  const lines = text.split(/\r?\n/u);
+  for (const line of lines) {
+    const match = /^\s*-?\d+(?:\.\d+)?\s*-\s*-?\d+(?:\.\d+)?\s*:\s*(.+)$/u.exec(line);
+    if (!match) continue;
+    const word = String(match[1] ?? "").trim();
+    if (word) words.push(word);
+  }
+  return words.join(" ");
+}
+
+function verifyAsrTailMatchUsingTranscriptAndTimestamps({
+  expectedTail = [],
+  transcript = "",
+  timestamps = ""
+} = {}) {
+  const transcriptVerdict = verifyAsrTailMatch({ expectedTail, transcript });
+  if (transcriptVerdict.pass) {
+    return { ...transcriptVerdict, source: "transcript" };
+  }
+  const timestampWordStream = parseTimestampWordStream(timestamps);
+  if (!timestampWordStream) {
+    return { ...transcriptVerdict, source: "transcript" };
+  }
+  const timestampVerdict = verifyAsrTailMatch({ expectedTail, transcript: timestampWordStream });
+  if (timestampVerdict.pass) {
+    return { ...timestampVerdict, source: "timestamps" };
+  }
+  return { ...transcriptVerdict, source: "transcript" };
+}
+
 function applyTailGapGuard({
   verificationRecord = {},
   durationSeconds = NaN,
@@ -924,7 +986,7 @@ async function verifyChunkTailWithQwenAsr({
   }
   const transcript = String(payload?.transcript ?? "").trim();
   const timestamps = String(payload?.timestamps ?? "").trim();
-  const verdict = verifyAsrTailMatch({ expectedTail, transcript });
+  const verdict = verifyAsrTailMatchUsingTranscriptAndTimestamps({ expectedTail, transcript, timestamps });
   const tailEndSeconds = parseTailEndSeconds(timestamps);
   return {
     pass: verdict.pass,
@@ -932,7 +994,8 @@ async function verifyChunkTailWithQwenAsr({
     timestamps,
     tailEndSeconds,
     matched: verdict.matched,
-    expected: verdict.expected
+    expected: verdict.expected,
+    matchSource: verdict.source
   };
 }
 
@@ -1113,13 +1176,15 @@ export async function qwenSay(
           const inlineTranscript = String(runResult?.transcript ?? "").trim();
           const inlineTimestamps = String(runResult?.timestamps ?? "").trim();
           if (inlineTranscript) {
-            const inlineVerdict = verifyAsrTailMatch({
+            const inlineVerdict = verifyAsrTailMatchUsingTranscriptAndTimestamps({
               expectedTail: verificationRecord.expectedTail,
-              transcript: inlineTranscript
+              transcript: inlineTranscript,
+              timestamps: inlineTimestamps
             });
             verificationRecord.asrPass = inlineVerdict?.pass === true;
             verificationRecord.asrMatched = Number(inlineVerdict?.matched ?? 0);
             verificationRecord.asrExpected = Number(inlineVerdict?.expected ?? verificationRecord.expectedTail.length);
+            verificationRecord.asrMatchSource = String(inlineVerdict?.source ?? "transcript");
             verificationRecord.asrTranscript = inlineTranscript;
             verificationRecord.asrTimestamps = inlineTimestamps;
             verificationRecord.asrTailEndSeconds = parseTailEndSeconds(inlineTimestamps);
@@ -1145,6 +1210,7 @@ export async function qwenSay(
                 verificationRecord.asrPass = true;
                 verificationRecord.asrMatched = Number(asrResult?.matched ?? 0);
                 verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
+                verificationRecord.asrMatchSource = String(asrResult?.matchSource ?? "transcript");
                 verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
                 verificationRecord.asrTimestamps = String(asrResult?.timestamps ?? "");
                 const fallbackTailEnd = Number(asrResult?.tailEndSeconds);
@@ -1170,6 +1236,7 @@ export async function qwenSay(
             verificationRecord.asrPass = asrResult?.pass === true;
             verificationRecord.asrMatched = Number(asrResult?.matched ?? 0);
             verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
+            verificationRecord.asrMatchSource = String(asrResult?.matchSource ?? "transcript");
             verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
             verificationRecord.asrTimestamps = String(asrResult?.timestamps ?? "");
             const externalTailEnd = Number(asrResult?.tailEndSeconds);
