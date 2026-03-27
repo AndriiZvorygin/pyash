@@ -583,6 +583,45 @@ test("qwenSay tolerates small ASR tail overshoot beyond wav duration", async () 
   }
 });
 
+test("qwenSay retries when final chunk tail gap is too short even if hot-tail is not suspect", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify max retries" }, ob: { num: 1 }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tail-gap-fail-"));
+  const output = path.join(outDir, "out.wav");
+  const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
+  let runCalls = 0;
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    runCalls += 1;
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_tail_gap_fail"));
+    return {
+      stdout: chunkFile,
+      outputPath: chunkFile,
+      transcript: String(text ?? ""),
+      timestamps: "0.10-4.45: done"
+    };
+  };
+  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 4.50 });
+  const verifyChunkTailFn = async () => ({ pass: true, transcript: "ok", matched: 2, expected: 2, tailEndSeconds: 4.45 });
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_tail_gap_fail_concat"));
+  };
+  try {
+    await assert.rejects(
+      async () => qwenSay(
+        { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+        { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
+      ),
+      /clipped chunk retries exhausted/u
+    );
+    assert.equal(runCalls >= 2, true);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
 test("qwenSay clip verify hard fails after retry exhaustion", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
