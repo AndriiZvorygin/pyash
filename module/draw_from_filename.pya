@@ -28,7 +28,7 @@ Rules:
 - 12 to 40 words.
 - Describe an emotional scene rooted in SOURCE_TEXT.
 - Style must be illustration, painterly/editorial, non-photorealistic.
-- Focus on one person with a clearly visible face and emotive expression.
+- Person is optional; a symbolic or environmental composition is valid.
 - Do not depict crying, tears, sobbing, or visible tear streaks.
 - Include exactly one quoted overlay phrase of 2 to 3 words.
 - Make the quoted overlay phrase very large, occupying about one-third of the frame area.
@@ -39,15 +39,15 @@ Rules:
 - Keep it concrete and faithful to SOURCE_TEXT.
 .text.quoted be text ya
 
-exists su name draw thumbnail style hint ob text "editorial illustration, era-appropriate wardrobe, coherent style" be text ya
+exists su name draw thumbnail style hint ob text "editorial illustration, bold civic background, high contrast, clean readable composition" be text ya
 
 su name draw thumbnail prompt replacements be map def
   su text "[[style_hint]]" ob name text draw thumbnail style hint ya
 prah
 
 su name draw size thumbnail be map def
-su name width ob num 1280 ya
-su name height ob num 720 ya
+su name width ob num 512 ya
+su name height ob num 512 ya
 prah
 
 su name draw from filename source with text style be ceremony def
@@ -216,7 +216,7 @@ su name draw as wo thumbnail from filename source with text style be ceremony de
 prah
 
 su name draw as wo thumbnail from filename source be ceremony def
-  su name result from filename of from of this with text "editorial illustration, era-appropriate wardrobe, coherent style" be draw as wo thumbnail do
+  su name result from filename of from of this with text "editorial illustration, bold civic background, high contrast, clean readable composition" be draw as wo thumbnail do
   su name result ret
 prah
 
