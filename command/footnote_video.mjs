@@ -5,6 +5,23 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseSrtToCuts } from "./itinerary_io.mjs";
 
+function shellQuote(value = "") {
+  const text = String(value ?? "");
+  return `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+async function writeBurnCommandRecord({ outputVideo = "", argv = [] } = {}) {
+  const outputResolved = path.resolve(String(outputVideo ?? ""));
+  const match = outputResolved.match(/^(.*[\\/]+artifacts[\\/]+[^\\/]+)/u);
+  if (!match) return;
+  const runArtifactsDir = match[1];
+  const newspaperDir = path.join(runArtifactsDir, "newspaper");
+  await fs.mkdir(newspaperDir, { recursive: true });
+  const cmd = `node command/footnote_video.mjs ${argv.slice(2).map(shellQuote).join(" ")}`.trim();
+  const recordPath = path.join(newspaperDir, `${path.basename(outputResolved)}.footnote-command.txt`);
+  await fs.writeFile(recordPath, `${cmd}\n`, "utf8");
+}
+
 function usage() {
   return "Usage: node command/footnote_video.mjs <input-video.mp4> <input.srt> <output-video.mp4> [--mode plain|karaoke] [--font-size <num>] [--margin-v <num>] [--margin-ratio <num>] [--start-delay-seconds <num>] [--font-name <text>]";
 }
@@ -422,6 +439,7 @@ export async function main(argv = process.argv) {
   const inputVideo = path.resolve(opts.inputVideo);
   const inputSrt = path.resolve(opts.inputSrt);
   const outputVideo = path.resolve(opts.outputVideo);
+  await writeBurnCommandRecord({ outputVideo, argv });
   const renderOutputVideo = resolveRenderOutputPath(inputVideo, outputVideo);
   const replaceInPlace = renderOutputVideo !== outputVideo;
   const srtText = await fs.readFile(inputSrt, "utf8");

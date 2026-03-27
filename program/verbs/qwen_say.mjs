@@ -111,6 +111,10 @@ function resolveChunkTailPadMs({ rememberFn = remember } = {}) {
   return 120;
 }
 
+function resolveTailPauseMarkup({ rememberFn = remember } = {}) {
+  return String(resolveConfigText("qwen say tail pause markup", { rememberFn }) ?? "").trim();
+}
+
 function resolveClipVerifyHost({ rememberFn = remember } = {}) {
   return (
     resolveConfigText("hear qwen host", { rememberFn }) ||
@@ -377,6 +381,14 @@ function ensureTrailingDoublePeriod(text = "") {
   if (chunk.endsWith("..")) return chunk;
   if (chunk.endsWith(".")) return `${chunk}.`;
   return `${chunk}..`;
+}
+
+function applyTailPauseMarkup(text = "", markup = "") {
+  const source = String(text ?? "").trim();
+  const token = String(markup ?? "").trim();
+  if (!source || !token) return source;
+  if (source.includes(token)) return source;
+  return `${source} ${token}`.trim();
 }
 
 function resolveQwenSaySanitizeMap({ rememberFn = remember } = {}) {
@@ -835,9 +847,12 @@ function applyTailGapGuard({
   }
   const tailGapMs = (duration - tailEnd) * 1000;
   verificationRecord.asrTailGapMs = tailGapMs;
-  if (tailGapMs < clipVerifyMinTailMs) {
+  const shouldEnforceTailGap = verificationRecord?.suspect === true;
+  if (tailGapMs < clipVerifyMinTailMs && shouldEnforceTailGap) {
     verificationRecord.asrPass = false;
     verificationRecord.asrTailGapFail = true;
+  } else if (tailGapMs < clipVerifyMinTailMs) {
+    verificationRecord.asrTailGapBypass = true;
   }
 }
 
@@ -1084,6 +1099,7 @@ export async function qwenSay(
   const clipVerifyMinTailMs = resolveClipVerifyMinTailMs({ rememberFn });
   const tailPadMs = resolveTailPadMs({ rememberFn });
   const chunkTailPadMs = resolveChunkTailPadMs({ rememberFn });
+  const tailPauseMarkup = resolveTailPauseMarkup({ rememberFn });
   const clipVerifyHost = resolveClipVerifyHost({ rememberFn });
   const clipVerifyWorkflowRoot = resolveClipVerifyWorkflowRoot({ rememberFn });
   const clipVerifyWorkflowName = resolveClipVerifyWorkflowName({ rememberFn });
@@ -1095,6 +1111,12 @@ export async function qwenSay(
     raw: String(chunk ?? ""),
     text: ensureTrailingDoublePeriod(
       sanitizeQwenSayScriptText(normalizeQwenSayChunkText(chunk), sanitizeMap)
+    ),
+    speakText: applyTailPauseMarkup(
+      ensureTrailingDoublePeriod(
+        sanitizeQwenSayScriptText(normalizeQwenSayChunkText(chunk), sanitizeMap)
+      ),
+      tailPauseMarkup
     )
   }));
   const emptyChunk = preparedChunks.find((entry) => !hasSpeakableContent(entry.text));
@@ -1109,7 +1131,7 @@ export async function qwenSay(
 
   if (chunks.length <= 1) {
     await runSayFn({
-      text: preparedChunks[0]?.text ?? "",
+      text: preparedChunks[0]?.speakText ?? preparedChunks[0]?.text ?? "",
       instruct: chunkInstructs[0] ?? toneDefault,
       workflowName,
       workflowRoot,
@@ -1129,6 +1151,7 @@ export async function qwenSay(
       }
       for (let i = 0; i < chunks.length; i += 1) {
         let chunkText = preparedChunks[i]?.text ?? "";
+        let chunkSpeakText = preparedChunks[i]?.speakText ?? chunkText;
         const chunkOutput = path.join(chunkDir, `chunk-${String(i + 1).padStart(3, "0")}.wav`);
         const isLastChunk = i === (chunks.length - 1);
         const verificationRecord = {
@@ -1142,7 +1165,7 @@ export async function qwenSay(
         };
         while (true) {
           const runResult = await runSayFn({
-            text: chunkText,
+            text: chunkSpeakText,
             instruct: chunkInstructs[i] ?? toneDefault,
             workflowName,
             workflowRoot,
@@ -1268,8 +1291,10 @@ export async function qwenSay(
           }
           verificationRecord.retries += 1;
           chunkText = tightenRetryChunkText(chunkText);
+          chunkSpeakText = applyTailPauseMarkup(chunkText, tailPauseMarkup);
         }
-        verificationRecord.text = chunkText;
+        verificationRecord.text = chunkSpeakText;
+        verificationRecord.verifyText = chunkText;
         if (chunkTailPadMs > 0) {
           const parsedChunk = path.parse(chunkOutput);
           const paddedChunkPath = path.join(parsedChunk.dir, `${parsedChunk.name}.padded${parsedChunk.ext || ".wav"}`);
@@ -1291,7 +1316,7 @@ export async function qwenSay(
           chunks: chunkFiles.map((filename, index) => ({
             index,
             filename,
-            text: chunkVerification[index]?.text ?? preparedChunks[index]?.text ?? "",
+            text: chunkVerification[index]?.text ?? preparedChunks[index]?.speakText ?? preparedChunks[index]?.text ?? "",
             instruct: chunkInstructs[index] ?? toneDefault,
             verification: chunkVerification[index] ?? null
           }))
@@ -1366,6 +1391,7 @@ export async function qwenSay(
     clipVerifyMinTailMs,
     tailPadMs,
     chunkTailPadMs,
+    tailPauseMarkup,
     clipVerifyHost,
     clipVerifyWorkflowName,
     tone: toneOverride || chunkInstructs[0] || toneDefault,

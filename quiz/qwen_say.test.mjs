@@ -251,6 +251,35 @@ test("qwenSay keeps short text in a single synthesis call", async () => {
   }
 });
 
+test("qwenSay appends configured tail pause markup to spoken chunk input", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say tail pause markup" }, ob: { text: "[pause:0.2]" }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tail-markup-out-"));
+  const output = path.join(outDir, "out.wav");
+  let seenText = "";
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    seenText = String(text ?? "");
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_tail_markup"));
+  };
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: "Short text only." },
+        to: { filename: output }
+      },
+      { runSayFn }
+    );
+    assert.match(seenText, /\[pause:0\.2\]$/u);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
 test("qwenSay keeps chunk artifacts when configured", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
