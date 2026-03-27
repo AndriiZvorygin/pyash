@@ -847,12 +847,9 @@ function applyTailGapGuard({
   }
   const tailGapMs = (duration - tailEnd) * 1000;
   verificationRecord.asrTailGapMs = tailGapMs;
-  const shouldEnforceTailGap = verificationRecord?.suspect === true;
-  if (tailGapMs < clipVerifyMinTailMs && shouldEnforceTailGap) {
+  if (tailGapMs < clipVerifyMinTailMs) {
     verificationRecord.asrPass = false;
     verificationRecord.asrTailGapFail = true;
-  } else if (tailGapMs < clipVerifyMinTailMs) {
-    verificationRecord.asrTailGapBypass = true;
   }
 }
 
