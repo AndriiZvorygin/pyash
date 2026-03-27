@@ -1,0 +1,618 @@
+{
+  "id": "b780badc-5c1e-483e-82bb-56d2ae638992",
+  "revision": 0,
+  "last_node_id": 25,
+  "last_link_id": 29,
+  "nodes": [
+    {
+      "id": 19,
+      "type": "Qwen3TTSRoleBank",
+      "pos": [
+        1317.939170351752,
+        -61.51860394642732
+      ],
+      "size": [
+        270.8629669189453,
+        166
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "prev_role_bank",
+          "shape": 7,
+          "type": "QWEN3_ROLE_BANK",
+          "link": null
+        },
+        {
+          "name": "prompt_1",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": 16
+        },
+        {
+          "name": "prompt_2",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": null
+        },
+        {
+          "name": "prompt_3",
+          "shape": 7,
+          "type": "QWEN3_PROMPT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "role_bank",
+          "type": "QWEN3_ROLE_BANK",
+          "links": [
+            17
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSRoleBank",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.4.1"
+        }
+      },
+      "widgets_values": [
+        "andrii",
+        "Role2",
+        "Role3"
+      ]
+    },
+    {
+      "id": 18,
+      "type": "Qwen3TTSScriptProcessor",
+      "pos": [
+        1193.9249445078894,
+        259.2201417048938
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "texts",
+          "type": "LIST",
+          "links": [
+            19
+          ]
+        },
+        {
+          "name": "instructs",
+          "type": "LIST",
+          "links": [
+            20
+          ]
+        },
+        {
+          "name": "roles",
+          "type": "LIST",
+          "links": [
+            21
+          ]
+        },
+        {
+          "name": "pauses",
+          "type": "LIST",
+          "links": [
+            22
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSScriptProcessor",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.4.1"
+        }
+      },
+      "widgets_values": [
+        "When the rich seized every plot, farmers lost homes, children, dignity. He gave voice to the poor, banned grain exports, built smallholder economies. Today's elites repeat the same theft, and we still wait for Solon's voice to rise again.\n\n\n",
+        "speak as a compassionate teacher"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "Qwen3LoadPrompt",
+      "pos": [
+        946.7090931671511,
+        -39.78184821751819
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "prompt",
+          "type": "QWEN3_PROMPT",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3LoadPrompt",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.4.1"
+        }
+      },
+      "widgets_values": [
+        "andrii.qwen3tts.safetensors"
+      ]
+    },
+    {
+      "id": 21,
+      "type": "Qwen3TTSLoader",
+      "pos": [
+        1114.2933820811418,
+        -285.4290119737576
+      ],
+      "size": [
+        270,
+        154
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "links": [
+            24
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.4.1"
+        }
+      },
+      "widgets_values": [
+        "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+        "HuggingFace",
+        "bf16",
+        "flash_attention_2",
+        true
+      ]
+    },
+    {
+      "id": 22,
+      "type": "Qwen3ASRLoader",
+      "pos": [
+        2424.2807271877696,
+        370.1031920114987
+      ],
+      "size": [
+        270,
+        178
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "QWEN3_ASR_MODEL",
+          "links": [
+            26
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3ASRLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.4.1",
+          "input_ue_unconnectable": {}
+        },
+        "aux_id": "DarioFT/ComfyUI-Qwen3-ASR",
+        "ver": "5cdfee1b78f5b92a3f9d6baeabfb3bc688f551c4"
+      },
+      "widgets_values": [
+        "Qwen/Qwen3-ASR-1.7B",
+        "HuggingFace",
+        "bf16",
+        "flash_attention_2",
+        "Qwen/Qwen3-ForcedAligner-0.6B",
+        ""
+      ]
+    },
+    {
+      "id": 23,
+      "type": "Qwen3ASRTranscribe",
+      "pos": [
+        2785.4315221791567,
+        242.2683487701251
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "QWEN3_ASR_MODEL",
+          "link": 26
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 25
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "links": [
+            28
+          ]
+        },
+        {
+          "name": "language",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "timestamps",
+          "type": "STRING",
+          "links": [
+            27
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3ASRTranscribe",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.4.1",
+          "input_ue_unconnectable": {}
+        },
+        "aux_id": "DarioFT/ComfyUI-Qwen3-ASR",
+        "ver": "5cdfee1b78f5b92a3f9d6baeabfb3bc688f551c4"
+      },
+      "widgets_values": [
+        "English",
+        "",
+        true
+      ]
+    },
+    {
+      "id": 25,
+      "type": "PreviewAny",
+      "pos": [
+        3286.292571763437,
+        33.40158523134086
+      ],
+      "size": [
+        210,
+        166
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 28
+        }
+      ],
+      "outputs": [],
+      "title": "Plain Text",
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.4.1",
+          "input_ue_unconnectable": {}
+        },
+        "cnr_id": "comfy-core",
+        "ver": "0.10.0"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 24,
+      "type": "PreviewAny",
+      "pos": [
+        3286.9911306216713,
+        303.7407846408255
+      ],
+      "size": [
+        210,
+        166
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 27
+        }
+      ],
+      "outputs": [],
+      "title": "Timestamps",
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.4.1",
+          "input_ue_unconnectable": {}
+        },
+        "cnr_id": "comfy-core",
+        "ver": "0.10.0"
+      },
+      "widgets_values": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": 7,
+      "type": "PreviewAudio",
+      "pos": [
+        2478.7137954157283,
+        25.69977170561105
+      ],
+      "size": [
+        270,
+        88
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 29
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewAudio",
+        "cnr_id": "comfy-core",
+        "ver": "0.10.0",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.4.1",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 20,
+      "type": "Qwen3TTSAdvancedDialogue",
+      "pos": [
+        1891.8437726470017,
+        124.93088819184513
+      ],
+      "size": [
+        383.5666564941406,
+        374
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_obj",
+          "type": "QWEN3_MODEL",
+          "link": 24
+        },
+        {
+          "name": "texts",
+          "type": "LIST",
+          "link": 19
+        },
+        {
+          "name": "instructs",
+          "type": "LIST",
+          "link": 20
+        },
+        {
+          "name": "roles",
+          "type": "LIST",
+          "link": 21
+        },
+        {
+          "name": "pauses",
+          "type": "LIST",
+          "link": 22
+        },
+        {
+          "name": "role_bank",
+          "type": "QWEN3_ROLE_BANK",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            25,
+            29
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Qwen3TTSAdvancedDialogue",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.4.1"
+        }
+      },
+      "widgets_values": [
+        787829595179866,
+        "randomize",
+        2048,
+        0.9,
+        1,
+        50,
+        1.05,
+        0.9,
+        1,
+        50
+      ]
+    }
+  ],
+  "links": [
+    [
+      16,
+      15,
+      0,
+      19,
+      1,
+      "QWEN3_PROMPT"
+    ],
+    [
+      17,
+      19,
+      0,
+      20,
+      5,
+      "QWEN3_ROLE_BANK"
+    ],
+    [
+      19,
+      18,
+      0,
+      20,
+      1,
+      "LIST"
+    ],
+    [
+      20,
+      18,
+      1,
+      20,
+      2,
+      "LIST"
+    ],
+    [
+      21,
+      18,
+      2,
+      20,
+      3,
+      "LIST"
+    ],
+    [
+      22,
+      18,
+      3,
+      20,
+      4,
+      "LIST"
+    ],
+    [
+      24,
+      21,
+      0,
+      20,
+      0,
+      "QWEN3_MODEL"
+    ],
+    [
+      25,
+      20,
+      0,
+      23,
+      1,
+      "AUDIO"
+    ],
+    [
+      26,
+      22,
+      0,
+      23,
+      0,
+      "QWEN3_ASR_MODEL"
+    ],
+    [
+      27,
+      23,
+      2,
+      24,
+      0,
+      "STRING"
+    ],
+    [
+      28,
+      23,
+      0,
+      25,
+      0,
+      "STRING"
+    ],
+    [
+      29,
+      20,
+      0,
+      7,
+      0,
+      "AUDIO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "workflowRendererVersion": "LG",
+    "ue_links": [],
+    "ds": {
+      "scale": 1.025933314334569,
+      "offset": [
+        -2028.2023759846973,
+        438.5914540947968
+      ]
+    },
+    "frontendVersion": "1.39.19",
+    "links_added_by_ue": [],
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

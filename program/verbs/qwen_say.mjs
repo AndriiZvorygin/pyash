@@ -482,7 +482,7 @@ async function planChunkInstructs(
   };
 }
 
-async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, host, output }) {
+async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, host, output, returnTranscript = false }) {
   const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../command/say_comfyui_runner.mjs");
   const args = [
     runner,
@@ -500,6 +500,9 @@ async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, hos
   if (String(instruct ?? "").trim()) {
     args.push("--instruct", String(instruct).trim());
   }
+  if (returnTranscript) {
+    args.push("--return-transcript", "true");
+  }
   return new Promise((resolve, reject) => {
     let stdout = "";
     let stderr = "";
@@ -508,7 +511,25 @@ async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, hos
     proc.stderr.on("data", chunk => { stderr += String(chunk ?? ""); });
     proc.on("error", reject);
     proc.on("close", (code) => {
-      if (code === 0) resolve({ stdout: stdout.trim() });
+      if (code === 0) {
+        const trimmed = stdout.trim();
+        const lines = trimmed.split(/\r?\n/u).filter(Boolean);
+        const lastLine = lines.length ? lines[lines.length - 1] : "";
+        let outputPath = trimmed;
+        let transcript = "";
+        let timestamps = "";
+        try {
+          const payload = JSON.parse(lastLine);
+          if (payload && typeof payload === "object") {
+            outputPath = String(payload.output ?? outputPath);
+            transcript = String(payload.transcript ?? "");
+            timestamps = String(payload.timestamps ?? "");
+          }
+        } catch {
+          // Plain text mode is still supported for non-JSON callers.
+        }
+        resolve({ stdout: trimmed, outputPath, transcript, timestamps });
+      }
       else reject(new Error(stderr.trim() || `qwen say defective: status=${code}`));
     });
   });
@@ -890,6 +911,7 @@ export async function qwenSay(
       for (let i = 0; i < chunks.length; i += 1) {
         let chunkText = preparedChunks[i]?.text ?? "";
         const chunkOutput = path.join(chunkDir, `chunk-${String(i + 1).padStart(3, "0")}.wav`);
+        const isLastChunk = i === (chunks.length - 1);
         const verificationRecord = {
           index: i,
           retries: 0,
@@ -900,13 +922,14 @@ export async function qwenSay(
           hotTail: null
         };
         while (true) {
-          await runSayFn({
+          const runResult = await runSayFn({
             text: chunkText,
             instruct: chunkInstructs[i] ?? toneDefault,
             workflowName,
             workflowRoot,
             host,
-            output: chunkOutput
+            output: chunkOutput,
+            returnTranscript: clipVerifyEnabled
           });
           if (!clipVerifyEnabled) break;
           let suspect = false;
@@ -923,19 +946,34 @@ export async function qwenSay(
             suspect = true;
           }
           verificationRecord.suspect = suspect;
-          if (!suspect) break;
+          const shouldAsrCheck = suspect || isLastChunk;
+          if (!shouldAsrCheck) break;
           verificationRecord.asrChecked = true;
-          const asrResult = await verifyChunkTailFn({
-            input: chunkOutput,
-            host: clipVerifyHost,
-            workflowRoot: clipVerifyWorkflowRoot,
-            workflowName: clipVerifyWorkflowName,
-            expectedTail: verificationRecord.expectedTail
-          });
-          verificationRecord.asrPass = asrResult?.pass === true;
-          verificationRecord.asrMatched = Number(asrResult?.matched ?? 0);
-          verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
-          verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
+          const inlineTranscript = String(runResult?.transcript ?? "").trim();
+          if (inlineTranscript) {
+            const inlineVerdict = verifyAsrTailMatch({
+              expectedTail: verificationRecord.expectedTail,
+              transcript: inlineTranscript
+            });
+            verificationRecord.asrPass = inlineVerdict?.pass === true;
+            verificationRecord.asrMatched = Number(inlineVerdict?.matched ?? 0);
+            verificationRecord.asrExpected = Number(inlineVerdict?.expected ?? verificationRecord.expectedTail.length);
+            verificationRecord.asrTranscript = inlineTranscript;
+            verificationRecord.asrSource = "inline";
+          } else {
+            const asrResult = await verifyChunkTailFn({
+              input: chunkOutput,
+              host: clipVerifyHost,
+              workflowRoot: clipVerifyWorkflowRoot,
+              workflowName: clipVerifyWorkflowName,
+              expectedTail: verificationRecord.expectedTail
+            });
+            verificationRecord.asrPass = asrResult?.pass === true;
+            verificationRecord.asrMatched = Number(asrResult?.matched ?? 0);
+            verificationRecord.asrExpected = Number(asrResult?.expected ?? verificationRecord.expectedTail.length);
+            verificationRecord.asrTranscript = String(asrResult?.transcript ?? "");
+            verificationRecord.asrSource = "external";
+          }
           if (verificationRecord.asrPass) break;
           if (verificationRecord.retries >= clipVerifyMaxRetries) {
             throwErrorSentence({

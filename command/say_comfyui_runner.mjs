@@ -14,7 +14,8 @@ function parseArgs(argv) {
     workflowRoot: null,
     workflowName: null,
     workflowFile: null,
-    output: null
+    output: null,
+    returnTranscript: false
   };
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -27,6 +28,7 @@ function parseArgs(argv) {
     else if (arg === "--workflow-name") out.workflowName = args[++i] ?? null;
     else if (arg === "--workflow-file") out.workflowFile = args[++i] ?? null;
     else if (arg === "--output") out.output = args[++i] ?? null;
+    else if (arg === "--return-transcript") out.returnTranscript = String(args[++i] ?? "true").trim().toLowerCase() !== "false";
   }
   return out;
 }
@@ -94,6 +96,8 @@ async function readMappingPya(workflowFile) {
       if (key === "default instruct path") result.instructPath = value;
       if (key === "tone path") result.instructPath = value;
       if (key === "audio path") result.audioPath = value;
+      if (key === "transcript path") result.transcriptPath = value;
+      if (key === "timestamps path") result.timestampsPath = value;
       if (key === "save audio prefix path") result.saveAudioPrefixPath = value;
     }
     return result;
@@ -245,6 +249,87 @@ function pickFirstAudio(historyEntry) {
   return null;
 }
 
+function getAtPath(obj, dottedPath) {
+  if (!dottedPath) return undefined;
+  const parts = String(dottedPath).split(".");
+  let cur = obj;
+  for (const part of parts) {
+    if (cur === null || cur === undefined) return undefined;
+    if (Array.isArray(cur)) {
+      const idx = Number(part);
+      cur = Number.isFinite(idx) ? cur[idx] : undefined;
+      continue;
+    }
+    cur = cur[part];
+  }
+  return cur;
+}
+
+function normalizeText(value) {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.map(normalizeText).join("\n");
+  if (typeof value === "object") {
+    if (typeof value.text === "string") return value.text;
+    if (typeof value.string === "string") return value.string;
+    if (typeof value.value === "string") return value.value;
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function collectStrings(value, out = []) {
+  if (value === null || value === undefined) return out;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) out.push(trimmed);
+    return out;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, out);
+    return out;
+  }
+  if (typeof value === "object") {
+    for (const item of Object.values(value)) collectStrings(item, out);
+    return out;
+  }
+  return out;
+}
+
+function looksLikeTimestamps(text = "") {
+  const value = String(text ?? "");
+  if (!value.trim()) return false;
+  if (/-->/u.test(value)) return true;
+  if (/\[\s*\d+(?:\.\d+)?\s*[,|-]\s*\d+(?:\.\d+)?/u.test(value)) return true;
+  if (/\b\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?\s*:/u.test(value)) return true;
+  if (/<\|\d+(?:\.\d+)?\|>/u.test(value)) return true;
+  if (/"start"|"end"|"timestamp"/u.test(value)) return true;
+  return false;
+}
+
+function resolveResultTexts(historyEntry, mapping = {}) {
+  const outputs = historyEntry?.outputs ?? {};
+  const transcriptMapped = normalizeText(getAtPath(outputs, mapping.transcriptPath) ?? getAtPath(historyEntry, mapping.transcriptPath));
+  const timestampsMapped = normalizeText(getAtPath(outputs, mapping.timestampsPath) ?? getAtPath(historyEntry, mapping.timestampsPath));
+  if (transcriptMapped.trim() || timestampsMapped.trim()) {
+    return { transcript: transcriptMapped.trim(), timestamps: timestampsMapped.trim() };
+  }
+
+  const strings = collectStrings(outputs && typeof outputs === "object" ? outputs : historyEntry, []);
+  let transcript = "";
+  let timestamps = "";
+  for (const candidate of strings) {
+    if (!timestamps && looksLikeTimestamps(candidate)) {
+      timestamps = candidate;
+      continue;
+    }
+    if (!transcript && candidate.length >= 3) {
+      transcript = candidate;
+    }
+  }
+  return { transcript: transcript.trim(), timestamps: timestamps.trim() };
+}
+
 async function requestJson(url, body) {
   const res = await fetch(url, {
     method: "POST",
@@ -277,7 +362,7 @@ async function requestBytes(url) {
   return Buffer.from(arrayBuf);
 }
 
-async function pollHistoryForAudio(host, promptId, timeoutMs = 180000) {
+async function pollHistoryForOutput(host, promptId, timeoutMs = 180000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const text = await requestText(`${host.replace(/\/$/, "")}/history/${encodeURIComponent(promptId)}`);
@@ -293,7 +378,7 @@ async function pollHistoryForAudio(host, promptId, timeoutMs = 180000) {
       throw new Error(`say_comfyui_runner: execution failed: ${errorMessage}`);
     }
     const audio = pickFirstAudio(entry);
-    if (audio) return audio;
+    if (audio) return { audio, entry };
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   throw new Error("say_comfyui_runner: timed out waiting for generated audio");
@@ -314,6 +399,10 @@ async function main() {
   const outputPath = opts.output ? String(opts.output) : defaultOutputPath();
 
   if (await copyFixtureToOutput(outputPath)) {
+    if (opts.returnTranscript) {
+      fsSync.writeFileSync(1, `${JSON.stringify({ output: outputPath, transcript: "", timestamps: "" })}\n`, "utf8");
+      return;
+    }
     fsSync.writeFileSync(1, `${outputPath}\n`, "utf8");
     return;
   }
@@ -352,7 +441,8 @@ async function main() {
   const promptId = queued?.prompt_id;
   if (!promptId) throw new Error("say_comfyui_runner: missing prompt_id from ComfyUI");
 
-  let audio = await pollHistoryForAudio(host, promptId);
+  const historyOutput = await pollHistoryForOutput(host, promptId);
+  let audio = historyOutput?.audio ?? null;
   if (mapping.audioPath) {
     const filename = String(audio?.filename ?? "");
     if (!filename) throw new Error("say_comfyui_runner: history audio missing filename");
@@ -367,6 +457,15 @@ async function main() {
   const bytes = await requestBytes(viewUrl);
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, bytes);
+  if (opts.returnTranscript) {
+    const result = resolveResultTexts(historyOutput?.entry ?? {}, mapping);
+    fsSync.writeFileSync(1, `${JSON.stringify({
+      output: outputPath,
+      transcript: String(result?.transcript ?? ""),
+      timestamps: String(result?.timestamps ?? "")
+    })}\n`, "utf8");
+    return;
+  }
   fsSync.writeFileSync(1, `${outputPath}\n`, "utf8");
 }
 

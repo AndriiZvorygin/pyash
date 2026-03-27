@@ -349,6 +349,81 @@ test("qwenSay clip verify retries suspicious chunk and keeps successful retry", 
   }
 });
 
+test("qwenSay clip verify always checks final chunk tail via ASR", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-clip-verify-last-"));
+  const output = path.join(outDir, "out.wav");
+  const longText = Array.from({ length: 220 }, (_, idx) => `token${idx + 1}`).join(" ");
+  let verifyCalls = 0;
+  const runSayFn = async ({ output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_clip_last"));
+  };
+  const detectHotTailFn = async () => ({ suspect: false });
+  const verifyChunkTailFn = async ({ input }) => {
+    if (/chunk-003\.wav$/u.test(String(input ?? ""))) verifyCalls += 1;
+    return { pass: true, transcript: "tail words present", matched: 2, expected: 2 };
+  };
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_clip_last_concat"));
+  };
+  try {
+    await qwenSay(
+      { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+      { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
+    );
+    const chunkDir = path.join(outDir, "out.qwen-say-chunks");
+    const manifest = JSON.parse(await fs.readFile(path.join(chunkDir, "chunks.metadata.json"), "utf8"));
+    const last = manifest.chunks[manifest.chunks.length - 1];
+    assert.equal(Boolean(last?.verification?.asrChecked), true);
+    assert.equal(Boolean(last?.verification?.asrPass), true);
+    assert.equal(verifyCalls, 1);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay clip verify prefers inline transcript from tts workflow output", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-inline-asr-"));
+  const output = path.join(outDir, "out.wav");
+  const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
+  let externalCalls = 0;
+  const runSayFn = async ({ output: chunkFile, returnTranscript }) => {
+    assert.equal(Boolean(returnTranscript), true);
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_inline_ok"));
+    return {
+      stdout: chunkFile,
+      outputPath: chunkFile,
+      transcript: "line219 line220",
+      timestamps: ""
+    };
+  };
+  const detectHotTailFn = async () => ({ suspect: false });
+  const verifyChunkTailFn = async () => {
+    externalCalls += 1;
+    return { pass: false, transcript: "", matched: 0, expected: 2 };
+  };
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_inline_concat"));
+  };
+  try {
+    await qwenSay(
+      { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+      { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
+    );
+    assert.equal(externalCalls, 0);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
 test("qwenSay clip verify hard fails after retry exhaustion", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
