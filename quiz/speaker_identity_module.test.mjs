@@ -61,4 +61,14 @@ test("speaker identify signature is module-owned and surfaces worker error conte
     () => run('fromstate wo audio from filename "/tmp/pyash-speaker-missing.wav" with name speaker identify options to name text who be identify do'),
     (err) => err?.sentence?.su?.name === "file or directory unavailable error"
   );
+
+  await run("su name speaker identify options spaced be map def");
+  await run("su name same speaker threshold ob num 0.72 ya");
+  await run("su name known speaker threshold ob num 0.68 ya");
+  await run("su name clip seconds ob num 8 ya");
+  await run("prah");
+  await assert.rejects(
+    () => run('fromstate wo audio from filename "/tmp/pyash-speaker-missing.wav" with name speaker identify options spaced to name text who be identify do'),
+    (err) => err?.sentence?.su?.name === "file or directory unavailable error"
+  );
 });
