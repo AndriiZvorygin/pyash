@@ -1806,3 +1806,9 @@ exists su name module manuscript scored collect pair be export ya
 exists su name module manuscript scored promote be export ya
 exists su name module manuscript scored semantic score be export ya
 exists su name module manuscript scored settle be export ya
+
+ob ve filename text source text text focus be input ya
+su name provider auto discharge ob bool lie ya
+
+su name story manuscript stage from filename of source with text of focus to name text result be manuscript as wo module do
+ob name text result be write do
