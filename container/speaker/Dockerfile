@@ -11,14 +11,16 @@ RUN apt-get update \
     ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
 # Pin a CUDA-compatible torch stack and SpeechBrain API behavior.
-RUN python3 -m pip install --no-cache-dir --break-system-packages \
+RUN python3 -m pip install --no-cache-dir \
   "numpy" \
   "torch==2.6.0" \
   "torchaudio==2.6.0" \
   --index-url https://download.pytorch.org/whl/cu124
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages \
+RUN python3 -m pip install --no-cache-dir \
   "speechbrain==1.0.3" \
   "huggingface_hub<1.0"
 

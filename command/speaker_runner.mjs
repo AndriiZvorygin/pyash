@@ -5,6 +5,8 @@ import path from "node:path";
 
 const DEFAULT_VOICES_DIR = "./world/voices";
 const DEFAULT_TEMP_DIR = "./world/temporary/speaker";
+const LOCAL_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const SERVICE_ROOT = String(process.env.PYA_SPEAKER_HOST_ROOT || "/workplace").trim() || "/workplace";
 
 function isFiniteProvidedNumber(value) {
   if (value === null || value === undefined) return false;
@@ -30,6 +32,7 @@ export class SpeakerRunner {
     this.defaultVoicesDir = resolvePathLike(voicesDir, DEFAULT_VOICES_DIR);
     this.tempDir = resolvePathLike(tempDir, DEFAULT_TEMP_DIR);
     this.workerPath = workerPath || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "speaker_worker.py");
+    this.serviceHost = String(process.env.PYA_SPEAKER_HOST || process.env.SPEAKER_HOST || "").trim().replace(/\/+$/u, "");
 
     this.child = null;
     this.buffer = "";
@@ -40,6 +43,20 @@ export class SpeakerRunner {
   }
 
   async ensureStarted() {
+    if (this.serviceHost) {
+      const url = `${this.serviceHost}/health`;
+      let res;
+      try {
+        res = await fetch(url);
+      } catch (err) {
+        throw new Error(`speaker service unavailable: ${err?.message || err}`);
+      }
+      if (!res.ok) {
+        throw new Error(`speaker service unavailable: ${res.status} ${res.statusText}`);
+      }
+      return;
+    }
+
     if (this.child && this.child.exitCode == null && !this.child.killed) return;
     if (this.startPromise) return this.startPromise;
 
@@ -137,6 +154,10 @@ export class SpeakerRunner {
   }
 
   async request(command, payload = {}) {
+    if (this.serviceHost) {
+      return this.requestViaService(command, payload);
+    }
+
     await this.ensureStarted();
     if (!this.child || this.child.exitCode != null || this.child.killed) {
       throw new Error("speaker worker unavailable");
@@ -158,6 +179,68 @@ export class SpeakerRunner {
     }
 
     return promise;
+  }
+
+  commandToEndpoint(command) {
+    const key = String(command || "").trim().toLowerCase();
+    if (key === "identify") return "/identify";
+    if (key === "enrol") return "/enrol";
+    if (key === "rename") return "/rename";
+    if (key === "discharge") return "/discharge";
+    if (key === "stop") return "/stop";
+    throw new Error(`unknown speaker command: ${command}`);
+  }
+
+  async requestViaService(command, payload = {}) {
+    await this.ensureStarted();
+    const endpoint = this.commandToEndpoint(command);
+    const url = `${this.serviceHost}${endpoint}`;
+    const mappedPayload = this.mapPayloadForService(payload);
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mappedPayload ?? {}),
+      });
+    } catch (err) {
+      throw new Error(`speaker service defective: ${err?.message || err}`);
+    }
+
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
+    if (!res.ok) {
+      const msg = String(data?.error || `${res.status} ${res.statusText}`).trim();
+      throw new Error(`speaker service defective: ${msg}`);
+    }
+    return data || {};
+  }
+
+  mapPathForService(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) return raw;
+    if (!path.isAbsolute(raw)) return raw;
+    const localPrefix = `${LOCAL_ROOT}${path.sep}`;
+    if (raw === LOCAL_ROOT) return SERVICE_ROOT;
+    if (!raw.startsWith(localPrefix)) return raw;
+    const rel = raw.slice(localPrefix.length).split(path.sep).join("/");
+    return `${SERVICE_ROOT}/${rel}`;
+  }
+
+  mapPayloadForService(payload = {}) {
+    if (!payload || typeof payload !== "object") return payload;
+    const out = { ...payload };
+    for (const key of ["audio", "voices_dir", "voicesDir"]) {
+      if (typeof out[key] === "string") {
+        out[key] = this.mapPathForService(out[key]);
+      }
+    }
+    return out;
   }
 
   async identify({
@@ -200,6 +283,12 @@ export class SpeakerRunner {
   }
 
   async stop() {
+    if (this.serviceHost) {
+      const result = await this.requestViaService("stop", {});
+      this.stopped = true;
+      return result;
+    }
+
     if (!this.child || this.child.exitCode != null || this.child.killed) {
       this.child = null;
       return { stopped: true, alreadyStopped: true };

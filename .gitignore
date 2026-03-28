@@ -88,5 +88,6 @@ caterer/nanobot/
 
 container/whisperx/service/__pycache__/
 container/whisperx/service/*.pyc
+container/speaker/cache/
 __pycache__/
 *.pyc
