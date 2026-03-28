@@ -1,0 +1,7 @@
+ob filename text request_json be input ya
+ob name request_json to name text request path be text do
+ob text "node /home/htaf/pyac/pyash/command/municipal_reporter_runner.mjs publish \"" to name text cmd be text do
+ob name request path to name cmd be plus do
+ob text "\"" to name cmd be plus do
+ob text of ob of cmd to name text out be command do
+ob name out be write do
