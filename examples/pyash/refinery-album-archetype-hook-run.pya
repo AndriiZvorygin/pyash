@@ -106,7 +106,11 @@ su name album hook song render be ceremony def
   su name hook line stage ob text of ob of this to name text hook line be text do
 
   su name hymn lyrics stage from filename of source with text of hook line to name text hymn lyrics be hymn manuscript do
-  su name hymn audio stage fromtext text "Spiritual devotional ambient electronic hymn, warm analog pads, gentle pulse, luminous choir texture, spacious mix, reverent mood, no harsh distortion." ob name text hymn lyrics be music say do
+  su name hymn row stage be map def
+    su name stage ob name text album current stage ya
+    su name hook ob name text hook line ya
+    su name lyrics ob name text hymn lyrics ya
+  prah
 
   su name render row stage ob text "[song]" to name text render row be text do
   ob name text paragraph break to name render row be plus do
@@ -120,6 +124,7 @@ su name album hook song render be ceremony def
   ob name text paragraph break to name render row be plus do
   ob name text paragraph break to name render row be plus do
   ob name text render row to name text album songbook be plus do
+  su name hymn row stage ret
 prah
 
 su name album archetype hook refinery run be refinery def
@@ -212,8 +217,19 @@ su name album archetype hook refinery run be refinery def
   ob name text highway hooks cleaned by wo newline to name vec highwayhooksvec be distribute do
   ob name highwayhooksvec at name all be album hook song render do
 
+  su name album hymn series stage be series def
+    su name seed hymns ob name seedhooksvec be vector ya
+    su name awake hymns ob name awakehooksvec be vector ya
+    su name challenge hymns ob name challengehooksvec be vector ya
+    su name experience hymns ob name experiencehooksvec be vector ya
+    su name integrated self hymns ob name integratedselfhooksvec be vector ya
+    su name transformation hymns ob name transformationhooksvec be vector ya
+    su name highway hymns ob name highwayhooksvec be vector ya
+  prah
+
   ob name text output be write do
   ob name text album songbook be write do
+  ob name series album hymn series stage be write do
   ob name album style profile be write do
 prah
 
