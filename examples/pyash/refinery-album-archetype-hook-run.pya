@@ -1,5 +1,16 @@
 ob ve filename text source be input ya
 su name provider auto discharge ob bool lie ya
+su name music workflow default ob text "ace-step-1.5-power_comfyui" be default ya
+
+exists su name album style key ob text "power-ace-step" be text ya
+exists su name album style text ob text "Spiritual devotional ambient electronic hymn, warm analog pads, gentle pulse, luminous choir texture, spacious mix, reverent mood, no harsh distortion." be text ya
+exists su name album style fixed seed ob num 424242 be number ya
+
+su name album style profile be map def
+  su name key ob name text album style key ya
+  su name style text ob name text album style text ya
+  su name fixed seed ob num 424242 ya
+prah
 
 exists su name archetype hook generator mind be mind as name "qwen3.5:9b" fromtext text "You prepare short hook hints for stage-based spiritual manuscript generation." ya
 exists su name archetype hook verifier mind be mind as name "qwen3.5:9b" fromtext text "You strictly select the strongest stage-fitting hooks from a candidate list." ya
@@ -86,7 +97,7 @@ su name stage hook run from text stage name with text stage role to name text st
   su name stage hooks out ret
 prah
 
-su name story archetype hook refinery run be refinery def
+su name album archetype hook refinery run be refinery def
   su name source load stage from filename of ob of source become wo text to name text source text be read do
 
   su name seed hooks stage from text "seed" with text "This stage introduces the core idea in its first living form. It names the central truth or possibility before it is tested. It should feel simple, clear, and foundational." to name text seed hooks be stage hook run do
@@ -125,8 +136,37 @@ su name story archetype hook refinery run be refinery def
   ob name text paragraph break to name output be plus do
   ob name text highway hooks to name output be plus do
 
+  su name album lyrics stage ob name text seed hooks to name text album lyrics be text do
+  ob name text paragraph break to name album lyrics be plus do
+  ob name text awake hooks to name album lyrics be plus do
+  ob name text paragraph break to name album lyrics be plus do
+  ob name text challenge hooks to name album lyrics be plus do
+  ob name text paragraph break to name album lyrics be plus do
+  ob name text experience hooks to name album lyrics be plus do
+  ob name text paragraph break to name album lyrics be plus do
+  ob name text integrated self hooks to name album lyrics be plus do
+  ob name text paragraph break to name album lyrics be plus do
+  ob name text transformation hooks to name album lyrics be plus do
+  ob name text paragraph break to name album lyrics be plus do
+  ob name text highway hooks to name album lyrics be plus do
+
+  su name music options be map def
+    su name seed ob num 424242 ya
+    su name seconds ob num 96 ya
+    su name duration ob num 96 ya
+    su name bpm ob num 84 ya
+    su name timesignature ob text "4" ya
+    su name language ob text "en" ya
+    su name keyscale ob text "Bb major" ya
+    su name quality ob text "128k" ya
+  prah
+
+  su name album song stage fromtext text of ob of album style text ob name text album lyrics with name music options be music say do
+
   ob name text output be write do
+  ob name album style profile be write do
+  ob name album song stage be write do
 prah
 
-from name story archetype hook refinery run to name text result be refinery do
+from name album archetype hook refinery run to name text result be refinery do
 ob name result be write do

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const repoRoot = process.cwd();
-const filename = path.join(repoRoot, "examples", "pyash", "refinery-story-deep-research-report-run.pya");
+const filename = path.join(repoRoot, "examples", "pyash", "refinery-album-archetype-hook-run.pya");
 
 test("story archetype refinery includes one verifier call in reusable stage ceremony", () => {
   const text = fs.readFileSync(filename, "utf8");
@@ -21,4 +21,10 @@ test("story archetype refinery runs all seven archetype stages", () => {
   assert.match(text, /from text "integrated self"/u);
   assert.match(text, /from text "transformation"/u);
   assert.match(text, /from text "highway"/u);
+});
+
+test("story archetype refinery wires power workflow music generation tail", () => {
+  const text = fs.readFileSync(filename, "utf8");
+  assert.match(text, /su name music workflow default ob text "ace-step-1\.5-power_comfyui" be default ya/u);
+  assert.match(text, /be music say do/u);
 });
