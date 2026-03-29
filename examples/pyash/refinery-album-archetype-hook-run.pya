@@ -1,12 +1,16 @@
+from filename "../../module/hymn_manuscript.pya" to name hymn manuscript be import do
+
 ob ve filename text source be input ya
 su name provider auto discharge ob bool lie ya
 su name music workflow default ob text "ace-step-1.5-power_comfyui" be default ya
 
-exists su name album style key ob text "power-ace-step" be text ya
+exists su name album profile key ob text "power-ace-step" be text ya
+exists su name album style key ob text "Bb major" be text ya
 exists su name album style text ob text "Spiritual devotional ambient electronic hymn, warm analog pads, gentle pulse, luminous choir texture, spacious mix, reverent mood, no harsh distortion." be text ya
 exists su name album style fixed seed ob num 424242 be number ya
 
 su name album style profile be map def
+  su name profile key ob name text album profile key ya
   su name key ob name text album style key ya
   su name style text ob name text album style text ya
   su name fixed seed ob num 424242 ya
@@ -81,6 +85,7 @@ prah
 exists su name text paragraph break ob text quoted.text.
 
 .text.quoted be text ya
+exists su name text album current stage ob text "" be text ya
 
 su name stage hook run from text stage name with text stage role to name text stage hooks out be ceremony def
   ob text of from of this to name text replacement stage name be text do
@@ -95,6 +100,26 @@ su name stage hook run from text stage name with text stage role to name text st
   su name stage hooks selected stage ob name text stage verify prompt for name archetype hook verifier mind to name text stage hooks out by num 0 atmost num 140 be write do
 
   su name stage hooks out ret
+prah
+
+su name album hook song render be ceremony def
+  su name hook line stage ob text of ob of this to name text hook line be text do
+
+  su name hymn lyrics stage from filename of source with text of hook line to name text hymn lyrics be hymn manuscript do
+  su name hymn audio stage fromtext text "Spiritual devotional ambient electronic hymn, warm analog pads, gentle pulse, luminous choir texture, spacious mix, reverent mood, no harsh distortion." ob name text hymn lyrics be music say do
+
+  su name render row stage ob text "[song]" to name text render row be text do
+  ob name text paragraph break to name render row be plus do
+  ob text "stage: " to name render row be plus do
+  ob name text album current stage to name render row be plus do
+  ob name text paragraph break to name render row be plus do
+  ob text "hook: " to name render row be plus do
+  ob name text hook line to name render row be plus do
+  ob name text paragraph break to name render row be plus do
+  ob name text hymn lyrics to name render row be plus do
+  ob name text paragraph break to name render row be plus do
+  ob name text paragraph break to name render row be plus do
+  ob name text render row to name text album songbook be plus do
 prah
 
 su name album archetype hook refinery run be refinery def
@@ -150,22 +175,46 @@ su name album archetype hook refinery run be refinery def
   ob name text paragraph break to name album lyrics be plus do
   ob name text highway hooks to name album lyrics be plus do
 
-  su name music options be map def
-    su name seed ob num 424242 ya
-    su name seconds ob num 96 ya
-    su name duration ob num 96 ya
-    su name bpm ob num 84 ya
-    su name timesignature ob text "4" ya
-    su name language ob text "en" ya
-    su name keyscale ob text "Bb major" ya
-    su name quality ob text "128k" ya
-  prah
+  su name songbook init stage ob text "" to name text album songbook be text do
 
-  su name album song stage fromtext text of ob of album style text ob name text album lyrics with name music options be music say do
+  ob text "seed" to name text album current stage be text do
+  ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name seed hooks to name text seed hooks cleaned be command do
+  ob name text seed hooks cleaned by wo newline to name vec seedhooksvec be distribute do
+  ob name seedhooksvec at name all be album hook song render do
+
+  ob text "awake" to name text album current stage be text do
+  ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name awake hooks to name text awake hooks cleaned be command do
+  ob name text awake hooks cleaned by wo newline to name vec awakehooksvec be distribute do
+  ob name awakehooksvec at name all be album hook song render do
+
+  ob text "challenge" to name text album current stage be text do
+  ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name challenge hooks to name text challenge hooks cleaned be command do
+  ob name text challenge hooks cleaned by wo newline to name vec challengehooksvec be distribute do
+  ob name challengehooksvec at name all be album hook song render do
+
+  ob text "experience" to name text album current stage be text do
+  ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name experience hooks to name text experience hooks cleaned be command do
+  ob name text experience hooks cleaned by wo newline to name vec experiencehooksvec be distribute do
+  ob name experiencehooksvec at name all be album hook song render do
+
+  ob text "integrated self" to name text album current stage be text do
+  ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name integrated self hooks to name text integrated self hooks cleaned be command do
+  ob name text integrated self hooks cleaned by wo newline to name vec integratedselfhooksvec be distribute do
+  ob name integratedselfhooksvec at name all be album hook song render do
+
+  ob text "transformation" to name text album current stage be text do
+  ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name transformation hooks to name text transformation hooks cleaned be command do
+  ob name text transformation hooks cleaned by wo newline to name vec transformationhooksvec be distribute do
+  ob name transformationhooksvec at name all be album hook song render do
+
+  ob text "highway" to name text album current stage be text do
+  ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name highway hooks to name text highway hooks cleaned be command do
+  ob name text highway hooks cleaned by wo newline to name vec highwayhooksvec be distribute do
+  ob name highwayhooksvec at name all be album hook song render do
 
   ob name text output be write do
+  ob name text album songbook be write do
   ob name album style profile be write do
-  ob name album song stage be write do
 prah
 
 from name album archetype hook refinery run to name text result be refinery do
