@@ -36,6 +36,7 @@ test("story archetype refinery renders hymn and song per selected hook", () => {
   assert.match(text, /with text of hook line to name text hymn lyrics be hymn manuscript do/u);
   assert.match(text, /su name hymn row stage be map def/u);
   assert.match(text, /ob name seedhooksvec at name all be album hook song render do/u);
+  assert.match(text, /from name seedhooksvec to name series seedhymns be series do/u);
   assert.match(text, /to name vec seedhooksvec be distribute do/u);
   assert.match(text, /su name album hymn series stage be series def/u);
   assert.match(text, /ob name series album hymn series stage be write do/u);
