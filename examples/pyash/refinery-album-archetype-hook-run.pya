@@ -128,6 +128,20 @@ su name album hook song render be ceremony def
   su name hymn row stage ret
 prah
 
+su name album hymn music render with text stage name to name map song row be ceremony def
+  su name hymn hook stage ob text of ob of hook of map of ob of this to name text hymn hook be text do
+  su name hymn lyrics stage ob text of ob of lyrics of map of ob of this to name text hymn lyrics be text do
+  su name hymn audio stage fromtext text "Spiritual devotional ambient electronic hymn, warm analog pads, gentle pulse, luminous choir texture, spacious mix, reverent mood, no harsh distortion." ob name text hymn lyrics be music say do
+
+  su name song row stage be map def
+    su name stage ob text of with of this ya
+    su name hook ob name text hymn hook ya
+    su name lyrics ob name text hymn lyrics ya
+    su name audio ob filename of ob of hymn audio stage ya
+  prah
+  su name song row stage ret
+prah
+
 su name album archetype hook refinery run be refinery def
   su name source load stage from filename of ob of source become wo text to name text source text be read do
 
@@ -188,42 +202,49 @@ su name album archetype hook refinery run be refinery def
   ob name text seed hooks cleaned by wo newline to name vec seedhooksvec be distribute do
   ob name seedhooksvec at name all be album hook song render do
   from name seedhooksvec to name series seedhymns be series do
+  from name seedhymns with text "seed" by name album hymn music render to name text seedsongrows be series map do
 
   ob text "awake" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name awake hooks to name text awake hooks cleaned be command do
   ob name text awake hooks cleaned by wo newline to name vec awakehooksvec be distribute do
   ob name awakehooksvec at name all be album hook song render do
   from name awakehooksvec to name series awakehymns be series do
+  from name awakehymns with text "awake" by name album hymn music render to name text awakesongrows be series map do
 
   ob text "challenge" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name challenge hooks to name text challenge hooks cleaned be command do
   ob name text challenge hooks cleaned by wo newline to name vec challengehooksvec be distribute do
   ob name challengehooksvec at name all be album hook song render do
   from name challengehooksvec to name series challengehymns be series do
+  from name challengehymns with text "challenge" by name album hymn music render to name text challengesongrows be series map do
 
   ob text "experience" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name experience hooks to name text experience hooks cleaned be command do
   ob name text experience hooks cleaned by wo newline to name vec experiencehooksvec be distribute do
   ob name experiencehooksvec at name all be album hook song render do
   from name experiencehooksvec to name series experiencehymns be series do
+  from name experiencehymns with text "experience" by name album hymn music render to name text experiencesongrows be series map do
 
   ob text "integrated self" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name integrated self hooks to name text integrated self hooks cleaned be command do
   ob name text integrated self hooks cleaned by wo newline to name vec integratedselfhooksvec be distribute do
   ob name integratedselfhooksvec at name all be album hook song render do
   from name integratedselfhooksvec to name series integratedselfhymns be series do
+  from name integratedselfhymns with text "integrated self" by name album hymn music render to name text integratedselfsongrows be series map do
 
   ob text "transformation" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name transformation hooks to name text transformation hooks cleaned be command do
   ob name text transformation hooks cleaned by wo newline to name vec transformationhooksvec be distribute do
   ob name transformationhooksvec at name all be album hook song render do
   from name transformationhooksvec to name series transformationhymns be series do
+  from name transformationhymns with text "transformation" by name album hymn music render to name text transformationsongrows be series map do
 
   ob text "highway" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name highway hooks to name text highway hooks cleaned be command do
   ob name text highway hooks cleaned by wo newline to name vec highwayhooksvec be distribute do
   ob name highwayhooksvec at name all be album hook song render do
   from name highwayhooksvec to name series highwayhymns be series do
+  from name highwayhymns with text "highway" by name album hymn music render to name text highwaysongrows be series map do
 
   su name album hymn series stage be series def
     su name seed hymns ob name series seedhymns be series ya
@@ -234,10 +255,20 @@ su name album archetype hook refinery run be refinery def
     su name transformation hymns ob name series transformationhymns be series ya
     su name highway hymns ob name series highwayhymns be series ya
   prah
+  su name album song series stage be series def
+    su name seed songs ob name series seedsongrows be series ya
+    su name awake songs ob name series awakesongrows be series ya
+    su name challenge songs ob name series challengesongrows be series ya
+    su name experience songs ob name series experiencesongrows be series ya
+    su name integrated self songs ob name series integratedselfsongrows be series ya
+    su name transformation songs ob name series transformationsongrows be series ya
+    su name highway songs ob name series highwaysongrows be series ya
+  prah
 
   ob name text output be write do
   ob name text album songbook be write do
   ob name series album hymn series stage be write do
+  ob name series album song series stage be write do
   ob name album style profile be write do
 prah
 
