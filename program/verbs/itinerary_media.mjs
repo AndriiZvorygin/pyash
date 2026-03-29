@@ -17,7 +17,8 @@ import {
   findImageForCut,
   getAudioDurationSeconds,
   runFfmpeg,
-  runFfmpegConcatVideos
+  runFfmpegConcatVideos,
+  runFfmpegConcatAudio
 } from "../../command/itinerary_to_video.mjs";
 import { callPromptMind, buildPromptifyPacket, buildDistinctFullScript } from "../../command/itinerary_promptify.mjs";
 import { emitExchangeSentence, getExchangeRunId, lookupArtifactLocator, recordArtifact } from "../bridge/exchange.mjs";
@@ -1356,6 +1357,48 @@ function clipFilenameFromCut(cut = {}) {
   return "";
 }
 
+function audioFilenameLike(value = {}) {
+  const direct = String(value?.ob?.filename ?? value?.filename ?? "").trim();
+  if (direct && /\.(wav|mp3|ogg|opus|m4a|flac|aac)$/iu.test(direct)) return direct;
+  return "";
+}
+
+function collectAudioFilesFromSeriesFact(fact = {}, { rememberFn = remember, seenSeries = new Set() } = {}) {
+  const entries = Array.isArray(fact?.ob?.series) ? fact.ob.series : [];
+  if (!entries.length) return [];
+  const seriesName = String(fact?.su?.name ?? "").trim();
+  if (seriesName) {
+    if (seenSeries.has(seriesName)) return [];
+    seenSeries.add(seriesName);
+  }
+  const out = [];
+  const pushIfAudio = (candidate) => {
+    const filename = audioFilenameLike(candidate);
+    if (filename) out.push(filename);
+  };
+
+  for (const entry of entries) {
+    pushIfAudio(entry);
+    pushIfAudio(entry?.ob);
+    const map = entry?.ob?.map;
+    if (map && typeof map === "object") {
+      const audioEntry = map.audio;
+      if (audioEntry) pushIfAudio(audioEntry);
+      for (const value of Object.values(map)) {
+        const nestedSeriesName = String(value?.ob?.name ?? "").trim();
+        const nestedSeriesType = String(value?.be ?? "").trim().toLowerCase();
+        if (nestedSeriesName && nestedSeriesType === "series") {
+          const nestedFact = rememberFn(nestedSeriesName);
+          if (nestedFact) {
+            out.push(...collectAudioFilesFromSeriesFact(nestedFact, { rememberFn, seenSeries }));
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
 export async function concatenateFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
   const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
   const requestedOutputFile = resolveFilenameFromCase(sentence?.to, rememberFn);
@@ -1555,6 +1598,93 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
+  return { ob: { filename: outputResolved.resolved }, be: "concatenate" };
+}
+
+export async function concatenateAudioFromNameSeries(
+  sentence,
+  { remember: rememberFn = remember, runConcatAudioFn = runFfmpegConcatAudio } = {}
+) {
+  const sourceName = String(sentence?.from?.name ?? "").trim();
+  if (!sourceName) {
+    throwErrorSentence({
+      name: "concatenate defective",
+      message: "concatenate defective: missing from name series",
+      from: { name: "concatenate" },
+      raw: { sentence }
+    });
+  }
+  const sourceFact = rememberFn(sourceName);
+  if (!sourceFact || sourceFact.be !== "series" || !Array.isArray(sourceFact?.ob?.series)) {
+    throwErrorSentence({
+      name: "concatenate defective",
+      message: `concatenate defective: ${sourceName} not series`,
+      from: { name: "concatenate" },
+      raw: { sentence }
+    });
+  }
+  const audioFilesRaw = collectAudioFilesFromSeriesFact(sourceFact, { rememberFn });
+  if (!audioFilesRaw.length) {
+    throwErrorSentence({
+      name: "concatenate defective",
+      message: "concatenate defective: no audio rows in series",
+      from: { name: "concatenate" },
+      raw: { sourceName }
+    });
+  }
+
+  const outputHandle = platformOutputHandleName(sentence, "audio");
+  const outputPrefix = normalizePlatformHandleToPrefix(outputHandle, "audio");
+  const requestedOutputFile = resolveFilenameFromCase(sentence?.to, rememberFn);
+  const runId = String(getExchangeRunId?.() ?? "").trim();
+  const defaultOutputFilename = `${outputPrefix}.opus`;
+  const outputFile = requestedOutputFile
+    || (runId ? path.join("artifacts", runId, defaultOutputFilename) : path.join("artifacts", "audio", buildRunTag(), defaultOutputFilename));
+  const outputResolved = resolveAgentPath(outputFile, { rememberFn });
+  if (outputResolved.outside) {
+    throwErrorSentence({
+      name: "concatenate defective",
+      message: `concatenate defective: outside agent cwd (${outputResolved.agentCwd})`,
+      from: { name: "concatenate" },
+      raw: { sentence }
+    });
+  }
+  const audioFiles = [];
+  for (const candidate of audioFilesRaw) {
+    const resolved = resolveAgentPath(candidate, { rememberFn });
+    if (resolved.outside) {
+      throwErrorSentence({
+        name: "concatenate defective",
+        message: `concatenate defective: outside agent cwd (${resolved.agentCwd})`,
+        from: { name: "concatenate" },
+        raw: { sentence }
+      });
+    }
+    audioFiles.push(resolved.resolved);
+  }
+
+  const { dir, file } = await createVideoConcatListFile(audioFiles);
+  try {
+    await fs.mkdir(path.dirname(outputResolved.resolved), { recursive: true });
+    await runConcatAudioFn({ listFile: file, outputFile: outputResolved.resolved });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+  const bytes = await fs.readFile(outputResolved.resolved);
+  const artifact = recordArtifact({
+    locator: outputResolved.resolved,
+    producer: String(sentence?.su?.name ?? "concatenate"),
+    bytes,
+    kind: "audio"
+  });
+  emitExchangeSentence({
+    mood: "ya",
+    su: { name: "concatenate result" },
+    ob: { filename: outputResolved.resolved },
+    be: "concatenate",
+    by: { num: bytes.length },
+    accordingto: artifact?.su?.name ? { name: artifact.su.name } : undefined
+  });
   return { ob: { filename: outputResolved.resolved }, be: "concatenate" };
 }
 
@@ -1759,6 +1889,8 @@ export const signatures = [
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "series", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "series", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
+  { signatureWords: ["be", "concatenate", "become", "wo", "audio", "from", "name", "series", "fromstate", "wo", "series", "to", "filename"], handler: concatenateAudioFromNameSeries },
+  { signatureWords: ["be", "concatenate", "become", "wo", "audio", "from", "name", "series", "fromstate", "wo", "series"], handler: concatenateAudioFromNameSeries },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
 
