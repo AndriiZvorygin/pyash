@@ -13,6 +13,7 @@ import grossChip, { signatures as grossChipSignatures } from "./gross_chip.mjs";
 import wiseChip, { signatures as wiseChipSignatures } from "./wise_chip.mjs";
 import abridge, { signatures as abridgeSignatures } from "./abridge.mjs";
 import seriesMap, { signatures as seriesMapSignatures } from "./series_map.mjs";
+import vectorToSeries, { signatures as vectorToSeriesSignatures } from "./vector_series.mjs";
 import vectorMap, { signatures as vectorMapSignatures } from "./vector_map.mjs";
 import text, { signatures as textSignatures } from "./text.mjs";
 import instead, { signatures as insteadSignatures } from "./instead.mjs";
@@ -105,6 +106,7 @@ export {
   wiseChip,
   abridge,
   seriesMap,
+  vectorToSeries,
   vectorMap,
   text,
   instead,
@@ -185,6 +187,7 @@ export const builtInSignatures = [
   ...wiseChipSignatures,
   ...abridgeSignatures,
   ...seriesMapSignatures,
+  ...vectorToSeriesSignatures,
   ...vectorMapSignatures,
   ...textSignatures,
   ...insteadSignatures,

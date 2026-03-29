@@ -104,11 +104,12 @@ prah
 
 su name album hook song render be ceremony def
   su name hook line stage ob text of ob of this to name text hook line be text do
+  su name hook text stage ob name text hook line to name text hook text be text do
 
   su name hymn lyrics stage from filename of source with text of hook line to name text hymn lyrics be hymn manuscript do
   su name hymn row stage be map def
     su name stage ob name text album current stage ya
-    su name hook ob name text hook line ya
+    su name hook ob name text hook text ya
     su name lyrics ob name text hymn lyrics ya
   prah
 
@@ -186,45 +187,52 @@ su name album archetype hook refinery run be refinery def
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name seed hooks to name text seed hooks cleaned be command do
   ob name text seed hooks cleaned by wo newline to name vec seedhooksvec be distribute do
   ob name seedhooksvec at name all be album hook song render do
+  from name seedhooksvec to name series seedhymns be series do
 
   ob text "awake" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name awake hooks to name text awake hooks cleaned be command do
   ob name text awake hooks cleaned by wo newline to name vec awakehooksvec be distribute do
   ob name awakehooksvec at name all be album hook song render do
+  from name awakehooksvec to name series awakehymns be series do
 
   ob text "challenge" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name challenge hooks to name text challenge hooks cleaned be command do
   ob name text challenge hooks cleaned by wo newline to name vec challengehooksvec be distribute do
   ob name challengehooksvec at name all be album hook song render do
+  from name challengehooksvec to name series challengehymns be series do
 
   ob text "experience" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name experience hooks to name text experience hooks cleaned be command do
   ob name text experience hooks cleaned by wo newline to name vec experiencehooksvec be distribute do
   ob name experiencehooksvec at name all be album hook song render do
+  from name experiencehooksvec to name series experiencehymns be series do
 
   ob text "integrated self" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name integrated self hooks to name text integrated self hooks cleaned be command do
   ob name text integrated self hooks cleaned by wo newline to name vec integratedselfhooksvec be distribute do
   ob name integratedselfhooksvec at name all be album hook song render do
+  from name integratedselfhooksvec to name series integratedselfhymns be series do
 
   ob text "transformation" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name transformation hooks to name text transformation hooks cleaned be command do
   ob name text transformation hooks cleaned by wo newline to name vec transformationhooksvec be distribute do
   ob name transformationhooksvec at name all be album hook song render do
+  from name transformationhooksvec to name series transformationhymns be series do
 
   ob text "highway" to name text album current stage be text do
   ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name highway hooks to name text highway hooks cleaned be command do
   ob name text highway hooks cleaned by wo newline to name vec highwayhooksvec be distribute do
   ob name highwayhooksvec at name all be album hook song render do
+  from name highwayhooksvec to name series highwayhymns be series do
 
   su name album hymn series stage be series def
-    su name seed hymns ob name seedhooksvec be vector ya
-    su name awake hymns ob name awakehooksvec be vector ya
-    su name challenge hymns ob name challengehooksvec be vector ya
-    su name experience hymns ob name experiencehooksvec be vector ya
-    su name integrated self hymns ob name integratedselfhooksvec be vector ya
-    su name transformation hymns ob name transformationhooksvec be vector ya
-    su name highway hymns ob name highwayhooksvec be vector ya
+    su name seed hymns ob name series seedhymns be series ya
+    su name awake hymns ob name series awakehymns be series ya
+    su name challenge hymns ob name series challengehymns be series ya
+    su name experience hymns ob name series experiencehymns be series ya
+    su name integrated self hymns ob name series integratedselfhymns be series ya
+    su name transformation hymns ob name series transformationhymns be series ya
+    su name highway hymns ob name series highwayhymns be series ya
   prah
 
   ob name text output be write do
