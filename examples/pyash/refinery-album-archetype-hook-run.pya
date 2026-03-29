@@ -269,6 +269,8 @@ su name album archetype hook refinery run be refinery def
   ob name text album songbook be write do
   ob name series album hymn series stage be write do
   ob name series album song series stage be write do
+  su name album concatenate stage from name series album song series stage fromstate wo series become wo audio be concatenate do
+  ob filename of ob of album concatenate stage be write do
   ob name album style profile be write do
 prah
 

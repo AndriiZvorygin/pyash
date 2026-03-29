@@ -148,6 +148,46 @@ function runFfmpegConcatVideos({ listFile, outputFile }) {
   });
 }
 
+async function runFfmpegConcatAudio({ listFile, outputFile }) {
+  const run = (args) => new Promise((resolve, reject) => {
+    let stderr = "";
+    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
+    proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`ffmpeg failed status=${code}: ${clipped}`));
+      }
+    });
+  });
+
+  try {
+    await run([
+      "-y",
+      "-f", "concat",
+      "-safe", "0",
+      "-i", listFile,
+      "-c", "copy",
+      outputFile
+    ]);
+    return;
+  } catch {
+    // fall through to transcode fallback
+  }
+
+  await run([
+    "-y",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", listFile,
+    "-c:a", "libopus",
+    "-b:a", "128k",
+    outputFile
+  ]);
+}
+
 function runCommandCapture(command, args = []) {
   return new Promise((resolve, reject) => {
     let stdout = "";
@@ -226,6 +266,7 @@ export {
   createVideoConcatListFile,
   runFfmpeg,
   runFfmpegConcatVideos,
+  runFfmpegConcatAudio,
   parseArgs,
   getAudioDurationSeconds,
   buildTimelineItems
