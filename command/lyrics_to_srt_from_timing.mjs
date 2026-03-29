@@ -2,6 +2,11 @@
 import fs from "node:fs/promises";
 import { parseSrtToCuts } from "./itinerary_io.mjs";
 
+const MAX_GAP_TRIM_SECONDS = (() => {
+  const raw = Number(process.env.PYA_TIMING_MAX_GAP_TRIM_SECONDS || 0);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+})();
+
 function usage() {
   return "Usage: node command/lyrics_to_srt_from_timing.mjs <lyrics.txt> <timing.srt> <output.srt> [--include-sections] [--sentence-cues]";
 }
@@ -173,8 +178,9 @@ function sanitizeTimingCuts(rawCuts) {
     const rawDur = Math.max(0.04, cut.until - cut.since);
     const rawSince = Math.max(0, cut.since);
     const rawGap = Math.max(0, rawSince - prevRawEnd);
-    // Keep natural pauses; only trim pathological ASR jumps.
-    const keepGap = rawGap > 20 ? 8 : rawGap;
+    // Preserve natural pauses by default (important for meetings with long silent segments).
+    // Optional safety trim can be enabled via PYA_TIMING_MAX_GAP_TRIM_SECONDS.
+    const keepGap = MAX_GAP_TRIM_SECONDS > 0 ? Math.min(rawGap, MAX_GAP_TRIM_SECONDS) : rawGap;
     const since = Math.max(prevEnd, prevEnd + keepGap);
     const until = since + rawDur;
     out.push({ since, until, obText: cut.obText });

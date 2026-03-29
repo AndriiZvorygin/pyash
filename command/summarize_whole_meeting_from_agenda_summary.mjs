@@ -6,7 +6,11 @@ const ROOT = '/home/htaf/pyac/pyash';
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
   : 'http://localhost:11434/api/chat';
-const MODEL = process.env.OWEN_MEETING_SUMMARY_MODEL || process.env.OWEN_SUMMARY_MODEL || 'qwen3.5:9b';
+const MODEL = process.env.MEETING_SUMMARY_MODEL
+  || process.env.SUMMARY_MODEL
+  || process.env.OWEN_MEETING_SUMMARY_MODEL
+  || process.env.OWEN_SUMMARY_MODEL
+  || 'qwen3.5:9b';
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = 0.8;
 
@@ -144,7 +148,7 @@ function hasCompleteRequiredSections(mdText) {
   return top.length >= 300 && why.length >= 80 && watch.length >= 80;
 }
 
-function buildSummaryPrompt({ sourceJson, focus, feedback, meetingDateIso, meetingDateLong, bodyLabel, jurisdiction }) {
+function buildSummaryPrompt({ sourceJson, focus, feedback, meetingDateIso, meetingDateLong, bodyLabel, jurisdiction, referenceContext }) {
   const focusLine = String(focus || '').trim() || 'the newsworthy, juicy, and unusual bits';
   return [
     'Create a compelling whole-meeting local-news summary from this agenda-section summary JSON.',
@@ -167,6 +171,7 @@ function buildSummaryPrompt({ sourceJson, focus, feedback, meetingDateIso, meeti
     '- Prefer concrete details (numbers, thresholds, votes, dates) when available.',
     '- Keep total length under 900 words.',
     '- Do not invent votes, participants, or outcomes.',
+    '- If REFERENCE_CONTEXT includes a canonical spelling for an organization/person/place and SOURCE_JSON has an obvious transcription misspelling, use the canonical spelling.',
     `- Use the exact meeting date "${meetingDateLong || meetingDateIso || 'unknown'}" whenever you mention the meeting date.`,
     `- Refer to the governing body as "${bodyLabel || 'unknown'}", not a different body.`,
     `- Refer to the jurisdiction as "${jurisdiction || 'unknown'}".`,
@@ -180,6 +185,9 @@ function buildSummaryPrompt({ sourceJson, focus, feedback, meetingDateIso, meeti
     '',
     'RETRY_FEEDBACK:',
     feedback || '',
+    '',
+    'REFERENCE_CONTEXT:',
+    referenceContext || '(none)',
     '',
     'SOURCE_JSON:',
     sourceJson
@@ -227,15 +235,36 @@ function parseScore(review) {
   return 0;
 }
 
-function pickCouncilRosterFile(transcriptDir) {
+function pickRosterFile(transcriptDir) {
   const meetingDir = path.dirname(transcriptDir);
+  const rosterFromEnv = String(process.env.MEETING_ROSTER_FILE || process.env.ROSTER_FILE || '').trim();
+  if (rosterFromEnv) {
+    const rosterPath = path.isAbsolute(rosterFromEnv)
+      ? path.normalize(rosterFromEnv)
+      : path.resolve(process.cwd(), rosterFromEnv);
+    if (fs.existsSync(rosterPath)) return rosterPath;
+  }
+
+  const houseFromEnv = String(
+    process.env.REPORTER_HOUSE_ROOT
+    || process.env.HOUSE_ROOT
+    || process.env.OWEN_HOUSE_ROOT
+    || ''
+  ).trim();
+  const houseFromPathMatch = String(transcriptDir || '').match(/^(.*\/world\/house\/[^/]+)/u)?.[1] || '';
+  const houseRoot = houseFromEnv || houseFromPathMatch || '';
+  const jurisdictionSlug = path.basename(path.dirname(path.dirname(meetingDir)));
   const candidates = [
-    path.join(HOUSE, 'artifacts/owen-sound/2022-2026-council.txt'),
+    houseRoot ? path.join(houseRoot, 'artifacts', jurisdictionSlug, 'roster.txt') : '',
+    houseRoot ? path.join(houseRoot, 'artifacts', jurisdictionSlug, 'council-roster.txt') : '',
+    houseRoot ? path.join(houseRoot, 'artifacts', jurisdictionSlug, '2022-2026-council.txt') : '',
     path.join(path.dirname(meetingDir), '2022-2026-council.txt'),
-    path.join(meetingDir, '2022-2026-council.txt')
+    path.join(path.dirname(meetingDir), 'roster.txt'),
+    path.join(meetingDir, '2022-2026-council.txt'),
+    path.join(meetingDir, 'roster.txt')
   ];
   for (const filePath of candidates) {
-    if (fs.existsSync(filePath)) return filePath;
+    if (filePath && fs.existsSync(filePath)) return filePath;
   }
   return '';
 }
@@ -337,12 +366,33 @@ function deriveMeetingContext(transcriptDir) {
   const meetingDir = path.dirname(String(transcriptDir || ''));
   const meetingJsonPath = path.join(meetingDir, 'meeting.json');
   let bodyLabel = '';
-  let jurisdiction = 'City of Owen Sound';
+  let jurisdiction = '';
+  const normalizeBodyLabel = (label) => {
+    let out = String(label || '').trim().replace(/\s+/gu, ' ');
+    out = out.replace(/^((?:Council Meeting|Committee|Board))\s*-\s*\1\s*-\s*/iu, '$1 - ');
+    out = out.replace(/^Committee\s*-\s*Committee of\s+/iu, 'Committee of ');
+    out = out.replace(/^Board\s*-\s*Board of\s+/iu, 'Board of ');
+    out = out.replace(/\s*-\s*/gu, ' - ');
+    return out.trim();
+  };
+  const envJurisdiction = String(process.env.MEETING_JURISDICTION || process.env.JURISDICTION || '').trim();
+  if (envJurisdiction) jurisdiction = envJurisdiction;
   try {
     const meeting = JSON.parse(fs.readFileSync(meetingJsonPath, 'utf8'));
     const payload = meeting?.payload || {};
-    bodyLabel = String(payload?.meeting_name || payload?.meeting_type || '').trim();
+    bodyLabel = normalizeBodyLabel(String(payload?.meeting_name || payload?.meeting_type || '').trim());
+    if (!jurisdiction) {
+      jurisdiction = String(payload?.jurisdiction || payload?.municipality || payload?.county || '').trim();
+    }
   } catch {}
+
+  if (!jurisdiction) {
+    const slug = String(path.basename(path.dirname(path.dirname(meetingDir))) || '').trim();
+    jurisdiction = slug
+      ? slug.split('-').map((part) => part ? (part[0].toUpperCase() + part.slice(1)) : '').join(' ')
+      : 'Local Municipality';
+  }
+
   if (!bodyLabel) {
     const dirName = path.basename(meetingDir);
     if (/committee-corporate-services/iu.test(dirName)) bodyLabel = 'Committee - Corporate Services';
@@ -351,6 +401,7 @@ function deriveMeetingContext(transcriptDir) {
     else if (/council/iu.test(dirName)) bodyLabel = 'Council Meeting - Regular';
     else bodyLabel = 'Council';
   }
+  bodyLabel = normalizeBodyLabel(bodyLabel);
   return { bodyLabel, jurisdiction };
 }
 
@@ -365,7 +416,7 @@ async function summarizeWholeMeeting({ summaryJsonObj, focus, meetingDateIso, me
   for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
     const draft = await ask([
       { role: 'system', content: 'You are a strict local-news meeting brief writer.' },
-      { role: 'user', content: buildSummaryPrompt({ sourceJson, focus, feedback, meetingDateIso, meetingDateLong, bodyLabel, jurisdiction }) }
+      { role: 'user', content: buildSummaryPrompt({ sourceJson, focus, feedback, meetingDateIso, meetingDateLong, bodyLabel, jurisdiction, referenceContext: rosterText }) }
     ], { numPredict: 1200 });
 
     const review = await ask([
@@ -410,7 +461,7 @@ async function main() {
   const { summaryPath, resolvedPrefix } = pickAgendaSummaryJson(transcriptDir, prefixArg);
   const outMd = path.join(transcriptDir, `${resolvedPrefix}.meeting-summary.md`);
   const outJson = path.join(transcriptDir, `${resolvedPrefix}.meeting-summary.json`);
-  const rosterPath = pickCouncilRosterFile(transcriptDir);
+  const rosterPath = pickRosterFile(transcriptDir);
   const rosterText = rosterPath ? abridgeUtf8(fs.readFileSync(rosterPath, 'utf8'), 5000) : '';
   const meetingDate = deriveMeetingDateFromTranscriptDir(transcriptDir);
   const meetingContext = deriveMeetingContext(transcriptDir);

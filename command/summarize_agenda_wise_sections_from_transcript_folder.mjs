@@ -6,16 +6,23 @@ const ROOT = '/home/htaf/pyac/pyash';
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
   : 'http://localhost:11434/api/chat';
-const MODEL = process.env.OWEN_SUMMARY_MODEL || 'qwen3.5:9b';
+const MODEL = process.env.AGENDA_SECTION_SUMMARY_MODEL
+  || process.env.MEETING_SUMMARY_MODEL
+  || process.env.SUMMARY_MODEL
+  || process.env.OWEN_SUMMARY_MODEL
+  || 'qwen3.5:9b';
 const MAX_ATTEMPTS = 3;
-const PASS_THRESHOLD = 0.8;
+const PASS_THRESHOLD = (() => {
+  const raw = Number(process.env.AGENDA_SUMMARY_PASS_THRESHOLD || process.env.MEETING_SUMMARY_PASS_THRESHOLD || process.env.OWEN_SUMMARY_PASS_THRESHOLD || 0.65);
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.65;
+})();
 const MIN_SUMMARY_WORDS = (() => {
-  const raw = Number(process.env.OWEN_SUMMARY_MIN_WORDS || 120);
+  const raw = Number(process.env.AGENDA_SUMMARY_MIN_WORDS || process.env.MEETING_SUMMARY_MIN_WORDS || process.env.OWEN_SUMMARY_MIN_WORDS || 120);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 120;
 })();
 const BASE_NEWS_HOOK = 'the newsworthy, juicy, and unusual bits';
 const MAX_SECTIONS = (() => {
-  const raw = Number(process.env.OWEN_SUMMARY_MAX_SECTIONS || 0);
+  const raw = Number(process.env.AGENDA_SUMMARY_MAX_SECTIONS || process.env.MEETING_SUMMARY_MAX_SECTIONS || process.env.OWEN_SUMMARY_MAX_SECTIONS || 0);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
 })();
 
@@ -98,14 +105,36 @@ function pickAgendaWiseSeries(transcriptDir, prefix = 'auto') {
 
 function pickCouncilRosterFile(transcriptDir) {
   const meetingDir = path.dirname(transcriptDir);
+  const rosterFromEnv = String(process.env.MEETING_ROSTER_FILE || process.env.ROSTER_FILE || '').trim();
+  if (rosterFromEnv) {
+    const rosterPath = path.isAbsolute(rosterFromEnv)
+      ? path.normalize(rosterFromEnv)
+      : path.resolve(process.cwd(), rosterFromEnv);
+    if (fs.existsSync(rosterPath)) return rosterPath;
+  }
+
+  const houseFromEnv = String(
+    process.env.REPORTER_HOUSE_ROOT
+    || process.env.HOUSE_ROOT
+    || process.env.OWEN_HOUSE_ROOT
+    || ''
+  ).trim();
+  const houseFromPathMatch = String(transcriptDir || '').match(/^(.*\/world\/house\/[^/]+)/u)?.[1] || '';
+  const houseRoot = houseFromEnv || houseFromPathMatch || '';
+  const jurisdictionSlug = path.basename(path.dirname(path.dirname(meetingDir)));
   const candidates = [
+    houseRoot ? path.join(houseRoot, 'artifacts', jurisdictionSlug, 'roster.txt') : '',
+    houseRoot ? path.join(houseRoot, 'artifacts', jurisdictionSlug, 'council-roster.txt') : '',
+    houseRoot ? path.join(houseRoot, 'artifacts', jurisdictionSlug, '2022-2026-council.txt') : '',
+    path.join(path.dirname(path.dirname(meetingDir)), '2022-2026-council.txt'),
     path.join(path.dirname(meetingDir), '2022-2026-council.txt'),
     path.join(meetingDir, '2022-2026-council.txt'),
+    path.join(path.dirname(path.dirname(meetingDir)), 'roster.txt'),
     path.join(path.dirname(meetingDir), 'roster.txt'),
     path.join(meetingDir, 'roster.txt')
   ];
   for (const filePath of candidates) {
-    if (fs.existsSync(filePath)) return filePath;
+    if (filePath && fs.existsSync(filePath)) return filePath;
   }
   return '';
 }
@@ -142,6 +171,94 @@ function parseHeadingAndBody(chipText, idx) {
   }
 
   return { heading, body };
+}
+
+function normalizeForMatch(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .replace(/[^a-z0-9]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function parseLeadingItemNumber(heading) {
+  const m = String(heading || '').match(/^\s*(\d+)\b/u);
+  return m ? String(Number(m[1])) : '';
+}
+
+function loadTranscriptRowsForPrefix(transcriptDir, prefix) {
+  const jsonPath = path.join(transcriptDir, `${prefix}.sentences.speaker.sentences.json`);
+  if (!fs.existsSync(jsonPath)) return [];
+  try {
+    const obj = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    const rows = Array.isArray(obj?.rows) ? obj.rows : [];
+    return rows.map((r) => ({
+      text: String(r?.text || '').trim(),
+      display: String(r?.display || '').trim(),
+    })).filter((r) => r.text);
+  } catch {
+    return [];
+  }
+}
+
+function loadAgendaMatchesForPrefix(transcriptDir, prefix) {
+  const jsonPath = path.join(transcriptDir, `${prefix}.agenda.matches.json`);
+  if (!fs.existsSync(jsonPath)) return [];
+  try {
+    const obj = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    return Array.isArray(obj?.matches) ? obj.matches : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildSectionRowRanges({ headings, rows, matches }) {
+  if (!Array.isArray(headings) || !headings.length || !Array.isArray(rows) || !rows.length) return [];
+  const rowNorm = rows.map((r) => normalizeForMatch(r?.text || ''));
+  const matchByItem = new Map();
+  for (const m of Array.isArray(matches) ? matches : []) {
+    const key = String(m?.item || '').trim();
+    if (!key || matchByItem.has(key)) continue;
+    matchByItem.set(key, m);
+  }
+
+  const starts = [];
+  for (let i = 0; i < headings.length; i += 1) {
+    const heading = String(headings[i] || '');
+    const item = parseLeadingItemNumber(heading);
+    const m = matchByItem.get(item);
+    const snippet = normalizeForMatch(String(m?.snippet || '').slice(0, 240));
+    let rowIndex = -1;
+    if (snippet) {
+      const anchor = snippet.slice(0, Math.min(80, snippet.length));
+      for (let r = 0; r < rowNorm.length; r += 1) {
+        if (rowNorm[r] && rowNorm[r].includes(anchor)) {
+          rowIndex = r;
+          break;
+        }
+      }
+    }
+    starts.push({ heading, rowIndex });
+  }
+
+  let lastKnown = 0;
+  for (const s of starts) {
+    if (s.rowIndex >= 0) lastKnown = s.rowIndex;
+    else s.rowIndex = lastKnown;
+  }
+  for (let i = 1; i < starts.length; i += 1) {
+    if (starts[i].rowIndex < starts[i - 1].rowIndex) starts[i].rowIndex = starts[i - 1].rowIndex;
+  }
+
+  const out = [];
+  for (let i = 0; i < starts.length; i += 1) {
+    const start = starts[i].rowIndex;
+    const end = i + 1 < starts.length ? Math.max(start, starts[i + 1].rowIndex - 1) : (rows.length - 1);
+    out.push({ start, end });
+  }
+  return out;
 }
 
 function abridgeUtf8(text, maxBytes) {
@@ -189,8 +306,10 @@ function buildShortSummaryPrompt({ heading, source, focus, feedback, rosterText 
     'Rules:',
     '- One sentence only.',
     '- Keep only facts supported by SOURCE.',
+    '- Do not introduce any person name, number, dollar figure, date, vote count, or title unless it is explicitly present in SOURCE.',
     '- Use roster only to disambiguate speaker identity/role/gender; do not invent facts.',
     '- If transcript naming appears misspelled by ASR, normalize to the closest roster name silently.',
+    '- If uncertain about a specific identity or figure, use role-level phrasing and omit the uncertain number/name.',
     '- If speaker identity is uncertain, use role phrasing (e.g., "a councillor").',
     '- No speculation.',
     '',
@@ -202,7 +321,7 @@ function buildShortSummaryPrompt({ heading, source, focus, feedback, rosterText 
   ].join('\n');
 }
 
-function buildSummaryPrompt({ heading, source, focus, feedback, rosterText }) {
+function buildSummaryPrompt({ heading, source, focus, feedback, rosterText, bodyLabel, jurisdiction }) {
   const focusRaw = String(focus || '').trim();
   const focusLine = focusRaw
     ? `${BASE_NEWS_HOOK}; additionally prioritize ${focusRaw}`
@@ -210,6 +329,8 @@ function buildSummaryPrompt({ heading, source, focus, feedback, rosterText }) {
   const roster = String(rosterText || '').trim();
   return [
     `Summarize this municipal meeting section for agenda heading: ${heading}`,
+    `Governing body (authoritative): ${String(bodyLabel || 'Unknown body')}`,
+    `Jurisdiction (authoritative): ${String(jurisdiction || 'Unknown jurisdiction')}`,
     `Focus: prioritize ${focusLine}.`,
     roster ? '' : '',
     roster ? 'COUNCIL ROSTER REFERENCE:' : '',
@@ -217,9 +338,13 @@ function buildSummaryPrompt({ heading, source, focus, feedback, rosterText }) {
     '',
     'Rules:',
     '- Keep only facts supported by SOURCE.',
+    `- Use the governing body label "${String(bodyLabel || 'Unknown body')}" accurately.`,
+    '- Do not refer to this as "Council" unless the governing body is explicitly Council.',
+    '- Do not introduce any person name, number, dollar figure, date, vote count, or title unless it is explicitly present in SOURCE.',
     '- Use roster only to disambiguate speaker identity/role/gender; do not invent facts.',
     '- Never assign a title (Mayor/Deputy Mayor/Councillor) to a person unless that title is explicitly supported by roster and source context.',
     '- If transcript naming appears misspelled by ASR, normalize to the closest roster name silently.',
+    '- If uncertain about a specific identity or figure, use role-level phrasing and omit the uncertain number/name.',
     '- Prefer exact roster spellings in output names (example: "Koepke" not "Keppie"; "Greig" not "Greg" when identifying Deputy Mayor).',
     '- Never treat spelling/name mismatch itself as a news finding.',
     '- If speaker identity is uncertain, use role phrasing (e.g., "a councillor") instead of speculation.',
@@ -241,7 +366,7 @@ function buildSummaryPrompt({ heading, source, focus, feedback, rosterText }) {
   ].join('\n');
 }
 
-function buildScorePrompt({ source, summary, rosterText }) {
+function buildScorePrompt({ source, summary, rosterText, bodyLabel }) {
   const roster = String(rosterText || '').trim();
   return [
     'Score SUMMARY for semantic faithfulness to SOURCE.',
@@ -257,6 +382,8 @@ function buildScorePrompt({ source, summary, rosterText }) {
     '',
     'Rules:',
     '- Penalize unsupported claims or invented outcomes.',
+    `- Penalize incorrect governing-body wording; required body is "${String(bodyLabel || 'Unknown body')}".`,
+    '- Penalize calling the meeting "Council" when SOURCE/context indicates committee/board.',
     '- Penalize non-canonical speaker naming when a clear canonical roster spelling is available.',
     '- Penalize speculative claims about identity mismatch, attendance counts, or roster discrepancies not explicit in SOURCE.',
     '- Do not penalize concise paraphrase if meaning is preserved.',
@@ -313,6 +440,49 @@ function parseScore(review) {
   const n = Number(last);
   if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
   return 0;
+}
+
+function deriveMeetingContext(transcriptDir) {
+  const meetingDir = path.dirname(String(transcriptDir || ''));
+  const meetingJsonPath = path.join(meetingDir, 'meeting.json');
+  const envJurisdiction = String(process.env.MEETING_JURISDICTION || process.env.JURISDICTION || '').trim();
+  let jurisdiction = envJurisdiction;
+  let bodyLabel = '';
+  const normalizeBodyLabel = (label) => {
+    let out = String(label || '').trim().replace(/\s+/gu, ' ');
+    out = out.replace(/^((?:Council Meeting|Committee|Board))\s*-\s*\1\s*-\s*/iu, '$1 - ');
+    out = out.replace(/^Committee\s*-\s*Committee of\s+/iu, 'Committee of ');
+    out = out.replace(/^Board\s*-\s*Board of\s+/iu, 'Board of ');
+    out = out.replace(/\s*-\s*/gu, ' - ');
+    return out.trim();
+  };
+  try {
+    const meeting = JSON.parse(fs.readFileSync(meetingJsonPath, 'utf8'));
+    const payload = meeting?.payload || {};
+    bodyLabel = normalizeBodyLabel(String(payload?.meeting_name || payload?.meeting_type || '').trim());
+    if (!jurisdiction) {
+      jurisdiction = String(payload?.jurisdiction || payload?.municipality || payload?.county || '').trim();
+    }
+  } catch {}
+  if (!jurisdiction) {
+    const slug = String(path.basename(path.dirname(path.dirname(meetingDir))) || '').trim();
+    jurisdiction = slug
+      ? slug.split('-').map((part) => part ? (part[0].toUpperCase() + part.slice(1)) : '').join(' ')
+      : 'Local Municipality';
+  }
+  if (!bodyLabel) {
+    const dirName = path.basename(meetingDir);
+    if (/committee-corporate-services/iu.test(dirName)) bodyLabel = 'Committee - Corporate Services';
+    else if (/committee-operations/iu.test(dirName)) bodyLabel = 'Committee - Operations';
+    else if (/committee-community-services/iu.test(dirName)) bodyLabel = 'Committee - Community Services';
+    else if (/committee-of-adjustment|committee-committee-of-adjustment/iu.test(dirName)) bodyLabel = 'Committee of Adjustment';
+    else if (/committee-of-the-whole/iu.test(dirName)) bodyLabel = 'Committee of the Whole';
+    else if (/board/iu.test(dirName)) bodyLabel = 'Board';
+    else if (/council/iu.test(dirName)) bodyLabel = 'Council Meeting - Regular';
+    else bodyLabel = 'Council';
+  }
+  bodyLabel = normalizeBodyLabel(bodyLabel);
+  return { bodyLabel, jurisdiction };
 }
 
 function normalizeNameKey(value) {
@@ -399,7 +569,33 @@ function countWords(text) {
   return t.split(/\s+/u).length;
 }
 
-async function summarizeSection({ heading, body, focus, rosterText, shortMode = false }) {
+function buildExtractiveFallbackSummary(source, heading, maxWords = 70) {
+  const text = String(source || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return `No clear transcript content was available for "${heading}".`;
+
+  const pieces = text
+    .split(/(?<=[.!?])\s+/u)
+    .map((x) => String(x || '').trim())
+    .filter(Boolean);
+  const out = [];
+  let words = 0;
+  for (const piece of pieces) {
+    const n = countWords(piece);
+    if (n <= 0) continue;
+    if (words > 0 && words + n > maxWords) break;
+    out.push(piece);
+    words += n;
+    if (words >= Math.floor(maxWords * 0.7)) break;
+  }
+  const joined = (out.length ? out.join(' ') : text).trim();
+  return joined || `No clear transcript content was available for "${heading}".`;
+}
+
+async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, jurisdiction, shortMode = false }) {
   const source = abridgeUtf8(body, 14000);
   const rosterRoles = parseRosterRoles(rosterText);
   let feedback = '';
@@ -413,13 +609,13 @@ async function summarizeSection({ heading, body, focus, rosterText, shortMode = 
         role: 'user',
         content: shortMode
           ? buildShortSummaryPrompt({ heading, source, focus, feedback, rosterText })
-          : buildSummaryPrompt({ heading, source, focus, feedback, rosterText })
+          : buildSummaryPrompt({ heading, source, focus, feedback, rosterText, bodyLabel, jurisdiction })
       }
     ], { numPredict: shortMode ? 120 : 340 });
 
     const reviewSemantic = await ask([
       { role: 'system', content: 'You are a strict semantic summary scorer.' },
-      { role: 'user', content: buildScorePrompt({ source, summary, rosterText }) }
+      { role: 'user', content: buildScorePrompt({ source, summary, rosterText, bodyLabel }) }
     ], { numPredict: 220 });
     const reviewAttribution = await ask([
       { role: 'system', content: 'You are a strict speaker attribution verifier.' },
@@ -442,8 +638,16 @@ async function summarizeSection({ heading, body, focus, rosterText, shortMode = 
     feedback = `${reviewSemantic}\n\nATTRIBUTION_REVIEW:\n${reviewAttribution}${violationFeedback}`;
     if (score >= PASS_THRESHOLD) break;
   }
-
-  return { summary: bestSummary, score: Number(bestScore.toFixed(3)) };
+  const finalScore = Number(bestScore.toFixed(3));
+  if (finalScore < PASS_THRESHOLD) {
+    return {
+      summary: buildExtractiveFallbackSummary(source, heading),
+      // Treat extractive fallback as a safe pass path: it is directly sourced text.
+      score: Math.max(finalScore, PASS_THRESHOLD),
+      mode: 'extractive-fallback'
+    };
+  }
+  return { summary: bestSummary, score: finalScore, mode: 'llm-pass' };
 }
 
 function toMarkdown(items, focus) {
@@ -478,11 +682,14 @@ async function main() {
   const { seriesPath, resolvedPrefix } = pickAgendaWiseSeries(transcriptDir, prefixArg);
   const rosterPath = pickCouncilRosterFile(transcriptDir);
   const rosterText = rosterPath ? abridgeUtf8(fs.readFileSync(rosterPath, 'utf8'), 5000) : '';
+  const meetingContext = deriveMeetingContext(transcriptDir);
   const outMd = path.join(transcriptDir, `${resolvedPrefix}.agenda-summary.md`);
   const outJson = path.join(transcriptDir, `${resolvedPrefix}.agenda-summary.json`);
 
   process.stdout.write(`[agenda-summary] source series: ${seriesPath}\n`);
   process.stdout.write(`[agenda-summary] roster: ${rosterPath || '(none)'}\n`);
+  process.stdout.write(`[agenda-summary] body: ${meetingContext.bodyLabel}\n`);
+  process.stdout.write(`[agenda-summary] jurisdiction: ${meetingContext.jurisdiction}\n`);
   process.stdout.write(`[agenda-summary] output md: ${outMd}\n`);
 
   const source = fs.readFileSync(seriesPath, 'utf8');
@@ -490,29 +697,68 @@ async function main() {
   if (!chips.length) throw new Error('agenda summary defective: no wise chips parsed from series');
   if (MAX_SECTIONS > 0) chips = chips.slice(0, MAX_SECTIONS);
 
+  const parsedChips = chips.map((chip, idx) => parseHeadingAndBody(chip, idx));
+  const sectionHeadings = parsedChips.map((x) => x.heading);
+  const transcriptRows = loadTranscriptRowsForPrefix(transcriptDir, resolvedPrefix);
+  const agendaMatches = loadAgendaMatchesForPrefix(transcriptDir, resolvedPrefix);
+  const rowRanges = buildSectionRowRanges({ headings: sectionHeadings, rows: transcriptRows, matches: agendaMatches });
+
   const out = [];
-  for (let i = 0; i < chips.length; i += 1) {
-    const { heading, body } = parseHeadingAndBody(chips[i], i);
+  for (let i = 0; i < parsedChips.length; i += 1) {
+    const { heading, body } = parsedChips[i];
     process.stdout.write(`[agenda-summary] atindex num ${i + 1} toindex num ${chips.length} heading ${heading}\n`);
-    const wordCount = countWords(body);
+    const rr = rowRanges[i] || null;
+    const sectionRows = rr ? transcriptRows.slice(rr.start, rr.end + 1) : [];
+    const sectionRowCount = sectionRows.length;
+    const sectionRowText = sectionRows
+      .map((r) => `${r.display || 'Speaker'}: ${r.text}`)
+      .join('\n')
+      .trim();
+    const effectiveBody = sectionRowText || body;
+    const wordCount = countWords(effectiveBody);
     let summary = '';
     let score = 1;
     let mode = 'llm';
-    if (wordCount < MIN_SUMMARY_WORDS) {
-      const shortOut = await summarizeSection({ heading, body, focus: focusArg, rosterText, shortMode: true });
+    const shouldShort = wordCount < MIN_SUMMARY_WORDS || (sectionRowCount > 0 && sectionRowCount <= 2);
+    if (shouldShort) {
+      const shortOut = await summarizeSection({
+        heading,
+        body: effectiveBody,
+        focus: focusArg,
+        rosterText,
+        bodyLabel: meetingContext.bodyLabel,
+        jurisdiction: meetingContext.jurisdiction,
+        shortMode: true
+      });
       summary = shortOut.summary;
       score = shortOut.score;
-      mode = 'llm-short';
+      mode = shortOut.mode === 'extractive-fallback' ? 'extractive-fallback' : 'llm-short';
     } else {
-      const summarized = await summarizeSection({ heading, body, focus: focusArg, rosterText });
+      const summarized = await summarizeSection({
+        heading,
+        body: effectiveBody,
+        focus: focusArg,
+        rosterText,
+        bodyLabel: meetingContext.bodyLabel,
+        jurisdiction: meetingContext.jurisdiction
+      });
       if (summarized.score < PASS_THRESHOLD && wordCount < 220) {
-        const shortFallback = await summarizeSection({ heading, body, focus: focusArg, rosterText, shortMode: true });
+        const shortFallback = await summarizeSection({
+          heading,
+          body: effectiveBody,
+          focus: focusArg,
+          rosterText,
+          bodyLabel: meetingContext.bodyLabel,
+          jurisdiction: meetingContext.jurisdiction,
+          shortMode: true
+        });
         summary = shortFallback.summary;
         score = shortFallback.score;
-        mode = 'llm-short-fallback';
+        mode = shortFallback.mode === 'extractive-fallback' ? 'extractive-fallback' : 'llm-short-fallback';
       } else {
         summary = summarized.summary;
         score = summarized.score;
+        mode = summarized.mode === 'extractive-fallback' ? 'extractive-fallback' : 'llm';
       }
     }
     out.push({
@@ -521,7 +767,8 @@ async function main() {
       summary,
       score,
       mode,
-      source_words: wordCount
+      source_words: wordCount,
+      source_rows: sectionRowCount
     });
   }
 
@@ -529,6 +776,8 @@ async function main() {
   fs.writeFileSync(outJson, JSON.stringify({
     source_series: seriesPath,
     roster_file: rosterPath || '',
+    body_label: meetingContext.bodyLabel,
+    jurisdiction: meetingContext.jurisdiction,
     focus: focusArg,
     sections: out
   }, null, 2), 'utf8');

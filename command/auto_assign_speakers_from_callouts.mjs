@@ -8,7 +8,7 @@ const DEFAULT_VOICES = path.join(ROOT, 'world/voices');
 function usage() {
   return [
     'Usage: node command/auto_assign_speakers_from_callouts.mjs <transcript_dir> [prefix] <roster_file> [voices_dir]',
-    'Example: node command/auto_assign_speakers_from_callouts.mjs artifacts/.../transcript meeting-qwen-auto-normalized.sentences world/house/owen-sound-reporter/artifacts/owen-sound/2022-2026-council.txt world/voices',
+    'Example: node command/auto_assign_speakers_from_callouts.mjs artifacts/.../transcript meeting-qwen-auto-normalized.sentences artifacts/<jurisdiction>/roster.txt world/voices',
   ].join('\n');
 }
 
@@ -38,6 +38,18 @@ function normalizeText(text) {
     .trim();
 }
 
+function containsDisallowedNameWord(words) {
+  const bannedWords = new Set([
+    'through', 'chair', 'mr', 'mrs', 'ms', 'miss', 'councillor', 'councilor', 'mayor', 'deputy',
+    'committee', 'council', 'city', 'project', 'item', 'report',
+    'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth',
+    'avenue', 'street', 'road', 'west', 'east', 'north', 'south',
+    'yes', 'yeah', 'yep', 'no', 'okay', 'ok', 'thanks', 'thank', 'hello', 'hi', 'good', 'great', 'perfect', 'welcome',
+    'understood', 'sorry', 'about', 'that', 'question', 'questions', 'staff', 'only', 'just', 'background',
+  ]);
+  return words.some((w) => bannedWords.has(String(w || '').replace(/\./gu, '').toLowerCase()));
+}
+
 function isUnknownSpeakerRow(row) {
   const key = String(row?.speaker_key || '');
   if (!/^speaker_\d+$/iu.test(key)) return false;
@@ -53,13 +65,7 @@ function personFromFullName(fullName) {
   const words = full.split(/\s+/u).filter(Boolean);
   if (words.length < 2 || words.length > 3) return null;
   if (!words.every((w) => /^[A-Z][A-Za-z'\-.]+$/u.test(w))) return null;
-  const banned = new Set([
-    'Through', 'Chair', 'Mr', 'Mrs', 'Ms', 'Councillor', 'Councilor', 'Mayor', 'Deputy',
-    'First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth',
-    'Avenue', 'Street', 'Road', 'West', 'East', 'North', 'South',
-    'Committee', 'Council', 'City', 'Project', 'Moving', 'Forward', 'Neighborhood'
-  ]);
-  if (words.some((w) => banned.has(w.replace(/\./gu, '')))) return null;
+  if (containsDisallowedNameWord(words)) return null;
   return {
     full,
     slug: slugName(full),
@@ -76,13 +82,7 @@ function personFromSingleName(rawName) {
     name = name.slice(0, -2);
   }
   if (!/^[A-Z][A-Za-z'\-.]+$/u.test(name)) return null;
-  const banned = new Set([
-    'Through', 'Chair', 'Mr', 'Mrs', 'Ms', 'Councillor', 'Councilor', 'Mayor', 'Deputy',
-    'Committee', 'Council', 'City', 'Project', 'Item', 'Report',
-    'Yes', 'Yeah', 'No', 'Okay', 'Ok', 'Thanks', 'Thank', 'Hello', 'Hi', 'Good', 'Great', 'Perfect',
-    'Seeing', 'Call', 'Question', 'Moved', 'Second', 'Carried', 'Favor', 'Aye', 'All'
-  ]);
-  if (banned.has(name.replace(/\./gu, ''))) return null;
+  if (containsDisallowedNameWord([name])) return null;
   const token = normalizeToken(name);
   if (!token) return null;
   return {
@@ -109,15 +109,9 @@ function parseRoster(rosterText) {
     if (!m) continue;
     const full = String(m[1] || '').trim();
     if (!full) continue;
-    const parts = full.split(/\s+/u).filter(Boolean);
-    if (parts.length < 2) continue;
-    const last = parts.at(-1);
-    people.push({
-      full,
-      slug: slugName(full),
-      first: normalizeToken(parts[0]),
-      last: normalizeToken(last),
-    });
+    const person = personFromFullName(full);
+    if (!person) continue;
+    people.push(person);
   }
   return people;
 }
@@ -382,11 +376,26 @@ function setSpeakerMetaName(metaPath, newSlug) {
   fs.writeFileSync(metaPath, out, 'utf8');
 }
 
+function readSpeakerMetaName(metaPath) {
+  if (!fs.existsSync(metaPath)) return '';
+  const src = fs.readFileSync(metaPath, 'utf8');
+  const m = src.match(/^\s*su name name ob text "(.*)" ya\s*$/mu);
+  return String(m?.[1] || '').trim();
+}
+
+function isStableSpeakerName(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return false;
+  if (/^speaker_\d+$/iu.test(raw)) return false;
+  return true;
+}
+
 function gatherEvidence(rows, roster) {
   const byTarget = new Map();
   const titleNameRe = /\b(?:councillor|mayor|deputy\s+mayor|mr\.?|ms\.?|miss)\s+([A-Za-z'\-\.]+)/giu;
   const calloutCueRe = /\b(go to|you'?re on|next|over to|go ahead|i'?ll ask|can you|call on|the floor is|thank you|welcome)\b/iu;
   const bareNameCalloutRe = /^\s*(?:go ahead,\s*)?([A-Z][A-Za-z'\-.]+)\s*[?.!,:;]?\s*$/u;
+  const nameBeforeGoAheadRe = /^\s*([A-Z][A-Za-z'\-.]+(?:\s+[A-Z][A-Za-z'\-.]+){0,2})\s*,\s*go ahead\b/iu;
 
   function add(target, person, why, atindex, text, weight = 1) {
     if (!byTarget.has(target)) byTarget.set(target, new Map());
@@ -429,10 +438,46 @@ function gatherEvidence(rows, roster) {
     if (!text || text.length > 32) continue;
     const m = text.match(bareNameCalloutRe);
     if (!m?.[1]) continue;
-    const person = bestRosterByFirstName(m[1], roster)
-      || bestRosterByLastName(m[1], roster);
+    let person = null;
+    const prevText = i > 0 ? String(rows[i - 1]?.text || '').trim() : '';
+    const prevSpeaker = i > 0 ? String(rows[i - 1]?.speaker_key || '') : '';
+    if (prevText && prevSpeaker && prevSpeaker === String(cur?.speaker_key || '')) {
+      const fullNear = prevText.match(/([A-Z][A-Za-z'\-.]+(?:\s+[A-Z][A-Za-z'\-.]+){1,2})/u)?.[1] || '';
+      if (fullNear) {
+        const nearLast = normalizeToken(fullNear.split(/\s+/u).at(-1));
+        const callLast = normalizeToken(m[1]);
+        if (nearLast && callLast && nearLast === callLast) {
+          person = bestRosterByFullName(fullNear, roster) || personFromFullName(fullNear);
+        }
+      }
+    }
+    if (!person) {
+      person = bestRosterByFirstName(m[1], roster)
+        || bestRosterByLastName(m[1], roster)
+        || personFromSingleName(m[1]);
+    }
     if (!person) continue;
     add(String(nxt?.speaker_key || ''), person, 'bare-name-handoff', i + 1, text, 3);
+  }
+
+  // Name before go-ahead handoff, e.g. "Morgan, go ahead." or "Travis Morgan, go ahead."
+  for (let i = 0; i < rows.length - 1; i += 1) {
+    const cur = rows[i];
+    const nxt = rows[i + 1];
+    if (!isUnknownSpeakerRow(nxt)) continue;
+    if (String(cur?.speaker_key || '') === String(nxt?.speaker_key || '')) continue;
+    const text = String(cur?.text || '').trim();
+    if (!text) continue;
+    const m = text.match(nameBeforeGoAheadRe);
+    if (!m?.[1]) continue;
+    const name = String(m[1] || '').trim();
+    const person = bestRosterByFullName(name, roster)
+      || bestRosterByLastName(name.split(/\s+/u).at(-1), roster)
+      || bestRosterByFirstName(name.split(/\s+/u)[0], roster)
+      || personFromFullName(name)
+      || personFromSingleName(name);
+    if (!person) continue;
+    add(String(nxt?.speaker_key || ''), person, 'name-before-go-ahead', i + 1, text, 4);
   }
 
   for (let i = 0; i < rows.length - 1; i += 1) {
@@ -539,6 +584,7 @@ function gatherEvidence(rows, roster) {
 
 function gatherSelfIntroEvidence(rows, roster, byTarget) {
   const introRe = /\b(?:my name is|my name['’]s)\s+([A-Za-z][A-Za-z'\-.]+(?:\s+[A-Za-z][A-Za-z'\-.]+){0,2})(?=[,.;:!?]|$)/iu;
+  const introImRe = /\b(?:i am|i['’]m)\s+([A-Za-z][A-Za-z'\-.]+(?:\s+[A-Za-z][A-Za-z'\-.]+){0,2})(?=[,.;:!?]|$)/iu;
 
   function add(target, person, why, atindex, text) {
     if (!byTarget.has(target)) byTarget.set(target, new Map());
@@ -556,8 +602,10 @@ function gatherSelfIntroEvidence(rows, roster, byTarget) {
     if (!isUnknownSpeakerRow(r)) continue;
     const text = String(r?.text || '');
     const m = text.match(introRe);
-    if (m) {
-      const introName = String(m[1] || '').trim();
+    const im = text.match(introImRe);
+    const introNameRaw = (m?.[1] || im?.[1] || '').trim();
+    if (introNameRaw) {
+      const introName = String(introNameRaw).trim();
       const exactFull = normalizeText(introName);
       let person = null;
       for (const p of roster) {
@@ -569,11 +617,11 @@ function gatherSelfIntroEvidence(rows, roster, byTarget) {
       if (!person) person = bestRosterByFullName(introName, roster);
       if (!person) person = personFromFullName(titleCaseName(introName));
       if (!person) person = personFromSingleName(introName);
-      if (person) add(key, person, 'self-intro', i + 1, text);
+      if (person) add(key, person, m ? 'self-intro' : 'self-intro-im', i + 1, text);
     }
 
     // Bare role intro format: "First Last, Role title." (roster-only to avoid false positives)
-    if (!m) {
+    if (!m && !im) {
       const roleIntro = text.match(/^([A-Z][A-Za-z'\-.]+(?:\s+[A-Z][A-Za-z'\-.]+){1,2})\s*,\s*[A-Za-z]/u);
       const person = roleIntro?.[1] ? bestRosterByFullName(roleIntro[1], roster) : null;
       if (person) add(key, person, 'role-intro', i + 1, text);
@@ -633,6 +681,37 @@ function gatherAgendaSectionEvidence(rows, roster, sectionRanges, byTarget) {
 }
 
 function chooseAssignments(byTarget) {
+  return chooseAssignmentsWithRows(byTarget, []);
+}
+
+function buildSpeakerSamples(rows, maxLines = 6) {
+  const by = new Map();
+  for (const r of rows) {
+    const key = String(r?.speaker_key || '').trim();
+    if (!key) continue;
+    const arr = by.get(key) || [];
+    if (arr.length < maxLines) arr.push(String(r?.text || '').trim());
+    by.set(key, arr);
+  }
+  return by;
+}
+
+function looksLikeChairIntro(sampleLines) {
+  const text = String((sampleLines || []).join(' ')).toLowerCase();
+  if (!text) return false;
+  const patterns = [
+    /\bat\s+[0-9]+(?:\s*[a-z])?\b/u,
+    /\b(?:next|item)\s+[0-9]+(?:\s*[a-z])?\b/u,
+    /\bwe have (?:a )?(?:deputation|presentation)\b/u,
+    /\b(?:deputation|presentation)\s+from\b/u,
+    /\bwelcome,\s+[a-z]/u,
+    /\bdoes anyone have any questions\b/u,
+  ];
+  return patterns.some((re) => re.test(text));
+}
+
+function chooseAssignmentsWithRows(byTarget, rows) {
+  const samplesByKey = buildSpeakerSamples(rows || []);
   const out = [];
   for (const [speakerKey, m] of byTarget.entries()) {
     const cands = [...m.values()].sort((a, b) => b.count - a.count || a.person.full.localeCompare(b.person.full));
@@ -685,9 +764,16 @@ function chooseAssignments(byTarget) {
     const sectionEvidence = Number(best?.byKind?.section || 0);
 
     const acceptViaDirect = nonSectionEvidence >= 1 && (best.count >= 2 || (best.count >= 1 && margin >= 1 && cands.length === 1));
-    const acceptViaSectionOnly = nonSectionEvidence === 0 && sectionEvidence >= 3 && best.count >= 3 && margin >= 1;
+    const acceptViaSectionOnly = nonSectionEvidence === 0 && sectionEvidence >= 6 && best.count >= 6 && margin >= 2;
     const accept = acceptViaDirect || acceptViaSectionOnly;
     if (!accept) continue;
+
+    // Guardrail: reject likely chair/moderator segments assigned to a callee name.
+    const samples = samplesByKey.get(speakerKey) || [];
+    if (looksLikeChairIntro(samples)) {
+      const hasSelfIntro = Number(best?.byKind?.selfIntro || 0) > 0;
+      if (!hasSelfIntro) continue;
+    }
 
     out.push({
       speaker_key: speakerKey,
@@ -757,11 +843,58 @@ async function main() {
     const sectionRanges = buildSectionRangesFromAgendaMatches(rows, agendaMatchesObj);
     gatherAgendaSectionEvidence(rows, roster, sectionRanges, evidence);
   }
-  const assignments = chooseAssignments(evidence);
+  const proposedAssignments = chooseAssignmentsWithRows(evidence, rows);
+  const allowOverwriteExisting = /^(1|true|yes)$/iu.test(String(process.env.PYA_AUTOASSIGN_OVERWRITE_EXISTING || ''));
+  const assignments = [];
+  const skippedLocked = [];
+  const unchangedStable = [];
+  const writeErrors = [];
 
-  for (const a of assignments) {
-    const metaPath = ensureSpeakerMetaFile(voicesDir, a.speaker_key);
-    setSpeakerMetaName(metaPath, a.person_slug);
+  for (const a of proposedAssignments) {
+    let metaPath = '';
+    try {
+      metaPath = ensureSpeakerMetaFile(voicesDir, a.speaker_key);
+    } catch (err) {
+      writeErrors.push({
+        speaker_key: a.speaker_key,
+        proposed_name: a.person_slug,
+        error: String(err?.message || err),
+      });
+      continue;
+    }
+    const existingName = readSpeakerMetaName(metaPath);
+    const existingStable = isStableSpeakerName(existingName);
+    if (existingStable) {
+      if (existingName === a.person_slug) {
+        assignments.push(a);
+        unchangedStable.push({
+          speaker_key: a.speaker_key,
+          existing_name: existingName,
+        });
+        continue;
+      }
+      if (!allowOverwriteExisting) {
+        skippedLocked.push({
+          speaker_key: a.speaker_key,
+          existing_name: existingName,
+          proposed_name: a.person_slug,
+          proposed_full: a.person_full,
+          evidence_count: a.evidence_count,
+        });
+        continue;
+      }
+    }
+    try {
+      setSpeakerMetaName(metaPath, a.person_slug);
+    } catch (err) {
+      writeErrors.push({
+        speaker_key: a.speaker_key,
+        proposed_name: a.person_slug,
+        error: String(err?.message || err),
+      });
+      continue;
+    }
+    assignments.push(a);
   }
 
   const reportPath = path.join(transcriptDir, `${payload?.prefix || 'auto'}.speaker.autoassign.report.json`);
@@ -769,8 +902,13 @@ async function main() {
     diarize_json: diarizeJson,
     roster_file: rosterPath,
     voices_dir: voicesDir,
+    overwrite_existing: allowOverwriteExisting,
     before,
+    proposed_assignments: proposedAssignments,
     assignments,
+    skipped_locked: skippedLocked,
+    unchanged_stable: unchangedStable,
+    write_errors: writeErrors,
     assigned_keys: assignments.map((x) => x.speaker_key),
     generated_at_utc: new Date().toISOString(),
   }, null, 2)}\n`, 'utf8');
@@ -780,7 +918,14 @@ async function main() {
   process.stdout.write(`[speaker-autoassign] voices: ${voicesDir}\n`);
   process.stdout.write(`[speaker-autoassign] before unknown rows: ${before.unknown_rows}\n`);
   process.stdout.write(`[speaker-autoassign] before unknown keys: ${before.unknown_keys}\n`);
+  process.stdout.write(`[speaker-autoassign] proposed keys: ${proposedAssignments.length}\n`);
   process.stdout.write(`[speaker-autoassign] assigned keys: ${assignments.length}\n`);
+  process.stdout.write(`[speaker-autoassign] locked skips: ${skippedLocked.length}\n`);
+  process.stdout.write(`[speaker-autoassign] unchanged stable: ${unchangedStable.length}\n`);
+  process.stdout.write(`[speaker-autoassign] write errors: ${writeErrors.length}\n`);
+  for (const e of writeErrors.slice(0, 8)) {
+    process.stdout.write(`[speaker-autoassign] warn ${e.speaker_key}: ${e.error}\n`);
+  }
   for (const a of assignments) {
     process.stdout.write(`[speaker-autoassign] ${a.speaker_key} -> ${a.person_full} (evidence=${a.evidence_count})\n`);
   }
