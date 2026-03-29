@@ -77,6 +77,71 @@ function toDisplayLabel(speakerKey, metadataMap) {
   return key || 'SPEAKER_UNKNOWN';
 }
 
+function pickAutoAssignReport(transcriptDir, resolvedPrefix) {
+  const exact = path.join(transcriptDir, `${resolvedPrefix}.speaker.autoassign.report.json`);
+  if (fs.existsSync(exact)) return exact;
+  const files = fs.readdirSync(transcriptDir)
+    .filter((n) => n.endsWith('.speaker.autoassign.report.json'))
+    .sort();
+  if (!files.length) return '';
+  return path.join(transcriptDir, files[files.length - 1]);
+}
+
+function toTitleCaseName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/gu, ' ')
+    .replace(/\b\w/gu, (m) => m.toUpperCase());
+}
+
+function isJunkSpeakerName(rawName) {
+  const n = String(rawName || '').trim().toLowerCase();
+  if (!n) return true;
+  if (/^speaker_\d+$/iu.test(n)) return true;
+  const junk = new Set([
+    'good', 'yep', 'welcome', 'okay', 'ok', 'yes', 'no', 'thanks', 'thank', 'hello', 'hi', 'great', 'perfect', 'thinking',
+  ]);
+  return junk.has(n);
+}
+
+function loadMeetingAssignmentsMap(reportPath) {
+  const out = new Map();
+  if (!reportPath || !fs.existsSync(reportPath)) return out;
+  try {
+    const obj = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    const arr = Array.isArray(obj?.assignments) ? obj.assignments : [];
+    for (const a of arr) {
+      const key = String(a?.speaker_key || '').trim();
+      const full = toTitleCaseName(a?.person_full || '');
+      if (!key || !full) continue;
+      out.set(key, full);
+    }
+  } catch {}
+  return out;
+}
+
+function toDisplayLabelWithMeetingAssignments(speakerKey, metadataMap, meetingAssignments) {
+  const key = String(speakerKey || '').trim();
+  const m = key.match(/^speaker_(\d+)$/iu);
+  if (m) {
+    const meta = metadataMap.get(key) || {};
+    const rawName = String(meta.name || '').trim();
+    if (rawName && !isJunkSpeakerName(rawName)) {
+      return rawName.replace(/_/g, ' ').replace(/\b\w/g, (x) => x.toUpperCase());
+    }
+    const assigned = String(meetingAssignments.get(key) || '').trim();
+    if (assigned) return assigned;
+    return `SPEAKER_${String(Number(m[1])).padStart(3, '0')}`;
+  }
+  const meta = metadataMap.get(key) || {};
+  const rawName = String(meta.name || '').trim();
+  if (rawName && !isJunkSpeakerName(rawName)) {
+    return rawName.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+  }
+  if (rawName && !isJunkSpeakerName(rawName)) return rawName.replace(/_/g, ' ');
+  return key || 'SPEAKER_UNKNOWN';
+}
+
 function pickDiarizationJson(transcriptDir, prefix = 'auto') {
   if (prefix !== 'auto') {
     const p = path.join(transcriptDir, `${prefix}.speaker.sentences.json`);
@@ -137,9 +202,11 @@ async function main() {
   if (!rows.length) throw new Error(`no rows in ${diarizeJson}`);
 
   const metadataMap = loadSpeakerMetadataMap(voicesDir);
+  const autoAssignReportPath = pickAutoAssignReport(transcriptDir, resolvedPrefix);
+  const meetingAssignments = loadMeetingAssignmentsMap(autoAssignReportPath);
   const updatedRows = rows.map((row) => ({
     ...row,
-    display: toDisplayLabel(row.speaker_key, metadataMap),
+    display: toDisplayLabelWithMeetingAssignments(row.speaker_key, metadataMap, meetingAssignments),
   }));
 
   const outSrt = path.join(transcriptDir, `${resolvedPrefix}.speaker.sentence.srt`);
@@ -153,6 +220,7 @@ async function main() {
 
   process.stdout.write(`[speaker-relabel] source: ${diarizeJson}\n`);
   process.stdout.write(`[speaker-relabel] voices dir: ${voicesDir}\n`);
+  if (autoAssignReportPath) process.stdout.write(`[speaker-relabel] autoassign report: ${autoAssignReportPath}\n`);
   process.stdout.write(`[speaker-relabel] wrote: ${outSrt}\n`);
   process.stdout.write(`[speaker-relabel] updated: ${diarizeJson}\n`);
 }
