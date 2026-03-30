@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -235,9 +236,19 @@ export class SpeakerRunner {
   mapPayloadForService(payload = {}) {
     if (!payload || typeof payload !== "object") return payload;
     const out = { ...payload };
-    for (const key of ["audio", "voices_dir", "voicesDir"]) {
-      if (typeof out[key] === "string") {
-        out[key] = this.mapPathForService(out[key]);
+    for (const key of ["voices_dir", "voicesDir"]) {
+      if (typeof out[key] === "string") out[key] = this.mapPathForService(out[key]);
+    }
+    if (typeof out.audio === "string") {
+      const audioRaw = String(out.audio || "").trim();
+      out.audio = this.mapPathForService(audioRaw);
+      if (audioRaw && path.isAbsolute(audioRaw) && fs.existsSync(audioRaw)) {
+        try {
+          out.audio_b64 = fs.readFileSync(audioRaw).toString("base64");
+          out.audio_name = path.basename(audioRaw);
+        } catch {
+          // keep path-only payload when byte upload is unavailable
+        }
       }
     }
     return out;
