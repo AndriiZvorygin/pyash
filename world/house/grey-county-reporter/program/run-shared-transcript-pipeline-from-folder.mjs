@@ -33,6 +33,44 @@ function existsFile(p) {
   try { return fs.statSync(p).isFile(); } catch { return false; }
 }
 
+function hasMinSize(p, minBytes = 1) {
+  try { return fs.statSync(p).isFile() && Number(fs.statSync(p).size || 0) >= minBytes; } catch { return false; }
+}
+
+function isValidAgendaSummaryJson(p) {
+  if (!hasMinSize(p, 200)) return false;
+  try {
+    const obj = JSON.parse(fs.readFileSync(p, "utf8"));
+    return Array.isArray(obj?.sections) && obj.sections.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function isValidMeetingSummaryMd(p) {
+  if (!hasMinSize(p, 400)) return false;
+  const text = String(fs.readFileSync(p, "utf8") || "");
+  return (
+    /^#\s+Whole Meeting Summary\b/mu.test(text) &&
+    /^##\s+Top Newsworthy Developments\b/mu.test(text) &&
+    /^##\s+Why It Matters\b/mu.test(text) &&
+    /^##\s+Watch Next\b/mu.test(text)
+  );
+}
+
+function isValidHookTxt(p) {
+  if (!hasMinSize(p, 4)) return false;
+  const line = String(fs.readFileSync(p, "utf8") || "").trim();
+  const words = line.split(/\s+/u).filter(Boolean);
+  return words.length >= 3;
+}
+
+function isValidWiseSeries(p) {
+  if (!hasMinSize(p, 150)) return false;
+  const text = String(fs.readFileSync(p, "utf8") || "");
+  return /su name wise chips be series def/iu.test(text) && /since num /iu.test(text);
+}
+
 function log(line) {
   process.stdout.write(`${line}\n`);
 }
@@ -193,7 +231,7 @@ async function main() {
       log('[grey-pipeline] diarize remote path unavailable; retry local worker');
       await runDiarize({}, 'diarize-speakers-local-retry');
     }
-  }, existsFile(speakerJson));
+  }, hasMinSize(speakerJson, 200));
 
   await stage('auto-assign-speakers', async () => {
     await runNode(path.join(ROOT, 'command/auto_assign_speakers_from_callouts.mjs'), [transcriptDir, `${normPrefix}.sentences`, rosterPath, voicesWork], {
@@ -205,7 +243,7 @@ async function main() {
     await runNode(path.join(ROOT, 'command/relabel_speaker_sentence_srt_from_transcript_folder.mjs'), [transcriptDir, `${normPrefix}.sentences`, voicesWork], {
       label: 'relabel-speakers',
     });
-  }, existsFile(speakerSrt));
+  }, hasMinSize(speakerSrt, 200));
 
   await stage('build-agenda-wise-series', async () => {
     const sourceSrt = existsFile(speakerSrt) ? speakerSrt : sentenceMerged;
@@ -222,7 +260,7 @@ async function main() {
       label: 'build-agenda-wise-series',
       timeoutMs: 20 * 60 * 1000,
     });
-  }, existsFile(agendaWise));
+  }, isValidWiseSeries(agendaWise));
 
   await stage('agenda-section-summaries', async () => {
     await runNode(path.join(ROOT, 'command/summarize_agenda_wise_sections_from_transcript_folder.mjs'), [transcriptDir, normPrefix, focus], {
@@ -232,7 +270,7 @@ async function main() {
         ...(ollamaHost ? { OLLAMA_HOST: ollamaHost } : {}),
       },
     });
-  }, existsFile(agendaSummary));
+  }, isValidAgendaSummaryJson(agendaSummary));
 
   await stage('whole-meeting-summary', async () => {
     await runNode(path.join(ROOT, 'command/summarize_whole_meeting_from_agenda_summary.mjs'), [transcriptDir, normPrefix, focus], {
@@ -242,7 +280,7 @@ async function main() {
         ...(ollamaHost ? { OLLAMA_HOST: ollamaHost } : {}),
       },
     });
-  }, existsFile(meetingSummary));
+  }, isValidMeetingSummaryMd(meetingSummary));
 
   await stage('meeting-hook', async () => {
     await runNode(path.join(ROOT, 'command/generate_meeting_hook_from_transcript_folder.mjs'), [transcriptDir, normPrefix, focus, jurisdiction, body], {
@@ -252,7 +290,7 @@ async function main() {
         ...(ollamaHost ? { OLLAMA_HOST: ollamaHost } : {}),
       },
     });
-  }, existsFile(meetingHook));
+  }, isValidHookTxt(meetingHook));
 
   await stage('render-transcript-html', async () => {
     const hook = existsFile(meetingHook) ? String(fs.readFileSync(meetingHook, 'utf8')).trim() : '';
