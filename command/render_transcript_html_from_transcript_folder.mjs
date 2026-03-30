@@ -256,14 +256,89 @@ function distinct(list) {
 }
 
 function parseLeadingItemNumber(heading) {
-  const m = String(heading || "").match(/^\s*(\d+)\b/u);
+  const raw = String(heading || "").trim();
+  const m = raw.match(/^\s*(\d+)\b/u) || raw.match(/^section\s+(\d+)\b/iu);
   return m ? String(Number(m[1])) : "";
 }
 
-function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches }) {
+function parseWiseRanges(seriesText) {
+  const src = String(seriesText || "");
+  const ranges = [];
+  const re = /su name wise chip \d+\s+since num ([0-9.]+)\s+until num ([0-9.]+)\s+ob text /gu;
+  for (const m of src.matchAll(re)) {
+    const since = Number(m[1]);
+    const until = Number(m[2]);
+    if (!Number.isFinite(since) || !Number.isFinite(until)) continue;
+    ranges.push({ since, until });
+  }
+  return ranges;
+}
+
+function findRowIndexAtOrAfter(rows, targetSince) {
+  for (let i = 0; i < rows.length; i += 1) {
+    if ((Number(rows[i]?.since) || 0) >= targetSince) return i;
+  }
+  return rows.length - 1;
+}
+
+function looksGenericSectionHeading(heading) {
+  return /^section\s+\d+\s*$/iu.test(String(heading || "").trim());
+}
+
+function titleCaseWords(text) {
+  return String(text || "")
+    .split(/\s+/u)
+    .map((w) => w ? (w[0].toUpperCase() + w.slice(1).toLowerCase()) : "")
+    .join(" ")
+    .trim();
+}
+
+function deriveHeadingFromSummary(fallbackHeading, summary, index) {
+  const heading = String(fallbackHeading || "").trim() || `Section ${index + 1}`;
+  if (!looksGenericSectionHeading(heading)) return heading;
+  const plain = stripMarkdown(String(summary || ""))
+    .replace(/\bSPEAKER_[0-9A-Z_-]+:\s*/giu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!plain) return heading;
+  const itemMatch = plain.match(/\bitem\s+([0-9]+[a-z]?)\b/iu);
+  if (itemMatch && itemMatch[1]) return `Item ${String(itemMatch[1]).toUpperCase()}`;
+  const topic = plain
+    .split(/(?<=[.!?])\s+/u)[0]
+    .split(/\s+/u)
+    .slice(0, 7)
+    .join(" ")
+    .replace(/[,:;.-]+$/u, "")
+    .trim();
+  if (!topic) return heading;
+  return titleCaseWords(topic);
+}
+
+function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, wiseRanges }) {
   const rows = Array.isArray(transcriptRows) ? transcriptRows : [];
   const sections = Array.isArray(sectionSummaries) ? sectionSummaries : [];
   if (!rows.length || !sections.length) return [];
+
+  const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
+  if (wise.length === sections.length) {
+    const out = [];
+    for (let i = 0; i < sections.length; i += 1) {
+      const sec = sections[i];
+      const wr = wise[i];
+      const nextSince = i + 1 < wise.length ? wise[i + 1].since : Number.POSITIVE_INFINITY;
+      const start = findRowIndexAtOrAfter(rows, wr.since);
+      const endCandidate = findRowIndexAtOrAfter(rows, nextSince);
+      const end = i + 1 < wise.length ? Math.max(start, endCandidate - 1) : rows.length - 1;
+      out.push({
+        id: `section-${i + 1}`,
+        heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
+        summary: String(sec?.summary || "").trim(),
+        startRow: start,
+        endRow: end,
+      });
+    }
+    return out;
+  }
 
   const matchByItem = new Map();
   for (const m of Array.isArray(agendaMatches?.matches) ? agendaMatches.matches : []) {
@@ -320,7 +395,7 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches })
     const end = i + 1 < starts.length ? Math.max(start, starts[i + 1].rowIndex - 1) : rows.length - 1;
     out.push({
       id: `section-${i + 1}`,
-      heading: starts[i].heading || `Section ${i + 1}`,
+      heading: deriveHeadingFromSummary(starts[i].heading || `Section ${i + 1}`, starts[i].summary || "", i),
       summary: starts[i].summary || "",
       startRow: start,
       endRow: end,
@@ -580,15 +655,20 @@ function main() {
   const agendaSummaryPath = pickFile(transcriptDir, [/\.agenda-summary\.md$/u]);
   const agendaSummaryJsonPath = pickFile(transcriptDir, [/\.agenda-summary\.json$/u]);
   const agendaMatchesPath = pickFile(transcriptDir, [/\.agenda\.matches\.json$/u]);
+  const agendaWiseSeriesPath = pickFile(transcriptDir, [/\.agenda-wise\.series\.pya$/u]);
   const meetingSummaryPath = pickFile(transcriptDir, [/\.meeting-summary\.md$/u]);
   const agendaSummary = agendaSummaryPath ? fs.readFileSync(agendaSummaryPath, "utf8") : "";
   let agendaSummaryJson = {};
   let agendaMatches = {};
+  let wiseRanges = [];
   if (agendaSummaryJsonPath) {
     try { agendaSummaryJson = JSON.parse(fs.readFileSync(agendaSummaryJsonPath, "utf8")); } catch {}
   }
   if (agendaMatchesPath) {
     try { agendaMatches = JSON.parse(fs.readFileSync(agendaMatchesPath, "utf8")); } catch {}
+  }
+  if (agendaWiseSeriesPath) {
+    try { wiseRanges = parseWiseRanges(fs.readFileSync(agendaWiseSeriesPath, "utf8")); } catch {}
   }
   const meetingSummary = meetingSummaryPath ? fs.readFileSync(meetingSummaryPath, "utf8") : "";
   const meetingDir = path.dirname(transcriptDir);
@@ -656,6 +736,7 @@ function main() {
       transcriptRows,
       sectionSummaries: agendaSummaryJson?.sections,
       agendaMatches,
+      wiseRanges,
     }),
     archiveJurUrl,
     archiveBodyUrl,
