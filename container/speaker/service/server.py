@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import json
 import os
 import socket
@@ -130,6 +131,30 @@ def _worker_rpc(command: str, payload: Dict[str, Any]) -> Tuple[int, Dict[str, A
                 return 500, {"error": "worker returned empty response"}
 
 
+def _materialize_audio_payload(payload: Dict[str, Any], req_tag: str) -> Tuple[Dict[str, Any], Optional[Path], Optional[str]]:
+    body = payload if isinstance(payload, dict) else {}
+    audio_b64 = body.get("audio_b64")
+    if not isinstance(audio_b64, str) or not audio_b64.strip():
+        return body, None, None
+    try:
+        raw = base64.b64decode(audio_b64.encode("ascii"), validate=True)
+    except Exception:
+        return body, None, "invalid audio_b64"
+    if not raw:
+        return body, None, "empty audio_b64"
+    upload_dir = Path(str(os.environ.get("SPEAKER_UPLOAD_DIR") or "/tmp/speaker-upload").strip())
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    audio_name = str(body.get("audio_name") or "").strip()
+    suffix = Path(audio_name).suffix or ".wav"
+    target = upload_dir / f"{req_tag}{suffix}"
+    target.write_bytes(raw)
+    out = dict(body)
+    out["audio"] = str(target)
+    out.pop("audio_b64", None)
+    out.pop("audio_name", None)
+    return out, target, None
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
@@ -150,11 +175,31 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/identify":
-            code, body = _worker_rpc("identify", payload if isinstance(payload, dict) else {})
+            req_payload = payload if isinstance(payload, dict) else {}
+            req_payload, temp_audio, temp_err = _materialize_audio_payload(req_payload, f"identify-{_next_req_id()}")
+            if temp_err:
+                _json(self, 400, {"error": temp_err})
+                return
+            code, body = _worker_rpc("identify", req_payload)
+            if temp_audio is not None:
+                try:
+                    temp_audio.unlink(missing_ok=True)
+                except Exception:
+                    pass
             _json(self, code, body)
             return
         if self.path == "/enrol":
-            code, body = _worker_rpc("enrol", payload if isinstance(payload, dict) else {})
+            req_payload = payload if isinstance(payload, dict) else {}
+            req_payload, temp_audio, temp_err = _materialize_audio_payload(req_payload, f"enrol-{_next_req_id()}")
+            if temp_err:
+                _json(self, 400, {"error": temp_err})
+                return
+            code, body = _worker_rpc("enrol", req_payload)
+            if temp_audio is not None:
+                try:
+                    temp_audio.unlink(missing_ok=True)
+                except Exception:
+                    pass
             _json(self, code, body)
             return
         if self.path == "/rename":
