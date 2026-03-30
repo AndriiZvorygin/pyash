@@ -224,9 +224,9 @@ async function main() {
 
   await stage('diarize-speakers', async () => {
     const sharedEnv = {
-      PYA_SPEAKER_ISOLATE_VOICES: process.env.PYA_SPEAKER_ISOLATE_VOICES || '1',
+      PYA_SPEAKER_ISOLATE_VOICES: process.env.PYA_SPEAKER_ISOLATE_VOICES || '0',
       PYA_SPEAKER_WORKING_VOICES_DIR: voicesWork,
-      PYA_SPEAKER_RESEED_VOICES: process.env.PYA_SPEAKER_RESEED_VOICES || '1',
+      PYA_SPEAKER_RESEED_VOICES: process.env.PYA_SPEAKER_RESEED_VOICES || '0',
     };
     const runDiarize = (extraEnv = {}, label = 'diarize-speakers') => runNode(
       path.join(ROOT, 'command/diarize_sentence_srt_from_transcript_folder.mjs'),
