@@ -4,6 +4,24 @@ import path from 'node:path';
 
 const ROOT = '/home/htaf/pyac/pyash';
 const DEFAULT_VOICES = path.join(ROOT, 'world/voices');
+const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
+  ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
+  : 'http://localhost:11434/api/chat';
+const VERIFY_MODEL = process.env.AUTOASSIGN_VERIFY_MODEL
+  || process.env.SPEAKER_VERIFY_MODEL
+  || process.env.MEETING_SUMMARY_MODEL
+  || process.env.SUMMARY_MODEL
+  || process.env.OWEN_SUMMARY_MODEL
+  || 'qwen3.5:9b';
+const VERIFY_ENABLED = !/^(0|false|no)$/iu.test(String(process.env.PYA_AUTOASSIGN_VERIFY || '1'));
+const VERIFY_CONTEXT_RADIUS = (() => {
+  const raw = Number(process.env.PYA_AUTOASSIGN_VERIFY_CONTEXT_RADIUS || 4);
+  return Number.isFinite(raw) && raw >= 1 && raw <= 12 ? Math.floor(raw) : 4;
+})();
+const VERIFY_MIN_CONFIDENCE = (() => {
+  const raw = Number(process.env.PYA_AUTOASSIGN_VERIFY_MIN_CONFIDENCE || 0.67);
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.67;
+})();
 
 function usage() {
   return [
@@ -802,6 +820,153 @@ function countUnknown(rows) {
   return { unknown_rows: unknownRows, unknown_keys: keys.size, unknown_key_list: [...keys].sort() };
 }
 
+async function ask(messages, { numPredict = 220 } = {}) {
+  const body = {
+    model: VERIFY_MODEL,
+    mode: 'chat',
+    keep_alive: 180,
+    think: false,
+    stream: false,
+    options: { num_predict: numPredict },
+    messages
+  };
+  const res = await fetch(OLLAMA_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`ollama status ${res.status}`);
+  const json = await res.json();
+  return String(json?.message?.content || '').trim();
+}
+
+function parseJsonObjectFromText(text) {
+  const src = String(text || '').trim();
+  if (!src) return null;
+  try {
+    return JSON.parse(src);
+  } catch {}
+  const m = src.match(/\{[\s\S]*\}/u);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[0]);
+  } catch {
+    return null;
+  }
+}
+
+function buildTransitionContext(rows, assignment, radius = 4) {
+  const key = String(assignment?.speaker_key || '');
+  if (!rows.length || !key) return '';
+  const centers = [];
+  for (const ex of (assignment?.examples || [])) {
+    const idx = Number(ex?.atindex || 0) - 1;
+    if (Number.isFinite(idx) && idx >= 0 && idx < rows.length) centers.push(idx);
+  }
+  if (!centers.length) {
+    const first = rows.findIndex((r) => String(r?.speaker_key || '') === key);
+    if (first >= 0) centers.push(first);
+  }
+  const uniqCenters = [...new Set(centers)].slice(0, 3);
+  const blocks = [];
+  for (const center of uniqCenters) {
+    const start = Math.max(0, center - radius);
+    const end = Math.min(rows.length - 1, center + radius);
+    const lines = [];
+    for (let i = start; i <= end; i += 1) {
+      const r = rows[i] || {};
+      const line = `${i + 1}. [${String(r?.speaker_key || '')} | ${String(r?.display || '').trim() || 'unknown'}] ${String(r?.text || '').replace(/\s+/gu, ' ').trim()}`;
+      lines.push(line);
+    }
+    blocks.push(`Context block around row ${center + 1}:\n${lines.join('\n')}`);
+  }
+  return blocks.join('\n\n');
+}
+
+function resolveRosterPersonFromName(rawName, roster) {
+  const name = String(rawName || '').trim();
+  if (!name) return null;
+  const byFull = bestRosterByFullName(name, roster);
+  if (byFull) return byFull;
+  const parts = name.split(/\s+/u).filter(Boolean);
+  if (!parts.length) return null;
+  const byLast = bestRosterByLastName(parts.at(-1), roster);
+  if (byLast) return byLast;
+  if (parts.length === 1) return bestRosterByFirstName(parts[0], roster);
+  return bestRosterByFirstName(parts[0], roster);
+}
+
+async function verifyAssignmentWithContext({ assignment, rows, roster }) {
+  const context = buildTransitionContext(rows, assignment, VERIFY_CONTEXT_RADIUS);
+  const alternatives = Array.isArray(assignment?.alternatives) ? assignment.alternatives : [];
+  const rosterList = roster.map((p) => p.full).join('\n');
+  const prompt = [
+    'Decide who the next speaker is at the transition context.',
+    '',
+    `Target speaker_key: ${String(assignment?.speaker_key || '')}`,
+    `Proposed by heuristics: ${String(assignment?.person_full || '')}`,
+    alternatives.length
+      ? `Other candidates: ${alternatives.map((a) => `${String(a?.full || '').trim()} (${Number(a?.count || 0)})`).join('; ')}`
+      : 'Other candidates: none',
+    '',
+    'ROSTER (only valid names):',
+    rosterList,
+    '',
+    'CONTEXT (+/- nearby lines around transition):',
+    context || '(no context)',
+    '',
+    'Return JSON only:',
+    '{"accept": true|false, "person_full": "<roster full name or UNKNOWN>", "confidence": 0..1, "reason": "<short>"}',
+    '',
+    'Rules:',
+    '- person_full must be a roster name exactly, or UNKNOWN.',
+    '- Reject phrase fragments (example: "as you see", "talking", "slightly off topic").',
+    '- Use the transition context; if uncertain, set accept=false and person_full=UNKNOWN.'
+  ].join('\n');
+
+  const raw = await ask([
+    { role: 'system', content: 'You are a strict municipal speaker transition verifier.' },
+    { role: 'user', content: prompt }
+  ], { numPredict: 200 });
+  const parsed = parseJsonObjectFromText(raw);
+  if (!parsed || typeof parsed !== 'object') {
+    return { status: 'error', error: 'verifier returned non-JSON output', raw };
+  }
+  const accept = !!parsed.accept;
+  const confidence = Number(parsed.confidence);
+  const personRaw = String(parsed.person_full || '').trim();
+  const reason = String(parsed.reason || '').trim();
+  if (!accept) {
+    return {
+      status: 'reject',
+      confidence: Number.isFinite(confidence) ? confidence : 0,
+      reason: reason || 'verifier rejected',
+      raw,
+    };
+  }
+  if (!Number.isFinite(confidence) || confidence < VERIFY_MIN_CONFIDENCE) {
+    return {
+      status: 'reject',
+      confidence: Number.isFinite(confidence) ? confidence : 0,
+      reason: `confidence below threshold (${VERIFY_MIN_CONFIDENCE})`,
+      raw,
+    };
+  }
+  const person = resolveRosterPersonFromName(personRaw, roster);
+  if (!person) {
+    return {
+      status: 'reject',
+      confidence,
+      reason: 'verifier did not return valid roster person',
+      raw,
+    };
+  }
+  if (person.slug === assignment.person_slug) {
+    return { status: 'accept', confidence, reason, person, raw };
+  }
+  return { status: 'replace', confidence, reason, person, raw };
+}
+
 async function main() {
   const transcriptDirArg = process.argv[2];
   const prefixArg = process.argv[3] || 'auto';
@@ -846,11 +1011,15 @@ async function main() {
   const proposedAssignments = chooseAssignmentsWithRows(evidence, rows);
   const allowOverwriteExisting = /^(1|true|yes)$/iu.test(String(process.env.PYA_AUTOASSIGN_OVERWRITE_EXISTING || ''));
   const assignments = [];
+  const verifierRejected = [];
+  const verifierErrors = [];
+  const verifierReplaced = [];
   const skippedLocked = [];
   const unchangedStable = [];
   const writeErrors = [];
 
-  for (const a of proposedAssignments) {
+  for (const baseAssignment of proposedAssignments) {
+    let a = baseAssignment;
     let metaPath = '';
     try {
       metaPath = ensureSpeakerMetaFile(voicesDir, a.speaker_key);
@@ -884,6 +1053,52 @@ async function main() {
         continue;
       }
     }
+    if (VERIFY_ENABLED) {
+      try {
+        const v = await verifyAssignmentWithContext({ assignment: a, rows, roster });
+        if (v.status === 'reject') {
+          verifierRejected.push({
+            speaker_key: a.speaker_key,
+            proposed_name: a.person_slug,
+            proposed_full: a.person_full,
+            confidence: v.confidence,
+            reason: v.reason,
+          });
+          continue;
+        }
+        if (v.status === 'error') {
+          verifierErrors.push({
+            speaker_key: a.speaker_key,
+            proposed_name: a.person_slug,
+            proposed_full: a.person_full,
+            error: v.error,
+          });
+          continue;
+        }
+        if (v.status === 'replace') {
+          verifierReplaced.push({
+            speaker_key: a.speaker_key,
+            from_full: a.person_full,
+            to_full: v.person.full,
+            confidence: v.confidence,
+            reason: v.reason || '',
+          });
+          a = {
+            ...a,
+            person_full: v.person.full,
+            person_slug: v.person.slug,
+          };
+        }
+      } catch (err) {
+        verifierErrors.push({
+          speaker_key: a.speaker_key,
+          proposed_name: a.person_slug,
+          proposed_full: a.person_full,
+          error: String(err?.message || err),
+        });
+        continue;
+      }
+    }
     try {
       setSpeakerMetaName(metaPath, a.person_slug);
     } catch (err) {
@@ -905,6 +1120,13 @@ async function main() {
     overwrite_existing: allowOverwriteExisting,
     before,
     proposed_assignments: proposedAssignments,
+    verifier_enabled: VERIFY_ENABLED,
+    verifier_model: VERIFY_MODEL,
+    verifier_min_confidence: VERIFY_MIN_CONFIDENCE,
+    verifier_context_radius: VERIFY_CONTEXT_RADIUS,
+    verifier_rejected: verifierRejected,
+    verifier_errors: verifierErrors,
+    verifier_replaced: verifierReplaced,
     assignments,
     skipped_locked: skippedLocked,
     unchanged_stable: unchangedStable,
@@ -919,6 +1141,10 @@ async function main() {
   process.stdout.write(`[speaker-autoassign] before unknown rows: ${before.unknown_rows}\n`);
   process.stdout.write(`[speaker-autoassign] before unknown keys: ${before.unknown_keys}\n`);
   process.stdout.write(`[speaker-autoassign] proposed keys: ${proposedAssignments.length}\n`);
+  process.stdout.write(`[speaker-autoassign] verifier enabled: ${VERIFY_ENABLED ? 'yes' : 'no'}\n`);
+  process.stdout.write(`[speaker-autoassign] verifier rejected: ${verifierRejected.length}\n`);
+  process.stdout.write(`[speaker-autoassign] verifier errors: ${verifierErrors.length}\n`);
+  process.stdout.write(`[speaker-autoassign] verifier replaced: ${verifierReplaced.length}\n`);
   process.stdout.write(`[speaker-autoassign] assigned keys: ${assignments.length}\n`);
   process.stdout.write(`[speaker-autoassign] locked skips: ${skippedLocked.length}\n`);
   process.stdout.write(`[speaker-autoassign] unchanged stable: ${unchangedStable.length}\n`);
