@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { ensureStarted, identify, discharge, stop } from '/home/htaf/pyac/pyash/command/speaker_runner.mjs';
+import { fileURLToPath } from 'node:url';
+import { ensureStarted, identify, discharge, stop } from './speaker_runner.mjs';
 
-const ROOT = '/home/htaf/pyac/pyash';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MAX_CUES = (() => {
   const raw = Number(process.env.PYA_SPEAKER_MAX_CUES || process.env.OWEN_SPEAKER_MAX_CUES || 0);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;

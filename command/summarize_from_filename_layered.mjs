@@ -3,7 +3,9 @@ import fs from "node:fs";
 import { splitIntoOverlappingChunks } from "./learn_from_filename_pipeline.mjs";
 
 const MODEL = "qwen3.5:9b";
-const OLLAMA_URL = "http://localhost:11434/api/chat";
+const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, "")
+  ? `${process.env.OLLAMA_HOST.replace(/\/$/u, "")}/api/chat`
+  : "http://localhost:11434/api/chat";
 const CHUNK_SIZE = 12000;
 const CHUNK_OVERLAP = 1200;
 const MERGE_GROUP_SIZE = 12;
@@ -167,4 +169,3 @@ main().catch((error) => {
   process.stderr.write(`${error?.message || String(error)}\n`);
   process.exit(1);
 });
-

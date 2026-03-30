@@ -2,8 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from "node:url";
 
-const ROOT = '/home/htaf/pyac/pyash';
+const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(COMMAND_DIR, "..");
 const RUN_BIN = path.join(ROOT, 'run');
 const DEFAULT_STYLE = 'bold civic poster background, no person required, high contrast, simple geometry, strong readability';
 
@@ -62,7 +64,9 @@ function sanitizeStem(input) {
 
 function parseGeneratedImagePath(drawStdout, sourceFilename) {
   const text = String(drawStdout || '');
-  const matches = [...text.matchAll(/\/home\/htaf\/pyac\/pyash\/(?:artifacts|know\/produce)\/[^\s"']+\.png/gu)].map((m) => m[0]);
+  const escapedRoot = ROOT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const imagePathRe = new RegExp(`${escapedRoot}\\/(?:artifacts|know\\/produce)\\/[^\\s"']+\\.png`, 'gu');
+  const matches = [...text.matchAll(imagePathRe)].map((m) => m[0]);
   for (let i = matches.length - 1; i >= 0; i -= 1) {
     if (existsFile(matches[i])) return matches[i];
   }
@@ -178,4 +182,3 @@ main().catch((err) => {
   process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
   process.exit(1);
 });
-

@@ -42,7 +42,7 @@ exists su name mind model ob text "qwen3.5:9b" be default ya
 su name mind configure be map def
   su name think ob bool lie ya
 prah
-exists su name draw host ob text "http://localhost:8188" be default ya
+exists su name draw host ob text "http://mriczo:8188" be default ya
 exists su name say host ob text "http://localhost:8188" be default ya
 exists su name say backend default ob text "comfyui" be default ya
 exists su name say workflow root ob filename "./say/" be default ya
