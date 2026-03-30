@@ -25,6 +25,7 @@ const MAX_SECTIONS = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_MAX_SECTIONS || process.env.MEETING_SUMMARY_MAX_SECTIONS || process.env.OWEN_SUMMARY_MAX_SECTIONS || 0);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
 })();
+const SUMMARY_TIME_MODE = String(process.env.AGENDA_SUMMARY_TIME_MODE || "standard").trim().toLowerCase();
 
 function usage() {
   return [
@@ -311,6 +312,13 @@ function buildShortSummaryPrompt({ heading, source, focus, feedback, rosterText 
     '- If transcript naming appears misspelled by ASR, normalize to the closest roster name silently.',
     '- If uncertain about a specific identity or figure, use role-level phrasing and omit the uncertain number/name.',
     '- If speaker identity is uncertain, use role phrasing (e.g., "a councillor").',
+    ...(SUMMARY_TIME_MODE === 'upcoming'
+      ? [
+        '- This is an upcoming agenda preview before the meeting occurs.',
+        '- Use present/future tense.',
+        '- Do not imply debate, votes, or decisions have already happened unless SOURCE explicitly states a past completed event.',
+      ]
+      : []),
     '- No speculation.',
     '',
     'RETRY_FEEDBACK:',
@@ -350,6 +358,13 @@ function buildSummaryPrompt({ heading, source, focus, feedback, rosterText, body
     '- If speaker identity is uncertain, use role phrasing (e.g., "a councillor") instead of speculation.',
     '- Attribute statements to named speakers only when SOURCE makes that attribution explicit.',
     '- Do not infer attendance counts unless explicitly stated in SOURCE.',
+    ...(SUMMARY_TIME_MODE === 'upcoming'
+      ? [
+        '- This is an upcoming agenda preview before the meeting occurs.',
+        '- Write in present/future tense.',
+        '- Do not frame agenda items as completed actions unless SOURCE explicitly states a historical completed event.',
+      ]
+      : []),
     '- Surface unusual, high-impact, conflict-heavy, costly, surprising, or politically sensitive details when present.',
     '- Mention concrete decisions, motions, votes, actions, and notable debate if present.',
     '- Prefer specific numbers/thresholds/heights/dates/dollar amounts when SOURCE provides them.',
@@ -366,7 +381,7 @@ function buildSummaryPrompt({ heading, source, focus, feedback, rosterText, body
   ].join('\n');
 }
 
-function buildScorePrompt({ source, summary, rosterText, bodyLabel }) {
+function buildScorePrompt({ source, summary, rosterText, bodyLabel, summaryTimeMode }) {
   const roster = String(rosterText || '').trim();
   return [
     'Score SUMMARY for semantic faithfulness to SOURCE.',
@@ -386,6 +401,13 @@ function buildScorePrompt({ source, summary, rosterText, bodyLabel }) {
     '- Penalize calling the meeting "Council" when SOURCE/context indicates committee/board.',
     '- Penalize non-canonical speaker naming when a clear canonical roster spelling is available.',
     '- Penalize speculative claims about identity mismatch, attendance counts, or roster discrepancies not explicit in SOURCE.',
+    ...(summaryTimeMode === 'upcoming'
+      ? [
+        '- This is an upcoming agenda preview.',
+        '- Penalize past-tense framing that implies the meeting item already happened (for example "presented", "debated", "approved"), unless SOURCE clearly describes a distinct historical event.',
+      ]
+      : []),
+    '- Penalize visibly truncated endings (for example trailing "..." or "…").',
     '- Do not penalize concise paraphrase if meaning is preserved.',
     '- Penalize omission when SOURCE contains clearly unusual/high-impact/newsworthy details and SUMMARY ignores them.',
     '- Penalize vague wording when SOURCE contains specific figures or thresholds that could be stated directly.',
@@ -400,6 +422,12 @@ function buildScorePrompt({ source, summary, rosterText, bodyLabel }) {
     'SUMMARY:',
     summary
   ].join('\n');
+}
+
+function looksTruncatedSummary(text) {
+  const t = String(text || '').trim();
+  if (!t) return true;
+  return /(?:\.\.\.|…)\s*$/u.test(t);
 }
 
 function buildAttributionScorePrompt({ source, summary, rosterText }) {
@@ -615,7 +643,7 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
 
     const reviewSemantic = await ask([
       { role: 'system', content: 'You are a strict semantic summary scorer.' },
-      { role: 'user', content: buildScorePrompt({ source, summary, rosterText, bodyLabel }) }
+      { role: 'user', content: buildScorePrompt({ source, summary, rosterText, bodyLabel, summaryTimeMode: SUMMARY_TIME_MODE }) }
     ], { numPredict: 220 });
     const reviewAttribution = await ask([
       { role: 'system', content: 'You are a strict speaker attribution verifier.' },
@@ -625,7 +653,7 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
     const scoreSemantic = parseScore(reviewSemantic);
     const scoreAttribution = parseScore(reviewAttribution);
     const titledViolations = findTitledIdentityViolations(summary, source, rosterRoles);
-    const score = titledViolations.length
+    const score = titledViolations.length || looksTruncatedSummary(summary)
       ? 0
       : Math.min(scoreSemantic, scoreAttribution);
     if (bestSummary === '' || score > bestScore) {
@@ -635,7 +663,10 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
     const violationFeedback = titledViolations.length
       ? `\n\nTITLE_IDENTITY_GUARD:\nInvalid titled attributions: ${titledViolations.join('; ')}\nFinal line: 0.0`
       : '';
-    feedback = `${reviewSemantic}\n\nATTRIBUTION_REVIEW:\n${reviewAttribution}${violationFeedback}`;
+    const truncationFeedback = looksTruncatedSummary(summary)
+      ? '\n\nTRUNCATION_GUARD:\nSummary appears cut off with trailing ellipsis; regenerate complete sentence(s).\nFinal line: 0.0'
+      : '';
+    feedback = `${reviewSemantic}\n\nATTRIBUTION_REVIEW:\n${reviewAttribution}${violationFeedback}${truncationFeedback}`;
     if (score >= PASS_THRESHOLD) break;
   }
   const finalScore = Number(bestScore.toFixed(3));

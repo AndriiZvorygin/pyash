@@ -13,6 +13,7 @@ const MODEL = process.env.MEETING_SUMMARY_MODEL
   || 'qwen3.5:9b';
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = 0.8;
+const SUMMARY_TIME_MODE = String(process.env.AGENDA_SUMMARY_TIME_MODE || 'standard').trim().toLowerCase();
 
 function usage() {
   return [
@@ -182,6 +183,13 @@ function buildSummaryPrompt({ sourceJson, focus, feedback, meetingDateIso, meeti
     '- In Top Newsworthy Developments, use bold subheads and specific facts.',
     '- If a claim is only a proposal/presentation and not adopted, say so explicitly.',
     '- Never assign titled identities (Mayor/Deputy Mayor/Councillor) to a person unless that title is supported by roster and source context.',
+    ...(SUMMARY_TIME_MODE === 'upcoming'
+      ? [
+        '- This is an upcoming agenda preview before the meeting occurs.',
+        '- Write primarily in present/future tense.',
+        '- Do not imply agenda items have already been debated, voted, approved, or presented unless SOURCE_JSON explicitly states a historical completed event.',
+      ]
+      : []),
     '',
     'RETRY_FEEDBACK:',
     feedback || '',
@@ -210,6 +218,12 @@ function buildScorePrompt({ sourceJson, summaryMd, bodyLabel, jurisdiction, meet
     `- Penalize incorrect jurisdiction label; required jurisdiction is "${jurisdiction || 'unknown'}".`,
     `- Penalize incorrect meeting date; required date is "${meetingDateLong || meetingDateIso || 'unknown'}".`,
     '- Penalize titled identity errors (wrong role/title attached to a person).',
+    ...(SUMMARY_TIME_MODE === 'upcoming'
+      ? [
+        '- This is an upcoming agenda preview.',
+        '- Penalize past-tense framing that implies this meeting already happened (for example "debated", "approved", "presented"), unless SOURCE_JSON clearly indicates a distinct historical completed event.',
+      ]
+      : []),
     '- Penalize omission of obviously major/high-impact events in SOURCE_JSON.',
     '- Penalize vague wording where concrete figures exist in SOURCE_JSON.',
     '',

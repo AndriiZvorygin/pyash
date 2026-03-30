@@ -109,7 +109,7 @@ function parseAgendaHtmlAttachments(htmlText, { baseOrigin = "" } = {}) {
 
 function isAgendaItemCode(line) {
   const raw = normalizeSpaces(line).toLowerCase();
-  return /^([0-9]{1,2})\.([a-z])$/.test(raw);
+  return /^([0-9]{1,2})\.([a-z])$/.test(raw) || /^([a-z])\.$/.test(raw);
 }
 
 function collectPageMarkers(lines) {

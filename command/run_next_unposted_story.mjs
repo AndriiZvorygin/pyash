@@ -265,6 +265,12 @@ function meetingState(row, meetingsDir, basePrefix) {
   const responsePath = findPublishResponsePath(transcriptDir, basePrefix);
   const postedInfo = parsePostedFromResponses(transcriptDir, basePrefix);
   const payload = row.payload || {};
+  const agendaCount = Array.isArray(payload.agenda) ? payload.agenda.length : 0;
+  const agendaCoverCount = Array.isArray(payload.agenda_cover) ? payload.agenda_cover.length : 0;
+  const minutesCount = Array.isArray(payload.minutes) ? payload.minutes.length : 0;
+  // Typical eScribe upcoming meetings expose one agenda PDF plus one agenda HTML link.
+  // Treat only *additional* agenda docs (beyond that pair) and minutes as supporting docs.
+  const supportDocCount = Math.max(0, agendaCount - 2) + minutesCount;
 
   return {
     row,
@@ -278,19 +284,36 @@ function meetingState(row, meetingsDir, basePrefix) {
     posted_remote: false,
     post_url: postedInfo.post_url,
     transcript_url: postedInfo.transcript_url,
-    has_agenda: Array.isArray(payload.agenda) && payload.agenda.length > 0,
+    has_agenda: agendaCount > 0,
     has_video: Array.isArray(payload.video) && payload.video.length > 0,
+    agenda_count: agendaCount,
+    agenda_cover_count: agendaCoverCount,
+    minutes_count: minutesCount,
+    support_doc_count: supportDocCount,
+    has_supporting_docs: supportDocCount > 0,
     since_date: parseLocalDate(row.since),
   };
 }
 
-function pickCandidate(states, timezone) {
+function eligibleUpcomingAgendaStates(states, timezone, cfg = {}) {
+  const now = nowLocalDate(timezone);
+  const notPosted = states.filter((s) => !s.posted && s.since_date instanceof Date);
+  const requireSupportingDocs = /^(1|true|yes)$/iu.test(String(cfg.require_upcoming_supporting_docs || "0"));
+  return notPosted
+    .filter((s) => {
+      if (s.since_date < now) return false;
+      if (!s.has_agenda) return false;
+      if (requireSupportingDocs && !s.has_supporting_docs) return false;
+      return true;
+    })
+    .sort((a, b) => a.since_date - b.since_date);
+}
+
+function pickCandidate(states, timezone, cfg = {}) {
   const now = nowLocalDate(timezone);
   const notPosted = states.filter((s) => !s.posted && s.since_date instanceof Date);
 
-  const upcomingWithAgenda = notPosted
-    .filter((s) => s.has_agenda && s.since_date >= now)
-    .sort((a, b) => a.since_date - b.since_date);
+  const upcomingWithAgenda = eligibleUpcomingAgendaStates(states, timezone, cfg);
   if (upcomingWithAgenda.length) return { mode: 'upcoming_agenda', state: upcomingWithAgenda[0] };
 
   const pastWithVideo = notPosted
@@ -338,14 +361,12 @@ async function isPostedByDirectTranscriptProbe(state, cfg, cache) {
 }
 
 async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
-  const picked = pickCandidate(states, timezone);
+  const picked = pickCandidate(states, timezone, cfg);
   if (!picked) return null;
 
   const now = nowLocalDate(timezone);
   const notPosted = states.filter((s) => !s.posted && s.since_date instanceof Date);
-  const upcomingWithAgenda = notPosted
-    .filter((s) => s.has_agenda && s.since_date >= now)
-    .sort((a, b) => a.since_date - b.since_date)
+  const upcomingWithAgenda = eligibleUpcomingAgendaStates(states, timezone, cfg)
     .map((s) => ({ mode: 'upcoming_agenda', state: s }));
   const pastWithVideo = notPosted
     .filter((s) => s.has_video && s.since_date < now)
