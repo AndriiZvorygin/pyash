@@ -745,7 +745,12 @@ async function main() {
       .map((r) => `${r.display || 'Speaker'}: ${r.text}`)
       .join('\n')
       .trim();
-    const effectiveBody = sectionRowText || body;
+    const bodyWordCount = countWords(body);
+    const rowWordCount = countWords(sectionRowText);
+    // Guard against sparse/misaligned agenda.match row ranges that can collapse rich chips into
+    // tiny "thank you" snippets; only prefer row text when it is materially rich.
+    const rowRangeLooksRich = rowWordCount >= Math.max(80, Math.floor(bodyWordCount * 0.6));
+    const effectiveBody = rowRangeLooksRich ? sectionRowText : body;
     const wordCount = countWords(effectiveBody);
     let summary = '';
     let score = 1;
