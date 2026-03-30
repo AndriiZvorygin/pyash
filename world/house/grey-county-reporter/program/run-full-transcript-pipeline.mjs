@@ -89,7 +89,21 @@ function countSpeakerRowsJson(filePath) {
 function isValidWiseSeries(filePath) {
   if (!hasMinSize(filePath, 150)) return false;
   const text = safeReadText(filePath, "");
-  return /su name wise chips be series def/iu.test(text) && /since num /iu.test(text);
+  return (
+    /su name wise chips be series def/iu.test(text) &&
+    /since num /iu.test(text) &&
+    /\[Agenda Start\]/iu.test(text)
+  );
+}
+
+function isValidAgendaMatches(filePath) {
+  if (!hasMinSize(filePath, 120)) return false;
+  try {
+    const obj = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return Array.isArray(obj?.chips) && obj.chips.length > 0 && Array.isArray(obj?.boundaries) && obj.boundaries.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function isValidAgendaSummaryJson(filePath) {
@@ -381,6 +395,7 @@ async function main() {
   const speakerSrt = path.join(transcriptDir, `${normPrefix}.sentences.speaker.sentence.srt`);
   const autoAssignReport = path.join(transcriptDir, `${normPrefix}.sentences.speaker.autoassign.report.json`);
   const agendaWiseSeries = path.join(transcriptDir, `${normPrefix}.agenda-wise.series.pya`);
+  const agendaMatchesJson = path.join(transcriptDir, `${normPrefix}.agenda.matches.json`);
   const agendaSummaryJson = path.join(transcriptDir, `${normPrefix}.agenda-summary.json`);
   const meetingSummaryMd = path.join(transcriptDir, `${normPrefix}.meeting-summary.md`);
   const meetingHookTxt = path.join(transcriptDir, `${normPrefix}.meeting-hook.txt`);
@@ -567,26 +582,23 @@ async function main() {
   });
 
   await stage("agenda-aware-wise-chunks", async () => {
-    const sourceSrt = existsFile(speakerSrt) ? speakerSrt : normalizedSentenceMerged;
     await runWithStreaming({
       cmd: "node",
       args: [
-        path.join(ROOT, "command/srt_to_wise_chip_series.mjs"),
-        sourceSrt,
-        agendaWiseSeries,
-        "--min-words",
-        String(process.env.GREY_WISE_MIN_WORDS || 120),
-        "--max-words",
-        String(process.env.GREY_WISE_MAX_WORDS || 320),
-        "--pause-seconds",
-        String(process.env.GREY_WISE_PAUSE_SECONDS || 6),
+        path.join(HOUSE, "program/wise-chunk-grey-county-agenda-aware-from-transcript-folder.mjs"),
+        transcriptDir,
+        normPrefix,
       ],
       cwd: ROOT,
+      env: {
+        ...(ollamaHost ? { OLLAMA_HOST: ollamaHost } : {}),
+        GREY_AGENDA_USE_LLM_RANGE: process.env.GREY_AGENDA_USE_LLM_RANGE || "1",
+      },
       timeoutMs: scaleTimeout(50 * 60 * 1000, audioSeconds, 0.7),
       label: "agenda-aware-wise-chunks",
     });
   }, {
-    skipWhen: () => isValidWiseSeries(agendaWiseSeries),
+    skipWhen: () => isValidWiseSeries(agendaWiseSeries) && isValidAgendaMatches(agendaMatchesJson),
   });
 
   await stage("agenda-section-summaries", async () => {
