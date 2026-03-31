@@ -183,6 +183,17 @@ case "$POST_OVERRIDE" in
     ;;
 esac
 
+# Ensure publish command is present whenever posting is enabled, including --meeting runs
+# that call run-grey-county-meeting-from-ref.mjs directly.
+if [[ "${PIPELINE_SKIP_POST}" == "0" ]]; then
+  if [[ -z "${GREY_LEMMY_POST_COMMAND:-}" ]]; then
+    export GREY_LEMMY_POST_COMMAND="node $SCRIPT_DIR/program/publish-meeting-to-helpos-from-payload.mjs"
+  fi
+  if [[ -z "${MEETING_POST_COMMAND:-}" ]]; then
+    export MEETING_POST_COMMAND="${GREY_LEMMY_POST_COMMAND}"
+  fi
+fi
+
 if [[ -z "${MEETING_PUBLISH_AUTH_TOKEN:-}" ]]; then
   for ENV_FILE in "$SCRIPT_DIR/.env" "/home/htaf/pyash/.env" "/home/htaf/pyash/world/house/owen-sound-reporter/.env"; do
     if [[ -f "$ENV_FILE" ]]; then
