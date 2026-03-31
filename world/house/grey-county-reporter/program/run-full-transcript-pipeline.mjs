@@ -550,6 +550,9 @@ async function main() {
         voicesWorkDir,
       ],
       cwd: ROOT,
+      env: {
+        PYA_AUTOASSIGN_OVERWRITE_EXISTING: "0",
+      },
       timeoutMs: 10 * 60 * 1000,
       label: "auto-assign-speakers-from-callouts",
     });

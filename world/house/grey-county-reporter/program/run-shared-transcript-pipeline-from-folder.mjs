@@ -250,6 +250,9 @@ async function main() {
 
   await stage('auto-assign-speakers', async () => {
     await runNode(path.join(ROOT, 'command/auto_assign_speakers_from_callouts.mjs'), [transcriptDir, `${normPrefix}.sentences`, rosterPath, voicesWork], {
+      env: {
+        PYA_AUTOASSIGN_OVERWRITE_EXISTING: '0',
+      },
       label: 'auto-assign-speakers',
     });
   });
