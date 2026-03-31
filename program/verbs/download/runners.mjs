@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { throwErrorSentence } from "../../error.mjs";
@@ -49,7 +49,8 @@ async function runYtDlp({ url, outputPath, intent, extraArgs = [], multi = false
       args.push("-x", "--audio-format", "opus", "--audio-quality", "0");
     }
     if (multi) {
-      args.push("--lazy-playlist", "--break-on-reject");
+      if (supportsYtDlpLazyPlaylist()) args.push("--lazy-playlist");
+      args.push("--break-on-reject");
     }
     if (monthWindow) {
       args.push("--dateafter", formatMonthWindow(monthWindow));
@@ -77,6 +78,21 @@ async function runYtDlp({ url, outputPath, intent, extraArgs = [], multi = false
     });
     proc.on("close", status => resolve({ status, stderr }));
   });
+}
+
+let ytDlpLazyPlaylistSupportCache = null;
+
+function supportsYtDlpLazyPlaylist() {
+  if (ytDlpLazyPlaylistSupportCache !== null) return ytDlpLazyPlaylistSupportCache;
+  try {
+    const probe = spawnSync("yt-dlp", ["--help"], { encoding: "utf8" });
+    const help = `${String(probe.stdout || "")}\n${String(probe.stderr || "")}`;
+    ytDlpLazyPlaylistSupportCache = /--lazy-playlist\b/u.test(help);
+    return ytDlpLazyPlaylistSupportCache;
+  } catch {
+    ytDlpLazyPlaylistSupportCache = false;
+    return ytDlpLazyPlaylistSupportCache;
+  }
 }
 
 export { missingBackend, recordDownloadArtifact, runCurl, runYtDlp };
