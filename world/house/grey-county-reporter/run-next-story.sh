@@ -207,6 +207,26 @@ if [[ -z "${MEETING_PUBLISH_AUTH_TOKEN:-}" ]]; then
   done
 fi
 
+# Force Grey posting identity defaults for this house.
+if [[ -z "${GREY_COUNTY_REPORTER_USERNAME:-}" || -z "${GREY_COUNTY_REPORTER_PASSWORD:-}" ]]; then
+  for ENV_FILE in "$SCRIPT_DIR/.env" "/home/htaf/pyash/.env" "/home/htaf/pyash/world/house/owen-sound-reporter/.env"; do
+    [[ -f "$ENV_FILE" ]] || continue
+    if [[ -z "${GREY_COUNTY_REPORTER_USERNAME:-}" ]]; then
+      GREY_USER="$(grep '^GREY_COUNTY_REPORTER_USERNAME=' "$ENV_FILE" | cut -d= -f2- | tr -d '\r\n' || true)"
+      [[ -n "$GREY_USER" ]] && export GREY_COUNTY_REPORTER_USERNAME="$GREY_USER"
+    fi
+    if [[ -z "${GREY_COUNTY_REPORTER_PASSWORD:-}" ]]; then
+      GREY_PASS="$(grep '^GREY_COUNTY_REPORTER_PASSWORD=' "$ENV_FILE" | cut -d= -f2- | tr -d '\r\n' || true)"
+      [[ -n "$GREY_PASS" ]] && export GREY_COUNTY_REPORTER_PASSWORD="$GREY_PASS"
+    fi
+  done
+fi
+
+export MEETING_PUBLISH_USERNAME="${MEETING_PUBLISH_USERNAME:-${GREY_COUNTY_REPORTER_USERNAME:-grey_county_reporter}}"
+if [[ -z "${MEETING_PUBLISH_PASSWORD:-}" && -n "${GREY_COUNTY_REPORTER_PASSWORD:-}" ]]; then
+  export MEETING_PUBLISH_PASSWORD="${GREY_COUNTY_REPORTER_PASSWORD}"
+fi
+
 cd "$SCRIPT_DIR"
 if [[ -n "$MEETING_SELECTOR" ]]; then
   MEETING_REF="$(resolve_meeting_selector "$MEETING_SELECTOR" || true)"
