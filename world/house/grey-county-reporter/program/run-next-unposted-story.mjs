@@ -4,23 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_SUMMARY_FOCUS } from "./defaults.mjs";
+import { GREY_ADAPTER } from "./writer-adapter-grey-county.mjs";
+import { buildRunNextConfig } from "./shared/writer-adapter-interface.mjs";
+import { applyPublishEnvNormalization } from "../../../../program/publisher-interface.mjs";
 
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HOUSE_ROOT = path.resolve(PROGRAM_DIR, "..");
 const PYASH_ROOT = path.resolve(PROGRAM_DIR, "../../../..");
-
-const DEFAULTS = {
-  base_prefix: "meeting-qwen-auto",
-  focus: DEFAULT_SUMMARY_FOCUS,
-  jurisdiction: "Grey County",
-  body: "auto",
-  site_url: "https://helpos.ca",
-  discussion_url: "",
-  exec_mxid: "@andrii:matrix.liberit.ca",
-  community_name: "grey-county-council",
-  timezone: "America/Toronto",
-};
 
 function runWithStreaming({ cmd, args, cwd, env = {}, timeoutMs = 8 * 60 * 60 * 1000, label = "stage" }) {
   return new Promise((resolve, reject) => {
@@ -59,35 +49,32 @@ function runWithStreaming({ cmd, args, cwd, env = {}, timeoutMs = 8 * 60 * 60 * 
 }
 
 async function main() {
-  const basePrefix = process.argv[2] || DEFAULTS.base_prefix;
-  const focus = process.argv[3] || DEFAULTS.focus;
-  const jurisdiction = process.argv[4] || DEFAULTS.jurisdiction;
-  const body = process.argv[5] || DEFAULTS.body;
-  const siteUrl = process.argv[6] || DEFAULTS.site_url;
-  const discussionUrl = process.argv[7] || DEFAULTS.discussion_url;
-  const execMxid = process.argv[8] || process.env.GREY_EXEC_MXID || DEFAULTS.exec_mxid;
+  const basePrefix = process.argv[2] || GREY_ADAPTER.defaults.base_prefix;
+  const focus = process.argv[3] || GREY_ADAPTER.defaults.focus;
+  const jurisdiction = process.argv[4] || GREY_ADAPTER.defaults.jurisdiction;
+  const body = process.argv[5] || GREY_ADAPTER.defaults.body;
+  const siteUrl = process.argv[6] || GREY_ADAPTER.defaults.site_url;
+  const discussionUrl = process.argv[7] || GREY_ADAPTER.defaults.discussion_url;
+  const execMxid = process.argv[8] || process.env.GREY_EXEC_MXID || GREY_ADAPTER.defaults.exec_mxid;
 
   const sendDmPath = path.join(PROGRAM_DIR, "send-executive-dm.mjs");
   const sendDmCmd = fs.existsSync(sendDmPath) ? ["node", sendDmPath] : [];
 
-  const cfg = {
-    house_root: HOUSE_ROOT,
-    monthly_dir: path.join(HOUSE_ROOT, "artifacts/grey-county/monthly"),
-    meetings_dir: path.join(HOUSE_ROOT, "artifacts/grey-county/meetings"),
-    refresh_calendar_cmd: ["node", path.join(PROGRAM_DIR, "extract-grey-county-calendar-monthly.mjs")],
-    run_meeting_from_ref_cmd: ["node", path.join(PROGRAM_DIR, "run-grey-county-meeting-from-ref.mjs")],
-    send_dm_cmd: sendDmCmd,
-    base_prefix: basePrefix,
+  const cfg = buildRunNextConfig(GREY_ADAPTER, {
+    basePrefix,
     focus,
     jurisdiction,
     body,
-    site_url: siteUrl,
-    discussion_url: discussionUrl,
-    exec_mxid: execMxid,
-    community_name: process.env.MEETING_PUBLISH_COMMUNITY_NAME || process.env.GREY_COMMUNITY_NAME || DEFAULTS.community_name,
-    timezone: process.env.GREY_TIMEZONE || DEFAULTS.timezone,
-    require_upcoming_supporting_docs: process.env.GREY_REQUIRE_UPCOMING_SUPPORTING_DOCS || "0",
-  };
+    siteUrl,
+    discussionUrl,
+    execMxid,
+    timezone: process.env.GREY_TIMEZONE || GREY_ADAPTER.defaults.timezone,
+    extra: {
+      send_dm_cmd: sendDmCmd,
+      community_name: process.env.MEETING_PUBLISH_COMMUNITY_NAME || process.env.GREY_COMMUNITY_NAME || GREY_ADAPTER.defaults.community_name,
+      require_upcoming_supporting_docs: process.env.GREY_REQUIRE_UPCOMING_SUPPORTING_DOCS || "0",
+    },
+  });
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "grey-next-story-"));
   const cfgPath = path.join(tempDir, "config.json");
@@ -101,12 +88,12 @@ async function main() {
     delete env.MEETING_POST_COMMAND;
   } else {
     env.PIPELINE_SKIP_POST = "0";
-    if (!String(env.GREY_LEMMY_POST_COMMAND || "").trim()) {
-      env.GREY_LEMMY_POST_COMMAND = `node ${path.join(PROGRAM_DIR, "publish-meeting-to-helpos-from-payload.mjs")}`;
-    }
-    if (!String(env.MEETING_POST_COMMAND || "").trim() && String(env.GREY_LEMMY_POST_COMMAND || "").trim()) {
-      env.MEETING_POST_COMMAND = env.GREY_LEMMY_POST_COMMAND;
-    }
+    const normalized = applyPublishEnvNormalization({
+      env,
+      adapter: GREY_ADAPTER,
+      fallbackCommand: `node ${path.join(PROGRAM_DIR, "publish-meeting-to-helpos-from-payload.mjs")}`,
+    });
+    Object.assign(env, normalized.env);
   }
 
   await runWithStreaming({
