@@ -176,6 +176,31 @@ function countWords(text) {
   return raw.split(/\s+/u).filter(Boolean).length;
 }
 
+function mergeTinyLyricCuts(cuts = [], { minWords = 5 } = {}) {
+  const source = Array.isArray(cuts) ? cuts.map((x) => String(x || "").trim()).filter(Boolean) : [];
+  if (source.length <= 1) return source;
+  const out = [];
+  for (let i = 0; i < source.length; i += 1) {
+    const cur = source[i];
+    const words = countWords(cur);
+    if (words >= minWords) {
+      out.push(cur);
+      continue;
+    }
+    if (out.length > 0) {
+      out[out.length - 1] = `${out[out.length - 1]} ${cur}`.replace(/\s+/gu, " ").trim();
+      continue;
+    }
+    const next = source[i + 1];
+    if (next) {
+      source[i + 1] = `${cur} ${next}`.replace(/\s+/gu, " ").trim();
+      continue;
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
 function normalizeWord(text) {
   return String(text ?? "")
     .toLowerCase()
@@ -448,7 +473,10 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
 
   const lyricsText = await readFile(lyricsPath, "utf8");
   const timingText = await readFile(timingSrtPath, "utf8");
-  const lyricCuts = normalizeLyricsCuts(lyricsText, { includeSections, sentenceCues });
+  const lyricCuts = mergeTinyLyricCuts(
+    normalizeLyricsCuts(lyricsText, { includeSections, sentenceCues }),
+    { minWords: Number(process.env.PYA_SRT_MIN_CUE_WORDS || 5) }
+  );
   const timingCuts = parseSrtToCuts(timingText);
   const aligned = buildTimingRows(lyricCuts, timingCuts);
   const rows = aligned.rows;
