@@ -46,12 +46,22 @@ function normalizeCuts(text) {
     .map((line) => String(line || "").trim())
     .filter(Boolean)
     .filter((line) => !/^\[[^\]]+\]$/.test(line));
-  if (lineCuts.length > 1) return lineCuts;
   const sentenceCuts = splitSentences(source, { includeThen: true })
     .map((entry) => String(entry || "").trim())
     .filter(Boolean)
     .filter((line) => !/^\[[^\]]+\]$/.test(line));
-  return sentenceCuts;
+  if (lineCuts.length <= 1) return sentenceCuts;
+  if (!sentenceCuts.length) return lineCuts;
+
+  // Guard against coarse paragraphized lines: if line-based cuts are too sparse or
+  // too long, prefer sentence-level cuts to preserve speaker-turn granularity.
+  const lineWords = lineCuts.reduce((sum, line) => sum + String(line).split(/\s+/u).filter(Boolean).length, 0);
+  const avgLineWords = lineCuts.length ? (lineWords / lineCuts.length) : lineWords;
+  const sentenceMuchRicher = sentenceCuts.length >= Math.max(120, lineCuts.length * 2);
+  const linesTooCoarse = lineCuts.length < 200 || avgLineWords > 28;
+  if (linesTooCoarse && sentenceMuchRicher) return sentenceCuts;
+
+  return lineCuts;
 }
 
 async function main() {
