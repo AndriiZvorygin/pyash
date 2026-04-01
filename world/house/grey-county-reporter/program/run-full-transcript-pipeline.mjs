@@ -5,6 +5,17 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_SUMMARY_FOCUS } from "./defaults.mjs";
+import {
+  buildGreyTranscriptArtifacts,
+  existsArtifact,
+  loadJsonArtifact,
+  savePyaReportArtifact,
+} from "./shared/artifact-contracts.mjs";
+import { createStageRunner } from "./shared/stage-runner.mjs";
+import { runQualityVerifiers } from "./shared/quality-verifiers.mjs";
+import { GREY_ADAPTER } from "./writer-adapter-grey-county.mjs";
+import { normalizePublishConfig } from "../../../../program/publisher-interface.mjs";
+import { readPyaTextValues } from "../../../../command/pya_lookup.mjs";
 
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HOUSE = path.resolve(PROGRAM_DIR, "..");
@@ -141,50 +152,31 @@ function resolveReporterPath(inputPath) {
   return path.resolve(HOUSE, inputPath);
 }
 
-function readSecretText() {
-  try {
-    if (fs.existsSync(SECRET_PATH)) return fs.readFileSync(SECRET_PATH, "utf8");
-  } catch {
-    // best effort
-  }
-  return "";
-}
-
-function pickSecretValue(secretText, patterns) {
-  const src = String(secretText || "");
-  for (const re of patterns) {
-    const m = src.match(re);
-    if (m && m[1]) return String(m[1]).trim();
-  }
-  return "";
-}
-
-const SECRET_TEXT = readSecretText();
+const SECRET_VALUES = readPyaTextValues(SECRET_PATH, [
+  "speaker host",
+  "speaker host root",
+  "ollama host",
+  "ai host",
+  "relay local host",
+]);
 
 function resolveSpeakerHost() {
   const fromEnv = String(process.env.PYA_SPEAKER_HOST || "").trim();
   if (fromEnv) return fromEnv.replace(/\/$/u, "");
-  return pickSecretValue(SECRET_TEXT, [
-    /exists\s+su\s+name\s+speaker\s+host\s+ob\s+text\s+"([^"]+)"/iu,
-  ]).replace(/\/$/u, "");
+  return String(SECRET_VALUES["speaker host"] || "").trim().replace(/\/$/u, "");
 }
 
 function resolveSpeakerHostRoot() {
   const fromEnv = String(process.env.PYA_SPEAKER_HOST_ROOT || "").trim();
   if (fromEnv) return fromEnv;
-  return pickSecretValue(SECRET_TEXT, [
-    /exists\s+su\s+name\s+speaker\s+host\s+root\s+ob\s+text\s+"([^"]+)"/iu,
-  ]);
+  return String(SECRET_VALUES["speaker host root"] || "").trim();
 }
 
 function resolveOllamaHost() {
   const fromEnv = String(process.env.OLLAMA_HOST || "").trim();
   if (fromEnv) return fromEnv.replace(/\/$/u, "");
-  return pickSecretValue(SECRET_TEXT, [
-    /exists\s+su\s+name\s+ollama\s+host\s+ob\s+text\s+"([^"]+)"/iu,
-    /exists\s+su\s+name\s+ai\s+host\s+ob\s+text\s+"([^"]+)"/iu,
-    /su\s+name\s+relay\s+local\s+host\s+ob\s+text\s+"([^"]+)"/iu,
-  ]).replace(/\/$/u, "");
+  const fromPya = String(SECRET_VALUES["ollama host"] || SECRET_VALUES["ai host"] || SECRET_VALUES["relay local host"] || "").trim();
+  return fromPya.replace(/\/$/u, "");
 }
 
 function runWithStreaming({ cmd, args, cwd = ROOT, env = {}, timeoutMs = 30 * 60 * 1000, label = "stage" }) {
@@ -377,33 +369,34 @@ async function main() {
     log(`[full-pipeline] using fallback voices-working: ${voicesWorkDir}`);
   }
 
-  const normPrefix = `${basePrefix}-normalized`;
+  const artifacts = buildGreyTranscriptArtifacts({ transcriptDir, basePrefix });
+  const normPrefix = artifacts.normalized_prefix;
   const force = /^(1|true|yes)$/iu.test(String(process.env.GREY_PIPELINE_FORCE || ""));
   const skipImage = /^(1|true|yes)$/iu.test(String(process.env.GREY_PIPELINE_SKIP_IMAGE || ""));
   const skipLemmy =
     /^(1|true|yes)$/iu.test(String(process.env.GREY_PIPELINE_SKIP_LEMMY || "")) ||
     /^(1|true|yes)$/iu.test(String(process.env.PIPELINE_SKIP_POST || ""));
 
-  const baseTimingSrt = path.join(transcriptDir, `${basePrefix}.timing.srt`);
-  const basePlain = path.join(transcriptDir, `${basePrefix}.plain.txt`);
-  const baseMerged = path.join(transcriptDir, `${basePrefix}.merged.srt`);
+  const baseTimingSrt = artifacts.base_timing_srt;
+  const basePlain = artifacts.base_plain_txt;
+  const baseMerged = artifacts.base_merged_srt;
 
-  const normalizedPlain = path.join(transcriptDir, `${normPrefix}.plain.txt`);
-  const normalizedMeta = path.join(transcriptDir, `${normPrefix}.normalize.metadata.json`);
-  const normalizedSentenceMerged = path.join(transcriptDir, `${normPrefix}.sentences.merged.srt`);
-  const speakerJson = path.join(transcriptDir, `${normPrefix}.sentences.speaker.sentences.json`);
-  const speakerSrt = path.join(transcriptDir, `${normPrefix}.sentences.speaker.sentence.srt`);
-  const autoAssignReport = path.join(transcriptDir, `${normPrefix}.sentences.speaker.autoassign.report.json`);
-  const agendaWiseSeries = path.join(transcriptDir, `${normPrefix}.agenda-wise.series.pya`);
-  const agendaMatchesJson = path.join(transcriptDir, `${normPrefix}.agenda.matches.json`);
-  const agendaSummaryJson = path.join(transcriptDir, `${normPrefix}.agenda-summary.json`);
-  const meetingSummaryMd = path.join(transcriptDir, `${normPrefix}.meeting-summary.md`);
-  const meetingHookTxt = path.join(transcriptDir, `${normPrefix}.meeting-hook.txt`);
-  const htmlPath = path.join(transcriptDir, "transcript-page.html");
-  const coverImagePath = path.join(transcriptDir, `${normPrefix}.meeting-cover.png`);
-  const coverImageStablePath = path.join(transcriptDir, "meeting-cover.png");
-  const lemmyPayloadPath = path.join(transcriptDir, `${normPrefix}.lemmy-post.json`);
-  const lemmyBodyPath = path.join(transcriptDir, `${normPrefix}.lemmy-post.md`);
+  const normalizedPlain = artifacts.normalized_plain_txt;
+  const normalizedMeta = artifacts.normalized_meta_json;
+  const normalizedSentenceMerged = artifacts.normalized_sentence_merged_srt;
+  const speakerJson = artifacts.speaker_json;
+  const speakerSrt = artifacts.speaker_srt;
+  const autoAssignReport = artifacts.autoassign_report_json;
+  const agendaWiseSeries = artifacts.agenda_wise_series_pya;
+  const agendaMatchesJson = artifacts.agenda_matches_json;
+  const agendaSummaryJson = artifacts.agenda_summary_json;
+  const meetingSummaryMd = artifacts.meeting_summary_md;
+  const meetingHookTxt = artifacts.meeting_hook_txt;
+  const htmlPath = artifacts.transcript_html;
+  const coverImagePath = artifacts.cover_image;
+  const coverImageStablePath = artifacts.cover_image_stable;
+  const lemmyPayloadPath = artifacts.lemmy_payload_json;
+  const lemmyBodyPath = artifacts.lemmy_post_md;
 
   const rosterPath = process.env.GREY_ROSTER_FILE || path.join(HOUSE, "artifacts/grey-county/roster.txt");
   const speakerHost = resolveSpeakerHost();
@@ -418,6 +411,21 @@ async function main() {
   log(`[full-pipeline] audio seconds: ${audioSeconds.toFixed(1)}`);
 
   const stageStatus = [];
+  let qualityVerifier = {
+    checks: {},
+    issues: [],
+    summary: { has_error: false, has_warn: false, issue_count: 0 },
+  };
+  const runId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const meetingId = String(loadJsonArtifact(path.join(meetingDir, "meeting.json"), {})?.payload?.meeting_id || "").trim();
+  const stageRunner = createStageRunner({
+    log,
+    force,
+    writer: GREY_ADAPTER.writer_id,
+    source: GREY_ADAPTER.source_id,
+    meetingId,
+    runId,
+  });
 
   function speakerCheckpointValid() {
     if (!existsFile(speakerJson) || !existsFile(speakerSrt)) return false;
@@ -437,27 +445,12 @@ async function main() {
     return srtTime >= jsonTime && srtTime >= reportTime;
   }
 
-  async function stage(name, fn, { skipWhen = null, optional = false } = {}) {
-    if (!force && typeof skipWhen === "function" && skipWhen()) {
-      log(`[full-pipeline] skip ${name} (checkpoint exists)`);
-      stageStatus.push({ stage: name, status: "skipped" });
-      return;
-    }
-    log(`[full-pipeline] start ${name}`);
-    const t0 = Date.now();
-    try {
-      await fn();
-      const ms = Date.now() - t0;
-      log(`[full-pipeline] done ${name} in ${(ms / 1000).toFixed(1)}s`);
-      stageStatus.push({ stage: name, status: "ok", duration_ms: ms });
-    } catch (err) {
-      if (optional) {
-        log(`[full-pipeline] warn ${name}: ${String(err?.message || err)}`);
-        stageStatus.push({ stage: name, status: "warn", error: String(err?.message || err) });
-        return;
-      }
-      throw err;
-    }
+  async function stage(name, fn, opts = {}) {
+    const record = await stageRunner.runStage(name, fn, opts);
+    const legacy = { stage: name, status: record.status };
+    if (record.duration_ms > 0) legacy.duration_ms = record.duration_ms;
+    if (record.status === "warn" && record.error) legacy.error = record.error;
+    stageStatus.push(legacy);
   }
 
   await stage("transcribe+merge", async () => {
@@ -474,6 +467,8 @@ async function main() {
     });
   }, {
     skipWhen: () => existsFile(baseMerged) && existsFile(baseTimingSrt) && existsFile(basePlain),
+    inputArtifacts: [audioPath],
+    outputArtifacts: [baseMerged, baseTimingSrt, basePlain],
   });
 
   await stage("normalize-transcript", async () => {
@@ -494,24 +489,48 @@ async function main() {
     });
   }, {
     skipWhen: () => existsFile(normalizedPlain) && existsFile(normalizedMeta),
+    inputArtifacts: [basePlain, baseTimingSrt],
+    outputArtifacts: [normalizedPlain, normalizedMeta],
   });
 
   await stage("merge-normalized-sentence-srt", async () => {
-    await runWithStreaming({
-      cmd: "node",
-      args: [
-        path.join(ROOT, "command/lyrics_to_srt_from_timing.mjs"),
-        normalizedPlain,
-        baseTimingSrt,
-        normalizedSentenceMerged,
-        "--sentence-cues",
-      ],
-      cwd: ROOT,
-      timeoutMs: 15 * 60 * 1000,
-      label: "merge-normalized-sentence-srt",
-    });
+    try {
+      await runWithStreaming({
+        cmd: "node",
+        args: [
+          path.join(ROOT, "command/lyrics_to_srt_from_timing.mjs"),
+          normalizedPlain,
+          baseTimingSrt,
+          normalizedSentenceMerged,
+          "--sentence-cues",
+        ],
+        cwd: ROOT,
+        timeoutMs: 15 * 60 * 1000,
+        label: "merge-normalized-sentence-srt",
+      });
+    } catch (err) {
+      const msg = String(err?.message || err || "");
+      const allowEvenFallback = !/^(0|false|no)$/iu.test(String(process.env.PYA_SRT_EVEN_FALLBACK || "1"));
+      const isMismatch = /lyrics to srt defective:\s*lyrics mismatch/iu.test(msg);
+      if (!allowEvenFallback || !isMismatch) throw err;
+      log("[full-pipeline] warn merge-normalized-sentence-srt mismatch; falling back to even timing");
+      await runWithStreaming({
+        cmd: "node",
+        args: [
+          path.join(ROOT, "command/lyrics_to_srt_even.mjs"),
+          normalizedPlain,
+          audioPath,
+          normalizedSentenceMerged,
+        ],
+        cwd: ROOT,
+        timeoutMs: 15 * 60 * 1000,
+        label: "merge-normalized-sentence-srt-even-fallback",
+      });
+    }
   }, {
     skipWhen: () => existsFile(normalizedSentenceMerged),
+    inputArtifacts: [normalizedPlain, baseTimingSrt],
+    outputArtifacts: [normalizedSentenceMerged],
   });
 
   await stage("diarize-speakers", async () => {
@@ -537,6 +556,8 @@ async function main() {
     });
   }, {
     skipWhen: () => speakerCheckpointValid(),
+    inputArtifacts: [normalizedSentenceMerged],
+    outputArtifacts: [speakerJson, speakerSrt],
   });
 
   await stage("auto-assign-speakers-from-callouts", async () => {
@@ -558,6 +579,8 @@ async function main() {
     });
   }, {
     optional: true,
+    inputArtifacts: [speakerJson, rosterPath],
+    outputArtifacts: [autoAssignReport],
   });
 
   await stage("relabel-speakers", async () => {
@@ -575,6 +598,8 @@ async function main() {
     });
   }, {
     skipWhen: () => relabelCheckpointValid(),
+    inputArtifacts: [speakerJson, autoAssignReport],
+    outputArtifacts: [speakerSrt, speakerJson],
   });
 
   await stage("sync-speaker-artifacts-to-global-voices", async () => {
@@ -582,6 +607,7 @@ async function main() {
     log(`[full-pipeline] speaker artifacts copied: ${result.copied}`);
   }, {
     optional: true,
+    outputArtifacts: [baseVoicesDir],
   });
 
   await stage("agenda-aware-wise-chunks", async () => {
@@ -602,13 +628,15 @@ async function main() {
     });
   }, {
     skipWhen: () => isValidWiseSeries(agendaWiseSeries) && isValidAgendaMatches(agendaMatchesJson),
+    inputArtifacts: [speakerSrt],
+    outputArtifacts: [agendaWiseSeries, agendaMatchesJson],
   });
 
   await stage("agenda-section-summaries", async () => {
     await runWithStreaming({
       cmd: "node",
       args: [
-        path.join(ROOT, "command/summarize_agenda_wise_sections_from_transcript_folder.mjs"),
+        path.join(HOUSE, "program/summarize-agenda-wise-sections-from-transcript-folder.mjs"),
         transcriptDir,
         normPrefix,
         focus,
@@ -622,13 +650,15 @@ async function main() {
     });
   }, {
     skipWhen: () => isValidAgendaSummaryJson(agendaSummaryJson),
+    inputArtifacts: [agendaWiseSeries, agendaMatchesJson],
+    outputArtifacts: [agendaSummaryJson],
   });
 
   await stage("whole-meeting-summary", async () => {
     await runWithStreaming({
       cmd: "node",
       args: [
-        path.join(ROOT, "command/summarize_whole_meeting_from_agenda_summary.mjs"),
+        path.join(HOUSE, "program/summarize-whole-meeting-from-agenda-summary.mjs"),
         transcriptDir,
         normPrefix,
         focus,
@@ -642,6 +672,8 @@ async function main() {
     });
   }, {
     skipWhen: () => isValidMeetingSummaryMd(meetingSummaryMd),
+    inputArtifacts: [agendaSummaryJson],
+    outputArtifacts: [meetingSummaryMd],
   });
 
   await stage("meeting-hook", async () => {
@@ -664,6 +696,38 @@ async function main() {
     });
   }, {
     skipWhen: () => isValidHookTxt(meetingHookTxt),
+    inputArtifacts: [meetingSummaryMd],
+    outputArtifacts: [meetingHookTxt],
+  });
+
+  await stage("quality-verifiers", async () => {
+    const mode = String(process.env.AGENDA_SUMMARY_TIME_MODE || "standard").trim().toLowerCase();
+    qualityVerifier = runQualityVerifiers({
+      meetingSummaryMdPath: meetingSummaryMd,
+      agendaSummaryJsonPath: agendaSummaryJson,
+      mode,
+      writer: GREY_ADAPTER.writer_id,
+      source: GREY_ADAPTER.source_id,
+      jurisdiction,
+      body,
+    });
+    const notes = (qualityVerifier.issues || [])
+      .map((x) => `[${x.level}] ${x.check}:${x.code}${x.detail ? ` ${x.detail}` : ""}`)
+      .join(" | ");
+    return {
+      validation_flags: {
+        required_sections_ok: Boolean(qualityVerifier?.checks?.required_sections?.ok),
+        truncation_ok: Boolean(qualityVerifier?.checks?.truncation?.ok),
+        tense_ok: Boolean(qualityVerifier?.checks?.tense?.ok),
+        identity_scoping_ok: Boolean(qualityVerifier?.checks?.identity_scoping?.ok),
+        verifier_has_error: Boolean(qualityVerifier?.summary?.has_error),
+        verifier_has_warn: Boolean(qualityVerifier?.summary?.has_warn),
+      },
+      notes,
+    };
+  }, {
+    inputArtifacts: [agendaSummaryJson, meetingSummaryMd],
+    outputArtifacts: [agendaSummaryJson, meetingSummaryMd],
   });
 
   const meetingJsonPath = path.join(meetingDir, "meeting.json");
@@ -698,6 +762,9 @@ async function main() {
       timeoutMs: 10 * 60 * 1000,
       label: "render-html",
     });
+  }, {
+    inputArtifacts: [speakerSrt, meetingHookTxt],
+    outputArtifacts: [htmlPath],
   });
 
   await stage("draw-meeting-image", async () => {
@@ -716,7 +783,16 @@ async function main() {
   }, {
     skipWhen: () => skipImage || existsFile(coverImagePath) || existsFile(coverImageStablePath),
     optional: true,
+    inputArtifacts: [meetingSummaryMd, meetingHookTxt],
+    outputArtifacts: [coverImagePath, coverImageStablePath],
   });
+
+  let publishStatus = {
+    mode: "skip",
+    command_source_env: "",
+    dry_run: false,
+    community_name: "",
+  };
 
   await stage("lemmy-payload", async () => {
     const summaryMd = safeReadText(meetingSummaryMd, "").trim();
@@ -762,20 +838,44 @@ async function main() {
     log(`[full-pipeline] wrote: ${lemmyPayloadPath}`);
     log(`[full-pipeline] wrote: ${lemmyBodyPath}`);
 
-    const submitCommand = String(process.env.GREY_LEMMY_POST_COMMAND || process.env.MEETING_POST_COMMAND || "").trim();
+    const publishCfg = normalizePublishConfig({
+      env: process.env,
+      adapter: GREY_ADAPTER,
+      fallbackCommand: "",
+    });
+    publishStatus = {
+      mode: "skip",
+      command_source_env: publishCfg.command_source_env || "",
+      dry_run: Boolean(publishCfg.dry_run),
+      community_name: publishCfg.community_name || "",
+    };
+    const submitCommand = String(publishCfg.command || "").trim();
     if (!submitCommand) {
       log("[full-pipeline] submit skipped (set GREY_LEMMY_POST_COMMAND or MEETING_POST_COMMAND)");
+      publishStatus.mode = "skip_no_command";
       return;
     }
 
     log(`[full-pipeline] submit command: ${submitCommand}`);
     await runSubmitHook(submitCommand, lemmyPayloadPath);
+    publishStatus.mode = publishCfg.dry_run ? "dry_run" : "submitted";
   }, {
     skipWhen: () => skipLemmy || (existsFile(lemmyPayloadPath) && existsFile(lemmyBodyPath) && hasSuccessfulMeetingPublishResponse(transcriptDir)),
+    inputArtifacts: [meetingSummaryMd, meetingHookTxt, htmlPath],
+    outputArtifacts: [lemmyPayloadPath, lemmyBodyPath],
+    validationFlags: {
+      skip_post: skipLemmy,
+    },
   });
 
-  const reportPath = path.join(transcriptDir, `${normPrefix}.full-pipeline.report.json`);
-  fs.writeFileSync(reportPath, `${JSON.stringify({
+  const reportPath = artifacts.full_pipeline_report_pya;
+  const legacyReportJsonPath = path.join(transcriptDir, `${normPrefix}.full-pipeline.report.json`);
+  savePyaReportArtifact(reportPath, {
+    report_version: "phase1-stage-report-v1",
+    writer: GREY_ADAPTER.writer_id,
+    source: GREY_ADAPTER.source_id,
+    meeting_id: meetingId || "",
+    run_id: runId,
     transcript_dir: transcriptDir,
     base_prefix: basePrefix,
     normalized_prefix: normPrefix,
@@ -788,6 +888,7 @@ async function main() {
     voices_work_dir: voicesWorkDir,
     audio_seconds: audioSeconds,
     stages: stageStatus,
+    stage_runs: stageRunner.getStageRuns(),
     outputs: {
       normalized_plain: normalizedPlain,
       speaker_srt: speakerSrt,
@@ -798,8 +899,26 @@ async function main() {
       image: existsFile(coverImageStablePath) ? coverImageStablePath : (existsFile(coverImagePath) ? coverImagePath : ""),
       lemmy_payload: lemmyPayloadPath,
     },
+    validation_flags: {
+      has_cover_image: existsArtifact(coverImageStablePath) || existsArtifact(coverImagePath),
+      has_publish_response: hasSuccessfulMeetingPublishResponse(transcriptDir),
+      speaker_checkpoint_valid: speakerCheckpointValid(),
+      relabel_checkpoint_valid: relabelCheckpointValid(),
+      required_sections_ok: Boolean(qualityVerifier?.checks?.required_sections?.ok),
+      truncation_ok: Boolean(qualityVerifier?.checks?.truncation?.ok),
+      tense_ok: Boolean(qualityVerifier?.checks?.tense?.ok),
+      identity_scoping_ok: Boolean(qualityVerifier?.checks?.identity_scoping?.ok),
+      verifier_has_error: Boolean(qualityVerifier?.summary?.has_error),
+      verifier_has_warn: Boolean(qualityVerifier?.summary?.has_warn),
+      publish_mode: publishStatus.mode,
+      publish_dry_run: Boolean(publishStatus.dry_run),
+      publish_has_command: Boolean(publishStatus.command_source_env || publishStatus.mode === "submitted" || publishStatus.mode === "dry_run"),
+    },
+    publish: publishStatus,
+    verifier_results: qualityVerifier,
     generated_at_utc: new Date().toISOString(),
-  }, null, 2)}\n`, "utf8");
+  });
+  if (existsFile(legacyReportJsonPath)) fs.unlinkSync(legacyReportJsonPath);
 
   log(`[full-pipeline] report: ${reportPath}`);
   log("[full-pipeline] complete");

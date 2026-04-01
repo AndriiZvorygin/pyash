@@ -1,0 +1,67 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+
+const CLI = path.resolve("command/pya_to_json.mjs");
+
+function runCli(args) {
+  return spawnSync(process.execPath, [CLI, ...args], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
+test("pya_to_json parses pya and emits index entries", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pya-to-json-"));
+  const input = path.join(dir, "sample.pya");
+  fs.writeFileSync(input, [
+    "# managed by test:start",
+    "exists su name ollama host ob text \"http://mriczo:11434\" be default ya",
+    "exists su name speaker host ob text \"http://mriczo:8010\" be default ya",
+    "# managed by test:end",
+    "",
+  ].join("\n"), "utf8");
+
+  const res = runCli([input]);
+  assert.equal(res.status, 0, res.stderr);
+  const out = JSON.parse(res.stdout);
+  assert.ok(Array.isArray(out.memory));
+  assert.ok(out.index);
+  assert.equal(out.index["ollama host"]?.ob, "http://mriczo:11434");
+  assert.equal(out.index["speaker host"]?.ob, "http://mriczo:8010");
+});
+
+test("pya_to_json --memory-only excludes index", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pya-to-json-"));
+  const input = path.join(dir, "memory-only.pya");
+  fs.writeFileSync(input, "exists su name alpha ob text \"beta\" be text ya\n", "utf8");
+
+  const res = runCli([input, "--memory-only"]);
+  assert.equal(res.status, 0, res.stderr);
+  const out = JSON.parse(res.stdout);
+  assert.ok(Array.isArray(out.memory));
+  assert.equal(Object.hasOwn(out, "index"), false);
+});
+
+test("pya_to_json handles large pya files (stress)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pya-to-json-stress-"));
+  const input = path.join(dir, "stress.pya");
+  const lines = [];
+  lines.push("exists su name anchor ob text \"start\" be text ya");
+  for (let i = 0; i < 2200; i += 1) {
+    lines.push(`exists su name var_${String(i).padStart(4, "0")} ob num ${i} be number ya`);
+  }
+  lines.push("exists su name anchor ob text \"end\" be text ya");
+  fs.writeFileSync(input, `${lines.join("\n")}\n`, "utf8");
+
+  const res = runCli([input, "--pretty"]);
+  assert.equal(res.status, 0, res.stderr);
+  const out = JSON.parse(res.stdout);
+  assert.ok(Array.isArray(out.memory));
+  assert.ok(out.memory.length >= 2201);
+  assert.equal(out.index["anchor"]?.ob, "end");
+  assert.equal(out.index["var_2199"]?.ob, 2199);
+});

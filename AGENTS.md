@@ -17,6 +17,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - `node --test quiz/core.test.mjs` runs a targeted file while iterating.
 - `node program/main.mjs` starts the REPL to exercise new verbs interactively.
 - `node command/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
+- `node command/pya_to_json.mjs path/to/file.pya --pretty` converts `.pya` to JSON (`memory`, `sandpits`, and indexed names) for robust machine reads.
 - `node command/vocab_suggest.mjs examples/pyash` checks files for non-Pyash vocabulary and suggests replacements; `node command/vocab_suggest.mjs "word"` checks a proposed token without scanning files.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 
@@ -78,6 +79,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 
 ## Security & Configuration Tips
 - `motor/ollama.mjs` calls an Ollama HTTP server (configured via `OLLAMA_HOST`, default `http://localhost:11434`); ensure the server is reachable.
+- Do not parse `.pya` configs/state with fragile `grep`/regex when correctness matters. Use parser-backed tools (`command/pya_to_json.mjs`, `command/read_pya_trace.mjs`) or shared interpreter helpers.
 - If a backend, network, or local model call (`ollama`, OpenAI-style runner, MCP server, etc.) is failing in a way that might be caused by the execution environment rather than the code, pause early and ask the user whether full permissions/network access are available before spending too long debugging the wrong layer.
 - Never commit secrets or personal data; prefer env vars or local, git-ignored config.
 - Do not introduce ad hoc `.json` state/config files. Prefer Pyash sentence files (`.pya`) unless a task explicitly requires JSON output.

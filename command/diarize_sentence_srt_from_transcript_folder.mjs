@@ -73,6 +73,44 @@ function parseSrtTime(raw) {
   return (hh * 3600) + (mm * 60) + ss + (ms / 1000);
 }
 
+function splitCueTextForDiarize(text) {
+  const src = String(text || '').replace(/\s+/gu, ' ').trim();
+  if (!src) return [];
+  const out = src
+    .split(/(?<=[.!?])\s+/u)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return out.length ? out : [src];
+}
+
+function expandCue(cue) {
+  const text = String(cue?.text || '').trim();
+  const since = Number(cue?.since || 0);
+  const until = Number(cue?.until || since);
+  const duration = Math.max(0.06, until - since);
+  const words = text.split(/\s+/u).filter(Boolean).length;
+  const pieces = splitCueTextForDiarize(text);
+  const looksTooLong = duration > 18 || words > 90;
+  if (!looksTooLong || pieces.length <= 1) return [cue];
+
+  const weighted = pieces.map((p) => Math.max(1, p.split(/\s+/u).filter(Boolean).length));
+  const total = weighted.reduce((a, b) => a + b, 0);
+  const out = [];
+  let cursor = since;
+  for (let i = 0; i < pieces.length; i += 1) {
+    const span = (duration * weighted[i]) / total;
+    const end = i === pieces.length - 1 ? until : Math.max(cursor + 0.06, cursor + span);
+    out.push({
+      index: Number(cue?.index || 0),
+      since: cursor,
+      until: end,
+      text: pieces[i],
+    });
+    cursor = end;
+  }
+  return out;
+}
+
 function formatSrtTime(seconds) {
   const safe = Math.max(0, Number(seconds) || 0);
   const totalMs = Math.round(safe * 1000);
@@ -98,7 +136,8 @@ function parseSrt(text) {
     const until = parseSrtTime(tm[2]);
     const textLine = lines.slice(2).join(' ').replace(/\s+/g, ' ').trim();
     if (!textLine) continue;
-    out.push({ index: Number.isFinite(idx) ? idx : out.length + 1, since, until, text: textLine });
+    const baseCue = { index: Number.isFinite(idx) ? idx : out.length + 1, since, until, text: textLine };
+    for (const c of expandCue(baseCue)) out.push(c);
   }
   return out;
 }

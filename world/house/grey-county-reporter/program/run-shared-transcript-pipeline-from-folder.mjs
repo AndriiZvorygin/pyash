@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from "node:url";
 import { DEFAULT_SUMMARY_FOCUS } from "./defaults.mjs";
+import { readPyaTextValues } from "../../../../command/pya_lookup.mjs";
 
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HOUSE = path.resolve(PROGRAM_DIR, "..");
@@ -89,50 +90,31 @@ function log(line) {
   process.stdout.write(`${line}\n`);
 }
 
-function readSecretText() {
-  try {
-    if (fs.existsSync(SECRET_PATH)) return fs.readFileSync(SECRET_PATH, "utf8");
-  } catch {
-    // best effort
-  }
-  return "";
-}
-
-function pickSecretValue(secretText, patterns) {
-  const src = String(secretText || "");
-  for (const re of patterns) {
-    const m = src.match(re);
-    if (m && m[1]) return String(m[1]).trim();
-  }
-  return "";
-}
-
-const SECRET_TEXT = readSecretText();
+const SECRET_VALUES = readPyaTextValues(SECRET_PATH, [
+  "speaker host",
+  "speaker host root",
+  "ollama host",
+  "ai host",
+  "relay local host",
+]);
 
 function resolveSpeakerHost() {
   const fromEnv = String(process.env.PYA_SPEAKER_HOST || "").trim();
   if (fromEnv) return fromEnv.replace(/\/$/u, "");
-  return pickSecretValue(SECRET_TEXT, [
-    /exists\s+su\s+name\s+speaker\s+host\s+ob\s+text\s+"([^"]+)"/iu,
-  ]).replace(/\/$/u, "");
+  return String(SECRET_VALUES["speaker host"] || "").trim().replace(/\/$/u, "");
 }
 
 function resolveSpeakerHostRoot() {
   const fromEnv = String(process.env.PYA_SPEAKER_HOST_ROOT || "").trim();
   if (fromEnv) return fromEnv;
-  return pickSecretValue(SECRET_TEXT, [
-    /exists\s+su\s+name\s+speaker\s+host\s+root\s+ob\s+text\s+"([^"]+)"/iu,
-  ]);
+  return String(SECRET_VALUES["speaker host root"] || "").trim();
 }
 
 function resolveOllamaHost() {
   const fromEnv = String(process.env.OLLAMA_HOST || "").trim();
   if (fromEnv) return fromEnv.replace(/\/$/u, "");
-  return pickSecretValue(SECRET_TEXT, [
-    /exists\s+su\s+name\s+ollama\s+host\s+ob\s+text\s+"([^"]+)"/iu,
-    /exists\s+su\s+name\s+ai\s+host\s+ob\s+text\s+"([^"]+)"/iu,
-    /su\s+name\s+relay\s+local\s+host\s+ob\s+text\s+"([^"]+)"/iu,
-  ]).replace(/\/$/u, "");
+  const fromPya = String(SECRET_VALUES["ollama host"] || SECRET_VALUES["ai host"] || SECRET_VALUES["relay local host"] || "").trim();
+  return fromPya.replace(/\/$/u, "");
 }
 
 function runNode(scriptPath, args, { env = {}, cwd = ROOT, timeoutMs = 28800000, label = 'stage' } = {}) {
@@ -278,7 +260,7 @@ async function main() {
   }, isValidWiseSeries(agendaWise) && isValidAgendaMatches(agendaMatches));
 
   await stage('agenda-section-summaries', async () => {
-    await runNode(path.join(ROOT, 'command/summarize_agenda_wise_sections_from_transcript_folder.mjs'), [transcriptDir, normPrefix, focus], {
+    await runNode(path.join(HOUSE, 'program/summarize-agenda-wise-sections-from-transcript-folder.mjs'), [transcriptDir, normPrefix, focus], {
       label: 'agenda-section-summaries',
       timeoutMs: 7200000,
       env: {
@@ -288,7 +270,7 @@ async function main() {
   }, isValidAgendaSummaryJson(agendaSummary));
 
   await stage('whole-meeting-summary', async () => {
-    await runNode(path.join(ROOT, 'command/summarize_whole_meeting_from_agenda_summary.mjs'), [transcriptDir, normPrefix, focus], {
+    await runNode(path.join(HOUSE, 'program/summarize-whole-meeting-from-agenda-summary.mjs'), [transcriptDir, normPrefix, focus], {
       label: 'whole-meeting-summary',
       timeoutMs: 3600000,
       env: {

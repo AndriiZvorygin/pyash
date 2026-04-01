@@ -293,9 +293,6 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
   const envPrefix = map.envPrefix;
 
   env.PYA_COMMAND_TIMEOUT_MS = env.PYA_COMMAND_TIMEOUT_MS || "28800000";
-  if (writerKey === "owen") {
-    env.PYA_SPEAKER_HOST = env.PYA_SPEAKER_HOST || "http://127.0.0.1:8010";
-  }
 
   const skipRefresh = args.refresh ? "0" : "1";
   env.NEXT_STORY_SKIP_REFRESH = skipRefresh;

@@ -37,7 +37,7 @@ Required artifacts:
 - `whole.summary.md`
 - `hook.txt`
 - `article.payload.json`
-- `run.report.json`
+- `run.report.pya`
 
 Each artifact includes:
 - `schema_version`

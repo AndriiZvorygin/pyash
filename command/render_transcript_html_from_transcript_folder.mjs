@@ -319,6 +319,12 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
   const sections = Array.isArray(sectionSummaries) ? sectionSummaries : [];
   if (!rows.length || !sections.length) return [];
 
+  // Guardrail: if section summaries were produced without usable row grounding,
+  // section rendering can duplicate opening transcript lines across headings.
+  // In that case, prefer a plain chronological transcript over broken anchors.
+  const groundedSections = sections.filter((s) => Number(s?.source_rows || 0) > 0).length;
+  if (groundedSections === 0) return [];
+
   const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
   if (wise.length === sections.length) {
     const out = [];
@@ -346,6 +352,10 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
     if (!key) continue;
     if (!matchByItem.has(key)) matchByItem.set(key, m);
   }
+
+  // If we cannot anchor enough sections to agenda matches, avoid misleading
+  // section layout and render plain transcript rows instead.
+  if (matchByItem.size < Math.max(2, Math.floor(sections.length * 0.5))) return [];
 
   const rowNorm = rows.map((r) => normalizeText(r.raw || r.speech || ""));
   const starts = [];
