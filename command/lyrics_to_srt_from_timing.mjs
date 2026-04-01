@@ -6,6 +6,10 @@ const MAX_GAP_TRIM_SECONDS = (() => {
   const raw = Number(process.env.PYA_TIMING_MAX_GAP_TRIM_SECONDS || 0);
   return Number.isFinite(raw) && raw > 0 ? raw : 0;
 })();
+const MAX_SENTENCE_WORDS = (() => {
+  const raw = Number(process.env.PYA_SRT_MAX_SENTENCE_WORDS || 36);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 36;
+})();
 
 function usage() {
   return "Usage: node command/lyrics_to_srt_from_timing.mjs <lyrics.txt> <timing.srt> <output.srt> [--include-sections] [--sentence-cues]";
@@ -76,10 +80,65 @@ function splitNaturalSentences(text) {
     .filter(Boolean);
 }
 
+function splitLongLineByWords(line, maxWords = MAX_SENTENCE_WORDS) {
+  const words = String(line || "").split(/\s+/u).map((x) => x.trim()).filter(Boolean);
+  if (words.length <= maxWords) return [String(line || "").trim()].filter(Boolean);
+  const out = [];
+  for (let i = 0; i < words.length; i += maxWords) {
+    out.push(words.slice(i, i + maxWords).join(" "));
+  }
+  return out;
+}
+
+function splitLongSentence(line, maxWords = MAX_SENTENCE_WORDS) {
+  const source = String(line || "").replace(/\s+/gu, " ").trim();
+  if (!source) return [];
+  if (countWords(source) <= maxWords) return [source];
+
+  const chunks = source
+    .split(/(?<=[,;:])\s+/u)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (chunks.length > 1) {
+    const out = [];
+    let acc = "";
+    let accWords = 0;
+    for (const chunk of chunks) {
+      const cw = countWords(chunk);
+      if (!acc) {
+        acc = chunk;
+        accWords = cw;
+        continue;
+      }
+      if (accWords + cw <= maxWords) {
+        acc = `${acc} ${chunk}`;
+        accWords += cw;
+        continue;
+      }
+      out.push(acc);
+      acc = chunk;
+      accWords = cw;
+    }
+    if (acc) out.push(acc);
+    return out.flatMap((entry) => splitLongLineByWords(entry, maxWords)).filter(Boolean);
+  }
+  return splitLongLineByWords(source, maxWords);
+}
+
+function enforceMaxSentenceWords(lines, maxWords = MAX_SENTENCE_WORDS) {
+  const out = [];
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const clean = String(line || "").trim();
+    if (!clean) continue;
+    out.push(...splitLongSentence(clean, maxWords));
+  }
+  return out.filter(Boolean);
+}
+
 function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = false } = {}) {
   const source = String(text ?? "");
   if (sentenceCues) {
-    const sentenceCuts = splitNaturalSentences(source)
+    const sentenceCuts = enforceMaxSentenceWords(splitNaturalSentences(source))
       .map((entry) => String(entry || "").trim())
       .filter(Boolean)
       .filter((line) => !/^\[[^\]]+\]$/u.test(line));
@@ -104,6 +163,7 @@ function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = fal
   if (lineCuts.length > 1) return lineCuts;
 
   const sentenceCuts = splitNaturalSentences(source)
+    .flatMap((entry) => enforceMaxSentenceWords([entry]))
     .map((entry) => String(entry || "").trim())
     .filter(Boolean)
     .filter((line) => !/^\[[^\]]+\]$/u.test(line));
