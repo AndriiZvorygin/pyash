@@ -275,7 +275,7 @@ function sanitizeTimingCuts(rawCuts) {
   return out;
 }
 
-function buildTimingRows(lyricsCuts, timingCuts) {
+function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) {
   const lines = Array.isArray(lyricsCuts) ? lyricsCuts : [];
   const cuts = sanitizeTimingCuts(timingCuts);
   if (!lines.length) throw new Error("lyrics to srt defective: no lyric lines");
@@ -371,8 +371,12 @@ function buildTimingRows(lyricsCuts, timingCuts) {
   for (const row of rows) {
     const wordCount = Math.max(1, countWords(row.text));
     const duration = Math.max(0, Number(row.until) - Number(row.since));
-    const minLineDuration = wordCount <= 3 ? 0.6 : Math.min(2.4, 0.28 * wordCount);
-    const maxLineDuration = Math.max(4.5, Math.min(9.5, 1.25 * wordCount));
+    const minLineDuration = sentenceCues
+      ? (wordCount <= 3 ? 0.14 : Math.min(0.9, 0.10 * wordCount))
+      : (wordCount <= 3 ? 0.6 : Math.min(2.4, 0.28 * wordCount));
+    const maxLineDuration = sentenceCues
+      ? Math.max(2.0, Math.min(6.0, 0.75 * wordCount))
+      : Math.max(4.5, Math.min(9.5, 1.25 * wordCount));
     if (duration < minLineDuration) {
       row.until = Number(row.since) + minLineDuration;
       continue;
@@ -391,7 +395,7 @@ function buildTimingRows(lyricsCuts, timingCuts) {
     row.until = Math.max(row.since + minLineSeconds, Number(row.until ?? row.since + minLineSeconds));
     prevEnd = row.until;
   }
-  if (rows.length && prevEnd > timelineEnd) {
+  if (!sentenceCues && rows.length && prevEnd > timelineEnd) {
     const currentSpan = Math.max(0.01, prevEnd - timelineStart);
     const targetSpan = Math.max(0.01, timelineEnd - timelineStart);
     const scale = targetSpan / currentSpan;
@@ -408,50 +412,79 @@ function buildTimingRows(lyricsCuts, timingCuts) {
   }
 
   // Final stabilization pass: ensure post-scale rows remain readable in karaoke mode.
-  let stabilizeCursor = timelineStart;
-  for (const row of rows) {
-    const words = Math.max(1, countWords(row.text));
-    const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
-    row.since = Math.max(stabilizeCursor, Number(row.since ?? 0));
-    row.until = Math.max(row.since + minReadable, Number(row.until ?? row.since + minReadable));
-    stabilizeCursor = row.until;
-  }
-  if (rows.length && stabilizeCursor > timelineEnd) {
-    const overflow = stabilizeCursor - timelineEnd;
-    const adjustable = rows.map((row) => {
+  if (!sentenceCues) {
+    let stabilizeCursor = timelineStart;
+    for (const row of rows) {
       const words = Math.max(1, countWords(row.text));
       const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
-      const duration = Math.max(0, Number(row.until) - Number(row.since));
-      return Math.max(0, duration - minReadable);
-    });
-    const totalAdjustable = adjustable.reduce((sum, value) => sum + value, 0);
-    if (totalAdjustable > 0) {
-      const shrinkRatio = Math.min(1, overflow / totalAdjustable);
-      let cursor = timelineStart;
-      for (let i = 0; i < rows.length; i += 1) {
-        const row = rows[i];
+      row.since = Math.max(stabilizeCursor, Number(row.since ?? 0));
+      row.until = Math.max(row.since + minReadable, Number(row.until ?? row.since + minReadable));
+      stabilizeCursor = row.until;
+    }
+    if (rows.length && stabilizeCursor > timelineEnd) {
+      const overflow = stabilizeCursor - timelineEnd;
+      const adjustable = rows.map((row) => {
         const words = Math.max(1, countWords(row.text));
         const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
         const duration = Math.max(0, Number(row.until) - Number(row.since));
-        const shrink = adjustable[i] * shrinkRatio;
-        const nextDuration = Math.max(minReadable, duration - shrink);
-        row.since = Math.max(cursor, Number(row.since));
-        row.until = row.since + nextDuration;
-        cursor = row.until;
+        return Math.max(0, duration - minReadable);
+      });
+      const totalAdjustable = adjustable.reduce((sum, value) => sum + value, 0);
+      if (totalAdjustable > 0) {
+        const shrinkRatio = Math.min(1, overflow / totalAdjustable);
+        let cursor = timelineStart;
+        for (let i = 0; i < rows.length; i += 1) {
+          const row = rows[i];
+          const words = Math.max(1, countWords(row.text));
+          const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
+          const duration = Math.max(0, Number(row.until) - Number(row.since));
+          const shrink = adjustable[i] * shrinkRatio;
+          const nextDuration = Math.max(minReadable, duration - shrink);
+          row.since = Math.max(cursor, Number(row.since));
+          row.until = row.since + nextDuration;
+          cursor = row.until;
+        }
       }
-    }
-    if (rows.length) {
-      rows[rows.length - 1].until = timelineEnd;
+      if (rows.length) {
+        rows[rows.length - 1].until = timelineEnd;
+      }
     }
   }
 
   return {
-    rows,
+    rows: collapseDuplicateMicroCues(rows),
     stats: {
       lines: lines.length,
       acceptedMatchLines
     }
   };
+}
+
+function collapseDuplicateMicroCues(rows = []) {
+  const input = Array.isArray(rows) ? rows : [];
+  if (input.length <= 1) return input;
+  const out = [];
+  const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/gu, " ").trim();
+  for (const row of input) {
+    const prev = out[out.length - 1];
+    if (!prev) {
+      out.push({ ...row });
+      continue;
+    }
+    const prevText = norm(prev.text);
+    const curText = norm(row.text);
+    const prevWords = countWords(prev.text);
+    const curWords = countWords(row.text);
+    const contiguous = Math.abs(Number(row.since) - Number(prev.until)) <= 1.2;
+    const tiny = prevWords <= 4 && curWords <= 4;
+    if (tiny && contiguous && prevText && prevText === curText) {
+      prev.until = Math.max(Number(prev.until), Number(row.until));
+      continue;
+    }
+    out.push({ ...row });
+  }
+  for (let i = 0; i < out.length; i += 1) out[i].index = i + 1;
+  return out;
 }
 
 async function main() {
@@ -475,16 +508,29 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
   const timingText = await readFile(timingSrtPath, "utf8");
   const lyricCuts = mergeTinyLyricCuts(
     normalizeLyricsCuts(lyricsText, { includeSections, sentenceCues }),
-    { minWords: Number(process.env.PYA_SRT_MIN_CUE_WORDS || 5) }
+    {
+      // Sentence-cue mode should preserve short utterances ("Thank you.", "Yes."),
+      // otherwise cues balloon into long blocks and timing/speaker alignment drifts.
+      minWords: sentenceCues
+        ? Number(process.env.PYA_SRT_MIN_CUE_WORDS_SENTENCE || 1)
+        : Number(process.env.PYA_SRT_MIN_CUE_WORDS || 5)
+    }
   );
   const timingCuts = parseSrtToCuts(timingText);
-  const aligned = buildTimingRows(lyricCuts, timingCuts);
-  const rows = aligned.rows;
-  const stats = aligned.stats ?? { lines: rows.length, acceptedMatchLines: 0 };
+  const aligned = buildTimingRows(lyricCuts, timingCuts, { sentenceCues });
+  const finalRows = aligned.rows;
+  const stats = aligned.stats ?? {
+    lines: finalRows.length,
+    acceptedMatchLines: sentenceCues ? finalRows.length : 0
+  };
   const lineCount = Number(stats.lines || 0);
+  const ratioRaw = sentenceCues
+    ? Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO_SENTENCE || 0.08)
+    : Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO || 0.35);
+  const ratio = Number.isFinite(ratioRaw) && ratioRaw > 0 && ratioRaw <= 1 ? ratioRaw : (sentenceCues ? 0.08 : 0.35);
   const minAccepted = lineCount <= 4
     ? 1
-    : Math.max(2, Math.ceil(lineCount * 0.35));
+    : Math.max(2, Math.ceil(lineCount * ratio));
   if (Number(stats.acceptedMatchLines || 0) < minAccepted) {
     throw new Error(
       `lyrics to srt defective: lyrics mismatch accepted=${Number(stats.acceptedMatchLines || 0)} min=${minAccepted} lines=${Number(stats.lines || 0)}`
@@ -492,7 +538,7 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
   }
 
   const out = [];
-  for (const row of rows) {
+  for (const row of finalRows) {
     out.push(String(row.index));
     out.push(`${formatSrtTime(row.since)} --> ${formatSrtTime(row.until)}`);
     out.push(String(row.text));
