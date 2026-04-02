@@ -3,18 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { pyaFileToJson } from "../program/library/pya_to_json.mjs";
 
-const CLI = path.resolve("command/pya_to_json.mjs");
-
-function runCli(args) {
-  return spawnSync(process.execPath, [CLI, ...args], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-}
-
-test("pya_to_json parses pya and emits index entries", () => {
+test("pya_to_json parses pya and emits index entries", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pya-to-json-"));
   const input = path.join(dir, "sample.pya");
   fs.writeFileSync(input, [
@@ -25,28 +16,24 @@ test("pya_to_json parses pya and emits index entries", () => {
     "",
   ].join("\n"), "utf8");
 
-  const res = runCli([input]);
-  assert.equal(res.status, 0, res.stderr);
-  const out = JSON.parse(res.stdout);
+  const out = await pyaFileToJson(input);
   assert.ok(Array.isArray(out.memory));
   assert.ok(out.index);
   assert.equal(out.index["ollama host"]?.ob, "http://mriczo:11434");
   assert.equal(out.index["speaker host"]?.ob, "http://mriczo:8010");
 });
 
-test("pya_to_json --memory-only excludes index", () => {
+test("pya_to_json --memory-only excludes index", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pya-to-json-"));
   const input = path.join(dir, "memory-only.pya");
   fs.writeFileSync(input, "exists su name alpha ob text \"beta\" be text ya\n", "utf8");
 
-  const res = runCli([input, "--memory-only"]);
-  assert.equal(res.status, 0, res.stderr);
-  const out = JSON.parse(res.stdout);
+  const out = await pyaFileToJson(input, { memoryOnly: true });
   assert.ok(Array.isArray(out.memory));
   assert.equal(Object.hasOwn(out, "index"), false);
 });
 
-test("pya_to_json handles large pya files (stress)", () => {
+test("pya_to_json handles large pya files (stress)", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pya-to-json-stress-"));
   const input = path.join(dir, "stress.pya");
   const lines = [];
@@ -57,9 +44,7 @@ test("pya_to_json handles large pya files (stress)", () => {
   lines.push("exists su name anchor ob text \"end\" be text ya");
   fs.writeFileSync(input, `${lines.join("\n")}\n`, "utf8");
 
-  const res = runCli([input, "--pretty"]);
-  assert.equal(res.status, 0, res.stderr);
-  const out = JSON.parse(res.stdout);
+  const out = await pyaFileToJson(input);
   assert.ok(Array.isArray(out.memory));
   assert.ok(out.memory.length >= 2201);
   assert.equal(out.index["anchor"]?.ob, "end");

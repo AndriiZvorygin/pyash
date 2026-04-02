@@ -510,7 +510,7 @@ async function main() {
   const baseVoicesDir = voicesDirArg
     ? path.resolve(process.cwd(), voicesDirArg)
     : path.join(ROOT, 'world', 'voices');
-  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '1'));
+  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '0'));
   const reseedVoices = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_RESEED_VOICES || ''));
   const voicesDir = isolateVoices
     ? path.resolve(process.cwd(), process.env.PYA_SPEAKER_WORKING_VOICES_DIR || path.join(transcriptDir, 'voices-working'))
@@ -756,6 +756,30 @@ async function main() {
   }
 
   const metadataMap = loadSpeakerMetadataMap(voicesDir);
+  if (rows.length >= 2) {
+    const first = rows[0];
+    const second = rows[1];
+    const firstWords = countWords(first?.text || "");
+    const firstDur = Math.max(0, Number(first?.until || 0) - Number(first?.since || 0));
+    const firstText = String(first?.text || "");
+    const secondKey = String(second?.speaker_key || "");
+    const secondKnown = secondKey && !/^speaker_\d+$/iu.test(secondKey);
+    const looksHandoffOpen = /\bthank you\b|\bgood (?:morning|afternoon|evening)\b|\bwelcome\b/iu.test(firstText);
+    if (
+      secondKnown &&
+      String(first?.speaker_key || "") !== secondKey &&
+      firstWords > 0 &&
+      firstWords <= 6 &&
+      firstDur <= 4.5 &&
+      looksHandoffOpen
+    ) {
+      const beforeKey = String(first?.speaker_key || "");
+      first.speaker_key = secondKey;
+      process.stdout.write(
+        `[speaker-sentence][refine] opening-bridge: speaker "${beforeKey}" -> "${secondKey}" text "${previewText(firstText)}"\n`
+      );
+    }
+  }
   for (const row of rows) {
     row.display = toDisplayLabel(row.speaker_key, metadataMap);
   }

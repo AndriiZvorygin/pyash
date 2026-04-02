@@ -9,7 +9,11 @@ import { readPyaTextValues } from "../../../../command/pya_lookup.mjs";
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HOUSE = path.resolve(PROGRAM_DIR, "..");
 const ROOT = path.resolve(PROGRAM_DIR, "../../../..");
-const SECRET_PATH = path.join(ROOT, "configure/secret.pya");
+const SECRET_PATHS = [
+  path.join(HOUSE, "configure/secret.pya"),
+  path.join(ROOT, "configure/secret.pya"),
+];
+const SECRET_PATH = SECRET_PATHS.find((p) => fs.existsSync(p)) || SECRET_PATHS[0];
 
 function usage() {
   return [
