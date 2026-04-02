@@ -257,20 +257,32 @@ function sanitizeTimingCuts(rawCuts) {
     .sort((a, b) => a.since - b.since || a.until - b.until);
   if (!cuts.length) return [];
   const out = [];
-  let prevEnd = Math.max(0, cuts[0].since);
-  let prevRawEnd = Math.max(0, cuts[0].since);
+  let prevEnd = 0;
   for (const cut of cuts) {
-    const rawDur = Math.max(0.04, cut.until - cut.since);
     const rawSince = Math.max(0, cut.since);
-    const rawGap = Math.max(0, rawSince - prevRawEnd);
-    // Preserve natural pauses by default (important for meetings with long silent segments).
-    // Optional safety trim can be enabled via PYA_TIMING_MAX_GAP_TRIM_SECONDS.
-    const keepGap = MAX_GAP_TRIM_SECONDS > 0 ? Math.min(rawGap, MAX_GAP_TRIM_SECONDS) : rawGap;
-    const since = Math.max(prevEnd, prevEnd + keepGap);
-    const until = since + rawDur;
+    const rawUntil = Math.max(rawSince + 0.04, Number(cut.until));
+    // Keep canonical source timeline anchors.
+    // If chunk overlap produced overlapping cues, trim only the overlapped head
+    // while preserving the original absolute end timestamp.
+    let since = rawSince;
+    let until = rawUntil;
+    if (since < prevEnd) {
+      since = prevEnd;
+      if (until <= since + 0.001) continue;
+    }
+    // Optional gap trim remains conservative and never stretches cue duration.
+    if (MAX_GAP_TRIM_SECONDS > 0 && out.length > 0) {
+      const maxGap = Math.max(0, MAX_GAP_TRIM_SECONDS);
+      const gap = Math.max(0, since - prevEnd);
+      if (gap > maxGap) {
+        const shift = gap - maxGap;
+        since -= shift;
+        until -= shift;
+      }
+    }
+    if (until <= since + 0.001) continue;
     out.push({ since, until, obText: cut.obText });
     prevEnd = until;
-    prevRawEnd = Math.max(prevRawEnd, Math.max(rawSince, cut.until));
   }
   return out;
 }
@@ -316,22 +328,32 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const words = Math.max(1, countWords(line));
-    const startTimingWord = (runningLyricWords / totalLyricWords) * totalTimingWords;
-    runningLyricWords += words;
-    const endTimingWord = i === lines.length - 1
-      ? totalTimingWords
+    const startTimingWord = sentenceCues
+      ? Math.max(0, Math.min(totalTimingWords, tokenCursor))
       : (runningLyricWords / totalLyricWords) * totalTimingWords;
+    runningLyricWords += words;
+    const endTimingWord = sentenceCues
+      ? Math.max(startTimingWord + 1, Math.min(totalTimingWords, startTimingWord + words))
+      : (i === lines.length - 1
+        ? totalTimingWords
+        : (runningLyricWords / totalLyricWords) * totalTimingWords);
     let since = wordToTime(startTimingWord);
     let until = Math.max(since + 0.06, wordToTime(endTimingWord));
-    const expectedTokenIndex = Math.max(0, Math.min(tokens.length - 1, Math.floor(startTimingWord)));
+    const expectedTokenIndex = sentenceCues
+      ? Math.max(0, Math.min(tokens.length - 1, tokenCursor))
+      : Math.max(0, Math.min(tokens.length - 1, Math.floor(startTimingWord)));
     const lineWords = splitNormalizedWords(line);
     if (lineWords.length && tokens.length) {
       let firstIdx = -1;
       let lastIdx = -1;
-      let searchFrom = Math.max(tokenCursor, expectedTokenIndex - 80);
+      let searchFrom = sentenceCues
+        ? Math.max(0, tokenCursor - 8)
+        : Math.max(tokenCursor, expectedTokenIndex - 80);
       for (const lyricWord of lineWords) {
         let found = -1;
-        const maxScan = Math.min(tokens.length, expectedTokenIndex + 140);
+        const maxScan = sentenceCues
+          ? Math.min(tokens.length, tokenCursor + Math.max(120, lineWords.length * 12))
+          : Math.min(tokens.length, expectedTokenIndex + 140);
         for (let j = searchFrom; j < maxScan; j += 1) {
           if (wordsRoughlyMatch(lyricWord, tokens[j].normalized)) {
             found = j;
@@ -353,11 +375,11 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
         const matchedTokenSpan = (lastIdx - firstIdx) + 1;
         const maxLineTokenSpan = Math.max(24, lineWords.length * 6);
         const looksOutlier = matchedSpan > Math.max(12, fallbackSpan * 3.5);
-        const looksTooFar = indexDrift > maxIndexDrift;
+        const looksTooFar = indexDrift > (sentenceCues ? Math.max(64, lineWords.length * 8) : maxIndexDrift);
         const looksTokenWide = matchedTokenSpan > maxLineTokenSpan;
         const looksCompressed = matchedSpan < Math.max(0.12, Math.min(2.5, fallbackSpan * 0.20));
         const timeDrift = Math.abs(matchedSince - since);
-        const looksTimeDrifted = timeDrift > Math.max(8, fallbackSpan * 2.5);
+        const looksTimeDrifted = timeDrift > (sentenceCues ? Math.max(4, fallbackSpan * 1.5) : Math.max(8, fallbackSpan * 2.5));
         if (!looksOutlier && !looksTooFar && !looksTokenWide && !looksCompressed && !looksTimeDrifted) {
           since = matchedSince;
           until = matchedUntil;
@@ -365,6 +387,9 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
           acceptedMatchLines += 1;
         }
       }
+    }
+    if (sentenceCues) {
+      tokenCursor = Math.min(tokens.length, Math.max(tokenCursor, Math.floor(endTimingWord)));
     }
     rows.push({ index: i + 1, since, until, text: line });
   }
@@ -525,9 +550,9 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
   };
   const lineCount = Number(stats.lines || 0);
   const ratioRaw = sentenceCues
-    ? Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO_SENTENCE || 0.08)
+    ? Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO_SENTENCE || 0.01)
     : Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO || 0.35);
-  const ratio = Number.isFinite(ratioRaw) && ratioRaw > 0 && ratioRaw <= 1 ? ratioRaw : (sentenceCues ? 0.08 : 0.35);
+  const ratio = Number.isFinite(ratioRaw) && ratioRaw > 0 && ratioRaw <= 1 ? ratioRaw : (sentenceCues ? 0.01 : 0.35);
   const minAccepted = lineCount <= 4
     ? 1
     : Math.max(2, Math.ceil(lineCount * ratio));
