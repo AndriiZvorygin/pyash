@@ -423,17 +423,68 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
       }
     }
   }
+  if (sentenceCues) {
+    const driftRows = Array.isArray(rows) ? rows : [];
+    let maxDrift = 0;
+    let driftCount = 0;
+    let worst = null;
+    for (const row of driftRows) {
+      const ms = row?.matchedSince;
+      const mu = row?.matchedUntil;
+      if (!Number.isFinite(ms) || !Number.isFinite(mu)) continue;
+      const dSince = Math.abs(Number(row.since) - ms);
+      const dUntil = Math.abs(Number(row.until) - mu);
+      maxDrift = Math.max(maxDrift, dSince, dUntil);
+      if (!worst || Math.max(dSince, dUntil) > worst.max) {
+        worst = {
+          max: Math.max(dSince, dUntil),
+          since: Number(row.since),
+          until: Number(row.until),
+          matchedSince: ms,
+          matchedUntil: mu,
+          text: String(row?.text || "").slice(0, 120),
+        };
+      }
+      driftCount += 1;
+    }
+    if (driftCount > 0 && maxDrift > MAX_DRIFT_SECONDS) {
+      throw new Error(
+        `lyrics to srt defective: timing drift max=${maxDrift.toFixed(3)}s threshold=${MAX_DRIFT_SECONDS.toFixed(3)}s matched=${driftCount}` +
+        (worst
+          ? ` worst_since=${worst.since.toFixed(3)} worst_until=${worst.until.toFixed(3)} matched_since=${worst.matchedSince.toFixed(3)} matched_until=${worst.matchedUntil.toFixed(3)} text="${worst.text}"`
+          : "")
+      );
+    }
+    return {
+      rows,
+      stats: {
+        lines: lines.length,
+        acceptedMatchLines,
+        maxDriftSeconds: maxDrift,
+        matchedForDrift: driftCount,
+      }
+    };
+  }
   const timelineStart = Number(cueWordPositions[0]?.since ?? 0);
   const timelineEnd = Number(cueWordPositions[cueWordPositions.length - 1]?.until ?? timelineStart);
-  const minLineSeconds = 0.10;
+  const minLineSeconds = sentenceCues ? 0.02 : 0.10;
 
   let prevEnd = timelineStart;
-  for (const row of rows) {
-    row.since = Math.max(prevEnd, Number(row.since ?? 0));
-    row.until = Math.max(row.since + minLineSeconds, Number(row.until ?? row.since + minLineSeconds));
-    prevEnd = row.until;
+  if (sentenceCues) {
+    for (const row of rows) {
+      row.since = Math.max(timelineStart, Number(row.since ?? 0));
+      row.until = Math.max(row.since + minLineSeconds, Number(row.until ?? row.since + minLineSeconds));
+      row.until = Math.min(timelineEnd, row.until);
+      prevEnd = Math.max(prevEnd, row.until);
+    }
+  } else {
+    for (const row of rows) {
+      row.since = Math.max(prevEnd, Number(row.since ?? 0));
+      row.until = Math.max(row.since + minLineSeconds, Number(row.until ?? row.since + minLineSeconds));
+      prevEnd = row.until;
+    }
   }
-  if (rows.length && Math.abs(prevEnd - timelineEnd) > 0.25) {
+  if (!sentenceCues && rows.length && Math.abs(prevEnd - timelineEnd) > 0.25) {
     const currentSpan = Math.max(0.01, prevEnd - timelineStart);
     const targetSpan = Math.max(0.01, timelineEnd - timelineStart);
     const scale = targetSpan / currentSpan;
@@ -491,24 +542,39 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
     }
   }
 
-  const collapsedRows = collapseDuplicateMicroCues(rows);
+  const driftRows = Array.isArray(rows) ? rows : [];
   let maxDrift = 0;
   let driftCount = 0;
-  for (const row of collapsedRows) {
-    const ms = Number(row?.matchedSince);
-    const mu = Number(row?.matchedUntil);
+  let worst = null;
+  for (const row of driftRows) {
+    const ms = row?.matchedSince;
+    const mu = row?.matchedUntil;
     if (!Number.isFinite(ms) || !Number.isFinite(mu)) continue;
     const dSince = Math.abs(Number(row.since) - ms);
     const dUntil = Math.abs(Number(row.until) - mu);
     maxDrift = Math.max(maxDrift, dSince, dUntil);
+    if (!worst || Math.max(dSince, dUntil) > worst.max) {
+      worst = {
+        max: Math.max(dSince, dUntil),
+        since: Number(row.since),
+        until: Number(row.until),
+        matchedSince: ms,
+        matchedUntil: mu,
+        text: String(row?.text || "").slice(0, 120),
+      };
+    }
     driftCount += 1;
   }
   if (sentenceCues && driftCount > 0 && maxDrift > MAX_DRIFT_SECONDS) {
     throw new Error(
-      `lyrics to srt defective: timing drift max=${maxDrift.toFixed(3)}s threshold=${MAX_DRIFT_SECONDS.toFixed(3)}s matched=${driftCount}`
+      `lyrics to srt defective: timing drift max=${maxDrift.toFixed(3)}s threshold=${MAX_DRIFT_SECONDS.toFixed(3)}s matched=${driftCount}` +
+      (worst
+        ? ` worst_since=${worst.since.toFixed(3)} worst_until=${worst.until.toFixed(3)} matched_since=${worst.matchedSince.toFixed(3)} matched_until=${worst.matchedUntil.toFixed(3)} text="${worst.text}"`
+        : "")
     );
   }
 
+  const collapsedRows = collapseDuplicateMicroCues(rows);
   return {
     rows: collapsedRows,
     stats: {
@@ -539,6 +605,12 @@ function collapseDuplicateMicroCues(rows = []) {
     const tiny = prevWords <= 4 && curWords <= 4;
     if (tiny && contiguous && prevText && prevText === curText) {
       prev.until = Math.max(Number(prev.until), Number(row.until));
+      if (Number.isFinite(prev.matchedSince) && Number.isFinite(row.matchedSince)) {
+        prev.matchedSince = Math.min(Number(prev.matchedSince), Number(row.matchedSince));
+      }
+      if (Number.isFinite(prev.matchedUntil) && Number.isFinite(row.matchedUntil)) {
+        prev.matchedUntil = Math.max(Number(prev.matchedUntil), Number(row.matchedUntil));
+      }
       continue;
     }
     out.push({ ...row });
