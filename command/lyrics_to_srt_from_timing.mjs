@@ -512,6 +512,66 @@ function collapseDuplicateMicroCues(rows = []) {
   return out;
 }
 
+function buildSentenceRowsFromTimingCutsStable(timingCuts = [], { maxWords = 28, maxSeconds = 12 } = {}) {
+  const cuts = sanitizeTimingCuts(timingCuts);
+  if (!cuts.length) throw new Error("lyrics to srt defective: no timing cuts");
+
+  const rows = [];
+  let idx = 1;
+  let accSince = null;
+  let accUntil = null;
+  let accWords = 0;
+  let accText = [];
+
+  const flush = () => {
+    const text = accText.join(" ").replace(/\s+/gu, " ").trim();
+    if (!text || accSince === null || accUntil === null) {
+      accSince = null;
+      accUntil = null;
+      accWords = 0;
+      accText = [];
+      return;
+    }
+    rows.push({
+      index: idx,
+      since: Number(accSince),
+      until: Math.max(Number(accSince) + 0.06, Number(accUntil)),
+      text,
+    });
+    idx += 1;
+    accSince = null;
+    accUntil = null;
+    accWords = 0;
+    accText = [];
+  };
+
+  for (const cut of cuts) {
+    const since = Number(cut?.since ?? 0);
+    const until = Math.max(since + 0.04, Number(cut?.until ?? since));
+    const text = String(cut?.obText ?? "").replace(/\s+/gu, " ").trim();
+    if (!text) continue;
+
+    if (accSince === null) {
+      accSince = since;
+      accUntil = until;
+    } else {
+      accUntil = Math.max(accUntil, until);
+    }
+
+    const words = text.split(/\s+/u).filter(Boolean);
+    accWords += words.length;
+    accText.push(text);
+
+    const accDur = Math.max(0, Number(accUntil) - Number(accSince));
+    const terminal = /[.!?]["')\]]*$/u.test(text);
+    const longEnough = accWords >= maxWords || accDur >= maxSeconds;
+    if (terminal || longEnough) flush();
+  }
+
+  flush();
+  return collapseDuplicateMicroCues(rows);
+}
+
 async function main() {
   await runLyricsToSrt(process.argv.slice(2));
 }
@@ -542,7 +602,12 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
     }
   );
   const timingCuts = parseSrtToCuts(timingText);
-  const aligned = buildTimingRows(lyricCuts, timingCuts, { sentenceCues });
+  const aligned = sentenceCues
+    ? {
+      rows: buildSentenceRowsFromTimingCutsStable(timingCuts),
+      stats: null,
+    }
+    : buildTimingRows(lyricCuts, timingCuts, { sentenceCues });
   const finalRows = aligned.rows;
   const stats = aligned.stats ?? {
     lines: finalRows.length,
