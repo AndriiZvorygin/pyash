@@ -10,6 +10,10 @@ const MAX_SENTENCE_WORDS = (() => {
   const raw = Number(process.env.PYA_SRT_MAX_SENTENCE_WORDS || 36);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 36;
 })();
+const MAX_DRIFT_SECONDS = (() => {
+  const raw = Number(process.env.PYA_SRT_MAX_DRIFT_SECONDS || 1.5);
+  return Number.isFinite(raw) && raw > 0 ? raw : 1.5;
+})();
 
 function usage() {
   return "Usage: node command/lyrics_to_srt_from_timing.mjs <lyrics.txt> <timing.srt> <output.srt> [--include-sections] [--sentence-cues]";
@@ -339,6 +343,8 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
         : (runningLyricWords / totalLyricWords) * totalTimingWords);
     let since = wordToTime(startTimingWord);
     let until = Math.max(since + 0.06, wordToTime(endTimingWord));
+    let matchedSince = null;
+    let matchedUntil = null;
     const expectedTokenIndex = sentenceCues
       ? Math.max(0, Math.min(tokens.length - 1, tokenCursor))
       : Math.max(0, Math.min(tokens.length - 1, Math.floor(startTimingWord)));
@@ -367,9 +373,9 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
         }
       }
       if (firstIdx >= 0 && lastIdx >= firstIdx) {
-        const matchedSince = Number(tokens[firstIdx].since ?? since);
-        const matchedUntil = Math.max(matchedSince + 0.06, Number(tokens[lastIdx].until ?? until));
-        const matchedSpan = matchedUntil - matchedSince;
+        const candidateSince = Number(tokens[firstIdx].since ?? since);
+        const candidateUntil = Math.max(candidateSince + 0.06, Number(tokens[lastIdx].until ?? until));
+        const matchedSpan = candidateUntil - candidateSince;
         const fallbackSpan = Math.max(0.06, until - since);
         const indexDrift = Math.abs(firstIdx - expectedTokenIndex);
         const matchedTokenSpan = (lastIdx - firstIdx) + 1;
@@ -378,11 +384,13 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
         const looksTooFar = indexDrift > (sentenceCues ? Math.max(64, lineWords.length * 8) : maxIndexDrift);
         const looksTokenWide = matchedTokenSpan > maxLineTokenSpan;
         const looksCompressed = matchedSpan < Math.max(0.12, Math.min(2.5, fallbackSpan * 0.20));
-        const timeDrift = Math.abs(matchedSince - since);
+        const timeDrift = Math.abs(candidateSince - since);
         const looksTimeDrifted = timeDrift > (sentenceCues ? Math.max(4, fallbackSpan * 1.5) : Math.max(8, fallbackSpan * 2.5));
         if (!looksOutlier && !looksTooFar && !looksTokenWide && !looksCompressed && !looksTimeDrifted) {
-          since = matchedSince;
-          until = matchedUntil;
+          since = candidateSince;
+          until = candidateUntil;
+          matchedSince = since;
+          matchedUntil = until;
           tokenCursor = Math.max(tokenCursor, lastIdx + 1);
           acceptedMatchLines += 1;
         }
@@ -391,7 +399,14 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
     if (sentenceCues) {
       tokenCursor = Math.min(tokens.length, Math.max(tokenCursor, Math.floor(endTimingWord)));
     }
-    rows.push({ index: i + 1, since, until, text: line });
+    rows.push({
+      index: i + 1,
+      since,
+      until,
+      text: line,
+      matchedSince: Number.isFinite(matchedSince) ? matchedSince : null,
+      matchedUntil: Number.isFinite(matchedUntil) ? matchedUntil : null,
+    });
   }
   if (!sentenceCues) {
     for (const row of rows) {
@@ -476,11 +491,31 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
     }
   }
 
+  const collapsedRows = collapseDuplicateMicroCues(rows);
+  let maxDrift = 0;
+  let driftCount = 0;
+  for (const row of collapsedRows) {
+    const ms = Number(row?.matchedSince);
+    const mu = Number(row?.matchedUntil);
+    if (!Number.isFinite(ms) || !Number.isFinite(mu)) continue;
+    const dSince = Math.abs(Number(row.since) - ms);
+    const dUntil = Math.abs(Number(row.until) - mu);
+    maxDrift = Math.max(maxDrift, dSince, dUntil);
+    driftCount += 1;
+  }
+  if (sentenceCues && driftCount > 0 && maxDrift > MAX_DRIFT_SECONDS) {
+    throw new Error(
+      `lyrics to srt defective: timing drift max=${maxDrift.toFixed(3)}s threshold=${MAX_DRIFT_SECONDS.toFixed(3)}s matched=${driftCount}`
+    );
+  }
+
   return {
-    rows: collapseDuplicateMicroCues(rows),
+    rows: collapsedRows,
     stats: {
       lines: lines.length,
-      acceptedMatchLines
+      acceptedMatchLines,
+      maxDriftSeconds: maxDrift,
+      matchedForDrift: driftCount,
     }
   };
 }
