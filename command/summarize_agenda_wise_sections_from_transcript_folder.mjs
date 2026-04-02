@@ -161,6 +161,19 @@ function parseSeriesTexts(pyaText) {
   return out;
 }
 
+function parseWiseRanges(pyaText) {
+  const src = String(pyaText || '');
+  const out = [];
+  const re = /su name wise chip \d+\s+since num ([0-9.]+)\s+until num ([0-9.]+)\s+ob text /gu;
+  for (const m of src.matchAll(re)) {
+    const since = Number(m[1]);
+    const until = Number(m[2]);
+    if (!Number.isFinite(since) || !Number.isFinite(until)) continue;
+    out.push({ since, until });
+  }
+  return out;
+}
+
 function parseHeadingAndBody(chipText, idx) {
   const raw = String(chipText || '')
     .replace(/\\r\\n/gu, '\n')
@@ -223,8 +236,28 @@ function loadAgendaMatchesForPrefix(transcriptDir, prefix) {
   }
 }
 
-function buildSectionRowRanges({ headings, rows, matches }) {
+function buildSectionRowRanges({ headings, rows, matches, wiseRanges }) {
   if (!Array.isArray(headings) || !headings.length || !Array.isArray(rows) || !rows.length) return [];
+  const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
+  if (wise.length === headings.length) {
+    const wiseMax = wise.reduce((mx, w) => Math.max(mx, Number(w?.until ?? w?.since ?? 0) || 0), 0);
+    const wiseLooksLikeRowIndex =
+      wise.every((w) => Number.isFinite(Number(w?.since)) && Number.isFinite(Number(w?.until))) &&
+      wise.every((w) => Number.isInteger(Number(w?.since)) && Number.isInteger(Number(w?.until))) &&
+      wiseMax <= (rows.length + 50);
+    if (wiseLooksLikeRowIndex) {
+      const out = [];
+      for (let i = 0; i < wise.length; i += 1) {
+        const start = Math.max(0, Math.min(rows.length - 1, Math.floor(Number(wise[i]?.since) || 0)));
+        const nextStart = i + 1 < wise.length
+          ? Math.max(0, Math.min(rows.length - 1, Math.floor(Number(wise[i + 1]?.since) || 0)))
+          : rows.length;
+        const end = i + 1 < wise.length ? Math.max(start, nextStart - 1) : rows.length - 1;
+        out.push({ start, end });
+      }
+      return out;
+    }
+  }
   const rowNorm = rows.map((r) => normalizeForMatch(r?.text || ''));
   const matchByItem = new Map();
   for (const m of Array.isArray(matches) ? matches : []) {
@@ -734,13 +767,14 @@ async function main() {
   const source = fs.readFileSync(seriesPath, 'utf8');
   let chips = parseSeriesTexts(source);
   if (!chips.length) throw new Error('agenda summary defective: no wise chips parsed from series');
+  const wiseRanges = parseWiseRanges(source);
   if (MAX_SECTIONS > 0) chips = chips.slice(0, MAX_SECTIONS);
 
   const parsedChips = chips.map((chip, idx) => parseHeadingAndBody(chip, idx));
   const sectionHeadings = parsedChips.map((x) => x.heading);
   const transcriptRows = loadTranscriptRowsForPrefix(transcriptDir, resolvedPrefix);
   const agendaMatches = loadAgendaMatchesForPrefix(transcriptDir, resolvedPrefix);
-  const rowRanges = buildSectionRowRanges({ headings: sectionHeadings, rows: transcriptRows, matches: agendaMatches });
+  const rowRanges = buildSectionRowRanges({ headings: sectionHeadings, rows: transcriptRows, matches: agendaMatches, wiseRanges });
 
   const out = [];
   for (let i = 0; i < parsedChips.length; i += 1) {

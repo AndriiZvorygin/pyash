@@ -20,7 +20,11 @@ import { readPyaTextValues } from "../../../../command/pya_lookup.mjs";
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HOUSE = path.resolve(PROGRAM_DIR, "..");
 const ROOT = path.resolve(PROGRAM_DIR, "../../../..");
-const SECRET_PATH = path.join(ROOT, "configure/secret.pya");
+const SECRET_PATHS = [
+  path.join(HOUSE, "configure/secret.pya"),
+  path.join(ROOT, "configure/secret.pya"),
+];
+const SECRET_PATH = SECRET_PATHS.find((p) => fs.existsSync(p)) || SECRET_PATHS[0];
 const DEFAULT_SITE = "https://helpos.ca";
 const DEFAULT_FOCUS = DEFAULT_SUMMARY_FOCUS;
 const DEFAULT_STYLE = "bold civic poster background, no person required, high contrast, simple geometry, strong readability";
@@ -384,6 +388,7 @@ async function main() {
   const normalizedPlain = artifacts.normalized_plain_txt;
   const normalizedMeta = artifacts.normalized_meta_json;
   const normalizedSentenceMerged = artifacts.normalized_sentence_merged_srt;
+  const timedSentenceMerged = path.join(transcriptDir, `${basePrefix}.sentences.merged.srt`);
   const speakerJson = artifacts.speaker_json;
   const speakerSrt = artifacts.speaker_srt;
   const autoAssignReport = artifacts.autoassign_report_json;
@@ -494,43 +499,33 @@ async function main() {
   });
 
   await stage("merge-normalized-sentence-srt", async () => {
-    try {
-      await runWithStreaming({
-        cmd: "node",
-        args: [
-          path.join(ROOT, "command/lyrics_to_srt_from_timing.mjs"),
-          normalizedPlain,
-          baseTimingSrt,
-          normalizedSentenceMerged,
-          "--sentence-cues",
-        ],
-        cwd: ROOT,
-        timeoutMs: 15 * 60 * 1000,
-        label: "merge-normalized-sentence-srt",
-      });
-    } catch (err) {
-      const msg = String(err?.message || err || "");
-      const allowEvenFallback = !/^(0|false|no)$/iu.test(String(process.env.PYA_SRT_EVEN_FALLBACK || "1"));
-      const isMismatch = /lyrics to srt defective:\s*lyrics mismatch/iu.test(msg);
-      if (!allowEvenFallback || !isMismatch) throw err;
-      log("[full-pipeline] warn merge-normalized-sentence-srt mismatch; falling back to even timing");
-      await runWithStreaming({
-        cmd: "node",
-        args: [
-          path.join(ROOT, "command/lyrics_to_srt_even.mjs"),
-          normalizedPlain,
-          audioPath,
-          normalizedSentenceMerged,
-        ],
-        cwd: ROOT,
-        timeoutMs: 15 * 60 * 1000,
-        label: "merge-normalized-sentence-srt-even-fallback",
-      });
-    }
+    await runWithStreaming({
+      cmd: "node",
+      args: [
+        path.join(HOUSE, "program/sentence_srt_from_timing_srt.mjs"),
+        baseTimingSrt,
+        timedSentenceMerged,
+      ],
+      cwd: ROOT,
+      timeoutMs: 5 * 60 * 1000,
+      label: "merge-normalized-sentence-srt",
+    });
+    await runWithStreaming({
+      cmd: "node",
+      args: [
+        path.join(HOUSE, "program/apply_string_replacement_map_to_srt.mjs"),
+        timedSentenceMerged,
+        normalizedMeta,
+        normalizedSentenceMerged,
+      ],
+      cwd: ROOT,
+      timeoutMs: 5 * 60 * 1000,
+      label: "apply-normalize-replacements-to-sentence-srt",
+    });
   }, {
     skipWhen: () => existsFile(normalizedSentenceMerged),
-    inputArtifacts: [normalizedPlain, baseTimingSrt],
-    outputArtifacts: [normalizedSentenceMerged],
+    inputArtifacts: [baseTimingSrt, normalizedMeta],
+    outputArtifacts: [timedSentenceMerged, normalizedSentenceMerged],
   });
 
   await stage("diarize-speakers", async () => {
