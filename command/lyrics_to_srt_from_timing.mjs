@@ -393,21 +393,19 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
     }
     rows.push({ index: i + 1, since, until, text: line });
   }
-  for (const row of rows) {
-    const wordCount = Math.max(1, countWords(row.text));
-    const duration = Math.max(0, Number(row.until) - Number(row.since));
-    const minLineDuration = sentenceCues
-      ? (wordCount <= 3 ? 0.14 : Math.min(0.9, 0.10 * wordCount))
-      : (wordCount <= 3 ? 0.6 : Math.min(2.4, 0.28 * wordCount));
-    const maxLineDuration = sentenceCues
-      ? Math.max(2.0, Math.min(6.0, 0.75 * wordCount))
-      : Math.max(4.5, Math.min(9.5, 1.25 * wordCount));
-    if (duration < minLineDuration) {
-      row.until = Number(row.since) + minLineDuration;
-      continue;
-    }
-    if (duration > maxLineDuration) {
-      row.until = Number(row.since) + maxLineDuration;
+  if (!sentenceCues) {
+    for (const row of rows) {
+      const wordCount = Math.max(1, countWords(row.text));
+      const duration = Math.max(0, Number(row.until) - Number(row.since));
+      const minLineDuration = wordCount <= 3 ? 0.6 : Math.min(2.4, 0.28 * wordCount);
+      const maxLineDuration = Math.max(4.5, Math.min(9.5, 1.25 * wordCount));
+      if (duration < minLineDuration) {
+        row.until = Number(row.since) + minLineDuration;
+        continue;
+      }
+      if (duration > maxLineDuration) {
+        row.until = Number(row.since) + maxLineDuration;
+      }
     }
   }
   const timelineStart = Number(cueWordPositions[0]?.since ?? 0);
@@ -420,7 +418,7 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
     row.until = Math.max(row.since + minLineSeconds, Number(row.until ?? row.since + minLineSeconds));
     prevEnd = row.until;
   }
-  if (rows.length && prevEnd > timelineEnd) {
+  if (rows.length && Math.abs(prevEnd - timelineEnd) > 0.25) {
     const currentSpan = Math.max(0.01, prevEnd - timelineStart);
     const targetSpan = Math.max(0.01, timelineEnd - timelineStart);
     const scale = targetSpan / currentSpan;
