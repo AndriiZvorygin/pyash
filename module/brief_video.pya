@@ -17,11 +17,11 @@ from filename "./video_common.pya" ob name shorts footnote mode to name shorts f
 
 exists su name draw system prompt default ob text "Québec bande dessinée illustration, precise linework, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be text ya
 exists su name draw system prompt ob text "Québec bande dessinée illustration, precise linework, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be text ya
-exists su name draw prompt style base default ob text "If people are present, ensure expressive faces with clearly visible irises." be text ya
+exists su name draw prompt style base default ob text "If people are present, ensure expressive faces with clearly visible white sclera and defined irises." be text ya
 exists su name draw prompt style beard default ob text "If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
 exists su name draw prompt beard guide enabled ob bool truth be default ya
-exists su name draw prompt style default ob text "If people are present, ensure expressive faces with clearly visible irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
-exists su name draw prompt style ob text "If people are present, ensure expressive faces with clearly visible irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
+exists su name draw prompt style default ob text "If people are present, ensure expressive faces with clearly visible white sclera and defined irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
+exists su name draw prompt style ob text "If people are present, ensure expressive faces with clearly visible white sclera and defined irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
 exists su name qwen say sanitize map be map def
 su name percent ob text "percent" ya
 su name reference separator ob text "." ya
@@ -344,7 +344,7 @@ su name teaching video section video mapper ob filename section aligned srt from
   su name section aligned srt input stage ob filename of ob of this to name filename section aligned srt input be filename do
   su name section cuts stage from num of ob of section index stage with text "section-cuts.series.pya" to name filename section cuts be teaching video section leaf do
 
-  su name section cut stage from filename of ob of section aligned srt input stage to name itinerary section cuts itinerary by num of ob of section index stage be cut do
+  su name section cut stage from filename of ob of section aligned srt input stage to name itinerary section cuts itinerary be cut do
   su name section cuts copy stage ob filename of ob of section cut stage to filename of ob of section cuts stage be copy do
   su name section cuts output stage ob filename of ob of section cuts stage be filename do
   su name section cuts output stage ret
