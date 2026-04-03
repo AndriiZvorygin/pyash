@@ -137,24 +137,39 @@ function slugify(input) {
     .slice(0, 70) || 'meeting';
 }
 
-function inferBodySlugCandidatesFromPayload(payload = {}, bodyDefault = '') {
+function inferPrimaryBodySlugFromPayload(payload = {}) {
   const meetingName = String(payload?.meeting_name || '').toLowerCase();
   const meetingType = String(payload?.meeting_type || '').toLowerCase();
   const source = `${meetingName} ${meetingType}`.trim();
+  if (!source) return '';
+  if (/committee of the whole/.test(source)) return 'committee-of-the-whole';
+  if (/county council/.test(source)) return 'county-council';
+  if (/committee\s*-\s*community services|community services/.test(source)) return 'committee-community-services';
+  if (/committee\s*-\s*operations|operations/.test(source)) return 'committee-operations';
+  if (/committee\s*-\s*corporate services|corporate services/.test(source)) return 'committee-corporate-services';
+  if (/task force/.test(source)) return 'task-force';
+  if (/committee/.test(source)) return 'committee';
+  if (/council/.test(source)) return 'council';
+  return '';
+}
+
+function inferBodySlugCandidatesFromPayload(payload = {}, bodyDefault = '') {
   const out = [];
   const add = (s) => {
+    if (!s) return;
     const slug = slugify(s);
     if (!out.includes(slug)) out.push(slug);
   };
-  if (/committee\s*-\s*community services|community services/.test(source)) add('committee-community-services');
-  if (/committee\s*-\s*operations|operations/.test(source)) add('committee-operations');
-  if (/committee\s*-\s*corporate services|corporate services/.test(source)) add('committee-corporate-services');
-  if (/committee of the whole/.test(source)) add('committee-of-the-whole');
-  if (/council/.test(source)) add('council');
-  if (/committee/.test(source)) add('committee');
+  const inferred = inferPrimaryBodySlugFromPayload(payload);
+  if (inferred) add(inferred);
   if (bodyDefault && bodyDefault !== 'auto') add(bodyDefault);
-  add('council');
-  add('committee');
+  // Conservative fallback only when no reliable hint exists.
+  if (!out.length) {
+    add('county-council');
+    add('committee-of-the-whole');
+    add('council');
+    add('committee');
+  }
   return out;
 }
 
@@ -387,40 +402,45 @@ function parseDateIsoFromSince(since) {
   return String(since || '').slice(0, 10);
 }
 
-function extractTranscriptDatesFromArchiveHtml(html, jurisdictionSlug) {
+function extractTranscriptBodyDateKeysFromArchiveHtml(html, jurisdictionSlug) {
   const slug = String(jurisdictionSlug || '').trim().toLowerCase();
   const src = String(html || '');
   const out = new Set();
-  const re = /\/transcripts\/([a-z0-9-]+)\/[^/"'\s>]+\/(\d{4}-\d{2}-\d{2})/giu;
+  const re = /\/transcripts\/([a-z0-9-]+)\/([a-z0-9-]+)\/(\d{4}-\d{2}-\d{2})/giu;
   let m;
   while ((m = re.exec(src)) !== null) {
     const j = String(m[1] || '').toLowerCase();
-    const d = String(m[2] || '');
-    if (!d) continue;
+    const body = String(m[2] || '').toLowerCase();
+    const d = String(m[3] || '');
+    if (!body || !d) continue;
     if (slug && j !== slug) continue;
-    out.add(d);
+    out.add(`${body}|${d}`);
   }
   return out;
 }
 
-async function fetchRemotePostedDates(cfg) {
+async function fetchRemotePostedKeys(cfg) {
   const archiveUrl = String(cfg.transcript_archive_url || '').trim();
   if (!archiveUrl) return new Set();
   try {
     const res = await fetch(archiveUrl, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return new Set();
     const html = await res.text();
-    return extractTranscriptDatesFromArchiveHtml(html, cfg.transcript_jurisdiction_slug);
+    return extractTranscriptBodyDateKeysFromArchiveHtml(html, cfg.transcript_jurisdiction_slug);
   } catch {
     return new Set();
   }
 }
 
-function mergeRemotePosted(states, remotePostedDates) {
-  if (!remotePostedDates || remotePostedDates.size === 0) return states;
+function mergeRemotePosted(states, remotePostedKeys, cfg = {}) {
+  if (!remotePostedKeys || remotePostedKeys.size === 0) return states;
   return states.map((s) => {
     const iso = parseDateIsoFromSince(s?.row?.since);
-    const remotePosted = Boolean(iso && remotePostedDates.has(iso));
+    const payload = s?.row?.payload || {};
+    const bodySlugs = inferBodySlugCandidatesFromPayload(payload, cfg.body);
+    const remotePosted = Boolean(
+      iso && bodySlugs.some((bodySlug) => remotePostedKeys.has(`${bodySlug}|${iso}`))
+    );
     if (!remotePosted) return s;
     return {
       ...s,
@@ -538,11 +558,11 @@ async function main() {
   if (!rows.length) throw new Error('no meetings in monthly cache');
 
   const localStates = rows.map((row) => meetingState(row, cfg.meetings_dir, cfg.base_prefix));
-  const remotePostedDates = await fetchRemotePostedDates(cfg);
-  if (remotePostedDates.size > 0) {
-    log(`[next-story] remote transcript dates found: ${remotePostedDates.size}`);
+  const remotePostedKeys = await fetchRemotePostedKeys(cfg);
+  if (remotePostedKeys.size > 0) {
+    log(`[next-story] remote transcript body/date keys found: ${remotePostedKeys.size}`);
   }
-  const states = mergeRemotePosted(localStates, remotePostedDates);
+  const states = mergeRemotePosted(localStates, remotePostedKeys, cfg);
   const picked = await pickCandidateWithRemoteProbe(states, cfg.timezone, cfg);
   const execMxid = cfg.exec_mxid;
 

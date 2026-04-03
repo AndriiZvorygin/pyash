@@ -256,20 +256,192 @@ function distinct(list) {
 }
 
 function parseLeadingItemNumber(heading) {
-  const m = String(heading || "").match(/^\s*(\d+)\b/u);
+  const raw = String(heading || "").trim();
+  const m = raw.match(/^\s*(\d+)\b/u) || raw.match(/^section\s+(\d+)\b/iu);
   return m ? String(Number(m[1])) : "";
 }
 
-function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches }) {
+function parseWiseRanges(seriesText) {
+  const src = String(seriesText || "");
+  const ranges = [];
+  const re = /su name wise chip \d+\s+since num ([0-9.]+)\s+until num ([0-9.]+)\s+ob text /gu;
+  for (const m of src.matchAll(re)) {
+    const since = Number(m[1]);
+    const until = Number(m[2]);
+    if (!Number.isFinite(since) || !Number.isFinite(until)) continue;
+    ranges.push({ since, until });
+  }
+  return ranges;
+}
+
+function findRowIndexAtOrAfter(rows, targetSince) {
+  for (let i = 0; i < rows.length; i += 1) {
+    if ((Number(rows[i]?.since) || 0) >= targetSince) return i;
+  }
+  return rows.length - 1;
+}
+
+function looksGenericSectionHeading(heading) {
+  return /^section\s+\d+\s*$/iu.test(String(heading || "").trim());
+}
+
+function titleCaseWords(text) {
+  return String(text || "")
+    .split(/\s+/u)
+    .map((w) => w ? (w[0].toUpperCase() + w.slice(1).toLowerCase()) : "")
+    .join(" ")
+    .trim();
+}
+
+function deriveHeadingFromSummary(fallbackHeading, summary, index) {
+  const heading = String(fallbackHeading || "").trim() || `Section ${index + 1}`;
+  if (!looksGenericSectionHeading(heading)) return heading;
+  const plain = stripMarkdown(String(summary || ""))
+    .replace(/\bSPEAKER_[0-9A-Z_-]+:\s*/giu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!plain) return heading;
+  const itemMatch = plain.match(/\bitem\s+([0-9]+[a-z]?)\b/iu);
+  if (itemMatch && itemMatch[1]) return `Item ${String(itemMatch[1]).toUpperCase()}`;
+  const topic = plain
+    .split(/(?<=[.!?])\s+/u)[0]
+    .split(/\s+/u)
+    .slice(0, 7)
+    .join(" ")
+    .replace(/[,:;.-]+$/u, "")
+    .trim();
+  if (!topic) return heading;
+  return titleCaseWords(topic);
+}
+
+function buildRangesFromSourceRowHints(sections, rows) {
+  const list = Array.isArray(sections) ? sections : [];
+  if (!list.length || !Array.isArray(rows) || !rows.length) return [];
+  const hinted = list.map((s) => Math.max(1, Math.floor(Number(s?.source_rows) || 0)));
+  const totalHint = hinted.reduce((a, b) => a + b, 0);
+  if (totalHint <= 0) return [];
+  const out = [];
+  let cursor = 0;
+  for (let i = 0; i < list.length; i += 1) {
+    const sec = list[i];
+    const remainingSections = list.length - i;
+    const remainingRows = rows.length - cursor;
+    if (remainingRows <= 0) break;
+    let take = Math.max(1, Math.floor((hinted[i] / totalHint) * rows.length));
+    if (i === list.length - 1) take = remainingRows;
+    const maxTake = Math.max(1, remainingRows - (remainingSections - 1));
+    take = Math.min(take, maxTake);
+    const startRow = cursor;
+    const endRow = Math.min(rows.length - 1, cursor + take - 1);
+    out.push({
+      id: `section-${i + 1}`,
+      heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
+      summary: String(sec?.summary || "").trim(),
+      startRow,
+      endRow,
+    });
+    cursor = endRow + 1;
+  }
+  return out;
+}
+
+function normalizeSectionRanges(rows, ranges) {
+  const rowCount = Array.isArray(rows) ? rows.length : 0;
+  const source = Array.isArray(ranges) ? ranges : [];
+  if (!rowCount || !source.length) return [];
+
+  // Clamp starts and enforce monotonic starts, then derive ends from the next start.
+  // This guarantees each transcript row appears at most once across section blocks.
+  const starts = source.map((range, idx) => {
+    const fallback = Math.min(rowCount - 1, Math.max(0, idx));
+    const raw = Number(range?.startRow);
+    if (!Number.isFinite(raw)) return fallback;
+    return Math.min(rowCount - 1, Math.max(0, Math.floor(raw)));
+  });
+
+  for (let i = 1; i < starts.length; i += 1) {
+    if (starts[i] <= starts[i - 1]) {
+      starts[i] = Math.min(rowCount - 1, starts[i - 1] + 1);
+    }
+  }
+
+  const out = [];
+  for (let i = 0; i < source.length; i += 1) {
+    const startRow = starts[i];
+    const endRow = i + 1 < starts.length
+      ? Math.max(startRow, starts[i + 1] - 1)
+      : rowCount - 1;
+    out.push({
+      id: String(source[i]?.id || `section-${i + 1}`),
+      heading: String(source[i]?.heading || `Section ${i + 1}`),
+      summary: String(source[i]?.summary || ""),
+      startRow,
+      endRow,
+    });
+  }
+  return out.filter((range) => range.startRow >= 0 && range.startRow < rowCount && range.endRow >= range.startRow);
+}
+
+function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, wiseRanges }) {
   const rows = Array.isArray(transcriptRows) ? transcriptRows : [];
   const sections = Array.isArray(sectionSummaries) ? sectionSummaries : [];
   if (!rows.length || !sections.length) return [];
+  const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
+
+  // Guardrail: if section summaries were produced without usable row grounding,
+  // section rendering can duplicate opening transcript lines across headings.
+  // In that case, prefer a plain chronological transcript over broken anchors.
+  const groundedSections = sections.filter((s) => Number(s?.source_rows || 0) > 0).length;
+  if (groundedSections === 0 && !wise.length) return [];
+  if (wise.length === sections.length) {
+    const wiseMax = wise.reduce((mx, w) => Math.max(mx, Number(w?.until ?? w?.since ?? 0) || 0), 0);
+    const wiseLooksLikeRowIndex =
+      wise.length > 0 &&
+      wise.every((w) => Number.isFinite(Number(w?.since)) && Number.isFinite(Number(w?.until))) &&
+      wise.every((w) => Number.isInteger(Number(w?.since)) && Number.isInteger(Number(w?.until))) &&
+      wiseMax <= (rows.length + 50);
+
+    const out = [];
+    for (let i = 0; i < sections.length; i += 1) {
+      const sec = sections[i];
+      const wr = wise[i];
+      const nextSinceRaw = i + 1 < wise.length ? Number(wise[i + 1].since) : Number.POSITIVE_INFINITY;
+      let start = 0;
+      let end = rows.length - 1;
+      if (wiseLooksLikeRowIndex) {
+        start = Math.max(0, Math.min(rows.length - 1, Math.floor(Number(wr?.since) || 0)));
+        const nextStart = i + 1 < wise.length
+          ? Math.max(0, Math.min(rows.length - 1, Math.floor(nextSinceRaw)))
+          : rows.length;
+        end = i + 1 < wise.length ? Math.max(start, nextStart - 1) : rows.length - 1;
+      } else {
+        const nextSince = Number.isFinite(nextSinceRaw) ? nextSinceRaw : Number.POSITIVE_INFINITY;
+        start = findRowIndexAtOrAfter(rows, Number(wr?.since || 0));
+        const endCandidate = findRowIndexAtOrAfter(rows, nextSince);
+        end = i + 1 < wise.length ? Math.max(start, endCandidate - 1) : rows.length - 1;
+      }
+      out.push({
+        id: `section-${i + 1}`,
+        heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
+        summary: String(sec?.summary || "").trim(),
+        startRow: start,
+        endRow: end,
+      });
+    }
+    return normalizeSectionRanges(rows, out);
+  }
 
   const matchByItem = new Map();
   for (const m of Array.isArray(agendaMatches?.matches) ? agendaMatches.matches : []) {
     const key = String(m?.item || "").trim();
     if (!key) continue;
     if (!matchByItem.has(key)) matchByItem.set(key, m);
+  }
+
+  // If we cannot anchor enough sections to agenda matches, avoid misleading
+  // section layout and render plain transcript rows instead.
+  if (matchByItem.size < Math.max(2, Math.floor(sections.length * 0.5))) {
+    return normalizeSectionRanges(rows, buildRangesFromSourceRowHints(sections, rows));
   }
 
   const rowNorm = rows.map((r) => normalizeText(r.raw || r.speech || ""));
@@ -320,13 +492,13 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches })
     const end = i + 1 < starts.length ? Math.max(start, starts[i + 1].rowIndex - 1) : rows.length - 1;
     out.push({
       id: `section-${i + 1}`,
-      heading: starts[i].heading || `Section ${i + 1}`,
+      heading: deriveHeadingFromSummary(starts[i].heading || `Section ${i + 1}`, starts[i].summary || "", i),
       summary: starts[i].summary || "",
       startRow: start,
       endRow: end,
     });
   }
-  return out;
+  return normalizeSectionRanges(rows, out);
 }
 
 function buildPage({
@@ -368,6 +540,15 @@ function buildPage({
   };
 
   const hasSections = Array.isArray(transcriptSections) && transcriptSections.length > 0;
+  const summaryLooksDuplicate = (summaryText, firstRow) => {
+    const a = normalizeText(summaryText);
+    const b = normalizeText(firstRow);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    if (a.length >= 24 && b.includes(a)) return true;
+    if (b.length >= 24 && a.includes(b)) return true;
+    return false;
+  };
   const mergedTopicRows = hasSections
     ? transcriptSections.map((s) => ({ href: `#${s.id}`, label: s.heading }))
     : topics.map((t) => ({ href: "#full-transcript", label: t }));
@@ -375,8 +556,10 @@ function buildPage({
   const transcriptHtml = hasSections
     ? transcriptSections.map((s) => {
       const rows = transcriptRows.slice(s.startRow, s.endRow + 1);
+      const firstRowText = rows.length ? String(rows[0]?.speech || rows[0]?.raw || "").trim() : "";
+      const showSummary = !summaryLooksDuplicate(String(s.summary || ""), firstRowText);
       const entries = rows.map(renderEntry).join("\n");
-      return `<section id="${escapeHtml(s.id)}" class="transcript-section"><h3>${escapeHtml(s.heading)}</h3><p class="section-summary">${escapeHtml(s.summary)}</p>${entries}</section>`;
+      return `<section id="${escapeHtml(s.id)}" class="transcript-section"><h3>${escapeHtml(s.heading)}</h3>${showSummary ? `<p class="section-summary">${escapeHtml(s.summary)}</p>` : ""}${entries}</section>`;
     }).join("\n")
     : transcriptRows.map(renderEntry).join("\n");
 
@@ -580,15 +763,20 @@ function main() {
   const agendaSummaryPath = pickFile(transcriptDir, [/\.agenda-summary\.md$/u]);
   const agendaSummaryJsonPath = pickFile(transcriptDir, [/\.agenda-summary\.json$/u]);
   const agendaMatchesPath = pickFile(transcriptDir, [/\.agenda\.matches\.json$/u]);
+  const agendaWiseSeriesPath = pickFile(transcriptDir, [/\.agenda-wise\.series\.pya$/u]);
   const meetingSummaryPath = pickFile(transcriptDir, [/\.meeting-summary\.md$/u]);
   const agendaSummary = agendaSummaryPath ? fs.readFileSync(agendaSummaryPath, "utf8") : "";
   let agendaSummaryJson = {};
   let agendaMatches = {};
+  let wiseRanges = [];
   if (agendaSummaryJsonPath) {
     try { agendaSummaryJson = JSON.parse(fs.readFileSync(agendaSummaryJsonPath, "utf8")); } catch {}
   }
   if (agendaMatchesPath) {
     try { agendaMatches = JSON.parse(fs.readFileSync(agendaMatchesPath, "utf8")); } catch {}
+  }
+  if (agendaWiseSeriesPath) {
+    try { wiseRanges = parseWiseRanges(fs.readFileSync(agendaWiseSeriesPath, "utf8")); } catch {}
   }
   const meetingSummary = meetingSummaryPath ? fs.readFileSync(meetingSummaryPath, "utf8") : "";
   const meetingDir = path.dirname(transcriptDir);
@@ -634,6 +822,24 @@ function main() {
   const finalVideo = videoArg || payloadVideoDirect[0] || payloadVideo[0] || "";
   const finalSource = sourceArg || meetingUrl || "";
 
+  const transcriptSections = buildSectionRanges({
+    transcriptRows,
+    sectionSummaries: agendaSummaryJson?.sections,
+    agendaMatches,
+    wiseRanges,
+  });
+  if (String(process.env.PYA_TRANSCRIPT_DEBUG || "").trim() === "1") {
+    const summedRows = transcriptSections.reduce(
+      (sum, s) => sum + Math.max(0, (Number(s?.endRow) - Number(s?.startRow) + 1)),
+      0
+    );
+    process.stdout.write(`[transcript-html][debug] rows=${transcriptRows.length} sections=${transcriptSections.length} rows_in_sections=${summedRows}\n`);
+    for (let i = 0; i < Math.min(12, transcriptSections.length); i += 1) {
+      const s = transcriptSections[i];
+      process.stdout.write(`[transcript-html][debug] section ${i + 1}: ${Number(s?.startRow)}..${Number(s?.endRow)} ${String(s?.heading || "").slice(0, 80)}\n`);
+    }
+  }
+
   const html = buildPage({
     jurisdiction: jurisdictionArg,
     body: bodyArg,
@@ -652,11 +858,7 @@ function main() {
     topNewsworthyItems,
     topics,
     transcriptRows,
-    transcriptSections: buildSectionRanges({
-      transcriptRows,
-      sectionSummaries: agendaSummaryJson?.sections,
-      agendaMatches,
-    }),
+    transcriptSections,
     archiveJurUrl,
     archiveBodyUrl,
     transcriptStatus: "Machine transcription, lightly cleaned",

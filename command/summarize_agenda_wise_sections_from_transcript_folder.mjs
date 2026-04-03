@@ -1,11 +1,19 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { readPyaTextValues } from './pya_lookup.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
-const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
-  ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
-  : 'http://localhost:11434/api/chat';
+function resolveOllamaHost() {
+  const fromEnv = String(process.env.OLLAMA_HOST || '').trim();
+  if (fromEnv) return fromEnv.replace(/\/$/u, '');
+  const secretPath = '/home/htaf/pyash/configure/secret.pya';
+  const vals = readPyaTextValues(secretPath, ['ollama host', 'ai host', 'relay local host']);
+  const fromPya = String(vals['ollama host'] || vals['ai host'] || vals['relay local host'] || '').trim();
+  if (fromPya) return fromPya.replace(/\/$/u, '');
+  return 'http://localhost:11434';
+}
+const OLLAMA_URL = `${resolveOllamaHost()}/api/chat`;
 const MODEL = process.env.AGENDA_SECTION_SUMMARY_MODEL
   || process.env.MEETING_SUMMARY_MODEL
   || process.env.SUMMARY_MODEL
@@ -153,6 +161,19 @@ function parseSeriesTexts(pyaText) {
   return out;
 }
 
+function parseWiseRanges(pyaText) {
+  const src = String(pyaText || '');
+  const out = [];
+  const re = /su name wise chip \d+\s+since num ([0-9.]+)\s+until num ([0-9.]+)\s+ob text /gu;
+  for (const m of src.matchAll(re)) {
+    const since = Number(m[1]);
+    const until = Number(m[2]);
+    if (!Number.isFinite(since) || !Number.isFinite(until)) continue;
+    out.push({ since, until });
+  }
+  return out;
+}
+
 function parseHeadingAndBody(chipText, idx) {
   const raw = String(chipText || '')
     .replace(/\\r\\n/gu, '\n')
@@ -215,8 +236,28 @@ function loadAgendaMatchesForPrefix(transcriptDir, prefix) {
   }
 }
 
-function buildSectionRowRanges({ headings, rows, matches }) {
+function buildSectionRowRanges({ headings, rows, matches, wiseRanges }) {
   if (!Array.isArray(headings) || !headings.length || !Array.isArray(rows) || !rows.length) return [];
+  const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
+  if (wise.length === headings.length) {
+    const wiseMax = wise.reduce((mx, w) => Math.max(mx, Number(w?.until ?? w?.since ?? 0) || 0), 0);
+    const wiseLooksLikeRowIndex =
+      wise.every((w) => Number.isFinite(Number(w?.since)) && Number.isFinite(Number(w?.until))) &&
+      wise.every((w) => Number.isInteger(Number(w?.since)) && Number.isInteger(Number(w?.until))) &&
+      wiseMax <= (rows.length + 50);
+    if (wiseLooksLikeRowIndex) {
+      const out = [];
+      for (let i = 0; i < wise.length; i += 1) {
+        const start = Math.max(0, Math.min(rows.length - 1, Math.floor(Number(wise[i]?.since) || 0)));
+        const nextStart = i + 1 < wise.length
+          ? Math.max(0, Math.min(rows.length - 1, Math.floor(Number(wise[i + 1]?.since) || 0)))
+          : rows.length;
+        const end = i + 1 < wise.length ? Math.max(start, nextStart - 1) : rows.length - 1;
+        out.push({ start, end });
+      }
+      return out;
+    }
+  }
   const rowNorm = rows.map((r) => normalizeForMatch(r?.text || ''));
   const matchByItem = new Map();
   for (const m of Array.isArray(matches) ? matches : []) {
@@ -726,13 +767,14 @@ async function main() {
   const source = fs.readFileSync(seriesPath, 'utf8');
   let chips = parseSeriesTexts(source);
   if (!chips.length) throw new Error('agenda summary defective: no wise chips parsed from series');
+  const wiseRanges = parseWiseRanges(source);
   if (MAX_SECTIONS > 0) chips = chips.slice(0, MAX_SECTIONS);
 
   const parsedChips = chips.map((chip, idx) => parseHeadingAndBody(chip, idx));
   const sectionHeadings = parsedChips.map((x) => x.heading);
   const transcriptRows = loadTranscriptRowsForPrefix(transcriptDir, resolvedPrefix);
   const agendaMatches = loadAgendaMatchesForPrefix(transcriptDir, resolvedPrefix);
-  const rowRanges = buildSectionRowRanges({ headings: sectionHeadings, rows: transcriptRows, matches: agendaMatches });
+  const rowRanges = buildSectionRowRanges({ headings: sectionHeadings, rows: transcriptRows, matches: agendaMatches, wiseRanges });
 
   const out = [];
   for (let i = 0; i < parsedChips.length; i += 1) {
@@ -745,7 +787,12 @@ async function main() {
       .map((r) => `${r.display || 'Speaker'}: ${r.text}`)
       .join('\n')
       .trim();
-    const effectiveBody = sectionRowText || body;
+    const bodyWordCount = countWords(body);
+    const rowWordCount = countWords(sectionRowText);
+    // Guard against sparse/misaligned agenda.match row ranges that can collapse rich chips into
+    // tiny "thank you" snippets; only prefer row text when it is materially rich.
+    const rowRangeLooksRich = rowWordCount >= Math.max(80, Math.floor(bodyWordCount * 0.6));
+    const effectiveBody = rowRangeLooksRich ? sectionRowText : body;
     const wordCount = countWords(effectiveBody);
     let summary = '';
     let score = 1;

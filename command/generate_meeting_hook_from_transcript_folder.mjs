@@ -1,11 +1,19 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { readPyaTextValues } from './pya_lookup.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
-const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
-  ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
-  : 'http://localhost:11434/api/chat';
+function resolveOllamaHost() {
+  const fromEnv = String(process.env.OLLAMA_HOST || '').trim();
+  if (fromEnv) return fromEnv.replace(/\/$/u, '');
+  const secretPath = '/home/htaf/pyash/configure/secret.pya';
+  const vals = readPyaTextValues(secretPath, ['ollama host', 'ai host', 'relay local host']);
+  const fromPya = String(vals['ollama host'] || vals['ai host'] || vals['relay local host'] || '').trim();
+  if (fromPya) return fromPya.replace(/\/$/u, '');
+  return 'http://localhost:11434';
+}
+const OLLAMA_URL = `${resolveOllamaHost()}/api/chat`;
 const MODEL = process.env.OWEN_HOOK_MODEL || process.env.OWEN_SUMMARY_MODEL || 'qwen3.5:9b';
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = 0.8;

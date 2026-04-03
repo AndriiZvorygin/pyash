@@ -73,6 +73,44 @@ function parseSrtTime(raw) {
   return (hh * 3600) + (mm * 60) + ss + (ms / 1000);
 }
 
+function splitCueTextForDiarize(text) {
+  const src = String(text || '').replace(/\s+/gu, ' ').trim();
+  if (!src) return [];
+  const out = src
+    .split(/(?<=[.!?])\s+/u)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return out.length ? out : [src];
+}
+
+function expandCue(cue) {
+  const text = String(cue?.text || '').trim();
+  const since = Number(cue?.since || 0);
+  const until = Number(cue?.until || since);
+  const duration = Math.max(0.06, until - since);
+  const words = text.split(/\s+/u).filter(Boolean).length;
+  const pieces = splitCueTextForDiarize(text);
+  const looksTooLong = duration > 18 || words > 90;
+  if (!looksTooLong || pieces.length <= 1) return [cue];
+
+  const weighted = pieces.map((p) => Math.max(1, p.split(/\s+/u).filter(Boolean).length));
+  const total = weighted.reduce((a, b) => a + b, 0);
+  const out = [];
+  let cursor = since;
+  for (let i = 0; i < pieces.length; i += 1) {
+    const span = (duration * weighted[i]) / total;
+    const end = i === pieces.length - 1 ? until : Math.max(cursor + 0.06, cursor + span);
+    out.push({
+      index: Number(cue?.index || 0),
+      since: cursor,
+      until: end,
+      text: pieces[i],
+    });
+    cursor = end;
+  }
+  return out;
+}
+
 function formatSrtTime(seconds) {
   const safe = Math.max(0, Number(seconds) || 0);
   const totalMs = Math.round(safe * 1000);
@@ -98,7 +136,8 @@ function parseSrt(text) {
     const until = parseSrtTime(tm[2]);
     const textLine = lines.slice(2).join(' ').replace(/\s+/g, ' ').trim();
     if (!textLine) continue;
-    out.push({ index: Number.isFinite(idx) ? idx : out.length + 1, since, until, text: textLine });
+    const baseCue = { index: Number.isFinite(idx) ? idx : out.length + 1, since, until, text: textLine };
+    for (const c of expandCue(baseCue)) out.push(c);
   }
   return out;
 }
@@ -471,7 +510,7 @@ async function main() {
   const baseVoicesDir = voicesDirArg
     ? path.resolve(process.cwd(), voicesDirArg)
     : path.join(ROOT, 'world', 'voices');
-  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '1'));
+  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '0'));
   const reseedVoices = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_RESEED_VOICES || ''));
   const voicesDir = isolateVoices
     ? path.resolve(process.cwd(), process.env.PYA_SPEAKER_WORKING_VOICES_DIR || path.join(transcriptDir, 'voices-working'))
@@ -717,6 +756,30 @@ async function main() {
   }
 
   const metadataMap = loadSpeakerMetadataMap(voicesDir);
+  if (rows.length >= 2) {
+    const first = rows[0];
+    const second = rows[1];
+    const firstWords = countWords(first?.text || "");
+    const firstDur = Math.max(0, Number(first?.until || 0) - Number(first?.since || 0));
+    const firstText = String(first?.text || "");
+    const secondKey = String(second?.speaker_key || "");
+    const secondKnown = secondKey && !/^speaker_\d+$/iu.test(secondKey);
+    const looksHandoffOpen = /\bthank you\b|\bgood (?:morning|afternoon|evening)\b|\bwelcome\b/iu.test(firstText);
+    if (
+      secondKnown &&
+      String(first?.speaker_key || "") !== secondKey &&
+      firstWords > 0 &&
+      firstWords <= 6 &&
+      firstDur <= 4.5 &&
+      looksHandoffOpen
+    ) {
+      const beforeKey = String(first?.speaker_key || "");
+      first.speaker_key = secondKey;
+      process.stdout.write(
+        `[speaker-sentence][refine] opening-bridge: speaker "${beforeKey}" -> "${secondKey}" text "${previewText(firstText)}"\n`
+      );
+    }
+  }
   for (const row of rows) {
     row.display = toDisplayLabel(row.speaker_key, metadataMap);
   }
