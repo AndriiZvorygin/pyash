@@ -64,6 +64,7 @@ exists su name qwen say clip verify tail words ob num 2 be default ya
 exists su name qwen say clip verify window ms ob num 120 be default ya
 exists su name qwen say clip verify peak db ob num -12 be default ya
 exists su name qwen say clip verify delta db ob num 1 be default ya
+exists su name qwen say clip verify min tail ms ob num 40 be default ya
 exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow root ob filename "./draw/" be default ya
 exists su name draw workflow default ob text "Z-Image-TSV" be default ya
