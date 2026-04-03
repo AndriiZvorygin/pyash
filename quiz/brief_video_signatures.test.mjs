@@ -197,7 +197,7 @@ test("section mappers use section-local aligned srt timing for cuts and footnote
   );
   assert.match(
     source,
-    /teaching video section align mapper[\s\S]*with text "captions-source\.txt" to name filename section source text be teaching video section leaf do[\s\S]*with text "captions-aligned\.srt" to name filename section aligned srt be teaching video section leaf do[\s\S]*node command\/lyrics_to_srt_from_timing\.mjs/u
+    /teaching video section align mapper[\s\S]*with text "captions-source\.txt" to name filename section source text be teaching video section leaf do[\s\S]*with text "captions-aligned\.srt" to name filename section aligned srt be teaching video section leaf do[\s\S]*node command\/lyrics_to_srt_from_timing\.mjs[\s\S]*--sentence-cues/u
   );
   assert.match(
     source,

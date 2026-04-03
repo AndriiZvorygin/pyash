@@ -331,7 +331,7 @@ su name teaching video section align mapper ob text section manuscript fromindex
   ob text of ob of section timing srt stage to name section align cmd be plus do
   ob text "\" \"" to name section align cmd be plus do
   ob text of ob of section aligned srt stage to name section align cmd be plus do
-  ob text "\"" to name section align cmd be plus do
+  ob text "\" --sentence-cues" to name section align cmd be plus do
   su name section align stage ob name text section align cmd be command do
 
   su name section aligned srt output stage ob filename of ob of section aligned srt stage be filename do
