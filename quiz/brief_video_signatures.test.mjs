@@ -201,7 +201,7 @@ test("section mappers use section-local aligned srt timing for cuts and footnote
   );
   assert.match(
     source,
-    /teaching video section video mapper[\s\S]*ob filename of ob of this to name filename section aligned srt input be filename do[\s\S]*from filename of ob of section aligned srt input stage to name itinerary section cuts itinerary/u
+    /teaching video section video mapper[\s\S]*ob filename of ob of this to name filename section aligned srt input be filename do[\s\S]*by num of ob of section index stage during num 999999 from filename of ob of section aligned srt input stage to name itinerary section cuts itinerary/u
   );
   assert.match(
     source,
