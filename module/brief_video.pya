@@ -17,6 +17,9 @@ from filename "./video_common.pya" ob name shorts footnote mode to name shorts f
 
 exists su name draw system prompt default ob text "Québec bande dessinée illustration, precise linework, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be text ya
 exists su name draw system prompt ob text "Québec bande dessinée illustration, precise linework, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be text ya
+exists su name draw prompt style base default ob text "If people are present, ensure expressive faces with clearly visible irises." be text ya
+exists su name draw prompt style beard default ob text "If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
+exists su name draw prompt beard guide enabled ob bool truth be default ya
 exists su name draw prompt style default ob text "If people are present, ensure expressive faces with clearly visible irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
 exists su name draw prompt style ob text "If people are present, ensure expressive faces with clearly visible irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
 exists su name qwen say sanitize map be map def
@@ -472,7 +475,12 @@ su name teaching video from text manuscript with text style prompt be ceremony d
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt to name text teaching draw style prompt be text do
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt default to name text teaching draw style prompt be text do
   su name draw system prompt ob text of ob of teaching draw style prompt ya
-  su name draw prompt style ob text of ob of draw prompt style default ya
+  su name draw prompt style assembled stage ob text of ob of draw prompt style base default to name text draw prompt style assembled be text do
+  ob bool of ob of draw prompt beard guide enabled be equally from bool truth then
+    ob text " " to name draw prompt style assembled be plus do
+    ob text of ob of draw prompt style beard default to name draw prompt style assembled be plus do
+  do
+  su name draw prompt style ob text of ob of draw prompt style assembled ya
   su name result from text of from of this be teaching video do
   su name result ret
 prah
@@ -495,7 +503,12 @@ su name teaching video from text manuscript with text style prompt to filename v
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt to name text teaching draw style prompt be text do
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt default to name text teaching draw style prompt be text do
   su name draw system prompt ob text of ob of teaching draw style prompt ya
-  su name draw prompt style ob text of ob of draw prompt style default ya
+  su name draw prompt style assembled stage ob text of ob of draw prompt style base default to name text draw prompt style assembled be text do
+  ob bool of ob of draw prompt beard guide enabled be equally from bool truth then
+    ob text " " to name draw prompt style assembled be plus do
+    ob text of ob of draw prompt style beard default to name draw prompt style assembled be plus do
+  do
+  su name draw prompt style ob text of ob of draw prompt style assembled ya
   su name result from text of from of this to filename of to of this be teaching video do
   su name result ret
 prah
