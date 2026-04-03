@@ -89,7 +89,7 @@ exists su name hear whisperx fallback qwen ob bool lie be default ya
 exists su name hear qwen host ob text "http://localhost:8188" be default ya
 exists su name hear workflow root ob filename "./hear/" be default ya
 exists su name hear workflow default ob text "qwen3-asr-timestamps-attn2" be default ya
-exists su name hear qwen chunk max seconds ob num 55 be default ya
+exists su name hear qwen chunk max seconds ob num 30 be default ya
 exists su name hear qwen chunk overlap seconds ob num 1.5 be default ya
 exists su name whisperx enabled ob bool lie be default ya
 exists su name speaker identity enabled ob bool lie be default ya

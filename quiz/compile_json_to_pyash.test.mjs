@@ -36,3 +36,38 @@ test("compile converts json text to pyash json map defs", async () => {
   assert.ok(childIdx >= 0 && parentIdx >= 0);
   assert.ok(childIdx < parentIdx);
 });
+
+test("compile converts large nested json without truncation (stress)", async () => {
+  forget();
+
+  const items = [];
+  for (let i = 0; i < 250; i += 1) {
+    items.push({
+      id: i,
+      label: `item-${i}`,
+      flags: [i % 2 === 0, i % 3 === 0, i % 5 === 0],
+      meta: { bucket: Math.floor(i / 25), weight: i + 0.5 },
+    });
+  }
+  const json = JSON.stringify({
+    title: "stress-profile",
+    count: items.length,
+    items,
+  });
+
+  await run(
+    `su name stress_profile ob text ${JSON.stringify(json)} from state json to state pyash to name output be compile do`
+  );
+
+  const output = remember("output");
+  const text = output?.ob?.text ?? "";
+
+  assert.match(text, /quoted\.pyash\./);
+  assert.match(text, /su name stress_profile be json map def/);
+  assert.match(text, /su name title ob text "stress-profile" ya/);
+  assert.match(text, /su name count ob num 250 ya/);
+  assert.match(text, /su name stress_profile items 1 be json map def/);
+  assert.match(text, /su name stress_profile items 250 be json map def/);
+  assert.match(text, /su name id ob num 249 ya/);
+  assert.ok(text.length > 50_000, "expected large pyash output for stress payload");
+});

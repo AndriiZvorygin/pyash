@@ -239,3 +239,54 @@ test("lyrics_to_srt_from_timing keeps repeated dense chorus windows bounded", as
     assert.ok(duration <= 8.5, `chorus line should not freeze, got ${duration.toFixed(3)}s`);
   }
 });
+
+test("lyrics_to_srt_from_timing sentence-cues stay aligned to source timeline", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-sentence-cues.txt");
+  const timingPath = path.join(dir, "timing-sentence-cues.srt");
+  const outputPath = path.join(dir, "lyrics-sentence-cues.out.srt");
+
+  const lyrics = [
+    "Thank you, Rob.",
+    "Indeed, I'll call our committee to order.",
+    "Is there any declaration of interest?",
+    "Not seeing one.",
+    "Of course, you can declare it at any time."
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:00,000 --> 00:00:00,120",
+    "Thank you Rob",
+    "",
+    "2",
+    "00:00:00,121 --> 00:00:00,300",
+    "Indeed I'll call our committee",
+    "",
+    "3",
+    "00:00:00,301 --> 00:00:00,540",
+    "to order Is there any",
+    "",
+    "4",
+    "00:00:00,541 --> 00:00:00,760",
+    "declaration of interest Not seeing one",
+    "",
+    "5",
+    "00:00:00,761 --> 00:00:01,000",
+    "Of course you can declare it at any time"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.ok(rows.length >= 4, "sentence cues should remain fine-grained");
+  assert.ok(rows[0].since <= 0.01, "first row should stay near source start");
+
+  const last = rows[rows.length - 1];
+  assert.ok(last.until <= 1.02, `last row should stay on source timeline, got ${last.until.toFixed(3)}s`);
+});

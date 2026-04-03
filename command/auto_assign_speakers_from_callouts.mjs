@@ -1,9 +1,35 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { readPyaTextValues } from './pya_lookup.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
 const DEFAULT_VOICES = path.join(ROOT, 'world/voices');
+function resolveOllamaHost() {
+  const fromEnv = String(process.env.OLLAMA_HOST || '').trim();
+  if (fromEnv) return fromEnv.replace(/\/$/u, '');
+  const secretPath = '/home/htaf/pyash/configure/secret.pya';
+  const vals = readPyaTextValues(secretPath, ['ollama host', 'ai host', 'relay local host']);
+  const fromPya = String(vals['ollama host'] || vals['ai host'] || vals['relay local host'] || '').trim();
+  if (fromPya) return fromPya.replace(/\/$/u, '');
+  return 'http://localhost:11434';
+}
+const OLLAMA_URL = `${resolveOllamaHost()}/api/chat`;
+const VERIFY_MODEL = process.env.AUTOASSIGN_VERIFY_MODEL
+  || process.env.SPEAKER_VERIFY_MODEL
+  || process.env.MEETING_SUMMARY_MODEL
+  || process.env.SUMMARY_MODEL
+  || process.env.OWEN_SUMMARY_MODEL
+  || 'qwen3.5:9b';
+const VERIFY_ENABLED = !/^(0|false|no)$/iu.test(String(process.env.PYA_AUTOASSIGN_VERIFY || '1'));
+const VERIFY_CONTEXT_RADIUS = (() => {
+  const raw = Number(process.env.PYA_AUTOASSIGN_VERIFY_CONTEXT_RADIUS || 4);
+  return Number.isFinite(raw) && raw >= 1 && raw <= 12 ? Math.floor(raw) : 4;
+})();
+const VERIFY_MIN_CONFIDENCE = (() => {
+  const raw = Number(process.env.PYA_AUTOASSIGN_VERIFY_MIN_CONFIDENCE || 0.67);
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.67;
+})();
 
 function usage() {
   return [
@@ -615,6 +641,16 @@ function gatherSelfIntroEvidence(rows, roster, byTarget) {
         }
       }
       if (!person) person = bestRosterByFullName(introName, roster);
+      if (!person) {
+        const parts = introName.split(/\s+/u).filter(Boolean);
+        if (parts.length === 1) {
+          person = bestRosterByFirstName(parts[0], roster)
+            || bestRosterByLastName(parts[0], roster);
+        } else if (parts.length > 1) {
+          person = bestRosterByFirstName(parts[0], roster)
+            || bestRosterByLastName(parts.at(-1), roster);
+        }
+      }
       if (!person) person = personFromFullName(titleCaseName(introName));
       if (!person) person = personFromSingleName(introName);
       if (person) add(key, person, m ? 'self-intro' : 'self-intro-im', i + 1, text);
@@ -684,6 +720,56 @@ function chooseAssignments(byTarget) {
   return chooseAssignmentsWithRows(byTarget, []);
 }
 
+function gatherDirectIntroAssignments(rows, roster) {
+  const introRe = /\b(?:my name is|my name['’]s)\s+([A-Za-z][A-Za-z'\-.]+(?:\s+[A-Za-z][A-Za-z'\-.]+){0,2})(?=[,.;:!?]|$)/iu;
+  const byKey = new Map();
+  for (let i = 0; i < rows.length; i += 1) {
+    const r = rows[i];
+    if (!isUnknownSpeakerRow(r)) continue;
+    const text = String(r?.text || "");
+    const m = text.match(introRe);
+    if (!m?.[1]) continue;
+    const introName = String(m[1] || "").trim();
+    const parts = introName.split(/\s+/u).filter(Boolean);
+    const person = bestRosterByFullName(introName, roster)
+      || bestRosterByFirstName(parts[0] || "", roster)
+      || bestRosterByLastName(parts.at(-1) || "", roster);
+    if (!person) continue;
+    const key = String(r?.speaker_key || "");
+    if (!key) continue;
+    if (!byKey.has(key)) byKey.set(key, new Map());
+    const inner = byKey.get(key);
+    const prev = inner.get(person.slug) || { person, count: 0, atindex: i + 1, sample: text };
+    prev.count += 1;
+    if (!prev.sample) prev.sample = text;
+    inner.set(person.slug, prev);
+  }
+
+  const out = [];
+  for (const [speakerKey, inner] of byKey.entries()) {
+    const cands = [...inner.values()].sort((a, b) => b.count - a.count || a.person.full.localeCompare(b.person.full));
+    if (!cands.length) continue;
+    const best = cands[0];
+    const second = cands[1];
+    if (second && second.count === best.count) continue;
+    out.push({
+      speaker_key: speakerKey,
+      person_full: best.person.full,
+      person_slug: best.person.slug,
+      evidence_count: Math.max(3, best.count * 3),
+      margin: best.count - (second?.count || 0),
+      examples: [{ why: "direct-self-intro", atindex: best.atindex, text: String(best.sample || "").slice(0, 180) }],
+      alternatives: cands.slice(1, 4).map((x) => ({ full: x.person.full, count: x.count })),
+    });
+  }
+  return out.sort((a, b) => a.speaker_key.localeCompare(b.speaker_key));
+}
+
+function isDirectSelfIntroAssignment(a) {
+  const examples = Array.isArray(a?.examples) ? a.examples : [];
+  return examples.some((x) => String(x?.why || "").trim() === "direct-self-intro");
+}
+
 function buildSpeakerSamples(rows, maxLines = 6) {
   const by = new Map();
   for (const r of rows) {
@@ -724,6 +810,12 @@ function chooseAssignmentsWithRows(byTarget, rows) {
       if (bestDirect !== secondDirect) {
         best = bestDirect > secondDirect ? best : second;
       } else {
+      // Prefer full roster-style identity over single-token alias when evidence ties.
+      const bestIsFull = /\s/u.test(String(best?.person?.full || ''));
+      const secondIsFull = /\s/u.test(String(second?.person?.full || ''));
+      if (bestIsFull !== secondIsFull) {
+        best = bestIsFull ? best : second;
+      } else {
       // Resolve ties among single-name callout variants: Frank/Franklin/Frankly.
       const isSingleA = !/\s/u.test(String(best?.person?.full || ''));
       const isSingleB = !/\s/u.test(String(second?.person?.full || ''));
@@ -756,6 +848,7 @@ function chooseAssignmentsWithRows(byTarget, rows) {
         } else {
           continue; // ambiguous tie
         }
+      }
       }
       }
     }
@@ -802,6 +895,153 @@ function countUnknown(rows) {
   return { unknown_rows: unknownRows, unknown_keys: keys.size, unknown_key_list: [...keys].sort() };
 }
 
+async function ask(messages, { numPredict = 220 } = {}) {
+  const body = {
+    model: VERIFY_MODEL,
+    mode: 'chat',
+    keep_alive: 180,
+    think: false,
+    stream: false,
+    options: { num_predict: numPredict },
+    messages
+  };
+  const res = await fetch(OLLAMA_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`ollama status ${res.status}`);
+  const json = await res.json();
+  return String(json?.message?.content || '').trim();
+}
+
+function parseJsonObjectFromText(text) {
+  const src = String(text || '').trim();
+  if (!src) return null;
+  try {
+    return JSON.parse(src);
+  } catch {}
+  const m = src.match(/\{[\s\S]*\}/u);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[0]);
+  } catch {
+    return null;
+  }
+}
+
+function buildTransitionContext(rows, assignment, radius = 4) {
+  const key = String(assignment?.speaker_key || '');
+  if (!rows.length || !key) return '';
+  const centers = [];
+  for (const ex of (assignment?.examples || [])) {
+    const idx = Number(ex?.atindex || 0) - 1;
+    if (Number.isFinite(idx) && idx >= 0 && idx < rows.length) centers.push(idx);
+  }
+  if (!centers.length) {
+    const first = rows.findIndex((r) => String(r?.speaker_key || '') === key);
+    if (first >= 0) centers.push(first);
+  }
+  const uniqCenters = [...new Set(centers)].slice(0, 3);
+  const blocks = [];
+  for (const center of uniqCenters) {
+    const start = Math.max(0, center - radius);
+    const end = Math.min(rows.length - 1, center + radius);
+    const lines = [];
+    for (let i = start; i <= end; i += 1) {
+      const r = rows[i] || {};
+      const line = `${i + 1}. [${String(r?.speaker_key || '')} | ${String(r?.display || '').trim() || 'unknown'}] ${String(r?.text || '').replace(/\s+/gu, ' ').trim()}`;
+      lines.push(line);
+    }
+    blocks.push(`Context block around row ${center + 1}:\n${lines.join('\n')}`);
+  }
+  return blocks.join('\n\n');
+}
+
+function resolveRosterPersonFromName(rawName, roster) {
+  const name = String(rawName || '').trim();
+  if (!name) return null;
+  const byFull = bestRosterByFullName(name, roster);
+  if (byFull) return byFull;
+  const parts = name.split(/\s+/u).filter(Boolean);
+  if (!parts.length) return null;
+  const byLast = bestRosterByLastName(parts.at(-1), roster);
+  if (byLast) return byLast;
+  if (parts.length === 1) return bestRosterByFirstName(parts[0], roster);
+  return bestRosterByFirstName(parts[0], roster);
+}
+
+async function verifyAssignmentWithContext({ assignment, rows, roster }) {
+  const context = buildTransitionContext(rows, assignment, VERIFY_CONTEXT_RADIUS);
+  const alternatives = Array.isArray(assignment?.alternatives) ? assignment.alternatives : [];
+  const rosterList = roster.map((p) => p.full).join('\n');
+  const prompt = [
+    'Decide who the next speaker is at the transition context.',
+    '',
+    `Target speaker_key: ${String(assignment?.speaker_key || '')}`,
+    `Proposed by heuristics: ${String(assignment?.person_full || '')}`,
+    alternatives.length
+      ? `Other candidates: ${alternatives.map((a) => `${String(a?.full || '').trim()} (${Number(a?.count || 0)})`).join('; ')}`
+      : 'Other candidates: none',
+    '',
+    'ROSTER (only valid names):',
+    rosterList,
+    '',
+    'CONTEXT (+/- nearby lines around transition):',
+    context || '(no context)',
+    '',
+    'Return JSON only:',
+    '{"accept": true|false, "person_full": "<roster full name or UNKNOWN>", "confidence": 0..1, "reason": "<short>"}',
+    '',
+    'Rules:',
+    '- person_full must be a roster name exactly, or UNKNOWN.',
+    '- Reject phrase fragments (example: "as you see", "talking", "slightly off topic").',
+    '- Use the transition context; if uncertain, set accept=false and person_full=UNKNOWN.'
+  ].join('\n');
+
+  const raw = await ask([
+    { role: 'system', content: 'You are a strict municipal speaker transition verifier.' },
+    { role: 'user', content: prompt }
+  ], { numPredict: 200 });
+  const parsed = parseJsonObjectFromText(raw);
+  if (!parsed || typeof parsed !== 'object') {
+    return { status: 'error', error: 'verifier returned non-JSON output', raw };
+  }
+  const accept = !!parsed.accept;
+  const confidence = Number(parsed.confidence);
+  const personRaw = String(parsed.person_full || '').trim();
+  const reason = String(parsed.reason || '').trim();
+  if (!accept) {
+    return {
+      status: 'reject',
+      confidence: Number.isFinite(confidence) ? confidence : 0,
+      reason: reason || 'verifier rejected',
+      raw,
+    };
+  }
+  if (!Number.isFinite(confidence) || confidence < VERIFY_MIN_CONFIDENCE) {
+    return {
+      status: 'reject',
+      confidence: Number.isFinite(confidence) ? confidence : 0,
+      reason: `confidence below threshold (${VERIFY_MIN_CONFIDENCE})`,
+      raw,
+    };
+  }
+  const person = resolveRosterPersonFromName(personRaw, roster);
+  if (!person) {
+    return {
+      status: 'reject',
+      confidence,
+      reason: 'verifier did not return valid roster person',
+      raw,
+    };
+  }
+  if (person.slug === assignment.person_slug) {
+    return { status: 'accept', confidence, reason, person, raw };
+  }
+  return { status: 'replace', confidence, reason, person, raw };
+}
+
 async function main() {
   const transcriptDirArg = process.argv[2];
   const prefixArg = process.argv[3] || 'auto';
@@ -844,13 +1084,25 @@ async function main() {
     gatherAgendaSectionEvidence(rows, roster, sectionRanges, evidence);
   }
   const proposedAssignments = chooseAssignmentsWithRows(evidence, rows);
+  const directIntroAssignments = gatherDirectIntroAssignments(rows, roster);
+  const mergedAssignments = [...proposedAssignments];
+  const existingKeys = new Set(mergedAssignments.map((x) => x.speaker_key));
+  for (const a of directIntroAssignments) {
+    if (existingKeys.has(a.speaker_key)) continue;
+    mergedAssignments.push(a);
+    existingKeys.add(a.speaker_key);
+  }
   const allowOverwriteExisting = /^(1|true|yes)$/iu.test(String(process.env.PYA_AUTOASSIGN_OVERWRITE_EXISTING || ''));
   const assignments = [];
+  const verifierRejected = [];
+  const verifierErrors = [];
+  const verifierReplaced = [];
   const skippedLocked = [];
   const unchangedStable = [];
   const writeErrors = [];
 
-  for (const a of proposedAssignments) {
+  for (const baseAssignment of mergedAssignments) {
+    let a = baseAssignment;
     let metaPath = '';
     try {
       metaPath = ensureSpeakerMetaFile(voicesDir, a.speaker_key);
@@ -884,6 +1136,62 @@ async function main() {
         continue;
       }
     }
+    if (VERIFY_ENABLED) {
+      try {
+        const v = await verifyAssignmentWithContext({ assignment: a, rows, roster });
+        if (v.status === 'reject') {
+          verifierRejected.push({
+            speaker_key: a.speaker_key,
+            proposed_name: a.person_slug,
+            proposed_full: a.person_full,
+            confidence: v.confidence,
+            reason: v.reason,
+          });
+          continue;
+        }
+        if (v.status === 'error') {
+          if (isDirectSelfIntroAssignment(a)) {
+            // Safe fallback: direct "my name is X" matched to roster identity.
+            // Keep moving when verifier transport/output fails.
+            v.status = 'accept';
+          } else {
+          verifierErrors.push({
+            speaker_key: a.speaker_key,
+            proposed_name: a.person_slug,
+            proposed_full: a.person_full,
+            error: v.error,
+          });
+          continue;
+          }
+        }
+        if (v.status === 'replace') {
+          verifierReplaced.push({
+            speaker_key: a.speaker_key,
+            from_full: a.person_full,
+            to_full: v.person.full,
+            confidence: v.confidence,
+            reason: v.reason || '',
+          });
+          a = {
+            ...a,
+            person_full: v.person.full,
+            person_slug: v.person.slug,
+          };
+        }
+      } catch (err) {
+        if (isDirectSelfIntroAssignment(a)) {
+          // Safe fallback when verifier call itself fails.
+        } else {
+        verifierErrors.push({
+          speaker_key: a.speaker_key,
+          proposed_name: a.person_slug,
+          proposed_full: a.person_full,
+          error: String(err?.message || err),
+        });
+        continue;
+        }
+      }
+    }
     try {
       setSpeakerMetaName(metaPath, a.person_slug);
     } catch (err) {
@@ -905,6 +1213,15 @@ async function main() {
     overwrite_existing: allowOverwriteExisting,
     before,
     proposed_assignments: proposedAssignments,
+    direct_intro_assignments: directIntroAssignments,
+    merged_assignments: mergedAssignments,
+    verifier_enabled: VERIFY_ENABLED,
+    verifier_model: VERIFY_MODEL,
+    verifier_min_confidence: VERIFY_MIN_CONFIDENCE,
+    verifier_context_radius: VERIFY_CONTEXT_RADIUS,
+    verifier_rejected: verifierRejected,
+    verifier_errors: verifierErrors,
+    verifier_replaced: verifierReplaced,
     assignments,
     skipped_locked: skippedLocked,
     unchanged_stable: unchangedStable,
@@ -919,6 +1236,12 @@ async function main() {
   process.stdout.write(`[speaker-autoassign] before unknown rows: ${before.unknown_rows}\n`);
   process.stdout.write(`[speaker-autoassign] before unknown keys: ${before.unknown_keys}\n`);
   process.stdout.write(`[speaker-autoassign] proposed keys: ${proposedAssignments.length}\n`);
+  process.stdout.write(`[speaker-autoassign] direct intro keys: ${directIntroAssignments.length}\n`);
+  process.stdout.write(`[speaker-autoassign] merged keys: ${mergedAssignments.length}\n`);
+  process.stdout.write(`[speaker-autoassign] verifier enabled: ${VERIFY_ENABLED ? 'yes' : 'no'}\n`);
+  process.stdout.write(`[speaker-autoassign] verifier rejected: ${verifierRejected.length}\n`);
+  process.stdout.write(`[speaker-autoassign] verifier errors: ${verifierErrors.length}\n`);
+  process.stdout.write(`[speaker-autoassign] verifier replaced: ${verifierReplaced.length}\n`);
   process.stdout.write(`[speaker-autoassign] assigned keys: ${assignments.length}\n`);
   process.stdout.write(`[speaker-autoassign] locked skips: ${skippedLocked.length}\n`);
   process.stdout.write(`[speaker-autoassign] unchanged stable: ${unchangedStable.length}\n`);
