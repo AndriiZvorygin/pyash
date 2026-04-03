@@ -97,7 +97,7 @@ function resolveClipVerifyDeltaDb({ rememberFn = remember } = {}) {
 function resolveClipVerifyMinTailMs({ rememberFn = remember } = {}) {
   const configured = resolveConfigNum("qwen say clip verify min tail ms", { rememberFn });
   if (Number.isFinite(configured) && configured >= 0) return Number(configured);
-  return 120;
+  return 40;
 }
 
 function resolveTailPadMs({ rememberFn = remember } = {}) {

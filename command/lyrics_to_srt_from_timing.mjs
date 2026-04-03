@@ -508,7 +508,9 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) 
     const ms = row?.matchedSince;
     const mu = row?.matchedUntil;
     if (!Number.isFinite(ms) || !Number.isFinite(mu)) continue;
-    const dSince = Math.abs(Number(row.since) - ms);
+    const dSince = sentenceCues
+      ? Math.max(0, ms - Number(row.since))
+      : Math.abs(Number(row.since) - ms);
     const dUntil = Math.abs(Number(row.until) - mu);
     maxDrift = Math.max(maxDrift, dSince, dUntil);
     if (!worst || Math.max(dSince, dUntil) > worst.max) {

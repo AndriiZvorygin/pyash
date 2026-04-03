@@ -343,3 +343,39 @@ test("lyrics_to_srt_from_timing sentence-cues never overlap", async () => {
     );
   }
 });
+
+test("lyrics_to_srt_from_timing sentence-cues tolerate late start from overlap clamp", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-sentence-late-start-ok.txt");
+  const timingPath = path.join(dir, "timing-sentence-late-start-ok.srt");
+  const outputPath = path.join(dir, "lyrics-sentence-late-start-ok.out.srt");
+
+  const lyrics = [
+    "Line one carries most of the duration.",
+    "Line two is short.",
+    "Be love now."
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:00,000 --> 00:00:08,320",
+    "Line one carries most of the duration",
+    "",
+    "2",
+    "00:00:08,320 --> 00:00:12,240",
+    "Line two is short Be love now"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows.length, 3);
+  for (let i = 1; i < rows.length; i += 1) {
+    assert.ok(rows[i].since >= rows[i - 1].until, "rows should stay non-overlapping");
+  }
+});

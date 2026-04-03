@@ -589,6 +589,7 @@ test("qwenSay retries when final chunk tail gap is too short even if hot-tail is
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify max retries" }, ob: { num: 1 }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify min tail ms" }, ob: { num: 120 }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tail-gap-fail-"));
   const output = path.join(outDir, "out.wav");
   const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
