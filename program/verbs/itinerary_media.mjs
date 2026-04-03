@@ -265,11 +265,26 @@ async function persistItineraryManifest({
     });
   }
   await fs.mkdir(path.dirname(outputResolved.resolved), { recursive: true });
+  const itineraryText = renderItineraryPya({
+    itineraryName,
+    cuts: series.map((entry, idx) => ({
+      index: Number(entry?.by?.num ?? (idx + 1)),
+      name: String(entry?.su?.name ?? `cut ${String(idx + 1).padStart(3, "0")}`),
+      since: Number(entry?.since?.num ?? 0),
+      until: Number(entry?.until?.num ?? entry?.since?.num ?? 0),
+      obText: entry?.ob?.text !== undefined ? String(entry?.ob?.text ?? "") : undefined,
+      obFilename: entry?.ob?.filename !== undefined ? String(entry?.ob?.filename ?? "") : undefined
+    }))
+  });
   // Retry/resume safety: if manifest already exists for this run path, reuse it
   // so non-deterministic stages (e.g. promptify) do not rewrite and trip hash checks.
   try {
     await fs.access(outputResolved.resolved);
-    const existingBytes = await fs.readFile(outputResolved.resolved);
+    const existingText = await fs.readFile(outputResolved.resolved, "utf8");
+    if (existingText !== itineraryText) {
+      throw new Error("itinerary manifest content changed");
+    }
+    const existingBytes = Buffer.from(existingText, "utf8");
     const existingArtifact = recordArtifact({
       locator: outputResolved.resolved,
       producer: String(sentence?.su?.name ?? fallbackPrefix),
@@ -287,17 +302,6 @@ async function persistItineraryManifest({
   } catch {
     // No existing manifest yet; continue and write fresh below.
   }
-  const itineraryText = renderItineraryPya({
-    itineraryName,
-    cuts: series.map((entry, idx) => ({
-      index: Number(entry?.by?.num ?? (idx + 1)),
-      name: String(entry?.su?.name ?? `cut ${String(idx + 1).padStart(3, "0")}`),
-      since: Number(entry?.since?.num ?? 0),
-      until: Number(entry?.until?.num ?? entry?.since?.num ?? 0),
-      obText: entry?.ob?.text !== undefined ? String(entry?.ob?.text ?? "") : undefined,
-      obFilename: entry?.ob?.filename !== undefined ? String(entry?.ob?.filename ?? "") : undefined
-    }))
-  });
   await fs.writeFile(outputResolved.resolved, itineraryText, "utf8");
   const itineraryBytes = await fs.readFile(outputResolved.resolved);
   const itineraryArtifact = recordArtifact({
