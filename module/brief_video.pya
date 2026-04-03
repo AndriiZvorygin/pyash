@@ -476,10 +476,8 @@ su name teaching video from text manuscript with text style prompt be ceremony d
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt default to name text teaching draw style prompt be text do
   su name draw system prompt ob text of ob of teaching draw style prompt ya
   su name draw prompt style assembled stage ob text of ob of draw prompt style base default to name text draw prompt style assembled be text do
-  ob bool of ob of draw prompt beard guide enabled be equally from bool truth then
-    ob text " " to name draw prompt style assembled be plus do
-    ob text of ob of draw prompt style beard default to name draw prompt style assembled be plus do
-  do
+  ob text " " to name draw prompt style assembled be plus do
+  ob text of ob of draw prompt style beard default to name draw prompt style assembled be plus do
   su name draw prompt style ob text of ob of draw prompt style assembled ya
   su name result from text of from of this be teaching video do
   su name result ret
@@ -504,10 +502,8 @@ su name teaching video from text manuscript with text style prompt to filename v
   ob name text teaching draw style prompt be equally from text "" then ob name text draw system prompt default to name text teaching draw style prompt be text do
   su name draw system prompt ob text of ob of teaching draw style prompt ya
   su name draw prompt style assembled stage ob text of ob of draw prompt style base default to name text draw prompt style assembled be text do
-  ob bool of ob of draw prompt beard guide enabled be equally from bool truth then
-    ob text " " to name draw prompt style assembled be plus do
-    ob text of ob of draw prompt style beard default to name draw prompt style assembled be plus do
-  do
+  ob text " " to name draw prompt style assembled be plus do
+  ob text of ob of draw prompt style beard default to name draw prompt style assembled be plus do
   su name draw prompt style ob text of ob of draw prompt style assembled ya
   su name result from text of from of this to filename of to of this be teaching video do
   su name result ret
