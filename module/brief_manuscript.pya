@@ -18,10 +18,13 @@ Task:
 - Sentence 1: one surprising fact from the transcript.
 - Sentence 2: how that fact relates directly to the viewer today.
 - Keep this segment between 20 and 44 words.
+- Role: establish the first source-grounded lane only.
 
 Rules:
 - Dramatic, authoritative tone.
 - Source claims must come only from the provided transcript.
+- Keep one concrete lane only: one event/reform/mechanism plus one viewer relevance sentence.
+- Do not include uplift language, solution language, or final-call language in this segment.
 - Prefer wording that stays close to the transcript instead of polished paraphrase.
 - Do not turn a broad source description into a stronger causal claim unless that causal wording appears in the transcript.
 - Do not introduce new people, places, events, or policies not present in the transcript.
@@ -41,10 +44,14 @@ Task:
 - Sentence 1: one surprising fact from the transcript.
 - Sentence 2: how that fact relates directly to the viewer today.
 - Keep this segment between 20 and 44 words.
+- Role: reveal a second lane that is clearly distinct from segment one.
 
 Rules:
 - Do not repeat the same person/event/core claim from the prior segment.
 - Prefer a clearly different source section than the prior segment.
+- Do not reuse the same anchor framing from prior segment (for example the same opening clause or same repeated noun phrase).
+- Keep the relation to the viewer different from prior segment (new consequence, risk, or decision frame).
+- Fail-safe: if you cannot find a distinct source lane, output exactly: DISTINCT_SOURCE_MISSING.
 - Prefer details that can stay close to the transcript's own wording.
 - Dramatic, authoritative tone.
 - Source claims must come only from the provided transcript.
@@ -65,9 +72,13 @@ Task:
 - Write 1-2 short spoken sentences.
 - Give an uplifting vision grounded in civic courage and reform.
 - Keep this segment between 18 and 40 words.
+- Role: close and elevate; do not restate source facts from segment one or two.
 
 Rules:
 - Hopeful ending.
+- No new historical/source facts.
+- Do not repeat the same core claim wording from segment one or segment two.
+- Prefer consequence-and-invitation language over fact restatement.
 - Plain prose only.
 - No labels, no bullets, no markdown, no quotes around the full output.
 .text.quoted be text ya
@@ -106,7 +117,8 @@ Rules:
 - Fail only on clear mismatch, clear unsupported source claims, or clear instruction break.
 - Use the TASK and CANDIDATE exactly as provided.
 - If TASK includes `TARGET_WORDS: X-Y`, count candidate words and fail when outside that inclusive range.
-- If TASK includes `PRIOR SEGMENT:`, fail when CANDIDATE repeats the prior segment wording or same core claim.
+- If TASK includes `PRIOR SEGMENT:`, fail when CANDIDATE repeats the prior segment wording, same core claim, or same viewer-implication frame.
+- If CANDIDATE outputs `DISTINCT_SOURCE_MISSING`, treat as FAIL.
 
 Output:
 - First output one short reasoning paragraph (2-4 sentences).
