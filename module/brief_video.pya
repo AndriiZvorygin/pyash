@@ -344,7 +344,7 @@ su name teaching video section video mapper ob filename section aligned srt from
   su name section aligned srt input stage ob filename of ob of this to name filename section aligned srt input be filename do
   su name section cuts stage from num of ob of section index stage with text "section-cuts.series.pya" to name filename section cuts be teaching video section leaf do
 
-  su name section cut stage from filename of ob of section aligned srt input stage to name itinerary section cuts itinerary be cut do
+  su name section cut stage by num of ob of section index stage during num 999999 from filename of ob of section aligned srt input stage to name itinerary section cuts itinerary be cut do
   su name section cuts copy stage ob filename of ob of section cut stage to filename of ob of section cuts stage be copy do
   su name section cuts output stage ob filename of ob of section cuts stage be filename do
   su name section cuts output stage ret
