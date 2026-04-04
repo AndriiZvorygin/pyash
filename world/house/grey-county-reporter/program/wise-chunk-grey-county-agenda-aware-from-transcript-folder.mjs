@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateAgendaWiseArtifacts } from "./shared/agenda-wise-chunks.mjs";
+import { pickRichestAgendaPathFromMeetingDir } from "../../../../program/library/agenda_preview_shared.mjs";
 
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HOUSE = path.resolve(PROGRAM_DIR, "..");
@@ -83,20 +84,7 @@ function pickPlainTranscript(transcriptDir, prefix = "auto") {
 }
 
 function pickAgendaMarkdown(meetingDir) {
-  const convertedDir = path.join(meetingDir, "converted");
-  const preferred = path.join(convertedDir, "agenda-01.pruned.md");
-  if (fs.existsSync(preferred)) return preferred;
-
-  if (!fs.existsSync(convertedDir)) return "";
-  const names = fs.readdirSync(convertedDir)
-    .filter((n) => n.toLowerCase().endsWith(".pruned.md"))
-    .sort();
-  if (names.length) return path.join(convertedDir, names[0]);
-
-  const mdNames = fs.readdirSync(convertedDir)
-    .filter((n) => n.toLowerCase().startsWith("agenda-") && n.toLowerCase().endsWith(".md"))
-    .sort();
-  return mdNames.length ? path.join(convertedDir, mdNames[0]) : "";
+  return pickRichestAgendaPathFromMeetingDir(meetingDir);
 }
 
 async function main() {
