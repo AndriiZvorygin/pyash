@@ -24,11 +24,19 @@ const WRITER_MAP = {
     envPrefix: "OWEN",
     defaultCommunity: "owen-sound-council",
   },
+  andrii: {
+    adapterFile: path.join(PYASH_ROOT, "world/house/andrii-youtube-reporter/program/writer-adapter-andrii-youtube.mjs"),
+    adapterExport: "ANDRII_ADAPTER",
+    nextStoryScript: path.join(PYASH_ROOT, "world/house/andrii-youtube-reporter/program/run-next-unposted-story.mjs"),
+    publishScript: path.join(PYASH_ROOT, "world/house/owen-sound-reporter/program/publish-meeting-to-helpos-from-payload.mjs"),
+    envPrefix: "ANDRII",
+    defaultCommunity: "andrii-zvorygin",
+  },
 };
 
 function usage() {
   return [
-    "Usage: node command/unified-writer-cli.mjs <command> --writer <grey|owen> [options]",
+    "Usage: node command/unified-writer-cli.mjs <command> --writer <grey|owen|andrii> [options]",
     "",
     "Commands:",
     "  list          list meeting workspaces and current stage",
@@ -41,7 +49,7 @@ function usage() {
     "  inspect       print report/artifact paths for --meeting",
     "",
     "Common flags:",
-    "  --writer <id>             writer adapter id (grey|owen)",
+    "  --writer <id>             writer adapter id (grey|owen|andrii)",
     "  --meeting <selector>      index, 8-char id prefix, full id/url, or folder fragment",
     "  --refresh                 force monthly refresh",
     "  --pick-only               select candidate only (no pipeline)",
@@ -258,6 +266,7 @@ function resolveMeetingSelector(meetingsDir, selector) {
     i += 1;
     const dir = path.join(meetingsDir, base);
     const meetingJson = path.join(dir, "meeting.json");
+    const pickJson = path.join(dir, "next-story.pick.json");
     let meetingId = "";
     let meetingUrl = "";
     if (fs.existsSync(meetingJson)) {
@@ -269,11 +278,25 @@ function resolveMeetingSelector(meetingsDir, selector) {
         // ignore
       }
     }
+    if ((!meetingId || !meetingUrl) && fs.existsSync(pickJson)) {
+      try {
+        const j = JSON.parse(fs.readFileSync(pickJson, "utf8"));
+        meetingId = meetingId || String(j?.meeting_id || "");
+        meetingUrl = meetingUrl || String(j?.meeting_url || "");
+      } catch {
+        // ignore
+      }
+    }
     const id8 = meetingId ? meetingId.slice(0, 8) : "";
-    if (/^\d+$/u.test(sel) && i === Number(sel)) return meetingUrl || id8 || base;
-    if (id8 && id8 === sel) return meetingUrl || id8;
-    if (base.includes(sel)) return meetingUrl || id8 || base;
-    if (meetingId && meetingId === sel) return meetingUrl || id8;
+    const baseTail = String(base).split("_").filter(Boolean).pop() || "";
+    const inferred = /^[A-Za-z0-9_-]{8,}$/u.test(baseTail) ? baseTail : "";
+    const ref = meetingUrl || meetingId || id8 || inferred || base;
+    if (/^\d+$/u.test(sel) && i === Number(sel)) return ref;
+    if (id8 && id8 === sel) return ref;
+    if (meetingId && meetingId.startsWith(sel)) return ref;
+    if (inferred && inferred.startsWith(sel)) return ref;
+    if (base.includes(sel)) return ref;
+    if (meetingId && meetingId === sel) return ref;
     if (meetingUrl && meetingUrl === sel) return meetingUrl;
   }
   return "";
