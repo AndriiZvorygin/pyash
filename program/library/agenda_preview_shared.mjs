@@ -53,10 +53,20 @@ function cleanSummaryText(value) {
 export function toOneSentenceSummary(value, fallback = "Agenda preview is available.") {
   const text = cleanSummaryText(value);
   if (!text) return fallback;
-  const punctuated = text.match(/^(.+?[.!?](?=\s|$))/u);
-  const sentence = (punctuated ? punctuated[1] : text).trim();
-  if (!sentence) return fallback;
-  return /[.!?]$/u.test(sentence) ? sentence : `${sentence}.`;
+  const stripped = text
+    .replace(/^The agenda(?:'s)? most newsworthy items include\s+/iu, "")
+    .replace(/^Most newsworthy agenda items include\s+/iu, "")
+    .replace(/[.!?]+$/u, "")
+    .trim();
+  const parts = stripped
+    .split(/\s*;\s*/u)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const core = parts.join("; ").replace(/\s+/gu, " ").trim();
+  if (!core) return fallback;
+  const sentence = `Upcoming agenda highlights ${core}.`;
+  return sentence.length <= 280 ? sentence : `${sentence.slice(0, 277).trim()}...`;
 }
 
 export function parseTopNewsHeadlines(markdownText = "") {
@@ -87,4 +97,3 @@ export function deriveWholeAgendaSummaryFromTopNews(topNewsMarkdown, fallback) {
   const list = headlines.slice(0, 5).join("; ");
   return `The agenda's most newsworthy items include ${list}.`;
 }
-

@@ -3,7 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { pickRichestAgendaMarkdownPathFromConvertedDir } from "../program/library/agenda_preview_shared.mjs";
+import {
+  pickRichestAgendaMarkdownPathFromConvertedDir,
+  pickRichestAgendaPdfPathFromSourceDir,
+} from "../program/library/agenda_preview_shared.mjs";
 
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PYASH_ROOT = path.resolve(COMMAND_DIR, "..");
@@ -63,9 +66,39 @@ async function main() {
     process.exit(2);
   }
 
-  const agendaMdPath = pickRichestAgendaMarkdownPathFromConvertedDir(convertedDir);
-  if (!agendaMdPath || !fs.existsSync(agendaMdPath)) {
-    process.stdout.write("[agenda-subreports] no agenda markdown found; skipping subreport extraction\n");
+  let agendaMdPath = pickRichestAgendaMarkdownPathFromConvertedDir(convertedDir);
+  let agendaMdSize = 0;
+  if (agendaMdPath && fs.existsSync(agendaMdPath)) {
+    agendaMdSize = Number(fs.statSync(agendaMdPath).size || 0);
+  }
+  if (!agendaMdPath || !fs.existsSync(agendaMdPath) || agendaMdSize <= 0) {
+    const sourceDir = path.join(path.dirname(convertedDir), "source");
+    const richestAgendaPdf = pickRichestAgendaPdfPathFromSourceDir(sourceDir);
+    if (richestAgendaPdf && fs.existsSync(richestAgendaPdf)) {
+      const fallbackMdPath = path.join(convertedDir, "agenda-99-from-pdf.md");
+      process.stdout.write(`[agenda-subreports] markdown missing/empty; extracting from PDF: ${richestAgendaPdf}\n`);
+      try {
+        await runWithStreaming({
+          cmd: "pdftotext",
+          args: [richestAgendaPdf, fallbackMdPath],
+          cwd: PYASH_ROOT,
+          timeoutMs: 4 * 60 * 1000,
+          label: "extract-agenda-pdf-fallback",
+        });
+      } catch (err) {
+        process.stdout.write(`[agenda-subreports] PDF fallback extraction failed: ${String(err?.message || err)}\n`);
+      }
+      if (fs.existsSync(fallbackMdPath)) {
+        const fallbackSize = Number(fs.statSync(fallbackMdPath).size || 0);
+        if (fallbackSize > 0) {
+          agendaMdPath = fallbackMdPath;
+          agendaMdSize = fallbackSize;
+        }
+      }
+    }
+  }
+  if (!agendaMdPath || !fs.existsSync(agendaMdPath) || agendaMdSize <= 0) {
+    process.stdout.write("[agenda-subreports] no usable agenda markdown found; skipping subreport extraction\n");
     process.exit(0);
   }
   if (!fs.existsSync(pruneScript)) {
@@ -73,9 +106,8 @@ async function main() {
   }
 
   fs.mkdirSync(subreportDir, { recursive: true });
-  const agendaMdStat = fs.statSync(agendaMdPath);
   process.stdout.write(`[agenda-subreports] selected agenda markdown: ${agendaMdPath}\n`);
-  process.stdout.write(`[agenda-subreports] selected size bytes: ${Number(agendaMdStat.size || 0)}\n`);
+  process.stdout.write(`[agenda-subreports] selected size bytes: ${agendaMdSize}\n`);
 
   const prunedPath = agendaMdPath.replace(/\.md$/iu, ".pruned.md");
   await runWithStreaming({
@@ -100,4 +132,3 @@ main().catch((err) => {
   process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
   process.exit(1);
 });
-
