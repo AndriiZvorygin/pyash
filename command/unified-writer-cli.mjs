@@ -263,7 +263,6 @@ function resolveMeetingSelector(meetingsDir, selector) {
     : [];
   let i = 0;
   for (const base of dirs) {
-    i += 1;
     const dir = path.join(meetingsDir, base);
     const meetingJson = path.join(dir, "meeting.json");
     const pickJson = path.join(dir, "next-story.pick.json");
@@ -378,6 +377,17 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
 function printMeetingList(adapter) {
   const meetingsDir = path.join(adapter.house_root, "artifacts", adapter.artifacts_slug, "meetings");
   const basePrefix = adapter.defaults?.base_prefix || "meeting-qwen-auto";
+  let youtubeKnownIds = null;
+  let youtubeKnownId8 = null;
+  if (String(adapter?.source_id || "") === "youtube-live") {
+    const rows = loadAllMeetings(path.join(adapter.house_root, "artifacts", adapter.artifacts_slug, "monthly"));
+    youtubeKnownIds = new Set(
+      rows
+        .map((r) => String(r?.payload?.meeting_id || "").trim())
+        .filter((id) => /^[A-Za-z0-9_-]{11}$/u.test(id)),
+    );
+    youtubeKnownId8 = new Set(Array.from(youtubeKnownIds).map((id) => id.slice(0, 8)));
+  }
   if (!fs.existsSync(meetingsDir)) {
     process.stdout.write(`No meetings directory: ${meetingsDir}\n`);
     return;
@@ -385,21 +395,39 @@ function printMeetingList(adapter) {
   const dirs = fs.readdirSync(meetingsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
   let i = 0;
   for (const base of dirs) {
-    i += 1;
     const dir = path.join(meetingsDir, base);
     const state = localMeetingState(dir, basePrefix);
     const meetingJson = path.join(dir, "meeting.json");
     let ref = base;
+    let meetingId = "";
+    let sourceId = "";
     if (fs.existsSync(meetingJson)) {
       try {
         const j = JSON.parse(fs.readFileSync(meetingJson, "utf8"));
         const id = String(j?.payload?.meeting_id || "");
         const url = String(j?.payload?.meeting_url || "");
+        sourceId = String(j?.payload?.source || "");
+        meetingId = id;
         ref = (id && id.slice(0, 8)) || url || ref;
       } catch {
         // ignore
       }
     }
+    if (String(adapter?.source_id || "") === "youtube-live") {
+      if (sourceId === "youtube-live" && meetingId && !/^[A-Za-z0-9_-]{11}$/u.test(meetingId)) continue;
+      if (!meetingId) {
+        const tail = String(base).split("_").filter(Boolean).pop() || "";
+        if (tail && !/^[A-Za-z0-9_-]{11}$/u.test(tail)) continue;
+      }
+      const tail8 = String(base).split("_").filter(Boolean).pop() || "";
+      const id = String(meetingId || "").trim();
+      const id8 = id ? id.slice(0, 8) : "";
+      const inKnown = (youtubeKnownIds && id && youtubeKnownIds.has(id))
+        || (youtubeKnownId8 && id8 && youtubeKnownId8.has(id8))
+        || (youtubeKnownId8 && tail8 && youtubeKnownId8.has(tail8));
+      if (!inKnown) continue;
+    }
+    i += 1;
     process.stdout.write(`${String(i).padStart(3, " ")}  ${base.padEnd(40, " ")}  ${state.stage.padEnd(14, " ")}  ${ref}\n`);
   }
 }
