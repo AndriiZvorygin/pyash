@@ -28,6 +28,11 @@ if [[ -n "${GREY_COUNTY_REPORTER_PASSWORD:-}" ]]; then
   export MEETING_PUBLISH_PASSWORD="$GREY_COUNTY_REPORTER_PASSWORD"
 fi
 
+# Ensure Grey has a default submit command so --post does not silently skip.
+if [[ -z "${GREY_LEMMY_POST_COMMAND:-}" && -z "${MEETING_POST_COMMAND:-}" ]]; then
+  export GREY_LEMMY_POST_COMMAND="node $SCRIPT_DIR/program/publish-meeting-to-helpos-from-payload.mjs"
+fi
+
 # Compatibility behavior:
 # - no args => next
 # - first arg is a flag => next + flags

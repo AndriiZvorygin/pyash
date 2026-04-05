@@ -24,11 +24,19 @@ const WRITER_MAP = {
     envPrefix: "OWEN",
     defaultCommunity: "owen-sound-council",
   },
+  andrii: {
+    adapterFile: path.join(PYASH_ROOT, "world/house/andrii-youtube-reporter/program/writer-adapter-andrii-youtube.mjs"),
+    adapterExport: "ANDRII_ADAPTER",
+    nextStoryScript: path.join(PYASH_ROOT, "world/house/andrii-youtube-reporter/program/run-next-unposted-story.mjs"),
+    publishScript: path.join(PYASH_ROOT, "world/house/owen-sound-reporter/program/publish-meeting-to-helpos-from-payload.mjs"),
+    envPrefix: "ANDRII",
+    defaultCommunity: "andrii-zvorygin",
+  },
 };
 
 function usage() {
   return [
-    "Usage: node command/unified-writer-cli.mjs <command> --writer <grey|owen> [options]",
+    "Usage: node command/unified-writer-cli.mjs <command> --writer <grey|owen|andrii> [options]",
     "",
     "Commands:",
     "  list          list meeting workspaces and current stage",
@@ -41,7 +49,7 @@ function usage() {
     "  inspect       print report/artifact paths for --meeting",
     "",
     "Common flags:",
-    "  --writer <id>             writer adapter id (grey|owen)",
+    "  --writer <id>             writer adapter id (grey|owen|andrii)",
     "  --meeting <selector>      index, 8-char id prefix, full id/url, or folder fragment",
     "  --refresh                 force monthly refresh",
     "  --pick-only               select candidate only (no pipeline)",
@@ -255,9 +263,9 @@ function resolveMeetingSelector(meetingsDir, selector) {
     : [];
   let i = 0;
   for (const base of dirs) {
-    i += 1;
     const dir = path.join(meetingsDir, base);
     const meetingJson = path.join(dir, "meeting.json");
+    const pickJson = path.join(dir, "next-story.pick.json");
     let meetingId = "";
     let meetingUrl = "";
     if (fs.existsSync(meetingJson)) {
@@ -269,11 +277,25 @@ function resolveMeetingSelector(meetingsDir, selector) {
         // ignore
       }
     }
+    if ((!meetingId || !meetingUrl) && fs.existsSync(pickJson)) {
+      try {
+        const j = JSON.parse(fs.readFileSync(pickJson, "utf8"));
+        meetingId = meetingId || String(j?.meeting_id || "");
+        meetingUrl = meetingUrl || String(j?.meeting_url || "");
+      } catch {
+        // ignore
+      }
+    }
     const id8 = meetingId ? meetingId.slice(0, 8) : "";
-    if (/^\d+$/u.test(sel) && i === Number(sel)) return meetingUrl || id8 || base;
-    if (id8 && id8 === sel) return meetingUrl || id8;
-    if (base.includes(sel)) return meetingUrl || id8 || base;
-    if (meetingId && meetingId === sel) return meetingUrl || id8;
+    const baseTail = String(base).split("_").filter(Boolean).pop() || "";
+    const inferred = /^[A-Za-z0-9_-]{8,}$/u.test(baseTail) ? baseTail : "";
+    const ref = meetingUrl || meetingId || id8 || inferred || base;
+    if (/^\d+$/u.test(sel) && i === Number(sel)) return ref;
+    if (id8 && id8 === sel) return ref;
+    if (meetingId && meetingId.startsWith(sel)) return ref;
+    if (inferred && inferred.startsWith(sel)) return ref;
+    if (base.includes(sel)) return ref;
+    if (meetingId && meetingId === sel) return ref;
     if (meetingUrl && meetingUrl === sel) return meetingUrl;
   }
   return "";
@@ -355,6 +377,17 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
 function printMeetingList(adapter) {
   const meetingsDir = path.join(adapter.house_root, "artifacts", adapter.artifacts_slug, "meetings");
   const basePrefix = adapter.defaults?.base_prefix || "meeting-qwen-auto";
+  let youtubeKnownIds = null;
+  let youtubeKnownId8 = null;
+  if (String(adapter?.source_id || "") === "youtube-live") {
+    const rows = loadAllMeetings(path.join(adapter.house_root, "artifacts", adapter.artifacts_slug, "monthly"));
+    youtubeKnownIds = new Set(
+      rows
+        .map((r) => String(r?.payload?.meeting_id || "").trim())
+        .filter((id) => /^[A-Za-z0-9_-]{11}$/u.test(id)),
+    );
+    youtubeKnownId8 = new Set(Array.from(youtubeKnownIds).map((id) => id.slice(0, 8)));
+  }
   if (!fs.existsSync(meetingsDir)) {
     process.stdout.write(`No meetings directory: ${meetingsDir}\n`);
     return;
@@ -362,21 +395,39 @@ function printMeetingList(adapter) {
   const dirs = fs.readdirSync(meetingsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
   let i = 0;
   for (const base of dirs) {
-    i += 1;
     const dir = path.join(meetingsDir, base);
     const state = localMeetingState(dir, basePrefix);
     const meetingJson = path.join(dir, "meeting.json");
     let ref = base;
+    let meetingId = "";
+    let sourceId = "";
     if (fs.existsSync(meetingJson)) {
       try {
         const j = JSON.parse(fs.readFileSync(meetingJson, "utf8"));
         const id = String(j?.payload?.meeting_id || "");
         const url = String(j?.payload?.meeting_url || "");
+        sourceId = String(j?.payload?.source || "");
+        meetingId = id;
         ref = (id && id.slice(0, 8)) || url || ref;
       } catch {
         // ignore
       }
     }
+    if (String(adapter?.source_id || "") === "youtube-live") {
+      if (sourceId === "youtube-live" && meetingId && !/^[A-Za-z0-9_-]{11}$/u.test(meetingId)) continue;
+      if (!meetingId) {
+        const tail = String(base).split("_").filter(Boolean).pop() || "";
+        if (tail && !/^[A-Za-z0-9_-]{11}$/u.test(tail)) continue;
+      }
+      const tail8 = String(base).split("_").filter(Boolean).pop() || "";
+      const id = String(meetingId || "").trim();
+      const id8 = id ? id.slice(0, 8) : "";
+      const inKnown = (youtubeKnownIds && id && youtubeKnownIds.has(id))
+        || (youtubeKnownId8 && id8 && youtubeKnownId8.has(id8))
+        || (youtubeKnownId8 && tail8 && youtubeKnownId8.has(tail8));
+      if (!inKnown) continue;
+    }
+    i += 1;
     process.stdout.write(`${String(i).padStart(3, " ")}  ${base.padEnd(40, " ")}  ${state.stage.padEnd(14, " ")}  ${ref}\n`);
   }
 }
