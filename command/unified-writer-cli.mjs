@@ -28,7 +28,7 @@ const WRITER_MAP = {
     adapterFile: path.join(PYASH_ROOT, "world/house/andrii-youtube-reporter/program/writer-adapter-andrii-youtube.mjs"),
     adapterExport: "ANDRII_ADAPTER",
     nextStoryScript: path.join(PYASH_ROOT, "world/house/andrii-youtube-reporter/program/run-next-unposted-story.mjs"),
-    publishScript: path.join(PYASH_ROOT, "world/house/owen-sound-reporter/program/publish-meeting-to-helpos-from-payload.mjs"),
+    publishScript: path.join(PYASH_ROOT, "world/house/andrii-youtube-reporter/program/publish-meeting-to-andrii-from-payload.mjs"),
     envPrefix: "ANDRII",
     defaultCommunity: "andrii-zvorygin",
   },
