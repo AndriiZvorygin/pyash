@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readPyaTextValues } from "./pya_lookup.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -124,6 +125,22 @@ const PROFILES = {
 
 function usage() {
   return "Usage: node command/normalize_transcript_from_transcript_folder_shared.mjs <grey|owen|andrii> <transcript_dir> [source_prefix] [output_prefix]";
+}
+
+function resolveOllamaHost(profile) {
+  const fromEnv = String(process.env.OLLAMA_HOST || "").trim();
+  if (fromEnv) return fromEnv.replace(/\/+$/u, "");
+  const secretCandidates = [
+    path.join(profile.house, "configure/secret.pya"),
+    path.join(ROOT, "configure/secret.pya"),
+  ];
+  const secretPath = secretCandidates.find((p) => fs.existsSync(p));
+  if (secretPath) {
+    const vals = readPyaTextValues(secretPath, ["ollama host", "ai host", "relay local host", "host"]);
+    const fromPya = String(vals["ollama host"] || vals["ai host"] || vals["relay local host"] || vals.host || "").trim();
+    if (fromPya) return fromPya.replace(/\/+$/u, "");
+  }
+  return "http://localhost:11434";
 }
 
 function ensureDir(dirPath) {
@@ -326,7 +343,7 @@ export async function runNormalizeShared(writer, argv = []) {
   const maxChunksRaw = Number(process.env[`${profile.envPrefix}_NORMALIZE_MAX_CHUNKS`] || 0);
   const maxChars = Number.isFinite(maxCharsRaw) && maxCharsRaw > 1500 ? Math.floor(maxCharsRaw) : 9000;
   const maxChunks = Number.isFinite(maxChunksRaw) && maxChunksRaw > 0 ? Math.floor(maxChunksRaw) : 0;
-  const ollamaBase = String(process.env.OLLAMA_HOST || "http://localhost:11434").replace(/\/+$/u, "");
+  const ollamaBase = resolveOllamaHost(profile);
   const ollamaUrl = `${ollamaBase}/api/chat`;
 
   const chunks = splitIntoChunks(sourceText, maxChars);
