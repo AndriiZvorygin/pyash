@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { readPyaTextValues } from "./pya_lookup.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PYASH_ROOT = path.resolve(HERE, "..");
@@ -132,6 +133,34 @@ function parseDotEnvText(src) {
 function readEnvFile(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return {};
   return parseDotEnvText(fs.readFileSync(filePath, "utf8"));
+}
+
+function loadSecretFallbacks(adapterHouseRoot) {
+  const paths = [
+    path.join(adapterHouseRoot, "configure", "secret.pya"),
+    path.join(PYASH_ROOT, "configure", "secret.pya"),
+  ];
+  const out = {};
+  for (const p of paths) {
+    if (!fs.existsSync(p)) continue;
+    const values = readPyaTextValues(p, [
+      "meeting publish auth token",
+      "meeting publish community name",
+      "meeting publish site url",
+      "grey county reporter username",
+      "grey county reporter password",
+      "owen sound reporter username",
+      "owen sound reporter password",
+      "andrii zvorygin reporter username",
+      "andrii zvorygin reporter password",
+    ]);
+    for (const [k, v] of Object.entries(values)) {
+      const text = String(v || "").trim();
+      if (!text || /^REPLACE_/iu.test(text)) continue;
+      if (!out[k]) out[k] = text;
+    }
+  }
+  return out;
 }
 
 function runWithStreaming({ cmd, args, cwd, env, label, timeoutMs = 8 * 60 * 60 * 1000 }) {
@@ -343,6 +372,7 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
     path.join(PYASH_ROOT, ".env"),
     path.join(PYASH_ROOT, "world/house/owen-sound-reporter/.env"),
   ];
+  const secretFallback = loadSecretFallbacks(adapter.house_root);
   if (!env.MEETING_PUBLISH_AUTH_TOKEN) {
     for (const f of envFiles) {
       const parsed = readEnvFile(f);
@@ -352,9 +382,43 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
         break;
       }
     }
+    if (!env.MEETING_PUBLISH_AUTH_TOKEN) {
+      const token = String(secretFallback["meeting publish auth token"] || "").trim();
+      if (token) env.MEETING_PUBLISH_AUTH_TOKEN = token;
+    }
   }
 
-  env.MEETING_PUBLISH_COMMUNITY_NAME = env.MEETING_PUBLISH_COMMUNITY_NAME || env[`${envPrefix}_COMMUNITY_NAME`] || adapter.publish?.community_name || map.defaultCommunity;
+  env.MEETING_PUBLISH_COMMUNITY_NAME =
+    env.MEETING_PUBLISH_COMMUNITY_NAME
+    || env[`${envPrefix}_COMMUNITY_NAME`]
+    || String(secretFallback["meeting publish community name"] || "").trim()
+    || adapter.publish?.community_name
+    || map.defaultCommunity;
+  env.MEETING_PUBLISH_SITE_URL =
+    env.MEETING_PUBLISH_SITE_URL
+    || String(secretFallback["meeting publish site url"] || "").trim()
+    || env.MEETING_PUBLISH_SITE_URL;
+
+  if (writerKey === "grey") {
+    env.GREY_COUNTY_REPORTER_USERNAME =
+      env.GREY_COUNTY_REPORTER_USERNAME
+      || String(secretFallback["grey county reporter username"] || "").trim()
+      || env.GREY_COUNTY_REPORTER_USERNAME;
+    env.GREY_COUNTY_REPORTER_PASSWORD =
+      env.GREY_COUNTY_REPORTER_PASSWORD
+      || String(secretFallback["grey county reporter password"] || "").trim()
+      || env.GREY_COUNTY_REPORTER_PASSWORD;
+  }
+  if (writerKey === "owen") {
+    env.OWEN_SOUND_REPORTER_USERNAME =
+      env.OWEN_SOUND_REPORTER_USERNAME
+      || String(secretFallback["owen sound reporter username"] || "").trim()
+      || env.OWEN_SOUND_REPORTER_USERNAME;
+    env.OWEN_SOUND_REPORTER_PASSWORD =
+      env.OWEN_SOUND_REPORTER_PASSWORD
+      || String(secretFallback["owen sound reporter password"] || "").trim()
+      || env.OWEN_SOUND_REPORTER_PASSWORD;
+  }
 
   const allowPost = args.post === true;
   const forceNoPost = args.post === false || args.dryRun;
