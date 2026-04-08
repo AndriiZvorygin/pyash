@@ -484,10 +484,13 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
   if (!picked) return null;
 
   const now = nowLocalDate(timezone);
-  const notPostedPastVideo = states.filter((s) => !s.posted_transcript && s.since_date instanceof Date);
-  const upcomingWithAgenda = eligibleUpcomingAgendaStates(states, timezone, cfg)
+  const upcomingWithAgenda = states
+    .filter((s) => s.since_date instanceof Date)
+    .filter((s) => s.since_date >= now && s.has_agenda)
+    .sort((a, b) => a.since_date - b.since_date)
     .map((s) => ({ mode: 'upcoming_agenda', state: s }));
-  const pastWithVideo = notPostedPastVideo
+  const pastWithVideo = states
+    .filter((s) => s.since_date instanceof Date)
     .filter((s) => s.has_video && s.since_date < now)
     .sort((a, b) => b.since_date - a.since_date)
     .map((s) => ({ mode: 'past_video', state: s }));
@@ -496,10 +499,20 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
 
   for (const candidate of ordered) {
     const directPosted = await isPostedByDirectTranscriptProbe(candidate.state, cfg, cache);
+    // Remote probe is authoritative when available, so stale local state
+    // (for example agenda-only posts that left transcript markers) does not
+    // block transcript backfill.
     const blocksCandidate = candidate.mode === 'upcoming_agenda'
       ? directPosted.posted_agenda
       : directPosted.posted_transcript;
     if (blocksCandidate) continue;
+    if (candidate.mode === 'upcoming_agenda') {
+      if (candidate.state.posted_agenda) continue;
+      const requireSupportingDocs = /^(1|true|yes)$/iu.test(String(cfg.require_upcoming_supporting_docs || "0"));
+      if (!candidate.state.has_agenda) continue;
+      if (requireSupportingDocs && !candidate.state.has_supporting_docs) continue;
+    }
+    if (candidate.mode === 'past_video' && !candidate.state.has_video) continue;
     return candidate;
   }
   return null;
