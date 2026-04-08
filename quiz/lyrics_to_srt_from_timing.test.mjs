@@ -99,10 +99,15 @@ test("lyrics_to_srt_from_timing fails fast on obvious lyrics mismatch", async ()
   await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
   await fs.writeFile(timingPath, `${timing}\n`, "utf8");
 
-  await assert.rejects(
-    () => runLyricsToSrt([lyricsPath, timingPath, outputPath]),
-    /lyrics mismatch/u
-  );
+  process.env.PYA_SRT_ALLOW_MISMATCH_FALLBACK = "false";
+  try {
+    await assert.rejects(
+      () => runLyricsToSrt([lyricsPath, timingPath, outputPath]),
+      /lyrics mismatch/u
+    );
+  } finally {
+    delete process.env.PYA_SRT_ALLOW_MISMATCH_FALLBACK;
+  }
 });
 
 test("lyrics_to_srt_from_timing avoids chorus freeze from overly wide repeated-token matches", async () => {
