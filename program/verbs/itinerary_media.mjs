@@ -1130,17 +1130,34 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
       raw: { sentence }
     });
   }
-  validateSectionCoverage({ sourceText, sections, mode, sentence });
+  let resolvedSections = sections;
+  try {
+    validateSectionCoverage({ sourceText, sections: resolvedSections, mode, sentence });
+  } catch (err) {
+    // Sentence mode must stay resilient: if strict token coverage fails due to
+    // noisy mixed-content inputs, fall back to one full speakable section
+    // instead of aborting the whole refinery.
+    if (mode === "sentence") {
+      const fallback = String(sourceText ?? "").replace(/\s+/gu, " ").trim();
+      if (hasSpeakableContent(fallback)) {
+        resolvedSections = [fallback];
+      } else {
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
   const requestedDurationTotal = Number(sentence?.during?.num);
   const requestedSentenceDuration = Number(sentence?.during?.sentence);
   const hasRequestedTotalDuration = Number.isFinite(requestedDurationTotal) && requestedDurationTotal > 0;
   const hasRequestedSentenceDuration = Number.isFinite(requestedSentenceDuration) && requestedSentenceDuration > 0;
   const sectionDuration = hasRequestedTotalDuration
-    ? (requestedDurationTotal / sections.length)
+    ? (requestedDurationTotal / resolvedSections.length)
     : hasRequestedSentenceDuration
     ? requestedSentenceDuration
     : 1;
-  const series = sections.map((sectionText, index) => ({
+  const series = resolvedSections.map((sectionText, index) => ({
     mood: "ya",
     su: { name: `cut ${String(index + 1).padStart(3, "0")}` },
     since: {

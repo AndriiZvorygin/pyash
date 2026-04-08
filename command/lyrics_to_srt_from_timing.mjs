@@ -620,13 +620,17 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
     ? Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO_SENTENCE || 0.01)
     : Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO || 0.35);
   const ratio = Number.isFinite(ratioRaw) && ratioRaw > 0 && ratioRaw <= 1 ? ratioRaw : (sentenceCues ? 0.01 : 0.35);
+  const allowMismatchFallbackRaw = String(process.env.PYA_SRT_ALLOW_MISMATCH_FALLBACK || "true").trim().toLowerCase();
+  const allowMismatchFallback = allowMismatchFallbackRaw !== "false" && allowMismatchFallbackRaw !== "0" && allowMismatchFallbackRaw !== "no";
   const minAccepted = lineCount <= 4
     ? 1
     : Math.max(2, Math.ceil(lineCount * ratio));
   if (Number(stats.acceptedMatchLines || 0) < minAccepted) {
-    throw new Error(
-      `lyrics to srt defective: lyrics mismatch accepted=${Number(stats.acceptedMatchLines || 0)} min=${minAccepted} lines=${Number(stats.lines || 0)}`
-    );
+    if (!allowMismatchFallback) {
+      throw new Error(
+        `lyrics to srt defective: lyrics mismatch accepted=${Number(stats.acceptedMatchLines || 0)} min=${minAccepted} lines=${Number(stats.lines || 0)}`
+      );
+    }
   }
 
   const out = [];

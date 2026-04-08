@@ -183,10 +183,17 @@ su name brief video manuscript improve from text source to name text manuscript 
   su name manuscript out ret
 prah
 
+su name brief video script source sanitize from text source to name text source clean be ceremony def
+  su name source raw stage ob text of from of this to name text source raw be text do
+  su name source clean stage ob text "node -e \"const fs=require('fs'); const src=fs.readFileSync(0,'utf8'); const markers=['\\nexists su name ',' exists su name ','\\nsu name run start time ','\\nrun start: ','\\nartifacts folder: ']; let cut=src.length; for(const marker of markers){ const index=src.indexOf(marker); if(index>=0 && index<cut){ cut=index; }} const out=src.slice(0,cut).trim(); process.stdout.write(out);\"" fromtext name text source raw to name text source clean be command do
+  su name source clean ret
+prah
+
 su name brief video from text manuscript be ceremony def
   su name script source stage ob text of from of this to name text brief video script source be text do
+  su name script source sanitize stage from text of ob of brief video script source to name text brief video script source clean be brief video script source sanitize do
 
-  su name manuscript stage from text of ob of brief video script source to name text manuscript out be brief video manuscript improve do
+  su name manuscript stage from text of ob of brief video script source clean to name text manuscript out be brief video manuscript improve do
 
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 
