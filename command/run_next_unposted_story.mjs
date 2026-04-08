@@ -213,6 +213,21 @@ function parsePostedFromResponse(respPath) {
   }
 }
 
+function parseLocalPostedKinds(meetingDir) {
+  const out = { posted_agenda: false, posted_transcript: false };
+  const resultPath = path.join(meetingDir, 'next-story.result.json');
+  if (!fs.existsSync(resultPath)) return out;
+  try {
+    const json = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+    const mode = String(json?.mode || '').trim().toLowerCase();
+    if (mode === 'upcoming_agenda') out.posted_agenda = true;
+    if (mode === 'past_video') out.posted_transcript = true;
+  } catch {
+    return out;
+  }
+  return out;
+}
+
 function listPublishResponsePaths(transcriptDir, basePrefix) {
   if (!fs.existsSync(transcriptDir)) return [];
   const direct = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.meeting-publish.response.json`);
@@ -279,6 +294,7 @@ function meetingState(row, meetingsDir, basePrefix) {
   const payloadPath = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.json`);
   const responsePath = findPublishResponsePath(transcriptDir, basePrefix);
   const postedInfo = parsePostedFromResponses(transcriptDir, basePrefix);
+  const localKinds = parseLocalPostedKinds(meetingDir);
   const payload = row.payload || {};
   const agendaCount = Array.isArray(payload.agenda) ? payload.agenda.length : 0;
   const agendaCoverCount = Array.isArray(payload.agenda_cover) ? payload.agenda_cover.length : 0;
@@ -296,7 +312,14 @@ function meetingState(row, meetingsDir, basePrefix) {
     response_path: postedInfo.response_path || responsePath,
     posted: postedInfo.posted,
     posted_local: postedInfo.posted,
+    posted_local_any: postedInfo.posted,
+    posted_local_agenda: localKinds.posted_agenda,
+    posted_local_transcript: localKinds.posted_transcript,
+    posted_agenda: localKinds.posted_agenda,
+    posted_transcript: localKinds.posted_transcript,
     posted_remote: false,
+    posted_remote_agenda: false,
+    posted_remote_transcript: false,
     post_url: postedInfo.post_url,
     transcript_url: postedInfo.transcript_url,
     has_agenda: agendaCount > 0,
@@ -312,7 +335,7 @@ function meetingState(row, meetingsDir, basePrefix) {
 
 function eligibleUpcomingAgendaStates(states, timezone, cfg = {}) {
   const now = nowLocalDate(timezone);
-  const notPosted = states.filter((s) => !s.posted && s.since_date instanceof Date);
+  const notPosted = states.filter((s) => !s.posted_agenda && s.since_date instanceof Date);
   const requireSupportingDocs = /^(1|true|yes)$/iu.test(String(cfg.require_upcoming_supporting_docs || "0"));
   return notPosted
     .filter((s) => {
@@ -326,12 +349,12 @@ function eligibleUpcomingAgendaStates(states, timezone, cfg = {}) {
 
 function pickCandidate(states, timezone, cfg = {}) {
   const now = nowLocalDate(timezone);
-  const notPosted = states.filter((s) => !s.posted && s.since_date instanceof Date);
+  const notPostedPastVideo = states.filter((s) => !s.posted_transcript && s.since_date instanceof Date);
 
   const upcomingWithAgenda = eligibleUpcomingAgendaStates(states, timezone, cfg);
   if (upcomingWithAgenda.length) return { mode: 'upcoming_agenda', state: upcomingWithAgenda[0] };
 
-  const pastWithVideo = notPosted
+  const pastWithVideo = notPostedPastVideo
     .filter((s) => s.has_video && s.since_date < now)
     .sort((a, b) => b.since_date - a.since_date);
   if (pastWithVideo.length) return { mode: 'past_video', state: pastWithVideo[0] };
@@ -353,6 +376,39 @@ async function urlExists(url) {
   }
 }
 
+async function fetchPageKind(url, cache) {
+  const key = `kind:${url}`;
+  if (cache.has(key)) return cache.get(key);
+  try {
+    const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(8000) });
+    if (!res.ok) {
+      cache.set(key, 'none');
+      return 'none';
+    }
+    const html = String(await res.text() || '').toLowerCase();
+    const transcriptSignals = [
+      'full transcript',
+      'jump to transcript',
+      'discussion',
+      '00:00:',
+    ];
+    const agendaSignals = [
+      'original agenda package links',
+      'most newsworthy agenda items',
+      'whole agenda summary',
+      'read full agenda archive',
+    ];
+    const transcriptHits = transcriptSignals.reduce((acc, token) => acc + (html.includes(token) ? 1 : 0), 0);
+    const agendaHits = agendaSignals.reduce((acc, token) => acc + (html.includes(token) ? 1 : 0), 0);
+    const kind = transcriptHits > agendaHits ? 'transcript' : (agendaHits > 0 ? 'agenda' : 'unknown');
+    cache.set(key, kind);
+    return kind;
+  } catch {
+    cache.set(key, 'none');
+    return 'none';
+  }
+}
+
 async function isPostedByDirectTranscriptProbe(state, cfg, cache) {
   const site = String(cfg.site_url || '').replace(/\/+$/u, '');
   if (!site) return false;
@@ -363,16 +419,27 @@ async function isPostedByDirectTranscriptProbe(state, cfg, cache) {
   const payload = state?.row?.payload || {};
   const bodySlugs = inferBodySlugCandidatesFromPayload(payload, cfg.body);
   for (const bodySlug of bodySlugs) {
-    const url = `${site}/transcripts/${jurisdictionSlug}/${bodySlug}/${dateIso}`;
-    if (cache.has(url)) {
-      if (cache.get(url)) return true;
-      continue;
+    const transcriptUrl = `${site}/transcripts/${jurisdictionSlug}/${bodySlug}/${dateIso}`;
+    const agendaUrl = `${site}/agendas/${jurisdictionSlug}/${bodySlug}/${dateIso}`;
+    const transcriptKey = `transcript:${transcriptUrl}`;
+    const agendaKey = `agenda:${agendaUrl}`;
+
+    if (!cache.has(transcriptKey)) {
+      cache.set(transcriptKey, await urlExists(transcriptUrl));
     }
-    const ok = await urlExists(url);
-    cache.set(url, ok);
-    if (ok) return true;
+    if (!cache.has(agendaKey)) {
+      cache.set(agendaKey, await urlExists(agendaUrl));
+    }
+
+    if (cache.get(transcriptKey)) {
+      const kind = await fetchPageKind(transcriptUrl, cache);
+      if (kind === 'agenda') return { posted_transcript: false, posted_agenda: true };
+      if (kind === 'transcript') return { posted_transcript: true, posted_agenda: false };
+      return { posted_transcript: true, posted_agenda: true };
+    }
+    if (cache.get(agendaKey)) return { posted_transcript: false, posted_agenda: true };
   }
-  return false;
+  return { posted_transcript: false, posted_agenda: false };
 }
 
 async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
@@ -380,10 +447,10 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
   if (!picked) return null;
 
   const now = nowLocalDate(timezone);
-  const notPosted = states.filter((s) => !s.posted && s.since_date instanceof Date);
+  const notPostedPastVideo = states.filter((s) => !s.posted_transcript && s.since_date instanceof Date);
   const upcomingWithAgenda = eligibleUpcomingAgendaStates(states, timezone, cfg)
     .map((s) => ({ mode: 'upcoming_agenda', state: s }));
-  const pastWithVideo = notPosted
+  const pastWithVideo = notPostedPastVideo
     .filter((s) => s.has_video && s.since_date < now)
     .sort((a, b) => b.since_date - a.since_date)
     .map((s) => ({ mode: 'past_video', state: s }));
@@ -392,7 +459,10 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
 
   for (const candidate of ordered) {
     const directPosted = await isPostedByDirectTranscriptProbe(candidate.state, cfg, cache);
-    if (directPosted) continue;
+    const blocksCandidate = candidate.mode === 'upcoming_agenda'
+      ? directPosted.posted_agenda
+      : directPosted.posted_transcript;
+    if (blocksCandidate) continue;
     return candidate;
   }
   return null;
@@ -438,14 +508,14 @@ function mergeRemotePosted(states, remotePostedKeys, cfg = {}) {
     const iso = parseDateIsoFromSince(s?.row?.since);
     const payload = s?.row?.payload || {};
     const bodySlugs = inferBodySlugCandidatesFromPayload(payload, cfg.body);
-    const remotePosted = Boolean(
+    const remotePostedAny = Boolean(
       iso && bodySlugs.some((bodySlug) => remotePostedKeys.has(`${bodySlug}|${iso}`))
     );
-    if (!remotePosted) return s;
+    if (!remotePostedAny) return s;
     return {
       ...s,
       posted_remote: true,
-      posted: true,
+      posted_remote_any: true,
     };
   });
 }
