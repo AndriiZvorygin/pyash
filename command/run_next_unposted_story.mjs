@@ -349,9 +349,11 @@ function meetingState(row, meetingsDir, basePrefix) {
     posted_local: postedInfo.posted,
     posted_local_any: postedInfo.posted || agendaPostedInfo.posted,
     posted_local_agenda: localKinds.posted_agenda || agendaPostedInfo.posted,
-    posted_local_transcript: localKinds.posted_transcript,
+    // Treat successful transcript publish responses as canonical local transcript state.
+    // next-story.result.json may be missing or stale when runs were done via direct commands.
+    posted_local_transcript: localKinds.posted_transcript || postedInfo.posted,
     posted_agenda: localKinds.posted_agenda || agendaPostedInfo.posted,
-    posted_transcript: localKinds.posted_transcript,
+    posted_transcript: localKinds.posted_transcript || postedInfo.posted,
     posted_remote: false,
     posted_remote_agenda: false,
     posted_remote_transcript: false,
