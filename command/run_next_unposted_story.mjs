@@ -283,6 +283,16 @@ function parsePostedFromResponses(transcriptDir, basePrefix) {
   return { ...last, response_path: lastPath };
 }
 
+function readPayloadContentType(payloadPath) {
+  if (!payloadPath || !fs.existsSync(payloadPath)) return "";
+  try {
+    const obj = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
+    return String(obj?.content_type || "").trim().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 function loadAllMeetings(monthlyDir) {
   if (!fs.existsSync(monthlyDir)) return [];
   const files = fs.readdirSync(monthlyDir)
@@ -325,11 +335,13 @@ function meetingState(row, meetingsDir, basePrefix) {
   const meetingDir = path.join(meetingsDir, folder);
   const transcriptDir = path.join(meetingDir, 'transcript');
   const payloadPath = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.json`);
+  const payloadContentType = readPayloadContentType(payloadPath);
   const responsePath = findPublishResponsePath(transcriptDir, basePrefix);
   const postedInfo = parsePostedFromResponses(transcriptDir, basePrefix);
   const agendaResponsePath = findAgendaPublishResponsePath(transcriptDir, basePrefix);
   const agendaPostedInfo = parsePostedFromAgendaResponse(agendaResponsePath);
   const localKinds = parseLocalPostedKinds(meetingDir);
+  const postedTranscriptByMeetingPublish = postedInfo.posted && payloadContentType !== "agenda";
   const payload = row.payload || {};
   const agendaCount = Array.isArray(payload.agenda) ? payload.agenda.length : 0;
   const agendaCoverCount = Array.isArray(payload.agenda_cover) ? payload.agenda_cover.length : 0;
@@ -345,15 +357,15 @@ function meetingState(row, meetingsDir, basePrefix) {
     transcript_dir: transcriptDir,
     payload_path: payloadPath,
     response_path: postedInfo.response_path || responsePath,
-    posted: postedInfo.posted || agendaPostedInfo.posted,
-    posted_local: postedInfo.posted,
-    posted_local_any: postedInfo.posted || agendaPostedInfo.posted,
+    posted: postedTranscriptByMeetingPublish || agendaPostedInfo.posted,
+    posted_local: postedTranscriptByMeetingPublish,
+    posted_local_any: postedTranscriptByMeetingPublish || agendaPostedInfo.posted,
     posted_local_agenda: localKinds.posted_agenda || agendaPostedInfo.posted,
     // Treat successful transcript publish responses as canonical local transcript state.
     // next-story.result.json may be missing or stale when runs were done via direct commands.
-    posted_local_transcript: localKinds.posted_transcript || postedInfo.posted,
+    posted_local_transcript: localKinds.posted_transcript || postedTranscriptByMeetingPublish,
     posted_agenda: localKinds.posted_agenda || agendaPostedInfo.posted,
-    posted_transcript: localKinds.posted_transcript || postedInfo.posted,
+    posted_transcript: localKinds.posted_transcript || postedTranscriptByMeetingPublish,
     posted_remote: false,
     posted_remote_agenda: false,
     posted_remote_transcript: false,
