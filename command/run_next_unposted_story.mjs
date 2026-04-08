@@ -213,6 +213,25 @@ function parsePostedFromResponse(respPath) {
   }
 }
 
+function parsePostedFromAgendaResponse(respPath) {
+  if (!respPath || !fs.existsSync(respPath)) return { posted: false, post_url: '', agenda_url: '', transcript_url: '' };
+  try {
+    const json = JSON.parse(fs.readFileSync(respPath, 'utf8'));
+    const postUrl = String(json?.post_url || '').trim();
+    const agendaUrl = String(json?.agenda_url || '').trim();
+    const transcriptUrl = String(json?.transcript_url || '').trim();
+    const err = String(json?.error || '').trim();
+    return {
+      posted: Boolean((postUrl || agendaUrl) && !err),
+      post_url: postUrl,
+      agenda_url: agendaUrl,
+      transcript_url: transcriptUrl,
+    };
+  } catch {
+    return { posted: false, post_url: '', agenda_url: '', transcript_url: '' };
+  }
+}
+
 function parseLocalPostedKinds(meetingDir) {
   const out = { posted_agenda: false, posted_transcript: false };
   const resultPath = path.join(meetingDir, 'next-story.result.json');
@@ -287,6 +306,20 @@ function loadAllMeetings(monthlyDir) {
   return rows;
 }
 
+function findAgendaPublishResponsePath(transcriptDir, basePrefix) {
+  if (!fs.existsSync(transcriptDir)) return '';
+  const direct = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.agenda-publish.response.json`);
+  const files = fs.readdirSync(transcriptDir, { withFileTypes: true })
+    .filter((d) => d.isFile())
+    .map((d) => d.name)
+    .filter((n) => n.endsWith('.agenda-publish.response.json'))
+    .sort();
+  if (fs.existsSync(direct) && files.includes(path.basename(direct))) return direct;
+  if (fs.existsSync(direct)) return direct;
+  if (!files.length) return '';
+  return path.join(transcriptDir, files[files.length - 1]);
+}
+
 function meetingState(row, meetingsDir, basePrefix) {
   const folder = inferFolder(row);
   const meetingDir = path.join(meetingsDir, folder);
@@ -294,6 +327,8 @@ function meetingState(row, meetingsDir, basePrefix) {
   const payloadPath = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.json`);
   const responsePath = findPublishResponsePath(transcriptDir, basePrefix);
   const postedInfo = parsePostedFromResponses(transcriptDir, basePrefix);
+  const agendaResponsePath = findAgendaPublishResponsePath(transcriptDir, basePrefix);
+  const agendaPostedInfo = parsePostedFromAgendaResponse(agendaResponsePath);
   const localKinds = parseLocalPostedKinds(meetingDir);
   const payload = row.payload || {};
   const agendaCount = Array.isArray(payload.agenda) ? payload.agenda.length : 0;
@@ -310,17 +345,17 @@ function meetingState(row, meetingsDir, basePrefix) {
     transcript_dir: transcriptDir,
     payload_path: payloadPath,
     response_path: postedInfo.response_path || responsePath,
-    posted: postedInfo.posted,
+    posted: postedInfo.posted || agendaPostedInfo.posted,
     posted_local: postedInfo.posted,
-    posted_local_any: postedInfo.posted,
-    posted_local_agenda: localKinds.posted_agenda,
+    posted_local_any: postedInfo.posted || agendaPostedInfo.posted,
+    posted_local_agenda: localKinds.posted_agenda || agendaPostedInfo.posted,
     posted_local_transcript: localKinds.posted_transcript,
-    posted_agenda: localKinds.posted_agenda,
+    posted_agenda: localKinds.posted_agenda || agendaPostedInfo.posted,
     posted_transcript: localKinds.posted_transcript,
     posted_remote: false,
     posted_remote_agenda: false,
     posted_remote_transcript: false,
-    post_url: postedInfo.post_url,
+    post_url: postedInfo.post_url || agendaPostedInfo.post_url,
     transcript_url: postedInfo.transcript_url,
     has_agenda: agendaCount > 0,
     has_video: Array.isArray(payload.video) && payload.video.length > 0,

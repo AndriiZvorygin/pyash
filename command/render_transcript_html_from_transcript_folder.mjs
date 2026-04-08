@@ -523,6 +523,7 @@ function buildPage({
   archiveJurUrl,
   archiveBodyUrl,
   transcriptStatus,
+  agendaPageUrl,
 }) {
   const title = hook
     ? `${hook} — ${jurisdiction} ${body} Transcript — ${dateLong}`
@@ -664,6 +665,7 @@ function buildPage({
         <dt>Date</dt><dd>${escapeHtml(dateLong)}</dd>
         <dt>Transcript Status</dt><dd>${escapeHtml(transcriptStatus)}</dd>
         <dt>Official Source</dt><dd>${sourceUrl ? `<a href="${escapeHtml(sourceUrl)}">View official meeting page</a>` : (meetingUrl ? `<a href="${escapeHtml(meetingUrl)}">View official meeting page</a>` : "Not provided")}</dd>
+        <dt>Agenda Page</dt><dd>${agendaPageUrl ? `<a href="${escapeHtml(agendaPageUrl)}">View agenda page</a>` : "Not available"}</dd>
         <dt>Original Video</dt><dd>${videoUrl ? `<a href="${escapeHtml(videoUrl)}">View original meeting video</a>` : "No direct video URL found in source metadata."}</dd>
         <dt>Meeting Portal</dt><dd>${meetingUrl ? `<a href="${escapeHtml(meetingUrl)}">View eScribe meeting page</a>` : "Not provided"}</dd>
       </dl>
@@ -698,6 +700,7 @@ function buildPage({
         <li><a href="${escapeHtml(archiveJurUrl)}">More ${escapeHtml(jurisdiction)} transcripts</a></li>
         <li><a href="${escapeHtml(archiveBodyUrl)}">More ${escapeHtml(body)} transcripts</a></li>
         ${sourceUrl ? `<li><a href="${escapeHtml(sourceUrl)}">Official meeting source</a></li>` : ""}
+        ${agendaPageUrl ? `<li><a href="${escapeHtml(agendaPageUrl)}">Agenda page</a></li>` : ""}
         ${meetingUrl ? `<li><a href="${escapeHtml(meetingUrl)}">Official eScribe meeting page</a></li>` : ""}
         ${agendaCoverUrls.map((u) => `<li><a href="${escapeHtml(u)}">Agenda cover</a></li>`).join("")}
         ${agendaUrls.map((u) => `<li><a href="${escapeHtml(u)}">Agenda</a></li>`).join("")}
@@ -720,6 +723,7 @@ function main() {
   const sourceArg = process.argv[8] || "";
   const videoArg = process.argv[9] || "";
   const hookArg = process.argv[10] || "";
+  const agendaPageArg = process.argv[11] || "";
 
   if (!transcriptDirArg) {
     process.stdout.write(`${usage()}\n`);
@@ -805,6 +809,7 @@ function main() {
   const jurisdictionSlug = slugify(jurisdictionArg);
   const bodySlug = slugify(bodyArg);
   const canonicalUrl = `${siteUrlArg.replace(/\/+$/u, "")}/transcripts/${jurisdictionSlug}/${bodySlug}/${dateInfo.iso || "unknown-date"}`;
+  const inferredAgendaPage = `${siteUrlArg.replace(/\/+$/u, "")}/agendas/${jurisdictionSlug}/${bodySlug}/${dateInfo.iso || "unknown-date"}`;
   const descTopics = topics.slice(0, 3).join(", ");
   const description = `Transcript and summary of the ${jurisdictionArg} ${bodyArg} meeting held on ${dateInfo.long}, including discussion of ${descTopics}.`;
   const archiveJurUrl = `/transcripts/${jurisdictionSlug}`;
@@ -821,6 +826,7 @@ function main() {
     : [];
   const finalVideo = videoArg || payloadVideoDirect[0] || payloadVideo[0] || "";
   const finalSource = sourceArg || meetingUrl || "";
+  const finalAgendaPage = String(agendaPageArg || inferredAgendaPage).trim();
 
   const transcriptSections = buildSectionRanges({
     transcriptRows,
@@ -862,6 +868,7 @@ function main() {
     archiveJurUrl,
     archiveBodyUrl,
     transcriptStatus: "Machine transcription, lightly cleaned",
+    agendaPageUrl: finalAgendaPage,
   });
 
   const outPath = path.resolve(transcriptDir, outputArg);
