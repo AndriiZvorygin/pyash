@@ -727,6 +727,8 @@ async function main() {
 
   const meetingJsonPath = path.join(meetingDir, "meeting.json");
   const meetingPayload = safeReadJson(meetingJsonPath, {})?.payload || {};
+  const meetingDateInfo = deriveDateLongFromMeetingDir(path.basename(meetingDir));
+  const agendaPageUrl = `${siteUrl.replace(/\/+$/u, "")}/agendas/${slugify(jurisdiction)}/${slugify(body)}/${meetingDateInfo.iso || "unknown-date"}`;
   const meetingUrl = String(meetingPayload?.meeting_url || "").trim();
   const payloadVideoDirect = Array.isArray(meetingPayload?.video_direct)
     ? meetingPayload.video_direct.find((x) => /^https?:\/\//iu.test(String(x || "")))
@@ -752,6 +754,7 @@ async function main() {
         meetingUrl,
         preferredVideo,
         hook,
+        agendaPageUrl,
       ],
       cwd: ROOT,
       timeoutMs: 10 * 60 * 1000,
@@ -804,6 +807,7 @@ async function main() {
     const bodyLines = [];
     if (summaryMd) bodyLines.push(summaryMd);
     bodyLines.push(`Read full transcript: ${canonicalUrl}`);
+    bodyLines.push(`Agenda page: ${agendaPageUrl}`);
     if (sourceLinks.length) bodyLines.push(sourceLinks.join("\n"));
     if (discussionUrl) bodyLines.push(`HelpOS discussion: ${discussionUrl}`);
 
@@ -823,6 +827,7 @@ async function main() {
       source: {
         meeting_url: meetingUrl || "",
         video_url: preferredVideo,
+        agenda_url: agendaPageUrl,
       },
       discussion_url: discussionUrl || "",
       generated_at_utc: new Date().toISOString(),
