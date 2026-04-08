@@ -143,6 +143,7 @@ function inferPrimaryBodySlugFromPayload(payload = {}) {
   const source = `${meetingName} ${meetingType}`.trim();
   if (!source) return '';
   if (/committee of the whole/.test(source)) return 'committee-of-the-whole';
+  if (/committee of adjustment/.test(source)) return 'committee-of-adjustment';
   if (/county council/.test(source)) return 'county-council';
   if (/committee\s*-\s*community services|community services/.test(source)) return 'committee-community-services';
   if (/committee\s*-\s*operations|operations/.test(source)) return 'committee-operations';
@@ -447,8 +448,13 @@ async function fetchPageKind(url, cache) {
       'whole agenda summary',
       'read full agenda archive',
     ];
-    const transcriptHits = transcriptSignals.reduce((acc, token) => acc + (html.includes(token) ? 1 : 0), 0);
-    const agendaHits = agendaSignals.reduce((acc, token) => acc + (html.includes(token) ? 1 : 0), 0);
+    const lowerUrl = String(url || '').toLowerCase();
+    let transcriptHits = transcriptSignals.reduce((acc, token) => acc + (html.includes(token) ? 1 : 0), 0);
+    let agendaHits = agendaSignals.reduce((acc, token) => acc + (html.includes(token) ? 1 : 0), 0);
+    // URL path is a stronger signal than body text, which may contain
+    // cross-links/phrases from both page types.
+    if (lowerUrl.includes('/transcripts/')) transcriptHits += 2;
+    if (lowerUrl.includes('/agendas/')) agendaHits += 2;
     const kind = transcriptHits > agendaHits ? 'transcript' : (agendaHits > 0 ? 'agenda' : 'unknown');
     cache.set(key, kind);
     return kind;
