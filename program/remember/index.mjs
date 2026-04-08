@@ -65,6 +65,18 @@ function rawRemember(name) {
   return defaults.get(name);
 }
 
+function rememberIt() {
+  for (let i = memory.length - 1; i >= 0; i--) {
+    const s = memory[i];
+    if (!s?.su?.name) continue;
+    if (s.su.name === "result") continue;
+    if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
+    if (s.mood === "do" || s.mood === "then") continue;
+    return s;
+  }
+  return undefined;
+}
+
 function resolveNicknameTarget(ref, seen = new Set()) {
   if (!ref || typeof ref !== "object") return null;
   if (ref.name) {
@@ -280,10 +292,11 @@ export function doRemember(sentence) {
 
 export function remember(name) {
   if (!name) return undefined;
-  const fact = rawRemember(name);
+  const key = String(name);
+  const fact = key === "it" ? rememberIt() : rawRemember(key);
   if (fact?.be !== "nickname") return fact;
-  const target = resolveNicknameTarget(fact.ob, new Set([String(name)]));
-  return synthesizeNicknameFact(String(name), fact, target);
+  const target = resolveNicknameTarget(fact.ob, new Set([key]));
+  return synthesizeNicknameFact(key, fact, target);
 }
 
 export function allRemember() {
