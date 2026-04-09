@@ -27,6 +27,18 @@ const KNOWN_SPEAKER_THRESHOLD = (() => {
   const raw = Number(process.env.PYA_SPEAKER_KNOWN_THRESHOLD || 0.50);
   return Number.isFinite(raw) ? raw : 0.50;
 })();
+const NAME_LOCK_THRESHOLD = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_NAME_LOCK_THRESHOLD || 0.62);
+  return Number.isFinite(raw) ? raw : 0.62;
+})();
+const NAME_LOCK_MIN_WINDOWS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_NAME_LOCK_MIN_WINDOWS || 2);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 2;
+})();
+const NAME_LOCK_WINDOW_SECONDS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_NAME_LOCK_WINDOW_SECONDS || 90);
+  return Number.isFinite(raw) && raw > 0 ? raw : 90;
+})();
 const TURN_MAX_SECONDS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_TURN_MAX_SECONDS || 14);
   return Number.isFinite(raw) && raw > 0 ? raw : 14;
@@ -53,12 +65,53 @@ const BOUNDARY_REFINE_MIN_SECONDS = (() => {
   return Number.isFinite(raw) && raw > 0 ? raw : 0.45;
 })();
 const PREDECODE_PCM_ENABLED = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_PREDECODE_PCM || '1'));
+const IDENTIFY_RETRY_COUNT = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_IDENTIFY_RETRY_COUNT || 2);
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 2;
+})();
+const IDENTIFY_RETRY_DELAY_MS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_IDENTIFY_RETRY_DELAY_MS || 350);
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 350;
+})();
 
 function usage() {
   return [
     'Usage: node command/diarize_sentence_srt_from_transcript_folder.mjs <transcript_dir> [prefix] [voices_dir]',
     'Example: node command/diarize_sentence_srt_from_transcript_folder.mjs artifacts/.../transcript meeting-qwen-auto world/voices'
   ].join('\n');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableIdentifyError(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return (
+    msg.includes("worker returned empty response") ||
+    msg.includes("fetch failed") ||
+    msg.includes("socket hang up") ||
+    msg.includes("connection reset")
+  );
+}
+
+async function identifyWithRetry(payload, context = "") {
+  let lastErr = null;
+  for (let attempt = 0; attempt <= IDENTIFY_RETRY_COUNT; attempt += 1) {
+    try {
+      return await identify(payload);
+    } catch (error) {
+      lastErr = error;
+      const retryable = isRetryableIdentifyError(error);
+      const canRetry = retryable && attempt < IDENTIFY_RETRY_COUNT;
+      if (!canRetry) throw error;
+      process.stdout.write(
+        `[speaker-sentence] identify retry ${attempt + 1}/${IDENTIFY_RETRY_COUNT} ${context} reason="${String(error?.message || error)}"\n`
+      );
+      if (IDENTIFY_RETRY_DELAY_MS > 0) await sleep(IDENTIFY_RETRY_DELAY_MS);
+    }
+  }
+  throw lastErr || new Error("identify failed");
 }
 
 function ensureDir(dirPath) {
@@ -142,17 +195,48 @@ function parseSrt(text) {
   return out;
 }
 
-function toDisplayLabel(speakerKey, metadataMap) {
+function toDisplayLabel(speakerKey, metadataMap, lockedSpeakerKeys = null) {
   const key = String(speakerKey || '').trim();
   const meta = metadataMap.get(key) || {};
   const rawName = String(meta.name || '').trim();
-  if (rawName && !/^speaker_\d+$/iu.test(rawName)) {
+  const hasLocks = lockedSpeakerKeys instanceof Set && lockedSpeakerKeys.size > 0;
+  const lockAllowed = !hasLocks || lockedSpeakerKeys.has(key);
+  if (lockAllowed && rawName && !/^speaker_\d+$/iu.test(rawName)) {
     return rawName.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
   }
   const m = key.match(/^speaker_(\d+)$/iu);
   if (m) return `SPEAKER_${String(Number(m[1])).padStart(3, '0')}`;
   if (rawName) return rawName.replace(/_/g, ' ');
   return key || 'SPEAKER_UNKNOWN';
+}
+
+function hasNamedMetadata(speakerKey, metadataMap) {
+  const key = String(speakerKey || '').trim();
+  if (!key) return false;
+  const meta = metadataMap.get(key) || {};
+  const rawName = String(meta.name || '').trim();
+  return Boolean(rawName && !/^speaker_\d+$/iu.test(rawName));
+}
+
+function noteNameEvidence(evidenceMap, speakerKey, matched, similarity, since, metadataMap) {
+  const key = String(speakerKey || '').trim();
+  if (!key) return;
+  if (!hasNamedMetadata(key, metadataMap)) return;
+  if (!isKnownLike(matched)) return;
+  const sim = Number(similarity);
+  if (!Number.isFinite(sim) || sim < NAME_LOCK_THRESHOLD) return;
+  const t = Math.max(0, Number(since) || 0);
+  const window = Math.floor(t / NAME_LOCK_WINDOW_SECONDS);
+  if (!evidenceMap.has(key)) evidenceMap.set(key, new Set());
+  evidenceMap.get(key).add(window);
+}
+
+function buildLockedSpeakerKeys(evidenceMap) {
+  const out = new Set();
+  for (const [key, windows] of evidenceMap.entries()) {
+    if ((windows?.size || 0) >= NAME_LOCK_MIN_WINDOWS) out.add(key);
+  }
+  return out;
 }
 
 function parseSpeakerMetaFile(filePath) {
@@ -463,14 +547,14 @@ async function refineBoundaries({
 
     const clipPath = path.join(tmpDir, `boundary-refine-${String(idx + 1).padStart(5, '0')}.wav`);
     ensureWavClip({ audioPath, since: row.since, until: row.until, outPath: clipPath });
-    const ident = await identify({
+    const ident = await identifyWithRetry({
       audio: clipPath,
       voicesDir,
       prevSpeaker: prevKey || null,
       sameSpeakerThreshold: SAME_SPEAKER_THRESHOLD,
       knownSpeakerThreshold: KNOWN_SPEAKER_THRESHOLD,
       clipSeconds: Math.max(1.0, Math.min(6, dur)),
-    });
+    }, `boundary=${idx + 1}`);
     const candKey = String(ident?.speaker || '').trim();
     const candMatch = String(ident?.matched || '').trim().toLowerCase();
     const candSimNum = Number(ident?.similarity);
@@ -512,6 +596,7 @@ async function main() {
     : path.join(ROOT, 'world', 'voices');
   const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '0'));
   const reseedVoices = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_RESEED_VOICES || ''));
+  const resolvedSpeakerHost = String(process.env.PYA_SPEAKER_HOST || process.env.SPEAKER_HOST || '').trim();
   const voicesDir = isolateVoices
     ? path.resolve(process.cwd(), process.env.PYA_SPEAKER_WORKING_VOICES_DIR || path.join(transcriptDir, 'voices-working'))
     : baseVoicesDir;
@@ -534,13 +619,14 @@ async function main() {
   process.stdout.write(`[speaker-sentence] audio: ${audioPath}\n`);
   process.stdout.write(`[speaker-sentence] base voices dir: ${baseVoicesDir}\n`);
   process.stdout.write(`[speaker-sentence] voices dir: ${voicesDir}\n`);
+  process.stdout.write(`[speaker-sentence] speaker host: ${resolvedSpeakerHost || '(local worker)'}\n`);
   process.stdout.write(`[speaker-sentence] isolate voices: ${isolateVoices ? 'on' : 'off'}\n`);
   process.stdout.write(`[speaker-sentence] cues: ${cues.length}\n`);
   if (MAX_CUES > 0) process.stdout.write(`[speaker-sentence] cue limit: ${workCues.length}\n`);
   const turns = buildTurnsFromCues(workCues);
   process.stdout.write(`[speaker-sentence] turns: ${turns.length}\n`);
   process.stdout.write(
-    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} turn_max_seconds=${TURN_MAX_SECONDS} turn_max_words=${TURN_MAX_WORDS} turn_max_gap=${TURN_MAX_GAP_SECONDS} boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
+    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} turn_max_seconds=${TURN_MAX_SECONDS} turn_max_words=${TURN_MAX_WORDS} turn_max_gap=${TURN_MAX_GAP_SECONDS} boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
   );
 
   const tempRoot = path.join(ROOT, 'world', 'temporary');
@@ -550,6 +636,7 @@ async function main() {
   const firstSampleBySpeaker = new Set();
   let prevSpeaker = '';
   const metadataMapForLog = loadSpeakerMetadataMap(voicesDir);
+  const nameEvidenceBySpeaker = new Map();
   let clipAudioPath = audioPath;
 
   if (PREDECODE_PCM_ENABLED) {
@@ -575,20 +662,28 @@ async function main() {
 
       if (!(shortTurn && prevSpeaker)) {
         ensureWavClip({ audioPath: clipAudioPath, since: turn.since, until: turn.until, outPath: clipPath });
-        const ident = await identify({
+        const ident = await identifyWithRetry({
           audio: clipPath,
           voicesDir,
           prevSpeaker: prevSpeaker || null,
           sameSpeakerThreshold: SAME_SPEAKER_THRESHOLD,
           knownSpeakerThreshold: KNOWN_SPEAKER_THRESHOLD,
           clipSeconds: Math.max(1.0, Math.min(8, turnDuration)),
-        });
+        }, `turn=${turnIndex + 1}`);
         speakerKey = String(ident?.speaker || '').trim() || 'speaker_unknown';
         matched = String(ident?.matched || 'na');
         similarity = fmtScore(ident?.similarity);
         sampleCount = Number.isFinite(Number(ident?.sample_count))
           ? String(Number(ident.sample_count))
           : 'na';
+        noteNameEvidence(
+          nameEvidenceBySpeaker,
+          speakerKey,
+          matched,
+          ident?.similarity,
+          turn.since,
+          metadataMapForLog,
+        );
 
         // Guard against mixed-speaker turns: if a fresh speaker was minted from a long
         // turn, probe beginning/end against a snapshot (excluding the new key) and
@@ -606,22 +701,22 @@ async function main() {
             const edgeTailSince = Math.max(turn.since, turn.until - EDGE_PROBE_SECONDS);
             ensureWavClip({ audioPath: clipAudioPath, since: turn.since, until: edgeHeadUntil, outPath: edgeHeadPath });
             ensureWavClip({ audioPath: clipAudioPath, since: edgeTailSince, until: turn.until, outPath: edgeTailPath });
-            edgeStart = await identify({
+            edgeStart = await identifyWithRetry({
               audio: edgeHeadPath,
               voicesDir: probeRoot,
               prevSpeaker: prevSpeaker || null,
               sameSpeakerThreshold: SAME_SPEAKER_THRESHOLD,
               knownSpeakerThreshold: KNOWN_SPEAKER_THRESHOLD,
               clipSeconds: Math.max(1.0, Math.min(6, edgeHeadUntil - turn.since)),
-            });
-            edgeEnd = await identify({
+            }, `turn=${turnIndex + 1} edge=head`);
+            edgeEnd = await identifyWithRetry({
               audio: edgeTailPath,
               voicesDir: probeRoot,
               prevSpeaker: String(edgeStart?.speaker || prevSpeaker || ''),
               sameSpeakerThreshold: SAME_SPEAKER_THRESHOLD,
               knownSpeakerThreshold: KNOWN_SPEAKER_THRESHOLD,
               clipSeconds: Math.max(1.0, Math.min(6, turn.until - edgeTailSince)),
-            });
+            }, `turn=${turnIndex + 1} edge=tail`);
             const startKey = String(edgeStart?.speaker || '').trim();
             const endKey = String(edgeEnd?.speaker || '').trim();
             const startMatch = String(edgeStart?.matched || '').trim();
@@ -664,20 +759,28 @@ async function main() {
               const cueShort = cueDur < MIN_IDENTIFY_SECONDS || cueWords < MIN_IDENTIFY_WORDS;
               if (!(cueShort && localPrev)) {
                 ensureWavClip({ audioPath: clipAudioPath, since: cue.since, until: cue.until, outPath: cueClip });
-                const cueIdent = await identify({
+                const cueIdent = await identifyWithRetry({
                   audio: cueClip,
                   voicesDir,
                   prevSpeaker: localPrev || null,
                   sameSpeakerThreshold: SAME_SPEAKER_THRESHOLD,
                   knownSpeakerThreshold: KNOWN_SPEAKER_THRESHOLD,
                   clipSeconds: Math.max(1.0, Math.min(6, cueDur)),
-                });
+                }, `turn=${turnIndex + 1} cue=${cueIdx + 1}`);
                 cueSpeaker = String(cueIdent?.speaker || '').trim() || cueSpeaker;
                 cueMatched = String(cueIdent?.matched || 'na');
                 cueSim = fmtScore(cueIdent?.similarity);
                 cueSamples = Number.isFinite(Number(cueIdent?.sample_count))
                   ? String(Number(cueIdent.sample_count))
                   : 'na';
+                noteNameEvidence(
+                  nameEvidenceBySpeaker,
+                  cueSpeaker,
+                  cueMatched,
+                  cueIdent?.similarity,
+                  cue.since,
+                  metadataMapForLog,
+                );
               }
               localPrev = cueSpeaker;
               localLast = cueSpeaker;
@@ -756,6 +859,8 @@ async function main() {
   }
 
   const metadataMap = loadSpeakerMetadataMap(voicesDir);
+  const lockedSpeakerKeys = buildLockedSpeakerKeys(nameEvidenceBySpeaker);
+  process.stdout.write(`[speaker-sentence] name-lock speakers: ${lockedSpeakerKeys.size}\n`);
   if (rows.length >= 2) {
     const first = rows[0];
     const second = rows[1];
@@ -781,7 +886,7 @@ async function main() {
     }
   }
   for (const row of rows) {
-    row.display = toDisplayLabel(row.speaker_key, metadataMap);
+    row.display = toDisplayLabel(row.speaker_key, metadataMap, lockedSpeakerKeys);
   }
 
   fs.writeFileSync(outSrt, renderSrt(rows), 'utf8');
@@ -792,6 +897,12 @@ async function main() {
     audio: audioPath,
     voices_dir: voicesDir,
     samples_dir: samplesDir,
+    name_lock: {
+      threshold: NAME_LOCK_THRESHOLD,
+      min_windows: NAME_LOCK_MIN_WINDOWS,
+      window_seconds: NAME_LOCK_WINDOW_SECONDS,
+      speakers: [...lockedSpeakerKeys].sort(),
+    },
     rows,
   }, null, 2)}\n`, 'utf8');
 
