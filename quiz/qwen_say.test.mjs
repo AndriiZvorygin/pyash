@@ -121,11 +121,11 @@ test("normalizeQwenSayChunkText appends an extra terminal period", () => {
 test("sanitizeQwenSayScriptText rewrites numeric colons used in citations", () => {
   assert.equal(
     sanitizeQwenSayScriptText("God is love (1st John 4:8)."),
-    "God is love (first John four point eight)."
+    "God is love (first John four eight)."
   );
   assert.equal(
     sanitizeQwenSayScriptText("Matthew 5 : 16 and Mark 11:26"),
-    "Matthew five point sixteen and Mark eleven point twenty six"
+    "Matthew five sixteen and Mark eleven twenty-six"
   );
   assert.equal(sanitizeQwenSayScriptText("God’s 50% promise"), "God's fifty percent promise");
   assert.match(sanitizeQwenSayScriptText("don't remove apostrophes"), /don't/u);
@@ -589,6 +589,7 @@ test("qwenSay retries when final chunk tail gap is too short even if hot-tail is
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify max retries" }, ob: { num: 1 }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify min tail ms" }, ob: { num: 120 }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tail-gap-fail-"));
   const output = path.join(outDir, "out.wav");
   const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
@@ -617,6 +618,94 @@ test("qwenSay retries when final chunk tail gap is too short even if hot-tail is
       /clipped chunk retries exhausted/u
     );
     assert.equal(runCalls >= 2, true);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay does not fail tail-gap check for short citation-like final chunk", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify min tail ms" }, ob: { num: 120 }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tail-gap-short-citation-"));
+  const output = path.join(outDir, "out.wav");
+  const longLead = Array.from({ length: 200 }, (_, idx) => `term${idx + 1}`).join(" ");
+  const longText = `${longLead}. (Colossians 3.15).`;
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_tail_gap_short_ok"));
+    return {
+      stdout: chunkFile,
+      outputPath: chunkFile,
+      transcript: String(text ?? ""),
+      timestamps: "0.10-2.95: colossians"
+    };
+  };
+  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 3.00 });
+  const verifyChunkTailFn = async () => ({ pass: true, transcript: "colossians three point fifteen", matched: 2, expected: 2, tailEndSeconds: 2.95 });
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_tail_gap_short_concat"));
+  };
+  try {
+    await qwenSay(
+      { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+      { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
+    );
+    const chunkDir = path.join(outDir, "out.qwen-say-chunks");
+    const manifest = JSON.parse(await fs.readFile(path.join(chunkDir, "chunks.metadata.json"), "utf8"));
+    const last = manifest.chunks[manifest.chunks.length - 1];
+    assert.equal(Boolean(last?.verification?.asrPass), true);
+    assert.equal(
+      Boolean(last?.verification?.asrTailGapSkipped) || String(last?.verification?.asrBypassed ?? "") === "short-final-chunk",
+      true
+    );
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay bypasses ASR for short final chunk when hot-tail is not suspect", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify min tail words" }, ob: { num: 6 }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-short-final-bypass-"));
+  const output = path.join(outDir, "out.wav");
+  const longLead = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
+  const longText = `${longLead}. (Acts 20:35).`;
+  let asrCalls = 0;
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_short_final_bypass"));
+    return {
+      stdout: chunkFile,
+      outputPath: chunkFile,
+      transcript: String(text ?? ""),
+      timestamps: ""
+    };
+  };
+  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 2.9 });
+  const verifyChunkTailFn = async () => {
+    asrCalls += 1;
+    return { pass: false, transcript: "", matched: 0, expected: 2 };
+  };
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_short_final_bypass_concat"));
+  };
+  try {
+    await qwenSay(
+      { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+      { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
+    );
+    assert.equal(asrCalls, 0);
+    const chunkDir = path.join(outDir, "out.qwen-say-chunks");
+    const manifest = JSON.parse(await fs.readFile(path.join(chunkDir, "chunks.metadata.json"), "utf8"));
+    const last = manifest.chunks[manifest.chunks.length - 1];
+    assert.equal(String(last?.verification?.asrBypassed ?? ""), "short-final-chunk");
+    assert.equal(Boolean(last?.verification?.asrPass), true);
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }
@@ -675,8 +764,8 @@ test("qwenSay sanitizes numeric citation colons before synthesis", async () => {
       { runSayFn }
     );
     assert.equal(seenTexts.length, 1);
-    assert.match(seenTexts[0], /four point eight/u);
-    assert.match(seenTexts[0], /five point sixteen/u);
+    assert.match(seenTexts[0], /four eight/u);
+    assert.match(seenTexts[0], /five sixteen/u);
     assert.match(seenTexts[0], /\.\.$/u);
     assert.doesNotMatch(seenTexts[0], /\d:\d/u);
   } finally {
@@ -690,7 +779,12 @@ test("sanitizeQwenSayScriptText uses map overrides when provided", () => {
     pointWord: "dot",
     percent: "pct"
   });
-  assert.equal(text, "First John four dot eight is fifty pct");
+  assert.equal(text, "First John four eight is fifty pct");
+});
+
+test("sanitizeQwenSayScriptText adds period after citation when followed by newline", () => {
+  const text = sanitizeQwenSayScriptText("(Acts 20:35)\nPeace grows through giving.");
+  assert.equal(text, "(Acts twenty thirty-five). Peace grows through giving.");
 });
 
 test("splitQwenSayTextChunks does not split chapter verse references into numeric fragments", () => {
