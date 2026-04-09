@@ -99,10 +99,15 @@ test("lyrics_to_srt_from_timing fails fast on obvious lyrics mismatch", async ()
   await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
   await fs.writeFile(timingPath, `${timing}\n`, "utf8");
 
-  await assert.rejects(
-    () => runLyricsToSrt([lyricsPath, timingPath, outputPath]),
-    /lyrics mismatch/u
-  );
+  process.env.PYA_SRT_ALLOW_MISMATCH_FALLBACK = "false";
+  try {
+    await assert.rejects(
+      () => runLyricsToSrt([lyricsPath, timingPath, outputPath]),
+      /lyrics mismatch/u
+    );
+  } finally {
+    delete process.env.PYA_SRT_ALLOW_MISMATCH_FALLBACK;
+  }
 });
 
 test("lyrics_to_srt_from_timing avoids chorus freeze from overly wide repeated-token matches", async () => {
@@ -289,4 +294,93 @@ test("lyrics_to_srt_from_timing sentence-cues stay aligned to source timeline", 
 
   const last = rows[rows.length - 1];
   assert.ok(last.until <= 1.02, `last row should stay on source timeline, got ${last.until.toFixed(3)}s`);
+});
+
+test("lyrics_to_srt_from_timing sentence-cues never overlap", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-sentence-no-overlap.txt");
+  const timingPath = path.join(dir, "timing-sentence-no-overlap.srt");
+  const outputPath = path.join(dir, "lyrics-sentence-no-overlap.out.srt");
+
+  const lyrics = [
+    "Many assume salvation demands a perfect self before opening the heart, yet the secret is entering exactly as you are.",
+    "We mistakenly think we must save ourselves alone, ignoring that true service arises precisely because we recognize our inability to save in isolation.",
+    "Judgment is inappropriate for an energy field with consciousness; only love honors the self.",
+    "This awakening transforms cold discernment into brotherhood and shared understanding, dissolving separations that density creates.",
+    "The tomb is empty when you forgive yourself daily and roll the stone away, finding the self you always were without needing proof or a savior."
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:00,320 --> 00:00:06,640",
+    "Many assume salvation demands a perfect self before opening the heart yet the secret is entering exactly as you are",
+    "",
+    "2",
+    "00:00:06,960 --> 00:00:15,600",
+    "We mistakenly think we must save ourselves alone ignoring that true service arises precisely because we recognize our inability to save in isolation",
+    "",
+    "3",
+    "00:00:16,160 --> 00:00:35,300",
+    "Judgment is inappropriate for an energy field with consciousness only love honors the self",
+    "",
+    "4",
+    "00:00:35,300 --> 00:00:36,800",
+    "This awakening transforms cold discernment into brotherhood and shared understanding dissolving separations that density creates",
+    "",
+    "5",
+    "00:00:36,200 --> 00:00:38,020",
+    "The tomb is empty when you forgive yourself daily and roll the stone away finding the self you always were without needing proof or a savior"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows.length, 5);
+  for (let i = 1; i < rows.length; i += 1) {
+    assert.ok(
+      rows[i].since >= rows[i - 1].until,
+      `sentence cues must not overlap: row ${i} starts ${rows[i].since.toFixed(3)} before prior ends ${rows[i - 1].until.toFixed(3)}`
+    );
+  }
+});
+
+test("lyrics_to_srt_from_timing sentence-cues tolerate late start from overlap clamp", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-sentence-late-start-ok.txt");
+  const timingPath = path.join(dir, "timing-sentence-late-start-ok.srt");
+  const outputPath = path.join(dir, "lyrics-sentence-late-start-ok.out.srt");
+
+  const lyrics = [
+    "Line one carries most of the duration.",
+    "Line two is short.",
+    "Be love now."
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:00,000 --> 00:00:08,320",
+    "Line one carries most of the duration",
+    "",
+    "2",
+    "00:00:08,320 --> 00:00:12,240",
+    "Line two is short Be love now"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows.length, 3);
+  for (let i = 1; i < rows.length; i += 1) {
+    assert.ok(rows[i].since >= rows[i - 1].until, "rows should stay non-overlapping");
+  }
 });

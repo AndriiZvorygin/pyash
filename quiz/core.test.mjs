@@ -158,6 +158,28 @@ test("que on unknown subject returns null", async () => {
   assert.equal(res, null);
 });
 
+test("remember it resolves to latest meaningful subject", async () => {
+  forget();
+
+  await run("exists su name alpha ob text \"first\" be text ya");
+  await run("exists su name beta ob text \"second\" be text ya");
+
+  const itFact = remember("it");
+  assert.ok(itFact);
+  assert.equal(itFact?.su?.name, "beta");
+  assert.equal(itFact?.ob?.text, "second");
+});
+
+test("querying name it returns latest meaningful subject fact", async () => {
+  forget();
+
+  await run("exists su name alpha ob num 1 be number ya");
+  await run("exists su name beta ob num 2 be number ya");
+
+  const res = await run("su name it ob what que");
+  assert.deepEqual(res, "exists su name beta ob num 2 be number ya");
+});
+
 test("false condition skips one statement and then resets", async () => {
   forget();
 

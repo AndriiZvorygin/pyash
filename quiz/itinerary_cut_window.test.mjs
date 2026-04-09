@@ -207,3 +207,23 @@ test("cut from text as sentence during num spreads cuts evenly across total dura
   assert.equal(series[2]?.since?.num, 20);
   assert.equal(series[2]?.until?.num, 30);
 });
+
+test("cut from text as sentence tolerates noisy trace-like payloads without aborting", async () => {
+  const noisy = [
+    "Begin your journey now by forgiving yourself and letting this living peace flow from your heart to heal the world around you.",
+    "exists su name newspaper-257 ob name evoke-4 from name newspaper to filename artifacts/20260405-002/newspaper/text-000257.txt as name text fromtext text \"e330...\" accordingto name sha256 by num 2768 be artifact ya",
+    "su name run start time ob text \"2026-04-05T07:03:33.307-04:00\" be text ya"
+  ].join(" ");
+
+  const out = await cutFromTextToNameItinerary({
+    mood: "do",
+    be: "cut",
+    from: { text: noisy },
+    as: { text: "sentence" },
+    to: { name: "noisy sentence cuts", nameTypeWords: ["itinerary"] }
+  });
+
+  const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
+  assert.ok(series.length >= 1);
+  assert.match(String(series[0]?.ob?.text ?? ""), /Begin your journey now/u);
+});
