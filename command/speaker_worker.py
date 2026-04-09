@@ -343,7 +343,23 @@ class SpeakerWorker:
 
     def _new_speaker_id(self, root: Path) -> str:
         index = self._load_index(root)
-        next_id = int(index.get("next_speaker_id", 1))
+        records = self._list_speakers(root)
+        used_ids = set()
+        for key in records.keys():
+            match = re.match(r"^speaker_(\d+)$", key)
+            if not match:
+                continue
+            try:
+                used_ids.add(int(match.group(1)))
+            except Exception:
+                continue
+
+        # Reuse the lowest available anonymous speaker slot so numbering
+        # stays compact and does not imply phantom speaker growth.
+        next_id = 1
+        while next_id in used_ids:
+            next_id += 1
+
         key = f"speaker_{next_id:03d}"
         index["next_speaker_id"] = next_id + 1
         self._save_index(root, index)

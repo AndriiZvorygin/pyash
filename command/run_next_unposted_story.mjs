@@ -700,6 +700,7 @@ async function main() {
   }
 
   const pickOnly = /^(1|true|yes)$/iu.test(String(process.env.NEXT_STORY_PICK_ONLY || process.env.OWEN_NEXT_STORY_PICK_ONLY || '0'));
+  const diarizeOnly = /^(1|true|yes)$/iu.test(String(process.env.NEXT_STORY_DIARIZE_ONLY || process.env.OWEN_NEXT_STORY_DIARIZE_ONLY || '0'));
   const skipRefresh = /^(1|true|yes)$/iu.test(String(process.env.NEXT_STORY_SKIP_REFRESH || process.env.OWEN_SKIP_MONTHLY_REFRESH || '0'));
 
   if (!process.env.MEETING_PUBLISH_AUTH_TOKEN) {
@@ -767,18 +768,24 @@ async function main() {
     return;
   }
 
-  if (!String(process.env.MEETING_PUBLISH_AUTH_TOKEN || '').trim()) {
+  if (!diarizeOnly && !String(process.env.MEETING_PUBLISH_AUTH_TOKEN || '').trim()) {
     throw new Error('MEETING_PUBLISH_AUTH_TOKEN is missing (.env or env var) for non-pick runs');
   }
 
   const env = {
     ...process.env,
     PYA_COMMAND_TIMEOUT_MS: process.env.PYA_COMMAND_TIMEOUT_MS || '28800000',
+    OWEN_PIPELINE_DIARIZE_ONLY: diarizeOnly ? '1' : (process.env.OWEN_PIPELINE_DIARIZE_ONLY || '0'),
     OWEN_PIPELINE_SKIP_IMAGE: process.env.OWEN_PIPELINE_SKIP_IMAGE || process.env.PIPELINE_SKIP_IMAGE || '0',
     OWEN_PIPELINE_SKIP_LEMMY: process.env.OWEN_PIPELINE_SKIP_LEMMY || process.env.PIPELINE_SKIP_POST || '0',
     OWEN_PIPELINE_FORCE: process.env.OWEN_PIPELINE_FORCE || process.env.PIPELINE_FORCE || '0',
     MEETING_PUBLISH_COMMUNITY_NAME: process.env.MEETING_PUBLISH_COMMUNITY_NAME || cfg.community_name || '',
   };
+
+  if (diarizeOnly) {
+    env.OWEN_PIPELINE_SKIP_IMAGE = '1';
+    env.OWEN_PIPELINE_SKIP_LEMMY = '1';
+  }
 
   const postCmd = String(
     process.env.MEETING_POST_COMMAND
