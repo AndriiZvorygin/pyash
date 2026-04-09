@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { generateAgendaWiseArtifacts } from "./shared/agenda-wise-chunks.mjs";
+import { generateAgendaWiseArtifacts } from "../../../../program/library/reporter_shared/agenda-wise-chunks.mjs";
 import { pickRichestAgendaPathFromMeetingDir } from "../../../../program/library/agenda_preview_shared.mjs";
 
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));

@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { GREY_ADAPTER } from "./writer-adapter-grey-county.mjs";
-import { buildRunNextConfig } from "./shared/writer-adapter-interface.mjs";
+import { buildRunNextConfig } from "../../../../program/library/reporter_shared/writer-adapter-interface.mjs";
 import { applyPublishEnvNormalization } from "../../../../program/publisher-interface.mjs";
 
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
