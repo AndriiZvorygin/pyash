@@ -54,6 +54,7 @@ function usage() {
     "  --meeting <selector>      index, 8-char id prefix, full id/url, or folder fragment",
     "  --refresh                 force monthly refresh",
     "  --pick-only               select candidate only (no pipeline)",
+    "  --diarize-only            run only transcript diarization stages",
     "  --list                    alias for command list",
     "  --stage <name>            for rerun-stage: prep|full|image|verify|publish",
     "  --force <stage>           repeatable; prep|full|image",
@@ -72,6 +73,7 @@ function parseArgs(argv) {
     meeting: "",
     refresh: false,
     pickOnly: false,
+    diarizeOnly: false,
     list: false,
     stage: "",
     force: new Set(),
@@ -91,6 +93,7 @@ function parseArgs(argv) {
     else if (a === "--meeting") out.meeting = String(args.shift() || "").trim();
     else if (a === "--refresh") out.refresh = true;
     else if (a === "--pick-only") out.pickOnly = true;
+    else if (a === "--diarize-only") out.diarizeOnly = true;
     else if (a === "--list") out.list = true;
     else if (a === "--stage") out.stage = String(args.shift() || "").trim().toLowerCase();
     else if (a === "--force") out.force.add(String(args.shift() || "").trim().toLowerCase());
@@ -352,6 +355,10 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
   const pickOnly = args.pickOnly ? "1" : "0";
   env.NEXT_STORY_PICK_ONLY = pickOnly;
   env[`${envPrefix}_NEXT_STORY_PICK_ONLY`] = pickOnly;
+
+  const diarizeOnly = args.diarizeOnly ? "1" : "0";
+  env.NEXT_STORY_DIARIZE_ONLY = diarizeOnly;
+  env[`${envPrefix}_NEXT_STORY_DIARIZE_ONLY`] = diarizeOnly;
 
   const normalizeStage = (s) => String(s || "").trim().toLowerCase();
   for (const st of args.force) {
