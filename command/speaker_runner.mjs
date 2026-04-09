@@ -46,14 +46,18 @@ export class SpeakerRunner {
   async ensureStarted() {
     if (this.serviceHost) {
       const url = `${this.serviceHost}/health`;
+      const healthTimeoutMsRaw = Number(process.env.PYA_SPEAKER_HEALTH_TIMEOUT_MS || 8000);
+      const healthTimeoutMs = Number.isFinite(healthTimeoutMsRaw) && healthTimeoutMsRaw > 0
+        ? Math.floor(healthTimeoutMsRaw)
+        : 8000;
       let res;
       try {
-        res = await fetch(url);
+        res = await fetch(url, { signal: AbortSignal.timeout(healthTimeoutMs) });
       } catch (err) {
-        throw new Error(`speaker service unavailable: ${err?.message || err}`);
+        throw new Error(`speaker service unavailable: ${url} (${err?.message || err})`);
       }
       if (!res.ok) {
-        throw new Error(`speaker service unavailable: ${res.status} ${res.statusText}`);
+        throw new Error(`speaker service unavailable: ${url} (${res.status} ${res.statusText})`);
       }
       return;
     }
