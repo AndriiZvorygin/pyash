@@ -451,11 +451,19 @@ async function fetchPageKind(url, cache) {
     const lowerUrl = String(url || '').toLowerCase();
     let transcriptHits = transcriptSignals.reduce((acc, token) => acc + (html.includes(token) ? 1 : 0), 0);
     let agendaHits = agendaSignals.reduce((acc, token) => acc + (html.includes(token) ? 1 : 0), 0);
-    // URL path is a stronger signal than body text, which may contain
-    // cross-links/phrases from both page types.
-    if (lowerUrl.includes('/transcripts/')) transcriptHits += 2;
-    if (lowerUrl.includes('/agendas/')) agendaHits += 2;
-    const kind = transcriptHits > agendaHits ? 'transcript' : (agendaHits > 0 ? 'agenda' : 'unknown');
+    // URL path is authoritative for content type.
+    // Transcript pages can legitimately include agenda-related sections/links.
+    if (lowerUrl.includes('/transcripts/')) {
+      cache.set(key, 'transcript');
+      return 'transcript';
+    }
+    if (lowerUrl.includes('/agendas/')) {
+      cache.set(key, 'agenda');
+      return 'agenda';
+    }
+    const kind = transcriptHits >= agendaHits && transcriptHits > 0
+      ? 'transcript'
+      : (agendaHits > 0 ? 'agenda' : 'unknown');
     cache.set(key, kind);
     return kind;
   } catch {
@@ -516,10 +524,34 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
   const cache = new Map();
 
   for (const candidate of ordered) {
+    // Local publish artifacts are the primary source of truth for whether this
+    // house has already posted this meeting. Remote probes are only for
+    // locally-unposted rows (to catch external/manual publishes).
+    if (candidate.mode === 'upcoming_agenda' && candidate.state.posted_agenda) {
+      continue;
+    }
+    if (candidate.mode === 'past_video' && candidate.state.posted_transcript) {
+      continue;
+    }
+
     const directPosted = await isPostedByDirectTranscriptProbe(candidate.state, cfg, cache);
-    // Remote probe is authoritative when available, so stale local state
-    // (for example agenda-only posts that left transcript markers) does not
-    // block transcript backfill.
+    // If transcript URL probing fails (moved/cleaned page), but we have a
+    // confirmed local transcript publish response and the discussion post URL
+    // is still live, treat transcript as already posted to avoid duplicate picks.
+    if (!directPosted.posted_transcript && candidate.mode === 'past_video') {
+      const localPostUrl = String(candidate?.state?.post_url || '').trim();
+      const locallyMarkedTranscript = Boolean(candidate?.state?.posted_local_transcript);
+      if (locallyMarkedTranscript && localPostUrl) {
+        const postKey = `post:${localPostUrl}`;
+        if (!cache.has(postKey)) {
+          cache.set(postKey, await urlExists(localPostUrl));
+        }
+        if (cache.get(postKey)) {
+          directPosted.posted_transcript = true;
+        }
+      }
+    }
+    // Remote probe is used only as a secondary check for locally-unposted rows.
     const blocksCandidate = candidate.mode === 'upcoming_agenda'
       ? directPosted.posted_agenda
       : directPosted.posted_transcript;
