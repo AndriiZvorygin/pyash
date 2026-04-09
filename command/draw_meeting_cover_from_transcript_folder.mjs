@@ -138,9 +138,7 @@ async function verifyRenderedOverlayWords({
   const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
   const verifyModels = [
     String(process.env.DRAW_OVERLAY_VERIFY_MODEL || "").trim(),
-    "qwen3-vl:8b-instruct",
-    "llama3.2-vision:11b",
-    "llava:7b",
+    "qwen3.5:9b",
   ].filter(Boolean);
   const uniqModels = [...new Set(verifyModels)];
 

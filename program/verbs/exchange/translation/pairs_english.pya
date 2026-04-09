@@ -100,9 +100,9 @@ su text "exists su name handled ob num 0 be number ya" ob text "handled is numbe
 su text "exists su name hear fixture ob text \"Hello from stream.\" be default ya" ob text "hear fixture is default \"Hello from stream.\"." ya
 su text "exists su name hear fixture ob text \"Hello from timebox.\" be default ya" ob text "hear fixture is default \"Hello from timebox.\"." ya
 su text "exists su name hear ob name hear be default ya" ob text "hear is default" ya
-su text "exists su name helper as name qwen3-vl:8b-instruct accordingto name You must call the time tool before answering. Use timezone America/Toronto. Reply with the tool datetime only. be mind ya" ob text "helper is mind" ya
-su text "exists su name helper as name qwen3-vl:8b-instruct accordingto name You must call tools. Use the JavaScript tool to compute math. When calling the tool, set ob to the full JavaScript source (not placeholders like code/source). After the tool call, respond with exactly the tool result content. If you did not receive a tool result, respond exactly: DID_NOT_RECEIVE_TOOL_RESULT. be mind ya" ob text "helper is mind" ya
-su text "exists su name helper as name qwen3-vl:8b-instruct be mind ya" ob text "helper is mind" ya
+su text "exists su name helper as name qwen3.5:9b accordingto name You must call the time tool before answering. Use timezone America/Toronto. Reply with the tool datetime only. be mind ya" ob text "helper is mind" ya
+su text "exists su name helper as name qwen3.5:9b accordingto name You must call tools. Use the JavaScript tool to compute math. When calling the tool, set ob to the full JavaScript source (not placeholders like code/source). After the tool call, respond with exactly the tool result content. If you did not receive a tool result, respond exactly: DID_NOT_RECEIVE_TOOL_RESULT. be mind ya" ob text "helper is mind" ya
+su text "exists su name helper as name qwen3.5:9b be mind ya" ob text "helper is mind" ya
 su text "exists su name i ob be number ya" ob text "i is number" ya
 su text "exists su name input ob text \"exists su name alpha ob num 2 be number ya\" be text ya" ob text "input is text \"exists su name alpha ob num 2 be number ya\"." ya
 su text "exists su name j ob be number ya" ob text "j is number" ya
@@ -133,7 +133,7 @@ su text "exists su name primes ob ve num 0 by num 4 be vector ya" ob text "prime
 su text "exists su name primes_index ob num 1 be number ya" ob text "primes_index is number 1." ya
 su text "exists su name program ob text quoted.text.\nexists su name bucket ob num 0 be number ya\nsu name plus two to name num target be ceremony def\nob this ti to be remember to name produce exists do\nob num 2 to produce be plus do\nsu name produce ret\nsu name plus two be ceremony prah\nbe plus two to bucket do \n.text.quoted be text ya" ob text "program is text \"\nexists su name bucket ob num 0 be number ya\nsu name plus two to name num target be ceremony def\nob this ti to be remember to name produce exists do\nob num 2 to produce be plus do\nsu name produce ret\nsu name plus two be ceremony prah\nbe plus two to bucket do \n\"." ya
 su text "exists su name program ob text quoted.text.\nexists su name doors ob ve num 3 1 0 be vector ya\nob name doors at ord 2 be read to name picked do\nbe write ob name picked do\n.text.quoted be text ya" ob text "program is text \"\nexists su name doors ob ve num 3 1 0 be vector ya\nob name doors at ord 2 be read to name picked do\nbe write ob name picked do\n\"." ya
-su text "exists su name qwenbot from name http://localhost:11434 as name qwen3-vl:8b-instruct accordingto name You may call tools. be mind ya" ob text "qwenbot is mind" ya
+su text "exists su name qwenbot from name http://localhost:11434 as name qwen3.5:9b accordingto name You may call tools. be mind ya" ob text "qwenbot is mind" ya
 su text "exists su name record ob la su name clause ob name example be text ya ko be note ya" ob text "record is note" ya
 su text "exists su name rem3 ob num 0 be number ya" ob text "rem3 is number 0." ya
 su text "exists su name rem5 ob num 0 be number ya" ob text "rem5 is number 0." ya
@@ -392,7 +392,7 @@ su text "ob text \"hello world\" to name text output be noop say do" ob text "do
 su text "ob text \"hello world\" to name text output be plain say say do" ob text "do plain say say \"hello world\" to output." ya
 su text "ob text \"hello world\" to name text result be espeak say do" ob text "do espeak say \"hello world\" to result." ya
 su text "ob text \"pyash\" in filename documentation be search do" ob text "do search." ya
-su text "ob text \"qwen3-vl:8b-instruct\" be mind discharge do" ob text "do mind discharge." ya
+su text "ob text \"qwen3.5:9b\" be mind discharge do" ob text "do mind discharge." ya
 su text "ob text \"say hello world out loud\" to name text qwenbot-out with name tools for name qwenbot be write do" ob text "do write \"say hello world out loud\" to qwenbot-out." ya
 su text "ob text \"tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | tr -d '\\\\n' | tr -s ' ' | sed 's/^ *//;s/ *$//'\" from filename artifacts/hear/talk-loop-stream.txt to name text normalized be command do" ob text "do command \"tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | tr -d '\\n' | tr -s ' ' | sed 's/^ *//;s/ *$//'\" to normalized." ya
 su text "ob text \"use the say tool to say hello world\" to name text helper-out with name tools for name helper be write do" ob text "do write \"use the say tool to say hello world\" to helper-out." ya
