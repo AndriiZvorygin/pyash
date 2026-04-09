@@ -81,8 +81,130 @@ function toShortOverlay(hookText) {
     .split(/\s+/u)
     .map((w) => w.trim())
     .filter(Boolean);
-  if (!words.length) return 'City Update';
-  return words.slice(0, 3).join(' ');
+  if (!words.length) return 'City Meeting Update';
+  if (words.length >= 4) return words.slice(0, 4).join(' ');
+  if (words.length === 3) return words.join(' ');
+  if (words.length === 2) return `${words[0]} ${words[1]} Update`;
+  return `${words[0]} City Update`;
+}
+
+function countWords(text) {
+  return String(text || '').trim().split(/\s+/u).filter(Boolean).length;
+}
+
+function verifyOverlayWordRange(overlay, minWords = 3, maxWords = 6) {
+  const n = countWords(overlay);
+  if (n < minWords || n > maxWords) {
+    throw new Error(`thumbnail overlay defective: expected ${minWords}-${maxWords} words, got ${n} ("${overlay}")`);
+  }
+}
+
+function extractOverlayCandidate(rawText) {
+  const text = String(rawText || "").trim();
+  if (!text) return "";
+  const quoted = text.match(/["“]([^"”\n]{2,96})["”]/u);
+  if (quoted?.[1]) return quoted[1].trim();
+
+  const line = text.split(/\r?\n/u).map((x) => x.trim()).find(Boolean) || "";
+  const overlayLead = line.match(/(?:overlay|text|phrase)\s*[:\-]\s*(.+)$/iu);
+  if (overlayLead?.[1]) return overlayLead[1].trim();
+  return line;
+}
+
+function normalizeOverlayText(text) {
+  return String(text || "")
+    .replace(/^[\s"'“”‘’`]+|[\s"'“”‘’`]+$/gu, "")
+    .replace(/[^A-Za-z0-9\s-]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function tokenSet(text) {
+  return new Set(
+    String(text || "")
+      .toLowerCase()
+      .split(/\s+/u)
+      .map((x) => x.trim())
+      .filter((x) => x && x.length >= 3)
+  );
+}
+
+async function verifyRenderedOverlayWords({
+  imagePath,
+  expectedOverlay,
+  minWords = 3,
+  maxWords = 6,
+}) {
+  const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
+  const verifyModels = [
+    String(process.env.DRAW_OVERLAY_VERIFY_MODEL || "").trim(),
+    "qwen3-vl:8b-instruct",
+    "llama3.2-vision:11b",
+    "llava:7b",
+  ].filter(Boolean);
+  const uniqModels = [...new Set(verifyModels)];
+
+  const prompt = [
+    "Read this image and extract only the large overlay headline text.",
+    "Return only that overlay text phrase.",
+    "Do not add explanation.",
+    "If unsure, return your best guess of the large overlaid words.",
+  ].join(" ");
+
+  let lastError = "";
+  for (const model of uniqModels) {
+    try {
+      const res = await runWithStreaming({
+        cmd: "node",
+        args: [
+          path.join(ROOT, "command/see_vl_runner.mjs"),
+          "--host",
+          verifyHost,
+          "--model",
+          model,
+          "--image",
+          imagePath,
+          "--prompt",
+          prompt,
+        ],
+        cwd: ROOT,
+        timeoutMs: 2 * 60 * 1000,
+        label: "verify-overlay-ocr",
+      });
+      const candidate = normalizeOverlayText(extractOverlayCandidate(res.stdout));
+      if (!candidate) throw new Error(`empty overlay text from model ${model}`);
+      const lc = candidate.toLowerCase();
+      if (
+        /\b(no|none|cannot|unable|did not|could not)\b/iu.test(lc) ||
+        /\b(detect|detected|visible|headline text|overlay text)\b/iu.test(lc)
+      ) {
+        throw new Error(`model ${model} returned non-overlay/meta text "${candidate}"`);
+      }
+      const words = countWords(candidate);
+      if (words < minWords || words > maxWords) {
+        throw new Error(`model ${model} extracted "${candidate}" (${words} words), expected ${minWords}-${maxWords}`);
+      }
+      const expectedTokens = tokenSet(expectedOverlay);
+      const candidateTokens = tokenSet(candidate);
+      let overlap = 0;
+      for (const t of candidateTokens) {
+        if (expectedTokens.has(t)) overlap += 1;
+      }
+      const minOverlap = Math.min(2, expectedTokens.size);
+      if (minOverlap > 0 && overlap < minOverlap) {
+        throw new Error(
+          `model ${model} extracted "${candidate}" but token overlap ${overlap}/${expectedTokens.size} is too low for expected "${expectedOverlay}"`
+        );
+      }
+      process.stdout.write(
+        `[meeting-cover] overlay verify model=${model} expected="${expectedOverlay}" extracted="${candidate}" words=${words}\n`
+      );
+      return { model, extracted: candidate, words };
+    } catch (err) {
+      lastError = String(err?.message || err);
+    }
+  }
+  throw new Error(`thumbnail overlay verification failed: ${lastError || "no successful vision extraction"}`);
 }
 
 function runWithStreaming({ cmd, args, cwd = ROOT, timeoutMs = 45 * 60 * 1000, label = 'draw' }) {
@@ -139,10 +261,11 @@ async function main() {
   const meetingSummaryText = safeReadText(meetingSummaryPath, '').trim();
   const topNewsworthy = extractMarkdownSection(meetingSummaryText, 'Top Newsworthy Developments');
   const shortOverlay = toShortOverlay(hookText);
+  verifyOverlayWordRange(shortOverlay, 3, 6);
   const thumbnailSource = [
     '# Thumbnail Brief',
     'Create a square civic thumbnail.',
-    `Overlay text must be exactly 2-3 words: "${shortOverlay}".`,
+    `Overlay text should be 3-6 words: "${shortOverlay}".`,
     'Do not require a person in frame. Prefer symbolic/atmospheric municipal background.',
     '',
     '# Hook (context only)',
@@ -168,6 +291,13 @@ async function main() {
 
   const generated = parseGeneratedImagePath(drawOut.stdout, thumbnailSourcePath);
   if (!generated) throw new Error('could not find generated image path in draw output');
+
+  await verifyRenderedOverlayWords({
+    imagePath: generated,
+    expectedOverlay: shortOverlay,
+    minWords: 3,
+    maxWords: 6,
+  });
 
   fs.copyFileSync(generated, coverImagePath);
   fs.copyFileSync(coverImagePath, coverImageStablePath);

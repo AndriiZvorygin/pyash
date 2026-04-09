@@ -20,11 +20,11 @@ function pickLargestFileFromDir(dirPath, matcher) {
 }
 
 export function pickRichestAgendaMarkdownPathFromConvertedDir(convertedDir) {
-  return pickLargestFileFromDir(convertedDir, /^agenda-\d+\.md$/iu);
+  return pickLargestFileFromDir(convertedDir, /^agenda-\d+(?:-[a-z0-9-]+)?\.md$/iu);
 }
 
 export function pickRichestAgendaPrunedMarkdownPathFromConvertedDir(convertedDir) {
-  return pickLargestFileFromDir(convertedDir, /^agenda-\d+\.pruned\.md$/iu);
+  return pickLargestFileFromDir(convertedDir, /^agenda-\d+(?:-[a-z0-9-]+)?\.pruned\.md$/iu);
 }
 
 export function pickRichestAgendaPdfPathFromSourceDir(sourceDir) {
