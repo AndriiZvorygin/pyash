@@ -10,9 +10,9 @@ import {
   existsArtifact,
   loadJsonArtifact,
   savePyaReportArtifact,
-} from "./shared/artifact-contracts.mjs";
-import { createStageRunner } from "./shared/stage-runner.mjs";
-import { runQualityVerifiers } from "./shared/quality-verifiers.mjs";
+} from "../../../../program/library/reporter_shared/artifact-contracts.mjs";
+import { createStageRunner } from "../../../../program/library/reporter_shared/stage-runner.mjs";
+import { runQualityVerifiers } from "../../../../program/library/reporter_shared/quality-verifiers.mjs";
 import { GREY_ADAPTER } from "./writer-adapter-grey-county.mjs";
 import { normalizePublishConfig } from "../../../../program/publisher-interface.mjs";
 import { readPyaTextValues } from "../../../../command/pya_lookup.mjs";
