@@ -120,12 +120,13 @@ function loadMeetingAssignmentsMap(reportPath) {
   return out;
 }
 
-function toDisplayLabelWithMeetingAssignments(speakerKey, metadataMap, meetingAssignments) {
+function toDisplayLabelWithMeetingAssignments(speakerKey, metadataMap, meetingAssignments, lockedSpeakerKeys) {
   const key = String(speakerKey || '').trim();
   const m = key.match(/^speaker_(\d+)$/iu);
   if (m) {
     const meta = metadataMap.get(key) || {};
     const rawName = String(meta.name || '').trim();
+    // Global voice metadata is curated state and should always win when present.
     if (rawName && !isJunkSpeakerName(rawName)) {
       return rawName.replace(/_/g, ' ').replace(/\b\w/g, (x) => x.toUpperCase());
     }
@@ -140,6 +141,16 @@ function toDisplayLabelWithMeetingAssignments(speakerKey, metadataMap, meetingAs
   }
   if (rawName && !isJunkSpeakerName(rawName)) return rawName.replace(/_/g, ' ');
   return key || 'SPEAKER_UNKNOWN';
+}
+
+function loadLockedSpeakerKeys(payload) {
+  const out = new Set();
+  const speakers = Array.isArray(payload?.name_lock?.speakers) ? payload.name_lock.speakers : [];
+  for (const item of speakers) {
+    const key = String(item || '').trim();
+    if (key) out.add(key);
+  }
+  return out;
 }
 
 function pickDiarizationJson(transcriptDir, prefix = 'auto') {
@@ -204,9 +215,10 @@ async function main() {
   const metadataMap = loadSpeakerMetadataMap(voicesDir);
   const autoAssignReportPath = pickAutoAssignReport(transcriptDir, resolvedPrefix);
   const meetingAssignments = loadMeetingAssignmentsMap(autoAssignReportPath);
+  const lockedSpeakerKeys = loadLockedSpeakerKeys(payload);
   const updatedRows = rows.map((row) => ({
     ...row,
-    display: toDisplayLabelWithMeetingAssignments(row.speaker_key, metadataMap, meetingAssignments),
+    display: toDisplayLabelWithMeetingAssignments(row.speaker_key, metadataMap, meetingAssignments, lockedSpeakerKeys),
   }));
 
   const outSrt = path.join(transcriptDir, `${resolvedPrefix}.speaker.sentence.srt`);

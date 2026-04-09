@@ -190,6 +190,8 @@ async function main() {
   const rosterPath = process.env.GREY_ROSTER_FILE || path.join(HOUSE, 'artifacts/grey-county/roster.txt');
   const voicesBase = process.env.GREY_VOICES_DIR || path.join(ROOT, 'world/voices');
   const voicesWork = process.env.GREY_VOICES_WORK_DIR || path.join(transcriptDir, 'voices-working');
+  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '0'));
+  const activeVoices = isolateVoices ? voicesWork : voicesBase;
 
   const sentenceMerged = path.join(transcriptDir, `${normPrefix}.sentences.merged.srt`);
   const speakerJson = path.join(transcriptDir, `${normPrefix}.sentences.speaker.sentences.json`);
@@ -210,7 +212,7 @@ async function main() {
 
   await stage('diarize-speakers', async () => {
     const sharedEnv = {
-      PYA_SPEAKER_ISOLATE_VOICES: process.env.PYA_SPEAKER_ISOLATE_VOICES || '0',
+      PYA_SPEAKER_ISOLATE_VOICES: isolateVoices ? '1' : '0',
       PYA_SPEAKER_WORKING_VOICES_DIR: voicesWork,
       PYA_SPEAKER_RESEED_VOICES: process.env.PYA_SPEAKER_RESEED_VOICES || '0',
     };
@@ -235,7 +237,7 @@ async function main() {
   }, hasMinSize(speakerJson, 200));
 
   await stage('auto-assign-speakers', async () => {
-    await runNode(path.join(ROOT, 'command/auto_assign_speakers_from_callouts.mjs'), [transcriptDir, `${normPrefix}.sentences`, rosterPath, voicesWork], {
+    await runNode(path.join(ROOT, 'command/auto_assign_speakers_from_callouts.mjs'), [transcriptDir, `${normPrefix}.sentences`, rosterPath, activeVoices], {
       env: {
         PYA_AUTOASSIGN_OVERWRITE_EXISTING: '0',
       },
@@ -244,7 +246,7 @@ async function main() {
   });
 
   await stage('relabel-speakers', async () => {
-    await runNode(path.join(ROOT, 'command/relabel_speaker_sentence_srt_from_transcript_folder.mjs'), [transcriptDir, `${normPrefix}.sentences`, voicesWork], {
+    await runNode(path.join(ROOT, 'command/relabel_speaker_sentence_srt_from_transcript_folder.mjs'), [transcriptDir, `${normPrefix}.sentences`, activeVoices], {
       label: 'relabel-speakers',
     });
   }, hasMinSize(speakerSrt, 200));

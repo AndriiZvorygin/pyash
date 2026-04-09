@@ -24,8 +24,8 @@ const SAME_SPEAKER_THRESHOLD = (() => {
   return Number.isFinite(raw) ? raw : 0.58;
 })();
 const KNOWN_SPEAKER_THRESHOLD = (() => {
-  const raw = Number(process.env.PYA_SPEAKER_KNOWN_THRESHOLD || 0.50);
-  return Number.isFinite(raw) ? raw : 0.50;
+  const raw = Number(process.env.PYA_SPEAKER_KNOWN_THRESHOLD || 0.68);
+  return Number.isFinite(raw) ? raw : 0.68;
 })();
 const NAME_LOCK_THRESHOLD = (() => {
   const raw = Number(process.env.PYA_SPEAKER_NAME_LOCK_THRESHOLD || 0.62);

@@ -6,7 +6,7 @@ Rules:
 - One single line only.
 - 12 to 40 words.
 - Describe visible subjects, setting, lighting, and composition.
-- Include exactly one quoted overlay phrase of 1 to 3 words (for example: "Final Warning").
+- Include exactly one quoted overlay phrase of 3 to 6 words (for example: "Final Warning on Transit Cuts").
 - No camera metadata, no model names, no workflow names.
 - No markdown, no bullets, no labels, no surrounding quotes.
 - Keep overlay text brief and highly readable like a thumbnail.
@@ -30,7 +30,7 @@ Rules:
 - Style must be illustration, painterly/editorial, non-photorealistic.
 - Person is optional; a symbolic or environmental composition is valid.
 - Do not depict crying, tears, sobbing, or visible tear streaks.
-- Include exactly one quoted overlay phrase of 2 to 3 words.
+- Include exactly one quoted overlay phrase of 3 to 6 words.
 - Make the quoted overlay phrase very large, occupying about one-third of the frame area.
 - Make the quoted overlay phrase specific to SOURCE_TEXT so a viewer instantly understands the video topic.
 - No camera metadata, no model names, no workflow names.

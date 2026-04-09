@@ -362,6 +362,7 @@ async function main() {
 
   const baseVoicesDir = process.env.GREY_VOICES_DIR || path.join(ROOT, "world/voices");
   const requestedVoicesWorkDir = process.env.GREY_VOICES_WORK_DIR || path.join(transcriptDir, "voices-working");
+  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || "0"));
   let voicesWorkDir = requestedVoicesWorkDir;
   try {
     ensureWritableDir(voicesWorkDir);
@@ -375,6 +376,7 @@ async function main() {
 
   const artifacts = buildGreyTranscriptArtifacts({ transcriptDir, basePrefix });
   const normPrefix = artifacts.normalized_prefix;
+  const activeVoicesDir = isolateVoices ? voicesWorkDir : baseVoicesDir;
   const force = /^(1|true|yes)$/iu.test(String(process.env.GREY_PIPELINE_FORCE || ""));
   const skipImage = /^(1|true|yes)$/iu.test(String(process.env.GREY_PIPELINE_SKIP_IMAGE || ""));
   const skipLemmy =
@@ -530,7 +532,7 @@ async function main() {
 
   await stage("diarize-speakers", async () => {
     const sharedEnv = {
-      PYA_SPEAKER_ISOLATE_VOICES: process.env.PYA_SPEAKER_ISOLATE_VOICES || "0",
+      PYA_SPEAKER_ISOLATE_VOICES: isolateVoices ? "1" : "0",
       PYA_SPEAKER_WORKING_VOICES_DIR: voicesWorkDir,
       PYA_SPEAKER_RESEED_VOICES: process.env.PYA_SPEAKER_RESEED_VOICES || "0",
       ...(speakerHost ? { PYA_SPEAKER_HOST: speakerHost } : {}),
@@ -563,7 +565,7 @@ async function main() {
         transcriptDir,
         `${normPrefix}.sentences`,
         rosterPath,
-        voicesWorkDir,
+        activeVoicesDir,
       ],
       cwd: ROOT,
       env: {
@@ -585,7 +587,7 @@ async function main() {
         path.join(ROOT, "command/relabel_speaker_sentence_srt_from_transcript_folder.mjs"),
         transcriptDir,
         `${normPrefix}.sentences`,
-        baseVoicesDir,
+        activeVoicesDir,
       ],
       cwd: ROOT,
       timeoutMs: 10 * 60 * 1000,
@@ -598,6 +600,10 @@ async function main() {
   });
 
   await stage("sync-speaker-artifacts-to-global-voices", async () => {
+    if (!isolateVoices || voicesWorkDir === baseVoicesDir) {
+      log("[full-pipeline] speaker artifacts copied: 0 (isolate voices off)");
+      return;
+    }
     const result = syncSpeakerArtifactsToGlobal({ fromDir: voicesWorkDir, toDir: baseVoicesDir });
     log(`[full-pipeline] speaker artifacts copied: ${result.copied}`);
   }, {
