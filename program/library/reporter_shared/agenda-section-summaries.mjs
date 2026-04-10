@@ -20,6 +20,10 @@ const MIN_SUMMARY_WORDS = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_MIN_WORDS || process.env.MEETING_SUMMARY_MIN_WORDS || process.env.OWEN_SUMMARY_MIN_WORDS || 120);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 120;
 })();
+const PROCEDURAL_SKIP_MAX_WORDS = (() => {
+  const raw = Number(process.env.AGENDA_SUMMARY_PROCEDURAL_SKIP_MAX_WORDS || 90);
+  return Number.isFinite(raw) && raw > 10 ? Math.floor(raw) : 90;
+})();
 const BASE_NEWS_HOOK = 'the newsworthy, juicy, and unusual bits';
 const MAX_SECTIONS = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_MAX_SECTIONS || process.env.MEETING_SUMMARY_MAX_SECTIONS || process.env.OWEN_SUMMARY_MAX_SECTIONS || 0);
@@ -1052,10 +1056,21 @@ function toMarkdown(items, focus) {
     lines.push(`## ${i + 1}. ${it.heading}`);
     lines.push(`(faithfulness score: ${it.score.toFixed(3)})`);
     lines.push('');
-    lines.push(it.summary || 'No summary produced.');
+    if (String(it.mode || '').startsWith('procedural-skip')) {
+      lines.push(it.summary || '');
+    } else {
+      lines.push(it.summary || 'No summary produced.');
+    }
     lines.push('');
   }
   return `${lines.join('\n')}\n`;
+}
+
+function isLikelyProceduralSection({ heading, body }) {
+  const text = normalizeForMatch(`${String(heading || '')} ${String(body || '')}`);
+  if (!text) return false;
+  if (!/\b(no|none|there is no|there are no)\b/u.test(text)) return false;
+  return /\b(public forum|correspondence|declaration|declarations|adjourn|call for additional business|adoption|confirmation of minutes|motion)\b/u.test(text);
 }
 
 export async function summarizeAgendaSectionArtifacts({
@@ -1210,7 +1225,17 @@ export async function summarizeAgendaSectionArtifacts({
       let score = 1;
       let mode = 'llm';
       const shouldShort = wordCount < MIN_SUMMARY_WORDS || (sourceRows > 0 && sourceRows <= 2);
-      if (shouldShort) {
+      const forcedProceduralSkip = isLikelyProceduralSection({ heading: finalHeading, body: finalHeading });
+      const proceduralTiny = forcedProceduralSkip || (shouldShort && (
+        sourceRows <= 2
+        || wordCount <= PROCEDURAL_SKIP_MAX_WORDS
+        || isLikelyProceduralSection({ heading: finalHeading, body: effectiveBody })
+      ));
+      if (proceduralTiny) {
+        summary = '';
+        score = 1;
+        mode = 'procedural-skip';
+      } else if (shouldShort) {
         const shortOut = await summarizeSection({
           heading: finalHeading,
           body: effectiveBody,
