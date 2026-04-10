@@ -279,7 +279,13 @@ function distinct(list) {
 
 function parseLeadingItemNumber(heading) {
   const raw = String(heading || "").trim();
-  const m = raw.match(/^\s*(\d+)\b/u) || raw.match(/^section\s+(\d+)\b/iu);
+  const full = raw.match(/^\s*(\d+)(?:\s*[.\-]\s*([a-z0-9]+))?\b/iu);
+  if (full) {
+    const major = String(Number(full[1]));
+    const minor = String(full[2] || "").trim().toLowerCase();
+    return minor ? `${major}.${minor}` : major;
+  }
+  const m = raw.match(/^section\s+(\d+)\b/iu);
   return m ? String(Number(m[1])) : "";
 }
 
@@ -409,6 +415,29 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
   const sections = Array.isArray(sectionSummaries) ? sectionSummaries : [];
   if (!rows.length || !sections.length) return [];
   const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
+  const allowWiseRowIndex = /^(1|true|yes)$/iu.test(String(process.env.PYA_WISE_RANGE_IS_ROW_INDEX || '0'));
+
+  const explicitRows = sections.filter((s) =>
+    Number.isFinite(Number(s?.start_row)) &&
+    Number.isFinite(Number(s?.end_row)) &&
+    Number(s.start_row) >= 0 &&
+    Number(s.end_row) >= Number(s.start_row)
+  );
+  if (explicitRows.length >= Math.max(2, Math.floor(sections.length * 0.7))) {
+    const out = sections.map((sec, i) => {
+      const start = Math.max(0, Math.min(rows.length - 1, Math.floor(Number(sec?.start_row) || 0)));
+      const endRaw = Math.floor(Number(sec?.end_row) || start);
+      const end = Math.max(start, Math.min(rows.length - 1, endRaw));
+      return {
+        id: `section-${i + 1}`,
+        heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
+        summary: String(sec?.summary || "").trim(),
+        startRow: start,
+        endRow: end,
+      };
+    });
+    return normalizeSectionRanges(rows, out);
+  }
 
   // Guardrail: if section summaries were produced without usable row grounding,
   // section rendering can duplicate opening transcript lines across headings.
@@ -418,6 +447,7 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
   if (wise.length === sections.length) {
     const wiseMax = wise.reduce((mx, w) => Math.max(mx, Number(w?.until ?? w?.since ?? 0) || 0), 0);
     const wiseLooksLikeRowIndex =
+      allowWiseRowIndex &&
       wise.length > 0 &&
       wise.every((w) => Number.isFinite(Number(w?.since)) && Number.isFinite(Number(w?.until))) &&
       wise.every((w) => Number.isInteger(Number(w?.since)) && Number.isInteger(Number(w?.until))) &&
