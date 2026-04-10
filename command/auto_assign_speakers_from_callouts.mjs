@@ -409,6 +409,61 @@ function readSpeakerMetaName(metaPath) {
   return String(m?.[1] || '').trim();
 }
 
+function loadVoiceNameRegistry(voicesDir) {
+  const keyToName = new Map();
+  const nameToKeys = new Map();
+  const names = fs.readdirSync(voicesDir)
+    .filter((n) => n.endsWith('.pya') && n !== 'index.pya')
+    .sort();
+  for (const name of names) {
+    const key = name.replace(/\.pya$/u, '');
+    const metaPath = path.join(voicesDir, name);
+    const speakerName = readSpeakerMetaName(metaPath);
+    if (!speakerName) continue;
+    keyToName.set(key, speakerName);
+    if (!nameToKeys.has(speakerName)) nameToKeys.set(speakerName, new Set());
+    nameToKeys.get(speakerName).add(key);
+  }
+  return { keyToName, nameToKeys };
+}
+
+function removeNameReservation(registry, speakerKey) {
+  const old = registry.keyToName.get(speakerKey);
+  if (!old) return;
+  const bag = registry.nameToKeys.get(old);
+  if (bag) {
+    bag.delete(speakerKey);
+    if (!bag.size) registry.nameToKeys.delete(old);
+  }
+  registry.keyToName.delete(speakerKey);
+}
+
+function addNameReservation(registry, speakerKey, speakerName) {
+  if (!speakerName) return;
+  registry.keyToName.set(speakerKey, speakerName);
+  if (!registry.nameToKeys.has(speakerName)) registry.nameToKeys.set(speakerName, new Set());
+  registry.nameToKeys.get(speakerName).add(speakerKey);
+}
+
+function reserveUniqueSpeakerName(registry, speakerKey, preferredName) {
+  const base = String(preferredName || '').trim();
+  if (!base) return { name: base, suffix: 1 };
+
+  let candidate = base;
+  let suffix = 1;
+  while (true) {
+    const keys = registry.nameToKeys.get(candidate);
+    const usedByOther = Boolean(keys && [...keys].some((k) => String(k) !== String(speakerKey)));
+    if (!usedByOther) break;
+    suffix += 1;
+    candidate = `${base}_${suffix}`;
+  }
+
+  removeNameReservation(registry, speakerKey);
+  addNameReservation(registry, speakerKey, candidate);
+  return { name: candidate, suffix };
+}
+
 function isStableSpeakerName(name) {
   const raw = String(name || '').trim();
   if (!raw) return false;
@@ -1094,12 +1149,14 @@ async function main() {
   }
   const allowOverwriteExisting = /^(1|true|yes)$/iu.test(String(process.env.PYA_AUTOASSIGN_OVERWRITE_EXISTING || ''));
   const assignments = [];
+  const nameAdjusted = [];
   const verifierRejected = [];
   const verifierErrors = [];
   const verifierReplaced = [];
   const skippedLocked = [];
   const unchangedStable = [];
   const writeErrors = [];
+  const voiceNameRegistry = loadVoiceNameRegistry(voicesDir);
 
   for (const baseAssignment of mergedAssignments) {
     let a = baseAssignment;
@@ -1192,9 +1249,27 @@ async function main() {
         }
       }
     }
+    const priorReservedName = String(voiceNameRegistry.keyToName.get(a.speaker_key) || '');
+    const reserved = reserveUniqueSpeakerName(voiceNameRegistry, a.speaker_key, a.person_slug);
+    if (reserved.name && reserved.name !== a.person_slug) {
+      const baseFull = String(a.person_full || '').trim();
+      a = {
+        ...a,
+        person_slug: reserved.name,
+        person_full: reserved.suffix > 1 && baseFull ? `${baseFull} ${reserved.suffix}` : a.person_full,
+      };
+      nameAdjusted.push({
+        speaker_key: a.speaker_key,
+        base_name: baseAssignment.person_slug,
+        assigned_name: reserved.name,
+        suffix: reserved.suffix,
+      });
+    }
     try {
       setSpeakerMetaName(metaPath, a.person_slug);
     } catch (err) {
+      removeNameReservation(voiceNameRegistry, a.speaker_key);
+      if (priorReservedName) addNameReservation(voiceNameRegistry, a.speaker_key, priorReservedName);
       writeErrors.push({
         speaker_key: a.speaker_key,
         proposed_name: a.person_slug,
@@ -1222,6 +1297,7 @@ async function main() {
     verifier_rejected: verifierRejected,
     verifier_errors: verifierErrors,
     verifier_replaced: verifierReplaced,
+    name_adjusted: nameAdjusted,
     assignments,
     skipped_locked: skippedLocked,
     unchanged_stable: unchangedStable,

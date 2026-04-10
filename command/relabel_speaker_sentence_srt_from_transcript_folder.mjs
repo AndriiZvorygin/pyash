@@ -94,6 +94,15 @@ function toTitleCaseName(value) {
     .replace(/\b\w/gu, (m) => m.toUpperCase());
 }
 
+function isTrustedGlobalSpeakerName(meta = {}) {
+  const fullName = String(meta?.full_name || "").trim();
+  if (fullName) return true;
+  const origin = String(meta?.origin || "").trim().toLowerCase();
+  // `identify` labels on speaker_### are auto-grown and can drift badly across meetings.
+  if (!origin) return false;
+  return origin !== "identify";
+}
+
 function isJunkSpeakerName(rawName) {
   const n = String(rawName || '').trim().toLowerCase();
   if (!n) return true;
@@ -126,8 +135,8 @@ function toDisplayLabelWithMeetingAssignments(speakerKey, metadataMap, meetingAs
   if (m) {
     const meta = metadataMap.get(key) || {};
     const rawName = String(meta.name || '').trim();
-    // Global voice metadata is curated state and should always win when present.
-    if (rawName && !isJunkSpeakerName(rawName)) {
+    // Only trust global speaker_### names when metadata is explicitly trusted.
+    if (rawName && !isJunkSpeakerName(rawName) && isTrustedGlobalSpeakerName(meta)) {
       return rawName.replace(/_/g, ' ').replace(/\b\w/g, (x) => x.toUpperCase());
     }
     const assigned = String(meetingAssignments.get(key) || '').trim();
