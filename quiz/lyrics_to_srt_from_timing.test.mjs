@@ -384,3 +384,39 @@ test("lyrics_to_srt_from_timing sentence-cues tolerate late start from overlap c
     assert.ok(rows[i].since >= rows[i - 1].until, "rows should stay non-overlapping");
   }
 });
+
+test("lyrics_to_srt_from_timing trims chunk-boundary overlap between adjacent sentences", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-boundary-overlap.txt");
+  const timingPath = path.join(dir, "timing-boundary-overlap.srt");
+  const outputPath = path.join(dir, "lyrics-boundary-overlap.out.srt");
+
+  const lyrics = [
+    "that cater to junior users who range in age from 18 months to 5 years and senior users who range in age from 5 to 12 years old.",
+    "In age from five to twelve years old, a hard edge around the perimeter of the protective surface area."
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:47:23,000 --> 00:47:31,900",
+    "that cater to junior users who range in age from 18 months to 5 years and senior users who range in age from 5 to 12 years old",
+    "",
+    "2",
+    "00:47:32,000 --> 00:47:36,000",
+    "a hard edge around the perimeter of the protective surface area"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows.length, 2);
+  assert.ok(/5 to 12 years old\.$/iu.test(rows[0].text), "first row should keep full first sentence");
+  assert.ok(
+    /^a hard edge around the perimeter/iu.test(rows[1].text),
+    `second row should trim repeated overlap prefix, got: ${rows[1].text}`
+  );
+});
