@@ -23,6 +23,7 @@ const PROFILES = {
       out = out.replace(/\bcaos\b/giu, "CAOs");
       return out;
     },
+    literalReplacements: [],
     rosterCandidates(transcriptDir) {
       const meetingDir = path.dirname(transcriptDir);
       return [
@@ -56,6 +57,9 @@ const PROFILES = {
       out = out.replace(/\bCity of Oceansound\b/giu, "City of Owen Sound");
       out = out.replace(/\bDeputy Mayor Greg\b/gu, "Deputy Mayor Greig");
       out = out.replace(/\bDeputy Mayor Gregg\b/gu, "Deputy Mayor Greig");
+      out = out.replace(/\bMayor Body\b/giu, "Mayor Boddy");
+      out = out.replace(/\bMayor Batty\b/giu, "Mayor Boddy");
+      out = out.replace(/\bMayor Baty\b/giu, "Mayor Boddy");
       out = out.replace(/\bCouncil(?:lor|or)\s+Kepi\b/giu, "Councillor Koepke");
       out = out.replace(/\bCouncil(?:lor|or)\s+Keppie\b/giu, "Councillor Koepke");
       out = out.replace(/\bCouncil(?:lor|or)\s+Kepky\b/giu, "Councillor Koepke");
@@ -66,6 +70,20 @@ const PROFILES = {
       out = out.replace(/\bAndrii Zvorov\b/gu, "Andrii Zvorygin");
       return out;
     },
+    literalReplacements: [
+      ["Oceansound", "Owen Sound"],
+      ["City of Oceansound", "City of Owen Sound"],
+      ["Deputy Mayor Greg", "Deputy Mayor Greig"],
+      ["Deputy Mayor Gregg", "Deputy Mayor Greig"],
+      ["Mayor Body", "Mayor Boddy"],
+      ["Mayor Batty", "Mayor Boddy"],
+      ["Mayor Baty", "Mayor Boddy"],
+      ["Councillor Keppie", "Councillor Koepke"],
+      ["Councillor Kepky", "Councillor Koepke"],
+      ["Andrei Zvorov", "Andrii Zvorygin"],
+      ["Andrei Zvorygin", "Andrii Zvorygin"],
+      ["Andrii Zvorov", "Andrii Zvorygin"],
+    ],
     rosterCandidates(transcriptDir) {
       const meetingDir = path.dirname(transcriptDir);
       return [
@@ -102,6 +120,7 @@ const PROFILES = {
       out = out.replace(/\bLatos\b/giu, "Laitos");
       return out;
     },
+    literalReplacements: [],
     rosterCandidates(transcriptDir) {
       const meetingDir = path.dirname(transcriptDir);
       return [
@@ -225,6 +244,50 @@ function applyNormalizationTerms(text, terms) {
   return out;
 }
 
+function titleCaseWords(text) {
+  return String(text || "")
+    .split(/\s+/u)
+    .map((w) => {
+      if (!w) return w;
+      return w[0].toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
+function addReplacement(map, from, to) {
+  const src = String(from || "").trim();
+  const dst = String(to || "").trim();
+  if (!src || !dst || src === dst) return;
+  if (!(src in map)) map[src] = dst;
+}
+
+function buildStringReplacementMap(profile, normalizationTerms) {
+  const map = {};
+  const literals = Array.isArray(profile?.literalReplacements) ? profile.literalReplacements : [];
+  for (const pair of literals) {
+    if (!Array.isArray(pair) || pair.length < 2) continue;
+    const from = String(pair[0] || "").trim();
+    const to = String(pair[1] || "").trim();
+    if (!from || !to || from === to) continue;
+    addReplacement(map, from, to);
+    addReplacement(map, from.toLowerCase(), to.toLowerCase());
+    addReplacement(map, titleCaseWords(from), titleCaseWords(to));
+  }
+  for (const term of Array.isArray(normalizationTerms) ? normalizationTerms : []) {
+    const canonical = String(term?.canonical || "").trim();
+    const aliases = Array.isArray(term?.aliases) ? term.aliases : [];
+    if (!canonical || !aliases.length) continue;
+    for (const aliasRaw of aliases) {
+      const alias = String(aliasRaw || "").trim();
+      if (!alias || alias === canonical) continue;
+      addReplacement(map, alias, canonical);
+      addReplacement(map, alias.toLowerCase(), canonical.toLowerCase());
+      addReplacement(map, titleCaseWords(alias), titleCaseWords(canonical));
+    }
+  }
+  return map;
+}
+
 function splitIntoChunks(text, maxChars) {
   const paras = String(text || "").split(/\n\s*\n+/u).map((p) => p.trim()).filter(Boolean);
   if (!paras.length) return [];
@@ -337,6 +400,7 @@ export async function runNormalizeShared(writer, argv = []) {
   const rosterText = rosterPath ? fs.readFileSync(rosterPath, "utf8") : "";
   const normalizationTerms = loadNormalizationTerms(termsPath);
   const termMapText = termsForPrompt(normalizationTerms);
+  const stringReplacementMap = buildStringReplacementMap(profile, normalizationTerms);
   const sourceText = fs.readFileSync(plainPath, "utf8");
   const model = String(process.env[`${profile.envPrefix}_NORMALIZE_MODEL`] || profile.defaultModel);
   const maxCharsRaw = Number(process.env[`${profile.envPrefix}_NORMALIZE_MAX_CHARS`] || 9000);
@@ -382,6 +446,7 @@ export async function runNormalizeShared(writer, argv = []) {
     roster_file: rosterPath || "",
     terms_file: termsPath || "",
     terms_count: normalizationTerms.length,
+    string_replacement_map: stringReplacementMap,
     chunks_total: chunks.length,
     chunks_processed: runChunks.length,
     max_chars_per_chunk: maxChars,
