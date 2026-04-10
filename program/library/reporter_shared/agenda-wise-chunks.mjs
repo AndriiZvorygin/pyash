@@ -48,12 +48,16 @@ function itemCuePhrases(item) {
     `number ${mainWord}`,
     `item ${mainWord}`,
     `at number ${mainWord}`,
+    `at ${mainWord}`,
+    `at ${main}`,
   ];
   if (letter) {
     out.push(`number ${mainWord} ${letter}`);
     out.push(`item ${mainWord} ${letter}`);
     out.push(`${mainWord} ${letter}`);
     out.push(`number ${main} ${letter}`);
+    out.push(`at ${mainWord} ${letter}`);
+    out.push(`at ${main} ${letter}`);
   }
   return out;
 }
@@ -163,6 +167,8 @@ function sectionCueRegex(section) {
   if (item === "8") {
     cues.push("\\bnumber\\s+eight\\s+is\\s+public\\s+forum\\b");
     cues.push("\\bfor\\s+public\\s+forum\\s+have\\s+been\\s+submitted\\b");
+    cues.push("\\bat\\s+eight\\b[^.\\n]*\\bpublic\\s+forum\\b");
+    cues.push("\\bat\\s+8\\b[^.\\n]*\\bpublic\\s+forum\\b");
   }
   if (item === "9") {
     cues.push("\\bmove\\s+on\\s+from\\s+number\\s+eight\\b.*\\bnumber\\s+nine\\b");
@@ -418,17 +424,48 @@ async function ollamaPickParagraph({ section, startIndex, paragraphs, topCandida
     }
   }
 
+  const cueRe = sectionCueRegex(section);
+  const cueCandidates = [];
+  if (cueRe) {
+    for (let i = narrowedStart; i < narrowedEndExclusive; i += 1) {
+      const pn = normalizeText(paragraphs[i]);
+      if (!pn) continue;
+      if (cueRe.test(pn)) cueCandidates.push(i);
+      if (cueCandidates.length >= 6) break;
+    }
+  }
+
   const topInWindow = topCandidates
     .filter((c) => c.index >= narrowedStart && c.index < narrowedEndExclusive)
     .slice(0, 12);
-  const candidates = topInWindow.map((c) => ({
-    idx: c.index,
-    score: Number(c.score.toFixed(3)),
-    text: buildSnippet(paragraphs[c.index], 240),
-  }));
+
+  const candidates = [];
+  const seen = new Set();
+  for (const idx of cueCandidates) {
+    if (seen.has(idx)) continue;
+    seen.add(idx);
+    candidates.push({
+      idx,
+      score: 2.0,
+      kind: "cue",
+      text: buildSnippet(paragraphs[idx], 240),
+    });
+  }
+  for (const c of topInWindow) {
+    if (seen.has(c.index)) continue;
+    seen.add(c.index);
+    candidates.push({
+      idx: c.index,
+      score: Number(c.score.toFixed(3)),
+      kind: "token-overlap",
+      text: buildSnippet(paragraphs[c.index], 240),
+    });
+  }
   if (!candidates.length) {
     for (let i = narrowedStart; i < narrowedEndExclusive && candidates.length < 12; i += 1) {
-      candidates.push({ idx: i, score: 0, text: buildSnippet(paragraphs[i], 220) });
+      if (seen.has(i)) continue;
+      seen.add(i);
+      candidates.push({ idx: i, score: 0, kind: "fallback", text: buildSnippet(paragraphs[i], 220) });
     }
   }
 
@@ -440,6 +477,11 @@ async function ollamaPickParagraph({ section, startIndex, paragraphs, topCandida
     `Agenda title: ${section.title}`,
     `Search start index: ${narrowedStart}`,
     `Search end index: ${Math.max(narrowedStart, narrowedEndExclusive - 1)}`,
+    `Cue candidates: ${cueCandidates.length ? cueCandidates.join(", ") : "none"}`,
+    "",
+    "Guidance:",
+    "- Prefer explicit agenda-cue language (e.g. 'at eight', 'public forum', 'item/number X') when present.",
+    "- Keep chronological flow and avoid jumping backwards.",
     "",
     "Candidates:",
     JSON.stringify(candidates, null, 2),
@@ -696,8 +738,16 @@ export async function generateAgendaWiseArtifacts({
   const idx8Section = sections.findIndex((s) => s.item === "8");
   const idx9Section = sections.findIndex((s) => s.item === "9");
   const idx7Section = sections.findIndex((s) => s.item === "7");
-  const forumStart = paragraphs.findIndex((p) => /\bnumber\s+eight\s+is\s+public\s+forum\b|\bfor\s+public\s+forum\s+have\s+been\s+submitted\b/iu.test(p));
-  const corrStart = paragraphs.findIndex((p) => /\bmove\s+on\s+from\s+number\s+eight\b.*\bnumber\s+nine\b|\bnumber\s+nine\b.*\bcorrespondence\b/iu.test(p));
+  const item8 = idx8Section >= 0 ? sections[idx8Section] : null;
+  const item9 = idx9Section >= 0 ? sections[idx9Section] : null;
+  const item8Cue = item8 ? sectionCueRegex(item8) : null;
+  const item9Cue = item9 ? sectionCueRegex(item9) : null;
+  const forumStart = item8Cue
+    ? paragraphs.findIndex((p) => item8Cue.test(normalizeText(p)))
+    : paragraphs.findIndex((p) => /\bnumber\s+eight\s+is\s+public\s+forum\b|\bfor\s+public\s+forum\s+have\s+been\s+submitted\b/iu.test(p));
+  const corrStart = item9Cue
+    ? paragraphs.findIndex((p) => item9Cue.test(normalizeText(p)))
+    : paragraphs.findIndex((p) => /\bmove\s+on\s+from\s+number\s+eight\b.*\bnumber\s+nine\b|\bnumber\s+nine\b.*\bcorrespondence\b/iu.test(p));
   if (idx8Section >= 0 && forumStart >= 0) starts[idx8Section] = forumStart;
   if (idx9Section >= 0 && corrStart >= 0) starts[idx9Section] = Math.max((idx8Section >= 0 ? starts[idx8Section] + 1 : 0), corrStart);
   if (idx7Section >= 0 && idx8Section >= 0 && starts[idx7Section] >= starts[idx8Section]) {

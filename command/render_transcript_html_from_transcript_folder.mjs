@@ -77,6 +77,28 @@ function parseSrt(text, { expectSpeaker = true } = {}) {
   return out;
 }
 
+function parseSpeakerRowsJson(jsonText) {
+  let parsed = {};
+  try { parsed = JSON.parse(String(jsonText || "{}")); } catch { parsed = {}; }
+  const rows = Array.isArray(parsed?.rows) ? parsed.rows : [];
+  const out = [];
+  for (const r of rows) {
+    const since = Number(r?.since ?? r?.start_s ?? r?.start ?? 0);
+    const until = Number(r?.until ?? r?.end_s ?? r?.end ?? since);
+    const speaker = String(r?.display || r?.speaker || r?.speaker_name || "").trim();
+    const speech = String(r?.text || r?.speech || r?.raw || "").replace(/\s+/g, " ").trim();
+    if (!speech) continue;
+    out.push({
+      since: Number.isFinite(since) ? since : 0,
+      until: Number.isFinite(until) ? until : (Number.isFinite(since) ? since : 0),
+      speaker,
+      speech,
+      raw: speaker ? `${speaker}: ${speech}` : speech,
+    });
+  }
+  return out;
+}
+
 function mergeSpeakerLabelsByTime(baseRows, speakerRows, toleranceSeconds = 0.25) {
   const out = Array.isArray(baseRows) ? baseRows.map((row) => ({ ...row })) : [];
   const speakers = Array.isArray(speakerRows) ? speakerRows : [];
@@ -432,10 +454,35 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
   }
 
   const matchByItem = new Map();
+  const seedMatch = (item, payload) => {
+    const key = String(item || "").trim();
+    if (!key) return;
+    if (!matchByItem.has(key)) matchByItem.set(key, { item: key, ...payload });
+    else matchByItem.set(key, { ...matchByItem.get(key), ...payload });
+  };
+
+  // Prefer full boundary/section-start maps because they exist for all agenda items,
+  // including items that did not get a direct "matches" hit.
+  for (const b of Array.isArray(agendaMatches?.boundaries) ? agendaMatches.boundaries : []) {
+    seedMatch(b?.item, {
+      start_paragraph: Number.isFinite(Number(b?.start)) ? Math.floor(Number(b.start)) : undefined,
+      end_paragraph: Number.isFinite(Number(b?.end)) ? Math.floor(Number(b.end)) : undefined,
+      reason: String(b?.reason || ""),
+      method: String(b?.method || ""),
+    });
+  }
+  for (const s of Array.isArray(agendaMatches?.section_starts) ? agendaMatches.section_starts : []) {
+    seedMatch(s?.item, {
+      start_paragraph: Number.isFinite(Number(s?.start_paragraph)) ? Math.floor(Number(s.start_paragraph)) : undefined,
+      title: String(s?.title || ""),
+    });
+  }
   for (const m of Array.isArray(agendaMatches?.matches) ? agendaMatches.matches : []) {
-    const key = String(m?.item || "").trim();
-    if (!key) continue;
-    if (!matchByItem.has(key)) matchByItem.set(key, m);
+    seedMatch(m?.item, {
+      snippet: String(m?.snippet || ""),
+      score: Number(m?.score),
+      paragraphIndex: Number.isFinite(Number(m?.paragraphIndex)) ? Math.floor(Number(m.paragraphIndex)) : undefined,
+    });
   }
 
   // If we cannot anchor enough sections to agenda matches, avoid misleading
@@ -452,13 +499,35 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
     const heading = String(sec?.heading || "").trim();
     const item = parseLeadingItemNumber(heading);
     const m = matchByItem.get(item);
-    const snippet = normalizeText(String(m?.snippet || "").slice(0, 220));
     let rowIndex = -1;
-    if (snippet) {
-      for (let r = 0; r < rowNorm.length; r += 1) {
-        if (rowNorm[r] && rowNorm[r].includes(snippet.slice(0, Math.min(80, snippet.length)))) {
-          rowIndex = r;
-          break;
+    const fromParagraph = Number(m?.start_paragraph);
+    if (Number.isFinite(fromParagraph) && fromParagraph >= 0) {
+      rowIndex = Math.max(0, Math.min(rows.length - 1, Math.floor(fromParagraph)));
+    } else {
+      const snippet = normalizeText(String(m?.snippet || "").slice(0, 220));
+      if (snippet) {
+        for (let r = 0; r < rowNorm.length; r += 1) {
+          if (rowNorm[r] && rowNorm[r].includes(snippet.slice(0, Math.min(80, snippet.length)))) {
+            rowIndex = r;
+            break;
+          }
+        }
+      }
+    }
+    if (rowIndex < 0) {
+      const fromParagraphIndex = Number(m?.paragraphIndex);
+      if (Number.isFinite(fromParagraphIndex) && fromParagraphIndex >= 0) {
+        rowIndex = Math.max(0, Math.min(rows.length - 1, Math.floor(fromParagraphIndex)));
+      }
+    }
+    if (rowIndex < 0) {
+      const snippet = normalizeText(String(m?.snippet || "").slice(0, 220));
+      if (snippet) {
+        for (let r = 0; r < rowNorm.length; r += 1) {
+          if (rowNorm[r] && rowNorm[r].includes(snippet.slice(0, Math.min(80, snippet.length)))) {
+            rowIndex = r;
+            break;
+          }
         }
       }
     }
@@ -755,6 +824,17 @@ function main() {
   let expectSpeaker = /speaker\.sentence\.srt$/iu.test(path.basename(srtPath));
   let transcriptRows = parseSrt(srtText, { expectSpeaker });
   if (!transcriptRows.length) throw new Error(`no transcript rows parsed from ${srtPath}`);
+
+  // Prefer canonical speaker sentence JSON rows when available, because they preserve
+  // diarization-aligned row indexing used by agenda/section alignment stages.
+  const speakerRowsJsonPath = pickFile(transcriptDir, [/\.normalized\.sentences\.speaker\.sentences\.json$/u, /\.speaker\.sentences\.json$/u]);
+  if (speakerRowsJsonPath) {
+    const jsonRows = parseSpeakerRowsJson(fs.readFileSync(speakerRowsJsonPath, "utf8"));
+    if (jsonRows.length >= Math.max(25, Math.floor(transcriptRows.length * 0.6))) {
+      transcriptRows = jsonRows;
+      process.stdout.write(`[transcript-html] using speaker rows json: ${speakerRowsJsonPath} (${jsonRows.length} rows)\n`);
+    }
+  }
 
   // Guard against truncated speaker SRT checkpoints; fall back to full sentence-merged SRT.
   const fallbackSrtPath = pickFile(transcriptDir, [
