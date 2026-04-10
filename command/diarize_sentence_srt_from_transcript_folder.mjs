@@ -594,7 +594,8 @@ async function main() {
   const baseVoicesDir = voicesDirArg
     ? path.resolve(process.cwd(), voicesDirArg)
     : path.join(ROOT, 'world', 'voices');
-  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '0'));
+  // Default isolate on: treat global voices as read-only baseline.
+  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '1'));
   const reseedVoices = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_RESEED_VOICES || ''));
   const resolvedSpeakerHost = String(process.env.PYA_SPEAKER_HOST || process.env.SPEAKER_HOST || '').trim();
   const voicesDir = isolateVoices
