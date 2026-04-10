@@ -744,23 +744,36 @@ function main() {
   let transcriptRows = parseSrt(srtText, { expectSpeaker });
   if (!transcriptRows.length) throw new Error(`no transcript rows parsed from ${srtPath}`);
 
-  // Guard against truncated speaker SRT checkpoints; fall back to full sentence-merged SRT.
+  // Prefer punctuated sentence-merged rows for speech text, then overlay speaker
+  // labels from speaker-sentence rows by time alignment.
   const fallbackSrtPath = pickFile(transcriptDir, [
     /\.normalized\.sentences\.merged\.srt$/u,
     /\.sentences\.merged\.srt$/u,
   ]);
   if (fallbackSrtPath && fallbackSrtPath !== srtPath) {
     const fallbackText = fs.readFileSync(fallbackSrtPath, "utf8");
-    const fallbackCueCount = countSrtCues(fallbackText);
-    if (fallbackCueCount >= 50 && transcriptRows.length < Math.floor(fallbackCueCount * 0.5)) {
+    const baseRows = parseSrt(fallbackText, { expectSpeaker: false });
+    if (baseRows.length) {
       const speakerRows = transcriptRows;
-      srtPath = fallbackSrtPath;
-      srtText = fallbackText;
-      expectSpeaker = false;
-      const baseRows = parseSrt(srtText, { expectSpeaker });
-      transcriptRows = mergeSpeakerLabelsByTime(baseRows, speakerRows, 0.35);
-      const labeled = transcriptRows.filter((r) => String(r.speaker || "").trim()).length;
-      process.stdout.write(`[transcript-html] warn: speaker srt looks truncated; merged labels onto fallback srt (${labeled}/${transcriptRows.length}) from ${srtPath}\n`);
+      const mergedRows = mergeSpeakerLabelsByTime(baseRows, speakerRows, 2.5);
+      const labeled = mergedRows.filter((r) => String(r.speaker || "").trim()).length;
+      const minLabeled = Math.max(10, Math.floor(Math.min(baseRows.length, speakerRows.length) * 0.05));
+      if (labeled >= minLabeled) {
+        transcriptRows = mergedRows;
+        srtPath = fallbackSrtPath;
+        srtText = fallbackText;
+        expectSpeaker = false;
+        process.stdout.write(`[transcript-html] merged speaker labels onto punctuated sentence rows (${labeled}/${transcriptRows.length}) from ${srtPath}\n`);
+      } else {
+        const fallbackCueCount = countSrtCues(fallbackText);
+        if (fallbackCueCount >= 50 && speakerRows.length < Math.floor(fallbackCueCount * 0.5)) {
+          transcriptRows = mergedRows;
+          srtPath = fallbackSrtPath;
+          srtText = fallbackText;
+          expectSpeaker = false;
+          process.stdout.write(`[transcript-html] warn: speaker srt looks truncated; merged labels onto fallback srt (${labeled}/${transcriptRows.length}) from ${srtPath}\n`);
+        }
+      }
     }
   }
 

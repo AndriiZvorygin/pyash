@@ -501,6 +501,21 @@ function buildTurnsFromCues(cues) {
   return turns;
 }
 
+function shouldForceIdentifyShortTurn({ turn, turnIndex, turns }) {
+  if (!turn || !Array.isArray(turns) || turnIndex <= 0) return false;
+  const text = String(turn?.cues?.[0]?.text || "").trim();
+  if (!text) return false;
+  const shortReplyRe = /^(?:okay|ok|yes|no|i do|i accept|thank you|sure)\b/iu;
+  if (!shortReplyRe.test(text)) return false;
+  const prev = turns[turnIndex - 1];
+  if (!prev) return false;
+  const prevText = String(prev?.cues?.map((c) => c?.text || "").join(" ") || "").trim();
+  const promptRe = /\b(do you accept|do you have|go ahead|the floor is yours|any other nominations|any further nominations|next speaker)\b/iu;
+  if (!promptRe.test(prevText)) return false;
+  const gap = Math.max(0, Number(turn?.since || 0) - Number(prev?.until || 0));
+  return gap >= 0.8;
+}
+
 async function refineBoundaries({
   rows,
   audioPath,
@@ -660,7 +675,8 @@ async function main() {
       let sampleCount = 'na';
       const clipPath = path.join(tmpDir, `turn-${String(turnIndex + 1).padStart(5, '0')}.wav`);
 
-      if (!(shortTurn && prevSpeaker)) {
+      const forceIdentifyShortTurn = shortTurn && prevSpeaker && shouldForceIdentifyShortTurn({ turn, turnIndex, turns });
+      if (!(shortTurn && prevSpeaker && !forceIdentifyShortTurn)) {
         ensureWavClip({ audioPath: clipAudioPath, since: turn.since, until: turn.until, outPath: clipPath });
         const ident = await identifyWithRetry({
           audio: clipPath,

@@ -253,7 +253,8 @@ async function main() {
   const meetingSummaryPath = path.join(transcriptDir, `${prefix}.meeting-summary.md`);
   const thumbnailSourcePath = path.join(transcriptDir, `${prefix}.thumbnail-source.md`);
   const coverImagePath = path.join(transcriptDir, `${prefix}.meeting-cover.png`);
-  const coverImageStablePath = path.join(transcriptDir, 'meeting-cover.png');
+  const stableCoverName = String(process.env.PYA_DRAW_COVER_STABLE_NAME || 'meeting-cover.png').trim() || 'meeting-cover.png';
+  const coverImageStablePath = path.join(transcriptDir, stableCoverName);
 
   const hookText = safeReadText(hookPath, '').trim();
   const meetingSummaryText = safeReadText(meetingSummaryPath, '').trim();
