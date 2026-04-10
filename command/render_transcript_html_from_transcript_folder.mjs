@@ -734,10 +734,22 @@ function main() {
   const st = fs.statSync(transcriptDir, { throwIfNoEntry: false });
   if (!st || !st.isDirectory()) throw new Error(`transcript directory not found: ${transcriptDir}`);
 
-  let srtPath = pickFile(transcriptDir, [
-    /\.normalized\.sentences\.speaker\.sentence\.srt$/u,
-    /\.speaker\.sentence\.srt$/u,
-  ]);
+  const forceMergedSrt = /^(1|true|yes)$/iu.test(String(process.env.PYA_TRANSCRIPT_FORCE_MERGED_SRT || "").trim());
+  let srtPath = forceMergedSrt
+    ? pickFile(transcriptDir, [
+      /\.normalized\.sentences\.merged\.srt$/u,
+      /\.sentences\.merged\.srt$/u,
+    ])
+    : pickFile(transcriptDir, [
+      /\.normalized\.sentences\.speaker\.sentence\.srt$/u,
+      /\.speaker\.sentence\.srt$/u,
+    ]);
+  if (!srtPath && forceMergedSrt) {
+    srtPath = pickFile(transcriptDir, [
+      /\.normalized\.sentences\.speaker\.sentence\.srt$/u,
+      /\.speaker\.sentence\.srt$/u,
+    ]);
+  }
   if (!srtPath) throw new Error(`speaker sentence srt not found in ${transcriptDir}`);
   let srtText = fs.readFileSync(srtPath, "utf8");
   let expectSpeaker = /speaker\.sentence\.srt$/iu.test(path.basename(srtPath));
