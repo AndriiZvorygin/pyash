@@ -60,6 +60,7 @@ function usage() {
     "  --force <stage>           repeatable; prep|full|image",
     "  --skip <stage>            repeatable; prep|full|image",
     "  --post                    enable posting",
+    "  --post-ref <id|url>       force publish UPDATE target",
     "  --no-post                 disable posting",
     "  --dry-run                 publish dry run",
     "  --help                    show this help",
@@ -79,6 +80,7 @@ function parseArgs(argv) {
     force: new Set(),
     skip: new Set(),
     post: undefined,
+    postRef: "",
     dryRun: false,
   };
 
@@ -99,6 +101,7 @@ function parseArgs(argv) {
     else if (a === "--force") out.force.add(String(args.shift() || "").trim().toLowerCase());
     else if (a === "--skip") out.skip.add(String(args.shift() || "").trim().toLowerCase());
     else if (a === "--post") out.post = true;
+    else if (a === "--post-ref") out.postRef = String(args.shift() || "").trim();
     else if (a === "--no-post") out.post = false;
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "-h" || a === "--help") {
@@ -441,6 +444,10 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
     env.PIPELINE_SKIP_POST = "1";
   }
   if (args.dryRun) env.MEETING_PUBLISH_DRY_RUN = "1";
+  if (args.postRef) {
+    env.MEETING_PUBLISH_POST_REF = args.postRef;
+    env.AGENDA_PUBLISH_POST_REF = args.postRef;
+  }
 
   return env;
 }

@@ -432,6 +432,46 @@ function buildStableNameIndex(voicesDir) {
   return byName;
 }
 
+function splitNumericSuffix(nameSlug) {
+  const raw = String(nameSlug || '').trim();
+  const m = raw.match(/^(.*)_(\d+)$/u);
+  if (!m) return { base: raw, num: null };
+  return { base: String(m[1] || '').trim(), num: Number(m[2]) };
+}
+
+function appendNumericSuffix(fullName, n) {
+  const raw = String(fullName || '').trim().replace(/\s+/gu, ' ');
+  if (!raw) return '';
+  return `${raw} ${n}`;
+}
+
+function chooseUniqueSpeakerIdentity({ preferredSlug, preferredFull, ownerKey, stableNameIndex }) {
+  const slug = String(preferredSlug || '').trim();
+  const full = String(preferredFull || '').trim().replace(/\s+/gu, ' ');
+  if (!slug || !full) return { slug, full, changed: false, reason: '' };
+  const takenBy = stableNameIndex.get(slug);
+  if (!takenBy || takenBy === ownerKey) {
+    return { slug, full, changed: false, reason: '' };
+  }
+  const parsed = splitNumericSuffix(slug);
+  const baseSlug = parsed.base || slug;
+  let n = 2;
+  while (n < 1000) {
+    const candidateSlug = `${baseSlug}_${n}`;
+    const candidateOwner = stableNameIndex.get(candidateSlug);
+    if (!candidateOwner || candidateOwner === ownerKey) {
+      return {
+        slug: candidateSlug,
+        full: appendNumericSuffix(full, n),
+        changed: true,
+        reason: `name_already_owned_by_${takenBy}`,
+      };
+    }
+    n += 1;
+  }
+  return { slug, full, changed: false, reason: 'no_available_suffix' };
+}
+
 function gatherEvidence(rows, roster) {
   const byTarget = new Map();
   const titleNameRe = /\b(?:councillor|mayor|deputy\s+mayor|mr\.?|ms\.?|miss)\s+([A-Za-z'\-\.]+)/giu;
@@ -1118,6 +1158,7 @@ async function main() {
   const verifierReplaced = [];
   const skippedLocked = [];
   const skippedNameConflicts = [];
+  const resolvedNameConflicts = [];
   const unchangedStable = [];
   const writeErrors = [];
 
@@ -1214,7 +1255,37 @@ async function main() {
         }
       }
     }
-    // Reject overlapping names across different global speaker keys.
+    // Keep global speaker names unique across keys: if taken, allocate a suffixed variant.
+    const chosenIdentity = chooseUniqueSpeakerIdentity({
+      preferredSlug: a.person_slug,
+      preferredFull: a.person_full,
+      ownerKey: a.speaker_key,
+      stableNameIndex,
+    });
+    if (!chosenIdentity.slug || !chosenIdentity.full) {
+      skippedNameConflicts.push({
+        speaker_key: a.speaker_key,
+        proposed_name: a.person_slug,
+        proposed_full: a.person_full,
+        reason: 'invalid_identity_after_conflict_resolution',
+      });
+      continue;
+    }
+    if (chosenIdentity.changed) {
+      resolvedNameConflicts.push({
+        speaker_key: a.speaker_key,
+        from_name: a.person_slug,
+        to_name: chosenIdentity.slug,
+        from_full: a.person_full,
+        to_full: chosenIdentity.full,
+        reason: chosenIdentity.reason,
+      });
+      a = {
+        ...a,
+        person_slug: chosenIdentity.slug,
+        person_full: chosenIdentity.full,
+      };
+    }
     const ownerKey = stableNameIndex.get(a.person_slug);
     if (ownerKey && ownerKey !== a.speaker_key) {
       skippedNameConflicts.push({
@@ -1261,6 +1332,7 @@ async function main() {
     assignments,
     skipped_locked: skippedLocked,
     skipped_name_conflicts: skippedNameConflicts,
+    resolved_name_conflicts: resolvedNameConflicts,
     unchanged_stable: unchangedStable,
     write_errors: writeErrors,
     assigned_keys: assignments.map((x) => x.speaker_key),
@@ -1282,6 +1354,7 @@ async function main() {
   process.stdout.write(`[speaker-autoassign] assigned keys: ${assignments.length}\n`);
   process.stdout.write(`[speaker-autoassign] locked skips: ${skippedLocked.length}\n`);
   process.stdout.write(`[speaker-autoassign] name conflicts: ${skippedNameConflicts.length}\n`);
+  process.stdout.write(`[speaker-autoassign] resolved name conflicts: ${resolvedNameConflicts.length}\n`);
   process.stdout.write(`[speaker-autoassign] unchanged stable: ${unchangedStable.length}\n`);
   process.stdout.write(`[speaker-autoassign] write errors: ${writeErrors.length}\n`);
   for (const e of writeErrors.slice(0, 8)) {

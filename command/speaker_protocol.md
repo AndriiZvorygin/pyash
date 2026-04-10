@@ -17,6 +17,14 @@ Stdout must stay machine-readable JSONL only.
 
 The worker is persistent. It loads the ECAPA model lazily on first inference command.
 
+## Deployment contract (spec)
+
+- Diarization must use global voices directly (`/home/htaf/pyash/world/voices`).
+- Per-meeting isolated voice paths are forbidden.
+- Reseed/copy voice-cache workflows are forbidden.
+- Local speaker worker mode is forbidden for production meeting runs.
+- `PYA_SPEAKER_HOST` must point to the remote speaker service (mriczo).
+
 ## Request shape
 
 ```json

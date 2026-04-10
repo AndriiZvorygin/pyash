@@ -142,7 +142,9 @@ function enforceMaxSentenceWords(lines, maxWords = MAX_SENTENCE_WORDS) {
 function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = false } = {}) {
   const source = String(text ?? "");
   if (sentenceCues) {
-    const sentenceCuts = enforceMaxSentenceWords(splitNaturalSentences(source))
+    const sentenceCuts = collapseEchoLyricCuts(
+      enforceMaxSentenceWords(splitNaturalSentences(source))
+    )
       .map((entry) => String(entry || "").trim())
       .filter(Boolean)
       .filter((line) => !/^\[[^\]]+\]$/u.test(line));
@@ -166,7 +168,9 @@ function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = fal
   }
   if (lineCuts.length > 1) return lineCuts;
 
-  const sentenceCuts = splitNaturalSentences(source)
+  const sentenceCuts = collapseEchoLyricCuts(
+    splitNaturalSentences(source)
+  )
     .flatMap((entry) => enforceMaxSentenceWords([entry]))
     .map((entry) => String(entry || "").trim())
     .filter(Boolean)
@@ -217,6 +221,50 @@ function splitNormalizedWords(text) {
     .split(/\s+/u)
     .map((word) => normalizeWord(word))
     .filter(Boolean);
+}
+
+function hasLikelyTruncatedEcho(prevText = "", nextText = "") {
+  const prev = splitNormalizedWords(prevText);
+  const next = splitNormalizedWords(nextText);
+  if (!prev.length || !next.length) return false;
+  if (prev.length > 10 || next.length < 4) return false;
+  if (prev.length > next.length) return false;
+
+  const minOverlap = Math.max(3, prev.length - 1);
+  for (let start = 0; start <= Math.min(2, next.length - minOverlap); start += 1) {
+    const maxLen = Math.min(prev.length, next.length - start);
+    for (let len = maxLen; len >= minOverlap; len -= 1) {
+      const prevSlice = prev.slice(prev.length - len);
+      const nextSlice = next.slice(start, start + len);
+      let same = true;
+      for (let i = 0; i < len; i += 1) {
+        if (prevSlice[i] !== nextSlice[i]) {
+          same = false;
+          break;
+        }
+      }
+      if (!same) continue;
+      const extendsTail = (start + len) < next.length;
+      const hasLeadIn = start > 0;
+      if (extendsTail || hasLeadIn) return true;
+    }
+  }
+  return false;
+}
+
+function collapseEchoLyricCuts(cuts = []) {
+  const input = Array.isArray(cuts)
+    ? cuts.map((x) => String(x || "").trim()).filter(Boolean)
+    : [];
+  if (input.length <= 1) return input;
+  const out = [];
+  for (let i = 0; i < input.length; i += 1) {
+    const cur = input[i];
+    const next = input[i + 1];
+    if (next && hasLikelyTruncatedEcho(cur, next)) continue;
+    out.push(cur);
+  }
+  return out;
 }
 
 function wordsRoughlyMatch(aRaw, bRaw) {
