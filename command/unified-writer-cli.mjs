@@ -266,6 +266,36 @@ function findPublishResponsePath(transcriptDir, basePrefix) {
   return files.length ? path.join(transcriptDir, files[files.length - 1]) : "";
 }
 
+function findAgendaPublishResponsePath(transcriptDir, basePrefix) {
+  if (!fs.existsSync(transcriptDir)) return "";
+  const direct = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.agenda-publish.response.json`);
+  if (fs.existsSync(direct)) return direct;
+  const files = fs.readdirSync(transcriptDir)
+    .filter((n) => n.endsWith(".agenda-publish.response.json"))
+    .sort();
+  return files.length ? path.join(transcriptDir, files[files.length - 1]) : "";
+}
+
+function findLemmyPayloadPath(transcriptDir, basePrefix) {
+  if (!fs.existsSync(transcriptDir)) return "";
+  const direct = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.json`);
+  if (fs.existsSync(direct)) return direct;
+  const files = fs.readdirSync(transcriptDir)
+    .filter((n) => n.endsWith(".lemmy-post.json"))
+    .sort();
+  return files.length ? path.join(transcriptDir, files[files.length - 1]) : "";
+}
+
+function readPayloadContentType(payloadPath) {
+  if (!payloadPath || !fs.existsSync(payloadPath)) return "";
+  try {
+    const json = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
+    return String(json?.content_type || "").trim().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 function parsePostedFromResponse(respPath) {
   if (!respPath || !fs.existsSync(respPath)) return false;
   try {
@@ -279,9 +309,15 @@ function parsePostedFromResponse(respPath) {
 function localMeetingState(meetingDir, basePrefix) {
   const transcriptDir = path.join(meetingDir, "transcript");
   const publishPath = findPublishResponsePath(transcriptDir, basePrefix);
+  const agendaPublishPath = findAgendaPublishResponsePath(transcriptDir, basePrefix);
+  const payloadPath = findLemmyPayloadPath(transcriptDir, basePrefix);
+  const payloadContentType = readPayloadContentType(payloadPath);
+  const transcriptPosted = parsePostedFromResponse(publishPath) && payloadContentType !== "agenda";
+  const agendaPosted = parsePostedFromResponse(agendaPublishPath) || (parsePostedFromResponse(publishPath) && payloadContentType === "agenda");
   const reportPath = findPipelineReportPath(transcriptDir, basePrefix);
   let stage = "new";
-  if (parsePostedFromResponse(publishPath)) stage = "published";
+  if (transcriptPosted) stage = "transcript-published";
+  else if (agendaPosted) stage = "agenda-published";
   else if (reportPath) stage = "pipeline-done";
   else if (fs.existsSync(path.join(transcriptDir, `${basePrefix}-normalized.sentences.speaker.sentence.srt`))) stage = "speaker-labeled";
   else if (fs.existsSync(path.join(transcriptDir, `${basePrefix}-normalized.sentences.merged.srt`))) stage = "transcribed";
