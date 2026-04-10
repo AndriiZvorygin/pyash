@@ -594,18 +594,31 @@ async function main() {
   const baseVoicesDir = voicesDirArg
     ? path.resolve(process.cwd(), voicesDirArg)
     : path.join(ROOT, 'world', 'voices');
-  // Default isolate on: treat global voices as read-only baseline.
-  const isolateVoices = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '1'));
-  const reseedVoices = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_RESEED_VOICES || ''));
-  const resolvedSpeakerHost = String(process.env.PYA_SPEAKER_HOST || process.env.SPEAKER_HOST || '').trim();
-  const voicesDir = isolateVoices
-    ? path.resolve(process.cwd(), process.env.PYA_SPEAKER_WORKING_VOICES_DIR || path.join(transcriptDir, 'voices-working'))
-    : baseVoicesDir;
-  if (isolateVoices) {
-    seedWorkingVoicesDir({ baseDir: baseVoicesDir, workingDir: voicesDir, reseed: reseedVoices });
-  } else {
-    fs.mkdirSync(voicesDir, { recursive: true });
+  const isolateEnv = String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '').trim();
+  const reseedEnv = String(process.env.PYA_SPEAKER_RESEED_VOICES || '').trim();
+  const workingDirEnv = String(process.env.PYA_SPEAKER_WORKING_VOICES_DIR || '').trim();
+  if (/^(1|true|yes)$/iu.test(isolateEnv)) {
+    throw new Error('spec violation: isolate voices mode is forbidden; diarize must use global voices directly (world/voices)');
   }
+  if (/^(1|true|yes)$/iu.test(reseedEnv)) {
+    throw new Error('spec violation: reseed voices mode is forbidden; diarize must use global voices directly (world/voices)');
+  }
+  if (workingDirEnv) {
+    throw new Error('spec violation: PYA_SPEAKER_WORKING_VOICES_DIR is forbidden; diarize must not use per-meeting voice paths');
+  }
+
+  // Hard-disable isolate/reseed paths: always diarize against global voices.
+  const isolateVoices = false;
+  const reseedVoices = false;
+  const resolvedSpeakerHost = String(process.env.PYA_SPEAKER_HOST || process.env.SPEAKER_HOST || '').trim();
+  if (!resolvedSpeakerHost) {
+    throw new Error('spec violation: local speaker worker is forbidden; set PYA_SPEAKER_HOST to the remote speaker service (mriczo)');
+  }
+  if (/^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?$/iu.test(resolvedSpeakerHost)) {
+    throw new Error(`spec violation: local speaker host is forbidden (${resolvedSpeakerHost}); use remote speaker service (mriczo)`);
+  }
+  const voicesDir = baseVoicesDir;
+  fs.mkdirSync(voicesDir, { recursive: true });
   const samplesDir = voicesDir;
 
   const outSrt = path.join(transcriptDir, `${resolvedPrefix}.speaker.sentence.srt`);
