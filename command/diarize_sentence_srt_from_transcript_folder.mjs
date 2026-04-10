@@ -73,6 +73,19 @@ const IDENTIFY_RETRY_DELAY_MS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_IDENTIFY_RETRY_DELAY_MS || 350);
   return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 350;
 })();
+const MIN_NEW_SPEAKER_SECONDS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_MIN_NEW_SECONDS || 4.5);
+  return Number.isFinite(raw) && raw > 0 ? raw : 4.5;
+})();
+const MIN_NEW_SPEAKER_WORDS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_MIN_NEW_WORDS || 14);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 14;
+})();
+const MIN_NEW_SPEAKER_SIMILARITY = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_MIN_NEW_SIMILARITY || 0.55);
+  return Number.isFinite(raw) ? raw : 0.55;
+})();
+const UNKNOWN_SPEAKER_KEY = 'speaker_unknown';
 
 function usage() {
   return [
@@ -413,6 +426,45 @@ function isKnownLike(matchKind) {
   return m === 'known' || m === 'prev';
 }
 
+function applyNewSpeakerGuard({
+  speakerKey,
+  matched,
+  similarity,
+  duration,
+  words,
+  prevSpeaker,
+  voicesDir,
+}) {
+  const key = String(speakerKey || '').trim();
+  const match = String(matched || '').trim().toLowerCase();
+  if (match !== 'new') {
+    return { speakerKey: key || UNKNOWN_SPEAKER_KEY, matched, demoted: false, reason: '' };
+  }
+  const dur = Math.max(0, Number(duration) || 0);
+  const w = Math.max(0, Number(words) || 0);
+  const sim = Number(similarity);
+  const failsDuration = dur < MIN_NEW_SPEAKER_SECONDS;
+  const failsWords = w < MIN_NEW_SPEAKER_WORDS;
+  const failsSimilarity = Number.isFinite(sim) && sim < MIN_NEW_SPEAKER_SIMILARITY;
+  if (!(failsDuration || failsWords || failsSimilarity)) {
+    return { speakerKey: key || UNKNOWN_SPEAKER_KEY, matched, demoted: false, reason: '' };
+  }
+  const fallback = String(prevSpeaker || '').trim() || UNKNOWN_SPEAKER_KEY;
+  if (key && key !== fallback && /^speaker_\d+$/iu.test(key)) {
+    removeSpeakerArtifacts({ voicesDir, speakerKey: key });
+  }
+  const reasons = [];
+  if (failsDuration) reasons.push(`dur<${MIN_NEW_SPEAKER_SECONDS}`);
+  if (failsWords) reasons.push(`words<${MIN_NEW_SPEAKER_WORDS}`);
+  if (failsSimilarity) reasons.push(`sim<${MIN_NEW_SPEAKER_SIMILARITY}`);
+  return {
+    speakerKey: fallback,
+    matched: fallback === UNKNOWN_SPEAKER_KEY ? 'fallback_unknown_short_new' : 'fallback_prev_short_new',
+    demoted: true,
+    reason: reasons.join(','),
+  };
+}
+
 function renderSrt(rows) {
   const out = [];
   for (let i = 0; i < rows.length; i += 1) {
@@ -698,6 +750,22 @@ async function main() {
           turn.since,
           metadataMapForLog,
         );
+        const guarded = applyNewSpeakerGuard({
+          speakerKey,
+          matched,
+          similarity: ident?.similarity,
+          duration: turnDuration,
+          words: turnWords,
+          prevSpeaker,
+          voicesDir,
+        });
+        if (guarded.demoted) {
+          process.stdout.write(
+            `[speaker-sentence] guard-new turn ${turnIndex + 1}/${turns.length}: key "${speakerKey}" -> "${guarded.speakerKey}" reason "${guarded.reason}"\n`
+          );
+        }
+        speakerKey = guarded.speakerKey;
+        matched = guarded.matched;
 
         // Guard against mixed-speaker turns: if a fresh speaker was minted from a long
         // turn, probe beginning/end against a snapshot (excluding the new key) and
@@ -795,6 +863,22 @@ async function main() {
                   cue.since,
                   metadataMapForLog,
                 );
+                const guardedCue = applyNewSpeakerGuard({
+                  speakerKey: cueSpeaker,
+                  matched: cueMatched,
+                  similarity: cueIdent?.similarity,
+                  duration: cueDur,
+                  words: cueWords,
+                  prevSpeaker: localPrev,
+                  voicesDir,
+                });
+                if (guardedCue.demoted) {
+                  process.stdout.write(
+                    `[speaker-sentence] guard-new turn ${turnIndex + 1}/${turns.length} cue ${cueIdx + 1}/${turn.cues.length}: key "${cueSpeaker}" -> "${guardedCue.speakerKey}" reason "${guardedCue.reason}"\n`
+                  );
+                }
+                cueSpeaker = guardedCue.speakerKey;
+                cueMatched = guardedCue.matched;
               }
               localPrev = cueSpeaker;
               localLast = cueSpeaker;
@@ -836,9 +920,13 @@ async function main() {
       );
 
       if (!firstSampleBySpeaker.has(speakerKey) && fs.existsSync(clipPath)) {
+        if (speakerKey === UNKNOWN_SPEAKER_KEY) {
+          // Do not persist unknown clips as canonical speaker samples.
+        } else {
         const samplePath = path.join(samplesDir, `${speakerKey}.wav`);
         if (!fs.existsSync(samplePath)) fs.copyFileSync(clipPath, samplePath);
         firstSampleBySpeaker.add(speakerKey);
+        }
       }
 
       for (const cue of turn.cues) {
