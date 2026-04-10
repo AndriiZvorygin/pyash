@@ -416,6 +416,22 @@ function isStableSpeakerName(name) {
   return true;
 }
 
+function buildStableNameIndex(voicesDir) {
+  const byName = new Map();
+  if (!fs.existsSync(voicesDir)) return byName;
+  const files = fs.readdirSync(voicesDir)
+    .filter((n) => /^speaker_\d+\.pya$/iu.test(n))
+    .sort();
+  for (const name of files) {
+    const key = name.replace(/\.pya$/u, '');
+    const metaPath = path.join(voicesDir, name);
+    const metaName = readSpeakerMetaName(metaPath);
+    if (!isStableSpeakerName(metaName)) continue;
+    if (!byName.has(metaName)) byName.set(metaName, key);
+  }
+  return byName;
+}
+
 function gatherEvidence(rows, roster) {
   const byTarget = new Map();
   const titleNameRe = /\b(?:councillor|mayor|deputy\s+mayor|mr\.?|ms\.?|miss)\s+([A-Za-z'\-\.]+)/giu;
@@ -1092,12 +1108,16 @@ async function main() {
     mergedAssignments.push(a);
     existingKeys.add(a.speaker_key);
   }
-  const allowOverwriteExisting = /^(1|true|yes)$/iu.test(String(process.env.PYA_AUTOASSIGN_OVERWRITE_EXISTING || ''));
+  // Global voice assignments are immutable in normal pipeline operation.
+  // This prevents accidental identity churn across meetings.
+  const allowOverwriteExisting = /^(1|true|yes)$/iu.test(String(process.env.PYA_AUTOASSIGN_ALLOW_REASSIGN || ''));
+  const stableNameIndex = buildStableNameIndex(voicesDir);
   const assignments = [];
   const verifierRejected = [];
   const verifierErrors = [];
   const verifierReplaced = [];
   const skippedLocked = [];
+  const skippedNameConflicts = [];
   const unchangedStable = [];
   const writeErrors = [];
 
@@ -1125,6 +1145,7 @@ async function main() {
         });
         continue;
       }
+      // Never overwrite an already-stable global mapping unless explicit reassignment is enabled.
       if (!allowOverwriteExisting) {
         skippedLocked.push({
           speaker_key: a.speaker_key,
@@ -1132,6 +1153,7 @@ async function main() {
           proposed_name: a.person_slug,
           proposed_full: a.person_full,
           evidence_count: a.evidence_count,
+          reason: 'immutable_existing_assignment',
         });
         continue;
       }
@@ -1192,8 +1214,22 @@ async function main() {
         }
       }
     }
+    // Reject overlapping names across different global speaker keys.
+    const ownerKey = stableNameIndex.get(a.person_slug);
+    if (ownerKey && ownerKey !== a.speaker_key) {
+      skippedNameConflicts.push({
+        speaker_key: a.speaker_key,
+        proposed_name: a.person_slug,
+        proposed_full: a.person_full,
+        existing_owner_key: ownerKey,
+        reason: 'name_already_owned_by_other_speaker_key',
+      });
+      continue;
+    }
+
     try {
       setSpeakerMetaName(metaPath, a.person_slug);
+      stableNameIndex.set(a.person_slug, a.speaker_key);
     } catch (err) {
       writeErrors.push({
         speaker_key: a.speaker_key,
@@ -1224,6 +1260,7 @@ async function main() {
     verifier_replaced: verifierReplaced,
     assignments,
     skipped_locked: skippedLocked,
+    skipped_name_conflicts: skippedNameConflicts,
     unchanged_stable: unchangedStable,
     write_errors: writeErrors,
     assigned_keys: assignments.map((x) => x.speaker_key),
@@ -1244,6 +1281,7 @@ async function main() {
   process.stdout.write(`[speaker-autoassign] verifier replaced: ${verifierReplaced.length}\n`);
   process.stdout.write(`[speaker-autoassign] assigned keys: ${assignments.length}\n`);
   process.stdout.write(`[speaker-autoassign] locked skips: ${skippedLocked.length}\n`);
+  process.stdout.write(`[speaker-autoassign] name conflicts: ${skippedNameConflicts.length}\n`);
   process.stdout.write(`[speaker-autoassign] unchanged stable: ${unchangedStable.length}\n`);
   process.stdout.write(`[speaker-autoassign] write errors: ${writeErrors.length}\n`);
   for (const e of writeErrors.slice(0, 8)) {
