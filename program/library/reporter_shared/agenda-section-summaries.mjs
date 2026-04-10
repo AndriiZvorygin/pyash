@@ -213,9 +213,52 @@ function normalizeForMatch(value) {
     .trim();
 }
 
+function extractHeadingAnchors(heading) {
+  const raw = String(heading || '');
+  const norm = normalizeForMatch(raw);
+  const anchors = [];
+  const reportCode = raw.match(/\b([A-Z]{2}-\d{2}-\d{3})\b/u);
+  if (reportCode) anchors.push(normalizeForMatch(reportCode[1]));
+  if (/\bpublic forum\b/iu.test(raw)) anchors.push('public forum');
+  if (/\bcorrespondence\b/iu.test(raw)) anchors.push('correspondence');
+  if (/\bdeputations?\b/iu.test(raw)) anchors.push('deputations');
+  if (/\bconfirmation of minutes\b/iu.test(raw)) anchors.push('confirmation minutes');
+  if (/\breports of city staff\b/iu.test(raw)) anchors.push('reports city staff');
+  const tokens = norm.split(' ').filter((t) => t.length >= 5 && !['there', 'being', 'presented', 'consideration', 'report', 'from', 'regarding', 'committee'].includes(t));
+  for (const t of tokens.slice(0, 3)) anchors.push(t);
+  return Array.from(new Set(anchors)).filter(Boolean);
+}
+
+function findRowByHeadingAnchors(rows, heading, approxIndex) {
+  if (!Array.isArray(rows) || !rows.length) return -1;
+  const anchors = extractHeadingAnchors(heading);
+  if (!anchors.length) return -1;
+  const normRows = rows.map((r) => normalizeForMatch(r?.text || ''));
+  const approx = Number.isFinite(Number(approxIndex)) ? Math.floor(Number(approxIndex)) : 0;
+  const start = Math.max(0, approx - 35);
+  const end = Math.min(rows.length - 1, approx + 45);
+  let best = -1;
+  let bestScore = 0;
+  for (let i = start; i <= end; i += 1) {
+    const line = normRows[i];
+    if (!line) continue;
+    let score = 0;
+    for (const a of anchors) if (line.includes(a)) score += 1;
+    if (score > bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  }
+  return bestScore > 0 ? best : -1;
+}
+
 function parseLeadingItemNumber(heading) {
-  const m = String(heading || '').match(/^\s*(\d+)\b/u);
-  return m ? String(Number(m[1])) : '';
+  const raw = String(heading || '').trim();
+  const m = raw.match(/^\s*(\d+)(?:\s*[.\-]\s*([a-z0-9]+))?\b/iu);
+  if (!m) return '';
+  const major = String(Number(m[1]));
+  const minor = String(m[2] || '').trim().toLowerCase();
+  return minor ? `${major}.${minor}` : major;
 }
 
 function loadTranscriptRowsForPrefix(transcriptDir, prefix) {
@@ -237,12 +280,11 @@ function loadTranscriptRowsForPrefix(transcriptDir, prefix) {
 
 function loadAgendaMatchesForPrefix(transcriptDir, prefix) {
   const jsonPath = path.join(transcriptDir, `${prefix}.agenda.matches.json`);
-  if (!fs.existsSync(jsonPath)) return [];
+  if (!fs.existsSync(jsonPath)) return {};
   try {
-    const obj = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-    return Array.isArray(obj?.matches) ? obj.matches : [];
+    return JSON.parse(fs.readFileSync(jsonPath, 'utf8')) || {};
   } catch {
-    return [];
+    return {};
   }
 }
 
@@ -259,12 +301,14 @@ function parseWiseRangesFromSeries(seriesText) {
   return out;
 }
 
-function buildSectionRowRanges({ headings, rows, matches, wiseRanges }) {
+function buildSectionRowRanges({ headings, rows, agendaMatches, wiseRanges }) {
   if (!Array.isArray(headings) || !headings.length || !Array.isArray(rows) || !rows.length) return [];
   const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
+  const allowWiseRowIndex = /^(1|true|yes)$/iu.test(String(process.env.PYA_WISE_RANGE_IS_ROW_INDEX || '0'));
   if (wise.length === headings.length) {
     const wiseMax = wise.reduce((mx, w) => Math.max(mx, Number(w?.until ?? w?.since ?? 0) || 0), 0);
     const wiseLooksLikeRowIndex =
+      allowWiseRowIndex &&
       wise.length > 0 &&
       wise.every((w) => Number.isFinite(Number(w?.since)) && Number.isFinite(Number(w?.until))) &&
       wise.every((w) => Number.isInteger(Number(w?.since)) && Number.isInteger(Number(w?.until))) &&
@@ -282,11 +326,46 @@ function buildSectionRowRanges({ headings, rows, matches, wiseRanges }) {
   }
 
   const rowNorm = rows.map((r) => normalizeForMatch(r?.text || ''));
+  const rowMentionsAgendaItem = (line, item) => {
+    const txt = String(line || '').trim();
+    const key = String(item || '').trim().toLowerCase();
+    if (!txt || !key) return false;
+    if (/^\d+$/u.test(key)) {
+      const re = new RegExp(`\\b(?:item\\s+|at\\s+)?${key}(?:\\s*[.]?\\s*[a-z])?\\b`, 'u');
+      return re.test(txt);
+    }
+    const compact = key.replace(/\s+/gu, '');
+    if (!compact) return false;
+    const escaped = compact.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    const re = new RegExp(`\\b(?:item\\s+|at\\s+)?${escaped}\\b`, 'u');
+    return re.test(txt);
+  };
   const matchByItem = new Map();
-  for (const m of Array.isArray(matches) ? matches : []) {
-    const key = String(m?.item || '').trim();
-    if (!key || matchByItem.has(key)) continue;
-    matchByItem.set(key, m);
+  const seedMatch = (item, payload) => {
+    const key = String(item || '').trim();
+    if (!key) return;
+    if (!matchByItem.has(key)) matchByItem.set(key, { item: key, ...payload });
+    else matchByItem.set(key, { ...matchByItem.get(key), ...payload });
+  };
+  for (const b of Array.isArray(agendaMatches?.boundaries) ? agendaMatches.boundaries : []) {
+    seedMatch(b?.item, {
+      start_paragraph: Number.isFinite(Number(b?.start)) ? Math.floor(Number(b.start)) : undefined,
+      end_paragraph: Number.isFinite(Number(b?.end)) ? Math.floor(Number(b.end)) : undefined,
+      method: String(b?.method || ''),
+    });
+  }
+  for (const s of Array.isArray(agendaMatches?.section_starts) ? agendaMatches.section_starts : []) {
+    seedMatch(s?.item, {
+      start_paragraph: Number.isFinite(Number(s?.start_paragraph)) ? Math.floor(Number(s.start_paragraph)) : undefined,
+      title: String(s?.title || ''),
+    });
+  }
+  for (const m of Array.isArray(agendaMatches?.matches) ? agendaMatches.matches : []) {
+    seedMatch(m?.item, {
+      snippet: String(m?.snippet || ''),
+      score: Number(m?.score),
+      paragraphIndex: Number.isFinite(Number(m?.paragraphIndex)) ? Math.floor(Number(m.paragraphIndex)) : undefined,
+    });
   }
 
   const starts = [];
@@ -295,9 +374,16 @@ function buildSectionRowRanges({ headings, rows, matches, wiseRanges }) {
     const heading = String(headings[i] || '');
     const item = parseLeadingItemNumber(heading);
     const m = matchByItem.get(item);
-    const snippet = normalizeForMatch(String(m?.snippet || '').slice(0, 240));
     let rowIndex = -1;
-    if (snippet) {
+    const fromParagraph = Number(m?.start_paragraph);
+    if (Number.isFinite(fromParagraph) && fromParagraph >= 0) {
+      rowIndex = Math.max(0, Math.min(rows.length - 1, Math.floor(fromParagraph)));
+      const refined = findRowByHeadingAnchors(rows, heading, rowIndex);
+      if (refined >= 0) rowIndex = refined;
+      matchedCount += 1;
+    }
+    const snippet = normalizeForMatch(String(m?.snippet || '').slice(0, 240));
+    if (rowIndex < 0 && snippet) {
       const anchor = snippet.slice(0, Math.min(80, snippet.length));
       for (let r = 0; r < rowNorm.length; r += 1) {
         if (rowNorm[r] && rowNorm[r].includes(anchor)) {
@@ -307,7 +393,14 @@ function buildSectionRowRanges({ headings, rows, matches, wiseRanges }) {
         }
       }
     }
-    starts.push({ heading, rowIndex });
+    if (rowIndex < 0) {
+      const fromParagraphIndex = Number(m?.paragraphIndex);
+      if (Number.isFinite(fromParagraphIndex) && fromParagraphIndex >= 0) {
+        rowIndex = Math.max(0, Math.min(rows.length - 1, Math.floor(fromParagraphIndex)));
+        matchedCount += 1;
+      }
+    }
+    starts.push({ heading, item, rowIndex });
   }
 
   // If alignment coverage is weak, do not trust row slicing at all.
@@ -319,6 +412,28 @@ function buildSectionRowRanges({ headings, rows, matches, wiseRanges }) {
     if (starts[i].rowIndex >= 0 && starts[i - 1].rowIndex >= 0 && starts[i].rowIndex < starts[i - 1].rowIndex) {
       starts[i].rowIndex = starts[i - 1].rowIndex;
     }
+  }
+
+  // If a major section is verbally introduced in a transition sentence shortly
+  // before its matched start ("at 10A and then B"), pull the start up to that line.
+  for (let i = 1; i < starts.length; i += 1) {
+    const current = starts[i];
+    const prev = starts[i - 1];
+    if (!current || !prev) continue;
+    if (current.rowIndex < 0 || prev.rowIndex < 0) continue;
+    const itemKey = String(current.item || '');
+    if (!/^\d+$/u.test(itemKey)) continue;
+    const searchStart = Math.max(prev.rowIndex, current.rowIndex - 30);
+    const searchEnd = current.rowIndex - 1;
+    if (searchEnd < searchStart) continue;
+    let candidate = -1;
+    for (let r = searchStart; r <= searchEnd; r += 1) {
+      if (rowMentionsAgendaItem(rowNorm[r], itemKey)) {
+        candidate = r;
+        break;
+      }
+    }
+    if (candidate >= 0) current.rowIndex = candidate;
   }
 
   const out = [];
@@ -1114,7 +1229,7 @@ export async function summarizeAgendaSectionArtifacts({
   const rowRanges = buildSectionRowRanges({
     headings: sectionHeadings,
     rows: transcriptRows,
-    matches: agendaMatches,
+    agendaMatches,
     wiseRanges
   });
 
@@ -1289,6 +1404,8 @@ export async function summarizeAgendaSectionArtifacts({
         mode,
         source_words: wordCount,
         source_rows: sourceRows,
+        start_row: Number.isFinite(Number(range?.start)) ? Math.floor(Number(range.start)) : -1,
+        end_row: Number.isFinite(Number(range?.end)) ? Math.floor(Number(range.end)) : -1,
         max_section_seconds: MAX_SECTION_SECONDS
       });
     }
