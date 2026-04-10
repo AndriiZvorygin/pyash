@@ -142,9 +142,9 @@ function enforceMaxSentenceWords(lines, maxWords = MAX_SENTENCE_WORDS) {
 function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = false } = {}) {
   const source = String(text ?? "");
   if (sentenceCues) {
-    const sentenceCuts = collapseEchoLyricCuts(
+    const sentenceCuts = trimAdjacentOverlapCuts(collapseEchoLyricCuts(
       enforceMaxSentenceWords(splitNaturalSentences(source))
-    )
+    ))
       .map((entry) => String(entry || "").trim())
       .filter(Boolean)
       .filter((line) => !/^\[[^\]]+\]$/u.test(line));
@@ -216,10 +216,25 @@ function normalizeWord(text) {
     .replace(/[^a-z0-9]+/gu, "");
 }
 
+const NUMBER_WORD_TO_INT = new Map([
+  ["zero", 0], ["one", 1], ["two", 2], ["three", 3], ["four", 4], ["five", 5],
+  ["six", 6], ["seven", 7], ["eight", 8], ["nine", 9], ["ten", 10], ["eleven", 11],
+  ["twelve", 12], ["thirteen", 13], ["fourteen", 14], ["fifteen", 15], ["sixteen", 16],
+  ["seventeen", 17], ["eighteen", 18], ["nineteen", 19], ["twenty", 20]
+]);
+
+function normalizeNumericWord(text) {
+  const token = normalizeWord(text);
+  if (!token) return "";
+  if (/^\d+$/u.test(token)) return `#${String(Number(token))}`;
+  if (NUMBER_WORD_TO_INT.has(token)) return `#${String(NUMBER_WORD_TO_INT.get(token))}`;
+  return token;
+}
+
 function splitNormalizedWords(text) {
   return String(text ?? "")
     .split(/\s+/u)
-    .map((word) => normalizeWord(word))
+    .map((word) => normalizeNumericWord(word))
     .filter(Boolean);
 }
 
@@ -267,9 +282,65 @@ function collapseEchoLyricCuts(cuts = []) {
   return out;
 }
 
+function stripLeadingWords(text, count) {
+  const words = String(text || "").split(/\s+/u).filter(Boolean);
+  if (!words.length) return "";
+  return words.slice(Math.max(0, Number(count) || 0)).join(" ").trim();
+}
+
+function trimAdjacentOverlapCuts(cuts = []) {
+  const input = Array.isArray(cuts) ? cuts.map((x) => String(x || "").trim()).filter(Boolean) : [];
+  if (input.length <= 1) return input;
+  const out = [input[0]];
+  const minOverlap = 4;
+  for (let i = 1; i < input.length; i += 1) {
+    const prev = String(out[out.length - 1] || "").trim();
+    const cur = String(input[i] || "").trim();
+    const prevWords = splitNormalizedWords(prev);
+    const curWords = splitNormalizedWords(cur);
+    if (prevWords.length < minOverlap || curWords.length < minOverlap) {
+      out.push(cur);
+      continue;
+    }
+    let overlap = 0;
+    let leadSkip = 0;
+    for (let skip = 0; skip <= 2; skip += 1) {
+      const maxLen = Math.min(prevWords.length, curWords.length - skip);
+      for (let len = maxLen; len >= minOverlap; len -= 1) {
+        let same = true;
+        for (let j = 0; j < len; j += 1) {
+          if (!wordsRoughlyMatch(prevWords[prevWords.length - len + j], curWords[skip + j])) {
+            same = false;
+            break;
+          }
+        }
+        if (same) {
+          overlap = len;
+          leadSkip = skip;
+          break;
+        }
+      }
+      if (overlap > 0) break;
+    }
+    if (overlap <= 0) {
+      out.push(cur);
+      continue;
+    }
+    const trimCount = leadSkip + overlap;
+    const ratio = overlap / Math.max(1, curWords.length - leadSkip);
+    if (ratio < 0.35) {
+      out.push(cur);
+      continue;
+    }
+    const trimmed = stripLeadingWords(cur, trimCount);
+    if (countWords(trimmed) >= 2) out.push(trimmed);
+  }
+  return out;
+}
+
 function wordsRoughlyMatch(aRaw, bRaw) {
-  const a = normalizeWord(aRaw);
-  const b = normalizeWord(bRaw);
+  const a = normalizeNumericWord(aRaw);
+  const b = normalizeNumericWord(bRaw);
   if (!a || !b) return false;
   if (a === b) return true;
   if (a.length >= 4 && b.length >= 4) {
@@ -581,13 +652,18 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingW
 
   let prevEnd = timelineStart;
   if (sentenceCues) {
-    rows = rows
-      .map((row) => {
-        const since = Math.max(timelineStart, Number(row.since ?? 0));
-        const until = Math.max(since + minLineSeconds, Number(row.until ?? since + minLineSeconds));
-        return { ...row, since, until };
-      })
-      .filter((row) => Number.isFinite(row.since) && Number.isFinite(row.until));
+    const stabilized = [];
+    let cursor = timelineStart;
+    for (const row of rows) {
+      const rawSince = Math.max(timelineStart, Number(row.since ?? 0));
+      const rawUntil = Math.max(rawSince + minLineSeconds, Number(row.until ?? rawSince + minLineSeconds));
+      const since = Math.max(cursor, rawSince);
+      const until = Math.max(since + minLineSeconds, rawUntil);
+      if (!Number.isFinite(since) || !Number.isFinite(until)) continue;
+      stabilized.push({ ...row, since, until });
+      cursor = until;
+    }
+    rows = stabilized;
   } else {
     for (const row of rows) {
       row.since = Math.max(prevEnd, Number(row.since ?? 0));
