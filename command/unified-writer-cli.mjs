@@ -318,6 +318,10 @@ function parseAgendaPostedFromResponse(respPath) {
   }
 }
 
+function normalizeComparableUrl(value) {
+  return String(value || "").trim().replace(/\/+$/u, "").toLowerCase();
+}
+
 function localMeetingState(meetingDir, basePrefix) {
   const transcriptDir = path.join(meetingDir, "transcript");
   const publishPath = findPublishResponsePath(transcriptDir, basePrefix);
@@ -326,7 +330,19 @@ function localMeetingState(meetingDir, basePrefix) {
   const payloadContentType = readPayloadContentType(payloadPath);
   const meetingPublishTranscriptPosted = parsePostedFromResponse(publishPath);
   const agendaPublishPosted = parseAgendaPostedFromResponse(agendaPublishPath);
-  const transcriptPosted = meetingPublishTranscriptPosted;
+  let sameDiscussionPostCollision = false;
+  if (publishPath && agendaPublishPath && fs.existsSync(publishPath) && fs.existsSync(agendaPublishPath)) {
+    try {
+      const pub = JSON.parse(fs.readFileSync(publishPath, "utf8"));
+      const ag = JSON.parse(fs.readFileSync(agendaPublishPath, "utf8"));
+      const pubUrl = normalizeComparableUrl(pub?.post_url);
+      const agUrl = normalizeComparableUrl(ag?.post_url);
+      if (pubUrl && agUrl && pubUrl === agUrl) sameDiscussionPostCollision = true;
+    } catch {
+      // ignore malformed artifacts
+    }
+  }
+  const transcriptPosted = meetingPublishTranscriptPosted && !sameDiscussionPostCollision;
   const agendaPosted = agendaPublishPosted || (!meetingPublishTranscriptPosted && payloadContentType === "agenda");
   const reportPath = findPipelineReportPath(transcriptDir, basePrefix);
   let stage = "new";

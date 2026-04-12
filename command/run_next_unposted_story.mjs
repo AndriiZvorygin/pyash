@@ -287,6 +287,10 @@ function parsePostedFromResponses(transcriptDir, basePrefix) {
   return { ...last, response_path: lastPath };
 }
 
+function normalizeComparableUrl(value) {
+  return String(value || "").trim().replace(/\/+$/u, "").toLowerCase();
+}
+
 function readPayloadContentType(payloadPath) {
   if (!payloadPath || !fs.existsSync(payloadPath)) return "";
   try {
@@ -344,8 +348,11 @@ function meetingState(row, meetingsDir, basePrefix) {
   const postedInfo = parsePostedFromResponses(transcriptDir, basePrefix);
   const agendaResponsePath = findAgendaPublishResponsePath(transcriptDir, basePrefix);
   const agendaPostedInfo = parsePostedFromAgendaResponse(agendaResponsePath);
+  const sameDiscussionPostForAgendaAndTranscript =
+    normalizeComparableUrl(postedInfo.post_url)
+    && normalizeComparableUrl(postedInfo.post_url) === normalizeComparableUrl(agendaPostedInfo.post_url);
   const localKinds = parseLocalPostedKinds(meetingDir);
-  const postedTranscriptByMeetingPublish = Boolean(postedInfo.posted_transcript);
+  const postedTranscriptByMeetingPublish = Boolean(postedInfo.posted_transcript) && !sameDiscussionPostForAgendaAndTranscript;
   const postedAgendaByLegacyMeetingPublish = Boolean(postedInfo.posted && payloadContentType === "agenda");
   const hasResponseArtifacts = Boolean((postedInfo.response_path || '').trim() || agendaResponsePath);
   const postedAgendaFromResult = !hasResponseArtifacts && localKinds.posted_agenda;
@@ -377,6 +384,7 @@ function meetingState(row, meetingsDir, basePrefix) {
     posted_remote: false,
     posted_remote_agenda: false,
     posted_remote_transcript: false,
+    publish_post_collision: Boolean(sameDiscussionPostForAgendaAndTranscript),
     post_url: postedInfo.post_url || agendaPostedInfo.post_url,
     transcript_url: postedInfo.transcript_url,
     has_agenda: agendaCount > 0,
