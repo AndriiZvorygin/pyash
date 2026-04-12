@@ -645,6 +645,12 @@ function buildPage({
     const b = normalizeText(firstRow);
     if (!a || !b) return false;
     if (a === b) return true;
+    // Only hide summary when it is effectively the same sentence as the first row.
+    // Do not hide longer summaries that happen to start with/contain the opening line.
+    const minLen = Math.min(a.length, b.length);
+    const maxLen = Math.max(a.length, b.length);
+    const lenRatio = maxLen > 0 ? (minLen / maxLen) : 0;
+    if (lenRatio < 0.92) return false;
     if (a.length >= 24 && b.includes(a)) return true;
     if (b.length >= 24 && a.includes(b)) return true;
     return false;

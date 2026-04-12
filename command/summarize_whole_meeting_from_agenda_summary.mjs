@@ -236,8 +236,9 @@ function buildScorePrompt({ sourceJson, summaryMd, bodyLabel, jurisdiction, meet
     '- Penalize vague wording where concrete figures exist in SOURCE_JSON.',
     '',
     'Output:',
-    '- First line: one short feedback sentence.',
-    '- Final line: exactly PASS, FAIL, or a numeric score from 0 to 1.',
+    '- First line: FEEDBACK: <one short sentence>.',
+    '- Final line: FINAL_SCORE: <number from 0.00 to 1.00>.',
+    '- Do not output any other score format.',
     '',
     'SOURCE_JSON:',
     sourceJson,
@@ -249,12 +250,37 @@ function buildScorePrompt({ sourceJson, summaryMd, bodyLabel, jurisdiction, meet
 
 function parseScore(review) {
   const lines = String(review || '').split(/\r?\n/u).map((x) => x.trim()).filter(Boolean);
-  const last = lines.at(-1) || '';
-  if (/^PASS$/i.test(last)) return 1;
-  if (/^FAIL$/i.test(last)) return 0;
-  const n = Number(last);
-  if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  const joined = lines.join('\n');
+  const labeled = joined.match(/FINAL_SCORE\s*:\s*([01](?:\.\d+)?)/iu);
+  if (labeled) {
+    const n = Number(labeled[1]);
+    if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  }
+  const passFail = joined.match(/\b(PASS|FAIL)\b/iu);
+  if (passFail) return /^PASS$/iu.test(passFail[1]) ? 1 : 0;
+  const tail = lines.slice(-3);
+  for (const line of tail) {
+    const n = Number(String(line).replace(/^[^0-9.-]+/u, '').trim());
+    if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  }
   return 0;
+}
+
+function hasUnsupportedNumericClaims(summary, sourceJson) {
+  const numRe = /[$]?\d[\d,]*(?:\.\d+)?%?/gu;
+  const srcNums = new Set(
+    (String(sourceJson || '').match(numRe) || [])
+      .map((x) => x.replace(/[,$%]/gu, '').trim())
+      .filter(Boolean)
+  );
+  if (!srcNums.size) return false;
+  const sumNums = (String(summary || '').match(numRe) || [])
+    .map((x) => x.replace(/[,$%]/gu, '').trim())
+    .filter(Boolean);
+  for (const n of sumNums) {
+    if (!srcNums.has(n)) return true;
+  }
+  return false;
 }
 
 function pickRosterFile(transcriptDir) {
@@ -448,16 +474,27 @@ async function summarizeWholeMeeting({ summaryJsonObj, focus, meetingDateIso, me
 
     const completenessPenalty = hasCompleteRequiredSections(draft) ? 0 : 0.4;
     const titledViolations = findTitledIdentityViolations(draft, sourceJson, rosterRoles);
+    const hasNumericMismatch = hasUnsupportedNumericClaims(draft, sourceJson);
     const titledPenalty = titledViolations.length ? 1 : 0;
-    const score = Math.max(0, parseScore(review) - completenessPenalty - titledPenalty);
+    const numericPenalty = hasNumericMismatch ? 1 : 0;
+    const score = Math.max(0, parseScore(review) - completenessPenalty - titledPenalty - numericPenalty);
     if (bestText === '' || score > bestScore) {
       bestText = draft;
       bestScore = score;
       bestReview = review;
     }
-    feedback = titledViolations.length
-      ? `${review}\n\nTITLE_IDENTITY_GUARD:\nInvalid titled attributions: ${titledViolations.join('; ')}\nFinal line: 0.0`
-      : review;
+    if (titledViolations.length || hasNumericMismatch) {
+      const blocks = [review];
+      if (titledViolations.length) {
+        blocks.push(`TITLE_IDENTITY_GUARD:\nInvalid titled attributions: ${titledViolations.join('; ')}\nFINAL_SCORE: 0.00`);
+      }
+      if (hasNumericMismatch) {
+        blocks.push('NUMERIC_GUARD:\nOne or more numeric claims are not explicitly present in SOURCE_JSON. Remove unsupported numbers.\nFINAL_SCORE: 0.00');
+      }
+      feedback = blocks.join('\n\n');
+    } else {
+      feedback = review;
+    }
     if (score >= PASS_THRESHOLD) break;
   }
 
