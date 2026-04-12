@@ -471,6 +471,8 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
   if (allowPost) {
     env[`${envPrefix}_AUTOPUBLISH`] = "1";
     env.PIPELINE_SKIP_POST = "0";
+    env.PIPELINE_FORCE_POST = "1";
+    env[`${envPrefix}_PIPELINE_FORCE_POST`] = "1";
     const envCmdKey = `${envPrefix}_LEMMY_POST_COMMAND`;
     const fallback = `node ${map.publishScript}`;
     env[envCmdKey] = env[envCmdKey] || fallback;
@@ -626,6 +628,8 @@ async function runMain() {
     env[`${map.envPrefix}_PIPELINE_SKIP_IMAGE`] = "1";
     env.PIPELINE_SKIP_POST = args.dryRun ? "1" : "0";
     if (!args.dryRun) {
+      env.PIPELINE_FORCE_POST = "1";
+      env[`${map.envPrefix}_PIPELINE_FORCE_POST`] = "1";
       env[`${map.envPrefix}_AUTOPUBLISH`] = "1";
       const envCmdKey = `${map.envPrefix}_LEMMY_POST_COMMAND`;
       env[envCmdKey] = env[envCmdKey] || `node ${map.publishScript}`;
@@ -654,6 +658,8 @@ async function runMain() {
       env[`${map.envPrefix}_PIPELINE_SKIP_IMAGE`] = "1";
       env.PIPELINE_SKIP_POST = args.dryRun ? "1" : "0";
       if (!args.dryRun) {
+        env.PIPELINE_FORCE_POST = "1";
+        env[`${map.envPrefix}_PIPELINE_FORCE_POST`] = "1";
         env[`${map.envPrefix}_AUTOPUBLISH`] = "1";
         const envCmdKey = `${map.envPrefix}_LEMMY_POST_COMMAND`;
         env[envCmdKey] = env[envCmdKey] || `node ${map.publishScript}`;
