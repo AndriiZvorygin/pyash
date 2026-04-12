@@ -300,7 +300,19 @@ function parsePostedFromResponse(respPath) {
   if (!respPath || !fs.existsSync(respPath)) return false;
   try {
     const json = JSON.parse(fs.readFileSync(respPath, "utf8"));
-    return Boolean((json?.post_url || json?.transcript_url) && !json?.error);
+    const transcriptUrl = String(json?.transcript_url || "").trim();
+    return Boolean(/\/transcripts\//iu.test(transcriptUrl) && !json?.error);
+  } catch {
+    return false;
+  }
+}
+
+function parseAgendaPostedFromResponse(respPath) {
+  if (!respPath || !fs.existsSync(respPath)) return false;
+  try {
+    const json = JSON.parse(fs.readFileSync(respPath, "utf8"));
+    const agendaUrl = String(json?.agenda_url || "").trim();
+    return Boolean(/\/agendas\//iu.test(agendaUrl) && !json?.error);
   } catch {
     return false;
   }
@@ -312,8 +324,10 @@ function localMeetingState(meetingDir, basePrefix) {
   const agendaPublishPath = findAgendaPublishResponsePath(transcriptDir, basePrefix);
   const payloadPath = findLemmyPayloadPath(transcriptDir, basePrefix);
   const payloadContentType = readPayloadContentType(payloadPath);
-  const transcriptPosted = parsePostedFromResponse(publishPath) && payloadContentType !== "agenda";
-  const agendaPosted = parsePostedFromResponse(agendaPublishPath) || (parsePostedFromResponse(publishPath) && payloadContentType === "agenda");
+  const meetingPublishTranscriptPosted = parsePostedFromResponse(publishPath);
+  const agendaPublishPosted = parseAgendaPostedFromResponse(agendaPublishPath);
+  const transcriptPosted = meetingPublishTranscriptPosted;
+  const agendaPosted = agendaPublishPosted || (!meetingPublishTranscriptPosted && payloadContentType === "agenda");
   const reportPath = findPipelineReportPath(transcriptDir, basePrefix);
   let stage = "new";
   if (transcriptPosted) stage = "transcript-published";
