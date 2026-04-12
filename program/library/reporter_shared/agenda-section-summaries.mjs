@@ -31,7 +31,7 @@ const MAX_SECTIONS = (() => {
 })();
 const SUMMARY_TIME_MODE = String(process.env.AGENDA_SUMMARY_TIME_MODE || "standard").trim().toLowerCase();
 const FORCE_ONE_SENTENCE = !/^(0|false|no)$/iu.test(String(
-  process.env.AGENDA_SUMMARY_ONE_SENTENCE || "1"
+  process.env.AGENDA_SUMMARY_ONE_SENTENCE || "0"
 ));
 const MAX_SECTION_SECONDS = (() => {
   const raw = Number(
@@ -368,6 +368,36 @@ function buildSectionRowRanges({ headings, rows, agendaMatches, wiseRanges }) {
     });
   }
 
+  const paragraphDomainMax = (() => {
+    let mx = -1;
+    for (const v of matchByItem.values()) {
+      const nums = [v?.start_paragraph, v?.end_paragraph, v?.paragraphIndex];
+      for (const n of nums) {
+        const x = Number(n);
+        if (Number.isFinite(x)) mx = Math.max(mx, Math.floor(x));
+      }
+    }
+    for (const w of wise) {
+      const s = Number(w?.since);
+      const u = Number(w?.until);
+      if (Number.isFinite(s)) mx = Math.max(mx, Math.floor(s));
+      if (Number.isFinite(u)) mx = Math.max(mx, Math.floor(u));
+    }
+    return mx;
+  })();
+  const paragraphLooksDifferentSpace =
+    Number.isFinite(paragraphDomainMax) &&
+    paragraphDomainMax > (rows.length + 50);
+  const mapParagraphToRow = (paragraphIndex) => {
+    const p = Number(paragraphIndex);
+    if (!Number.isFinite(p) || p < 0) return -1;
+    if (!paragraphLooksDifferentSpace || paragraphDomainMax <= 0) {
+      return Math.max(0, Math.min(rows.length - 1, Math.floor(p)));
+    }
+    const ratio = Math.max(0, Math.min(1, p / paragraphDomainMax));
+    return Math.max(0, Math.min(rows.length - 1, Math.round(ratio * (rows.length - 1))));
+  };
+
   const starts = [];
   let matchedCount = 0;
   for (let i = 0; i < headings.length; i += 1) {
@@ -377,7 +407,7 @@ function buildSectionRowRanges({ headings, rows, agendaMatches, wiseRanges }) {
     let rowIndex = -1;
     const fromParagraph = Number(m?.start_paragraph);
     if (Number.isFinite(fromParagraph) && fromParagraph >= 0) {
-      rowIndex = Math.max(0, Math.min(rows.length - 1, Math.floor(fromParagraph)));
+      rowIndex = mapParagraphToRow(fromParagraph);
       const refined = findRowByHeadingAnchors(rows, heading, rowIndex);
       if (refined >= 0) rowIndex = refined;
       matchedCount += 1;
@@ -396,7 +426,7 @@ function buildSectionRowRanges({ headings, rows, agendaMatches, wiseRanges }) {
     if (rowIndex < 0) {
       const fromParagraphIndex = Number(m?.paragraphIndex);
       if (Number.isFinite(fromParagraphIndex) && fromParagraphIndex >= 0) {
-        rowIndex = Math.max(0, Math.min(rows.length - 1, Math.floor(fromParagraphIndex)));
+        rowIndex = mapParagraphToRow(fromParagraphIndex);
         matchedCount += 1;
       }
     }
@@ -611,8 +641,9 @@ function buildScorePrompt({ source, summary, rosterText, bodyLabel, summaryTimeM
     '- Penalize vague wording when SOURCE contains specific figures or thresholds that could be stated directly.',
     '',
     'Output:',
-    '- First line: one short feedback sentence.',
-    '- Final line: exactly PASS, FAIL, or a numeric score from 0 to 1.',
+    '- First line: FEEDBACK: <one short sentence>.',
+    '- Final line: FINAL_SCORE: <number from 0.00 to 1.00>.',
+    '- Do not output any other score format.',
     '',
     'SOURCE:',
     source,
@@ -647,8 +678,9 @@ function buildAttributionScorePrompt({ source, summary, rosterText }) {
     '- Penalize use of non-canonical roster names when canonical match is clear.',
     '',
     'Output:',
-    '- First line: one short feedback sentence.',
-    '- Final line: exactly PASS, FAIL, or a numeric score from 0 to 1.',
+    '- First line: FEEDBACK: <one short sentence>.',
+    '- Final line: FINAL_SCORE: <number from 0.00 to 1.00>.',
+    '- Do not output any other score format.',
     '',
     'SOURCE:',
     source,
@@ -660,12 +692,38 @@ function buildAttributionScorePrompt({ source, summary, rosterText }) {
 
 function parseScore(review) {
   const lines = String(review || '').split(/\r?\n/u).map((x) => x.trim()).filter(Boolean);
-  const last = lines.at(-1) || '';
-  if (/^PASS$/i.test(last)) return 1;
-  if (/^FAIL$/i.test(last)) return 0;
-  const n = Number(last);
-  if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  const joined = lines.join('\n');
+  const labeled = joined.match(/FINAL_SCORE\s*:\s*([01](?:\.\d+)?)/iu);
+  if (labeled) {
+    const n = Number(labeled[1]);
+    if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  }
+  const passFail = joined.match(/\b(PASS|FAIL)\b/iu);
+  if (passFail) return /^PASS$/iu.test(passFail[1]) ? 1 : 0;
+  const tail = lines.slice(-3);
+  for (const line of tail) {
+    const n = Number(String(line).replace(/^[^0-9.-]+/u, '').trim());
+    if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  }
   return 0;
+}
+
+function hasUnsupportedNumericClaims(summary, source) {
+  const numRe = /[$]?\d[\d,]*(?:\.\d+)?%?/gu;
+  const srcRaw = String(source || '');
+  const srcNums = new Set(
+    (srcRaw.match(numRe) || [])
+      .map((x) => x.replace(/[,$%]/gu, '').trim())
+      .filter(Boolean)
+  );
+  if (!srcNums.size) return false;
+  const sumNums = (String(summary || '').match(numRe) || [])
+    .map((x) => x.replace(/[,$%]/gu, '').trim())
+    .filter(Boolean);
+  for (const n of sumNums) {
+    if (!srcNums.has(n)) return true;
+  }
+  return false;
 }
 
 function deriveMeetingContext(transcriptDir) {
@@ -1126,7 +1184,8 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
     const scoreSemantic = parseScore(reviewSemantic);
     const scoreAttribution = parseScore(reviewAttribution);
     const titledViolations = findTitledIdentityViolations(normalizedSummary, source, rosterRoles);
-    const score = titledViolations.length || looksTruncatedSummary(normalizedSummary)
+    const hasNumericMismatch = hasUnsupportedNumericClaims(normalizedSummary, source);
+    const score = titledViolations.length || looksTruncatedSummary(normalizedSummary) || hasNumericMismatch
       ? 0
       : Math.min(scoreSemantic, scoreAttribution);
     if (bestSummary === '' || score > bestScore) {
@@ -1139,7 +1198,10 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
     const truncationFeedback = looksTruncatedSummary(normalizedSummary)
       ? '\n\nTRUNCATION_GUARD:\nSummary appears cut off with trailing ellipsis; regenerate complete sentence(s).\nFinal line: 0.0'
       : '';
-    feedback = `${reviewSemantic}\n\nATTRIBUTION_REVIEW:\n${reviewAttribution}${violationFeedback}${truncationFeedback}`;
+    const numericFeedback = hasNumericMismatch
+      ? '\n\nNUMERIC_GUARD:\nOne or more numeric claims are not explicitly present in SOURCE. Remove unsupported numbers.\nFINAL_SCORE: 0.00'
+      : '';
+    feedback = `${reviewSemantic}\n\nATTRIBUTION_REVIEW:\n${reviewAttribution}${violationFeedback}${truncationFeedback}${numericFeedback}`;
     if (score >= PASS_THRESHOLD) break;
   }
   if (backendFailed) {
@@ -1151,6 +1213,16 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
   }
   const finalScore = Number(bestScore.toFixed(3));
   if (finalScore < PASS_THRESHOLD) {
+    const candidate = String(bestSummary || '').trim();
+    // Preserve a coherent LLM-generated summary when available instead of
+    // replacing it with transcript-quote fallback text.
+    if (candidate && !looksTruncatedSummary(candidate) && countWords(candidate) >= 10) {
+      return {
+        summary: candidate,
+        score: Math.max(0, finalScore),
+        mode: 'llm-low-confidence'
+      };
+    }
     return {
       summary: buildExtractiveFallbackSummary(source, heading),
       // Treat extractive fallback as a safe pass path: it is directly sourced text.

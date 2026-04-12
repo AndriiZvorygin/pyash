@@ -858,6 +858,9 @@ export async function generateAgendaWiseArtifacts({
   const maxChipWords = chips.reduce((m, c) => Math.max(m, Number(c.wordCount || 0)), 0);
   const oversizedChips = chips.filter((c) => Number(c.wordCount || 0) >= 3000).length;
   const coverage = sections.length ? (chosen.length / sections.length) : 0;
+  const boundaryCoverage = sections.length
+    ? (boundaries.filter((b) => Number.isFinite(Number(b?.start)) && Number.isFinite(Number(b?.end)) && Number(b.end) >= Number(b.start)).length / sections.length)
+    : 0;
   const llmRefineErrors = boundaries.filter((b) => /^llm-refine-error:/iu.test(String(b?.reason || ""))).length;
   const llmRangeCount = boundaries.filter((b) => String(b?.method || "") === "llm-range").length;
   if (maxChipWords >= 20000) {
@@ -868,9 +871,11 @@ export async function generateAgendaWiseArtifacts({
       `agenda-wise quality defective: llm_range_missing coverage=${coverage.toFixed(2)} oversized_chips=${oversizedChips}`
     );
   }
-  if (useLlmRange && llmRefineErrors > 0 && (coverage < 0.45 || oversizedChips > 0)) {
+  // Use refined boundary coverage for quality gating.
+  // Early cue-match coverage can be low on sparse agendas even when refined boundaries are healthy.
+  if (useLlmRange && llmRefineErrors > 0 && (boundaryCoverage < 0.80 || oversizedChips > 0)) {
     throw new Error(
-      `agenda-wise quality defective: llm_refine_errors=${llmRefineErrors} coverage=${coverage.toFixed(2)} oversized_chips=${oversizedChips}`
+      `agenda-wise quality defective: llm_refine_errors=${llmRefineErrors} coverage=${coverage.toFixed(2)} boundary_coverage=${boundaryCoverage.toFixed(2)} oversized_chips=${oversizedChips}`
     );
   }
 
