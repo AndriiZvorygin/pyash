@@ -814,7 +814,8 @@ export async function generateAgendaWiseArtifacts({
   }
 
   for (let i = 0; i < boundaries.length - 1; i += 1) {
-    boundaries[i].end = Math.min(boundaries[i].end, Math.max(boundaries[i].start, boundaries[i + 1].start - 1));
+    // Keep sections contiguous in transcript order to avoid large unassigned gaps.
+    boundaries[i].end = Math.max(boundaries[i].start, boundaries[i + 1].start - 1);
   }
   boundaries[boundaries.length - 1].end = Math.max(boundaries[boundaries.length - 1].start, boundaries[boundaries.length - 1].end);
 
