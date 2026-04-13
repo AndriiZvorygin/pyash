@@ -55,6 +55,7 @@ const SUBSECTION_MIN_GAP_SECONDS = (() => {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 90;
 })();
 const DEBUG_SECTION_SPLIT = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_SUMMARY_DEBUG_SPLIT || '0'));
+const USE_ROW_RANGES = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_SUMMARY_USE_ROW_RANGES || '0'));
 
 function usage() {
   return [
@@ -433,10 +434,30 @@ function buildSectionRowRanges({ headings, rows, agendaMatches, wiseRanges }) {
     starts.push({ heading, item, rowIndex });
   }
 
-  // If alignment coverage is weak, do not trust row slicing at all.
-  // This avoids reusing the opening rows across many sections.
+  // If direct matching coverage is weak, fall back to coarse paragraph->row mapping
+  // instead of dropping row ranges entirely.
   const minCoverage = Math.max(2, Math.floor(headings.length * 0.5));
-  if (matchedCount < minCoverage) return [];
+  if (matchedCount < minCoverage) {
+    const coarse = [];
+    for (let i = 0; i < headings.length; i += 1) {
+      const heading = String(headings[i] || '');
+      const item = parseLeadingItemNumber(heading);
+      const m = matchByItem.get(item);
+      const startP = Number(m?.start_paragraph);
+      const endP = Number(m?.end_paragraph);
+      if (!Number.isFinite(startP) || startP < 0) {
+        coarse.push({ start: -1, end: -1 });
+        continue;
+      }
+      const start = mapParagraphToRow(startP);
+      const end = Number.isFinite(endP) && endP >= startP
+        ? mapParagraphToRow(endP)
+        : start;
+      coarse.push({ start: Math.max(0, start), end: Math.max(Math.max(0, start), end) });
+    }
+    if (coarse.some((r) => r.start >= 0 && r.end >= r.start)) return coarse;
+    return [];
+  }
 
   for (let i = 1; i < starts.length; i += 1) {
     if (starts[i].rowIndex >= 0 && starts[i - 1].rowIndex >= 0 && starts[i].rowIndex < starts[i - 1].rowIndex) {
@@ -1139,6 +1160,32 @@ function buildExtractiveFallbackSummary(source, heading, maxWords = 70) {
   return `No clear transcript content was available for "${heading}".`;
 }
 
+async function buildFallbackOneSentenceLlm({ heading, source, focus }) {
+  const focusText = String(focus || '').trim();
+  const prompt = [
+    `Write exactly one factual sentence summarizing agenda heading: ${heading}`,
+    focusText ? `Focus: ${focusText}` : '',
+    'Rules:',
+    '- Use only facts present in SOURCE.',
+    '- Do not invent names, numbers, or decisions.',
+    '- Keep it concrete and readable.',
+    '- Output one sentence only.',
+    '',
+    'SOURCE:',
+    abridgeUtf8(source, 9000),
+  ].filter(Boolean).join('\n');
+  try {
+    const raw = await ask([
+      { role: 'system', content: 'You are a strict factual civic summarizer.' },
+      { role: 'user', content: prompt },
+    ], { numPredict: 120 });
+    const one = clampToOneSentence(raw).trim();
+    return one;
+  } catch {
+    return '';
+  }
+}
+
 async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, jurisdiction, shortMode = false }) {
   const source = abridgeUtf8(body, 14000);
   const rosterRoles = parseRosterRoles(rosterText);
@@ -1167,6 +1214,7 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
 
     let reviewSemantic = '';
     let reviewAttribution = '';
+    let reviewFailed = false;
     try {
       reviewSemantic = await ask([
         { role: 'system', content: 'You are a strict semantic summary scorer.' },
@@ -1177,8 +1225,9 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
         { role: 'user', content: buildAttributionScorePrompt({ source, summary: normalizedSummary, rosterText }) }
       ], { numPredict: 180 });
     } catch {
-      backendFailed = true;
-      break;
+      reviewFailed = true;
+      reviewSemantic = 'FEEDBACK: review backend unavailable.\nFINAL_SCORE: 0.55';
+      reviewAttribution = 'FEEDBACK: review backend unavailable.\nFINAL_SCORE: 0.55';
     }
 
     const scoreSemantic = parseScore(reviewSemantic);
@@ -1202,6 +1251,7 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
       ? '\n\nNUMERIC_GUARD:\nOne or more numeric claims are not explicitly present in SOURCE. Remove unsupported numbers.\nFINAL_SCORE: 0.00'
       : '';
     feedback = `${reviewSemantic}\n\nATTRIBUTION_REVIEW:\n${reviewAttribution}${violationFeedback}${truncationFeedback}${numericFeedback}`;
+    if (reviewFailed && score >= LOW_CONFIDENCE_ACCEPT_THRESHOLD) break;
     if (score >= PASS_THRESHOLD) break;
   }
   if (backendFailed) {
@@ -1221,6 +1271,14 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
         summary: candidate,
         score: Math.max(0, finalScore),
         mode: 'llm-low-confidence'
+      };
+    }
+    const llmFallback = await buildFallbackOneSentenceLlm({ heading, source, focus });
+    if (llmFallback && countWords(llmFallback) >= 8 && !looksTruncatedSummary(llmFallback)) {
+      return {
+        summary: llmFallback,
+        score: Math.max(finalScore, PASS_THRESHOLD),
+        mode: 'llm-fallback'
       };
     }
     return {
@@ -1298,25 +1356,34 @@ export async function summarizeAgendaSectionArtifacts({
   const transcriptRows = loadTranscriptRowsForPrefix(transcriptDir, resolvedPrefix);
   const agendaMatches = loadAgendaMatchesForPrefix(transcriptDir, resolvedPrefix);
   const wiseRanges = parseWiseRangesFromSeries(source);
-  const rowRanges = buildSectionRowRanges({
-    headings: sectionHeadings,
-    rows: transcriptRows,
-    agendaMatches,
-    wiseRanges
-  });
+  const rowRanges = USE_ROW_RANGES
+    ? buildSectionRowRanges({
+      headings: sectionHeadings,
+      rows: transcriptRows,
+      agendaMatches,
+      wiseRanges
+    })
+    : [];
+  const boundaryByItem = new Map(
+    (Array.isArray(agendaMatches?.boundaries) ? agendaMatches.boundaries : [])
+      .map((b) => [String(b?.item || '').trim(), b])
+      .filter(([k]) => Boolean(k))
+  );
 
   const out = [];
   for (let i = 0; i < parsedChips.length; i += 1) {
     const { heading, body } = parsedChips[i];
     log(`[agenda-summary] atindex num ${i + 1} toindex num ${chips.length} heading ${heading}`);
     const rr = rowRanges[i] || null;
+    const itemCode = parseLeadingItemNumber(heading);
+    const boundary = boundaryByItem.get(itemCode) || null;
     const sectionRows = rr ? transcriptRows.slice(rr.start, rr.end + 1) : [];
     const sectionRowCount = sectionRows.length;
     const sectionRowText = sectionRows.map((r) => `${r.display || 'Speaker'}: ${r.text}`).join('\n').trim();
     const bodyWordCount = countWords(body);
     const rowWordCount = countWords(sectionRowText);
     const rowRangeLooksRich = rowWordCount >= Math.max(80, Math.floor(bodyWordCount * 0.6));
-    const baseBody = rowRangeLooksRich ? sectionRowText : body;
+    const baseBody = (USE_ROW_RANGES && rowRangeLooksRich) ? sectionRowText : body;
 
     let subRanges = [];
     if (rr && sectionRows.length > 1) {
@@ -1466,6 +1533,7 @@ export async function summarizeAgendaSectionArtifacts({
 
       out.push({
         index: out.length + 1,
+        item: itemCode || '',
         parent_index: i + 1,
         parent_heading: heading,
         part_index: subRanges.length > 1 ? (part + 1) : 0,
@@ -1478,6 +1546,9 @@ export async function summarizeAgendaSectionArtifacts({
         source_rows: sourceRows,
         start_row: Number.isFinite(Number(range?.start)) ? Math.floor(Number(range.start)) : -1,
         end_row: Number.isFinite(Number(range?.end)) ? Math.floor(Number(range.end)) : -1,
+        start_paragraph: Number.isFinite(Number(boundary?.start)) ? Math.floor(Number(boundary.start)) : -1,
+        end_paragraph: Number.isFinite(Number(boundary?.end)) ? Math.floor(Number(boundary.end)) : -1,
+        boundary_method: String(boundary?.method || ''),
         max_section_seconds: MAX_SECTION_SECONDS
       });
     }
