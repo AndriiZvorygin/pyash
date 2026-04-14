@@ -16,6 +16,10 @@ const PASS_THRESHOLD = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_PASS_THRESHOLD || process.env.MEETING_SUMMARY_PASS_THRESHOLD || process.env.OWEN_SUMMARY_PASS_THRESHOLD || 0.65);
   return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.65;
 })();
+const LOW_CONFIDENCE_ACCEPT_THRESHOLD = (() => {
+  const raw = Number(process.env.AGENDA_SUMMARY_LOW_CONFIDENCE_ACCEPT_THRESHOLD || PASS_THRESHOLD);
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : PASS_THRESHOLD;
+})();
 const MIN_SUMMARY_WORDS = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_MIN_WORDS || process.env.MEETING_SUMMARY_MIN_WORDS || process.env.OWEN_SUMMARY_MIN_WORDS || 120);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 120;
@@ -287,6 +291,45 @@ function loadAgendaMatchesForPrefix(transcriptDir, prefix) {
   } catch {
     return {};
   }
+}
+
+function loadGrossChunksForPrefix(transcriptDir, prefix) {
+  const jsonPath = path.join(transcriptDir, `${prefix}.agenda.gross-chunks.json`);
+  if (!fs.existsSync(jsonPath)) return [];
+  try {
+    const obj = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    return Array.isArray(obj?.windows) ? obj.windows : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildGrossContextForRange(grossChunks, startParagraph, endParagraph, maxItems = 3) {
+  const start = Number(startParagraph);
+  const end = Number(endParagraph);
+  if (!Array.isArray(grossChunks) || !grossChunks.length) return '';
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '';
+  const picks = [];
+  for (const g of grossChunks) {
+    const gs = Number(g?.start);
+    const ge = Number(g?.end);
+    if (!Number.isFinite(gs) || !Number.isFinite(ge)) continue;
+    if (ge < start || gs > end) continue;
+    const summary = String(g?.summary || '').trim();
+    const phase = String(g?.phase || '').trim();
+    if (!summary) continue;
+    picks.push({
+      start: gs,
+      end: ge,
+      text: phase ? `${phase}: ${summary}` : summary,
+    });
+  }
+  if (!picks.length) return '';
+  picks.sort((a, b) => a.start - b.start || a.end - b.end);
+  return picks
+    .slice(0, Math.max(1, maxItems))
+    .map((p, idx) => `- Phase ${idx + 1} (${p.start}..${p.end}): ${p.text}`)
+    .join('\n');
 }
 
 function parseWiseRangesFromSeries(seriesText) {
@@ -1355,6 +1398,7 @@ export async function summarizeAgendaSectionArtifacts({
   const sectionHeadings = parsedChips.map((x) => x.heading);
   const transcriptRows = loadTranscriptRowsForPrefix(transcriptDir, resolvedPrefix);
   const agendaMatches = loadAgendaMatchesForPrefix(transcriptDir, resolvedPrefix);
+  const grossChunks = loadGrossChunksForPrefix(transcriptDir, resolvedPrefix);
   const wiseRanges = parseWiseRangesFromSeries(source);
   const rowRanges = USE_ROW_RANGES
     ? buildSectionRowRanges({
@@ -1384,6 +1428,15 @@ export async function summarizeAgendaSectionArtifacts({
     const rowWordCount = countWords(sectionRowText);
     const rowRangeLooksRich = rowWordCount >= Math.max(80, Math.floor(bodyWordCount * 0.6));
     const baseBody = (USE_ROW_RANGES && rowRangeLooksRich) ? sectionRowText : body;
+    const grossContext = buildGrossContextForRange(
+      grossChunks,
+      Number(boundary?.start),
+      Number(boundary?.end),
+      3
+    );
+    const baseBodyWithContext = grossContext
+      ? `${baseBody}\n\nGROSS_PHASE_CONTEXT:\n${grossContext}`
+      : baseBody;
 
     let subRanges = [];
     if (rr && sectionRows.length > 1) {
@@ -1456,7 +1509,10 @@ export async function summarizeAgendaSectionArtifacts({
         ? transcriptRows.slice(range.start, range.end + 1)
         : [];
       const partRowText = partRows.map((r) => `${r.display || 'Speaker'}: ${r.text}`).join('\n').trim();
-      const effectiveBody = partRows.length ? partRowText : baseBody;
+      const sectionBody = partRows.length ? partRowText : baseBody;
+      const effectiveBody = grossContext
+        ? `${sectionBody}\n\nGROSS_PHASE_CONTEXT:\n${grossContext}`
+        : sectionBody;
       const wordCount = countWords(effectiveBody);
       const sourceRows = partRows.length || sectionRowCount;
       let finalHeading = heading;

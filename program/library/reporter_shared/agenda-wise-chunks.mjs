@@ -1,5 +1,10 @@
 import fs from "node:fs";
 
+const GROSS_PASS_THRESHOLD = (() => {
+  const raw = Number(process.env.AGENDA_GROSS_PASS_THRESHOLD || 0.65);
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.65;
+})();
+
 function normalizeText(value) {
   return String(value || "")
     .normalize("NFKD")
@@ -231,7 +236,6 @@ function parseAgendaSections(agendaText) {
   function pushSection(item, title) {
     const cleanTitle = String(title || "").replace(/\s+/gu, " ").trim();
     if (!item || !cleanTitle) return;
-    if (/^(BY-LAWS|ADJOURNMENT|MATTERS POSTPONED|NOTICES OF MOTION)/iu.test(cleanTitle)) return;
     if (seen.has(item)) return;
     seen.add(item);
     sections.push({ item, title: cleanTitle });
@@ -342,7 +346,7 @@ function buildGrossWindows(paragraphs, startIndex, searchEnd, { targetWords = 18
       end > i ? buildSnippet(paragraphs[Math.min(end, i + 3)], 140) : "",
       end > i + 4 ? buildSnippet(paragraphs[end], 140) : "",
     ].filter(Boolean).join(" | ");
-    windows.push({ start: i, end, preview });
+    windows.push({ start: i, end, preview, words: count });
     i = end + 1;
   }
   if (windows.length <= maxWindows) return windows;
@@ -353,8 +357,234 @@ function buildGrossWindows(paragraphs, startIndex, searchEnd, { targetWords = 18
   return compact.slice(0, maxWindows);
 }
 
-async function ollamaPickGrossWindow({ section, startIndex, paragraphs, searchEnd, llmModel, ollamaUrl }) {
-  const windows = buildGrossWindows(paragraphs, startIndex, searchEnd);
+function overlapScore(aStart, aEnd, bStart, bEnd) {
+  const lo = Math.max(aStart, bStart);
+  const hi = Math.min(aEnd, bEnd);
+  if (hi < lo) return 0;
+  const overlap = (hi - lo) + 1;
+  const span = Math.max(1, (aEnd - aStart) + 1);
+  return overlap / span;
+}
+
+function scoreGrossCandidateForSection({ section, startIndex, candidate }) {
+  const titleNorm = normalizeText(section?.title || "");
+  const bag = `${normalizeText(candidate?.summary || "")} ${normalizeText(candidate?.preview || "")}`;
+  let lexical = 0;
+  for (const tok of tokenSet(titleNorm)) {
+    if (bag.includes(tok)) lexical += 1;
+  }
+  const lexicalScore = lexical / Math.max(3, tokenSet(titleNorm).size || 3);
+  const start = Number(candidate?.start ?? 0);
+  const end = Number(candidate?.end ?? start);
+  const distance = Math.abs(start - startIndex);
+  const distanceScore = 1 / (1 + (distance / 220));
+  const cue = cueStrength(section?.item || "", bag);
+  return (lexicalScore * 0.9) + (distanceScore * 0.25) + (cue * 0.7);
+}
+
+function selectGrossCandidatesForSection({ section, startIndex, searchEnd, grossPrepass = [], maxCandidates = 14 }) {
+  const inRange = [];
+  const nearRange = [];
+  for (const g of grossPrepass) {
+    const gs = Number(g?.start ?? 0);
+    const ge = Number(g?.end ?? gs);
+    const score = scoreGrossCandidateForSection({ section, startIndex, candidate: g });
+    const row = {
+      start: gs,
+      end: ge,
+      preview: String(g?.preview || ""),
+      summary: String(g?.summary || ""),
+      phase: String(g?.phase || ""),
+      reason: String(g?.reason || ""),
+      words: Number(g?.words || 0),
+      score,
+      range_overlap: overlapScore(gs, ge, startIndex, Math.max(startIndex, searchEnd - 1)),
+    };
+    if (row.range_overlap > 0) inRange.push(row);
+    else nearRange.push(row);
+  }
+  const byRank = (a, b) =>
+    b.range_overlap - a.range_overlap ||
+    b.score - a.score ||
+    a.start - b.start;
+  inRange.sort(byRank);
+  nearRange.sort((a, b) => b.score - a.score || a.start - b.start);
+  const chosen = [...inRange.slice(0, maxCandidates)];
+  if (chosen.length < maxCandidates) chosen.push(...nearRange.slice(0, maxCandidates - chosen.length));
+  return chosen;
+}
+
+async function ollamaSummarizeGrossWindow({ start, end, preview, llmModel, ollamaUrl }) {
+  const prompt = [
+    "Summarize this transcript gross chunk for downstream agenda alignment.",
+    "Return strict JSON only:",
+    "{\"phase\":\"short\",\"summary\":\"one sentence\",\"signals\":[\"a\",\"b\"]}",
+    "",
+    `Chunk paragraph range: ${start}..${end}`,
+    "Chunk excerpt:",
+    String(preview || "").slice(0, 1200),
+  ].join("\n");
+  const body = {
+    model: llmModel,
+    stream: false,
+    think: false,
+    options: { temperature: 0.1 },
+    messages: [
+      { role: "system", content: "You produce compact transcript phase summaries for retrieval. Output strict JSON only." },
+      { role: "user", content: prompt },
+    ],
+  };
+  const res = await fetch(ollamaUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`ollama status ${res.status}`);
+  const payload = await res.json();
+  const text = String(payload?.message?.content || "").trim();
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch {
+    const m = text.match(/\{[\s\S]*\}/u);
+    if (m) parsed = JSON.parse(m[0]);
+  }
+  const phase = String(parsed?.phase || "").replace(/\s+/gu, " ").trim();
+  const summary = String(parsed?.summary || "").replace(/\s+/gu, " ").trim();
+  const signals = Array.isArray(parsed?.signals)
+    ? parsed.signals.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 5)
+    : [];
+  if (!summary) throw new Error("missing-summary");
+  return { phase, summary, signals };
+}
+
+function parseGrossScore(value) {
+  const txt = String(value || "");
+  const m = txt.match(/FINAL_SCORE\s*:\s*([01](?:\.\d+)?)/iu);
+  if (m) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  }
+  return 0;
+}
+
+async function ollamaScoreGrossWindowSummary({ preview, summary, llmModel, ollamaUrl }) {
+  const prompt = [
+    "Score SUMMARY for semantic faithfulness to SOURCE.",
+    "Output exactly:",
+    "FEEDBACK: <short line>",
+    "FINAL_SCORE: <0.00-1.00>",
+    "",
+    "Rules:",
+    "- Penalize unsupported claims.",
+    "- Penalize truncation or vague filler.",
+    "- Reward concise, factual grounding.",
+    "",
+    "SOURCE:",
+    String(preview || "").slice(0, 1400),
+    "",
+    "SUMMARY:",
+    String(summary || "").slice(0, 500),
+  ].join("\n");
+  const body = {
+    model: llmModel,
+    stream: false,
+    think: false,
+    options: { temperature: 0.1 },
+    messages: [
+      { role: "system", content: "You are a strict semantic scorer. Output only FEEDBACK and FINAL_SCORE." },
+      { role: "user", content: prompt },
+    ],
+  };
+  const res = await fetch(ollamaUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`ollama status ${res.status}`);
+  const payload = await res.json();
+  const review = String(payload?.message?.content || "").trim();
+  const score = parseGrossScore(review);
+  return { score, review };
+}
+
+async function buildGlobalGrossPrepass({ paragraphs, llmModel, ollamaUrl, log = () => {} }) {
+  const windows = buildGrossWindows(paragraphs, 0, paragraphs.length, { targetWords: 1700, maxWindows: 28 });
+  const out = [];
+  for (let i = 0; i < windows.length; i += 1) {
+    const win = windows[i];
+    let summary = buildSnippet(win.preview, 220);
+    let phase = "";
+    let signals = [];
+    let reason = "fallback-preview";
+    let verificationScore = 0;
+    let verification = "";
+    try {
+      const llm = await ollamaSummarizeGrossWindow({
+        start: win.start,
+        end: win.end,
+        preview: win.preview,
+        llmModel,
+        ollamaUrl,
+      });
+      summary = llm.summary;
+      phase = llm.phase;
+      signals = llm.signals;
+      reason = "llm";
+      try {
+        const scored = await ollamaScoreGrossWindowSummary({
+          preview: win.preview,
+          summary,
+          llmModel,
+          ollamaUrl,
+        });
+        verificationScore = Number(scored.score || 0);
+        verification = String(scored.review || "");
+        if (verificationScore < GROSS_PASS_THRESHOLD) {
+          summary = buildSnippet(win.preview, 220);
+          phase = "";
+          signals = [];
+          reason = "verified-fallback-preview";
+        } else {
+          reason = "llm-verified";
+        }
+      } catch {
+        summary = buildSnippet(win.preview, 220);
+        phase = "";
+        signals = [];
+        reason = "verify-error-fallback-preview";
+      }
+    } catch {
+      // deterministic fallback already assigned
+    }
+    out.push({
+      index: i + 1,
+      start: win.start,
+      end: win.end,
+      words: Number(win.words || 0),
+      preview: win.preview,
+      phase,
+      summary,
+      signals,
+      verification_score: verificationScore,
+      verification,
+      reason,
+    });
+    log(`[agenda-wise][gross] atindex num ${i + 1} toindex num ${windows.length} since ${win.start} until ${win.end} method ${reason}`);
+  }
+  return out;
+}
+
+async function ollamaPickGrossWindow({ section, startIndex, paragraphs, searchEnd, llmModel, ollamaUrl, grossPrepass = [] }) {
+  const windows = grossPrepass.length
+    ? selectGrossCandidatesForSection({ section, startIndex, searchEnd, grossPrepass, maxCandidates: 14 })
+      .map((g) => ({
+        start: g.start,
+        end: g.end,
+        preview: g.preview,
+        summary: g.summary,
+        phase: g.phase,
+        reason: g.reason,
+      }))
+    : buildGrossWindows(paragraphs, startIndex, searchEnd);
   const prompt = [
     "Pick the best gross transcript window where this agenda segment likely begins.",
     "Return strict JSON only: {\"start\": <num>, \"end\": <num>, \"reason\": \"short\"}",
@@ -401,7 +631,7 @@ async function ollamaPickGrossWindow({ section, startIndex, paragraphs, searchEn
   return { start: boundedStart, end: boundedEnd, reason: String(parsed?.reason || "").slice(0, 180) };
 }
 
-async function ollamaPickParagraph({ section, startIndex, paragraphs, topCandidates, searchEnd, llmModel, ollamaUrl }) {
+async function ollamaPickParagraph({ section, startIndex, paragraphs, topCandidates, searchEnd, llmModel, ollamaUrl, grossPrepass = [] }) {
   let narrowedStart = startIndex;
   let narrowedEndExclusive = Math.min(paragraphs.length, searchEnd);
   let grossReason = "";
@@ -415,6 +645,7 @@ async function ollamaPickParagraph({ section, startIndex, paragraphs, topCandida
         searchEnd,
         llmModel,
         ollamaUrl,
+        grossPrepass,
       });
       narrowedStart = Math.max(startIndex, Math.min(searchEnd - 1, gross.start));
       narrowedEndExclusive = Math.max(narrowedStart + 1, Math.min(paragraphs.length, gross.end + 1));
@@ -627,11 +858,29 @@ function toSeriesText(chips) {
   return `${lines.join("\n")}\n`;
 }
 
+function toGrossSeriesText(chunks) {
+  const lines = ["su name gross chunks be series def"];
+  for (let i = 0; i < chunks.length; i += 1) {
+    const n = String(i + 1).padStart(3, "0");
+    const g = chunks[i] || {};
+    const since = Number(g?.start ?? 0);
+    const until = Number(g?.end ?? since);
+    const phase = String(g?.phase || "").trim();
+    const summary = String(g?.summary || "").trim();
+    const text = phase ? `${phase}: ${summary}` : summary;
+    lines.push(`su name gross chunk ${n} since num ${since} until num ${Math.max(since, until)} ob text ${JSON.stringify(text)} ya`);
+  }
+  lines.push("prah");
+  return `${lines.join("\n")}\n`;
+}
+
 export async function generateAgendaWiseArtifacts({
   plainPath,
   agendaPath,
   outputPath,
   matchPath,
+  grossJsonPath = "",
+  grossSeriesPath = "",
   useLlmRange = false,
   llmModel = "qwen3.5:9b",
   ollamaUrl = "http://localhost:11434/api/chat",
@@ -641,6 +890,7 @@ export async function generateAgendaWiseArtifacts({
   if (!paragraphs.length) throw new Error("plain transcript has no paragraphs");
   const sections = parseAgendaSections(fs.readFileSync(agendaPath, "utf8"));
   if (!sections.length) throw new Error("agenda parser found no sections");
+  const grossPrepass = await buildGlobalGrossPrepass({ paragraphs, llmModel, ollamaUrl, log });
 
   const chosen = [];
   let cursor = 0;
@@ -675,6 +925,7 @@ export async function generateAgendaWiseArtifacts({
         searchEnd,
         llmModel,
         ollamaUrl,
+        grossPrepass,
       });
       if (Number.isInteger(pick.index) && pick.index >= cursor && pick.index < searchEnd) {
         finalIndex = pick.index;
@@ -864,6 +1115,11 @@ export async function generateAgendaWiseArtifacts({
     : 0;
   const llmRefineErrors = boundaries.filter((b) => /^llm-refine-error:/iu.test(String(b?.reason || ""))).length;
   const llmRangeCount = boundaries.filter((b) => String(b?.method || "") === "llm-range").length;
+  const grossScoredCount = grossPrepass.filter((g) => Number.isFinite(Number(g?.verification_score))).length;
+  const grossVerifiedCount = grossPrepass.filter((g) => String(g?.reason || "") === "llm-verified").length;
+  const grossAvgScore = grossScoredCount
+    ? grossPrepass.reduce((sum, g) => sum + Number(g?.verification_score || 0), 0) / grossScoredCount
+    : 0;
   if (maxChipWords >= 20000) {
     throw new Error(`agenda-wise quality defective: oversized chip words=${maxChipWords}`);
   }
@@ -879,8 +1135,30 @@ export async function generateAgendaWiseArtifacts({
       `agenda-wise quality defective: llm_refine_errors=${llmRefineErrors} coverage=${coverage.toFixed(2)} boundary_coverage=${boundaryCoverage.toFixed(2)} oversized_chips=${oversizedChips}`
     );
   }
+  if (grossPrepass.length && grossScoredCount !== grossPrepass.length) {
+    throw new Error(
+      `agenda-wise quality defective: gross_verification_missing scored=${grossScoredCount} total=${grossPrepass.length}`
+    );
+  }
+  if (grossPrepass.length && grossVerifiedCount === 0) {
+    throw new Error(
+      `agenda-wise quality defective: gross_verification_absent total=${grossPrepass.length}`
+    );
+  }
 
   fs.writeFileSync(outputPath, toSeriesText(chips), "utf8");
+  if (grossSeriesPath) fs.writeFileSync(grossSeriesPath, toGrossSeriesText(grossPrepass), "utf8");
+  if (grossJsonPath) fs.writeFileSync(grossJsonPath, JSON.stringify({
+    transcript: plainPath,
+    windows: grossPrepass,
+    verification: {
+      scored_windows: grossScoredCount,
+      verified_windows: grossVerifiedCount,
+      total_windows: grossPrepass.length,
+      average_score: Number(grossAvgScore.toFixed(4)),
+      pass_threshold: GROSS_PASS_THRESHOLD,
+    },
+  }, null, 2), "utf8");
   fs.writeFileSync(matchPath, JSON.stringify({
     transcript: plainPath,
     agenda: agendaPath,
@@ -903,6 +1181,7 @@ export async function generateAgendaWiseArtifacts({
       title: s.title,
       start_paragraph: starts[i],
     })),
+    gross_prepass_count: grossPrepass.length,
     boundaries,
   }, null, 2), "utf8");
 

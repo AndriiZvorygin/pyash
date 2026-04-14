@@ -125,6 +125,21 @@ function mergeSpeakerLabelsByTime(baseRows, speakerRows, toleranceSeconds = 0.25
   return out;
 }
 
+function mergeSpeakerLabelsByIndex(baseRows, speakerRows) {
+  const out = Array.isArray(baseRows) ? baseRows.map((row) => ({ ...row })) : [];
+  const speakers = Array.isArray(speakerRows) ? speakerRows : [];
+  if (!out.length || !speakers.length) return out;
+  const limit = Math.min(out.length, speakers.length);
+  for (let i = 0; i < limit; i += 1) {
+    const name = String(speakers[i]?.speaker || "").trim();
+    if (name) {
+      out[i].speaker = name;
+      out[i].raw = `${name}: ${String(out[i].speech || "").trim()}`.trim();
+    }
+  }
+  return out;
+}
+
 function countSrtCues(text) {
   const src = String(text || "").replace(/\r\n/g, "\n");
   const m = src.match(/^\d\d:\d\d:\d\d,\d\d\d\s+-->\s+\d\d:\d\d:\d\d,\d\d\d$/gmu);
@@ -302,6 +317,24 @@ function parseWiseRanges(seriesText) {
   return ranges;
 }
 
+function parseGrossChunks(jsonText) {
+  try {
+    const obj = JSON.parse(String(jsonText || "{}"));
+    const windows = Array.isArray(obj?.windows) ? obj.windows : [];
+    return windows
+      .map((w, i) => ({
+        index: i + 1,
+        start: Number(w?.start),
+        end: Number(w?.end),
+        summary: String(w?.summary || "").trim(),
+        phase: String(w?.phase || "").trim(),
+      }))
+      .filter((w) => Number.isFinite(w.start) && Number.isFinite(w.end) && w.end >= w.start);
+  } catch {
+    return [];
+  }
+}
+
 function findRowIndexAtOrAfter(rows, targetSince) {
   for (let i = 0; i < rows.length; i += 1) {
     if ((Number(rows[i]?.since) || 0) >= targetSince) return i;
@@ -410,12 +443,38 @@ function normalizeSectionRanges(rows, ranges) {
   return out.filter((range) => range.startRow >= 0 && range.startRow < rowCount && range.endRow >= range.startRow);
 }
 
-function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, wiseRanges }) {
+function buildRangesFromGrossChunks(rows, grossChunks) {
+  const list = Array.isArray(grossChunks) ? grossChunks : [];
+  if (!Array.isArray(rows) || !rows.length || !list.length) return [];
+  const maxParagraph = list.reduce((mx, g) => Math.max(mx, Number(g?.end || 0)), 0);
+  if (!Number.isFinite(maxParagraph) || maxParagraph <= 0) return [];
+  const toRow = (p) => {
+    const ratio = Math.max(0, Math.min(1, Number(p || 0) / maxParagraph));
+    return Math.max(0, Math.min(rows.length - 1, Math.round(ratio * (rows.length - 1))));
+  };
+  const out = list.map((g, i) => {
+    const startRow = toRow(g.start);
+    const endRow = Math.max(startRow, toRow(g.end));
+    const heading = g.phase
+      ? `Gross Chunk ${i + 1} — ${g.phase}`
+      : `Gross Chunk ${i + 1}`;
+    return {
+      id: `section-gross-${i + 1}`,
+      heading,
+      summary: String(g.summary || ""),
+      startRow,
+      endRow,
+    };
+  });
+  return normalizeSectionRanges(rows, out);
+}
+
+function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, wiseRanges, grossChunks }) {
   const rows = Array.isArray(transcriptRows) ? transcriptRows : [];
   const sections = Array.isArray(sectionSummaries) ? sectionSummaries : [];
   if (!rows.length || !sections.length) return [];
   const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
-  const allowWiseRowIndex = /^(1|true|yes)$/iu.test(String(process.env.PYA_WISE_RANGE_IS_ROW_INDEX || '0'));
+  const gross = Array.isArray(grossChunks) ? grossChunks : [];
 
   const explicitRows = sections.filter((s) =>
     Number.isFinite(Number(s?.start_row)) &&
@@ -443,14 +502,24 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
   // section rendering can duplicate opening transcript lines across headings.
   // In that case, prefer a plain chronological transcript over broken anchors.
   const groundedSections = sections.filter((s) => Number(s?.source_rows || 0) > 0).length;
-  if (groundedSections === 0 && !wise.length) return [];
+  if (groundedSections === 0) {
+    const grossFallback = buildRangesFromGrossChunks(rows, gross);
+    if (grossFallback.length) return grossFallback;
+    if (!wise.length) return [];
+  }
   if (wise.length === sections.length) {
     const wiseMax = wise.reduce((mx, w) => Math.max(mx, Number(w?.until ?? w?.since ?? 0) || 0), 0);
+    const wiseMonotonic = wise.every((w, i) => {
+      if (i === 0) return true;
+      const prev = Number(wise[i - 1]?.since);
+      const curr = Number(w?.since);
+      return Number.isFinite(prev) && Number.isFinite(curr) && curr >= prev;
+    });
     const wiseLooksLikeRowIndex =
-      allowWiseRowIndex &&
       wise.length > 0 &&
       wise.every((w) => Number.isFinite(Number(w?.since)) && Number.isFinite(Number(w?.until))) &&
       wise.every((w) => Number.isInteger(Number(w?.since)) && Number.isInteger(Number(w?.until))) &&
+      wiseMonotonic &&
       wiseMax <= (rows.length + 50);
 
     const out = [];
@@ -522,6 +591,34 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
   }
 
   const rowNorm = rows.map((r) => normalizeText(r.raw || r.speech || ""));
+  const paragraphDomainMax = (() => {
+    let mx = -1;
+    for (const v of matchByItem.values()) {
+      for (const n of [v?.start_paragraph, v?.end_paragraph, v?.paragraphIndex]) {
+        const x = Number(n);
+        if (Number.isFinite(x)) mx = Math.max(mx, Math.floor(x));
+      }
+    }
+    for (const w of wise) {
+      const s = Number(w?.since);
+      const u = Number(w?.until);
+      if (Number.isFinite(s)) mx = Math.max(mx, Math.floor(s));
+      if (Number.isFinite(u)) mx = Math.max(mx, Math.floor(u));
+    }
+    return mx;
+  })();
+  const paragraphLooksDifferentSpace =
+    Number.isFinite(paragraphDomainMax) &&
+    paragraphDomainMax > (rows.length + 50);
+  const mapParagraphToRow = (paragraphIndex) => {
+    const p = Number(paragraphIndex);
+    if (!Number.isFinite(p) || p < 0) return -1;
+    if (!paragraphLooksDifferentSpace || paragraphDomainMax <= 0) {
+      return Math.max(0, Math.min(rows.length - 1, Math.floor(p)));
+    }
+    const ratio = Math.max(0, Math.min(1, p / paragraphDomainMax));
+    return Math.max(0, Math.min(rows.length - 1, Math.round(ratio * (rows.length - 1))));
+  };
   const starts = [];
 
   for (let i = 0; i < sections.length; i += 1) {
@@ -532,7 +629,7 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
     let rowIndex = -1;
     const fromParagraph = Number(m?.start_paragraph);
     if (Number.isFinite(fromParagraph) && fromParagraph >= 0) {
-      rowIndex = Math.max(0, Math.min(rows.length - 1, Math.floor(fromParagraph)));
+      rowIndex = mapParagraphToRow(fromParagraph);
     } else {
       const snippet = normalizeText(String(m?.snippet || "").slice(0, 220));
       if (snippet) {
@@ -547,7 +644,7 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
     if (rowIndex < 0) {
       const fromParagraphIndex = Number(m?.paragraphIndex);
       if (Number.isFinite(fromParagraphIndex) && fromParagraphIndex >= 0) {
-        rowIndex = Math.max(0, Math.min(rows.length - 1, Math.floor(fromParagraphIndex)));
+        rowIndex = mapParagraphToRow(fromParagraphIndex);
       }
     }
     if (rowIndex < 0) {
@@ -598,6 +695,40 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
     });
   }
   return normalizeSectionRanges(rows, out);
+}
+
+function sectionDurationSeconds(rows, range) {
+  const start = Math.max(0, Math.floor(Number(range?.startRow) || 0));
+  const end = Math.max(start, Math.floor(Number(range?.endRow) || start));
+  const first = rows[start];
+  const last = rows[end];
+  const since = Number(first?.since);
+  const until = Number(last?.until ?? last?.since);
+  if (!Number.isFinite(since) || !Number.isFinite(until) || until < since) return 0;
+  return until - since;
+}
+
+function assertNoLongUnsummarizedSections(rows, ranges, maxSeconds = 900) {
+  const violations = [];
+  for (const r of Array.isArray(ranges) ? ranges : []) {
+    const summary = String(r?.summary || "").trim();
+    if (summary) continue;
+    const dur = sectionDurationSeconds(rows, r);
+    if (dur > maxSeconds) {
+      violations.push({
+        heading: String(r?.heading || ""),
+        duration_seconds: Math.round(dur),
+        start_row: Number(r?.startRow),
+        end_row: Number(r?.endRow),
+      });
+    }
+  }
+  if (violations.length) {
+    const first = violations[0];
+    throw new Error(
+      `[section-summary-contract] missing summary for long section (> ${maxSeconds}s): heading="${first.heading}" duration=${first.duration_seconds}s rows=${first.start_row}..${first.end_row}`
+    );
+  }
 }
 
 function buildPage({
@@ -861,14 +992,20 @@ function main() {
   let transcriptRows = parseSrt(srtText, { expectSpeaker });
   if (!transcriptRows.length) throw new Error(`no transcript rows parsed from ${srtPath}`);
 
-  // Prefer canonical speaker sentence JSON rows when available, because they preserve
-  // diarization-aligned row indexing used by agenda/section alignment stages.
+  // Keep canonical cue timing from speaker sentence SRT and only merge speaker labels
+  // from JSON, so transcript timing cannot drift from the SRT timeline.
   const speakerRowsJsonPath = pickFile(transcriptDir, [/\.normalized\.sentences\.speaker\.sentences\.json$/u, /\.speaker\.sentences\.json$/u]);
   if (speakerRowsJsonPath) {
     const jsonRows = parseSpeakerRowsJson(fs.readFileSync(speakerRowsJsonPath, "utf8"));
     if (jsonRows.length >= Math.max(25, Math.floor(transcriptRows.length * 0.6))) {
-      transcriptRows = jsonRows;
-      process.stdout.write(`[transcript-html] using speaker rows json: ${speakerRowsJsonPath} (${jsonRows.length} rows)\n`);
+      const mergeByIndex = Math.abs(jsonRows.length - transcriptRows.length) <= 3;
+      if (mergeByIndex) {
+        transcriptRows = mergeSpeakerLabelsByIndex(transcriptRows, jsonRows);
+        process.stdout.write(`[transcript-html] merged speaker labels by index from json: ${speakerRowsJsonPath} (${jsonRows.length} rows)\n`);
+      } else {
+        transcriptRows = mergeSpeakerLabelsByTime(transcriptRows, jsonRows, 0.35);
+        process.stdout.write(`[transcript-html] merged speaker labels by time from json: ${speakerRowsJsonPath} (${jsonRows.length} rows)\n`);
+      }
     }
   }
 
@@ -880,15 +1017,20 @@ function main() {
   if (fallbackSrtPath && fallbackSrtPath !== srtPath) {
     const fallbackText = fs.readFileSync(fallbackSrtPath, "utf8");
     const fallbackCueCount = countSrtCues(fallbackText);
-    if (fallbackCueCount >= 50 && transcriptRows.length < Math.floor(fallbackCueCount * 0.5)) {
+    const fallbackRows = parseSrt(fallbackText, { expectSpeaker: false });
+    const currentEnd = Number(transcriptRows[transcriptRows.length - 1]?.until || 0);
+    const fallbackEnd = Number(fallbackRows[fallbackRows.length - 1]?.until || 0);
+    const looksTruncatedByCount = fallbackCueCount >= 50 && transcriptRows.length < Math.floor(fallbackCueCount * 0.5);
+    const looksTruncatedByEndTime = fallbackCueCount >= 50 && fallbackEnd > 0 && (fallbackEnd - currentEnd) > 30;
+    if (looksTruncatedByCount || looksTruncatedByEndTime) {
       const speakerRows = transcriptRows;
       srtPath = fallbackSrtPath;
       srtText = fallbackText;
       expectSpeaker = false;
-      const baseRows = parseSrt(srtText, { expectSpeaker });
+      const baseRows = fallbackRows.length ? fallbackRows : parseSrt(srtText, { expectSpeaker });
       transcriptRows = mergeSpeakerLabelsByTime(baseRows, speakerRows, 0.35);
       const labeled = transcriptRows.filter((r) => String(r.speaker || "").trim()).length;
-      process.stdout.write(`[transcript-html] warn: speaker srt looks truncated; merged labels onto fallback srt (${labeled}/${transcriptRows.length}) from ${srtPath}\n`);
+      process.stdout.write(`[transcript-html] warn: speaker srt timeline looks truncated; merged labels onto fallback srt (${labeled}/${transcriptRows.length}) from ${srtPath}\n`);
     }
   }
 
@@ -896,6 +1038,7 @@ function main() {
   const agendaSummaryJsonPath = pickFile(transcriptDir, [/\.agenda-summary\.json$/u]);
   const agendaMatchesPath = pickFile(transcriptDir, [/\.agenda\.matches\.json$/u]);
   const agendaWiseSeriesPath = pickFile(transcriptDir, [/\.agenda-wise\.series\.pya$/u]);
+  const agendaGrossChunksPath = pickFile(transcriptDir, [/\.agenda\.gross-chunks\.json$/u]);
   const meetingSummaryPath = pickFile(transcriptDir, [/\.meeting-summary\.md$/u]);
   const agendaSummary = agendaSummaryPath ? fs.readFileSync(agendaSummaryPath, "utf8") : "";
   let agendaSummaryJson = {};
@@ -910,6 +1053,9 @@ function main() {
   if (agendaWiseSeriesPath) {
     try { wiseRanges = parseWiseRanges(fs.readFileSync(agendaWiseSeriesPath, "utf8")); } catch {}
   }
+  const grossChunks = agendaGrossChunksPath
+    ? parseGrossChunks(fs.readFileSync(agendaGrossChunksPath, "utf8"))
+    : [];
   const meetingSummary = meetingSummaryPath ? fs.readFileSync(meetingSummaryPath, "utf8") : "";
   const meetingDir = path.dirname(transcriptDir);
   const meetingJsonPath = path.join(meetingDir, "meeting.json");
@@ -961,7 +1107,13 @@ function main() {
     sectionSummaries: agendaSummaryJson?.sections,
     agendaMatches,
     wiseRanges,
+    grossChunks,
   });
+  assertNoLongUnsummarizedSections(
+    transcriptRows,
+    transcriptSections,
+    Number(process.env.PYA_SECTION_SUMMARY_REQUIRED_MAX_SECONDS || 900)
+  );
   if (String(process.env.PYA_TRANSCRIPT_DEBUG || "").trim() === "1") {
     const summedRows = transcriptSections.reduce(
       (sum, s) => sum + Math.max(0, (Number(s?.endRow) - Number(s?.startRow) + 1)),
