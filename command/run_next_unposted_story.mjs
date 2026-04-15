@@ -204,13 +204,15 @@ function parsePostedFromResponse(respPath) {
     const postUrl = String(json?.post_url || '').trim();
     const transcriptUrl = String(json?.transcript_url || '').trim();
     const err = String(json?.error || '').trim();
+    const transcriptPathLike = /\/transcripts\//iu.test(transcriptUrl);
     return {
       posted: Boolean((postUrl || transcriptUrl) && !err),
+      posted_transcript: Boolean(transcriptPathLike && !err),
       post_url: postUrl,
       transcript_url: transcriptUrl,
     };
   } catch {
-    return { posted: false, post_url: '', transcript_url: '' };
+    return { posted: false, posted_transcript: false, post_url: '', transcript_url: '' };
   }
 }
 
@@ -224,12 +226,13 @@ function parsePostedFromAgendaResponse(respPath) {
     const err = String(json?.error || '').trim();
     return {
       posted: Boolean((postUrl || agendaUrl) && !err),
+      posted_agenda: Boolean(/\/agendas\//iu.test(agendaUrl) && !err),
       post_url: postUrl,
       agenda_url: agendaUrl,
       transcript_url: transcriptUrl,
     };
   } catch {
-    return { posted: false, post_url: '', agenda_url: '', transcript_url: '' };
+    return { posted: false, posted_agenda: false, post_url: '', agenda_url: '', transcript_url: '' };
   }
 }
 
@@ -273,7 +276,7 @@ function listPublishResponsePaths(transcriptDir, basePrefix) {
 
 function parsePostedFromResponses(transcriptDir, basePrefix) {
   const paths = listPublishResponsePaths(transcriptDir, basePrefix);
-  let last = { posted: false, post_url: '', transcript_url: '' };
+  let last = { posted: false, posted_transcript: false, post_url: '', transcript_url: '' };
   let lastPath = '';
   for (const p of paths) {
     const parsed = parsePostedFromResponse(p);
@@ -282,6 +285,10 @@ function parsePostedFromResponses(transcriptDir, basePrefix) {
     lastPath = p;
   }
   return { ...last, response_path: lastPath };
+}
+
+function normalizeComparableUrl(value) {
+  return String(value || "").trim().replace(/\/+$/u, "").toLowerCase();
 }
 
 function readPayloadContentType(payloadPath) {
@@ -341,8 +348,15 @@ function meetingState(row, meetingsDir, basePrefix) {
   const postedInfo = parsePostedFromResponses(transcriptDir, basePrefix);
   const agendaResponsePath = findAgendaPublishResponsePath(transcriptDir, basePrefix);
   const agendaPostedInfo = parsePostedFromAgendaResponse(agendaResponsePath);
+  const sameDiscussionPostForAgendaAndTranscript =
+    normalizeComparableUrl(postedInfo.post_url)
+    && normalizeComparableUrl(postedInfo.post_url) === normalizeComparableUrl(agendaPostedInfo.post_url);
   const localKinds = parseLocalPostedKinds(meetingDir);
-  const postedTranscriptByMeetingPublish = postedInfo.posted && payloadContentType !== "agenda";
+  const postedTranscriptByMeetingPublish = Boolean(postedInfo.posted_transcript) && !sameDiscussionPostForAgendaAndTranscript;
+  const postedAgendaByLegacyMeetingPublish = Boolean(postedInfo.posted && payloadContentType === "agenda");
+  const hasResponseArtifacts = Boolean((postedInfo.response_path || '').trim() || agendaResponsePath);
+  const postedAgendaFromResult = !hasResponseArtifacts && localKinds.posted_agenda;
+  const postedTranscriptFromResult = !hasResponseArtifacts && localKinds.posted_transcript;
   const payload = row.payload || {};
   const agendaCount = Array.isArray(payload.agenda) ? payload.agenda.length : 0;
   const agendaCoverCount = Array.isArray(payload.agenda_cover) ? payload.agenda_cover.length : 0;
@@ -361,15 +375,16 @@ function meetingState(row, meetingsDir, basePrefix) {
     posted: postedTranscriptByMeetingPublish || agendaPostedInfo.posted,
     posted_local: postedTranscriptByMeetingPublish,
     posted_local_any: postedTranscriptByMeetingPublish || agendaPostedInfo.posted,
-    posted_local_agenda: localKinds.posted_agenda || agendaPostedInfo.posted,
+    posted_local_agenda: postedAgendaFromResult || agendaPostedInfo.posted || postedAgendaByLegacyMeetingPublish,
     // Treat successful transcript publish responses as canonical local transcript state.
     // next-story.result.json may be missing or stale when runs were done via direct commands.
-    posted_local_transcript: localKinds.posted_transcript || postedTranscriptByMeetingPublish,
-    posted_agenda: localKinds.posted_agenda || agendaPostedInfo.posted,
-    posted_transcript: localKinds.posted_transcript || postedTranscriptByMeetingPublish,
+    posted_local_transcript: postedTranscriptFromResult || postedTranscriptByMeetingPublish,
+    posted_agenda: postedAgendaFromResult || agendaPostedInfo.posted || postedAgendaByLegacyMeetingPublish,
+    posted_transcript: postedTranscriptFromResult || postedTranscriptByMeetingPublish,
     posted_remote: false,
     posted_remote_agenda: false,
     posted_remote_transcript: false,
+    publish_post_collision: Boolean(sameDiscussionPostForAgendaAndTranscript),
     post_url: postedInfo.post_url || agendaPostedInfo.post_url,
     transcript_url: postedInfo.transcript_url,
     has_agenda: agendaCount > 0,
