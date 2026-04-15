@@ -241,6 +241,10 @@ test("draw promptify instruction anchors literal named subjects, especially huma
     /If current_cut names a specific person, people, species, object, place, or era, depict that exact entity\./u
   );
   assert.match(
+    briefSource,
+    /If people are visible, sentence three must include concrete appropriate clothing worn by visible people; keep clothing description non-sexual and suitable for mainstream platforms\./u
+  );
+  assert.match(
     musicSource,
     /If current_cut names a specific person, people, species, animal, object, place, or era, depict that literal subject\./u
   );
