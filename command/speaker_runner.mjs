@@ -264,7 +264,10 @@ export class SpeakerRunner {
     voicesDir = this.defaultVoicesDir,
     sameSpeakerThreshold = null,
     knownSpeakerThreshold = null,
-    clipSeconds = null
+    clipSeconds = null,
+    edgeCheckSeconds = null,
+    edgeMinDurationSeconds = null,
+    edgeMinSimilarity = null
   } = {}) {
     return this.request("identify", {
       audio,
@@ -273,15 +276,29 @@ export class SpeakerRunner {
       ...(isFiniteProvidedNumber(sameSpeakerThreshold) ? { same_speaker_threshold: Number(sameSpeakerThreshold) } : {}),
       ...(isFiniteProvidedNumber(knownSpeakerThreshold) ? { known_speaker_threshold: Number(knownSpeakerThreshold) } : {}),
       ...(isFiniteProvidedNumber(clipSeconds) ? { clip_seconds: Number(clipSeconds) } : {}),
+      ...(isFiniteProvidedNumber(edgeCheckSeconds) ? { edge_check_seconds: Number(edgeCheckSeconds) } : {}),
+      ...(isFiniteProvidedNumber(edgeMinDurationSeconds) ? { edge_min_duration_seconds: Number(edgeMinDurationSeconds) } : {}),
+      ...(isFiniteProvidedNumber(edgeMinSimilarity) ? { edge_min_similarity: Number(edgeMinSimilarity) } : {}),
     });
   }
 
-  async enrol({ audio, name, voicesDir = this.defaultVoicesDir, clipSeconds = null } = {}) {
+  async enrol({
+    audio,
+    name,
+    voicesDir = this.defaultVoicesDir,
+    clipSeconds = null,
+    edgeCheckSeconds = null,
+    edgeMinDurationSeconds = null,
+    edgeMinSimilarity = null
+  } = {}) {
     return this.request("enrol", {
       audio,
       name,
       voices_dir: voicesDir,
       ...(isFiniteProvidedNumber(clipSeconds) ? { clip_seconds: Number(clipSeconds) } : {}),
+      ...(isFiniteProvidedNumber(edgeCheckSeconds) ? { edge_check_seconds: Number(edgeCheckSeconds) } : {}),
+      ...(isFiniteProvidedNumber(edgeMinDurationSeconds) ? { edge_min_duration_seconds: Number(edgeMinDurationSeconds) } : {}),
+      ...(isFiniteProvidedNumber(edgeMinSimilarity) ? { edge_min_similarity: Number(edgeMinSimilarity) } : {}),
     });
   }
 

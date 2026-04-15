@@ -60,15 +60,20 @@ Payload:
 - `voices_dir` (optional, default `./world/voices`)
 - `same_speaker_threshold` (optional, default `0.72`)
 - `known_speaker_threshold` (optional, default `0.68`)
+- `edge_check_seconds` (optional, default `3.0`)
+- `edge_min_duration_seconds` (optional, default `6.0`)
+- `edge_min_similarity` (optional, default `0.58`)
 
 Behavior:
 1. Embed current slice with SpeechBrain ECAPA.
-2. If `prev_speaker` exists, compare first.
-3. If prev similarity >= same-speaker threshold, reuse `prev_speaker`.
-4. Else compare against all enrolled centroids in `voices_dir`.
-5. If best enrolled similarity >= known-speaker threshold, assign known speaker.
-6. Else create new `speaker_NNN` using `voices_dir/index.pya` `next_speaker_id`.
-7. When a known/prev speaker is accepted, update centroid and `sample_count`.
+2. Run a sample-integrity edge check (head vs tail embedding similarity) before persisting updates.
+3. If edge similarity is below threshold, do not create a new speaker and do not update centroids from that sample.
+4. If `prev_speaker` exists, compare first.
+5. If prev similarity >= same-speaker threshold, reuse `prev_speaker`.
+6. Else compare against all enrolled centroids in `voices_dir`.
+7. If best enrolled similarity >= known-speaker threshold, assign known speaker.
+8. Else create new `speaker_NNN` using `voices_dir/index.pya` `next_speaker_id`.
+9. When a known/prev speaker is accepted and integrity check passed, update centroid and `sample_count`.
 
 ### `enrol`
 
@@ -76,10 +81,14 @@ Payload:
 - `audio` (required): WAV path
 - `name` (required): speaker key/name (sanitized to `[A-Za-z0-9_-]`)
 - `voices_dir` (optional)
+- `edge_check_seconds` (optional, default `3.0`)
+- `edge_min_duration_seconds` (optional, default `6.0`)
+- `edge_min_similarity` (optional, default `0.58`)
 
 Behavior:
 - If speaker exists, update centroid and metadata.
 - If speaker does not exist, create `.npy` + `.pya` sidecar.
+- If sample-integrity edge check fails, reject enrol and do not persist.
 
 ### `rename`
 
