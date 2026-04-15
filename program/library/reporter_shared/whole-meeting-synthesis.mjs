@@ -15,6 +15,10 @@ const MODEL = process.env.MEETING_SUMMARY_MODEL
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = 0.8;
 const SUMMARY_TIME_MODE = String(process.env.AGENDA_SUMMARY_TIME_MODE || 'standard').trim().toLowerCase();
+const WHOLE_MEETING_SOURCE_MAX_BYTES = Number.parseInt(
+  String(process.env.WHOLE_MEETING_SOURCE_MAX_BYTES || '120000'),
+  10,
+);
 
 function usage() {
   return [
@@ -448,7 +452,10 @@ function deriveMeetingContext(transcriptDir) {
 }
 
 async function summarizeWholeMeeting({ summaryJsonObj, focus, meetingDateIso, meetingDateLong, bodyLabel, jurisdiction, rosterText }) {
-  const sourceJson = abridgeUtf8(JSON.stringify(summaryJsonObj, null, 2), 24000);
+  const sourceBudget = Number.isFinite(WHOLE_MEETING_SOURCE_MAX_BYTES) && WHOLE_MEETING_SOURCE_MAX_BYTES > 0
+    ? WHOLE_MEETING_SOURCE_MAX_BYTES
+    : 120000;
+  const sourceJson = abridgeUtf8(JSON.stringify(summaryJsonObj, null, 2), sourceBudget);
   const rosterRoles = parseRosterRoles(rosterText);
   let feedback = '';
   let bestText = '';
