@@ -674,7 +674,9 @@ async function runMain() {
       env[`${map.envPrefix}_PREP_FORCE`] = "1";
       env[`${map.envPrefix}_PIPELINE_SKIP_FULL`] = "1";
     } else if (stage === "full") {
-      env[`${map.envPrefix}_PIPELINE_FORCE`] = "1";
+      // Keep full-stage reruns checkpoint-aware: rerun downstream stages that
+      // are stale according to dependency mtimes, but do not force a full
+      // transcribe rebuild unless caller explicitly passes --force full.
       env[`${map.envPrefix}_PIPELINE_SKIP_PREP`] = "1";
     } else if (stage === "image") {
       env[`${map.envPrefix}_PIPELINE_SKIP_PREP`] = "1";
