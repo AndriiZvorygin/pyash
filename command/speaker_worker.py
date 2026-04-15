@@ -48,6 +48,7 @@ DEFAULT_TEMP_DIR = "./world/temporary/speaker"
 DEFAULT_CLIP_SECONDS = 10.0
 DEFAULT_SAME_SPEAKER_THRESHOLD = 0.72
 DEFAULT_KNOWN_SPEAKER_THRESHOLD = 0.68
+DEFAULT_MERGE_GUARD_THRESHOLD = 0.80
 DEFAULT_EDGE_CHECK_SECONDS = 3.0
 DEFAULT_EDGE_MIN_DURATION_SECONDS = 6.0
 DEFAULT_EDGE_MIN_SIMILARITY = 0.58
@@ -450,6 +451,7 @@ class SpeakerWorker:
         root = self._resolve_voices_dir(payload.get("voices_dir") or payload.get("voicesDir"))
         same_thr = float(payload.get("same_speaker_threshold", DEFAULT_SAME_SPEAKER_THRESHOLD))
         known_thr = float(payload.get("known_speaker_threshold", DEFAULT_KNOWN_SPEAKER_THRESHOLD))
+        merge_guard_thr = float(payload.get("merge_guard_threshold", DEFAULT_MERGE_GUARD_THRESHOLD))
         clip_seconds = float(payload.get("clip_seconds", DEFAULT_CLIP_SECONDS))
         edge_check_seconds = float(payload.get("edge_check_seconds", DEFAULT_EDGE_CHECK_SECONDS))
         edge_min_duration_seconds = float(payload.get("edge_min_duration_seconds", DEFAULT_EDGE_MIN_DURATION_SECONDS))
@@ -491,13 +493,18 @@ class SpeakerWorker:
                 best_sim = score
                 best_key = key
 
-        if best_key and best_sim >= known_thr:
+        forced_merge = bool(best_key and best_sim >= merge_guard_thr)
+        if best_key and (best_sim >= known_thr or forced_merge):
             meta = self._update_centroid(root, best_key, emb) if allow_persist else dict(records[best_key].metadata or {})
             return {
                 "speaker": best_key,
-                "matched": "known" if allow_persist else "known_guard",
+                "matched": (
+                    "known_merge_guard"
+                    if forced_merge and allow_persist
+                    else ("known" if allow_persist else "known_guard")
+                ),
                 "similarity": best_sim,
-                "threshold": known_thr,
+                "threshold": merge_guard_thr if forced_merge else known_thr,
                 "sample_count": int(meta.get("sample_count", 1) or 1),
                 "integrity": {
                     "accepted": bool(integrity.accepted),

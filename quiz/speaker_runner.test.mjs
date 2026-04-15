@@ -54,12 +54,14 @@ test("speaker runner identify forwards edge guard options when provided", async 
   await runner.identify({
     audio: "/tmp/a.wav",
     voicesDir: "./world/voices",
+    mergeGuardThreshold: 0.8,
     edgeCheckSeconds: 2.5,
     edgeMinDurationSeconds: 5.5,
     edgeMinSimilarity: 0.61,
   });
 
   assert.equal(captured?.command, "identify");
+  assert.equal(captured?.payload?.merge_guard_threshold, 0.8);
   assert.equal(captured?.payload?.edge_check_seconds, 2.5);
   assert.equal(captured?.payload?.edge_min_duration_seconds, 5.5);
   assert.equal(captured?.payload?.edge_min_similarity, 0.61);

@@ -190,6 +190,11 @@ export async function speakerIdentity(sentence, { remember: rememberFn = remembe
     "known speaker threshold",
     "knownThreshold"
   ]));
+  const mergeGuardThreshold = resolveNumericFromMapEntry(optionEntry(optionsMap, [
+    "mergeGuardThreshold",
+    "merge_guard_threshold",
+    "merge guard threshold"
+  ]));
   const clipSeconds = resolveNumericFromMapEntry(optionEntry(optionsMap, [
     "clipSeconds",
     "clip_seconds",
@@ -227,6 +232,7 @@ export async function speakerIdentity(sentence, { remember: rememberFn = remembe
         ...(prevSpeaker ? { prev_speaker: prevSpeaker } : {}),
         ...(Number.isFinite(Number(sameSpeakerThreshold)) ? { same_speaker_threshold: Number(sameSpeakerThreshold) } : {}),
         ...(Number.isFinite(Number(knownSpeakerThreshold)) ? { known_speaker_threshold: Number(knownSpeakerThreshold) } : {}),
+        ...(Number.isFinite(Number(mergeGuardThreshold)) ? { merge_guard_threshold: Number(mergeGuardThreshold) } : {}),
         ...(Number.isFinite(Number(clipSeconds)) ? { clip_seconds: Number(clipSeconds) } : {}),
         ...(Number.isFinite(Number(edgeCheckSeconds)) ? { edge_check_seconds: Number(edgeCheckSeconds) } : {}),
         ...(Number.isFinite(Number(edgeMinDurationSeconds)) ? { edge_min_duration_seconds: Number(edgeMinDurationSeconds) } : {}),
@@ -261,6 +267,7 @@ export async function speakerIdentity(sentence, { remember: rememberFn = remembe
           prevSpeaker,
           sameSpeakerThreshold,
           knownSpeakerThreshold,
+          mergeGuardThreshold,
           clipSeconds,
           edgeCheckSeconds,
           edgeMinDurationSeconds,

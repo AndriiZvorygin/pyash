@@ -36,6 +36,7 @@ su name speaker identify options be map def
 su name prev_speaker ob text "speaker_001" ya
 su name same_speaker_threshold ob num 0.74 ya
 su name known_speaker_threshold ob num 0.69 ya
+su name merge_guard_threshold ob num 0.80 ya
 su name clip_seconds ob num 10 ya
 prah
 su name speaker stage fromstate wo audio from filename source audio with name speaker identify options to name text speaker name be identify do
@@ -71,7 +72,8 @@ For standard identify calls:
 2. if above same-speaker threshold, reuse previous speaker,
 3. else compare against enrolled speakers in `world/voices/`,
 4. if best known speaker exceeds known-speaker threshold, assign known speaker,
-5. else allocate new `speaker_NNN`.
+5. else if best known speaker exceeds merge-guard threshold (default `0.80`), force known reuse (do not create a new speaker),
+6. else allocate new `speaker_NNN`.
 
 When a known speaker is accepted:
 - update centroid + metadata sample count.
@@ -83,6 +85,16 @@ Minimum stable output for `to name text`:
 
 Extended diagnostics (optional implementation detail):
 - similarity, matched mode (`prev`, `known`, `new`), threshold, sample count.
+
+## 7. Auto-merge cleanup for existing voices
+
+Use:
+
+```bash
+node command/auto_merge_high_similarity_voices.mjs world/voices --threshold 0.8 --apply
+```
+
+This finds high-similarity speaker groups and merges them into one canonical speaker per group.
 
 ## 6. Resource lifecycle
 

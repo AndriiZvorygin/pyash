@@ -60,6 +60,7 @@ Payload:
 - `voices_dir` (optional, default `./world/voices`)
 - `same_speaker_threshold` (optional, default `0.72`)
 - `known_speaker_threshold` (optional, default `0.68`)
+- `merge_guard_threshold` (optional, default `0.80`)
 - `edge_check_seconds` (optional, default `3.0`)
 - `edge_min_duration_seconds` (optional, default `6.0`)
 - `edge_min_similarity` (optional, default `0.58`)
@@ -72,8 +73,9 @@ Behavior:
 5. If prev similarity >= same-speaker threshold, reuse `prev_speaker`.
 6. Else compare against all enrolled centroids in `voices_dir`.
 7. If best enrolled similarity >= known-speaker threshold, assign known speaker.
-8. Else create new `speaker_NNN` using `voices_dir/index.pya` `next_speaker_id`.
-9. When a known/prev speaker is accepted and integrity check passed, update centroid and `sample_count`.
+8. Else if best enrolled similarity >= merge-guard threshold, force known-speaker reuse (no new speaker mint).
+9. Else create new `speaker_NNN` using `voices_dir/index.pya` `next_speaker_id`.
+10. When a known/prev speaker is accepted and integrity check passed, update centroid and `sample_count`.
 
 ### `enrol`
 
