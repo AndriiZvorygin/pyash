@@ -48,6 +48,9 @@ DEFAULT_TEMP_DIR = "./world/temporary/speaker"
 DEFAULT_CLIP_SECONDS = 10.0
 DEFAULT_SAME_SPEAKER_THRESHOLD = 0.72
 DEFAULT_KNOWN_SPEAKER_THRESHOLD = 0.68
+DEFAULT_EDGE_CHECK_SECONDS = 3.0
+DEFAULT_EDGE_MIN_DURATION_SECONDS = 6.0
+DEFAULT_EDGE_MIN_SIMILARITY = 0.58
 
 
 @dataclass
@@ -55,6 +58,13 @@ class SpeakerRecord:
     key: str
     embedding: np.ndarray
     metadata: Dict
+
+
+@dataclass
+class SampleIntegrity:
+    accepted: bool
+    edge_similarity: float
+    reason: str
 
 
 def utc_now_iso() -> str:
@@ -255,31 +265,71 @@ class SpeakerWorker:
         )
 
     def _embed_audio(self, audio: str, req_id: str, clip_seconds: float = DEFAULT_CLIP_SECONDS) -> np.ndarray:
+        wav = self._load_audio_tensor(audio, req_id)
+        return self._embed_wav_tensor(wav, clip_seconds=clip_seconds, segment="head")
+
+    def _load_audio_tensor(self, audio: str, req_id: str):
         self._assert_wav(audio)
         self._load_model()
         staged = self._stage_audio(audio, req_id)
         try:
-            emb = None
-            if hasattr(self.model, "encode_batch"):
-                wav = self._load_wav_tensor(str(staged), target_sample_rate=16000)
-                clip_samples = int(max(0.0, float(clip_seconds)) * 16000.0)
-                if clip_samples > 0 and wav.shape[-1] > clip_samples:
-                    wav = wav[:clip_samples]
-                wav = wav.unsqueeze(0)
-                emb = self.model.encode_batch(wav, normalize=False)
-            elif hasattr(self.model, "encode_file"):
-                emb = self.model.encode_file(str(staged))
-            if emb is None:
-                raise RuntimeError("embedding failed")
-            arr = emb.detach().to("cpu").numpy().astype(np.float32).reshape(-1)
-            if arr.size == 0:
-                raise RuntimeError("empty embedding")
-            return arr
+            return self._load_wav_tensor(str(staged), target_sample_rate=16000)
         finally:
             try:
                 staged.unlink(missing_ok=True)
             except Exception:
                 pass
+
+    def _embed_wav_tensor(self, wav, clip_seconds: float = DEFAULT_CLIP_SECONDS, segment: str = "head") -> np.ndarray:
+        if torch is None:
+            raise RuntimeError("torch unavailable for embedding")
+        if wav is None or wav.numel() <= 0:
+            raise RuntimeError("embedding failed: wav empty")
+        emb = None
+        segment_wav = wav
+        clip_samples = int(max(0.0, float(clip_seconds)) * 16000.0)
+        if clip_samples > 0 and wav.shape[-1] > clip_samples:
+            if segment == "tail":
+                segment_wav = wav[-clip_samples:]
+            else:
+                segment_wav = wav[:clip_samples]
+        segment_wav = segment_wav.unsqueeze(0)
+        if hasattr(self.model, "encode_batch"):
+            emb = self.model.encode_batch(segment_wav, normalize=False)
+        elif hasattr(self.model, "encode_file"):
+            raise RuntimeError("embedding failed: encode_file path mode unsupported for segment embedding")
+        if emb is None:
+            raise RuntimeError("embedding failed")
+        arr = emb.detach().to("cpu").numpy().astype(np.float32).reshape(-1)
+        if arr.size == 0:
+            raise RuntimeError("empty embedding")
+        return arr
+
+    def _assess_sample_integrity(
+        self,
+        wav,
+        edge_check_seconds: float = DEFAULT_EDGE_CHECK_SECONDS,
+        edge_min_duration_seconds: float = DEFAULT_EDGE_MIN_DURATION_SECONDS,
+        edge_min_similarity: float = DEFAULT_EDGE_MIN_SIMILARITY,
+    ) -> SampleIntegrity:
+        if wav is None or wav.numel() <= 0:
+            return SampleIntegrity(accepted=False, edge_similarity=-1.0, reason="wav empty")
+
+        sample_rate = 16000.0
+        duration_seconds = float(wav.shape[-1]) / sample_rate
+        if duration_seconds < max(0.0, float(edge_min_duration_seconds)):
+            return SampleIntegrity(accepted=True, edge_similarity=1.0, reason="short_clip_skip")
+
+        head = self._embed_wav_tensor(wav, clip_seconds=edge_check_seconds, segment="head")
+        tail = self._embed_wav_tensor(wav, clip_seconds=edge_check_seconds, segment="tail")
+        edge_similarity = cosine_similarity(head, tail)
+        if edge_similarity >= float(edge_min_similarity):
+            return SampleIntegrity(accepted=True, edge_similarity=edge_similarity, reason="ok")
+        return SampleIntegrity(
+            accepted=False,
+            edge_similarity=edge_similarity,
+            reason=f"mixed_or_noisy_edges edge_similarity={edge_similarity:.3f} threshold={float(edge_min_similarity):.3f}",
+        )
 
     @staticmethod
     def _load_wav_tensor(path: str, target_sample_rate: int = 16000):
@@ -401,20 +451,36 @@ class SpeakerWorker:
         same_thr = float(payload.get("same_speaker_threshold", DEFAULT_SAME_SPEAKER_THRESHOLD))
         known_thr = float(payload.get("known_speaker_threshold", DEFAULT_KNOWN_SPEAKER_THRESHOLD))
         clip_seconds = float(payload.get("clip_seconds", DEFAULT_CLIP_SECONDS))
+        edge_check_seconds = float(payload.get("edge_check_seconds", DEFAULT_EDGE_CHECK_SECONDS))
+        edge_min_duration_seconds = float(payload.get("edge_min_duration_seconds", DEFAULT_EDGE_MIN_DURATION_SECONDS))
+        edge_min_similarity = float(payload.get("edge_min_similarity", DEFAULT_EDGE_MIN_SIMILARITY))
 
-        emb = self._embed_audio(audio, req_id, clip_seconds=clip_seconds)
+        wav = self._load_audio_tensor(audio, req_id)
+        emb = self._embed_wav_tensor(wav, clip_seconds=clip_seconds, segment="head")
         records = self._list_speakers(root)
+        integrity = self._assess_sample_integrity(
+            wav,
+            edge_check_seconds=edge_check_seconds,
+            edge_min_duration_seconds=edge_min_duration_seconds,
+            edge_min_similarity=edge_min_similarity,
+        )
+        allow_persist = integrity.accepted
 
         if prev and prev in records:
             sim_prev = cosine_similarity(emb, records[prev].embedding)
             if sim_prev >= same_thr:
-                meta = self._update_centroid(root, prev, emb)
+                meta = self._update_centroid(root, prev, emb) if allow_persist else dict(records[prev].metadata or {})
                 return {
                     "speaker": prev,
-                    "matched": "prev",
+                    "matched": "prev" if allow_persist else "prev_guard",
                     "similarity": sim_prev,
                     "threshold": same_thr,
-                    "sample_count": int(meta.get("sample_count", 1)),
+                    "sample_count": int(meta.get("sample_count", 1) or 1),
+                    "integrity": {
+                        "accepted": bool(integrity.accepted),
+                        "edge_similarity": float(integrity.edge_similarity),
+                        "reason": integrity.reason,
+                    },
                 }
 
         best_key = None
@@ -426,14 +492,36 @@ class SpeakerWorker:
                 best_key = key
 
         if best_key and best_sim >= known_thr:
-            meta = self._update_centroid(root, best_key, emb)
+            meta = self._update_centroid(root, best_key, emb) if allow_persist else dict(records[best_key].metadata or {})
             return {
                 "speaker": best_key,
-                "matched": "known",
+                "matched": "known" if allow_persist else "known_guard",
                 "similarity": best_sim,
                 "threshold": known_thr,
-                "sample_count": int(meta.get("sample_count", 1)),
+                "sample_count": int(meta.get("sample_count", 1) or 1),
+                "integrity": {
+                    "accepted": bool(integrity.accepted),
+                    "edge_similarity": float(integrity.edge_similarity),
+                    "reason": integrity.reason,
+                },
             }
+
+        if not allow_persist:
+            if prev and prev in records:
+                meta = dict(records[prev].metadata or {})
+                return {
+                    "speaker": prev,
+                    "matched": "prev_guard",
+                    "similarity": best_sim,
+                    "threshold": known_thr,
+                    "sample_count": int(meta.get("sample_count", 1) or 1),
+                    "integrity": {
+                        "accepted": bool(integrity.accepted),
+                        "edge_similarity": float(integrity.edge_similarity),
+                        "reason": integrity.reason,
+                    },
+                }
+            raise RuntimeError(f"speaker sample defective: {integrity.reason}")
 
         key = self._new_speaker_id(root)
         now = utc_now_iso()
@@ -452,6 +540,11 @@ class SpeakerWorker:
             "similarity": best_sim,
             "threshold": known_thr,
             "sample_count": 1,
+            "integrity": {
+                "accepted": bool(integrity.accepted),
+                "edge_similarity": float(integrity.edge_similarity),
+                "reason": integrity.reason,
+            },
         }
 
     def command_enrol(self, req_id, payload: Dict) -> Dict:
@@ -459,12 +552,24 @@ class SpeakerWorker:
         name = payload.get("name")
         root = self._resolve_voices_dir(payload.get("voices_dir") or payload.get("voicesDir"))
         clip_seconds = float(payload.get("clip_seconds", DEFAULT_CLIP_SECONDS))
+        edge_check_seconds = float(payload.get("edge_check_seconds", DEFAULT_EDGE_CHECK_SECONDS))
+        edge_min_duration_seconds = float(payload.get("edge_min_duration_seconds", DEFAULT_EDGE_MIN_DURATION_SECONDS))
+        edge_min_similarity = float(payload.get("edge_min_similarity", DEFAULT_EDGE_MIN_SIMILARITY))
 
         if not isinstance(name, str) or not name.strip():
             raise RuntimeError("name missing")
         key = safe_name(name)
 
-        emb = self._embed_audio(audio, req_id, clip_seconds=clip_seconds)
+        wav = self._load_audio_tensor(audio, req_id)
+        emb = self._embed_wav_tensor(wav, clip_seconds=clip_seconds, segment="head")
+        integrity = self._assess_sample_integrity(
+            wav,
+            edge_check_seconds=edge_check_seconds,
+            edge_min_duration_seconds=edge_min_duration_seconds,
+            edge_min_similarity=edge_min_similarity,
+        )
+        if not integrity.accepted:
+            raise RuntimeError(f"speaker sample defective: {integrity.reason}")
         records = self._list_speakers(root)
 
         now = utc_now_iso()

@@ -196,6 +196,21 @@ export async function speakerIdentity(sentence, { remember: rememberFn = remembe
     "clip seconds",
     "seconds"
   ]));
+  const edgeCheckSeconds = resolveNumericFromMapEntry(optionEntry(optionsMap, [
+    "edgeCheckSeconds",
+    "edge_check_seconds",
+    "edge check seconds"
+  ]));
+  const edgeMinDurationSeconds = resolveNumericFromMapEntry(optionEntry(optionsMap, [
+    "edgeMinDurationSeconds",
+    "edge_min_duration_seconds",
+    "edge min duration seconds"
+  ]));
+  const edgeMinSimilarity = resolveNumericFromMapEntry(optionEntry(optionsMap, [
+    "edgeMinSimilarity",
+    "edge_min_similarity",
+    "edge min similarity"
+  ]));
   const overrideVoicesDir = resolveTextFromMapEntry(optionEntry(optionsMap, [
     "voicesDir",
     "voices_dir",
@@ -213,21 +228,43 @@ export async function speakerIdentity(sentence, { remember: rememberFn = remembe
         ...(Number.isFinite(Number(sameSpeakerThreshold)) ? { same_speaker_threshold: Number(sameSpeakerThreshold) } : {}),
         ...(Number.isFinite(Number(knownSpeakerThreshold)) ? { known_speaker_threshold: Number(knownSpeakerThreshold) } : {}),
         ...(Number.isFinite(Number(clipSeconds)) ? { clip_seconds: Number(clipSeconds) } : {}),
+        ...(Number.isFinite(Number(edgeCheckSeconds)) ? { edge_check_seconds: Number(edgeCheckSeconds) } : {}),
+        ...(Number.isFinite(Number(edgeMinDurationSeconds)) ? { edge_min_duration_seconds: Number(edgeMinDurationSeconds) } : {}),
+        ...(Number.isFinite(Number(edgeMinSimilarity)) ? { edge_min_similarity: Number(edgeMinSimilarity) } : {}),
       };
       result = enrollName
-        ? await callService("/enrol", { audio, name: enrollName, voices_dir: effectiveVoicesDir, ...(Number.isFinite(Number(clipSeconds)) ? { clip_seconds: Number(clipSeconds) } : {}) })
+        ? await callService("/enrol", {
+          audio,
+          name: enrollName,
+          voices_dir: effectiveVoicesDir,
+          ...(Number.isFinite(Number(clipSeconds)) ? { clip_seconds: Number(clipSeconds) } : {}),
+          ...(Number.isFinite(Number(edgeCheckSeconds)) ? { edge_check_seconds: Number(edgeCheckSeconds) } : {}),
+          ...(Number.isFinite(Number(edgeMinDurationSeconds)) ? { edge_min_duration_seconds: Number(edgeMinDurationSeconds) } : {}),
+          ...(Number.isFinite(Number(edgeMinSimilarity)) ? { edge_min_similarity: Number(edgeMinSimilarity) } : {}),
+        })
         : await callService("/identify", identifyPayload);
     } else {
       await ensureSpeakerStarted();
       result = enrollName
-        ? await enrolSpeaker({ audio, name: enrollName, voicesDir: effectiveVoicesDir, clipSeconds })
+        ? await enrolSpeaker({
+          audio,
+          name: enrollName,
+          voicesDir: effectiveVoicesDir,
+          clipSeconds,
+          edgeCheckSeconds,
+          edgeMinDurationSeconds,
+          edgeMinSimilarity,
+        })
         : await identifySpeaker({
           audio,
           voicesDir: effectiveVoicesDir,
           prevSpeaker,
           sameSpeakerThreshold,
           knownSpeakerThreshold,
-          clipSeconds
+          clipSeconds,
+          edgeCheckSeconds,
+          edgeMinDurationSeconds,
+          edgeMinSimilarity,
         });
     }
 
