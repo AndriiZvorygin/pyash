@@ -224,19 +224,41 @@ async function main() {
     for (const item of items) {
       const key = item.key;
       const meta = parseSpeakerMetaFile(path.join(voicesDir, `${key}.pya`));
-      const r = await inspectSpeaker({
-        key,
-        wav: item.wav,
-        voicesDir,
-        clipSeconds: opts.clipSeconds,
-        headOffsetSeconds: opts.headOffsetSeconds
-      });
+      let r = null;
+      let inspectError = null;
+      try {
+        r = await inspectSpeaker({
+          key,
+          wav: item.wav,
+          voicesDir,
+          clipSeconds: opts.clipSeconds,
+          headOffsetSeconds: opts.headOffsetSeconds
+        });
+      } catch (error) {
+        inspectError = error;
+      }
       checked += 1;
+      if (inspectError) {
+        const msg = String(inspectError?.message || inspectError || "");
+        const suspicious = msg.toLowerCase().includes("speaker sample defective");
+        if (suspicious) {
+          flagged += 1;
+          process.stdout.write(`FLAG ${key} reason=${JSON.stringify(msg)}\n`);
+          if (opts.apply) {
+            const moved = moveSpeakerArtifactsToArchive({ voicesDir, archiveDir, key });
+            if (moved > 0) pruned += 1;
+            process.stdout.write(`PRUNE ${key} moved_files=${moved}\n`);
+          }
+        } else {
+          process.stdout.write(`SKIP ${key} reason=${JSON.stringify(msg)}\n`);
+        }
+        continue;
+      }
       const prune = shouldPruneCandidate({
         key,
         meta,
-        head: r.head,
-        tail: r.tail,
+        head: r?.head,
+        tail: r?.tail,
         minSimilarity: opts.minSimilarity,
       });
       if (prune) {
@@ -277,4 +299,3 @@ export {
   shouldPruneCandidate,
   listSpeakerWavs,
 };
-

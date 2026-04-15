@@ -158,6 +158,7 @@ function main() {
 
   const byKey = new Map(vectors.map((v) => [v.key, v]));
   let planned = 0;
+  let failed = 0;
   for (const comp of components) {
     const detailed = comp.map((k) => byKey.get(k)).filter(Boolean);
     const target = chooseCanonical(detailed);
@@ -177,10 +178,16 @@ function main() {
         "--apply",
         ...(opts.keepSource ? ["--keep-source"] : []),
       ];
-      execFileSync("node", cmd, { stdio: "inherit" });
+      try {
+        execFileSync("node", cmd, { stdio: "inherit" });
+      } catch (error) {
+        failed += 1;
+        process.stderr.write(`[voice-merge-auto] merge failed from=${member.key} to=${target.key}: ${error?.message || String(error)}\n`);
+      }
     }
   }
   process.stdout.write(`[voice-merge-auto] merges_planned=${planned}\n`);
+  process.stdout.write(`[voice-merge-auto] merges_failed=${failed}\n`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -191,4 +198,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
 }
-
