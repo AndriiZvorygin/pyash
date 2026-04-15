@@ -13,6 +13,236 @@ function normalizeText(value = "") {
   return String(value || "").replace(/\s+/gu, " ").trim();
 }
 
+function countWords(text = "") {
+  if (!String(text || "").trim()) return 0;
+  return String(text || "")
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean).length;
+}
+
+function splitSentences(text = "") {
+  const clean = normalizeText(text);
+  if (!clean) return [];
+  const parts = clean
+    .split(/(?<=[.!?])\s+/u)
+    .map((x) => normalizeText(x))
+    .filter(Boolean);
+  if (parts.length) return parts;
+  return [clean];
+}
+
+function seemsCompleteSentence(sentence = "") {
+  const s = normalizeText(sentence);
+  if (!s) return false;
+  return /[.!?]["')\]]*$/u.test(s);
+}
+
+function isOutcomeSentence(sentence = "") {
+  const s = String(sentence || "").toLowerCase();
+  return /(approved|defeated|carried|voted|directed|passed|denied|adopted|rejected|motion|resolution)/u.test(s);
+}
+
+function chooseSentenceToDrop(sentences = []) {
+  if (!sentences.length) return -1;
+  if (sentences.length === 1) return 0;
+  const outcomeIndexes = new Set();
+  for (let i = 0; i < sentences.length; i += 1) {
+    if (isOutcomeSentence(sentences[i])) outcomeIndexes.add(i);
+  }
+  // Prefer dropping the latest non-outcome sentence.
+  for (let i = sentences.length - 1; i >= 0; i -= 1) {
+    if (!outcomeIndexes.has(i)) return i;
+  }
+  // Fallback to dropping the last sentence.
+  return sentences.length - 1;
+}
+
+function cleanupIncompleteTail(sentences = [], { allowOriginalEllipsis = false } = {}) {
+  const out = sentences.slice();
+  while (out.length) {
+    const last = normalizeText(out[out.length - 1] || "");
+    if (!last) {
+      out.pop();
+      continue;
+    }
+    if (last.endsWith("...") && !allowOriginalEllipsis) {
+      out.pop();
+      continue;
+    }
+    if (!seemsCompleteSentence(last)) {
+      out.pop();
+      continue;
+    }
+    break;
+  }
+  return out;
+}
+
+function summaryHasMinimalCompleteness(summary = "") {
+  const s = normalizeText(summary);
+  if (!s) return false;
+  const words = s.split(/\s+/u).filter(Boolean);
+  if (words.length < 5) return false;
+  // Requires at least one action/description cue.
+  if (!/(is|was|were|has|had|have|approved|defeated|carried|voted|directed|passed|considered|reported|discussed|adopted|denied|rejected)/iu.test(s)) {
+    return false;
+  }
+  return true;
+}
+
+function looksProceduralLabel(label = "") {
+  const lower = String(label || "").toLowerCase();
+  return (
+    lower.includes("call to order") ||
+    lower.includes("adoption of agenda") ||
+    lower.includes("declaration of interest") ||
+    lower.includes("confirmation of minutes") ||
+    lower.includes("minutes") ||
+    lower.includes("correspondence") ||
+    lower.includes("adjourn") ||
+    lower.includes("public forum") ||
+    lower.includes("opening remarks")
+  );
+}
+
+function buildSummaryBudget(unit = {}) {
+  const durationSeconds = Number(unit["duration seconds"] || 0);
+  const sourceRows = Number(unit["source rows"] || 0);
+  const excerpt = String(unit["source excerpt"] || "");
+  const sourceChars = excerpt.length;
+  const splitParts = Number(unit["part total"] || 1);
+  const procedural = looksProceduralLabel(unit.label || unit["agenda item"] || "");
+
+  const tiny = durationSeconds <= 75 || sourceRows <= 6 || sourceChars <= 350;
+  const short = durationSeconds <= 180 && sourceRows <= 18 && sourceChars <= 1200;
+  const medium = durationSeconds <= 780 && sourceRows <= 120;
+  const long = durationSeconds <= 1800 && sourceRows <= 260;
+
+  if (procedural && tiny) {
+    return {
+      tier: "tiny_procedural",
+      maxSentences: 1,
+      maxWords: 22,
+      minSentences: 1,
+      paragraphCap: 1,
+      procedural,
+      durationSeconds,
+      sourceRows,
+      sourceChars,
+      splitParts,
+    };
+  }
+  if (short || (procedural && durationSeconds <= 300 && sourceRows <= 30)) {
+    return {
+      tier: "short",
+      maxSentences: procedural ? 1 : 2,
+      maxWords: procedural ? 32 : 48,
+      minSentences: 1,
+      paragraphCap: 1,
+      procedural,
+      durationSeconds,
+      sourceRows,
+      sourceChars,
+      splitParts,
+    };
+  }
+  if (medium) {
+    return {
+      tier: "medium",
+      maxSentences: 4,
+      maxWords: 130,
+      minSentences: 2,
+      paragraphCap: 1,
+      procedural,
+      durationSeconds,
+      sourceRows,
+      sourceChars,
+      splitParts,
+    };
+  }
+  if (long) {
+    return {
+      tier: "long",
+      maxSentences: 6,
+      maxWords: 220,
+      minSentences: 2,
+      paragraphCap: 1,
+      procedural,
+      durationSeconds,
+      sourceRows,
+      sourceChars,
+      splitParts,
+    };
+  }
+  return {
+    tier: "very_long",
+    maxSentences: 8,
+    maxWords: 320,
+    minSentences: 2,
+    paragraphCap: splitParts > 1 ? 1 : 2,
+    procedural,
+    durationSeconds,
+    sourceRows,
+    sourceChars,
+    splitParts,
+  };
+}
+
+function enforceSummaryBudget(rawSummary = "", budget = {}) {
+  const before = normalizeText(rawSummary);
+  if (!before) return "";
+  const allowOriginalEllipsis = before.endsWith("...");
+  const maxSentences = Number.isFinite(Number(budget.maxSentences)) ? Number(budget.maxSentences) : 0;
+  const maxWords = Number.isFinite(Number(budget.maxWords)) ? Number(budget.maxWords) : 0;
+
+  let sentences = splitSentences(before);
+  sentences = cleanupIncompleteTail(sentences, { allowOriginalEllipsis });
+  if (!sentences.length) return "";
+
+  // 1) Sentence-first clamp
+  if (budget.procedural) {
+    sentences = sentences.slice(0, 1);
+  } else if (maxSentences > 0 && sentences.length > maxSentences) {
+    sentences = sentences.slice(0, maxSentences);
+  }
+
+  // 2) If still over word budget, drop whole sentences (never mid-sentence).
+  if (maxWords > 0) {
+    while (sentences.length > 1 && countWords(sentences.join(" ")) > maxWords) {
+      const idx = chooseSentenceToDrop(sentences);
+      if (idx < 0) break;
+      sentences.splice(idx, 1);
+    }
+    // If one sentence is still over budget, keep it as-is to avoid fragmenting.
+  }
+
+  // 3) Completeness guard pass ("regenerate once" analog in post-gen enforcement):
+  // do one stricter cleanup attempt, then drop incomplete tail.
+  let summary = normalizeText(sentences.join(" "));
+  if (!summaryHasMinimalCompleteness(summary)) {
+    let strictSentences = splitSentences(summary);
+    strictSentences = cleanupIncompleteTail(strictSentences, { allowOriginalEllipsis: false });
+    if (strictSentences.length > 1 && !summaryHasMinimalCompleteness(strictSentences.join(" "))) {
+      strictSentences = strictSentences.slice(0, strictSentences.length - 1);
+    }
+    summary = normalizeText(strictSentences.join(" "));
+  }
+
+  if ((budget.paragraphCap || 1) <= 1) {
+    summary = normalizeText(summary.replace(/\n+/gu, " "));
+  } else {
+    summary = summary.replace(/\n{3,}/gu, "\n\n").trim();
+  }
+
+  // Never emit ellipsis artifacts unless present in original source summary.
+  if (!allowOriginalEllipsis && summary.endsWith("...")) {
+    const retry = cleanupIncompleteTail(splitSentences(summary), { allowOriginalEllipsis: false });
+    summary = normalizeText(retry.join(" "));
+  }
+  return summary;
+}
+
 function assertExactGroundingRoot(filePath) {
   const lines = String(fs.readFileSync(filePath, "utf8")).split(/\r?\n/u);
   const first = String(lines[0] || "").trim();
@@ -65,12 +295,23 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
 }
 
 async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
+  const budget = buildSummaryBudget(unit);
+  const longOrderLine =
+    budget.tier === "long" || budget.tier === "very_long"
+      ? "For long sections, prefer this order when applicable: item under discussion; main substance; decision/direction/outcome."
+      : "";
   const prompt = [
     "You are stage3 of a strict agenda summary pipeline.",
     "Grounding is authoritative. Do not invent boundaries or facts.",
     "Return strict JSON with keys: summary, chapter text, confidence, notes.",
-    "summary: 2-5 sentences, factual and source-aligned.",
+    "summary: factual, source-aligned, and proportional to section size.",
     "chapter text: short chapter-ready line. If not split, still provide a useful line.",
+    `Summary budget tier: ${budget.tier}`,
+    `Budget max sentences: ${budget.maxSentences}`,
+    `Budget max words: ${budget.maxWords}`,
+    `Procedural section: ${budget.procedural ? "yes" : "no"}`,
+    longOrderLine,
+    "Do not mention names, figures, or decisions not present in the grounded source excerpt.",
     "",
     `Focus: ${focus || "newsworthy factual civic reporting"}`,
     `Label: ${unit.label}`,
@@ -88,11 +329,16 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
     prompt,
   });
 
+  const rawSummary = normalizeText(parsed?.summary || "");
+  const summary = enforceSummaryBudget(rawSummary, budget);
   return {
-    summary: normalizeText(parsed?.summary || ""),
+    summary,
     chapterText: normalizeText(parsed?.["chapter text"] || ""),
     confidence: Number.isFinite(Number(parsed?.confidence)) ? Number(parsed.confidence) : 0,
     notes: normalizeText(parsed?.notes || ""),
+    budget,
+    clampChanged: summary !== rawSummary,
+    rawSummary,
   };
 }
 
@@ -158,8 +404,21 @@ export async function runAgendaStage3SummaryRenderer({
       "end row": Number(unit["row end"] || 0),
       "max section seconds": Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900),
       "grounding status": unit["grounding status"] || "",
+      "budget tier": llm.budget?.tier || "",
+      "budget max sentences": Number(llm.budget?.maxSentences || 0),
+      "budget max words": Number(llm.budget?.maxWords || 0),
+      "budget paragraph cap": Number(llm.budget?.paragraphCap || 1),
+      "clamp changed": llm.clampChanged ? "yes" : "no",
+      "summary pre clamp": llm.clampChanged ? llm.rawSummary : "",
     });
-    log(`[agenda-stage3] section ${i + 1}/${units.length} heading ${heading}`);
+    if (llm.clampChanged) {
+      log(
+        `[agenda-stage3][clamp] unit=${unitId} tier=${llm.budget?.tier || "na"} before="${llm.rawSummary.slice(0, 160)}" after="${llm.summary.slice(0, 160)}"`,
+      );
+    }
+    log(
+      `[agenda-stage3] section ${i + 1}/${units.length} heading ${heading} budget=${llm.budget?.tier || "na"} max_words=${llm.budget?.maxWords || 0} max_sent=${llm.budget?.maxSentences || 0}`,
+    );
   }
 
   const summaryArtifact = {
