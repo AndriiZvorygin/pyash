@@ -300,10 +300,26 @@ function parsePostedFromResponse(respPath) {
   if (!respPath || !fs.existsSync(respPath)) return false;
   try {
     const json = JSON.parse(fs.readFileSync(respPath, "utf8"));
-    return Boolean((json?.post_url || json?.transcript_url) && !json?.error);
+    const transcriptUrl = String(json?.transcript_url || "").trim();
+    return Boolean(/\/transcripts\//iu.test(transcriptUrl) && !json?.error);
   } catch {
     return false;
   }
+}
+
+function parseAgendaPostedFromResponse(respPath) {
+  if (!respPath || !fs.existsSync(respPath)) return false;
+  try {
+    const json = JSON.parse(fs.readFileSync(respPath, "utf8"));
+    const agendaUrl = String(json?.agenda_url || "").trim();
+    return Boolean(/\/agendas\//iu.test(agendaUrl) && !json?.error);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeComparableUrl(value) {
+  return String(value || "").trim().replace(/\/+$/u, "").toLowerCase();
 }
 
 function localMeetingState(meetingDir, basePrefix) {
@@ -312,8 +328,22 @@ function localMeetingState(meetingDir, basePrefix) {
   const agendaPublishPath = findAgendaPublishResponsePath(transcriptDir, basePrefix);
   const payloadPath = findLemmyPayloadPath(transcriptDir, basePrefix);
   const payloadContentType = readPayloadContentType(payloadPath);
-  const transcriptPosted = parsePostedFromResponse(publishPath) && payloadContentType !== "agenda";
-  const agendaPosted = parsePostedFromResponse(agendaPublishPath) || (parsePostedFromResponse(publishPath) && payloadContentType === "agenda");
+  const meetingPublishTranscriptPosted = parsePostedFromResponse(publishPath);
+  const agendaPublishPosted = parseAgendaPostedFromResponse(agendaPublishPath);
+  let sameDiscussionPostCollision = false;
+  if (publishPath && agendaPublishPath && fs.existsSync(publishPath) && fs.existsSync(agendaPublishPath)) {
+    try {
+      const pub = JSON.parse(fs.readFileSync(publishPath, "utf8"));
+      const ag = JSON.parse(fs.readFileSync(agendaPublishPath, "utf8"));
+      const pubUrl = normalizeComparableUrl(pub?.post_url);
+      const agUrl = normalizeComparableUrl(ag?.post_url);
+      if (pubUrl && agUrl && pubUrl === agUrl) sameDiscussionPostCollision = true;
+    } catch {
+      // ignore malformed artifacts
+    }
+  }
+  const transcriptPosted = meetingPublishTranscriptPosted && !sameDiscussionPostCollision;
+  const agendaPosted = agendaPublishPosted || (!meetingPublishTranscriptPosted && payloadContentType === "agenda");
   const reportPath = findPipelineReportPath(transcriptDir, basePrefix);
   let stage = "new";
   if (transcriptPosted) stage = "transcript-published";
@@ -471,6 +501,8 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
   if (allowPost) {
     env[`${envPrefix}_AUTOPUBLISH`] = "1";
     env.PIPELINE_SKIP_POST = "0";
+    env.PIPELINE_FORCE_POST = "1";
+    env[`${envPrefix}_PIPELINE_FORCE_POST`] = "1";
     const envCmdKey = `${envPrefix}_LEMMY_POST_COMMAND`;
     const fallback = `node ${map.publishScript}`;
     env[envCmdKey] = env[envCmdKey] || fallback;
@@ -626,6 +658,8 @@ async function runMain() {
     env[`${map.envPrefix}_PIPELINE_SKIP_IMAGE`] = "1";
     env.PIPELINE_SKIP_POST = args.dryRun ? "1" : "0";
     if (!args.dryRun) {
+      env.PIPELINE_FORCE_POST = "1";
+      env[`${map.envPrefix}_PIPELINE_FORCE_POST`] = "1";
       env[`${map.envPrefix}_AUTOPUBLISH`] = "1";
       const envCmdKey = `${map.envPrefix}_LEMMY_POST_COMMAND`;
       env[envCmdKey] = env[envCmdKey] || `node ${map.publishScript}`;
@@ -654,6 +688,8 @@ async function runMain() {
       env[`${map.envPrefix}_PIPELINE_SKIP_IMAGE`] = "1";
       env.PIPELINE_SKIP_POST = args.dryRun ? "1" : "0";
       if (!args.dryRun) {
+        env.PIPELINE_FORCE_POST = "1";
+        env[`${map.envPrefix}_PIPELINE_FORCE_POST`] = "1";
         env[`${map.envPrefix}_AUTOPUBLISH`] = "1";
         const envCmdKey = `${map.envPrefix}_LEMMY_POST_COMMAND`;
         env[envCmdKey] = env[envCmdKey] || `node ${map.publishScript}`;

@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readPyaTextValues } from './pya_lookup.mjs';
 
+// LEGACY ENTRYPOINT: JSON-era whole-meeting synthesis.
+// Canonical writers call reporter_shared/whole-meeting-synthesis.mjs (.pya-native).
+
 const ROOT = '/home/htaf/pyac/pyash';
 function resolveOllamaHost() {
   const fromEnv = String(process.env.OLLAMA_HOST || '').trim();
@@ -60,6 +63,10 @@ function pickAgendaSummaryJson(transcriptDir, prefix = 'auto') {
   const wantsAuto = !prefix || /^auto$/iu.test(String(prefix));
   if (!wantsAuto) {
     const preferred = path.join(transcriptDir, `${prefix}.agenda-summary.json`);
+    const canonicalPya = path.join(transcriptDir, `${prefix}.agenda-summary.pya`);
+    if (!fs.existsSync(preferred) && fs.existsSync(canonicalPya)) {
+      throw new Error('legacy summarize_whole_meeting_from_agenda_summary requires .agenda-summary.json; use canonical .pya whole-meeting synthesis instead');
+    }
     if (fs.existsSync(preferred)) return { summaryPath: preferred, resolvedPrefix: prefix };
   }
 

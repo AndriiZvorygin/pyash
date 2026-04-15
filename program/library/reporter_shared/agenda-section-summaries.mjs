@@ -2,6 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// LEGACY MODULE: JSON-era agenda summarizer kept for backward compatibility.
+// Canonical pipeline uses Stage 1/2/3 .pya artifacts via:
+// - agenda-stage1-gross-chunking.mjs
+// - agenda-stage2-grounding.mjs
+// - agenda-stage3-summary-renderer.mjs
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
@@ -15,6 +21,10 @@ const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_PASS_THRESHOLD || process.env.MEETING_SUMMARY_PASS_THRESHOLD || process.env.OWEN_SUMMARY_PASS_THRESHOLD || 0.65);
   return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.65;
+})();
+const LOW_CONFIDENCE_ACCEPT_THRESHOLD = (() => {
+  const raw = Number(process.env.AGENDA_SUMMARY_LOW_CONFIDENCE_ACCEPT_THRESHOLD || PASS_THRESHOLD);
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : PASS_THRESHOLD;
 })();
 const MIN_SUMMARY_WORDS = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_MIN_WORDS || process.env.MEETING_SUMMARY_MIN_WORDS || process.env.OWEN_SUMMARY_MIN_WORDS || 120);
@@ -55,6 +65,7 @@ const SUBSECTION_MIN_GAP_SECONDS = (() => {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 90;
 })();
 const DEBUG_SECTION_SPLIT = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_SUMMARY_DEBUG_SPLIT || '0'));
+const USE_ROW_RANGES = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_SUMMARY_USE_ROW_RANGES || '1'));
 
 function usage() {
   return [
@@ -280,12 +291,59 @@ function loadTranscriptRowsForPrefix(transcriptDir, prefix) {
 
 function loadAgendaMatchesForPrefix(transcriptDir, prefix) {
   const jsonPath = path.join(transcriptDir, `${prefix}.agenda.matches.json`);
+  const canonicalPya = path.join(transcriptDir, `${prefix}.agenda.matches.pya`);
+  if (!fs.existsSync(jsonPath) && fs.existsSync(canonicalPya)) {
+    throw new Error("legacy agenda-section-summaries requires .agenda.matches.json; canonical .pya-only artifacts must use stage3 summary renderer");
+  }
   if (!fs.existsSync(jsonPath)) return {};
   try {
     return JSON.parse(fs.readFileSync(jsonPath, 'utf8')) || {};
   } catch {
     return {};
   }
+}
+
+function loadGrossChunksForPrefix(transcriptDir, prefix) {
+  const jsonPath = path.join(transcriptDir, `${prefix}.agenda.gross-chunks.json`);
+  const canonicalPya = path.join(transcriptDir, `${prefix}.agenda.gross-chunks.pya`);
+  if (!fs.existsSync(jsonPath) && fs.existsSync(canonicalPya)) {
+    throw new Error("legacy agenda-section-summaries requires .agenda.gross-chunks.json; canonical .pya-only artifacts must use stage3 summary renderer");
+  }
+  if (!fs.existsSync(jsonPath)) return [];
+  try {
+    const obj = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    return Array.isArray(obj?.windows) ? obj.windows : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildGrossContextForRange(grossChunks, startParagraph, endParagraph, maxItems = 3) {
+  const start = Number(startParagraph);
+  const end = Number(endParagraph);
+  if (!Array.isArray(grossChunks) || !grossChunks.length) return '';
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '';
+  const picks = [];
+  for (const g of grossChunks) {
+    const gs = Number(g?.start);
+    const ge = Number(g?.end);
+    if (!Number.isFinite(gs) || !Number.isFinite(ge)) continue;
+    if (ge < start || gs > end) continue;
+    const summary = String(g?.summary || '').trim();
+    const phase = String(g?.phase || '').trim();
+    if (!summary) continue;
+    picks.push({
+      start: gs,
+      end: ge,
+      text: phase ? `${phase}: ${summary}` : summary,
+    });
+  }
+  if (!picks.length) return '';
+  picks.sort((a, b) => a.start - b.start || a.end - b.end);
+  return picks
+    .slice(0, Math.max(1, maxItems))
+    .map((p, idx) => `- Phase ${idx + 1} (${p.start}..${p.end}): ${p.text}`)
+    .join('\n');
 }
 
 function parseWiseRangesFromSeries(seriesText) {
@@ -433,10 +491,30 @@ function buildSectionRowRanges({ headings, rows, agendaMatches, wiseRanges }) {
     starts.push({ heading, item, rowIndex });
   }
 
-  // If alignment coverage is weak, do not trust row slicing at all.
-  // This avoids reusing the opening rows across many sections.
+  // If direct matching coverage is weak, fall back to coarse paragraph->row mapping
+  // instead of dropping row ranges entirely.
   const minCoverage = Math.max(2, Math.floor(headings.length * 0.5));
-  if (matchedCount < minCoverage) return [];
+  if (matchedCount < minCoverage) {
+    const coarse = [];
+    for (let i = 0; i < headings.length; i += 1) {
+      const heading = String(headings[i] || '');
+      const item = parseLeadingItemNumber(heading);
+      const m = matchByItem.get(item);
+      const startP = Number(m?.start_paragraph);
+      const endP = Number(m?.end_paragraph);
+      if (!Number.isFinite(startP) || startP < 0) {
+        coarse.push({ start: -1, end: -1 });
+        continue;
+      }
+      const start = mapParagraphToRow(startP);
+      const end = Number.isFinite(endP) && endP >= startP
+        ? mapParagraphToRow(endP)
+        : start;
+      coarse.push({ start: Math.max(0, start), end: Math.max(Math.max(0, start), end) });
+    }
+    if (coarse.some((r) => r.start >= 0 && r.end >= r.start)) return coarse;
+    return [];
+  }
 
   for (let i = 1; i < starts.length; i += 1) {
     if (starts[i].rowIndex >= 0 && starts[i - 1].rowIndex >= 0 && starts[i].rowIndex < starts[i - 1].rowIndex) {
@@ -1139,6 +1217,32 @@ function buildExtractiveFallbackSummary(source, heading, maxWords = 70) {
   return `No clear transcript content was available for "${heading}".`;
 }
 
+async function buildFallbackOneSentenceLlm({ heading, source, focus }) {
+  const focusText = String(focus || '').trim();
+  const prompt = [
+    `Write exactly one factual sentence summarizing agenda heading: ${heading}`,
+    focusText ? `Focus: ${focusText}` : '',
+    'Rules:',
+    '- Use only facts present in SOURCE.',
+    '- Do not invent names, numbers, or decisions.',
+    '- Keep it concrete and readable.',
+    '- Output one sentence only.',
+    '',
+    'SOURCE:',
+    abridgeUtf8(source, 9000),
+  ].filter(Boolean).join('\n');
+  try {
+    const raw = await ask([
+      { role: 'system', content: 'You are a strict factual civic summarizer.' },
+      { role: 'user', content: prompt },
+    ], { numPredict: 120 });
+    const one = clampToOneSentence(raw).trim();
+    return one;
+  } catch {
+    return '';
+  }
+}
+
 async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, jurisdiction, shortMode = false }) {
   const source = abridgeUtf8(body, 14000);
   const rosterRoles = parseRosterRoles(rosterText);
@@ -1167,6 +1271,7 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
 
     let reviewSemantic = '';
     let reviewAttribution = '';
+    let reviewFailed = false;
     try {
       reviewSemantic = await ask([
         { role: 'system', content: 'You are a strict semantic summary scorer.' },
@@ -1177,8 +1282,9 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
         { role: 'user', content: buildAttributionScorePrompt({ source, summary: normalizedSummary, rosterText }) }
       ], { numPredict: 180 });
     } catch {
-      backendFailed = true;
-      break;
+      reviewFailed = true;
+      reviewSemantic = 'FEEDBACK: review backend unavailable.\nFINAL_SCORE: 0.55';
+      reviewAttribution = 'FEEDBACK: review backend unavailable.\nFINAL_SCORE: 0.55';
     }
 
     const scoreSemantic = parseScore(reviewSemantic);
@@ -1202,6 +1308,7 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
       ? '\n\nNUMERIC_GUARD:\nOne or more numeric claims are not explicitly present in SOURCE. Remove unsupported numbers.\nFINAL_SCORE: 0.00'
       : '';
     feedback = `${reviewSemantic}\n\nATTRIBUTION_REVIEW:\n${reviewAttribution}${violationFeedback}${truncationFeedback}${numericFeedback}`;
+    if (reviewFailed && score >= LOW_CONFIDENCE_ACCEPT_THRESHOLD) break;
     if (score >= PASS_THRESHOLD) break;
   }
   if (backendFailed) {
@@ -1221,6 +1328,14 @@ async function summarizeSection({ heading, body, focus, rosterText, bodyLabel, j
         summary: candidate,
         score: Math.max(0, finalScore),
         mode: 'llm-low-confidence'
+      };
+    }
+    const llmFallback = await buildFallbackOneSentenceLlm({ heading, source, focus });
+    if (llmFallback && countWords(llmFallback) >= 8 && !looksTruncatedSummary(llmFallback)) {
+      return {
+        summary: llmFallback,
+        score: Math.max(finalScore, PASS_THRESHOLD),
+        mode: 'llm-fallback'
       };
     }
     return {
@@ -1297,26 +1412,45 @@ export async function summarizeAgendaSectionArtifacts({
   const sectionHeadings = parsedChips.map((x) => x.heading);
   const transcriptRows = loadTranscriptRowsForPrefix(transcriptDir, resolvedPrefix);
   const agendaMatches = loadAgendaMatchesForPrefix(transcriptDir, resolvedPrefix);
+  const grossChunks = loadGrossChunksForPrefix(transcriptDir, resolvedPrefix);
   const wiseRanges = parseWiseRangesFromSeries(source);
-  const rowRanges = buildSectionRowRanges({
-    headings: sectionHeadings,
-    rows: transcriptRows,
-    agendaMatches,
-    wiseRanges
-  });
+  const rowRanges = USE_ROW_RANGES
+    ? buildSectionRowRanges({
+      headings: sectionHeadings,
+      rows: transcriptRows,
+      agendaMatches,
+      wiseRanges
+    })
+    : [];
+  const boundaryByItem = new Map(
+    (Array.isArray(agendaMatches?.boundaries) ? agendaMatches.boundaries : [])
+      .map((b) => [String(b?.item || '').trim(), b])
+      .filter(([k]) => Boolean(k))
+  );
 
   const out = [];
   for (let i = 0; i < parsedChips.length; i += 1) {
     const { heading, body } = parsedChips[i];
     log(`[agenda-summary] atindex num ${i + 1} toindex num ${chips.length} heading ${heading}`);
     const rr = rowRanges[i] || null;
+    const itemCode = parseLeadingItemNumber(heading);
+    const boundary = boundaryByItem.get(itemCode) || null;
     const sectionRows = rr ? transcriptRows.slice(rr.start, rr.end + 1) : [];
     const sectionRowCount = sectionRows.length;
     const sectionRowText = sectionRows.map((r) => `${r.display || 'Speaker'}: ${r.text}`).join('\n').trim();
     const bodyWordCount = countWords(body);
     const rowWordCount = countWords(sectionRowText);
     const rowRangeLooksRich = rowWordCount >= Math.max(80, Math.floor(bodyWordCount * 0.6));
-    const baseBody = rowRangeLooksRich ? sectionRowText : body;
+    const baseBody = (USE_ROW_RANGES && rowRangeLooksRich) ? sectionRowText : body;
+    const grossContext = buildGrossContextForRange(
+      grossChunks,
+      Number(boundary?.start),
+      Number(boundary?.end),
+      3
+    );
+    const baseBodyWithContext = grossContext
+      ? `${baseBody}\n\nGROSS_PHASE_CONTEXT:\n${grossContext}`
+      : baseBody;
 
     let subRanges = [];
     if (rr && sectionRows.length > 1) {
@@ -1389,7 +1523,10 @@ export async function summarizeAgendaSectionArtifacts({
         ? transcriptRows.slice(range.start, range.end + 1)
         : [];
       const partRowText = partRows.map((r) => `${r.display || 'Speaker'}: ${r.text}`).join('\n').trim();
-      const effectiveBody = partRows.length ? partRowText : baseBody;
+      const sectionBody = partRows.length ? partRowText : baseBody;
+      const effectiveBody = grossContext
+        ? `${sectionBody}\n\nGROSS_PHASE_CONTEXT:\n${grossContext}`
+        : sectionBody;
       const wordCount = countWords(effectiveBody);
       const sourceRows = partRows.length || sectionRowCount;
       let finalHeading = heading;
@@ -1466,6 +1603,7 @@ export async function summarizeAgendaSectionArtifacts({
 
       out.push({
         index: out.length + 1,
+        item: itemCode || '',
         parent_index: i + 1,
         parent_heading: heading,
         part_index: subRanges.length > 1 ? (part + 1) : 0,
@@ -1478,6 +1616,9 @@ export async function summarizeAgendaSectionArtifacts({
         source_rows: sourceRows,
         start_row: Number.isFinite(Number(range?.start)) ? Math.floor(Number(range.start)) : -1,
         end_row: Number.isFinite(Number(range?.end)) ? Math.floor(Number(range.end)) : -1,
+        start_paragraph: Number.isFinite(Number(boundary?.start)) ? Math.floor(Number(boundary.start)) : -1,
+        end_paragraph: Number.isFinite(Number(boundary?.end)) ? Math.floor(Number(boundary.end)) : -1,
+        boundary_method: String(boundary?.method || ''),
         max_section_seconds: MAX_SECTION_SECONDS
       });
     }

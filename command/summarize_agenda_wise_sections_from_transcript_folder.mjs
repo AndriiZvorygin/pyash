@@ -3,6 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readPyaTextValues } from './pya_lookup.mjs';
 
+// LEGACY CLI (JSON-era): intentionally quarantined.
+// Canonical Stage 3 summary path is:
+// node program/summarize-agenda-wise-sections-from-transcript-folder.mjs
+
 const ROOT = '/home/htaf/pyac/pyash';
 function resolveOllamaHost() {
   const fromEnv = String(process.env.OLLAMA_HOST || '').trim();
@@ -739,6 +743,9 @@ function toMarkdown(items, focus) {
 }
 
 async function main() {
+  throw new Error(
+    "legacy command disabled: summarize_agenda_wise_sections_from_transcript_folder.mjs is JSON-era. Use canonical Stage 3 writer entrypoints that consume *.agenda.section-grounding.pya and emit *.agenda-summary.pya",
+  );
   const transcriptDirArg = process.argv[2];
   const prefixArg = process.argv[3] || 'auto';
   const focusArg = process.argv.slice(4).join(' ').trim();

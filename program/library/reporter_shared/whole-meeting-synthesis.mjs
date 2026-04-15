@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readPyaMapArtifact } from './agenda-stage-contracts.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
@@ -48,40 +49,41 @@ function readNormalizeCheckpoint(transcriptDir, prefix) {
   }
 }
 
-function pickAgendaSummaryJson(transcriptDir, prefix = 'auto') {
+function pickAgendaSummaryArtifact(transcriptDir, prefix = 'auto') {
   const wantsAuto = !prefix || /^auto$/iu.test(String(prefix));
   if (!wantsAuto) {
-    const preferred = path.join(transcriptDir, `${prefix}.agenda-summary.json`);
-    if (fs.existsSync(preferred)) return { summaryPath: preferred, resolvedPrefix: prefix };
+    const preferredPya = path.join(transcriptDir, `${prefix}.agenda-summary.pya`);
+    if (fs.existsSync(preferredPya)) return { summaryPath: preferredPya, resolvedPrefix: prefix };
+    throw new Error(`canonical agenda summary missing: ${preferredPya}`);
   }
 
-  const candidates = fs.readdirSync(transcriptDir, { withFileTypes: true })
+  const pyaCandidates = fs.readdirSync(transcriptDir, { withFileTypes: true })
     .filter((d) => d.isFile())
     .map((d) => d.name)
-    .filter((name) => name.endsWith('.agenda-summary.json'));
-  if (!candidates.length) throw new Error(`no *.agenda-summary.json found in ${transcriptDir}`);
+    .filter((name) => name.endsWith('.agenda-summary.pya'));
+  if (pyaCandidates.length) {
+    const rankedPya = pyaCandidates.map((name) => {
+      const full = path.join(transcriptDir, name);
+      const st = fs.statSync(full);
+      const pfx = name.replace(/\.agenda-summary\.pya$/u, '');
+      const cp = readNormalizeCheckpoint(transcriptDir, pfx);
+      let score = 0;
+      if (cp.complete) score += 400;
+      if (cp.exists && !cp.complete) score -= 300;
+      if (/normalized/iu.test(pfx)) score += 150;
+      if (/test|tmp|partial/iu.test(pfx)) score -= 250;
+      return { full, pfx, score, mtimeMs: Number(st.mtimeMs || 0), size: Number(st.size || 0), name };
+    }).sort((a, b) =>
+      b.score - a.score ||
+      b.mtimeMs - a.mtimeMs ||
+      b.size - a.size ||
+      a.name.localeCompare(b.name)
+    );
+    const chosen = rankedPya[0];
+    return { summaryPath: chosen.full, resolvedPrefix: chosen.pfx };
+  }
 
-  const ranked = candidates.map((name) => {
-    const full = path.join(transcriptDir, name);
-    const st = fs.statSync(full);
-    const pfx = name.replace(/\.agenda-summary\.json$/u, '');
-    const cp = readNormalizeCheckpoint(transcriptDir, pfx);
-    let score = 0;
-    if (cp.complete) score += 400;
-    if (cp.exists && !cp.complete) score -= 300;
-    if (/normalized/iu.test(pfx)) score += 150;
-    if (/test|tmp|partial/iu.test(pfx)) score -= 250;
-    if (pfx === 'meeting-qwen-auto') score += 10;
-    return { full, pfx, score, mtimeMs: Number(st.mtimeMs || 0), size: Number(st.size || 0), name };
-  }).sort((a, b) =>
-    b.score - a.score ||
-    b.mtimeMs - a.mtimeMs ||
-    b.size - a.size ||
-    a.name.localeCompare(b.name)
-  );
-
-  const chosen = ranked[0];
-  return { summaryPath: chosen.full, resolvedPrefix: chosen.pfx };
+  throw new Error(`no *.agenda-summary.pya found in ${transcriptDir}`);
 }
 
 function abridgeUtf8(text, maxBytes) {
@@ -511,7 +513,7 @@ export async function summarizeWholeMeetingArtifacts({
   const transcriptDir = resolvePathFromRoot(transcriptDirArg);
   ensureDir(transcriptDir);
 
-  const { summaryPath, resolvedPrefix } = pickAgendaSummaryJson(transcriptDir, prefixArg);
+  const { summaryPath, resolvedPrefix } = pickAgendaSummaryArtifact(transcriptDir, prefixArg);
   const outMd = path.join(transcriptDir, `${resolvedPrefix}.meeting-summary.md`);
   const outJson = path.join(transcriptDir, `${resolvedPrefix}.meeting-summary.json`);
   const rosterPath = pickRosterFile(transcriptDir);
@@ -522,7 +524,13 @@ export async function summarizeWholeMeetingArtifacts({
   log(`[meeting-summary] source agenda summary: ${summaryPath}`);
   log(`[meeting-summary] output md: ${outMd}`);
 
-  const sourceObj = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+  const sourceObj = await readPyaMapArtifact(summaryPath, 'agenda summary artifact');
+  if (!String(sourceObj?.["schema version"] || "").trim()) {
+    throw new Error(`invalid canonical agenda summary (missing schema version): ${summaryPath}`);
+  }
+  if (!String(sourceObj?.sections || "").trim()) {
+    throw new Error(`invalid canonical agenda summary (missing sections field): ${summaryPath}`);
+  }
   const out = await summarizeWholeMeeting({
     summaryJsonObj: sourceObj,
     focus: focusText,
