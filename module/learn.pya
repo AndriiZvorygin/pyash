@@ -80,6 +80,9 @@ Rules:
 - Preserve distinct supported ideas rather than collapsing everything into one narrow summary.
 - Prefer conceptual breadth across the chunk cards.
 - Do not invent claims that are not supported by the chunk cards.
+- Only include a concrete claim when it is explicitly supported by chunk cards.
+- For central lanes (SEED CONCEPT, CARDINAL TRAINING SENTENCE, TEACHING PROGRESSION, CAUSATIVE AND CONSEQUENCE), prefer claims that are supported by two or more chunk cards whenever possible.
+- If support is uncertain, omit the claim instead of guessing.
 - This is a schema-preserving merge, not a generic summary.
 - Prefer communal declarative phrasing over direct instruction.
 - Keep affirmative definition concentrated in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the cards support it.
@@ -90,6 +93,17 @@ Rules:
 - Keep CONCEPT RELATIONS brief and local to nearby source ideas instead of using it as a second summary section.
 - Keep BRIEF MEMORY PHRASES genuinely brief and refrain-like; trim explanatory phrases.
 - Do not merge toward the lowest-common-denominator summary if the cards share a more specific spiritual, symbolic, or metaphysical teaching world.
+- Keep section item counts inside schema ranges exactly:
+  - TEACHING PROGRESSION: 3-6 lines
+  - ORTHOGONAL FEATURES: 3-5 lines
+  - SURPRISES AND MISUNDERSTANDINGS: 2-5 lines
+  - AFFAIRS OR ACTIVITIES: 2-5 lines
+  - CAUSATIVE AND CONSEQUENCE: 2-5 lines
+  - CARDINAL SCENES AND IDIOMS: 2-6 lines
+  - BRIEF MEMORY PHRASES: 4-8 lines
+  - CONCEPT RELATIONS: 2-4 lines
+- Do not add quotations, scripture references, named entities, or specific examples that do not appear in chunk cards.
+- Avoid verbose expansion. Prefer short, concrete lines over exhaustive lists.
 
 Formatting rules:
 - Plain text only.
@@ -122,6 +136,8 @@ Rules:
 - Prefer communal declarative phrasing over direct instruction.
 - Prefer brief memory phrases that feel declarative and reusable.
 - Do not add new claims not already present in the draft card.
+- Do not introduce new entities, references, examples, or scenes that are absent from the draft card.
+- If support in the draft card is weak or ambiguous, keep wording conservative and shorter rather than expanding.
 - Strengthen affirmative declarative wording in SEED CONCEPT and CARDINAL TRAINING SENTENCE when the draft already supports it.
 - Move corrective, paradox, or misunderstanding-heavy wording toward SURPRISES AND MISUNDERSTANDINGS when the draft mixes those lanes together.
 - Rewrite rather-than, instead-of, or not-this-but-that seed wording into positive declarative teaching when the draft already supports the same meaning.
@@ -130,6 +146,16 @@ Rules:
 - Trim CONCEPT RELATIONS into brief nearby links rather than another explanatory section.
 - Trim BRIEF MEMORY PHRASES into short refrain-like fragments rather than mini-summaries.
 - Do not refine the card into a more generic, secular, institutional, or textbook-sounding artifact than the draft already is.
+- Keep section item counts inside schema ranges exactly:
+  - TEACHING PROGRESSION: 3-6 lines
+  - ORTHOGONAL FEATURES: 3-5 lines
+  - SURPRISES AND MISUNDERSTANDINGS: 2-5 lines
+  - AFFAIRS OR ACTIVITIES: 2-5 lines
+  - CAUSATIVE AND CONSEQUENCE: 2-5 lines
+  - CARDINAL SCENES AND IDIOMS: 2-6 lines
+  - BRIEF MEMORY PHRASES: 4-8 lines
+  - CONCEPT RELATIONS: 2-4 lines
+- Avoid verbose expansion. Prefer compact lines over broad enumeration.
 
 Formatting rules:
 - Plain text only.
@@ -230,7 +256,7 @@ su name learn merge cards from text cards with text learning focus to name text 
   ob text "\n\nCHUNK CARDS:\n" to name learning merge request be plus do
   ob name text learn cards text to name learning merge request be plus do
 
-  su name teaching raw stage ob name text learning merge request fromtext name learning merge prompt for name mind to name text teaching raw by num 0 atmost num 2600 be write do
+  su name teaching raw stage ob name text learning merge request fromtext name learning merge prompt for name mind to name text teaching raw by num 0 atmost num 1800 be write do
   ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   ob text "node command/normalize_learn_card.mjs" fromtext name teaching out to name text teaching out be command do
   ob text "node command/validate_learn_card.mjs" fromtext name teaching out to name text learning card valid be command do
@@ -248,7 +274,7 @@ su name learn refine card from text card with text learning focus to name text t
   ob text "\n\nDRAFT CARD:\n" to name learning refine request be plus do
   ob name text learn card text to name learning refine request be plus do
 
-  su name teaching raw stage ob name text learning refine request fromtext name learning refine prompt for name mind to name text teaching raw by num 0 atmost num 2600 be write do
+  su name teaching raw stage ob name text learning refine request fromtext name learning refine prompt for name mind to name text teaching raw by num 0 atmost num 1800 be write do
   ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   ob text "node command/normalize_learn_card.mjs" fromtext name teaching out to name text teaching out be command do
   ob text "node command/validate_learn_card.mjs" fromtext name teaching out to name text learning card valid be command do
