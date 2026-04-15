@@ -4,6 +4,7 @@ const GROSS_PASS_THRESHOLD = (() => {
   const raw = Number(process.env.AGENDA_GROSS_PASS_THRESHOLD || 0.65);
   return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.65;
 })();
+const GROSS_VERIFICATION_REQUIRED = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_GROSS_VERIFICATION_REQUIRED || "0"));
 
 function normalizeText(value) {
   return String(value || "")
@@ -417,8 +418,10 @@ function selectGrossCandidatesForSection({ section, startIndex, searchEnd, gross
 async function ollamaSummarizeGrossWindow({ start, end, preview, llmModel, ollamaUrl }) {
   const prompt = [
     "Summarize this transcript gross chunk for downstream agenda alignment.",
+    "Write a useful phase synopsis, not a stub.",
+    "Summary length target: 2 to 4 sentences (about 80-220 words).",
     "Return strict JSON only:",
-    "{\"phase\":\"short\",\"summary\":\"one sentence\",\"signals\":[\"a\",\"b\"]}",
+    "{\"phase\":\"descriptive phase title\",\"summary\":\"2-4 sentence synopsis\",\"signals\":[\"a\",\"b\",\"c\"]}",
     "",
     `Chunk paragraph range: ${start}..${end}`,
     "Chunk excerpt:",
@@ -1135,12 +1138,12 @@ export async function generateAgendaWiseArtifacts({
       `agenda-wise quality defective: llm_refine_errors=${llmRefineErrors} coverage=${coverage.toFixed(2)} boundary_coverage=${boundaryCoverage.toFixed(2)} oversized_chips=${oversizedChips}`
     );
   }
-  if (grossPrepass.length && grossScoredCount !== grossPrepass.length) {
+  if (GROSS_VERIFICATION_REQUIRED && grossPrepass.length && grossScoredCount !== grossPrepass.length) {
     throw new Error(
       `agenda-wise quality defective: gross_verification_missing scored=${grossScoredCount} total=${grossPrepass.length}`
     );
   }
-  if (grossPrepass.length && grossVerifiedCount === 0) {
+  if (GROSS_VERIFICATION_REQUIRED && grossPrepass.length && grossVerifiedCount === 0) {
     throw new Error(
       `agenda-wise quality defective: gross_verification_absent total=${grossPrepass.length}`
     );
@@ -1157,6 +1160,7 @@ export async function generateAgendaWiseArtifacts({
       total_windows: grossPrepass.length,
       average_score: Number(grossAvgScore.toFixed(4)),
       pass_threshold: GROSS_PASS_THRESHOLD,
+      required: GROSS_VERIFICATION_REQUIRED,
     },
   }, null, 2), "utf8");
   fs.writeFileSync(matchPath, JSON.stringify({

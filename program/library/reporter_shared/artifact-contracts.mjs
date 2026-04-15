@@ -74,6 +74,13 @@ export function collectArtifactStates(artifactPaths = []) {
 
 export function buildGreyTranscriptArtifacts({ transcriptDir, basePrefix }) {
   const normPrefix = `${basePrefix}-normalized`;
+  const canonicalStage = {
+    agenda_gross_chunks_pya: path.join(transcriptDir, `${normPrefix}.agenda.gross-chunks.pya`),
+    agenda_matches_pya: path.join(transcriptDir, `${normPrefix}.agenda.matches.pya`),
+    agenda_wise_series_pya: path.join(transcriptDir, `${normPrefix}.agenda-wise.series.pya`),
+    agenda_section_grounding_pya: path.join(transcriptDir, `${normPrefix}.agenda.section-grounding.pya`),
+    agenda_summary_pya: path.join(transcriptDir, `${normPrefix}.agenda-summary.pya`),
+  };
   return {
     base_prefix: basePrefix,
     normalized_prefix: normPrefix,
@@ -86,9 +93,7 @@ export function buildGreyTranscriptArtifacts({ transcriptDir, basePrefix }) {
     speaker_json: path.join(transcriptDir, `${normPrefix}.sentences.speaker.sentences.json`),
     speaker_srt: path.join(transcriptDir, `${normPrefix}.sentences.speaker.sentence.srt`),
     autoassign_report_json: path.join(transcriptDir, `${normPrefix}.sentences.speaker.autoassign.report.json`),
-    agenda_wise_series_pya: path.join(transcriptDir, `${normPrefix}.agenda-wise.series.pya`),
-    agenda_matches_json: path.join(transcriptDir, `${normPrefix}.agenda.matches.json`),
-    agenda_summary_json: path.join(transcriptDir, `${normPrefix}.agenda-summary.json`),
+    ...canonicalStage,
     meeting_summary_md: path.join(transcriptDir, `${normPrefix}.meeting-summary.md`),
     meeting_hook_txt: path.join(transcriptDir, `${normPrefix}.meeting-hook.txt`),
     transcript_html: path.join(transcriptDir, "transcript-page.html"),
@@ -97,5 +102,10 @@ export function buildGreyTranscriptArtifacts({ transcriptDir, basePrefix }) {
     lemmy_payload_json: path.join(transcriptDir, `${normPrefix}.lemmy-post.json`),
     lemmy_post_md: path.join(transcriptDir, `${normPrefix}.lemmy-post.md`),
     full_pipeline_report_pya: path.join(transcriptDir, `${normPrefix}.full-pipeline.report.pya`),
+    // Legacy JSON stage artifacts are intentionally outside canonical flow.
+    legacy_stage_json: {
+      agenda_matches_json: path.join(transcriptDir, `${normPrefix}.agenda.matches.json`),
+      agenda_summary_json: path.join(transcriptDir, `${normPrefix}.agenda-summary.json`),
+    },
   };
 }

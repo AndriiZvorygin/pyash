@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { readPyaTextValues } from "./pya_lookup.mjs";
 
 const SITE_URL_DEFAULT = "https://helpos.ca";
 
@@ -335,6 +336,54 @@ function parseGrossChunks(jsonText) {
   }
 }
 
+function parsePyaJsonField(filePath, fieldName) {
+  const values = readPyaTextValues(filePath, [fieldName]);
+  const raw = String(values[fieldName] || "").trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function parseAgendaSummarySectionsFromPya(filePath) {
+  const rawSections = parsePyaJsonField(filePath, "sections");
+  if (!Array.isArray(rawSections)) return [];
+  return rawSections.map((sec) => ({
+    ...sec,
+    start_row: Number(sec?.start_row ?? sec?.["start row"]),
+    end_row: Number(sec?.end_row ?? sec?.["end row"]),
+    source_rows: Number(sec?.source_rows ?? sec?.["source rows"]),
+  }));
+}
+
+function parseAgendaMatchesFromPya(filePath) {
+  const sectionsTotalRaw = readPyaTextValues(filePath, ["sections total"])["sections total"];
+  const assignments = parsePyaJsonField(filePath, "assignments");
+  return {
+    sections_total: Number(sectionsTotalRaw || 0),
+    assignments: Array.isArray(assignments) ? assignments : [],
+    boundaries: [],
+    section_starts: [],
+    matches: [],
+  };
+}
+
+function parseGrossChunksFromPya(filePath) {
+  const rawChunks = parsePyaJsonField(filePath, "chunks");
+  if (!Array.isArray(rawChunks)) return [];
+  return rawChunks
+    .map((c, i) => ({
+      index: i + 1,
+      start: Number(c?.start ?? c?.["row start"]),
+      end: Number(c?.end ?? c?.["row end"]),
+      summary: String(c?.summary || c?.["semantic summary"] || "").trim(),
+      phase: String(c?.phase || c?.["likely agenda item"] || "").trim(),
+    }))
+    .filter((c) => Number.isFinite(c.start) && Number.isFinite(c.end) && c.end >= c.start);
+}
+
 function findRowIndexAtOrAfter(rows, targetSince) {
   for (let i = 0; i < rows.length; i += 1) {
     if ((Number(rows[i]?.since) || 0) >= targetSince) return i;
@@ -475,6 +524,42 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
   if (!rows.length || !sections.length) return [];
   const wise = Array.isArray(wiseRanges) ? wiseRanges : [];
   const gross = Array.isArray(grossChunks) ? grossChunks : [];
+  const mapParagraphSectionsToRows = () => {
+    const paragraphRows = sections.filter((s) =>
+      Number.isFinite(Number(s?.start_paragraph)) &&
+      Number.isFinite(Number(s?.end_paragraph)) &&
+      Number(s.start_paragraph) >= 0 &&
+      Number(s.end_paragraph) >= Number(s.start_paragraph)
+    );
+    if (paragraphRows.length < Math.max(2, Math.floor(sections.length * 0.7))) return [];
+    let maxParagraph = 0;
+    for (const s of sections) {
+      const sp = Number(s?.start_paragraph);
+      const ep = Number(s?.end_paragraph);
+      if (Number.isFinite(sp)) maxParagraph = Math.max(maxParagraph, Math.floor(sp));
+      if (Number.isFinite(ep)) maxParagraph = Math.max(maxParagraph, Math.floor(ep));
+    }
+    if (maxParagraph <= 0) return [];
+    const toRow = (p) => {
+      const x = Number(p);
+      if (!Number.isFinite(x) || x < 0) return -1;
+      const ratio = Math.max(0, Math.min(1, x / maxParagraph));
+      return Math.max(0, Math.min(rows.length - 1, Math.round(ratio * (rows.length - 1))));
+    };
+    const out = sections.map((sec, i) => {
+      const start = toRow(sec?.start_paragraph);
+      const endRaw = toRow(sec?.end_paragraph);
+      const end = Math.max(start, endRaw);
+      return {
+        id: `section-${i + 1}`,
+        heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
+        summary: String(sec?.summary || "").trim(),
+        startRow: start,
+        endRow: end,
+      };
+    }).filter((s) => s.startRow >= 0 && s.endRow >= s.startRow);
+    return normalizeSectionRanges(rows, out);
+  };
 
   const explicitRows = sections.filter((s) =>
     Number.isFinite(Number(s?.start_row)) &&
@@ -503,6 +588,8 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
   // In that case, prefer a plain chronological transcript over broken anchors.
   const groundedSections = sections.filter((s) => Number(s?.source_rows || 0) > 0).length;
   if (groundedSections === 0) {
+    const paragraphMapped = mapParagraphSectionsToRows();
+    if (paragraphMapped.length) return paragraphMapped;
     const grossFallback = buildRangesFromGrossChunks(rows, gross);
     if (grossFallback.length) return grossFallback;
     if (!wise.length) return [];
@@ -1035,27 +1122,25 @@ function main() {
   }
 
   const agendaSummaryPath = pickFile(transcriptDir, [/\.agenda-summary\.md$/u]);
-  const agendaSummaryJsonPath = pickFile(transcriptDir, [/\.agenda-summary\.json$/u]);
-  const agendaMatchesPath = pickFile(transcriptDir, [/\.agenda\.matches\.json$/u]);
+  const agendaSummaryPyaPath = pickFile(transcriptDir, [/\.agenda-summary\.pya$/u]);
+  const agendaMatchesPath = pickFile(transcriptDir, [/\.agenda\.matches\.pya$/u]);
   const agendaWiseSeriesPath = pickFile(transcriptDir, [/\.agenda-wise\.series\.pya$/u]);
-  const agendaGrossChunksPath = pickFile(transcriptDir, [/\.agenda\.gross-chunks\.json$/u]);
+  const agendaGrossChunksPath = pickFile(transcriptDir, [/\.agenda\.gross-chunks\.pya$/u]);
   const meetingSummaryPath = pickFile(transcriptDir, [/\.meeting-summary\.md$/u]);
   const agendaSummary = agendaSummaryPath ? fs.readFileSync(agendaSummaryPath, "utf8") : "";
   let agendaSummaryJson = {};
   let agendaMatches = {};
   let wiseRanges = [];
-  if (agendaSummaryJsonPath) {
-    try { agendaSummaryJson = JSON.parse(fs.readFileSync(agendaSummaryJsonPath, "utf8")); } catch {}
+  if (agendaSummaryPyaPath) {
+    agendaSummaryJson = { sections: parseAgendaSummarySectionsFromPya(agendaSummaryPyaPath) };
   }
   if (agendaMatchesPath) {
-    try { agendaMatches = JSON.parse(fs.readFileSync(agendaMatchesPath, "utf8")); } catch {}
+    agendaMatches = parseAgendaMatchesFromPya(agendaMatchesPath);
   }
   if (agendaWiseSeriesPath) {
     try { wiseRanges = parseWiseRanges(fs.readFileSync(agendaWiseSeriesPath, "utf8")); } catch {}
   }
-  const grossChunks = agendaGrossChunksPath
-    ? parseGrossChunks(fs.readFileSync(agendaGrossChunksPath, "utf8"))
-    : [];
+  const grossChunks = agendaGrossChunksPath ? parseGrossChunksFromPya(agendaGrossChunksPath) : [];
   const meetingSummary = meetingSummaryPath ? fs.readFileSync(meetingSummaryPath, "utf8") : "";
   const meetingDir = path.dirname(transcriptDir);
   const meetingJsonPath = path.join(meetingDir, "meeting.json");

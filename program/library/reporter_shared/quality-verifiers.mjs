@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { readPyaTextValues } from "../../../command/pya_lookup.mjs";
 
 function safeRead(filePath) {
   try {
@@ -8,9 +9,17 @@ function safeRead(filePath) {
   }
 }
 
-function safeJson(filePath) {
+function readAgendaSummarySectionsFromPya(filePath) {
+  const values = readPyaTextValues(filePath, ["sections"]);
+  const raw = String(values.sections || "").trim();
+  if (!raw) return [];
+  const parsed = safeJsonFromText(raw);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function safeJsonFromText(text) {
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return JSON.parse(String(text || ""));
   } catch {
     return {};
   }
@@ -20,7 +29,7 @@ function words(text) {
   return String(text || "").split(/\s+/u).filter(Boolean).length;
 }
 
-export function verifyRequiredSections({ meetingSummaryMdPath = "", agendaSummaryJsonPath = "" } = {}) {
+export function verifyRequiredSections({ meetingSummaryMdPath = "", agendaSummaryPyaPath = "" } = {}) {
   const issues = [];
   const md = safeRead(meetingSummaryMdPath);
   const requiredHeadings = [
@@ -32,8 +41,7 @@ export function verifyRequiredSections({ meetingSummaryMdPath = "", agendaSummar
   for (const h of requiredHeadings) {
     if (!md.includes(h)) issues.push({ level: "error", code: "missing_heading", detail: h });
   }
-  const agenda = safeJson(agendaSummaryJsonPath);
-  const sections = Array.isArray(agenda?.sections) ? agenda.sections : [];
+  const sections = readAgendaSummarySectionsFromPya(agendaSummaryPyaPath);
   if (!sections.length) {
     issues.push({ level: "error", code: "missing_agenda_sections", detail: "agenda-summary sections missing" });
   }
@@ -47,11 +55,10 @@ export function verifyRequiredSections({ meetingSummaryMdPath = "", agendaSummar
   };
 }
 
-export function verifyTruncation({ meetingSummaryMdPath = "", agendaSummaryJsonPath = "" } = {}) {
+export function verifyTruncation({ meetingSummaryMdPath = "", agendaSummaryPyaPath = "" } = {}) {
   const issues = [];
   const md = safeRead(meetingSummaryMdPath);
-  const agenda = safeJson(agendaSummaryJsonPath);
-  const sections = Array.isArray(agenda?.sections) ? agenda.sections : [];
+  const sections = readAgendaSummarySectionsFromPya(agendaSummaryPyaPath);
 
   const mdLines = md.split(/\r?\n/u);
   const ellipsisLines = mdLines.filter((l) => /\.\.\.\s*$/u.test(String(l).trim()));

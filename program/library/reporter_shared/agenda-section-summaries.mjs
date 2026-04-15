@@ -2,6 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// LEGACY MODULE: JSON-era agenda summarizer kept for backward compatibility.
+// Canonical pipeline uses Stage 1/2/3 .pya artifacts via:
+// - agenda-stage1-gross-chunking.mjs
+// - agenda-stage2-grounding.mjs
+// - agenda-stage3-summary-renderer.mjs
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
@@ -59,7 +65,7 @@ const SUBSECTION_MIN_GAP_SECONDS = (() => {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 90;
 })();
 const DEBUG_SECTION_SPLIT = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_SUMMARY_DEBUG_SPLIT || '0'));
-const USE_ROW_RANGES = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_SUMMARY_USE_ROW_RANGES || '0'));
+const USE_ROW_RANGES = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_SUMMARY_USE_ROW_RANGES || '1'));
 
 function usage() {
   return [
@@ -285,6 +291,10 @@ function loadTranscriptRowsForPrefix(transcriptDir, prefix) {
 
 function loadAgendaMatchesForPrefix(transcriptDir, prefix) {
   const jsonPath = path.join(transcriptDir, `${prefix}.agenda.matches.json`);
+  const canonicalPya = path.join(transcriptDir, `${prefix}.agenda.matches.pya`);
+  if (!fs.existsSync(jsonPath) && fs.existsSync(canonicalPya)) {
+    throw new Error("legacy agenda-section-summaries requires .agenda.matches.json; canonical .pya-only artifacts must use stage3 summary renderer");
+  }
   if (!fs.existsSync(jsonPath)) return {};
   try {
     return JSON.parse(fs.readFileSync(jsonPath, 'utf8')) || {};
@@ -295,6 +305,10 @@ function loadAgendaMatchesForPrefix(transcriptDir, prefix) {
 
 function loadGrossChunksForPrefix(transcriptDir, prefix) {
   const jsonPath = path.join(transcriptDir, `${prefix}.agenda.gross-chunks.json`);
+  const canonicalPya = path.join(transcriptDir, `${prefix}.agenda.gross-chunks.pya`);
+  if (!fs.existsSync(jsonPath) && fs.existsSync(canonicalPya)) {
+    throw new Error("legacy agenda-section-summaries requires .agenda.gross-chunks.json; canonical .pya-only artifacts must use stage3 summary renderer");
+  }
   if (!fs.existsSync(jsonPath)) return [];
   try {
     const obj = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
