@@ -33,6 +33,42 @@ function normalizeHost(raw) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
+function resolveNonNegativeInt(raw, fallback) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.floor(n);
+}
+
+function resolvePositiveInt(raw, fallback) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.floor(n);
+}
+
+function sleep(ms) {
+  const delay = Math.max(0, Number(ms) || 0);
+  if (!delay) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+function isRetryablePromptifyError(error) {
+  const status = Number(error?.status);
+  if (Number.isFinite(status) && [408, 425, 429, 500, 502, 503, 504].includes(status)) {
+    return true;
+  }
+  const msg = String(error?.message || "").toLowerCase();
+  return (
+    msg.includes("fetch failed")
+    || msg.includes("network")
+    || msg.includes("timed out")
+    || msg.includes("timeout")
+    || msg.includes("econnreset")
+    || msg.includes("socket hang up")
+    || msg.includes("connection reset")
+    || msg.includes("connection refused")
+  );
+}
+
 function cleanPrompt(text) {
   const normalized = String(text ?? "")
     .replace(/```[\s\S]*?```/g, " ")
@@ -154,32 +190,50 @@ function buildPromptifyPacket({
 
 async function callPromptMind({ host, model, systemPrompt, cutText }) {
   const endpoint = `${normalizeHost(host)}/api/chat`;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      think: false,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: cutText }
-      ]
-    })
-  });
-  let payload = {};
-  try {
-    payload = await response.json();
-  } catch {
-    payload = {};
+  const timeoutMs = resolvePositiveInt(process.env.PYA_PROMPTIFY_TIMEOUT_MS, 45000);
+  const maxRetries = resolveNonNegativeInt(process.env.PYA_PROMPTIFY_RETRIES, 3);
+  const retryDelayMs = resolvePositiveInt(process.env.PYA_PROMPTIFY_RETRY_DELAY_MS, 600);
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model,
+          stream: false,
+          think: false,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: cutText }
+          ]
+        }),
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch {
+        payload = {};
+      }
+      if (!response.ok) {
+        const error = new Error(`promptify defective: status=${response.status} error=${payload?.error || response.statusText}`);
+        error.status = response.status;
+        throw error;
+      }
+      const text = payload?.message?.content ?? payload?.response ?? "";
+      const prompt = cleanPrompt(text);
+      if (!prompt) throw new Error("promptify defective: empty prompt");
+      return prompt;
+    } catch (error) {
+      lastError = error;
+      const shouldRetry = isRetryablePromptifyError(error) && attempt < maxRetries;
+      if (!shouldRetry) throw error;
+      await sleep(retryDelayMs * (attempt + 1));
+    }
   }
-  if (!response.ok) {
-    throw new Error(`promptify defective: status=${response.status} error=${payload?.error || response.statusText}`);
-  }
-  const text = payload?.message?.content ?? payload?.response ?? "";
-  const prompt = cleanPrompt(text);
-  if (!prompt) throw new Error("promptify defective: empty prompt");
-  return prompt;
+  throw lastError || new Error("promptify defective: unknown error");
 }
 
 export { parseArgs, callPromptMind, cleanPrompt, buildPromptifyPacket, buildDistinctFullScript };

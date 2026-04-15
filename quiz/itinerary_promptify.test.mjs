@@ -175,3 +175,29 @@ test("buildPromptifyPacket renders caller-provided placeholder template", () => 
     "CUT=second cut|PREV=first cut|NEXT=EMPTY|SCRIPT=first cut second cut|P1=first prompt|P2=EMPTY"
   );
 });
+
+test("callPromptMind retries transient fetch failure", async () => {
+  const priorFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) throw new Error("fetch failed");
+    return {
+      ok: true,
+      json: async () => ({ message: { content: "stable prompt" } })
+    };
+  };
+  try {
+    const { callPromptMind } = await import("../command/itinerary_promptify.mjs");
+    const out = await callPromptMind({
+      host: "http://localhost:11434",
+      model: "qwen3.5:9b",
+      systemPrompt: "x",
+      cutText: "y"
+    });
+    assert.equal(out, "stable prompt");
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});
