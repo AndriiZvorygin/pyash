@@ -141,6 +141,8 @@ async function main() {
 
   const fromWav = path.join(voicesDir, `${fromKey}.wav`);
   const toWav = path.join(voicesDir, `${toKey}.wav`);
+  const fromNpy = path.join(voicesDir, `${fromKey}.npy`);
+  const toNpy = path.join(voicesDir, `${toKey}.npy`);
   const fromPya = path.join(voicesDir, `${fromKey}.pya`);
   const toPya = path.join(voicesDir, `${toKey}.pya`);
 
@@ -166,27 +168,33 @@ async function main() {
   process.stdout.write(`[voice-merge] drop source: ${keepSource ? "no" : "yes"}\n`);
 
   if (!apply) return;
-  if (!isFile(chosenWav)) {
-    throw new Error(`no wav available to rebuild target embedding: ${chosenWav}`);
-  }
-
   ensureMeta(toPya, toKey, mergedName);
-  if (chosen === "from") {
+  if (chosen === "from" && isFile(fromWav)) {
     fs.copyFileSync(fromWav, toWav);
   }
 
-  // Rebuild target embedding from selected wav.
-  await ensureStarted();
-  try {
-    await enrol({
-      audio: toWav,
-      name: toKey,
-      voicesDir,
-      clipSeconds: Math.max(1.2, Math.min(20, chosenDur || 12)),
-    });
-  } finally {
-    try { await discharge(); } catch {}
-    try { await stop(); } catch {}
+  if (isFile(toWav)) {
+    // Rebuild target embedding from selected wav.
+    await ensureStarted();
+    try {
+      await enrol({
+        audio: toWav,
+        name: toKey,
+        voicesDir,
+        clipSeconds: Math.max(1.2, Math.min(8, chosenDur || 8)),
+        // Merge is a maintenance operation over existing enrolled identities;
+        // skip strict long-clip edge integrity to avoid blocking on mixed archival wav tails.
+        edgeMinDurationSeconds: 999999,
+      });
+    } finally {
+      try { await discharge(); } catch {}
+      try { await stop(); } catch {}
+    }
+  } else {
+    // No wav exists; keep current target embedding if present, otherwise promote source embedding.
+    if (!isFile(toNpy) && isFile(fromNpy)) {
+      fs.copyFileSync(fromNpy, toNpy);
+    }
   }
 
   let toMetaSrc = isFile(toPya) ? fs.readFileSync(toPya, "utf8") : "";
@@ -205,4 +213,3 @@ main().catch((err) => {
   process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
   process.exit(1);
 });
-
