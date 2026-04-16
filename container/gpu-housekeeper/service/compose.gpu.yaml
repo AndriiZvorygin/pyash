@@ -1,0 +1,19 @@
+services:
+  gpu-housekeeper:
+    container_name: gpu-housekeeper
+    build:
+      context: ../../..
+      dockerfile: container/gpu-housekeeper/Dockerfile
+    image: liberit/gpu-housekeeper:latest
+    entrypoint: ["python3", "/service/server.py"]
+    command: ["--host", "0.0.0.0", "--port", "8090", "--host-id", "${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}"]
+    ports:
+      - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-8090}:8090"
+    gpus: all
+    environment:
+      - GPU_HOUSEKEEPER_HOST_ID=${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}
+      - GPU_HOUSEKEEPER_RUNTIME_REGISTRY=${GPU_HOUSEKEEPER_RUNTIME_REGISTRY:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - host.docker.internal:host-gateway
