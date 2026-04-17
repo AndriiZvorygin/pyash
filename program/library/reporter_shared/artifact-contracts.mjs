@@ -94,6 +94,8 @@ export function buildGreyTranscriptArtifacts({ transcriptDir, basePrefix }) {
     speaker_srt: path.join(transcriptDir, `${normPrefix}.sentences.speaker.sentence.srt`),
     autoassign_report_json: path.join(transcriptDir, `${normPrefix}.sentences.speaker.autoassign.report.json`),
     ...canonicalStage,
+    meeting_summary_chunks_pya: path.join(transcriptDir, `${normPrefix}.meeting-summary.chunks.pya`),
+    meeting_summary_pya: path.join(transcriptDir, `${normPrefix}.meeting-summary.pya`),
     meeting_summary_md: path.join(transcriptDir, `${normPrefix}.meeting-summary.md`),
     meeting_hook_txt: path.join(transcriptDir, `${normPrefix}.meeting-hook.txt`),
     transcript_html: path.join(transcriptDir, "transcript-page.html"),
