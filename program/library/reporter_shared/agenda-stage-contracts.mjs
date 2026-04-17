@@ -297,3 +297,141 @@ export function validateAgendaSummaryStrict(sectionGrounding = {}, summary = {})
     }
   }
 }
+
+export function validateMeetingSummaryChunksStrict(chunksArtifact = {}) {
+  assertNoSnakeCaseKeys(chunksArtifact, "meeting summary chunks");
+  assertExactKeys(
+    chunksArtifact,
+    [
+      "schema version",
+      "source agenda summary",
+      "transcript dir",
+      "prefix",
+      "focus",
+      "generated time",
+      "source sections total",
+      "chunks",
+    ],
+    "meeting summary chunks",
+  );
+  if (String(chunksArtifact["schema version"] || "") !== "meeting_summary_chunks_v1") {
+    throw new Error("meeting summary chunks defective: invalid schema version");
+  }
+  const sourceSectionsTotal = Number(chunksArtifact["source sections total"] || 0);
+  if (!Number.isInteger(sourceSectionsTotal) || sourceSectionsTotal <= 0) {
+    throw new Error("meeting summary chunks defective: invalid source sections total");
+  }
+  const chunks = Array.isArray(chunksArtifact?.chunks) ? chunksArtifact.chunks : [];
+  if (!chunks.length) throw new Error("meeting summary chunks defective: no chunks");
+
+  const seenChunkIds = new Set();
+  let expectedSectionStart = 1;
+  for (let i = 0; i < chunks.length; i += 1) {
+    const chunk = chunks[i] || {};
+    assertNoSnakeCaseKeys(chunk, `meeting summary chunk ${i + 1}`);
+    assertExactKeys(
+      chunk,
+      [
+        "chunk id",
+        "section start index",
+        "section end index",
+        "covered headings",
+        "source section count",
+        "source byte count",
+        "chunk summary text",
+      ],
+      `meeting summary chunk ${i + 1}`,
+    );
+    const chunkId = String(chunk["chunk id"] || "").trim();
+    if (!chunkId) throw new Error(`meeting summary chunks defective: empty chunk id at index=${i + 1}`);
+    if (seenChunkIds.has(chunkId)) {
+      throw new Error(`meeting summary chunks defective: duplicate chunk id "${chunkId}"`);
+    }
+    seenChunkIds.add(chunkId);
+
+    const sectionStart = Number(chunk["section start index"]);
+    const sectionEnd = Number(chunk["section end index"]);
+    if (!Number.isInteger(sectionStart) || !Number.isInteger(sectionEnd) || sectionStart < 1 || sectionEnd < sectionStart) {
+      throw new Error(`meeting summary chunks defective: invalid section range at chunk=${i + 1}`);
+    }
+    if (sectionStart !== expectedSectionStart) {
+      throw new Error(
+        `meeting summary chunks defective: discontinuous section coverage at chunk=${i + 1} expected_start=${expectedSectionStart} got=${sectionStart}`,
+      );
+    }
+    const sectionCount = Number(chunk["source section count"]);
+    if (!Number.isInteger(sectionCount) || sectionCount <= 0) {
+      throw new Error(`meeting summary chunks defective: invalid source section count at chunk=${i + 1}`);
+    }
+    if (sectionCount !== (sectionEnd - sectionStart + 1)) {
+      throw new Error(`meeting summary chunks defective: source section count mismatch at chunk=${i + 1}`);
+    }
+    const headings = Array.isArray(chunk["covered headings"]) ? chunk["covered headings"] : [];
+    if (headings.length !== sectionCount) {
+      throw new Error(`meeting summary chunks defective: covered headings count mismatch at chunk=${i + 1}`);
+    }
+    const sourceBytes = Number(chunk["source byte count"]);
+    if (!Number.isFinite(sourceBytes) || sourceBytes <= 0) {
+      throw new Error(`meeting summary chunks defective: invalid source byte count at chunk=${i + 1}`);
+    }
+    if (!String(chunk["chunk summary text"] || "").trim()) {
+      throw new Error(`meeting summary chunks defective: empty chunk summary text at chunk=${i + 1}`);
+    }
+    expectedSectionStart = sectionEnd + 1;
+  }
+
+  if (expectedSectionStart !== sourceSectionsTotal + 1) {
+    throw new Error(
+      `meeting summary chunks defective: section coverage ended at ${expectedSectionStart - 1} expected ${sourceSectionsTotal}`,
+    );
+  }
+}
+
+export function validateMeetingSummaryArtifactStrict(summary = {}, chunksArtifact = {}) {
+  assertNoSnakeCaseKeys(summary, "meeting summary artifact");
+  assertExactKeys(
+    summary,
+    [
+      "schema version",
+      "source meeting summary chunks",
+      "focus",
+      "score",
+      "generated time",
+      "headings",
+      "markdown",
+      "verifier feedback",
+      "chunk count",
+    ],
+    "meeting summary artifact",
+  );
+  if (String(summary["schema version"] || "") !== "meeting_summary_v1") {
+    throw new Error("meeting summary artifact defective: invalid schema version");
+  }
+  const score = Number(summary.score);
+  if (!Number.isFinite(score) || score < 0 || score > 1) {
+    throw new Error("meeting summary artifact defective: invalid score");
+  }
+  const chunkCount = Number(summary["chunk count"] || 0);
+  if (!Number.isInteger(chunkCount) || chunkCount <= 0) {
+    throw new Error("meeting summary artifact defective: invalid chunk count");
+  }
+  const chunks = Array.isArray(chunksArtifact?.chunks) ? chunksArtifact.chunks : [];
+  if (chunks.length && chunkCount !== chunks.length) {
+    throw new Error(`meeting summary artifact defective: chunk count mismatch artifact=${chunkCount} chunks=${chunks.length}`);
+  }
+  const markdown = String(summary.markdown || "");
+  if (!markdown.trim()) {
+    throw new Error("meeting summary artifact defective: empty markdown");
+  }
+  const requiredHeadings = [
+    /^#\s+Whole Meeting Summary\b/mu,
+    /^##\s+Top Newsworthy Developments\b/mu,
+    /^##\s+Why It Matters\b/mu,
+    /^##\s+Watch Next\b/mu,
+  ];
+  for (const pattern of requiredHeadings) {
+    if (!pattern.test(markdown)) {
+      throw new Error(`meeting summary artifact defective: missing required heading ${pattern}`);
+    }
+  }
+}
