@@ -95,7 +95,7 @@ exists su name hear qwen chunk overlap seconds ob num 1.5 be default ya
 exists su name whisperx enabled ob bool lie be default ya
 exists su name speaker identity enabled ob bool lie be default ya
 exists su name speaker backend default ob text "local" be default ya
-exists su name speaker host ob text "http://speaker:8010" be default ya
+exists su name speaker host ob text "http://mriczo:8010" be default ya
 exists su name speaker voices dir ob filename "./world/voices" be default ya
 exists su name download extra ob ve text "--cookies-from-browser" "firefox" ya
 exists su name download extra default ob la be download as wo video ko with name download extra be default ya

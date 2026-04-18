@@ -423,7 +423,25 @@ function removeSpeakerArtifacts({ voicesDir, speakerKey }) {
 
 function isKnownLike(matchKind) {
   const m = String(matchKind || '').trim().toLowerCase();
-  return m === 'known' || m === 'prev';
+  return m === 'known' || m === 'prev' || m === 'known_merge_guard';
+}
+
+function enforceNoPseudoKnownForFreshKey({
+  speakerKey,
+  matched,
+  preexistingSpeakerKeys,
+  context,
+}) {
+  const key = String(speakerKey || '').trim();
+  const match = String(matched || '').trim().toLowerCase();
+  if (!key) return;
+  if (!/^speaker_\d+$/iu.test(key)) return;
+  if (!(preexistingSpeakerKeys instanceof Set)) return;
+  if (preexistingSpeakerKeys.has(key)) return;
+  if (!isKnownLike(match)) return;
+  throw new Error(
+    `spec violation: fresh key ${key} returned as ${match} (${context}); this indicates illegal pseudo-known assignment`
+  );
 }
 
 function applyNewSpeakerGuard({
@@ -702,6 +720,7 @@ async function main() {
   const firstSampleBySpeaker = new Set();
   let prevSpeaker = '';
   const metadataMapForLog = loadSpeakerMetadataMap(voicesDir);
+  const preexistingSpeakerKeys = new Set(metadataMapForLog.keys());
   const nameEvidenceBySpeaker = new Map();
   let clipAudioPath = audioPath;
 
@@ -738,6 +757,12 @@ async function main() {
         }, `turn=${turnIndex + 1}`);
         speakerKey = String(ident?.speaker || '').trim() || 'speaker_unknown';
         matched = String(ident?.matched || 'na');
+        enforceNoPseudoKnownForFreshKey({
+          speakerKey,
+          matched,
+          preexistingSpeakerKeys,
+          context: `turn=${turnIndex + 1}/${turns.length}`,
+        });
         similarity = fmtScore(ident?.similarity);
         sampleCount = Number.isFinite(Number(ident?.sample_count))
           ? String(Number(ident.sample_count))
@@ -851,6 +876,12 @@ async function main() {
                 }, `turn=${turnIndex + 1} cue=${cueIdx + 1}`);
                 cueSpeaker = String(cueIdent?.speaker || '').trim() || cueSpeaker;
                 cueMatched = String(cueIdent?.matched || 'na');
+                enforceNoPseudoKnownForFreshKey({
+                  speakerKey: cueSpeaker,
+                  matched: cueMatched,
+                  preexistingSpeakerKeys,
+                  context: `turn=${turnIndex + 1}/${turns.length} cue=${cueIdx + 1}/${turn.cues.length}`,
+                });
                 cueSim = fmtScore(cueIdent?.similarity);
                 cueSamples = Number.isFinite(Number(cueIdent?.sample_count))
                   ? String(Number(cueIdent.sample_count))
