@@ -87,7 +87,7 @@ function buildThumbnailSource({ titleHook, summaryDescription, sourceText, filen
     lines.push(`FILENAME_FALLBACK: ${normalize(filenameOnly)}`);
   }
 
-  lines.push("THUMBNAIL_DIRECTION: choose one dominant visual hook from the cooperation-scaling arc, not the whole script at once.");
+  lines.push("THUMBNAIL_DIRECTION: choose one dominant visual hook directly from PRIMARY_THUMBNAIL_SIGNAL; keep the same core meaning and nouns.");
 
   return {
     text: `${lines.join("\n")}\n`,

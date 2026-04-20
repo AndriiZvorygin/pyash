@@ -420,3 +420,63 @@ test("lyrics_to_srt_from_timing trims chunk-boundary overlap between adjacent se
     `second row should trim repeated overlap prefix, got: ${rows[1].text}`
   );
 });
+
+test("lyrics_to_srt_from_timing strips markdown markers from subtitle text", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-markdown-clean.txt");
+  const timingPath = path.join(dir, "timing-markdown-clean.srt");
+  const outputPath = path.join(dir, "lyrics-markdown-clean.out.srt");
+
+  const lyrics = [
+    "[verse]",
+    "**Bold** _light_ and [link](https://example.com) `code`.",
+    "- Keep ~~steady~~ focus."
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:00,000 --> 00:00:02,000",
+    "bold light and link code",
+    "",
+    "2",
+    "00:00:02,000 --> 00:00:04,000",
+    "keep steady focus"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  assert.doesNotMatch(outText, /\*\*|__|~~|`|\[[^\]]+\]\([^)]*\)/u);
+  assert.doesNotMatch(outText, /^\s*-\s+/mu);
+  assert.match(outText, /Bold light and link code\./u);
+  assert.match(outText, /Keep steady focus\./u);
+});
+
+test("lyrics_to_srt_from_timing sentence-cues sanitize markdown emphasis", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-markdown-sentence-cues.txt");
+  const timingPath = path.join(dir, "timing-markdown-sentence-cues.srt");
+  const outputPath = path.join(dir, "lyrics-markdown-sentence-cues.out.srt");
+
+  const lyrics = "**We** enter with _open_ hearts. [Read more](https://example.com).";
+  const timing = [
+    "1",
+    "00:00:00,000 --> 00:00:01,600",
+    "we enter with open hearts read more"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  assert.doesNotMatch(outText, /\*\*|_|`|\[[^\]]+\]\([^)]*\)/u);
+  assert.match(outText, /We enter with open hearts\./u);
+  assert.match(outText, /Read more\./u);
+});

@@ -8,7 +8,7 @@ test("wide teaching video pipeline selects thumbnail input from generated metada
   assert.match(text, /final-concatenate-stage\.metadata\.pya/);
   assert.match(text, /thumbnail-input-source\.txt/);
   assert.match(text, /thumbnail-input-selection\.json/);
-  assert.match(text, /exists su name thumbnail variant mode ob text "single" be default ya/);
+  assert.match(text, /su name thumbnail variant mode ob text "triple" ya/);
   assert.match(text, /exists su name thumbnail variant label ob text "" be default ya/);
   assert.match(text, /su name thumbnail source filename stage ob name text thumbnail source path to name filename thumbnail source filename be filename do/);
   assert.match(text, /su name thumbnail demo from filename of ob of thumbnail source filename stage with text of ob of style_prompt be draw as wo thumbnail do/);

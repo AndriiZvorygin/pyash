@@ -49,7 +49,8 @@ Thumbnail rules:
 - Keep background simple and uncluttered.
 - Use high contrast and clean silhouette separation.
 - Overlay text must be 2 to 5 words, short and punchy, no long sentence.
-- Overlay text should map to the source hook and be easy to read when tiny.
+- If PRIMARY_THUMBNAIL_SIGNAL or TITLE_HOOK is present in SOURCE_TEXT, OVERLAY_TEXT must be derived directly from that signal and keep the same core nouns.
+- Do not invent unrelated nouns for OVERLAY_TEXT when PRIMARY_THUMBNAIL_SIGNAL or TITLE_HOOK is present.
 - OVERLAY_TEXT should be words only, no decorative punctuation.
 - Style supports clarity first, style second.
 - Avoid generic cinematic filler language.
@@ -71,14 +72,23 @@ exists su name draw thumbnail style hint ob text "editorial illustration, bold c
 exists su name thumbnail variant mode ob text "single" be default ya
 exists su name thumbnail variant label ob text "" be default ya
 
+exists su name thumbnail generation policy be map def
+su name profile ob text "teaching_video" ya
+su name subject_policy ob text "human_face" ya
+su name face_required ob text "truth" ya
+su name text_prominence ob text "balanced" ya
+su name width ob num 1280 ya
+su name height ob num 720 ya
+prah
+
 
 su name draw thumbnail prompt replacements be map def
   su text "[[style_hint]]" ob name text draw thumbnail style hint ya
 prah
 
 su name draw size thumbnail be map def
-su name width ob num 512 ya
-su name height ob num 512 ya
+su name width ob num 1280 ya
+su name height ob num 720 ya
 prah
 
 su name draw from filename source with text style be ceremony def
@@ -246,6 +256,19 @@ su name draw as wo thumbnail from filename source with text style be ceremony de
   ob name thumbnail variant mode to name text draw thumbnail variant mode be text do
   ob name text draw thumbnail variant mode be equally from text "" then ob text "single" to name text draw thumbnail variant mode be text do
   ob name thumbnail variant label to name text draw thumbnail variant label be text do
+  ob name thumbnail generation policy to name map draw thumbnail policy be map do
+  ob text of profile of draw thumbnail policy to name text draw thumbnail profile be text do
+  ob name text draw thumbnail profile be equally from text "" then ob text "teaching_video" to name text draw thumbnail profile be text do
+  ob text of subject_policy of draw thumbnail policy to name text draw thumbnail subject policy be text do
+  ob name text draw thumbnail subject policy be equally from text "" then ob text "human_face" to name text draw thumbnail subject policy be text do
+  ob text of face_required of draw thumbnail policy to name text draw thumbnail face required be text do
+  ob name text draw thumbnail face required be equally from text "" then ob text "truth" to name text draw thumbnail face required be text do
+  ob text of text_prominence of draw thumbnail policy to name text draw thumbnail text prominence be text do
+  ob name text draw thumbnail text prominence be equally from text "" then ob text "balanced" to name text draw thumbnail text prominence be text do
+  ob num of width of draw thumbnail policy to name num draw thumbnail width be num do
+  ob num of num draw thumbnail width be less num 1 then ob num of width of draw size thumbnail to name num draw thumbnail width be plus do
+  ob num of height of draw thumbnail policy to name num draw thumbnail height be num do
+  ob num of num draw thumbnail height be less num 1 then ob num of height of draw size thumbnail to name num draw thumbnail height be plus do
   su name draw thumbnail prompt system stage ob name map draw thumbnail prompt replacements in name text draw thumbnail prompt system template to name text draw thumbnail prompt system be instead do
 
   su name prompt request stage ob text "SOURCE_TEXT:\n" to name text draw prompt request be text do
@@ -253,90 +276,66 @@ su name draw as wo thumbnail from filename source with text style be ceremony de
   ob name text draw prompt request fromtext name draw thumbnail prompt system for name mind to name text draw prompt schema by num 0 atmost num 280 be write do
   ob text "node command/normalize_escaped_newlines.mjs" fromtext name draw prompt schema to name text draw prompt schema be command do
   ob text "node command/draw_comfyui_runner.mjs --prompt-stdin" to name text draw cmd base be text do
-  ob text " --workflow-name \"" to name draw cmd base be plus do
+  ob text " --workflow-name " to name draw cmd base be plus do
   ob name draw workflow default to name draw cmd base be plus do
-  ob text "\"" to name draw cmd base be plus do
-  ob text " --host \"" to name draw cmd base be plus do
+  ob text " --host " to name draw cmd base be plus do
   ob name draw host to name draw cmd base be plus do
-  ob text "\"" to name draw cmd base be plus do
-  ob text " --width \"" to name draw cmd base be plus do
-  ob num of width of draw size thumbnail to name draw cmd base be plus do
-  ob text "\"" to name draw cmd base be plus do
-  ob text " --height \"" to name draw cmd base be plus do
-  ob num of height of draw size thumbnail to name draw cmd base be plus do
-  ob text "\"" to name draw cmd base be plus do
-  ob text " --output \"" to name draw cmd base be plus do
+  ob text " --width " to name draw cmd base be plus do
+  ob num of draw thumbnail width to name draw cmd base be plus do
+  ob text " --height " to name draw cmd base be plus do
+  ob num of draw thumbnail height to name draw cmd base be plus do
+  ob text " --output " to name draw cmd base be plus do
 
-  ob name text draw thumbnail variant mode be equally from text "single" then ob text "THUMBNAIL_PROMPT_DEBUG_PATH=\"" to name text thumbnail compose cmd be text do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob name thumbnail prompt debug path to name thumbnail compose cmd be plus do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob text "\" THUMBNAIL_VARIANT_MODE=\"single\" THUMBNAIL_VARIANT_LABEL=\"\" node command/thumbnail_prompt_compose.mjs" to name thumbnail compose cmd be plus do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob text of thumbnail compose cmd fromtext name draw prompt schema to name text draw prompt be command do
+  ob text "node command/thumbnail_prompt_compose.mjs --variant-mode single" to name text draw compose cmd base be text do
+  ob text " --profile-kind \"" to name draw compose cmd base be plus do
+  ob name text draw thumbnail profile to name draw compose cmd base be plus do
+  ob text "\"" to name draw compose cmd base be plus do
+  ob text " --subject-policy \"" to name draw compose cmd base be plus do
+  ob name text draw thumbnail subject policy to name draw compose cmd base be plus do
+  ob text "\"" to name draw compose cmd base be plus do
+  ob text " --face-required \"" to name draw compose cmd base be plus do
+  ob name text draw thumbnail face required to name draw compose cmd base be plus do
+  ob text "\"" to name draw compose cmd base be plus do
+  ob text " --text-prominence \"" to name draw compose cmd base be plus do
+  ob name text draw thumbnail text prominence to name draw compose cmd base be plus do
+  ob text "\"" to name draw compose cmd base be plus do
+  ob text " --target-width " to name draw compose cmd base be plus do
+  ob num of draw thumbnail width to name draw compose cmd base be plus do
+  ob text " --target-height " to name draw compose cmd base be plus do
+  ob num of draw thumbnail height to name draw compose cmd base be plus do
 
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "THUMBNAIL_PROMPT_DEBUG_PATH=\"" to name text thumbnail compose cmd a be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name thumbnail prompt debug path to name thumbnail compose cmd a be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\" THUMBNAIL_VARIANT_MODE=\"triple\" THUMBNAIL_VARIANT_LABEL=\"A\" node command/thumbnail_prompt_compose.mjs" to name thumbnail compose cmd a be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text of thumbnail compose cmd a fromtext name draw prompt schema to name text draw prompt a be command do
+  ob name text draw compose cmd base fromtext name draw prompt schema to name text draw prompt be command do
 
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "THUMBNAIL_PROMPT_DEBUG_PATH=\"" to name text thumbnail compose cmd b be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name thumbnail prompt debug path to name thumbnail compose cmd b be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\" THUMBNAIL_VARIANT_MODE=\"triple\" THUMBNAIL_VARIANT_LABEL=\"B\" node command/thumbnail_prompt_compose.mjs" to name thumbnail compose cmd b be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text of thumbnail compose cmd b fromtext name draw prompt schema to name text draw prompt b be command do
+  ob name text draw compose cmd base to name text draw compose cmd a be text do
+  ob text " --variant-mode triple --variant-label A" to name draw compose cmd a be plus do
+  ob name text draw compose cmd a fromtext name draw prompt schema to name text draw prompt a be command do
 
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "THUMBNAIL_PROMPT_DEBUG_PATH=\"" to name text thumbnail compose cmd c be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name thumbnail prompt debug path to name thumbnail compose cmd c be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\" THUMBNAIL_VARIANT_MODE=\"triple\" THUMBNAIL_VARIANT_LABEL=\"C\" node command/thumbnail_prompt_compose.mjs" to name thumbnail compose cmd c be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text of thumbnail compose cmd c fromtext name draw prompt schema to name text draw prompt c be command do
+  ob name text draw compose cmd base to name text draw compose cmd b be text do
+  ob text " --variant-mode triple --variant-label B" to name draw compose cmd b be plus do
+  ob name text draw compose cmd b fromtext name draw prompt schema to name text draw prompt b be command do
+
+  ob name text draw compose cmd base to name text draw compose cmd c be text do
+  ob text " --variant-mode triple --variant-label C" to name draw compose cmd c be plus do
+  ob name text draw compose cmd c fromtext name draw prompt schema to name text draw prompt c be command do
+
 
   be discharge as wo mind do
 
-  ob name text draw thumbnail variant mode be equally from text "single" then ob name draw cmd base to name text draw cmd be text do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob name artifacts image path to name draw cmd be plus do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob text "\"" to name draw cmd be plus do
-  ob name text draw thumbnail variant mode be equally from text "single" then su name draw stage ob text of draw cmd fromtext name draw prompt be command do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob text "cp \"" to name text copy cmd be text do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob name artifacts image path to name copy cmd be plus do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob text "\" \"" to name copy cmd be plus do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob name produce image path to name copy cmd be plus do
-  ob name text draw thumbnail variant mode be equally from text "single" then ob text "\"" to name copy cmd be plus do
-  ob name text draw thumbnail variant mode be equally from text "single" then su name produce copy stage ob name text copy cmd be command do
+  ob name draw cmd base to name text draw cmd a be text do
+  ob name text artifacts image path a to name draw cmd a be plus do
+  su name draw stage a ob text of draw cmd a fromtext name draw prompt a be command do
 
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name draw cmd base to name text draw cmd a be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text artifacts image path a to name draw cmd a be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\"" to name draw cmd a be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then su name draw stage a ob text of draw cmd a fromtext name draw prompt a be command do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "cp \"" to name text copy cmd a be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text artifacts image path a to name copy cmd a be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\" \"" to name copy cmd a be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text produce image path a to name copy cmd a be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\"" to name copy cmd a be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then su name produce copy stage a ob name text copy cmd a be command do
+  ob name draw cmd base to name text draw cmd b be text do
+  ob name text artifacts image path b to name draw cmd b be plus do
+  su name draw stage b ob text of draw cmd b fromtext name draw prompt b be command do
 
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name draw cmd base to name text draw cmd b be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text artifacts image path b to name draw cmd b be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\"" to name draw cmd b be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then su name draw stage b ob text of draw cmd b fromtext name draw prompt b be command do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "cp \"" to name text copy cmd b be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text artifacts image path b to name copy cmd b be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\" \"" to name copy cmd b be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text produce image path b to name copy cmd b be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\"" to name copy cmd b be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then su name produce copy stage b ob name text copy cmd b be command do
-
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name draw cmd base to name text draw cmd c be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text artifacts image path c to name draw cmd c be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\"" to name draw cmd c be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then su name draw stage c ob text of draw cmd c fromtext name draw prompt c be command do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "cp \"" to name text copy cmd c be text do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text artifacts image path c to name copy cmd c be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\" \"" to name copy cmd c be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob name text produce image path c to name copy cmd c be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then ob text "\"" to name copy cmd c be plus do
-  ob name text draw thumbnail variant mode be equally from text "triple" then su name produce copy stage c ob name text copy cmd c be command do
+  ob name draw cmd base to name text draw cmd c be text do
+  ob name text artifacts image path c to name draw cmd c be plus do
+  su name draw stage c ob text of draw cmd c fromtext name draw prompt c be command do
 
   be discharge as wo draw do
 
-  ob name text draw thumbnail variant mode be equally from text "single" then su name result stage ob filename of ob of produce image filename stage be filename do
-  ob name text draw thumbnail variant mode be equally from text "triple" then su name result stage ob filename of ob of produce image filename stage a be filename do
+  su name result stage ob filename of ob of artifacts image filename stage a be filename do
   su name result stage ret
 prah
 

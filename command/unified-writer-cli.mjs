@@ -653,6 +653,17 @@ async function runMain() {
     env.PIPELINE_SKIP_POST = "1";
   }
 
+  if (args.post === false) {
+    env.PIPELINE_SKIP_POST = "1";
+    env[`${map.envPrefix}_PIPELINE_SKIP_LEMMY`] = "1";
+    env[`${map.envPrefix}_AUTOPUBLISH`] = "0";
+    env[`${map.envPrefix}_PIPELINE_FORCE_POST`] = "0";
+  } else if (args.post === true) {
+    env.PIPELINE_SKIP_POST = "0";
+    env[`${map.envPrefix}_PIPELINE_SKIP_LEMMY`] = "0";
+    env[`${map.envPrefix}_AUTOPUBLISH`] = "1";
+  }
+
   if (args.command === "publish") {
     env[`${map.envPrefix}_PIPELINE_SKIP_PREP`] = "1";
     env[`${map.envPrefix}_PIPELINE_SKIP_IMAGE`] = "1";

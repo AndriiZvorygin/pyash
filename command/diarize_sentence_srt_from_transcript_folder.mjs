@@ -721,6 +721,7 @@ async function main() {
   let prevSpeaker = '';
   const metadataMapForLog = loadSpeakerMetadataMap(voicesDir);
   const preexistingSpeakerKeys = new Set(metadataMapForLog.keys());
+  const knownSpeakerKeysForGuard = new Set(preexistingSpeakerKeys);
   const nameEvidenceBySpeaker = new Map();
   let clipAudioPath = audioPath;
 
@@ -760,7 +761,7 @@ async function main() {
         enforceNoPseudoKnownForFreshKey({
           speakerKey,
           matched,
-          preexistingSpeakerKeys,
+          preexistingSpeakerKeys: knownSpeakerKeysForGuard,
           context: `turn=${turnIndex + 1}/${turns.length}`,
         });
         similarity = fmtScore(ident?.similarity);
@@ -879,7 +880,7 @@ async function main() {
                 enforceNoPseudoKnownForFreshKey({
                   speakerKey: cueSpeaker,
                   matched: cueMatched,
-                  preexistingSpeakerKeys,
+                  preexistingSpeakerKeys: knownSpeakerKeysForGuard,
                   context: `turn=${turnIndex + 1}/${turns.length} cue=${cueIdx + 1}/${turn.cues.length}`,
                 });
                 cueSim = fmtScore(cueIdent?.similarity);
@@ -910,6 +911,9 @@ async function main() {
                 }
                 cueSpeaker = guardedCue.speakerKey;
                 cueMatched = guardedCue.matched;
+              }
+              if (/^speaker_\d+$/iu.test(String(cueSpeaker || '').trim())) {
+                knownSpeakerKeysForGuard.add(String(cueSpeaker || '').trim());
               }
               localPrev = cueSpeaker;
               localLast = cueSpeaker;
@@ -942,6 +946,9 @@ async function main() {
             continue;
           }
         }
+      }
+      if (/^speaker_\d+$/iu.test(String(speakerKey || '').trim())) {
+        knownSpeakerKeysForGuard.add(String(speakerKey || '').trim());
       }
 
       prevSpeaker = speakerKey;

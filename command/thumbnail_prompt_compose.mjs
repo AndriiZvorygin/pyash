@@ -14,6 +14,16 @@ const REQUIRED_KEYS = [
   "NEGATIVE_PROMPT"
 ];
 
+const OPTIONAL_KEYS = [
+  "PROFILE_KIND",
+  "SUBJECT_POLICY",
+  "FACE_REQUIRED",
+  "TEXT_PROMINENCE",
+  "SCENE_PRIORITY",
+  "TARGET_WIDTH",
+  "TARGET_HEIGHT"
+];
+
 const CORE_NEGATIVE_EXCLUSIONS = [
   "no clutter",
   "no tiny text",
@@ -59,7 +69,7 @@ const CLARITY_VALUES = {
   sharp_focus: "sharp subject focus",
   subject_background_separation: "strong subject-background separation",
   contrast_lighting: "high contrast lighting",
-  visible_sclera: "white sclera and defined irises for visible faces"
+  visible_sclera: "white sclera and defined irises with clear expressive eyes for visible faces"
 };
 
 const ANCHOR_POOLS = {
@@ -170,7 +180,7 @@ function parseSchema(text) {
     const match = line.match(/^([A-Z_]+)\s*:\s*(.*)$/);
     if (!match) continue;
     const key = match[1];
-    if (!REQUIRED_KEYS.includes(key)) continue;
+    if (!REQUIRED_KEYS.includes(key) && !OPTIONAL_KEYS.includes(key)) continue;
     const value = normalizeSpaces(match[2]);
     if (!Object.prototype.hasOwnProperty.call(parsed, key)) {
       parsed[key] = value;
@@ -482,7 +492,8 @@ function sanitizeStyle(value) {
   );
 }
 
-function ensureBaseClarityRules(value) {
+function ensureBaseClarityRules(value, options = {}) {
+  const faceRequired = options.faceRequired !== false;
   const base = normalizeSpaces(value);
   const parts = [];
   if (base) parts.push(base);
@@ -492,7 +503,7 @@ function ensureBaseClarityRules(value) {
   parts.push("sharp subject focus");
   parts.push("strong subject-background separation");
   parts.push("high contrast lighting");
-  parts.push("white sclera and defined irises for visible faces");
+  if (faceRequired) parts.push("white sclera and defined irises with clear expressive eyes for visible faces");
   return normalizeSpaces(parts.join(", "));
 }
 
@@ -527,7 +538,8 @@ function strongestForKey(key, current, incoming) {
   return incoming.length > current.length ? incoming : current;
 }
 
-function compressClarityRules(rawClarity, allowTwoSubjects) {
+function compressClarityRules(rawClarity, allowTwoSubjects, options = {}) {
+  const faceRequired = options.faceRequired !== false;
   const normalizedRaw = rewriteNegationToPositive(rawClarity);
   const fragments = normalizedRaw
     .split(/[;,]/)
@@ -556,7 +568,8 @@ function compressClarityRules(rawClarity, allowTwoSubjects) {
   if (!bucket.has("clean_composition")) bucket.set("clean_composition", CLARITY_VALUES.clean_composition);
   if (!bucket.has("sharp_focus")) bucket.set("sharp_focus", CLARITY_VALUES.sharp_focus);
   if (!bucket.has("subject_background_separation")) bucket.set("subject_background_separation", CLARITY_VALUES.subject_background_separation);
-  if (!bucket.has("visible_sclera")) bucket.set("visible_sclera", CLARITY_VALUES.visible_sclera);
+  if (faceRequired && !bucket.has("visible_sclera")) bucket.set("visible_sclera", CLARITY_VALUES.visible_sclera);
+  if (!faceRequired) bucket.delete("visible_sclera");
 
   const ordered = [];
   for (const key of CLARITY_PRIORITY) {
@@ -581,6 +594,33 @@ function compressClarityRules(rawClarity, allowTwoSubjects) {
   return normalizeSpaces(ordered.slice(0, 8).join(", "));
 }
 
+function hasVisibleHumanSubject(hookSubject = "") {
+  const text = normalizeSpaces(hookSubject).toLowerCase();
+  return /\bhuman\b|\bperson\b|\bpeople\b|\bman\b|\bwoman\b|\belder\b|\bfigure\b|\bface\b|\bsubject\b/.test(text);
+}
+
+function enforceExpressiveEmotion(emotion = "", hookSubject = "") {
+  const base = normalizeSpaces(emotion || "strong readable emotion");
+  if (!hasVisibleHumanSubject(hookSubject)) return base;
+  if (/eyes?.*brows?.*mouth|facial expression|expressive face|readable expression/.test(base.toLowerCase())) return base;
+  return normalizeSpaces(base + ", visible emotion in eyes brows and mouth, readable facial expression at thumbnail size");
+}
+
+function parseTruthy(value) {
+  const v = normalizeSpaces(value).toLowerCase();
+  return /^(truth|true|yes|1|required)$/.test(v);
+}
+
+function normalizeSubjectPolicy(value) {
+  return normalizeSpaces(value).toLowerCase();
+}
+
+function isHumanSubjectPolicy(value) {
+  const v = normalizeSubjectPolicy(value);
+  if (!v) return true;
+  return /human|face|person|portrait/.test(v);
+}
+
 function lintAndRepair(schemaParsed, duplicates) {
   const schema = {};
   const repairs = [];
@@ -596,6 +636,13 @@ function lintAndRepair(schemaParsed, duplicates) {
   if (Object.values(schema).every((v) => !v)) {
     throw new Error("thumbnail prompt compose defective: schema empty or missing required keyed lines");
   }
+
+  const subjectPolicy = normalizeSubjectPolicy(schemaParsed.SUBJECT_POLICY || "");
+  const preferHumanSubject = isHumanSubjectPolicy(subjectPolicy);
+  const faceRequired = normalizeSpaces(schemaParsed.FACE_REQUIRED || "")
+    ? parseTruthy(schemaParsed.FACE_REQUIRED)
+    : preferHumanSubject;
+  const textProminence = normalizeSpaces(schemaParsed.TEXT_PROMINENCE || "").toLowerCase();
 
   const preserveCase = /preserve overlay case|overlay_case_preserve/i.test(schema.CLARITY_RULES)
     || process.env.THUMBNAIL_OVERLAY_UPPERCASE === "0";
@@ -619,7 +666,9 @@ function lintAndRepair(schemaParsed, duplicates) {
   }
 
   if (!allowTwoSubjects && subjectImpliesCrowd(schema.HOOK_SUBJECT)) {
-    schema.HOOK_SUBJECT = "one dominant human focal subject tied to source hook";
+    schema.HOOK_SUBJECT = preferHumanSubject
+      ? "one dominant human focal subject tied to source hook"
+      : "one dominant focal subject tied to source hook";
     repairs.push({ type: "focal_subject_rewrite", mode: "single_subject_default" });
   }
 
@@ -627,16 +676,20 @@ function lintAndRepair(schemaParsed, duplicates) {
     schema.HOOK_SUBJECT = normalizeSpaces(`${schema.HOOK_SUBJECT || "two human subjects"}, exactly two human subjects`);
     repairs.push({ type: "focal_subject_mode", mode: "two_subject_allowed" });
   } else {
-    schema.HOOK_SUBJECT = normalizeSpaces(`${schema.HOOK_SUBJECT || "one dominant human focal subject"}, exactly one human focal subject`);
+    schema.HOOK_SUBJECT = preferHumanSubject
+      ? normalizeSpaces(`${schema.HOOK_SUBJECT || "one dominant human focal subject"}, exactly one human focal subject`)
+      : normalizeSpaces(`${schema.HOOK_SUBJECT || "one dominant focal subject"}, exactly one dominant focal subject`);
     repairs.push({ type: "focal_subject_mode", mode: "single_subject_enforced" });
   }
 
   if (variantFrameMode === "face") {
-    schema.HOOK_SUBJECT = normalizeSpaces(`${stripKnownAnchors(schema.HOOK_SUBJECT)}, expressive human face with visible white sclera and defined irises, exactly one human focal subject`);
+    if (faceRequired) {
+      schema.HOOK_SUBJECT = normalizeSpaces(`${stripKnownAnchors(schema.HOOK_SUBJECT)}, expressive human face with visible white sclera and defined irises, exactly one human focal subject`);
+    } else {
+      schema.HOOK_SUBJECT = normalizeSpaces(`${stripKnownAnchors(schema.HOOK_SUBJECT)}, close focal subject with clear silhouette, exactly one dominant focal subject`);
+    }
   } else if (variantFrameMode === "symbol") {
-    const symbolicAnchor = overlayInfo.systemsAbstract
-      ? overlayInfo.primaryAnchor || deterministicPick(ANCHOR_POOLS.systems, schema.OVERLAY_TEXT, "symbolic-anchor")
-      : deterministicPick(ANCHOR_POOLS.systems, schema.OVERLAY_TEXT, "symbolic-anchor");
+    const symbolicAnchor = deterministicPick(ANCHOR_POOLS.systems, schema.OVERLAY_TEXT, "symbolic-anchor");
     schema.HOOK_SUBJECT = normalizeSpaces(`${stripKnownAnchors(schema.HOOK_SUBJECT)}, centered symbolic structure, ${symbolicAnchor}`);
   } else {
     schema.HOOK_SUBJECT = alignHookSubjectToOverlay(schema.HOOK_SUBJECT, overlayInfo);
@@ -656,11 +709,13 @@ function lintAndRepair(schemaParsed, duplicates) {
   schema.FRAMING = ensureFraming(schema.FRAMING, orientation, allowTwoSubjects);
   repairs.push({ type: "orientation", text_side: orientation.textSide, subject_side: orientation.subjectSide, source: orientation.source, plural: allowTwoSubjects });
 
-  schema.EMOTION = normalizeSpaces(schema.EMOTION || "strong readable emotion");
+  schema.EMOTION = faceRequired
+    ? enforceExpressiveEmotion(schema.EMOTION || "strong readable emotion", schema.HOOK_SUBJECT)
+    : normalizeSpaces(schema.EMOTION || "clear readable mood");
   schema.BACKGROUND = normalizeSpaces(schema.BACKGROUND || "simple uncluttered background with soft depth separation");
   schema.COLOUR_CONTRAST = normalizeSpaces(schema.COLOUR_CONTRAST || "high contrast foreground/background separation for mobile readability");
   schema.STYLE = sanitizeStyle(schema.STYLE);
-  schema.CLARITY_RULES = ensureBaseClarityRules(schema.CLARITY_RULES);
+  schema.CLARITY_RULES = ensureBaseClarityRules(schema.CLARITY_RULES, { faceRequired });
   schema.NEGATIVE_PROMPT = ensureNegativePrompt(schema.NEGATIVE_PROMPT, allowTwoSubjects);
 
   const mappedFromNegative = mapNegativePromptToClarity(schema.NEGATIVE_PROMPT);
@@ -669,13 +724,18 @@ function lintAndRepair(schemaParsed, duplicates) {
     repairs.push({ type: "negative_to_positive", applied: true });
   }
 
+  if (/high|prominent|headline/.test(textProminence)) {
+    schema.FRAMING = normalizeSpaces(`${schema.FRAMING}, reserve about one third of frame for overlay text`);
+    schema.CLARITY_RULES = normalizeSpaces(`${schema.CLARITY_RULES}, text block intentionally prominent`);
+  }
+
   schema.HOOK_SUBJECT = rewriteNegationToPositive(schema.HOOK_SUBJECT);
   schema.EMOTION = rewriteNegationToPositive(schema.EMOTION);
   schema.FRAMING = rewriteNegationToPositive(schema.FRAMING);
   schema.BACKGROUND = rewriteNegationToPositive(schema.BACKGROUND);
   schema.COLOUR_CONTRAST = rewriteNegationToPositive(schema.COLOUR_CONTRAST);
   schema.STYLE = rewriteNegationToPositive(schema.STYLE);
-  schema.CLARITY_RULES = compressClarityRules(schema.CLARITY_RULES, allowTwoSubjects);
+  schema.CLARITY_RULES = compressClarityRules(schema.CLARITY_RULES, allowTwoSubjects, { faceRequired });
 
   if (!/\b16:9\b|thumbnail/i.test(schema.FRAMING)) {
     throw new Error("thumbnail prompt compose defective: framing missing thumbnail/16:9 intent");
@@ -720,8 +780,8 @@ function composePrompt(schema) {
 }
 
 const VARIANT_EMOTION = {
-  A: "intense emotional facial expression",
-  B: "situational tension in the scene",
+  A: "high-intensity emotional facial expression, visible emotion in eyes brows and mouth",
+  B: "situational tension with visibly expressive face, visible emotion in eyes brows and mouth",
   C: "calm analytical conceptual tone"
 };
 
@@ -743,6 +803,12 @@ const VARIANT_ANCHOR_KIND = {
   A: "human_emotion",
   B: "environment_scale",
   C: "abstract_symbol"
+};
+
+const VARIANT_STYLE = {
+  A: "portrait editorial illustration, ink-and-gouache texture, expressive facial rendering, crisp contour linework",
+  B: "environmental narrative illustration, storyboard scene depth, directional lighting contrast, layered perspective",
+  C: "diagrammatic symbolic illustration, geometric icon forms, flat color planes, precise shape language"
 };
 
 const OVERLAY_STOP_WORDS = new Set([
@@ -835,22 +901,22 @@ function buildVariantOverlayValues(schema) {
   const k1 = keywords[0] || "SYSTEM";
   const k2 = keywords[1] || "SHIFT";
 
-  const conceptualSafe = keywords.filter((w) => !/^(BUDGET|COST|COSTS|RENT|PRICE|PRICES|TAX|FEES|DEFICIT|DEBT|BILLS|INFLATION|GROCERY|UTILITY|VOTE|COUNCIL|MAYOR|POLICY|ZONING|COMMITTEE|CITY|ELECTION|OFFICIAL|AGENDA|MOTION|SHOWDOWN|CLASH|BATTLE|FIGHT|STANDOFF|CONFRONT)$/i.test(w));
-  const c1 = conceptualSafe[0] || "SYSTEM";
-  const c2 = conceptualSafe[1] || "PATTERN";
-
   const A = enforceOverlayText(schema.OVERLAY_TEXT, { uppercaseByDefault: true }).value;
-  const B = enforceOverlayText(`${k1} ${k2} WHAT NEXT`, { uppercaseByDefault: true }).value;
-  const C = enforceOverlayText(`${c1} ${c2} MAP`, { uppercaseByDefault: true }).value;
+
+  const aWords = String(A || "").toUpperCase().split(/\s+/).filter(Boolean);
+  const a1 = aWords[0] || k1;
+  const a2 = aWords[1] || k2;
+
+  const B = enforceOverlayText(`${a1} ${a2} WHAT NEXT`, { uppercaseByDefault: true }).value;
+  const C = enforceOverlayText(`${a1} ${a2} CORE IDEA`, { uppercaseByDefault: true }).value;
 
   const overlays = { A, B, C };
-  if (overlays.B === overlays.A) overlays.B = enforceOverlayText(`${k1} OPEN LOOP`, { uppercaseByDefault: true }).value;
+  if (overlays.B === overlays.A) overlays.B = enforceOverlayText(`${a1} OPEN LOOP`, { uppercaseByDefault: true }).value;
   if (overlays.C === overlays.A || overlays.C === overlays.B) {
-    overlays.C = enforceOverlayText("SYSTEM PATTERN MAP", { uppercaseByDefault: true }).value;
+    overlays.C = enforceOverlayText(`${a1} ${a2} CORE`, { uppercaseByDefault: true }).value;
   }
   return overlays;
 }
-
 function pickDifferentAnchor(pool, seed, label, excluded = []) {
   const uniq = [...new Set((pool || []).map((x) => normalizeSpaces(x)).filter(Boolean))];
   const available = uniq.filter((x) => !excluded.includes(x));
@@ -891,7 +957,7 @@ function buildVariantSchemaForLabel(label, baseSchema, context = {}, attempt = 0
     spec.schema.HOOK_SUBJECT = normalizeSpaces(`${subjectCore}, ${anchor}, exactly one human focal subject`);
     spec.schema.FRAMING = "close-up face dominates frame, centered composition, 16:9 thumbnail framing, reserve right side for text";
     spec.schema.BACKGROUND = "minimal soft gradient background with low detail";
-    spec.schema.STYLE = normalizeSpaces(`${baseSchema.STYLE}, editorial illustration face focus`);
+    spec.schema.STYLE = normalizeSpaces(VARIANT_STYLE.A);
     return spec;
   }
 
@@ -902,7 +968,7 @@ function buildVariantSchemaForLabel(label, baseSchema, context = {}, attempt = 0
     spec.schema.HOOK_SUBJECT = normalizeSpaces(`small human figure within dominant environment, ${anchor}, exactly one human focal subject`);
     spec.schema.FRAMING = "medium-wide environmental framing, environment dominant, subject secondary, 16:9 thumbnail framing, reserve left side for text";
     spec.schema.BACKGROUND = normalizeSpaces(`${baseSchema.BACKGROUND}, high-contrast environmental context with clear depth`);
-    spec.schema.STYLE = normalizeSpaces(`${baseSchema.STYLE}, dramatic editorial scene lighting`);
+    spec.schema.STYLE = normalizeSpaces(VARIANT_STYLE.B);
     return spec;
   }
 
@@ -911,7 +977,7 @@ function buildVariantSchemaForLabel(label, baseSchema, context = {}, attempt = 0
   spec.schema.HOOK_SUBJECT = normalizeSpaces(`centered symbolic structure, ${anchor}`);
   spec.schema.FRAMING = "centered symmetric symbolic layout, 16:9 thumbnail framing, reserve lower third for text";
   spec.schema.BACKGROUND = "clean low-detail backdrop supporting one symbolic focal structure";
-  spec.schema.STYLE = normalizeSpaces(`${baseSchema.STYLE}, clean diagrammatic symbolic illustration`);
+  spec.schema.STYLE = normalizeSpaces(VARIANT_STYLE.C);
   return spec;
 }
 
@@ -957,6 +1023,17 @@ function validateVariantDivergence(variantOutputs = []) {
         issues.push({ label, reason: "symbol_variant_reused_face_or_scene_framing" });
       }
     }
+
+    const style = normalizeSpaces(variant.schema?.STYLE || "").toLowerCase();
+    if (label === "A" && !/portrait/.test(style)) {
+      issues.push({ label, reason: "face_variant_missing_portrait_style" });
+    }
+    if (label === "B" && !/environmental narrative|storyboard/.test(style)) {
+      issues.push({ label, reason: "scene_variant_missing_environment_style" });
+    }
+    if (label === "C" && !/diagrammatic symbolic|geometric icon/.test(style)) {
+      issues.push({ label, reason: "symbol_variant_missing_diagram_style" });
+    }
   }
 
   const compositionKinds = new Set(variantOutputs.map((v) => v.composition_kind));
@@ -972,6 +1049,11 @@ function validateVariantDivergence(variantOutputs = []) {
   const framingKinds = new Set(variantOutputs.map((v) => normalizeSpaces(v.schema?.FRAMING || "").toLowerCase()));
   if (framingKinds.size !== 3) {
     for (const v of variantOutputs) issues.push({ label: v.label, reason: "framing_not_unique" });
+  }
+
+  const styleKinds = new Set(variantOutputs.map((v) => normalizeSpaces(v.schema?.STYLE || "").toLowerCase()));
+  if (styleKinds.size !== 3) {
+    for (const v of variantOutputs) issues.push({ label: v.label, reason: "style_not_unique" });
   }
 
   return issues;
@@ -999,8 +1081,35 @@ async function writeDebugArtifact(payload) {
   await fs.writeFile(outPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+function parseComposeOverridesFromArgs(argv = process.argv.slice(2)) {
+  const args = Array.isArray(argv) ? argv : [];
+  const read = (name) => {
+    const idx = args.indexOf(name);
+    if (idx >= 0) return normalizeSpaces(args[idx + 1] || "");
+    const byEq = args.find((a) => String(a || "").startsWith(name + "="));
+    if (byEq) return normalizeSpaces(String(byEq).slice(name.length + 1));
+    return "";
+  };
+  const out = {};
+  const profile = read("--profile-kind");
+  const subjectPolicy = read("--subject-policy");
+  const faceRequired = read("--face-required");
+  const textProminence = read("--text-prominence");
+  const targetWidth = read("--target-width");
+  const targetHeight = read("--target-height");
+  if (profile) out.PROFILE_KIND = profile;
+  if (subjectPolicy) out.SUBJECT_POLICY = subjectPolicy;
+  if (faceRequired) out.FACE_REQUIRED = faceRequired;
+  if (textProminence) out.TEXT_PROMINENCE = textProminence;
+  if (targetWidth) out.TARGET_WIDTH = targetWidth;
+  if (targetHeight) out.TARGET_HEIGHT = targetHeight;
+  return out;
+}
+
 const input = await readStdin();
 const { parsed, duplicates } = parseSchema(input);
+const composeOverrides = parseComposeOverridesFromArgs(process.argv.slice(2));
+for (const [k, v] of Object.entries(composeOverrides)) parsed[k] = v;
 const variantMode = parseVariantModeFromArgs(process.argv.slice(2));
 const variantLabel = parseVariantLabelFromArgs(process.argv.slice(2));
 const { schema, repairs, orientation } = lintAndRepair(parsed, duplicates);

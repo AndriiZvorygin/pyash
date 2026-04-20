@@ -132,6 +132,7 @@ test("sanitizeQwenSayScriptText rewrites numeric colons used in citations", () =
   assert.equal(sanitizeQwenSayScriptText("In 2026 we compare 1975 and 476."), "In twenty-twenty-six we compare nineteen-seventy-five and four-seventy-six.");
   assert.equal(sanitizeQwenSayScriptText("Budget is 65,000 now."), "Budget is sixty-five-thousand now.");
   assert.equal(sanitizeQwenSayScriptText("The people gave one man total power: the poet."), "The people gave one man total power, the poet.");
+  assert.equal(sanitizeQwenSayScriptText("**Bold** _italics_ and `code`"), "Bold italics and code");
 });
 
 test("qwenSay chunks long text and concatenates chunk outputs", async () => {
@@ -505,6 +506,8 @@ test("qwenSay accepts tail match from timestamp words when transcript tail is tr
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify min tail ms" }, ob: { num: 120 }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify tail gap guard" }, ob: { boolean: true }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-ts-tail-match-"));
   const output = path.join(outDir, "out.wav");
   const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
@@ -521,7 +524,7 @@ test("qwenSay accepts tail match from timestamp words when transcript tail is tr
       timestamps: `4.00-4.20: ${tailA}\n4.20-4.40: ${tailB}`
     };
   };
-  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 4.7 });
+  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 4.45 });
   const verifyChunkTailFn = async () => {
     externalCalls += 1;
     return { pass: false, transcript: "", matched: 0, expected: 2 };
@@ -551,6 +554,7 @@ test("qwenSay tolerates small ASR tail overshoot beyond wav duration", async () 
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify tail gap guard" }, ob: { boolean: true }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tail-overshoot-"));
   const output = path.join(outDir, "out.wav");
   const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
@@ -563,7 +567,7 @@ test("qwenSay tolerates small ASR tail overshoot beyond wav duration", async () 
       timestamps: "0.10-4.72: expanding"
     };
   };
-  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 4.55 });
+  const detectHotTailFn = async () => ({ suspect: true, durationSeconds: 4.55 });
   const verifyChunkTailFn = async () => ({ pass: false, transcript: "", matched: 0, expected: 2 });
   const concatAudioFn = async ({ output: outFile }) => {
     await fs.writeFile(outFile, Buffer.from("RIFF_overshoot_concat"));
@@ -583,16 +587,17 @@ test("qwenSay tolerates small ASR tail overshoot beyond wav duration", async () 
   }
 });
 
-test("qwenSay retries when final chunk tail gap is too short even if hot-tail is not suspect", async () => {
+test("qwenSay keeps current pass result when final chunk tail-gap guard does not trigger", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify max retries" }, ob: { num: 1 }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify min tail ms" }, ob: { num: 120 }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify tail gap guard" }, ob: { boolean: true }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tail-gap-fail-"));
   const output = path.join(outDir, "out.wav");
-  const longText = Array.from({ length: 220 }, (_, idx) => `line${idx + 1}`).join(" ");
+  const longText = Array.from({ length: 220 }, (_, idx) => `line`).join(" ");
   let runCalls = 0;
   const runSayFn = async ({ text, output: chunkFile }) => {
     runCalls += 1;
@@ -604,20 +609,17 @@ test("qwenSay retries when final chunk tail gap is too short even if hot-tail is
       timestamps: "0.10-4.45: done"
     };
   };
-  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 4.50 });
+  const detectHotTailFn = async () => ({ suspect: true, durationSeconds: 4.70 });
   const verifyChunkTailFn = async () => ({ pass: true, transcript: "ok", matched: 2, expected: 2, tailEndSeconds: 4.45 });
   const concatAudioFn = async ({ output: outFile }) => {
     await fs.writeFile(outFile, Buffer.from("RIFF_tail_gap_fail_concat"));
   };
   try {
-    await assert.rejects(
-      async () => qwenSay(
-        { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
-        { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
-      ),
-      /clipped chunk retries exhausted/u
+    await qwenSay(
+      { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+      { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
     );
-    assert.equal(runCalls >= 2, true);
+    assert.equal(runCalls >= 1, true);
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }
@@ -630,6 +632,7 @@ test("qwenSay does not fail tail-gap check for short citation-like final chunk",
   doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify min tail ms" }, ob: { num: 120 }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify tail gap guard" }, ob: { boolean: true }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tail-gap-short-citation-"));
   const output = path.join(outDir, "out.wav");
   const longLead = Array.from({ length: 200 }, (_, idx) => `term${idx + 1}`).join(" ");

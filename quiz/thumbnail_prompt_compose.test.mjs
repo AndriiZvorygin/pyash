@@ -38,6 +38,10 @@ function extractClaritySection(prompt) {
   return String(prompt || "").trim().replace(/\.$/, "").split(";").at(-1)?.trim() || "";
 }
 
+function extractStyleSection(prompt) {
+  return String(prompt || "").split(";")[6]?.trim() || "";
+}
+
 function countOccurrences(text, needle) {
   return (String(text).match(new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []).length;
 }
@@ -308,6 +312,25 @@ test("multi-variant mode enforces hard composition divergence", () => {
 
   assert.match(framingC, /symbolic layout|symmetric symbolic|diagrammatic/);
   assert.doesNotMatch(framingC, /medium-wide|environment dominant|close-up face dominates frame/);
+});
+
+test("multi-variant mode enforces distinct style families", () => {
+  const run = runComposeWithArgs(toLines(baseSchema({ OVERLAY_TEXT: "Budget Cuts Hit Hard" })), ["--multi-variants"]);
+  assert.equal(run.status, 0, run.stderr || "style divergence run should pass");
+
+  const lines = String(run.stdout || "").trim().split(/\n/).map((x) => x.trim()).filter(Boolean);
+  const prompts = lines.map((line) => line.replace(/^Variant [ABC] \([^)]*\):\s*/, ""));
+  const styleA = extractStyleSection(prompts[0]).toLowerCase();
+  const styleB = extractStyleSection(prompts[1]).toLowerCase();
+  const styleC = extractStyleSection(prompts[2]).toLowerCase();
+
+  assert.match(styleA, /portrait/);
+  assert.match(styleB, /environmental narrative|storyboard/);
+  assert.match(styleC, /diagrammatic symbolic|geometric icon/);
+
+  assert.notEqual(styleA, styleB);
+  assert.notEqual(styleA, styleC);
+  assert.notEqual(styleB, styleC);
 });
 
 test("multi-variant mode enforces anchor category divergence", () => {
