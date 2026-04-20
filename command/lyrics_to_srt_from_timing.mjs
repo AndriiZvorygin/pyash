@@ -33,6 +33,32 @@ function normalizeSectionName(raw) {
   return String(raw ?? "").trim().replace(/\s+/g, " ");
 }
 
+function sanitizeSubtitleMarkdownText(input) {
+  const source = String(input ?? "").replace(/\r\n/g, "\n");
+  if (!source) return "";
+  let text = source;
+  text = text.replace(/```[\s\S]*?```/gu, " ");
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/gu, "$1");
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/gu, "$1");
+  text = text.replace(/`([^`]+)`/gu, "$1");
+  text = text.replace(/^\s{0,3}>\s?/gmu, "");
+  text = text.replace(/^\s{0,3}#{1,6}\s+/gmu, "");
+  text = text.replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gmu, "");
+  text = text.replace(/<[^>]+>/gu, " ");
+  text = text.replace(/\*\*([^*]+)\*\*/gu, "$1");
+  text = text.replace(/__([^_]+)__/gu, "$1");
+  text = text.replace(/~~([^~]+)~~/gu, "$1");
+  text = text.replace(/(^|[^\p{L}\p{N}])[*_~]+(?=[\p{L}\p{N}])/gu, "$1");
+  text = text.replace(/(?<=[\p{L}\p{N}])[*_~]+(?=[^\p{L}\p{N}]|$)/gu, "");
+  text = text.replace(/[\t ]+/gu, " ");
+  text = text.replace(/ ?\n ?/gu, "\n");
+  return text.trim();
+}
+
+function sanitizeSubtitleLine(line) {
+  return sanitizeSubtitleMarkdownText(String(line ?? "")).replace(/\s+/gu, " ").trim();
+}
+
 const PROTECTED_DOT = "__PYA_DOT__";
 
 function protectAbbreviationDots(input) {
@@ -140,7 +166,7 @@ function enforceMaxSentenceWords(lines, maxWords = MAX_SENTENCE_WORDS) {
 }
 
 function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = false } = {}) {
-  const source = String(text ?? "");
+  const source = sanitizeSubtitleMarkdownText(text);
   if (sentenceCues) {
     const sentenceCuts = trimAdjacentOverlapCuts(collapseEchoLyricCuts(
       enforceMaxSentenceWords(splitNaturalSentences(source))
@@ -151,16 +177,16 @@ function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = fal
     if (sentenceCuts.length) return sentenceCuts;
   }
 
-  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const lines = source.split("\n");
   const lineCuts = [];
   let activeSection = "";
 
   for (const rawLine of lines) {
-    const line = String(rawLine || "").trim();
+    const line = sanitizeSubtitleLine(rawLine);
     if (!line) continue;
     const sectionMatch = /^\[([^\]]+)\]$/u.exec(line);
     if (sectionMatch) {
-      activeSection = normalizeSectionName(sectionMatch[1]);
+      activeSection = sanitizeSubtitleLine(normalizeSectionName(sectionMatch[1]));
       continue;
     }
     const textLine = includeSections && activeSection ? `[${activeSection}] ${line}` : line;

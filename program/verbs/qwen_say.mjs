@@ -106,6 +106,10 @@ function resolveClipVerifyMinTailWords({ rememberFn = remember } = {}) {
   return 6;
 }
 
+function resolveClipVerifyTailGapGuardEnabled({ rememberFn = remember } = {}) {
+  return resolveConfigBool("qwen say clip verify tail gap guard", { rememberFn }) === true;
+}
+
 function resolveTailPadMs({ rememberFn = remember } = {}) {
   const configured = resolveConfigNum("qwen say tail pad ms", { rememberFn });
   if (Number.isFinite(configured) && configured >= 0) return Number(configured);
@@ -421,6 +425,16 @@ export function sanitizeQwenSayScriptText(text = "", mapConfig = {}) {
   const lineBreakMarker = "\u241E";
   let sanitized = source;
   sanitized = sanitized.replace(/\r\n/g, "\n").replace(/\n+/g, ` ${lineBreakMarker} `);
+  // Strip markdown wrappers so TTS receives plain prose.
+  sanitized = sanitized.replace(/\*\*(.*?)\*\*/g, "$1");
+  sanitized = sanitized.replace(/__(.*?)__/g, "$1");
+  sanitized = sanitized.replace(/\*(.*?)\*/g, "$1");
+  sanitized = sanitized.replace(/_(.*?)_/g, "$1");
+  sanitized = sanitized.replace(/`([^`]+)`/g, "$1");
+  sanitized = sanitized.replace(/^\s{0,3}#{1,6}\s+/gm, "");
+  sanitized = sanitized.replace(/^\s*[-*+]\s+/gm, "");
+  sanitized = sanitized.replace(/^\s*\d+[.)]\s+/gm, "");
+  sanitized = sanitized.replace(/\u2026/g, "...");
   sanitized = sanitized.replace(/\b1st\b/gi, ordinal1st);
   sanitized = sanitized.replace(/\b2nd\b/gi, ordinal2nd);
   sanitized = sanitized.replace(/\b3rd\b/gi, ordinal3rd);
@@ -734,7 +748,16 @@ function parseLastAstatsMetric(stderr = "", metric = "") {
 }
 
 function normalizeWordToken(value = "") {
-  return String(value ?? "").toLowerCase().replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+  const raw = String(value ?? "").toLowerCase();
+  if (/^\d{3,4}$/.test(raw)) {
+    const yearWord = yearToWords(raw);
+    if (yearWord) return String(yearWord).toLowerCase().replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+  }
+  if (/^\d+$/.test(raw)) {
+    const numberWord = integerToWordsHyphenated(raw);
+    if (numberWord) return String(numberWord).toLowerCase().replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+  }
+  return raw.replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
 }
 
 function tokenizedWords(value = "") {
@@ -841,9 +864,10 @@ function applyTailGapGuard({
   isLastChunk = false,
   clipVerifyMinTailMs = 120,
   clipVerifyMinTailWords = 6,
-  chunkText = ""
+  chunkText = "",
+  guardEnabled = false
 } = {}) {
-  if (!isLastChunk) return;
+  if (!isLastChunk || !guardEnabled) return;
   const chunkWordCount = countWords(chunkText);
   verificationRecord.chunkWordCount = chunkWordCount;
   if (chunkWordCount < Math.max(1, Number(clipVerifyMinTailWords) || 1)) {
@@ -862,7 +886,8 @@ function applyTailGapGuard({
   }
   const tailGapMs = (duration - tailEnd) * 1000;
   verificationRecord.asrTailGapMs = tailGapMs;
-  if (tailGapMs < clipVerifyMinTailMs) {
+  // If ASR tail ends too far before chunk end, treat as potential truncation.
+  if (tailGapMs > clipVerifyMinTailMs) {
     verificationRecord.asrPass = false;
     verificationRecord.asrTailGapFail = true;
   }
@@ -1114,6 +1139,7 @@ export async function qwenSay(
   const clipVerifyDeltaDb = resolveClipVerifyDeltaDb({ rememberFn });
   const clipVerifyMinTailMs = resolveClipVerifyMinTailMs({ rememberFn });
   const clipVerifyMinTailWords = resolveClipVerifyMinTailWords({ rememberFn });
+  const clipVerifyTailGapGuardEnabled = resolveClipVerifyTailGapGuardEnabled({ rememberFn });
   const tailPadMs = resolveTailPadMs({ rememberFn });
   const chunkTailPadMs = resolveChunkTailPadMs({ rememberFn });
   const tailPauseMarkup = resolveTailPauseMarkup({ rememberFn });
@@ -1246,7 +1272,8 @@ export async function qwenSay(
                 isLastChunk,
                 clipVerifyMinTailMs,
                 clipVerifyMinTailWords,
-                chunkText
+                chunkText,
+                guardEnabled: clipVerifyTailGapGuardEnabled && verificationRecord.suspect === true
               });
             }
             if (!verificationRecord.asrPass) {
@@ -1303,7 +1330,8 @@ export async function qwenSay(
                 isLastChunk,
                 clipVerifyMinTailMs,
                 clipVerifyMinTailWords,
-                chunkText
+                chunkText,
+                guardEnabled: clipVerifyTailGapGuardEnabled && verificationRecord.suspect === true
               });
             }
           }

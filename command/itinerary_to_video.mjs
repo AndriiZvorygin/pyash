@@ -121,19 +121,8 @@ function runFfmpeg({ listFile, audioFile, outputFile, fps }) {
   });
 }
 
-function runFfmpegConcatVideos({ listFile, outputFile }) {
-  const args = [
-    "-y",
-    "-f", "concat",
-    "-safe", "0",
-    "-i", listFile,
-    "-c:v", "libx264",
-    "-pix_fmt", "yuv420p",
-    "-c:a", "aac",
-    "-movflags", "+faststart",
-    outputFile
-  ];
-  return new Promise((resolve, reject) => {
+function runFfmpegConcatVideos({ listFile, outputFile, stripAudio = false }) {
+  const run = (args) => new Promise((resolve, reject) => {
     let stderr = "";
     const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
     proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
@@ -146,6 +135,31 @@ function runFfmpegConcatVideos({ listFile, outputFile }) {
       }
     });
   });
+
+  const copyArgs = [
+    "-y",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", listFile,
+    "-c", "copy",
+    "-movflags", "+faststart",
+    outputFile
+  ];
+  if (stripAudio) copyArgs.splice(copyArgs.length - 2, 0, "-an");
+
+  const transcodeArgs = [
+    "-y",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", listFile,
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    ...(stripAudio ? ["-an"] : ["-c:a", "aac"]),
+    "-movflags", "+faststart",
+    outputFile
+  ];
+
+  return run(copyArgs).catch(() => run(transcodeArgs));
 }
 
 async function runFfmpegConcatAudio({ listFile, outputFile }) {
@@ -217,6 +231,49 @@ async function getAudioDurationSeconds(audioFile) {
   }
 }
 
+async function getImageDimensions(imageFile) {
+  const { code, stdout } = await runCommandCapture("ffprobe", [
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=width,height",
+    "-of", "csv=p=0:s=x",
+    imageFile
+  ]);
+  if (code !== 0) throw new Error(`ffprobe failed for image dimensions: ${imageFile}`);
+  const text = String(stdout ?? "").trim();
+  const match = text.match(/^(\d+)x(\d+)$/);
+  if (!match) throw new Error(`could not parse image dimensions for: ${imageFile}`);
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error(`invalid image dimensions for: ${imageFile}`);
+  }
+  return { width, height };
+}
+
+function chooseTargetDimensions(imageDimensions = []) {
+  const byKey = new Map();
+  for (const dims of imageDimensions) {
+    const width = Number(dims?.width ?? 0);
+    const height = Number(dims?.height ?? 0);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) continue;
+    const key = `${width}x${height}`;
+    const prev = byKey.get(key) ?? { width, height, count: 0 };
+    prev.count += 1;
+    byKey.set(key, prev);
+  }
+  const values = [...byKey.values()];
+  if (!values.length) throw new Error("could not determine target dimensions");
+  values.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    const areaA = a.width * a.height;
+    const areaB = b.width * b.height;
+    if (areaB !== areaA) return areaB - areaA;
+    return a.width - b.width;
+  });
+  return { width: values[0].width, height: values[0].height };
+}
+
 function buildTimelineItems(cuts = [], audioDurationSeconds = null) {
   const rows = Array.isArray(cuts) ? cuts : [];
   const normalizedAudioDuration = Number(audioDurationSeconds);
@@ -252,11 +309,157 @@ function buildTimelineItems(cuts = [], audioDurationSeconds = null) {
     const rawDuration = desiredEnd - start;
     const fallbackDuration = Math.max(0.05, fallbackEnd - start);
     let duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : fallbackDuration;
-    // Preserve leading silence by extending the first visual cut back to t=0.
     if (i === 0 && firstStart > 0) duration += firstStart;
     out.push({ ...cut, duration });
   }
   return out;
+}
+
+function chooseMotionPreset(sequenceIndex = 0) {
+  const presets = [
+    "zoom_in_center",
+    "pan_left_to_right",
+    "pan_right_to_left",
+    "slight_diagonal",
+    "slight_zoom_out"
+  ];
+  return presets[Math.abs(Number(sequenceIndex) || 0) % presets.length];
+}
+
+function buildScaleCropFilter({ targetWidth, targetHeight }) {
+  return [
+    `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=increase`,
+    `crop=${targetWidth}:${targetHeight}`
+  ].join(",");
+}
+
+function buildMotionFilter({ preset, width, height, fps, duration }) {
+  const safeFps = Math.max(1, Math.floor(fps));
+  const safeFrames = Math.max(2, Math.round(Math.max(0.05, duration) * safeFps));
+  const frameDen = Math.max(1, safeFrames - 1);
+  const longCut = Number(duration) > 8;
+  const zoomDelta = longCut ? 0.015 : 0.03;
+  const panSpan = longCut ? 0.12 : 0.22;
+  const diagonalYSpan = longCut ? 0.06 : 0.10;
+  const zoomStart = (1 + zoomDelta).toFixed(4);
+  const zoomStep = (zoomDelta / frameDen).toFixed(8);
+
+  if (preset === "zoom_in_center") {
+    return [
+      `zoompan=z='if(eq(on,0),1.0000,min(${zoomStart},zoom+${zoomStep}))'`,
+      "x='iw/2-(iw/zoom/2)'",
+      "y='ih/2-(ih/zoom/2)'",
+      "d=1",
+      `s=${width}x${height}`,
+      `fps=${safeFps}`
+    ].join(":");
+  }
+
+  if (preset === "slight_zoom_out") {
+    return [
+      `zoompan=z='if(eq(on,0),${zoomStart},max(1.0000,zoom-${zoomStep}))'`,
+      "x='iw/2-(iw/zoom/2)'",
+      "y='ih/2-(ih/zoom/2)'",
+      "d=1",
+      `s=${width}x${height}`,
+      `fps=${safeFps}`
+    ].join(":");
+  }
+
+  const panZoom = (1 + (zoomDelta * 0.5)).toFixed(4);
+  if (preset === "pan_left_to_right") {
+    return [
+      `zoompan=z='${panZoom}'`,
+      `x='(iw-iw/${panZoom})*(${panSpan.toFixed(4)}*on/${frameDen})'`,
+      `y='(ih-ih/${panZoom})*0.50'`,
+      "d=1",
+      `s=${width}x${height}`,
+      `fps=${safeFps}`
+    ].join(":");
+  }
+
+  if (preset === "pan_right_to_left") {
+    return [
+      `zoompan=z='${panZoom}'`,
+      `x='(iw-iw/${panZoom})*(1.0000-${panSpan.toFixed(4)}*on/${frameDen})'`,
+      `y='(ih-ih/${panZoom})*0.50'`,
+      "d=1",
+      `s=${width}x${height}`,
+      `fps=${safeFps}`
+    ].join(":");
+  }
+
+  return [
+    `zoompan=z='${panZoom}'`,
+    `x='(iw-iw/${panZoom})*(${(panSpan * 0.7).toFixed(4)}*on/${frameDen})'`,
+    `y='(ih-ih/${panZoom})*(${(diagonalYSpan * 0.8).toFixed(4)}*on/${frameDen})'`,
+    "d=1",
+    `s=${width}x${height}`,
+    `fps=${safeFps}`
+  ].join(":");
+}
+
+function runFfmpegMotionClip({ imageFile, outputFile, duration, fps, targetWidth, targetHeight, preset }) {
+  const motion = buildMotionFilter({ preset, width: targetWidth, height: targetHeight, fps, duration });
+  const scaleCrop = buildScaleCropFilter({ targetWidth, targetHeight });
+  const filter = `${scaleCrop},${motion}`;
+  const safeFps = Math.max(1, Math.floor(fps));
+  const args = [
+    "-y",
+    "-loop", "1",
+    "-i", imageFile,
+    "-t", Math.max(0.05, Number(duration)).toFixed(3),
+    "-vf", filter,
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-an",
+    "-g", String(safeFps),
+    "-keyint_min", String(safeFps),
+    "-sc_threshold", "0",
+    "-x264-params", "open-gop=0:min-keyint=1",
+    "-video_track_timescale", "90000",
+    "-movflags", "+faststart",
+    outputFile
+  ];
+  return new Promise((resolve, reject) => {
+    let stderr = "";
+    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
+    proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`ffmpeg motion clip failed status=${code}: ${clipped}`));
+      }
+    });
+  });
+}
+
+function runFfmpegMuxAudio({ videoFile, audioFile, outputFile }) {
+  const args = [
+    "-y",
+    "-i", videoFile,
+    "-i", audioFile,
+    "-c:v", "copy",
+    "-c:a", "aac",
+    "-shortest",
+    "-movflags", "+faststart",
+    outputFile
+  ];
+  return new Promise((resolve, reject) => {
+    let stderr = "";
+    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
+    proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`ffmpeg mux failed status=${code}: ${clipped}`));
+      }
+    });
+  });
 }
 
 export {
@@ -269,7 +472,14 @@ export {
   runFfmpegConcatAudio,
   parseArgs,
   getAudioDurationSeconds,
-  buildTimelineItems
+  getImageDimensions,
+  chooseTargetDimensions,
+  buildTimelineItems,
+  chooseMotionPreset,
+  buildScaleCropFilter,
+  buildMotionFilter,
+  runFfmpegMotionClip,
+  runFfmpegMuxAudio
 };
 
 export async function main() {
@@ -279,6 +489,7 @@ export async function main() {
   const cuts = itinerary.cuts;
   if (!cuts.length) throw new Error("no cuts found");
   if (!fss.existsSync(opts.audioFile)) throw new Error(`audio file missing: ${opts.audioFile}`);
+
   const audioDurationSeconds = await getAudioDurationSeconds(opts.audioFile);
   const timeline = buildTimelineItems(cuts, audioDurationSeconds);
   const items = [];
@@ -286,19 +497,53 @@ export async function main() {
     const image = await findImageForCut(opts.imagesDir, opts.prefix, cut.index);
     items.push({ ...cut, image });
   }
+
   if (opts.dryRun) {
     for (const item of items) {
       process.stdout.write(`${item.index}\t${item.duration.toFixed(3)}\t${item.image}\n`);
     }
     return;
   }
-  const { dir, file } = await createConcatListFile(items);
+
+  const imageDimensions = [];
+  for (const item of items) {
+    const dims = await getImageDimensions(item.image);
+    imageDimensions.push(dims);
+  }
+  const { width, height } = chooseTargetDimensions(imageDimensions);
+
+  const clipsDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-video-motion-clips-"));
+  let concatListDir = "";
   try {
+    const clipFiles = [];
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      const preset = chooseMotionPreset(i);
+      const clipFile = path.join(clipsDir, `clip-${String(i).padStart(4, "0")}.mp4`);
+      await runFfmpegMotionClip({
+        imageFile: item.image,
+        outputFile: clipFile,
+        duration: item.duration,
+        fps: opts.fps,
+        targetWidth: width,
+        targetHeight: height,
+        preset
+      });
+      clipFiles.push(clipFile);
+    }
+
+    const concatList = await createVideoConcatListFile(clipFiles);
+    concatListDir = concatList.dir;
+
+    const videoNoAudio = path.join(clipsDir, "section-video-noaudio.mp4");
+    await runFfmpegConcatVideos({ listFile: concatList.file, outputFile: videoNoAudio, stripAudio: true });
+
     await fs.mkdir(path.dirname(opts.outputFile), { recursive: true });
-    await runFfmpeg({ listFile: file, audioFile: opts.audioFile, outputFile: opts.outputFile, fps: opts.fps });
+    await runFfmpegMuxAudio({ videoFile: videoNoAudio, audioFile: opts.audioFile, outputFile: opts.outputFile });
     process.stdout.write(`${opts.outputFile}\n`);
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    if (concatListDir) await fs.rm(concatListDir, { recursive: true, force: true });
+    await fs.rm(clipsDir, { recursive: true, force: true });
   }
 }
 

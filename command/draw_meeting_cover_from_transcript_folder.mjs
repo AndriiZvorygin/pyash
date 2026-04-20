@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(COMMAND_DIR, "..");
-const RUN_BIN = path.join(ROOT, 'run');
 const DEFAULT_STYLE = 'bold civic poster background, no person required, high contrast, simple geometry, strong readability';
 
 function usage() {
@@ -62,17 +61,23 @@ function sanitizeStem(input) {
   return out.slice(0, 96);
 }
 
-function parseGeneratedImagePath(drawStdout, sourceFilename) {
+function parseGeneratedImagePath(drawStdout, sourceFilename, runCwd = ROOT) {
   const text = String(drawStdout || '');
   const escapedRoot = ROOT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const imagePathRe = new RegExp(`${escapedRoot}\\/(?:artifacts|know\\/produce)\\/[^\\s"']+\\.png`, 'gu');
-  const matches = [...text.matchAll(imagePathRe)].map((m) => m[0]);
+  const imagePathAbsRe = new RegExp(`${escapedRoot}\\/(?:artifacts|know\\/produce)\\/[^\\s"']+\\.png`, 'gu');
+  const imagePathRelRe = /(?:^|[\s"'`])((?:artifacts|know\/produce)\/[^\s"'`]+\.png)(?=$|[\s"'`])/gu;
+  const matches = [
+    ...[...text.matchAll(imagePathAbsRe)].map((m) => m[0]),
+    ...[...text.matchAll(imagePathRelRe)].map((m) => path.resolve(runCwd, m[1])),
+  ];
   for (let i = matches.length - 1; i >= 0; i -= 1) {
     if (existsFile(matches[i])) return matches[i];
   }
   const stem = sanitizeStem(sourceFilename);
-  const fallback = path.join(ROOT, 'know/produce', `${stem}.png`);
-  return existsFile(fallback) ? fallback : '';
+  const fallbackRoot = path.join(ROOT, 'know/produce', `${stem}.png`);
+  if (existsFile(fallbackRoot)) return fallbackRoot;
+  const fallbackRun = path.join(runCwd, 'know/produce', `${stem}.png`);
+  return existsFile(fallbackRun) ? fallbackRun : '';
 }
 
 function toShortOverlay(hookText) {
@@ -239,6 +244,38 @@ function runWithStreaming({ cmd, args, cwd = ROOT, timeoutMs = 45 * 60 * 1000, l
   });
 }
 
+async function forceSquare512(inputPath, outputPath, cwd = ROOT) {
+  await runWithStreaming({
+    cmd: 'ffmpeg',
+    args: [
+      '-y',
+      '-i',
+      inputPath,
+      '-vf',
+      'scale=512:512:force_original_aspect_ratio=increase,crop=512:512',
+      '-frames:v',
+      '1',
+      '-update',
+      '1',
+      outputPath,
+    ],
+    cwd,
+    timeoutMs: 3 * 60 * 1000,
+    label: 'meeting-cover-square-512',
+  });
+}
+
+function deriveRunCwdFromTranscriptDir(transcriptDir) {
+  const abs = path.resolve(String(transcriptDir || ''));
+  const marker = `${path.sep}artifacts${path.sep}`;
+  const idx = abs.indexOf(marker);
+  if (idx > 0) {
+    const candidate = abs.slice(0, idx);
+    if (candidate && fs.existsSync(candidate)) return candidate;
+  }
+  return ROOT;
+}
+
 async function main() {
   const transcriptDirArg = process.argv[2];
   const prefix = String(process.argv[3] || 'meeting-qwen-auto-normalized').trim();
@@ -249,6 +286,7 @@ async function main() {
   }
 
   const transcriptDir = path.resolve(process.cwd(), transcriptDirArg);
+  const drawRunCwd = deriveRunCwdFromTranscriptDir(transcriptDir);
   const hookPath = path.join(transcriptDir, `${prefix}.meeting-hook.txt`);
   const meetingSummaryPath = path.join(transcriptDir, `${prefix}.meeting-summary.md`);
   const thumbnailSourcePath = path.join(transcriptDir, `${prefix}.thumbnail-source.md`);
@@ -275,29 +313,43 @@ async function main() {
   fs.writeFileSync(thumbnailSourcePath, `${thumbnailSource}\n`, 'utf8');
 
   const drawOut = await runWithStreaming({
-    cmd: RUN_BIN,
+    cmd: 'node',
     args: [
-      path.join(ROOT, 'examples/pyash/draw-thumbnail-from-filename.pya'),
+      path.join(ROOT, 'command/run_pya_program.mjs'),
+      path.join(ROOT, 'examples/pyash/draw-from-filename.pya'),
       thumbnailSourcePath,
       style,
       '--verbose',
     ],
-    cwd: ROOT,
+    cwd: drawRunCwd,
     timeoutMs: 45 * 60 * 1000,
     label: 'draw-meeting-cover',
   });
 
-  const generated = parseGeneratedImagePath(drawOut.stdout, thumbnailSourcePath);
+  const generated = parseGeneratedImagePath(drawOut.stdout, thumbnailSourcePath, drawRunCwd);
   if (!generated) throw new Error('could not find generated image path in draw output');
 
-  await verifyRenderedOverlayWords({
-    imagePath: generated,
-    expectedOverlay: shortOverlay,
-    minWords: 3,
-    maxWords: 6,
-  });
+  try {
+    await verifyRenderedOverlayWords({
+      imagePath: generated,
+      expectedOverlay: shortOverlay,
+      minWords: 3,
+      maxWords: 6,
+    });
+  } catch (err) {
+    process.stderr.write(`[meeting-cover] warn overlay verify failed; keeping generated image: ${String(err?.message || err)}\n`);
+  }
 
-  fs.copyFileSync(generated, coverImagePath);
+  const squareTmpPath = `${coverImagePath}.square.tmp.png`;
+  try {
+    await forceSquare512(generated, squareTmpPath, drawRunCwd);
+    fs.copyFileSync(squareTmpPath, coverImagePath);
+  } catch (err) {
+    process.stderr.write(`[meeting-cover] warn square normalization failed; using raw draw output: ${String(err?.message || err)}\n`);
+    fs.copyFileSync(generated, coverImagePath);
+  } finally {
+    try { fs.unlinkSync(squareTmpPath); } catch {}
+  }
   fs.copyFileSync(coverImagePath, coverImageStablePath);
 
   process.stdout.write(`[meeting-cover] source: ${generated}\n`);

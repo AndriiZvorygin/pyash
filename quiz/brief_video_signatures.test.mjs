@@ -98,7 +98,7 @@ test("current footnote mode resolves widescreen karaoke and tall wordflow", asyn
   const source = await fs.readFile("module/video_common.pya", "utf8");
   assert.match(
     source,
-    /su name current footnote mode[\s\S]*ob text "wordflow"[\s\S]*draw widescreen mode be equally from text "truth" then[\s\S]*ob text "karaoke"/u
+    /su name current footnote mode[\s\S]*footnote_mode of draw size shorts[\s\S]*draw widescreen mode be equally from text "truth" then[\s\S]*footnote_mode of draw size widescreen[\s\S]*ob bool of ob of draw widescreen mode be equally from bool truth/u
   );
 });
 

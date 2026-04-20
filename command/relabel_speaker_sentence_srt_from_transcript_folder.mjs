@@ -191,6 +191,36 @@ function renderSrt(rows) {
   return `${out.join('\n')}\n`;
 }
 
+function parseSrtEntries(filePath) {
+  if (!fs.existsSync(filePath)) return [];
+  const text = fs.readFileSync(filePath, 'utf8');
+  const blocks = String(text).split(/\r?\n\r?\n/gu).map((b) => b.trim()).filter(Boolean);
+  const out = [];
+  for (const block of blocks) {
+    const lines = block.split(/\r?\n/gu);
+    if (lines.length < 2) continue;
+    const timing = lines[1].match(/^(\d\d:\d\d:\d\d,\d\d\d)\s+-->\s+(\d\d:\d\d:\d\d,\d\d\d)$/u);
+    if (!timing) continue;
+    const body = lines.slice(2).join(' ').trim();
+    out.push({
+      since: timing[1],
+      until: timing[2],
+      text: body,
+    });
+  }
+  return out;
+}
+
+function parseSrtTime(value) {
+  const m = String(value || '').match(/^(\d\d):(\d\d):(\d\d),(\d\d\d)$/u);
+  if (!m) return NaN;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  const ss = Number(m[3]);
+  const ms = Number(m[4]);
+  return (hh * 3600) + (mm * 60) + ss + (ms / 1000);
+}
+
 async function main() {
   const transcriptDirArg = process.argv[2];
   const prefixArg = process.argv[3] || 'auto';
@@ -216,10 +246,40 @@ async function main() {
   const autoAssignReportPath = pickAutoAssignReport(transcriptDir, resolvedPrefix);
   const meetingAssignments = loadMeetingAssignmentsMap(autoAssignReportPath);
   const lockedSpeakerKeys = loadLockedSpeakerKeys(payload);
-  const updatedRows = rows.map((row) => ({
+  let updatedRows = rows.map((row) => ({
     ...row,
     display: toDisplayLabelWithMeetingAssignments(row.speaker_key, metadataMap, meetingAssignments, lockedSpeakerKeys),
   }));
+
+  // Canonicalize cue count/timeline to normalized sentence cues so downstream
+  // timing-contract checks are stable even when diarize rows include malformed
+  // tail rows or legacy drift.
+  const canonicalSrtPath = path.join(transcriptDir, `${resolvedPrefix}.merged.srt`);
+  const canonicalEntries = parseSrtEntries(canonicalSrtPath);
+  if (canonicalEntries.length) {
+    const aligned = [];
+    let carrySpeakerKey = '';
+    let carryDisplay = 'SPEAKER_UNKNOWN';
+    for (let i = 0; i < canonicalEntries.length; i += 1) {
+      const src = updatedRows[i] || {};
+      const speakerKey = String(src?.speaker_key || carrySpeakerKey || '').trim();
+      const display = String(src?.display || carryDisplay || '').trim() || 'SPEAKER_UNKNOWN';
+      const since = parseSrtTime(canonicalEntries[i].since);
+      const until = parseSrtTime(canonicalEntries[i].until);
+      aligned.push({
+        ...src,
+        atindex: i + 1,
+        speaker_key: speakerKey || 'speaker_unknown',
+        display,
+        since: Number.isFinite(since) ? since : 0,
+        until: Number.isFinite(until) ? until : 0,
+        text: canonicalEntries[i].text,
+      });
+      if (speakerKey) carrySpeakerKey = speakerKey;
+      carryDisplay = display;
+    }
+    updatedRows = aligned;
+  }
 
   const outSrt = path.join(transcriptDir, `${resolvedPrefix}.speaker.sentence.srt`);
   fs.writeFileSync(outSrt, renderSrt(updatedRows), 'utf8');

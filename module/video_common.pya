@@ -75,8 +75,9 @@ su name current subtitle margin ratio to name num subtitle margin ratio be cerem
 prah
 
 su name current footnote mode to name text footnote mode current be ceremony def
-  ob text "wordflow" to name text footnote mode current be text do
-  ob name text draw widescreen mode be equally from text "truth" then ob text "karaoke" to name text footnote mode current be text do
+  ob text of footnote_mode of draw size shorts to name text footnote mode current be text do
+  ob name text draw widescreen mode be equally from text "truth" then ob text of footnote_mode of draw size widescreen to name text footnote mode current be text do
+  ob bool of ob of draw widescreen mode be equally from bool truth then ob text of footnote_mode of draw size widescreen to name text footnote mode current be text do
   su name footnote mode current ret
 prah
 
