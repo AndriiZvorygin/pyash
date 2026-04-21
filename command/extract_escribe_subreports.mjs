@@ -109,7 +109,7 @@ function parseAgendaHtmlAttachments(htmlText, { baseOrigin = "" } = {}) {
 
 function isAgendaItemCode(line) {
   const raw = normalizeSpaces(line).toLowerCase();
-  return /^([0-9]{1,2})\.([a-z])$/.test(raw) || /^([a-z])\.$/.test(raw);
+  return /^([0-9]{1,2})\.([a-z])$/.test(raw);
 }
 
 function collectPageMarkers(lines) {
@@ -131,6 +131,22 @@ function findPagesHeader(lines) {
   return -1;
 }
 
+function sanitizeTocTitle(text) {
+  let t = normalizeSpaces(text);
+  if (!t) return t;
+  t = t.replace(/Page\s+[0-9]{1,4}\s+of\s+[0-9]{1,4}/gi, " ");
+  t = t.replace(/\bit is therefore recommended:?\b[\s\S]*$/i, "");
+  t = t.replace(/^Whereas\s+/i, "Whereas ");
+  t = t.replace(/\bThat\b[\s\S]*$/i, "");
+  t = normalizeSpaces(t);
+  if (t.length > 180) {
+    const firstClause = t.split(/[;:.]/u)[0] || t;
+    t = normalizeSpaces(firstClause);
+  }
+  const words = t.split(/\s+/u).filter(Boolean);
+  if (words.length > 24) t = words.slice(0, 24).join(" ") + "...";
+  return t;
+}
 function parseTocItems(lines, startLine, endLine) {
   const items = [];
   for (let i = startLine; i <= endLine; i += 1) {
@@ -143,16 +159,25 @@ function parseTocItems(lines, startLine, endLine) {
       const raw = normalizeSpaces(lines[j]);
       if (!raw) continue;
       if (isAgendaItemCode(raw)) break;
+      const marker = parseGlobalPageMarker(raw);
+      if (marker) continue;
+      // Top-level agenda counters like "5." / "6." are section breaks, not
+      // page numbers. Treating them as pages collapses subreport ranges and
+      // causes title bleed across multiple agenda sections.
+      if (/^[0-9]{1,2}\.$/.test(raw)) break;
       if (/^[0-9]{1,4}\.?$/.test(raw)) {
         page = Number(raw.replace(/\./g, ""));
         continue;
       }
-      if (/^[0-9]{1,2}\.$/.test(raw)) break;
+      // Stop title capture when recommendation/body text starts.
+      if (titleParts.length > 0 && /^that\b/i.test(raw)) break;
+      if (titleParts.length > 0 && /^[ivxlcdm]+\.$/i.test(raw)) break;
+      if (titleParts.length > 0 && /^[A-Z]{2,}(?:-[A-Z]{2,})+-[0-9]{2}-[0-9]{2}\b/.test(raw)) break;
       titleParts.push(raw);
     }
     items.push({
       item,
-      title: titleParts.join(" ").trim() || item,
+      title: sanitizeTocTitle(titleParts.join(" ")) || item,
       start_page: page !== null && page > 0 ? page : null,
     });
     i = j - 1;
@@ -169,11 +194,62 @@ function dedupeAndSortItems(items) {
     seen.add(key);
     out.push(item);
   }
-  out.sort((a, b) => {
-    const ap = Number.isFinite(a.start_page) ? a.start_page : Number.POSITIVE_INFINITY;
-    const bp = Number.isFinite(b.start_page) ? b.start_page : Number.POSITIVE_INFINITY;
-    return ap - bp || a.item.localeCompare(b.item);
-  });
+  return out;
+}
+
+function inferMissingStartPages({ items, lines, byPage }) {
+  const out = items.map((x) => ({ ...x }));
+  const known = out
+    .map((x, i) => ({ i, page: Number.isFinite(x.start_page) ? x.start_page : null }))
+    .filter((x) => Number.isFinite(x.page));
+  if (!known.length) return out;
+
+  const firstKnownPage = known[0].page;
+  const firstKnownLine = byPage.get(firstKnownPage);
+  if (typeof firstKnownLine !== "number") return out;
+  const markerPages = Array.from(byPage.keys())
+    .filter((p) => Number.isFinite(p) && p > 0)
+    .sort((a, b) => a - b);
+
+  const firstIntermediatePage = markerPages.find((p) => p < firstKnownPage && p >= 5);
+  const firstIntermediateLine = Number.isFinite(firstIntermediatePage) ? byPage.get(firstIntermediatePage) : null;
+  const topLevelScanEnd =
+    typeof firstIntermediateLine === "number"
+      ? Math.min(firstKnownLine, firstIntermediateLine)
+      : firstKnownLine;
+
+  let lastTopLevelLine = -1;
+  for (let i = 0; i < topLevelScanEnd; i += 1) {
+    const raw = normalizeSpaces(lines[i]);
+    if (/^[0-9]{1,2}\.$/.test(raw)) lastTopLevelLine = i;
+  }
+
+  const markerPagesFiltered = markerPages;
+
+  for (let i = 0; i < out.length; i += 1) {
+    if (Number.isFinite(out[i].start_page)) continue;
+    const nextKnown = known.find((k) => k.i > i);
+    if (!nextKnown && i !== 0) continue;
+    const nextPage = nextKnown ? nextKnown.page : firstKnownPage;
+
+    const candidates = markerPagesFiltered
+      .filter((p) => p < nextPage)
+      .filter((p) => {
+        const line = byPage.get(p);
+        return typeof line === "number" && line > lastTopLevelLine;
+      });
+    if (!candidates.length) continue;
+
+    let chosen = candidates[0];
+    if (candidates.length > 1) {
+      const firstGap = byPage.get(candidates[1]) - byPage.get(candidates[0]);
+      // Skip tiny page-marker runs that are usually table-of-contents carryover.
+      if (firstGap <= 3) chosen = candidates[1];
+    }
+
+    out[i].start_page = chosen;
+  }
+
   return out;
 }
 
@@ -191,7 +267,14 @@ function main() {
   const { byPage, totalPages } = collectPageMarkers(lines);
   const pagesHeader = findPagesHeader(lines);
   const tocEnd = (() => {
-    for (let i = Math.max(0, pagesHeader); i < lines.length; i += 1) {
+    const start = Math.max(0, pagesHeader);
+    let lastTopLevelLine = -1;
+    for (let i = start; i < Math.min(lines.length, start + 1200); i += 1) {
+      const raw = normalizeSpaces(lines[i]);
+      if (/^[0-9]{1,2}\.$/.test(raw)) lastTopLevelLine = i;
+    }
+    const probeStart = lastTopLevelLine >= 0 ? lastTopLevelLine + 1 : start;
+    for (let i = probeStart; i < lines.length; i += 1) {
       const m = parseGlobalPageMarker(lines[i]);
       if (m && m.page >= 2) return i;
     }
@@ -202,9 +285,12 @@ function main() {
     pagesHeader >= 0 && tocEnd > pagesHeader
       ? parseTocItems(lines, pagesHeader + 1, tocEnd - 1)
       : [];
-  const tocItems = dedupeAndSortItems(tocItemsRaw).filter(
-    (x) => Number.isFinite(x.start_page) && byPage.has(x.start_page),
-  );
+  const tocItemsFilled = inferMissingStartPages({
+    items: dedupeAndSortItems(tocItemsRaw),
+    lines,
+    byPage,
+  });
+  const tocItems = tocItemsFilled.filter((x) => Number.isFinite(x.start_page) && byPage.has(x.start_page));
 
   const sections = [];
   for (let i = 0; i < tocItems.length; i += 1) {
