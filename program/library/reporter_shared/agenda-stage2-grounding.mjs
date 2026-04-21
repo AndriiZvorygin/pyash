@@ -219,34 +219,129 @@ function deriveUnitFieldsFromSpan({ unit, rowStart, rowEnd, rows, chunks }) {
 
 function splitLongUnitsByTransition({ units, chunks, rows, thresholdSeconds = 900 }) {
   const out = [];
+
+  const minChapterSeconds = 600;
+  const maxSegmentFor = (durationSeconds) => {
+    if (durationSeconds > 2400) return 600;
+    if (durationSeconds > 1200) return 720;
+    if (durationSeconds > 900) return 780;
+    return 900;
+  };
+
+  const rowDuration = (rowStart, rowEnd) => {
+    const rs = Math.max(0, Number(rowStart || 0));
+    const re = Math.max(rs, Number(rowEnd || rs));
+    const since = Number(rows[rs]?.since || 0);
+    const until = Number(rows[re]?.until || since);
+    return Math.max(0, until - since);
+  };
+
   for (const unit of units) {
     const duration = Number(unit["duration seconds"] || 0);
-    if (duration <= thresholdSeconds) {
+    if (duration <= minChapterSeconds) {
       out.push(unit);
       continue;
     }
 
-    const candidateChunks = chunks.filter((c) =>
-      Number(c["row end"]) >= Number(unit["row start"]) &&
-      Number(c["row start"]) <= Number(unit["row end"])
-    );
-    const transitionRows = candidateChunks
-      .filter((c) => String(c["topic transition"] || "") === "major")
+    const unitStart = Number(unit["row start"] || 0);
+    const unitEnd = Number(unit["row end"] || unitStart);
+
+    const candidateChunks = chunks
+      .filter((c) => Number(c["row end"]) >= unitStart && Number(c["row start"]) <= unitEnd)
+      .sort((a, b) => Number(a["row start"]) - Number(b["row start"]));
+
+    const boundaryStarts = candidateChunks
       .map((c) => Number(c["row start"]))
-      .filter((n) => Number.isInteger(n) && n > unit["row start"] && n < unit["row end"])
-      .sort((a, b) => a - b);
+      .filter((n) => Number.isInteger(n) && n > unitStart && n < unitEnd);
+
+    const scored = new Map();
+    for (let idx = 0; idx < candidateChunks.length; idx += 1) {
+      const c = candidateChunks[idx];
+      const row = Number(c["row start"]);
+      if (!(row > unitStart && row < unitEnd)) continue;
+      let score = 0;
+      const transition = String(c["topic transition"] || "").trim().toLowerCase();
+      if (transition === "major") score += 3;
+      else if (transition === "minor") score += 2;
+      else if (transition && transition !== "none") score += 1;
+
+      const flow = String(c["signal flow"] || "").trim().toLowerCase();
+      if (flow === "start" || flow === "end") score += 1;
+
+      const prev = idx > 0 ? candidateChunks[idx - 1] : null;
+      const prevCue = String(prev?.["likely agenda item"] || "").trim().toLowerCase();
+      const cue = String(c["likely agenda item"] || "").trim().toLowerCase();
+      if (prev && cue && prevCue && cue !== prevCue) score += 1;
+
+      if (score > 0) scored.set(row, score);
+    }
+
+    const strong = [...scored.entries()].filter(([, sc]) => sc >= 2).map(([row]) => row).sort((a, b) => a - b);
+    const reasonable = [...scored.keys()].sort((a, b) => a - b);
+
+    let transitionRows = [];
+    if (duration > 1200) {
+      transitionRows = reasonable.length ? reasonable : boundaryStarts;
+    } else if (duration > thresholdSeconds) {
+      transitionRows = strong.length ? strong : (reasonable.length ? reasonable : boundaryStarts);
+    } else {
+      transitionRows = reasonable;
+    }
+
+    const targetMax = maxSegmentFor(duration);
+
+    const pickMidBoundary = (segStart, segEnd, usedSet) => {
+      const candidates = boundaryStarts.filter((r) => r > segStart && r < segEnd && !usedSet.has(r));
+      if (!candidates.length) return null;
+      const mid = Math.floor((segStart + segEnd) / 2);
+      let best = candidates[0];
+      let bestDist = Math.abs(best - mid);
+      for (const c of candidates.slice(1)) {
+        const d = Math.abs(c - mid);
+        if (d < bestDist) {
+          best = c;
+          bestDist = d;
+        }
+      }
+      return best;
+    };
+
+    const used = new Set(transitionRows);
+    const maxAugment = 24;
+    let loops = 0;
+    while (loops < maxAugment) {
+      loops += 1;
+      const ordered = [...used].sort((a, b) => a - b);
+      const boundaries = [unitStart, ...ordered, unitEnd + 1];
+      let inserted = false;
+      for (let bi = 0; bi < boundaries.length - 1; bi += 1) {
+        const segStart = boundaries[bi];
+        const segEnd = Math.max(segStart, boundaries[bi + 1] - 1);
+        const segDuration = rowDuration(segStart, segEnd);
+        if (segDuration <= targetMax) continue;
+        const b = pickMidBoundary(segStart, segEnd, used);
+        if (b != null) {
+          used.add(b);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) break;
+    }
+
+    transitionRows = [...used].sort((a, b) => a - b);
 
     if (!transitionRows.length) {
       out.push(unit);
       continue;
     }
 
-    const boundaries = [unit["row start"], ...transitionRows, unit["row end"] + 1];
+    const boundaries = [unitStart, ...transitionRows, unitEnd + 1];
     let part = 0;
-    for (let i = 0; i < boundaries.length - 1; i += 1) {
-      const start = boundaries[i];
-      const end = Math.max(start, boundaries[i + 1] - 1);
-      if (end - start < 8) continue;
+    for (let bi = 0; bi < boundaries.length - 1; bi += 1) {
+      const startRow = boundaries[bi];
+      const endRow = Math.max(startRow, boundaries[bi + 1] - 1);
+      if (endRow - startRow < 8) continue;
       part += 1;
       const splitUnit = {
         ...unit,
@@ -255,8 +350,9 @@ function splitLongUnitsByTransition({ units, chunks, rows, thresholdSeconds = 90
         "split depth": 1,
         "grounding status": "grounded-split",
       };
-      out.push(deriveUnitFieldsFromSpan({ unit: splitUnit, rowStart: start, rowEnd: end, rows, chunks }));
+      out.push(deriveUnitFieldsFromSpan({ unit: splitUnit, rowStart: startRow, rowEnd: endRow, rows, chunks }));
     }
+
     if (part === 0) out.push(unit);
   }
 
