@@ -108,12 +108,34 @@ function isRetryableIdentifyError(error) {
   );
 }
 
+function isNoisyEdgeIdentifyError(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return (
+    msg.includes("mixed_or_noisy_edges") ||
+    msg.includes("speaker sample defective") ||
+    msg.includes("edge_similarity")
+  );
+}
+
 async function identifyWithRetry(payload, context = "") {
   let lastErr = null;
   for (let attempt = 0; attempt <= IDENTIFY_RETRY_COUNT; attempt += 1) {
     try {
       return await identify(payload);
     } catch (error) {
+      if (isNoisyEdgeIdentifyError(error)) {
+        const fallbackSpeaker = String(payload?.prevSpeaker || payload?.prev_speaker || "").trim() || UNKNOWN_SPEAKER_KEY;
+        process.stdout.write(
+          `[speaker-sentence] identify degraded ${context} reason="${String(error?.message || error)}" fallback="${fallbackSpeaker}"\n`
+        );
+        return {
+          speaker: fallbackSpeaker,
+          matched: "noisy_edges_rejected",
+          similarity: null,
+          sample_count: null,
+          degraded: true,
+        };
+      }
       lastErr = error;
       const retryable = isRetryableIdentifyError(error);
       const canRetry = retryable && attempt < IDENTIFY_RETRY_COUNT;
