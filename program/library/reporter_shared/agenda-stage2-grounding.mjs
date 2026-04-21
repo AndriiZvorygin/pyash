@@ -181,7 +181,43 @@ function buildGroundedUnits({ sections, chunks, assignments, rows }) {
   return units;
 }
 
-function splitLongUnitsByTransition({ units, chunks, thresholdSeconds = 900 }) {
+function deriveUnitFieldsFromSpan({ unit, rowStart, rowEnd, rows, chunks }) {
+  const safeStart = Math.max(0, Number(rowStart || 0));
+  const safeEnd = Math.max(safeStart, Number(rowEnd || safeStart));
+  const slice = rows.slice(safeStart, safeEnd + 1);
+  const excerpt = slice.slice(0, 160).map((r) => `${r.speaker}: ${r.text}`).join("\n");
+  const since = Number(slice[0]?.since || 0);
+  const until = Number(slice[slice.length - 1]?.until || since);
+  const chunkIds = chunks
+    .filter((c) => Number(c["row end"]) >= safeStart && Number(c["row start"]) <= safeEnd)
+    .map((c) => String(c["chunk id"]));
+  const unitChunks = chunks.filter((c) => chunkIds.includes(String(c["chunk id"])));
+  const traceSignals = {
+    "likely agenda items": [...new Set(unitChunks.map((c) => String(c["likely agenda item"] || "").trim()).filter(Boolean))],
+    "signal flow": [...new Set(unitChunks.map((c) => String(c["signal flow"] || "").trim()).filter(Boolean))],
+    "topic transition": [...new Set(unitChunks.map((c) => String(c["topic transition"] || "").trim()).filter(Boolean))],
+  };
+  return {
+    ...unit,
+    "row start": safeStart,
+    "row end": safeEnd,
+    "source rows": slice.length,
+    since,
+    until,
+    "duration seconds": Math.max(0, until - since),
+    "chunk ids": chunkIds,
+    "chunk span": chunkIds.length ? { first: chunkIds[0], last: chunkIds[chunkIds.length - 1] } : null,
+    "grounding confidence": Number((chunkIds.length ? 0.78 : 0.35).toFixed(2)),
+    "grounding status": chunkIds.length ? "grounded" : "review-needed",
+    "source excerpt": excerpt,
+    "source words": excerpt.split(/\s+/u).filter(Boolean).length,
+    "trace chunk ids": chunkIds,
+    "trace row span": `${safeStart}..${safeEnd}`,
+    "trace signals": traceSignals,
+  };
+}
+
+function splitLongUnitsByTransition({ units, chunks, rows, thresholdSeconds = 900 }) {
   const out = [];
   for (const unit of units) {
     const duration = Number(unit["duration seconds"] || 0);
@@ -212,17 +248,14 @@ function splitLongUnitsByTransition({ units, chunks, thresholdSeconds = 900 }) {
       const end = Math.max(start, boundaries[i + 1] - 1);
       if (end - start < 8) continue;
       part += 1;
-      out.push({
+      const splitUnit = {
         ...unit,
         "unit id": `${unit["unit id"]}_part_${String(part).padStart(2, "0")}`,
         "parent unit id": unit["unit id"],
         "split depth": 1,
-        "row start": start,
-        "row end": end,
-        "source rows": (end - start) + 1,
         "grounding status": "grounded-split",
-        "trace row span": `${start}..${end}`,
-      });
+      };
+      out.push(deriveUnitFieldsFromSpan({ unit: splitUnit, rowStart: start, rowEnd: end, rows, chunks }));
     }
     if (part === 0) out.push(unit);
   }
@@ -273,6 +306,7 @@ export async function runAgendaStage2Grounding({
   const groundedUnits = splitLongUnitsByTransition({
     units: baseUnits,
     chunks,
+    rows,
     thresholdSeconds: Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900),
   });
 

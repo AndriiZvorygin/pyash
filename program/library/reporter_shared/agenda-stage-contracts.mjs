@@ -196,6 +196,28 @@ export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
     if (!Object.hasOwn(u, "trace chunk ids") || !Object.hasOwn(u, "trace row span") || !Object.hasOwn(u, "trace signals")) {
       throw new Error(`stage2 defective: missing trace fields at grounded unit=${i + 1}`);
     }
+    const excerpt = String(u["source excerpt"] || "").trim();
+    if (!excerpt) {
+      throw new Error(`stage2 defective: empty source excerpt at grounded unit=${i + 1}`);
+    }
+    const expectedRows = (rowEnd - rowStart) + 1;
+    if (sourceRows !== expectedRows) {
+      throw new Error(`stage2 defective: source rows mismatch at grounded unit=${i + 1} expected=${expectedRows} actual=${sourceRows}`);
+    }
+    const spanText = String(u["trace row span"] || "");
+    if (spanText !== `${rowStart}..${rowEnd}`) {
+      throw new Error(`stage2 defective: trace row span mismatch at grounded unit=${i + 1}`);
+    }
+    const since = Number(u.since);
+    const until = Number(u.until);
+    const duration = Number(u["duration seconds"]);
+    if (!Number.isFinite(since) || !Number.isFinite(until) || !Number.isFinite(duration) || until < since) {
+      throw new Error(`stage2 defective: invalid timing fields at grounded unit=${i + 1}`);
+    }
+    const expectedDuration = Math.max(0, until - since);
+    if (Math.abs(duration - expectedDuration) > 0.75) {
+      throw new Error(`stage2 defective: duration mismatch at grounded unit=${i + 1} expected~=${expectedDuration.toFixed(3)} actual=${duration.toFixed(3)}`);
+    }
   }
 
   const sortedUnits = units
@@ -257,9 +279,23 @@ export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
     if (indices.length !== total) {
       throw new Error(`stage2 defective: sibling count mismatch in group ${groupKey}`);
     }
-    for (let i = 0; i < indices.length; i += 1) {
-      if (indices[i] !== i) {
-        throw new Error(`stage2 defective: non-contiguous part indices in group ${groupKey}`);
+    if (total > 1) {
+      const excerpts = arr.map((u) => String(u["source excerpt"] || "").trim());
+      const distinct = new Set(excerpts);
+      if (distinct.size !== excerpts.length) {
+        throw new Error(`stage2 defective: duplicate source excerpts in split group ${groupKey}`);
+      }
+      const starts = arr.map((u) => Number(u.since));
+      const ends = arr.map((u) => Number(u.until));
+      const durations = arr.map((u) => Number(u["duration seconds"]));
+      if (starts.some((n) => !Number.isFinite(n)) || ends.some((n) => !Number.isFinite(n)) || durations.some((n) => !Number.isFinite(n) || n <= 0)) {
+        throw new Error(`stage2 defective: invalid split timing values in group ${groupKey}`);
+      }
+      const groupDuration = Math.max(...ends) - Math.min(...starts);
+      for (const d of durations) {
+        if (!(d < groupDuration)) {
+          throw new Error(`stage2 defective: split duration not smaller than parent span in group ${groupKey}`);
+        }
       }
     }
   }
