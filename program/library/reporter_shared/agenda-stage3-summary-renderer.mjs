@@ -13,6 +13,10 @@ function normalizeText(value = "") {
   return String(value || "").replace(/\s+/gu, " ").trim();
 }
 
+function stripLeadingAgendaNumber(text = "") {
+  return normalizeText(String(text || "").replace(/^\d+(?:\.[a-z0-9]+)*\s*/iu, ""));
+}
+
 function countWords(text = "") {
   if (!String(text || "").trim()) return 0;
   return String(text || "")
@@ -243,6 +247,66 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
   return summary;
 }
 
+function wordsKey(text = "") {
+  return normalizeText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function isHeadingLikeChapterText(chapterText = "", heading = "") {
+  const c = wordsKey(stripLeadingAgendaNumber(chapterText));
+  const h = wordsKey(stripLeadingAgendaNumber(heading));
+  if (!c || !h) return false;
+  if (c === h) return true;
+  if (c.length < 24 && (h.includes(c) || c.includes(h))) return true;
+  if (h === "next meeting" && c === "next meeting") return true;
+  return false;
+}
+
+function chapterFromSummary(summary = "") {
+  const sentences = splitSentences(summary).filter(Boolean);
+  const complete = sentences.find((s) => seemsCompleteSentence(s));
+  const base = normalizeText(complete || sentences[0] || summary || "");
+  if (!base) return "";
+  let out = base.replace(/[.]+$/u, "").trim();
+  let words = out.split(/\s+/u).filter(Boolean);
+  if (words.length > 18) words = words.slice(0, 18);
+  while (words.length > 3) {
+    const tail = String(words[words.length - 1] || "").toLowerCase();
+    if (!new Set(["a", "an", "the", "to", "of", "for", "and", "or", "with", "by", "on", "in", "at", "from"]).has(tail)) break;
+    words = words.slice(0, words.length - 1);
+  }
+  out = words.join(" ");
+  return normalizeText(out);
+}
+
+function nextDistinctChapterFromSummary(summary = "", previousChapter = "") {
+  const prevKey = wordsKey(previousChapter);
+  const sentences = splitSentences(summary).filter(Boolean);
+  for (const s of sentences) {
+    const candidate = chapterFromSummary(s);
+    if (!candidate) continue;
+    if (wordsKey(candidate) !== prevKey) return candidate;
+  }
+  return chapterFromSummary(summary);
+}
+
+function finalizeChapterText({ chapterText, heading, summary, splitPart = false, previousChapter = "" }) {
+  const fromLlm = normalizeText(chapterText);
+  const fromSummary = chapterFromSummary(summary);
+  let out = fromLlm || fromSummary || stripLeadingAgendaNumber(heading);
+  if (splitPart && isHeadingLikeChapterText(out, heading)) {
+    out = fromSummary || out;
+  }
+  if (splitPart && previousChapter && wordsKey(out) === wordsKey(previousChapter)) {
+    out = nextDistinctChapterFromSummary(summary, previousChapter) || out;
+  }
+  out = normalizeText(out).replace(/[.]+$/u, "");
+  return out;
+}
+
 function assertExactGroundingRoot(filePath) {
   const lines = String(fs.readFileSync(filePath, "utf8")).split(/\r?\n/u);
   const first = String(lines[0] || "").trim();
@@ -379,6 +443,7 @@ export async function runAgendaStage3SummaryRenderer({
   if (!units.length) throw new Error("stage3 defective: no grounded units in section-grounding artifact");
 
   const sections = [];
+  const previousChapterByParent = new Map();
   for (let i = 0; i < units.length; i += 1) {
     const unit = units[i];
     const llm = await summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl });
@@ -388,6 +453,20 @@ export async function runAgendaStage3SummaryRenderer({
       throw new Error(`stage3 defective: empty chapter text for split grounded unit ${unitId}`);
     }
     const heading = unit.label || `${unit["agenda item"] || ""}`;
+    const splitPart = Number(unit["part total"] || 1) > 1;
+    const parentKey = String(unit["parent unit id"] || unitId);
+    const previousChapter = previousChapterByParent.get(parentKey) || "";
+    const finalChapterText = finalizeChapterText({
+      chapterText: llm.chapterText,
+      heading,
+      summary: llm.summary,
+      splitPart,
+      previousChapter,
+    });
+    if (splitPart && !finalChapterText) {
+      throw new Error(`stage3 defective: empty chapter text after postprocess for split grounded unit ${unitId}`);
+    }
+    if (finalChapterText) previousChapterByParent.set(parentKey, finalChapterText);
     sections.push({
       index: i + 1,
       "unit id": unitId,
@@ -396,7 +475,7 @@ export async function runAgendaStage3SummaryRenderer({
       "part total": Number(unit["part total"] || 1),
       heading,
       summary: llm.summary,
-      "chapter text": llm.chapterText || heading,
+      "chapter text": finalChapterText,
       score: Number(llm.confidence || 0),
       mode: "llm-stage3",
       "source rows": Number(unit["source rows"] || 0),
