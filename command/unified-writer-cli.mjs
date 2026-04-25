@@ -301,7 +301,8 @@ function parsePostedFromResponse(respPath) {
   try {
     const json = JSON.parse(fs.readFileSync(respPath, "utf8"));
     const transcriptUrl = String(json?.transcript_url || "").trim();
-    return Boolean(/\/transcripts\//iu.test(transcriptUrl) && !json?.error);
+    const postUrl = String(json?.post_url || json?.article_url || json?.stream_url || "").trim();
+    return Boolean((/\/transcripts\//iu.test(transcriptUrl) || /\/streams\//iu.test(postUrl)) && !json?.error);
   } catch {
     return false;
   }
