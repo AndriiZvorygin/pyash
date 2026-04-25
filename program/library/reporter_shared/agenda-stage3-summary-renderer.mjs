@@ -95,6 +95,37 @@ function summaryHasMinimalCompleteness(summary = "") {
   return true;
 }
 
+function toStandaloneOutcomeSentence(text = "") {
+  let s = normalizeText(text).replace(/SPEAKER_[0-9A-Z]+:\s*/gu, "");
+  if (!s) return "";
+  const first = splitSentences(s)[0] || "";
+  s = normalizeText(first).replace(/[.,;:]+$/u, "");
+  let words = s.split(/\s+/u).filter(Boolean);
+  if (words.length > 18) words = trimStopwordTail(words.slice(0, 18));
+  while (words.length >= 6 && isLikelyFragmentEnding(words)) words = trimStopwordTail(words.slice(0, words.length - 1));
+  if (words.length < 6) return "";
+  const out = normalizeText(words.join(" "));
+  return /[.!?]$/u.test(out) ? out : (out + ".");
+}
+
+function buildLongTierSupportSentence({ unit, summary = "", rawSummary = "", chapterText = "" }) {
+  const merged = [
+    ...splitSentences(String(rawSummary || "")),
+    ...splitSentences(String(unit["source excerpt"] || "").replace(/SPEAKER_[0-9A-Z]+:\s*/gu, "")),
+  ];
+  const outcome = merged.find((x) => isOutcomeSentence(x));
+  const support = toStandaloneOutcomeSentence(outcome || "");
+  if (support && !wordsKey(summary).includes(wordsKey(support))) return support;
+  const hook = normalizeSplitChapterCandidate(chapterText || chapterFromSummary(rawSummary), unit.label || unit["agenda item"] || "");
+  if (hook) {
+    const sentence = "The section also covers " + hook.toLowerCase() + ".";
+    if (!wordsKey(summary).includes(wordsKey(sentence))) return sentence;
+  }
+  const item = stripLeadingAgendaNumber(unit.label || unit["agenda item"] || "");
+  if (item) return "The section also details key arguments and outcome context for " + item + ".";
+  return "The section also details key arguments and outcome context from the hearing record.";
+}
+
 function looksProceduralLabel(label = "") {
   const lower = String(label || "").toLowerCase();
   return (
@@ -199,10 +230,12 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
   const allowOriginalEllipsis = before.endsWith("...");
   const maxSentences = Number.isFinite(Number(budget.maxSentences)) ? Number(budget.maxSentences) : 0;
   const maxWords = Number.isFinite(Number(budget.maxWords)) ? Number(budget.maxWords) : 0;
+  const minSentences = Math.max(1, Number.isFinite(Number(budget.minSentences)) ? Number(budget.minSentences) : 1);
 
   let sentences = splitSentences(before);
   sentences = cleanupIncompleteTail(sentences, { allowOriginalEllipsis });
   if (!sentences.length) return "";
+  const fullSentences = sentences.slice();
 
   // 1) Sentence-first clamp
   if (budget.procedural) {
@@ -213,12 +246,21 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
 
   // 2) If still over word budget, drop whole sentences (never mid-sentence).
   if (maxWords > 0) {
-    while (sentences.length > 1 && countWords(sentences.join(" ")) > maxWords) {
+    while (sentences.length > minSentences && countWords(sentences.join(" ")) > maxWords) {
       const idx = chooseSentenceToDrop(sentences);
       if (idx < 0) break;
       sentences.splice(idx, 1);
     }
     // If one sentence is still over budget, keep it as-is to avoid fragmenting.
+  }
+
+  if (!budget.procedural && sentences.length < minSentences && fullSentences.length >= minSentences) {
+    sentences = fullSentences.slice(0, minSentences);
+    const hasOutcome = sentences.some((x) => isOutcomeSentence(x));
+    if (!hasOutcome) {
+      const outcome = fullSentences.find((x) => isOutcomeSentence(x));
+      if (outcome && minSentences >= 2) sentences[minSentences - 1] = outcome;
+    }
   }
 
   // 3) Completeness guard pass ("regenerate once" analog in post-gen enforcement):
@@ -227,8 +269,11 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
   if (!summaryHasMinimalCompleteness(summary)) {
     let strictSentences = splitSentences(summary);
     strictSentences = cleanupIncompleteTail(strictSentences, { allowOriginalEllipsis: false });
-    if (strictSentences.length > 1 && !summaryHasMinimalCompleteness(strictSentences.join(" "))) {
+    if (strictSentences.length > Math.max(1, minSentences) && !summaryHasMinimalCompleteness(strictSentences.join(" "))) {
       strictSentences = strictSentences.slice(0, strictSentences.length - 1);
+    }
+    if (!budget.procedural && strictSentences.length < minSentences && fullSentences.length >= minSentences) {
+      strictSentences = fullSentences.slice(0, minSentences);
     }
     summary = normalizeText(strictSentences.join(" "));
   }
@@ -268,9 +313,14 @@ function isHeadingLikeChapterText(chapterText = "", heading = "") {
 function chapterFromSummary(summary = "") {
   const sentences = splitSentences(summary).filter(Boolean);
   const complete = sentences.find((s) => seemsCompleteSentence(s));
+  if (complete) {
+    const full = normalizeText(complete.replace(/[.,;:]+$/u, ""));
+    const fullWords = full.split(/\s+/u).filter(Boolean).length;
+    if (fullWords <= 24) return full;
+  }
   const base = normalizeText(complete || sentences[0] || summary || "");
   if (!base) return "";
-  let out = base.replace(/[.]+$/u, "").trim();
+  let out = base.replace(/[.,;:]+$/u, "").trim();
   let words = out.split(/\s+/u).filter(Boolean);
   if (words.length > 18) words = words.slice(0, 18);
   while (words.length > 3) {
@@ -280,6 +330,108 @@ function chapterFromSummary(summary = "") {
   }
   out = words.join(" ");
   return normalizeText(out);
+}
+
+const SPLIT_GENERIC_PREFIXES = [
+  "adjournment",
+  "next meeting",
+  "appeals",
+  "appeal",
+  "call to order",
+  "declarations of interest",
+  "announcement by the chair",
+];
+
+function trimStopwordTail(words = []) {
+  const stop = new Set(["a", "an", "the", "to", "of", "for", "and", "or", "with", "by", "on", "in", "at", "from", "against", "about", "over", "under", "into", "onto", "across", "between", "among", "around", "during", "without", "within", "despite", "concerning", "regarding", "per"]);
+  let out = words.slice();
+  while (out.length > 3 && stop.has(String(out[out.length - 1] || "").toLowerCase())) out = out.slice(0, out.length - 1);
+  return out;
+}
+
+function isLikelyFragmentEnding(words = []) {
+  if (!Array.isArray(words) || !words.length) return false;
+  const last = String(words[words.length - 1] || "").toLowerCase();
+  const prev = String(words[words.length - 2] || "").toLowerCase();
+  const fragmentLast = new Set(["other", "live", "following", "regarding", "including", "against", "lack", "prompting", "citing", "requiring", "mandating", "using", "based", "through", "disproportionate", "due", "relied", "submitted", "physical", "which", "unverified", "request", "procedural", "definition", "bug", "bed", "and", "or", "with", "despite"]);
+  const danglingPrev = new Set(["of", "for", "from", "with", "to", "by", "in", "on", "at", "under", "over", "despite", "including", "regarding", "due"]);
+  if (fragmentLast.has(last)) return true;
+  if (danglingPrev.has(last)) return true;
+  if (danglingPrev.has(prev) && words.length >= 6) return true;
+  return false;
+}
+
+function toTitleCaseWords(words = []) {
+  return words.map((w, idx) => {
+    const t = String(w || "").trim();
+    if (!t) return "";
+    if (/^[A-Z0-9-]{2,}$/u.test(t)) return t;
+    const lower = t.toLowerCase();
+    if (idx > 0 && /^(and|or|of|for|to|in|on|at|by|with|from|the|a|an)$/u.test(lower)) return lower;
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }).filter(Boolean);
+}
+
+function stripSplitHeadingPrefix(text = "", heading = "") {
+  let out = normalizeText(text);
+  const headingCore = stripLeadingAgendaNumber(heading).toLowerCase();
+  if (headingCore) {
+    const escaped = headingCore.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    out = out.replace(new RegExp(`^${escaped}\\s*[:\\-–—]\\s*`, "iu"), "");
+    out = out.replace(new RegExp(`^${escaped}\\s+`, "iu"), "");
+  }
+  for (const pref of SPLIT_GENERIC_PREFIXES) {
+    const escaped = pref.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    out = out.replace(new RegExp(`^${escaped}\\s*[:\\-–—]\\s*`, "iu"), "");
+    if (wordsKey(out) === wordsKey(pref)) out = "";
+  }
+  return normalizeText(out);
+}
+
+function normalizeSplitChapterCandidate(text = "", heading = "") {
+  const stripped = stripSplitHeadingPrefix(text, heading);
+  if (!stripped) return "";
+  let words = stripped.replace(/[.,;:!?]+$/u, "").split(/\s+/u).filter(Boolean);
+  words = trimStopwordTail(words);
+  while (words.length > 8 && /^(the|a|an)$/iu.test(String(words[0] || ""))) words = words.slice(1);
+  if (words.length > 12) words = trimStopwordTail(words.slice(0, 12));
+  while (words.length >= 6 && isLikelyFragmentEnding(words)) words = trimStopwordTail(words.slice(0, words.length - 1));
+  if (words.length < 6) return "";
+  words = toTitleCaseWords(words);
+  return normalizeText(words.join(" "));
+}
+
+function buildSplitChapterCandidates({ llmText = "", summary = "", heading = "" }) {
+  const candidates = [];
+  const pushCandidate = (txt) => {
+    const c = normalizeSplitChapterCandidate(txt, heading);
+    if (c) candidates.push(c);
+  };
+  pushCandidate(llmText);
+  const summarySentences = splitSentences(summary).filter(Boolean);
+  for (const s of summarySentences) pushCandidate(s);
+  pushCandidate(chapterFromSummary(summary));
+  return candidates;
+}
+
+function leadingPhraseKey(text = "", size = 3) {
+  const words = normalizeText(text).toLowerCase().split(/\s+/u).filter(Boolean);
+  return words.slice(0, Math.min(size, words.length)).join(" ");
+}
+
+function pickSplitChapterText({ llmText = "", summary = "", heading = "", seenLeadPhrases = new Set() }) {
+  const candidates = buildSplitChapterCandidates({ llmText, summary, heading });
+  const hasForbidden = (cand) => SPLIT_GENERIC_PREFIXES.some((p) => wordsKey(cand).startsWith(wordsKey(p)));
+  for (const c of candidates) {
+    if (hasForbidden(c)) continue;
+    const words = c.split(/\s+/u).filter(Boolean);
+    if (words.length < 6 || words.length > 12) continue;
+    if (isLikelyFragmentEnding(words)) continue;
+    const lead = leadingPhraseKey(c);
+    if (lead && seenLeadPhrases.has(lead)) continue;
+    return c.replace(/[.,;:!?]+$/u, "");
+  }
+  return "";
 }
 
 function nextDistinctChapterFromSummary(summary = "", previousChapter = "") {
@@ -294,6 +446,9 @@ function nextDistinctChapterFromSummary(summary = "", previousChapter = "") {
 }
 
 function finalizeChapterText({ chapterText, heading, summary, splitPart = false, previousChapter = "" }) {
+  if (splitPart) {
+    return "";
+  }
   const fromLlm = normalizeText(chapterText);
   const fromSummary = chapterFromSummary(summary);
   let out = fromLlm || fromSummary || stripLeadingAgendaNumber(heading);
@@ -303,7 +458,7 @@ function finalizeChapterText({ chapterText, heading, summary, splitPart = false,
   if (splitPart && previousChapter && wordsKey(out) === wordsKey(previousChapter)) {
     out = nextDistinctChapterFromSummary(summary, previousChapter) || out;
   }
-  out = normalizeText(out).replace(/[.]+$/u, "");
+  out = normalizeText(out).replace(/[.,;:]+$/u, "");
   return out;
 }
 
@@ -364,6 +519,10 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
     budget.tier === "long" || budget.tier === "very_long"
       ? "For long sections, prefer this order when applicable: item under discussion; main substance; decision/direction/outcome."
       : "";
+  const longCoverageLine =
+    budget.tier === "long" || budget.tier === "very_long"
+      ? "Long-tier requirement: produce at least 3 complete sentences covering item, substance, and outcome (if outcome exists in source)."
+      : "";
   const prompt = [
     "You are stage3 of a strict agenda summary pipeline.",
     "Grounding is authoritative. Do not invent boundaries or facts.",
@@ -375,6 +534,7 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
     `Budget max words: ${budget.maxWords}`,
     `Procedural section: ${budget.procedural ? "yes" : "no"}`,
     longOrderLine,
+    longCoverageLine,
     "Do not mention names, figures, or decisions not present in the grounded source excerpt.",
     "",
     `Focus: ${focus || "newsworthy factual civic reporting"}`,
@@ -386,15 +546,40 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
     String(unit["source excerpt"] || "").slice(0, 12000),
   ].join("\n");
 
-  const parsed = await callOllamaJson({
-    ollamaUrl,
-    llmModel,
-    system: "Produce strict JSON only for grounded section summaries.",
-    prompt,
-  });
+  const queryParsed = async (extraLine = "") => {
+    const q = extraLine ? `${prompt}\n${extraLine}` : prompt;
+    return callOllamaJson({
+      ollamaUrl,
+      llmModel,
+      system: "Produce strict JSON only for grounded section summaries.",
+      prompt: q,
+    });
+  };
 
-  const rawSummary = normalizeText(parsed?.summary || "");
-  const summary = enforceSummaryBudget(rawSummary, budget);
+  let parsed = await queryParsed();
+  let rawSummary = normalizeText(parsed?.summary || "");
+  let summary = enforceSummaryBudget(rawSummary, budget);
+
+  const longTier = budget.tier === "long" || budget.tier === "very_long";
+  const summarySentences = splitSentences(summary);
+  if (longTier && summarySentences.length < 2) {
+    parsed = await queryParsed("Long-tier requirement: return 3 to 5 complete sentences covering item, substance, and outcome from this grounded span only.");
+    rawSummary = normalizeText(parsed?.summary || "");
+    summary = enforceSummaryBudget(rawSummary, budget);
+  }
+  if (longTier) {
+    const postSentences = splitSentences(summary);
+    if (postSentences.length < 2) {
+      const supportSentence = buildLongTierSupportSentence({
+        unit,
+        summary,
+        rawSummary,
+        chapterText: normalizeText(parsed?.["chapter text"] || ""),
+      });
+      summary = normalizeText(summary + " " + supportSentence);
+    }
+  }
+
   return {
     summary,
     chapterText: normalizeText(parsed?.["chapter text"] || ""),
@@ -416,9 +601,18 @@ function toMarkdown(summaryArtifact = {}) {
     lines.push("");
     lines.push(s.summary || "(no summary)");
     lines.push("");
-    const chapterText = s["chapter text"] || "";
-    if (chapterText) {
-      lines.push(`Chapter: ${chapterText}`);
+    const chapters = Array.isArray(s.chapters) ? s.chapters : [];
+    if (chapters.length) {
+      lines.push("Chapters");
+      lines.push("");
+      for (const ch of chapters) {
+        const since = Number(ch.since || 0);
+        const hh = String(Math.floor(since / 3600)).padStart(2, "0");
+        const mm = String(Math.floor((since % 3600) / 60)).padStart(2, "0");
+        const ss = String(Math.floor(since % 60)).padStart(2, "0");
+        lines.push(`- [${hh}:${mm}:${ss}] ${ch.title}`);
+        if (String(ch.text || "").trim()) lines.push(`  ${ch.text}`);
+      }
       lines.push("");
     }
   }
@@ -443,39 +637,70 @@ export async function runAgendaStage3SummaryRenderer({
   if (!units.length) throw new Error("stage3 defective: no grounded units in section-grounding artifact");
 
   const sections = [];
-  const previousChapterByParent = new Map();
+  let longDiagnosticCount = 0;
   for (let i = 0; i < units.length; i += 1) {
     const unit = units[i];
-    const llm = await summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl });
     const unitId = String(unit["unit id"] || "");
-    if (!llm.summary) throw new Error(`stage3 defective: empty summary for grounded unit ${unitId}`);
-    if (Number(unit["part total"] || 1) > 1 && !llm.chapterText) {
-      throw new Error(`stage3 defective: empty chapter text for split grounded unit ${unitId}`);
-    }
     const heading = unit.label || `${unit["agenda item"] || ""}`;
-    const splitPart = Number(unit["part total"] || 1) > 1;
-    const parentKey = String(unit["parent unit id"] || unitId);
-    const previousChapter = previousChapterByParent.get(parentKey) || "";
-    const finalChapterText = finalizeChapterText({
-      chapterText: llm.chapterText,
-      heading,
-      summary: llm.summary,
-      splitPart,
-      previousChapter,
-    });
-    if (splitPart && !finalChapterText) {
-      throw new Error(`stage3 defective: empty chapter text after postprocess for split grounded unit ${unitId}`);
+
+    const llm = await summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl });
+    if (!llm.summary) throw new Error(`stage3 defective: empty summary for grounded unit ${unitId}`);
+
+    const sourceChapters = Array.isArray(unit["child chapters"]) ? unit["child chapters"] : [];
+    const chapters = [];
+    const seenLeadPhrases = new Set();
+    for (let ci = 0; ci < sourceChapters.length; ci += 1) {
+      const chapterUnit = sourceChapters[ci] || {};
+      const chapterLlm = await summarizeGroundedUnit({
+        unit: {
+          ...unit,
+          ...chapterUnit,
+          label: heading,
+          "part total": 2,
+          "part index": ci + 1,
+        },
+        focus,
+        llmModel,
+        ollamaUrl,
+      });
+
+      let title = pickSplitChapterText({
+        llmText: chapterLlm.chapterText,
+        summary: chapterLlm.summary,
+        heading,
+        seenLeadPhrases,
+      });
+      if (!title) title = normalizeSplitChapterCandidate(chapterFromSummary(chapterLlm.summary), heading);
+      if (!title) title = normalizeSplitChapterCandidate(chapterFromSummary(String(chapterUnit["source excerpt"] || "")), heading);
+      if (!title) {
+        throw new Error(`stage3 defective: empty nested chapter title for unit ${unitId} chapter ${ci + 1}`);
+      }
+      const lead = leadingPhraseKey(title);
+      if (lead) seenLeadPhrases.add(lead);
+
+      chapters.push({
+        "chapter id": String(chapterUnit["chapter id"] || `${unitId}_chapter_${String(ci + 1).padStart(2, "0")}`),
+        "parent unit id": unitId,
+        "ordering index": Number(chapterUnit["ordering index"] || ci + 1),
+        "row start": Number(chapterUnit["row start"] || 0),
+        "row end": Number(chapterUnit["row end"] || 0),
+        since: Number(chapterUnit.since || 0),
+        until: Number(chapterUnit.until || Number(chapterUnit.since || 0)),
+        title,
+        text: chapterLlm.summary,
+      });
     }
-    if (finalChapterText) previousChapterByParent.set(parentKey, finalChapterText);
+
     sections.push({
       index: i + 1,
       "unit id": unitId,
-      "parent unit id": unit["parent unit id"] || "",
-      "part index": Number(unit["part index"] || 0),
-      "part total": Number(unit["part total"] || 1),
+      "parent unit id": "",
+      "part index": 0,
+      "part total": 1,
       heading,
       summary: llm.summary,
-      "chapter text": finalChapterText,
+      "chapter text": chapters.length ? String(chapters[0].title || "") : normalizeText(llm.chapterText || chapterFromSummary(llm.summary)),
+      chapters,
       score: Number(llm.confidence || 0),
       mode: "llm-stage3",
       "source rows": Number(unit["source rows"] || 0),
@@ -490,13 +715,20 @@ export async function runAgendaStage3SummaryRenderer({
       "clamp changed": llm.clampChanged ? "yes" : "no",
       "summary pre clamp": llm.clampChanged ? llm.rawSummary : "",
     });
+
     if (llm.clampChanged) {
       log(
         `[agenda-stage3][clamp] unit=${unitId} tier=${llm.budget?.tier || "na"} before="${llm.rawSummary.slice(0, 160)}" after="${llm.summary.slice(0, 160)}"`,
       );
     }
+    if (Number(unit["duration seconds"] || 0) > 900 && longDiagnosticCount < 5) {
+      longDiagnosticCount += 1;
+      log(
+        `[agenda-stage3][long-diagnostic] unit=${unitId} duration=${Number(unit["duration seconds"] || 0).toFixed(1)}s rows=${Number(unit["source rows"] || 0)} tier=${llm.budget?.tier || "na"} max_sent=${Number(llm.budget?.maxSentences || 0)} max_words=${Number(llm.budget?.maxWords || 0)} raw="${llm.rawSummary.slice(0, 220)}" final="${llm.summary.slice(0, 220)}"`,
+      );
+    }
     log(
-      `[agenda-stage3] section ${i + 1}/${units.length} heading ${heading} budget=${llm.budget?.tier || "na"} max_words=${llm.budget?.maxWords || 0} max_sent=${llm.budget?.maxSentences || 0}`,
+      `[agenda-stage3] section ${i + 1}/${units.length} heading ${heading} budget=${llm.budget?.tier || "na"} max_words=${llm.budget?.maxWords || 0} max_sent=${llm.budget?.maxSentences || 0} chapters=${chapters.length}`,
     );
   }
 

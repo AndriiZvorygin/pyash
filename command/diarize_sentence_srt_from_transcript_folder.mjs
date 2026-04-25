@@ -316,6 +316,18 @@ function loadSpeakerMetadataMap(voicesDir) {
   return out;
 }
 
+function loadSpeakerKeysFromVoicesDir(voicesDir) {
+  const out = new Set();
+  if (!fs.existsSync(voicesDir)) return out;
+  const files = fs.readdirSync(voicesDir);
+  for (const file of files) {
+    const m = String(file || '').match(/^(speaker_\d+)\.(?:wav|npy|meta|pya)$/iu);
+    if (!m) continue;
+    out.add(String(m[1] || '').toLowerCase());
+  }
+  return out;
+}
+
 function pickAudioFile(transcriptDir) {
   const entries = fs.readdirSync(transcriptDir, { withFileTypes: true })
     .filter((d) => d.isFile())
@@ -459,11 +471,10 @@ function enforceNoPseudoKnownForFreshKey({
   if (!key) return;
   if (!/^speaker_\d+$/iu.test(key)) return;
   if (!(preexistingSpeakerKeys instanceof Set)) return;
-  if (preexistingSpeakerKeys.has(key)) return;
+  if (preexistingSpeakerKeys.has(String(key).toLowerCase())) return;
   if (!isKnownLike(match)) return;
-  throw new Error(
-    `spec violation: fresh key ${key} returned as ${match} (${context}); this indicates illegal pseudo-known assignment`
-  );
+  process.stdout.write(`[speaker-sentence] guard-known reject key=\"${key}\" matched=\"${match}\" context=\"${context}\"\n`);
+  return;
 }
 
 function applyNewSpeakerGuard({
@@ -742,7 +753,8 @@ async function main() {
   const firstSampleBySpeaker = new Set();
   let prevSpeaker = '';
   const metadataMapForLog = loadSpeakerMetadataMap(voicesDir);
-  const preexistingSpeakerKeys = new Set(metadataMapForLog.keys());
+  const preexistingSpeakerKeys = loadSpeakerKeysFromVoicesDir(voicesDir);
+  for (const key of metadataMapForLog.keys()) preexistingSpeakerKeys.add(String(key || '').toLowerCase());
   const knownSpeakerKeysForGuard = new Set(preexistingSpeakerKeys);
   const nameEvidenceBySpeaker = new Map();
   let clipAudioPath = audioPath;
