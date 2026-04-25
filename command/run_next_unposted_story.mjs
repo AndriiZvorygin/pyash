@@ -201,7 +201,7 @@ function parsePostedFromResponse(respPath) {
   if (!respPath || !fs.existsSync(respPath)) return { posted: false, post_url: '', transcript_url: '' };
   try {
     const json = JSON.parse(fs.readFileSync(respPath, 'utf8'));
-    const postUrl = String(json?.post_url || '').trim();
+    const postUrl = String(json?.post_url || json?.article_url || json?.stream_url || '').trim();
     const transcriptUrl = String(json?.transcript_url || '').trim();
     const err = String(json?.error || '').trim();
     const transcriptPathLike = /\/transcripts\//iu.test(transcriptUrl);
