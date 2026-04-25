@@ -218,6 +218,68 @@ export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
     if (Math.abs(duration - expectedDuration) > 0.75) {
       throw new Error(`stage2 defective: duration mismatch at grounded unit=${i + 1} expected~=${expectedDuration.toFixed(3)} actual=${duration.toFixed(3)}`);
     }
+
+    const chapters = Array.isArray(u["child chapters"]) ? u["child chapters"] : [];
+    if (chapters.length === 1) {
+      throw new Error(`stage2 defective: child chapters must be 0 or >=2 at grounded unit=${i + 1}`);
+    }
+    let prevChapterEnd = null;
+    for (let ci = 0; ci < chapters.length; ci += 1) {
+      const ch = chapters[ci] || {};
+      assertNoSnakeCaseKeys(ch, `stage2 chapter ${i + 1}.${ci + 1}`);
+      const chParent = String(ch["parent unit id"] || "").trim();
+      if (chParent !== String(u["unit id"] || "")) {
+        throw new Error(`stage2 defective: child chapter parent mismatch at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      const chId = String(ch["chapter id"] || "").trim();
+      if (!chId) {
+        throw new Error(`stage2 defective: empty chapter id at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      const order = Number(ch["ordering index"]);
+      if (!Number.isInteger(order) || order !== ci + 1) {
+        throw new Error(`stage2 defective: invalid child chapter ordering at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      const chStart = Number(ch["row start"]);
+      const chEnd = Number(ch["row end"]);
+      if (!Number.isInteger(chStart) || !Number.isInteger(chEnd) || chStart < rowStart || chEnd > rowEnd || chEnd < chStart) {
+        throw new Error(`stage2 defective: child chapter span out of parent bounds at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      if (prevChapterEnd != null && chStart <= prevChapterEnd) {
+        throw new Error(`stage2 defective: child chapter overlap at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      prevChapterEnd = chEnd;
+      const chRows = Number(ch["source rows"]);
+      const chExpectedRows = (chEnd - chStart) + 1;
+      if (!Number.isInteger(chRows) || chRows !== chExpectedRows) {
+        throw new Error(`stage2 defective: child chapter source rows mismatch at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      const chChunkIds = Array.isArray(ch["chunk ids"]) ? ch["chunk ids"] : [];
+      if (!chChunkIds.length) {
+        throw new Error(`stage2 defective: child chapter missing chunk backing at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      for (const cid of chChunkIds) {
+        if (!grossChunkIds.has(String(cid || ""))) {
+          throw new Error(`stage2 defective: unknown child chapter chunk id "${cid}" at grounded unit=${i + 1} chapter=${ci + 1}`);
+        }
+      }
+      const chSince = Number(ch.since);
+      const chUntil = Number(ch.until);
+      const chDuration = Number(ch["duration seconds"]);
+      if (!Number.isFinite(chSince) || !Number.isFinite(chUntil) || !Number.isFinite(chDuration) || chUntil < chSince) {
+        throw new Error(`stage2 defective: invalid child chapter timing at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      const chExpectedDuration = Math.max(0, chUntil - chSince);
+      if (Math.abs(chDuration - chExpectedDuration) > 0.75) {
+        throw new Error(`stage2 defective: child chapter duration mismatch at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      const chSpanText = String(ch["trace row span"] || "");
+      if (chSpanText !== `${chStart}..${chEnd}`) {
+        throw new Error(`stage2 defective: child chapter trace row span mismatch at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      if (!String(ch["source excerpt"] || "").trim()) {
+        throw new Error(`stage2 defective: empty child chapter source excerpt at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+    }
   }
 
   const sortedUnits = units
@@ -326,10 +388,25 @@ export function validateAgendaSummaryStrict(sectionGrounding = {}, summary = {})
     if (!String(s.summary || "").trim()) {
       throw new Error(`stage3 defective: empty summary at section=${i + 1}`);
     }
-    const partTotal = Number(s["part total"] || 1);
-    const chapterText = String(s["chapter text"] || "");
-    if (partTotal > 1 && !chapterText.trim()) {
-      throw new Error(`stage3 defective: empty chapter text for split unit at section=${i + 1}`);
+    const chapters = Array.isArray(s.chapters) ? s.chapters : [];
+    const sourceUnit = units.find((u) => String(u["unit id"] || "") === unitId) || {};
+    const expectedChapters = Array.isArray(sourceUnit["child chapters"]) ? sourceUnit["child chapters"] : [];
+    if (chapters.length !== expectedChapters.length) {
+      throw new Error(`stage3 defective: chapter count mismatch for section=${i + 1} expected=${expectedChapters.length} actual=${chapters.length}`);
+    }
+    for (let ci = 0; ci < chapters.length; ci += 1) {
+      const ch = chapters[ci] || {};
+      assertNoSnakeCaseKeys(ch, `stage3 chapter ${i + 1}.${ci + 1}`);
+      const expected = expectedChapters[ci] || {};
+      if (String(ch["parent unit id"] || "") !== unitId) {
+        throw new Error(`stage3 defective: chapter parent mismatch at section=${i + 1} chapter=${ci + 1}`);
+      }
+      if (String(ch["chapter id"] || "") !== String(expected["chapter id"] || "")) {
+        throw new Error(`stage3 defective: chapter id mismatch at section=${i + 1} chapter=${ci + 1}`);
+      }
+      if (!String(ch.title || "").trim()) {
+        throw new Error(`stage3 defective: empty chapter title at section=${i + 1} chapter=${ci + 1}`);
+      }
     }
   }
 }

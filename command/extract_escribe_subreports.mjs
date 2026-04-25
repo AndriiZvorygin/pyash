@@ -10,11 +10,13 @@ function normalizeSpaces(text) {
 }
 
 function slugify(input) {
-  return String(input || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "section";
+  return (
+    String(input || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "section"
+  );
 }
 
 function parseGlobalPageMarker(line) {
@@ -61,7 +63,7 @@ function inferBaseOriginFromAgendaHtml(htmlText, explicitBase = "") {
     .map((m) => String(m?.[0] || "").trim())
     .filter(Boolean);
   const pubPreferred = escribeMatches.find((u) => /https?:\/\/pub-[^/]+\.escribemeetings\.com/iu.test(u));
-  const candidate = pubPreferred || escribeMatches[0] || (src.match(/https?:\/\/[^"'<>]+/iu)?.[0] || "");
+  const candidate = pubPreferred || escribeMatches[0] || src.match(/https?:\/\/[^"'<>]+/iu)?.[0] || "";
   if (!candidate) return "";
   try {
     return new URL(candidate).origin;
@@ -144,13 +146,32 @@ function sanitizeTocTitle(text) {
     t = normalizeSpaces(firstClause);
   }
   const words = t.split(/\s+/u).filter(Boolean);
-  if (words.length > 24) t = words.slice(0, 24).join(" ") + "...";
+  if (words.length > 24) t = `${words.slice(0, 24).join(" ")}...`;
   return t;
 }
+
+function isContaminatedMinutesActionTitle(title = "") {
+  const t = normalizeSpaces(title);
+  if (!t) return false;
+  return (
+    /\bR-\d{6}-\d{3}[a-z]?\b/iu.test(t) ||
+    /\bS-\d{6}-\d{3}[a-z]?\b/iu.test(t) ||
+    /\bMoved by\b/iu.test(t) ||
+    /\bSeconded by\b/iu.test(t) ||
+    /\bCarried\b/iu.test(t) ||
+    /\bDefeated\b/iu.test(t) ||
+    /\bLost\b/iu.test(t) ||
+    /\bResolution(?:\s+No\.)?\b/iu.test(t)
+  );
+}
+
 function parseTocItems(lines, startLine, endLine) {
   const items = [];
+  let rejectedContaminatedTitles = 0;
+  let candidateCount = 0;
   for (let i = startLine; i <= endLine; i += 1) {
     if (!isAgendaItemCode(lines[i])) continue;
+    candidateCount += 1;
     const item = normalizeSpaces(lines[i]).toLowerCase();
     const titleParts = [];
     let page = null;
@@ -161,28 +182,31 @@ function parseTocItems(lines, startLine, endLine) {
       if (isAgendaItemCode(raw)) break;
       const marker = parseGlobalPageMarker(raw);
       if (marker) continue;
-      // Top-level agenda counters like "5." / "6." are section breaks, not
-      // page numbers. Treating them as pages collapses subreport ranges and
-      // causes title bleed across multiple agenda sections.
       if (/^[0-9]{1,2}\.$/.test(raw)) break;
       if (/^[0-9]{1,4}\.?$/.test(raw)) {
         page = Number(raw.replace(/\./g, ""));
         continue;
       }
-      // Stop title capture when recommendation/body text starts.
       if (titleParts.length > 0 && /^that\b/i.test(raw)) break;
       if (titleParts.length > 0 && /^[ivxlcdm]+\.$/i.test(raw)) break;
       if (titleParts.length > 0 && /^[A-Z]{2,}(?:-[A-Z]{2,})+-[0-9]{2}-[0-9]{2}\b/.test(raw)) break;
       titleParts.push(raw);
     }
+    const cleanTitle = sanitizeTocTitle(titleParts.join(" ")) || item;
+    if (isContaminatedMinutesActionTitle(cleanTitle)) {
+      rejectedContaminatedTitles += 1;
+      i = j - 1;
+      continue;
+    }
     items.push({
       item,
-      title: sanitizeTocTitle(titleParts.join(" ")) || item,
+      title: cleanTitle,
       start_page: page !== null && page > 0 ? page : null,
+      start_page_source: page !== null && page > 0 ? "explicit" : "missing",
     });
     i = j - 1;
   }
-  return items;
+  return { items, rejectedContaminatedTitles, candidateCount };
 }
 
 function dedupeAndSortItems(items) {
@@ -243,30 +267,190 @@ function inferMissingStartPages({ items, lines, byPage }) {
     let chosen = candidates[0];
     if (candidates.length > 1) {
       const firstGap = byPage.get(candidates[1]) - byPage.get(candidates[0]);
-      // Skip tiny page-marker runs that are usually table-of-contents carryover.
       if (firstGap <= 3) chosen = candidates[1];
     }
 
     out[i].start_page = chosen;
+    out[i].start_page_source = "inferred";
   }
 
   return out;
 }
 
-function main() {
-  const [, , inputPath, outputDir, outputIndexPath, agendaHtmlPath, sourceBaseUrl] = process.argv;
-  if (!inputPath || !outputDir) {
-    process.stderr.write(
-      "usage: node command/extract_escribe_subreports.mjs <agenda.md> <output_dir> [output_index.json] [agenda_html] [source_base_url]\n",
-    );
-    process.exit(2);
+function scrubContaminatedMinutesActionBody(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const kept = [];
+  for (const line of lines) {
+    const raw = normalizeSpaces(line);
+    if (/\b(?:R|S)-\d{6}-\d{3}[a-z]?\b/iu.test(raw)) continue;
+    if (/\bMoved by\b/iu.test(raw)) continue;
+    if (/\bSeconded by\b/iu.test(raw)) continue;
+    if (/\b(?:Carried|Defeated|Lost)\b/iu.test(raw)) continue;
+    if (/\bResolution(?:\s+No\.)?\b/iu.test(raw)) continue;
+    kept.push(line);
+  }
+  return `${kept.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
+}
+function collectItemAnchorPages(lines, byPage) {
+  const markerPages = Array.from(byPage.keys())
+    .filter((p) => Number.isFinite(p) && p > 0)
+    .sort((a, b) => a - b);
+  const pageForLine = (line) => {
+    let page = null;
+    for (const p of markerPages) {
+      const at = byPage.get(p);
+      if (typeof at !== "number") continue;
+      if (at <= line) page = p;
+      else break;
+    }
+    return page;
+  };
+  const byItem = new Map();
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = normalizeSpaces(lines[i]).toLowerCase();
+    const m = raw.match(/^([0-9]{1,2}\.[a-z])\b/);
+    if (!m) continue;
+    const item = m[1];
+    const page = pageForLine(i);
+    if (!Number.isFinite(page)) continue;
+    if (!byItem.has(item)) byItem.set(item, []);
+    const arr = byItem.get(item);
+    if (!arr.includes(page)) arr.push(page);
+  }
+  return byItem;
+}
+
+function enforceMonotonicStartPages(items, byPage, lines) {
+  const out = items.map((x) => ({ ...x }));
+  const markerPages = Array.from(byPage.keys())
+    .filter((p) => Number.isFinite(p) && p > 0)
+    .sort((a, b) => a - b);
+  const anchors = collectItemAnchorPages(lines, byPage);
+
+  let prevPage = 0;
+  for (let i = 0; i < out.length; i += 1) {
+    const current = out[i];
+    const page = Number(current.start_page);
+    const nextKnown = out
+      .slice(i + 1)
+      .map((x) => Number(x.start_page))
+      .find((p) => Number.isFinite(p) && p > prevPage);
+
+    const anchorPages = anchors.get(String(current.item || "").toLowerCase()) || [];
+    if (Number.isFinite(page) && page >= prevPage) {
+      const anchorRefine = anchorPages.find((p) => p >= page && (!Number.isFinite(nextKnown) || p < nextKnown));
+      if (Number.isFinite(anchorRefine) && anchorRefine > page) {
+        current.start_page = anchorRefine;
+        prevPage = anchorRefine;
+      } else {
+        prevPage = page;
+      }
+      continue;
+    }
+
+    const anchorCandidate = anchorPages.find((p) => p >= prevPage && (!Number.isFinite(nextKnown) || p < nextKnown));
+    if (Number.isFinite(anchorCandidate)) {
+      current.start_page = anchorCandidate;
+      prevPage = anchorCandidate;
+      continue;
+    }
+
+    const pageCandidate = markerPages.find((p) => p >= prevPage && (!Number.isFinite(nextKnown) || p < nextKnown));
+    if (Number.isFinite(pageCandidate)) {
+      current.start_page = pageCandidate;
+      prevPage = pageCandidate;
+      continue;
+    }
+
+    current.start_page = null;
   }
 
-  const text = fs.readFileSync(inputPath, "utf8");
-  const lines = text.split(/\r?\n/);
-  const { byPage, totalPages } = collectPageMarkers(lines);
+  return out;
+}
+
+function isMinutesLikeTitle(title = "") {
+  const t = normalizeSpaces(title).toLowerCase();
+  return /\bminutes\b/.test(t) || /\bconfirmation of.*minutes\b/.test(t) || /\bmeeting held on\b/.test(t);
+}
+
+function extractReportCode(title = "") {
+  const m = normalizeSpaces(title).match(/\b([A-Z]{1,4}-[0-9]{2}-[0-9]{3})\b/);
+  return m ? m[1] : "";
+}
+
+function findFirstNonEmptyLine(lines, startLine, endLine) {
+  for (let i = startLine; i <= endLine; i += 1) {
+    if (normalizeSpaces(lines[i])) return i;
+  }
+  return startLine;
+}
+
+function hasMinutesHeaderAt(lines, lineIndex) {
+  const probe = [];
+  for (let i = lineIndex; i < Math.min(lines.length, lineIndex + 12); i += 1) {
+    probe.push(normalizeSpaces(lines[i]).toLowerCase());
+  }
+  const joined = probe.join(" ");
+  return /\bminutes\b/.test(joined) && /\bowen sound city council\b/.test(joined);
+}
+
+function hasStrongAnchorInRange(section, lines, startLine, endLine) {
+  const reportCode = extractReportCode(section.title);
+  const reportPattern = reportCode ? new RegExp("\\b" + reportCode + "\\b", "i") : null;
+  const spanLines = [];
+  for (let i = startLine; i <= endLine; i += 1) {
+    const raw = normalizeSpaces(lines[i]);
+    if (raw) spanLines.push(raw);
+  }
+  const joined = spanLines.join(" ").toLowerCase();
+  if (reportPattern && reportPattern.test(joined)) return true;
+
+  const stopWords = new Set([
+    "the", "and", "for", "from", "with", "that", "this", "there", "are", "was", "were", "meeting", "held",
+    "city", "council", "report", "minutes", "regular", "committee", "session", "update", "re", "of", "to", "on",
+    "in", "by", "at", "a", "an", "is", "be", "as", "or"
+  ]);
+  const words = normalizeSpaces(section.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w && w.length >= 5 && !stopWords.has(w) && !/^\d+[a-z]?$/.test(w));
+  const unique = Array.from(new Set(words)).slice(0, 8);
+  if (!unique.length) return false;
+  let matched = 0;
+  for (const w of unique) {
+    if (joined.includes(w)) matched += 1;
+    if (matched >= 2) return true;
+  }
+  return false;
+}
+
+function findMinutesActionBlockStart(lines, startLine, endLine) {
+  for (let i = startLine; i <= endLine; i += 1) {
+    const raw = normalizeSpaces(lines[i]);
+    if (!raw) continue;
+    const looksLikeResolution = /\b(?:R|S)-\d{6}-\d{3}[a-z]?\b/iu.test(raw);
+    const looksLikeMotion = /\bMoved by\b/iu.test(raw) || /\bSeconded by\b/iu.test(raw);
+    if (!looksLikeResolution && !looksLikeMotion) continue;
+    const lookahead = [];
+    for (let j = i; j <= Math.min(endLine, i + 6); j += 1) {
+      lookahead.push(normalizeSpaces(lines[j]));
+    }
+    const probe = lookahead.join(" ");
+    if (
+      /\bMoved by\b/iu.test(probe) ||
+      /\bSeconded by\b/iu.test(probe) ||
+      /\b(?:Carried|Defeated|Lost)\b/iu.test(probe)
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function findTocWindow(lines) {
   const pagesHeader = findPagesHeader(lines);
-  const tocEnd = (() => {
+  if (pagesHeader >= 0) {
     const start = Math.max(0, pagesHeader);
     let lastTopLevelLine = -1;
     for (let i = start; i < Math.min(lines.length, start + 1200); i += 1) {
@@ -276,35 +460,118 @@ function main() {
     const probeStart = lastTopLevelLine >= 0 ? lastTopLevelLine + 1 : start;
     for (let i = probeStart; i < lines.length; i += 1) {
       const m = parseGlobalPageMarker(lines[i]);
-      if (m && m.page >= 2) return i;
+      if (m && m.page >= 2) {
+        const tocStart = pagesHeader + 1;
+        const tocEnd = i - 1;
+        if (tocEnd >= tocStart) return { start: tocStart, end: tocEnd, pagesHeader };
+        break;
+      }
     }
-    return -1;
-  })();
+  } else {
+    for (let i = 0; i < lines.length; i += 1) {
+      const m = parseGlobalPageMarker(lines[i]);
+      if (m && m.page >= 2) {
+        const tocStart = 0;
+        const tocEnd = i - 1;
+        if (tocEnd >= tocStart) return { start: tocStart, end: tocEnd, pagesHeader };
+        break;
+      }
+    }
+  }
+  return { start: -1, end: -1, pagesHeader };
+}
 
-  const tocItemsRaw =
-    pagesHeader >= 0 && tocEnd > pagesHeader
-      ? parseTocItems(lines, pagesHeader + 1, tocEnd - 1)
-      : [];
+function main() {
+  const [, , inputPath, outputDir, outputIndexPath, agendaHtmlPath, sourceBaseUrl, sliceSourcePathRaw] = process.argv;
+  if (!inputPath || !outputDir) {
+    process.stderr.write(
+      "usage: node command/extract_escribe_subreports.mjs <toc_source.md> <output_dir> [output_index.json] [agenda_html] [source_base_url] [slice_source.md]\\n",
+    );
+    process.exit(2);
+  }
+
+  const tocSourcePath = path.resolve(inputPath);
+  const sliceSourcePath = sliceSourcePathRaw ? path.resolve(sliceSourcePathRaw) : tocSourcePath;
+
+  const tocText = fs.readFileSync(tocSourcePath, "utf8");
+  const tocLines = tocText.split(/\r?\n/);
+  const sliceText = fs.readFileSync(sliceSourcePath, "utf8");
+  const sliceLines = sliceText.split(/\r?\n/);
+
+  const { byPage, totalPages } = collectPageMarkers(sliceLines);
+  const tocWindow = findTocWindow(tocLines);
+  const tocParse =
+    tocWindow.start >= 0 && tocWindow.end >= tocWindow.start
+      ? parseTocItems(tocLines, tocWindow.start, tocWindow.end)
+      : { items: [], rejectedContaminatedTitles: 0, candidateCount: 0 };
+
+  const tocItemsRaw = Array.isArray(tocParse?.items) ? tocParse.items : [];
+  const rejectedContaminatedTitles = Number(tocParse?.rejectedContaminatedTitles || 0);
+  const tocCandidateCountBeforeFiltering = Number(tocParse?.candidateCount || 0);
+
   const tocItemsFilled = inferMissingStartPages({
     items: dedupeAndSortItems(tocItemsRaw),
-    lines,
+    lines: sliceLines,
     byPage,
   });
-  const tocItems = tocItemsFilled.filter((x) => Number.isFinite(x.start_page) && byPage.has(x.start_page));
+  const tocItemsMonotonic = enforceMonotonicStartPages(tocItemsFilled, byPage, sliceLines);
+
+  const skippedMissingPageCoverageCount = tocItemsMonotonic.filter(
+    (x) => Number.isFinite(x.start_page) && !byPage.has(x.start_page),
+  ).length;
+
+  const tocItems = tocItemsMonotonic.filter((x) => Number.isFinite(x.start_page) && byPage.has(x.start_page));
 
   const sections = [];
+  let skippedWeakAnchorCount = 0;
+  let skippedDuplicateInferredStartCount = 0;
+  let minutesBoundaryCutCount = 0;
+  const inferredStartSeen = new Set();
   for (let i = 0; i < tocItems.length; i += 1) {
     const current = tocItems[i];
-    const next = tocItems[i + 1];
     const startPage = current.start_page;
+    let nextIndex = i + 1;
+    while (nextIndex < tocItems.length && Number(tocItems[nextIndex]?.start_page || 0) <= Number(startPage || 0)) {
+      nextIndex += 1;
+    }
+    const next = tocItems[nextIndex];
     const nextStartPage = next ? next.start_page : totalPages + 1;
     const endPage = Math.max(startPage, nextStartPage - 1);
     const startLine = byPage.get(startPage);
     const nextStartLine = byPage.get(nextStartPage);
     if (typeof startLine !== "number") continue;
-    const endLine =
-      typeof nextStartLine === "number" ? Math.max(startLine, nextStartLine - 1) : lines.length - 1;
-    const sectionText = `${lines.slice(startLine, endLine + 1).join("\n").trim()}\n`;
+    let endLine =
+      typeof nextStartLine === "number" ? Math.max(startLine, nextStartLine - 1) : sliceLines.length - 1;
+
+    const isInferredStart = String(current.start_page_source || "") === "inferred";
+    const inferredKey = String(current.start_page);
+    const anchorProbeEnd = Math.min(endLine, startLine + 1200);
+    const hasStrongAnchor = hasStrongAnchorInRange(current, sliceLines, startLine, anchorProbeEnd);
+    if (isInferredStart && inferredStartSeen.has(inferredKey) && !hasStrongAnchor) {
+      skippedDuplicateInferredStartCount += 1;
+      continue;
+    }
+    const firstContentLine = findFirstNonEmptyLine(sliceLines, startLine, endLine);
+    if (!isMinutesLikeTitle(current.title) && hasMinutesHeaderAt(sliceLines, firstContentLine)) {
+      skippedWeakAnchorCount += 1;
+      continue;
+    }
+    if (isInferredStart && !hasStrongAnchor) {
+      skippedWeakAnchorCount += 1;
+      continue;
+    }
+    if (isInferredStart) inferredStartSeen.add(inferredKey);
+
+    if (!isMinutesLikeTitle(current.title)) {
+      const contaminationStart = findMinutesActionBlockStart(sliceLines, startLine, endLine);
+      if (contaminationStart > startLine + 10) {
+        endLine = contaminationStart - 1;
+        minutesBoundaryCutCount += 1;
+      }
+    }
+
+    const rawSectionText = sliceLines.slice(startLine, endLine + 1).join("\n").trim() + "\n";
+    const sectionText = scrubContaminatedMinutesActionBody(rawSectionText);
     const fileName = `${current.item.replace(".", "-")}_${slugify(current.title)}.md`;
     const filePath = path.join(outputDir, fileName);
     sections.push({
@@ -336,14 +603,22 @@ function main() {
 
   const indexPath = outputIndexPath || path.join(outputDir, "subreports.index.json");
   const index = {
-    source_file: inputPath,
+    source_file: tocSourcePath,
+    slice_source_file: sliceSourcePath,
     output_dir: outputDir,
     generated_at_utc: new Date().toISOString(),
     total_pages_detected: totalPages,
     toc_window: {
-      start_line: pagesHeader >= 0 ? pagesHeader + 1 : null,
-      end_line: tocEnd >= 0 ? tocEnd + 1 : null,
+      start_line: tocWindow.start >= 0 ? tocWindow.start + 1 : null,
+      end_line: tocWindow.end >= 0 ? tocWindow.end + 1 : null,
     },
+    toc_candidate_count_before_filtering: tocCandidateCountBeforeFiltering,
+    toc_candidate_count_after_filtering: tocItemsRaw.length,
+    rejected_contaminated_toc_titles_count: rejectedContaminatedTitles,
+    toc_items_skipped_missing_page_coverage_count: skippedMissingPageCoverageCount,
+    toc_items_skipped_weak_inferred_anchor_count: skippedWeakAnchorCount,
+    toc_items_skipped_duplicate_inferred_start_count: skippedDuplicateInferredStartCount,
+    minutes_action_boundary_cut_count: minutesBoundaryCutCount,
     section_count: sections.length,
     sections: sections.map((s) => ({
       item: s.item,
@@ -357,24 +632,17 @@ function main() {
     items_without_pages_from_toc: tocItemsRaw
       .filter((x) => !Number.isFinite(x.start_page))
       .map((x) => ({ item: x.item, title: x.title })),
-    attachments_from_html: Array.from(attachmentsByItem.entries()).map(
-      ([item, data]) => ({
-        item,
-        title: data.title,
-        attachment_count: data.attachments.length,
-        attachments: data.attachments,
-      }),
-    ),
+    attachments_from_html: Array.from(attachmentsByItem.entries()).map(([item, data]) => ({
+      item,
+      title: data.title,
+      attachment_count: data.attachments.length,
+      attachments: data.attachments,
+    })),
     source_base_origin: baseOrigin,
   };
 
   const sectionByItem = new Map(index.sections.map((x) => [x.item, x]));
-  index.items = Array.from(
-    new Set([
-      ...index.sections.map((x) => x.item),
-      ...Array.from(attachmentsByItem.keys()),
-    ]),
-  )
+  index.items = Array.from(new Set([...index.sections.map((x) => x.item), ...Array.from(attachmentsByItem.keys())]))
     .sort()
     .map((item) => {
       const fromSection = sectionByItem.get(item);
@@ -392,8 +660,18 @@ function main() {
 
   fs.writeFileSync(indexPath, `${JSON.stringify(index, null, 2)}\n`, "utf8");
 
+  process.stdout.write(`[agenda-subreports] toc source markdown: ${tocSourcePath} | slice source markdown: ${sliceSourcePath}\n`);
   process.stdout.write(
-    `extracted ${sections.length} page-sliced subreports and ${index.attachments_from_html.length} attachment groups from ${path.basename(inputPath)} -> ${outputDir} (base_origin=${baseOrigin || "none"})\n`,
+    `[agenda-subreports] toc candidates before filtering: ${tocCandidateCountBeforeFiltering} | after filtering: ${tocItemsRaw.length} | rejected contaminated toc titles: ${rejectedContaminatedTitles}\n`,
+  );
+  process.stdout.write(
+    `[agenda-subreports] sliced sections: ${sections.length} | toc items skipped missing page coverage: ${skippedMissingPageCoverageCount}\n`,
+  );
+  process.stdout.write(
+    `[agenda-subreports] skipped weak inferred anchors: ${skippedWeakAnchorCount} | skipped duplicate inferred starts: ${skippedDuplicateInferredStartCount} | minutes boundary cuts: ${minutesBoundaryCutCount}\n`,
+  );
+  process.stdout.write(
+    `extracted ${sections.length} page-sliced subreports and ${index.attachments_from_html.length} attachment groups from ${path.basename(tocSourcePath)} -> ${outputDir} (base_origin=${baseOrigin || "none"})\n`,
   );
 }
 

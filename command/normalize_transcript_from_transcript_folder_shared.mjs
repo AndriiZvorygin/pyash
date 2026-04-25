@@ -364,14 +364,38 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
     ],
   };
 
-  const res = await fetch(ollamaUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || "").trim();
+  const timeoutMsRaw = Number(process.env.PYA_NORMALIZE_FETCH_TIMEOUT_MS || 120000);
+  const timeoutMs = Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 5000 ? Math.floor(timeoutMsRaw) : 120000;
+  const attemptsRaw = Number(process.env.PYA_NORMALIZE_FETCH_ATTEMPTS || 3);
+  const attempts = Number.isFinite(attemptsRaw) && attemptsRaw > 0 ? Math.floor(attemptsRaw) : 3;
+
+  let lastErr = "";
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    let timer = null;
+    try {
+      const ctl = new AbortController();
+      timer = setTimeout(() => ctl.abort(), timeoutMs);
+      const res = await fetch(ollamaUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctl.signal,
+      });
+      if (!res.ok) throw new Error(`ollama status ${res.status}`);
+      const json = await res.json();
+      const out = String(json?.message?.content || "").trim();
+      if (!out) throw new Error("empty normalize response");
+      return out;
+    } catch (err) {
+      lastErr = String(err?.message || err || "unknown normalize error");
+      if (attempt >= attempts) break;
+      const delay = 1200 * attempt;
+      await new Promise((r) => setTimeout(r, delay));
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  throw new Error(`normalize fetch failed after ${attempts} attempts: ${lastErr}`);
 }
 
 export async function runNormalizeShared(writer, argv = []) {

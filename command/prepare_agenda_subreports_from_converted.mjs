@@ -121,7 +121,7 @@ async function main() {
   const extractSubreportsPya = path.join(PYASH_ROOT, "program/extract-subreports-fromstate-wo-escribe-full.pya");
   await runWithStreaming({
     cmd: RUN_BIN,
-    args: [extractSubreportsPya, agendaMdPath, subreportDir, subreportIndexPath, agendaHtmlPath, meetingUrl],
+    args: [extractSubreportsPya, prunedPath, subreportDir, subreportIndexPath, agendaHtmlPath, meetingUrl, agendaMdPath],
     cwd: PYASH_ROOT,
     timeoutMs: 10 * 60 * 1000,
     label: "extract-subreports",

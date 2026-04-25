@@ -20,8 +20,8 @@ const PASS_THRESHOLD = 0.8;
 
 function usage() {
   return [
-    'Usage: node command/generate_meeting_hook_from_transcript_folder.mjs <transcript_dir> [prefix] [focus] [jurisdiction] [body]',
-    'Example: node command/generate_meeting_hook_from_transcript_folder.mjs artifacts/.../transcript meeting-qwen-auto-normalized "newsworthy juicy bits" "Owen Sound" "Council"'
+    'Usage: node command/generate_meeting_hook_from_transcript_folder.mjs <transcript_dir> [prefix] [focus] [jurisdiction] [body] [hook_mode]',
+    'Example: node command/generate_meeting_hook_from_transcript_folder.mjs artifacts/.../transcript meeting-qwen-auto-normalized "newsworthy juicy bits" "Owen Sound" "Council" preview'
   ].join('\n');
 }
 
@@ -99,6 +99,269 @@ function sanitizeHook(text) {
   return words.join(' ');
 }
 
+function sanitizePreviewNounHook(text) {
+  const line = String(text || '').split(/\r?\n/u).map((x) => x.trim()).filter(Boolean)[0] || '';
+  const cleaned = line
+    .replace(/\bCouncil\b/giu, ' ')
+    .replace(/[^A-Za-z0-9'& -]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  const words = cleaned.split(/\s+/u).filter(Boolean).slice(0, 8);
+  if (words.length < 3) return '';
+  return words
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+    .trim();
+}
+
+const HOOK_MALFORMED_TOKEN_REPAIRS = new Map([
+  ['anail', 'nail'],
+]);
+
+const HOOK_COMMON_WORDS = new Set([
+  'patio', 'permit', 'permits', 'bylaw', 'by-law', 'bill', 'planning', 'changes',
+  'city', 'by-laws', 'business', 'licence', 'licences', 'license', 'licenses',
+  'rules', 'new', 'and', 'nail', 'eyelash', 'studio', 'beauty', 'review', 'reviews',
+  'consider', 'considers', 'discuss', 'discusses', 'hears', 'receives', 'tax', 'fees',
+]);
+
+const HOOK_TRAILING_FRAGMENT_WORDS = new Set(['and', 'or', 'with', 'including', 'despite']);
+const HOOK_WEAK_END_WORDS = new Set(['eye']);
+
+function normalizeHookPhrases(text) {
+  return String(text || '')
+    .replace(/\beye\s+lash(es)?\b/giu, 'eyelash$1')
+    .replace(/\banail\b/giu, 'nail')
+    .replace(/\ba\s+(?=(nail|eyelash|studio|shop|store|permit|by-?law|bill|licen[cs]e?s?|rules?|changes?)\b)/giu, '');
+}
+
+function vowelRatio(word) {
+  const letters = String(word || '').toLowerCase().replace(/[^a-z]/gu, '');
+  if (!letters) return 1;
+  const vowels = (letters.match(/[aeiouy]/gu) || []).length;
+  return vowels / letters.length;
+}
+
+function cleanupHookToken(token) {
+  const raw = String(token || '').trim();
+  if (!raw) return '';
+  const base = raw.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/gu, '');
+  if (!base) return '';
+  const lower = base.toLowerCase();
+
+  if (HOOK_MALFORMED_TOKEN_REPAIRS.has(lower)) {
+    const fixed = HOOK_MALFORMED_TOKEN_REPAIRS.get(lower);
+    return fixed.charAt(0).toUpperCase() + fixed.slice(1).toLowerCase();
+  }
+  if (/^[A-Z]{2,}$/u.test(base)) return base;
+  if (/\d/u.test(base)) return base;
+
+  if (!HOOK_COMMON_WORDS.has(lower)) {
+    const letters = lower.replace(/[^a-z]/gu, '');
+    if (letters.length >= 5) {
+      const ratio = vowelRatio(letters);
+      if (ratio < 0.22 || !/[aeiouy]/u.test(letters)) return '';
+      if (/^a[a-z]{4,}$/u.test(letters)) {
+        const trimmed = letters.slice(1);
+        if (HOOK_COMMON_WORDS.has(trimmed)) {
+          return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+        }
+      }
+    }
+  }
+
+  return base.charAt(0).toUpperCase() + base.slice(1).toLowerCase();
+}
+
+function sanitizeFinalPreviewHook(hookText) {
+  const normalized = normalizeHookPhrases(hookText);
+  const tokens = normalized.split(/\s+/u).map(cleanupHookToken).filter(Boolean);
+  const collapsed = [];
+  for (const t of tokens) {
+    if (!collapsed.length || normalizeForMatch(collapsed[collapsed.length - 1]) !== normalizeForMatch(t)) {
+      collapsed.push(t);
+    }
+  }
+  while (collapsed.length >= 2) {
+    const last = normalizeForMatch(collapsed[collapsed.length - 1]);
+    const prev = normalizeForMatch(collapsed[collapsed.length - 2]);
+    if (HOOK_WEAK_END_WORDS.has(last) && prev === 'and') {
+      collapsed.pop();
+      collapsed.pop();
+      continue;
+    }
+    break;
+  }
+  while (collapsed.length) {
+    const last = normalizeForMatch(collapsed[collapsed.length - 1]);
+    if (!HOOK_TRAILING_FRAGMENT_WORDS.has(last)) break;
+    collapsed.pop();
+  }
+  const trimmed = collapsed.slice(0, 8).join(' ').trim();
+  return sanitizePreviewNounHook(trimmed);
+}
+
+const PREVIEW_BANNED_VERBS = new Set([
+  'adopt', 'adopts', 'adopted',
+  'approve', 'approves', 'approved',
+  'pass', 'passes', 'passed',
+  'defeat', 'defeats', 'defeated',
+  'confirm', 'confirms', 'confirmed',
+  'carry', 'carries', 'carried',
+]);
+
+const PREVIEW_REPLACEMENT_VERBS = new Map([
+  ['adopt', 'considers'],
+  ['adopts', 'considers'],
+  ['adopted', 'considers'],
+  ['approve', 'considers'],
+  ['approves', 'considers'],
+  ['approved', 'considers'],
+  ['pass', 'debates'],
+  ['passes', 'debates'],
+  ['passed', 'debates'],
+  ['defeat', 'debates'],
+  ['defeats', 'debates'],
+  ['defeated', 'debates'],
+  ['confirm', 'reviews'],
+  ['confirms', 'reviews'],
+  ['confirmed', 'reviews'],
+  ['carry', 'considers'],
+  ['carries', 'considers'],
+  ['carried', 'considers'],
+]);
+
+const PREVIEW_ALLOWED_VERBS = new Set([
+  'considers', 'reviews', 'discusses', 'hears', 'receives', 'debates',
+]);
+
+function inferHookMode({ explicitMode, resolvedPrefix, summaryPath, focus }) {
+  const mode = String(explicitMode || '').trim().toLowerCase();
+  if (mode === 'preview' || mode === 'recap') return mode;
+  const prefixText = String(resolvedPrefix || '').toLowerCase();
+  const summaryText = String(summaryPath || '').toLowerCase();
+  const focusText = String(focus || '').toLowerCase();
+  if (prefixText.includes('.agenda') || summaryText.includes('.agenda.') || focusText.includes('upcoming agenda')) {
+    return 'preview';
+  }
+  return 'recap';
+}
+
+function containsPreviewBannedVerb(text) {
+  const norm = normalizeForMatch(text);
+  const words = norm.split(' ').filter(Boolean);
+  return words.some((w) => PREVIEW_BANNED_VERBS.has(w));
+}
+
+function enforcePreviewVerbTense(hook) {
+  const rawWords = String(hook || '').trim().split(/\s+/u).filter(Boolean);
+  if (!rawWords.length) return hook;
+  const words = [...rawWords];
+  for (let i = 0; i < words.length; i += 1) {
+    const plain = normalizeForMatch(words[i]);
+    if (PREVIEW_REPLACEMENT_VERBS.has(plain)) {
+      const next = PREVIEW_REPLACEMENT_VERBS.get(plain);
+      words[i] = next.charAt(0).toUpperCase() + next.slice(1);
+      break;
+    }
+  }
+  const normalizedWords = words.map((w) => normalizeForMatch(w));
+  const hasAllowedVerb = normalizedWords.some((w) => PREVIEW_ALLOWED_VERBS.has(w));
+  if (!hasAllowedVerb) return sanitizeHook('Council Considers Agenda Items');
+  if (normalizedWords[0] === 'council' && words.length >= 2) {
+    const second = normalizeForMatch(words[1]);
+    if (!PREVIEW_ALLOWED_VERBS.has(second)) {
+      words.splice(1, 0, 'Considers');
+    }
+  }
+  return sanitizeHook(words.join(' '));
+}
+
+function isGenericPreviewHook(text) {
+  const n = normalizeForMatch(text);
+  return n.includes('council considers agenda items')
+    || n.includes('meeting agenda')
+    || n.includes('council business')
+    || n.includes('several reports')
+    || n.includes('city matters')
+    || n.includes('updates')
+    || n === 'council considers agenda items';
+}
+
+function extractTopNewsHeadings(mdText) {
+  const lines = String(mdText || '').split(/\r?\n/u);
+  const out = [];
+  for (const line of lines) {
+    const m = line.match(/^\s*-\s+\*\*(.+?)\*\*/u);
+    if (!m) continue;
+    const heading = String(m[1] || '').trim();
+    if (heading) out.push(heading);
+  }
+  return out;
+}
+
+function deriveSubjectFromHeading(heading) {
+  const raw = String(heading || '').trim();
+  if (!raw) return '';
+
+  const reField = raw.match(/\bRe:\s*([^,.;\n]{6,80})/iu);
+  if (reField && reField[1]) return toTitleWords(reField[1]);
+
+  const bylaw = raw.match(/\b(By-?laws?)\b/iu);
+  if (bylaw) return 'City By-laws';
+
+  let s = raw
+    .replace(/^\s*\d+(?:\.[a-z])?\s*/iu, '')
+    .replace(/^\s*Report\s+[A-Z]{1,4}-\d{2}-\d{2,3}\s+from\s+.+?\bRe:\s*/iu, '')
+    .replace(/^\s*Verbal Report from\s+.+?\bRe:\s*/iu, '')
+    .replace(/^\s*Final approvals issued for the following\s+/iu, '')
+    .replace(/^\s*•\s*/u, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  if (!s) return '';
+  const words = s.split(/\s+/u).slice(0, 5).join(' ');
+  return toTitleWords(words);
+}
+
+function buildPreviewHookFromRankedItems(headings = []) {
+  const candidates = (Array.isArray(headings) ? headings : [])
+    .map((h) => sanitizeFinalPreviewHook(deriveSubjectFromHeading(h)))
+    .filter(Boolean)
+    .filter((s, i, arr) => arr.findIndex((x) => normalizeForMatch(x) === normalizeForMatch(s)) === i);
+  if (!candidates.length) return '';
+
+  const subjectA = candidates[0];
+  const subjectB = candidates[1] || '';
+  const genericSubjects = new Set([
+    'agenda items',
+    'meeting agenda',
+    'council business',
+    'several reports',
+    'city matters',
+    'updates',
+    'information',
+    'reports',
+    'business',
+    'matters',
+  ]);
+  if (genericSubjects.has(normalizeForMatch(subjectA))) return '';
+
+  const picked = [subjectA];
+  if (subjectB && !genericSubjects.has(normalizeForMatch(subjectB))) picked.push(subjectB);
+  const subjectC = candidates[2] || '';
+  if (subjectC && !genericSubjects.has(normalizeForMatch(subjectC))) picked.push(subjectC);
+
+  if (picked.length >= 3) {
+    const combined = sanitizeFinalPreviewHook(`${picked[0]} ${picked[1]} ${picked[2]}`);
+    if (combined) return combined;
+  }
+  if (picked.length === 2) {
+    const combined = sanitizeFinalPreviewHook(`${picked[0]} And ${picked[1]}`);
+    if (combined) return combined;
+  }
+  return sanitizeFinalPreviewHook(subjectA);
+}
+
 function normalizeForMatch(text) {
   return String(text || '')
     .toLowerCase()
@@ -167,10 +430,12 @@ function fallbackHookFromSummary(summaryText) {
   return 'Council Integrity Report Flashpoint';
 }
 
-function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback }) {
+function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, hookMode }) {
   const focusLine = String(focus || '').trim() || 'the newsworthy, juicy, and unusual bits';
+  const isPreview = hookMode === 'preview';
   return [
     'Create a short meeting hook phrase for a transcript/news post title.',
+    `Mode: ${isPreview ? 'upcoming agenda preview' : 'post-meeting recap'}`,
     `Jurisdiction: ${jurisdiction}`,
     `Body: ${body}`,
     `Focus: ${focusLine}`,
@@ -181,6 +446,9 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback })
     '- Prefer strong, high-signal wording over generic committee language.',
     '- Concrete and specific, not clickbait.',
     '- Faithful to SOURCE_SUMMARY only.',
+    ...(isPreview
+      ? ['- Prospective language only; this is an upcoming agenda.', '- Do not use completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Prefer considers/reviews/discusses/hears/receives/debates.']
+      : []),
     '- No punctuation except apostrophe if required.',
     '- No date and no jurisdiction/body names in the hook.',
     '- Avoid bland joins like "and" unless absolutely necessary.',
@@ -195,9 +463,11 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback })
   ].join('\n');
 }
 
-function buildScorePrompt({ sourceSummary, hook, jurisdiction, body }) {
+function buildScorePrompt({ sourceSummary, hook, jurisdiction, body, hookMode }) {
+  const isPreview = hookMode === 'preview';
   return [
     'Score HOOK for semantic faithfulness and utility for a municipal transcript title.',
+    `Mode: ${isPreview ? 'upcoming agenda preview' : 'post-meeting recap'}`,
     `Jurisdiction: ${jurisdiction}`,
     `Body: ${body}`,
     '',
@@ -210,6 +480,9 @@ function buildScorePrompt({ sourceSummary, hook, jurisdiction, body }) {
     'Rules:',
     '- Penalize invented claims not in SOURCE_SUMMARY.',
     '- Penalize action verbs that overstate status (adopted/approved/passed) unless SOURCE_SUMMARY explicitly supports that action for the same subject.',
+    ...(isPreview
+      ? ['- For preview mode, fail completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Reward prospective framing (considers/reviews/discusses/hears/receives/debates).']
+      : []),
     '- Penalize vagueness if SOURCE_SUMMARY has concrete high-impact items.',
     '- Penalize non-title-ready hooks (too long/too short/noise).',
     '- Penalize dry/boilerplate phrasing when SOURCE_SUMMARY contains conflict, cost, major policy shifts, or unusual events.',
@@ -258,7 +531,7 @@ async function ask(messages, { numPredict = 120 } = {}) {
   return String(json?.message?.content || '').trim();
 }
 
-async function generateHook({ sourceSummary, focus, jurisdiction, body }) {
+async function generateHook({ sourceSummary, topNewsHeadings, focus, jurisdiction, body, hookMode }) {
   let feedback = '';
   let bestHook = '';
   let bestScore = -1;
@@ -267,20 +540,25 @@ async function generateHook({ sourceSummary, focus, jurisdiction, body }) {
   for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
     const draftRaw = await ask([
       { role: 'system', content: 'You are a precise civic headline hook writer.' },
-      { role: 'user', content: buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback }) },
+      { role: 'user', content: buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, hookMode }) },
     ], { numPredict: 64 });
 
-    const draft = sanitizeHook(draftRaw);
+    const draft = hookMode === 'preview'
+      ? enforcePreviewVerbTense(sanitizeHook(draftRaw))
+      : sanitizeHook(draftRaw);
 
     let review = '';
     let score = 0;
-    if (hookDecisionClaimUnsupported(draft, sourceSummary)) {
+    if (hookMode === 'preview' && containsPreviewBannedVerb(draft)) {
+      review = 'Hook uses completed-outcome verbs disallowed for upcoming agenda previews.\n0';
+      score = 0;
+    } else if (hookDecisionClaimUnsupported(draft, sourceSummary)) {
       review = 'Hook uses an unsupported decision verb (adopted/approved/passed) for the same subject.\n0';
       score = 0;
     } else {
       review = await ask([
         { role: 'system', content: 'You are a strict semantic verifier.' },
-        { role: 'user', content: buildScorePrompt({ sourceSummary, hook: draft, jurisdiction, body }) },
+        { role: 'user', content: buildScorePrompt({ sourceSummary, hook: draft, jurisdiction, body, hookMode }) },
       ], { numPredict: 180 });
       score = parseScore(review);
     }
@@ -293,7 +571,20 @@ async function generateHook({ sourceSummary, focus, jurisdiction, body }) {
     if (score >= PASS_THRESHOLD) break;
   }
 
-  const safeHook = bestScore >= PASS_THRESHOLD ? bestHook : fallbackHookFromSummary(sourceSummary);
+  let safeHook = bestScore >= PASS_THRESHOLD ? bestHook : fallbackHookFromSummary(sourceSummary);
+  if (hookMode === 'preview') {
+    const rankedHook = buildPreviewHookFromRankedItems(topNewsHeadings);
+    if (rankedHook) {
+      safeHook = sanitizeFinalPreviewHook(rankedHook) || rankedHook;
+    } else {
+      safeHook = enforcePreviewVerbTense(safeHook);
+      if (isGenericPreviewHook(safeHook)) {
+        safeHook = sanitizeFinalPreviewHook(deriveSubjectFromHeading(topNewsHeadings[0] || '')) || safeHook;
+      }
+      safeHook = safeHook.replace(/\bCouncil\b/giu, '').replace(/\s+/gu, ' ').trim();
+      safeHook = sanitizeFinalPreviewHook(safeHook) || safeHook;
+    }
+  }
 
   return {
     hook: safeHook,
@@ -332,6 +623,7 @@ async function main() {
   const focusArg = process.argv[4] || '';
   const jurisdictionArg = process.argv[5] || 'Owen Sound';
   const bodyArg = process.argv[6] || 'Council';
+  const hookModeArg = process.argv[7] || '';
 
   if (!transcriptDirArg) {
     process.stdout.write(`${usage()}\n`);
@@ -342,8 +634,15 @@ async function main() {
   ensureDir(transcriptDir);
 
   const { summaryPath, resolvedPrefix } = pickMeetingSummaryPath(transcriptDir, prefixArg);
+  const hookMode = inferHookMode({
+    explicitMode: hookModeArg,
+    resolvedPrefix,
+    summaryPath,
+    focus: focusArg,
+  });
   const meetingSummaryMd = fs.readFileSync(summaryPath, 'utf8');
   const topNewsworthyMd = extractMarkdownSection(meetingSummaryMd, 'Top Newsworthy Developments');
+  const topNewsHeadings = extractTopNewsHeadings(topNewsworthyMd);
   const sourceSummary = stripMarkdown(topNewsworthyMd || meetingSummaryMd).slice(0, 32000);
   if (!sourceSummary) throw new Error(`meeting summary is empty: ${summaryPath}`);
 
@@ -355,9 +654,11 @@ async function main() {
 
   const out = await generateHook({
     sourceSummary,
+    topNewsHeadings,
     focus: focusArg,
     jurisdiction: jurisdictionArg,
     body: bodyArg,
+    hookMode,
   });
 
   fs.writeFileSync(outTxt, `${out.hook}\n`, 'utf8');
@@ -365,6 +666,7 @@ async function main() {
     source_meeting_summary: summaryPath,
     source_scope: topNewsworthyMd ? 'top_newsworthy_developments' : 'whole_meeting_summary',
     model: MODEL,
+    hook_mode: hookMode,
     focus: focusArg,
     jurisdiction: jurisdictionArg,
     body: bodyArg,
@@ -375,6 +677,7 @@ async function main() {
   }, null, 2), 'utf8');
 
   process.stdout.write(`[meeting-hook] score: ${out.score.toFixed(3)}\n`);
+  process.stdout.write(`[meeting-hook] hook_mode: ${hookMode}\n`);
   process.stdout.write(`[meeting-hook] hook: ${out.hook}\n`);
   process.stdout.write(`[meeting-hook] wrote: ${outTxt}\n`);
   process.stdout.write(`[meeting-hook] wrote: ${outJson}\n`);
