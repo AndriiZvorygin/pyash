@@ -250,3 +250,54 @@ Good first examples:
 - Spec-first fixes are preferred over ad hoc heuristics.
 - New Pyash vocabulary should be checked with `node command/vocab_suggest.mjs`.
 - New behavior should be covered by quizzes under `quiz/`.
+
+## Wide Teaching Video Modes (Stable)
+
+Wrapper:
+
+```bash
+./run examples/pyash/wide-teaching-video-from-filename.pya know/input/wide-one-sentence.txt
+```
+
+Modes are controlled by the optional third positional input (`thumbnail_mode`):
+
+```bash
+# default/off: video only
+./run examples/pyash/wide-teaching-video-from-filename.pya know/input/wide-one-sentence.txt
+
+# checkpoint: video + thumbnail checkpoint artifacts
+./run examples/pyash/wide-teaching-video-from-filename.pya know/input/wide-one-sentence.txt baseline checkpoint
+
+# render: video + checkpoint + thumbnail-render.png
+./run examples/pyash/wide-teaching-video-from-filename.pya know/input/wide-one-sentence.txt baseline render
+```
+
+Expected outputs:
+
+- Produce outputs:
+  - `know/produce/<name>.mp4`
+  - `know/produce/<name>.metadata.pya`
+- Run artifacts:
+  - `artifacts/<run-id>/...`
+- Checkpoint mode adds:
+  - `artifacts/<run-id>/thumbnail-input-source.txt`
+  - `artifacts/<run-id>/thumbnail-checkpoint.pya`
+- Render mode adds:
+  - `artifacts/<run-id>/thumbnail-render.png`
+
+Failure behavior:
+
+- Video generation failure fails the wrapper in all modes.
+- Checkpoint generation/validation failure fails `checkpoint` and `render`.
+- Thumbnail render failure fails only `render` mode.
+
+Render failure diagnosis:
+
+- Confirm checkpoint exists and is valid:
+  - `artifacts/<run-id>/thumbnail-checkpoint.pya`
+- Re-run the render adapter directly to surface command-level errors:
+  - `node command/thumbnail_render_from_checkpoint.mjs <source.txt> <thumbnail-render.png>`
+- Common root causes:
+  - ComfyUI host/workflow unavailable or mismatched
+  - prompt compose failure from malformed checkpoint source
+  - draw command transport/timeout failures
