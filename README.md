@@ -301,3 +301,18 @@ Render failure diagnosis:
   - ComfyUI host/workflow unavailable or mismatched
   - prompt compose failure from malformed checkpoint source
   - draw command transport/timeout failures
+
+### Wide Image Cadence
+
+For `teaching video wide`, image prompt/image cadence is phrase-based.
+
+Phrase delimiters:
+- comma `,`
+- period `.`
+- newline
+
+Rules:
+- trim whitespace per phrase
+- drop empty phrases
+- preserve phrase order
+- narration/timing text flow remains sentence/audio-driven; only image cadence shifts to phrase units
