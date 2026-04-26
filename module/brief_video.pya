@@ -362,11 +362,21 @@ su name teaching video section prompt mapper ob filename section cuts fromindex 
   ob num 1 to name section index be plus do
   su name section cuts input stage ob filename of ob of this to name filename section cuts input be filename do
 
-  exists su name section cuts itinerary stage ob name filename section cuts input stage be itinerary ya
+  su name section phrase cuts stage from num of ob of section index stage with text "section-phrase-cuts.series.pya" to name filename section phrase cuts be teaching video section leaf do
+  ob text "node command/itinerary_split_phrases.mjs \"" to name text section phrase cuts cmd be text do
+  ob text of ob of section cuts input stage to name section phrase cuts cmd be plus do
+  ob text "\" \"" to name section phrase cuts cmd be plus do
+  ob text of ob of section phrase cuts stage to name section phrase cuts cmd be plus do
+  ob text "\"" to name section phrase cuts cmd be plus do
+  su name section phrase cuts run stage ob name text section phrase cuts cmd be command do
+
+  exists su name section cuts itinerary stage ob name filename section phrase cuts stage be itinerary ya
   su name section prompt packet stage ob name map draw promptify packet style replacements in name text draw promptify packet template to name text draw promptify packet be instead do
   su name section prompt stage from name section cuts itinerary stage ob text of ob of draw promptify packet fromtext name draw promptify instruction for name mind to name itinerary section draw prompts by num of ob of section index stage be promptify do
 
-  su name section prompts output stage ob filename of ob of section prompt stage be filename do
+  su name section prompts filename stage from num of ob of section index stage with text "section-draw-prompts.series.pya" to name filename section prompts filename be teaching video section leaf do
+  su name section prompts copy stage ob filename of ob of section prompt stage to filename of ob of section prompts filename stage be copy do
+  su name section prompts output stage ob filename of ob of section prompts filename stage be filename do
   su name section prompts output stage ret
 prah
 
@@ -398,8 +408,9 @@ su name teaching video section concatenate mapper ob filename section cuts fromi
   exists su name video cuts prefix ob text "section-draw-stage" be text ya
 
   su name section video stage from num of ob of section index stage with text "section.mp4" to name filename section video be teaching video section leaf do
+  su name section phrase cuts stage from num of ob of section index stage with text "section-phrase-cuts.series.pya" to name filename section phrase cuts be teaching video section leaf do
 
-  exists su name section cuts itinerary stage ob name filename section cuts input stage be itinerary ya
+  exists su name section cuts itinerary stage ob name filename section phrase cuts stage be itinerary ya
   su name section concatenate stage from name section cuts itinerary stage fromstate wo itinerary become wo video to filename of ob of section video be concatenate do
   su name section video output stage ob filename of ob of section concatenate stage be filename do
   su name section video output stage ret

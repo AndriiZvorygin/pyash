@@ -112,7 +112,9 @@ function splitOversizedCut(cut = {}, targetSeconds = 6) {
   const text = String(cut?.obText ?? "").replace(/\s+/g, " ").trim();
   if (!(Number.isFinite(span) && span > target + 1e-6) || !text) return [cut];
 
-  const sentenceSections = splitTextSentences(text).filter(Boolean);
+  const sentenceSections = splitTextSentences(text).filter(Boolean)
+    .filter((entry) => !isMarkdownDivider(entry))
+    .filter((entry) => hasSpeakableContent(entry));
   if (sentenceSections.length < 2 && sectionWordTokens(text).length < 8) return [cut];
   const sections = sentenceSections.length > 1 ? sentenceSections : text.split(/\s+/u).filter(Boolean);
   if (sections.length < 2) return [cut];
@@ -157,13 +159,21 @@ function splitOversizedCut(cut = {}, targetSeconds = 6) {
   return out;
 }
 
+function isMarkdownDivider(text = "") {
+  const value = String(text ?? "").trim();
+  if (!value) return false;
+  return /^(?:[-*_]\s*){3,}$/u.test(value);
+}
+
 function splitTextParagraphs(text = "") {
   const source = String(text ?? "").replace(/\r\n/g, "\n").trim();
   if (!source) return [];
   return source
     .split(/\n\s*\n+/u)
-    .map((entry) => String(entry ?? "").replace(/[ \t]+\n/g, "\n").replace(/\s+/g, " ").trim())
-    .filter(Boolean);
+    .map((entry) => String(entry ?? "").replace(/[ \t]+\n/g, "\n").replace(/\s+/g, " " ).trim())
+    .filter(Boolean)
+    .filter((entry) => !isMarkdownDivider(entry))
+    .filter((entry) => hasSpeakableContent(entry));
 }
 
 function splitTextSentences(text = "") {
@@ -186,6 +196,16 @@ function splitTextSentences(text = "") {
     .filter((entry) => /[\p{L}\p{N}]/u.test(entry))
     .filter(Boolean);
   return sentences;
+}
+
+export function splitTextPhrases(text = "") {
+  const source = String(text ?? "").replace(/\r\n/g, "\n").trim();
+  if (!source) return [];
+  return source
+    .split(/[,.\n]+/u)
+    .map((entry) => String(entry ?? "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .filter((entry) => hasSpeakableContent(entry));
 }
 
 function hasSpeakableContent(text = "") {
@@ -913,7 +933,7 @@ function defaultFootnoteOutputFilename(inputVideo) {
   return path.join(path.dirname(inputVideo || "."), `${stem}-footnote${ext}`);
 }
 
-function metadataTextFromRemember(rememberFn, { videoFile = "", thumbnailFile = "" } = {}) {
+function metadataTextFromRemember(rememberFn, { videoFile = "", thumbnailFile = "", extraRows = [] } = {}) {
   const lines = ["su name video metadata be map def"];
   const title = String(rememberFn("video title")?.ob?.text ?? "").trim();
   const heading = String(rememberFn("video heading")?.ob?.text ?? "").trim();
@@ -929,6 +949,10 @@ function metadataTextFromRemember(rememberFn, { videoFile = "", thumbnailFile = 
   if (description) lines.push(`su name description ob text ${JSON.stringify(description)} ya`);
   if (video) lines.push(`su name video ob filename ${JSON.stringify(video)} ya`);
   if (thumbnail) lines.push(`su name thumbnail ob filename ${JSON.stringify(thumbnail)} ya`);
+  for (const row of Array.isArray(extraRows) ? extraRows : []) {
+    const line = String(row ?? "").trim();
+    if (line) lines.push(line);
+  }
   lines.push("prah");
   return `${lines.join("\n")}\n`;
 }
@@ -1090,13 +1114,19 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
       raw: { sentence, sourceText }
     });
   }
-  const sections = mode === "sentence" ? splitTextSentences(sourceText) : splitTextParagraphs(sourceText);
-  if (mode === "sentence") {
+  const sections = mode === "sentence"
+    ? splitTextSentences(sourceText)
+    : mode === "phrase"
+    ? splitTextPhrases(sourceText)
+    : splitTextParagraphs(sourceText);
+  if (mode === "sentence" || mode === "phrase") {
     const invalid = sections.find((entry) => !hasSpeakableContent(entry));
     if (invalid !== undefined) {
       throwErrorSentence({
         name: "cut defective",
-        message: "cut defective: sentence splitting produced unspeakable sentence",
+        message: mode === "phrase"
+          ? "cut defective: phrase splitting produced unspeakable phrase"
+          : "cut defective: sentence splitting produced unspeakable sentence",
         from: { name: "cut" },
         raw: { sentence, section: invalid }
       });
@@ -1104,7 +1134,9 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
     if (!sections.length && hasSpeakableContent(sourceText)) {
       throwErrorSentence({
         name: "cut defective",
-        message: "cut defective: sentence splitting produced no speakable sentences",
+        message: mode === "phrase"
+          ? "cut defective: phrase splitting produced no speakable phrases"
+          : "cut defective: sentence splitting produced no speakable sentences",
         from: { name: "cut" },
         raw: { sentence, sourceText }
       });
@@ -1116,7 +1148,9 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
     if (micro !== undefined) {
       throwErrorSentence({
         name: "cut defective",
-        message: "cut defective: sentence splitting produced micro sentence",
+        message: mode === "phrase"
+          ? "cut defective: phrase splitting produced micro phrase"
+          : "cut defective: sentence splitting produced micro sentence",
         from: { name: "cut" },
         raw: { sentence, section: micro }
       });
@@ -1137,7 +1171,7 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
     // Sentence mode must stay resilient: if strict token coverage fails due to
     // noisy mixed-content inputs, fall back to one full speakable section
     // instead of aborting the whole refinery.
-    if (mode === "sentence") {
+    if (mode === "sentence" || mode === "phrase") {
       const fallback = String(sourceText ?? "").replace(/\s+/gu, " ").trim();
       if (hasSpeakableContent(fallback)) {
         resolvedSections = [fallback];
@@ -1442,6 +1476,9 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
       raw: { sentence }
     });
   }
+  const outputDir = path.dirname(outputResolved.resolved);
+  const sectionOutput = outputDir.includes(`${path.sep}sections${path.sep}paragraph-`);
+
   const emitResultArtifacts = async () => {
     const bytes = await fs.readFile(outputResolved.resolved);
     const artifact = recordArtifact({ locator: outputResolved.resolved, producer: String(sentence?.su?.name ?? "concatenate"), bytes, kind: "video" });
@@ -1455,9 +1492,45 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
     });
 
     const thumbnailFilename = resolveFilenameFromCase({ name: "thumbnail" }, rememberFn);
+    const extraRows = [];
+    if (sectionOutput) {
+      const phraseCutsPath = path.join(outputDir, "section-phrase-cuts.series.pya");
+      const promptItineraryPath = path.join(outputDir, "section-draw-prompts.series.pya");
+      const drawDirPath = path.join(outputDir, "draw");
+      try {
+        const stat = await fs.stat(phraseCutsPath);
+        if (stat.isFile()) {
+          extraRows.push('su name image prompt units ob text "phrase" ya');
+          extraRows.push("su name image cuts itinerary ob filename " + JSON.stringify(phraseCutsPath) + " ya");
+          const phraseParsed = parseItineraryPya(await fs.readFile(phraseCutsPath, "utf8"));
+          const phraseCuts = Array.isArray(phraseParsed?.cuts) ? phraseParsed.cuts : [];
+          const totalPhrases = phraseCuts.length;
+          const totalDuration = phraseCuts.reduce(
+            (sum, row) => sum + Math.max(0, Number(row?.until ?? 0) - Number(row?.since ?? 0)),
+            0
+          );
+          const avgPhraseDuration = totalPhrases > 0 ? Number((totalDuration / totalPhrases).toFixed(3)) : 0;
+          extraRows.push("su name total_phrases ob num " + String(totalPhrases) + " ya");
+          extraRows.push("su name avg_phrase_duration ob num " + String(avgPhraseDuration) + " ya");
+        }
+      } catch {}
+      try {
+        const stat = await fs.stat(promptItineraryPath);
+        if (stat.isFile()) {
+          extraRows.push(`su name image prompt itinerary ob filename ${JSON.stringify(promptItineraryPath)} ya`);
+        }
+      } catch {}
+      try {
+        const stat = await fs.stat(drawDirPath);
+        if (stat.isDirectory()) {
+          extraRows.push(`su name image artifacts directory ob filename ${JSON.stringify(drawDirPath)} ya`);
+        }
+      } catch {}
+    }
     const metadataText = metadataTextFromRemember(rememberFn, {
       videoFile: outputResolved.resolved,
-      thumbnailFile: thumbnailFilename
+      thumbnailFile: thumbnailFilename,
+      extraRows
     });
     await fs.writeFile(metadataFile, metadataText, "utf8");
     const metadataBytes = await fs.readFile(metadataFile);
@@ -1508,8 +1581,6 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
   }
 
   const outputFileForDefaults = requestedOutputFile || defaultOutputFilename;
-  const outputDir = path.dirname(outputResolved.resolved);
-  const sectionOutput = outputDir.includes(`${path.sep}sections${path.sep}paragraph-`);
   const configuredImagesDir = String(rememberFn("video cuts images directory")?.ob?.text ?? "").trim();
   const imagesDir = configuredImagesDir
     ? videoImagesDir(rememberFn, { outputFile: outputFileForDefaults })
