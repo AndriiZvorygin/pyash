@@ -12,7 +12,8 @@
     "repl": "node program/main.mjs",
     "run": "node command/run_pya_program.mjs",
     "trace": "node command/read_pya_trace.mjs",
-    "compile": "node command/run_pya_program.mjs --gross"
+    "compile": "node command/run_pya_program.mjs --gross",
+    "smoke:wide-teaching-video": "bash command/smoke_wide_teaching_video.sh"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
