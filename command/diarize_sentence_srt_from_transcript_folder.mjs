@@ -85,6 +85,29 @@ const MIN_NEW_SPEAKER_SIMILARITY = (() => {
   const raw = Number(process.env.PYA_SPEAKER_MIN_NEW_SIMILARITY || 0.55);
   return Number.isFinite(raw) ? raw : 0.55;
 })();
+const REASSIGN_PASS_ENABLED = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_REASSIGN_PASS || '0'));
+const RELABEL_MODE = String(process.env.PYA_SPEAKER_RELABEL_MODE || '').trim().toLowerCase();
+const EXPECTED_MAX_SPEAKERS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_EXPECTED_MAX || 0);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+})();
+const REASSIGN_WINDOW_ROWS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_REASSIGN_WINDOW_ROWS || 12);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 12;
+})();
+const BAD_SAMPLE_GUARD_ENABLED = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_BAD_SAMPLE_GUARD || '0'));
+const BAD_SAMPLE_MIN_SECONDS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_BAD_SAMPLE_MIN_SECONDS || 1.1);
+  return Number.isFinite(raw) && raw > 0 ? raw : 1.1;
+})();
+const BAD_SAMPLE_MIN_WORDS = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_BAD_SAMPLE_MIN_WORDS || 3);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 3;
+})();
+const BAD_SAMPLE_LOW_SPEECH_DENSITY = (() => {
+  const raw = Number(process.env.PYA_SPEAKER_BAD_SAMPLE_LOW_SPEECH_DENSITY || 0.4);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0.4;
+})();
 const UNKNOWN_SPEAKER_KEY = 'speaker_unknown';
 
 function usage() {
@@ -543,6 +566,284 @@ function countWords(text) {
   return String(text || '').trim().split(/\s+/u).filter(Boolean).length;
 }
 
+function countAlphaWords(text) {
+  return String(text || '')
+    .split(/\s+/u)
+    .map((w) => w.replace(/[^a-z]/giu, '').toLowerCase())
+    .filter(Boolean)
+    .length;
+}
+
+function evaluateSampleQuality({ text, duration, words }) {
+  const sampleText = String(text || '').trim();
+  const dur = Math.max(0, Number(duration || 0));
+  const wordCount = Number.isFinite(Number(words)) ? Number(words) : countWords(sampleText);
+  const alphaWords = countAlphaWords(sampleText);
+  const density = dur > 0 ? wordCount / dur : 0;
+  const reasons = [];
+  const evidence = [];
+
+  if (!sampleText) {
+    reasons.push('empty_text');
+    evidence.push('no transcript text');
+  }
+  if (dur < BAD_SAMPLE_MIN_SECONDS) {
+    reasons.push('too_short');
+    evidence.push(`duration<${BAD_SAMPLE_MIN_SECONDS}s`);
+  }
+  if (wordCount < BAD_SAMPLE_MIN_WORDS) {
+    reasons.push('too_few_words');
+    evidence.push(`words<${BAD_SAMPLE_MIN_WORDS}`);
+  }
+  if (dur >= 3 && density < BAD_SAMPLE_LOW_SPEECH_DENSITY) {
+    reasons.push('low_speech_density');
+    evidence.push(`words/sec<${BAD_SAMPLE_LOW_SPEECH_DENSITY}`);
+  }
+  if (/\[(music|applause|noise|laughter|inaudible)\]|\b(music|applause|noise|laughter|inaudible)\b/iu.test(sampleText)) {
+    reasons.push('non_speech_marker');
+    evidence.push('contains non-speech marker');
+  }
+  if (/^(?:uh+|um+|hmm+|mm+|ah+|eh+|yeah+|okay+|right+|yep+|no+|yes+|well+|so+|you know)+[.!?]*$/iu.test(sampleText)) {
+    reasons.push('filler_only');
+    evidence.push('filler-only utterance');
+  }
+  if (alphaWords <= 1 && wordCount <= 4) {
+    reasons.push('low_lexical_content');
+    evidence.push('too little lexical speech');
+  }
+  if (/\b(go ahead|thank you)\b/iu.test(sampleText) && wordCount <= 6) {
+    reasons.push('handoff_fragment');
+    evidence.push('likely handoff fragment');
+  }
+
+  return {
+    bad: reasons.length > 0,
+    reasons,
+    evidence,
+    duration: dur,
+    words: wordCount,
+    text: sampleText,
+  };
+}
+
+function noteSampleQuality(qualityBySpeaker, speakerKey, quality) {
+  const key = String(speakerKey || '').trim() || UNKNOWN_SPEAKER_KEY;
+  if (!qualityBySpeaker.has(key)) qualityBySpeaker.set(key, { good: 0, bad: 0, bad_reasons: {} });
+  const cur = qualityBySpeaker.get(key);
+  if (quality?.bad) {
+    cur.bad += 1;
+    for (const reason of quality.reasons || []) {
+      cur.bad_reasons[reason] = Number(cur.bad_reasons[reason] || 0) + 1;
+    }
+  } else {
+    cur.good += 1;
+  }
+}
+
+function keyByRow(row) {
+  return `${Number(row?.index || 0)}|${Number(row?.since || 0).toFixed(3)}|${Number(row?.until || 0).toFixed(3)}|${String(row?.text || '')}`;
+}
+
+function speakerTotals(rows) {
+  const by = new Map();
+  for (const r of rows) {
+    const k = String(r?.speaker_key || '').trim() || UNKNOWN_SPEAKER_KEY;
+    const dur = Math.max(0, Number(r?.until || 0) - Number(r?.since || 0));
+    if (!by.has(k)) by.set(k, { lines: 0, duration: 0 });
+    const cur = by.get(k);
+    cur.lines += 1;
+    cur.duration += dur;
+  }
+  return [...by.entries()]
+    .map(([speaker, v]) => ({ speaker, lines: v.lines, duration: v.duration }))
+    .sort((a, b) => b.duration - a.duration || b.lines - a.lines || a.speaker.localeCompare(b.speaker));
+}
+
+function buildRuns(rows) {
+  const out = [];
+  if (!rows.length) return out;
+  let start = 0;
+  for (let i = 1; i <= rows.length; i += 1) {
+    if (i < rows.length && String(rows[i].speaker_key || '') === String(rows[start].speaker_key || '')) continue;
+    const slice = rows.slice(start, i);
+    out.push({
+      start,
+      end: i - 1,
+      speaker: String(rows[start].speaker_key || ''),
+      lines: slice.length,
+      duration: slice.reduce((n, r) => n + Math.max(0, Number(r.until || 0) - Number(r.since || 0)), 0),
+      since: Number(rows[start].since || 0),
+      until: Number(rows[i - 1].until || 0),
+    });
+    start = i;
+  }
+  return out;
+}
+
+function findHostSpeakerFromRows(rows) {
+  const intro = rows.find((r) => /\b(i am|i'm)\s+andrii\b/iu.test(String(r?.text || '')));
+  if (intro) return String(intro.speaker_key || '').trim();
+  return '';
+}
+
+function isHostCue(text) {
+  const t = String(text || '');
+  return /\b(go ahead|you read it|did you want|shall we|should i share|next question|welcome[, ]|joined here today)\b/iu.test(t);
+}
+
+function applySmallPanelReassign(rows, { expectedMax, windowRows, sampleQualityBySpeaker, badSampleDetails }) {
+  const beforeRows = rows.map((r) => ({ ...r }));
+  const totals = speakerTotals(rows);
+  const totalsBySpeaker = new Map(totals.map((t) => [t.speaker, t]));
+  const qualityBySpeaker = sampleQualityBySpeaker instanceof Map ? sampleQualityBySpeaker : new Map();
+  const pickKeep = [];
+  for (const t of totals) {
+    const q = qualityBySpeaker.get(t.speaker) || { good: 0, bad: 0 };
+    const totalSamples = Number(q.good || 0) + Number(q.bad || 0);
+    const goodRatio = totalSamples > 0 ? Number(q.good || 0) / totalSamples : 0;
+    const anchorEligible = Number(q.good || 0) > 0 || (totalSamples === 0 && t.duration >= 45);
+    if (!anchorEligible) continue;
+    if (totalSamples > 0 && goodRatio < 0.2) continue;
+    pickKeep.push(t.speaker);
+    if (pickKeep.length >= Math.max(1, expectedMax)) break;
+  }
+  const keep = new Set(pickKeep);
+  const hostSpeaker = findHostSpeakerFromRows(rows);
+  if (hostSpeaker) keep.add(hostSpeaker);
+
+  const changes = [];
+  const lowConfidenceSegments = [];
+  void windowRows;
+
+  // Pass A: host cue normalization.
+  if (hostSpeaker) {
+    for (let i = 0; i < rows.length; i += 1) {
+      const r = rows[i];
+      const cur = String(r.speaker_key || '');
+      if (cur === hostSpeaker) continue;
+      if (!isHostCue(r.text)) continue;
+      rows[i].speaker_key = hostSpeaker;
+      changes.push({
+        type: 'host_cue',
+        index: i,
+        from: cur,
+        to: hostSpeaker,
+        since: Number(r?.since || 0),
+        until: Number(r?.until || 0),
+        text: String(r?.text || ''),
+        reason: 'strong_host_cue',
+        confidence: 0.95,
+        evidence: ['host cue phrase'],
+      });
+    }
+  }
+
+  // Pass B: collapse non-keep runs to keep speakers only when evidence is explicit/strong.
+  // Never smooth based on continuity/majority-window alone.
+  const runs = buildRuns(rows);
+  for (const run of runs) {
+    if (keep.has(run.speaker)) continue;
+    const runRows = rows.slice(run.start, run.end + 1);
+    const runText = runRows.map((r) => String(r?.text || '')).join(' ').trim();
+    const rowCount = runRows.length;
+    const allHostCue = rowCount > 0 && runRows.every((r) => isHostCue(r.text));
+    const speakerTotalsEntry = totalsBySpeaker.get(run.speaker) || { lines: run.lines, duration: run.duration };
+    const isWeakLabel = speakerTotalsEntry.lines <= 6 || speakerTotalsEntry.duration <= 45;
+
+    let target = '';
+    let confidence = 0;
+    let reason = 'insufficient_evidence';
+
+    if (hostSpeaker && /\b(i am|i'm)\s+andrii(?:\s+zvorygin)?\b/iu.test(runText)) {
+      target = hostSpeaker;
+      confidence = 1;
+      reason = 'explicit_self_identification';
+    } else if (hostSpeaker && isWeakLabel && run.duration <= 12 && rowCount <= 3 && allHostCue) {
+      target = hostSpeaker;
+      confidence = 0.95;
+      reason = 'strong_host_cue_run';
+    }
+
+    if (target && keep.has(target) && confidence >= 0.9) {
+      for (let i = run.start; i <= run.end; i += 1) {
+        const from = String(rows[i].speaker_key || '');
+        if (from === target) continue;
+        rows[i].speaker_key = target;
+        changes.push({
+          type: reason,
+          index: i,
+          from,
+          to: target,
+          since: Number(rows[i]?.since || 0),
+          until: Number(rows[i]?.until || 0),
+          text: String(rows[i]?.text || ''),
+          reason,
+          confidence,
+          evidence: reason === 'explicit_self_identification'
+            ? ['self-identification cue']
+            : ['strong host cue run'],
+        });
+      }
+    } else {
+      lowConfidenceSegments.push({
+        since: run.since,
+        until: run.until,
+        speaker: run.speaker,
+        lines: run.lines,
+        duration: run.duration,
+        candidate: target || '',
+        confidence,
+        reason,
+        text_sample: previewText(runRows.map((r) => String(r?.text || '')).join(' '), 180),
+        no_auto_reassign: true,
+      });
+    }
+  }
+
+  const afterTotals = speakerTotals(rows);
+  const beforeLabels = new Set(beforeRows.map((r) => String(r.speaker_key || '')));
+  const afterLabels = new Set(rows.map((r) => String(r.speaker_key || '')));
+  const collapsedLabels = [...beforeLabels].filter((k) => !afterLabels.has(k));
+
+  const badSamples = Array.isArray(badSampleDetails) ? badSampleDetails : [];
+  const badSampleReasons = {};
+  const badSampleLabels = new Set();
+  const lowConfidenceRowsFromBadSamples = [];
+  for (const b of badSamples) {
+    badSampleLabels.add(String(b?.speaker || '').trim());
+    for (const reason of (b?.reasons || [])) {
+      badSampleReasons[reason] = Number(badSampleReasons[reason] || 0) + 1;
+    }
+    lowConfidenceRowsFromBadSamples.push({
+      since: Number(b?.since || 0),
+      until: Number(b?.until || 0),
+      speaker: String(b?.speaker || '').trim() || UNKNOWN_SPEAKER_KEY,
+      duration: Number(b?.duration || 0),
+      reason: 'bad_sample_quality',
+      why_flagged: (b?.reasons || []).join(','),
+      text_sample: String(b?.text_sample || ''),
+      no_auto_reassign: true,
+    });
+  }
+
+  return {
+    keep: [...keep].sort(),
+    hostSpeaker,
+    expectedMax,
+    beforeTotals: totals,
+    afterTotals,
+    linesRelabeled: changes.length,
+    collapsedLabels,
+    lowConfidenceSegments,
+    badSampleCount: badSamples.length,
+    badSampleReasons,
+    badSampleLabels: [...badSampleLabels].filter(Boolean).sort(),
+    badSamples: badSamples.slice(0, 400),
+    lowConfidenceRowsFromBadSamples: lowConfidenceRowsFromBadSamples.slice(0, 400),
+    changeExamples: changes.slice(0, 120),
+  };
+}
+
 function isLikelyHandoff(prevText, curText) {
   const prev = String(prevText || '').toLowerCase();
   const cur = String(curText || '').toLowerCase();
@@ -726,6 +1027,7 @@ async function main() {
 
   const outSrt = path.join(transcriptDir, `${resolvedPrefix}.speaker.sentence.srt`);
   const outJson = path.join(transcriptDir, `${resolvedPrefix}.speaker.sentences.json`);
+  const outReassignReport = path.join(transcriptDir, `${resolvedPrefix}.speaker.reassign.report.json`);
 
   const cues = parseSrt(fs.readFileSync(mergedSrt, 'utf8'));
   if (!cues.length) throw new Error(`no cues parsed from ${mergedSrt}`);
@@ -745,6 +1047,12 @@ async function main() {
   process.stdout.write(
     `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} turn_max_seconds=${TURN_MAX_SECONDS} turn_max_words=${TURN_MAX_WORDS} turn_max_gap=${TURN_MAX_GAP_SECONDS} boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
   );
+  process.stdout.write(
+    `[speaker-sentence] reassign: enabled=${REASSIGN_PASS_ENABLED ? 'on' : 'off'} mode=${RELABEL_MODE || 'default'} expected_max=${EXPECTED_MAX_SPEAKERS || 0}\n`
+  );
+  process.stdout.write(
+    `[speaker-sentence] bad-sample-guard: ${BAD_SAMPLE_GUARD_ENABLED ? 'on' : 'off'} min_seconds=${BAD_SAMPLE_MIN_SECONDS} min_words=${BAD_SAMPLE_MIN_WORDS} low_density=${BAD_SAMPLE_LOW_SPEECH_DENSITY}\n`
+  );
 
   const tempRoot = path.join(ROOT, 'world', 'temporary');
   fs.mkdirSync(tempRoot, { recursive: true });
@@ -757,6 +1065,8 @@ async function main() {
   for (const key of metadataMapForLog.keys()) preexistingSpeakerKeys.add(String(key || '').toLowerCase());
   const knownSpeakerKeysForGuard = new Set(preexistingSpeakerKeys);
   const nameEvidenceBySpeaker = new Map();
+  const sampleQualityBySpeaker = new Map();
+  const badSampleDetails = [];
   let clipAudioPath = audioPath;
 
   if (PREDECODE_PCM_ENABLED) {
@@ -826,6 +1136,37 @@ async function main() {
         }
         speakerKey = guarded.speakerKey;
         matched = guarded.matched;
+        if (BAD_SAMPLE_GUARD_ENABLED) {
+          const turnSampleText = turn.cues.map((c) => String(c?.text || '')).join(' ').trim();
+          const turnQuality = evaluateSampleQuality({
+            text: turnSampleText,
+            duration: turnDuration,
+            words: turnWords,
+          });
+          noteSampleQuality(sampleQualityBySpeaker, speakerKey, turnQuality);
+          if (turnQuality.bad) {
+            badSampleDetails.push({
+              stage: 'turn',
+              turn_index: turnIndex + 1,
+              since: Number(turn.since || 0),
+              until: Number(turn.until || 0),
+              speaker: String(speakerKey || '').trim() || UNKNOWN_SPEAKER_KEY,
+              duration: turnQuality.duration,
+              words: turnQuality.words,
+              reasons: turnQuality.reasons,
+              evidence: turnQuality.evidence,
+              text_sample: previewText(turnQuality.text, 220),
+            });
+            if (matched === 'new') {
+              const demoted = prevSpeaker || UNKNOWN_SPEAKER_KEY;
+              process.stdout.write(
+                `[speaker-sentence] bad-sample guard turn ${turnIndex + 1}/${turns.length}: new key "${speakerKey}" -> "${demoted}" reasons "${turnQuality.reasons.join(',')}"\n`
+              );
+              speakerKey = demoted;
+              matched = 'bad_sample_new_demoted';
+            }
+          }
+        }
 
         // Guard against mixed-speaker turns: if a fresh speaker was minted from a long
         // turn, probe beginning/end against a snapshot (excluding the new key) and
@@ -945,6 +1286,37 @@ async function main() {
                 }
                 cueSpeaker = guardedCue.speakerKey;
                 cueMatched = guardedCue.matched;
+                if (BAD_SAMPLE_GUARD_ENABLED) {
+                  const cueQuality = evaluateSampleQuality({
+                    text: cue.text,
+                    duration: cueDur,
+                    words: cueWords,
+                  });
+                  noteSampleQuality(sampleQualityBySpeaker, cueSpeaker, cueQuality);
+                  if (cueQuality.bad) {
+                    badSampleDetails.push({
+                      stage: 'cue',
+                      turn_index: turnIndex + 1,
+                      cue_index: cueIdx + 1,
+                      since: Number(cue.since || 0),
+                      until: Number(cue.until || 0),
+                      speaker: String(cueSpeaker || '').trim() || UNKNOWN_SPEAKER_KEY,
+                      duration: cueQuality.duration,
+                      words: cueQuality.words,
+                      reasons: cueQuality.reasons,
+                      evidence: cueQuality.evidence,
+                      text_sample: previewText(cueQuality.text, 220),
+                    });
+                    if (cueMatched === 'new') {
+                      const cueDemoted = localPrev || prevSpeaker || UNKNOWN_SPEAKER_KEY;
+                      process.stdout.write(
+                        `[speaker-sentence] bad-sample guard turn ${turnIndex + 1}/${turns.length} cue ${cueIdx + 1}/${turn.cues.length}: new key "${cueSpeaker}" -> "${cueDemoted}" reasons "${cueQuality.reasons.join(',')}"\n`
+                      );
+                      cueSpeaker = cueDemoted;
+                      cueMatched = 'bad_sample_new_demoted';
+                    }
+                  }
+                }
               }
               if (/^speaker_\d+$/iu.test(String(cueSpeaker || '').trim())) {
                 knownSpeakerKeysForGuard.add(String(cueSpeaker || '').trim());
@@ -959,9 +1331,18 @@ async function main() {
             for (const item of cueAssignments) {
               const cueLabel = toDisplayLabel(item.cueSpeaker, metadataMapForLog);
               if (!firstSampleBySpeaker.has(item.cueSpeaker) && fs.existsSync(item.cueClip)) {
-                const samplePath = path.join(samplesDir, `${item.cueSpeaker}.wav`);
-                if (!fs.existsSync(samplePath)) fs.copyFileSync(item.cueClip, samplePath);
-                firstSampleBySpeaker.add(item.cueSpeaker);
+                const cueQualityForSample = BAD_SAMPLE_GUARD_ENABLED
+                  ? evaluateSampleQuality({
+                    text: item.cue.text,
+                    duration: Math.max(0.01, Number(item.cue.until || 0) - Number(item.cue.since || 0)),
+                    words: countWords(item.cue.text),
+                  })
+                  : { bad: false };
+                if (!cueQualityForSample.bad) {
+                  const samplePath = path.join(samplesDir, `${item.cueSpeaker}.wav`);
+                  if (!fs.existsSync(samplePath)) fs.copyFileSync(item.cueClip, samplePath);
+                  firstSampleBySpeaker.add(item.cueSpeaker);
+                }
               }
               processedSentenceIndex += 1;
               const cueDuration = Math.max(0.01, item.cue.until - item.cue.since);
@@ -995,9 +1376,18 @@ async function main() {
         if (speakerKey === UNKNOWN_SPEAKER_KEY) {
           // Do not persist unknown clips as canonical speaker samples.
         } else {
-        const samplePath = path.join(samplesDir, `${speakerKey}.wav`);
-        if (!fs.existsSync(samplePath)) fs.copyFileSync(clipPath, samplePath);
-        firstSampleBySpeaker.add(speakerKey);
+        const turnQualityForSample = BAD_SAMPLE_GUARD_ENABLED
+          ? evaluateSampleQuality({
+            text: turn.cues.map((c) => String(c?.text || '')).join(' ').trim(),
+            duration: turnDuration,
+            words: turnWords,
+          })
+          : { bad: false };
+        if (!turnQualityForSample.bad) {
+          const samplePath = path.join(samplesDir, `${speakerKey}.wav`);
+          if (!fs.existsSync(samplePath)) fs.copyFileSync(clipPath, samplePath);
+          firstSampleBySpeaker.add(speakerKey);
+        }
         }
       }
 
@@ -1033,6 +1423,30 @@ async function main() {
   }
 
   const metadataMap = loadSpeakerMetadataMap(voicesDir);
+  let reassignReport = null;
+  if (REASSIGN_PASS_ENABLED && RELABEL_MODE === 'small_panel' && EXPECTED_MAX_SPEAKERS > 0) {
+    reassignReport = applySmallPanelReassign(rows, {
+      expectedMax: EXPECTED_MAX_SPEAKERS,
+      windowRows: REASSIGN_WINDOW_ROWS,
+      sampleQualityBySpeaker: BAD_SAMPLE_GUARD_ENABLED ? sampleQualityBySpeaker : new Map(),
+      badSampleDetails: BAD_SAMPLE_GUARD_ENABLED ? badSampleDetails : [],
+    });
+    process.stdout.write(
+      `[speaker-sentence][reassign] keep=${reassignReport.keep.join(',')} lines_relabeled=${reassignReport.linesRelabeled} collapsed=${reassignReport.collapsedLabels.length}\n`
+    );
+    process.stdout.write(
+      `[speaker-sentence][reassign] low_conf_segments=${reassignReport.lowConfidenceSegments.length}\n`
+    );
+    fs.writeFileSync(outReassignReport, `${JSON.stringify({
+      generated_at: new Date().toISOString(),
+      mode: RELABEL_MODE,
+      enabled: true,
+      expected_max: EXPECTED_MAX_SPEAKERS,
+      window_rows: REASSIGN_WINDOW_ROWS,
+      ...reassignReport,
+    }, null, 2)}\n`, 'utf8');
+    process.stdout.write(`[speaker-sentence][reassign] wrote: ${outReassignReport}\n`);
+  }
   const lockedSpeakerKeys = buildLockedSpeakerKeys(nameEvidenceBySpeaker);
   process.stdout.write(`[speaker-sentence] name-lock speakers: ${lockedSpeakerKeys.size}\n`);
   if (rows.length >= 2) {
@@ -1077,6 +1491,14 @@ async function main() {
       window_seconds: NAME_LOCK_WINDOW_SECONDS,
       speakers: [...lockedSpeakerKeys].sort(),
     },
+    reassign: reassignReport ? {
+      mode: RELABEL_MODE,
+      expected_max: EXPECTED_MAX_SPEAKERS,
+      lines_relabeled: reassignReport.linesRelabeled,
+      collapsed_labels: reassignReport.collapsedLabels,
+      low_conf_segments: reassignReport.lowConfidenceSegments.length,
+      report_path: outReassignReport,
+    } : null,
     rows,
   }, null, 2)}\n`, 'utf8');
 
