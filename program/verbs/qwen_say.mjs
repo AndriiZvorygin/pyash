@@ -748,16 +748,30 @@ function parseLastAstatsMetric(stderr = "", metric = "") {
 }
 
 function normalizeWordToken(value = "") {
+  const normalizeSpellingVariant = (token = "") => {
+    const map = {
+      behaviour: "behavior",
+      behaviours: "behaviors"
+    };
+    return map[token] || token;
+  };
   const raw = String(value ?? "").toLowerCase();
   if (/^\d{3,4}$/.test(raw)) {
     const yearWord = yearToWords(raw);
-    if (yearWord) return String(yearWord).toLowerCase().replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+    if (yearWord) {
+      const normalized = String(yearWord).toLowerCase().replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+      return normalizeSpellingVariant(normalized);
+    }
   }
   if (/^\d+$/.test(raw)) {
     const numberWord = integerToWordsHyphenated(raw);
-    if (numberWord) return String(numberWord).toLowerCase().replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+    if (numberWord) {
+      const normalized = String(numberWord).toLowerCase().replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+      return normalizeSpellingVariant(normalized);
+    }
   }
-  return raw.replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+  const normalized = raw.replace(/[`'’]/gu, "").replace(/[^a-z0-9]+/gu, "");
+  return normalizeSpellingVariant(normalized);
 }
 
 function tokenizedWords(value = "") {

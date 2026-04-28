@@ -317,9 +317,28 @@ su name teaching video section hear mapper ob filename section audio fromindex n
   su name section audio input stage ob filename of ob of this to name filename section audio input be filename do
 
   su name section srt stage from num of ob of section index stage with text "captions.srt" to name filename section srt be teaching video section leaf do
+  su name section chunk metadata stage from num of ob of section index stage with text "audio.qwen-say-chunks/chunks.metadata.json" to name filename section chunk metadata be teaching video section leaf do
 
-  su name section hear stage from filename of ob of section audio input stage become wo srt to filename of ob of section srt be hear do
-  su name section srt output stage ob filename of ob of section hear stage be filename do
+  ob text of subtitle_mode to name text subtitle mode chosen be text do
+  ob name text subtitle mode chosen be equally from text "" then ob text "karaoke" to name text subtitle mode chosen be text do
+
+  ob name text subtitle mode chosen be equally from text "asr" then su name section hear stage from filename of ob of section audio input stage become wo srt to filename of ob of section srt be hear do
+  ob name text subtitle mode chosen be equally from text "asr" then su name section srt output stage ob filename of ob of section hear stage be filename do
+
+  ob name text subtitle mode chosen be equally from text "karaoke" then ob text "node${IFS}command/srt_from_qwen_say_chunks.mjs${IFS}" to name text section timing cmd be text do
+  ob name text subtitle mode chosen be equally from text "karaoke" then ob text of ob of section chunk metadata stage to name section timing cmd be plus do
+  ob name text subtitle mode chosen be equally from text "karaoke" then ob text "${IFS}" to name section timing cmd be plus do
+  ob name text subtitle mode chosen be equally from text "karaoke" then ob text of ob of section srt stage to name section timing cmd be plus do
+  ob name text subtitle mode chosen be equally from text "karaoke" then su name section timing stage ob name text section timing cmd be command do
+  ob name text subtitle mode chosen be equally from text "karaoke" then su name section srt output stage ob filename of ob of section srt stage be filename do
+
+  ob name text subtitle mode chosen be equally from text "timed" then ob text "node${IFS}command/srt_from_qwen_say_chunks.mjs${IFS}" to name text section timing cmd be text do
+  ob name text subtitle mode chosen be equally from text "timed" then ob text of ob of section chunk metadata stage to name section timing cmd be plus do
+  ob name text subtitle mode chosen be equally from text "timed" then ob text "${IFS}" to name section timing cmd be plus do
+  ob name text subtitle mode chosen be equally from text "timed" then ob text of ob of section srt stage to name section timing cmd be plus do
+  ob name text subtitle mode chosen be equally from text "timed" then su name section timing stage ob name text section timing cmd be command do
+  ob name text subtitle mode chosen be equally from text "timed" then su name section srt output stage ob filename of ob of section srt stage be filename do
+
   su name section srt output stage ret
 prah
 

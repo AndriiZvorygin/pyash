@@ -744,6 +744,40 @@ test("qwenSay clip verify hard fails after retry exhaustion", async () => {
   }
 });
 
+test("qwenSay clip verify accepts british/us spelling variants in tail tokens", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify max retries" }, ob: { num: 0 }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-variant-tail-out-"));
+  const output = path.join(outDir, "out.wav");
+  const longText = Array.from({ length: 140 }, () => "We observe human behaviour.").join(" ");
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_variant_tail"));
+    return {
+      stdout: chunkFile,
+      outputPath: chunkFile,
+      transcript: String(text ?? "").replace(/behaviour/giu, "behavior"),
+      timestamps: ""
+    };
+  };
+  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 2.0 });
+  const verifyChunkTailFn = async () => ({ pass: false, transcript: "", matched: 0, expected: 2 });
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_variant_tail_concat"));
+  };
+  try {
+    const result = await qwenSay(
+      { mood: "do", be: "qwen say", su: { name: "voice" }, ob: { text: longText }, to: { filename: output } },
+      { runSayFn, concatAudioFn, detectHotTailFn, verifyChunkTailFn }
+    );
+    assert.equal(result?.be, "say");
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
 test("qwenSay sanitizes numeric citation colons before synthesis", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });

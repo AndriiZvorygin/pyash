@@ -1,17 +1,18 @@
 from filename "../../module/brief_video.pya" ob name teaching video to name teaching video be import do
-from filename "../../module/draw_from_filename.pya" ob name draw as wo thumbnail to name draw as wo thumbnail be import do
 
 exists su name style_prompt ob text "Québec bande dessinée illustration, precise linework, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be default ya
-ob ve filename text manuscript text text style_prompt be input ya
-su name thumbnail variant mode ob text "triple" ya
-exists su name thumbnail variant label ob text "" be default ya
+ob ve filename text manuscript text text style_prompt text text thumbnail_mode be input ya
+
 exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear whisperx fallback qwen ob bool truth be default ya
+exists su name subtitle_mode ob text "karaoke" be default ya
 su name draw widescreen mode ob text "truth" ya
+
 exists su name draw size widescreen be map def
 su name width ob num 1280 ya
 su name height ob num 720 ya
+prah
 
 exists su name thumbnail generation policy be map def
 su name profile ob text "teaching_video" ya
@@ -27,31 +28,69 @@ su name subtitle_margin_ratio ob num 0.10 ya
 su name footnote_mode ob text "karaoke" ya
 prah
 
-su name teaching demo from filename of ob of manuscript with text of ob of style_prompt be teaching video do
+su name teaching demo from filename of ob of manuscript with text of ob of style_prompt be teaching video wide do
 
-ob text "artifacts/" to name text wide run root be text do
-ob name run id to name wide run root be plus do
-ob name text wide run root to name text thumbnail metadata path be plus do
-ob text "/final-concatenate-stage.metadata.pya" to name thumbnail metadata path be plus do
-ob name text wide run root to name text thumbnail source path be plus do
-ob text "/thumbnail-input-source.txt" to name thumbnail source path be plus do
-ob name text wide run root to name text thumbnail select debug path be plus do
-ob text "/thumbnail-input-selection.json" to name thumbnail select debug path be plus do
+ob name text thumbnail_mode to name text thumbnail mode chosen be text do
+ob name text thumbnail mode chosen be equally from text "" then ob text "off" to name text thumbnail mode chosen be text do
+ob name text thumbnail mode chosen be equally from text "truth" then ob text "checkpoint" to name text thumbnail mode chosen be text do
+ob text of ob of manuscript to name text manuscript path be text do
 
-ob text "node command/thumbnail_input_select_from_metadata.mjs \"" to name text thumbnail select cmd be text do
-ob name text thumbnail metadata path to name thumbnail select cmd be plus do
-ob text "\" \"" to name thumbnail select cmd be plus do
-ob text of ob of manuscript to name thumbnail select cmd be plus do
-ob text "\" \"" to name thumbnail select cmd be plus do
-ob text of ob of manuscript to name thumbnail select cmd be plus do
-ob text "\" \"" to name thumbnail select cmd be plus do
-ob name text thumbnail source path to name thumbnail select cmd be plus do
-ob text "\" \"" to name thumbnail select cmd be plus do
-ob name text thumbnail select debug path to name thumbnail select cmd be plus do
-ob text "\"" to name thumbnail select cmd be plus do
-su name thumbnail input select stage ob text of thumbnail select cmd be command do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "artifacts/" to name text wide run root be text do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "artifacts/" to name text wide run root be text do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name run id to name wide run root be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name run id to name wide run root be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name text wide run root to name text thumbnail metadata path be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text wide run root to name text thumbnail metadata path be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "/final-concatenate-stage.metadata.pya" to name thumbnail metadata path be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "/final-concatenate-stage.metadata.pya" to name thumbnail metadata path be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name text wide run root to name text thumbnail source path be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text wide run root to name text thumbnail source path be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "/thumbnail-input-source.txt" to name thumbnail source path be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "/thumbnail-input-source.txt" to name thumbnail source path be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name text wide run root to name text thumbnail checkpoint path be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text wide run root to name text thumbnail checkpoint path be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "/thumbnail-checkpoint.pya" to name thumbnail checkpoint path be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "/thumbnail-checkpoint.pya" to name thumbnail checkpoint path be plus do
 
-su name thumbnail source filename stage ob name text thumbnail source path to name filename thumbnail source filename be filename do
-su name thumbnail demo from filename of ob of thumbnail source filename stage with text of ob of style_prompt be draw as wo thumbnail do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "node command/thumbnail_checkpoint_from_metadata.mjs \"" to name text thumbnail checkpoint cmd be text do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "node command/thumbnail_checkpoint_from_metadata.mjs \"" to name text thumbnail checkpoint cmd be text do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name text thumbnail metadata path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text thumbnail metadata path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "\" \"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\" \"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name text manuscript path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text manuscript path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "\" \"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\" \"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name text manuscript path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text manuscript path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "\" \"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\" \"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name text thumbnail source path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text thumbnail source path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "\" \"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\" \"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob name text thumbnail checkpoint path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text thumbnail checkpoint path to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then ob text "\"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\"" to name thumbnail checkpoint cmd be plus do
+ob name text thumbnail mode chosen be equally from text "checkpoint" then su name thumbnail checkpoint stage ob text of ob of thumbnail checkpoint cmd be command do
+ob name text thumbnail mode chosen be equally from text "render" then su name thumbnail checkpoint stage ob text of ob of thumbnail checkpoint cmd be command do
+
+ob name text thumbnail mode chosen be equally from text "render" then ob name text wide run root to name text thumbnail render path be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "/thumbnail-render.png" to name thumbnail render path be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "node command/thumbnail_render_from_checkpoint.mjs \"" to name text thumbnail render cmd be text do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text thumbnail source path to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\" \"" to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name text thumbnail render path to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\" \"" to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name draw workflow default to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\" \"" to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob name draw host to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text "\" " to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob num of width of thumbnail generation policy to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob text " " to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then ob num of height of thumbnail generation policy to name thumbnail render cmd be plus do
+ob name text thumbnail mode chosen be equally from text "render" then su name thumbnail render stage ob text of ob of thumbnail render cmd be command do
 
 su name result out ob name teaching demo be write do
