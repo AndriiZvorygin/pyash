@@ -249,3 +249,11 @@ test("draw promptify instruction anchors literal named subjects, especially huma
     /If current_cut names a specific person, people, species, animal, object, place, or era, depict that literal subject\./u
   );
 });
+
+
+test("default wide subtitle mode is karaoke and non-ASR path is available", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(source, /ob name text subtitle mode chosen be equally from text "" then ob text "karaoke" to name text subtitle mode chosen be text do/u);
+  assert.match(source, /subtitle mode chosen be equally from text "asr" then su name section hear stage/u);
+  assert.match(source, /subtitle mode chosen be equally from text "karaoke" then su name section timing stage ob name text section timing cmd be command do/u);
+});
