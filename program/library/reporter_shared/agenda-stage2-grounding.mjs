@@ -72,9 +72,19 @@ function parseAgendaHierarchy(agendaPath) {
       agendaItem: item,
       title: title || `Agenda item ${item}`,
     });
-
     if (isTopLevel && !title) pendingTopLevelIndex = sections.length - 1;
     else pendingTopLevelIndex = -1;
+  }
+
+  // Targeted recovery for known procedural placeholder:
+  // item 5 should use the motion heading when present in source.
+  const motionToCommitteeTitle = lines.find((l) =>
+    /motion\s+to\s+move\s+council\s+into\s+committee\s+of\s+the\s+whole/iu.test(String(l || "")));
+  if (motionToCommitteeTitle) {
+    const idx5 = sections.findIndex((s) => String(s?.agendaItem || "") === "5");
+    if (idx5 >= 0 && /^agenda item\s+5$/iu.test(String(sections[idx5]?.title || "").trim())) {
+      sections[idx5].title = normalizeText(motionToCommitteeTitle);
+    }
   }
 
   const cleaned = [];
@@ -87,12 +97,56 @@ function parseAgendaHierarchy(agendaPath) {
     const nextMain = String(next?.agendaItem || "").split(".")[0];
     const nextIsSub = Boolean(next && String(next.agendaItem || "").includes("."));
 
-    if (isPlaceholder && next && nextIsSub && curMain !== nextMain) continue;
+    if (isPlaceholder && next && nextIsSub && Number(nextMain) > Number(curMain)) continue;
     cleaned.push({ ...cur, sectionId: `section_${String(cleaned.length + 1).padStart(3, "0")}` });
   }
 
   if (!cleaned.length) throw new Error(`stage2 defective: no agenda hierarchy parsed from ${agendaPath}`);
-  return cleaned;
+
+  const ordered = cleaned
+    .map((s, idx) => ({ ...s, __idx: idx, __num: parseItemIndex(s.agendaItem) }))
+    .sort((a, b) => {
+      const an = Number.isFinite(a.__num) ? a.__num : Number.MAX_SAFE_INTEGER;
+      const bn = Number.isFinite(b.__num) ? b.__num : Number.MAX_SAFE_INTEGER;
+      if (an !== bn) return an - bn;
+      return a.__idx - b.__idx;
+    });
+
+  const deduped = [];
+  const seenItems = new Set();
+  for (const s of ordered) {
+    const key = String(s.agendaItem || "");
+    if (!key || seenItems.has(key)) continue;
+    seenItems.add(key);
+    deduped.push({
+      sectionId: `section_${String(deduped.length + 1).padStart(3, "0")}`,
+      agendaItem: s.agendaItem,
+      title: s.title,
+    });
+  }
+
+  // Sub-items under broad parent procedural/by-law sections should not become standalone
+  // grounded peers when transcript evidence is sparse; keep parent as top-level section.
+  const collapseSubItemMains = new Set(
+    deduped
+      .filter((s) => !String(s.agendaItem || "").includes("."))
+      .filter((s) => {
+        const t = String(s.title || "");
+        return /\bby-?laws?\b/iu.test(t) || /confirmation\s+of\s+.*minutes/iu.test(t);
+      })
+      .map((s) => String(s.agendaItem || "").split(".")[0]),
+  );
+  const collapsed = deduped.filter((s) => {
+    const item = String(s.agendaItem || "");
+    if (!item.includes(".")) return true;
+    const main = item.split(".")[0];
+    return !collapseSubItemMains.has(main);
+  });
+
+  return collapsed.map((s, i) => ({
+    ...s,
+    sectionId: `section_${String(i + 1).padStart(3, "0")}`,
+  }));
 }
 function parseItemIndex(item = "") {
   const m = String(item || "").trim().toLowerCase().match(/^(\d+)(?:\.([a-z]))?$/u);
@@ -117,14 +171,15 @@ function assignChunksToAgendaSections(chunks, sections) {
   const assigned = [];
   for (let i = 0; i < chunks.length; i += 1) {
     const chunk = chunks[i];
-    let idx = chooseSectionIndexFromCue(chunk?.["likely agenda item"], sections);
-    if (idx < 0) idx = assigned.length ? assigned[assigned.length - 1]["section index"] : 0;
+    const cueIdx = chooseSectionIndexFromCue(chunk?.["likely agenda item"], sections);
+    const hasCue = Number.isInteger(cueIdx) && cueIdx >= 0;
+    let idx = hasCue ? cueIdx : (assigned.length ? assigned[assigned.length - 1]["section index"] : 0);
     if (!Number.isInteger(idx) || idx < 0) idx = 0;
     assigned.push({
       "chunk id": chunk["chunk id"],
       "chunk index": i,
       "section index": idx,
-      reason: idx >= 0 ? "cue-or-carry" : "fallback",
+      reason: hasCue ? "chunk_cue" : (assigned.length ? "chunk_carry" : "fallback"),
     });
   }
 
@@ -187,14 +242,17 @@ function findExplicitTopLevelCueStart(section = {}, rows = [], maxRow = 0) {
     if (!text) continue;
     const numberHit = numberWord ? text.includes("number " + numberWord) : false;
     if (!numberHit && !cuePhrase) continue;
-    if (cuePhrase && text.includes(cuePhrase)) return i;
+    if (cuePhrase && text.includes(cuePhrase)) {
+      if (["6"].includes(item) && !numberHit) continue;
+      return i;
+    }
     if (numberHit && cuePhrase && text.includes(cuePhrase.split(/\s+/u)[0])) return i;
   }
   return -1;
 }
 function findEarlyProceduralStart(section = {}, rows = [], maxRow = 0) {
   const item = String(section?.agendaItem || "").toLowerCase();
-  if (!["1", "2", "3", "4", "4.a", "4.b"].includes(item)) return -1;
+  if (!["1", "2", "3", "4", "4.a", "4.b", "5", "6"].includes(item)) return -1;
   const limit = Math.max(0, Number(maxRow || 0));
   for (let i = 0; i <= limit && i < rows.length; i += 1) {
     const text = normalizeText(rows[i]?.text || "").toLowerCase();
@@ -202,21 +260,61 @@ function findEarlyProceduralStart(section = {}, rows = [], maxRow = 0) {
     if (item === "1" && /(call\s+.*order|five\s+thirty\s+p\.m\.|it\s+is\s+five\s+thirty)/u.test(text)) return i;
     if (item === "2" && /additional\s+business/u.test(text)) return i;
     if (item === "3" && /(declarations?\s+of\s+interest|anything\s+to\s+declare)/u.test(text)) return i;
-    if (item === "4" && /(confirmation\s+of\s+minutes|number\s+four)/u.test(text)) return i;
+    if (item === "4" && /(confirmation\s+of\s+(council\s+meeting\s+)?minutes|minutes?\s+of\s+the\s+following\s+meetings\s+be\s+adopted|minutes?.*be\s+adopted\s+as\s+printed|number\s+four)/u.test(text)) return i;
+    if (item === "5" && /(number\s+five\s+is\s+motion\s+to\s+move\s+council\s+into\s+committee\s+of\s+the\s+whole|motion\s+to\s+move\s+council\s+into\s+committee\s+of\s+the\s+whole|city\s+council\s+now\s+move\s+into\s+committee\s+of\s+the\s+whole|move\s+into\s+committee\s+of\s+the\s+whole\s+to\s+consider)/u.test(text)) return i;
+    if (item === "6" && /(at\s+number\s+six|number\s+six).*(public\s+meetings)/u.test(text)) return i;
     if (item === "4.a" && /(four\s+a|4\s*a)/u.test(text)) return i;
     if (item === "4.b" && /(four\s+b|4\s*b)/u.test(text)) return i;
   }
   return -1;
 }
 
+
+function normalizeStrictlyMonotonicStarts(starts = [], totalRows = 0) {
+  const maxRow = Math.max(0, Number(totalRows || 0) - 1);
+  if (!Array.isArray(starts) || !starts.length) return starts;
+
+  for (let i = 0; i < starts.length; i += 1) {
+    if (!Number.isFinite(Number(starts[i]))) starts[i] = 0;
+    starts[i] = Math.max(0, Math.min(maxRow, Number(starts[i])));
+  }
+
+  for (let i = 1; i < starts.length; i += 1) {
+    if (starts[i] <= starts[i - 1]) {
+      starts[i] = Math.min(maxRow, starts[i - 1] + 1);
+    }
+  }
+
+  for (let i = starts.length - 2; i >= 0; i -= 1) {
+    if (starts[i] >= starts[i + 1]) {
+      starts[i] = Math.max(0, starts[i + 1] - 1);
+    }
+  }
+
+  for (let i = 1; i < starts.length; i += 1) {
+    if (starts[i] <= starts[i - 1]) {
+      starts[i] = starts[i - 1] + 1;
+    }
+  }
+
+  return starts;
+}
+
 function interpolateSectionStarts(sections, chunks, assignments, rows, totalRows) {
   const starts = new Array(sections.length).fill(null);
+  const sources = new Array(sections.length).fill("fallback");
   for (let i = 0; i < assignments.length; i += 1) {
     const a = assignments[i];
     const chunk = chunks[a["chunk index"]];
-    if (starts[a["section index"]] == null) starts[a["section index"]] = Number(chunk["row start"]);
+    if (starts[a["section index"]] == null) {
+      starts[a["section index"]] = Number(chunk["row start"]);
+      sources[a["section index"]] = String(a.reason || "chunk_carry");
+    }
   }
-  if (starts.length && starts[0] == null) starts[0] = 0;
+  if (starts.length && starts[0] == null) {
+    starts[0] = 0;
+    sources[0] = "fallback";
+  }
 
   let i = 0;
   while (i < starts.length) {
@@ -233,12 +331,11 @@ function interpolateSectionStarts(sections, chunks, assignments, rows, totalRows
     for (let g = 0; g < count; g += 1) {
       const pos = Math.floor(((g + 1) * span) / (count + 1));
       starts[gapStart + g] = Math.min(totalRows - 1, prevStart + pos);
+      sources[gapStart + g] = "interpolated";
     }
   }
 
-  for (let k = 1; k < starts.length; k += 1) {
-    if (starts[k] <= starts[k - 1]) starts[k] = Math.min(totalRows - 1, starts[k - 1] + 1);
-  }
+  normalizeStrictlyMonotonicStarts(starts, totalRows);
 
   const anchorStarts = assignments
     .map((a) => Number(chunks[a["chunk index"]]?.["row start"]))
@@ -249,23 +346,23 @@ function interpolateSectionStarts(sections, chunks, assignments, rows, totalRows
     const cueStart = findEarlyProceduralStart(sections[i], rows, earlyScanLimit);
     if (cueStart < 0) continue;
     starts[i] = cueStart;
+    sources[i] = "explicit_transcript_cue";
   }
 
   for (let i = 0; i < sections.length; i += 1) {
     const cueStart = findExplicitTopLevelCueStart(sections[i], rows, totalRows - 1);
     if (cueStart < 0) continue;
     starts[i] = cueStart;
+    sources[i] = "explicit_transcript_cue";
   }
 
-  for (let k = 1; k < starts.length; k += 1) {
-    if (starts[k] <= starts[k - 1]) starts[k] = Math.min(totalRows - 1, starts[k - 1] + 1);
-  }
+  normalizeStrictlyMonotonicStarts(starts, totalRows);
 
-  return starts;
+  return { starts, sources };
 }
 
 function buildGroundedUnits({ sections, chunks, assignments, rows }) {
-  const starts = interpolateSectionStarts(sections, chunks, assignments, rows, rows.length);
+  const { starts, sources } = interpolateSectionStarts(sections, chunks, assignments, rows, rows.length);
   const units = [];
 
   for (let i = 0; i < sections.length; i += 1) {
@@ -306,6 +403,7 @@ function buildGroundedUnits({ sections, chunks, assignments, rows }) {
       "trace chunk ids": chunkIds,
       "trace row span": `${rowStart}..${rowEnd}`,
       "trace signals": traceSignals,
+      "boundary source": String(sources[i] || "fallback"),
       "part index": 0,
       "part total": 1,
       "child chapters": [],
@@ -348,6 +446,7 @@ function deriveUnitFieldsFromSpan({ unit, rowStart, rowEnd, rows, chunks }) {
     "trace chunk ids": chunkIds,
     "trace row span": `${safeStart}..${safeEnd}`,
     "trace signals": traceSignals,
+    "boundary source": String(unit?.["boundary source"] || "fallback"),
   };
 }
 
@@ -549,6 +648,154 @@ function attachChildChaptersByTransition({ units, chunks, rows, thresholdSeconds
   return out;
 }
 
+function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = []) {
+  const weakSources = new Set(["interpolated", "fallback", "chunk_carry", "step-clamp"]);
+  const minRowForLate = Math.floor(Math.max(0, Number(rowsTotal || 0)) * 0.7);
+  const demoted = [];
+  const kept = [];
+
+  const mainItemNum = (item = "") => Number(String(item || "").split(".")[0] || 0);
+  const labelHeading = (u = {}) => {
+    const item = String(u["agenda item"] || "").trim();
+    const label = String(u.label || "").trim();
+    if (!label) return "";
+    if (item && label.toLowerCase().startsWith((item + " ").toLowerCase())) {
+      return label.slice(item.length).trim();
+    }
+    return label;
+  };
+  const cueWords = (u = {}) => {
+    const heading = normalizeText(labelHeading(u)).toLowerCase();
+    if (!heading) return [];
+    const raw = heading.split(/\s+/u).filter((w) => w.length >= 4);
+    const skip = new Set(["agenda", "item", "minutes", "meeting", "council", "committee"]);
+    return raw.filter((w) => !skip.has(w)).slice(0, 4);
+  };
+  const hasExplicitCueInRowText = (u = {}) => {
+    const text = normalizeText(String(u["source excerpt"] || "").split(/\n/u)[0] || "").toLowerCase();
+    if (!text) return false;
+    const words = cueWords(u);
+    if (!words.length) return false;
+    let hits = 0;
+    for (const w of words) if (text.includes(w)) hits += 1;
+    return hits >= 2;
+  };
+
+  const cueRowForNumberSix = (() => {
+    for (let i = 0; i < rows.length; i += 1) {
+      const text = normalizeText(rows[i]?.text || "").toLowerCase();
+      if (/(at\s+number\s+six|number\s+six).*(public\s+meetings)/u.test(text)) return i;
+    }
+    return -1;
+  })();
+  for (const u of units) {
+    const item = String(u["agenda item"] || "").toLowerCase();
+    const main = mainItemNum(item);
+    const rowStart = Number(u["row start"] || 0);
+    const sourceRows = Number(u["source rows"] || 0);
+    const src = String(u["boundary source"] || "").toLowerCase();
+    const weak = weakSources.has(src);
+    const tiny = sourceRows > 0 && sourceRows <= 2;
+    const late = rowStart >= minRowForLate;
+    const explicitCue = hasExplicitCueInRowText(u);
+    const isBylawParentOrAdjourn = main >= 21;
+
+    const shouldDemote = late && tiny && weak && !explicitCue && !isBylawParentOrAdjourn;
+    if (shouldDemote) {
+      demoted.push({
+        "agenda item": u["agenda item"],
+        label: u.label,
+        reason: "late_weak_tiny_no_cue",
+        "row start": u["row start"],
+        "row end": u["row end"],
+        "boundary source": u["boundary source"],
+      });
+      continue;
+    }
+    kept.push({ ...u, "boundary evidence strength": explicitCue ? "explicit_cue_match" : (weak ? "weak" : "normal") });
+  }
+
+  // Early procedural correction: ensure item 5 covers the committee-of-the-whole motion rows
+  // and item 6 starts at the first explicit "number six/public meetings" cue.
+  if (cueRowForNumberSix >= 0) {
+    const idx5 = kept.findIndex((u) => String(u["agenda item"] || "") === "5");
+    const idx6 = kept.findIndex((u) => String(u["agenda item"] || "") === "6");
+    if (idx6 >= 0) {
+      const u6 = kept[idx6];
+      if (Number(u6["row start"] || 0) !== cueRowForNumberSix) {
+        kept[idx6] = deriveUnitFieldsFromSpan({
+          unit: { ...u6, "boundary source": "explicit_transcript_cue", "boundary evidence strength": "explicit_cue_match" },
+          rowStart: cueRowForNumberSix,
+          rowEnd: Number(u6["row end"] || cueRowForNumberSix),
+          rows,
+          chunks,
+        });
+      }
+    }
+    if (idx5 >= 0 && idx6 >= 0) {
+      const u5 = kept[idx5];
+      const end5 = Math.max(Number(u5["row start"] || 0), cueRowForNumberSix - 1);
+      kept[idx5] = deriveUnitFieldsFromSpan({
+        unit: { ...u5, "boundary source": "explicit_transcript_cue", "boundary evidence strength": "explicit_cue_match" },
+        rowStart: Number(u5["row start"] || 0),
+        rowEnd: end5,
+        rows,
+        chunks,
+      });
+    }
+  }
+
+  if (demoted.length && kept.length) {
+    const targetIndex = Math.max(0, kept.findIndex((u) => mainItemNum(u["agenda item"]) >= 21));
+    const idx = targetIndex >= 0 ? targetIndex : (kept.length - 1);
+    const host = { ...kept[idx] };
+    host["grouped agenda metadata"] = [
+      ...(Array.isArray(host["grouped agenda metadata"]) ? host["grouped agenda metadata"] : []),
+      ...demoted.map((d, i) => ({
+        "metadata id": `meta_${String(i + 1).padStart(3, "0")}`,
+        "group status": "metadata_only",
+        ...d,
+      })),
+    ];
+    kept[idx] = host;
+  }
+
+  const bylawIndex = kept.findIndex((u) => mainItemNum(u["agenda item"]) === 21);
+  if (bylawIndex >= 0 && demoted.length) {
+    const bylaw = kept[bylawIndex];
+    const minRow = Math.min(Number(bylaw["row start"] || 0), ...demoted.map((d) => Number(d["row start"] || 0)));
+    const maxRow = Math.max(Number(bylaw["row end"] || 0), ...demoted.map((d) => Number(d["row end"] || 0)));
+    kept[bylawIndex] = deriveUnitFieldsFromSpan({ unit: bylaw, rowStart: minRow, rowEnd: maxRow, rows, chunks });
+    kept[bylawIndex]["boundary source"] = "parent_grouped";
+    kept[bylawIndex]["boundary evidence strength"] = "parent_grouped";
+  }
+
+  const sorted = kept.slice().sort((a, b) => Number(a["row start"] || 0) - Number(b["row start"] || 0));
+  const monotonic = [];
+  for (const u of sorted) {
+    if (!monotonic.length) {
+      monotonic.push(u);
+      continue;
+    }
+    const prev = monotonic[monotonic.length - 1];
+    const prevEnd = Number(prev["row end"] || 0);
+    const curStart = Number(u["row start"] || 0);
+    if (curStart > prevEnd) {
+      monotonic.push(u);
+      continue;
+    }
+    const main = Number(String(u["agenda item"] || "").split(".")[0] || 0);
+    const weak = weakSources.has(String(u["boundary source"] || "").toLowerCase()) || Number(u["source rows"] || 0) <= 2;
+    if (main < 21 || weak) {
+      continue;
+    }
+    const shifted = deriveUnitFieldsFromSpan({ unit: u, rowStart: prevEnd + 1, rowEnd: Number(u["row end"] || prevEnd + 1), rows, chunks });
+    if (Number(shifted["row start"] || 0) <= prevEnd) continue;
+    monotonic.push(shifted);
+  }
+  return monotonic.map((u, i) => ({ ...u, "unit id": `ground_${String(i + 1).padStart(3, "0")}` }));
+}
+
 function toWiseSeriesText(units, rows) {
   const lines = ["su name wise chips be series def"];
   for (let i = 0; i < units.length; i += 1) {
@@ -583,12 +830,13 @@ export async function runAgendaStage2Grounding({
 
   const assignments = assignChunksToAgendaSections(chunks, sections);
   const baseUnits = buildGroundedUnits({ sections, chunks, assignments, rows });
-  const groundedUnits = attachChildChaptersByTransition({
+  const groundedUnitsRaw = attachChildChaptersByTransition({
     units: baseUnits,
     chunks,
     rows,
     thresholdSeconds: Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900),
   });
+  const groundedUnits = pruneLateTinyWeakUnits(groundedUnitsRaw, rows.length, rows, chunks);
 
   const grounding = {
     "schema version": "agenda_section_grounding_v1",
