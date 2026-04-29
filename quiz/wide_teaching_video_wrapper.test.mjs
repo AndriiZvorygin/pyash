@@ -7,6 +7,10 @@ test("wide teaching wrapper keeps baseline and optional thumbnail checkpoint sta
   assert.match(text, /ob ve filename text manuscript text text style_prompt text text thumbnail_mode be input ya/);
   assert.match(text, /su name teaching demo from filename of ob of manuscript with text of ob of style_prompt be teaching video wide do/);
   assert.match(text, /exists su name subtitle_mode ob text "karaoke" be default ya/);
+  assert.match(
+    text,
+    /exists su name draw size widescreen be map def[\s\S]*footnote_mode ob text "karaoke" ya[\s\S]*prah/u
+  );
   assert.match(text, /thumbnail_checkpoint_from_metadata\.mjs/);
   assert.match(text, /thumbnail-checkpoint\.pya/);
   assert.match(text, /thumbnail-input-source\.txt/);

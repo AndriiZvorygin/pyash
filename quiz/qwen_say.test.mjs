@@ -1102,3 +1102,50 @@ test("qwenSay uses tone manifest instructs from from filename", async () => {
     await fs.rm(outDir, { recursive: true, force: true });
   }
 });
+
+test("qwenSay bypasses retry exhaustion when ASR evidence is unavailable and chunk is not suspect", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say keep chunks" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify max retries" }, ob: { num: 1 }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-asr-unavailable-"));
+  const output = path.join(outDir, "out.wav");
+  const longText = Array.from({ length: 220 }, (_, idx) => `word${idx + 1}`).join(" ");
+
+  const runSayFn = async ({ output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_clip_unavailable"));
+    return {
+      transcript: "ComfyUI_temp_nioqf_00001_.flac",
+      timestamps: ""
+    };
+  };
+  const detectHotTailFn = async () => ({ suspect: false, durationSeconds: 1.0 });
+  const verifyChunkTailFn = async () => ({
+    pass: false,
+    transcript: "ComfyUI_temp_nioqf_00001_.flac",
+    timestamps: ""
+  });
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_clip_concat"));
+  };
+
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: longText },
+        to: { filename: output }
+      },
+      { runSayFn, detectHotTailFn, verifyChunkTailFn, concatAudioFn }
+    );
+    const chunkDir = path.join(outDir, "out.qwen-say-chunks");
+    const manifest = JSON.parse(await fs.readFile(path.join(chunkDir, "chunks.metadata.json"), "utf8"));
+    assert.equal(manifest.chunks[0]?.verification?.asrBypassed, "asr-unavailable-nonsuspect");
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});

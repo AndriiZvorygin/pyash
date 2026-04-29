@@ -51,7 +51,9 @@ function resolvePostProcessFilter({ rememberFn = remember } = {}) {
 }
 
 function resolveKeepChunkArtifacts({ rememberFn = remember } = {}) {
-  return resolveConfigBool("qwen say keep chunks", { rememberFn }) === true;
+  const configured = resolveConfigBool("qwen say keep chunks", { rememberFn });
+  if (configured === false) return false;
+  return true;
 }
 
 function resolveClipVerifyEnabled({ rememberFn = remember } = {}) {
@@ -739,6 +741,14 @@ async function probeDurationSeconds(input = "") {
   return duration;
 }
 
+async function probeDurationSecondsSafe(input = "") {
+  try {
+    return await probeDurationSeconds(input);
+  } catch {
+    return null;
+  }
+}
+
 function parseLastAstatsMetric(stderr = "", metric = "") {
   const rx = new RegExp(`${String(metric)}:\\s*(-?\\d+(?:\\.\\d+)?)`, "gu");
   let found = null;
@@ -964,6 +974,20 @@ function parseTailEndSeconds(timestampsRaw = "") {
   return null;
 }
 
+function looksLikeComfyTempTranscript(value = "") {
+  const text = String(value ?? "").trim();
+  if (!text) return false;
+  return /^ComfyUI_temp_[^s]+.(?:flac|wav|mp3)$/iu.test(text);
+}
+
+function asrEvidenceUnavailable(verificationRecord = {}) {
+  const timestamps = String(verificationRecord?.asrTimestamps ?? "").trim();
+  const transcript = String(verificationRecord?.asrTranscript ?? "").trim();
+  if (timestamps) return false;
+  if (!transcript) return true;
+  return looksLikeComfyTempTranscript(transcript);
+}
+
 async function detectHotTailSuspect({
   input = "",
   windowMs = 120,
@@ -1187,14 +1211,60 @@ export async function qwenSay(
   }
 
   if (chunks.length <= 1) {
-    await runSayFn({
-      text: preparedChunks[0]?.speakText ?? preparedChunks[0]?.text ?? "",
-      instruct: chunkInstructs[0] ?? toneDefault,
+    const singleChunkText = preparedChunks[0]?.text ?? "";
+    const singleChunkSpeakText = preparedChunks[0]?.speakText ?? singleChunkText;
+    const singleChunkInstruct = chunkInstructs[0] ?? toneDefault;
+    const runResult = await runSayFn({
+      text: singleChunkSpeakText,
+      instruct: singleChunkInstruct,
       workflowName,
       workflowRoot,
       host,
-      output: outputPath
+      output: outputPath,
+      returnTranscript: clipVerifyEnabled
     });
+    if (keepChunkArtifacts) {
+      const outputParsed = path.parse(outputPath);
+      const chunkDir = path.join(outputParsed.dir, `${outputParsed.name}.qwen-say-chunks`);
+      await fs.rm(chunkDir, { recursive: true, force: true });
+      await fs.mkdir(chunkDir, { recursive: true });
+      const chunkOutput = path.join(chunkDir, `chunk-${'001'}.wav`);
+      await fs.copyFile(outputPath, chunkOutput);
+      const chunkDurationSeconds = await probeDurationSecondsSafe(chunkOutput);
+      const verificationRecord = {
+        index: 0,
+        retries: 0,
+        suspect: false,
+        asrChecked: false,
+        asrPass: null,
+        expectedTail: expectedTailTokens(singleChunkText, clipVerifyTailWords),
+        text: singleChunkSpeakText,
+        verifyText: singleChunkText,
+        durationSeconds: chunkDurationSeconds
+      };
+      if (clipVerifyEnabled) {
+        verificationRecord.asrChecked = true;
+        verificationRecord.asrTranscript = String(runResult?.transcript ?? "").trim();
+        verificationRecord.asrTimestamps = String(runResult?.timestamps ?? "").trim();
+        verificationRecord.asrTailEndSeconds = parseTailEndSeconds(verificationRecord.asrTimestamps);
+      }
+      const manifestPath = path.join(chunkDir, "chunks.metadata.json");
+      const manifest = {
+        kind: "qwen say chunk artifacts",
+        output: outputPath,
+        chunks: [{
+          index: 0,
+          filename: chunkOutput,
+          text: singleChunkSpeakText,
+          verifyText: singleChunkText,
+          durationSeconds: chunkDurationSeconds,
+          instruct: singleChunkInstruct,
+          verification: verificationRecord
+        }]
+      };
+      await fs.writeFile(manifestPath, canonicalJsonStringify(manifest), "utf8");
+      chunkArtifactsDir = chunkDir;
+    }
   } else {
     const outputParsed = path.parse(outputPath);
     const chunkDir = keepChunkArtifacts
@@ -1351,6 +1421,11 @@ export async function qwenSay(
           }
           if (verificationRecord.asrPass) break;
           if (verificationRecord.retries >= clipVerifyMaxRetries) {
+            if (verificationRecord.suspect !== true && asrEvidenceUnavailable(verificationRecord)) {
+              verificationRecord.asrPass = true;
+              verificationRecord.asrBypassed = "asr-unavailable-nonsuspect";
+              break;
+            }
             throwErrorSentence({
               name: "qwen say defective",
               message: `qwen say defective: clipped chunk retries exhausted at chunk ${i + 1}`,
@@ -1359,7 +1434,9 @@ export async function qwenSay(
                 chunkIndex: i + 1,
                 retries: verificationRecord.retries,
                 expectedTail: verificationRecord.expectedTail,
-                transcript: verificationRecord.asrTranscript
+                transcript: verificationRecord.asrTranscript,
+                timestamps: verificationRecord.asrTimestamps,
+                suspect: verificationRecord.suspect
               }
             });
           }
