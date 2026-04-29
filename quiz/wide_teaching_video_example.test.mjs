@@ -6,19 +6,22 @@ test("wide teaching example keeps karaoke subtitles and generates thumbnail", as
   const source = await fs.readFile("examples/pyash/wide-teaching-video-from-filename.pya", "utf8");
   assert.match(
     source,
-    /from filename "\.\.\/\.\.\/module\/draw_from_filename\.pya" ob name draw as wo thumbnail to name draw as wo thumbnail be import do/u
+    /su name draw widescreen mode ob text "truth" ya/u
   );
   assert.match(
     source,
-    /su name draw widescreen mode ob text "truth" be default ya/u
+    /exists su name draw size widescreen be map def[\s\S]*subtitle_margin_ratio ob num 0\.10[\s\S]*footnote_mode ob text "karaoke"/u
   );
   assert.match(
     source,
-    /su name draw size widescreen be map def[\s\S]*subtitle_margin_ratio ob num 0\.10[\s\S]*footnote_mode ob text "karaoke"/u
+    /su name teaching demo from filename of ob of manuscript with text of ob of style_prompt be teaching video wide do/u
   );
   assert.match(
     source,
-    /su name teaching demo from filename of ob of manuscript with text of ob of style_prompt be teaching video do[\s\S]*su name thumbnail demo from filename of ob of manuscript with text of ob of style_prompt be draw as wo thumbnail do/u
+    /thumbnail_checkpoint_from_metadata\.mjs/u
+  );
+  assert.match(
+    source,
+    /thumbnail_render_from_checkpoint\.mjs/u
   );
 });
-

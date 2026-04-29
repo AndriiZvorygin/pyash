@@ -98,7 +98,39 @@ test("current footnote mode resolves widescreen karaoke and tall wordflow", asyn
   const source = await fs.readFile("module/video_common.pya", "utf8");
   assert.match(
     source,
-    /su name current footnote mode[\s\S]*footnote_mode of draw size shorts[\s\S]*draw widescreen mode be equally from text "truth" then[\s\S]*footnote_mode of draw size widescreen[\s\S]*ob bool of ob of draw widescreen mode be equally from bool truth/u
+    /su name current footnote mode[\s\S]*draw widescreen mode be equally from text "truth" then[\s\S]*footnote_mode of draw size widescreen[\s\S]*draw widescreen mode be equally from text "lie" then[\s\S]*footnote_mode of draw size shorts/u
+  );
+});
+
+test("wide teaching flow forces karaoke at footnote burn call sites", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /draw widescreen mode be equally from text "truth" then su name footnote output stage[\s\S]*as text "karaoke" be footnote mode do/u
+  );
+  assert.match(
+    source,
+    /draw widescreen mode be equally from text "truth" then su name section clip output stage[\s\S]*as text "karaoke" be footnote mode do/u
+  );
+  assert.match(
+    source,
+    /ob text of subtitle_mode to name text subtitle mode chosen be text do[\s\S]*subtitle mode chosen be equally from text "karaoke" then ob text "karaoke" to name text footnote mode current be text do/u
+  );
+});
+
+test("regular explicit asr branch stays available and regular explicit karaoke skips asr branch", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /subtitle mode chosen be equally from text "asr" then su name section hear stage[\s\S]*be hear do/u
+  );
+  assert.match(
+    source,
+    /subtitle mode chosen be equally from text "karaoke" then ob text "node\$\{IFS\}command\/srt_from_qwen_say_chunks\.mjs\$\{IFS\}"/u
+  );
+  assert.match(
+    source,
+    /teaching video from text manuscript be ceremony def[\s\S]*subtitle mode chosen be equally from text "karaoke" then su name footnote mode override ob text "karaoke" ya/u
   );
 });
 

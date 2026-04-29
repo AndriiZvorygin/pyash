@@ -1,3 +1,21 @@
+su name draw size shorts canonical be map def
+  su name width ob num 720 ya
+  su name height ob num 1280 ya
+  su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text" ya
+  su name thumbnail_heading_y_ratio ob num 0.42 ya
+  su name video_heading_y_ratio ob num 0.60 ya
+  su name subtitle_margin_ratio ob num 0.10 ya
+  su name footnote_mode ob text "wordflow" ya
+prah
+su name draw size widescreen canonical be map def
+  su name width ob num 1280 ya
+  su name height ob num 720 ya
+  su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text" ya
+  su name thumbnail_heading_y_ratio ob num 0.42 ya
+  su name video_heading_y_ratio ob num 0.60 ya
+  su name subtitle_margin_ratio ob num 0.10 ya
+  su name footnote_mode ob text "karaoke" ya
+prah
 su name draw size shorts be map def
   su name width ob num 720 ya
   su name height ob num 1280 ya
@@ -18,6 +36,7 @@ su name draw size widescreen be map def
 prah
 exists su name draw widescreen mode ob text "lie" be default ya
 exists su name teaching video section window seconds ob num 6 be default ya
+exists su name footnote mode override ob text "" be default ya
 
 exists su name video heading burn command template ob text quoted.text.node command/video_heading_burn.mjs "[[video_path]]" "[[output_path]]" --text-stdin --seconds 1 --y-ratio [[y_ratio]] --max-width-ratio 0.82.text.quoted be text ya
 su name video heading burn replacements be map def
@@ -57,27 +76,35 @@ prah
 
 su name current thumbnail heading y ratio to name num thumbnail heading y ratio be ceremony def
   ob name text draw widescreen mode be equally from text "truth" then ob num of thumbnail_heading_y_ratio of draw size widescreen to name num thumbnail heading y ratio be plus do
+  ob name text draw widescreen mode be equally from text "truth" then ob num of ob of thumbnail heading y ratio be equally from num 0 then ob num of thumbnail_heading_y_ratio of draw size widescreen canonical to name num thumbnail heading y ratio be plus do
   ob name text draw widescreen mode be equally from text "lie" then ob num of thumbnail_heading_y_ratio of draw size shorts to name num thumbnail heading y ratio be plus do
+  ob name text draw widescreen mode be equally from text "lie" then ob num of ob of thumbnail heading y ratio be equally from num 0 then ob num of thumbnail_heading_y_ratio of draw size shorts canonical to name num thumbnail heading y ratio be plus do
   su name thumbnail heading y ratio ret
 prah
 
 su name current video heading y ratio to name num video heading y ratio be ceremony def
   ob name text draw widescreen mode be equally from text "truth" then ob num of video_heading_y_ratio of draw size widescreen to name num video heading y ratio be plus do
+  ob name text draw widescreen mode be equally from text "truth" then ob num of ob of video heading y ratio be equally from num 0 then ob num of video_heading_y_ratio of draw size widescreen canonical to name num video heading y ratio be plus do
   ob name text draw widescreen mode be equally from text "lie" then ob num of video_heading_y_ratio of draw size shorts to name num video heading y ratio be plus do
+  ob name text draw widescreen mode be equally from text "lie" then ob num of ob of video heading y ratio be equally from num 0 then ob num of video_heading_y_ratio of draw size shorts canonical to name num video heading y ratio be plus do
   su name video heading y ratio ret
 prah
 
 su name current subtitle margin ratio to name num subtitle margin ratio be ceremony def
   ob num of subtitle margin ratio override to name num subtitle margin ratio be plus do
   ob num of ob of subtitle margin ratio be equally from num 0 then ob name text draw widescreen mode be equally from text "truth" then ob num of subtitle_margin_ratio of draw size widescreen to name num subtitle margin ratio be plus do
+  ob num of ob of subtitle margin ratio be equally from num 0 then ob name text draw widescreen mode be equally from text "truth" then ob num of ob of subtitle margin ratio be equally from num 0 then ob num of subtitle_margin_ratio of draw size widescreen canonical to name num subtitle margin ratio be plus do
   ob num of ob of subtitle margin ratio be equally from num 0 then ob name text draw widescreen mode be equally from text "lie" then ob num of subtitle_margin_ratio of draw size shorts to name num subtitle margin ratio be plus do
+  ob num of ob of subtitle margin ratio be equally from num 0 then ob name text draw widescreen mode be equally from text "lie" then ob num of ob of subtitle margin ratio be equally from num 0 then ob num of subtitle_margin_ratio of draw size shorts canonical to name num subtitle margin ratio be plus do
   su name subtitle margin ratio ret
 prah
 
 su name current footnote mode to name text footnote mode current be ceremony def
-  ob text of footnote_mode of draw size shorts to name text footnote mode current be text do
-  ob name text draw widescreen mode be equally from text "truth" then ob text of footnote_mode of draw size widescreen to name text footnote mode current be text do
-  ob bool of ob of draw widescreen mode be equally from bool truth then ob text of footnote_mode of draw size widescreen to name text footnote mode current be text do
+  ob text of footnote mode override to name text footnote mode current be text do
+  ob name text footnote mode current be equally from text "" then ob name text draw widescreen mode be equally from text "truth" then ob text of footnote_mode of draw size widescreen to name text footnote mode current be text do
+  ob name text footnote mode current be equally from text "" then ob name text draw widescreen mode be equally from text "truth" then ob name text footnote mode current be equally from text "" then ob text of footnote_mode of draw size widescreen canonical to name text footnote mode current be text do
+  ob name text footnote mode current be equally from text "" then ob name text draw widescreen mode be equally from text "lie" then ob text of footnote_mode of draw size shorts to name text footnote mode current be text do
+  ob name text footnote mode current be equally from text "" then ob name text draw widescreen mode be equally from text "lie" then ob name text footnote mode current be equally from text "" then ob text of footnote_mode of draw size shorts canonical to name text footnote mode current be text do
   su name footnote mode current ret
 prah
 
@@ -111,6 +138,8 @@ prah
 
 exists su name draw size shorts be export ya
 exists su name draw size widescreen be export ya
+exists su name draw size shorts canonical be export ya
+exists su name draw size widescreen canonical be export ya
 exists su name draw widescreen mode be export ya
 exists su name teaching video section window seconds be export ya
 exists su name video heading burn be export ya
@@ -118,6 +147,7 @@ exists su name current thumbnail heading y ratio be export ya
 exists su name current video heading y ratio be export ya
 exists su name current subtitle margin ratio be export ya
 exists su name current footnote mode be export ya
+exists su name footnote mode override be export ya
 exists su name footnote mode be export ya
 exists su name widescreen subtitle margin ratio be export ya
 exists su name shorts subtitle margin ratio be export ya
