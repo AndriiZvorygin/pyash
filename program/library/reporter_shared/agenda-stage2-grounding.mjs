@@ -132,7 +132,7 @@ function parseAgendaHierarchy(agendaPath) {
       .filter((s) => !String(s.agendaItem || "").includes("."))
       .filter((s) => {
         const t = String(s.title || "");
-        return /\bby-?laws?\b/iu.test(t) || /confirmation\s+of\s+.*minutes/iu.test(t);
+        return /\bby-?laws?\b/iu.test(t) || /confirmation\s+of\s+.*minutes/iu.test(t) || /deputations?\s+and\s+presentations?/iu.test(t);
       })
       .map((s) => String(s.agendaItem || "").split(".")[0]),
   );
@@ -212,6 +212,8 @@ function headingCuePhrase(title = "") {
   if (!v) return "";
   const explicit = [
     "public forum",
+    "deputations and presentations",
+    "deputation or presentation",
     "correspondence received for which direction is required",
     "reports of city staff",
     "matters postponed",
@@ -243,7 +245,7 @@ function findExplicitTopLevelCueStart(section = {}, rows = [], maxRow = 0) {
     const numberHit = numberWord ? text.includes("number " + numberWord) : false;
     if (!numberHit && !cuePhrase) continue;
     if (cuePhrase && text.includes(cuePhrase)) {
-      if (["6"].includes(item) && !numberHit) continue;
+      if (["6", "8"].includes(item) && !numberHit) continue;
       return i;
     }
     if (numberHit && cuePhrase && text.includes(cuePhrase.split(/\s+/u)[0])) return i;
@@ -252,7 +254,7 @@ function findExplicitTopLevelCueStart(section = {}, rows = [], maxRow = 0) {
 }
 function findEarlyProceduralStart(section = {}, rows = [], maxRow = 0) {
   const item = String(section?.agendaItem || "").toLowerCase();
-  if (!["1", "2", "3", "4", "4.a", "4.b", "5", "6"].includes(item)) return -1;
+  if (!["1", "2", "3", "4", "4.a", "4.b", "5", "6", "7", "8", "9", "10"].includes(item)) return -1;
   const limit = Math.max(0, Number(maxRow || 0));
   for (let i = 0; i <= limit && i < rows.length; i += 1) {
     const text = normalizeText(rows[i]?.text || "").toLowerCase();
@@ -263,6 +265,10 @@ function findEarlyProceduralStart(section = {}, rows = [], maxRow = 0) {
     if (item === "4" && /(confirmation\s+of\s+(council\s+meeting\s+)?minutes|minutes?\s+of\s+the\s+following\s+meetings\s+be\s+adopted|minutes?.*be\s+adopted\s+as\s+printed|number\s+four)/u.test(text)) return i;
     if (item === "5" && /(number\s+five\s+is\s+motion\s+to\s+move\s+council\s+into\s+committee\s+of\s+the\s+whole|motion\s+to\s+move\s+council\s+into\s+committee\s+of\s+the\s+whole|city\s+council\s+now\s+move\s+into\s+committee\s+of\s+the\s+whole|move\s+into\s+committee\s+of\s+the\s+whole\s+to\s+consider)/u.test(text)) return i;
     if (item === "6" && /(at\s+number\s+six|number\s+six).*(public\s+meetings)/u.test(text)) return i;
+    if (item === "7" && /(at\s+number\s+seven|number\s+seven|deputation\s+or\s+presentation|deputations?\s+and\s+presentations?|acting\s+city\s+manager\s+presenting\s+the\s+city\s+manager'?s\s+update)/u.test(text)) return i;
+    if (item === "8" && /(at\s+number\s+eight\s+in\s+our\s+agenda|number\s+eight\s+on\s+our\s+agenda\s+is\s+public\s+forum|number\s+eight.*public\s+forum|no\s+comments\s+for\s+public\s+forum\s+have\s+been\s+submitted|if\s+anyone\s+present\s+wishes\s+to\s+speak|each\s+speaker\s+is\s+limited\s+to|total\s+time\s+allotted\s+for\s+public\s+forum)/u.test(text)) return i;
+    if (item === "9" && /(no\s+correspondence\s+items\s+being\s+presented\s+for\s+consideration|correspondence\s+received\s+for\s+which\s+direction\s+of\s+council\s+is\s+required|at\s+number\s+nine|number\s+nine)/u.test(text)) return i;
+    if (item === "10" && /(reports\s+of\s+city\s+staff|at\s+number\s+ten|number\s+ten|report\s+cs-\d{2}-\d{3})/u.test(text)) return i;
     if (item === "4.a" && /(four\s+a|4\s*a)/u.test(text)) return i;
     if (item === "4.b" && /(four\s+b|4\s*b)/u.test(text)) return i;
   }
@@ -341,7 +347,7 @@ function interpolateSectionStarts(sections, chunks, assignments, rows, totalRows
     .map((a) => Number(chunks[a["chunk index"]]?.["row start"]))
     .filter((n) => Number.isInteger(n) && n >= 0);
   const firstAnchor = anchorStarts.length ? Math.min(...anchorStarts) : 0;
-  const earlyScanLimit = Math.min(totalRows - 1, firstAnchor + 40);
+  const earlyScanLimit = Math.min(totalRows - 1, firstAnchor + 220);
   for (let i = 0; i < sections.length; i += 1) {
     const cueStart = findEarlyProceduralStart(sections[i], rows, earlyScanLimit);
     if (cueStart < 0) continue;
@@ -649,7 +655,7 @@ function attachChildChaptersByTransition({ units, chunks, rows, thresholdSeconds
 }
 
 function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = []) {
-  const weakSources = new Set(["interpolated", "fallback", "chunk_carry", "step-clamp"]);
+  const weakSources = new Set(["interpolated", "fallback", "chunk_carry", "step-clamp", "parent_grouped"]);
   const minRowForLate = Math.floor(Math.max(0, Number(rowsTotal || 0)) * 0.7);
   const demoted = [];
   const kept = [];
@@ -681,6 +687,39 @@ function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = [
     return hits >= 2;
   };
 
+  const headingExcerptCompatibility = (u = {}) => {
+    const heading = normalizeText(labelHeading(u)).toLowerCase();
+    const excerpt = normalizeText(String(u["source excerpt"] || "")).toLowerCase();
+    if (!heading || !excerpt) return { ok: false, reason: "empty_heading_or_excerpt" };
+    if (/^agenda item\s+\d+/u.test(heading)) return { ok: false, reason: "placeholder_heading" };
+    const itemNum = String(u["agenda item"] || "").split(".")[0];
+    const itemWord = ({
+      "1": "one", "2": "two", "3": "three", "4": "four", "5": "five",
+      "6": "six", "7": "seven", "8": "eight", "9": "nine", "10": "ten",
+      "11": "eleven", "12": "twelve", "13": "thirteen",
+    })[itemNum] || "";
+    if ((itemWord && excerpt.includes(`number ${itemWord}`)) || excerpt.includes(`number ${itemNum}`)) {
+      return { ok: true, reason: "numbered_cue_match" };
+    }
+    const keywordSets = [
+      { label: "patio_permit", heading: /(patio|permit|street furniture|sidewalk)/u, mustAny: ["patio", "permit", "street furniture"] },
+      { label: "business_licence", heading: /(business licences?|glowup|good neighbour|resale|licen[cs]e)/u, mustAny: ["business", "licence", "license", "glowup", "good neighbour", "resale"] },
+      { label: "doctors_day", heading: /(ontario medical association|doctors day|oma|medical association)/u, mustAny: ["doctor", "medical", "association", "doctors day", "oma"] },
+      { label: "fourth_avenue", heading: /(fourth avenue|one-way|one way|road|street)/u, mustAny: ["fourth avenue", "one-way", "one way", "road", "street"] },
+    ];
+    for (const set of keywordSets) {
+      if (!set.heading.test(heading)) continue;
+      const hit = set.mustAny.some((w) => excerpt.includes(w));
+      return hit ? { ok: true, reason: `${set.label}_keyword_match` } : { ok: false, reason: `${set.label}_keyword_missing` };
+    }
+    const rawTokens = heading.split(/\s+/u).filter((w) => w.length >= 4);
+    const skip = new Set(["agenda", "item", "minutes", "meeting", "council", "committee", "report", "reports", "city", "provided", "information"]);
+    const tokens = rawTokens.filter((w) => !skip.has(w)).slice(0, 5);
+    if (!tokens.length) return { ok: false, reason: "no_heading_tokens" };
+    const hits = tokens.filter((w) => excerpt.includes(w)).length;
+    if (hits >= Math.min(2, tokens.length)) return { ok: true, reason: "token_overlap" };
+    return { ok: false, reason: "low_heading_excerpt_overlap" };
+  };
   const cueRowForNumberSix = (() => {
     for (let i = 0; i < rows.length; i += 1) {
       const text = normalizeText(rows[i]?.text || "").toLowerCase();
@@ -699,8 +738,10 @@ function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = [
     const late = rowStart >= minRowForLate;
     const explicitCue = hasExplicitCueInRowText(u);
     const isBylawParentOrAdjourn = main >= 21;
+    const compat = headingExcerptCompatibility(u);
 
     const shouldDemote = late && tiny && weak && !explicitCue && !isBylawParentOrAdjourn;
+    const shouldDemoteHeadingMismatch = !compat.ok && !isBylawParentOrAdjourn && !["neutral_heading","reports_neutral"].includes(String(compat.reason||""));
     if (shouldDemote) {
       demoted.push({
         "agenda item": u["agenda item"],
@@ -712,11 +753,104 @@ function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = [
       });
       continue;
     }
-    kept.push({ ...u, "boundary evidence strength": explicitCue ? "explicit_cue_match" : (weak ? "weak" : "normal") });
+    if (shouldDemoteHeadingMismatch) {
+      demoted.push({
+        "agenda item": u["agenda item"],
+        label: u.label,
+        reason: `weak_heading_excerpt_mismatch:${compat.reason}`,
+        "row start": u["row start"],
+        "row end": u["row end"],
+        "boundary source": u["boundary source"],
+      });
+      continue;
+    }
+    kept.push({
+      ...u,
+      "boundary evidence strength": explicitCue ? "explicit_cue_match" : (weak ? "weak" : "normal"),
+      "heading excerpt status": compat.ok ? "compatible" : "mismatch",
+      "heading excerpt reason": compat.reason,
+    });
   }
 
   // Early procedural correction: ensure item 5 covers the committee-of-the-whole motion rows
   // and item 6 starts at the first explicit "number six/public meetings" cue.
+  const cueRowForNumberNine = (() => {
+    for (let i = 0; i < rows.length; i += 1) {
+      const text = normalizeText(rows[i]?.text || "").toLowerCase();
+      if (/(no\s+correspondence\s+items\s+being\s+presented\s+for\s+consideration|number\s+nine\s+correspondence|at\s+number\s+nine)/u.test(text)) return i;
+    }
+    return -1;
+  })();
+  const cueRowForNumberTen = (() => {
+    const start = Math.max(0, cueRowForNumberNine);
+    for (let i = start; i < rows.length; i += 1) {
+      const text = normalizeText(rows[i]?.text || "").toLowerCase();
+      if (/no\s+correspondence\s+items/u.test(text)) continue;
+      if (/(at\s+number\s+ten|number\s+ten|reports\s+of\s+city\s+staff|report\s+cs-\d{2}-\d{3})/u.test(text)) return i;
+    }
+    return -1;
+  })();
+  // Early procedural correction: ensure item 9 owns correspondence rows and
+  // item 10 starts at first real staff-report cue.
+  if (cueRowForNumberNine >= 0) {
+    const idx9 = kept.findIndex((u) => String(u["agenda item"] || "") === "9");
+    const idx10 = kept.findIndex((u) => String(u["agenda item"] || "") === "10");
+    let start10Candidate = cueRowForNumberNine + 1;
+    if (idx9 >= 0) {
+      const u9 = kept[idx9];
+      const immediateNextText = normalizeText(rows[cueRowForNumberNine + 1]?.text || "").toLowerCase();
+      const minStart10 = /no\s+correspondence\s+items/u.test(immediateNextText) ? (cueRowForNumberNine + 2) : (cueRowForNumberNine + 1);
+      start10Candidate = (cueRowForNumberTen > cueRowForNumberNine && cueRowForNumberTen <= (cueRowForNumberNine + 60)) ? Math.max(cueRowForNumberTen, minStart10) : minStart10;
+      const end9 = start10Candidate - 1;
+      kept[idx9] = deriveUnitFieldsFromSpan({
+        unit: { ...u9, "boundary source": "explicit_transcript_cue", "boundary evidence strength": "explicit_cue_match", "child chapters": [] },
+        rowStart: Number(u9["row start"] || cueRowForNumberNine),
+        rowEnd: Math.max(Number(u9["row start"] || cueRowForNumberNine), end9),
+        rows,
+        chunks,
+      });
+    }
+    if (idx10 >= 0) {
+      const u10 = kept[idx10];
+      kept[idx10] = deriveUnitFieldsFromSpan({
+        unit: { ...u10, "boundary source": "explicit_transcript_cue", "boundary evidence strength": "explicit_cue_match", "child chapters": [] },
+        rowStart: start10Candidate,
+        rowEnd: Math.max(start10Candidate, Number(u10["row end"] || start10Candidate)),
+        rows,
+        chunks,
+      });
+    }
+  }
+
+  // Deterministic handoff fix: if item 10 still starts on a
+  // "no correspondence items" row, move that row back to item 9.
+  {
+    const idx9 = kept.findIndex((u) => String(u["agenda item"] || "") === "9");
+    const idx10 = kept.findIndex((u) => String(u["agenda item"] || "") === "10");
+    if (idx9 >= 0 && idx10 >= 0) {
+      const u9 = kept[idx9];
+      const u10 = kept[idx10];
+      const start10 = Number(u10["row start"] || 0);
+      const first10 = normalizeText(rows[start10]?.text || "").toLowerCase();
+      if (/no\s+correspondence\s+items/u.test(first10) && start10 > Number(u9["row start"] || 0)) {
+        kept[idx9] = deriveUnitFieldsFromSpan({
+          unit: { ...u9, "boundary source": "explicit_transcript_cue", "boundary evidence strength": "explicit_cue_match", "child chapters": [] },
+          rowStart: Number(u9["row start"] || 0),
+          rowEnd: start10,
+          rows,
+          chunks,
+        });
+        kept[idx10] = deriveUnitFieldsFromSpan({
+          unit: { ...u10, "boundary source": "explicit_transcript_cue", "boundary evidence strength": "explicit_cue_match", "child chapters": [] },
+          rowStart: start10 + 1,
+          rowEnd: Math.max(start10 + 1, Number(u10["row end"] || start10 + 1)),
+          rows,
+          chunks,
+        });
+      }
+    }
+  }
+
   if (cueRowForNumberSix >= 0) {
     const idx5 = kept.findIndex((u) => String(u["agenda item"] || "") === "5");
     const idx6 = kept.findIndex((u) => String(u["agenda item"] || "") === "6");
@@ -746,28 +880,58 @@ function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = [
   }
 
   if (demoted.length && kept.length) {
-    const targetIndex = Math.max(0, kept.findIndex((u) => mainItemNum(u["agenda item"]) >= 21));
-    const idx = targetIndex >= 0 ? targetIndex : (kept.length - 1);
-    const host = { ...kept[idx] };
-    host["grouped agenda metadata"] = [
-      ...(Array.isArray(host["grouped agenda metadata"]) ? host["grouped agenda metadata"] : []),
-      ...demoted.map((d, i) => ({
-        "metadata id": `meta_${String(i + 1).padStart(3, "0")}`,
-        "group status": "metadata_only",
-        ...d,
-      })),
-    ];
-    kept[idx] = host;
+    const metadataRowsByHost = new Map();
+    for (const d of demoted) {
+      const dStart = Number(d["row start"] || 0);
+      let hostIdx = -1;
+      for (let i = 0; i < kept.length; i += 1) {
+        const kStart = Number(kept[i]["row start"] || 0);
+        if (kStart <= dStart) hostIdx = i;
+      }
+      if (hostIdx < 0) hostIdx = 0;
+      const list = metadataRowsByHost.get(hostIdx) || [];
+      list.push(d);
+      metadataRowsByHost.set(hostIdx, list);
+    }
+
+    for (const [hostIdx, list] of metadataRowsByHost.entries()) {
+      const host = { ...kept[hostIdx] };
+      host["grouped agenda metadata"] = [
+        ...(Array.isArray(host["grouped agenda metadata"]) ? host["grouped agenda metadata"] : []),
+        ...list.map((d, i) => ({
+          "metadata id": `meta_${String(i + 1).padStart(3, "0")}`,
+          "group status": "metadata_only",
+          ...d,
+        })),
+      ];
+      const minRow = Math.min(Number(host["row start"] || 0), ...list.map((d) => Number(d["row start"] || 0)));
+      const maxRow = Math.max(Number(host["row end"] || 0), ...list.map((d) => Number(d["row end"] || 0)));
+      const merged = deriveUnitFieldsFromSpan({ unit: host, rowStart: minRow, rowEnd: maxRow, rows, chunks });
+      merged["boundary source"] = "parent_grouped";
+      merged["boundary evidence strength"] = "parent_grouped";
+      kept[hostIdx] = merged;
+    }
   }
 
-  const bylawIndex = kept.findIndex((u) => mainItemNum(u["agenda item"]) === 21);
-  if (bylawIndex >= 0 && demoted.length) {
-    const bylaw = kept[bylawIndex];
-    const minRow = Math.min(Number(bylaw["row start"] || 0), ...demoted.map((d) => Number(d["row start"] || 0)));
-    const maxRow = Math.max(Number(bylaw["row end"] || 0), ...demoted.map((d) => Number(d["row end"] || 0)));
-    kept[bylawIndex] = deriveUnitFieldsFromSpan({ unit: bylaw, rowStart: minRow, rowEnd: maxRow, rows, chunks });
-    kept[bylawIndex]["boundary source"] = "parent_grouped";
-    kept[bylawIndex]["boundary evidence strength"] = "parent_grouped";
+  // Grouped 12.* cleanup: if parent-grouped minute labels are holding
+  // broader service-review/tourism/parking discussion, relabel as grouped consent.
+  for (let i = 0; i < kept.length; i += 1) {
+    const u = kept[i];
+    const item = String(u["agenda item"] || "").toLowerCase();
+    const src = String(u["boundary source"] || "").toLowerCase();
+    if (!item.startsWith("12.")) continue;
+    if (src !== "parent_grouped") continue;
+    const heading = String(u.label || "").toLowerCase();
+    const excerpt = String(u["source excerpt"] || "").toLowerCase();
+    const looksMinutes = /minutes\s+of|minutes\b/u.test(heading);
+    const looksBroader = /(services+review|tourism|toms+thomson|parking|playground|parkss+ands+opens+space|staffs+haves+continued)/u.test(excerpt);
+    if (looksMinutes && looksBroader) {
+      kept[i] = {
+        ...u,
+        "parent agenda item": "12",
+        label: "12 CONSENT AGENDA (GROUPED)",
+      };
+    }
   }
 
   const sorted = kept.slice().sort((a, b) => Number(a["row start"] || 0) - Number(b["row start"] || 0));
@@ -794,6 +958,76 @@ function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = [
     monotonic.push(shifted);
   }
   return monotonic.map((u, i) => ({ ...u, "unit id": `ground_${String(i + 1).padStart(3, "0")}` }));
+}
+
+function rebindChildChapterParents(units = []) {
+  return units.map((u, idx) => {
+    const finalUnitId = `ground_${String(idx + 1).padStart(3, "0")}`;
+    const chapters = Array.isArray(u["child chapters"]) ? u["child chapters"] : [];
+    const reboundChapters = chapters.map((ch, ci) => ({
+      ...ch,
+      "parent unit id": finalUnitId,
+      "ordering index": ci + 1,
+      "chapter id": `${finalUnitId}_chapter_${String(ci + 1).padStart(2, "0")}`,
+    }));
+    return {
+      ...u,
+      "unit id": finalUnitId,
+      "child chapters": reboundChapters,
+    };
+  });
+}
+
+function findFirstChapterParentMismatch(units = []) {
+  for (let ui = 0; ui < units.length; ui += 1) {
+    const u = units[ui] || {};
+    const uid = String(u["unit id"] || "").trim();
+    const chapters = Array.isArray(u["child chapters"]) ? u["child chapters"] : [];
+    for (let ci = 0; ci < chapters.length; ci += 1) {
+      const ch = chapters[ci] || {};
+      const chParent = String(ch["parent unit id"] || "").trim();
+      if (chParent !== uid) {
+        return {
+          unitIndex: ui,
+          chapterIndex: ci,
+          expectedParentUnitId: uid,
+          actualParentUnitId: chParent,
+          unit: u,
+          chapter: ch,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function assertLocalParentChapterInvariant(units = []) {
+  for (let ui = 0; ui < units.length; ui += 1) {
+    const u = units[ui] || {};
+    const uid = String(u["unit id"] || "").trim();
+    const uStart = Number(u["row start"]);
+    const uEnd = Number(u["row end"]);
+    const uSince = Number(u.since);
+    const uUntil = Number(u.until);
+    const chapters = Array.isArray(u["child chapters"]) ? u["child chapters"] : [];
+    for (let ci = 0; ci < chapters.length; ci += 1) {
+      const ch = chapters[ci] || {};
+      const chParent = String(ch["parent unit id"] || "").trim();
+      if (chParent !== uid) {
+        throw new Error(`stage2 local invariant failed: chapter parent mismatch at unit=${ui + 1} unitId=${uid} chapter=${ci + 1} expected=${uid} actual=${chParent || "(empty)"}`);
+      }
+      const cStart = Number(ch["row start"]);
+      const cEnd = Number(ch["row end"]);
+      if (!Number.isInteger(cStart) || !Number.isInteger(cEnd) || cStart < uStart || cEnd > uEnd || cEnd < cStart) {
+        throw new Error(`stage2 local invariant failed: chapter row span out of parent bounds at unit=${ui + 1} chapter=${ci + 1} parent=${uStart}..${uEnd} chapter=${cStart}..${cEnd}`);
+      }
+      const cSince = Number(ch.since);
+      const cUntil = Number(ch.until);
+      if (!Number.isFinite(cSince) || !Number.isFinite(cUntil) || cSince < uSince || cUntil > uUntil || cUntil < cSince) {
+        throw new Error(`stage2 local invariant failed: chapter timing out of parent bounds at unit=${ui + 1} chapter=${ci + 1} parent=${uSince}..${uUntil} chapter=${cSince}..${cUntil}`);
+      }
+    }
+  }
 }
 
 function toWiseSeriesText(units, rows) {
@@ -836,7 +1070,15 @@ export async function runAgendaStage2Grounding({
     rows,
     thresholdSeconds: Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900),
   });
-  const groundedUnits = pruneLateTinyWeakUnits(groundedUnitsRaw, rows.length, rows, chunks);
+  const groundedUnitsPruned = pruneLateTinyWeakUnits(groundedUnitsRaw, rows.length, rows, chunks);
+  const preRebindMismatch = findFirstChapterParentMismatch(groundedUnitsPruned);
+  if (preRebindMismatch) {
+    const u = preRebindMismatch.unit || {};
+    const ch = preRebindMismatch.chapter || {};
+    log(`[agenda-stage2][pre-rebind-mismatch] unit=${preRebindMismatch.unitIndex + 1} heading=${String(u.label || "")} chapter=${preRebindMismatch.chapterIndex + 1} expected_parent=${preRebindMismatch.expectedParentUnitId || "(empty)"} actual_parent=${preRebindMismatch.actualParentUnitId || "(empty)"} chapter_id=${String(ch["chapter id"] || "")} row_span=${Number(ch["row start"])}..${Number(ch["row end"])}`);
+  }
+  const groundedUnits = rebindChildChapterParents(groundedUnitsPruned);
+  assertLocalParentChapterInvariant(groundedUnits);
 
   const grounding = {
     "schema version": "agenda_section_grounding_v1",
