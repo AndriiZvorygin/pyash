@@ -253,6 +253,26 @@ test("section mappers use section-local aligned srt timing for cuts and footnote
   );
 });
 
+test("teaching video options map defaults image cadence to phrase", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /exists su name teaching video options be map def[\s\S]*su name image_cadence ob text "phrase" ya/u
+  );
+});
+
+test("section prompt and concatenate mappers share image cadence selection", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /teaching video section prompt mapper[\s\S]*section image cadence stage ob text of image_cadence of teaching video options[\s\S]*section image cadence stage be equally from text "" then ob text "phrase"[\s\S]*section image cadence stage be equally from text "phrase" then ob text "node command\/itinerary_split_phrases\.mjs[\s\S]*section selected cuts stage ob filename of ob of section cuts input stage[\s\S]*section image cadence stage be equally from text "phrase" then su name section selected cuts stage ob filename of ob of section phrase cuts stage[\s\S]*section cuts itinerary stage ob name filename section selected cuts stage/u
+  );
+  assert.match(
+    source,
+    /teaching video section concatenate mapper[\s\S]*section image cadence stage ob text of image_cadence of teaching video options[\s\S]*section image cadence stage be equally from text "" then ob text "phrase"[\s\S]*section selected cuts stage ob filename of ob of section cuts input stage[\s\S]*section image cadence stage be equally from text "phrase" then su name section selected cuts stage ob filename of ob of section phrase cuts stage[\s\S]*section cuts itinerary stage ob name filename section selected cuts stage/u
+  );
+});
+
 test("qwen tone promptify instruction enforces single-line style with example output", async () => {
   const source = await fs.readFile("module/brief_video.pya", "utf8");
   assert.match(
