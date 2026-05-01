@@ -23,6 +23,11 @@ exists su name draw prompt style beard default ob text "If one clear male subjec
 exists su name draw prompt beard guide enabled ob bool truth be default ya
 exists su name draw prompt style default ob text "If people are present, ensure expressive faces with clearly visible white sclera and defined irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
 exists su name draw prompt style ob text "If people are present, ensure expressive faces with clearly visible white sclera and defined irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
+exists su name teaching video options be map def
+su name image_cadence ob text "phrase" ya
+su name subtitle_mode ob text "karaoke" ya
+su name thumbnail_mode ob text "checkpoint" ya
+prah
 exists su name qwen say sanitize map be map def
 su name percent ob text "percent" ya
 su name reference separator ob text "." ya
@@ -389,16 +394,20 @@ su name teaching video section prompt mapper ob filename section cuts fromindex 
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section cuts input stage ob filename of ob of this to name filename section cuts input be filename do
+  su name section image cadence stage ob text of image_cadence of teaching video options to name text section image cadence be text do
+  ob name text section image cadence stage be equally from text "" then ob text "phrase" to name text section image cadence be text do
 
   su name section phrase cuts stage from num of ob of section index stage with text "section-phrase-cuts.series.pya" to name filename section phrase cuts be teaching video section leaf do
-  ob text "node command/itinerary_split_phrases.mjs \"" to name text section phrase cuts cmd be text do
-  ob text of ob of section cuts input stage to name section phrase cuts cmd be plus do
-  ob text "\" \"" to name section phrase cuts cmd be plus do
-  ob text of ob of section phrase cuts stage to name section phrase cuts cmd be plus do
-  ob text "\"" to name section phrase cuts cmd be plus do
-  su name section phrase cuts run stage ob name text section phrase cuts cmd be command do
+  ob name text section image cadence stage be equally from text "phrase" then ob text "node command/itinerary_split_phrases.mjs \"" to name text section phrase cuts cmd be text do
+  ob name text section image cadence stage be equally from text "phrase" then ob text of ob of section cuts input stage to name section phrase cuts cmd be plus do
+  ob name text section image cadence stage be equally from text "phrase" then ob text "\" \"" to name section phrase cuts cmd be plus do
+  ob name text section image cadence stage be equally from text "phrase" then ob text of ob of section phrase cuts stage to name section phrase cuts cmd be plus do
+  ob name text section image cadence stage be equally from text "phrase" then ob text "\"" to name section phrase cuts cmd be plus do
+  ob name text section image cadence stage be equally from text "phrase" then su name section phrase cuts run stage ob name text section phrase cuts cmd be command do
 
-  exists su name section cuts itinerary stage ob name filename section phrase cuts stage be itinerary ya
+  su name section selected cuts stage ob filename of ob of section cuts input stage to name filename section selected cuts be filename do
+  ob name text section image cadence stage be equally from text "phrase" then su name section selected cuts stage ob filename of ob of section phrase cuts stage be filename do
+  exists su name section cuts itinerary stage ob name filename section selected cuts stage be itinerary ya
   su name section prompt packet stage ob name map draw promptify packet style replacements in name text draw promptify packet template to name text draw promptify packet be instead do
   su name section prompt stage from name section cuts itinerary stage ob text of ob of draw promptify packet fromtext name draw promptify instruction for name mind to name itinerary section draw prompts by num of ob of section index stage be promptify do
 
@@ -427,6 +436,8 @@ su name teaching video section concatenate mapper ob filename section cuts fromi
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section cuts input stage ob filename of ob of this to name filename section cuts input be filename do
+  su name section image cadence stage ob text of image_cadence of teaching video options to name text section image cadence be text do
+  ob name text section image cadence stage be equally from text "" then ob text "phrase" to name text section image cadence be text do
 
   su name section audio stage from num of ob of section index stage with text "audio.wav" to name filename section audio be teaching video section leaf do
   su name video cuts audio filename ob text of ob of section audio stage be text do
@@ -438,7 +449,9 @@ su name teaching video section concatenate mapper ob filename section cuts fromi
   su name section video stage from num of ob of section index stage with text "section.mp4" to name filename section video be teaching video section leaf do
   su name section phrase cuts stage from num of ob of section index stage with text "section-phrase-cuts.series.pya" to name filename section phrase cuts be teaching video section leaf do
 
-  exists su name section cuts itinerary stage ob name filename section phrase cuts stage be itinerary ya
+  su name section selected cuts stage ob filename of ob of section cuts input stage to name filename section selected cuts be filename do
+  ob name text section image cadence stage be equally from text "phrase" then su name section selected cuts stage ob filename of ob of section phrase cuts stage be filename do
+  exists su name section cuts itinerary stage ob name filename section selected cuts stage be itinerary ya
   su name section concatenate stage from name section cuts itinerary stage fromstate wo itinerary become wo video to filename of ob of section video be concatenate do
   su name section video output stage ob filename of ob of section concatenate stage be filename do
   su name section video output stage ret
