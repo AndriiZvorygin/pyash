@@ -279,10 +279,11 @@ async function editPostImage({ instance, token, postId, title, body, imageUrl, l
   return r;
 }
 
-function buildIdempotencyKey({ postRef, expectedTitleHash, expectedBodyHash, imagePath }) {
-  const stamp = `${String(postRef)}|${String(expectedTitleHash)}|${String(expectedBodyHash)}|${path.basename(String(imagePath || ""))}`;
+function buildIdempotencyKey({ postRef, expectedTitleHash, expectedBodyHash, imagePath, dryRun }) {
+  const mode = dryRun ? "dry" : "live";
+  const stamp = `${String(postRef)}|${String(expectedTitleHash)}|${String(expectedBodyHash)}|${path.basename(String(imagePath || ""))}|${mode}`;
   const digest = sha256Text(stamp).slice(0, 12);
-  return `post-image-${postRef}-${digest}-v1`;
+  return `post-image-${postRef}-${mode}-${digest}-v1`;
 }
 
 async function callBackendImageUpdate({ instance, token, postRef, expectedTitleHash, expectedBodyHash, imagePath, mime, dryRun, idempotencyKey, fetchImpl = fetch }) {
@@ -431,6 +432,7 @@ export async function runUpdate(argv, deps = {}) {
       expectedTitleHash: args.expectedTitleHash,
       expectedBodyHash: args.expectedBodyHash,
       imagePath,
+      dryRun: args.dryRun,
     });
 
     preflight = {
