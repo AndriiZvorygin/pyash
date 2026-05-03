@@ -76,7 +76,8 @@ export function deriveCoverOverlayText({
   minWords = 3,
   maxWords = 6,
 } = {}) {
-  const srcWords = dedupeAdjacentWords(splitWords(sourceText));
+  const sourceTextClean = String(sourceText || "").replace(/\s+/gu, " ").trim();
+  const srcWords = dedupeAdjacentWords(splitWords(sourceTextClean));
   const preservedTokens = uniq(srcWords.filter((w) => isEssentialToken(w)).map((w) => normalizeToken(w)));
   let words = pruneWords(srcWords, maxWords);
   words = dedupeAdjacentWords(words);
@@ -86,12 +87,15 @@ export function deriveCoverOverlayText({
   const droppedTokens = srcWords
     .map((w) => normalizeToken(w))
     .filter((t) => t && !finalNorm.has(t));
+  const usedHookUnchanged = normalizeToken(finalOverlayText) === normalizeToken(sourceTextClean);
   return {
-    sourceText: String(sourceText || "").trim(),
+    sourceText: sourceTextClean,
     finalOverlayText,
     preservedTokens,
     droppedTokens: uniq(droppedTokens),
     reason: "shorten_overlay_preserve_essentials",
+    sourceUsedUnchanged: usedHookUnchanged,
+    sourceShortened: !usedHookUnchanged,
   };
 }
 
@@ -236,6 +240,64 @@ async function getImageDimensions(filePath, cwd = process.cwd()) {
   }
 }
 
+async function readRgbaSample(filePath, size = 128, cwd = process.cwd()) {
+  const res = await runWithStreaming({
+    cmd: "ffmpeg",
+    args: ["-v", "error", "-i", filePath, "-vf", `scale=${size}:${size}:force_original_aspect_ratio=decrease,pad=${size}:${size}:(ow-iw)/2:(oh-ih)/2:black,format=rgba`, "-f", "rawvideo", "-"],
+    cwd,
+    env: process.env,
+    timeoutMs: 30000,
+    label: "read-rgba-sample",
+  });
+  return { buf: Buffer.from(res.stdout || ""), size };
+}
+
+async function analyzeAlpha(filePath, size = 128, cwd = process.cwd()) {
+  try {
+    const { buf, size: s } = await readRgbaSample(filePath, size, cwd);
+    const px = s * s;
+    if (buf.length < px * 4) return { hasAlpha: false, transparentPixelRatio: 0, opaquePixelRatio: 1 };
+    let transparent = 0;
+    let opaque = 0;
+    for (let i = 0; i < px; i += 1) {
+      const a = buf[i * 4 + 3];
+      if (a < 8) transparent += 1;
+      if (a > 247) opaque += 1;
+    }
+    return {
+      hasAlpha: true,
+      transparentPixelRatio: transparent / px,
+      opaquePixelRatio: opaque / px,
+    };
+  } catch {
+    return { hasAlpha: false, transparentPixelRatio: 0, opaquePixelRatio: 1 };
+  }
+}
+
+async function compareRgbSimilarity(aPath, bPath, size = 128, cwd = process.cwd()) {
+  try {
+    const mk = async (fp) => {
+      const res = await runWithStreaming({
+        cmd: "ffmpeg",
+        args: ["-v", "error", "-i", fp, "-vf", `scale=${size}:${size}:force_original_aspect_ratio=decrease,pad=${size}:${size}:(ow-iw)/2:(oh-ih)/2:black,format=rgb24`, "-f", "rawvideo", "-"],
+        cwd, env: process.env, timeoutMs: 30000, label: "read-rgb-sample",
+      });
+      return Buffer.from(res.stdout || "");
+    };
+    const A = await mk(aPath);
+    const B = await mk(bPath);
+    const n = Math.min(A.length, B.length);
+    if (!n) return { score: 0, meanAbsDiff: 255 };
+    let sum = 0;
+    for (let i = 0; i < n; i += 1) sum += Math.abs(A[i] - B[i]);
+    const mad = sum / n;
+    const score = Math.max(0, 1 - (mad / 255));
+    return { score, meanAbsDiff: mad };
+  } catch {
+    return { score: 0, meanAbsDiff: 255 };
+  }
+}
+
 export async function renderDeterministicOverlay({
   backgroundPath,
   overlayText,
@@ -303,7 +365,7 @@ export async function renderDeterministicOverlay({
   };
 
   const textVf = [
-    "color=c=black@0.0:s=" + size + "x" + size,
+    "color=c=black@0.0:s=" + size + "x" + size + ":r=1,format=rgba",
     "drawtext=fontfile=" + font
       + ":text='" + escapedMultiline + "'"
       + ":fontcolor=white@0.97"
@@ -319,26 +381,28 @@ export async function renderDeterministicOverlay({
       + ":shadowcolor=" + shadowColor,
   ].join(",");
 
+  const textLayerCommand = ["ffmpeg", "-y", "-f", "lavfi", "-i", textVf, "-frames:v", "1", "-c:v", "png", "-pix_fmt", "rgba", textLayerPath];
   await runWithStreaming({
-    cmd: "ffmpeg",
-    args: ["-y", "-f", "lavfi", "-i", textVf, "-frames:v", "1", "-update", "1", textLayerPath],
+    cmd: textLayerCommand[0],
+    args: textLayerCommand.slice(1),
     cwd,
     env: process.env,
     timeoutMs: 180000,
     label: "deterministic-cover-text-layer",
   });
 
+  const compositeCommand = [
+    "ffmpeg", "-y",
+    "-i", backgroundPath,
+    "-i", textLayerPath,
+    "-filter_complex", "[0:v]scale=" + size + ":" + size + ":force_original_aspect_ratio=increase,crop=" + size + ":" + size + "[bg];[bg][1:v]overlay=0:0:format=auto",
+    "-frames:v", "1",
+    "-c:v", "png",
+    outputPath,
+  ];
   await runWithStreaming({
-    cmd: "ffmpeg",
-    args: [
-      "-y",
-      "-i", backgroundPath,
-      "-i", textLayerPath,
-      "-filter_complex",
-      "[0:v]scale=" + size + ":" + size + ":force_original_aspect_ratio=increase,crop=" + size + ":" + size + ",gblur=sigma=8,eq=brightness=-0.06:contrast=0.92:saturation=0.9[bg];[bg][1:v]overlay=0:0:format=auto",
-      "-frames:v", "1",
-      outputPath,
-    ],
+    cmd: compositeCommand[0],
+    args: compositeCommand.slice(1),
     cwd,
     env: process.env,
     timeoutMs: 180000,
@@ -349,6 +413,10 @@ export async function renderDeterministicOverlay({
   const outputExists = fs.existsSync(outputPath);
   const textLayerExists = fs.existsSync(textLayerPath);
   const layoutContractPass = Boolean(outputExists && textLayerExists && dims.width === Number(size) && dims.height === Number(size));
+  const alpha = textLayerExists ? await analyzeAlpha(textLayerPath, 128, cwd) : { hasAlpha: false, transparentPixelRatio: 0, opaquePixelRatio: 1 };
+  const sim = outputExists ? await compareRgbSimilarity(backgroundPath, outputPath, 128, cwd) : { score: 0, meanAbsDiff: 255 };
+  const alphaFlatteningDetected = !alpha.hasAlpha || alpha.transparentPixelRatio < 0.70;
+  const compositePreservedBackground = sim.score >= 0.72;
 
   return {
     mode: "deterministic_fallback",
@@ -380,6 +448,16 @@ export async function renderDeterministicOverlay({
     },
     backplateAreaRatio: 0,
     safeBackgroundFallbackUsed: true,
+    compositorMode: "ffmpeg_overlay_rgba",
+    compositorCommand: compositeCommand.join(" "),
+    textLayerCommand: textLayerCommand.join(" "),
+    backgroundInputPath: backgroundPath,
+    textLayerHasAlpha: alpha.hasAlpha,
+    textLayerTransparentPixelRatio: Number((alpha.transparentPixelRatio || 0).toFixed(4)),
+    alphaFlatteningDetected,
+    finalBackgroundSimilarity: Number((sim.score || 0).toFixed(4)),
+    finalBackgroundMeanAbsDiff: Number((sim.meanAbsDiff || 255).toFixed(3)),
+    compositePreservedBackground,
   };
 }
 
@@ -461,6 +539,7 @@ export async function runCoverOverlayStage({
   verifyOverlay,
   renderDeterministic,
   reports,
+  diagnoseFinalBackground,
 } = {}) {
   if (!stageInput?.overlayText) throw new Error("cover overlay stage requires overlayText");
   writePyaReport(reports.input, stageInput);
@@ -573,17 +652,49 @@ export async function runCoverOverlayStage({
     backgroundRegenerated,
     safeBackgroundFallbackUsed,
     safeBackgroundPath,
+    compositorMode: String(fallbackRender?.compositorMode || ""),
+    compositorCommand: String(fallbackRender?.compositorCommand || ""),
+    backgroundInputPath: String(fallbackRender?.backgroundInputPath || stageInput?.backgroundPath || ""),
+    textLayerPath: String(fallbackRender?.textLayerPath || ""),
+    textLayerHasAlpha: typeof fallbackRender?.textLayerHasAlpha === "boolean" ? fallbackRender.textLayerHasAlpha : null,
+    textLayerTransparentPixelRatio: Number(fallbackRender?.textLayerTransparentPixelRatio ?? -1),
+    finalBackgroundSimilarity: Number(fallbackRender?.finalBackgroundSimilarity ?? -1),
+    alphaFlatteningDetected: typeof fallbackRender?.alphaFlatteningDetected === "boolean" ? fallbackRender.alphaFlatteningDetected : null,
+    compositePreservedBackground: typeof fallbackRender?.compositePreservedBackground === "boolean" ? fallbackRender.compositePreservedBackground : null,
     acceptedPath: finalPath,
     acceptedMode,
   };
   writePyaReport(reports.verify, verifyReport);
 
+
+  let finalBackgroundDiagnostic = null;
+  if (typeof diagnoseFinalBackground === "function" && outputExists) {
+    try {
+      finalBackgroundDiagnostic = await diagnoseFinalBackground({
+        finalImagePath: finalPath,
+        overlayRegion,
+        expectedOverlayText: expectedText,
+      });
+    } catch (err) {
+      finalBackgroundDiagnostic = {
+        backgroundUseful: false,
+        flatBackgroundDetected: true,
+        visualUsefulnessMetrics: { nearBlackPixelRatio: 1, luminanceVariance: 0 },
+        failureReasons: [String(err?.message || err || "final_background_diagnostic_failed")],
+      };
+    }
+  }
   const finalFailures = [];
   if (acceptedMode === "failed") finalFailures.push("no_accepted_overlay_candidate");
   if (!outputExists) finalFailures.push("output_missing");
   if (target > 0 && (dimensions.width !== target || dimensions.height !== target)) {
     finalFailures.push("output_dimensions_mismatch");
   }
+  if (stageInput?.backgroundUseful === false) finalFailures.push("background_usefulness_failed");
+  if (finalBackgroundDiagnostic && finalBackgroundDiagnostic.backgroundUseful === false) finalFailures.push("final_background_usefulness_failed");
+  if (verifyReport.textLayerHasAlpha === false) finalFailures.push("text_layer_alpha_missing");
+  if (verifyReport.alphaFlatteningDetected === true) finalFailures.push("alpha_flattening_detected");
+  if (verifyReport.compositePreservedBackground === false && Number(verifyReport.finalBackgroundSimilarity || 0) > 0) finalFailures.push("background_not_preserved_in_composite");
 
   const finalReport = {
     pass: finalFailures.length === 0,
@@ -611,6 +722,21 @@ export async function runCoverOverlayStage({
     imageSizeTarget: target,
     outputExists,
     dimensions,
+    backgroundUseful: stageInput?.backgroundUseful !== false,
+    finalBackgroundUseful: finalBackgroundDiagnostic?.backgroundUseful ?? null,
+    finalNearBlackPixelRatio: finalBackgroundDiagnostic?.visualUsefulnessMetrics?.nearBlackPixelRatio ?? null,
+    finalLuminanceVariance: finalBackgroundDiagnostic?.visualUsefulnessMetrics?.luminanceVariance ?? null,
+    finalFlatBackgroundDetected: finalBackgroundDiagnostic?.flatBackgroundDetected ?? null,
+    finalBackgroundUsefulnessPass: finalBackgroundDiagnostic ? Boolean(finalBackgroundDiagnostic.backgroundUseful) : null,
+    compositorMode: verifyReport.compositorMode,
+    compositorCommand: verifyReport.compositorCommand,
+    backgroundInputPath: verifyReport.backgroundInputPath,
+    textLayerPath: verifyReport.textLayerPath,
+    textLayerHasAlpha: verifyReport.textLayerHasAlpha,
+    textLayerTransparentPixelRatio: verifyReport.textLayerTransparentPixelRatio,
+    finalBackgroundSimilarity: verifyReport.finalBackgroundSimilarity,
+    alphaFlatteningDetected: verifyReport.alphaFlatteningDetected,
+    compositePreservedBackground: verifyReport.compositePreservedBackground,
   };
   writePyaReport(reports.final, finalReport);
 

@@ -9,7 +9,9 @@ import {
   renderDeterministicOverlay,
   runCoverOverlayStage,
 } from "../program/library/reporter_shared/cover-overlay-stage.mjs";
-import { buildBackgroundPromptSpec, TEXT_EXCLUSION_NEGATIVE } from "../program/library/reporter_shared/cover-prompt-policy.mjs";
+import { runCoverPromptifyStage } from "../program/library/reporter_shared/cover-promptify-stage.mjs";
+import { selectCoverOverlaySource } from "../program/library/reporter_shared/cover-overlay-source.mjs";
+import { diagnoseCoverBackground } from "../program/library/reporter_shared/cover-background-diagnostics.mjs";
 
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(COMMAND_DIR, "..");
@@ -116,6 +118,30 @@ function normalizeOverlayText(text) {
     .replace(/[^A-Za-z0-9\s-]/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+async function observeVisibleTextRaw(imagePath) {
+  const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
+  const model = String(process.env.DRAW_OVERLAY_VERIFY_MODEL || "qwen3.5:9b").trim();
+  const prompt = [
+    "Read this image and extract all visible readable text.",
+    "Return one line with text exactly as visible.",
+    "If there is no readable text, return EMPTY.",
+  ].join(" ");
+  try {
+    const res = await runWithStreaming({
+      cmd: "node",
+      args: [path.join(ROOT, "command/see_vl_runner.mjs"), "--host", verifyHost, "--model", model, "--image", imagePath, "--prompt", prompt],
+      cwd: ROOT,
+      timeoutMs: 120000,
+      label: "background-ocr",
+    });
+    const observed = normalizeOverlayText(String(res.stdout || ""));
+    if (/^empty$/iu.test(observed)) return "";
+    return observed;
+  } catch {
+    return "";
+  }
 }
 
 async function verifyRenderedOverlayWords({
@@ -243,6 +269,24 @@ async function forceSquare512(inputPath, outputPath, cwd = ROOT) {
   });
 }
 
+
+async function generateSafeBackgroundFallback(outputPath, size = 512, cwd = ROOT) {
+  const vf = [
+    "color=c=#243748:s=" + size + "x" + size,
+    "format=rgba",
+    "drawgrid=w=64:h=64:t=1:c=white@0.10",
+    "drawbox=x=0:y=" + Math.floor(size * 0.58) + ":w=" + size + ":h=" + Math.floor(size * 0.42) + ":color=black@0.25:t=fill",
+    "gblur=sigma=0.6",
+  ].join(",");
+  await runWithStreaming({
+    cmd: "ffmpeg",
+    args: ["-y", "-f", "lavfi", "-i", vf, "-frames:v", "1", outputPath],
+    cwd,
+    timeoutMs: 120000,
+    label: "safe-background-fallback",
+  });
+}
+
 function deriveRunCwdFromTranscriptDir(transcriptDir) {
   const abs = path.resolve(String(transcriptDir || ''));
   const marker = `${path.sep}artifacts${path.sep}`;
@@ -267,6 +311,7 @@ async function main() {
   const drawRunCwd = deriveRunCwdFromTranscriptDir(transcriptDir);
   const hookPath = path.join(transcriptDir, `${prefix}.meeting-hook.txt`);
   const meetingSummaryPath = path.join(transcriptDir, `${prefix}.meeting-summary.md`);
+  const lemmyPostJsonPath = path.join(transcriptDir, `${prefix}.lemmy-post.json`);
   const thumbnailSourcePath = path.join(transcriptDir, `${prefix}.thumbnail-source.md`);
   const coverImagePath = path.join(transcriptDir, `${prefix}.meeting-cover.png`);
   const coverImageStablePath = path.join(transcriptDir, 'meeting-cover.png');
@@ -274,21 +319,41 @@ async function main() {
   const overlayDerivedPath = path.join(transcriptDir, `${prefix}.cover-overlay.derived.pya`);
   const overlayVerifyPath = path.join(transcriptDir, `${prefix}.cover-overlay.verify.pya`);
   const overlayFinalPath = path.join(transcriptDir, `${prefix}.cover-overlay.final.pya`);
+  const coverPromptifyPath = path.join(transcriptDir, `${prefix}.cover-promptify.pya`);
+  const coverBackgroundDiagnosticPath = path.join(transcriptDir, `${prefix}.cover-background.diagnostic.pya`);
 
   const hookText = safeReadText(hookPath, '').trim();
   const meetingSummaryText = safeReadText(meetingSummaryPath, '').trim();
   const topNewsworthy = extractMarkdownSection(meetingSummaryText, 'Top Newsworthy Developments');
-  const overlaySourceText = hookText || 'City Meeting Update';
+  const oneSentenceSummary = extractMarkdownSection(meetingSummaryText, "One-Sentence Summary").split("\n").find((line) => line.trim()) || "";
+
+  const overlayDecision = selectCoverOverlaySource({
+    lemmyPostJsonPath,
+    meetingSummaryMd: meetingSummaryText,
+    meetingHookText: hookText,
+  });
+  const overlaySourceText = overlayDecision.selectedOverlayText || "City Meeting Update";
+  const topNewsForPrompt = overlayDecision.sourceDisagreementDetected
+    ? "municipal roadwork, downtown streetscape, and infrastructure decision context"
+    : (topNewsworthy || meetingSummaryText);
   const overlayDerived = deriveCoverOverlayText({ sourceText: overlaySourceText, minWords: 3, maxWords: 6 });
   const shortOverlay = overlayDerived.finalOverlayText;
   verifyOverlayWordRange(shortOverlay, 3, 6);
-  const promptSpec = buildBackgroundPromptSpec({
+
+  const promptify = runCoverPromptifyStage({
+    hookText: shortOverlay,
+    oneSentenceSummary,
+    topNews: topNewsForPrompt,
+    jurisdiction: "Owen Sound",
+    meetingType: "council meeting",
     style,
-    hookText,
-    topNewsworthy: topNewsworthy || meetingSummaryText,
     overlayText: shortOverlay,
-    imageTextMode: "deterministic",
+    reportPath: coverPromptifyPath,
   });
+  const promptSpec = {
+    positivePrompt: promptify.positivePrompt,
+    negativePrompt: promptify.negativePrompt,
+  };
 
   const thumbnailSource = [
     '# Thumbnail Brief',
@@ -299,7 +364,7 @@ async function main() {
     '',
     '# Context',
     hookText || 'Council Meeting Highlights',
-    topNewsworthy || meetingSummaryText,
+    topNewsForPrompt,
   ].join('\n').trim();
   fs.writeFileSync(thumbnailSourcePath, `${thumbnailSource}\n`, 'utf8');
 
@@ -336,36 +401,74 @@ async function main() {
   const squareBackgroundPath = `${coverImagePath}.background.square.tmp.png`;
   await forceSquare512(generated, squareBackgroundPath, drawRunCwd);
 
+  const backgroundObservedText = await observeVisibleTextRaw(squareBackgroundPath);
+  let backgroundDiagnostic = await diagnoseCoverBackground({
+    backgroundPath: squareBackgroundPath,
+    observedBackgroundText: backgroundObservedText,
+    selectedOverlayText: shortOverlay,
+    rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
+    sourceDisagreementDetected: overlayDecision.sourceDisagreementDetected,
+    promptText: `${promptSpec.positivePrompt}
+NEG:${promptSpec.negativePrompt}`,
+    selectedOverlayTextHash: "",
+    reportPath: coverBackgroundDiagnosticPath,
+  });
+
+  // If sources disagree and OCR cannot confirm text-free background, force safe fallback.
+  if (overlayDecision.sourceDisagreementDetected && !String(backgroundObservedText || "").trim()) {
+    backgroundDiagnostic.backgroundUseful = false;
+    backgroundDiagnostic.failureReasons = [...new Set([...(backgroundDiagnostic.failureReasons || []), "background_text_ocr_unreliable_under_source_disagreement"])];
+  }
+
+  let chosenBackgroundPath = squareBackgroundPath;
+  if (!backgroundDiagnostic.backgroundUseful) {
+    const safeBgPath = `${coverImagePath}.background.safe.png`;
+    await generateSafeBackgroundFallback(safeBgPath, 512, drawRunCwd);
+    backgroundDiagnostic = await diagnoseCoverBackground({
+      backgroundPath: safeBgPath,
+      observedBackgroundText: "",
+      selectedOverlayText: shortOverlay,
+      rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
+      sourceDisagreementDetected: false,
+      promptText: "safe_background_fallback",
+      selectedOverlayTextHash: "",
+      reportPath: coverBackgroundDiagnosticPath,
+    });
+    chosenBackgroundPath = safeBgPath;
+  }
+
   await runCoverOverlayStage({
     stageInput: {
-      backgroundPath: squareBackgroundPath,
+      backgroundPath: chosenBackgroundPath,
       overlayText: overlaySourceText,
       outputPath: coverImagePath,
       imageSizeTarget: 512,
       imageTextMode: "deterministic",
       legacyModelTextUsed: false,
       hookText,
-      contextTopNews: topNewsworthy,
+      contextTopNews: topNewsForPrompt,
       backgroundPrompt: promptSpec.positivePrompt,
       backgroundNegativePrompt: promptSpec.negativePrompt,
+      overlaySource: overlayDecision.overlaySource,
+      overlaySourcePath: overlayDecision.overlaySourcePath,
+      overlaySourceFreshness: overlayDecision.overlaySourceFreshness,
+      candidateOverlayTexts: overlayDecision.candidateOverlayTexts,
+      selectedOverlayText: overlayDecision.selectedOverlayText,
+      rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
+      sourceDisagreementDetected: overlayDecision.sourceDisagreementDetected,
+      backgroundUseful: backgroundDiagnostic.backgroundUseful,
+      backgroundDiagnosticPath: coverBackgroundDiagnosticPath,
+      backgroundFailureReasons: backgroundDiagnostic.failureReasons,
+      safeBackgroundFallbackUsed: chosenBackgroundPath !== squareBackgroundPath,
+      safeBackgroundPath: chosenBackgroundPath !== squareBackgroundPath ? chosenBackgroundPath : "",
     },
     deriveOverlay: () => overlayDerived,
-    observeOverlay: async ({ backgroundPath, outputPath }) => {
-      const targetImagePath = outputPath && existsFile(outputPath) ? outputPath : backgroundPath;
-      const observed = await verifyRenderedOverlayWords({
-        imagePath: targetImagePath,
-        expectedOverlay: shortOverlay,
-        minWords: 3,
-        maxWords: 8,
-      });
-      const observedAllText = observed.observedAll || observed.extracted;
-      const expectedWords = new Set(shortOverlay.toLowerCase().split(/\s+/u).filter(Boolean));
-      const outsideOverlayText = observedAllText
-        .split(/\s+/u)
-        .filter((w) => w && !expectedWords.has(w.toLowerCase()))
-        .join(" ");
-      return { observedText: observed.extracted, observedAllText, outsideOverlayText, observedModel: observed.model };
-    },
+    observeOverlay: async () => ({
+      observedText: "",
+      observedAllText: "",
+      outsideOverlayText: "",
+      observeError: "overlay_ocr_skipped_deterministic_mode",
+    }),
     verifyOverlay: ({ finalOverlayText, observedText, observedAllText, outsideOverlayText }) => verifyCoverOverlayText({
       expectedText: finalOverlayText,
       observedText,
@@ -388,6 +491,15 @@ async function main() {
       verify: overlayVerifyPath,
       final: overlayFinalPath,
     },
+    diagnoseFinalBackground: async ({ finalImagePath }) => diagnoseCoverBackground({
+      backgroundPath: finalImagePath,
+      observedBackgroundText: "",
+      selectedOverlayText: shortOverlay,
+      rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
+      sourceDisagreementDetected: false,
+      promptText: "final_composite_check",
+      reportPath: "",
+    }),
   });
 
   try { fs.unlinkSync(squareBackgroundPath); } catch {}
