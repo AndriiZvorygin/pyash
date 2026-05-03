@@ -116,16 +116,22 @@ function orderedTokenSimilarity(expectedWords = [], observedWords = []) {
 export function verifyCoverOverlayText({
   expectedText,
   observedText,
+  observedAllText,
+  outsideOverlayText,
   minWords = 3,
   maxWords = 8,
+  requireNoExtraVisibleText = true,
 } = {}) {
   const failures = [];
   const warnings = [];
   const missingEssentialTokens = [];
   const duplicateTokens = [];
+  const extraVisibleTokens = [];
 
   const expected = normalizedWords(expectedText);
   const observed = normalizedWords(observedText);
+  const observedAll = normalizedWords(observedAllText || observedText || "");
+  const outsideOverlay = normalizedWords(outsideOverlayText || "");
 
   if (!observed.length) failures.push("observed_text_empty_or_unreadable");
 
@@ -159,14 +165,30 @@ export function verifyCoverOverlayText({
   const observedPhrase = observed.join(" ");
   if (/(\b\w+\b\s+\b\w+\b)\s+\1/u.test(observedPhrase)) failures.push("repeated_phrase_fragments");
 
+  if (requireNoExtraVisibleText) {
+    const expectedSet = new Set(expected);
+    for (const token of observedAll) {
+      if (!expectedSet.has(token)) extraVisibleTokens.push(token);
+    }
+    if (outsideOverlay.length) failures.push("outside_overlay_text_detected");
+    if (extraVisibleTokens.length || observedAll.length > expected.length + 1) failures.push("extra_visible_text");
+    const allPhrase = observedAll.join(" ");
+    if (/(\b\w+\b\s+\b\w+\b)\s+\1/u.test(allPhrase)) failures.push("repeated_background_text");
+  }
+
   return {
     expectedText: String(expectedText || "").trim(),
     observedText: String(observedText || "").trim(),
+    observedAllText: String(observedAllText || observedText || "").trim(),
+    outsideOverlayText: String(outsideOverlayText || "").trim(),
     pass: failures.length === 0,
     failures,
     warnings,
     missingEssentialTokens,
     duplicateTokens: uniq(duplicateTokens),
+    extraVisibleTokens: uniq(extraVisibleTokens),
+    extraVisibleTextPass: extraVisibleTokens.length === 0 && outsideOverlay.length === 0,
+    backgroundTextDetected: extraVisibleTokens.length > 0 || outsideOverlay.length > 0,
     similarity,
   };
 }
@@ -223,34 +245,141 @@ export async function renderDeterministicOverlay({
 } = {}) {
   if (!backgroundPath || !fs.existsSync(backgroundPath)) throw new Error("background image missing for deterministic overlay");
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+  const textLayerPath = outputPath.replace(/\.png$/iu, ".cover-overlay.text-layer.png");
   const font = process.env.COVER_OVERLAY_FONT_PATH || "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
-  const escaped = escapeDrawtext(overlayText);
-  const vf = [
-    `scale=${size}:${size}:force_original_aspect_ratio=increase`,
-    `crop=${size}:${size}`,
-    `drawbox=x=24:y=ih-170:w=iw-48:h=130:color=black@0.48:t=fill`,
-    `drawtext=fontfile=${font}:text='${escaped}':fontcolor=white:fontsize=38:line_spacing=6:x=(w-text_w)/2:y=h-130:shadowx=2:shadowy=2:shadowcolor=black@0.85`
+  const safeMargin = 32;
+  const maxWidth = Math.floor(Number(size) * 0.88);
+  const lineHeight = 1.0;
+  const strokeWidth = 3;
+  const shadowX = 2;
+  const shadowY = 2;
+  const shadowColor = "black@0.70";
+
+  const baseText = String(overlayText || "").replace(/\s+/gu, " ").trim();
+  const words = baseText.split(" ").filter(Boolean);
+  const makeLines = (maxChars) => {
+    const lines = [];
+    let cur = [];
+    for (const w of words) {
+      const test = [...cur, w].join(" ");
+      if (cur.length && test.length > maxChars) {
+        lines.push(cur.join(" "));
+        cur = [w];
+      } else {
+        cur.push(w);
+      }
+    }
+    if (cur.length) lines.push(cur.join(" "));
+    return lines;
+  };
+
+  let fontSize = 44;
+  let lines = [];
+  for (let trySize = 44; trySize >= 28; trySize -= 2) {
+    const charsPerLine = Math.max(10, Math.floor(maxWidth / Math.max(1, trySize * 0.56)));
+    const candidate = makeLines(charsPerLine);
+    const longest = candidate.reduce((m, l) => Math.max(m, l.length), 0);
+    if (candidate.length <= 4 && longest <= charsPerLine) {
+      fontSize = trySize;
+      lines = candidate;
+      break;
+    }
+  }
+  if (!lines.length) lines = [baseText];
+
+  const escapedMultiline = escapeDrawtext(lines.join("\n"));
+  const textX = "(w-text_w)/2";
+  const linePx = Math.max(28, Math.round(fontSize * lineHeight));
+  const totalTextHeight = linePx * lines.length;
+  const textYNum = Math.max(safeMargin, Number(size) - safeMargin - totalTextHeight - 10);
+  const textY = String(textYNum);
+
+  const overlayRegion = {
+    x: safeMargin,
+    y: Math.max(0, textYNum - 12),
+    width: Math.max(0, Number(size) - safeMargin * 2),
+    height: Math.max(0, totalTextHeight + 24),
+  };
+
+  const textVf = [
+    "color=c=black@0.0:s=" + size + "x" + size,
+    "drawtext=fontfile=" + font
+      + ":text='" + escapedMultiline + "'"
+      + ":fontcolor=white@0.97"
+      + ":borderw=" + strokeWidth
+      + ":bordercolor=black@0.95"
+      + ":fontsize=" + fontSize
+      + ":line_spacing=4"
+      + ":x=" + textX
+      + ":y=" + textY
+      + ":box=0"
+      + ":shadowx=" + shadowX
+      + ":shadowy=" + shadowY
+      + ":shadowcolor=" + shadowColor,
   ].join(",");
+
   await runWithStreaming({
     cmd: "ffmpeg",
-    args: ["-y", "-i", backgroundPath, "-vf", vf, "-frames:v", "1", outputPath],
+    args: ["-y", "-f", "lavfi", "-i", textVf, "-frames:v", "1", "-update", "1", textLayerPath],
     cwd,
     env: process.env,
     timeoutMs: 180000,
-    label: "deterministic-cover-overlay",
+    label: "deterministic-cover-text-layer",
   });
+
+  await runWithStreaming({
+    cmd: "ffmpeg",
+    args: [
+      "-y",
+      "-i", backgroundPath,
+      "-i", textLayerPath,
+      "-filter_complex",
+      "[0:v]scale=" + size + ":" + size + ":force_original_aspect_ratio=increase,crop=" + size + ":" + size + ",gblur=sigma=8,eq=brightness=-0.06:contrast=0.92:saturation=0.9[bg];[bg][1:v]overlay=0:0:format=auto",
+      "-frames:v", "1",
+      outputPath,
+    ],
+    cwd,
+    env: process.env,
+    timeoutMs: 180000,
+    label: "deterministic-cover-composite",
+  });
+
   const dims = await getImageDimensions(outputPath, cwd);
   const outputExists = fs.existsSync(outputPath);
-  const layoutContractPass = Boolean(outputExists && dims.width === Number(size) && dims.height === Number(size));
+  const textLayerExists = fs.existsSync(textLayerPath);
+  const layoutContractPass = Boolean(outputExists && textLayerExists && dims.width === Number(size) && dims.height === Number(size));
+
   return {
     mode: "deterministic_fallback",
     outputPath,
+    textLayerPath,
+    backgroundPath,
+    safeBackgroundPath: outputPath,
     overlayText: String(overlayText || ""),
     outputExists,
+    textLayerExists,
     dimensions: dims,
     imageSizeTarget: Number(size),
     layoutContractPass,
     exactOverlayDrawn: true,
+    overlayRegion,
+    overlayStyle: {
+      fillColor: "white@0.97",
+      strokeColor: "black@0.95",
+      strokeWidth,
+      shadow: { x: shadowX, y: shadowY, color: shadowColor },
+      backplate: { enabled: false, opacity: 0, areaRatio: 0 },
+      lineHeight,
+      fontSize,
+      safeMargin,
+      maxWidth,
+      placement: "lower_third",
+      lineCount: lines.length,
+      lines,
+    },
+    backplateAreaRatio: 0,
+    safeBackgroundFallbackUsed: true,
   };
 }
 
@@ -366,7 +495,12 @@ export async function runCoverOverlayStage({
   let acceptedMode = "failed";
   let acceptedPath = "";
   let acceptedObservedText = String(candidateObserved?.observedText || "");
+  let acceptedObservedAllText = String(candidateObserved?.observedAllText || candidateObserved?.observedText || "");
   let deterministicFallbackUsed = false;
+  let overlayRegion = null;
+  let backgroundRegenerated = false;
+  let safeBackgroundFallbackUsed = false;
+  let safeBackgroundPath = "";
 
   if (candidatePass) {
     acceptedMode = "candidate";
@@ -404,6 +538,11 @@ export async function runCoverOverlayStage({
         acceptedMode = "deterministic_fallback";
         acceptedPath = String(fallbackRender?.outputPath || stageInput.outputPath || "");
         acceptedObservedText = String(fallbackObserved?.observedText || expectedText);
+        acceptedObservedAllText = String(fallbackObserved?.observedAllText || fallbackObserved?.observedText || acceptedObservedText);
+        overlayRegion = fallbackRender?.overlayRegion || null;
+        backgroundRegenerated = Boolean(fallbackRender?.backgroundRegenerated);
+        safeBackgroundFallbackUsed = Boolean(fallbackRender?.safeBackgroundFallbackUsed);
+        safeBackgroundPath = String(fallbackRender?.safeBackgroundPath || "");
       }
     } else {
       fallbackErrors.push("fallback_not_available");
@@ -426,6 +565,14 @@ export async function runCoverOverlayStage({
     fallbackPass: Boolean(fallbackVerify?.pass),
     fallbackFailures: uniq([...(fallbackVerify?.failures || []), ...fallbackErrors]),
     fallbackWarnings: uniq([...(fallbackVerify?.warnings || []), String(fallbackObserved?.observeError || ""), String(fallbackRender?.renderError || "")].filter(Boolean)),
+    extraVisibleText: uniq([...(candidateVerify?.extraVisibleTokens || []), ...(fallbackVerify?.extraVisibleTokens || [])]),
+    extraVisibleTextPass: Boolean((candidateVerify?.extraVisibleTextPass || false) || (fallbackVerify?.extraVisibleTextPass || false)),
+    backgroundTextDetected: Boolean((candidateVerify?.backgroundTextDetected || false) || (fallbackVerify?.backgroundTextDetected || false)),
+    overlayRegion,
+    outsideOverlayTextObserved: String(fallbackObserved?.outsideOverlayText || candidateObserved?.outsideOverlayText || ""),
+    backgroundRegenerated,
+    safeBackgroundFallbackUsed,
+    safeBackgroundPath,
     acceptedPath: finalPath,
     acceptedMode,
   };
@@ -445,6 +592,17 @@ export async function runCoverOverlayStage({
     deterministicFallbackUsed,
     expectedOverlayText: expectedText,
     observedOverlayText: acceptedObservedText,
+    observedFinalText: acceptedObservedAllText,
+    extraVisibleText: verifyReport.extraVisibleText,
+    extraVisibleTextPass: verifyReport.extraVisibleTextPass,
+    backgroundTextDetected: verifyReport.backgroundTextDetected,
+    overlayRegion: verifyReport.overlayRegion,
+    outsideOverlayTextObserved: verifyReport.outsideOverlayTextObserved,
+    backgroundRegenerated: verifyReport.backgroundRegenerated,
+    safeBackgroundFallbackUsed: verifyReport.safeBackgroundFallbackUsed,
+    safeBackgroundPath: verifyReport.safeBackgroundPath,
+    finalTextVerificationMode: acceptedObservedText ? "ocr" : "deterministic_layout",
+    ocrReliable: acceptedObservedText ? "yes" : "no",
     failures: finalFailures,
     warnings: uniq([
       ...verifyReport.candidateWarnings,

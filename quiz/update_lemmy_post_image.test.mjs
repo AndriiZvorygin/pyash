@@ -140,3 +140,31 @@ test("backend failure writes result pya", async () => {
   assert.match(txt, /pass is no\./u);
   assert.match(txt, /failedStage is "backend_update"\./u);
 });
+
+
+test("live backend mode fails when url not changed", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "post-image-live-unchanged-"));
+  const prev = process.cwd();
+  process.chdir(tmp);
+  const oldEnv = { ...process.env };
+  process.env.MEETING_PUBLISH_AUTH_TOKEN = "token";
+  let thrown = null;
+  try {
+    await runUpdate(["node", "cmd", "--post-ref", "7468", "--image", "x.png"], {
+      probeImage: async () => ({ exists: true, width: 512, height: 512, bytes: 111, mime: "image/png" }),
+      fetchLivePost: async () => ({ endpoint: "https://example/api/v3/post?id=7468", post: { name: "n", body: "b", url: "https://old", thumbnail_url: "", community_id: 1, language_id: 37 } }),
+      backendUpdate: async () => ({ endpoint: "https://helpos.ca/api/helpos/v1/post-image-update", parsed: { status: "ok", image_url: "" }, raw: "{}", metadata: {} }),
+    });
+  } catch (err) {
+    thrown = err;
+  } finally {
+    process.env = oldEnv;
+    process.chdir(prev);
+  }
+  assert.ok(thrown);
+  const runs = fs.readdirSync(path.join(tmp, "artifacts")).sort();
+  const latest = path.join(tmp, "artifacts", runs[runs.length - 1]);
+  const resultPath = path.join(latest, "post-image-update.result.pya");
+  const txt = fs.readFileSync(resultPath, "utf8");
+  assert.match(txt, /image_url_not_changed/u);
+});
