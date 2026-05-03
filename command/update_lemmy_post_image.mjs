@@ -7,10 +7,11 @@ import { pathToFileURL } from "node:url";
 import { readPyaTextValues } from "./pya_lookup.mjs";
 
 const DEFAULT_INSTANCE = "https://helpos.ca";
+const BACKEND_IMAGE_UPDATE_PATH = "/api/helpos/v1/post-image-update";
 
 function usage() {
   return [
-    "Usage: node command/update_lemmy_post_image.mjs --post-ref <id> --image <path> [--instance <url>] [--dry-run] [--expected-title-hash <sha256>] [--expected-body-hash <sha256>]",
+    "Usage: node command/update_lemmy_post_image.mjs --post-ref <id> --image <path> [--instance <url>] [--dry-run] [--expected-title-hash <sha256>] [--expected-body-hash <sha256>] [--direct-pictrs]",
   ].join("\n");
 }
 
@@ -23,6 +24,7 @@ export function parseArgs(argv) {
     dryRun: false,
     expectedTitleHash: "",
     expectedBodyHash: "",
+    directPictrs: false,
   };
 
   while (args.length) {
@@ -33,6 +35,7 @@ export function parseArgs(argv) {
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--expected-title-hash") out.expectedTitleHash = String(args.shift() || "").trim().toLowerCase();
     else if (a === "--expected-body-hash") out.expectedBodyHash = String(args.shift() || "").trim().toLowerCase();
+    else if (a === "--direct-pictrs") out.directPictrs = true;
     else throw new Error(`unknown arg: ${a}`);
   }
 
@@ -183,7 +186,7 @@ async function probeImage(imagePath) {
 
 async function fetchLivePost({ instance, postRef, fetchImpl = fetch }) {
   const endpoint = `${String(instance).replace(/\/+$/u, "")}/api/v3/post?id=${encodeURIComponent(postRef)}`;
-  const res = await fetchImpl(endpoint, { method: "GET", signal: AbortSignal.timeout(30000) });
+  const res = await fetchImpl(endpoint, { method: "GET", signal: AbortSignal.timeout(30_000) });
   const raw = await res.text();
   let parsed = null;
   try { parsed = JSON.parse(raw); } catch {}
@@ -222,17 +225,16 @@ function extractImageUrlFromUploadResponse(parsed) {
   return candidates.length ? candidates[0].trim() : "";
 }
 
-async function uploadImage({ instance, token, imagePath, mime, fetchImpl = fetch }) {
+async function uploadImageDirectPictrs({ instance, token, imagePath, mime, fetchImpl = fetch }) {
   const endpoint = `${String(instance).replace(/\/+$/u, "")}/pictrs/image`;
   const form = new FormData();
   const imageBuf = fs.readFileSync(imagePath);
   form.append("images[]", new Blob([imageBuf], { type: mime || "application/octet-stream" }), path.basename(imagePath));
-  form.append("auth", token);
-
   const res = await fetchImpl(endpoint, {
     method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
     body: form,
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(120_000),
   });
   const raw = await res.text();
   let parsed = null;
@@ -277,56 +279,99 @@ async function editPostImage({ instance, token, postId, title, body, imageUrl, l
   return r;
 }
 
+function buildIdempotencyKey({ postRef, expectedTitleHash, expectedBodyHash, imagePath }) {
+  const stamp = `${String(postRef)}|${String(expectedTitleHash)}|${String(expectedBodyHash)}|${path.basename(String(imagePath || ""))}`;
+  const digest = sha256Text(stamp).slice(0, 12);
+  return `post-image-${postRef}-${digest}-v1`;
+}
+
+async function callBackendImageUpdate({ instance, token, postRef, expectedTitleHash, expectedBodyHash, imagePath, mime, dryRun, idempotencyKey, fetchImpl = fetch }) {
+  const endpoint = `${String(instance).replace(/\/+$/u, "")}${BACKEND_IMAGE_UPDATE_PATH}`;
+  const form = new FormData();
+  const metadata = {
+    idempotency_key: idempotencyKey,
+    post_id: Number(postRef),
+    expected_title_hash: expectedTitleHash || "",
+    expected_body_hash: expectedBodyHash || "",
+    dry_run: Boolean(dryRun),
+  };
+  form.append("metadata", JSON.stringify(metadata));
+  const imageBuf = fs.readFileSync(imagePath);
+  form.append("cover_image", new Blob([imageBuf], { type: mime || "application/octet-stream" }), path.basename(imagePath));
+
+  const res = await fetchImpl(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+    signal: AbortSignal.timeout(5 * 60 * 1000),
+  });
+  const raw = await res.text();
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch {}
+  if (!res.ok) throw new Error(`post-image-update failed (${res.status}) via ${endpoint}: ${raw.slice(0, 1200)}`);
+  return { endpoint, parsed, raw, metadata };
+}
+
 export async function runUpdate(argv, deps = {}) {
   const args = parseArgs(argv);
   const fetchImpl = deps.fetchImpl || fetch;
   const probeImageImpl = deps.probeImage || probeImage;
   const fetchLivePostImpl = deps.fetchLivePost || fetchLivePost;
+  const backendUpdateImpl = deps.backendUpdate || callBackendImageUpdate;
   const lemmyLoginImpl = deps.lemmyLogin || lemmyLogin;
-  const uploadImageImpl = deps.uploadImage || uploadImage;
-  const editPostImageImpl = deps.editPostImage || editPostImage;
+  const uploadImageImpl = deps.uploadImage || uploadImageDirectPictrs;
+  const editPostImpl = deps.editPostImage || editPostImage;
 
   const envFallback = loadEnvFallbacks(process.cwd());
   const secret = readSecretValues(process.cwd());
 
-  const apiToken = String(
+  const token = String(
     process.env.MEETING_PUBLISH_AUTH_TOKEN
     || envFallback.MEETING_PUBLISH_AUTH_TOKEN
     || secret["meeting publish auth token"]
     || ""
   ).trim();
-  const publishUsername = String(
+  const username = String(
     process.env.MEETING_PUBLISH_USERNAME
     || envFallback.MEETING_PUBLISH_USERNAME
-    || process.env.GREY_COUNTY_REPORTER_USERNAME
-    || envFallback.GREY_COUNTY_REPORTER_USERNAME
     || process.env.OWEN_SOUND_REPORTER_USERNAME
     || envFallback.OWEN_SOUND_REPORTER_USERNAME
+    || process.env.GREY_COUNTY_REPORTER_USERNAME
+    || envFallback.GREY_COUNTY_REPORTER_USERNAME
     || secret["meeting publish username"]
-    || secret["grey county reporter username"]
     || secret["owen sound reporter username"]
+    || secret["grey county reporter username"]
     || ""
   ).trim();
-  const publishPassword = String(
+  const password = String(
     process.env.MEETING_PUBLISH_PASSWORD
     || envFallback.MEETING_PUBLISH_PASSWORD
-    || process.env.GREY_COUNTY_REPORTER_PASSWORD
-    || envFallback.GREY_COUNTY_REPORTER_PASSWORD
     || process.env.OWEN_SOUND_REPORTER_PASSWORD
     || envFallback.OWEN_SOUND_REPORTER_PASSWORD
+    || process.env.GREY_COUNTY_REPORTER_PASSWORD
+    || envFallback.GREY_COUNTY_REPORTER_PASSWORD
     || secret["meeting publish password"]
-    || secret["grey county reporter password"]
     || secret["owen sound reporter password"]
+    || secret["grey county reporter password"]
     || ""
   ).trim();
+
+  const tokenSource = process.env.MEETING_PUBLISH_AUTH_TOKEN ? "env:MEETING_PUBLISH_AUTH_TOKEN"
+    : envFallback.MEETING_PUBLISH_AUTH_TOKEN ? "envfile:MEETING_PUBLISH_AUTH_TOKEN"
+      : secret["meeting publish auth token"] ? "secret:meeting publish auth token" : "missing";
 
   const imagePath = path.resolve(process.cwd(), args.imagePath);
   const reportDir = path.join(process.cwd(), "artifacts", `post-image-update-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const preflightPath = path.join(reportDir, "post-image-update.preflight.pya");
   const resultPath = path.join(reportDir, "post-image-update.result.pya");
 
+  const updateMode = args.directPictrs ? "direct_pictrs" : "backend_endpoint";
+  const endpoint = args.directPictrs
+    ? `${String(args.instance).replace(/\/+$/u, "")}/pictrs/image`
+    : `${String(args.instance).replace(/\/+$/u, "")}${BACKEND_IMAGE_UPDATE_PATH}`;
   const attempted = {
-    uploadEndpoint: `${String(args.instance).replace(/\/+$/u, "")}/pictrs/image`,
+    updateMode,
+    endpoint,
     editEndpoint: `${String(args.instance).replace(/\/+$/u, "")}/api/v3/post/edit`,
   };
   let preflight = null;
@@ -337,16 +382,24 @@ export async function runUpdate(argv, deps = {}) {
     writePya(resultPath, {
       pass: false,
       failedStage,
+      updateMode,
+      endpoint,
       error: String(err?.message || err || ""),
       preflightPath,
-      uploadEndpointAttempted: attempted.uploadEndpoint || "",
-      editEndpointAttempted: attempted.editEndpoint || "",
+      idempotencyKey: preflight?.idempotencyKey || "",
+      postId: args.postRef,
+      expectedTitleHash: args.expectedTitleHash,
+      expectedBodyHash: args.expectedBodyHash,
       oldImageUrl: preflight?.liveUrl || "",
       newImageUrl: extra.newImageUrl || "",
       titleHash: preflight?.liveTitleHash || "",
       bodyHash: preflight?.liveBodyHash || "",
       titleHashMatchesExpected: titleHashMatches,
       bodyHashMatchesExpected: bodyHashMatches,
+      tokenSource,
+      tokenPresent: Boolean(token),
+      directPictrsRequested: args.directPictrs,
+      pictrsAttempted: Boolean(extra.pictrsAttempted),
       rollbackNeeded: Boolean(extra.rollbackNeeded),
     });
   };
@@ -354,8 +407,14 @@ export async function runUpdate(argv, deps = {}) {
   let stage = "preflight";
   try {
     const image = await probeImageImpl(imagePath);
-    if (!image.exists) throw new Error(`image not found: ${imagePath}`);
-    if (!image.width || !image.height) throw new Error(`image probe failed: ${imagePath}`);
+    if (!image.exists) {
+      stage = "image_validation";
+      throw new Error(`image not found: ${imagePath}`);
+    }
+    if (!image.width || !image.height) {
+      stage = "image_validation";
+      throw new Error(`image probe failed: ${imagePath}`);
+    }
 
     const before = await fetchLivePostImpl({ instance: args.instance, postRef: args.postRef, fetchImpl });
     const liveTitle = String(before.post?.name || "");
@@ -367,18 +426,26 @@ export async function runUpdate(argv, deps = {}) {
       expectedBodyHash: args.expectedBodyHash,
     });
 
+    const idempotencyKey = buildIdempotencyKey({
+      postRef: args.postRef,
+      expectedTitleHash: args.expectedTitleHash,
+      expectedBodyHash: args.expectedBodyHash,
+      imagePath,
+    });
+
     preflight = {
       mode: args.dryRun ? "dry_run" : "live",
+      updateMode,
+      endpoint,
       instance: args.instance,
       postRef: args.postRef,
+      idempotencyKey,
       liveReadEndpoint: before.endpoint,
       liveTitle: liveTitle,
       liveTitleHash: hashCheck.titleHash,
       liveBodyHash: hashCheck.bodyHash,
       liveUrl: String(before.post?.url || ""),
       liveThumbnailUrl: String(before.post?.thumbnail_url || ""),
-      liveCommunityId: Number(before.post?.community_id || 0),
-      liveLanguageId: Number(before.post?.language_id || 0),
       imagePath,
       imageWidth: image.width,
       imageHeight: image.height,
@@ -386,10 +453,10 @@ export async function runUpdate(argv, deps = {}) {
       expectedTitleHash: args.expectedTitleHash,
       expectedBodyHash: args.expectedBodyHash,
       expectationErrors: hashCheck.errors,
-      tokenPresent: Boolean(apiToken),
-      lemmyCredentialsPresent: Boolean(publishUsername && publishPassword),
-      plannedUploadEndpoint: attempted.uploadEndpoint,
-      plannedEditEndpoint: attempted.editEndpoint,
+      tokenSource,
+      tokenPresent: Boolean(token),
+      directPictrsRequested: args.directPictrs,
+      lemmyCredentialsPresent: Boolean(username && password),
     };
     writePya(preflightPath, preflight);
 
@@ -398,43 +465,77 @@ export async function runUpdate(argv, deps = {}) {
       throw new Error(`aborted: ${hashCheck.errors.join(", ")}`);
     }
 
+    if (!token) {
+      stage = "auth";
+      throw new Error("MEETING_PUBLISH_AUTH_TOKEN is required");
+    }
+
+    if (!args.directPictrs) {
+      stage = "backend_update";
+      const backend = await backendUpdateImpl({
+        instance: args.instance,
+        token,
+        postRef: args.postRef,
+        expectedTitleHash: args.expectedTitleHash,
+        expectedBodyHash: args.expectedBodyHash,
+        imagePath,
+        mime: image.mime,
+        dryRun: args.dryRun,
+        idempotencyKey,
+        fetchImpl,
+      });
+
+      const summary = {
+        pass: true,
+        mode: args.dryRun ? "dry_run" : "live",
+        updateMode,
+        endpoint: backend.endpoint,
+        preflightPath,
+        idempotencyKey,
+        postId: args.postRef,
+        expectedTitleHash: args.expectedTitleHash,
+        expectedBodyHash: args.expectedBodyHash,
+        backendResponsePostUrl: String(backend.parsed?.post_url || ""),
+        backendResponseImageUrl: String(backend.parsed?.image_url || backend.parsed?.post_image_url || ""),
+        backendResponseStatus: String(backend.parsed?.status || "ok"),
+        beforeUrl: String(before.post?.url || ""),
+        afterUrl: String(backend.parsed?.image_url || backend.parsed?.post_image_url || before.post?.url || ""),
+      };
+      writePya(resultPath, summary);
+      process.stdout.write(`[post-image-update] ${args.dryRun ? "dry-run" : "live"} result: ${resultPath}\n`);
+      return { ok: true, dryRun: args.dryRun, preflightPath, resultPath };
+    }
+
+    // Legacy/debug-only direct Pictrs path
+    stage = "direct_pictrs_auth";
+    if (!username || !password) throw new Error("publisher username/password are required for --direct-pictrs mode");
+    const login = await lemmyLoginImpl({ instance: args.instance, username, password, fetchImpl });
+
+    stage = "direct_pictrs_upload";
+    const uploaded = await uploadImageImpl({ instance: args.instance, token: login.jwt, imagePath, mime: image.mime, fetchImpl });
+
     if (args.dryRun) {
       writePya(resultPath, {
         pass: true,
         mode: "dry_run",
+        updateMode,
+        endpoint: uploaded.endpoint,
         preflightPath,
-        result: "no_upload_no_edit",
-        plannedPreserveTitleHash: hashCheck.titleHash,
-        plannedPreserveBodyHash: hashCheck.bodyHash,
-        plannedTargetPostRef: args.postRef,
+        idempotencyKey,
+        postId: args.postRef,
+        expectedTitleHash: args.expectedTitleHash,
+        expectedBodyHash: args.expectedBodyHash,
+        beforeUrl: String(before.post?.url || ""),
+        afterUrl: String(before.post?.url || ""),
+        note: "direct pictrs dry-run completed upload check only; no post edit",
       });
-      process.stdout.write(`[post-image-update] dry-run preflight: ${preflightPath}\n`);
-      process.stdout.write(`[post-image-update] dry-run result: ${resultPath}\n`);
-      process.stdout.write(`[post-image-update] live title hash: ${hashCheck.titleHash}\n`);
-      process.stdout.write(`[post-image-update] live body hash: ${hashCheck.bodyHash}\n`);
-      process.stdout.write(`[post-image-update] planned upload endpoint: ${preflight.plannedUploadEndpoint}\n`);
-      process.stdout.write(`[post-image-update] planned edit endpoint: ${preflight.plannedEditEndpoint}\n`);
       return { ok: true, dryRun: true, preflightPath, resultPath };
     }
 
-    if (!publishUsername || !publishPassword) {
-      stage = "preflight";
-      throw new Error("publisher username/password are required for non-dry-run image update");
-    }
-    if (!apiToken) {
-      stage = "preflight";
-      throw new Error("MEETING_PUBLISH_AUTH_TOKEN is required for non-dry-run image update");
-    }
-
-    stage = "upload";
-    const login = await lemmyLoginImpl({ instance: args.instance, username: publishUsername, password: publishPassword, fetchImpl });
-    const uploaded = await uploadImageImpl({ instance: args.instance, token: login.jwt, imagePath, mime: image.mime, fetchImpl });
-    attempted.uploadEndpoint = uploaded.endpoint;
-
-    stage = "edit";
-    const edited = await editPostImageImpl({
+    stage = "direct_pictrs_edit";
+    const edited = await editPostImpl({
       instance: args.instance,
-      token: apiToken,
+      token,
       postId: args.postRef,
       title: liveTitle,
       body: liveBody,
@@ -442,58 +543,47 @@ export async function runUpdate(argv, deps = {}) {
       languageId: Number(before.post?.language_id || 0),
       fetchImpl,
     });
-    attempted.editEndpoint = edited.endpoint;
 
     stage = "readback";
     const after = await fetchLivePostImpl({ instance: args.instance, postRef: args.postRef, fetchImpl });
-    const afterTitle = String(after.post?.name || "");
-    const afterBody = String(after.post?.body || "");
-    const afterTitleHash = sha256Text(afterTitle);
-    const afterBodyHash = sha256Text(afterBody);
+    const afterTitleHash = sha256Text(String(after.post?.name || ""));
+    const afterBodyHash = sha256Text(String(after.post?.body || ""));
     const afterUrl = String(after.post?.url || "");
-
     const failures = [];
     if (afterTitleHash !== hashCheck.titleHash) failures.push("title_drift_detected");
     if (afterBodyHash !== hashCheck.bodyHash) failures.push("body_drift_detected");
     if (!afterUrl || afterUrl === String(before.post?.url || "")) failures.push("image_url_not_changed");
 
-    const result = {
+    writePya(resultPath, {
       pass: failures.length === 0,
       mode: "live",
+      updateMode,
+      endpoint: uploaded.endpoint,
       preflightPath,
-      uploadEndpoint: uploaded.endpoint,
-      uploadedImageUrl: uploaded.imageUrl,
+      idempotencyKey,
+      postId: args.postRef,
+      expectedTitleHash: args.expectedTitleHash,
+      expectedBodyHash: args.expectedBodyHash,
       editEndpoint: edited.endpoint,
-      editMethod: edited.method,
       beforeUrl: String(before.post?.url || ""),
       afterUrl,
-      beforeTitleHash: hashCheck.titleHash,
-      afterTitleHash,
-      beforeBodyHash: hashCheck.bodyHash,
-      afterBodyHash,
       failures,
-      rollbackInstruction: failures.length
-        ? `Re-run full publisher update with known-good payload and post-ref ${args.postRef}`
-        : "",
-    };
-    writePya(resultPath, result);
+    });
 
-    if (failures.length) {
-      throw new Error(`post-image-update drift check failed: ${failures.join(", ")}`);
-    }
-
-    process.stdout.write(`[post-image-update] success result: ${resultPath}\n`);
+    if (failures.length) throw new Error(`post-image-update drift check failed: ${failures.join(", ")}`);
     return { ok: true, dryRun: false, preflightPath, resultPath };
   } catch (err) {
     if (!fs.existsSync(resultPath)) {
-      writeFailure(stage, err, { rollbackNeeded: stage !== "preflight" && stage !== "hash_gate" && stage !== "image_validation" });
+      writeFailure(stage, err, { pictrsAttempted: stage.startsWith("direct_pictrs") || stage === "direct_pictrs_upload", rollbackNeeded: stage !== "preflight" && stage !== "hash_gate" && stage !== "image_validation" });
     }
     throw err;
   }
 }
 
 async function main() {
-  await runUpdate(process.argv);
+  const result = await runUpdate(process.argv);
+  if (result?.preflightPath) process.stdout.write(`[post-image-update] preflight: ${result.preflightPath}\n`);
+  if (result?.resultPath) process.stdout.write(`[post-image-update] result: ${result.resultPath}\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
