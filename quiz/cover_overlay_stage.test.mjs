@@ -11,6 +11,7 @@ import {
   renderDeterministicOverlay,
   runCoverOverlayStage,
 } from "../program/library/reporter_shared/cover-overlay-stage.mjs";
+import { buildBackgroundPromptSpec } from "../program/library/reporter_shared/cover-prompt-policy.mjs";
 
 function mkTmpDir(prefix = "cover-overlay-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -189,4 +190,52 @@ test("candidate verification failure triggers deterministic fallback and accepte
   const verifyText = fs.readFileSync(reports.verify, "utf8");
   assert.match(verifyText, /acceptedMode is "deterministic_fallback"\./u);
   assert.match(verifyText, /candidatePass is no\./u);
+});
+
+
+test("verifier rejects extra background words beyond expected overlay", () => {
+  const v = verifyCoverOverlayText({
+    expectedText: "Easing The Burden On Local Businesses",
+    observedText: "Easing The Burden On Local Businesses",
+    observedAllText: "Easing The Burden On Local Businesses The Burden On Local Businesses",
+    requireNoExtraVisibleText: true,
+  });
+  assert.equal(v.pass, false);
+  assert.ok(v.failures.includes("extra_visible_text"));
+});
+
+test("prompt policy keeps overlay text out of positive prompt and puts exclusions in negative", () => {
+  const spec = buildBackgroundPromptSpec({
+    style: "editorial civic scene",
+    hookText: "Fourth Avenue Delayed Until 2027",
+    topNewsworthy: "Road project deferral",
+    overlayText: "Easing The Burden On Local Businesses",
+    imageTextMode: "deterministic",
+  });
+  const lower = spec.positivePrompt.toLowerCase();
+  for (const banned of [" do not ", " without ", " exclude ", " avoid ", " no "]) {
+    assert.equal(lower.includes(banned.trim()), false);
+  }
+  assert.equal(lower.includes("easing the burden on local businesses"), false);
+  const neg = spec.negativePrompt.toLowerCase();
+  for (const term of ["words","letters","numbers","signs","labels","captions","headline text","typography","watermark","logo","poster","banner","duplicated text","gibberish text"]) {
+    assert.equal(neg.includes(term), true);
+  }
+  assert.equal(spec.modelOverlayText, "");
+});
+
+test("deterministic compositor returns transparent text layer metadata", async (t) => {
+  const tmp = mkTmpDir("cover-overlay-layer-");
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const bg = path.join(tmp, "bg.png");
+  const out = path.join(tmp, "out.png");
+  await new Promise((resolve, reject) => {
+    const child = spawn("ffmpeg", ["-y", "-f", "lavfi", "-i", "color=c=#203040:s=512x512", "-frames:v", "1", bg]);
+    child.on("close", (code) => code === 0 ? resolve() : reject(new Error("ffmpeg create bg failed")));
+    child.on("error", reject);
+  });
+  const meta = await renderDeterministicOverlay({ backgroundPath: bg, overlayText: "Easing The Burden On Local Businesses", outputPath: out, size: 512 });
+  assert.equal(Boolean(meta.textLayerPath), true);
+  assert.equal(fs.existsSync(meta.textLayerPath), true);
+  assert.equal(meta.overlayStyle.backplate.enabled, false);
 });

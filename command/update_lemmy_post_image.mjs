@@ -487,8 +487,27 @@ export async function runUpdate(argv, deps = {}) {
         fetchImpl,
       });
 
+      let after = before;
+      let afterTitleHash = hashCheck.titleHash;
+      let afterBodyHash = hashCheck.bodyHash;
+      if (!args.dryRun) {
+        stage = "readback";
+        after = await fetchLivePostImpl({ instance: args.instance, postRef: args.postRef, fetchImpl });
+        afterTitleHash = sha256Text(String(after.post?.name || ""));
+        afterBodyHash = sha256Text(String(after.post?.body || ""));
+      }
+
+      const backendImageUrl = String(backend.parsed?.new_image_url || backend.parsed?.image_url || backend.parsed?.post_image_url || "");
+      const beforeUrl = String(before.post?.url || "");
+      const afterUrl = String(after.post?.url || beforeUrl || "");
+      const failures = [];
+      if (!args.dryRun && !backendImageUrl) failures.push("backend_missing_new_image_url");
+      if (!args.dryRun && (!afterUrl || afterUrl === beforeUrl)) failures.push("image_url_not_changed");
+      if (!args.dryRun && afterTitleHash !== hashCheck.titleHash) failures.push("title_drift_detected");
+      if (!args.dryRun && afterBodyHash !== hashCheck.bodyHash) failures.push("body_drift_detected");
+
       const summary = {
-        pass: true,
+        pass: failures.length === 0,
         mode: args.dryRun ? "dry_run" : "live",
         updateMode,
         endpoint: backend.endpoint,
@@ -498,13 +517,22 @@ export async function runUpdate(argv, deps = {}) {
         expectedTitleHash: args.expectedTitleHash,
         expectedBodyHash: args.expectedBodyHash,
         backendResponsePostUrl: String(backend.parsed?.post_url || ""),
-        backendResponseImageUrl: String(backend.parsed?.image_url || backend.parsed?.post_image_url || ""),
+        backendResponseImageUrl: backendImageUrl,
         backendResponseStatus: String(backend.parsed?.status || "ok"),
-        beforeUrl: String(before.post?.url || ""),
-        afterUrl: String(backend.parsed?.image_url || backend.parsed?.post_image_url || before.post?.url || ""),
+        uploadAttempted: Boolean(backend.parsed?.uploadAttempted ?? backend.parsed?.upload_attempted ?? !args.dryRun),
+        editAttempted: Boolean(backend.parsed?.editAttempted ?? backend.parsed?.edit_attempted ?? !args.dryRun),
+        rollbackNeeded: Boolean(backend.parsed?.rollbackNeeded ?? backend.parsed?.rollback_needed ?? false),
+        beforeUrl,
+        afterUrl,
+        titleHash: hashCheck.titleHash,
+        bodyHash: hashCheck.bodyHash,
+        afterTitleHash,
+        afterBodyHash,
+        failures,
       };
       writePya(resultPath, summary);
-      process.stdout.write(`[post-image-update] ${args.dryRun ? "dry-run" : "live"} result: ${resultPath}\n`);
+      if (failures.length) throw new Error("post-image-update backend verification failed: " + failures.join(", "));
+      process.stdout.write("[post-image-update] " + (args.dryRun ? "dry-run" : "live") + " result: " + resultPath + "\n");
       return { ok: true, dryRun: args.dryRun, preflightPath, resultPath };
     }
 

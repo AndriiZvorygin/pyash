@@ -9,10 +9,11 @@ import {
   renderDeterministicOverlay,
   runCoverOverlayStage,
 } from "../program/library/reporter_shared/cover-overlay-stage.mjs";
+import { buildBackgroundPromptSpec, TEXT_EXCLUSION_NEGATIVE } from "../program/library/reporter_shared/cover-prompt-policy.mjs";
 
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(COMMAND_DIR, "..");
-const DEFAULT_STYLE = 'bold civic poster background, no person required, high contrast, simple geometry, strong readability';
+const DEFAULT_STYLE = 'bold civic poster background, high contrast, simple geometry, strong readability';
 
 function usage() {
   return [
@@ -131,10 +132,9 @@ async function verifyRenderedOverlayWords({
   const uniqModels = [...new Set(verifyModels)];
 
   const prompt = [
-    "Read this image and extract only the large overlay headline text.",
-    "Return only that overlay text phrase.",
-    "Do not add explanation.",
-    "If unsure, return your best guess of the large overlaid words.",
+    "Read this image and extract all visible readable text.",
+    "Return one line with text exactly as visible.",
+    "If multiple text regions exist, include them all in reading order.",
   ].join(" ");
 
   let lastError = "";
@@ -157,7 +157,8 @@ async function verifyRenderedOverlayWords({
         timeoutMs: 2 * 60 * 1000,
         label: "verify-overlay-ocr",
       });
-      const candidate = normalizeOverlayText(extractOverlayCandidate(res.stdout));
+      const observedAll = normalizeOverlayText(String(res.stdout || ""));
+      const candidate = normalizeOverlayText(extractOverlayCandidate(observedAll));
       if (!candidate) throw new Error(`empty overlay text from model ${model}`);
       const lc = candidate.toLowerCase();
       if (
@@ -169,6 +170,7 @@ async function verifyRenderedOverlayWords({
       const verify = verifyCoverOverlayText({
         expectedText: expectedOverlay,
         observedText: candidate,
+        observedAllText: observedAll,
         minWords,
         maxWords,
       });
@@ -178,7 +180,7 @@ async function verifyRenderedOverlayWords({
       process.stdout.write(
         `[meeting-cover] overlay verify model=${model} expected="${expectedOverlay}" extracted="${candidate}" words=${countWords(candidate)}\n`
       );
-      return { model, extracted: candidate };
+      return { model, extracted: candidate, observedAll };
     } catch (err) {
       lastError = String(err?.message || err);
     }
@@ -280,35 +282,55 @@ async function main() {
   const overlayDerived = deriveCoverOverlayText({ sourceText: overlaySourceText, minWords: 3, maxWords: 6 });
   const shortOverlay = overlayDerived.finalOverlayText;
   verifyOverlayWordRange(shortOverlay, 3, 6);
+  const promptSpec = buildBackgroundPromptSpec({
+    style,
+    hookText,
+    topNewsworthy: topNewsworthy || meetingSummaryText,
+    overlayText: shortOverlay,
+    imageTextMode: "deterministic",
+  });
+
   const thumbnailSource = [
     '# Thumbnail Brief',
-    'Create a square civic thumbnail.',
-    `Overlay text should be 3-6 words: "${shortOverlay}".`,
-    'Do not require a person in frame. Prefer symbolic/atmospheric municipal background.',
+    promptSpec.positivePrompt,
     '',
-    '# Hook (context only)',
+    '# Negative Prompt',
+    promptSpec.negativePrompt,
+    '',
+    '# Context',
     hookText || 'Council Meeting Highlights',
-    '',
-    '# Top Newsworthy Developments',
     topNewsworthy || meetingSummaryText,
   ].join('\n').trim();
   fs.writeFileSync(thumbnailSourcePath, `${thumbnailSource}\n`, 'utf8');
 
-  const drawOut = await runWithStreaming({
+  const backgroundOutputPath = path.join(transcriptDir, prefix + '.meeting-cover.background.generated.png');
+  await runWithStreaming({
     cmd: 'node',
     args: [
-      path.join(ROOT, 'command/run_pya_program.mjs'),
-      path.join(ROOT, 'examples/pyash/draw-from-filename.pya'),
-      thumbnailSourcePath,
-      style,
-      '--verbose',
+      path.join(ROOT, 'command/draw_comfyui_runner.mjs'),
+      '--prompt',
+      promptSpec.positivePrompt,
+      '--negative-prompt',
+      promptSpec.negativePrompt,
+      '--workflow-root',
+      path.join(ROOT, 'draw'),
+      '--workflow-name',
+      String(process.env.PYA_DRAW_WORKFLOW_DEFAULT || 'Z-Image-TSV'),
+      '--host',
+      String(process.env.PYA_DRAW_HOST || 'http://mriczo:8188'),
+      '--output',
+      backgroundOutputPath,
+      '--width',
+      '1024',
+      '--height',
+      '1024',
     ],
     cwd: drawRunCwd,
     timeoutMs: 45 * 60 * 1000,
-    label: 'draw-meeting-cover',
+    label: 'draw-meeting-cover-background',
   });
 
-  const generated = parseGeneratedImagePath(drawOut.stdout, thumbnailSourcePath, drawRunCwd);
+  const generated = existsFile(backgroundOutputPath) ? backgroundOutputPath : '';
   if (!generated) throw new Error('could not find generated image path in draw output');
 
   const squareBackgroundPath = `${coverImagePath}.background.square.tmp.png`;
@@ -320,9 +342,12 @@ async function main() {
       overlayText: overlaySourceText,
       outputPath: coverImagePath,
       imageSizeTarget: 512,
-      legacyModelTextUsed: true,
+      imageTextMode: "deterministic",
+      legacyModelTextUsed: false,
       hookText,
       contextTopNews: topNewsworthy,
+      backgroundPrompt: promptSpec.positivePrompt,
+      backgroundNegativePrompt: promptSpec.negativePrompt,
     },
     deriveOverlay: () => overlayDerived,
     observeOverlay: async ({ backgroundPath, outputPath }) => {
@@ -333,23 +358,30 @@ async function main() {
         minWords: 3,
         maxWords: 8,
       });
-      return { observedText: observed.extracted, observedModel: observed.model };
+      const observedAllText = observed.observedAll || observed.extracted;
+      const expectedWords = new Set(shortOverlay.toLowerCase().split(/\s+/u).filter(Boolean));
+      const outsideOverlayText = observedAllText
+        .split(/\s+/u)
+        .filter((w) => w && !expectedWords.has(w.toLowerCase()))
+        .join(" ");
+      return { observedText: observed.extracted, observedAllText, outsideOverlayText, observedModel: observed.model };
     },
-    verifyOverlay: ({ finalOverlayText, observedText }) => verifyCoverOverlayText({
+    verifyOverlay: ({ finalOverlayText, observedText, observedAllText, outsideOverlayText }) => verifyCoverOverlayText({
       expectedText: finalOverlayText,
       observedText,
+      observedAllText,
+      outsideOverlayText,
       minWords: 3,
       maxWords: 8,
+      requireNoExtraVisibleText: true,
     }),
-    renderDeterministic: async ({ backgroundPath, finalOverlayText, outputPath }) => {
-      await renderDeterministicOverlay({
-        backgroundPath,
-        overlayText: finalOverlayText,
-        outputPath,
-        size: 512,
-        cwd: drawRunCwd,
-      });
-    },
+    renderDeterministic: async ({ backgroundPath, finalOverlayText, outputPath }) => renderDeterministicOverlay({
+      backgroundPath,
+      overlayText: finalOverlayText,
+      outputPath,
+      size: 512,
+      cwd: drawRunCwd,
+    }),
     reports: {
       input: overlayInputPath,
       derived: overlayDerivedPath,
