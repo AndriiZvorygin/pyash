@@ -238,4 +238,112 @@ test("deterministic compositor returns transparent text layer metadata", async (
   assert.equal(Boolean(meta.textLayerPath), true);
   assert.equal(fs.existsSync(meta.textLayerPath), true);
   assert.equal(meta.overlayStyle.backplate.enabled, false);
+  assert.equal(meta.textLayerHasAlpha, true);
+  assert.ok(meta.textLayerTransparentPixelRatio > 0.75);
+  assert.equal(meta.compositePreservedBackground, true);
+});
+
+test("hook becomes overlay text by default", () => {
+  const hook = "Easing The Burden On Local Businesses";
+  const derived = deriveCoverOverlayText({ sourceText: hook, minWords: 3, maxWords: 6 });
+  assert.equal(derived.finalOverlayText, hook);
+  assert.equal(derived.sourceUsedUnchanged, true);
+  assert.equal(derived.sourceShortened, false);
+});
+
+test("derived report records whether hook was unchanged or shortened", () => {
+  const unchanged = deriveCoverOverlayText({ sourceText: "Easing The Burden On Local Businesses", minWords: 3, maxWords: 6 });
+  assert.equal(unchanged.sourceUsedUnchanged, true);
+  const shortened = deriveCoverOverlayText({ sourceText: "Operations Committee Reviews Proposed 2026 Fees for Food Trucks", minWords: 3, maxWords: 6 });
+  assert.equal(shortened.sourceShortened, true);
+});
+
+test("promptify infers visual subject from hook semantics", async () => {
+  const { runCoverPromptifyStage } = await import("../program/library/reporter_shared/cover-promptify-stage.mjs");
+  const out = runCoverPromptifyStage({
+    hookText: "Easing The Burden On Local Businesses",
+    overlayText: "Easing The Burden On Local Businesses",
+    oneSentenceSummary: "Council reviewed costs for local operators.",
+    topNews: "Patio permit barriers and business costs",
+  });
+  assert.match(out.selectedVisualSubject, /storefronts|business|downtown/iu);
+  assert.equal(out.promptContainsOverlayText, false);
+});
+
+test("positive prompt does not contain hook verbatim in deterministic mode", () => {
+  const spec = buildBackgroundPromptSpec({
+    style: "editorial civic scene",
+    hookText: "Easing The Burden On Local Businesses",
+    topNewsworthy: "Patio permit barriers and business costs",
+    overlayText: "Easing The Burden On Local Businesses",
+    imageTextMode: "deterministic",
+  });
+  assert.equal(spec.positivePrompt.toLowerCase().includes("easing the burden on local businesses"), false);
+});
+
+test("overlay input report records hook and overlay text", async (t) => {
+  const tmp = mkTmpDir("cover-stage-hook-input-");
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const outputPath = path.join(tmp, "cover.png");
+  const reports = {
+    input: path.join(tmp, "cover-overlay.input.pya"),
+    derived: path.join(tmp, "cover-overlay.derived.pya"),
+    verify: path.join(tmp, "cover-overlay.verify.pya"),
+    final: path.join(tmp, "cover-overlay.final.pya"),
+  };
+
+  await runCoverOverlayStage({
+    stageInput: {
+      hookText: "Easing The Burden On Local Businesses",
+      overlayText: "Easing The Burden On Local Businesses",
+      outputPath,
+      imageSizeTarget: 0,
+    },
+    deriveOverlay: ({ overlayText }) => deriveCoverOverlayText({ sourceText: overlayText, minWords: 3, maxWords: 6 }),
+    observeOverlay: async () => ({ observedText: "", observedAllText: "" }),
+    verifyOverlay: ({ finalOverlayText, observedText, observedAllText }) => verifyCoverOverlayText({ expectedText: finalOverlayText, observedText, observedAllText }),
+    renderDeterministic: async ({ outputPath }) => {
+      fs.writeFileSync(outputPath, "ok");
+      return { outputPath, exactOverlayDrawn: true, layoutContractPass: true, outputExists: true, dimensions: { width: 0, height: 0 } };
+    },
+    reports,
+  });
+
+  const inputText = fs.readFileSync(reports.input, "utf8");
+  assert.match(inputText, /hookText is "Easing The Burden On Local Businesses"\./u);
+  assert.match(inputText, /overlayText is "Easing The Burden On Local Businesses"\./u);
+});
+
+
+test("black text-layer background/alpha flattening fails stage", async (t) => {
+  const tmp = mkTmpDir("cover-stage-alpha-fail-");
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const outputPath = path.join(tmp, "cover.png");
+  fs.writeFileSync(outputPath, "x");
+  const reports = {
+    input: path.join(tmp, "cover-overlay.input.pya"),
+    derived: path.join(tmp, "cover-overlay.derived.pya"),
+    verify: path.join(tmp, "cover-overlay.verify.pya"),
+    final: path.join(tmp, "cover-overlay.final.pya"),
+  };
+  await assert.rejects(() => runCoverOverlayStage({
+    stageInput: { overlayText: "Fourth Avenue One-Way Option Defeated", outputPath, imageSizeTarget: 0, backgroundUseful: true },
+    deriveOverlay: ({ overlayText }) => ({ finalOverlayText: overlayText }),
+    observeOverlay: async () => ({ observedText: "", observedAllText: "" }),
+    verifyOverlay: () => ({ pass: false, failures: ["force_fallback"], warnings: [] }),
+    renderDeterministic: async ({ outputPath }) => ({
+      outputPath,
+      exactOverlayDrawn: true,
+      layoutContractPass: true,
+      outputExists: true,
+      dimensions: { width: 512, height: 512 },
+      textLayerHasAlpha: false,
+      textLayerTransparentPixelRatio: 0,
+      alphaFlatteningDetected: true,
+      finalBackgroundSimilarity: 0.2,
+      compositePreservedBackground: false,
+    }),
+    reports,
+    diagnoseFinalBackground: async () => ({ backgroundUseful: true, visualUsefulnessMetrics: { nearBlackPixelRatio: 0.2, luminanceVariance: 1000 }, flatBackgroundDetected: false }),
+  }));
 });
