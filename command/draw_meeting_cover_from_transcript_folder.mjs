@@ -3,6 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from "node:url";
+import {
+  deriveCoverOverlayText,
+  verifyCoverOverlayText,
+  renderDeterministicOverlay,
+  runCoverOverlayStage,
+} from "../program/library/reporter_shared/cover-overlay-stage.mjs";
 
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(COMMAND_DIR, "..");
@@ -80,19 +86,6 @@ function parseGeneratedImagePath(drawStdout, sourceFilename, runCwd = ROOT) {
   return existsFile(fallbackRun) ? fallbackRun : '';
 }
 
-function toShortOverlay(hookText) {
-  const words = String(hookText || '')
-    .replace(/[^A-Za-z0-9\s-]/gu, ' ')
-    .split(/\s+/u)
-    .map((w) => w.trim())
-    .filter(Boolean);
-  if (!words.length) return 'City Meeting Update';
-  if (words.length >= 4) return words.slice(0, 4).join(' ');
-  if (words.length === 3) return words.join(' ');
-  if (words.length === 2) return `${words[0]} ${words[1]} Update`;
-  return `${words[0]} City Update`;
-}
-
 function countWords(text) {
   return String(text || '').trim().split(/\s+/u).filter(Boolean).length;
 }
@@ -124,21 +117,11 @@ function normalizeOverlayText(text) {
     .trim();
 }
 
-function tokenSet(text) {
-  return new Set(
-    String(text || "")
-      .toLowerCase()
-      .split(/\s+/u)
-      .map((x) => x.trim())
-      .filter((x) => x && x.length >= 3)
-  );
-}
-
 async function verifyRenderedOverlayWords({
   imagePath,
   expectedOverlay,
   minWords = 3,
-  maxWords = 6,
+  maxWords = 8,
 }) {
   const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
   const verifyModels = [
@@ -183,26 +166,19 @@ async function verifyRenderedOverlayWords({
       ) {
         throw new Error(`model ${model} returned non-overlay/meta text "${candidate}"`);
       }
-      const words = countWords(candidate);
-      if (words < minWords || words > maxWords) {
-        throw new Error(`model ${model} extracted "${candidate}" (${words} words), expected ${minWords}-${maxWords}`);
-      }
-      const expectedTokens = tokenSet(expectedOverlay);
-      const candidateTokens = tokenSet(candidate);
-      let overlap = 0;
-      for (const t of candidateTokens) {
-        if (expectedTokens.has(t)) overlap += 1;
-      }
-      const minOverlap = Math.min(2, expectedTokens.size);
-      if (minOverlap > 0 && overlap < minOverlap) {
-        throw new Error(
-          `model ${model} extracted "${candidate}" but token overlap ${overlap}/${expectedTokens.size} is too low for expected "${expectedOverlay}"`
-        );
+      const verify = verifyCoverOverlayText({
+        expectedText: expectedOverlay,
+        observedText: candidate,
+        minWords,
+        maxWords,
+      });
+      if (!verify.pass) {
+        throw new Error(`model ${model} extracted "${candidate}" but verify failed: ${verify.failures.join(", ")}`);
       }
       process.stdout.write(
-        `[meeting-cover] overlay verify model=${model} expected="${expectedOverlay}" extracted="${candidate}" words=${words}\n`
+        `[meeting-cover] overlay verify model=${model} expected="${expectedOverlay}" extracted="${candidate}" words=${countWords(candidate)}\n`
       );
-      return { model, extracted: candidate, words };
+      return { model, extracted: candidate };
     } catch (err) {
       lastError = String(err?.message || err);
     }
@@ -292,11 +268,17 @@ async function main() {
   const thumbnailSourcePath = path.join(transcriptDir, `${prefix}.thumbnail-source.md`);
   const coverImagePath = path.join(transcriptDir, `${prefix}.meeting-cover.png`);
   const coverImageStablePath = path.join(transcriptDir, 'meeting-cover.png');
+  const overlayInputPath = path.join(transcriptDir, `${prefix}.cover-overlay.input.pya`);
+  const overlayDerivedPath = path.join(transcriptDir, `${prefix}.cover-overlay.derived.pya`);
+  const overlayVerifyPath = path.join(transcriptDir, `${prefix}.cover-overlay.verify.pya`);
+  const overlayFinalPath = path.join(transcriptDir, `${prefix}.cover-overlay.final.pya`);
 
   const hookText = safeReadText(hookPath, '').trim();
   const meetingSummaryText = safeReadText(meetingSummaryPath, '').trim();
   const topNewsworthy = extractMarkdownSection(meetingSummaryText, 'Top Newsworthy Developments');
-  const shortOverlay = toShortOverlay(hookText);
+  const overlaySourceText = hookText || 'City Meeting Update';
+  const overlayDerived = deriveCoverOverlayText({ sourceText: overlaySourceText, minWords: 3, maxWords: 6 });
+  const shortOverlay = overlayDerived.finalOverlayText;
   verifyOverlayWordRange(shortOverlay, 3, 6);
   const thumbnailSource = [
     '# Thumbnail Brief',
@@ -329,27 +311,54 @@ async function main() {
   const generated = parseGeneratedImagePath(drawOut.stdout, thumbnailSourcePath, drawRunCwd);
   if (!generated) throw new Error('could not find generated image path in draw output');
 
-  try {
-    await verifyRenderedOverlayWords({
-      imagePath: generated,
-      expectedOverlay: shortOverlay,
-      minWords: 3,
-      maxWords: 6,
-    });
-  } catch (err) {
-    process.stderr.write(`[meeting-cover] warn overlay verify failed; keeping generated image: ${String(err?.message || err)}\n`);
-  }
+  const squareBackgroundPath = `${coverImagePath}.background.square.tmp.png`;
+  await forceSquare512(generated, squareBackgroundPath, drawRunCwd);
 
-  const squareTmpPath = `${coverImagePath}.square.tmp.png`;
-  try {
-    await forceSquare512(generated, squareTmpPath, drawRunCwd);
-    fs.copyFileSync(squareTmpPath, coverImagePath);
-  } catch (err) {
-    process.stderr.write(`[meeting-cover] warn square normalization failed; using raw draw output: ${String(err?.message || err)}\n`);
-    fs.copyFileSync(generated, coverImagePath);
-  } finally {
-    try { fs.unlinkSync(squareTmpPath); } catch {}
-  }
+  await runCoverOverlayStage({
+    stageInput: {
+      backgroundPath: squareBackgroundPath,
+      overlayText: overlaySourceText,
+      outputPath: coverImagePath,
+      imageSizeTarget: 512,
+      legacyModelTextUsed: true,
+      hookText,
+      contextTopNews: topNewsworthy,
+    },
+    deriveOverlay: () => overlayDerived,
+    observeOverlay: async ({ backgroundPath, outputPath }) => {
+      const targetImagePath = outputPath && existsFile(outputPath) ? outputPath : backgroundPath;
+      const observed = await verifyRenderedOverlayWords({
+        imagePath: targetImagePath,
+        expectedOverlay: shortOverlay,
+        minWords: 3,
+        maxWords: 8,
+      });
+      return { observedText: observed.extracted, observedModel: observed.model };
+    },
+    verifyOverlay: ({ finalOverlayText, observedText }) => verifyCoverOverlayText({
+      expectedText: finalOverlayText,
+      observedText,
+      minWords: 3,
+      maxWords: 8,
+    }),
+    renderDeterministic: async ({ backgroundPath, finalOverlayText, outputPath }) => {
+      await renderDeterministicOverlay({
+        backgroundPath,
+        overlayText: finalOverlayText,
+        outputPath,
+        size: 512,
+        cwd: drawRunCwd,
+      });
+    },
+    reports: {
+      input: overlayInputPath,
+      derived: overlayDerivedPath,
+      verify: overlayVerifyPath,
+      final: overlayFinalPath,
+    },
+  });
+
+  try { fs.unlinkSync(squareBackgroundPath); } catch {}
   fs.copyFileSync(coverImagePath, coverImageStablePath);
 
   process.stdout.write(`[meeting-cover] source: ${generated}\n`);
