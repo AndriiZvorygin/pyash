@@ -8,8 +8,9 @@ import {
   verifyCoverOverlayText,
   renderDeterministicOverlay,
   runCoverOverlayStage,
+  writePyaReport,
 } from "../program/library/reporter_shared/cover-overlay-stage.mjs";
-import { runCoverPromptifyStage } from "../program/library/reporter_shared/cover-promptify-stage.mjs";
+import { runCoverPromptifyStage, buildRetryPromptForBackgroundRisk } from "../program/library/reporter_shared/cover-promptify-stage.mjs";
 import { selectCoverOverlaySource } from "../program/library/reporter_shared/cover-overlay-source.mjs";
 import { diagnoseCoverBackground } from "../program/library/reporter_shared/cover-background-diagnostics.mjs";
 
@@ -121,6 +122,7 @@ function normalizeOverlayText(text) {
 }
 
 async function observeVisibleTextRaw(imagePath) {
+  if (String(process.env.COVER_BACKGROUND_OCR || '').trim() !== '1') return '';
   const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
   const model = String(process.env.DRAW_OVERLAY_VERIFY_MODEL || "qwen3.5:9b").trim();
   const prompt = [
@@ -321,6 +323,7 @@ async function main() {
   const overlayFinalPath = path.join(transcriptDir, `${prefix}.cover-overlay.final.pya`);
   const coverPromptifyPath = path.join(transcriptDir, `${prefix}.cover-promptify.pya`);
   const coverBackgroundDiagnosticPath = path.join(transcriptDir, `${prefix}.cover-background.diagnostic.pya`);
+  const coverBackgroundAttemptsPath = path.join(transcriptDir, `${prefix}.cover-background.attempts.pya`);
 
   const hookText = safeReadText(hookPath, '').trim();
   const meetingSummaryText = safeReadText(meetingSummaryPath, '').trim();
@@ -368,74 +371,133 @@ async function main() {
   ].join('\n').trim();
   fs.writeFileSync(thumbnailSourcePath, `${thumbnailSource}\n`, 'utf8');
 
-  const backgroundOutputPath = path.join(transcriptDir, prefix + '.meeting-cover.background.generated.png');
-  await runWithStreaming({
-    cmd: 'node',
-    args: [
-      path.join(ROOT, 'command/draw_comfyui_runner.mjs'),
-      '--prompt',
-      promptSpec.positivePrompt,
-      '--negative-prompt',
-      promptSpec.negativePrompt,
-      '--workflow-root',
-      path.join(ROOT, 'draw'),
-      '--workflow-name',
-      String(process.env.PYA_DRAW_WORKFLOW_DEFAULT || 'Z-Image-TSV'),
-      '--host',
-      String(process.env.PYA_DRAW_HOST || 'http://mriczo:8188'),
-      '--output',
-      backgroundOutputPath,
-      '--width',
-      '1024',
-      '--height',
-      '1024',
-    ],
-    cwd: drawRunCwd,
-    timeoutMs: 45 * 60 * 1000,
-    label: 'draw-meeting-cover-background',
-  });
+  const backgroundAttempts = [];
+  async function renderBackgroundAttempt(outputPath, attemptLabel, strictNegative = false, promptOverride = "") {
+    const neg = strictNegative
+      ? `${promptSpec.negativePrompt}, typographic characters, stray glyphs, alphanumeric marks`
+      : promptSpec.negativePrompt;
+    await runWithStreaming({
+      cmd: 'node',
+      args: [
+        path.join(ROOT, 'command/draw_comfyui_runner.mjs'),
+        '--prompt',
+        (promptOverride || promptSpec.positivePrompt),
+        '--negative-prompt',
+        neg,
+        '--workflow-root',
+        path.join(ROOT, 'draw'),
+        '--workflow-name',
+        String(process.env.PYA_DRAW_WORKFLOW_DEFAULT || 'Z-Image-TSV'),
+        '--host',
+        String(process.env.PYA_DRAW_HOST || 'http://mriczo:8188'),
+        '--output',
+        outputPath,
+        '--width',
+        '1024',
+        '--height',
+        '1024',
+      ],
+      cwd: drawRunCwd,
+      timeoutMs: 45 * 60 * 1000,
+      label: 'draw-meeting-cover-background',
+    });
 
-  const generated = existsFile(backgroundOutputPath) ? backgroundOutputPath : '';
-  if (!generated) throw new Error('could not find generated image path in draw output');
+    const squarePath = `${outputPath}.square.tmp.png`;
+    await forceSquare512(outputPath, squarePath, drawRunCwd);
+    const observedText = await observeVisibleTextRaw(squarePath);
+    const diag = await diagnoseCoverBackground({
+      backgroundPath: squarePath,
+      observedBackgroundText: observedText,
+      selectedOverlayText: shortOverlay,
+      rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
+      sourceDisagreementDetected: overlayDecision.sourceDisagreementDetected,
+      backgroundKind: 'generated_scene',
+      visualSubject: promptify.selectedVisualSubject,
+      abstractFallbackAllowed: false,
+      promptText: `${(promptOverride || promptSpec.positivePrompt)}\nNEG:${neg}`,
+      selectedOverlayTextHash: '',
+      reportPath: '',
+    });
 
-  const squareBackgroundPath = `${coverImagePath}.background.square.tmp.png`;
-  await forceSquare512(generated, squareBackgroundPath, drawRunCwd);
-
-  const backgroundObservedText = await observeVisibleTextRaw(squareBackgroundPath);
-  let backgroundDiagnostic = await diagnoseCoverBackground({
-    backgroundPath: squareBackgroundPath,
-    observedBackgroundText: backgroundObservedText,
-    selectedOverlayText: shortOverlay,
-    rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
-    sourceDisagreementDetected: overlayDecision.sourceDisagreementDetected,
-    promptText: `${promptSpec.positivePrompt}
-NEG:${promptSpec.negativePrompt}`,
-    selectedOverlayTextHash: "",
-    reportPath: coverBackgroundDiagnosticPath,
-  });
-
-  // If sources disagree and OCR cannot confirm text-free background, force safe fallback.
-  if (overlayDecision.sourceDisagreementDetected && !String(backgroundObservedText || "").trim()) {
-    backgroundDiagnostic.backgroundUseful = false;
-    backgroundDiagnostic.failureReasons = [...new Set([...(backgroundDiagnostic.failureReasons || []), "background_text_ocr_unreliable_under_source_disagreement"])];
+    backgroundAttempts.push({
+      label: attemptLabel,
+      outputPath,
+      squarePath,
+      observedText,
+      diagnostics: diag,
+      accepted: Boolean(diag.backgroundUseful && diag.backgroundRelevancePass),
+      rejectionReasons: diag.failureReasons,
+    });
+    return { squarePath, observedText, diag };
   }
 
-  let chosenBackgroundPath = squareBackgroundPath;
-  if (!backgroundDiagnostic.backgroundUseful) {
+  const backgroundOutputPath = path.join(transcriptDir, prefix + '.meeting-cover.background.generated.png');
+  const retryBackgroundOutputPath = path.join(transcriptDir, prefix + '.meeting-cover.background.generated.retry-1.png');
+
+  let chosenBackgroundPath = '';
+  let backgroundDiagnostic = null;
+
+  const first = await renderBackgroundAttempt(backgroundOutputPath, 'generated_attempt_1', false);
+  backgroundDiagnostic = first.diag;
+  if (backgroundDiagnostic.backgroundUseful && backgroundDiagnostic.backgroundRelevancePass) {
+    chosenBackgroundPath = first.squarePath;
+  } else {
+    const retryPrompt = buildRetryPromptForBackgroundRisk({ visualSubject: promptify.selectedVisualSubject, positivePrompt: promptSpec.positivePrompt });
+    const second = await renderBackgroundAttempt(retryBackgroundOutputPath, 'generated_attempt_2_strict_negative', true, retryPrompt);
+    backgroundDiagnostic = second.diag;
+    if (backgroundDiagnostic.backgroundUseful && backgroundDiagnostic.backgroundRelevancePass) {
+      chosenBackgroundPath = second.squarePath;
+    }
+  }
+
+  if (!chosenBackgroundPath) {
     const safeBgPath = `${coverImagePath}.background.safe.png`;
     await generateSafeBackgroundFallback(safeBgPath, 512, drawRunCwd);
-    backgroundDiagnostic = await diagnoseCoverBackground({
+    const safeDiag = await diagnoseCoverBackground({
       backgroundPath: safeBgPath,
-      observedBackgroundText: "",
+      observedBackgroundText: '',
       selectedOverlayText: shortOverlay,
       rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
       sourceDisagreementDetected: false,
-      promptText: "safe_background_fallback",
-      selectedOverlayTextHash: "",
-      reportPath: coverBackgroundDiagnosticPath,
+      backgroundKind: 'abstract_fallback',
+      visualSubject: promptify.selectedVisualSubject,
+      abstractFallbackAllowed: false,
+      promptText: 'safe_background_fallback',
+      selectedOverlayTextHash: '',
+      reportPath: '',
     });
+    backgroundAttempts.push({
+      label: 'abstract_fallback',
+      outputPath: safeBgPath,
+      squarePath: safeBgPath,
+      observedText: '',
+      diagnostics: safeDiag,
+      accepted: false,
+      rejectionReasons: safeDiag.failureReasons,
+    });
+    backgroundDiagnostic = safeDiag;
     chosenBackgroundPath = safeBgPath;
   }
+
+  writePyaReport(coverBackgroundAttemptsPath, {
+    selectedOverlayText: shortOverlay,
+    visualSubject: promptify.selectedVisualSubject,
+    attempts: backgroundAttempts,
+  });
+
+  backgroundDiagnostic = await diagnoseCoverBackground({
+    backgroundPath: chosenBackgroundPath,
+    observedBackgroundText: '',
+    selectedOverlayText: shortOverlay,
+    rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
+    sourceDisagreementDetected: overlayDecision.sourceDisagreementDetected,
+    backgroundKind: backgroundDiagnostic?.backgroundKind || (String(chosenBackgroundPath).includes('.background.safe.') ? 'abstract_fallback' : 'generated_scene'),
+    visualSubject: promptify.selectedVisualSubject,
+    abstractFallbackAllowed: false,
+    promptText: `${promptSpec.positivePrompt}\nNEG:${promptSpec.negativePrompt}`,
+    selectedOverlayTextHash: '',
+    reportPath: coverBackgroundDiagnosticPath,
+  });
 
   await runCoverOverlayStage({
     stageInput: {
@@ -459,8 +521,15 @@ NEG:${promptSpec.negativePrompt}`,
       backgroundUseful: backgroundDiagnostic.backgroundUseful,
       backgroundDiagnosticPath: coverBackgroundDiagnosticPath,
       backgroundFailureReasons: backgroundDiagnostic.failureReasons,
-      safeBackgroundFallbackUsed: chosenBackgroundPath !== squareBackgroundPath,
-      safeBackgroundPath: chosenBackgroundPath !== squareBackgroundPath ? chosenBackgroundPath : "",
+      safeBackgroundFallbackUsed: String(chosenBackgroundPath).includes(".background.safe."),
+      safeBackgroundPath: String(chosenBackgroundPath).includes(".background.safe.") ? chosenBackgroundPath : "",
+      backgroundKind: String(chosenBackgroundPath).includes(".background.safe.") ? "abstract_fallback" : "generated_scene",
+      backgroundRelevancePass: Boolean(backgroundDiagnostic?.backgroundRelevancePass),
+      backgroundRelevanceReason: String(backgroundDiagnostic?.backgroundRelevanceReason || ""),
+      abstractFallbackUsed: String(chosenBackgroundPath).includes(".background.safe."),
+      abstractFallbackAllowed: false,
+      visualSubject: String(promptify.selectedVisualSubject || ""),
+      coverBackgroundAttemptsPath,
     },
     deriveOverlay: () => overlayDerived,
     observeOverlay: async () => ({
@@ -497,15 +566,20 @@ NEG:${promptSpec.negativePrompt}`,
       selectedOverlayText: shortOverlay,
       rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
       sourceDisagreementDetected: false,
+      backgroundKind: String(chosenBackgroundPath).includes(".background.safe.") ? "abstract_fallback" : "transformed_generated_scene",
+      visualSubject: String(promptify.selectedVisualSubject || ""),
+      abstractFallbackAllowed: false,
       promptText: "final_composite_check",
       reportPath: "",
     }),
   });
 
-  try { fs.unlinkSync(squareBackgroundPath); } catch {}
+  for (const a of backgroundAttempts) {
+    try { if (String(a.squarePath || "").endsWith(".square.tmp.png")) fs.unlinkSync(a.squarePath); } catch {}
+  }
   fs.copyFileSync(coverImagePath, coverImageStablePath);
 
-  process.stdout.write(`[meeting-cover] source: ${generated}\n`);
+  process.stdout.write(`[meeting-cover] source: ${chosenBackgroundPath}\n`);
   process.stdout.write(`[meeting-cover] thumbnail source: ${thumbnailSourcePath}\n`);
   process.stdout.write(`[meeting-cover] wrote: ${coverImagePath}\n`);
   process.stdout.write(`[meeting-cover] wrote: ${coverImageStablePath}\n`);

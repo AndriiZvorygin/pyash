@@ -12,11 +12,11 @@ const BANNED_NEGATIVE_PHRASING = [
 
 function inferVisualSubject({ hookText = "", oneSentenceSummary = "", topNews = "" } = {}) {
   const src = `${hookText} ${oneSentenceSummary} ${topNews}`.toLowerCase();
+  if (src.includes("road") || src.includes("traffic") || src.includes("avenue") || src.includes("fourth")) {
+    return "municipal roadway corridor with civic infrastructure context";
+  }
   if (src.includes("business") || src.includes("permit") || src.includes("patio")) {
     return "downtown storefronts near municipal roadwork context";
-  }
-  if (src.includes("road") || src.includes("traffic") || src.includes("avenue")) {
-    return "municipal roadway corridor with civic infrastructure context";
   }
   if (src.includes("budget") || src.includes("fees") || src.includes("fund")) {
     return "city committee setting with civic finance context";
@@ -85,4 +85,14 @@ export function runCoverPromptifyStage({
 
   if (reportPath) writePyaReport(reportPath, out);
   return out;
+}
+
+
+export function buildRetryPromptForBackgroundRisk({ visualSubject = "", positivePrompt = "" } = {}) {
+  const src = String(visualSubject || "").toLowerCase() + " " + String(positivePrompt || "").toLowerCase();
+  const roadworkLike = /\b(avenue|road|street|traffic|one-way|construction|barrier|barricade|lane|pavement|infrastructure|deferred|roadwork)\b/iu.test(src);
+  if (roadworkLike) {
+    return "Documentary close-up of municipal roadwork scene, orange traffic barrels and temporary barricades, lane markings and pavement texture in sharp foreground, curb and sidewalk edges, background buildings softly blurred, natural evening light, balanced contrast, open pavement foreground, square composition";
+  }
+  return String(positivePrompt || "");
 }

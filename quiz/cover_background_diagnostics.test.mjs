@@ -62,3 +62,19 @@ test("final mostly black composite fails when final background usefulness is fal
     diagnoseFinalBackground: async () => ({ backgroundUseful: false, flatBackgroundDetected: true, visualUsefulnessMetrics: { nearBlackPixelRatio: 0.95, luminanceVariance: 10 } }),
   }));
 });
+
+test("abstract fallback fails relevance by default", async (t) => {
+  const tmp = mkTmpDir();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const bg = path.join(tmp, "bg.png");
+  await makeImage("#4a6ea8", bg);
+  const out = await diagnoseCoverBackground({
+    backgroundPath: bg,
+    backgroundKind: "abstract_fallback",
+    abstractFallbackAllowed: false,
+    promptText: "safe_background_fallback",
+  });
+  assert.equal(out.backgroundRelevancePass, false);
+  assert.ok(out.failureReasons.includes("relevant_background_unavailable"));
+  assert.equal(out.finalPublishableCover, false);
+});
