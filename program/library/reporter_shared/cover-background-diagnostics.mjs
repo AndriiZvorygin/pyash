@@ -52,6 +52,9 @@ export async function diagnoseCoverBackground({
   selectedOverlayText = "",
   rejectedOverlayTexts = [],
   sourceDisagreementDetected = false,
+  backgroundKind = "unknown",
+  visualSubject = "",
+  abstractFallbackAllowed = false,
   promptText = "",
   selectedOverlayTextHash = "",
   previousPromptHash = "",
@@ -72,6 +75,14 @@ export async function diagnoseCoverBackground({
     textLikeContentDetected: false,
     observedBackgroundText: String(observedBackgroundText || ""),
     staleBackgroundTextDetected: false,
+    backgroundKind: String(backgroundKind || "unknown"),
+    abstractFallbackUsed: String(backgroundKind || "").includes("fallback"),
+    abstractFallbackAllowed: Boolean(abstractFallbackAllowed),
+    visualSubject: String(visualSubject || ""),
+    visualSubjectMatched: null,
+    backgroundRelevancePass: false,
+    backgroundRelevanceReason: "",
+    finalPublishableCover: false,
     visualUsefulnessMetrics: {
       luminanceVariance: 0,
       colourVariance: 0,
@@ -87,6 +98,7 @@ export async function diagnoseCoverBackground({
 
   if (!exists) {
     out.failureReasons.push("background_missing");
+    out.backgroundRelevanceReason = "background_missing";
     if (reportPath) writePyaReport(reportPath, out);
     return out;
   }
@@ -155,9 +167,11 @@ export async function diagnoseCoverBackground({
 
   const flatBackgroundDetected = varL < 20 || edgeScore < 2;
   const nearBlackTooHigh = nearBlackRatio > 0.78;
+  const syntheticTextBannerRisk = nearWhiteRatio > 0.08 && edgeScore > 80 && varSat < 800;
   out.flatBackgroundDetected = flatBackgroundDetected;
 
   if (textLikeContentDetected) out.failureReasons.push("background_text_detected");
+  if (syntheticTextBannerRisk) out.failureReasons.push("synthetic_text_banner_risk");
   if (flatBackgroundDetected) out.failureReasons.push("flat_background_detected");
   if (nearBlackTooHigh) out.failureReasons.push("near_black_ratio_too_high");
 
@@ -169,6 +183,27 @@ export async function diagnoseCoverBackground({
   }
 
   out.backgroundUseful = out.failureReasons.length === 0;
+
+  const kind = String(backgroundKind || "unknown");
+  const isAbstract = kind === "abstract_fallback" || kind === "solid_fallback";
+  const isGeneratedLike = kind === "generated_scene" || kind === "transformed_generated_scene";
+  if (isAbstract && !abstractFallbackAllowed) {
+    out.backgroundRelevancePass = false;
+    out.backgroundRelevanceReason = "abstract_fallback_not_allowed";
+    out.failureReasons.push("relevant_background_unavailable");
+    out.backgroundUseful = false;
+  } else if (isGeneratedLike) {
+    out.backgroundRelevancePass = true;
+    out.backgroundRelevanceReason = "generated_scene_provenance";
+  } else if (out.backgroundUseful) {
+    out.backgroundRelevancePass = false;
+    out.backgroundRelevanceReason = "unknown_background_provenance";
+  } else {
+    out.backgroundRelevancePass = false;
+    out.backgroundRelevanceReason = "background_usefulness_failed";
+  }
+  out.visualSubjectMatched = isGeneratedLike ? true : null;
+  out.finalPublishableCover = Boolean(out.backgroundUseful && out.backgroundRelevancePass);
 
   if (out.backgroundUseful) out.recommendedAction = "accept";
   else if (staleTextMatch) out.recommendedAction = "regenerate_with_stricter_prompt";

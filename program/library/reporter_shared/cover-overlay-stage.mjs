@@ -423,7 +423,7 @@ export async function renderDeterministicOverlay({
     outputPath,
     textLayerPath,
     backgroundPath,
-    safeBackgroundPath: outputPath,
+    safeBackgroundPath: "",
     overlayText: String(overlayText || ""),
     outputExists,
     textLayerExists,
@@ -447,7 +447,7 @@ export async function renderDeterministicOverlay({
       lines,
     },
     backplateAreaRatio: 0,
-    safeBackgroundFallbackUsed: true,
+    safeBackgroundFallbackUsed: false,
     compositorMode: "ffmpeg_overlay_rgba",
     compositorCommand: compositeCommand.join(" "),
     textLayerCommand: textLayerCommand.join(" "),
@@ -692,6 +692,9 @@ export async function runCoverOverlayStage({
   }
   if (stageInput?.backgroundUseful === false) finalFailures.push("background_usefulness_failed");
   if (finalBackgroundDiagnostic && finalBackgroundDiagnostic.backgroundUseful === false) finalFailures.push("final_background_usefulness_failed");
+  if (stageInput?.backgroundRelevancePass === false) finalFailures.push("background_relevance_failed");
+  if (finalBackgroundDiagnostic && finalBackgroundDiagnostic.backgroundRelevancePass === false) finalFailures.push("final_background_relevance_failed");
+  if (stageInput?.abstractFallbackUsed === true && stageInput?.abstractFallbackAllowed !== true) finalFailures.push("abstract_fallback_not_allowed");
   if (verifyReport.textLayerHasAlpha === false) finalFailures.push("text_layer_alpha_missing");
   if (verifyReport.alphaFlatteningDetected === true) finalFailures.push("alpha_flattening_detected");
   if (verifyReport.compositePreservedBackground === false && Number(verifyReport.finalBackgroundSimilarity || 0) > 0) finalFailures.push("background_not_preserved_in_composite");
@@ -728,6 +731,13 @@ export async function runCoverOverlayStage({
     finalLuminanceVariance: finalBackgroundDiagnostic?.visualUsefulnessMetrics?.luminanceVariance ?? null,
     finalFlatBackgroundDetected: finalBackgroundDiagnostic?.flatBackgroundDetected ?? null,
     finalBackgroundUsefulnessPass: finalBackgroundDiagnostic ? Boolean(finalBackgroundDiagnostic.backgroundUseful) : null,
+    backgroundKind: String(stageInput?.backgroundKind || finalBackgroundDiagnostic?.backgroundKind || "unknown"),
+    backgroundRelevancePass: finalBackgroundDiagnostic ? Boolean(finalBackgroundDiagnostic.backgroundRelevancePass) : (stageInput?.backgroundRelevancePass ?? null),
+    backgroundRelevanceReason: String(finalBackgroundDiagnostic?.backgroundRelevanceReason || stageInput?.backgroundRelevanceReason || ""),
+    abstractFallbackUsed: Boolean(stageInput?.abstractFallbackUsed),
+    abstractFallbackAllowed: Boolean(stageInput?.abstractFallbackAllowed),
+    visualSubject: String(stageInput?.visualSubject || finalBackgroundDiagnostic?.visualSubject || ""),
+    finalPublishableCover: false,
     compositorMode: verifyReport.compositorMode,
     compositorCommand: verifyReport.compositorCommand,
     backgroundInputPath: verifyReport.backgroundInputPath,
@@ -738,6 +748,7 @@ export async function runCoverOverlayStage({
     alphaFlatteningDetected: verifyReport.alphaFlatteningDetected,
     compositePreservedBackground: verifyReport.compositePreservedBackground,
   };
+  finalReport.finalPublishableCover = Boolean(finalReport.pass && finalReport.backgroundRelevancePass !== false && finalReport.finalBackgroundUsefulnessPass !== false && finalReport.abstractFallbackUsed !== true);
   writePyaReport(reports.final, finalReport);
 
   if (!finalReport.pass) {

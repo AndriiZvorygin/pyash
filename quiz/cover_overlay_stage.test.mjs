@@ -347,3 +347,65 @@ test("black text-layer background/alpha flattening fails stage", async (t) => {
     diagnoseFinalBackground: async () => ({ backgroundUseful: true, visualUsefulnessMetrics: { nearBlackPixelRatio: 0.2, luminanceVariance: 1000 }, flatBackgroundDetected: false }),
   }));
 });
+
+test("final pass requires background relevance and disallows abstract fallback", async (t) => {
+  const tmp = mkTmpDir();
+  const out = path.join(tmp, "final.png");
+  const reports = {
+    input: path.join(tmp, "in.pya"),
+    derived: path.join(tmp, "derived.pya"),
+    verify: path.join(tmp, "verify.pya"),
+    final: path.join(tmp, "final.pya"),
+  };
+  await assert.rejects(() => runCoverOverlayStage({
+    stageInput: {
+      overlayText: "Fourth Avenue One-Way Option Defeated",
+      outputPath: out,
+      imageSizeTarget: 512,
+      backgroundUseful: true,
+      backgroundRelevancePass: false,
+      abstractFallbackUsed: true,
+      abstractFallbackAllowed: false,
+      backgroundKind: "abstract_fallback",
+    },
+    deriveOverlay: ({ overlayText }) => ({ finalOverlayText: overlayText }),
+    observeOverlay: async ({ overlayText }) => ({ observedText: overlayText, observedAllText: overlayText }),
+    verifyOverlay: () => ({ pass: true, failures: [], warnings: [] }),
+    renderDeterministic: async ({ outputPath }) => ({ outputPath, exactOverlayDrawn: true, layoutContractPass: true, outputExists: true, dimensions: { width: 512, height: 512 } }),
+    reports,
+    diagnoseFinalBackground: async () => ({ backgroundUseful: true, backgroundRelevancePass: false, backgroundKind: "abstract_fallback", visualUsefulnessMetrics: { nearBlackPixelRatio: 0.1, luminanceVariance: 100 } }),
+  }));
+});
+
+test("roadwork prompt uses object-level street terms and excludes text-inducing terms", () => {
+  const spec = buildBackgroundPromptSpec({
+    style: "editorial documentary background",
+    hookText: "Fourth Avenue One-Way Option Defeated",
+    topNewsworthy: "Council deferred the road project and rejected one-way option",
+    visualSubject: "municipal roadway corridor with civic infrastructure context",
+    overlayText: "Fourth Avenue One-Way Option Defeated",
+    imageTextMode: "deterministic",
+  });
+  const p = spec.positivePrompt.toLowerCase();
+  for (const term of ["traffic barrels", "barricades", "lane markings", "pavement"]) {
+    assert.equal(p.includes(term), true);
+  }
+  for (const banned of ["civic-news", "poster", "headline", "title", "sign", "signage", "label", "fourth avenue one-way option defeated"]) {
+    assert.equal(p.includes(banned), false);
+  }
+  const neg = spec.negativePrompt.toLowerCase();
+  for (const term of ["billboard", "placard", "storefront signs", "road signs", "license plates"]) {
+    assert.equal(neg.includes(term), true);
+  }
+});
+
+test("retry prompt for synthetic text risk shifts to close-up roadwork framing", async () => {
+  const { buildRetryPromptForBackgroundRisk } = await import("../program/library/reporter_shared/cover-promptify-stage.mjs");
+  const retry = buildRetryPromptForBackgroundRisk({
+    visualSubject: "municipal roadway corridor with civic infrastructure context",
+    positivePrompt: "Documentary photograph style municipal street under roadwork",
+  }).toLowerCase();
+  for (const term of ["close-up", "traffic barrels", "barricades", "pavement", "blurred", "open pavement foreground"]) {
+    assert.equal(retry.includes(term), true);
+  }
+});
