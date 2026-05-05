@@ -36,7 +36,7 @@ function parseArgs(argv) {
 }
 
 function resolveHost(opts) {
-  return opts.host ?? process.env.PYA_DRAW_HOST ?? "http://localhost:8188";
+  return opts.host ?? process.env.PYA_DRAW_HOST ?? "http://mriczo:8188";
 }
 
 function resolveBackend(opts) {

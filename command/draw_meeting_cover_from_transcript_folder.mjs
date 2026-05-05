@@ -355,15 +355,11 @@ async function main() {
   });
   const promptSpec = {
     positivePrompt: promptify.positivePrompt,
-    negativePrompt: promptify.negativePrompt,
   };
 
   const thumbnailSource = [
     '# Thumbnail Brief',
     promptSpec.positivePrompt,
-    '',
-    '# Negative Prompt',
-    promptSpec.negativePrompt,
     '',
     '# Context',
     hookText || 'Council Meeting Highlights',
@@ -373,9 +369,7 @@ async function main() {
 
   const backgroundAttempts = [];
   async function renderBackgroundAttempt(outputPath, attemptLabel, strictNegative = false, promptOverride = "") {
-    const neg = strictNegative
-      ? `${promptSpec.negativePrompt}, typographic characters, stray glyphs, alphanumeric marks`
-      : promptSpec.negativePrompt;
+    const neg = "";
     await runWithStreaming({
       cmd: 'node',
       args: [
@@ -383,7 +377,7 @@ async function main() {
         '--prompt',
         (promptOverride || promptSpec.positivePrompt),
         '--negative-prompt',
-        neg,
+        '',
         '--workflow-root',
         path.join(ROOT, 'draw'),
         '--workflow-name',
@@ -414,7 +408,7 @@ async function main() {
       backgroundKind: 'generated_scene',
       visualSubject: promptify.selectedVisualSubject,
       abstractFallbackAllowed: false,
-      promptText: `${(promptOverride || promptSpec.positivePrompt)}\nNEG:${neg}`,
+      promptText: String(promptOverride || promptSpec.positivePrompt),
       selectedOverlayTextHash: '',
       reportPath: '',
     });
@@ -494,7 +488,7 @@ async function main() {
     backgroundKind: backgroundDiagnostic?.backgroundKind || (String(chosenBackgroundPath).includes('.background.safe.') ? 'abstract_fallback' : 'generated_scene'),
     visualSubject: promptify.selectedVisualSubject,
     abstractFallbackAllowed: false,
-    promptText: `${promptSpec.positivePrompt}\nNEG:${promptSpec.negativePrompt}`,
+    promptText: String(promptSpec.positivePrompt),
     selectedOverlayTextHash: '',
     reportPath: coverBackgroundDiagnosticPath,
   });
@@ -510,7 +504,6 @@ async function main() {
       hookText,
       contextTopNews: topNewsForPrompt,
       backgroundPrompt: promptSpec.positivePrompt,
-      backgroundNegativePrompt: promptSpec.negativePrompt,
       overlaySource: overlayDecision.overlaySource,
       overlaySourcePath: overlayDecision.overlaySourcePath,
       overlaySourceFreshness: overlayDecision.overlaySourceFreshness,
