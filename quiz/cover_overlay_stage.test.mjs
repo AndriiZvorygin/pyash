@@ -204,7 +204,7 @@ test("verifier rejects extra background words beyond expected overlay", () => {
   assert.ok(v.failures.includes("extra_visible_text"));
 });
 
-test("prompt policy keeps overlay text out of positive prompt and puts exclusions in negative", () => {
+test("prompt policy keeps overlay text out of positive prompt and keeps negative prompt empty", () => {
   const spec = buildBackgroundPromptSpec({
     style: "editorial civic scene",
     hookText: "Fourth Avenue Delayed Until 2027",
@@ -216,11 +216,7 @@ test("prompt policy keeps overlay text out of positive prompt and puts exclusion
   for (const banned of [" do not ", " without ", " exclude ", " avoid ", " no "]) {
     assert.equal(lower.includes(banned.trim()), false);
   }
-  assert.equal(lower.includes("easing the burden on local businesses"), false);
-  const neg = spec.negativePrompt.toLowerCase();
-  for (const term of ["words","letters","numbers","signs","labels","captions","headline text","typography","watermark","logo","poster","banner","duplicated text","gibberish text"]) {
-    assert.equal(neg.includes(term), true);
-  }
+  assert.equal(lower.includes("easing the burden on local businesses"), false);  assert.equal(spec.negativePrompt, "");
   assert.equal(spec.modelOverlayText, "");
 });
 
@@ -393,10 +389,7 @@ test("roadwork prompt uses object-level street terms and excludes text-inducing 
   for (const banned of ["civic-news", "poster", "headline", "title", "sign", "signage", "label", "fourth avenue one-way option defeated"]) {
     assert.equal(p.includes(banned), false);
   }
-  const neg = spec.negativePrompt.toLowerCase();
-  for (const term of ["billboard", "placard", "storefront signs", "road signs", "license plates"]) {
-    assert.equal(neg.includes(term), true);
-  }
+  assert.equal(spec.negativePrompt, "");
 });
 
 test("retry prompt for synthetic text risk shifts to close-up roadwork framing", async () => {
