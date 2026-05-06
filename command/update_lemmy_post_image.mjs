@@ -82,24 +82,106 @@ function loadEnvFallbacks(cwdDir) {
   return merged;
 }
 
-function readSecretValues(cwdDir) {
+function uniquePaths(paths) {
+  const seen = new Set();
+  const out = [];
+  for (const p of paths) {
+    const abs = path.resolve(String(p || ""));
+    if (!abs || seen.has(abs)) continue;
+    seen.add(abs);
+    out.push(abs);
+  }
+  return out;
+}
+
+function findRepoRootFrom(startDir) {
+  let cur = path.resolve(startDir);
+  while (true) {
+    if (fs.existsSync(path.join(cur, "command", "pya_lookup.mjs"))) return cur;
+    const parent = path.dirname(cur);
+    if (parent === cur) return path.resolve(startDir);
+    cur = parent;
+  }
+}
+
+function detectHouseNameFromImagePath(imagePath) {
+  const parts = String(imagePath || "").split(path.sep);
+  const idx = parts.indexOf("house");
+  if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
+  return "";
+}
+
+function buildSecretPathCandidates(cwdDir, imagePath) {
+  const root = findRepoRootFrom(cwdDir);
   const here = path.resolve(cwdDir);
+  const detectedHouse = detectHouseNameFromImagePath(imagePath);
+  const houseCandidates = [
+    detectedHouse,
+    "owen-sound-reporter",
+    "grey-county-reporter",
+    "andrii-youtube-reporter",
+  ].filter(Boolean);
   const candidates = [
-    path.join(here, "configure/secret.pya"),
-    path.join(path.resolve(here, ".."), "configure/secret.pya"),
-    path.join(path.resolve(here, "../.."), "configure/secret.pya"),
-    path.join(path.resolve(here, "../../.."), "configure/secret.pya"),
+    path.join(here, "configure", "secret.pya"),
+    path.join(path.resolve(here, ".."), "configure", "secret.pya"),
+    path.join(path.resolve(here, "../.."), "configure", "secret.pya"),
+    path.join(path.resolve(here, "../../.."), "configure", "secret.pya"),
+    path.join(root, "configure", "secret.pya"),
+    ...houseCandidates.map((name) => path.join(root, "world", "house", name, "configure", "secret.pya")),
   ];
-  const secretPath = candidates.find((p) => fs.existsSync(p)) || candidates[0];
-  return readPyaTextValues(secretPath, [
-    "meeting publish auth token",
-    "meeting publish username",
-    "meeting publish password",
-    "grey county reporter username",
-    "grey county reporter password",
-    "owen sound reporter username",
-    "owen sound reporter password",
-  ]);
+  return uniquePaths(candidates);
+}
+
+function readSecretValues(cwdDir, imagePath, names) {
+  const wantedNames = Array.isArray(names) ? names : [];
+  const merged = Object.create(null);
+  for (const n of wantedNames) merged[n] = "";
+  const paths = buildSecretPathCandidates(cwdDir, imagePath);
+  const diagnostics = [];
+  for (const filePath of paths) {
+    const exists = fs.existsSync(filePath);
+    let readable = false;
+    let parseSucceeded = false;
+    if (exists) {
+      try {
+        fs.accessSync(filePath, fs.constants.R_OK);
+        readable = true;
+      } catch {
+        readable = false;
+      }
+    }
+    let values = Object.create(null);
+    if (exists && readable) {
+      values = readPyaTextValues(filePath, wantedNames);
+      parseSucceeded = true;
+      for (const name of wantedNames) {
+        const text = String(values[name] || "").trim();
+        if (text && !String(merged[name] || "").trim()) merged[name] = text;
+      }
+    }
+    diagnostics.push({ path: filePath, exists, readable, parseSucceeded });
+  }
+  return { values: merged, diagnostics, paths };
+}
+
+function resolveAuth({ env, envFallback, secretValues, secretDiagnostics, tokenAliases }) {
+  const envTokenKeys = ["MEETING_PUBLISH_AUTH_TOKEN", "HELPOS_PUBLISH_AUTH_TOKEN", "PUBLISH_AUTH_TOKEN"];
+  for (const key of envTokenKeys) {
+    const value = String(env?.[key] || "").trim();
+    if (value) return { token: value, tokenSource: "env", tokenSourcePath: "", tokenSourceKey: key };
+  }
+  for (const key of envTokenKeys) {
+    const value = String(envFallback?.[key] || "").trim();
+    if (value) return { token: value, tokenSource: "envfile", tokenSourcePath: ".env", tokenSourceKey: key };
+  }
+  for (const key of tokenAliases) {
+    const value = String(secretValues?.[key] || "").trim();
+    if (value) {
+      const sourcePath = (secretDiagnostics || []).find((d) => d.exists && d.readable && d.parseSucceeded)?.path || "";
+      return { token: value, tokenSource: "secret_pya", tokenSourcePath: sourcePath, tokenSourceKey: key };
+    }
+  }
+  return { token: "", tokenSource: "missing", tokenSourcePath: "", tokenSourceKey: "" };
 }
 
 export function sha256Text(input) {
@@ -279,9 +361,19 @@ async function editPostImage({ instance, token, postId, title, body, imageUrl, l
   return r;
 }
 
+function fileSha256(filePath) {
+  try {
+    const buf = fs.readFileSync(filePath);
+    return sha256Text(buf).slice(0, 16);
+  } catch {
+    return "";
+  }
+}
+
 function buildIdempotencyKey({ postRef, expectedTitleHash, expectedBodyHash, imagePath, dryRun }) {
   const mode = dryRun ? "dry" : "live";
-  const stamp = `${String(postRef)}|${String(expectedTitleHash)}|${String(expectedBodyHash)}|${path.basename(String(imagePath || ""))}|${mode}`;
+  const imageHash = fileSha256(String(imagePath || ""));
+  const stamp = `${String(postRef)}|${String(expectedTitleHash)}|${String(expectedBodyHash)}|${path.basename(String(imagePath || ""))}|${imageHash}|${mode}`;
   const digest = sha256Text(stamp).slice(0, 12);
   return `post-image-${postRef}-${mode}-${digest}-v1`;
 }
@@ -324,14 +416,33 @@ export async function runUpdate(argv, deps = {}) {
   const editPostImpl = deps.editPostImage || editPostImage;
 
   const envFallback = loadEnvFallbacks(process.cwd());
-  const secret = readSecretValues(process.cwd());
+  const tokenAliases = [
+    "meeting publish auth token",
+    "helpos publish auth token",
+    "MEETING_PUBLISH_AUTH_TOKEN",
+    "HELPOS_PUBLISH_AUTH_TOKEN",
+    "publish auth token",
+  ];
+  const secretFieldNames = [
+    ...tokenAliases,
+    "meeting publish username",
+    "meeting publish password",
+    "grey county reporter username",
+    "grey county reporter password",
+    "owen sound reporter username",
+    "owen sound reporter password",
+  ];
+  const secretRead = readSecretValues(process.cwd(), args.imagePath, secretFieldNames);
+  const secret = secretRead.values;
+  const authResolved = resolveAuth({
+    env: process.env,
+    envFallback,
+    secretValues: secret,
+    secretDiagnostics: secretRead.diagnostics,
+    tokenAliases,
+  });
 
-  const token = String(
-    process.env.MEETING_PUBLISH_AUTH_TOKEN
-    || envFallback.MEETING_PUBLISH_AUTH_TOKEN
-    || secret["meeting publish auth token"]
-    || ""
-  ).trim();
+  const token = String(authResolved.token || "").trim();
   const username = String(
     process.env.MEETING_PUBLISH_USERNAME
     || envFallback.MEETING_PUBLISH_USERNAME
@@ -357,9 +468,7 @@ export async function runUpdate(argv, deps = {}) {
     || ""
   ).trim();
 
-  const tokenSource = process.env.MEETING_PUBLISH_AUTH_TOKEN ? "env:MEETING_PUBLISH_AUTH_TOKEN"
-    : envFallback.MEETING_PUBLISH_AUTH_TOKEN ? "envfile:MEETING_PUBLISH_AUTH_TOKEN"
-      : secret["meeting publish auth token"] ? "secret:meeting publish auth token" : "missing";
+  const tokenSource = authResolved.tokenSource;
 
   const imagePath = path.resolve(process.cwd(), args.imagePath);
   const reportDir = path.join(process.cwd(), "artifacts", `post-image-update-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -398,7 +507,12 @@ export async function runUpdate(argv, deps = {}) {
       titleHashMatchesExpected: titleHashMatches,
       bodyHashMatchesExpected: bodyHashMatches,
       tokenSource,
+      tokenSourcePath: authResolved.tokenSourcePath,
+      tokenSourceKey: authResolved.tokenSourceKey,
       tokenPresent: Boolean(token),
+      authPathsChecked: secretRead.paths,
+      authPathDiagnostics: secretRead.diagnostics,
+      authKeysChecked: tokenAliases,
       directPictrsRequested: args.directPictrs,
       pictrsAttempted: Boolean(extra.pictrsAttempted),
       rollbackNeeded: Boolean(extra.rollbackNeeded),
@@ -456,7 +570,12 @@ export async function runUpdate(argv, deps = {}) {
       expectedBodyHash: args.expectedBodyHash,
       expectationErrors: hashCheck.errors,
       tokenSource,
+      tokenSourcePath: authResolved.tokenSourcePath,
+      tokenSourceKey: authResolved.tokenSourceKey,
       tokenPresent: Boolean(token),
+      authPathsChecked: secretRead.paths,
+      authPathDiagnostics: secretRead.diagnostics,
+      authKeysChecked: tokenAliases,
       directPictrsRequested: args.directPictrs,
       lemmyCredentialsPresent: Boolean(username && password),
     };
@@ -469,7 +588,12 @@ export async function runUpdate(argv, deps = {}) {
 
     if (!token) {
       stage = "auth";
-      throw new Error("MEETING_PUBLISH_AUTH_TOKEN is required");
+      const checkedSummary = secretRead.diagnostics
+        .map((d) => `${d.path} (exists=${d.exists ? "yes" : "no"}, readable=${d.readable ? "yes" : "no"}, parsed=${d.parseSucceeded ? "yes" : "no"})`)
+        .join("; ");
+      throw new Error(
+        `MEETING_PUBLISH_AUTH_TOKEN is required. Checked env keys [MEETING_PUBLISH_AUTH_TOKEN, HELPOS_PUBLISH_AUTH_TOKEN, PUBLISH_AUTH_TOKEN], .env keys of same names, and secret.pya keys [${tokenAliases.join(", ")}]. Secret paths checked: ${checkedSummary}`
+      );
     }
 
     if (!args.directPictrs) {

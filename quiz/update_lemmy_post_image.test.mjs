@@ -168,3 +168,89 @@ test("live backend mode fails when url not changed", async () => {
   const txt = fs.readFileSync(resultPath, "utf8");
   assert.match(txt, /image_url_not_changed/u);
 });
+
+test("reads token from secret.pya when env is missing", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "post-image-secret-token-"));
+  fs.mkdirSync(path.join(tmp, "configure"), { recursive: true });
+  fs.writeFileSync(path.join(tmp, "configure", "secret.pya"), 'su name meeting publish auth token ob text "secret-token-value" ya\n', 'utf8');
+  const prev = process.cwd();
+  process.chdir(tmp);
+  const oldEnv = { ...process.env };
+  delete process.env.MEETING_PUBLISH_AUTH_TOKEN;
+
+  try {
+    const result = await runUpdate(["node", "cmd", "--post-ref", "7468", "--image", "x.png", "--dry-run"], {
+      probeImage: async () => ({ exists: true, width: 512, height: 512, bytes: 111, mime: "image/png" }),
+      fetchLivePost: async () => ({ endpoint: "https://example/api/v3/post?id=7468", post: { name: "n", body: "b", url: "https://old", thumbnail_url: "", community_id: 1, language_id: 37 } }),
+      backendUpdate: async () => ({ endpoint: "https://helpos.ca/api/helpos/v1/post-image-update", parsed: { status: "ok", image_url: "https://new" }, raw: "{}", metadata: {} }),
+    });
+    const pre = fs.readFileSync(result.preflightPath, "utf8");
+    assert.match(pre, /tokenSource is "secret_pya"\./u);
+    assert.match(pre, /tokenSourceKey is "meeting publish auth token"\./u);
+    assert.doesNotMatch(pre, /secret-token-value/u);
+  } finally {
+    process.env = oldEnv;
+    process.chdir(prev);
+  }
+});
+
+test("env token overrides secret.pya token", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "post-image-env-overrides-secret-"));
+  fs.mkdirSync(path.join(tmp, "configure"), { recursive: true });
+  fs.writeFileSync(path.join(tmp, "configure", "secret.pya"), 'su name meeting publish auth token ob text "secret-token-value" ya\n', 'utf8');
+  const prev = process.cwd();
+  process.chdir(tmp);
+  const oldEnv = { ...process.env };
+  process.env.MEETING_PUBLISH_AUTH_TOKEN = "env-token-value";
+
+  try {
+    const result = await runUpdate(["node", "cmd", "--post-ref", "7468", "--image", "x.png", "--dry-run"], {
+      probeImage: async () => ({ exists: true, width: 512, height: 512, bytes: 111, mime: "image/png" }),
+      fetchLivePost: async () => ({ endpoint: "https://example/api/v3/post?id=7468", post: { name: "n", body: "b", url: "https://old", thumbnail_url: "", community_id: 1, language_id: 37 } }),
+      backendUpdate: async () => ({ endpoint: "https://helpos.ca/api/helpos/v1/post-image-update", parsed: { status: "ok", image_url: "https://new" }, raw: "{}", metadata: {} }),
+    });
+    const pre = fs.readFileSync(result.preflightPath, "utf8");
+    assert.match(pre, /tokenSource is "env"\./u);
+    assert.match(pre, /tokenSourceKey is "MEETING_PUBLISH_AUTH_TOKEN"\./u);
+    assert.doesNotMatch(pre, /env-token-value/u);
+    assert.doesNotMatch(pre, /secret-token-value/u);
+  } finally {
+    process.env = oldEnv;
+    process.chdir(prev);
+  }
+});
+
+test("missing token writes auth diagnostics without leaking token values", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "post-image-missing-token-diag-"));
+  fs.mkdirSync(path.join(tmp, "configure"), { recursive: true });
+  fs.writeFileSync(path.join(tmp, "configure", "secret.pya"), 'su name unrelated secret ob text "do-not-leak" ya\n', 'utf8');
+  const prev = process.cwd();
+  process.chdir(tmp);
+  const oldEnv = { ...process.env };
+  delete process.env.MEETING_PUBLISH_AUTH_TOKEN;
+
+  let thrown = null;
+  try {
+    await runUpdate(["node", "cmd", "--post-ref", "7468", "--image", "x.png", "--dry-run"], {
+      probeImage: async () => ({ exists: true, width: 512, height: 512, bytes: 111, mime: "image/png" }),
+      fetchLivePost: async () => ({ endpoint: "https://example/api/v3/post?id=7468", post: { name: "n", body: "b", url: "https://old", thumbnail_url: "", community_id: 1, language_id: 37 } }),
+      backendUpdate: async () => ({ endpoint: "https://helpos.ca/api/helpos/v1/post-image-update", parsed: { status: "ok", image_url: "https://new" }, raw: "{}", metadata: {} }),
+    });
+  } catch (err) {
+    thrown = err;
+  } finally {
+    process.env = oldEnv;
+    process.chdir(prev);
+  }
+
+  assert.ok(thrown);
+  assert.match(String(thrown.message || ""), /Checked env keys/u);
+  const runs = fs.readdirSync(path.join(tmp, "artifacts")).sort();
+  const latest = path.join(tmp, "artifacts", runs[runs.length - 1]);
+  const resultPath = path.join(latest, "post-image-update.result.pya");
+  const txt = fs.readFileSync(resultPath, "utf8");
+  assert.match(txt, /failedStage is "auth"\./u);
+  assert.match(txt, /authPathsChecked count is /u);
+  assert.match(txt, /authKeysChecked count is /u);
+  assert.doesNotMatch(txt, /do-not-leak/u);
+});
