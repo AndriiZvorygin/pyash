@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
-  : 'http://localhost:11434/api/chat';
+  : 'http://mriczo:11434/api/chat';
 const MODEL = process.env.AGENDA_SECTION_SUMMARY_MODEL
   || process.env.MEETING_SUMMARY_MODEL
   || process.env.SUMMARY_MODEL

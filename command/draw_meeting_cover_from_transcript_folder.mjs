@@ -289,6 +289,21 @@ async function generateSafeBackgroundFallback(outputPath, size = 512, cwd = ROOT
   });
 }
 
+
+async function dischargeDrawBackend(cwd = ROOT) {
+  try {
+    await runWithStreaming({
+      cmd: path.join(ROOT, 'run'),
+      args: [path.join(ROOT, 'examples/pyash/discharge-draw-backend.pya')],
+      cwd: ROOT,
+      timeoutMs: 60 * 1000,
+      label: 'discharge-draw-backend',
+    });
+  } catch (err) {
+    process.stdout.write(`[meeting-cover] warn discharge draw failed: ${String(err?.message || err)}\n`);
+  }
+}
+
 function deriveRunCwdFromTranscriptDir(transcriptDir) {
   const abs = path.resolve(String(transcriptDir || ''));
   const marker = `${path.sep}artifacts${path.sep}`;
@@ -325,6 +340,7 @@ async function main() {
   const coverBackgroundDiagnosticPath = path.join(transcriptDir, `${prefix}.cover-background.diagnostic.pya`);
   const coverBackgroundAttemptsPath = path.join(transcriptDir, `${prefix}.cover-background.attempts.pya`);
 
+  try {
   const hookText = safeReadText(hookPath, '').trim();
   const meetingSummaryText = safeReadText(meetingSummaryPath, '').trim();
   const topNewsworthy = extractMarkdownSection(meetingSummaryText, 'Top Newsworthy Developments');
@@ -335,15 +351,24 @@ async function main() {
     meetingSummaryMd: meetingSummaryText,
     meetingHookText: hookText,
   });
-  const overlaySourceText = overlayDecision.selectedOverlayText || "City Meeting Update";
-  const topNewsForPrompt = overlayDecision.sourceDisagreementDetected
-    ? "municipal roadwork, downtown streetscape, and infrastructure decision context"
-    : (topNewsworthy || meetingSummaryText);
+  const hookPreferredOverlay = String(hookText || "").trim();
+  const overlayDecisionUsed = hookPreferredOverlay
+    ? {
+        ...overlayDecision,
+        overlaySource: "meeting_hook_txt",
+        overlaySourcePath: hookPath,
+        overlaySourceFreshness: "final_hook",
+        selectedOverlayText: hookPreferredOverlay,
+        sourceDisagreementDetected: false,
+      }
+    : overlayDecision;
+  const overlaySourceText = overlayDecisionUsed.selectedOverlayText || "City Meeting Update";
+  const topNewsForPrompt = String(topNewsworthy || meetingSummaryText || overlaySourceText || "").trim();
   const overlayDerived = deriveCoverOverlayText({ sourceText: overlaySourceText, minWords: 3, maxWords: 6 });
   const shortOverlay = overlayDerived.finalOverlayText;
   verifyOverlayWordRange(shortOverlay, 3, 6);
 
-  const promptify = runCoverPromptifyStage({
+  const promptify = await runCoverPromptifyStage({
     hookText: shortOverlay,
     oneSentenceSummary,
     topNews: topNewsForPrompt,
@@ -403,8 +428,8 @@ async function main() {
       backgroundPath: squarePath,
       observedBackgroundText: observedText,
       selectedOverlayText: shortOverlay,
-      rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
-      sourceDisagreementDetected: overlayDecision.sourceDisagreementDetected,
+      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
+      sourceDisagreementDetected: overlayDecisionUsed.sourceDisagreementDetected,
       backgroundKind: 'generated_scene',
       visualSubject: promptify.selectedVisualSubject,
       abstractFallbackAllowed: false,
@@ -451,7 +476,7 @@ async function main() {
       backgroundPath: safeBgPath,
       observedBackgroundText: '',
       selectedOverlayText: shortOverlay,
-      rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
+      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
       sourceDisagreementDetected: false,
       backgroundKind: 'abstract_fallback',
       visualSubject: promptify.selectedVisualSubject,
@@ -483,8 +508,8 @@ async function main() {
     backgroundPath: chosenBackgroundPath,
     observedBackgroundText: '',
     selectedOverlayText: shortOverlay,
-    rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
-    sourceDisagreementDetected: overlayDecision.sourceDisagreementDetected,
+    rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
+    sourceDisagreementDetected: overlayDecisionUsed.sourceDisagreementDetected,
     backgroundKind: backgroundDiagnostic?.backgroundKind || (String(chosenBackgroundPath).includes('.background.safe.') ? 'abstract_fallback' : 'generated_scene'),
     visualSubject: promptify.selectedVisualSubject,
     abstractFallbackAllowed: false,
@@ -504,13 +529,13 @@ async function main() {
       hookText,
       contextTopNews: topNewsForPrompt,
       backgroundPrompt: promptSpec.positivePrompt,
-      overlaySource: overlayDecision.overlaySource,
-      overlaySourcePath: overlayDecision.overlaySourcePath,
-      overlaySourceFreshness: overlayDecision.overlaySourceFreshness,
-      candidateOverlayTexts: overlayDecision.candidateOverlayTexts,
-      selectedOverlayText: overlayDecision.selectedOverlayText,
-      rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
-      sourceDisagreementDetected: overlayDecision.sourceDisagreementDetected,
+      overlaySource: overlayDecisionUsed.overlaySource,
+      overlaySourcePath: overlayDecisionUsed.overlaySourcePath,
+      overlaySourceFreshness: overlayDecisionUsed.overlaySourceFreshness,
+      candidateOverlayTexts: overlayDecisionUsed.candidateOverlayTexts,
+      selectedOverlayText: overlayDecisionUsed.selectedOverlayText,
+      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
+      sourceDisagreementDetected: overlayDecisionUsed.sourceDisagreementDetected,
       backgroundUseful: backgroundDiagnostic.backgroundUseful,
       backgroundDiagnosticPath: coverBackgroundDiagnosticPath,
       backgroundFailureReasons: backgroundDiagnostic.failureReasons,
@@ -557,7 +582,7 @@ async function main() {
       backgroundPath: finalImagePath,
       observedBackgroundText: "",
       selectedOverlayText: shortOverlay,
-      rejectedOverlayTexts: overlayDecision.rejectedOverlayTexts,
+      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
       sourceDisagreementDetected: false,
       backgroundKind: String(chosenBackgroundPath).includes(".background.safe.") ? "abstract_fallback" : "transformed_generated_scene",
       visualSubject: String(promptify.selectedVisualSubject || ""),
@@ -576,6 +601,9 @@ async function main() {
   process.stdout.write(`[meeting-cover] thumbnail source: ${thumbnailSourcePath}\n`);
   process.stdout.write(`[meeting-cover] wrote: ${coverImagePath}\n`);
   process.stdout.write(`[meeting-cover] wrote: ${coverImageStablePath}\n`);
+  } finally {
+    await dischargeDrawBackend(drawRunCwd);
+  }
 }
 
 main().catch((err) => {
