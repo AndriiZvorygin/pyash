@@ -12,7 +12,8 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, "")
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, "")}/api/chat`
-  : "http://localhost:11434/api/chat";
+  : "http://mriczo:11434/api/chat";
+const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
 const MODEL = process.env.MEETING_SUMMARY_MODEL
   || process.env.SUMMARY_MODEL
   || process.env.OWEN_MEETING_SUMMARY_MODEL
@@ -28,6 +29,15 @@ const STAGE_A_HARD_MAX_BYTES = Number.parseInt(String(process.env.MEETING_SUMMAR
 const AGENDA_SUMMARY_ROOT = "agenda summary artifact";
 const MEETING_SUMMARY_CHUNKS_ROOT = "meeting summary chunks artifact";
 const MEETING_SUMMARY_ROOT = "meeting summary artifact";
+const BANNED_RECAP_PHRASES = [
+  "distributive justice",
+  "ring-fenced",
+  "reclamation",
+  "spirited debate",
+  "stark reality check",
+  "no unresolved issues",
+  "complex landscape",
+];
 
 function usage() {
   return [
@@ -112,11 +122,16 @@ async function ask(messages, { numPredict = 520 } = {}) {
     options: { num_predict: numPredict },
     messages,
   };
-  const res = await fetch(OLLAMA_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(OLLAMA_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw new Error(`Ollama fetch failed for whole-meeting-summary using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(err?.message || err)})`);
+  }
   if (!res.ok) throw new Error(`ollama status ${res.status}`);
   const json = await res.json();
   return String(json?.message?.content || "").trim();
@@ -156,6 +171,76 @@ function hasCompleteRequiredSections(mdText) {
   const why = sectionContent(text, "Why It Matters");
   const watch = sectionContent(text, "Watch Next");
   return top.length >= 300 && why.length >= 80 && watch.length >= 80;
+}
+
+function matchesAnyPattern(text, patterns = []) {
+  const value = String(text || "").toLowerCase();
+  return patterns.some((p) => {
+    if (!p) return false;
+    if (p instanceof RegExp) return p.test(value);
+    return value.includes(String(p).toLowerCase());
+  });
+}
+
+function proceduralHeading(heading = "") {
+  return matchesAnyPattern(heading, [
+    /call to order/u,
+    /additional business/u,
+    /declarations of interest/u,
+    /confirmation of .*minutes/u,
+    /move .*committee of the whole/u,
+    /adjournment/u,
+    /correspondence received/u,
+  ]);
+}
+
+function scoreNewsCandidate(section = {}) {
+  const heading = String(section?.heading || "");
+  const summary = String(section?.summary || "");
+  const hay = `${heading} ${summary}`.toLowerCase();
+  let score = 0;
+  if (proceduralHeading(heading)) score -= 12;
+  if (/\bby-?laws?\b/u.test(hay)) score += 9;
+  if (/\bfirefighters?\b/u.test(hay)) score += 7;
+  if (/\bpublic forum\b/u.test(hay)) score += 8;
+  if (/\bfourth avenue|roadway|one-way|infrastructure\b/u.test(hay)) score += 8;
+  if (/\bdefer|deferred|defeated|carried|approved|passed|rejected\b/u.test(hay)) score += 5;
+  if (/\bstaff report|report\b/u.test(hay)) score += 3;
+  if (/\bcost|budget|funding|tax|surplus\b/u.test(hay)) score += 4;
+  if (/\bdiscussed|considered|presented\b/u.test(hay)) score += 2;
+  const words = summary.split(/\s+/u).filter(Boolean).length;
+  if (words >= 22) score += 2;
+  if (words < 8) score -= 3;
+  return score;
+}
+
+function buildNewsPriorityItems(sections = [], topN = 8) {
+  return (Array.isArray(sections) ? sections : [])
+    .map((section, i) => {
+      const heading = String(section?.heading || "").trim();
+      const summary = String(section?.summary || "").trim();
+      return {
+        index: Number(section?.index || i + 1),
+        heading,
+        summary,
+        score: scoreNewsCandidate(section),
+      };
+    })
+    .filter((row) => row.heading && row.summary && !proceduralHeading(row.heading))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, topN);
+}
+
+function synthesisPenalty(mdText = "") {
+  const text = String(mdText || "");
+  const lower = text.toLowerCase();
+  let penalty = 0;
+  for (const phrase of BANNED_RECAP_PHRASES) {
+    if (lower.includes(phrase.toLowerCase())) penalty += 0.14;
+  }
+  const opener = text.split(/\n\n/u).find((x) => x.trim() && !x.trim().startsWith("#")) || "";
+  if (/\bmove into committee of the whole\b/iu.test(opener)) penalty += 0.22;
+  return Math.min(0.7, penalty);
 }
 
 function extractHeadings(mdText) {
@@ -348,10 +433,10 @@ function buildChunkSummaryPrompt({
   bodyLabel,
   jurisdiction,
 }) {
-  const focusLine = String(focus || "").trim() || "the newsworthy, juicy, and unusual bits";
+  const focusLine = String(focus || "").trim() || "factual civic reporting";
   const headings = (Array.isArray(coveredHeadings) ? coveredHeadings : []).map((h) => `- ${h}`).join("\n");
   return [
-    "Create a detailed chunk summary for whole-meeting synthesis.",
+    "Create a grounded, readable local-news chunk summary for whole-meeting synthesis.",
     "",
     `Chunk id: ${chunkId}`,
     `Covered sections: ${sectionStartIndex} to ${sectionEndIndex}`,
@@ -368,6 +453,11 @@ function buildChunkSummaryPrompt({
     "- Important decisions / vote outcomes, and clearly state when no decision was taken.",
     "- Unresolved issues / follow-up requested by council/staff.",
     "- Notable events that matter to readers.",
+    "",
+    "Style constraints:",
+    "- Readable local-news style: clear, specific, and human.",
+    "- Keep tone grounded; avoid ideological framing or invented drama.",
+    "- Do not use: distributive justice, ring-fenced, reclamation, spirited debate, stark reality check, no unresolved issues.",
     "",
     "Output constraints:",
     "- 2 to 6 sentences.",
@@ -387,10 +477,14 @@ function buildFinalSummaryPrompt({
   bodyLabel,
   jurisdiction,
   feedback,
+  priorityItems,
 }) {
-  const focusLine = String(focus || "").trim() || "the newsworthy, juicy, and unusual bits";
+  const focusLine = String(focus || "").trim() || "factual civic reporting";
+  const rankedItemsText = (Array.isArray(priorityItems) ? priorityItems : [])
+    .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading} -- ${it.summary}`)
+    .join("\n");
   return [
-    "Create a compelling whole-meeting local-news summary from chunk summaries.",
+    "Create a readable, grounded whole-meeting local-news recap from chunk summaries.",
     "",
     `Meeting date (authoritative): ${meetingDateLong || meetingDateIso || "unknown"}`,
     `Governing body (authoritative): ${bodyLabel || "unknown"}`,
@@ -405,10 +499,17 @@ function buildFinalSummaryPrompt({
     "",
     "Rules:",
     "- Use only facts present in CHUNK_SUMMARIES.",
+    "- Lead with the most consequential substantive item from RANKED_NEWS_CANDIDATES, not procedural openers.",
+    "- Write like strong local journalism, not dry minutes: concise, concrete, and engaging.",
+    "- Use concrete local stakes (costs, votes, projects, bylaws, speakers, service impacts).",
     "- Preserve coverage from early, middle, and late meeting phases.",
-    "- Do not overweight opening sections.",
+    "- Do not overweight opening procedural sections.",
     "- Include key decisions and outcomes where present.",
-    "- If a point is proposal-only, say it was discussed/proposed rather than adopted.",
+    "- If a point is proposal-only or uncertain, say it was discussed/considered rather than adopted.",
+    "- For vote language (carried, defeated, approved, deferred, unanimous, split), use only when explicitly supported in CHUNK_SUMMARIES.",
+    "- Keep tone grounded and specific; avoid generic civic filler or abstract framing.",
+    "- Avoid opening with call-to-order, committee-of-the-whole motions, minutes confirmation, or adjournment.",
+    "- Do not use these phrases unless directly quoted from source: distributive justice; ring-fenced; reclamation; spirited debate; stark reality check; no unresolved issues; complex landscape.",
     "- Keep total length under 900 words.",
     ...(SUMMARY_TIME_MODE === "upcoming"
       ? [
@@ -420,12 +521,26 @@ function buildFinalSummaryPrompt({
     "RETRY_FEEDBACK:",
     feedback || "",
     "",
+    "RANKED_NEWS_CANDIDATES:",
+    rankedItemsText || "(none)",
+    "",
     "CHUNK_SUMMARIES:",
     chunkSource,
   ].join("\n");
 }
 
-function buildFinalScorePrompt({ chunkSource, summaryMd, bodyLabel, jurisdiction, meetingDateIso, meetingDateLong }) {
+function buildFinalScorePrompt({
+  chunkSource,
+  summaryMd,
+  bodyLabel,
+  jurisdiction,
+  meetingDateIso,
+  meetingDateLong,
+  priorityItems,
+}) {
+  const rankedItemsText = (Array.isArray(priorityItems) ? priorityItems : [])
+    .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading} -- ${it.summary}`)
+    .join("\n");
   return [
     "Score WHOLE_MEETING_SUMMARY for semantic faithfulness to CHUNK_SUMMARIES.",
     "",
@@ -440,6 +555,8 @@ function buildFinalScorePrompt({ chunkSource, summaryMd, bodyLabel, jurisdiction
     `- Penalize incorrect governing body label; required body is "${bodyLabel || "unknown"}".`,
     `- Penalize incorrect jurisdiction label; required jurisdiction is "${jurisdiction || "unknown"}".`,
     `- Penalize incorrect meeting date; required date is "${meetingDateLong || meetingDateIso || "unknown"}".`,
+    "- Penalize leading with procedural framing instead of substantive outcomes.",
+    "- Penalize ideological/dramatic framing not supported by source.",
     "- Penalize omission of major events that appear in chunk summaries.",
     "",
     "Output:",
@@ -448,6 +565,9 @@ function buildFinalScorePrompt({ chunkSource, summaryMd, bodyLabel, jurisdiction
     "",
     "CHUNK_SUMMARIES:",
     chunkSource,
+    "",
+    "RANKED_NEWS_CANDIDATES:",
+    rankedItemsText || "(none)",
     "",
     "WHOLE_MEETING_SUMMARY:",
     summaryMd,
@@ -536,6 +656,7 @@ async function synthesizeFinalMeetingSummary({
   meetingDateLong,
   bodyLabel,
   jurisdiction,
+  priorityItems,
 }) {
   const chunkSource = buildChunkSourceForStageB(chunksArtifact?.chunks || []);
   let feedback = "";
@@ -557,6 +678,7 @@ async function synthesizeFinalMeetingSummary({
             bodyLabel,
             jurisdiction,
             feedback,
+            priorityItems,
           }),
         },
       ],
@@ -575,6 +697,7 @@ async function synthesizeFinalMeetingSummary({
             jurisdiction,
             meetingDateIso,
             meetingDateLong,
+            priorityItems,
           }),
         },
       ],
@@ -582,7 +705,8 @@ async function synthesizeFinalMeetingSummary({
     );
 
     const completenessPenalty = hasCompleteRequiredSections(draft) ? 0 : 0.4;
-    const score = Math.max(0, parseScore(review) - completenessPenalty);
+    const stylePenalty = synthesisPenalty(draft);
+    const score = Math.max(0, parseScore(review) - completenessPenalty - stylePenalty);
     if (bestText === "" || score > bestScore) {
       bestText = draft;
       bestScore = score;
@@ -621,6 +745,7 @@ export async function summarizeWholeMeetingArtifacts({
   const meetingContext = deriveMeetingContext(transcriptDir);
 
   log(`[meeting-summary] source agenda summary: ${summaryPath}`);
+  log(`[llm] ollama host: ${RESOLVED_OLLAMA_HOST}`);
   log(`[meeting-summary] output chunks: ${outChunksPya}`);
   log(`[meeting-summary] output md: ${outMd}`);
   log(`[meeting-summary] output pya: ${outSummaryPya}`);
@@ -635,6 +760,7 @@ export async function summarizeWholeMeetingArtifacts({
   }
 
   const stageABuilt = buildChunkUnitsFromSections(sections);
+  const priorityItems = buildNewsPriorityItems(sections, 8);
   validateChunkCoverage(stageABuilt.units, sections.length);
   const chunkSummaries = await synthesizeChunkSummaries({
     units: stageABuilt.units,
@@ -665,6 +791,7 @@ export async function summarizeWholeMeetingArtifacts({
     meetingDateLong: meetingDate.long,
     bodyLabel: meetingContext.bodyLabel,
     jurisdiction: meetingContext.jurisdiction,
+    priorityItems,
   });
   fs.writeFileSync(outMd, `${String(stageB.markdown || "").trim()}\n`, "utf8");
 

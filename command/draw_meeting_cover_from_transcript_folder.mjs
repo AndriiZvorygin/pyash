@@ -3,10 +3,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from "node:url";
+import {
+  deriveCoverOverlayText,
+  verifyCoverOverlayText,
+  renderDeterministicOverlay,
+  runCoverOverlayStage,
+  writePyaReport,
+} from "../program/library/reporter_shared/cover-overlay-stage.mjs";
+import { runCoverPromptifyStage, buildRetryPromptForBackgroundRisk } from "../program/library/reporter_shared/cover-promptify-stage.mjs";
+import { selectCoverOverlaySource } from "../program/library/reporter_shared/cover-overlay-source.mjs";
+import { diagnoseCoverBackground } from "../program/library/reporter_shared/cover-background-diagnostics.mjs";
 
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(COMMAND_DIR, "..");
-const DEFAULT_STYLE = 'bold civic poster background, no person required, high contrast, simple geometry, strong readability';
+const DEFAULT_STYLE = 'bold civic poster background, high contrast, simple geometry, strong readability';
 
 function usage() {
   return [
@@ -80,19 +90,6 @@ function parseGeneratedImagePath(drawStdout, sourceFilename, runCwd = ROOT) {
   return existsFile(fallbackRun) ? fallbackRun : '';
 }
 
-function toShortOverlay(hookText) {
-  const words = String(hookText || '')
-    .replace(/[^A-Za-z0-9\s-]/gu, ' ')
-    .split(/\s+/u)
-    .map((w) => w.trim())
-    .filter(Boolean);
-  if (!words.length) return 'City Meeting Update';
-  if (words.length >= 4) return words.slice(0, 4).join(' ');
-  if (words.length === 3) return words.join(' ');
-  if (words.length === 2) return `${words[0]} ${words[1]} Update`;
-  return `${words[0]} City Update`;
-}
-
 function countWords(text) {
   return String(text || '').trim().split(/\s+/u).filter(Boolean).length;
 }
@@ -124,21 +121,36 @@ function normalizeOverlayText(text) {
     .trim();
 }
 
-function tokenSet(text) {
-  return new Set(
-    String(text || "")
-      .toLowerCase()
-      .split(/\s+/u)
-      .map((x) => x.trim())
-      .filter((x) => x && x.length >= 3)
-  );
+async function observeVisibleTextRaw(imagePath) {
+  if (String(process.env.COVER_BACKGROUND_OCR || '').trim() !== '1') return '';
+  const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
+  const model = String(process.env.DRAW_OVERLAY_VERIFY_MODEL || "qwen3.5:9b").trim();
+  const prompt = [
+    "Read this image and extract all visible readable text.",
+    "Return one line with text exactly as visible.",
+    "If there is no readable text, return EMPTY.",
+  ].join(" ");
+  try {
+    const res = await runWithStreaming({
+      cmd: "node",
+      args: [path.join(ROOT, "command/see_vl_runner.mjs"), "--host", verifyHost, "--model", model, "--image", imagePath, "--prompt", prompt],
+      cwd: ROOT,
+      timeoutMs: 120000,
+      label: "background-ocr",
+    });
+    const observed = normalizeOverlayText(String(res.stdout || ""));
+    if (/^empty$/iu.test(observed)) return "";
+    return observed;
+  } catch {
+    return "";
+  }
 }
 
 async function verifyRenderedOverlayWords({
   imagePath,
   expectedOverlay,
   minWords = 3,
-  maxWords = 6,
+  maxWords = 8,
 }) {
   const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
   const verifyModels = [
@@ -148,10 +160,9 @@ async function verifyRenderedOverlayWords({
   const uniqModels = [...new Set(verifyModels)];
 
   const prompt = [
-    "Read this image and extract only the large overlay headline text.",
-    "Return only that overlay text phrase.",
-    "Do not add explanation.",
-    "If unsure, return your best guess of the large overlaid words.",
+    "Read this image and extract all visible readable text.",
+    "Return one line with text exactly as visible.",
+    "If multiple text regions exist, include them all in reading order.",
   ].join(" ");
 
   let lastError = "";
@@ -174,7 +185,8 @@ async function verifyRenderedOverlayWords({
         timeoutMs: 2 * 60 * 1000,
         label: "verify-overlay-ocr",
       });
-      const candidate = normalizeOverlayText(extractOverlayCandidate(res.stdout));
+      const observedAll = normalizeOverlayText(String(res.stdout || ""));
+      const candidate = normalizeOverlayText(extractOverlayCandidate(observedAll));
       if (!candidate) throw new Error(`empty overlay text from model ${model}`);
       const lc = candidate.toLowerCase();
       if (
@@ -183,26 +195,20 @@ async function verifyRenderedOverlayWords({
       ) {
         throw new Error(`model ${model} returned non-overlay/meta text "${candidate}"`);
       }
-      const words = countWords(candidate);
-      if (words < minWords || words > maxWords) {
-        throw new Error(`model ${model} extracted "${candidate}" (${words} words), expected ${minWords}-${maxWords}`);
-      }
-      const expectedTokens = tokenSet(expectedOverlay);
-      const candidateTokens = tokenSet(candidate);
-      let overlap = 0;
-      for (const t of candidateTokens) {
-        if (expectedTokens.has(t)) overlap += 1;
-      }
-      const minOverlap = Math.min(2, expectedTokens.size);
-      if (minOverlap > 0 && overlap < minOverlap) {
-        throw new Error(
-          `model ${model} extracted "${candidate}" but token overlap ${overlap}/${expectedTokens.size} is too low for expected "${expectedOverlay}"`
-        );
+      const verify = verifyCoverOverlayText({
+        expectedText: expectedOverlay,
+        observedText: candidate,
+        observedAllText: observedAll,
+        minWords,
+        maxWords,
+      });
+      if (!verify.pass) {
+        throw new Error(`model ${model} extracted "${candidate}" but verify failed: ${verify.failures.join(", ")}`);
       }
       process.stdout.write(
-        `[meeting-cover] overlay verify model=${model} expected="${expectedOverlay}" extracted="${candidate}" words=${words}\n`
+        `[meeting-cover] overlay verify model=${model} expected="${expectedOverlay}" extracted="${candidate}" words=${countWords(candidate)}\n`
       );
-      return { model, extracted: candidate, words };
+      return { model, extracted: candidate, observedAll };
     } catch (err) {
       lastError = String(err?.message || err);
     }
@@ -265,6 +271,39 @@ async function forceSquare512(inputPath, outputPath, cwd = ROOT) {
   });
 }
 
+
+async function generateSafeBackgroundFallback(outputPath, size = 512, cwd = ROOT) {
+  const vf = [
+    "color=c=#243748:s=" + size + "x" + size,
+    "format=rgba",
+    "drawgrid=w=64:h=64:t=1:c=white@0.10",
+    "drawbox=x=0:y=" + Math.floor(size * 0.58) + ":w=" + size + ":h=" + Math.floor(size * 0.42) + ":color=black@0.25:t=fill",
+    "gblur=sigma=0.6",
+  ].join(",");
+  await runWithStreaming({
+    cmd: "ffmpeg",
+    args: ["-y", "-f", "lavfi", "-i", vf, "-frames:v", "1", outputPath],
+    cwd,
+    timeoutMs: 120000,
+    label: "safe-background-fallback",
+  });
+}
+
+
+async function dischargeDrawBackend(cwd = ROOT) {
+  try {
+    await runWithStreaming({
+      cmd: path.join(ROOT, 'run'),
+      args: [path.join(ROOT, 'examples/pyash/discharge-draw-backend.pya')],
+      cwd: ROOT,
+      timeoutMs: 60 * 1000,
+      label: 'discharge-draw-backend',
+    });
+  } catch (err) {
+    process.stdout.write(`[meeting-cover] warn discharge draw failed: ${String(err?.message || err)}\n`);
+  }
+}
+
 function deriveRunCwdFromTranscriptDir(transcriptDir) {
   const abs = path.resolve(String(transcriptDir || ''));
   const marker = `${path.sep}artifacts${path.sep}`;
@@ -289,73 +328,282 @@ async function main() {
   const drawRunCwd = deriveRunCwdFromTranscriptDir(transcriptDir);
   const hookPath = path.join(transcriptDir, `${prefix}.meeting-hook.txt`);
   const meetingSummaryPath = path.join(transcriptDir, `${prefix}.meeting-summary.md`);
+  const lemmyPostJsonPath = path.join(transcriptDir, `${prefix}.lemmy-post.json`);
   const thumbnailSourcePath = path.join(transcriptDir, `${prefix}.thumbnail-source.md`);
   const coverImagePath = path.join(transcriptDir, `${prefix}.meeting-cover.png`);
   const coverImageStablePath = path.join(transcriptDir, 'meeting-cover.png');
+  const overlayInputPath = path.join(transcriptDir, `${prefix}.cover-overlay.input.pya`);
+  const overlayDerivedPath = path.join(transcriptDir, `${prefix}.cover-overlay.derived.pya`);
+  const overlayVerifyPath = path.join(transcriptDir, `${prefix}.cover-overlay.verify.pya`);
+  const overlayFinalPath = path.join(transcriptDir, `${prefix}.cover-overlay.final.pya`);
+  const coverPromptifyPath = path.join(transcriptDir, `${prefix}.cover-promptify.pya`);
+  const coverBackgroundDiagnosticPath = path.join(transcriptDir, `${prefix}.cover-background.diagnostic.pya`);
+  const coverBackgroundAttemptsPath = path.join(transcriptDir, `${prefix}.cover-background.attempts.pya`);
 
+  try {
   const hookText = safeReadText(hookPath, '').trim();
   const meetingSummaryText = safeReadText(meetingSummaryPath, '').trim();
   const topNewsworthy = extractMarkdownSection(meetingSummaryText, 'Top Newsworthy Developments');
-  const shortOverlay = toShortOverlay(hookText);
+  const oneSentenceSummary = extractMarkdownSection(meetingSummaryText, "One-Sentence Summary").split("\n").find((line) => line.trim()) || "";
+
+  const overlayDecision = selectCoverOverlaySource({
+    lemmyPostJsonPath,
+    meetingSummaryMd: meetingSummaryText,
+    meetingHookText: hookText,
+  });
+  const hookPreferredOverlay = String(hookText || "").trim();
+  const overlayDecisionUsed = hookPreferredOverlay
+    ? {
+        ...overlayDecision,
+        overlaySource: "meeting_hook_txt",
+        overlaySourcePath: hookPath,
+        overlaySourceFreshness: "final_hook",
+        selectedOverlayText: hookPreferredOverlay,
+        sourceDisagreementDetected: false,
+      }
+    : overlayDecision;
+  const overlaySourceText = overlayDecisionUsed.selectedOverlayText || "City Meeting Update";
+  const topNewsForPrompt = String(topNewsworthy || meetingSummaryText || overlaySourceText || "").trim();
+  const overlayDerived = deriveCoverOverlayText({ sourceText: overlaySourceText, minWords: 3, maxWords: 6 });
+  const shortOverlay = overlayDerived.finalOverlayText;
   verifyOverlayWordRange(shortOverlay, 3, 6);
+
+  const promptify = await runCoverPromptifyStage({
+    hookText: shortOverlay,
+    oneSentenceSummary,
+    topNews: topNewsForPrompt,
+    jurisdiction: "Owen Sound",
+    meetingType: "council meeting",
+    style,
+    overlayText: shortOverlay,
+    reportPath: coverPromptifyPath,
+  });
+  const promptSpec = {
+    positivePrompt: promptify.positivePrompt,
+  };
+
   const thumbnailSource = [
     '# Thumbnail Brief',
-    'Create a square civic thumbnail.',
-    `Overlay text should be 3-6 words: "${shortOverlay}".`,
-    'Do not require a person in frame. Prefer symbolic/atmospheric municipal background.',
+    promptSpec.positivePrompt,
     '',
-    '# Hook (context only)',
+    '# Context',
     hookText || 'Council Meeting Highlights',
-    '',
-    '# Top Newsworthy Developments',
-    topNewsworthy || meetingSummaryText,
+    topNewsForPrompt,
   ].join('\n').trim();
   fs.writeFileSync(thumbnailSourcePath, `${thumbnailSource}\n`, 'utf8');
 
-  const drawOut = await runWithStreaming({
-    cmd: 'node',
-    args: [
-      path.join(ROOT, 'command/run_pya_program.mjs'),
-      path.join(ROOT, 'examples/pyash/draw-from-filename.pya'),
-      thumbnailSourcePath,
-      style,
-      '--verbose',
-    ],
-    cwd: drawRunCwd,
-    timeoutMs: 45 * 60 * 1000,
-    label: 'draw-meeting-cover',
-  });
-
-  const generated = parseGeneratedImagePath(drawOut.stdout, thumbnailSourcePath, drawRunCwd);
-  if (!generated) throw new Error('could not find generated image path in draw output');
-
-  try {
-    await verifyRenderedOverlayWords({
-      imagePath: generated,
-      expectedOverlay: shortOverlay,
-      minWords: 3,
-      maxWords: 6,
+  const backgroundAttempts = [];
+  async function renderBackgroundAttempt(outputPath, attemptLabel, strictNegative = false, promptOverride = "") {
+    const neg = "";
+    await runWithStreaming({
+      cmd: 'node',
+      args: [
+        path.join(ROOT, 'command/draw_comfyui_runner.mjs'),
+        '--prompt',
+        (promptOverride || promptSpec.positivePrompt),
+        '--negative-prompt',
+        '',
+        '--workflow-root',
+        path.join(ROOT, 'draw'),
+        '--workflow-name',
+        String(process.env.PYA_DRAW_WORKFLOW_DEFAULT || 'Z-Image-TSV'),
+        '--host',
+        String(process.env.PYA_DRAW_HOST || 'http://mriczo:8188'),
+        '--output',
+        outputPath,
+        '--width',
+        '1024',
+        '--height',
+        '1024',
+      ],
+      cwd: drawRunCwd,
+      timeoutMs: 45 * 60 * 1000,
+      label: 'draw-meeting-cover-background',
     });
-  } catch (err) {
-    process.stderr.write(`[meeting-cover] warn overlay verify failed; keeping generated image: ${String(err?.message || err)}\n`);
+
+    const squarePath = `${outputPath}.square.tmp.png`;
+    await forceSquare512(outputPath, squarePath, drawRunCwd);
+    const observedText = await observeVisibleTextRaw(squarePath);
+    const diag = await diagnoseCoverBackground({
+      backgroundPath: squarePath,
+      observedBackgroundText: observedText,
+      selectedOverlayText: shortOverlay,
+      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
+      sourceDisagreementDetected: overlayDecisionUsed.sourceDisagreementDetected,
+      backgroundKind: 'generated_scene',
+      visualSubject: promptify.selectedVisualSubject,
+      abstractFallbackAllowed: false,
+      promptText: String(promptOverride || promptSpec.positivePrompt),
+      selectedOverlayTextHash: '',
+      reportPath: '',
+    });
+
+    backgroundAttempts.push({
+      label: attemptLabel,
+      outputPath,
+      squarePath,
+      observedText,
+      diagnostics: diag,
+      accepted: Boolean(diag.backgroundUseful && diag.backgroundRelevancePass),
+      rejectionReasons: diag.failureReasons,
+    });
+    return { squarePath, observedText, diag };
   }
 
-  const squareTmpPath = `${coverImagePath}.square.tmp.png`;
-  try {
-    await forceSquare512(generated, squareTmpPath, drawRunCwd);
-    fs.copyFileSync(squareTmpPath, coverImagePath);
-  } catch (err) {
-    process.stderr.write(`[meeting-cover] warn square normalization failed; using raw draw output: ${String(err?.message || err)}\n`);
-    fs.copyFileSync(generated, coverImagePath);
-  } finally {
-    try { fs.unlinkSync(squareTmpPath); } catch {}
+  const backgroundOutputPath = path.join(transcriptDir, prefix + '.meeting-cover.background.generated.png');
+  const retryBackgroundOutputPath = path.join(transcriptDir, prefix + '.meeting-cover.background.generated.retry-1.png');
+
+  let chosenBackgroundPath = '';
+  let backgroundDiagnostic = null;
+
+  const first = await renderBackgroundAttempt(backgroundOutputPath, 'generated_attempt_1', false);
+  backgroundDiagnostic = first.diag;
+  if (backgroundDiagnostic.backgroundUseful && backgroundDiagnostic.backgroundRelevancePass) {
+    chosenBackgroundPath = first.squarePath;
+  } else {
+    const retryPrompt = buildRetryPromptForBackgroundRisk({ visualSubject: promptify.selectedVisualSubject, positivePrompt: promptSpec.positivePrompt });
+    const second = await renderBackgroundAttempt(retryBackgroundOutputPath, 'generated_attempt_2_strict_negative', true, retryPrompt);
+    backgroundDiagnostic = second.diag;
+    if (backgroundDiagnostic.backgroundUseful && backgroundDiagnostic.backgroundRelevancePass) {
+      chosenBackgroundPath = second.squarePath;
+    }
+  }
+
+  if (!chosenBackgroundPath) {
+    const safeBgPath = `${coverImagePath}.background.safe.png`;
+    await generateSafeBackgroundFallback(safeBgPath, 512, drawRunCwd);
+    const safeDiag = await diagnoseCoverBackground({
+      backgroundPath: safeBgPath,
+      observedBackgroundText: '',
+      selectedOverlayText: shortOverlay,
+      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
+      sourceDisagreementDetected: false,
+      backgroundKind: 'abstract_fallback',
+      visualSubject: promptify.selectedVisualSubject,
+      abstractFallbackAllowed: false,
+      promptText: 'safe_background_fallback',
+      selectedOverlayTextHash: '',
+      reportPath: '',
+    });
+    backgroundAttempts.push({
+      label: 'abstract_fallback',
+      outputPath: safeBgPath,
+      squarePath: safeBgPath,
+      observedText: '',
+      diagnostics: safeDiag,
+      accepted: false,
+      rejectionReasons: safeDiag.failureReasons,
+    });
+    backgroundDiagnostic = safeDiag;
+    chosenBackgroundPath = safeBgPath;
+  }
+
+  writePyaReport(coverBackgroundAttemptsPath, {
+    selectedOverlayText: shortOverlay,
+    visualSubject: promptify.selectedVisualSubject,
+    attempts: backgroundAttempts,
+  });
+
+  backgroundDiagnostic = await diagnoseCoverBackground({
+    backgroundPath: chosenBackgroundPath,
+    observedBackgroundText: '',
+    selectedOverlayText: shortOverlay,
+    rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
+    sourceDisagreementDetected: overlayDecisionUsed.sourceDisagreementDetected,
+    backgroundKind: backgroundDiagnostic?.backgroundKind || (String(chosenBackgroundPath).includes('.background.safe.') ? 'abstract_fallback' : 'generated_scene'),
+    visualSubject: promptify.selectedVisualSubject,
+    abstractFallbackAllowed: false,
+    promptText: String(promptSpec.positivePrompt),
+    selectedOverlayTextHash: '',
+    reportPath: coverBackgroundDiagnosticPath,
+  });
+
+  await runCoverOverlayStage({
+    stageInput: {
+      backgroundPath: chosenBackgroundPath,
+      overlayText: overlaySourceText,
+      outputPath: coverImagePath,
+      imageSizeTarget: 512,
+      imageTextMode: "deterministic",
+      legacyModelTextUsed: false,
+      hookText,
+      contextTopNews: topNewsForPrompt,
+      backgroundPrompt: promptSpec.positivePrompt,
+      overlaySource: overlayDecisionUsed.overlaySource,
+      overlaySourcePath: overlayDecisionUsed.overlaySourcePath,
+      overlaySourceFreshness: overlayDecisionUsed.overlaySourceFreshness,
+      candidateOverlayTexts: overlayDecisionUsed.candidateOverlayTexts,
+      selectedOverlayText: overlayDecisionUsed.selectedOverlayText,
+      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
+      sourceDisagreementDetected: overlayDecisionUsed.sourceDisagreementDetected,
+      backgroundUseful: backgroundDiagnostic.backgroundUseful,
+      backgroundDiagnosticPath: coverBackgroundDiagnosticPath,
+      backgroundFailureReasons: backgroundDiagnostic.failureReasons,
+      safeBackgroundFallbackUsed: String(chosenBackgroundPath).includes(".background.safe."),
+      safeBackgroundPath: String(chosenBackgroundPath).includes(".background.safe.") ? chosenBackgroundPath : "",
+      backgroundKind: String(chosenBackgroundPath).includes(".background.safe.") ? "abstract_fallback" : "generated_scene",
+      backgroundRelevancePass: Boolean(backgroundDiagnostic?.backgroundRelevancePass),
+      backgroundRelevanceReason: String(backgroundDiagnostic?.backgroundRelevanceReason || ""),
+      abstractFallbackUsed: String(chosenBackgroundPath).includes(".background.safe."),
+      abstractFallbackAllowed: false,
+      visualSubject: String(promptify.selectedVisualSubject || ""),
+      coverBackgroundAttemptsPath,
+    },
+    deriveOverlay: () => overlayDerived,
+    observeOverlay: async () => ({
+      observedText: "",
+      observedAllText: "",
+      outsideOverlayText: "",
+      observeError: "overlay_ocr_skipped_deterministic_mode",
+    }),
+    verifyOverlay: ({ finalOverlayText, observedText, observedAllText, outsideOverlayText }) => verifyCoverOverlayText({
+      expectedText: finalOverlayText,
+      observedText,
+      observedAllText,
+      outsideOverlayText,
+      minWords: 3,
+      maxWords: 8,
+      requireNoExtraVisibleText: true,
+    }),
+    renderDeterministic: async ({ backgroundPath, finalOverlayText, outputPath }) => renderDeterministicOverlay({
+      backgroundPath,
+      overlayText: finalOverlayText,
+      outputPath,
+      size: 512,
+      cwd: drawRunCwd,
+    }),
+    reports: {
+      input: overlayInputPath,
+      derived: overlayDerivedPath,
+      verify: overlayVerifyPath,
+      final: overlayFinalPath,
+    },
+    diagnoseFinalBackground: async ({ finalImagePath }) => diagnoseCoverBackground({
+      backgroundPath: finalImagePath,
+      observedBackgroundText: "",
+      selectedOverlayText: shortOverlay,
+      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
+      sourceDisagreementDetected: false,
+      backgroundKind: String(chosenBackgroundPath).includes(".background.safe.") ? "abstract_fallback" : "transformed_generated_scene",
+      visualSubject: String(promptify.selectedVisualSubject || ""),
+      abstractFallbackAllowed: false,
+      promptText: "final_composite_check",
+      reportPath: "",
+    }),
+  });
+
+  for (const a of backgroundAttempts) {
+    try { if (String(a.squarePath || "").endsWith(".square.tmp.png")) fs.unlinkSync(a.squarePath); } catch {}
   }
   fs.copyFileSync(coverImagePath, coverImageStablePath);
 
-  process.stdout.write(`[meeting-cover] source: ${generated}\n`);
+  process.stdout.write(`[meeting-cover] source: ${chosenBackgroundPath}\n`);
   process.stdout.write(`[meeting-cover] thumbnail source: ${thumbnailSourcePath}\n`);
   process.stdout.write(`[meeting-cover] wrote: ${coverImagePath}\n`);
   process.stdout.write(`[meeting-cover] wrote: ${coverImageStablePath}\n`);
+  } finally {
+    await dischargeDrawBackend(drawRunCwd);
+  }
 }
 
 main().catch((err) => {

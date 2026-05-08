@@ -886,7 +886,7 @@ export async function generateAgendaWiseArtifacts({
   grossSeriesPath = "",
   useLlmRange = false,
   llmModel = "qwen3.5:9b",
-  ollamaUrl = "http://localhost:11434/api/chat",
+  ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {
   const paragraphs = splitParagraphs(fs.readFileSync(plainPath, "utf8"));

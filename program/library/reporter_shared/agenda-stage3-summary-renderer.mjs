@@ -627,7 +627,7 @@ export async function runAgendaStage3SummaryRenderer({
   outSummaryMdPath,
   focus = "",
   llmModel = "qwen3.5:9b",
-  ollamaUrl = "http://localhost:11434/api/chat",
+  ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {
   assertExactGroundingRoot(sectionGroundingPyaPath);

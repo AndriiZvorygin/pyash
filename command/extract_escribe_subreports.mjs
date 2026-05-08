@@ -373,9 +373,63 @@ function isMinutesLikeTitle(title = "") {
   return /\bminutes\b/.test(t) || /\bconfirmation of.*minutes\b/.test(t) || /\bmeeting held on\b/.test(t);
 }
 
+function hasNoUpdateTitle(title = "") {
+  const t = normalizeSpaces(title).toLowerCase();
+  return /\bthere (?:was|is|are) no update\b/.test(t) || /\bthere are no\b/.test(t);
+}
+
 function extractReportCode(title = "") {
   const m = normalizeSpaces(title).match(/\b([A-Z]{1,4}-[0-9]{2}-[0-9]{3})\b/);
   return m ? m[1] : "";
+}
+function findSectionByReportCode(lines, reportCode, allReportCodes = []) {
+  if (!reportCode) return null;
+  const code = String(reportCode || "").toUpperCase();
+  const codeRe = new RegExp("\\b" + code.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&") + "\\b", "iu");
+  const starts = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (codeRe.test(normalizeSpaces(lines[i]))) starts.push(i);
+  }
+  if (!starts.length) return null;
+  const preferredStaff = starts.find((idx) => {
+    const probe = [normalizeSpaces(lines[idx]), normalizeSpaces(lines[idx + 1] || ""), normalizeSpaces(lines[idx + 2] || "")].join(" ").toLowerCase();
+    return probe.includes("staff report") && probe.includes(code.toLowerCase());
+  });
+  const preferredLate = starts.find((idx) => idx > 200 && /page\s+1\s+of\s+\d+/iu.test(normalizeSpaces(lines[idx + 1] || "")));
+  const startLine = Number.isInteger(preferredStaff) ? preferredStaff : Number.isInteger(preferredLate) ? preferredLate : starts[0];
+  const codeSet = new Set((allReportCodes || []).map((x) => String(x || "").toUpperCase()).filter(Boolean));
+  codeSet.delete(code);
+  const codeMatchers = Array.from(codeSet).map((c) => ({
+    code: c,
+    re: new RegExp("\\b" + c.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&") + "\\b", "iu"),
+  }));
+  let endLine = lines.length - 1;
+  for (let i = startLine + 1; i < lines.length; i += 1) {
+    const raw = normalizeSpaces(lines[i]);
+    if (!raw) continue;
+    if (/^[0-9]{1,2}\.[a-z]\b/iu.test(raw)) { endLine = i - 1; break; }
+    if (/^Page [0-9]{1,4} of [0-9]{1,4}$/iu.test(raw)) continue;
+    if (codeMatchers.some((m) => m.re.test(raw))) { endLine = i - 1; break; }
+  }
+  if (endLine < startLine) endLine = startLine;
+  return {
+    startLine,
+    endLine,
+    startAnchorText: normalizeSpaces(lines[startLine] || ""),
+    endAnchorText: normalizeSpaces(lines[endLine] || ""),
+  };
+}
+
+function hasContaminationMarkers(text = "") {
+  const t = String(text || "");
+  return {
+    has_r_marker: /\bR-\d{6}-\d{3}[a-z]?\b/iu.test(t),
+    has_s_marker: /\bS-\d{6}-\d{3}[a-z]?\b/iu.test(t),
+    has_moved_by: /\bMoved by\b/iu.test(t),
+    has_seconded_by: /\bSeconded by\b/iu.test(t),
+    has_carried: /\bCarried\b/iu.test(t),
+    has_defeated: /\bDefeated\b/iu.test(t),
+  };
 }
 
 function findFirstNonEmptyLine(lines, startLine, endLine) {
@@ -500,14 +554,27 @@ function main() {
 
   const { byPage, totalPages } = collectPageMarkers(sliceLines);
   const tocWindow = findTocWindow(tocLines);
-  const tocParse =
+  const primaryTocParse =
     tocWindow.start >= 0 && tocWindow.end >= tocWindow.start
       ? parseTocItems(tocLines, tocWindow.start, tocWindow.end)
       : { items: [], rejectedContaminatedTitles: 0, candidateCount: 0 };
 
-  const tocItemsRaw = Array.isArray(tocParse?.items) ? tocParse.items : [];
-  const rejectedContaminatedTitles = Number(tocParse?.rejectedContaminatedTitles || 0);
-  const tocCandidateCountBeforeFiltering = Number(tocParse?.candidateCount || 0);
+  const sliceTocWindow = findTocWindow(sliceLines);
+  const sliceTocParse =
+    sliceTocWindow.start >= 0 && sliceTocWindow.end >= sliceTocWindow.start
+      ? parseTocItems(sliceLines, sliceTocWindow.start, sliceTocWindow.end)
+      : { items: [], rejectedContaminatedTitles: 0, candidateCount: 0 };
+
+  const primaryItems = Array.isArray(primaryTocParse?.items) ? primaryTocParse.items : [];
+  const fallbackItems = Array.isArray(sliceTocParse?.items) ? sliceTocParse.items : [];
+  const useSliceTocFallback = primaryItems.length === 0 && fallbackItems.length > 0;
+  const tocItemsRaw = useSliceTocFallback ? fallbackItems : primaryItems;
+  const rejectedContaminatedTitles = Number(
+    (useSliceTocFallback ? sliceTocParse?.rejectedContaminatedTitles : primaryTocParse?.rejectedContaminatedTitles) || 0,
+  );
+  const tocCandidateCountBeforeFiltering = Number(
+    (useSliceTocFallback ? sliceTocParse?.candidateCount : primaryTocParse?.candidateCount) || 0,
+  );
 
   const tocItemsFilled = inferMissingStartPages({
     items: dedupeAndSortItems(tocItemsRaw),
@@ -586,8 +653,54 @@ function main() {
     });
   }
 
+  const existingItems = new Set(sections.map((s) => String(s.item || "").toLowerCase()));
+  const reportCodes = Array.from(new Set(tocItemsRaw.map((x) => extractReportCode(x.title)).filter(Boolean)));
+  const fallbackSections = [];
+  for (const item of tocItemsRaw) {
+    const itemKey = String(item.item || "").toLowerCase();
+    if (existingItems.has(itemKey)) continue;
+    if (isMinutesLikeTitle(item.title)) continue;
+    const reportCode = extractReportCode(item.title);
+    if (!reportCode) continue;
+    const located = findSectionByReportCode(sliceLines, reportCode, reportCodes);
+    if (!located) continue;
+    const startLine = Number(located.startLine);
+    const endLine = Number(located.endLine);
+    if (!Number.isFinite(startLine) || !Number.isFinite(endLine) || endLine < startLine) continue;
+    const anchorProbeEnd = Math.min(endLine, startLine + 1500);
+    if (!hasStrongAnchorInRange(item, sliceLines, startLine, anchorProbeEnd)) continue;
+    if (hasMinutesHeaderAt(sliceLines, findFirstNonEmptyLine(sliceLines, startLine, endLine))) continue;
+    const rawText = sliceLines.slice(startLine, endLine + 1).join("\n").trim() + "\n";
+    const sectionText = scrubContaminatedMinutesActionBody(rawText);
+    const lineCount = sectionText.split(/\r?\n/).filter((ln) => normalizeSpaces(ln)).length;
+    if (lineCount < 20) continue;
+    const contamination = hasContaminationMarkers(sectionText);
+    if (contamination.has_r_marker || contamination.has_s_marker || contamination.has_moved_by || contamination.has_seconded_by || contamination.has_carried || contamination.has_defeated) {
+      continue;
+    }
+    const fileName = `${String(item.item || "").replace(/\./g, "-")}_${slugify(item.title)}_report-number.md`;
+    const filePath = path.join(outputDir, fileName);
+    fallbackSections.push({
+      item: item.item,
+      title: item.title,
+      start_page: null,
+      end_page: null,
+      line_start: startLine + 1,
+      line_end: endLine + 1,
+      file: filePath,
+      text: sectionText,
+      extraction_method: "report_number_search",
+      source_file: tocSourcePath,
+      slice_source_file: sliceSourcePath,
+      start_anchor_text: located.startAnchorText || "",
+      end_anchor_text: located.endAnchorText || "",
+      confidence: 0.9,
+      contamination_scan: contamination,
+    });
+    existingItems.add(itemKey);
+  }
   fs.mkdirSync(outputDir, { recursive: true });
-  for (const section of sections) {
+  for (const section of [...sections, ...fallbackSections]) {
     fs.writeFileSync(section.file, section.text, "utf8");
   }
 
@@ -601,6 +714,58 @@ function main() {
   const attachmentsByItem = attachmentsResult?.byItem || new Map();
   const baseOrigin = attachmentsResult?.baseOrigin || "";
 
+  const fallbackSectionsFromAttachments = [];
+  if (attachmentsByItem.size > 0) {
+    const already = new Set([...sections, ...fallbackSections].map((s) => String(s.item || "").toLowerCase()));
+    const reportCodes = Array.from(new Set(Array.from(attachmentsByItem.values()).map((x) => extractReportCode(x.title)).filter(Boolean)));
+    for (const [item, data] of attachmentsByItem.entries()) {
+      const itemKey = String(item || "").toLowerCase();
+      if (already.has(itemKey)) continue;
+      if (isMinutesLikeTitle(data.title)) continue;
+      const reportCode = extractReportCode(data.title);
+      if (!reportCode) continue;
+      const located = findSectionByReportCode(sliceLines, reportCode, reportCodes);
+      if (!located) continue;
+      const startLine = Number(located.startLine);
+      const endLine = Number(located.endLine);
+      if (!Number.isFinite(startLine) || !Number.isFinite(endLine) || endLine < startLine) continue;
+      const pseudoSection = { item, title: data.title };
+      const anchorProbeEnd = Math.min(endLine, startLine + 1500);
+      if (!hasStrongAnchorInRange(pseudoSection, sliceLines, startLine, anchorProbeEnd)) continue;
+      if (hasMinutesHeaderAt(sliceLines, findFirstNonEmptyLine(sliceLines, startLine, endLine))) continue;
+      const rawText = sliceLines.slice(startLine, endLine + 1).join("\n").trim() + "\n";
+      const sectionText = scrubContaminatedMinutesActionBody(rawText);
+      const lineCount = sectionText.split(/\r?\n/).filter((ln) => normalizeSpaces(ln)).length;
+      if (lineCount < 20) continue;
+      const contamination = hasContaminationMarkers(sectionText);
+      if (contamination.has_r_marker || contamination.has_s_marker || contamination.has_moved_by || contamination.has_seconded_by || contamination.has_carried || contamination.has_defeated) {
+        continue;
+      }
+      const fileName = `${String(item || "").replace(/\./g, "-")}_${slugify(data.title)}_report-number.md`;
+      const filePath = path.join(outputDir, fileName);
+      fallbackSectionsFromAttachments.push({
+        item,
+        title: data.title,
+        start_page: null,
+        end_page: null,
+        line_start: startLine + 1,
+        line_end: endLine + 1,
+        file: filePath,
+        text: sectionText,
+        extraction_method: "report_number_search",
+        source_file: tocSourcePath,
+        slice_source_file: sliceSourcePath,
+        start_anchor_text: located.startAnchorText || "",
+        end_anchor_text: located.endAnchorText || "",
+        confidence: 0.9,
+        contamination_scan: contamination,
+      });
+      already.add(itemKey);
+    }
+  }
+  for (const section of fallbackSectionsFromAttachments) {
+    fs.writeFileSync(section.file, section.text, "utf8");
+  }
   const indexPath = outputIndexPath || path.join(outputDir, "subreports.index.json");
   const index = {
     source_file: tocSourcePath,
@@ -619,6 +784,7 @@ function main() {
     toc_items_skipped_weak_inferred_anchor_count: skippedWeakAnchorCount,
     toc_items_skipped_duplicate_inferred_start_count: skippedDuplicateInferredStartCount,
     minutes_action_boundary_cut_count: minutesBoundaryCutCount,
+    duplicate_range_invalidated_count: 0,
     section_count: sections.length,
     sections: sections.map((s) => ({
       item: s.item,
@@ -641,11 +807,58 @@ function main() {
     source_base_origin: baseOrigin,
   };
 
-  const sectionByItem = new Map(index.sections.map((x) => [x.item, x]));
+  const duplicateSpanMap = new Map();
+  for (const sec of [...sections, ...fallbackSections, ...fallbackSectionsFromAttachments]) {
+    const ls = Number(sec?.line_start || 0);
+    const le = Number(sec?.line_end || 0);
+    if (!Number.isFinite(ls) || !Number.isFinite(le) || ls <= 0 || le <= 0) continue;
+    const key = String(ls) + '-' + String(le);
+    if (!duplicateSpanMap.has(key)) duplicateSpanMap.set(key, []);
+    duplicateSpanMap.get(key).push(sec);
+  }
+  let duplicateRangeInvalidatedCount = 0;
+  const invalidDuplicateKeys = new Set();
+  for (const [key, arr] of duplicateSpanMap.entries()) {
+    if (!Array.isArray(arr) || arr.length < 2) continue;
+    const keepable = arr.filter((x) => /\b[A-Z]{1,4}-[0-9]{2}-[0-9]{3}\b/.test(String(x?.title || '')));
+    if (keepable.length === 0) {
+      invalidDuplicateKeys.add(key);
+      duplicateRangeInvalidatedCount += arr.length;
+    }
+  }
+
+  index.duplicate_range_invalidated_count = duplicateRangeInvalidatedCount;
+
+  const mergedSections = [
+    ...sections.map((x) => ({
+      ...x,
+      extraction_method: "page_toc",
+      source_file: tocSourcePath,
+      slice_source_file: sliceSourcePath,
+      start_anchor_text: "",
+      end_anchor_text: "",
+      confidence: 0.82,
+      contamination_scan: hasContaminationMarkers(String(x.text || "")),
+    })),
+    ...fallbackSections,
+    ...fallbackSectionsFromAttachments,
+  ];
+  const sectionByItem = new Map(mergedSections
+    .filter((sec) => {
+      const ls = Number(sec?.line_start || 0);
+      const le = Number(sec?.line_end || 0);
+      const key = String(ls) + '-' + String(le);
+      if (invalidDuplicateKeys.has(key)) return false;
+      const text = String(sec?.text || '');
+      const lineCount = text.split(/\r?\n/).filter((ln) => normalizeSpaces(ln)).length;
+      if (hasNoUpdateTitle(String(sec?.title || '')) && lineCount > 40) return false;
+      return true;
+    })
+    .map((x) => [String(x.item || "").toLowerCase(), x]));
   index.items = Array.from(new Set([...index.sections.map((x) => x.item), ...Array.from(attachmentsByItem.keys())]))
     .sort()
     .map((item) => {
-      const fromSection = sectionByItem.get(item);
+      const fromSection = sectionByItem.get(String(item || "").toLowerCase());
       const fromHtml = attachmentsByItem.get(item);
       return {
         item,
@@ -654,6 +867,13 @@ function main() {
         start_page: fromSection?.start_page ?? null,
         end_page: fromSection?.end_page ?? null,
         file: fromSection?.file ?? null,
+        extraction_method: fromSection?.extraction_method ?? "none",
+        source_file: fromSection?.source_file ?? tocSourcePath,
+        slice_source_file: fromSection?.slice_source_file ?? sliceSourcePath,
+        start_anchor_text: fromSection?.start_anchor_text ?? "",
+        end_anchor_text: fromSection?.end_anchor_text ?? "",
+        confidence: fromSection?.confidence ?? 0,
+        contamination_scan: fromSection?.contamination_scan ?? hasContaminationMarkers(""),
         attachments: fromHtml?.attachments ?? [],
       };
     });
