@@ -1,4 +1,4 @@
-const DEFAULT_STYLE_FALLBACK = "realistic documentary photo background, natural lighting, balanced contrast";
+const DEFAULT_STYLE_FALLBACK = "editorial symbolic illustration background, clear visual hierarchy, balanced contrast";
 const POSITIVE_BANNED_TERMS = ["news", "poster", "headline", "title", "sign", "signage", "label", "banner", "infographic", "article"];
 
 function sanitizePromptContext(text) {
@@ -41,21 +41,20 @@ export function buildBackgroundPromptSpec({
 
   let positivePrompt = roadworkLike
     ? [
-        "Documentary photograph of a Canadian municipal street under roadwork",
-        "orange traffic barrels and temporary barricades",
-        "lane markings, curb, sidewalk, and realistic pavement texture",
-        "downtown buildings softly out of focus",
-        "evening natural light with balanced contrast",
-        "open pavement foreground",
-        "square composition with street-level perspective",
+        "Editorial symbolic background about transportation decisions",
+        "lane arrows, route lines, wayfinding symbols, and asphalt-texture motifs",
+        "policy-planning visual language with clean geometric composition",
+        "balanced contrast with clear focal hierarchy",
+        "open foreground area for headline overlay",
+        "square composition",
       ].join(", ")
     : [
-        "Documentary photograph of Canadian municipal local scenery",
+        "Editorial symbolic background tailored to the article topic",
         style || DEFAULT_STYLE_FALLBACK,
-        visualSubject || "municipal civic setting",
-        "realistic physical objects and street-level composition",
-        "natural lighting and balanced contrast",
-        "open foreground space",
+        visualSubject || "policy-relevant objects and planning context",
+        "concrete objects and icon-like cues that explain the topic",
+        "balanced contrast and uncluttered composition",
+        "open foreground area for headline overlay",
         "square composition",
       ].join(", ");
 

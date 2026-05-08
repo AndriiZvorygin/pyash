@@ -11,9 +11,10 @@ function resolveOllamaHost() {
   const vals = readPyaTextValues(secretPath, ['ollama host', 'ai host', 'relay local host']);
   const fromPya = String(vals['ollama host'] || vals['ai host'] || vals['relay local host'] || '').trim();
   if (fromPya) return fromPya.replace(/\/$/u, '');
-  return 'http://localhost:11434';
+  return 'http://mriczo:11434';
 }
 const OLLAMA_URL = `${resolveOllamaHost()}/api/chat`;
+const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
 const MODEL = process.env.OWEN_HOOK_MODEL || process.env.OWEN_SUMMARY_MODEL || 'qwen3.5:9b';
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = 0.8;
@@ -521,11 +522,16 @@ async function ask(messages, { numPredict = 120 } = {}) {
     options: { temperature: 0.15, num_predict: numPredict },
     messages,
   };
-  const res = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw new Error(`Ollama fetch failed for meeting-hook using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(err?.message || err)})`);
+  }
   if (!res.ok) throw new Error(`ollama status ${res.status}`);
   const json = await res.json();
   return String(json?.message?.content || '').trim();
@@ -650,6 +656,7 @@ async function main() {
   const outJson = path.join(transcriptDir, `${resolvedPrefix}.meeting-hook.json`);
 
   process.stdout.write(`[meeting-hook] source: ${summaryPath}\n`);
+  process.stdout.write(`[llm] ollama host: ${RESOLVED_OLLAMA_HOST}\n`);
   process.stdout.write(`[meeting-hook] output txt: ${outTxt}\n`);
 
   const out = await generateHook({

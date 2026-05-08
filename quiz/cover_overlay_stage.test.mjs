@@ -262,7 +262,7 @@ test("promptify infers visual subject from hook semantics", async () => {
     oneSentenceSummary: "Council reviewed costs for local operators.",
     topNews: "Patio permit barriers and business costs",
   });
-  assert.match(out.selectedVisualSubject, /storefronts|business|downtown/iu);
+  assert.match(out.selectedVisualSubject, /planning|development|documents|business|downtown/iu);
   assert.equal(out.promptContainsOverlayText, false);
 });
 
@@ -383,7 +383,7 @@ test("roadwork prompt uses object-level street terms and excludes text-inducing 
     imageTextMode: "deterministic",
   });
   const p = spec.positivePrompt.toLowerCase();
-  for (const term of ["traffic barrels", "barricades", "lane markings", "pavement"]) {
+  for (const term of ["lane arrows", "route lines", "wayfinding symbols", "asphalt-texture motifs"]) {
     assert.equal(p.includes(term), true);
   }
   for (const banned of ["civic-news", "poster", "headline", "title", "sign", "signage", "label", "fourth avenue one-way option defeated"]) {
@@ -398,7 +398,7 @@ test("retry prompt for synthetic text risk shifts to close-up roadwork framing",
     visualSubject: "municipal roadway corridor with civic infrastructure context",
     positivePrompt: "Documentary photograph style municipal street under roadwork",
   }).toLowerCase();
-  for (const term of ["close-up", "traffic barrels", "barricades", "pavement", "blurred", "open pavement foreground"]) {
+  for (const term of ["close-up", "lane arrows", "route", "markings", "directional symbols", "square composition"]) {
     assert.equal(retry.includes(term), true);
   }
 });

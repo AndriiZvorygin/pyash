@@ -164,7 +164,7 @@ export async function runAgendaStage1GrossChunking({
   agendaPath,
   grossChunksPyaPath,
   llmModel = "qwen3.5:9b",
-  ollamaUrl = "http://localhost:11434/api/chat",
+  ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {
   const rows = parseSpeakerRows(rowsJsonPath);
