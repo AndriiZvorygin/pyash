@@ -518,6 +518,24 @@ function buildRangesFromGrossChunks(rows, grossChunks) {
   return normalizeSectionRanges(rows, out);
 }
 
+function attachSectionChaptersByIndex(ranges, sections) {
+  const out = Array.isArray(ranges) ? ranges.map((r) => ({ ...r })) : [];
+  const src = Array.isArray(sections) ? sections : [];
+  if (!out.length || !src.length) return out;
+  if (out.length === src.length) {
+    for (let i = 0; i < out.length; i += 1) {
+      const ch = src[i]?.chapters;
+      out[i].chapters = Array.isArray(ch) ? ch : [];
+    }
+    return out;
+  }
+  const byHeading = new Map(src.map((s) => [String(s?.heading || "").trim(), Array.isArray(s?.chapters) ? s.chapters : []]));
+  for (const r of out) {
+    r.chapters = byHeading.get(String(r?.heading || "").trim()) || [];
+  }
+  return out;
+}
+
 function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, wiseRanges, grossChunks }) {
   const rows = Array.isArray(transcriptRows) ? transcriptRows : [];
   const sections = Array.isArray(sectionSummaries) ? sectionSummaries : [];
@@ -882,8 +900,23 @@ function buildPage({
       const rows = transcriptRows.slice(s.startRow, s.endRow + 1);
       const firstRowText = rows.length ? String(rows[0]?.speech || rows[0]?.raw || "").trim() : "";
       const showSummary = !summaryLooksDuplicate(String(s.summary || ""), firstRowText);
+      const chapterList = Array.isArray(s.chapters) ? s.chapters : [];
+      const chaptersHtml = chapterList.length
+        ? `<div class="section-chapters"><h4>Chapters</h4><ul>${chapterList.map((ch) => {
+          const since = Number(ch?.since);
+          const ts = Number.isFinite(since) ? fmtClock(since) : "";
+          const jumpUrl = Number.isFinite(since) ? buildTimedVideoUrl(videoUrl || meetingUrl, since) : (videoUrl || meetingUrl || "#");
+          const title = String(ch?.title || "").trim();
+          const text = String(ch?.text || "").trim();
+          const lead = ts
+            ? `<a href="${escapeHtml(jumpUrl)}">[${escapeHtml(ts)}]</a> ${escapeHtml(title || text || "Chapter")}`
+            : escapeHtml(title || text || "Chapter");
+          const detail = text ? `<br><span class="chapter-text">${escapeHtml(text)}</span>` : "";
+          return `<li>${lead}${detail}</li>`;
+        }).join("")} </ul></div>`
+        : "";
       const entries = rows.map(renderEntry).join("\n");
-      return `<section id="${escapeHtml(s.id)}" class="transcript-section"><h3>${escapeHtml(s.heading)}</h3>${showSummary ? `<p class="section-summary">${escapeHtml(s.summary)}</p>` : ""}${entries}</section>`;
+      return `<section id="${escapeHtml(s.id)}" class="transcript-section"><h3>${escapeHtml(s.heading)}</h3>${showSummary ? `<p class="section-summary">${escapeHtml(s.summary)}</p>` : ""}${chaptersHtml}${entries}</section>`;
     }).join("\n")
     : transcriptRows.map(renderEntry).join("\n");
 
@@ -945,6 +978,11 @@ function buildPage({
     .transcript-section { margin: 1.1rem 0 1.25rem; }
     .transcript-section h3 { margin: 0 0 .35rem; font-family:"IBM Plex Sans", Arial, sans-serif; font-size:1.05rem; }
     .section-summary { margin:.1rem 0 .5rem; color:#26323e; background:#fff; border-left:3px solid var(--line); padding:.35rem .55rem; }
+    .section-chapters { margin:.2rem 0 .6rem; border-left:2px solid var(--line); padding:.3rem .6rem; background:#fff; }
+    .section-chapters h4 { margin:.1rem 0 .25rem; font-size:.95rem; color:#203042; }
+    .section-chapters ul { margin:.15rem 0 .1rem 1rem; padding:0; }
+    .section-chapters li { margin:.15rem 0; }
+    .chapter-text { color:#3f4c58; }
     .transcript-tools a { color:var(--accent); text-decoration:none; font-family:"IBM Plex Sans", Arial, sans-serif; }
     .transcript-entry { border-top:1px solid var(--line); padding:.58rem 0; }
     .transcript-entry p { margin:0; }
@@ -1187,13 +1225,16 @@ function main() {
   const finalSource = sourceArg || meetingUrl || "";
   const finalAgendaPage = String(agendaPageArg || inferredAgendaPage).trim();
 
-  const transcriptSections = buildSectionRanges({
-    transcriptRows,
-    sectionSummaries: agendaSummaryJson?.sections,
-    agendaMatches,
-    wiseRanges,
-    grossChunks,
-  });
+  const transcriptSections = attachSectionChaptersByIndex(
+    buildSectionRanges({
+      transcriptRows,
+      sectionSummaries: agendaSummaryJson?.sections,
+      agendaMatches,
+      wiseRanges,
+      grossChunks,
+    }),
+    agendaSummaryJson?.sections,
+  );
   assertNoLongUnsummarizedSections(
     transcriptRows,
     transcriptSections,

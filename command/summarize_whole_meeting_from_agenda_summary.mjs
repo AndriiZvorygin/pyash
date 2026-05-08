@@ -14,7 +14,7 @@ function resolveOllamaHost() {
   const vals = readPyaTextValues(secretPath, ['ollama host', 'ai host', 'relay local host']);
   const fromPya = String(vals['ollama host'] || vals['ai host'] || vals['relay local host'] || '').trim();
   if (fromPya) return fromPya.replace(/\/$/u, '');
-  return 'http://localhost:11434';
+  return 'http://mriczo:11434';
 }
 const OLLAMA_URL = `${resolveOllamaHost()}/api/chat`;
 const MODEL = process.env.MEETING_SUMMARY_MODEL

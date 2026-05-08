@@ -282,22 +282,21 @@ async function main() {
   const uploadHtmlPath = path.join(payloadDir, `${path.basename(htmlSourcePath, path.extname(htmlSourcePath))}.agenda-publish.html`);
   fs.writeFileSync(uploadHtmlPath, html, "utf8");
 
-  const metadata = {
-    idempotency_key: idempotencyKey,
+  const metadataBase = {
     jurisdiction: slugify(jurisdiction),
     body: slugify(body),
     date_iso: dateIso,
     post_title: postTitle,
     post_body: postBody,
   };
-  if (suffix) metadata.suffix = suffix;
-  if (communityName) metadata.community_name = communityName;
-  if (parsedRef.post_id) metadata.post_id = parsedRef.post_id;
-  if (parsedRef.post_url) metadata.post_url = parsedRef.post_url;
-  if (publishUsername) metadata.publish_username = publishUsername;
-  if (publishPassword) metadata.publish_password = publishPassword;
-  if (transcriptUrl) metadata.transcript_url = transcriptUrl;
-  if (officialSourceUrl) metadata.source_url = officialSourceUrl;
+  if (suffix) metadataBase.suffix = suffix;
+  if (communityName) metadataBase.community_name = communityName;
+  if (parsedRef.post_id) metadataBase.post_id = parsedRef.post_id;
+  if (parsedRef.post_url) metadataBase.post_url = parsedRef.post_url;
+  if (publishUsername) metadataBase.publish_username = publishUsername;
+  if (publishPassword) metadataBase.publish_password = publishPassword;
+  if (transcriptUrl) metadataBase.transcript_url = transcriptUrl;
+  if (officialSourceUrl) metadataBase.source_url = officialSourceUrl;
 
   const extras = parseExtras(process.env.AGENDA_PUBLISH_EXTRAS_JSON || envFallback.AGENDA_PUBLISH_EXTRAS_JSON || extrasArg);
 
@@ -317,28 +316,59 @@ async function main() {
   }
   if (!token) throw new Error("AGENDA_PUBLISH_AUTH_TOKEN (or MEETING_PUBLISH_AUTH_TOKEN) is required unless dry-run");
 
-  const form = new FormData();
-  form.append("metadata", JSON.stringify(metadata));
-  form.append("agenda_html", new Blob([html], { type: "text/html; charset=utf-8" }), path.basename(uploadHtmlPath));
-  if (imageSourcePath && fs.existsSync(imageSourcePath)) {
-    const imageBuf = fs.readFileSync(imageSourcePath);
-    const ext = path.extname(imageSourcePath).toLowerCase();
-    const contentType = ext === ".png" ? "image/png" : (ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "application/octet-stream");
-    form.append("cover_image", new Blob([imageBuf], { type: contentType }), path.basename(imageSourcePath));
-  }
-  if (extras) form.append("extras_json", JSON.stringify(extras));
+  let disableCoverUpload = false;
 
-  const res = await fetch(endpoint, {
+  function buildMultipartForm(metadata) {
+    const form = new FormData();
+    form.append("metadata", JSON.stringify(metadata));
+    form.append("agenda_html", new Blob([html], { type: "text/html; charset=utf-8" }), path.basename(uploadHtmlPath));
+    if (!disableCoverUpload && imageSourcePath && fs.existsSync(imageSourcePath)) {
+      const imageBuf = fs.readFileSync(imageSourcePath);
+      const ext = path.extname(imageSourcePath).toLowerCase();
+      const contentType = ext === ".png" ? "image/png" : (ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "application/octet-stream");
+      form.append("cover_image", new Blob([imageBuf], { type: contentType }), path.basename(imageSourcePath));
+    }
+    if (extras) form.append("extras_json", JSON.stringify(extras));
+    return form;
+  }
+
+  const responseBase = path.basename(payloadPath, path.extname(payloadPath));
+  const responsePath = path.join(payloadDir, `${responseBase}.agenda-publish.response.json`);
+
+  const metadataAttempt1 = { ...metadataBase, idempotency_key: idempotencyKey };
+  let res = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
-    body: form,
+    body: buildMultipartForm(metadataAttempt1),
     signal: AbortSignal.timeout(5 * 60 * 1000),
   });
-  const raw = await res.text();
+  let raw = await res.text();
   let parsed = null;
   try { parsed = JSON.parse(raw); } catch {}
 
-  const responsePath = path.join(payloadDir, `${path.basename(payloadPath, path.extname(payloadPath))}.agenda-publish.response.json`);
+  const attempt1Path = path.join(payloadDir, `${responseBase}.agenda-publish.response.attempt-01.json`);
+  fs.writeFileSync(attempt1Path, `${parsed ? JSON.stringify(parsed, null, 2) : raw}\n`, "utf8");
+  process.stdout.write(`[agenda-publish] attempt response saved: ${attempt1Path}\n`);
+
+  const pictrsUploadFailure = String(parsed?.error || "").toLowerCase().includes("failed to upload cover image to pictrs");
+  if (!res.ok && pictrsUploadFailure && !disableCoverUpload && imageSourcePath && fs.existsSync(imageSourcePath)) {
+    disableCoverUpload = true;
+    process.stdout.write("[agenda-publish] cover upload failed; retrying without cover image\n");
+    const metadataAttempt2 = { ...metadataBase, idempotency_key: `${idempotencyKey}-nocover` };
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: buildMultipartForm(metadataAttempt2),
+      signal: AbortSignal.timeout(5 * 60 * 1000),
+    });
+    raw = await res.text();
+    parsed = null;
+    try { parsed = JSON.parse(raw); } catch {}
+    const attempt2Path = path.join(payloadDir, `${responseBase}.agenda-publish.response.attempt-02.json`);
+    fs.writeFileSync(attempt2Path, `${parsed ? JSON.stringify(parsed, null, 2) : raw}\n`, "utf8");
+    process.stdout.write(`[agenda-publish] attempt response saved: ${attempt2Path}\n`);
+  }
+
   fs.writeFileSync(responsePath, `${parsed ? JSON.stringify(parsed, null, 2) : raw}\n`, "utf8");
   process.stdout.write(`[agenda-publish] response saved: ${responsePath}\n`);
 

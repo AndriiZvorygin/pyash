@@ -484,6 +484,7 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingW
     return Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : 0.34;
   })();
   let unmatchedSentenceLines = 0;
+  let exhaustedTokenLines = 0;
   let tokenCursor = 0;
   let runningLyricWords = 0;
   let acceptedMatchLines = 0;
@@ -492,11 +493,8 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingW
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const words = Math.max(1, countWords(line));
-    if (sentenceCues && tokenCursor >= tokens.length && i < (totalLineCount - 1)) {
-      throw new Error(
-        `lyrics to srt defective: timing tokens exhausted at line=${i + 1}/${totalLineCount} token_cursor=${tokenCursor} tokens=${tokens.length}`
-      );
-    }
+    const tokenExhausted = sentenceCues && tokenCursor >= tokens.length;
+    if (tokenExhausted) exhaustedTokenLines += 1;
     const startTimingWord = sentenceCues
       ? Math.max(0, Math.min(totalTimingWords, tokenCursor))
       : (runningLyricWords / totalLyricWords) * totalTimingWords;
@@ -514,7 +512,7 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingW
       ? Math.max(0, Math.min(tokens.length - 1, tokenCursor))
       : Math.max(0, Math.min(tokens.length - 1, Math.floor(startTimingWord)));
     const lineWords = splitNormalizedWords(line);
-    if (sentenceCues && tokens.length) {
+    if (sentenceCues && tokens.length && !tokenExhausted) {
       const cursorStart = Math.max(0, Math.min(tokens.length - 1, tokenCursor));
       let chosenFirst = cursorStart;
       const here = tokens[chosenFirst]?.normalized || "";
@@ -600,6 +598,13 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingW
         );
       }
       tokenCursor = Math.max(tokenCursor + 1, chosenLast + 1);
+    } else if (sentenceCues && tokenExhausted) {
+      // Degrade gracefully when timing tokens run out near tail:
+      // keep timeline continuity using proportional word timing instead of hard-failing.
+      const fallbackSince = wordToTime(startTimingWord);
+      const fallbackUntil = Math.max(fallbackSince + 0.08, wordToTime(endTimingWord));
+      since = fallbackSince;
+      until = fallbackUntil;
     } else if (lineWords.length && tokens.length) {
       let firstIdx = -1;
       let lastIdx = -1;
@@ -803,6 +808,11 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingW
         );
       }
     }
+  }
+  if (sentenceCues && exhaustedTokenLines > 0) {
+    process.stderr.write(
+      `[lyrics-to-srt] warn token exhaustion handled with fallback timing: lines=${exhaustedTokenLines}/${totalLineCount} token_cursor=${tokenCursor} tokens=${tokens.length}\n`
+    );
   }
   return {
     rows: collapsedRows,
