@@ -49,11 +49,20 @@ async function callPromptifyLlm({ host, model, prompt }) {
       { role: "user", content: prompt },
     ],
   };
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const timeoutMs = Math.max(5_000, Number(process.env.COVER_PROMPTIFY_TIMEOUT_MS || 30_000));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`promptify ollama status ${res.status}`);
   const data = await res.json();
   return cleanLine(String(data?.message?.content || ""));
@@ -61,12 +70,13 @@ async function callPromptifyLlm({ host, model, prompt }) {
 
 function buildPromptRequest({ hookText = "", oneSentenceSummary = "", topNews = "", jurisdiction = "", meetingType = "" }) {
   return [
-    "Given this Canadian local news article metadata, write one concise positive image prompt for a background-only image.",
-    "Use affirmative visual scene language only.",
-    "Describe physical setting, objects, lighting, and composition.",
-    "Do not include headline words verbatim.",
-    "Do not mention text, posters, banners, signs, labels, typography, or logos.",
-    "Prefer realistic Canadian municipal or community context when appropriate.",
+    "Given this Canadian local news article metadata, write one concise positive image prompt for a background-only cover image.",
+    "Use symbolic illustration style similar to an editorial teaching thumbnail, with clean vector-like forms and strong contrast.",
+    "Use object-first composition: one dominant symbolic anchor plus two supporting objects tied to the topic.",
+    "Use environmental cues from Canadian local context where appropriate.",
+    "Keep it non-photoreal and non-cinematic: stylized illustration, geometric clarity, matte texture.",
+    "Describe only visible scene content, lighting, composition, palette, and depth.",
+    "The visible headline is added separately; do not include headline words verbatim.",
     "Return one line only.",
     `Title/hook: ${hookText}`,
     `Summary: ${oneSentenceSummary}`,
@@ -99,7 +109,7 @@ export async function runCoverPromptifyStage({
   }
 
   if (!positivePrompt) {
-    positivePrompt = "Documentary-style Canadian municipal scene with relevant civic objects, natural lighting, layered depth, and open foreground composition.";
+    positivePrompt = "Editorial symbolic Canadian civic background with one dominant metaphor anchor, geometric structure, layered depth, balanced contrast, and open foreground for overlay.";
   }
 
   positivePrompt = dropVerbatimOverlay(positivePrompt, overlayText);
@@ -134,5 +144,7 @@ export async function runCoverPromptifyStage({
 
 export function buildRetryPromptForBackgroundRisk({ visualSubject = "", positivePrompt = "" } = {}) {
   const base = cleanLine(String(positivePrompt || ""));
-  return base ? `${base}, tighter close-up on concrete objects, reduced signage-like surfaces, shallow depth of field` : "Close-up documentary municipal scene with concrete objects, shallow depth of field, open foreground.";
+  return base
+    ? `${base}, simplified symbolic composition, single dominant anchor object, flat-shaded illustration look, cleaner geometric hierarchy`
+    : "Symbolic editorial illustration with one dominant civic anchor object, clean geometric layout, flat-shaded matte finish, high contrast.";
 }

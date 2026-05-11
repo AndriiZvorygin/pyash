@@ -304,6 +304,20 @@ async function dischargeDrawBackend(cwd = ROOT) {
   }
 }
 
+async function dischargeMindBackend(cwd = ROOT) {
+  try {
+    await runWithStreaming({
+      cmd: path.join(ROOT, 'run'),
+      args: [path.join(ROOT, 'examples/pyash/discharge-mind-backend.pya')],
+      cwd: ROOT,
+      timeoutMs: 60 * 1000,
+      label: 'discharge-mind-backend',
+    });
+  } catch (err) {
+    process.stdout.write(`[meeting-cover] warn discharge mind failed: ${String(err?.message || err)}\n`);
+  }
+}
+
 function deriveRunCwdFromTranscriptDir(transcriptDir) {
   const abs = path.resolve(String(transcriptDir || ''));
   const marker = `${path.sep}artifacts${path.sep}`;
@@ -339,6 +353,15 @@ async function main() {
   const coverPromptifyPath = path.join(transcriptDir, `${prefix}.cover-promptify.pya`);
   const coverBackgroundDiagnosticPath = path.join(transcriptDir, `${prefix}.cover-background.diagnostic.pya`);
   const coverBackgroundAttemptsPath = path.join(transcriptDir, `${prefix}.cover-background.attempts.pya`);
+
+  const gracefulShutdown = async (signal) => {
+    process.stdout.write(`[meeting-cover] received ${signal}; discharging backends before exit\n`);
+    await dischargeDrawBackend(drawRunCwd);
+    await dischargeMindBackend(drawRunCwd);
+    process.exit(130);
+  };
+  process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+  process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
 
   try {
   const hookText = safeReadText(hookPath, '').trim();
@@ -603,6 +626,7 @@ async function main() {
   process.stdout.write(`[meeting-cover] wrote: ${coverImageStablePath}\n`);
   } finally {
     await dischargeDrawBackend(drawRunCwd);
+    await dischargeMindBackend(drawRunCwd);
   }
 }
 
