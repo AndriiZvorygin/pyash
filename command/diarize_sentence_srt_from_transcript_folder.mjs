@@ -6,6 +6,24 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ensureStarted, identify, discharge, stop } from './speaker_runner.mjs';
 
+let __speakerCleanupDone = false;
+async function cleanupSpeakerRunner(reason = '') {
+  if (__speakerCleanupDone) return;
+  __speakerCleanupDone = true;
+  try { await discharge(); } catch {}
+  try { await stop(); } catch {}
+  if (reason) {
+    try { process.stdout.write(`[speaker-sentence] cleanup: ${reason}\n`); } catch {}
+  }
+}
+
+process.on('SIGINT', () => {
+  cleanupSpeakerRunner('SIGINT').finally(() => process.exit(130));
+});
+process.on('SIGTERM', () => {
+  cleanupSpeakerRunner('SIGTERM').finally(() => process.exit(143));
+});
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MAX_CUES = (() => {
   const raw = Number(process.env.PYA_SPEAKER_MAX_CUES || process.env.OWEN_SPEAKER_MAX_CUES || 0);
@@ -1507,7 +1525,13 @@ async function main() {
   process.stdout.write(`[speaker-sentence] samples dir: ${samplesDir}\n`);
 }
 
-main().catch((err) => {
-  process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
-  process.exit(1);
-});
+(async () => {
+  try {
+    await main();
+  } catch (err) {
+    process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
+    process.exitCode = 1;
+  } finally {
+    await cleanupSpeakerRunner('finally');
+  }
+})();

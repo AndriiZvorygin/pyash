@@ -1,6 +1,6 @@
 import { writePyaReport } from "./cover-overlay-stage.mjs";
 
-const TEXT_INDUCING_TERMS = ["news", "poster", "headline", "title", "sign", "signage", "label", "banner", "infographic", "article"];
+const TEXT_INDUCING_TERMS = ["news", "poster", "headline", "title", "sign", "signage", "label", "banner", "infographic", "article", "caption", "typography", "letters", "wordmark", "logo", "watermark"];
 const NEGATIVE_PHRASING = [/\bno\b/iu, /\bwithout\b/iu, /\bdo\s+not\b/iu, /\bdon'?t\b/iu, /\bexclude\b/iu, /\bavoid\b/iu];
 
 function normalizeHost(v = "") {
@@ -14,6 +14,38 @@ function cleanLine(text = "") {
     .replace(/^[\s"'“”‘’`]+|[\s"'“”‘’`]+$/gu, "")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+function abridge(text = "", maxChars = 700) {
+  const s = cleanLine(text);
+  if (s.length <= maxChars) return s;
+  return `${s.slice(0, Math.max(0, maxChars - 1)).trim()}…`;
+}
+
+function inferVisualSubject({ hookText = "", topNews = "", oneSentenceSummary = "" } = {}) {
+  const hay = `${hookText} ${topNews} ${oneSentenceSummary}`.toLowerCase();
+  if (/\b(wheelchair|accessibility|hospital|taxi|mobility)\b/u.test(hay)) return "accessible transit network";
+  if (/\b(food|food box|hunger|housing|land trust|affordable)\b/u.test(hay)) return "food and housing system";
+  if (/\b(garbage|recycling|waste|landlord|river district)\b/u.test(hay)) return "urban waste management system";
+  if (/\b(transit|funding|bylaw|budget|funder)\b/u.test(hay)) return "municipal transit funding system";
+  return "municipal civic systems";
+}
+
+function buildDeterministicTeachingPrompt({ visualSubject = "", jurisdiction = "", meetingType = "", style = "" } = {}) {
+  const subject = cleanLine(visualSubject) || "municipal civic systems";
+  const location = cleanLine(jurisdiction) || "Canadian municipality";
+  const mtype = cleanLine(meetingType) || "council meeting";
+  const styleHint = cleanLine(style);
+  return cleanLine([
+    "Editorial teaching-diagram illustration",
+    `about ${subject}`,
+    `for ${location} ${mtype}`,
+    "single dominant symbolic anchor object with two supporting civic symbols connected by arrows and nodes",
+    "vector-like geometric forms, flat-shaded matte texture, high contrast, clean negative space for overlay",
+    "diagrammatic educational style, abstract informative composition, minimal clutter",
+    "stylized illustration and geometric clarity, no people required",
+    styleHint ? `style cue: ${styleHint}` : "",
+  ].filter(Boolean).join(", "));
 }
 
 function dropVerbatimOverlay(prompt = "", overlayText = "") {
@@ -69,18 +101,38 @@ async function callPromptifyLlm({ host, model, prompt }) {
 }
 
 function buildPromptRequest({ hookText = "", oneSentenceSummary = "", topNews = "", jurisdiction = "", meetingType = "" }) {
+  const profile = String(process.env.COVER_PROMPT_PROFILE || "default").trim().toLowerCase();
+  if (profile === "teaching_video_scene") {
+    return [
+      "Given this spoken-topic context, write one concise image-generation prompt for a single instructional teaching-video scene.",
+      "Goal: help a viewer understand what is being discussed.",
+      "Use explanatory visual structure with one main concept object and two supporting concept objects.",
+      "Prefer symbolic process visuals (flow, cause/effect, system relationships) over decorative poster aesthetics.",
+      "Use non-photorealistic educational illustration style with geometric clarity and matte texture.",
+      "Describe only visible scene content, composition, visual hierarchy, palette, and depth.",
+      "No visible text, letters, numbers, logos, signs, banners, or watermarks.",
+      "Return one line only.",
+      `Topic hook: ${abridge(hookText, 220)}`,
+      `Spoken summary: ${abridge(oneSentenceSummary, 420)}`,
+      `Detailed topic notes: ${abridge(topNews, 900)}`,
+      `Jurisdiction context: ${jurisdiction}`,
+      `Meeting context: ${meetingType}`,
+    ].join("\n");
+  }
   return [
     "Given this Canadian local news article metadata, write one concise positive image prompt for a background-only cover image.",
-    "Use symbolic illustration style similar to an editorial teaching thumbnail, with clean vector-like forms and strong contrast.",
+    "Use symbolic illustration style similar to a teaching explainer video thumbnail, with clean vector-like forms and strong contrast.",
     "Use object-first composition: one dominant symbolic anchor plus two supporting objects tied to the topic.",
+    "Use arrows, connectors, and simple diagrammatic structure to explain relationships.",
     "Use environmental cues from Canadian local context where appropriate.",
-    "Keep it non-photoreal and non-cinematic: stylized illustration, geometric clarity, matte texture.",
+    "Keep it stylized and educational: geometric clarity, matte texture, abstract informative visuals.",
     "Describe only visible scene content, lighting, composition, palette, and depth.",
     "The visible headline is added separately; do not include headline words verbatim.",
+    "Do not include text, letters, numbers, logos, signage, banners, or watermarks in the scene.",
     "Return one line only.",
-    `Title/hook: ${hookText}`,
-    `Summary: ${oneSentenceSummary}`,
-    `Top news: ${topNews}`,
+    `Title/hook: ${abridge(hookText, 220)}`,
+    `Summary: ${abridge(oneSentenceSummary, 420)}`,
+    `Top news: ${abridge(topNews, 900)}`,
     `Jurisdiction: ${jurisdiction}`,
     `Meeting type: ${meetingType}`,
   ].join("\n");
@@ -108,8 +160,14 @@ export async function runCoverPromptifyStage({
     llmError = String(err?.message || err);
   }
 
+  const visualSubject = inferVisualSubject({ hookText, topNews, oneSentenceSummary });
   if (!positivePrompt) {
-    positivePrompt = "Editorial symbolic Canadian civic background with one dominant metaphor anchor, geometric structure, layered depth, balanced contrast, and open foreground for overlay.";
+    positivePrompt = buildDeterministicTeachingPrompt({
+      visualSubject,
+      jurisdiction,
+      meetingType,
+      style,
+    });
   }
 
   positivePrompt = dropVerbatimOverlay(positivePrompt, overlayText);
@@ -117,7 +175,7 @@ export async function runCoverPromptifyStage({
 
   const out = {
     hook: String(hookText || ""),
-    selectedVisualSubject: "llm_inferred_scene",
+    selectedVisualSubject: visualSubject || "llm_inferred_scene",
     positivePrompt,
     topicFamily: "llm_inferred",
     promptVariant: "llm_positive_only",

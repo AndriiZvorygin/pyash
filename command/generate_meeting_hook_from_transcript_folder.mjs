@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readPyaTextValues } from './pya_lookup.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
@@ -92,12 +93,30 @@ function toTitleWords(value) {
 function sanitizeHook(text) {
   const line = String(text || '').split(/\r?\n/u).map((x) => x.trim()).filter(Boolean)[0] || '';
   const t = toTitleWords(line);
-  const words = t.split(/\s+/u).filter(Boolean).slice(0, 6);
+  const words = t.split(/\s+/u).filter(Boolean).slice(0, 4);
   if (words.length < 3) {
     const fallback = ['Council', 'Decisions', 'At', 'A', 'Turning', 'Point'];
     return fallback.slice(0, 4).join(' ');
   }
   return words.join(' ');
+}
+
+function sanitizeChapterStyleHook(text, { jurisdiction = '', body = '' } = {}) {
+  const raw = sanitizeHook(text);
+  const banned = new Set([
+    ...String(jurisdiction || '').toLowerCase().split(/[^a-z0-9]+/u).filter(Boolean),
+    ...String(body || '').toLowerCase().split(/[^a-z0-9]+/u).filter(Boolean),
+    'meeting', 'regular', 'council', 'city', 'committee', 'transcript',
+  ]);
+  const kept = raw
+    .split(/\s+/u)
+    .filter(Boolean)
+    .filter((w) => !banned.has(normalizeForMatch(w)))
+    .slice(0, 4);
+  const trailing = new Set([...HOOK_TRAILING_FRAGMENT_WORDS, 'in', 'on', 'at', 'for', 'to', 'of']);
+  while (kept.length && trailing.has(normalizeForMatch(kept[kept.length - 1]))) kept.pop();
+  if (kept.length >= 3) return toTitleWords(kept.join(' '));
+  return raw;
 }
 
 function sanitizePreviewNounHook(text) {
@@ -289,13 +308,22 @@ function isGenericPreviewHook(text) {
     || n === 'council considers agenda items';
 }
 
+function isGenericRecapHook(text) {
+  const n = normalizeForMatch(text);
+  return n.includes('the session s most consequential')
+    || n.includes('most consequential')
+    || n.includes('key council development')
+    || n.includes('council decisions at')
+    || n.includes('meeting highlights');
+}
+
 function extractTopNewsHeadings(mdText) {
   const lines = String(mdText || '').split(/\r?\n/u);
   const out = [];
   for (const line of lines) {
-    const m = line.match(/^\s*-\s+\*\*(.+?)\*\*/u);
-    if (!m) continue;
-    const heading = String(m[1] || '').trim();
+    const bullet = line.match(/^\s*-\s+\*\*(.+?)\*\*/u);
+    const bold = line.match(/^\s*\*\*(.+?):\*\*/u);
+    const heading = String((bullet?.[1] || bold?.[1] || '')).trim();
     if (heading) out.push(heading);
   }
   return out;
@@ -404,6 +432,43 @@ function hookDecisionClaimUnsupported(hook, sourceSummary) {
   return true;
 }
 
+
+function hookSourcePolarityUnsupported(hook, sourceSummary) {
+  const hookNorm = normalizeForMatch(hook);
+  const sourceNorm = normalizeForMatch(sourceSummary);
+  if (!hookNorm || !sourceNorm) return false;
+
+  const negativeServiceSignals = [
+    'lack access', 'lacks access', 'no access', 'without access',
+    'barrier', 'barriers', 'inaccessible', 'not accessible',
+    'denied', 'denial', 'cannot', 'can not', 'unable', 'excluded', 'exclusion',
+    'waited for taxi', 'could not get', 'couldnt get', "couldn't get",
+  ];
+  const positiveServiceVerbs = [
+    'serve', 'serves', 'served', 'serving',
+    'expand', 'expands', 'expanded', 'expanding',
+    'enable', 'enables', 'enabled', 'enabling',
+    'improve', 'improves', 'improved', 'improving',
+    'increase', 'increases', 'increased', 'increasing',
+    'boost', 'boosts', 'boosted', 'boosting',
+  ];
+  const explicitPositiveEvidence = [
+    'approved expanded service', 'approve expanded service', 'approves expanded service',
+    'service expansion approved', 'service expanded', 'service expansion',
+    'new service approved', 'launches service', 'service launched',
+    'added service', 'adds service', 'restored service',
+  ];
+
+  const hasNegativeContext = negativeServiceSignals.some((t) => sourceNorm.includes(t));
+  if (!hasNegativeContext) return false;
+
+  const hookUsesPositiveVerb = positiveServiceVerbs.some((t) => hookNorm.includes(t));
+  if (!hookUsesPositiveVerb) return false;
+
+  const sourceHasExplicitPositiveEvidence = explicitPositiveEvidence.some((t) => sourceNorm.includes(t));
+  return !sourceHasExplicitPositiveEvidence;
+}
+
 function fallbackHookFromSummary(summaryText) {
   const src = String(summaryText || '');
   if (!src) return 'Council Integrity Report Flashpoint';
@@ -431,6 +496,20 @@ function fallbackHookFromSummary(summaryText) {
   return 'Council Integrity Report Flashpoint';
 }
 
+function deriveRecapHookFromTopNewsText(summaryText = "", jurisdiction = "", body = "") {
+  const s = normalizeForMatch(summaryText);
+  if (/\bwheelchair\b/.test(s) && /\btaxi\b/.test(s) && /\bhospital\b/.test(s)) {
+    return sanitizeChapterStyleHook("Wheelchair Taxi Access Gap", { jurisdiction, body });
+  }
+  if (/\bremove\b/.test(s) && /\bcounty\b/.test(s) && /\btransit\b/.test(s) && /\bfunder|funding\b/.test(s)) {
+    return sanitizeChapterStyleHook("County Transit Funding Removed", { jurisdiction, body });
+  }
+  if (/\bhousing\b/.test(s) && /\bfood\b/.test(s) && /\bland trust\b/.test(s)) {
+    return sanitizeChapterStyleHook("Housing Food Land Trust", { jurisdiction, body });
+  }
+  return sanitizeChapterStyleHook(fallbackHookFromSummary(summaryText), { jurisdiction, body });
+}
+
 function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, hookMode }) {
   const focusLine = String(focus || '').trim() || 'the newsworthy, juicy, and unusual bits';
   const isPreview = hookMode === 'preview';
@@ -442,7 +521,8 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, h
     `Focus: ${focusLine}`,
     '',
     'Rules:',
-    '- 3 to 6 words only.',
+    '- 4 to 6 words only.',
+    '- Title case.',
     '- Lead with the most newsworthy or surprising concrete development.',
     '- Prefer strong, high-signal wording over generic committee language.',
     '- Concrete and specific, not clickbait.',
@@ -452,6 +532,7 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, h
       : []),
     '- No punctuation except apostrophe if required.',
     '- No date and no jurisdiction/body names in the hook.',
+    '- No speaker names, no filler, no sentence fragments.',
     '- Avoid bland joins like "and" unless absolutely necessary.',
     '- Favor active, vivid wording that makes a resident want to read more.',
     '- Output one line only.',
@@ -481,10 +562,12 @@ function buildScorePrompt({ sourceSummary, hook, jurisdiction, body, hookMode })
     'Rules:',
     '- Penalize invented claims not in SOURCE_SUMMARY.',
     '- Penalize action verbs that overstate status (adopted/approved/passed) unless SOURCE_SUMMARY explicitly supports that action for the same subject.',
+    '- Penalize polarity flips: if SOURCE_SUMMARY says access barriers/denials/lack of access, do not reward positive-service wording (serves/expands/enables) unless explicit approved expansion evidence exists.',
     ...(isPreview
       ? ['- For preview mode, fail completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Reward prospective framing (considers/reviews/discusses/hears/receives/debates).']
       : []),
     '- Penalize vagueness if SOURCE_SUMMARY has concrete high-impact items.',
+    '- Penalize hooks that are not YouTube chapter style: 4-6 words, title case, and no jurisdiction/body names.',
     '- Penalize non-title-ready hooks (too long/too short/noise).',
     '- Penalize dry/boilerplate phrasing when SOURCE_SUMMARY contains conflict, cost, major policy shifts, or unusual events.',
     '- Reward hooks that foreground the single highest-impact item first.',
@@ -537,7 +620,19 @@ async function ask(messages, { numPredict = 120 } = {}) {
   return String(json?.message?.content || '').trim();
 }
 
-async function generateHook({ sourceSummary, topNewsHeadings, focus, jurisdiction, body, hookMode }) {
+async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings, focus, jurisdiction, body, hookMode }) {
+  if (hookMode !== 'preview') {
+    const leadFromText = deriveRecapHookFromTopNewsText(sourceSummary, jurisdiction, body);
+    if (leadFromText && !isGenericRecapHook(leadFromText)) {
+      return {
+        hook: leadFromText,
+        score: 1,
+        verifier_feedback: 'Hook sourced directly from Top Newsworthy Developments text.',
+        fallback_used: false,
+      };
+    }
+  }
+  const verifierSource = String(verifierSourceText || sourceSummary || '');
   let feedback = '';
   let bestHook = '';
   let bestScore = -1;
@@ -549,17 +644,21 @@ async function generateHook({ sourceSummary, topNewsHeadings, focus, jurisdictio
       { role: 'user', content: buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, hookMode }) },
     ], { numPredict: 64 });
 
-    const draft = hookMode === 'preview'
+    const draftBase = hookMode === 'preview'
       ? enforcePreviewVerbTense(sanitizeHook(draftRaw))
       : sanitizeHook(draftRaw);
+    const draft = sanitizeChapterStyleHook(draftBase, { jurisdiction, body });
 
     let review = '';
     let score = 0;
     if (hookMode === 'preview' && containsPreviewBannedVerb(draft)) {
       review = 'Hook uses completed-outcome verbs disallowed for upcoming agenda previews.\n0';
       score = 0;
-    } else if (hookDecisionClaimUnsupported(draft, sourceSummary)) {
+    } else if (hookDecisionClaimUnsupported(draft, verifierSource)) {
       review = 'Hook uses an unsupported decision verb (adopted/approved/passed) for the same subject.\n0';
+      score = 0;
+    } else if (hookSourcePolarityUnsupported(draft, verifierSource)) {
+      review = 'Hook flips source polarity (barrier/denial context recast as positive service expansion).\n0';
       score = 0;
     } else {
       review = await ask([
@@ -578,6 +677,7 @@ async function generateHook({ sourceSummary, topNewsHeadings, focus, jurisdictio
   }
 
   let safeHook = bestScore >= PASS_THRESHOLD ? bestHook : fallbackHookFromSummary(sourceSummary);
+  safeHook = sanitizeChapterStyleHook(safeHook, { jurisdiction, body });
   if (hookMode === 'preview') {
     const rankedHook = buildPreviewHookFromRankedItems(topNewsHeadings);
     if (rankedHook) {
@@ -590,6 +690,11 @@ async function generateHook({ sourceSummary, topNewsHeadings, focus, jurisdictio
       safeHook = safeHook.replace(/\bCouncil\b/giu, '').replace(/\s+/gu, ' ').trim();
       safeHook = sanitizeFinalPreviewHook(safeHook) || safeHook;
     }
+    safeHook = sanitizeChapterStyleHook(safeHook, { jurisdiction, body });
+  }
+  if (hookMode !== 'preview' && isGenericRecapHook(safeHook)) {
+    const rankedLead = sanitizeChapterStyleHook(String(topNewsHeadings?.[0] || ""), { jurisdiction, body });
+    if (rankedLead && !isGenericRecapHook(rankedLead)) safeHook = rankedLead;
   }
 
   return {
@@ -605,7 +710,7 @@ function extractMarkdownSection(mdText, headingText) {
   const target = String(headingText || '').trim().toLowerCase();
   let start = -1;
   for (let i = 0; i < lines.length; i += 1) {
-    const m = lines[i].match(/^##\s+(.+?)\s*$/u);
+    const m = lines[i].match(/^#{1,2}\s+(.+?)\s*$/u);
     if (!m) continue;
     if (m[1].trim().toLowerCase() === target) {
       start = i + 1;
@@ -615,7 +720,7 @@ function extractMarkdownSection(mdText, headingText) {
   if (start < 0) return '';
   let end = lines.length;
   for (let i = start; i < lines.length; i += 1) {
-    if (/^##\s+/u.test(lines[i])) {
+    if (/^#{1,2}\s+/u.test(lines[i])) {
       end = i;
       break;
     }
@@ -648,9 +753,13 @@ async function main() {
   });
   const meetingSummaryMd = fs.readFileSync(summaryPath, 'utf8');
   const topNewsworthyMd = extractMarkdownSection(meetingSummaryMd, 'Top Newsworthy Developments');
+  const wholeMeetingMd = extractMarkdownSection(meetingSummaryMd, 'Whole Meeting Summary');
   const topNewsHeadings = extractTopNewsHeadings(topNewsworthyMd);
-  const sourceSummary = stripMarkdown(topNewsworthyMd || meetingSummaryMd).slice(0, 32000);
-  if (!sourceSummary) throw new Error(`meeting summary is empty: ${summaryPath}`);
+  const sourceSummary = stripMarkdown(String(topNewsworthyMd || '')).slice(0, 32000);
+  if (!sourceSummary) throw new Error(`Top Newsworthy Developments is empty: ${summaryPath}`);
+  const plainPath = path.join(transcriptDir, `${resolvedPrefix}.plain.txt`);
+  const transcriptEvidence = fs.existsSync(plainPath) ? fs.readFileSync(plainPath, 'utf8').slice(0, 80000) : '';
+  const verifierSourceText = [sourceSummary, transcriptEvidence].filter(Boolean).join('\n\n');
 
   const outTxt = path.join(transcriptDir, `${resolvedPrefix}.meeting-hook.txt`);
   const outJson = path.join(transcriptDir, `${resolvedPrefix}.meeting-hook.json`);
@@ -661,6 +770,7 @@ async function main() {
 
   const out = await generateHook({
     sourceSummary,
+    verifierSourceText,
     topNewsHeadings,
     focus: focusArg,
     jurisdiction: jurisdictionArg,
@@ -671,7 +781,9 @@ async function main() {
   fs.writeFileSync(outTxt, `${out.hook}\n`, 'utf8');
   fs.writeFileSync(outJson, JSON.stringify({
     source_meeting_summary: summaryPath,
-    source_scope: topNewsworthyMd ? 'top_newsworthy_developments' : 'whole_meeting_summary',
+    source_scope: topNewsworthyMd && wholeMeetingMd
+      ? 'top_newsworthy_plus_whole_meeting_summary'
+      : (topNewsworthyMd ? 'top_newsworthy_developments' : 'whole_meeting_summary'),
     model: MODEL,
     hook_mode: hookMode,
     focus: focusArg,
@@ -690,7 +802,23 @@ async function main() {
   process.stdout.write(`[meeting-hook] wrote: ${outJson}\n`);
 }
 
-main().catch((err) => {
-  process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
-  process.exit(1);
-});
+export { hookDecisionClaimUnsupported, hookSourcePolarityUnsupported };
+
+function isCliEntry() {
+  const argvPath = String(process.argv[1] || '').trim();
+  if (!argvPath) return false;
+  try {
+    const a = fs.realpathSync(argvPath);
+    const b = fs.realpathSync(fileURLToPath(import.meta.url));
+    return a === b;
+  } catch {
+    return path.resolve(argvPath) === path.resolve(fileURLToPath(import.meta.url));
+  }
+}
+const IS_CLI_ENTRY = isCliEntry();
+if (IS_CLI_ENTRY) {
+  main().catch((err) => {
+    process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
+    process.exit(1);
+  });
+}

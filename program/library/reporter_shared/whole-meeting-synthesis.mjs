@@ -173,6 +173,15 @@ function hasCompleteRequiredSections(mdText) {
   return top.length >= 300 && why.length >= 80 && watch.length >= 80;
 }
 
+function normalizeRequiredSummaryHeadings(mdText = "") {
+  let out = String(mdText || "");
+  out = out.replace(/^##\s+Top\s+Newsworthy\s+Developements\b/gimu, "## Top Newsworthy Developments");
+  out = out.replace(/^##\s+Most\s+Newsworthy\s+Items\b/gimu, "## Top Newsworthy Developments");
+  out = out.replace(/^##\s+Why\s+it\s+Matters\b/gimu, "## Why It Matters");
+  out = out.replace(/^##\s+Watch\s+next\b/gimu, "## Watch Next");
+  return out;
+}
+
 function matchesAnyPattern(text, patterns = []) {
   const value = String(text || "").toLowerCase();
   return patterns.some((p) => {
@@ -194,24 +203,45 @@ function proceduralHeading(heading = "") {
   ]);
 }
 
+function lowSignalSummary(summary = "") {
+  const s = String(summary || "").toLowerCase().replace(/\s+/gu, " ").trim();
+  if (!s) return true;
+  return /\b(no submissions?|none submitted|no deputations?|none scheduled|no scheduled sessions?|for information only|no correspondence(?:\s+items?)?\s+(?:were\s+presented|for\s+consideration)|meeting then proceeded)\b/u.test(s);
+}
+
 function scoreNewsCandidate(section = {}) {
   const heading = String(section?.heading || "");
   const summary = String(section?.summary || "");
   const hay = `${heading} ${summary}`.toLowerCase();
   let score = 0;
   if (proceduralHeading(heading)) score -= 12;
-  if (/\bby-?laws?\b/u.test(hay)) score += 9;
+  if (lowSignalSummary(summary)) score -= 20;
+  if (/\bby-?laws?\b/u.test(hay)) score += 5;
   if (/\bfirefighters?\b/u.test(hay)) score += 7;
-  if (/\bpublic forum\b/u.test(hay)) score += 8;
+  if (/\bpublic forum\b/u.test(hay)) score += 6;
   if (/\bfourth avenue|roadway|one-way|infrastructure\b/u.test(hay)) score += 8;
   if (/\bdefer|deferred|defeated|carried|approved|passed|rejected\b/u.test(hay)) score += 5;
   if (/\bstaff report|report\b/u.test(hay)) score += 3;
   if (/\bcost|budget|funding|tax|surplus\b/u.test(hay)) score += 4;
+  if (/\b(food|hunger|food insecurity|wheelchair|accessibility|hospital|taxi|housing|rent|safety|health|poverty)\b/u.test(hay)) score += 14;
+  if (/\bconsent agenda|administrative|for information only|correspondence\b/u.test(hay)) score -= 8;
   if (/\bdiscussed|considered|presented\b/u.test(hay)) score += 2;
   const words = summary.split(/\s+/u).filter(Boolean).length;
   if (words >= 22) score += 2;
   if (words < 8) score -= 3;
   return score;
+}
+
+function humanImpactPriority(section = {}) {
+  const heading = String(section?.heading || "");
+  const summary = String(section?.summary || "");
+  const hay = `${heading} ${summary}`.toLowerCase();
+  let p = 0;
+  if (/\b(wheelchair|accessibility|hospital|taxi|mobility)\b/u.test(hay)) p += 10;
+  if (/\b(food insecurity|food security|hunger|poverty|housing|rent|cost of living)\b/u.test(hay)) p += 9;
+  if (/\b(health|safety)\b/u.test(hay)) p += 5;
+  if (/\b(consent agenda|administrative|lease assignment|business license|for information only)\b/u.test(hay)) p -= 8;
+  return p;
 }
 
 function buildNewsPriorityItems(sections = [], topN = 8) {
@@ -226,8 +256,8 @@ function buildNewsPriorityItems(sections = [], topN = 8) {
         score: scoreNewsCandidate(section),
       };
     })
-    .filter((row) => row.heading && row.summary && !proceduralHeading(row.heading))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .filter((row) => row.heading && row.summary && !proceduralHeading(row.heading) && !lowSignalSummary(row.summary))
+    .sort((a, b) => humanImpactPriority(b) - humanImpactPriority(a) || b.score - a.score || a.index - b.index)
     .slice(0, topN);
 }
 
@@ -665,7 +695,7 @@ async function synthesizeFinalMeetingSummary({
   let bestReview = "";
 
   for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
-    const draft = await ask(
+    const draftRaw = await ask(
       [
         { role: "system", content: "You are a strict local-news meeting brief writer." },
         {
@@ -684,6 +714,7 @@ async function synthesizeFinalMeetingSummary({
       ],
       { numPredict: 1200 },
     );
+    const draft = normalizeRequiredSummaryHeadings(String(draftRaw || "").trim());
 
     const review = await ask(
       [
@@ -823,4 +854,3 @@ export async function summarizeWholeMeetingArtifacts({
   log(`[meeting-summary] wrote: ${outSummaryPya}`);
   return { outChunksPya, outMd, outSummaryPya, score: stageB.score, chunkCount: chunkSummaries.length };
 }
-
