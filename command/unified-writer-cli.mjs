@@ -63,6 +63,7 @@ function usage() {
     "  --post-ref <id|url>       force publish UPDATE target",
     "  --no-post                 disable posting",
     "  --dry-run                 publish dry run",
+    "  --transcript-only         publish via transcript-publish endpoint",
     "  --help                    show this help",
   ].join("\n");
 }
@@ -82,6 +83,7 @@ function parseArgs(argv) {
     post: undefined,
     postRef: "",
     dryRun: false,
+    transcriptOnly: false,
   };
 
   const args = [...argv];
@@ -104,6 +106,7 @@ function parseArgs(argv) {
     else if (a === "--post-ref") out.postRef = String(args.shift() || "").trim();
     else if (a === "--no-post") out.post = false;
     else if (a === "--dry-run") out.dryRun = true;
+    else if (a === "--transcript-only" || a === "--publish-transcript") out.transcriptOnly = true;
     else if (a === "-h" || a === "--help") {
       process.stdout.write(`${usage()}\n`);
       process.exit(0);
@@ -674,7 +677,8 @@ async function runMain() {
       env[`${map.envPrefix}_PIPELINE_FORCE_POST`] = "1";
       env[`${map.envPrefix}_AUTOPUBLISH`] = "1";
       const envCmdKey = `${map.envPrefix}_LEMMY_POST_COMMAND`;
-      env[envCmdKey] = env[envCmdKey] || `node ${map.publishScript}`;
+      const transcriptPublishCmd = `node ${path.join(PYASH_ROOT, "command/publish_transcript_to_helpos_from_payload.mjs")}`;
+      env[envCmdKey] = env[envCmdKey] || (args.transcriptOnly ? transcriptPublishCmd : `node ${map.publishScript}`);
       env.MEETING_POST_COMMAND = env.MEETING_POST_COMMAND || env[envCmdKey];
     }
   }
@@ -706,7 +710,8 @@ async function runMain() {
         env[`${map.envPrefix}_PIPELINE_FORCE_POST`] = "1";
         env[`${map.envPrefix}_AUTOPUBLISH`] = "1";
         const envCmdKey = `${map.envPrefix}_LEMMY_POST_COMMAND`;
-        env[envCmdKey] = env[envCmdKey] || `node ${map.publishScript}`;
+        const transcriptPublishCmd = `node ${path.join(PYASH_ROOT, "command/publish_transcript_to_helpos_from_payload.mjs")}`;
+        env[envCmdKey] = env[envCmdKey] || (args.transcriptOnly ? transcriptPublishCmd : `node ${map.publishScript}`);
         env.MEETING_POST_COMMAND = env.MEETING_POST_COMMAND || env[envCmdKey];
       }
     } else {

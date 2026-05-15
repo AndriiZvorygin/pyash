@@ -17,6 +17,25 @@ import { diagnoseCoverBackground } from "../program/library/reporter_shared/cove
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(COMMAND_DIR, "..");
 const DEFAULT_STYLE = 'bold civic poster background, high contrast, simple geometry, strong readability';
+const ALLOW_SYMBOLIC_FALLBACK = String(process.env.COVER_ALLOW_SYMBOLIC_FALLBACK || "1").trim() !== "0";
+const NEGATIVE_PROMPT_BASE = [
+  "text",
+  "letters",
+  "words",
+  "numbers",
+  "typography",
+  "caption",
+  "headline",
+  "title",
+  "sign",
+  "signage",
+  "banner",
+  "logo",
+  "watermark",
+  "ui",
+  "interface",
+].join(", ");
+const NEGATIVE_PROMPT_STRICT = `${NEGATIVE_PROMPT_BASE}, paragraph, sentence, subtitle, label, document, newspaper, poster`;
 
 function usage() {
   return [
@@ -391,12 +410,14 @@ async function main() {
   const shortOverlay = overlayDerived.finalOverlayText;
   verifyOverlayWordRange(shortOverlay, 3, 6);
 
+  const coverJurisdiction = String(process.env.COVER_JURISDICTION || "Owen Sound").trim();
+  const coverMeetingType = String(process.env.COVER_MEETING_TYPE || "council meeting").trim();
   const promptify = await runCoverPromptifyStage({
     hookText: shortOverlay,
     oneSentenceSummary,
     topNews: topNewsForPrompt,
-    jurisdiction: "Owen Sound",
-    meetingType: "council meeting",
+    jurisdiction: coverJurisdiction,
+    meetingType: coverMeetingType,
     style,
     overlayText: shortOverlay,
     reportPath: coverPromptifyPath,
@@ -417,7 +438,7 @@ async function main() {
 
   const backgroundAttempts = [];
   async function renderBackgroundAttempt(outputPath, attemptLabel, strictNegative = false, promptOverride = "") {
-    const neg = "";
+    const neg = strictNegative ? NEGATIVE_PROMPT_STRICT : NEGATIVE_PROMPT_BASE;
     await runWithStreaming({
       cmd: 'node',
       args: [
@@ -425,7 +446,7 @@ async function main() {
         '--prompt',
         (promptOverride || promptSpec.positivePrompt),
         '--negative-prompt',
-        '',
+        neg,
         '--workflow-root',
         path.join(ROOT, 'draw'),
         '--workflow-name',
@@ -455,7 +476,7 @@ async function main() {
       sourceDisagreementDetected: overlayDecisionUsed.sourceDisagreementDetected,
       backgroundKind: 'generated_scene',
       visualSubject: promptify.selectedVisualSubject,
-      abstractFallbackAllowed: false,
+      abstractFallbackAllowed: ALLOW_SYMBOLIC_FALLBACK,
       promptText: String(promptOverride || promptSpec.positivePrompt),
       selectedOverlayTextHash: '',
       reportPath: '',
@@ -503,7 +524,7 @@ async function main() {
       sourceDisagreementDetected: false,
       backgroundKind: 'abstract_fallback',
       visualSubject: promptify.selectedVisualSubject,
-      abstractFallbackAllowed: false,
+      abstractFallbackAllowed: ALLOW_SYMBOLIC_FALLBACK,
       promptText: 'safe_background_fallback',
       selectedOverlayTextHash: '',
       reportPath: '',
@@ -535,7 +556,7 @@ async function main() {
     sourceDisagreementDetected: overlayDecisionUsed.sourceDisagreementDetected,
     backgroundKind: backgroundDiagnostic?.backgroundKind || (String(chosenBackgroundPath).includes('.background.safe.') ? 'abstract_fallback' : 'generated_scene'),
     visualSubject: promptify.selectedVisualSubject,
-    abstractFallbackAllowed: false,
+    abstractFallbackAllowed: ALLOW_SYMBOLIC_FALLBACK,
     promptText: String(promptSpec.positivePrompt),
     selectedOverlayTextHash: '',
     reportPath: coverBackgroundDiagnosticPath,
@@ -568,7 +589,7 @@ async function main() {
       backgroundRelevancePass: Boolean(backgroundDiagnostic?.backgroundRelevancePass),
       backgroundRelevanceReason: String(backgroundDiagnostic?.backgroundRelevanceReason || ""),
       abstractFallbackUsed: String(chosenBackgroundPath).includes(".background.safe."),
-      abstractFallbackAllowed: false,
+      abstractFallbackAllowed: ALLOW_SYMBOLIC_FALLBACK,
       visualSubject: String(promptify.selectedVisualSubject || ""),
       coverBackgroundAttemptsPath,
     },
@@ -609,7 +630,7 @@ async function main() {
       sourceDisagreementDetected: false,
       backgroundKind: String(chosenBackgroundPath).includes(".background.safe.") ? "abstract_fallback" : "transformed_generated_scene",
       visualSubject: String(promptify.selectedVisualSubject || ""),
-      abstractFallbackAllowed: false,
+      abstractFallbackAllowed: ALLOW_SYMBOLIC_FALLBACK,
       promptText: "final_composite_check",
       reportPath: "",
     }),

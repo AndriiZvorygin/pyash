@@ -69,6 +69,15 @@ function resolveMaybeRelative(baseDir, rawPath) {
   return path.resolve(baseDir, p);
 }
 
+function assertPathWithin(baseDir, targetPath, label = "path") {
+  const base = path.resolve(String(baseDir || ""));
+  const target = path.resolve(String(targetPath || ""));
+  const rel = path.relative(base, target);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error(`${label} must stay inside payload directory: target=${target} base=${base}`);
+  }
+}
+
 function parsePostRef(postRefRaw) {
   const postRef = String(postRefRaw || "").trim();
   if (!postRef) return { post_id: "", post_url: "" };
@@ -265,7 +274,9 @@ async function main() {
   if (!htmlSourcePath || !fs.existsSync(htmlSourcePath)) {
     throw new Error(`agenda html not found: ${String(payload?.local_agenda_html || payload?.local_transcript_html || "")}`);
   }
+  assertPathWithin(payloadDir, htmlSourcePath, "agenda_html");
   const imageSourcePath = resolveMaybeRelative(payloadDir, payload?.local_cover_image);
+  if (imageSourcePath) assertPathWithin(payloadDir, imageSourcePath, "cover_image");
 
   let html = fs.readFileSync(htmlSourcePath, "utf8");
   html = stripDisallowedTags(html);
@@ -387,4 +398,3 @@ main().catch((err) => {
   process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
   process.exit(1);
 });
-

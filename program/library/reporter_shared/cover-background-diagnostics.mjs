@@ -167,7 +167,7 @@ export async function diagnoseCoverBackground({
 
   const flatBackgroundDetected = varL < 20 || edgeScore < 2;
   const nearBlackTooHigh = nearBlackRatio > 0.78;
-  const syntheticTextBannerRisk = nearWhiteRatio > 0.08 && edgeScore > 80 && varSat < 800;
+  const syntheticTextBannerRisk = textLikeContentDetected && nearWhiteRatio > 0.08 && edgeScore > 80 && varSat < 800;
   out.flatBackgroundDetected = flatBackgroundDetected;
 
   if (textLikeContentDetected) out.failureReasons.push("background_text_detected");
@@ -192,6 +192,9 @@ export async function diagnoseCoverBackground({
     out.backgroundRelevanceReason = "abstract_fallback_not_allowed";
     out.failureReasons.push("relevant_background_unavailable");
     out.backgroundUseful = false;
+  } else if (isAbstract && abstractFallbackAllowed) {
+    out.backgroundRelevancePass = true;
+    out.backgroundRelevanceReason = "abstract_fallback_allowed_symbolic";
   } else if (isGeneratedLike) {
     out.backgroundRelevancePass = true;
     out.backgroundRelevanceReason = "generated_scene_provenance";

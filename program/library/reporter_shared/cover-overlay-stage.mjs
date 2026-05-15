@@ -21,6 +21,14 @@ function splitWords(text) {
     .filter(Boolean);
 }
 
+function breakLongWord(word, maxChars) {
+  const token = String(word || "");
+  if (!token || token.length <= maxChars) return [token];
+  const out = [];
+  for (let i = 0; i < token.length; i += maxChars) out.push(token.slice(i, i + maxChars));
+  return out;
+}
+
 function isEssentialToken(token) {
   const t = normalizeToken(token);
   if (!t) return false;
@@ -323,7 +331,8 @@ export async function renderDeterministicOverlay({
   const makeLines = (maxChars) => {
     const lines = [];
     let cur = [];
-    for (const w of words) {
+    const safeWords = words.flatMap((w) => breakLongWord(w, Math.max(8, Math.floor(maxChars * 0.9))));
+    for (const w of safeWords) {
       const test = [...cur, w].join(" ");
       if (cur.length && test.length > maxChars) {
         lines.push(cur.join(" "));
@@ -336,19 +345,30 @@ export async function renderDeterministicOverlay({
     return lines;
   };
 
-  let fontSize = 44;
+  let fontSize = 36;
   let lines = [];
-  for (let trySize = 44; trySize >= 28; trySize -= 2) {
+  let best = null;
+  const maxTextBlockHeight = Math.floor(Number(size) * 0.36);
+  for (let trySize = 36; trySize >= 20; trySize -= 1) {
     const charsPerLine = Math.max(10, Math.floor(maxWidth / Math.max(1, trySize * 0.56)));
     const candidate = makeLines(charsPerLine);
     const longest = candidate.reduce((m, l) => Math.max(m, l.length), 0);
-    if (candidate.length <= 4 && longest <= charsPerLine) {
+    const linePx = Math.max(22, Math.round(trySize * lineHeight));
+    const totalHeight = linePx * candidate.length;
+    const fitsHeight = totalHeight <= maxTextBlockHeight;
+    if (candidate.length <= 4 && longest <= charsPerLine && fitsHeight) {
       fontSize = trySize;
       lines = candidate;
       break;
     }
+    if (!best || totalHeight < best.totalHeight) {
+      best = { trySize, candidate, totalHeight };
+    }
   }
-  if (!lines.length) lines = [baseText];
+  if (!lines.length) {
+    fontSize = Math.max(20, best?.trySize || 20);
+    lines = (best?.candidate || [baseText]).slice(0, 4);
+  }
 
   const escapedMultiline = escapeDrawtext(lines.join("\n"));
   const textX = "(w-text_w)/2";
@@ -748,7 +768,12 @@ export async function runCoverOverlayStage({
     alphaFlatteningDetected: verifyReport.alphaFlatteningDetected,
     compositePreservedBackground: verifyReport.compositePreservedBackground,
   };
-  finalReport.finalPublishableCover = Boolean(finalReport.pass && finalReport.backgroundRelevancePass !== false && finalReport.finalBackgroundUsefulnessPass !== false && finalReport.abstractFallbackUsed !== true);
+  finalReport.finalPublishableCover = Boolean(
+    finalReport.pass
+    && finalReport.backgroundRelevancePass !== false
+    && finalReport.finalBackgroundUsefulnessPass !== false
+    && (finalReport.abstractFallbackUsed !== true || finalReport.abstractFallbackAllowed === true)
+  );
   writePyaReport(reports.final, finalReport);
 
   if (!finalReport.pass) {

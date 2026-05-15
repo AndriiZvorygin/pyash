@@ -136,7 +136,6 @@ function looksProceduralLabel(label = "") {
     lower.includes("minutes") ||
     lower.includes("correspondence") ||
     lower.includes("adjourn") ||
-    lower.includes("public forum") ||
     lower.includes("opening remarks")
   );
 }
@@ -330,6 +329,14 @@ function chapterFromSummary(summary = "") {
   }
   out = words.join(" ");
   return normalizeText(out);
+}
+
+function fallbackUnitSummaryFromGrounding(unit = {}) {
+  const excerpt = normalizeText(String(unit?.["source excerpt"] || ""));
+  if (!excerpt) return "";
+  const sentence = excerpt.split(/(?<=[.!?])\s+/u).map((x) => normalizeText(x)).find(Boolean) || "";
+  if (!sentence) return "";
+  return clampSummaryLength(sentence, 2, 48);
 }
 
 const SPLIT_GENERIC_PREFIXES = [
@@ -644,7 +651,15 @@ export async function runAgendaStage3SummaryRenderer({
     const heading = unit.label || `${unit["agenda item"] || ""}`;
 
     const llm = await summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl });
-    if (!llm.summary) throw new Error(`stage3 defective: empty summary for grounded unit ${unitId}`);
+    let unitSummary = normalizeText(llm.summary || "");
+    if (!unitSummary) {
+      unitSummary = fallbackUnitSummaryFromGrounding(unit);
+      if (unitSummary) {
+        log(`[agenda-stage3][fallback] unit=${unitId} empty llm summary recovered from source excerpt`);
+      } else {
+        throw new Error(`stage3 defective: empty summary for grounded unit ${unitId}`);
+      }
+    }
 
     const sourceChapters = Array.isArray(unit["child chapters"]) ? unit["child chapters"] : [];
     const chapters = [];
@@ -698,7 +713,7 @@ export async function runAgendaStage3SummaryRenderer({
       "part index": 0,
       "part total": 1,
       heading,
-      summary: llm.summary,
+      summary: unitSummary,
       "chapter text": chapters.length ? String(chapters[0].title || "") : normalizeText(llm.chapterText || chapterFromSummary(llm.summary)),
       chapters,
       score: Number(llm.confidence || 0),

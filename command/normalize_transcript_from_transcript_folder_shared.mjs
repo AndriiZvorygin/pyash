@@ -54,6 +54,7 @@ const PROFILES = {
     canonicalCleanup(text) {
       let out = String(text || "");
       out = out.replace(/\bOceansound\b/giu, "Owen Sound");
+      out = out.replace(/\bOnsound\b/giu, "Owen Sound");
       out = out.replace(/\bCity of Oceansound\b/giu, "City of Owen Sound");
       out = out.replace(/\bDeputy Mayor Greg\b/gu, "Deputy Mayor Greig");
       out = out.replace(/\bDeputy Mayor Gregg\b/gu, "Deputy Mayor Greig");
@@ -68,10 +69,12 @@ const PROFILES = {
       out = out.replace(/\bAndrei Zvorov\b/gu, "Andrii Zvorygin");
       out = out.replace(/\bAndrei Zvorygin\b/gu, "Andrii Zvorygin");
       out = out.replace(/\bAndrii Zvorov\b/gu, "Andrii Zvorygin");
+      out = out.replace(/\bAndre Zvorogin\b/gu, "Andrii Zvorygin");
       return out;
     },
     literalReplacements: [
       ["Oceansound", "Owen Sound"],
+      ["Onsound", "Owen Sound"],
       ["City of Oceansound", "City of Owen Sound"],
       ["Deputy Mayor Greg", "Deputy Mayor Greig"],
       ["Deputy Mayor Gregg", "Deputy Mayor Greig"],
@@ -83,6 +86,7 @@ const PROFILES = {
       ["Andrei Zvorov", "Andrii Zvorygin"],
       ["Andrei Zvorygin", "Andrii Zvorygin"],
       ["Andrii Zvorov", "Andrii Zvorygin"],
+      ["Andre Zvorogin", "Andrii Zvorygin"],
     ],
     rosterCandidates(transcriptDir) {
       const meetingDir = path.dirname(transcriptDir);
