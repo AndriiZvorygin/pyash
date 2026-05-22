@@ -70,6 +70,7 @@ const PROFILES = {
       out = out.replace(/\bAndrei Zvorygin\b/gu, "Andrii Zvorygin");
       out = out.replace(/\bAndrii Zvorov\b/gu, "Andrii Zvorygin");
       out = out.replace(/\bAndre Zvorogin\b/gu, "Andrii Zvorygin");
+      out = out.replace(/\bGrey Sable\b/giu, "Grey Sauble");
       return out;
     },
     literalReplacements: [
@@ -87,6 +88,7 @@ const PROFILES = {
       ["Andrei Zvorygin", "Andrii Zvorygin"],
       ["Andrii Zvorov", "Andrii Zvorygin"],
       ["Andre Zvorogin", "Andrii Zvorygin"],
+      ["Grey Sable", "Grey Sauble"],
     ],
     rosterCandidates(transcriptDir) {
       const meetingDir = path.dirname(transcriptDir);

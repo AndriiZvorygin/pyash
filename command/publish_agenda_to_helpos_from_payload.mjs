@@ -86,6 +86,33 @@ function parsePostRef(postRefRaw) {
   return { post_id: "", post_url: "" };
 }
 
+function parseRetryAfterMs(headerValue) {
+  const raw = String(headerValue || "").trim();
+  if (!raw) return 0;
+  const sec = Number(raw);
+  if (Number.isFinite(sec) && sec >= 0) return Math.round(sec * 1000);
+  const when = Date.parse(raw);
+  if (!Number.isFinite(when)) return 0;
+  return Math.max(0, when - Date.now());
+}
+
+function isRateLimited(status, parsedBody) {
+  if (Number(status) === 429) return true;
+  const err = String(parsedBody?.error || "").trim().toLowerCase();
+  return err === "rate_limit_error";
+}
+
+function withAttemptSuffix(idempotencyKeyBase, attempt) {
+  const base = String(idempotencyKeyBase || "").trim();
+  if (!base) return "";
+  const n = Number(attempt) || 1;
+  return n <= 1 ? base : `${base}-r${n}`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
 function buildIdempotencyKey({ jurisdiction, body, dateIso, postTitle, postBody, explicit }) {
   const ex = String(explicit || "").trim();
   if (ex) return ex;
@@ -327,6 +354,19 @@ async function main() {
   }
   if (!token) throw new Error("AGENDA_PUBLISH_AUTH_TOKEN (or MEETING_PUBLISH_AUTH_TOKEN) is required unless dry-run");
 
+  const maxAttempts = Math.max(
+    1,
+    Number.parseInt(String(process.env.AGENDA_PUBLISH_MAX_ATTEMPTS || envFallback.AGENDA_PUBLISH_MAX_ATTEMPTS || "6"), 10) || 6
+  );
+  const baseRetryDelayMs = Math.max(
+    1000,
+    Number.parseInt(String(process.env.AGENDA_PUBLISH_RETRY_DELAY_MS || envFallback.AGENDA_PUBLISH_RETRY_DELAY_MS || "12000"), 10) || 12000
+  );
+  const retryJitterMs = Math.max(
+    0,
+    Number.parseInt(String(process.env.AGENDA_PUBLISH_RETRY_JITTER_MS || envFallback.AGENDA_PUBLISH_RETRY_JITTER_MS || "4000"), 10) || 4000
+  );
+
   let disableCoverUpload = false;
 
   function buildMultipartForm(metadata) {
@@ -346,38 +386,52 @@ async function main() {
   const responseBase = path.basename(payloadPath, path.extname(payloadPath));
   const responsePath = path.join(payloadDir, `${responseBase}.agenda-publish.response.json`);
 
-  const metadataAttempt1 = { ...metadataBase, idempotency_key: idempotencyKey };
-  let res = await fetch(endpoint, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: buildMultipartForm(metadataAttempt1),
-    signal: AbortSignal.timeout(5 * 60 * 1000),
-  });
-  let raw = await res.text();
+  let res = null;
+  let raw = "";
   let parsed = null;
-  try { parsed = JSON.parse(raw); } catch {}
-
-  const attempt1Path = path.join(payloadDir, `${responseBase}.agenda-publish.response.attempt-01.json`);
-  fs.writeFileSync(attempt1Path, `${parsed ? JSON.stringify(parsed, null, 2) : raw}\n`, "utf8");
-  process.stdout.write(`[agenda-publish] attempt response saved: ${attempt1Path}\n`);
-
-  const pictrsUploadFailure = String(parsed?.error || "").toLowerCase().includes("failed to upload cover image to pictrs");
-  if (!res.ok && pictrsUploadFailure && !disableCoverUpload && imageSourcePath && fs.existsSync(imageSourcePath)) {
-    disableCoverUpload = true;
-    process.stdout.write("[agenda-publish] cover upload failed; retrying without cover image\n");
-    const metadataAttempt2 = { ...metadataBase, idempotency_key: `${idempotencyKey}-nocover` };
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const meta = { ...metadataBase, idempotency_key: withAttemptSuffix(idempotencyKey, attempt) };
+    process.stdout.write(`[agenda-publish] attempt ${attempt}/${maxAttempts} key=${meta.idempotency_key}\n`);
     res = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
-      body: buildMultipartForm(metadataAttempt2),
+      body: buildMultipartForm(meta),
       signal: AbortSignal.timeout(5 * 60 * 1000),
     });
     raw = await res.text();
     parsed = null;
     try { parsed = JSON.parse(raw); } catch {}
-    const attempt2Path = path.join(payloadDir, `${responseBase}.agenda-publish.response.attempt-02.json`);
-    fs.writeFileSync(attempt2Path, `${parsed ? JSON.stringify(parsed, null, 2) : raw}\n`, "utf8");
-    process.stdout.write(`[agenda-publish] attempt response saved: ${attempt2Path}\n`);
+
+    const attemptPath = path.join(payloadDir, `${responseBase}.agenda-publish.response.attempt-${String(attempt).padStart(2, "0")}.json`);
+    fs.writeFileSync(attemptPath, `${parsed ? JSON.stringify(parsed, null, 2) : raw}\n`, "utf8");
+    process.stdout.write(`[agenda-publish] attempt response saved: ${attemptPath}\n`);
+
+    if (res.ok) break;
+
+    const pictrsUploadFailure = String(parsed?.error || "").toLowerCase().includes("failed to upload cover image to pictrs");
+    if (pictrsUploadFailure && !disableCoverUpload && imageSourcePath && fs.existsSync(imageSourcePath)) {
+      disableCoverUpload = true;
+      process.stdout.write("[agenda-publish] cover upload failed; retrying without cover image\n");
+      continue;
+    }
+
+    const rateLimited = isRateLimited(res.status, parsed);
+    const transientServerFailure = Number(res.status) >= 500;
+    const retryable = rateLimited || transientServerFailure;
+    if (!retryable || attempt >= maxAttempts) break;
+
+    const jitterMs = retryJitterMs > 0 ? Math.floor(Math.random() * (retryJitterMs + 1)) : 0;
+    let waitMs = baseRetryDelayMs + jitterMs;
+    if (rateLimited) {
+      const retryAfterMs = parseRetryAfterMs(res.headers.get("retry-after"));
+      waitMs = Math.max(waitMs, retryAfterMs);
+      process.stdout.write(`[agenda-publish] rate limited, waiting ${waitMs}ms before retry\n`);
+    } else {
+      const serverBackoff = Math.min(120000, baseRetryDelayMs * attempt);
+      waitMs = serverBackoff + jitterMs;
+      process.stdout.write(`[agenda-publish] transient server error (${res.status}), waiting ${waitMs}ms before retry\n`);
+    }
+    await sleep(waitMs);
   }
 
   fs.writeFileSync(responsePath, `${parsed ? JSON.stringify(parsed, null, 2) : raw}\n`, "utf8");
