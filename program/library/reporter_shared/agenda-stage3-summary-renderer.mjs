@@ -336,7 +336,15 @@ function fallbackUnitSummaryFromGrounding(unit = {}) {
   if (!excerpt) return "";
   const sentence = excerpt.split(/(?<=[.!?])\s+/u).map((x) => normalizeText(x)).find(Boolean) || "";
   if (!sentence) return "";
-  return clampSummaryLength(sentence, 2, 48);
+  const budget = buildSummaryBudget(unit);
+  return enforceSummaryBudget(sentence, budget);
+}
+
+function fallbackUnitSummaryFromLabel(unit = {}) {
+  const label = normalizeText(String(unit?.label || ""));
+  const agendaItem = normalizeText(String(unit?.["agenda item"] || ""));
+  const base = label || agendaItem || "Agenda section";
+  return `${base} was listed on the agenda.`;
 }
 
 const SPLIT_GENERIC_PREFIXES = [
@@ -506,18 +514,44 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
       { role: "user", content: prompt },
     ],
   };
-  const res = await fetch(ollamaUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const payload = await res.json();
-  const content = String(payload?.message?.content || "").trim();
-  try { return JSON.parse(content); } catch {}
-  const m = content.match(/\{[\s\S]*\}/u);
-  if (!m) throw new Error("unparseable-json");
-  return JSON.parse(m[0]);
+  const maxAttempts = Math.max(1, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_ATTEMPTS || "5"), 10) || 5);
+  const timeoutMs = Math.max(5_000, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS || "120000"), 10) || 120_000);
+  const baseDelayMs = Math.max(250, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS || "1500"), 10) || 1500);
+
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await fetch(ollamaUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) {
+        const retryableStatus = res.status === 408 || res.status === 429 || res.status >= 500;
+        if (retryableStatus && attempt < maxAttempts) {
+          const waitMs = baseDelayMs * attempt;
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+        throw new Error(`ollama status ${res.status}`);
+      }
+      const payload = await res.json();
+      const content = String(payload?.message?.content || "").trim();
+      try { return JSON.parse(content); } catch {}
+      const m = content.match(/\{[\s\S]*\}/u);
+      if (!m) throw new Error("unparseable-json");
+      return JSON.parse(m[0]);
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message || err).toLowerCase();
+      const retryable = /fetch failed|network|socket|timeout|timed out|econnreset|enotfound|eai_again/u.test(msg);
+      if (!retryable || attempt >= maxAttempts) break;
+      const waitMs = baseDelayMs * attempt;
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+  throw lastErr || new Error("ollama fetch failed");
 }
 
 async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
@@ -563,7 +597,28 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
     });
   };
 
-  let parsed = await queryParsed();
+  let parsed = null;
+  try {
+    parsed = await queryParsed();
+  } catch (err) {
+    const allowFallback = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_STAGE3_ALLOW_FALLBACK || "0"));
+    if (!allowFallback) {
+      throw new Error(
+        `stage3 llm unavailable at ${ollamaUrl} (${normalizeText(String(err?.message || err)).slice(0, 200)}); set AGENDA_STAGE3_ALLOW_FALLBACK=1 to allow grounded fallback summaries`,
+      );
+    }
+    const fallbackSummary = fallbackUnitSummaryFromGrounding(unit);
+    const fallbackChapter = normalizeText(chapterFromSummary(fallbackSummary || String(unit.label || "")));
+    return {
+      summary: fallbackSummary,
+      chapterText: fallbackChapter,
+      confidence: 0,
+      notes: `llm_unavailable:${normalizeText(String(err?.message || err)).slice(0, 200)}`,
+      budget,
+      clampChanged: false,
+      rawSummary: fallbackSummary,
+    };
+  }
   let rawSummary = normalizeText(parsed?.summary || "");
   let summary = enforceSummaryBudget(rawSummary, budget);
 
@@ -657,7 +712,8 @@ export async function runAgendaStage3SummaryRenderer({
       if (unitSummary) {
         log(`[agenda-stage3][fallback] unit=${unitId} empty llm summary recovered from source excerpt`);
       } else {
-        throw new Error(`stage3 defective: empty summary for grounded unit ${unitId}`);
+        unitSummary = fallbackUnitSummaryFromLabel(unit);
+        log(`[agenda-stage3][fallback] unit=${unitId} empty source excerpt; using label-derived summary`);
       }
     }
 

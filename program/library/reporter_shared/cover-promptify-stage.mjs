@@ -37,12 +37,12 @@ function buildDeterministicTeachingPrompt({ visualSubject = "", jurisdiction = "
   const mtype = cleanLine(meetingType) || "council meeting";
   const styleHint = cleanLine(style);
   return cleanLine([
-    "Editorial teaching-diagram illustration",
+    "Editorial educational illustration",
     `about ${subject}`,
     `for ${location} ${mtype}`,
-    "single dominant symbolic anchor object with two supporting civic symbols connected by arrows and nodes",
-    "vector-like geometric forms, flat-shaded matte texture, high contrast, clean negative space for overlay",
-    "diagrammatic educational style, abstract informative composition, minimal clutter",
+    "clear conceptual scene with balanced composition and strong focal hierarchy",
+    "vector-like geometric forms, flat-shaded matte texture, high contrast, clean negative space",
+    "abstract informative composition, minimal clutter",
     "stylized illustration and geometric clarity, no people required",
     styleHint ? `style cue: ${styleHint}` : "",
   ].filter(Boolean).join(", "));
@@ -106,8 +106,8 @@ function buildPromptRequest({ hookText = "", oneSentenceSummary = "", topNews = 
     return [
       "Given this spoken-topic context, write one concise image-generation prompt for a single instructional teaching-video scene.",
       "Goal: help a viewer understand what is being discussed.",
-      "Use explanatory visual structure with one main concept object and two supporting concept objects.",
-      "Prefer symbolic process visuals (flow, cause/effect, system relationships) over decorative poster aesthetics.",
+      "Prefer clear scene-based explanatory visuals grounded in concrete topic elements.",
+      "Use process and relationship cues only when naturally relevant, without forcing diagram structure.",
       "Use non-photorealistic educational illustration style with geometric clarity and matte texture.",
       "Describe only visible scene content, composition, visual hierarchy, palette, and depth.",
       "No visible text, letters, numbers, logos, signs, banners, or watermarks.",
@@ -122,8 +122,8 @@ function buildPromptRequest({ hookText = "", oneSentenceSummary = "", topNews = 
   return [
     "Given this Canadian local news article metadata, write one concise positive image prompt for a background-only cover image.",
     "Use symbolic illustration style similar to a teaching explainer video thumbnail, with clean vector-like forms and strong contrast.",
-    "Use object-first composition: one dominant symbolic anchor plus two supporting objects tied to the topic.",
-    "Use arrows, connectors, and simple diagrammatic structure to explain relationships.",
+    "Use scene-first composition tied directly to the topic and human consequences.",
+    "Use relationship cues only where helpful, but avoid forced infographic/diagram structure.",
     "Use environmental cues from Canadian local context where appropriate.",
     "Keep it stylized and educational: geometric clarity, matte texture, abstract informative visuals.",
     "Describe only visible scene content, lighting, composition, palette, and depth.",
@@ -203,6 +203,6 @@ export async function runCoverPromptifyStage({
 export function buildRetryPromptForBackgroundRisk({ visualSubject = "", positivePrompt = "" } = {}) {
   const base = cleanLine(String(positivePrompt || ""));
   return base
-    ? `${base}, simplified symbolic composition, single dominant anchor object, flat-shaded illustration look, cleaner geometric hierarchy`
-    : "Symbolic editorial illustration with one dominant civic anchor object, clean geometric layout, flat-shaded matte finish, high contrast.";
+    ? `${base}, simplify composition, preserve topic-grounded scene elements, flat-shaded illustration look, cleaner visual hierarchy`
+    : "Symbolic editorial illustration with topic-grounded scene composition, flat-shaded matte finish, high contrast.";
 }
