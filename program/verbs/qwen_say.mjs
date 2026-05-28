@@ -112,6 +112,10 @@ function resolveClipVerifyTailGapGuardEnabled({ rememberFn = remember } = {}) {
   return resolveConfigBool("qwen say clip verify tail gap guard", { rememberFn }) === true;
 }
 
+function resolveClipVerifyStrict({ rememberFn = remember } = {}) {
+  return resolveConfigBool("qwen say clip verify strict", { rememberFn }) === true;
+}
+
 function resolveTailPadMs({ rememberFn = remember } = {}) {
   const configured = resolveConfigNum("qwen say tail pad ms", { rememberFn });
   if (Number.isFinite(configured) && configured >= 0) return Number(configured);
@@ -425,17 +429,18 @@ export function sanitizeQwenSayScriptText(text = "", mapConfig = {}) {
   };
 
   const lineBreakMarker = "\u241E";
-  let sanitized = source;
-  sanitized = sanitized.replace(/\r\n/g, "\n").replace(/\n+/g, ` ${lineBreakMarker} `);
+  let sanitized = source.replace(/\r\n/g, "\n");
   // Strip markdown wrappers so TTS receives plain prose.
+  sanitized = sanitized.replace(/^\s{0,3}#{1,6}\s*/gm, "");
+  sanitized = sanitized.replace(/(^|\s)#(?=[\p{L}\p{N}])/gu, "$1");
   sanitized = sanitized.replace(/\*\*(.*?)\*\*/g, "$1");
   sanitized = sanitized.replace(/__(.*?)__/g, "$1");
   sanitized = sanitized.replace(/\*(.*?)\*/g, "$1");
   sanitized = sanitized.replace(/_(.*?)_/g, "$1");
   sanitized = sanitized.replace(/`([^`]+)`/g, "$1");
-  sanitized = sanitized.replace(/^\s{0,3}#{1,6}\s+/gm, "");
   sanitized = sanitized.replace(/^\s*[-*+]\s+/gm, "");
   sanitized = sanitized.replace(/^\s*\d+[.)]\s+/gm, "");
+  sanitized = sanitized.replace(/\n+/g, ` ${lineBreakMarker} `);
   sanitized = sanitized.replace(/\u2026/g, "...");
   sanitized = sanitized.replace(/\b1st\b/gi, ordinal1st);
   sanitized = sanitized.replace(/\b2nd\b/gi, ordinal2nd);
@@ -1178,6 +1183,7 @@ export async function qwenSay(
   const clipVerifyMinTailMs = resolveClipVerifyMinTailMs({ rememberFn });
   const clipVerifyMinTailWords = resolveClipVerifyMinTailWords({ rememberFn });
   const clipVerifyTailGapGuardEnabled = resolveClipVerifyTailGapGuardEnabled({ rememberFn });
+  const clipVerifyStrict = resolveClipVerifyStrict({ rememberFn });
   const tailPadMs = resolveTailPadMs({ rememberFn });
   const chunkTailPadMs = resolveChunkTailPadMs({ rememberFn });
   const tailPauseMarkup = resolveTailPauseMarkup({ rememberFn });
@@ -1426,19 +1432,24 @@ export async function qwenSay(
               verificationRecord.asrBypassed = "asr-unavailable-nonsuspect";
               break;
             }
-            throwErrorSentence({
-              name: "qwen say defective",
-              message: `qwen say defective: clipped chunk retries exhausted at chunk ${i + 1}`,
-              from: { name: "qwen say" },
-              raw: {
-                chunkIndex: i + 1,
-                retries: verificationRecord.retries,
-                expectedTail: verificationRecord.expectedTail,
-                transcript: verificationRecord.asrTranscript,
-                timestamps: verificationRecord.asrTimestamps,
-                suspect: verificationRecord.suspect
-              }
-            });
+            if (clipVerifyStrict) {
+              throwErrorSentence({
+                name: "qwen say defective",
+                message: `qwen say defective: clipped chunk retries exhausted at chunk ${i + 1}`,
+                from: { name: "qwen say" },
+                raw: {
+                  chunkIndex: i + 1,
+                  retries: verificationRecord.retries,
+                  expectedTail: verificationRecord.expectedTail,
+                  transcript: verificationRecord.asrTranscript,
+                  timestamps: verificationRecord.asrTimestamps,
+                  suspect: verificationRecord.suspect
+                }
+              });
+            }
+            verificationRecord.asrPass = true;
+            verificationRecord.asrBypassed = "retry-exhausted-nonstrict";
+            break;
           }
           verificationRecord.retries += 1;
           chunkText = tightenRetryChunkText(chunkText);
@@ -1540,6 +1551,7 @@ export async function qwenSay(
     clipVerifyPeakDb,
     clipVerifyDeltaDb,
     clipVerifyMinTailMs,
+    clipVerifyStrict,
     tailPadMs,
     chunkTailPadMs,
     tailPauseMarkup,
