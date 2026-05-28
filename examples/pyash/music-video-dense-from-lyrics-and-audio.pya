@@ -4,10 +4,9 @@ from filename "../../module/video_common.pya" ob name video heading burn to name
 exists su name draw size shorts be map def
 su name width ob num 720 ya
 su name height ob num 1280 ya
-su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text, chinese characters, hanzi, kanji, kana, korean characters, hangul, glyphs, symbols, calligraphy, photorealistic, realistic, lifelike, cinematic, DSLR, lens blur, skin pores, detailed skin, live action, hyperreal, 3D render, uncanny, photographic lighting, real person, portrait photography, shirtless, bare chest, bare shoulders, bare torso, nude, semi-nude, sleeveless top, open shirt, exposed skin torso" ya
 prah
 
-exists su name draw system prompt ob text "Simple 2D cartoon illustration, hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, simplified facial features, playful but respectful proportions, poster-like composition, non-photorealistic, no realistic skin texture, no camera realism, no visible text or letters, no watermark. There is no text. Every visible person must be fully clothed in opaque full-coverage clothing with covered shoulders, chest, torso, midriff, hips, and upper legs; no shirtless bodies, bare chest, bare shoulders, open shirt, or sleeveless tops. If an adult male person is visible, he must have a clearly visible full beard and long hair. Do not depict clean-shaven men." be text ya
+exists su name draw system prompt ob text "Simple 2D cartoon illustration, hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, simplified facial features, playful but respectful proportions, poster-like composition, flat poster art, natural backgrounds, clean shapes. For people-free scenes, show only the named plant, object, landscape, or setting with no human figures or body parts. If the image prompt explicitly requests a person, keep every visible person fully clothed in opaque full-coverage clothing with covered shoulders, chest, torso, midriff, hips, and upper legs." be text ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear qwen chunk max seconds ob num 30 be default ya
 exists su name subtitle margin ratio override ob num 0.40 be num ya
@@ -35,13 +34,13 @@ If no visible person is present, use exactly three sentences in this order: sent
 Sentence one must describe a concrete visible action using a strong verb and object; avoid static posing, standing, or looking-only portraits.
 Use flat 2D cartoon/cel-shaded language in the prompt. Avoid lifelike, photorealistic, cinematic, photographic, portrait, realistic-skin, and 3D-render language.
 Treat each cut as its own lyric moment and hard switch scenes when the lyric changes.
-Keep scene surfaces typography-free: no letters, captions, logos, signage, or interface elements.
-If people appear, depict modest opaque full-coverage clothing that covers shoulders, chest, torso, midriff, hips, upper legs, and buttocks. Never depict shirtless, bare-chested, bare-shouldered, open-shirt, sleeveless, nude, semi-nude, or transparent clothing.
+Use natural backgrounds and simple clean props. Keep the prompt focused on scenery, actions, materials, light, and mood.
+If current_cut does not explicitly name or require a person, keep the prompt people-free and show only the named plant, object, landscape, place, weather, or setting details.
+If people appear, depict modest opaque full-coverage clothing that covers shoulders, chest, torso, midriff, hips, upper legs, and buttocks.
 When a person is visible, sentence two must state concrete full-coverage clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
 The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
 Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
-If an adult male person is visible, he must have a clearly visible full beard and long hair; do not depict clean-shaven men.
-If current_cut or full_script mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
+If current_cut mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
 Keep the final prompt line visual-only and descriptive; exclude moderation or policy terms..text.quoted be text ya
 su name lyric promptify style replacements be map def
 su text "[[style_prompt]]" ob name text draw system prompt ya
@@ -116,7 +115,7 @@ su name mind discharge settle stage ob text "sleep 3" be command do
 
 su name draw out dir stage ob name text artifacts root to name text draw out dir be text do
 ob text "/draw" to name draw out dir be plus do
-su name lyric draw stage from name itinerary lyric draw prompts fromtext name draw system prompt ob text "Create one illustration representing this lyric moment:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of draw out dir be draw do
+su name lyric draw stage from name itinerary lyric draw prompts fromtext name draw system prompt ob text "Create one finished cartoon scene:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of draw out dir be draw do
 su name draw discharge after render stage as wo draw be discharge do
 
 su name video cuts audio filename ob name text audio wav path be text do
