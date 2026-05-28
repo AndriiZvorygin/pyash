@@ -8,7 +8,7 @@ from filename "./video_common.pya" ob name current video heading y ratio to name
 from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
 from filename "./video_common.pya" ob name footnote mode to name footnote mode be import do
 
-exists su name draw system prompt ob text "Québec bande dessinée cartoon illustration, simple 2D hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, simplified facial features, playful but respectful proportions, muted natural palette, balanced poster-like composition, mature francophone comic storytelling, matte printed surface, natural backgrounds, clean shapes, flat poster art. For people-free scenes, show only the named plant, object, landscape, or setting with no human figures or body parts. If the image prompt explicitly requests a person, keep every visible person fully clothed in opaque full-coverage clothing with covered shoulders, chest, torso, midriff, hips, and upper legs." be default ya
+exists su name draw system prompt ob text "Québec bande dessinée cartoon illustration, simple 2D hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, muted natural palette, rounded plant and landscape shapes, natural garden backgrounds, warm pastel light, clean uncluttered composition, matte printed surface." be default ya
 exists su name audio cue text ob text "Sound On 🎧" be default ya
 exists su name audio cue y ratio ob num 0.68 be default ya
 exists su name audio cue font scale ob num 0.42 be default ya

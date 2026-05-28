@@ -7,7 +7,7 @@ su name width ob num 1280 ya
 su name height ob num 720 ya
 prah
 
-exists su name draw system prompt ob text "Simple 2D cartoon illustration, hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, simplified facial features, playful but respectful proportions, poster-like composition, flat poster art, natural backgrounds, clean shapes. For people-free scenes, show only the named plant, object, landscape, or setting with no human figures or body parts. If the image prompt explicitly requests a person, keep every visible person fully clothed in opaque full-coverage clothing with covered shoulders, chest, torso, midriff, hips, and upper legs." be text ya
+exists su name draw system prompt ob text "Simple 2D hand-drawn cartoon storybook illustration, bold clean outlines, flat colours, soft cel shading, rounded plant and landscape shapes, natural garden backgrounds, warm pastel light, clean uncluttered composition, gentle storybook mood." be text ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear qwen chunk max seconds ob num 30 be default ya
 exists su name subtitle margin ratio override ob num 0.10 be num ya
@@ -116,7 +116,7 @@ su name mind discharge settle stage ob text "sleep 3" be command do
 
 su name draw out dir stage ob name text artifacts root to name text draw out dir be text do
 ob text "/draw" to name draw out dir be plus do
-su name lyric draw stage from name itinerary lyric draw prompts fromtext name draw system prompt ob text "Create one finished cartoon scene:" fromstate wo text become wo photograph with name draw size widescreen to filename of ob of draw out dir be draw do
+su name lyric draw stage from name itinerary lyric draw prompts fromtext name draw system prompt ob text "Render this visual scene:" fromstate wo text become wo photograph with name draw size widescreen to filename of ob of draw out dir be draw do
 su name draw discharge after render stage as wo draw be discharge do
 
 su name video cuts audio filename ob name text audio wav path be text do
