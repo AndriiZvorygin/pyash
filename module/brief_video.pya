@@ -24,7 +24,7 @@ exists su name draw prompt beard guide enabled ob bool truth be default ya
 exists su name draw prompt style default ob text "If people are present, ensure expressive faces with clearly visible white sclera and defined irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
 exists su name draw prompt style ob text "If people are present, ensure expressive faces with clearly visible white sclera and defined irises. If one clear male subject is central, depict long hair and a full beard. If a mixed group is present, vary hair styles and include at least one long-haired bearded man." be text ya
 exists su name teaching video options be map def
-su name image_cadence ob text "phrase" ya
+su name image_cadence ob text "sentence" ya
 su name subtitle_mode ob text "karaoke" ya
 su name thumbnail_mode ob text "checkpoint" ya
 prah

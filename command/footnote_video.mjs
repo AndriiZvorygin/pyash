@@ -281,6 +281,41 @@ function buildWordflowDialogues(cuts = [], { maxLineChars = 12 } = {}) {
   return out;
 }
 
+function mergeShortCuts(cuts = [], { minSeconds = SUBTITLE_MIN_SEGMENT_SECONDS } = {}) {
+  const input = Array.isArray(cuts) ? cuts.map((cut) => ({ ...cut })) : [];
+  if (input.length <= 1) return input;
+  const out = [];
+  for (let i = 0; i < input.length; i += 1) {
+    const cur = input[i];
+    const since = Number(cur?.since ?? 0);
+    const until = Number(cur?.until ?? since);
+    const duration = Math.max(0, until - since);
+    const text = String(cur?.obText ?? "").trim();
+    const words = splitWords(text).length;
+    const minByWords = Math.min(1.2, Math.max(minSeconds, words * 0.11));
+    const tooFast = duration > 0 ? (words / duration) > 5.6 : true;
+    if (!text) continue;
+    if (duration >= minByWords && !tooFast) {
+      out.push(cur);
+      continue;
+    }
+    const next = input[i + 1];
+    if (next) {
+      next.obText = `${text} ${String(next.obText ?? "").trim()}`.replace(/\s+/gu, " ").trim();
+      next.since = Math.min(Number(next.since ?? since), since);
+      continue;
+    }
+    const prev = out[out.length - 1];
+    if (prev) {
+      prev.obText = `${String(prev.obText ?? "").trim()} ${text}`.replace(/\s+/gu, " ").trim();
+      prev.until = Math.max(Number(prev.until ?? since), until);
+      continue;
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
 function buildAssFromSrt(
   srtText,
   {
@@ -310,6 +345,7 @@ function buildAssFromSrt(
       until: shiftedSince + duration
     };
   });
+  const stabilizedCuts = mergeShortCuts(cuts);
   const resolvedOutline = Number.isFinite(outline) && outline > 0
     ? Number(outline)
     : Number(
@@ -345,10 +381,10 @@ function buildAssFromSrt(
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
   ];
   const body = mode === "wordflow"
-    ? buildWordflowDialogues(cuts, { maxLineChars })
+    ? buildWordflowDialogues(stabilizedCuts, { maxLineChars })
     : mode === "karaoke"
-      ? buildKaraokeDialogues(cuts, { maxLineChars, maxRows: SUBTITLE_MAX_ROWS })
-      : cuts.map((cut) => {
+      ? buildKaraokeDialogues(stabilizedCuts, { maxLineChars, maxRows: SUBTITLE_MAX_ROWS })
+      : stabilizedCuts.map((cut) => {
       const since = Number(cut?.since ?? 0);
       const until = Number(cut?.until ?? since + 1);
       const text = styleTextForCut(cut?.obText ?? "", mode, Math.max(0.05, until - since), maxLineChars);

@@ -8,7 +8,7 @@ from filename "./video_common.pya" ob name current video heading y ratio to name
 from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
 from filename "./video_common.pya" ob name footnote mode to name footnote mode be import do
 
-exists su name draw system prompt ob text "Québec bande dessinée illustration, realistic proportions, precise linework, expressive faces with visible sclera and defined irises, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be default ya
+exists su name draw system prompt ob text "Québec bande dessinée illustration, realistic proportions, precise linework, expressive faces with visible sclera and defined irises, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface. If an adult male person is visible, he must have a clearly visible full beard and long hair. Do not depict clean-shaven men. No nudity, no shirtless bodies, no bare chest, no exposed breasts, no exposed nipples, no exposed genitals, and no underwear-only outfits." be default ya
 exists su name audio cue text ob text "Sound On 🎧" be default ya
 exists su name audio cue y ratio ob num 0.68 be default ya
 exists su name audio cue font scale ob num 0.42 be default ya
@@ -26,15 +26,18 @@ Follow these rules:
 8. Use split-scene only when current_cut explicitly describes contrast or before/after.
 9. Minimize garbage: no random symbols, no abstract filler metaphors, no unrelated props, no camera jargon lists, no style spam.
 10. Keep scene surfaces typography-free: no letters, captions, logos, signage, or interface elements.
-11. If people appear, depict modest opaque full-coverage clothing that covers chest, midriff, and hips.
+11. If people appear, depict modest opaque full-coverage clothing that covers shoulders, chest, midriff, hips, upper legs, and buttocks.
 12. Keep the final prompt line visual-only and descriptive; exclude moderation or policy terms.
 13. Keep the final prompt concise and concrete (about 30-70 words).
 14. If a visible person is present, use exactly four sentences in this order: sentence one subject plus action, sentence two clothing, sentence three environment, sentence four mood plus lighting.
 15. If no visible person is present, use exactly three sentences in this order: sentence one subject plus action, sentence two environment, sentence three mood plus lighting.
 16. Sentence one must describe a concrete visible action using a strong verb and object; avoid static posing, standing, or looking-only portraits.
 17. When a person is visible, sentence two must state concrete clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
-18. The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
-19. Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
+18. Clothing is mandatory for every visible person in every scene. Never depict shirtless, bare-chested, nude, semi-nude, lingerie-only, bikini-only, underwear-only, or transparent clothing.
+19. The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
+20. Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
+21. If an adult male person is visible, he must have a clearly visible full beard and long hair; do not depict clean-shaven men.
+22. If current_cut or full_script mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: friendly gardener in late 30s; medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over plain white collared shirt; gentle joyful sincere expression with grounded caring presence.
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be default ya
 
@@ -119,6 +122,12 @@ su name music video from filename audio be ceremony def
 
   su name prompt packet stage ob name map draw promptify packet style replacements in name text draw promptify packet template to name text draw promptify packet be instead do
   su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
+  su name prompt verify path stage ob name text music video run root to name text prompt verify path be text do
+  ob text "/teaching-draw-prompts.series.pya" to name prompt verify path be plus do
+  su name prompt verify cmd stage ob text "node command/verify_draw_prompt_clothing.mjs \"" to name text prompt verify cmd be text do
+  ob name text prompt verify path to name prompt verify cmd be plus do
+  ob text "\"" to name prompt verify cmd be plus do
+  su name prompt verify stage ob name text prompt verify cmd be command do
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube title (max 90 chars). Plain text only." for name mind to name text video title be write do
   su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-7 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
   su name summary stage ob name text manuscript out fromtext text "Write one concise summary sentence for this music video in plain text (max 180 chars)." for name mind to name text video summary be write do

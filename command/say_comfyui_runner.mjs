@@ -384,7 +384,13 @@ async function requestBytes(url) {
   return Buffer.from(arrayBuf);
 }
 
-async function pollHistoryForOutput(host, promptId, timeoutMs = 180000) {
+function resolvePollTimeoutMs() {
+  const raw = Number(process.env.PYA_SAY_COMFYUI_TIMEOUT_MS ?? "");
+  if (Number.isFinite(raw) && raw > 0) return Math.max(1000, Math.trunc(raw));
+  return 900000;
+}
+
+async function pollHistoryForOutput(host, promptId, timeoutMs = resolvePollTimeoutMs()) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const text = await requestText(`${host.replace(/\/$/, "")}/history/${encodeURIComponent(promptId)}`);

@@ -7,6 +7,9 @@ exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear whisperx fallback qwen ob bool truth be default ya
 exists su name subtitle_mode ob text "karaoke" be default ya
+exists su name qwen say clip verify enabled ob bool truth be default ya
+exists su name qwen say clip verify all chunks ob bool lie be default ya
+exists su name qwen say clip verify strict ob bool lie be default ya
 su name draw widescreen mode ob text "truth" ya
 
 exists su name draw size widescreen be map def

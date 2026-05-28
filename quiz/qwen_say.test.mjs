@@ -133,6 +133,8 @@ test("sanitizeQwenSayScriptText rewrites numeric colons used in citations", () =
   assert.equal(sanitizeQwenSayScriptText("Budget is 65,000 now."), "Budget is sixty-five-thousand now.");
   assert.equal(sanitizeQwenSayScriptText("The people gave one man total power: the poet."), "The people gave one man total power, the poet.");
   assert.equal(sanitizeQwenSayScriptText("**Bold** _italics_ and `code`"), "Bold italics and code");
+  assert.equal(sanitizeQwenSayScriptText("##A Good Citizen Story."), "A Good Citizen Story.");
+  assert.equal(sanitizeQwenSayScriptText("Serve #OwenSound with care."), "Serve OwenSound with care.");
 });
 
 test("qwenSay chunks long text and concatenates chunk outputs", async () => {
@@ -719,6 +721,7 @@ test("qwenSay clip verify hard fails after retry exhaustion", async () => {
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify enabled" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say clip verify strict" }, ob: { boolean: true }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say clip verify max retries" }, ob: { num: 2 }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-clip-verify-fail-"));
   const output = path.join(outDir, "out.wav");

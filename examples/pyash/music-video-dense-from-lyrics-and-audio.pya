@@ -7,7 +7,7 @@ su name height ob num 1280 ya
 su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text, chinese characters, hanzi, kanji, kana, korean characters, hangul, glyphs, symbols, calligraphy" ya
 prah
 
-exists su name draw system prompt ob text "Educational lyrical illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, expressive emotion, high detail. There is no text." be text ya
+exists su name draw system prompt ob text "Educational lyrical illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, expressive emotion, high detail. There is no text. If an adult male person is visible, he must have a clearly visible full beard and long hair. Do not depict clean-shaven men." be text ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear qwen chunk max seconds ob num 30 be default ya
 exists su name subtitle margin ratio override ob num 0.40 be num ya
@@ -39,6 +39,8 @@ If people appear, depict modest opaque full-coverage clothing that covers chest,
 When a person is visible, sentence two must state concrete clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
 The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
 Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
+If an adult male person is visible, he must have a clearly visible full beard and long hair; do not depict clean-shaven men.
+If current_cut or full_script mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: friendly gardener in late 30s; medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over plain white collared shirt; gentle joyful sincere expression with grounded caring presence.
 Keep the final prompt line visual-only and descriptive; exclude moderation or policy terms..text.quoted be text ya
 su name lyric promptify style replacements be map def
 su text "[[style_prompt]]" ob name text draw system prompt ya
@@ -100,7 +102,7 @@ ob text "\" \"" to name captions cmd be plus do
 ob name text captions timing text path to name captions cmd be plus do
 ob text "\" \"" to name captions cmd be plus do
 ob name text captions text path to name captions cmd be plus do
-ob text "\"" to name captions cmd be plus do
+ob text "\" --sentence-cues" to name captions cmd be plus do
 su name captions stage ob name text captions cmd be command do
 su name cut stage from filename of ob of captions filename stage to name itinerary lyric cuts be cut do
 

@@ -253,11 +253,11 @@ test("section mappers use section-local aligned srt timing for cuts and footnote
   );
 });
 
-test("teaching video options map defaults image cadence to phrase", async () => {
+test("teaching video options map defaults image cadence to sentence", async () => {
   const source = await fs.readFile("module/brief_video.pya", "utf8");
   assert.match(
     source,
-    /exists su name teaching video options be map def[\s\S]*su name image_cadence ob text "phrase" ya/u
+    /exists su name teaching video options be map def[\s\S]*su name image_cadence ob text "sentence" ya/u
   );
 });
 

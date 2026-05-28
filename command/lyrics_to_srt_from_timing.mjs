@@ -14,6 +14,18 @@ const MAX_DRIFT_SECONDS = (() => {
   const raw = Number(process.env.PYA_SRT_MAX_DRIFT_SECONDS || 1.5);
   return Number.isFinite(raw) && raw > 0 ? raw : 1.5;
 })();
+const MAX_NON_SENTENCE_DRIFT_SECONDS = (() => {
+  const raw = Number(process.env.PYA_SRT_MAX_NON_SENTENCE_DRIFT_SECONDS || 3);
+  return Number.isFinite(raw) && raw > 0 ? raw : 3;
+})();
+const STRICT_NON_SENTENCE_DRIFT = (() => {
+  const raw = String(process.env.PYA_SRT_STRICT_NON_SENTENCE_DRIFT || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "truth" || raw === "yes";
+})();
+const MIN_CUE_SECONDS = (() => {
+  const raw = Number(process.env.PYA_SRT_MIN_CUE_SECONDS || 0.24);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0.24;
+})();
 
 function usage() {
   return "Usage: node command/lyrics_to_srt_from_timing.mjs <lyrics.txt> <timing.srt> <output.srt> [--include-sections] [--sentence-cues]";
@@ -168,8 +180,16 @@ function enforceMaxSentenceWords(lines, maxWords = MAX_SENTENCE_WORDS) {
 function normalizeLyricsCuts(text, { includeSections = false, sentenceCues = false } = {}) {
   const source = sanitizeSubtitleMarkdownText(text);
   if (sentenceCues) {
+    const rawLines = source
+      .split("\n")
+      .map((line) => sanitizeSubtitleLine(line))
+      .filter(Boolean)
+      .filter((line) => !/^\[[^\]]+\]$/u.test(line));
+    const lineFirstCuts = rawLines.length > 0
+      ? rawLines.flatMap((line) => splitNaturalSentences(line))
+      : splitNaturalSentences(source);
     const sentenceCuts = trimAdjacentOverlapCuts(collapseEchoLyricCuts(
-      enforceMaxSentenceWords(splitNaturalSentences(source))
+      enforceMaxSentenceWords(lineFirstCuts)
     ))
       .map((entry) => String(entry || "").trim())
       .filter(Boolean)
@@ -641,7 +661,9 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingW
         const looksTokenWide = matchedTokenSpan > maxLineTokenSpan;
         const looksCompressed = matchedSpan < Math.max(0.12, Math.min(2.5, fallbackSpan * 0.20));
         const timeDrift = Math.abs(candidateSince - since);
-        const looksTimeDrifted = timeDrift > (sentenceCues ? Math.max(4, fallbackSpan * 1.5) : Math.max(8, fallbackSpan * 2.5));
+        const looksTimeDrifted = timeDrift > (sentenceCues
+          ? Math.max(4, fallbackSpan * 1.5)
+          : Math.max(MAX_NON_SENTENCE_DRIFT_SECONDS, fallbackSpan * 1.15));
         if (!looksOutlier && !looksTooFar && !looksTokenWide && !looksCompressed && !looksTimeDrifted) {
           since = candidateSince;
           until = candidateUntil;
@@ -793,8 +815,16 @@ function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingW
         : "")
     );
   }
+  if (!sentenceCues && STRICT_NON_SENTENCE_DRIFT && driftCount > 0 && maxDrift > MAX_NON_SENTENCE_DRIFT_SECONDS) {
+    throw new Error(
+      `lyrics to srt defective: non-sentence timing drift max=${maxDrift.toFixed(3)}s threshold=${MAX_NON_SENTENCE_DRIFT_SECONDS.toFixed(3)}s matched=${driftCount}` +
+      (worst
+        ? ` worst_since=${worst.since.toFixed(3)} worst_until=${worst.until.toFixed(3)} matched_since=${worst.matchedSince.toFixed(3)} matched_until=${worst.matchedUntil.toFixed(3)} text="${worst.text}"`
+        : "")
+    );
+  }
 
-  const collapsedRows = collapseDuplicateMicroCues(rows);
+  const collapsedRows = mergeShortAdjacentRows(collapseDuplicateMicroCues(rows));
   if (sentenceCues) {
     const maxUnmatchedRatio = (() => {
       const raw = Number(process.env.PYA_SRT_MAX_UNMATCHED_SENTENCE_RATIO || -1);
@@ -855,6 +885,74 @@ function collapseDuplicateMicroCues(rows = []) {
     out.push({ ...row });
   }
   for (let i = 0; i < out.length; i += 1) out[i].index = i + 1;
+  return out;
+}
+
+function buildTailRowsFromTimingCuts({
+  timingCuts = [],
+  afterSeconds = 0,
+  startIndex = 1
+} = {}) {
+  const source = Array.isArray(timingCuts) ? timingCuts : [];
+  const rows = [];
+  let index = Number(startIndex) || 1;
+  for (const cut of source) {
+    const since = Number(cut?.since ?? 0);
+    const until = Number(cut?.until ?? since);
+    const text = String(cut?.obText ?? "").trim();
+    if (!text) continue;
+    if (until <= Number(afterSeconds)) continue;
+    rows.push({
+      index,
+      since,
+      until: Math.max(since + 0.001, until),
+      text
+    });
+    index += 1;
+  }
+  return rows;
+}
+
+function mergeShortAdjacentRows(rows = [], { minSeconds = MIN_CUE_SECONDS } = {}) {
+  const input = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
+  if (input.length <= 1) return input;
+  const out = [];
+  for (let i = 0; i < input.length; i += 1) {
+    const cur = input[i];
+    const since = Number(cur?.since ?? 0);
+    const until = Number(cur?.until ?? since);
+    const duration = Math.max(0, until - since);
+    const text = String(cur?.text ?? "").trim();
+    if (!text) continue;
+    if (duration >= minSeconds) {
+      out.push(cur);
+      continue;
+    }
+    const next = input[i + 1];
+    if (next) {
+      next.text = `${text} ${String(next.text ?? "").trim()}`.replace(/\s+/gu, " ").trim();
+      next.since = Math.min(Number(next.since ?? since), since);
+      next.matchedSince = Number.isFinite(cur?.matchedSince)
+        ? Math.min(Number(next.matchedSince ?? cur.matchedSince), Number(cur.matchedSince))
+        : next.matchedSince;
+      continue;
+    }
+    const prev = out[out.length - 1];
+    if (prev) {
+      prev.text = `${String(prev.text ?? "").trim()} ${text}`.replace(/\s+/gu, " ").trim();
+      prev.until = Math.max(Number(prev.until ?? since), until);
+      prev.matchedUntil = Number.isFinite(cur?.matchedUntil)
+        ? Math.max(Number(prev.matchedUntil ?? cur.matchedUntil), Number(cur.matchedUntil))
+        : prev.matchedUntil;
+      continue;
+    }
+    out.push(cur);
+  }
+  for (let i = 0; i < out.length; i += 1) {
+    out[i].index = i + 1;
+    out[i].since = Number(out[i].since ?? 0);
+    out[i].until = Math.max(out[i].since + 0.06, Number(out[i].until ?? out[i].since + 0.06));
+  }
   return out;
 }
 
@@ -924,7 +1022,7 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
   }
   const timingCuts = parseSrtToCuts(timingText);
   const aligned = buildTimingRows(lyricCuts, timingCuts, { sentenceCues, timingWordHints });
-  const finalRows = aligned.rows;
+  let finalRows = aligned.rows;
   const stats = aligned.stats ?? {
     lines: finalRows.length,
     acceptedMatchLines: sentenceCues ? finalRows.length : 0
@@ -944,6 +1042,26 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
       throw new Error(
         `lyrics to srt defective: lyrics mismatch accepted=${Number(stats.acceptedMatchLines || 0)} min=${minAccepted} lines=${Number(stats.lines || 0)}`
       );
+    }
+  }
+
+  // If lyric alignment ends early, append raw ASR tail cues verbatim.
+  // This keeps strict timestamp/text alignment to the ASR stream (no regrouping).
+  const timelineEnd = Math.max(
+    0,
+    ...timingCuts.map((cut) => Number(cut?.until ?? 0)).filter((x) => Number.isFinite(x))
+  );
+  const finalEnd = finalRows.length ? Number(finalRows[finalRows.length - 1]?.until ?? 0) : 0;
+  const tailGapSeconds = Math.max(0, timelineEnd - finalEnd);
+  const maxTailGapBeforeAppend = Number(process.env.PYA_SRT_MAX_TAIL_GAP_SECONDS || 2.0);
+  if (Number.isFinite(timelineEnd) && tailGapSeconds > maxTailGapBeforeAppend) {
+    const tailRows = buildTailRowsFromTimingCuts({
+      timingCuts,
+      afterSeconds: finalEnd + 0.001,
+      startIndex: finalRows.length + 1
+    });
+    if (tailRows.length) {
+      finalRows = finalRows.concat(tailRows);
     }
   }
 
