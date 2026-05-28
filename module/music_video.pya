@@ -8,7 +8,7 @@ from filename "./video_common.pya" ob name current video heading y ratio to name
 from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
 from filename "./video_common.pya" ob name footnote mode to name footnote mode be import do
 
-exists su name draw system prompt ob text "Québec bande dessinée cartoon illustration, simple 2D hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, simplified facial features, playful but respectful proportions, muted natural palette, balanced poster-like composition, mature francophone comic storytelling, matte printed surface, non-photorealistic, no realistic skin texture, no camera realism. Every visible person must be fully clothed in opaque full-coverage clothing with covered shoulders, chest, torso, midriff, hips, and upper legs; no shirtless bodies, bare chest, bare shoulders, open shirt, or sleeveless tops. If an adult male person is visible, he must have a clearly visible full beard and long hair. Do not depict clean-shaven men. No nudity, no shirtless bodies, no bare chest, no exposed breasts, no exposed nipples, no exposed genitals, and no underwear-only outfits." be default ya
+exists su name draw system prompt ob text "Québec bande dessinée cartoon illustration, simple 2D hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, simplified facial features, playful but respectful proportions, muted natural palette, balanced poster-like composition, mature francophone comic storytelling, matte printed surface, natural backgrounds, clean shapes, flat poster art. For people-free scenes, show only the named plant, object, landscape, or setting with no human figures or body parts. If the image prompt explicitly requests a person, keep every visible person fully clothed in opaque full-coverage clothing with covered shoulders, chest, torso, midriff, hips, and upper legs." be default ya
 exists su name audio cue text ob text "Sound On 🎧" be default ya
 exists su name audio cue y ratio ob num 0.68 be default ya
 exists su name audio cue font scale ob num 0.42 be default ya
@@ -25,8 +25,8 @@ Follow these rules:
 7. If current_cut references a problem, debt, oppression, or harm, output a negative sentiment prompt that visibly features causes and harms.
 8. Use split-scene only when current_cut explicitly describes contrast or before/after.
 9. Minimize garbage: no random symbols, no abstract filler metaphors, no unrelated props, no camera jargon lists, no style spam.
-10. Keep scene surfaces typography-free: no letters, captions, logos, signage, or interface elements.
-11. If people appear, depict modest opaque full-coverage clothing that covers shoulders, chest, torso, midriff, hips, upper legs, and buttocks. Never depict shirtless, bare-chested, bare-shouldered, open-shirt, sleeveless, nude, semi-nude, or transparent clothing.
+10. Use natural backgrounds and simple clean props. Keep the prompt focused on scenery, actions, materials, light, and mood.
+11. If current_cut does not explicitly name or require a person, keep the prompt people-free and show only the named plant, object, landscape, place, weather, or setting details.
 12. Keep the final prompt line visual-only and descriptive; exclude moderation or policy terms.
 13. Keep the final prompt concise and concrete (about 30-70 words).
 14. If a visible person is present, use exactly four sentences in this order: sentence one subject plus action, sentence two clothing, sentence three environment, sentence four mood plus lighting.
@@ -34,11 +34,10 @@ Follow these rules:
 16. Sentence one must describe a concrete visible action using a strong verb and object; avoid static posing, standing, or looking-only portraits.
 17. Use flat 2D cartoon/cel-shaded language in the prompt. Avoid lifelike, photorealistic, cinematic, photographic, portrait, realistic-skin, and 3D-render language.
 18. When a person is visible, sentence two must state concrete full-coverage clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
-19. Clothing is mandatory for every visible person in every scene. Never depict shirtless, bare-chested, nude, semi-nude, lingerie-only, bikini-only, underwear-only, or transparent clothing.
+19. If people appear, depict modest opaque full-coverage clothing that covers shoulders, chest, torso, midriff, hips, upper legs, and buttocks.
 20. The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
 21. Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
-22. If an adult male person is visible, he must have a clearly visible full beard and long hair; do not depict clean-shaven men.
-23. If current_cut or full_script mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; simplified medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
+22. If current_cut mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; simplified medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be default ya
 
@@ -59,8 +58,8 @@ exists su name thumbnail system prompt ob text quoted.text.You are a YouTube Sho
 Output exactly one image-generation prompt for a single scroll-stopping scene based on the full context.
 
 Hard rules:
-1. Image-only. Absolutely no visible text, letters, words, numbers, logos, watermarks, captions, subtitles, UI, signs, posters, book pages, tablets, engraved writing, or title cards.
-2. Do not ask for text overlay and do not include any wording inside the image scene.
+1. Image-only scene with natural backgrounds, clean open space, and simple visual emphasis.
+2. Use the scene itself for emphasis rather than title-card composition or poster composition.
 3. Use a person-centric composition: a clear human subject with visible face and strong expression tied to the hook moment.
 4. Prefer one person covered in the script. If the script names a person, anchor the scene to that person.
 5. Pick the strongest hook moment from the script and render it as a concrete visual scene with clear subject, action, and stakes.
