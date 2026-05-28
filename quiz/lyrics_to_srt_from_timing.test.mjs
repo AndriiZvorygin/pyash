@@ -17,6 +17,126 @@ function parseSrtRows(text) {
   }).filter(Boolean);
 }
 
+function boundarySetFromSrt(text) {
+  const rows = parseSrtRows(text);
+  const set = new Set();
+  for (const row of rows) {
+    set.add(row.since.toFixed(3));
+    set.add(row.until.toFixed(3));
+  }
+  return set;
+}
+
+function assertRowsUseTimingBoundaries(rows, timingText) {
+  const boundaries = boundarySetFromSrt(timingText);
+  for (const row of rows) {
+    assert.ok(boundaries.has(row.since.toFixed(3)), `row start ${row.since.toFixed(3)} should be an ASR boundary`);
+    assert.ok(boundaries.has(row.until.toFixed(3)), `row end ${row.until.toFixed(3)} should be an ASR boundary`);
+  }
+}
+
+function alignmentReportPath(outputPath) {
+  return String(outputPath).replace(/(?:\.srt)?$/u, ".alignment-report.json");
+}
+
+test("lyrics_to_srt_from_timing uses exact ASR cue boundaries as timing authority", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-asr-boundaries.txt");
+  const timingPath = path.join(dir, "timing-asr-boundaries.srt");
+  const outputPath = path.join(dir, "lyrics-asr-boundaries.out.srt");
+
+  const lyrics = [
+    "Silver lanterns carry the melody beyond the quiet river tonight.",
+    "Morning answers softly while the faithful voices keep walking home."
+  ].join("\n");
+  const timing = [
+    "1",
+    "00:00:01,250 --> 00:00:04,750",
+    "silver lanterns carry the melody beyond the quiet river tonight",
+    "",
+    "2",
+    "00:00:07,125 --> 00:00:11,500",
+    "morning answers softly while the faithful voices keep walking home"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath]);
+
+  const rows = parseSrtRows(await fs.readFile(outputPath, "utf8"));
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => [row.since, row.until]), [[1.25, 4.75], [7.125, 11.5]]);
+  assertRowsUseTimingBoundaries(rows, timing);
+});
+
+test("lyrics_to_srt_from_timing covers ASR tail when lyrics are shorter", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-short-tail.txt");
+  const timingPath = path.join(dir, "timing-short-tail.srt");
+  const outputPath = path.join(dir, "lyrics-short-tail.out.srt");
+
+  const lyrics = "Stay bright";
+  const timing = [
+    "1",
+    "00:00:00,000 --> 00:00:02,000",
+    "stay bright under the amber evening sky",
+    "",
+    "2",
+    "00:00:02,500 --> 00:00:05,000",
+    "voices continue through the final ringing chorus",
+    "",
+    "3",
+    "00:00:05,500 --> 00:00:08,000",
+    "until the last note settles into silence"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows[rows.length - 1].until, 8);
+  assertRowsUseTimingBoundaries(rows, timing);
+  assert.doesNotMatch(outText, /voices continue|last note/iu);
+
+  const report = JSON.parse(await fs.readFile(alignmentReportPath(outputPath), "utf8"));
+  assert.equal(report.uncoveredTailSeconds, 0);
+  assert.ok(report.repeatedTailGroups > 0);
+});
+
+test("lyrics_to_srt_from_timing preserves lyric names when ASR misrecognizes them", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-andrii.txt");
+  const timingPath = path.join(dir, "timing-andrii.srt");
+  const outputPath = path.join(dir, "lyrics-andrii.out.srt");
+
+  const lyrics = "Andrii carries the candle through the chapel.";
+  const timing = [
+    "1",
+    "00:00:03,000 --> 00:00:06,500",
+    "Andre carries the candle through the chapel"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows[0].since, 3);
+  assert.equal(rows[0].until, 6.5);
+  assert.match(outText, /Andrii carries/u);
+  assert.doesNotMatch(outText, /Andre carries/u);
+  assertRowsUseTimingBoundaries(rows, timing);
+});
+
 test("lyrics_to_srt_from_timing keeps repeated chorus lines distributed across timeline", async () => {
   const dir = path.resolve("quiz/sandpit");
   await fs.mkdir(dir, { recursive: true });
@@ -62,7 +182,8 @@ test("lyrics_to_srt_from_timing keeps repeated chorus lines distributed across t
 
   const outText = await fs.readFile(outputPath, "utf8");
   const rows = parseSrtRows(outText);
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 5);
+  assertRowsUseTimingBoundaries(rows, timing);
   assert.ok(rows[0].since < 2, "first line should stay near start");
   assert.ok(rows[rows.length - 1].until > 34, "last line should stay near end");
 
@@ -73,7 +194,7 @@ test("lyrics_to_srt_from_timing keeps repeated chorus lines distributed across t
   assert.ok(tinyTailRows <= 3, "rows should not collapse to song tail window");
 });
 
-test("lyrics_to_srt_from_timing fails fast on obvious lyrics mismatch", async () => {
+test("lyrics_to_srt_from_timing preserves lyric text with ASR time on obvious mismatch", async () => {
   const dir = path.resolve("quiz/sandpit");
   await fs.mkdir(dir, { recursive: true });
   const lyricsPath = path.join(dir, "lyrics-mismatch.txt");
@@ -99,15 +220,20 @@ test("lyrics_to_srt_from_timing fails fast on obvious lyrics mismatch", async ()
   await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
   await fs.writeFile(timingPath, `${timing}\n`, "utf8");
 
-  process.env.PYA_SRT_ALLOW_MISMATCH_FALLBACK = "false";
-  try {
-    await assert.rejects(
-      () => runLyricsToSrt([lyricsPath, timingPath, outputPath]),
-      /lyrics mismatch/u
-    );
-  } finally {
-    delete process.env.PYA_SRT_ALLOW_MISMATCH_FALLBACK;
-  }
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath]);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows[0].since, 0);
+  assert.equal(rows[rows.length - 1].until, 6);
+  assertRowsUseTimingBoundaries(rows, timing);
+  assert.match(outText, /quantum pineapple zephyr/u);
+  assert.doesNotMatch(outText, /go forth|ride forth/iu);
+
+  const report = JSON.parse(await fs.readFile(alignmentReportPath(outputPath), "utf8"));
+  assert.equal(report.timingAuthority, "asr");
+  assert.equal(report.mismatchPolicy, "lyric_text_with_asr_time");
+  assert.equal(report.matchRatio, 0);
 });
 
 test("lyrics_to_srt_from_timing avoids chorus freeze from overly wide repeated-token matches", async () => {
@@ -168,9 +294,11 @@ test("lyrics_to_srt_from_timing avoids chorus freeze from overly wide repeated-t
 
   const outText = await fs.readFile(outputPath, "utf8");
   const rows = parseSrtRows(outText);
-  assert.equal(rows.length, 3);
+  assert.equal(rows.length, 4);
+  assertRowsUseTimingBoundaries(rows, timing);
   const firstDur = rows[0].until - rows[0].since;
   assert.ok(firstDur < 10, `first chorus line should not freeze, got ${firstDur.toFixed(3)}s`);
+  assert.equal(rows[rows.length - 1].until, 54.4);
 });
 
 test("lyrics_to_srt_from_timing keeps repeated dense chorus windows bounded", async () => {
@@ -232,10 +360,12 @@ test("lyrics_to_srt_from_timing keeps repeated dense chorus windows bounded", as
 
   const outText = await fs.readFile(outputPath, "utf8");
   const rows = parseSrtRows(outText);
-  assert.equal(rows.length, 8);
+  assert.equal(rows.length, 7);
+  assertRowsUseTimingBoundaries(rows, timing);
 
   const maxDuration = rows.reduce((max, row) => Math.max(max, row.until - row.since), 0);
   assert.ok(maxDuration <= 10, `dense chorus cue should stay bounded, got ${maxDuration.toFixed(3)}s`);
+  assert.equal(rows[rows.length - 1].until, 54.4);
 
   const chorusRows = rows.filter((row) => /polish the armor of light/i.test(row.text));
   assert.ok(chorusRows.length >= 3);
@@ -340,7 +470,8 @@ test("lyrics_to_srt_from_timing sentence-cues never overlap", async () => {
 
   const outText = await fs.readFile(outputPath, "utf8");
   const rows = parseSrtRows(outText);
-  assert.equal(rows.length, 5);
+  assert.equal(rows.length, 4);
+  assertRowsUseTimingBoundaries(rows, timing);
   for (let i = 1; i < rows.length; i += 1) {
     assert.ok(
       rows[i].since >= rows[i - 1].until,
@@ -379,7 +510,8 @@ test("lyrics_to_srt_from_timing sentence-cues tolerate late start from overlap c
 
   const outText = await fs.readFile(outputPath, "utf8");
   const rows = parseSrtRows(outText);
-  assert.equal(rows.length, 3);
+  assert.equal(rows.length, 2);
+  assertRowsUseTimingBoundaries(rows, timing);
   for (let i = 1; i < rows.length; i += 1) {
     assert.ok(rows[i].since >= rows[i - 1].until, "rows should stay non-overlapping");
   }

@@ -2,29 +2,21 @@
 import fs from "node:fs/promises";
 import { parseSrtToCuts } from "./itinerary_io.mjs";
 
-const MAX_GAP_TRIM_SECONDS = (() => {
-  const raw = Number(process.env.PYA_TIMING_MAX_GAP_TRIM_SECONDS || 0);
-  return Number.isFinite(raw) && raw > 0 ? raw : 0;
-})();
 const MAX_SENTENCE_WORDS = (() => {
   const raw = Number(process.env.PYA_SRT_MAX_SENTENCE_WORDS || 36);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 36;
 })();
-const MAX_DRIFT_SECONDS = (() => {
-  const raw = Number(process.env.PYA_SRT_MAX_DRIFT_SECONDS || 1.5);
-  return Number.isFinite(raw) && raw > 0 ? raw : 1.5;
+const MAX_ASR_GROUP_WORDS = (() => {
+  const raw = Number(process.env.PYA_SRT_MAX_ASR_GROUP_WORDS || 6);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 6;
 })();
-const MAX_NON_SENTENCE_DRIFT_SECONDS = (() => {
-  const raw = Number(process.env.PYA_SRT_MAX_NON_SENTENCE_DRIFT_SECONDS || 3);
-  return Number.isFinite(raw) && raw > 0 ? raw : 3;
+const MAX_ASR_GROUP_CHARS = (() => {
+  const raw = Number(process.env.PYA_SRT_MAX_ASR_GROUP_CHARS || 48);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 48;
 })();
-const STRICT_NON_SENTENCE_DRIFT = (() => {
-  const raw = String(process.env.PYA_SRT_STRICT_NON_SENTENCE_DRIFT || "").trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "truth" || raw === "yes";
-})();
-const MIN_CUE_SECONDS = (() => {
-  const raw = Number(process.env.PYA_SRT_MIN_CUE_SECONDS || 0.24);
-  return Number.isFinite(raw) && raw > 0 ? raw : 0.24;
+const TRAILING_SILENCE_TOLERANCE_SECONDS = (() => {
+  const raw = Number(process.env.PYA_SRT_TRAILING_SILENCE_TOLERANCE_SECONDS || 2);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 2;
 })();
 
 function usage() {
@@ -396,564 +388,211 @@ function wordsRoughlyMatch(aRaw, bRaw) {
   return false;
 }
 
-function buildTimingTokens(cuts = []) {
-  const tokens = [];
-  for (const cut of cuts) {
-    const since = Number(cut?.since ?? 0);
-    const until = Number(cut?.until ?? since);
-    const words = String(cut?.obText ?? "").split(/\s+/u).filter(Boolean);
-    for (const word of words) {
-      tokens.push({
-        word,
-        normalized: normalizeWord(word),
-        since,
-        until
-      });
-    }
-  }
-  return tokens.filter((token) => token.normalized);
-}
-
-function sanitizeTimingCuts(rawCuts, { sentenceCues = false } = {}) {
+function sanitizeAsrTimingCuts(rawCuts) {
   const source = Array.isArray(rawCuts) ? rawCuts : [];
-  const cuts = source
+  return source
     .map((cut) => ({
       since: Number(cut?.since ?? 0),
       until: Number(cut?.until ?? Number(cut?.since ?? 0)),
-      obText: String(cut?.obText ?? "")
+      obText: String(cut?.obText ?? "").replace(/\s+/gu, " ").trim()
     }))
-    .filter((cut) => Number.isFinite(cut.since) && Number.isFinite(cut.until))
+    .filter((cut) => cut.obText && Number.isFinite(cut.since) && Number.isFinite(cut.until) && cut.until > cut.since)
     .sort((a, b) => a.since - b.since || a.until - b.until);
-  if (!cuts.length) return [];
-  const out = [];
-  if (sentenceCues) {
-    for (const cut of cuts) {
-      const since = Math.max(0, cut.since);
-      const until = Math.max(since + 0.001, Number(cut.until));
-      out.push({ since, until, obText: cut.obText });
-    }
-    return out;
-  }
-  let prevEnd = 0;
-  for (const cut of cuts) {
-    const rawSince = Math.max(0, cut.since);
-    const rawUntil = Math.max(rawSince + 0.04, Number(cut.until));
-    // Keep canonical source timeline anchors.
-    // If chunk overlap produced overlapping cues, trim only the overlapped head
-    // while preserving the original absolute end timestamp.
-    let since = rawSince;
-    let until = rawUntil;
-    if (since < prevEnd) {
-      since = prevEnd;
-      if (until <= since + 0.001) continue;
-    }
-    // Optional gap trim remains conservative and never stretches cue duration.
-    if (MAX_GAP_TRIM_SECONDS > 0 && out.length > 0) {
-      const maxGap = Math.max(0, MAX_GAP_TRIM_SECONDS);
-      const gap = Math.max(0, since - prevEnd);
-      if (gap > maxGap) {
-        const shift = gap - maxGap;
-        since -= shift;
-        until -= shift;
-      }
-    }
-    if (until <= since + 0.001) continue;
-    out.push({ since, until, obText: cut.obText });
-    prevEnd = until;
-  }
-  return out;
 }
 
-function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false, timingWordHints = null } = {}) {
+function buildAsrCueGroups(timingCuts, {
+  maxWords = MAX_ASR_GROUP_WORDS,
+  maxChars = MAX_ASR_GROUP_CHARS
+} = {}) {
+  const cuts = sanitizeAsrTimingCuts(timingCuts);
+  const groups = [];
+  let active = null;
+
+  function finish() {
+    if (!active) return;
+    active.until = Number(active.cues[active.cues.length - 1]?.until ?? active.until);
+    active.asrText = active.cues.map((cue) => cue.obText).join(" ").replace(/\s+/gu, " ").trim();
+    active.words = Math.max(1, countWords(active.asrText));
+    active.chars = active.asrText.length;
+    groups.push(active);
+    active = null;
+  }
+
+  for (let cueIndex = 0; cueIndex < cuts.length; cueIndex += 1) {
+    const cue = cuts[cueIndex];
+    const cueWords = Math.max(1, countWords(cue.obText));
+    const cueChars = String(cue.obText || "").length;
+    if (!active) {
+      active = {
+        cueStartIndex: cueIndex,
+        cueEndIndex: cueIndex,
+        since: cue.since,
+        until: cue.until,
+        cues: [cue],
+        words: cueWords,
+        chars: cueChars
+      };
+      continue;
+    }
+
+    const overlapsActive = cue.since < active.until;
+    const combinedWords = active.words + cueWords;
+    const combinedChars = active.chars + 1 + cueChars;
+    if (!overlapsActive && (combinedWords > maxWords || combinedChars > maxChars)) {
+      finish();
+      active = {
+        cueStartIndex: cueIndex,
+        cueEndIndex: cueIndex,
+        since: cue.since,
+        until: cue.until,
+        cues: [cue],
+        words: cueWords,
+        chars: cueChars
+      };
+      continue;
+    }
+
+    active.cues.push(cue);
+    active.cueEndIndex = cueIndex;
+    active.until = cue.until;
+    active.words = combinedWords;
+    active.chars = combinedChars;
+  }
+  finish();
+  return groups;
+}
+
+function splitDisplayTextForGroups(lyricsCuts, groups) {
+  const lines = Array.isArray(lyricsCuts) ? lyricsCuts.map((line) => String(line || "").trim()).filter(Boolean) : [];
+  const words = lines.join(" ").split(/\s+/u).map((word) => word.trim()).filter(Boolean);
+  const fallbackText = lines[lines.length - 1] || "";
+  const totalGroups = Math.max(1, Array.isArray(groups) ? groups.length : 0);
+  const totalAsrWords = Math.max(1, groups.reduce((sum, group) => sum + Math.max(1, Number(group?.words || 0)), 0));
+  const out = [];
+  let cursor = 0;
+  let repeatedTailGroups = 0;
+
+  for (let i = 0; i < totalGroups; i += 1) {
+    const groupsLeft = totalGroups - i;
+    const wordsLeft = words.length - cursor;
+    if (wordsLeft <= 0) {
+      out.push(fallbackText);
+      repeatedTailGroups += 1;
+      continue;
+    }
+    const minReserve = Math.max(0, groupsLeft - 1);
+    const weightedWords = Math.round((Math.max(1, Number(groups[i]?.words || 1)) / totalAsrWords) * words.length);
+    const take = Math.max(1, Math.min(wordsLeft - minReserve, weightedWords || 1));
+    out.push(words.slice(cursor, cursor + take).join(" ").trim());
+    cursor += take;
+  }
+
+  if (cursor < words.length && out.length) {
+    out[out.length - 1] = `${out[out.length - 1]} ${words.slice(cursor).join(" ")}`.replace(/\s+/gu, " ").trim();
+  }
+  return { texts: out, repeatedTailGroups };
+}
+
+function alignmentScore(lyricsCuts, timingCuts) {
+  const lyricWords = splitNormalizedWords(lyricsCuts.join(" "));
+  const asrWords = splitNormalizedWords(timingCuts.map((cut) => cut.obText).join(" "));
+  if (!lyricWords.length || !asrWords.length) return { matched: 0, lyricWords: lyricWords.length, asrWords: asrWords.length, ratio: 0 };
+  let cursor = 0;
+  let matched = 0;
+  for (const lyricWord of lyricWords) {
+    for (let i = cursor; i < asrWords.length; i += 1) {
+      if (wordsRoughlyMatch(lyricWord, asrWords[i])) {
+        matched += 1;
+        cursor = i + 1;
+        break;
+      }
+    }
+  }
+  return {
+    matched,
+    lyricWords: lyricWords.length,
+    asrWords: asrWords.length,
+    ratio: matched / Math.max(1, lyricWords.length)
+  };
+}
+
+function validateAsrAnchoredRows(rows, groups, timingCuts) {
+  const errors = [];
+  if (!rows.length || !groups.length || !timingCuts.length) return errors;
+  const firstAsr = Number(timingCuts[0].since);
+  const lastAsr = Number(timingCuts[timingCuts.length - 1].until);
+  const boundarySet = new Set();
+  for (const cut of timingCuts) {
+    boundarySet.add(Number(cut.since).toFixed(3));
+    boundarySet.add(Number(cut.until).toFixed(3));
+  }
+
+  for (const row of rows) {
+    if (Number(row.since) < firstAsr - 0.001) errors.push(`row ${row.index} starts before ASR timeline`);
+    if (Number(row.until) > lastAsr + TRAILING_SILENCE_TOLERANCE_SECONDS + 0.001) errors.push(`row ${row.index} ends after ASR timeline`);
+    if (!boundarySet.has(Number(row.since).toFixed(3))) errors.push(`row ${row.index} start is not an ASR cue boundary`);
+    if (!boundarySet.has(Number(row.until).toFixed(3))) errors.push(`row ${row.index} end is not an ASR cue boundary`);
+  }
+
+  const tailGap = Math.max(0, lastAsr - Number(rows[rows.length - 1].until));
+  if (tailGap > TRAILING_SILENCE_TOLERANCE_SECONDS) errors.push(`subtitle tail gap ${tailGap.toFixed(3)}s exceeds tolerance`);
+  return errors;
+}
+
+function buildTimingRows(lyricsCuts, timingCuts) {
   const lines = Array.isArray(lyricsCuts) ? lyricsCuts : [];
-  const cuts = sanitizeTimingCuts(timingCuts, { sentenceCues });
+  const cuts = sanitizeAsrTimingCuts(timingCuts);
   if (!lines.length) throw new Error("lyrics to srt defective: no lyric lines");
   if (!cuts.length) throw new Error("lyrics to srt defective: no timing cuts");
 
-  const totalTimingWords = Math.max(1, cuts.reduce((sum, cut) => sum + Math.max(1, countWords(cut?.obText)), 0));
-  const totalLyricWords = Math.max(1, lines.reduce((sum, line) => sum + Math.max(1, countWords(line)), 0));
+  const groups = buildAsrCueGroups(cuts);
+  if (!groups.length) throw new Error("lyrics to srt defective: no ASR cue groups");
 
-  const cueWordPositions = [];
-  let runningTimingWords = 0;
-  for (const cut of cuts) {
-    const words = Math.max(1, countWords(cut?.obText));
-    const since = Number(cut?.since ?? 0);
-    const until = Number(cut?.until ?? since);
-    cueWordPositions.push({ since, until, startWord: runningTimingWords, endWord: runningTimingWords + words });
-    runningTimingWords += words;
-  }
-
-  function wordToTime(wordPos) {
-    const clamped = Math.max(0, Math.min(totalTimingWords, wordPos));
-    for (const cue of cueWordPositions) {
-      if (clamped <= cue.endWord) {
-        const spanWords = Math.max(1, cue.endWord - cue.startWord);
-        const p = Math.max(0, Math.min(1, (clamped - cue.startWord) / spanWords));
-        return cue.since + ((cue.until - cue.since) * p);
-      }
-    }
-    return cueWordPositions[cueWordPositions.length - 1].until;
+  const { texts, repeatedTailGroups } = splitDisplayTextForGroups(lines, groups);
+  const rows = groups.map((group, i) => ({
+    index: i + 1,
+    since: Number(group.since),
+    until: Number(group.until),
+    text: texts[i] || texts[texts.length - 1] || lines[lines.length - 1] || "",
+    cueStartIndex: group.cueStartIndex,
+    cueEndIndex: group.cueEndIndex
+  }));
+  const score = alignmentScore(lines, cuts);
+  const validationErrors = validateAsrAnchoredRows(rows, groups, cuts);
+  if (validationErrors.length) {
+    throw new Error(`lyrics to srt defective: ${validationErrors.join("; ")}`);
   }
 
-  let rows = [];
-  const tokens = buildTimingTokens(cuts);
-  const tokenAt = (idx) => tokens[Math.max(0, Math.min(tokens.length - 1, Number(idx) || 0))] || null;
-  const totalLineCount = lines.length;
-  const SENTENCE_MIN_PHRASE_SCORE = (() => {
-    const raw = Number(process.env.PYA_SRT_SENTENCE_MIN_PHRASE_SCORE || 0.34);
-    return Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : 0.34;
-  })();
-  let unmatchedSentenceLines = 0;
-  let exhaustedTokenLines = 0;
-  let tokenCursor = 0;
-  let runningLyricWords = 0;
-  let acceptedMatchLines = 0;
-  const avgTimingWordsPerLine = Math.max(1, Math.floor(totalTimingWords / Math.max(1, lines.length)));
-  const maxIndexDrift = Math.max(24, avgTimingWordsPerLine * 4);
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    const words = Math.max(1, countWords(line));
-    const tokenExhausted = sentenceCues && tokenCursor >= tokens.length;
-    if (tokenExhausted) exhaustedTokenLines += 1;
-    const startTimingWord = sentenceCues
-      ? Math.max(0, Math.min(totalTimingWords, tokenCursor))
-      : (runningLyricWords / totalLyricWords) * totalTimingWords;
-    runningLyricWords += words;
-    const endTimingWord = sentenceCues
-      ? Math.max(startTimingWord + 1, Math.min(totalTimingWords, startTimingWord + words))
-      : (i === lines.length - 1
-        ? totalTimingWords
-        : (runningLyricWords / totalLyricWords) * totalTimingWords);
-    let since = wordToTime(startTimingWord);
-    let until = Math.max(since + 0.06, wordToTime(endTimingWord));
-    let matchedSince = null;
-    let matchedUntil = null;
-    const expectedTokenIndex = sentenceCues
-      ? Math.max(0, Math.min(tokens.length - 1, tokenCursor))
-      : Math.max(0, Math.min(tokens.length - 1, Math.floor(startTimingWord)));
-    const lineWords = splitNormalizedWords(line);
-    if (sentenceCues && tokens.length && !tokenExhausted) {
-      const cursorStart = Math.max(0, Math.min(tokens.length - 1, tokenCursor));
-      let chosenFirst = cursorStart;
-      const here = tokens[chosenFirst]?.normalized || "";
-      const prevNorm = tokens[Math.max(0, chosenFirst - 1)]?.normalized || "";
-      const nextNorm = tokens[Math.min(tokens.length - 1, chosenFirst + 1)]?.normalized || "";
-      const firstWord = lineWords[0] || "";
-      if (firstWord) {
-        const hereOk = wordsRoughlyMatch(firstWord, here);
-        const prevOk = wordsRoughlyMatch(firstWord, prevNorm);
-        const nextOk = wordsRoughlyMatch(firstWord, nextNorm);
-        if (!hereOk && prevOk) chosenFirst = Math.max(0, chosenFirst - 1);
-        else if (!hereOk && nextOk) chosenFirst = Math.min(tokens.length - 1, chosenFirst + 1);
-      }
-      const scoreLen = Math.min(6, Math.max(1, lineWords.length), Math.max(1, tokens.length - chosenFirst));
-      let matched = 0;
-      for (let wi = 0; wi < scoreLen; wi += 1) {
-        const lw = lineWords[wi] || "";
-        if (lw && wordsRoughlyMatch(lw, tokens[chosenFirst + wi].normalized)) matched += 1;
-      }
-      const bestScore = scoreLen > 0 ? (matched / scoreLen) : 1;
-      const minScore = lineWords.length <= 3
-        ? 0.0
-        : lineWords.length <= 6
-          ? 0.34
-          : SENTENCE_MIN_PHRASE_SCORE;
-      if (bestScore < minScore) unmatchedSentenceLines += 1;
-      // Advance and bound end by actual matched token progression only.
-      // Do not derive end from normalized sentence word count.
-      const hintWords = Array.isArray(timingWordHints)
-        ? Math.max(1, Number(timingWordHints[i] || 0))
-        : 0;
-      let chosenLast = hintWords > 0
-        ? Math.max(chosenFirst, Math.min(tokens.length - 1, chosenFirst + hintWords - 1))
-        : chosenFirst;
-      if (lineWords.length > 0) {
-        let probe = chosenFirst;
-        let seenMatch = false;
-        for (const lw of lineWords) {
-          if (!lw) continue;
-          const end = Math.min(tokens.length, probe + 4);
-          let found = -1;
-          for (let j = probe; j < end; j += 1) {
-            if (wordsRoughlyMatch(lw, tokens[j].normalized)) {
-              found = j;
-              break;
-            }
-          }
-          if (found >= 0) {
-            chosenLast = Math.max(chosenLast, found);
-            probe = found + 1;
-            seenMatch = true;
-          }
-        }
-        if (!seenMatch && hintWords <= 0) chosenLast = chosenFirst;
-      }
-      if (chosenFirst >= tokens.length || chosenLast >= tokens.length) {
-        throw new Error(
-          `lyrics to srt defective: sentence token anchor out of range line=${i + 1}/${totalLineCount} first=${chosenFirst} last=${chosenLast} tokens=${tokens.length}`
-        );
-      }
-      const firstTok = tokenAt(chosenFirst);
-      const lastTok = tokenAt(chosenLast);
-      if (!firstTok || !lastTok) {
-        throw new Error(
-          `lyrics to srt defective: missing token anchors line=${i + 1}/${totalLineCount} first=${chosenFirst} last=${chosenLast}`
-        );
-      }
-      const anchorSince = Math.max(0, Number(firstTok.since ?? since));
-      const anchorUntil = Math.max(anchorSince + 0.001, Number(lastTok.until ?? until));
-      since = anchorSince;
-      until = anchorUntil;
-      matchedSince = since;
-      matchedUntil = until;
-      acceptedMatchLines += 1;
-      if (since > anchorSince + 1e-6) {
-        throw new Error(
-          `lyrics to srt defective: sentence starts after first timing word line=${i + 1}/${totalLineCount}`
-        );
-      }
-      if (until > anchorUntil + 1e-6) {
-        throw new Error(
-          `lyrics to srt defective: sentence ends after last timing word line=${i + 1}/${totalLineCount}`
-        );
-      }
-      tokenCursor = Math.max(tokenCursor + 1, chosenLast + 1);
-    } else if (sentenceCues && tokenExhausted) {
-      // Degrade gracefully when timing tokens run out near tail:
-      // keep timeline continuity using proportional word timing instead of hard-failing.
-      const fallbackSince = wordToTime(startTimingWord);
-      const fallbackUntil = Math.max(fallbackSince + 0.08, wordToTime(endTimingWord));
-      since = fallbackSince;
-      until = fallbackUntil;
-    } else if (lineWords.length && tokens.length) {
-      let firstIdx = -1;
-      let lastIdx = -1;
-      let searchFrom = sentenceCues
-        ? Math.max(0, tokenCursor - 8)
-        : Math.max(tokenCursor, expectedTokenIndex - 80);
-      for (const lyricWord of lineWords) {
-        let found = -1;
-        const maxScan = sentenceCues
-          ? Math.min(tokens.length, tokenCursor + Math.max(120, lineWords.length * 12))
-          : Math.min(tokens.length, expectedTokenIndex + 140);
-        for (let j = searchFrom; j < maxScan; j += 1) {
-          if (wordsRoughlyMatch(lyricWord, tokens[j].normalized)) {
-            found = j;
-            break;
-          }
-        }
-        if (found >= 0) {
-          if (firstIdx < 0) firstIdx = found;
-          lastIdx = found;
-          searchFrom = found + 1;
-        }
-      }
-      if (firstIdx >= 0 && lastIdx >= firstIdx) {
-        const candidateSince = Number(tokens[firstIdx].since ?? since);
-        const candidateUntil = Math.max(candidateSince + 0.06, Number(tokens[lastIdx].until ?? until));
-        const matchedSpan = candidateUntil - candidateSince;
-        const fallbackSpan = Math.max(0.06, until - since);
-        const indexDrift = Math.abs(firstIdx - expectedTokenIndex);
-        const matchedTokenSpan = (lastIdx - firstIdx) + 1;
-        const maxLineTokenSpan = Math.max(24, lineWords.length * 6);
-        const looksOutlier = matchedSpan > Math.max(12, fallbackSpan * 3.5);
-        const looksTooFar = indexDrift > (sentenceCues ? Math.max(64, lineWords.length * 8) : maxIndexDrift);
-        const looksTokenWide = matchedTokenSpan > maxLineTokenSpan;
-        const looksCompressed = matchedSpan < Math.max(0.12, Math.min(2.5, fallbackSpan * 0.20));
-        const timeDrift = Math.abs(candidateSince - since);
-        const looksTimeDrifted = timeDrift > (sentenceCues
-          ? Math.max(4, fallbackSpan * 1.5)
-          : Math.max(MAX_NON_SENTENCE_DRIFT_SECONDS, fallbackSpan * 1.15));
-        if (!looksOutlier && !looksTooFar && !looksTokenWide && !looksCompressed && !looksTimeDrifted) {
-          since = candidateSince;
-          until = candidateUntil;
-          matchedSince = since;
-          matchedUntil = until;
-          tokenCursor = Math.max(tokenCursor, lastIdx + 1);
-          acceptedMatchLines += 1;
-        }
-      }
-    }
-    // sentenceCues cursor progression is strictly controlled by matched token indices.
-    rows.push({
-      index: i + 1,
-      since,
-      until,
-      text: line,
-      matchedSince: Number.isFinite(matchedSince) ? matchedSince : null,
-      matchedUntil: Number.isFinite(matchedUntil) ? matchedUntil : null,
-    });
-  }
-  if (!sentenceCues) {
-    for (const row of rows) {
-      const wordCount = Math.max(1, countWords(row.text));
-      const duration = Math.max(0, Number(row.until) - Number(row.since));
-      const minLineDuration = wordCount <= 3 ? 0.6 : Math.min(2.4, 0.28 * wordCount);
-      const maxLineDuration = Math.max(4.5, Math.min(9.5, 1.25 * wordCount));
-      if (duration < minLineDuration) {
-        row.until = Number(row.since) + minLineDuration;
-        continue;
-      }
-      if (duration > maxLineDuration) {
-        row.until = Number(row.since) + maxLineDuration;
-      }
-    }
-  }
-  const timelineStart = Number(cueWordPositions[0]?.since ?? 0);
-  const timelineEnd = Number(cueWordPositions[cueWordPositions.length - 1]?.until ?? timelineStart);
-  const minLineSeconds = sentenceCues ? 0.001 : 0.10;
-
-  let prevEnd = timelineStart;
-  if (sentenceCues) {
-    const stabilized = [];
-    let cursor = timelineStart;
-    for (const row of rows) {
-      const rawSince = Math.max(timelineStart, Number(row.since ?? 0));
-      const rawUntil = Math.max(rawSince + minLineSeconds, Number(row.until ?? rawSince + minLineSeconds));
-      const since = Math.max(cursor, rawSince);
-      const until = Math.max(since + minLineSeconds, rawUntil);
-      if (!Number.isFinite(since) || !Number.isFinite(until)) continue;
-      stabilized.push({ ...row, since, until });
-      cursor = until;
-    }
-    rows = stabilized;
-  } else {
-    for (const row of rows) {
-      row.since = Math.max(prevEnd, Number(row.since ?? 0));
-      row.until = Math.max(row.since + minLineSeconds, Number(row.until ?? row.since + minLineSeconds));
-      prevEnd = row.until;
-    }
-  }
-  if (!sentenceCues && rows.length && Math.abs(prevEnd - timelineEnd) > 0.25) {
-    const currentSpan = Math.max(0.01, prevEnd - timelineStart);
-    const targetSpan = Math.max(0.01, timelineEnd - timelineStart);
-    const scale = targetSpan / currentSpan;
-    let cursor = timelineStart;
-    for (const row of rows) {
-      const scaledSince = timelineStart + ((row.since - timelineStart) * scale);
-      const scaledUntil = timelineStart + ((row.until - timelineStart) * scale);
-      const scaledMin = sentenceCues
-        ? Math.min(0.8, Math.max(0.08, 0.06 * Math.max(1, countWords(row.text))))
-        : Math.min(1.8, Math.max(0.22, 0.18 * Math.max(1, countWords(row.text))));
-      row.since = Math.max(cursor, scaledSince);
-      row.until = Math.max(row.since + scaledMin, scaledUntil);
-      cursor = row.until;
-    }
-    rows[rows.length - 1].until = timelineEnd;
-  }
-
-  // Final stabilization pass: ensure post-scale rows remain readable in karaoke mode.
-  if (!sentenceCues) {
-    let stabilizeCursor = timelineStart;
-    for (const row of rows) {
-      const words = Math.max(1, countWords(row.text));
-      const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
-      row.since = Math.max(stabilizeCursor, Number(row.since ?? 0));
-      row.until = Math.max(row.since + minReadable, Number(row.until ?? row.since + minReadable));
-      stabilizeCursor = row.until;
-    }
-    if (rows.length && stabilizeCursor > timelineEnd) {
-      const overflow = stabilizeCursor - timelineEnd;
-      const adjustable = rows.map((row) => {
-        const words = Math.max(1, countWords(row.text));
-        const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
-        const duration = Math.max(0, Number(row.until) - Number(row.since));
-        return Math.max(0, duration - minReadable);
-      });
-      const totalAdjustable = adjustable.reduce((sum, value) => sum + value, 0);
-      if (totalAdjustable > 0) {
-        const shrinkRatio = Math.min(1, overflow / totalAdjustable);
-        let cursor = timelineStart;
-        for (let i = 0; i < rows.length; i += 1) {
-          const row = rows[i];
-          const words = Math.max(1, countWords(row.text));
-          const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
-          const duration = Math.max(0, Number(row.until) - Number(row.since));
-          const shrink = adjustable[i] * shrinkRatio;
-          const nextDuration = Math.max(minReadable, duration - shrink);
-          row.since = Math.max(cursor, Number(row.since));
-          row.until = row.since + nextDuration;
-          cursor = row.until;
-        }
-      }
-      if (rows.length) {
-        rows[rows.length - 1].until = timelineEnd;
-      }
-    }
-  }
-
-  const driftRows = Array.isArray(rows) ? rows : [];
-  let maxDrift = 0;
-  let driftCount = 0;
-  let worst = null;
-  for (const row of driftRows) {
-    const ms = row?.matchedSince;
-    const mu = row?.matchedUntil;
-    if (!Number.isFinite(ms) || !Number.isFinite(mu)) continue;
-    const dSince = sentenceCues
-      ? Math.max(0, ms - Number(row.since))
-      : Math.abs(Number(row.since) - ms);
-    const dUntil = Math.abs(Number(row.until) - mu);
-    maxDrift = Math.max(maxDrift, dSince, dUntil);
-    if (!worst || Math.max(dSince, dUntil) > worst.max) {
-      worst = {
-        max: Math.max(dSince, dUntil),
-        since: Number(row.since),
-        until: Number(row.until),
-        matchedSince: ms,
-        matchedUntil: mu,
-        text: String(row?.text || "").slice(0, 120),
-      };
-    }
-    driftCount += 1;
-  }
-  if (sentenceCues && driftCount > 0 && maxDrift > MAX_DRIFT_SECONDS) {
-    throw new Error(
-      `lyrics to srt defective: timing drift max=${maxDrift.toFixed(3)}s threshold=${MAX_DRIFT_SECONDS.toFixed(3)}s matched=${driftCount}` +
-      (worst
-        ? ` worst_since=${worst.since.toFixed(3)} worst_until=${worst.until.toFixed(3)} matched_since=${worst.matchedSince.toFixed(3)} matched_until=${worst.matchedUntil.toFixed(3)} text="${worst.text}"`
-        : "")
-    );
-  }
-  if (!sentenceCues && STRICT_NON_SENTENCE_DRIFT && driftCount > 0 && maxDrift > MAX_NON_SENTENCE_DRIFT_SECONDS) {
-    throw new Error(
-      `lyrics to srt defective: non-sentence timing drift max=${maxDrift.toFixed(3)}s threshold=${MAX_NON_SENTENCE_DRIFT_SECONDS.toFixed(3)}s matched=${driftCount}` +
-      (worst
-        ? ` worst_since=${worst.since.toFixed(3)} worst_until=${worst.until.toFixed(3)} matched_since=${worst.matchedSince.toFixed(3)} matched_until=${worst.matchedUntil.toFixed(3)} text="${worst.text}"`
-        : "")
-    );
-  }
-
-  const collapsedRows = mergeShortAdjacentRows(collapseDuplicateMicroCues(rows));
-  if (sentenceCues) {
-    const maxUnmatchedRatio = (() => {
-      const raw = Number(process.env.PYA_SRT_MAX_UNMATCHED_SENTENCE_RATIO || -1);
-      return Number.isFinite(raw) ? raw : -1;
-    })();
-    if (totalLineCount > 0) {
-      const unmatchedRatio = unmatchedSentenceLines / totalLineCount;
-      if (maxUnmatchedRatio >= 0 && unmatchedRatio > maxUnmatchedRatio) {
-        throw new Error(
-          `lyrics to srt defective: sentence matching weak unmatched=${unmatchedSentenceLines}/${totalLineCount} ratio=${unmatchedRatio.toFixed(3)} max=${maxUnmatchedRatio.toFixed(3)}`
-        );
-      }
-    }
-  }
-  if (sentenceCues && exhaustedTokenLines > 0) {
-    process.stderr.write(
-      `[lyrics-to-srt] warn token exhaustion handled with fallback timing: lines=${exhaustedTokenLines}/${totalLineCount} token_cursor=${tokenCursor} tokens=${tokens.length}\n`
-    );
-  }
   return {
-    rows: collapsedRows,
+    rows,
     stats: {
       lines: lines.length,
-      acceptedMatchLines,
-      maxDriftSeconds: maxDrift,
-      matchedForDrift: driftCount,
+      asrCues: cuts.length,
+      asrGroups: groups.length,
+      acceptedMatchLines: score.matched,
+      lyricWords: score.lyricWords,
+      asrWords: score.asrWords,
+      matchRatio: score.ratio,
+      repeatedTailGroups,
+      firstAsrSeconds: Number(cuts[0].since),
+      lastAsrSeconds: Number(cuts[cuts.length - 1].until),
+      firstSubtitleSeconds: Number(rows[0].since),
+      lastSubtitleSeconds: Number(rows[rows.length - 1].until),
+      uncoveredTailSeconds: Math.max(0, Number(cuts[cuts.length - 1].until) - Number(rows[rows.length - 1].until)),
+      maxUncoveredGapSeconds: rows.reduce((max, row, i) => {
+        if (i === 0) return max;
+        return Math.max(max, Math.max(0, Number(row.since) - Number(rows[i - 1].until)));
+      }, 0),
+      boundaryPolicy: "asr_cue_boundaries_only",
+      mismatchPolicy: "lyric_text_with_asr_time"
     }
   };
 }
 
-function collapseDuplicateMicroCues(rows = []) {
-  const input = Array.isArray(rows) ? rows : [];
-  if (input.length <= 1) return input;
-  const out = [];
-  const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/gu, " ").trim();
-  for (const row of input) {
-    const prev = out[out.length - 1];
-    if (!prev) {
-      out.push({ ...row });
-      continue;
-    }
-    const prevText = norm(prev.text);
-    const curText = norm(row.text);
-    const prevWords = countWords(prev.text);
-    const curWords = countWords(row.text);
-    const contiguous = Math.abs(Number(row.since) - Number(prev.until)) <= 1.2;
-    const tiny = prevWords <= 4 && curWords <= 4;
-    if (tiny && contiguous && prevText && prevText === curText) {
-      prev.until = Math.max(Number(prev.until), Number(row.until));
-      if (Number.isFinite(prev.matchedSince) && Number.isFinite(row.matchedSince)) {
-        prev.matchedSince = Math.min(Number(prev.matchedSince), Number(row.matchedSince));
-      }
-      if (Number.isFinite(prev.matchedUntil) && Number.isFinite(row.matchedUntil)) {
-        prev.matchedUntil = Math.max(Number(prev.matchedUntil), Number(row.matchedUntil));
-      }
-      continue;
-    }
-    out.push({ ...row });
-  }
-  for (let i = 0; i < out.length; i += 1) out[i].index = i + 1;
-  return out;
-}
-
-function buildTailRowsFromTimingCuts({
-  timingCuts = [],
-  afterSeconds = 0,
-  startIndex = 1
-} = {}) {
-  const source = Array.isArray(timingCuts) ? timingCuts : [];
-  const rows = [];
-  let index = Number(startIndex) || 1;
-  for (const cut of source) {
-    const since = Number(cut?.since ?? 0);
-    const until = Number(cut?.until ?? since);
-    const text = String(cut?.obText ?? "").trim();
-    if (!text) continue;
-    if (until <= Number(afterSeconds)) continue;
-    rows.push({
-      index,
-      since,
-      until: Math.max(since + 0.001, until),
-      text
-    });
-    index += 1;
-  }
-  return rows;
-}
-
-function mergeShortAdjacentRows(rows = [], { minSeconds = MIN_CUE_SECONDS } = {}) {
-  const input = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
-  if (input.length <= 1) return input;
-  const out = [];
-  for (let i = 0; i < input.length; i += 1) {
-    const cur = input[i];
-    const since = Number(cur?.since ?? 0);
-    const until = Number(cur?.until ?? since);
-    const duration = Math.max(0, until - since);
-    const text = String(cur?.text ?? "").trim();
-    if (!text) continue;
-    if (duration >= minSeconds) {
-      out.push(cur);
-      continue;
-    }
-    const next = input[i + 1];
-    if (next) {
-      next.text = `${text} ${String(next.text ?? "").trim()}`.replace(/\s+/gu, " ").trim();
-      next.since = Math.min(Number(next.since ?? since), since);
-      next.matchedSince = Number.isFinite(cur?.matchedSince)
-        ? Math.min(Number(next.matchedSince ?? cur.matchedSince), Number(cur.matchedSince))
-        : next.matchedSince;
-      continue;
-    }
-    const prev = out[out.length - 1];
-    if (prev) {
-      prev.text = `${String(prev.text ?? "").trim()} ${text}`.replace(/\s+/gu, " ").trim();
-      prev.until = Math.max(Number(prev.until ?? since), until);
-      prev.matchedUntil = Number.isFinite(cur?.matchedUntil)
-        ? Math.max(Number(prev.matchedUntil ?? cur.matchedUntil), Number(cur.matchedUntil))
-        : prev.matchedUntil;
-      continue;
-    }
-    out.push(cur);
-  }
-  for (let i = 0; i < out.length; i += 1) {
-    out[i].index = i + 1;
-    out[i].since = Number(out[i].since ?? 0);
-    out[i].until = Math.max(out[i].since + 0.06, Number(out[i].until ?? out[i].since + 0.06));
-  }
-  return out;
+function deriveAlignmentReportPath(outputPath) {
+  const text = String(outputPath || "").trim();
+  if (!text) return "captions.alignment-report.json";
+  return text.replace(/(?:\.srt)?$/iu, ".alignment-report.json");
 }
 
 async function main() {
@@ -1022,48 +661,8 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
   }
   const timingCuts = parseSrtToCuts(timingText);
   const aligned = buildTimingRows(lyricCuts, timingCuts, { sentenceCues, timingWordHints });
-  let finalRows = aligned.rows;
-  const stats = aligned.stats ?? {
-    lines: finalRows.length,
-    acceptedMatchLines: sentenceCues ? finalRows.length : 0
-  };
-  const lineCount = Number(stats.lines || 0);
-  const ratioRaw = sentenceCues
-    ? Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO_SENTENCE || 0.65)
-    : Number(process.env.PYA_SRT_MIN_ACCEPT_RATIO || 0.35);
-  const ratio = Number.isFinite(ratioRaw) && ratioRaw > 0 && ratioRaw <= 1 ? ratioRaw : (sentenceCues ? 0.01 : 0.35);
-  const allowMismatchFallbackRaw = String(process.env.PYA_SRT_ALLOW_MISMATCH_FALLBACK || "true").trim().toLowerCase();
-  const allowMismatchFallback = allowMismatchFallbackRaw !== "false" && allowMismatchFallbackRaw !== "0" && allowMismatchFallbackRaw !== "no";
-  const minAccepted = lineCount <= 4
-    ? 1
-    : Math.max(2, Math.ceil(lineCount * ratio));
-  if (Number(stats.acceptedMatchLines || 0) < minAccepted) {
-    if (!allowMismatchFallback) {
-      throw new Error(
-        `lyrics to srt defective: lyrics mismatch accepted=${Number(stats.acceptedMatchLines || 0)} min=${minAccepted} lines=${Number(stats.lines || 0)}`
-      );
-    }
-  }
-
-  // If lyric alignment ends early, append raw ASR tail cues verbatim.
-  // This keeps strict timestamp/text alignment to the ASR stream (no regrouping).
-  const timelineEnd = Math.max(
-    0,
-    ...timingCuts.map((cut) => Number(cut?.until ?? 0)).filter((x) => Number.isFinite(x))
-  );
-  const finalEnd = finalRows.length ? Number(finalRows[finalRows.length - 1]?.until ?? 0) : 0;
-  const tailGapSeconds = Math.max(0, timelineEnd - finalEnd);
-  const maxTailGapBeforeAppend = Number(process.env.PYA_SRT_MAX_TAIL_GAP_SECONDS || 2.0);
-  if (Number.isFinite(timelineEnd) && tailGapSeconds > maxTailGapBeforeAppend) {
-    const tailRows = buildTailRowsFromTimingCuts({
-      timingCuts,
-      afterSeconds: finalEnd + 0.001,
-      startIndex: finalRows.length + 1
-    });
-    if (tailRows.length) {
-      finalRows = finalRows.concat(tailRows);
-    }
-  }
+  const finalRows = aligned.rows;
+  const stats = aligned.stats ?? {};
 
   const out = [];
   for (const row of finalRows) {
@@ -1073,6 +672,17 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
     out.push("");
   }
   await writeFile(outputPath, `${out.join("\n")}\n`, "utf8");
+  await writeFile(deriveAlignmentReportPath(outputPath), `${JSON.stringify({
+    generatedBy: "lyrics_to_srt_from_timing",
+    timingAuthority: "asr",
+    subtitleBoundaryContract: "group start/end are exact ASR cue boundaries",
+    outputPath,
+    lyricsPath,
+    timingSrtPath,
+    includeSections,
+    sentenceCues,
+    ...stats
+  }, null, 2)}\n`, "utf8");
   writeOut(`${outputPath}\n`);
 }
 
