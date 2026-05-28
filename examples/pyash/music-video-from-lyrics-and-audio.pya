@@ -5,10 +5,10 @@ from filename "../../module/video_common.pya" ob name footnote mode to name foot
 exists su name draw size shorts be map def
 su name width ob num 720 ya
 su name height ob num 1280 ya
-su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text, chinese characters, hanzi, kanji, kana, korean characters, hangul, glyphs, symbols, calligraphy" ya
+su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text, chinese characters, hanzi, kanji, kana, korean characters, hangul, glyphs, symbols, calligraphy, photorealistic, realistic, lifelike, cinematic, DSLR, lens blur, skin pores, detailed skin, live action, hyperreal, 3D render, uncanny, photographic lighting, real person, portrait photography" ya
 prah
 
-exists su name draw system prompt ob text "Educational lyrical illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, expressive emotion, high detail. There is no text. If an adult male person is visible, he must have a clearly visible full beard and long hair. Do not depict clean-shaven men." be text ya
+exists su name draw system prompt ob text "Simple 2D cartoon illustration, hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, simplified facial features, playful but respectful proportions, poster-like composition, non-photorealistic, no realistic skin texture, no camera realism, no visible text or letters, no watermark. There is no text. If an adult male person is visible, he must have a clearly visible full beard and long hair. Do not depict clean-shaven men." be text ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear qwen chunk max seconds ob num 30 be default ya
 exists su name subtitle margin ratio override ob num 0.40 be num ya
@@ -34,6 +34,7 @@ Focus on current_cut and output only one concise image-generation prompt line (a
 If a visible person is present, use exactly four sentences in this order: sentence one subject plus action, sentence two clothing, sentence three environment, sentence four mood plus lighting.
 If no visible person is present, use exactly three sentences in this order: sentence one subject plus action, sentence two environment, sentence three mood plus lighting.
 Sentence one must describe a concrete visible action using a strong verb and object; avoid static posing, standing, or looking-only portraits.
+Use flat 2D cartoon/cel-shaded language in the prompt. Avoid lifelike, photorealistic, cinematic, photographic, portrait, realistic-skin, and 3D-render language.
 Keep scene surfaces typography-free: no letters, captions, logos, signage, or interface elements.
 If people appear, depict modest opaque full-coverage clothing that covers chest, midriff, and hips.
 When a person is visible, sentence two must state concrete clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
