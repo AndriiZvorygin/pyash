@@ -8,7 +8,7 @@ from filename "./video_common.pya" ob name current video heading y ratio to name
 from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
 from filename "./video_common.pya" ob name footnote mode to name footnote mode be import do
 
-exists su name draw system prompt ob text "Québec bande dessinée illustration, realistic proportions, precise linework, expressive faces with visible sclera and defined irises, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface. If an adult male person is visible, he must have a clearly visible full beard and long hair. Do not depict clean-shaven men. No nudity, no shirtless bodies, no bare chest, no exposed breasts, no exposed nipples, no exposed genitals, and no underwear-only outfits." be default ya
+exists su name draw system prompt ob text "Québec bande dessinée cartoon illustration, simple 2D hand-drawn storybook style, bold clean outlines, flat colours, soft cel shading, simplified facial features, playful but respectful proportions, muted natural palette, balanced poster-like composition, mature francophone comic storytelling, matte printed surface, non-photorealistic, no realistic skin texture, no camera realism. If an adult male person is visible, he must have a clearly visible full beard and long hair. Do not depict clean-shaven men. No nudity, no shirtless bodies, no bare chest, no exposed breasts, no exposed nipples, no exposed genitals, and no underwear-only outfits." be default ya
 exists su name audio cue text ob text "Sound On 🎧" be default ya
 exists su name audio cue y ratio ob num 0.68 be default ya
 exists su name audio cue font scale ob num 0.42 be default ya
@@ -32,12 +32,13 @@ Follow these rules:
 14. If a visible person is present, use exactly four sentences in this order: sentence one subject plus action, sentence two clothing, sentence three environment, sentence four mood plus lighting.
 15. If no visible person is present, use exactly three sentences in this order: sentence one subject plus action, sentence two environment, sentence three mood plus lighting.
 16. Sentence one must describe a concrete visible action using a strong verb and object; avoid static posing, standing, or looking-only portraits.
-17. When a person is visible, sentence two must state concrete clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
-18. Clothing is mandatory for every visible person in every scene. Never depict shirtless, bare-chested, nude, semi-nude, lingerie-only, bikini-only, underwear-only, or transparent clothing.
-19. The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
-20. Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
-21. If an adult male person is visible, he must have a clearly visible full beard and long hair; do not depict clean-shaven men.
-22. If current_cut or full_script mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: friendly gardener in late 30s; medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over plain white collared shirt; gentle joyful sincere expression with grounded caring presence.
+17. Use flat 2D cartoon/cel-shaded language in the prompt. Avoid lifelike, photorealistic, cinematic, photographic, portrait, realistic-skin, and 3D-render language.
+18. When a person is visible, sentence two must state concrete clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
+19. Clothing is mandatory for every visible person in every scene. Never depict shirtless, bare-chested, nude, semi-nude, lingerie-only, bikini-only, underwear-only, or transparent clothing.
+20. The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
+21. Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
+22. If an adult male person is visible, he must have a clearly visible full beard and long hair; do not depict clean-shaven men.
+23. If current_cut or full_script mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: friendly cartoon gardener in late 30s; simplified medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over plain white collared shirt; gentle joyful sincere expression with grounded caring presence.
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be default ya
 
