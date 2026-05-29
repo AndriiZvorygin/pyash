@@ -42,6 +42,8 @@ function normalizeCutEntry(entry, index) {
   const until = Number(entry?.until?.num ?? entry?.until ?? since);
   const obText = String(entry?.ob?.text ?? entry?.obText ?? "");
   const obFilename = String(entry?.ob?.filename ?? entry?.obFilename ?? "");
+  const sourceText = String(entry?.fromtext?.text ?? entry?.sourceText ?? entry?.fromtextText ?? "");
+  const workflowName = String(entry?.as?.text ?? entry?.workflowName ?? entry?.asText ?? "");
   const name = String(entry?.su?.name ?? entry?.name ?? `cut ${String(index).padStart(3, "0")}`);
   return {
     index,
@@ -49,7 +51,9 @@ function normalizeCutEntry(entry, index) {
     since: Number.isFinite(since) ? since : 0,
     until: Number.isFinite(until) ? until : 0,
     obText,
-    obFilename
+    obFilename,
+    sourceText,
+    workflowName
   };
 }
 
@@ -293,7 +297,9 @@ async function persistItineraryManifest({
       since: Number(entry?.since?.num ?? 0),
       until: Number(entry?.until?.num ?? entry?.since?.num ?? 0),
       obText: entry?.ob?.text !== undefined ? String(entry?.ob?.text ?? "") : undefined,
-      obFilename: entry?.ob?.filename !== undefined ? String(entry?.ob?.filename ?? "") : undefined
+      obFilename: entry?.ob?.filename !== undefined ? String(entry?.ob?.filename ?? "") : undefined,
+      sourceText: entry?.fromtext?.text !== undefined ? String(entry?.fromtext?.text ?? "") : undefined,
+      workflowName: entry?.as?.text !== undefined ? String(entry?.as?.text ?? "") : undefined
     }))
   });
   // Retry/resume safety: if manifest already exists for this run path, reuse it
@@ -477,6 +483,83 @@ function drawHost(rememberFn) {
 
 function drawWorkflowName(rememberFn) {
   return String(rememberFn("draw workflow default")?.ob?.text ?? "").trim();
+}
+
+function defaultCharacterDrawRoutes() {
+  return [
+    {
+      name: "andrii zvorygin",
+      aliases: ["andrii", "andrii zvorygin", "zvorygin"],
+      workflowName: "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled",
+      prefix: "same guy but cartoony, long reddish-brown beard with copper tones.",
+      suffix: "no severed body parts. no extra limbs. no bad eyes. irises visible."
+    }
+  ];
+}
+
+function parseCharacterRouteSpec(name, raw) {
+  const fields = {};
+  for (const part of String(raw ?? "").split(/[;\n]+/u)) {
+    const match = /^\s*([a-z_ -]+)\s*[:=]\s*([\s\S]*?)\s*$/iu.exec(part);
+    if (!match) continue;
+    fields[String(match[1] ?? "").trim().toLowerCase().replace(/[ -]+/gu, "_")] = String(match[2] ?? "").trim();
+  }
+  const aliases = String(fields.aliases ?? fields.alias ?? name ?? "")
+    .split(/\s+or\s+|[|,]/iu)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return {
+    name: String(name ?? "").trim(),
+    aliases,
+    workflowName: String(fields.workflow ?? fields.workflow_name ?? "").trim(),
+    prefix: String(fields.prefix ?? "").trim(),
+    suffix: String(fields.suffix ?? "").trim(),
+    template: String(fields.template ?? "").trim()
+  };
+}
+
+function characterDrawRoutes(rememberFn) {
+  const fact = rememberFn?.("draw character routes");
+  const map = fact?.ob?.map;
+  if (!map || typeof map !== "object") return defaultCharacterDrawRoutes();
+  const routes = [];
+  for (const [name, entry] of Object.entries(map)) {
+    const raw = resolveTextFromMapEntry(entry);
+    if (!raw) continue;
+    const route = parseCharacterRouteSpec(name, raw);
+    if (route.aliases.length && route.workflowName) routes.push(route);
+  }
+  return routes.length ? routes : defaultCharacterDrawRoutes();
+}
+
+function escapeRegExp(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+function textMatchesAlias(text, alias) {
+  const pattern = new RegExp("(?:^|[^A-Za-z0-9_])" + escapeRegExp(alias) + "(?:$|[^A-Za-z0-9_])", "iu");
+  return pattern.test(String(text ?? ""));
+}
+
+function findCharacterDrawRoute(sourceText, rememberFn) {
+  const text = String(sourceText ?? "");
+  if (!text.trim()) return null;
+  return characterDrawRoutes(rememberFn).find((route) => route.aliases.some((alias) => textMatchesAlias(text, alias))) ?? null;
+}
+
+function findCharacterDrawRouteByWorkflow(workflowName, rememberFn) {
+  const workflow = String(workflowName ?? "").trim();
+  if (!workflow) return null;
+  return characterDrawRoutes(rememberFn).find((route) => route.workflowName === workflow) ?? null;
+}
+
+function composeCharacterDrawPrompt(route, scenePrompt) {
+  const scene = String(scenePrompt ?? "").trim();
+  const template = String(route?.template ?? "").trim();
+  if (template) return template.replace(/\[\[scene\]\]/gu, scene).trim();
+  return [route?.prefix, scene, route?.suffix]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function normalizePlatformHandleToPrefix(value, fallback = "draw") {
@@ -1233,7 +1316,8 @@ export async function drawFromNameItinerary(sentence, { remember: rememberFn = r
   const outputHandle = platformOutputHandleName(sentence, "draw");
   const prefix = normalizePlatformHandleToPrefix(outputHandle, "draw");
   const host = drawHost(rememberFn);
-  const workflowName = String(sentence?.as?.text ?? "").trim() || drawWorkflowName(rememberFn);
+  const explicitWorkflowName = String(sentence?.as?.text ?? "").trim();
+  const defaultWorkflowName = explicitWorkflowName || drawWorkflowName(rememberFn);
   const limitRaw = Number(sentence?.by?.num ?? Number.POSITIVE_INFINITY);
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : Number.POSITIVE_INFINITY;
   await fs.mkdir(outputResolved, { recursive: true });
@@ -1249,7 +1333,14 @@ export async function drawFromNameItinerary(sentence, { remember: rememberFn = r
   const photographRows = [];
   for (const cut of work) {
     const output = outputPathForCut(outputResolved, prefix, cut);
-    const prompt = promptFromCut(cut, sentence?.ob?.text ?? "", systemPrompt);
+    const basePrompt = promptFromCut(cut, sentence?.ob?.text ?? "", systemPrompt);
+    const cutWorkflowName = String(cut?.workflowName ?? "").trim();
+    const characterRoute = !explicitWorkflowName
+      ? (findCharacterDrawRouteByWorkflow(cutWorkflowName, rememberFn) || findCharacterDrawRoute(cut?.sourceText, rememberFn))
+      : null;
+    const usesCharacterWorkflow = Boolean(characterRoute) && (!cutWorkflowName || cutWorkflowName === characterRoute.workflowName);
+    const workflowName = explicitWorkflowName || cutWorkflowName || (usesCharacterWorkflow ? characterRoute.workflowName : defaultWorkflowName);
+    const prompt = usesCharacterWorkflow ? composeCharacterDrawPrompt(characterRoute, basePrompt) : basePrompt;
     const requestSentence = {
       mood: "do",
       su: { name: `draw request ${String(cut.index).padStart(3, "0")}` },
@@ -1375,14 +1466,19 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
       cutText: promptInput
     });
     promptHistory.push(prompt);
-    series.push({
+    const sourceCutText = String(cut?.obText ?? "");
+    const promptRow = {
       mood: "ya",
       su: { name: `cut ${String(index).padStart(3, "0")}` },
       since: { num: Number(cut?.since ?? 0) },
       until: { num: Number(cut?.until ?? cut?.since ?? 0) },
       ob: { text: prompt },
+      fromtext: { text: sourceCutText },
       be: "cut"
-    });
+    };
+    const characterRoute = findCharacterDrawRoute(sourceCutText, rememberFn) || findCharacterDrawRoute(prompt, rememberFn);
+    if (characterRoute?.workflowName) promptRow.as = { text: characterRoute.workflowName };
+    series.push(promptRow);
     emitExchangeSentence({
       mood: "ya",
       su: { name: `promptify result ${String(index).padStart(3, "0")}` },

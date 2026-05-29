@@ -381,9 +381,25 @@ function wordsRoughlyMatch(aRaw, bRaw) {
   const b = normalizeNumericWord(bRaw);
   if (!a || !b) return false;
   if (a === b) return true;
+  if (wordsAliasMatch(a, b)) return true;
   if (a.length >= 4 && b.length >= 4) {
     if (a.endsWith("s") && a.slice(0, -1) === b) return true;
     if (b.endsWith("s") && b.slice(0, -1) === a) return true;
+  }
+  return false;
+}
+
+const WORD_ALIAS_GROUPS = [
+  ["andrii", "andre", "andres", "andrae"],
+  ["zvorygin", "again", "floridian"],
+  ["owen", "all", "bowing"],
+  ["neighbour", "neighbor"],
+  ["neighbours", "neighbors"]
+];
+
+function wordsAliasMatch(a, b) {
+  for (const group of WORD_ALIAS_GROUPS) {
+    if (group.includes(a) && group.includes(b)) return true;
   }
   return false;
 }
@@ -460,6 +476,217 @@ function buildAsrCueGroups(timingCuts, {
   }
   finish();
   return groups;
+}
+
+function lineMatchScore(lyricWords, asrWords) {
+  const lyrics = Array.isArray(lyricWords) ? lyricWords.filter(Boolean) : [];
+  const asr = Array.isArray(asrWords) ? asrWords.filter(Boolean) : [];
+  if (!lyrics.length || !asr.length) return 0;
+  let cursor = 0;
+  let matched = 0;
+  for (const lyricWord of lyrics) {
+    for (let i = cursor; i < asr.length; i += 1) {
+      if (wordsRoughlyMatch(lyricWord, asr[i])) {
+        matched += 1;
+        cursor = i + 1;
+        break;
+      }
+    }
+  }
+  return matched / Math.max(1, lyrics.length);
+}
+
+function timingCutWords(cuts, start, end) {
+  return cuts
+    .slice(start, end)
+    .flatMap((cut) => splitNormalizedWords(cut?.obText ?? ""));
+}
+
+function chooseSentenceCueEnd(line, cuts, startIndex, remainingLines) {
+  const lyricWords = splitNormalizedWords(line);
+  const lyricCount = Math.max(1, lyricWords.length);
+  const maxEnd = Math.max(startIndex + 1, cuts.length - Math.max(0, remainingLines));
+  const minEnd = startIndex + 1;
+  const searchEnd = Math.min(maxEnd, startIndex + Math.max(lyricCount + 6, Math.ceil(lyricCount * 1.8) + 2));
+  let best = null;
+
+  const lineGapSeconds = Number(process.env.PYA_SRT_SENTENCE_CUE_LINE_GAP_SECONDS || 0.42);
+  for (let end = minEnd; end <= searchEnd; end += 1) {
+    const asrWords = timingCutWords(cuts, startIndex, end);
+    const asrCount = Math.max(1, asrWords.length);
+    const score = lineMatchScore(lyricWords, asrWords);
+    const lengthPenalty = Math.abs(asrCount - lyricCount) / Math.max(asrCount, lyricCount) * 0.18;
+    const value = score - lengthPenalty;
+    const nextGap = end < cuts.length
+      ? Number(cuts[end]?.since ?? 0) - Number(cuts[end - 1]?.until ?? 0)
+      : 0;
+    if (nextGap >= lineGapSeconds && score >= 0.35 && asrCount >= Math.max(1, Math.floor(lyricCount * 0.5))) {
+      return end;
+    }
+    if (!best || value > best.value || (value === best.value && Math.abs(asrCount - lyricCount) < Math.abs(best.asrCount - lyricCount))) {
+      best = { end, value, score, asrCount };
+    }
+  }
+
+  if (best && best.score >= 0.45) return best.end;
+
+  let words = 0;
+  for (let end = minEnd; end <= maxEnd; end += 1) {
+    words += Math.max(1, countWords(cuts[end - 1]?.obText ?? ""));
+    if (words >= lyricCount) return end;
+  }
+  return maxEnd;
+}
+
+function flattenTimingWords(cuts) {
+  const out = [];
+  for (let cueIndex = 0; cueIndex < cuts.length; cueIndex += 1) {
+    const words = splitNormalizedWords(cuts[cueIndex]?.obText ?? "");
+    for (const word of words) out.push({ word, cueIndex });
+  }
+  return out;
+}
+
+function lineStartAnchorScore(lyricWords, asrWords, wordIndex) {
+  const lyrics = Array.isArray(lyricWords) ? lyricWords.filter(Boolean) : [];
+  if (!lyrics.length || !Array.isArray(asrWords) || wordIndex >= asrWords.length) return 0;
+  const windowEnd = Math.min(asrWords.length, wordIndex + Math.max(lyrics.length + 4, Math.ceil(lyrics.length * 1.8)));
+  let cursor = wordIndex;
+  let matched = 0;
+  let firstMatched = false;
+  for (let i = 0; i < lyrics.length; i += 1) {
+    for (let j = cursor; j < windowEnd; j += 1) {
+      if (!wordsRoughlyMatch(lyrics[i], asrWords[j]?.word)) continue;
+      matched += 1;
+      if (i === 0) firstMatched = true;
+      cursor = j + 1;
+      break;
+    }
+  }
+  const ratio = matched / Math.max(1, lyrics.length);
+  const cueDistance = cursor > wordIndex ? cursor - wordIndex : windowEnd - wordIndex;
+  const distancePenalty = Math.max(0, cueDistance - lyrics.length) / Math.max(lyrics.length + 4, 1) * 0.08;
+  return ratio + (firstMatched ? 0.18 : 0) - distancePenalty;
+}
+
+function chooseLineStartCueIndex(line, cuts, flatWords, startCueIndex, remainingLines) {
+  const lyricWords = splitNormalizedWords(line);
+  if (!lyricWords.length) return startCueIndex;
+  const minWordIndex = Math.max(0, flatWords.findIndex((entry) => entry.cueIndex >= startCueIndex));
+  if (minWordIndex < 0) return startCueIndex;
+  const maxCueIndex = Math.max(startCueIndex, cuts.length - Math.max(1, remainingLines + 1));
+  const maxLookaheadSeconds = Number(process.env.PYA_SRT_LINE_START_MAX_LOOKAHEAD_SECONDS || 7.5);
+  let timeCueLimit = startCueIndex;
+  while (timeCueLimit + 1 < cuts.length && Number(cuts[timeCueLimit + 1]?.since ?? 0) - Number(cuts[startCueIndex]?.since ?? 0) <= maxLookaheadSeconds) {
+    timeCueLimit += 1;
+  }
+  const searchCueLimit = Math.min(cuts.length - 1, maxCueIndex, timeCueLimit);
+  let best = null;
+
+  for (let wordIndex = minWordIndex; wordIndex < flatWords.length; wordIndex += 1) {
+    const cueIndex = Number(flatWords[wordIndex]?.cueIndex ?? 0);
+    if (cueIndex < startCueIndex) continue;
+    if (cueIndex > searchCueLimit) break;
+    const score = lineStartAnchorScore(lyricWords, flatWords, wordIndex);
+    const progressPenalty = (cueIndex - startCueIndex) * 0.004;
+    const value = score - progressPenalty;
+    if (!best || value > best.value || (value === best.value && cueIndex < best.cueIndex)) {
+      best = { cueIndex, value, score };
+    }
+  }
+
+  const minScore = Number(process.env.PYA_SRT_LINE_START_MIN_SCORE || 0.42);
+  if (best && best.score >= minScore) return Math.max(startCueIndex, best.cueIndex);
+  const lyricCount = Math.max(1, lyricWords.length);
+  let words = 0;
+  for (let cueIndex = startCueIndex; cueIndex < Math.min(cuts.length, maxCueIndex + 1); cueIndex += 1) {
+    words += Math.max(1, countWords(cuts[cueIndex]?.obText ?? ""));
+    if (words >= lyricCount) return Math.min(cuts.length - 1, cueIndex + 1);
+  }
+  return startCueIndex;
+}
+
+function buildLineStartAnchors(lines, cuts) {
+  const flatWords = flattenTimingWords(cuts);
+  const anchors = [];
+  let cursorCue = 0;
+  for (let i = 0; i < lines.length && cursorCue < cuts.length; i += 1) {
+    const remainingLines = Math.max(0, lines.length - i - 1);
+    const anchor = i === 0
+      ? 0
+      : chooseLineStartCueIndex(lines[i], cuts, flatWords, cursorCue, remainingLines);
+    const safeAnchor = Math.max(cursorCue, Math.min(cuts.length - 1, anchor));
+    anchors.push(safeAnchor);
+    cursorCue = Math.min(cuts.length, safeAnchor + 1);
+  }
+  return anchors;
+}
+
+function buildSentenceCueTimingRows(lyricsCuts, timingCuts) {
+  const lines = Array.isArray(lyricsCuts) ? lyricsCuts.map((line) => String(line || "").trim()).filter(Boolean) : [];
+  const cuts = sanitizeAsrTimingCuts(timingCuts);
+  if (!lines.length) throw new Error("lyrics to srt defective: no lyric lines");
+  if (!cuts.length) throw new Error("lyrics to srt defective: no timing cuts");
+
+  const score = alignmentScore(lines, cuts);
+  const anchors = buildLineStartAnchors(lines, cuts);
+  const rows = [];
+  for (let i = 0; i < anchors.length; i += 1) {
+    const startCueIndex = anchors[i];
+    const nextCueIndex = i + 1 < anchors.length ? anchors[i + 1] : cuts.length;
+    const endCueIndex = Math.max(startCueIndex, Math.min(cuts.length - 1, nextCueIndex - 1));
+    const row = {
+      index: rows.length + 1,
+      since: Number(cuts[startCueIndex].since),
+      until: Number(cuts[endCueIndex].until),
+      text: lines[i],
+      cueStartIndex: startCueIndex,
+      cueEndIndex: endCueIndex
+    };
+    const previous = rows[rows.length - 1];
+    if (previous && row.since < Number(previous.until) - 0.001) {
+      previous.text = `${previous.text} ${row.text}`.replace(/\s+/gu, " ").trim();
+      previous.until = Math.max(Number(previous.until), Number(row.until));
+      previous.cueEndIndex = Math.max(Number(previous.cueEndIndex), Number(row.cueEndIndex));
+    } else {
+      rows.push(row);
+    }
+  }
+
+  if (anchors.length < lines.length && rows.length) {
+    rows[rows.length - 1].text = `${rows[rows.length - 1].text} ${lines.slice(anchors.length).join(" ")}`.replace(/\s+/gu, " ").trim();
+  }
+  rows.forEach((row, index) => { row.index = index + 1; });
+
+  const validationErrors = validateAsrAnchoredRows(rows, rows, cuts);
+  if (validationErrors.length) {
+    throw new Error(`lyrics to srt defective: ${validationErrors.join("; ")}`);
+  }
+
+  return {
+    rows,
+    stats: {
+      lines: lines.length,
+      asrCues: cuts.length,
+      asrGroups: rows.length,
+      acceptedMatchLines: score.matched,
+      lyricWords: score.lyricWords,
+      asrWords: score.asrWords,
+      matchRatio: score.ratio,
+      repeatedTailGroups: 0,
+      firstAsrSeconds: Number(cuts[0].since),
+      lastAsrSeconds: Number(cuts[cuts.length - 1].until),
+      firstSubtitleSeconds: Number(rows[0]?.since ?? cuts[0].since),
+      lastSubtitleSeconds: Number(rows[rows.length - 1]?.until ?? cuts[cuts.length - 1].until),
+      uncoveredTailSeconds: Math.max(0, Number(cuts[cuts.length - 1].until) - Number(rows[rows.length - 1]?.until ?? 0)),
+      maxUncoveredGapSeconds: rows.reduce((max, row, i) => {
+        if (i === 0) return max;
+        return Math.max(max, Math.max(0, Number(row.since) - Number(rows[i - 1].until)));
+      }, 0),
+      boundaryPolicy: "asr_line_start_anchors",
+      mismatchPolicy: "lyric_text_with_asr_time"
+    }
+  };
 }
 
 function splitDisplayTextForGroups(lyricsCuts, groups) {
@@ -539,7 +766,9 @@ function validateAsrAnchoredRows(rows, groups, timingCuts) {
   return errors;
 }
 
-function buildTimingRows(lyricsCuts, timingCuts) {
+function buildTimingRows(lyricsCuts, timingCuts, { sentenceCues = false } = {}) {
+  if (sentenceCues) return buildSentenceCueTimingRows(lyricsCuts, timingCuts);
+
   const lines = Array.isArray(lyricsCuts) ? lyricsCuts : [];
   const cuts = sanitizeAsrTimingCuts(timingCuts);
   if (!lines.length) throw new Error("lyrics to srt defective: no lyric lines");

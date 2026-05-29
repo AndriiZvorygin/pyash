@@ -67,7 +67,12 @@ function renderItineraryPya({ itineraryName, cuts }) {
       continue;
     }
     const text = quoteText(String(cut?.obText ?? ""));
-    lines.push(`su name ${name} since num ${since.toFixed(3)} until num ${until.toFixed(3)} ob text ${text} ya`);
+    const sourceText = String(cut?.sourceText ?? cut?.fromtextText ?? "").trim();
+    const workflowName = String(cut?.workflowName ?? cut?.asText ?? "").trim();
+    let line = `su name ${name} since num ${since.toFixed(3)} until num ${until.toFixed(3)} ob text ${text}`;
+    if (sourceText) line += ` fromtext text ${quoteText(sourceText)}`;
+    if (workflowName) line += ` as text ${quoteText(workflowName)}`;
+    lines.push(`${line} ya`);
   }
   return `${lines.join("\n")}\n`;
 }
@@ -78,7 +83,9 @@ function parseItineraryPya(text) {
   const cuts = [];
   let ordinal = 0;
   const headPattern = /^su name (.+?) be series def$/u;
-  const cutPattern = /^su name (.+?) since num ([+-]?\d+(?:\.\d+)?) until num ([+-]?\d+(?:\.\d+)?) ob text ("(?:\\.|[^"\\])*") ya$/u;
+  const cutPattern = /^su name (.+?) since num ([+-]?\d+(?:\.\d+)?) until num ([+-]?\d+(?:\.\d+)?) ob text ("(?:\\.|[^"\\])*")((?: fromtext text "(?:\\.|[^"\\])*")?(?: as text "(?:\\.|[^"\\])*")?) ya$/u;
+  const sourceTailPattern = / fromtext text ("(?:\\.|[^"\\])*")/u;
+  const workflowTailPattern = / as text ("(?:\\.|[^"\\])*")/u;
   const cutFilenamePattern = /^su name (.+?) since num ([+-]?\d+(?:\.\d+)?) until num ([+-]?\d+(?:\.\d+)?) ob filename ("(?:\\.|[^"\\])*") ya$/u;
   for (const raw of lines) {
     const line = raw.trim();
@@ -101,7 +108,17 @@ function parseItineraryPya(text) {
     const literal = parsePyaTextLiteral(String(match?.[4] ?? "\"\""));
     const parsedIndex = Number((/(\d+)/.exec(name)?.[1]) ?? "");
     const index = Number.isFinite(parsedIndex) ? parsedIndex : ordinal;
-    if (m) cuts.push({ index, name, since, until, obText: literal });
+    if (m) {
+      const tail = String(m?.[5] ?? "");
+      const sourceMatch = sourceTailPattern.exec(tail);
+      const workflowMatch = workflowTailPattern.exec(tail);
+      const sourceLiteral = sourceMatch ? parsePyaTextLiteral(String(sourceMatch?.[1] ?? "\"\"")) : "";
+      const workflowLiteral = workflowMatch ? parsePyaTextLiteral(String(workflowMatch?.[1] ?? "\"\"")) : "";
+      const cut = { index, name, since, until, obText: literal };
+      if (sourceLiteral) cut.sourceText = String(sourceLiteral ?? "");
+      if (workflowLiteral) cut.workflowName = String(workflowLiteral ?? "");
+      cuts.push(cut);
+    }
     else cuts.push({ index, name, since, until, obFilename: String(literal ?? "") });
   }
   if (!itineraryName) throw new Error("itinerary defective: missing series header");

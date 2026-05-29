@@ -612,3 +612,53 @@ test("lyrics_to_srt_from_timing sentence-cues sanitize markdown emphasis", async
   assert.match(outText, /We enter with open hearts\./u);
   assert.match(outText, /Read more\./u);
 });
+test("lyrics_to_srt_from_timing sentence-cues keep repeated misheard name chorus on ASR line timing", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-andrii-chorus-drift.txt");
+  const timingPath = path.join(dir, "timing-andrii-chorus-drift.srt");
+  const outputPath = path.join(dir, "lyrics-andrii-chorus-drift.out.srt");
+
+  const lyrics = [
+    "Andrii Zvorygin",
+    "Andrii Zvorygin",
+    "Say his name and sing it strong:",
+    "Andrii Zvorygin",
+    "For compassion, truth, and helping hands"
+  ].join("\n");
+  const timing = [
+    "1", "00:01:56,480 --> 00:01:56,520", "for", "",
+    "2", "00:01:56,960 --> 00:01:57,520", "again", "",
+    "3", "00:01:58,240 --> 00:01:58,590", "Andres", "",
+    "4", "00:01:58,940 --> 00:01:59,300", "for", "",
+    "5", "00:01:59,650 --> 00:02:00,000", "again", "",
+    "6", "00:02:01,280 --> 00:02:01,840", "Say", "",
+    "7", "00:02:01,841 --> 00:02:01,920", "his", "",
+    "8", "00:02:02,240 --> 00:02:02,480", "name", "",
+    "9", "00:02:02,481 --> 00:02:02,640", "and", "",
+    "10", "00:02:02,641 --> 00:02:03,040", "sing", "",
+    "11", "00:02:03,041 --> 00:02:03,280", "it", "",
+    "12", "00:02:03,281 --> 00:02:03,920", "strong", "",
+    "13", "00:02:03,921 --> 00:02:04,640", "Andres", "",
+    "14", "00:02:04,960 --> 00:02:05,440", "for", "",
+    "15", "00:02:05,441 --> 00:02:06,000", "again", "",
+    "16", "00:02:06,560 --> 00:02:06,640", "For", "",
+    "17", "00:02:06,641 --> 00:02:07,600", "compassion", "",
+    "18", "00:02:07,680 --> 00:02:08,000", "truth", "",
+    "19", "00:02:08,160 --> 00:02:08,240", "and", "",
+    "20", "00:02:08,241 --> 00:02:08,960", "helping", "",
+    "21", "00:02:08,961 --> 00:02:09,440", "hands"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+
+  const rows = parseSrtRows(await fs.readFile(outputPath, "utf8"));
+  assertRowsUseTimingBoundaries(rows, timing);
+  const sayRow = rows.find((row) => /Say his name/u.test(row.text));
+  assert.ok(sayRow, "expected a Say his name cue");
+  assert.ok(sayRow.since >= 121.28, `Say his name should not lead ASR, got ${sayRow.since.toFixed(3)}`);
+});
+
