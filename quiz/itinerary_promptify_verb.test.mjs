@@ -146,3 +146,157 @@ test("promptify accepts packet template placeholders from ob text", async () => 
     globalThis.fetch = priorFetch;
   }
 });
+
+
+test("promptify marks Andrii source cuts with image-edit workflow", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "teaching cuts" },
+    be: "itinerary",
+    ob: {
+      series: [
+        {
+          mood: "ya",
+          su: { name: "cut 001" },
+          since: { num: 0 },
+          until: { num: 2 },
+          ob: { text: "Andrii Zvorygin sits at a computer pondering the next scene." },
+          be: "cut"
+        }
+      ]
+    }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "andrii draw workflow default" },
+    ob: { text: "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled" },
+    be: "default"
+  });
+
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ message: { content: "a thoughtful bearded man at a computer desk" } })
+  });
+
+  try {
+    const sentence = parse(
+      "su name prompt stage from name itinerary teaching cuts ob text \"Turn this cut into an image prompt.\" for name mind to name itinerary teaching draw prompts by num 0 be promptify do"
+    );
+    await interpret(sentence);
+    const rows = Array.isArray(remember("result")?.ob?.series) ? remember("result").ob.series : [];
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.ob?.text, "a thoughtful bearded man at a computer desk");
+    assert.equal(rows[0]?.fromtext?.text, "Andrii Zvorygin sits at a computer pondering the next scene.");
+    assert.equal(rows[0]?.as?.text, "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled");
+    const manifestText = await fs.readFile(String(remember("result")?.ob?.filename ?? ""), "utf8");
+    assert.match(manifestText, /fromtext text "Andrii Zvorygin sits at a computer pondering the next scene\." as text "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled" ya/u);
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});
+
+test("promptify marks source cuts from custom character draw routes", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "draw character routes" },
+    be: "map",
+    ob: {
+      map: {
+        mira: {
+          ob: {
+            text: "aliases: mira or mira sol\nworkflow: mira_image_edit_flow\nprefix: same woman with silver glasses.\nsuffix: clean hands, clear eyes."
+          }
+        }
+      }
+    }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "teaching cuts" },
+    be: "itinerary",
+    ob: {
+      series: [
+        {
+          mood: "ya",
+          su: { name: "cut 001" },
+          since: { num: 0 },
+          until: { num: 2 },
+          ob: { text: "Mira Sol studies a seed catalogue by the window." },
+          be: "cut"
+        }
+      ]
+    }
+  });
+
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ message: { content: "a person reading at a bright window" } })
+  });
+
+  try {
+    const sentence = parse(
+      "su name prompt stage from name itinerary teaching cuts ob text \"Turn this cut into an image prompt.\" for name mind to name itinerary teaching draw prompts by num 0 be promptify do"
+    );
+    await interpret(sentence);
+    const rows = Array.isArray(remember("result")?.ob?.series) ? remember("result").ob.series : [];
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.ob?.text, "a person reading at a bright window");
+    assert.equal(rows[0]?.as?.text, "mira_image_edit_flow");
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});
+
+test("promptify can mark generated person prompts with custom character route", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "draw character routes" },
+    be: "map",
+    ob: {
+      map: {
+        "andrii people": {
+          ob: {
+            text: "aliases: person or man or woman or people\nworkflow: andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled\nprefix: same guy but cartoony, long reddish-brown beard with copper tones.\nsuffix: no severed body parts. no extra limbs. no bad eyes. irises visible."
+          }
+        }
+      }
+    }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "teaching cuts" },
+    be: "itinerary",
+    ob: {
+      series: [
+        { mood: "ya", su: { name: "cut 001" }, since: { num: 0 }, until: { num: 2 }, ob: { text: "A quiet desk beside a window." }, be: "cut" }
+      ]
+    }
+  });
+
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ message: { content: "a thoughtful person sitting at a computer" } })
+  });
+
+  try {
+    const sentence = parse(
+      "su name prompt stage from name itinerary teaching cuts ob text \"Turn this cut into an image prompt.\" for name mind to name itinerary teaching draw prompts by num 0 be promptify do"
+    );
+    await interpret(sentence);
+    const rows = Array.isArray(remember("result")?.ob?.series) ? remember("result").ob.series : [];
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.ob?.text, "a thoughtful person sitting at a computer");
+    assert.equal(rows[0]?.as?.text, "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled");
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});

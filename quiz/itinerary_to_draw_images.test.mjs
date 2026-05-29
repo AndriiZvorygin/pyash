@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseArgs, promptFromCut, runItineraryToDrawImages } from "../command/itinerary_to_draw_images.mjs";
+import { parseItineraryPya, renderItineraryPya } from "../command/itinerary_io.mjs";
 
 test("itinerary to draw images dry-run writes deterministic output plan", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-itinerary-draw-"));
@@ -77,4 +78,26 @@ test("parseArgs accepts negative prompt option", () => {
     "no text, no subtitles"
   ]);
   assert.equal(opts.negativePrompt, "no text, no subtitles");
+});
+
+test("itinerary pya preserves optional source cut text", () => {
+  const source = renderItineraryPya({
+    itineraryName: "draw prompts",
+    cuts: [
+      {
+        index: 1,
+        name: "cut 001",
+        since: 0,
+        until: 2,
+        obText: "a quiet computer desk",
+        sourceText: "Andrii Zvorygin thinks through a design problem.",
+        workflowName: "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled"
+      }
+    ]
+  });
+  assert.match(source, /fromtext text "Andrii Zvorygin thinks through a design problem\." as text "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled" ya/u);
+  const parsed = parseItineraryPya(source);
+  assert.equal(parsed.cuts[0].obText, "a quiet computer desk");
+  assert.equal(parsed.cuts[0].sourceText, "Andrii Zvorygin thinks through a design problem.");
+  assert.equal(parsed.cuts[0].workflowName, "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled");
 });

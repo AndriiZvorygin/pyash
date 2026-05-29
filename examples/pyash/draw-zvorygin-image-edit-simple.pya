@@ -1,0 +1,17 @@
+from filename "../../module/draw_comfyui.pya" ob name draw to name draw be import do
+
+ob text text scene be input ya
+exists su name scene ob text "running around being happy." be default ya
+
+exists su name zvorygin image edit prompt template ob text quoted.text.same guy but cartoony, long reddish-brown beard with copper tones.
+
+[[scene]]
+
+no severed body parts. no extra limbs. no bad eyes. irises visible..text.quoted be text ya
+su name zvorygin image edit replacements be map def
+  su text "[[scene]]" ob name text scene ya
+prah
+
+su name zvorygin image edit prompt stage ob name map zvorygin image edit replacements in name text zvorygin image edit prompt template to name text zvorygin image edit prompt be instead do
+
+ob name text zvorygin image edit prompt fromstate wo text become wo image to filename "examples/out/zvorygin-image-edit-simple.png" as text "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled" be draw do

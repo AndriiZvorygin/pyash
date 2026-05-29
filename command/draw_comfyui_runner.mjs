@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -89,8 +90,14 @@ async function readMappingPya(workflowFile) {
       const value = String(m[2] ?? "");
       if (key === "positive prompt path") result.positivePromptPath = value;
       if (key === "save image prefix path") result.saveImagePrefixPath = value;
-      if (key === "width path") result.widthPath = value;
-      if (key === "height path") result.heightPath = value;
+      if (key === "width path") {
+        result.widthPaths = [...(result.widthPaths || []), value];
+        result.widthPath = result.widthPath || value;
+      }
+      if (key === "height path") {
+        result.heightPaths = [...(result.heightPaths || []), value];
+        result.heightPath = result.heightPath || value;
+      }
       if (key === "negative prompt path") result.negativePromptPath = value;
     }
     return result;
@@ -122,10 +129,144 @@ function detectDimensionPath(workflow, promptObject, axis = "width") {
   return null;
 }
 
-function normalizePromptObject(workflow) {
+function expandSubgraphWorkflow(workflow) {
+  const subgraphs = Array.isArray(workflow?.definitions?.subgraphs) ? workflow.definitions.subgraphs : [];
+  if (!subgraphs.length || !Array.isArray(workflow?.nodes)) return workflow;
+  const subgraphById = new Map(subgraphs.map((subgraph) => [String(subgraph?.id ?? ""), subgraph]));
+  const expandedNodes = [];
+  const expandedLinks = [];
+  const topLinks = Array.isArray(workflow?.links) ? workflow.links : [];
+  const linkById = new Map();
+  for (const link of topLinks) {
+    if (!Array.isArray(link) || link.length < 5) continue;
+    linkById.set(Number(link[0]), link);
+  }
+
+  for (const node of workflow.nodes) {
+    const subgraph = subgraphById.get(String(node?.type ?? ""));
+    if (!subgraph || Number(node?.mode) === 4) {
+      expandedNodes.push(node);
+      continue;
+    }
+
+    const idPrefix = Number(node?.id) * 1000;
+    const nodeIdMap = new Map();
+    const innerLinkIdMap = new Map();
+    for (const inner of subgraph.nodes || []) {
+      nodeIdMap.set(Number(inner?.id), idPrefix + Number(inner?.id));
+    }
+    for (const link of subgraph.links || []) {
+      innerLinkIdMap.set(Number(link?.id), idPrefix + Number(link?.id));
+    }
+
+    for (const inner of subgraph.nodes || []) {
+      const copy = JSON.parse(JSON.stringify(inner));
+      copy.id = nodeIdMap.get(Number(inner?.id));
+      for (const input of copy.inputs || []) {
+        const mappedLink = innerLinkIdMap.get(Number(input?.link));
+        if (mappedLink !== undefined) input.link = mappedLink;
+      }
+      expandedNodes.push(copy);
+    }
+
+    for (const link of subgraph.links || []) {
+      const originId = Number(link?.origin_id);
+      const targetId = Number(link?.target_id);
+      if (originId === Number(subgraph.outputNode?.id)) continue;
+      if (targetId === Number(subgraph.inputNode?.id)) continue;
+      const originSlot = Number(link?.origin_slot);
+      const targetSlot = Number(link?.target_slot);
+      const linkId = idPrefix + Number(link?.id);
+      const mappedTarget = nodeIdMap.get(targetId);
+
+      if (originId === Number(subgraph.inputNode?.id)) {
+        const subgraphInput = Array.isArray(subgraph?.inputs) ? subgraph.inputs[originSlot] : null;
+        const inputName = String(subgraphInput?.name ?? "");
+        const wrapperInputs = Array.isArray(node?.inputs) ? node.inputs : [];
+        const wrapperInput = wrapperInputs.find((input) => String(input?.name ?? "") === inputName);
+        const wrapperLink = Number(wrapperInput?.link);
+        const topLink = Number.isFinite(wrapperLink) ? linkById.get(wrapperLink) : null;
+        if (Array.isArray(topLink) && mappedTarget !== undefined) {
+          expandedLinks.push([linkId, topLink[1], topLink[2], mappedTarget, targetSlot, link?.type]);
+        }
+        continue;
+      }
+
+      if (targetId === Number(subgraph.outputNode?.id)) {
+        for (const topLink of topLinks) {
+          if (!Array.isArray(topLink) || Number(topLink[1]) !== Number(node?.id)) continue;
+          const mappedOrigin = nodeIdMap.get(originId);
+          if (mappedOrigin !== undefined) {
+            expandedLinks.push([topLink[0], mappedOrigin, originSlot, topLink[3], topLink[4], link?.type]);
+          }
+        }
+        continue;
+      }
+
+      const mappedOrigin = nodeIdMap.get(originId);
+      if (mappedOrigin !== undefined && mappedTarget !== undefined) {
+        expandedLinks.push([linkId, mappedOrigin, originSlot, mappedTarget, targetSlot, link?.type]);
+      }
+    }
+  }
+
+  for (const link of topLinks) {
+    if (!Array.isArray(link) || link.length < 5) continue;
+    const targetNode = workflow.nodes.find((node) => Number(node?.id) === Number(link[3]));
+    if (subgraphById.has(String(targetNode?.type ?? ""))) continue;
+    const originNode = workflow.nodes.find((node) => Number(node?.id) === Number(link[1]));
+    if (subgraphById.has(String(originNode?.type ?? ""))) continue;
+    expandedLinks.push(link);
+  }
+
+  return { ...workflow, nodes: expandedNodes, links: expandedLinks };
+}
+
+function applyWidgetOnlyInputs(entry, node) {
+  const classType = String(node?.type ?? "");
+  const widgets = Array.isArray(node?.widgets_values) ? node.widgets_values : [];
+  if (classType === "LoadImage" && widgets[0] !== undefined) {
+    entry.inputs.image = widgets[0];
+    if (widgets[1] !== undefined) entry.inputs.upload = widgets[1];
+  }
+  if (classType === "SaveImage" && widgets[0] !== undefined) {
+    entry.inputs.filename_prefix = widgets[0];
+  }
+  if (classType === "ImageScaleToTotalPixels") {
+    if (widgets[0] !== undefined) entry.inputs.upscale_method = widgets[0];
+    if (widgets[1] !== undefined) entry.inputs.resolution_steps = widgets[1];
+    if (widgets[2] !== undefined) entry.inputs.megapixels = widgets[2];
+  }
+  if (classType === "UNETLoader" && widgets[1] !== undefined) {
+    entry.inputs.weight_dtype = widgets[1];
+  }
+  if (classType === "CLIPLoader") {
+    if (widgets[1] !== undefined) entry.inputs.type = widgets[1];
+    if (widgets[2] !== undefined) entry.inputs.device = widgets[2];
+  }
+  if (classType === "KSamplerSelect" && widgets[0] !== undefined) {
+    entry.inputs.sampler_name = widgets[0];
+  }
+  if (classType === "Flux2Scheduler" && widgets[0] !== undefined) {
+    entry.inputs.steps = widgets[0];
+  }
+  if (classType === "CFGGuider" && widgets[0] !== undefined) {
+    entry.inputs.cfg = widgets[0];
+  }
+  if (classType === "RandomNoise") {
+    if (widgets[0] !== undefined) entry.inputs.noise_seed = widgets[0];
+    if (widgets[1] !== undefined) entry.inputs.control_after_generate = widgets[1];
+  }
+  if (classType === "EmptyFlux2LatentImage" && widgets[2] !== undefined) {
+    entry.inputs.batch_size = widgets[2];
+  }
+}
+
+export function normalizePromptObject(workflow) {
   if (workflow && typeof workflow === "object" && workflow.prompt && typeof workflow.prompt === "object") {
     return workflow.prompt;
   }
+  workflow = expandSubgraphWorkflow(workflow);
   if (!Array.isArray(workflow?.nodes)) {
     throw new Error("draw_comfyui_runner: workflow missing nodes");
   }
@@ -139,10 +280,11 @@ function normalizePromptObject(workflow) {
 
   const prompt = {};
   for (const node of workflow.nodes) {
+    if (Number(node?.mode) === 4) continue;
     const id = String(node?.id ?? "");
     if (!id) continue;
     const classType = String(node?.type ?? "");
-    if (!classType || classType === "Note") continue;
+    if (!classType || classType === "Note" || classType === "MarkdownNote") continue;
     const inputs = Array.isArray(node?.inputs) ? node.inputs : [];
     const widgets = Array.isArray(node?.widgets_values) ? node.widgets_values : [];
     let widgetIndex = 0;
@@ -178,7 +320,7 @@ function normalizePromptObject(workflow) {
         widgetIndex += 1;
       }
     }
-
+    applyWidgetOnlyInputs(entry, node);
     prompt[id] = entry;
   }
   return prompt;
@@ -383,18 +525,22 @@ async function main() {
   }
 
   if (Number.isFinite(opts.width) && opts.width > 0) {
-    const widthPath = mapping.widthPath || detectDimensionPath(workflow, promptObject, "width");
-    if (!widthPath) {
+    const widthPaths = mapping.widthPaths?.length ? mapping.widthPaths : [mapping.widthPath || detectDimensionPath(workflow, promptObject, "width")].filter(Boolean);
+    if (!widthPaths.length) {
       throw new Error("draw_comfyui_runner: width path unresolved");
     }
-    setAtPath(promptObject, widthPath, Math.floor(opts.width));
+    for (const widthPath of widthPaths) {
+      setAtPath(promptObject, widthPath, Math.floor(opts.width));
+    }
   }
   if (Number.isFinite(opts.height) && opts.height > 0) {
-    const heightPath = mapping.heightPath || detectDimensionPath(workflow, promptObject, "height");
-    if (!heightPath) {
+    const heightPaths = mapping.heightPaths?.length ? mapping.heightPaths : [mapping.heightPath || detectDimensionPath(workflow, promptObject, "height")].filter(Boolean);
+    if (!heightPaths.length) {
       throw new Error("draw_comfyui_runner: height path unresolved");
     }
-    setAtPath(promptObject, heightPath, Math.floor(opts.height));
+    for (const heightPath of heightPaths) {
+      setAtPath(promptObject, heightPath, Math.floor(opts.height));
+    }
   }
 
   const payload = {
@@ -426,8 +572,10 @@ async function main() {
   fsSync.writeFileSync(1, `${outputPath}\n`, "utf8");
 }
 
-main().catch((err) => {
-  const message = err?.message ?? String(err);
-  if (message) fsSync.writeFileSync(2, `${message}\n`, "utf8");
-  process.exit(1);
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((err) => {
+    const message = err?.message ?? String(err);
+    if (message) fsSync.writeFileSync(2, `${message}\n`, "utf8");
+    process.exit(1);
+  });
+}
