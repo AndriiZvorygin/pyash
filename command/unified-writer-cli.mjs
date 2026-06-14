@@ -206,6 +206,31 @@ function runWithStreaming({ cmd, args, cwd, env, label, timeoutMs = 8 * 60 * 60 
   });
 }
 
+async function runFreshCacheCleanup() {
+  const enabled = String(process.env.PYA_LIBRARY_FRESH_CLEANUP_ENABLED || "1").trim();
+  if (enabled === "0" || /^false$/iu.test(enabled) || /^no$/iu.test(enabled)) return;
+  const maxAgeDays = String(process.env.PYA_LIBRARY_FRESH_MAX_AGE_DAYS || "30").trim();
+  const maxBytes = String(process.env.PYA_LIBRARY_FRESH_MAX_BYTES || String(10 * 1024 * 1024 * 1024)).trim();
+  try {
+    await runWithStreaming({
+      cmd: "node",
+      args: [
+        path.join(PYASH_ROOT, "command", "cleanup-library-fresh-cache.mjs"),
+        "--max-age-days",
+        maxAgeDays,
+        "--max-bytes",
+        maxBytes,
+      ],
+      cwd: PYASH_ROOT,
+      env: process.env,
+      label: "fresh-cache-cleanup",
+      timeoutMs: 120000,
+    });
+  } catch (err) {
+    process.stderr.write(`[fresh-cache] warning: ${String(err?.message || err)}\n`);
+  }
+}
+
 function inferFolder(row) {
   const payload = row.payload || {};
   const day = String(row.since || "").slice(0, 10) || "unknown-day";
@@ -619,6 +644,7 @@ function printInspect(adapter, selector) {
 async function runMain() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.writer) throw new Error("--writer is required");
+  await runFreshCacheCleanup();
   const { map, adapter } = await loadAdapter(args.writer);
   const env = buildRuntimeEnv({ writerKey: args.writer, map, adapter, args });
 

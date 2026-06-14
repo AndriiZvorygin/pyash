@@ -785,7 +785,22 @@ export async function summarizeWholeMeetingArtifacts({
   if (String(sourceObj?.["schema version"] || "") !== "agenda_summary_v1") {
     throw new Error(`invalid canonical agenda summary schema: ${summaryPath}`);
   }
-  const sections = Array.isArray(sourceObj?.sections) ? sourceObj.sections : [];
+  const sections = (() => {
+    if (Array.isArray(sourceObj?.sections)) return sourceObj.sections;
+    const raw = String(sourceObj?.sections || "").trim();
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === "string") {
+        const reparsed = JSON.parse(parsed);
+        return Array.isArray(reparsed) ? reparsed : [];
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  })();
   if (!sections.length) {
     throw new Error(`invalid canonical agenda summary (missing sections): ${summaryPath}`);
   }

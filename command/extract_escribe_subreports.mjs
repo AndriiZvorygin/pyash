@@ -410,6 +410,22 @@ function findSectionByReportCode(lines, reportCode, allReportCodes = []) {
     if (/^[0-9]{1,2}\.[a-z]\b/iu.test(raw)) { endLine = i - 1; break; }
     if (/^Page [0-9]{1,4} of [0-9]{1,4}$/iu.test(raw)) continue;
     if (codeMatchers.some((m) => m.re.test(raw))) { endLine = i - 1; break; }
+    const nextStaffReport = raw.match(/^THAT in consideration of Staff Report\s+([A-Z]{1,4}-[0-9]{2}-[0-9]{3})\b/iu)?.[1] || "";
+    if (nextStaffReport && nextStaffReport.toUpperCase() !== code) {
+      endLine = i - 1;
+      break;
+    }
+    if (i > startLine + 20 && /\bMINUTES\b/u.test(raw)) {
+      const boundaryProbe = lines
+        .slice(i, Math.min(lines.length, i + 18))
+        .map((line) => normalizeSpaces(line))
+        .filter(Boolean)
+        .join(" ");
+      if (/\b(meeting|board of directors|committee|council)\b/iu.test(boundaryProbe)) {
+        endLine = i - 1;
+        break;
+      }
+    }
   }
   if (endLine < startLine) endLine = startLine;
   return {
@@ -614,6 +630,14 @@ function main() {
     const inferredKey = String(current.start_page);
     const anchorProbeEnd = Math.min(endLine, startLine + 1200);
     const hasStrongAnchor = hasStrongAnchorInRange(current, sliceLines, startLine, anchorProbeEnd);
+    const reportCode = extractReportCode(current.title);
+    const hasReportCodeAnchor = !reportCode || sliceLines
+      .slice(startLine, anchorProbeEnd + 1)
+      .some((line) => normalizeSpaces(line).toUpperCase().includes(reportCode.toUpperCase()));
+    if (!hasReportCodeAnchor) {
+      skippedWeakAnchorCount += 1;
+      continue;
+    }
     if (isInferredStart && inferredStartSeen.has(inferredKey) && !hasStrongAnchor) {
       skippedDuplicateInferredStartCount += 1;
       continue;

@@ -70,8 +70,10 @@ function resolveMaybeRelative(baseDir, rawPath) {
 }
 
 function assertPathWithin(baseDir, targetPath, label = "path") {
-  const base = path.resolve(String(baseDir || ""));
-  const target = path.resolve(String(targetPath || ""));
+  const resolvedBase = path.resolve(String(baseDir || ""));
+  const resolvedTarget = path.resolve(String(targetPath || ""));
+  const base = fs.realpathSync.native(resolvedBase);
+  const target = fs.realpathSync.native(resolvedTarget);
   const rel = path.relative(base, target);
   if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error(`${label} must stay inside payload directory: target=${target} base=${base}`);

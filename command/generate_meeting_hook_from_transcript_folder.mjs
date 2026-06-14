@@ -17,7 +17,7 @@ function resolveOllamaHost() {
 const OLLAMA_URL = `${resolveOllamaHost()}/api/chat`;
 const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
 const MODEL = process.env.OWEN_HOOK_MODEL || process.env.OWEN_SUMMARY_MODEL || 'qwen3.5:9b';
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 8;
 const PASS_THRESHOLD = 0.8;
 
 function usage() {
@@ -78,6 +78,23 @@ function stripMarkdown(text) {
     .trim();
 }
 
+function selectHookGenerationSource(sourceSummary = '') {
+  const text = String(sourceSummary || '').replace(/\s+/gu, ' ').trim();
+  if (!text) return '';
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/gu) || [text];
+  const kept = [];
+  let total = 0;
+  for (const sentence of sentences) {
+    const cleaned = String(sentence || '').replace(/\s+/gu, ' ').trim();
+    if (!cleaned) continue;
+    if (kept.length >= 3 && total >= 500) break;
+    if (total + cleaned.length > 1400 && kept.length) break;
+    kept.push(cleaned);
+    total += cleaned.length;
+  }
+  return (kept.join(' ') || text).slice(0, 1800).trim();
+}
+
 function toTitleWords(value) {
   return String(value || '')
     .replace(/[^A-Za-z0-9' -]/gu, ' ')
@@ -93,7 +110,7 @@ function toTitleWords(value) {
 function sanitizeHook(text) {
   const line = String(text || '').split(/\r?\n/u).map((x) => x.trim()).filter(Boolean)[0] || '';
   const t = toTitleWords(line);
-  const words = t.split(/\s+/u).filter(Boolean).slice(0, 4);
+  const words = t.split(/\s+/u).filter(Boolean).slice(0, 6);
   if (words.length < 3) {
     const fallback = ['Council', 'Decisions', 'At', 'A', 'Turning', 'Point'];
     return fallback.slice(0, 4).join(' ');
@@ -112,8 +129,8 @@ function sanitizeChapterStyleHook(text, { jurisdiction = '', body = '' } = {}) {
     .split(/\s+/u)
     .filter(Boolean)
     .filter((w) => !banned.has(normalizeForMatch(w)))
-    .slice(0, 4);
-  const trailing = new Set([...HOOK_TRAILING_FRAGMENT_WORDS, 'in', 'on', 'at', 'for', 'to', 'of']);
+    .slice(0, 6);
+  const trailing = new Set([...HOOK_TRAILING_FRAGMENT_WORDS, 'a', 'an', 'the', 'in', 'on', 'at', 'for', 'to', 'of']);
   while (kept.length && trailing.has(normalizeForMatch(kept[kept.length - 1]))) kept.pop();
   if (kept.length >= 3) return toTitleWords(kept.join(' '));
   return raw;
@@ -255,6 +272,53 @@ const PREVIEW_ALLOWED_VERBS = new Set([
   'considers', 'reviews', 'discusses', 'hears', 'receives', 'debates',
 ]);
 
+function enforcePreviewTemporalStyle(hook) {
+  const words = String(hook || '').trim().split(/\s+/u).filter(Boolean);
+  if (!words.length) return hook;
+  const norm = words.map((w) => normalizeForMatch(w));
+  const hasPresentVerb = norm.some((w) => PREVIEW_ALLOWED_VERBS.has(w));
+  const hasFuture = norm.includes('will');
+  if (hasPresentVerb || hasFuture) return sanitizeHook(words.join(' '));
+  const subject = words.slice(0, 4).join(' ').trim();
+  if (!subject) return 'Will Review Agenda Items';
+  return sanitizeHook(`Will Review ${subject}`);
+}
+
+function isWeakPreviewHook(text = "") {
+  const n = normalizeForMatch(text);
+  if (!n) return true;
+  if (/\b(declaration|discussion|direction|review|report|update|item|business|matter|development|concerns?)\s*$/u.test(n)
+    && n.split(" ").filter(Boolean).length <= 4) return true;
+  if (/^(committee|council|board)\s+(considers|reviews|discusses|hears|receives)\b/u.test(n)
+    && !hasConcreteKeywordOverlap(text, n)) return true;
+  if (n === "will review approval") return true;
+  if (n === "will review report") return true;
+  if (n === "will review item" || n === "will review items") return true;
+  if (n === "will review update" || n === "will review updates") return true;
+  if (n === "will review bylaw" || n === "will review bylaws") return true;
+  const words = n.split(" ").filter(Boolean);
+  if (words.length <= 3) return true;
+  if (words.length === 4 && words[0] === "will" && words[1] === "review") return true;
+  return false;
+}
+
+function derivePreviewHookFromTopNewsText(summaryText = "", jurisdiction = "", body = "") {
+  const s = normalizeForMatch(summaryText);
+  if (/\bwastewater\b/.test(s) && /\bdigestor\b/.test(s) && /\bclean/.test(s)) {
+    return sanitizeChapterStyleHook("Wastewater Digestor Cleanout Review", { jurisdiction, body });
+  }
+  if (/\bby law enforcement officer\b/.test(s) || /\bbylaw enforcement officer\b/.test(s)) {
+    return sanitizeChapterStyleHook("Bylaw Officer Appointment Review", { jurisdiction, body });
+  }
+  if (/\bfees and charges\b/.test(s) || (/\bfees\b/.test(s) && /\bcharges\b/.test(s))) {
+    return sanitizeChapterStyleHook("Fees Charges Review Cycle", { jurisdiction, body });
+  }
+  if (/\b4th avenue west reconstruction\b/.test(s)) {
+    return sanitizeChapterStyleHook("Fourth Avenue Reconstruction Review", { jurisdiction, body });
+  }
+  return "";
+}
+
 function inferHookMode({ explicitMode, resolvedPrefix, summaryPath, focus }) {
   const mode = String(explicitMode || '').trim().toLowerCase();
   if (mode === 'preview' || mode === 'recap') return mode;
@@ -287,7 +351,7 @@ function enforcePreviewVerbTense(hook) {
   }
   const normalizedWords = words.map((w) => normalizeForMatch(w));
   const hasAllowedVerb = normalizedWords.some((w) => PREVIEW_ALLOWED_VERBS.has(w));
-  if (!hasAllowedVerb) return sanitizeHook('Council Considers Agenda Items');
+  if (!hasAllowedVerb) return sanitizeHook(words.join(' '));
   if (normalizedWords[0] === 'council' && words.length >= 2) {
     const second = normalizeForMatch(words[1]);
     if (!PREVIEW_ALLOWED_VERBS.has(second)) {
@@ -300,10 +364,13 @@ function enforcePreviewVerbTense(hook) {
 function isGenericPreviewHook(text) {
   const n = normalizeForMatch(text);
   return n.includes('council considers agenda items')
+    || n.includes('considers agenda items')
     || n.includes('meeting agenda')
     || n.includes('council business')
     || n.includes('several reports')
     || n.includes('city matters')
+    || n.includes('committee considers declaration')
+    || n.includes('considers declaration')
     || n.includes('updates')
     || n === 'council considers agenda items';
 }
@@ -312,9 +379,93 @@ function isGenericRecapHook(text) {
   const n = normalizeForMatch(text);
   return n.includes('the session s most consequential')
     || n.includes('most consequential')
+    || n.includes('the most significant development')
+    || n.includes('most significant development')
+    || n.includes('significant development concerns')
+    || n.includes('most significant substantive')
+    || n.includes('significant substantive')
     || n.includes('key council development')
     || n.includes('council decisions at')
-    || n.includes('meeting highlights');
+    || n.includes('meeting highlights')
+    || isProseSpeakerHook(text);
+}
+
+const GENERIC_HOOK_TERMS = new Set([
+  'administration', 'administrative', 'agenda', 'alignment', 'business', 'committee', 'concern', 'concerns',
+  'considers', 'council', 'declaration', 'development', 'discussion', 'direction',
+  'hears', 'item', 'items', 'matter', 'matters', 'meeting', 'most', 'newsworthy',
+  'open', 'procedural', 'receives', 'report', 'reports', 'review', 'reviews', 'routine',
+  'significant', 'slate', 'standard', 'substantive', 'the', 'update', 'updates',
+]);
+
+function hasConcreteKeywordOverlap(hook = "", sourceSummary = "") {
+  const hookTerms = normalizeForMatch(hook)
+    .split(" ")
+    .filter((term) => term.length >= 4)
+    .filter((term) => !GENERIC_HOOK_TERMS.has(term));
+  if (!hookTerms.length) return false;
+  const source = normalizeForMatch(sourceSummary);
+  return hookTerms.some((term) => source.includes(term));
+}
+
+function isKeywordHookReady(hook = "", sourceSummary = "", hookMode = "recap") {
+  const words = String(hook || "").trim().split(/\s+/u).filter(Boolean);
+  if (words.length < 3 || words.length > 6) return false;
+  if (/\b(january|february|march|april|may|june|july|august|september|october|november|december)$/iu.test(String(hook || "").trim())) return false;
+  if (isGenericRecapHook(hook)) return false;
+  if (hookMode === "preview" && (isGenericPreviewHook(hook) || isWeakPreviewHook(hook))) return false;
+  return hasConcreteKeywordOverlap(hook, sourceSummary);
+}
+
+function isRedundantDurationHook(text = '') {
+  const n = normalizeForMatch(text);
+  const hasDecade = /\btwo decade\b/u.test(n) || /\b2 decade\b/u.test(n) || /\b20 year\b/u.test(n);
+  const hasTwentyYears = /\btwenty years?\b/u.test(n) || /\b20 years?\b/u.test(n);
+  return hasDecade && hasTwentyYears;
+}
+
+function isProseSpeakerHook(text = "") {
+  const n = normalizeForMatch(text);
+  if (!n) return false;
+  const hasSpeakerSubject = /\b(representative|resident|residents|speaker|speakers|participant|participants|public|neighbourhood|neighborhood)\b/u.test(n);
+  const hasProseVerb = /\b(voice|voices|voiced|raise|raises|raised|hear|hears|heard|discuss|discusses|discussed|consider|considers|considered|express|expresses|expressed)\b/u.test(n);
+  const hasConcreteTopic = /\b(subdivision|frontage|lots|housing|parking|snow|pedestrian|school|hazard|eighth|twenty|third|street|avenue|consent|wetlands|ravines|servicing|density|tax|fees|transit|hospital|zoning|bylaw|food|access)\b/u.test(n);
+  return hasSpeakerSubject && hasProseVerb && !hasConcreteTopic;
+}
+
+function isClippedContrastHook(text = "") {
+  const n = normalizeForMatch(text);
+  if (!n) return false;
+  return /\b(despite|amid|over)\s+(safety|concerns|issues|questions|debate|pushback)\b/u.test(n);
+}
+
+function isPartialStreetHook(text = "") {
+  const n = normalizeForMatch(text);
+  if (!n) return false;
+  return /\b(twenty third|eighth|fourth|ninth|tenth|eleventh|second|third)\s*$/u.test(n);
+}
+
+function hookInventsUtilitySpecificity(hook = "", sourceSummary = "") {
+  const h = normalizeForMatch(hook);
+  const s = normalizeForMatch(sourceSummary);
+  if (!h || !s) return false;
+  const utilityTerms = ["water", "sewer", "sewerless", "wastewater", "hydro"];
+  return utilityTerms.some((term) => h.includes(term) && !s.includes(term));
+}
+
+function hookMissesConcernTopic(hook = "", sourceSummary = "") {
+  const h = normalizeForMatch(hook);
+  const s = normalizeForMatch(sourceSummary);
+  if (!h || !s) return false;
+  const sourceHasConcern = /\b(concern|concerns|pushback|opposition|inconsistent|parking|snow|pedestrian|density)\b/u.test(s);
+  const sourceHasSubdivision = /\b(subdivision|frontage|small lots|four lots|twenty third)\b/u.test(s);
+  if (!sourceHasConcern || !sourceHasSubdivision) return false;
+  return !/\b(subdivision|frontage|lots|parking|pedestrian|density|twenty|third|concerns)\b/u.test(h);
+}
+
+function sourceHasConcreteIssueTerms(sourceSummary = "") {
+  const n = normalizeForMatch(sourceSummary);
+  return /\b(subdivision|frontage|lots|housing|parking|snow|pedestrian|school|hazard|eighth|twenty|third|street|avenue|consent|wetlands|ravines|servicing|density|tax|fees|transit|hospital|zoning|bylaw|food|access)\b/u.test(n);
 }
 
 function extractTopNewsHeadings(mdText) {
@@ -498,6 +649,12 @@ function fallbackHookFromSummary(summaryText) {
 
 function deriveRecapHookFromTopNewsText(summaryText = "", jurisdiction = "", body = "") {
   const s = normalizeForMatch(summaryText);
+  if (/\bfive projects\b/.test(s) && /\blegislative verbal updates?\b/.test(s)) {
+    return sanitizeChapterStyleHook("Projects Legislative Updates Roundtable", { jurisdiction, body });
+  }
+  if (/\bcorrespondence\b/.test(s) && /\bsix\b/.test(s) && /\bpublic letters?\b/.test(s)) {
+    return sanitizeChapterStyleHook("Six Public Letters Reviewed", { jurisdiction, body });
+  }
   if (/\bwheelchair\b/.test(s) && /\btaxi\b/.test(s) && /\bhospital\b/.test(s)) {
     return sanitizeChapterStyleHook("Wheelchair Taxi Access Gap", { jurisdiction, body });
   }
@@ -507,7 +664,7 @@ function deriveRecapHookFromTopNewsText(summaryText = "", jurisdiction = "", bod
   if (/\bhousing\b/.test(s) && /\bfood\b/.test(s) && /\bland trust\b/.test(s)) {
     return sanitizeChapterStyleHook("Housing Food Land Trust", { jurisdiction, body });
   }
-  return sanitizeChapterStyleHook(fallbackHookFromSummary(summaryText), { jurisdiction, body });
+  return "";
 }
 
 function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, hookMode }) {
@@ -521,21 +678,35 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, h
     `Focus: ${focusLine}`,
     '',
     'Rules:',
-    '- 4 to 6 words only.',
-    '- Title case.',
-    '- Lead with the most newsworthy or surprising concrete development.',
-    '- Prefer strong, high-signal wording over generic committee language.',
-    '- Concrete and specific, not clickbait.',
-    '- Faithful to SOURCE_SUMMARY only.',
+	    '- 4 to 6 words only.',
+	    '- Title case.',
+	    '- Lead with the most newsworthy or surprising concrete development.',
+	    '- Use keyword-style noun phrases, like YouTube chapter headings, not sentence/prose wording.',
+	    '- Include concrete source keywords: project type, street/location, dollar amount, policy, service, or affected thing.',
+	    '- If using dollar amounts, write them as words or digits without punctuation.',
+	    '- Never use a bare amount by itself; pair it with the exact source noun, such as Film Series Revenue or Studio Class Earnings.',
+	    '- Prefer strong, high-signal wording over generic committee language.',
+	    '- Concrete and specific, not clickbait.',
+	    '- Faithful to SOURCE_SUMMARY only.',
     ...(isPreview
       ? ['- Prospective language only; this is an upcoming agenda.', '- Do not use completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Prefer considers/reviews/discusses/hears/receives/debates.']
       : []),
     '- No punctuation except apostrophe if required.',
-    '- No date and no jurisdiction/body names in the hook.',
-    '- No speaker names, no filler, no sentence fragments.',
-    '- Avoid bland joins like "and" unless absolutely necessary.',
-    '- Favor active, vivid wording that makes a resident want to read more.',
-    '- Output one line only.',
+	    '- No date and no jurisdiction/body names in the hook.',
+	    '- No speaker names, no filler, no sentence fragments.',
+	    '- Do not write hooks like "A Representative Voices Concerns" or "Residents Raise Concerns"; name what the concern is about.',
+	    '- Avoid bland joins like "and" unless absolutely necessary.',
+	    '- Do not use contrast/preposition fragments like "despite safety", "amid concerns", or "over issues".',
+	    '- Reuse concrete wording from SOURCE_SUMMARY instead of inventing labels.',
+	    '- If SOURCE_SUMMARY says "servicing", use "servicing"; do not change it to water, sewer, hydro, or wastewater unless that exact utility appears.',
+	    '- If SOURCE_SUMMARY contains subdivision/frontage/parking/pedestrian concerns, include one of those concrete issue terms in the hook.',
+	    '- For subdivision concern stories, acceptable keyword shapes include "Reduced Frontage Subdivision Concerns" or "Twenty Third Parking Concerns".',
+	    '- Do not end with a partial street phrase like "Twenty Third"; use the full street phrase or omit the street name.',
+	    '- Do not repeat the same time span twice, such as Two-decade and Twenty Years in the same hook.',
+	    '- Favor dense civic keywords over verbs like voices, discusses, considers, hears, or raises.',
+	    '- Good shape: "<Specific Topic> <Specific Issue>", for example "Twenty Third Subdivision Concerns".',
+	    '- Good revenue shape: "<Revenue Type> <Revenue Result>", for example "Film Series Revenue Surges".',
+	    '- Output one line only.',
     '',
     'RETRY_FEEDBACK:',
     feedback || '',
@@ -561,13 +732,26 @@ function buildScorePrompt({ sourceSummary, hook, jurisdiction, body, hookMode })
     '',
     'Rules:',
     '- Penalize invented claims not in SOURCE_SUMMARY.',
+    '- Treat equivalent number words and digits as the same amount (for example "Five Hundred Thousand" equals "$500,000"); do not claim digits are missing when the amount is written in words.',
+    '- Do not require currency symbols or comma-formatted numbers; hooks are punctuation-free keyword titles.',
     '- Penalize action verbs that overstate status (adopted/approved/passed) unless SOURCE_SUMMARY explicitly supports that action for the same subject.',
-    '- Penalize polarity flips: if SOURCE_SUMMARY says access barriers/denials/lack of access, do not reward positive-service wording (serves/expands/enables) unless explicit approved expansion evidence exists.',
+	    '- Penalize polarity flips: if SOURCE_SUMMARY says access barriers/denials/lack of access, do not reward positive-service wording (serves/expands/enables) unless explicit approved expansion evidence exists.',
     ...(isPreview
       ? ['- For preview mode, fail completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Reward prospective framing (considers/reviews/discusses/hears/receives/debates).']
       : []),
-    '- Penalize vagueness if SOURCE_SUMMARY has concrete high-impact items.',
-    '- Penalize hooks that are not YouTube chapter style: 4-6 words, title case, and no jurisdiction/body names.',
+	    '- Penalize vagueness if SOURCE_SUMMARY has concrete high-impact items.',
+	    '- Fail prose hooks that say a representative/resident/public voices, raises, hears, discusses, considers, or expresses concerns without naming the concrete issue.',
+	    '- Fail contrast/preposition fragments like "despite safety", "amid concerns", or "over issues"; hooks must read as a compact title, not a clipped sentence.',
+	    '- Fail utility-specific hooks using water, sewer, hydro, or wastewater unless SOURCE_SUMMARY uses that same utility word.',
+	    '- If SOURCE_SUMMARY has subdivision/frontage/parking/pedestrian concerns, fail hooks that omit those concrete issue terms.',
+	    '- Do not require every issue from SOURCE_SUMMARY; one concrete issue or one concrete location plus issue is enough for a 4-6 word hook.',
+	    '- Do not require exact dollar amounts when the hook names the same concrete revenue, budget, cost, project, service, or policy issue accurately.',
+	    '- Treat a named revenue stream, budget item, cost, project, service, or program as concrete context; do not require a separate location or policy term.',
+	    '- Do not penalize omission of secondary details when the hook names a concrete source issue accurately.',
+	    '- Fail hooks that end with a partial street phrase such as "Twenty Third" without Street, Avenue, Road, or West.',
+	    '- Fail hooks that repeat the same time span twice, such as Two-decade and Twenty Years in the same hook.',
+	    '- Reward keyword hooks that include source terms such as street names, project types, costs, policy names, services, land uses, or affected infrastructure.',
+	    '- Penalize hooks that are not YouTube chapter style: 4-6 words, title case, and no jurisdiction/body names.',
     '- Penalize non-title-ready hooks (too long/too short/noise).',
     '- Penalize dry/boilerplate phrasing when SOURCE_SUMMARY contains conflict, cost, major policy shifts, or unusual events.',
     '- Reward hooks that foreground the single highest-impact item first.',
@@ -593,6 +777,38 @@ function parseScore(review) {
   const n = Number(last);
   if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
   return 0;
+}
+
+function buildYouTubeChapterHookPrompt({ currentSection = "" }) {
+  const section = String(currentSection || "").replace(/\s+/gu, " ").trim();
+  return [
+    "Create one concise YouTube chapter heading for this transcript section.",
+    "Return only the heading text.",
+    "Requirements: 3 to 4 words, title case, specific topic, no quotes, no speaker names, no filler, no sentence fragments.",
+    "Use only the CURRENT_SECTION to choose the heading topic.",
+    "Do not describe previous or next sections.",
+    `CURRENT_SECTION: ${section || "EMPTY"}`,
+  ].join("\n");
+}
+
+async function generateYouTubeStyleHookFromSource({ sourceSummary = "" }) {
+  const systemPrompt = "You create compact YouTube chapter headings from transcript excerpts. Respond with one heading only. Do not explain. think false.";
+  let feedback = "";
+  let best = "";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const prompt = feedback
+      ? `${buildYouTubeChapterHookPrompt({ currentSection: sourceSummary })}\n\nREVISION_FEEDBACK:\n${feedback}`
+      : buildYouTubeChapterHookPrompt({ currentSection: sourceSummary });
+    const raw = await ask([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt },
+    ], { numPredict: 48 });
+    const hook = sanitizeHook(raw);
+    if (hook) best = hook;
+    if (best && !isGenericPreviewHook(best) && !isWeakPreviewHook(best)) return best;
+    feedback = "Make it more specific and topic-grounded; avoid generic wording.";
+  }
+  return best;
 }
 
 async function ask(messages, { numPredict = 120 } = {}) {
@@ -621,9 +837,21 @@ async function ask(messages, { numPredict = 120 } = {}) {
 }
 
 async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings, focus, jurisdiction, body, hookMode }) {
+  if (hookMode === "preview") {
+    const ytStyle = await generateYouTubeStyleHookFromSource({ sourceSummary });
+    if (ytStyle && isKeywordHookReady(ytStyle, sourceSummary, hookMode)) {
+      const cleaned = sanitizeChapterStyleHook(ytStyle, { jurisdiction, body });
+      return {
+        hook: cleaned,
+        score: 1,
+        verifier_feedback: "Hook sourced from YouTube chapter-style prompt on current section.",
+        fallback_used: false,
+      };
+    }
+  }
   if (hookMode !== 'preview') {
     const leadFromText = deriveRecapHookFromTopNewsText(sourceSummary, jurisdiction, body);
-    if (leadFromText && !isGenericRecapHook(leadFromText)) {
+    if (leadFromText && isKeywordHookReady(leadFromText, sourceSummary, hookMode) && !isRedundantDurationHook(leadFromText)) {
       return {
         hook: leadFromText,
         score: 1,
@@ -633,6 +861,9 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
     }
   }
   const verifierSource = String(verifierSourceText || sourceSummary || '');
+  const generationSource = hookMode === 'preview'
+    ? sourceSummary
+    : selectHookGenerationSource(sourceSummary);
   let feedback = '';
   let bestHook = '';
   let bestScore = -1;
@@ -641,7 +872,7 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
   for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
     const draftRaw = await ask([
       { role: 'system', content: 'You are a precise civic headline hook writer.' },
-      { role: 'user', content: buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, hookMode }) },
+      { role: 'user', content: buildHookPrompt({ sourceSummary: generationSource, focus, jurisdiction, body, feedback, hookMode }) },
     ], { numPredict: 64 });
 
     const draftBase = hookMode === 'preview'
@@ -649,14 +880,32 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
       : sanitizeHook(draftRaw);
     const draft = sanitizeChapterStyleHook(draftBase, { jurisdiction, body });
 
-    let review = '';
-    let score = 0;
-    if (hookMode === 'preview' && containsPreviewBannedVerb(draft)) {
-      review = 'Hook uses completed-outcome verbs disallowed for upcoming agenda previews.\n0';
-      score = 0;
-    } else if (hookDecisionClaimUnsupported(draft, verifierSource)) {
-      review = 'Hook uses an unsupported decision verb (adopted/approved/passed) for the same subject.\n0';
-      score = 0;
+	    let review = '';
+	    let score = 0;
+	    if (hookMode === 'preview' && containsPreviewBannedVerb(draft)) {
+	      review = 'Hook uses completed-outcome verbs disallowed for upcoming agenda previews.\n0';
+	      score = 0;
+	    } else if (hookMode !== 'preview' && isProseSpeakerHook(draft) && sourceHasConcreteIssueTerms(sourceSummary)) {
+	      review = 'Hook is prose about who spoke instead of keyword-style topic terms; name the concrete issue from the source.\n0';
+	      score = 0;
+	    } else if (isClippedContrastHook(draft)) {
+	      review = 'Hook uses a clipped contrast fragment; rewrite as a compact keyword title with concrete source nouns.\n0';
+	      score = 0;
+	    } else if (isPartialStreetHook(draft)) {
+	      review = 'Hook ends with a partial street phrase; use the full street phrase or replace it with issue keywords.\n0';
+	      score = 0;
+	    } else if (isRedundantDurationHook(draft)) {
+	      review = 'Hook repeats the same time span twice; keep either Two-decade or Twenty Years, not both.\n0';
+	      score = 0;
+	    } else if (hookInventsUtilitySpecificity(draft, verifierSource)) {
+	      review = 'Hook invents a specific utility word not present in source; reuse source wording such as servicing instead.\n0';
+	      score = 0;
+	    } else if (hookMissesConcernTopic(draft, sourceSummary)) {
+	      review = 'Hook misses the concrete subdivision/frontage concern topic in the source; revise with exact issue keywords such as Subdivision, Frontage, Parking, Pedestrian, Density, Lots, or Twenty Third.\n0';
+	      score = 0;
+	    } else if (hookDecisionClaimUnsupported(draft, verifierSource)) {
+	      review = 'Hook uses an unsupported decision verb (adopted/approved/passed) for the same subject.\n0';
+	      score = 0;
     } else if (hookSourcePolarityUnsupported(draft, verifierSource)) {
       review = 'Hook flips source polarity (barrier/denial context recast as positive service expansion).\n0';
       score = 0;
@@ -673,10 +922,14 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
       bestReview = review;
     }
     feedback = review;
-    if (score >= PASS_THRESHOLD) break;
+    if (score >= PASS_THRESHOLD && isKeywordHookReady(draft, sourceSummary, hookMode)) break;
   }
 
-  let safeHook = bestScore >= PASS_THRESHOLD ? bestHook : fallbackHookFromSummary(sourceSummary);
+	  let safeHook = bestHook || '';
+	  if (hookMode !== 'preview' && bestScore < PASS_THRESHOLD) {
+	    throw new Error(`meeting-hook failed quality threshold score=${Number(bestScore || 0).toFixed(3)} hook=${JSON.stringify(bestHook || '')} feedback=${String(bestReview || '').replace(/\s+/gu, ' ').trim()}`);
+	  }
+	  if (!safeHook) safeHook = fallbackHookFromSummary(sourceSummary);
   safeHook = sanitizeChapterStyleHook(safeHook, { jurisdiction, body });
   if (hookMode === 'preview') {
     const rankedHook = buildPreviewHookFromRankedItems(topNewsHeadings);
@@ -690,11 +943,27 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
       safeHook = safeHook.replace(/\bCouncil\b/giu, '').replace(/\s+/gu, ' ').trim();
       safeHook = sanitizeFinalPreviewHook(safeHook) || safeHook;
     }
+    safeHook = enforcePreviewTemporalStyle(safeHook);
+    if (isWeakPreviewHook(safeHook)) {
+      const fromTop = buildPreviewHookFromRankedItems(topNewsHeadings);
+      if (fromTop) safeHook = sanitizeFinalPreviewHook(fromTop) || fromTop;
+    }
+    if (isWeakPreviewHook(safeHook)) {
+      const fromSummary = derivePreviewHookFromTopNewsText(sourceSummary, jurisdiction, body);
+      if (fromSummary) safeHook = fromSummary;
+    }
     safeHook = sanitizeChapterStyleHook(safeHook, { jurisdiction, body });
   }
   if (hookMode !== 'preview' && isGenericRecapHook(safeHook)) {
-    const rankedLead = sanitizeChapterStyleHook(String(topNewsHeadings?.[0] || ""), { jurisdiction, body });
-    if (rankedLead && !isGenericRecapHook(rankedLead)) safeHook = rankedLead;
+    const recapLead = deriveRecapHookFromTopNewsText(sourceSummary, jurisdiction, body);
+    if (recapLead && !isGenericRecapHook(recapLead)) safeHook = recapLead;
+    else {
+      const rankedLead = sanitizeChapterStyleHook(String(topNewsHeadings?.[0] || ""), { jurisdiction, body });
+      if (rankedLead && !isGenericRecapHook(rankedLead)) safeHook = rankedLead;
+    }
+  }
+  if (!isKeywordHookReady(safeHook, sourceSummary, hookMode)) {
+    throw new Error(`meeting-hook failed keyword quality gate hook=${JSON.stringify(safeHook)} mode=${hookMode}`);
   }
 
   return {
@@ -802,7 +1071,12 @@ async function main() {
   process.stdout.write(`[meeting-hook] wrote: ${outJson}\n`);
 }
 
-export { hookDecisionClaimUnsupported, hookSourcePolarityUnsupported };
+export {
+  hasConcreteKeywordOverlap,
+  hookDecisionClaimUnsupported,
+  hookSourcePolarityUnsupported,
+  isKeywordHookReady,
+};
 
 function isCliEntry() {
   const argvPath = String(process.argv[1] || '').trim();

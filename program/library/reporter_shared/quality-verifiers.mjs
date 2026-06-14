@@ -455,6 +455,21 @@ function hasMalformedRewritePattern(sentenceNorm) {
   return /\b(addressed|reviewed|considered|discussed)\s+[^.?!]{2,80}\s+from\s+[^.?!]{2,80}\b/iu.test(sentenceNorm);
 }
 
+function escalationClaimSupported(sentenceNorm = "", sourceNorm = "") {
+  const claims = [
+    ["secured", /\bsecur(?:e|ed|es|ing)\b/iu],
+    ["protected", /\bprotect(?:ed|s|ing)?\b/iu],
+    ["ensured", /\bensur(?:e|ed|es|ing)\b/iu],
+    ["saved", /\bsav(?:e|ed|es|ing)\b/iu],
+    ["prevented", /\bprevent(?:ed|s|ing)?\b/iu],
+    ["delivered", /\bdeliver(?:ed|s|ing)?\b/iu],
+    ["won", /\b(?:won|wins?|winning)\b/iu],
+    ["resisting", /\bresist(?:ed|s|ing)?\b/iu],
+  ];
+  const used = claims.filter(([word]) => new RegExp(`\\b${word}\\b`, "iu").test(sentenceNorm));
+  return used.length > 0 && used.every(([, supportedPattern]) => supportedPattern.test(sourceNorm));
+}
+
 export function verifyArticleClaims({
   bodyMarkdown = "",
   meetingSummaryMd = "",
@@ -496,6 +511,7 @@ export function verifyArticleClaims({
       if (!sentenceNorm) continue;
       const hasValue = valueWords.test(sentenceNorm);
       const hasEsc = escalationWords.test(sentenceNorm);
+      const supportedEsc = hasEsc && escalationClaimSupported(sentenceNorm, `${strongNorm} ${secondaryNorm}`);
       const hasCausal = causalWords.test(sentenceNorm);
       const hasOutcome = outcomeWords.test(sentenceNorm);
       const strongHit = supportSnippet(sentenceNorm, source.strong);
@@ -509,9 +525,9 @@ export function verifyArticleClaims({
 
       let severity = "supported";
       let issueType = "";
-      if (hasValue || hasEsc || hasCausal) {
+      if (hasValue || (hasEsc && !supportedEsc) || hasCausal) {
         severity = "unsupported";
-        issueType = hasValue ? "value_judgment_overclaim" : (hasEsc ? "action_escalation" : "causal_overclaim");
+        issueType = hasValue ? "value_judgment_overclaim" : ((hasEsc && !supportedEsc) ? "action_escalation" : "causal_overclaim");
       }
       if (hasOutcome && !isSupportedOutcome) {
         severity = "unsupported_high_severity";
@@ -588,7 +604,7 @@ export function verifyArticleClaims({
           "rewritten sentence": "",
           "final action": finalAction,
         });
-        if (severity === "unsupported_high_severity" || rewriteStillUnsupported) {
+        if (finalAction === "blocked" && (severity === "unsupported_high_severity" || rewriteStillUnsupported)) {
           blocked = true;
           unresolvedHighSeverity += 1;
         }

@@ -55,6 +55,11 @@ function buildTimedVideoUrl(baseUrl, seconds) {
   return `${base}#t=${sec}`;
 }
 
+function htmlId(input, fallback = "item") {
+  const slug = slugify(input);
+  return slug || fallback;
+}
+
 function parseSrt(text, { expectSpeaker = true } = {}) {
   const src = String(text || "").replace(/\r\n/g, "\n");
   const blocks = src.split(/\n{2,}/u).map((b) => b.trim()).filter(Boolean);
@@ -137,6 +142,26 @@ function mergeSpeakerLabelsByIndex(baseRows, speakerRows) {
       out[i].speaker = name;
       out[i].raw = `${name}: ${String(out[i].speech || "").trim()}`.trim();
     }
+  }
+  return out;
+}
+
+function forceNumberedSpeakers(rows) {
+  const out = Array.isArray(rows) ? rows.map((r) => ({ ...r })) : [];
+  if (!out.length) return out;
+  const labelToNumber = new Map();
+  let next = 1;
+  for (const row of out) {
+    const rawLabel = String(row?.speaker || "").trim();
+    if (!rawLabel) continue;
+    let num = labelToNumber.get(rawLabel);
+    if (!num) {
+      num = next;
+      labelToNumber.set(rawLabel, num);
+      next += 1;
+    }
+    row.speaker = `Speaker ${String(num).padStart(2, "0")}`;
+    row.raw = `${row.speaker}: ${String(row?.speech || "").trim()}`.trim();
   }
   return out;
 }
@@ -281,6 +306,136 @@ function extractTopNewsworthyItems(mdText, maxItems = 6) {
   return out;
 }
 
+function isProceduralNewsText(text) {
+  const t = normalizeText(text);
+  if (!t) return true;
+  return /\b(call to order|declarations of interest|confirmation of .*minutes|adopted minutes|adjournment|committee of the whole rise and report|motion to adopt proceedings|notices of motion|closed session|reporting out of closed session)\b/u.test(t);
+}
+
+function deriveGroundedNewsTitle(title, text) {
+  const rawTitle = String(title || "").trim();
+  const combined = normalizeText(`${rawTitle} ${text}`);
+  if (/\blibrary\b/u.test(combined) && /\bparking\b/u.test(combined) && /\baccessib/u.test(combined)) {
+    return "Library Parking and Accessibility";
+  }
+  if (/\bshort term parking\b/u.test(combined) && /\baoda|accessib|handicap/u.test(combined)) {
+    return "Short-Term Parking and Accessibility Review";
+  }
+  if (/\bcapital cost recovery\b/u.test(combined) && /\bschool|servicing|sydenham/u.test(combined)) {
+    return "School Servicing and Capital Cost Recovery";
+  }
+  if (/\btunnel\b/u.test(combined) && /\bresurfacing|lighting|funding/u.test(combined)) {
+    return "Tunnel Rehabilitation and Road Funding";
+  }
+  if (/\bwater billing\b/u.test(combined)) {
+    return "Monthly Water Billing Discussion";
+  }
+  if (rawTitle && !/^[0-9.a-z\s-]*[A-Z][A-Z\s.'&-]+$/u.test(rawTitle) && !/\b(public forum|correspondence received|agenda item covered)\b/iu.test(rawTitle)) {
+    return rawTitle;
+  }
+  const sentence = firstSentences(text, 1)
+    .replace(/\s+/gu, " ")
+    .replace(/[.?!]+$/u, "")
+    .trim();
+  return sentence.split(/\s+/u).slice(0, 9).join(" ") || rawTitle || "Meeting Item";
+}
+
+function scoreGroundedNewsCandidate(candidate) {
+  const title = String(candidate?.title || "");
+  const text = String(candidate?.text || "");
+  const combined = normalizeText(`${title} ${text}`);
+  if (!combined || isProceduralNewsText(combined)) return -1000;
+
+  let score = 0;
+  const sourceRows = Math.max(0, Number(candidate?.sourceRows) || 0);
+  const duration = Math.max(0, Number(candidate?.durationSeconds) || 0);
+  score += Math.min(4, sourceRows / 40);
+  score += Math.min(3, duration / 600);
+
+  const strongPatterns = [
+    /\b(approved|adopted|carried|defeated|deferred|voted|directed staff|authorized|bylaw|agreement|tender|capital cost|cost recovery)\b/u,
+    /\b(parking|accessib|aoda|traffic calming|road safety|sidewalk|school|servicing|tunnel|water|wastewater|resurfacing|budget|funding|tax|collision)\b/u,
+    /\b(\$|million|thousand|[0-9]+(?:\.[0-9]+)?\s*(?:million|thousand|spaces|minutes|percent|%))\b/u,
+  ];
+  for (const pattern of strongPatterns) {
+    const matches = combined.match(new RegExp(pattern.source, "gu"));
+    score += Math.min(4, Array.isArray(matches) ? matches.length : 0);
+  }
+
+  const weakPatterns = [
+    /\b(media release|celebration|festival|presentation|workshop|survey|open online survey|invitation|upcoming|for information|no matters|no submissions)\b/u,
+    /\b(canada day|bereavement|butterfly|pollinator|donated flowers)\b/u,
+    /\b(correspondence received for which direction of council is|approved amendments to its constitution and directed staff to forward)\b/u,
+  ];
+  for (const pattern of weakPatterns) {
+    if (pattern.test(combined)) score -= 3;
+  }
+  if (/^agenda item covered\b/u.test(combined)) score -= 4;
+  if (text.length < 90) score -= 1;
+  return score;
+}
+
+function buildGroundedTopNewsworthyItems(sectionSummaries, maxItems = 6) {
+  const sections = Array.isArray(sectionSummaries) ? sectionSummaries : [];
+  const candidates = [];
+  for (const sec of sections) {
+    const heading = String(sec?.heading || "").trim();
+    const sectionText = String(sec?.summary || "").trim();
+    const sectionRows = Number(sec?.source_rows ?? sec?.["source rows"] ?? 0) || 0;
+    const start = Number(sec?.start_row ?? sec?.["start row"]);
+    const end = Number(sec?.end_row ?? sec?.["end row"]);
+    const sectionCandidate = {
+      id: String(sec?.["unit id"] || heading),
+      parentId: String(sec?.["unit id"] || heading),
+      title: deriveGroundedNewsTitle(heading.replace(/^\d+(?:\.[a-z0-9]+)?\s*/iu, "").trim() || heading || "Meeting Item", sectionText),
+      text: firstSentences(sectionText, 2),
+      sourceRows: sectionRows,
+      durationSeconds: 0,
+      rowStart: Number.isFinite(start) ? start : -1,
+      rowEnd: Number.isFinite(end) ? end : -1,
+    };
+    if (sectionCandidate.text) candidates.push(sectionCandidate);
+
+    for (const ch of Array.isArray(sec?.chapters) ? sec.chapters : []) {
+      const rowStart = Number(ch?.["row start"] ?? ch?.start_row);
+      const rowEnd = Number(ch?.["row end"] ?? ch?.end_row);
+      const since = Number(ch?.since);
+      const until = Number(ch?.until);
+      const rows = Number.isFinite(rowStart) && Number.isFinite(rowEnd) ? Math.max(1, rowEnd - rowStart + 1) : 0;
+      candidates.push({
+        id: String(ch?.["chapter id"] || `${sec?.["unit id"] || heading}-${candidates.length + 1}`),
+        parentId: String(sec?.["unit id"] || heading),
+        title: deriveGroundedNewsTitle(String(ch?.title || heading || "Meeting Item").trim(), String(ch?.text || sectionText || "").trim()),
+        text: firstSentences(String(ch?.text || sectionText || "").trim(), 2),
+        sourceRows: rows || sectionRows,
+        durationSeconds: Number.isFinite(since) && Number.isFinite(until) && until >= since ? until - since : 0,
+        rowStart: Number.isFinite(rowStart) ? rowStart : -1,
+        rowEnd: Number.isFinite(rowEnd) ? rowEnd : -1,
+      });
+    }
+  }
+
+  const seen = new Set();
+  const parentCounts = new Map();
+  return candidates
+    .map((candidate) => ({ ...candidate, score: scoreGroundedNewsCandidate(candidate) }))
+    .filter((candidate) => candidate.score > 1 && candidate.text)
+    .sort((a, b) => b.score - a.score || a.rowStart - b.rowStart)
+    .filter((candidate) => {
+      const key = normalizeText(candidate.title).split(" ").slice(0, 7).join(" ");
+      if (!key || seen.has(key)) return false;
+      const parentId = String(candidate.parentId || "");
+      const parentCount = parentCounts.get(parentId) || 0;
+      if (parentId && parentCount >= 2) return false;
+      seen.add(key);
+      if (parentId) parentCounts.set(parentId, parentCount + 1);
+      return true;
+    })
+    .slice(0, maxItems)
+    .sort((a, b) => a.rowStart - b.rowStart)
+    .map((candidate) => ({ title: candidate.title, text: candidate.text }));
+}
+
 function distinct(list) {
   const seen = new Set();
   const out = [];
@@ -356,6 +511,47 @@ function parseAgendaSummarySectionsFromPya(filePath) {
     end_row: Number(sec?.end_row ?? sec?.["end row"]),
     source_rows: Number(sec?.source_rows ?? sec?.["source rows"]),
   }));
+}
+
+function parseChapterSummarySectionsFromPya(summaryPath, groundingPath = "") {
+  const parseUnits = (filePath, unitName) => {
+    if (!filePath || !fs.existsSync(filePath)) return [];
+    const out = [];
+    const src = fs.readFileSync(filePath, "utf8");
+    const escapedUnitName = unitName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const re = new RegExp(`^su name ${escapedUnitName}\\s+([^\\s]+)\\s+since num\\s+([0-9.]+)\\s+until num\\s+([0-9.]+)\\s+ob text\\s+"([\\s\\S]+)"\\s+ya$`, "u");
+    for (const line of src.split(/\r?\n/u).map((x) => x.trim()).filter(Boolean)) {
+      const m = line.match(re);
+      if (!m) continue;
+      let payload = {};
+      try { payload = JSON.parse(JSON.parse(`"${m[4]}"`)); } catch {}
+      out.push({
+        id: String(payload?.["chapter id"] || m[1]).trim(),
+        since: Number(payload?.since ?? m[2]),
+        until: Number(payload?.until ?? m[3]),
+        title: String(payload?.["chapter title"] || "").trim(),
+        summary: String(payload?.summary || payload?.["chapter text"] || "").trim(),
+        start_row: Number(payload?.["row start"]),
+        end_row: Number(payload?.["row end"]),
+        source_rows: Number(payload?.["source rows"]),
+      });
+    }
+    return out;
+  };
+  const summaries = parseUnits(summaryPath, "chapter summary unit");
+  const grounding = parseUnits(groundingPath, "chapter grounding unit");
+  const groundingById = new Map(grounding.map((unit) => [unit.id, unit]));
+  return summaries.map((summary, index) => {
+    const ground = groundingById.get(summary.id) || grounding[index] || {};
+    return {
+      "unit id": summary.id || ground.id || `chapter_${String(index + 1).padStart(3, "0")}`,
+      heading: summary.title || ground.title || `Chapter ${index + 1}`,
+      summary: summary.summary || ground.summary || "",
+      start_row: Number.isFinite(summary.start_row) ? summary.start_row : ground.start_row,
+      end_row: Number.isFinite(summary.end_row) ? summary.end_row : ground.end_row,
+      source_rows: Number.isFinite(summary.source_rows) ? summary.source_rows : ground.source_rows,
+    };
+  });
 }
 
 function parseAgendaMatchesFromPya(filePath) {
@@ -875,6 +1071,31 @@ function buildPage({
     return `<div class="transcript-entry"><p>${ts} ${speaker}<span class="speech">${escapeHtml(row.speech)}</span></p></div>`;
   };
 
+  const chapterAnchor = (section, chapter, index) => {
+    const rawId = String(chapter?.["chapter id"] || `${section?.id || "section"}-chapter-${index + 1}`).trim();
+    return `chapter-${htmlId(rawId, `${section?.id || "section"}-chapter-${index + 1}`)}`;
+  };
+
+  const chapterStartRow = (chapter, fallbackRow) => {
+    const value = Number(chapter?.["row start"] ?? chapter?.start_row ?? chapter?.startRow);
+    if (Number.isFinite(value)) return Math.floor(value);
+    return Math.floor(Number(fallbackRow) || 0);
+  };
+
+  const renderChapterSummary = (section, chapter, index) => {
+    const since = Number(chapter?.since);
+    const ts = Number.isFinite(since) ? fmtClock(since) : "";
+    const jumpUrl = Number.isFinite(since) ? buildTimedVideoUrl(videoUrl || meetingUrl, since) : (videoUrl || meetingUrl || "#");
+    const title = String(chapter?.title || "").trim();
+    const text = String(chapter?.text || "").trim();
+    const anchorId = chapterAnchor(section, chapter, index);
+    const heading = title || text || "Chapter";
+    const timestamp = ts
+      ? `<a class="chapter-timestamp" href="${escapeHtml(jumpUrl)}" aria-label="Open source video at ${escapeHtml(ts)}">${escapeHtml(ts)}</a>`
+      : "";
+    return `<aside id="${escapeHtml(anchorId)}" class="chapter-summary"><h4>${timestamp}${timestamp ? " " : ""}${escapeHtml(heading)}</h4>${text ? `<p>${escapeHtml(text)}</p>` : ""}</aside>`;
+  };
+
   const hasSections = Array.isArray(transcriptSections) && transcriptSections.length > 0;
   const summaryLooksDuplicate = (summaryText, firstRow) => {
     const a = normalizeText(summaryText);
@@ -892,31 +1113,46 @@ function buildPage({
     return false;
   };
   const mergedTopicRows = hasSections
-    ? transcriptSections.map((s) => ({ href: `#${s.id}`, label: s.heading }))
-    : topics.map((t) => ({ href: "#full-transcript", label: t }));
-  const mergedTopicsHtml = `<nav class="toc" aria-label="Transcript topics and sections"><ol>${mergedTopicRows.map((row) => `<li><a href="${escapeHtml(row.href)}">${escapeHtml(row.label)}</a></li>`).join("")}</ol></nav>`;
+    ? transcriptSections.map((s) => ({
+      href: `#${s.id}`,
+      label: s.heading,
+      chapters: (Array.isArray(s.chapters) ? s.chapters : []).map((ch, i) => ({
+        href: `#${chapterAnchor(s, ch, i)}`,
+        label: String(ch?.title || ch?.text || `Chapter ${i + 1}`).trim() || `Chapter ${i + 1}`,
+        since: Number(ch?.since),
+      })),
+    }))
+    : topics.map((t) => ({ href: "#full-transcript", label: t, chapters: [] }));
+  const mergedTopicsHtml = `<nav class="toc" aria-label="Transcript topics and sections"><ol>${mergedTopicRows.map((row) => {
+    const chapters = Array.isArray(row.chapters) && row.chapters.length
+      ? `<ol class="toc-chapters">${row.chapters.map((ch) => {
+        const ts = Number.isFinite(ch.since) ? `${fmtClock(ch.since)} ` : "";
+        return `<li><a href="${escapeHtml(ch.href)}">${escapeHtml(ts)}${escapeHtml(ch.label)}</a></li>`;
+      }).join("")}</ol>`
+      : "";
+    return `<li><a href="${escapeHtml(row.href)}">${escapeHtml(row.label)}</a>${chapters}</li>`;
+  }).join("")}</ol></nav>`;
   const transcriptHtml = hasSections
     ? transcriptSections.map((s) => {
       const rows = transcriptRows.slice(s.startRow, s.endRow + 1);
       const firstRowText = rows.length ? String(rows[0]?.speech || rows[0]?.raw || "").trim() : "";
       const showSummary = !summaryLooksDuplicate(String(s.summary || ""), firstRowText);
       const chapterList = Array.isArray(s.chapters) ? s.chapters : [];
-      const chaptersHtml = chapterList.length
-        ? `<div class="section-chapters"><h4>Chapters</h4><ul>${chapterList.map((ch) => {
-          const since = Number(ch?.since);
-          const ts = Number.isFinite(since) ? fmtClock(since) : "";
-          const jumpUrl = Number.isFinite(since) ? buildTimedVideoUrl(videoUrl || meetingUrl, since) : (videoUrl || meetingUrl || "#");
-          const title = String(ch?.title || "").trim();
-          const text = String(ch?.text || "").trim();
-          const lead = ts
-            ? `<a href="${escapeHtml(jumpUrl)}">[${escapeHtml(ts)}]</a> ${escapeHtml(title || text || "Chapter")}`
-            : escapeHtml(title || text || "Chapter");
-          const detail = text ? `<br><span class="chapter-text">${escapeHtml(text)}</span>` : "";
-          return `<li>${lead}${detail}</li>`;
-        }).join("")} </ul></div>`
-        : "";
-      const entries = rows.map(renderEntry).join("\n");
-      return `<section id="${escapeHtml(s.id)}" class="transcript-section"><h3>${escapeHtml(s.heading)}</h3>${showSummary ? `<p class="section-summary">${escapeHtml(s.summary)}</p>` : ""}${chaptersHtml}${entries}</section>`;
+      const chaptersByStartRow = new Map();
+      for (let i = 0; i < chapterList.length; i += 1) {
+        const rowIndex = Math.max(s.startRow, Math.min(s.endRow, chapterStartRow(chapterList[i], s.startRow)));
+        const list = chaptersByStartRow.get(rowIndex) || [];
+        list.push({ chapter: chapterList[i], index: i });
+        chaptersByStartRow.set(rowIndex, list);
+      }
+      const entries = rows.map((row, localIndex) => {
+        const globalRow = s.startRow + localIndex;
+        const summaries = (chaptersByStartRow.get(globalRow) || [])
+          .map(({ chapter, index }) => renderChapterSummary(s, chapter, index))
+          .join("\n");
+        return `${summaries}${summaries ? "\n" : ""}${renderEntry(row)}`;
+      }).join("\n");
+      return `<section id="${escapeHtml(s.id)}" class="transcript-section"><h3>${escapeHtml(s.heading)}</h3>${showSummary ? `<p class="section-summary">${escapeHtml(s.summary)}</p>` : ""}${entries}</section>`;
     }).join("\n")
     : transcriptRows.map(renderEntry).join("\n");
 
@@ -974,15 +1210,15 @@ function buildPage({
     .transcript-tools { margin:.4rem 0 .8rem; }
     .toc { margin:.3rem 0 .9rem; padding:.6rem .75rem; border:1px solid var(--line); background:#fff; }
     .toc ol { margin:.25rem 0 .1rem 1.2rem; }
+    .toc .toc-chapters { margin:.1rem 0 .25rem 1.1rem; font-size:.94rem; }
     .toc a { color:var(--accent); text-decoration:none; }
     .transcript-section { margin: 1.1rem 0 1.25rem; }
     .transcript-section h3 { margin: 0 0 .35rem; font-family:"IBM Plex Sans", Arial, sans-serif; font-size:1.05rem; }
     .section-summary { margin:.1rem 0 .5rem; color:#26323e; background:#fff; border-left:3px solid var(--line); padding:.35rem .55rem; }
-    .section-chapters { margin:.2rem 0 .6rem; border-left:2px solid var(--line); padding:.3rem .6rem; background:#fff; }
-    .section-chapters h4 { margin:.1rem 0 .25rem; font-size:.95rem; color:#203042; }
-    .section-chapters ul { margin:.15rem 0 .1rem 1rem; padding:0; }
-    .section-chapters li { margin:.15rem 0; }
-    .chapter-text { color:#3f4c58; }
+    .chapter-summary { margin:.75rem 0 .5rem; border-left:2px solid var(--line); padding:.35rem .6rem; background:#fff; scroll-margin-top:1rem; }
+    .chapter-summary h4 { margin:.05rem 0 .2rem; font-family:"IBM Plex Sans", Arial, sans-serif; font-size:.98rem; color:#203042; }
+    .chapter-summary p { margin:.15rem 0; color:#3f4c58; }
+    .chapter-timestamp { color:var(--accent); text-decoration:none; font-size:.9rem; }
     .transcript-tools a { color:var(--accent); text-decoration:none; font-family:"IBM Plex Sans", Arial, sans-serif; }
     .transcript-entry { border-top:1px solid var(--line); padding:.58rem 0; }
     .transcript-entry p { margin:0; }
@@ -1159,18 +1395,30 @@ function main() {
     }
   }
 
+  const preserveSpeakerNames = /^(1|true|yes)$/iu.test(String(process.env.PYA_PRESERVE_SPEAKER_NAMES || ""));
+  if (!preserveSpeakerNames) transcriptRows = forceNumberedSpeakers(transcriptRows);
+  const numberedCount = transcriptRows.filter((r) => String(r.speaker || "").trim()).length;
+  process.stdout.write(`[transcript-html] ${preserveSpeakerNames ? "preserved speaker labels" : "normalized speaker labels to numbered format"} (${numberedCount}/${transcriptRows.length})\n`);
+
   const agendaSummaryPath = pickFile(transcriptDir, [/\.agenda-summary\.md$/u]);
   const agendaSummaryPyaPath = pickFile(transcriptDir, [/\.agenda-summary\.pya$/u]);
+  const chapterSummaryPath = pickFile(transcriptDir, [/\.chapter-summary\.md$/u]);
+  const chapterSummaryPyaPath = pickFile(transcriptDir, [/\.chapter-summary\.pya$/u]);
+  const chapterGroundingPyaPath = pickFile(transcriptDir, [/\.chapter\.grounding\.pya$/u]);
   const agendaMatchesPath = pickFile(transcriptDir, [/\.agenda\.matches\.pya$/u]);
   const agendaWiseSeriesPath = pickFile(transcriptDir, [/\.agenda-wise\.series\.pya$/u]);
   const agendaGrossChunksPath = pickFile(transcriptDir, [/\.agenda\.gross-chunks\.pya$/u]);
   const meetingSummaryPath = pickFile(transcriptDir, [/\.meeting-summary\.md$/u]);
-  const agendaSummary = agendaSummaryPath ? fs.readFileSync(agendaSummaryPath, "utf8") : "";
+  const agendaSummary = agendaSummaryPath
+    ? fs.readFileSync(agendaSummaryPath, "utf8")
+    : (chapterSummaryPath ? fs.readFileSync(chapterSummaryPath, "utf8") : "");
   let agendaSummaryJson = {};
   let agendaMatches = {};
   let wiseRanges = [];
   if (agendaSummaryPyaPath) {
     agendaSummaryJson = { sections: parseAgendaSummarySectionsFromPya(agendaSummaryPyaPath) };
+  } else if (chapterSummaryPyaPath) {
+    agendaSummaryJson = { sections: parseChapterSummarySectionsFromPya(chapterSummaryPyaPath, chapterGroundingPyaPath) };
   }
   if (agendaMatchesPath) {
     agendaMatches = parseAgendaMatchesFromPya(agendaMatchesPath);
@@ -1190,13 +1438,16 @@ function main() {
     } catch {}
   }
 
-  const topics = distinct(parseMdHeadings(agendaSummary)).slice(0, 10);
+  const topics = distinct(parseMdHeadings(agendaSummary)).slice(0, 30);
   if (!topics.length) {
     topics.push("Council procedure", "Public forum", "Planning and development");
   }
 
   const leadSummary = extractWholeMeetingLead(meetingSummary);
-  const topNewsworthyItems = extractTopNewsworthyItems(meetingSummary, 6);
+  const groundedTopNewsworthyItems = buildGroundedTopNewsworthyItems(agendaSummaryJson?.sections, 6);
+  const topNewsworthyItems = groundedTopNewsworthyItems.length
+    ? groundedTopNewsworthyItems
+    : extractTopNewsworthyItems(meetingSummary, 6);
   const summary = firstSentences(
     leadSummary || stripMarkdown(meetingSummary || agendaSummary || transcriptRows.slice(0, 12).map((x) => x.raw).join(" ")),
     5
