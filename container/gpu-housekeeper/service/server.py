@@ -10,7 +10,9 @@ from collections import deque
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional
+from urllib.error import HTTPError, URLError
 from urllib.parse import unquote
+from urllib.request import Request, urlopen
 
 _QUEUE = deque()
 _JOBS: Dict[str, Dict[str, Any]] = {}
@@ -184,6 +186,19 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
       "error": "jobSpec must be map or text"
     }
 
+  if runtime_name.lower() == "ollama":
+    if not isinstance(job_spec, dict):
+      return {
+        "accepted": False,
+        "error": "ollama jobSpec must be map"
+      }
+    kind = normalize_text(job_spec.get("kind")).lower()
+    if kind not in {"ollama-generate", "ollama-chat"}:
+      return {
+        "accepted": False,
+        "error": "ollama jobSpec.kind must be ollama-generate or ollama-chat"
+      }
+
   remote_job_id = f"job-{uuid.uuid4().hex[:12]}"
   now = utc_now_iso()
   job = {
@@ -223,6 +238,8 @@ def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
     return {
       "status": job.get("status") or "queued",
       "message": job.get("message") or "",
+      "result": job.get("result"),
+      "error": job.get("error"),
       "startedAt": job.get("startedAt") or "",
       "finishedAt": job.get("finishedAt") or ""
     }
@@ -421,6 +438,154 @@ def runtime_action(runtime_registry: Dict[str, Dict[str, Any]], runtime_name: st
   }
 
 
+def ollama_runtime_url() -> str:
+  return normalize_text(os.environ.get("OLLAMA_RUNTIME_URL")) or "http://host.docker.internal:11434"
+
+
+def request_ollama_json(pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_sec: int = 600) -> Dict[str, Any]:
+  base = ollama_runtime_url().rstrip("/")
+  url = f"{base}/{pathname.lstrip('/')}"
+  data = None if payload is None else json.dumps(payload).encode("utf-8")
+  req = Request(url, data=data, headers={"Content-Type": "application/json"})
+  if payload is None:
+    req.get_method = lambda: "GET"
+  try:
+    with urlopen(req, timeout=max(1, timeout_sec)) as response:
+      raw = response.read().decode("utf-8")
+  except HTTPError as err:
+    detail = ""
+    try:
+      detail = err.read().decode("utf-8")
+    except Exception:
+      detail = str(err)
+    raise RuntimeError(f"ollama request failed {err.code}: {detail}")
+  except URLError as err:
+    raise RuntimeError(f"ollama request failed: {err.reason}")
+
+  try:
+    parsed = json.loads(raw or "{}")
+  except Exception:
+    parsed = {}
+  if isinstance(parsed, dict):
+    return parsed
+  return {"value": parsed}
+
+
+def runtime_is_stopped(status: Dict[str, Any]) -> bool:
+  value = normalize_text(status.get("status")).lower()
+  return value in {"", "created", "dead", "exited", "not running", "paused", "restarting", "stopped"}
+
+
+def ensure_runtime_ready(runtime_registry: Dict[str, Dict[str, Any]], runtime_name: str) -> None:
+  entry = runtime_registry.get(runtime_name)
+  if not entry:
+    raise RuntimeError(f"runtime not managed: {runtime_name}")
+
+  status = parse_runtime_status(entry)
+  if runtime_is_stopped(status):
+    result = runtime_action(runtime_registry, runtime_name, "beginAction")
+    if not result.get("success"):
+      raise RuntimeError(result.get("message") or f"runtime begin failed: {runtime_name}")
+    status = parse_runtime_status(entry)
+
+  if bool(entry.get("gpuExpected", False)) and status.get("gpuObserved") is False:
+    result = runtime_action(runtime_registry, runtime_name, "restartAction")
+    if not result.get("success"):
+      raise RuntimeError(result.get("message") or f"runtime restart failed: {runtime_name}")
+
+
+def warm_ollama_models() -> List[str]:
+  payload = request_ollama_json("/api/ps", None, timeout_sec=10)
+  models = payload.get("models") if isinstance(payload, dict) else []
+  if not isinstance(models, list):
+    return []
+  out: List[str] = []
+  for item in models:
+    if not isinstance(item, dict):
+      continue
+    name = normalize_text(item.get("name") or item.get("model"))
+    if name:
+      out.append(name)
+  return out
+
+
+def discharge_warm_ollama_models(target_model: str) -> None:
+  target = normalize_text(target_model)
+  for model in warm_ollama_models():
+    if model == target:
+      continue
+    try:
+      request_ollama_json("/api/generate", {
+        "model": model,
+        "prompt": "",
+        "stream": False,
+        "keep_alive": 0
+      }, timeout_sec=30)
+      with _LOCK:
+        if model in _PROFILES:
+          _PROFILES[model]["loaded"] = False
+    except Exception:
+      continue
+
+
+def normalize_ollama_payload(job_spec: Dict[str, Any], profile_name: str) -> Dict[str, Any]:
+  payload = job_spec.get("payload") if isinstance(job_spec.get("payload"), dict) else dict(job_spec)
+  payload.pop("kind", None)
+  payload.pop("payload", None)
+  payload.pop("host", None)
+  payload["model"] = normalize_text(payload.get("model")) or profile_name
+  payload["stream"] = False
+  if "keep_alive" not in payload:
+    payload["keep_alive"] = 300
+  return payload
+
+
+def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  profile_name = normalize_text(job.get("profileName"))
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    raise RuntimeError("ollama jobSpec must be a map")
+
+  kind = normalize_text(job_spec.get("kind")).lower()
+  if kind not in {"ollama-generate", "ollama-chat"}:
+    raise RuntimeError(f"unsupported ollama job kind: {kind or 'missing'}")
+
+  ensure_runtime_ready(runtime_registry, runtime_name)
+  payload = normalize_ollama_payload(job_spec, profile_name)
+  target_model = normalize_text(payload.get("model"))
+  if not target_model:
+    raise RuntimeError("ollama model is required")
+  discharge_warm_ollama_models(target_model)
+
+  endpoint = "/api/chat" if kind == "ollama-chat" else "/api/generate"
+  result = request_ollama_json(endpoint, payload, timeout_sec=int(os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900")))
+  with _LOCK:
+    _PROFILES[target_model] = {
+      "profileName": target_model,
+      "runtimeName": runtime_name,
+      "loaded": True
+    }
+  return result
+
+
+def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  if runtime_name == "ollama":
+    return execute_ollama_job(job, runtime_registry)
+
+  sleep_ms = 200
+  if isinstance(job.get("jobSpec"), dict):
+    requested = job["jobSpec"].get("sleepMs")
+    try:
+      sleep_ms = int(requested)
+    except Exception:
+      sleep_ms = 200
+  sleep_ms = max(10, min(30000, sleep_ms))
+  time.sleep(sleep_ms / 1000.0)
+  return {"message": "completed"}
+
+
 def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
   raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_RUNTIME_REGISTRY"))
   entries: List[Dict[str, Any]] = []
@@ -484,25 +649,28 @@ def worker_loop() -> None:
           "loaded": True
         }
 
-    sleep_ms = 200
-    with _LOCK:
-      current = _JOBS.get(remote_job_id)
-      if current and isinstance(current.get("jobSpec"), dict):
-        requested = current["jobSpec"].get("sleepMs")
-        try:
-          sleep_ms = int(requested)
-        except Exception:
-          sleep_ms = 200
-    sleep_ms = max(10, min(30000, sleep_ms))
-    time.sleep(sleep_ms / 1000.0)
-
-    with _LOCK:
-      job = _JOBS.get(remote_job_id)
-      if job:
-        job["status"] = "success"
-        job["message"] = "completed"
-        job["finishedAt"] = utc_now_iso()
-      _RUNNING_JOB_ID = None
+    try:
+      result = execute_job(job, Handler.runtime_registry)
+      with _LOCK:
+        current = _JOBS.get(remote_job_id)
+        if current:
+          current["status"] = "success"
+          current["message"] = "completed"
+          current["result"] = result
+          current["error"] = None
+          current["finishedAt"] = utc_now_iso()
+    except Exception as err:
+      with _LOCK:
+        current = _JOBS.get(remote_job_id)
+        if current:
+          current["status"] = "fail"
+          current["message"] = normalize_text(err) or "job failed"
+          current["result"] = None
+          current["error"] = {"message": normalize_text(err) or "job failed"}
+          current["finishedAt"] = utc_now_iso()
+    finally:
+      with _LOCK:
+        _RUNNING_JOB_ID = None
 
 
 class Handler(BaseHTTPRequestHandler):

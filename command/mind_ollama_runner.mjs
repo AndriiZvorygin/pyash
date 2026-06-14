@@ -1,7 +1,11 @@
 import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
 import dns from "node:dns";
 import { spawn, spawnSync } from "node:child_process";
 import { attachImagesToMessages } from "./ollama_image_payload.mjs";
+import { enqueueInputEnvelope } from "../program/runtime/gpu/queue.mjs";
+import { readGpuHandleStatus, writeGpuHandleStatus, isTerminalHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 
 function requestTimeoutMs() {
   const raw = Number(process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS);
@@ -29,6 +33,125 @@ function readStdin() {
 
 function resolveHost(payload) {
   return payload?.host || process.env.OLLAMA_HOST || "http://localhost:11434";
+}
+
+function truthyEnv(value) {
+  return ["truth", "true", "yes", "1", "on"].includes(String(value ?? "").trim().toLowerCase());
+}
+
+function gpuMindTimeoutMs() {
+  const raw = Number(process.env.PYA_GPU_MIND_TIMEOUT_MS || process.env.PYA_COMMAND_TIMEOUT_MS);
+  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
+  return 900000;
+}
+
+function resolveGpuWorldRoot(payload) {
+  const raw = payload?.worldRoot || process.env.PYA_WORLD_ROOT || process.env.PYA_WORLD || "";
+  return raw ? path.resolve(String(raw)) : path.resolve(process.cwd(), "world");
+}
+
+function makeGpuHandleId(payload) {
+  const hash = crypto
+    .createHash("sha1")
+    .update(JSON.stringify(payload ?? {}))
+    .update(String(Date.now()))
+    .update(String(process.pid))
+    .digest("hex")
+    .slice(0, 12);
+  return `mind-${hash}`;
+}
+
+function gpuPayloadSentence(payload) {
+  const mode = payload?.mode === "chat" ? "chat" : "generate";
+  const prompt = mode === "chat"
+    ? `${Array.isArray(payload?.messages) ? payload.messages.length : 0} messages`
+    : String(payload?.prompt ?? "").slice(0, 160);
+  return {
+    mood: "do",
+    be: "gpu mind",
+    ob: { text: prompt },
+    as: { name: mode }
+  };
+}
+
+function gpuJobKind(payload) {
+  return payload?.mode === "chat" ? "ollama-chat" : "ollama-generate";
+}
+
+function parseJsonText(text, fallback = null) {
+  const value = String(text ?? "").trim();
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+async function delay(ms) {
+  await new Promise((resolve) => setTimeout(resolve, Math.max(1, ms)));
+}
+
+async function waitForGpuMindResult(worldRoot, handleId) {
+  const deadline = Date.now() + gpuMindTimeoutMs();
+  while (Date.now() <= deadline) {
+    const status = await readGpuHandleStatus(worldRoot, handleId);
+    if (status && isTerminalHandleStatus(status.status)) {
+      if (status.status === "success") {
+        return parseJsonText(status.result, {});
+      }
+      const parsedError = parseJsonText(status.error, status.message);
+      throw new Error(`mind_ollama_runner gpu queue failed: ${typeof parsedError === "string" ? parsedError : JSON.stringify(parsedError)}`);
+    }
+    await delay(250);
+  }
+  throw new Error(`mind_ollama_runner gpu queue timed out waiting for ${handleId}`);
+}
+
+async function runQueuedGpuMind(payload) {
+  const worldRoot = resolveGpuWorldRoot(payload);
+  const handleId = makeGpuHandleId(payload);
+  const queuedAt = new Date().toISOString();
+  const model = String(payload?.model ?? "").trim();
+  const gpuId = process.env.PYA_GPU_ID || "gpu-0";
+  if (!model) throw new Error("mind_ollama_runner gpu queue: model is required");
+
+  await writeGpuHandleStatus(worldRoot, handleId, {
+    status: "queued",
+    agentName: "mind-ollama-runner",
+    gpuId,
+    intent: "mind",
+    lane: "durable",
+    queuedAt,
+    startedAt: "",
+    finishedAt: "",
+    retryCount: 0,
+    outcome: "queued",
+    message: "queued",
+    result: "",
+    error: ""
+  });
+
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt,
+    handleId,
+    agentName: "mind-ollama-runner",
+    gpuId,
+    intent: "mind",
+    lane: "durable",
+    payloadSentence: gpuPayloadSentence(payload),
+    serviceName: "ollama",
+    residencyName: model,
+    residencyRequired: true,
+    beginRequired: true,
+    dischargeAllowed: true,
+    jobSpec: {
+      kind: gpuJobKind(payload),
+      payload
+    }
+  });
+
+  return waitForGpuMindResult(worldRoot, handleId);
 }
 
 async function resolveIpv4Endpoint(endpoint) {
@@ -369,9 +492,10 @@ async function main() {
   if (payload.stream === undefined) payload.stream = false;
   if (args.stream && !payload.stream) payload.stream = true;
   const mode = payload?.mode ?? "generate";
-  const response = mode === "chat"
-    ? await runChat(payload)
-    : await runGenerate(payload);
+  const useGpuQueue = truthyEnv(process.env.PYA_GPU_MIND_QUEUE) && !payload?.stream;
+  const response = useGpuQueue
+    ? await runQueuedGpuMind(payload)
+    : (mode === "chat" ? await runChat(payload) : await runGenerate(payload));
   if (payload?.stream) return;
   process.stdout.write(`${JSON.stringify(response)}\n`);
 }
