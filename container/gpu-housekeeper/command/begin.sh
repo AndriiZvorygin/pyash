@@ -11,5 +11,5 @@ if [[ -z "${GPU_HOUSEKEEPER_HOST_ID:-}" ]]; then
   fi
 fi
 
-docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
+docker compose -p gpu-housekeeper -f "$COMPOSE_FILE" up -d --build --remove-orphans
 echo "gpu-housekeeper service started"
