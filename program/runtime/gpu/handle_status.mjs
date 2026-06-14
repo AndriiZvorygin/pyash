@@ -81,7 +81,9 @@ function statusToText(status = {}) {
     { key: "finished at", type: "text", value: quoteText(status.finishedAt || "") },
     { key: "retry count", type: "num", value: Math.max(0, Math.trunc(Number(status.retryCount) || 0)) },
     { key: "outcome", type: "text", value: quoteText(status.outcome || "") },
-    { key: "message", type: "text", value: quoteText(status.message || "") }
+    { key: "message", type: "text", value: quoteText(status.message || "") },
+    { key: "result", type: "text", value: quoteText(status.result || "") },
+    { key: "error", type: "text", value: quoteText(status.error || "") }
   ];
   return `${mapBlock("gpu handle status", entries)}\n`;
 }
@@ -101,7 +103,9 @@ function statusFromText(text) {
     finishedAt: "",
     retryCount: 0,
     outcome: "",
-    message: ""
+    message: "",
+    result: "",
+    error: ""
   };
   for (const entry of entries) {
     if (entry.key === "handle id") out.handleId = String(parseQuoted(entry.valueRaw) ?? "").trim();
@@ -116,6 +120,8 @@ function statusFromText(text) {
     if (entry.key === "retry count") out.retryCount = Math.max(0, Math.trunc(Number(entry.valueRaw) || 0));
     if (entry.key === "outcome") out.outcome = String(parseQuoted(entry.valueRaw) ?? "").trim();
     if (entry.key === "message") out.message = String(parseQuoted(entry.valueRaw) ?? "").trim();
+    if (entry.key === "result") out.result = String(parseQuoted(entry.valueRaw) ?? "").trim();
+    if (entry.key === "error") out.error = String(parseQuoted(entry.valueRaw) ?? "").trim();
   }
   return out;
 }
@@ -153,7 +159,9 @@ export async function writeGpuHandleStatus(worldRoot, handleId, nextStatus = {})
     finishedAt: "",
     retryCount: 0,
     outcome: "",
-    message: ""
+    message: "",
+    result: "",
+    error: ""
   };
   const merged = buildGpuHandleStatus({
     ...base,

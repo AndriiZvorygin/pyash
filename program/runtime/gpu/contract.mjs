@@ -166,7 +166,9 @@ export function buildGpuHandleStatus(input = {}) {
     finishedAt: normalizeText(input?.finishedAt),
     retryCount: normalizeCount(input?.retryCount, 0),
     outcome: normalizeText(input?.outcome).toLowerCase(),
-    message: normalizeText(input?.message)
+    message: normalizeText(input?.message),
+    result: normalizeText(input?.result),
+    error: normalizeText(input?.error)
   };
 }
 
@@ -216,6 +218,12 @@ export function assertGpuHandleStatus(value = {}) {
   }
   if (value.message == null || typeof value.message !== "string") {
     throw new Error("gpu handle status defective: invalid message");
+  }
+  if (value.result == null || typeof value.result !== "string") {
+    throw new Error("gpu handle status defective: invalid result");
+  }
+  if (value.error == null || typeof value.error !== "string") {
+    throw new Error("gpu handle status defective: invalid error");
   }
 }
 

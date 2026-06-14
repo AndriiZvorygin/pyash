@@ -31,7 +31,9 @@ test("gpu handle status write then read round-trip works", async () => {
     finishedAt: "",
     retryCount: 0,
     outcome: "queued",
-    message: "queued"
+    message: "queued",
+    result: JSON.stringify({ ready: true }),
+    error: ""
   });
   const read = await readGpuHandleStatus(worldRoot, "job-one");
   assert.equal(read?.handleId, "job-one");
@@ -39,6 +41,8 @@ test("gpu handle status write then read round-trip works", async () => {
   assert.equal(read?.agentName, "agent-a");
   assert.equal(read?.gpuId, "gpu-0");
   assert.equal(read?.message, "queued");
+  assert.deepEqual(JSON.parse(read?.result), { ready: true });
+  assert.equal(read?.error, "");
 });
 
 test("gpu handle status write merges existing data", async () => {
