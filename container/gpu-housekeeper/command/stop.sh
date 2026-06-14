@@ -4,5 +4,5 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/service/compose.gpu.yaml"
 
-docker compose -f "$COMPOSE_FILE" down --remove-orphans
+docker compose -p gpu-housekeeper -f "$COMPOSE_FILE" down --remove-orphans
 echo "gpu-housekeeper service stopped"
