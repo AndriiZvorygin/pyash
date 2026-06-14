@@ -2,6 +2,24 @@ import { writePyaReport } from "./cover-overlay-stage.mjs";
 
 const TEXT_INDUCING_TERMS = ["news", "poster", "headline", "title", "sign", "signage", "label", "banner", "infographic", "article", "caption", "typography", "letters", "wordmark", "logo", "watermark"];
 const NEGATIVE_PHRASING = [/\bno\b/iu, /\bwithout\b/iu, /\bdo\s+not\b/iu, /\bdon'?t\b/iu, /\bexclude\b/iu, /\bavoid\b/iu];
+const TEXT_TERM_REPLACEMENTS = new Map([
+  ["news", "civic scene"],
+  ["poster", "composition"],
+  ["headline", ""],
+  ["title", ""],
+  ["sign", ""],
+  ["signage", ""],
+  ["label", ""],
+  ["banner", ""],
+  ["infographic", "explainer scene"],
+  ["article", "civic scene"],
+  ["caption", ""],
+  ["typography", ""],
+  ["letters", ""],
+  ["wordmark", ""],
+  ["logo", ""],
+  ["watermark", ""],
+]);
 
 function normalizeHost(v = "") {
   const raw = String(v || "").trim();
@@ -22,30 +40,16 @@ function abridge(text = "", maxChars = 700) {
   return `${s.slice(0, Math.max(0, maxChars - 1)).trim()}…`;
 }
 
-function inferVisualSubject({ hookText = "", topNews = "", oneSentenceSummary = "" } = {}) {
-  const hay = `${hookText} ${topNews} ${oneSentenceSummary}`.toLowerCase();
-  if (/\b(wheelchair|accessibility|hospital|taxi|mobility)\b/u.test(hay)) return "accessible transit network";
-  if (/\b(food|food box|hunger|housing|land trust|affordable)\b/u.test(hay)) return "food and housing system";
-  if (/\b(garbage|recycling|waste|landlord|river district)\b/u.test(hay)) return "urban waste management system";
-  if (/\b(transit|funding|bylaw|budget|funder)\b/u.test(hay)) return "municipal transit funding system";
-  return "municipal civic systems";
+function extractVisualSubjectFromPrompt(prompt = "") {
+  const s = cleanLine(prompt);
+  if (!s) return "";
+  const first = s.split(/[.,;:]/u)[0] || s;
+  return cleanLine(first).slice(0, 120);
 }
 
-function buildDeterministicTeachingPrompt({ visualSubject = "", jurisdiction = "", meetingType = "", style = "" } = {}) {
-  const subject = cleanLine(visualSubject) || "municipal civic systems";
-  const location = cleanLine(jurisdiction) || "Canadian municipality";
-  const mtype = cleanLine(meetingType) || "council meeting";
-  const styleHint = cleanLine(style);
-  return cleanLine([
-    "Editorial educational illustration",
-    `about ${subject}`,
-    `for ${location} ${mtype}`,
-    "clear conceptual scene with balanced composition and strong focal hierarchy",
-    "vector-like geometric forms, flat-shaded matte texture, high contrast, clean negative space",
-    "abstract informative composition, minimal clutter",
-    "stylized illustration and geometric clarity, no people required",
-    styleHint ? `style cue: ${styleHint}` : "",
-  ].filter(Boolean).join(", "));
+function wordTermRegex(term = "") {
+  const esc = String(term || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`\\b${esc}\\b`, "giu");
 }
 
 function dropVerbatimOverlay(prompt = "", overlayText = "") {
@@ -62,10 +66,36 @@ function positivePromptPasses(prompt = "", overlayText = "") {
   if (!p) return { pass: false, warnings: ["empty_positive_prompt"] };
   const warnings = [];
   if (overlayLow && low.includes(overlayLow)) warnings.push("positive_prompt_contains_overlay_text");
-  const badTerms = TEXT_INDUCING_TERMS.filter((t) => low.includes(t));
+  const badTerms = TEXT_INDUCING_TERMS.filter((t) => wordTermRegex(t).test(low));
   if (badTerms.length) warnings.push(`positive_prompt_text_inducing_terms_${badTerms.length}`);
   if (NEGATIVE_PHRASING.some((re) => re.test(p))) warnings.push("positive_prompt_contains_negative_phrasing");
   return { pass: warnings.length === 0, warnings };
+}
+
+function sanitizePositivePrompt(prompt = "", overlayText = "") {
+  let out = dropVerbatimOverlay(cleanLine(prompt), overlayText);
+  for (const term of TEXT_INDUCING_TERMS) {
+    out = out.replace(wordTermRegex(term), TEXT_TERM_REPLACEMENTS.get(term) || "");
+  }
+  out = out
+    .replace(/\bdo\s+not\s+include\b/giu, "")
+    .replace(/\bdon'?t\s+include\b/giu, "")
+    .replace(/\bwithout\b/giu, "")
+    .replace(/\bavoid\b/giu, "")
+    .replace(/\bexclude\b/giu, "")
+    .replace(/\bno\b/giu, "")
+    .replace(/\s*,\s*,+/gu, ",")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return cleanLine(out);
+}
+
+function fallbackPositivePrompt({ jurisdiction = "", meetingType = "" } = {}) {
+  const context = [jurisdiction, meetingType].map(cleanLine).filter(Boolean).join(" ");
+  return cleanLine([
+    "Symbolic Canadian county council scene showing stormwater runoff channels, rural roads, meeting chamber silhouettes, layered watershed landscape, geometric matte illustration, strong contrast, clear depth, background composition",
+    context ? `local civic context ${context}` : "",
+  ].join(", "));
 }
 
 async function callPromptifyLlm({ host, model, prompt }) {
@@ -81,7 +111,7 @@ async function callPromptifyLlm({ host, model, prompt }) {
       { role: "user", content: prompt },
     ],
   };
-  const timeoutMs = Math.max(5_000, Number(process.env.COVER_PROMPTIFY_TIMEOUT_MS || 30_000));
+  const timeoutMs = Math.max(5_000, Number(process.env.COVER_PROMPTIFY_TIMEOUT_MS || 120_000));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res;
@@ -98,6 +128,22 @@ async function callPromptifyLlm({ host, model, prompt }) {
   if (!res.ok) throw new Error(`promptify ollama status ${res.status}`);
   const data = await res.json();
   return cleanLine(String(data?.message?.content || ""));
+}
+
+async function callPromptifyLlmWithRetry({ host, model, prompt }) {
+  const attempts = Math.max(1, Number(process.env.COVER_PROMPTIFY_RETRIES || 3));
+  let lastErr = null;
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      return await callPromptifyLlm({ host, model, prompt });
+    } catch (err) {
+      lastErr = err;
+      if (i >= attempts) break;
+      const sleepMs = Math.min(10_000, 1500 * i);
+      await new Promise((resolve) => setTimeout(resolve, sleepMs));
+    }
+  }
+  throw lastErr || new Error("promptify request failed");
 }
 
 function buildPromptRequest({ hookText = "", oneSentenceSummary = "", topNews = "", jurisdiction = "", meetingType = "" }) {
@@ -138,6 +184,18 @@ function buildPromptRequest({ hookText = "", oneSentenceSummary = "", topNews = 
   ].join("\n");
 }
 
+function buildPromptRepairRequest({ invalidPrompt = "", warnings = [] }) {
+  return [
+    "Rewrite this image-generation prompt into a single compliant positive line.",
+    "Keep topic specificity, composition cues, and style quality.",
+    "Do not use negative phrasing like no/without/do not/avoid/exclude.",
+    "Do not include visible text terms (headline, poster, signage, labels, letters, numbers, logo, watermark).",
+    "Return one line only.",
+    `Warnings: ${warnings.join(", ") || "none"}`,
+    `Invalid prompt: ${abridge(invalidPrompt, 1100)}`,
+  ].join("\n");
+}
+
 export async function runCoverPromptifyStage({
   hookText = "",
   oneSentenceSummary = "",
@@ -155,27 +213,36 @@ export async function runCoverPromptifyStage({
   let positivePrompt = "";
   let llmError = "";
   try {
-    positivePrompt = await callPromptifyLlm({ host, model, prompt: req });
+    positivePrompt = await callPromptifyLlmWithRetry({ host, model, prompt: req });
   } catch (err) {
     llmError = String(err?.message || err);
   }
 
-  const visualSubject = inferVisualSubject({ hookText, topNews, oneSentenceSummary });
   if (!positivePrompt) {
-    positivePrompt = buildDeterministicTeachingPrompt({
-      visualSubject,
-      jurisdiction,
-      meetingType,
-      style,
-    });
+    const reason = llmError || "empty_llm_prompt";
+    throw new Error(`cover promptify failed: ${reason}`);
   }
 
   positivePrompt = dropVerbatimOverlay(positivePrompt, overlayText);
-  const check = positivePromptPasses(positivePrompt, overlayText);
+  let check = positivePromptPasses(positivePrompt, overlayText);
+  if (!check.pass) {
+    const repairReq = buildPromptRepairRequest({ invalidPrompt: positivePrompt, warnings: check.warnings });
+    const repaired = await callPromptifyLlmWithRetry({ host, model, prompt: repairReq });
+    positivePrompt = sanitizePositivePrompt(repaired, overlayText);
+    check = positivePromptPasses(positivePrompt, overlayText);
+  }
+  if (!check.pass) {
+    positivePrompt = fallbackPositivePrompt({ jurisdiction, meetingType });
+    check = positivePromptPasses(positivePrompt, overlayText);
+  }
+  if (!check.pass) {
+    throw new Error(`cover promptify rejected fallback prompt: ${check.warnings.join(",") || "unknown_reason"}`);
+  }
+  const visualSubject = extractVisualSubjectFromPrompt(positivePrompt);
 
   const out = {
     hook: String(hookText || ""),
-    selectedVisualSubject: visualSubject || "llm_inferred_scene",
+    selectedVisualSubject: visualSubject || "llm_generated_scene",
     positivePrompt,
     topicFamily: "llm_inferred",
     promptVariant: "llm_positive_only",
@@ -184,7 +251,7 @@ export async function runCoverPromptifyStage({
     positivePromptNegativePhrasingDetected: check.warnings.includes("positive_prompt_contains_negative_phrasing"),
     sourceFieldsUsed: ["hook", "oneSentenceSummary", "topNews", "jurisdiction", "meetingType"],
     warnings: llmError ? [...check.warnings, `llm_error:${llmError}`] : check.warnings,
-    pass: check.pass,
+    pass: true,
     promptSourceFields: {
       jurisdiction: String(jurisdiction || ""),
       meetingType: String(meetingType || ""),

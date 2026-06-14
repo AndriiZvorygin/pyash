@@ -47,6 +47,13 @@ function resolveWorkflowName(opts) {
   return opts.workflowName ?? process.env.PYA_HEAR_WORKFLOW_DEFAULT ?? "qwen3-asr-timestamps-attn2";
 }
 
+function resolvePollTimeoutMs() {
+  const raw = String(process.env.PYA_HEAR_TIMEOUT_MS || process.env.PYA_HEAR_QWEN_TIMEOUT_MS || "").trim();
+  const value = Number(raw);
+  if (Number.isFinite(value) && value >= 30_000) return Math.floor(value);
+  return 45 * 60 * 1000;
+}
+
 async function resolveWorkflowFile(opts) {
   if (opts.workflowFile) return opts.workflowFile;
   const root = resolveWorkflowRoot(opts);
@@ -264,7 +271,12 @@ async function requestText(url) {
 async function tryUploadAudio(host, inputPath) {
   const filename = path.basename(inputPath);
   const bytes = await fs.readFile(inputPath);
-  const blob = new Blob([bytes]);
+  const ext = path.extname(filename).toLowerCase();
+  const mime = ext === ".wav" ? "audio/wav"
+    : ext === ".opus" ? "audio/ogg"
+    : ext === ".mp3" ? "audio/mpeg"
+    : "application/octet-stream";
+  const blob = new Blob([bytes], { type: mime });
   const targets = [
     { endpoint: "/upload/audio", field: "audio" },
     { endpoint: "/upload/audio", field: "image" },
@@ -274,6 +286,8 @@ async function tryUploadAudio(host, inputPath) {
     try {
       const form = new FormData();
       form.append(target.field, blob, filename);
+      form.append("type", "input");
+      form.append("overwrite", "true");
       const res = await fetch(`${host.replace(/\/$/, "")}${target.endpoint}`, {
         method: "POST",
         body: form
@@ -289,7 +303,8 @@ async function tryUploadAudio(host, inputPath) {
         String(payload?.name ?? "").trim() ||
         String(payload?.filename ?? "").trim() ||
         String(payload?.file ?? "").trim();
-      if (uploaded) return uploaded;
+      const subfolder = String(payload?.subfolder ?? "").trim().replace(/^\/+|\/+$/gu, "");
+      if (uploaded) return subfolder ? `${subfolder}/${uploaded}` : uploaded;
     } catch {
       // Try next upload method.
     }
@@ -297,7 +312,7 @@ async function tryUploadAudio(host, inputPath) {
   return null;
 }
 
-async function pollHistoryForTexts(host, promptId, timeoutMs = 240000) {
+async function pollHistoryForTexts(host, promptId, timeoutMs = resolvePollTimeoutMs()) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const text = await requestText(`${host.replace(/\/$/, "")}/history/${encodeURIComponent(promptId)}`);
@@ -318,7 +333,7 @@ async function pollHistoryForTexts(host, promptId, timeoutMs = 240000) {
     }
     await new Promise(resolve => setTimeout(resolve, 700));
   }
-  throw new Error("hear_comfyui_runner: timed out waiting for transcription result");
+  throw new Error(`hear_comfyui_runner: timed out waiting for transcription result after ${Math.round(timeoutMs / 1000)}s`);
 }
 
 function resolveResultTexts(historyEntry, mapping = {}) {
@@ -364,6 +379,9 @@ async function main() {
     mapping.returnTimestampsPath || detectPath(workflow, promptObject, { nodeType: "Qwen3ASRTranscribe", inputName: "return_timestamps" });
 
   const uploadedAudio = await tryUploadAudio(host, inputPath);
+  if (!uploadedAudio && /^https?:\/\//iu.test(host)) {
+    throw new Error(`hear_comfyui_runner: failed to upload audio input to ${host}`);
+  }
   const audioValue = uploadedAudio || inputPath;
   setAtPath(promptObject, audioInputPath, audioValue);
 

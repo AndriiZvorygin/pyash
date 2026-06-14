@@ -39,12 +39,21 @@ async function main() {
   }
   const outDir = path.dirname(outFile);
   fs.mkdirSync(outDir, { recursive: true });
+  if (fs.existsSync(outFile)) {
+    const stat = fs.statSync(outFile);
+    if (stat.size > 0) {
+      process.stdout.write(`[resumable-download] exists: ${outFile} bytes=${stat.size}\n`);
+      return;
+    }
+  }
   const partFile = `${outFile}.part`;
 
   for (let i = 1; i <= attempts; i += 1) {
     try {
       await runCurl([
         "-fL",
+        "--no-progress-meter",
+        "--show-error",
         "--retry", "6",
         "--retry-all-errors",
         "--retry-delay", "2",
@@ -73,4 +82,3 @@ main().catch((err) => {
   process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
   process.exit(29);
 });
-

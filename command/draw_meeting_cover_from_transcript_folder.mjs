@@ -17,7 +17,7 @@ import { diagnoseCoverBackground } from "../program/library/reporter_shared/cove
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(COMMAND_DIR, "..");
 const DEFAULT_STYLE = 'bold civic poster background, high contrast, simple geometry, strong readability';
-const ALLOW_SYMBOLIC_FALLBACK = String(process.env.COVER_ALLOW_SYMBOLIC_FALLBACK || "1").trim() !== "0";
+const ALLOW_SYMBOLIC_FALLBACK = String(process.env.COVER_ALLOW_SYMBOLIC_FALLBACK || "0").trim() === "1";
 const NEGATIVE_PROMPT_BASE = [
   "text",
   "letters",
@@ -60,6 +60,146 @@ function safeReadText(filePath, fallback = '') {
   }
 }
 
+function safeReadJson(filePath, fallback = {}) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return fallback;
+  }
+}
+
+function firstHttpUrl(values) {
+  const list = Array.isArray(values) ? values : [values];
+  return String(list.find((value) => /^https?:\/\//iu.test(String(value || '').trim())) || '').trim();
+}
+
+function findLocalSourceVideo(meetingDir) {
+  const videoExt = /\.(?:mp4|mkv|webm|mov|m4v)$/iu;
+  for (const dir of [path.join(meetingDir, 'source'), path.join(meetingDir, 'transcript')]) {
+    if (!fs.existsSync(dir)) continue;
+    const found = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && videoExt.test(entry.name))
+      .map((entry) => path.join(dir, entry.name))
+      .find(existsFile);
+    if (found) return found;
+  }
+  return '';
+}
+
+function youtubeVideoId(sourceUrl) {
+  try {
+    const url = new URL(String(sourceUrl || '').trim());
+    if (url.hostname === 'youtu.be') return url.pathname.split('/').filter(Boolean)[0] || '';
+    if (!/(?:^|\.)youtube\.com$/iu.test(url.hostname)) return '';
+    const queryId = String(url.searchParams.get('v') || '').trim();
+    if (queryId) return queryId;
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (['embed', 'shorts', 'live'].includes(parts[0])) return parts[1] || '';
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+async function downloadYoutubeSourceThumbnail(sourceUrl, sourceDir) {
+  const videoId = youtubeVideoId(sourceUrl);
+  if (!videoId) return '';
+  const outputPath = path.join(sourceDir, 'meeting-cover-source-thumbnail.jpg');
+  if (existsFile(outputPath) && fs.statSync(outputPath).size >= 10_000) return outputPath;
+  for (const quality of ['maxresdefault', 'sddefault', 'hqdefault']) {
+    try {
+      const res = await fetch(`https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/${quality}.jpg`, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+      if (!res.ok || !contentType.startsWith('image/')) continue;
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (bytes.length < 10_000) continue;
+      fs.writeFileSync(outputPath, bytes);
+      process.stdout.write(`[meeting-cover] downloaded source thumbnail: ${quality} (${bytes.length} bytes)\n`);
+      return outputPath;
+    } catch {
+      // Try the next official YouTube thumbnail size.
+    }
+  }
+  return '';
+}
+
+async function prepareVideoFrameBackground({ transcriptDir, prefix, drawRunCwd }) {
+  const meetingDir = path.resolve(transcriptDir, '..');
+  const meeting = safeReadJson(path.join(meetingDir, 'meeting.json'), {});
+  const payload = meeting?.payload || {};
+  const sourceUrl = firstHttpUrl([
+    payload?.video_direct,
+    payload?.video,
+    payload?.video_player,
+    payload?.source_url,
+    payload?.meeting_url,
+  ].flat());
+  const sourceDir = path.join(meetingDir, 'source');
+  fs.mkdirSync(sourceDir, { recursive: true });
+
+  let videoPath = findLocalSourceVideo(meetingDir);
+  if (!videoPath && sourceUrl && /\.(?:mp4|mkv|webm|mov|m4v)(?:[?#].*)?$/iu.test(sourceUrl)) {
+    // Direct media URLs are already valid ffmpeg inputs and usually support
+    // range seeking. Avoid yt-dlp format selection, which can reject generic
+    // MP4 endpoints even though the media itself is available.
+    videoPath = sourceUrl;
+  }
+  if (!videoPath && sourceUrl) {
+    const clipTemplate = path.join(sourceDir, 'meeting-cover-source-clip.%(ext)s');
+    try {
+      await runWithStreaming({
+        cmd: 'yt-dlp',
+        args: [
+          '--no-playlist',
+          '--download-sections', '*120-123',
+          '--force-keyframes-at-cuts',
+          '-f', 'bestvideo[height<=720]/best[height<=720]',
+          '-o', clipTemplate,
+          sourceUrl,
+        ],
+        cwd: drawRunCwd,
+        timeoutMs: 15 * 60 * 1000,
+        label: 'meeting-cover-download-video-segment',
+      });
+      videoPath = findLocalSourceVideo(meetingDir);
+    } catch (err) {
+      process.stdout.write(`[meeting-cover] warn source video segment unavailable: ${String(err?.message || err)}\n`);
+    }
+  }
+  const sourceImagePath = videoPath ? '' : await downloadYoutubeSourceThumbnail(sourceUrl, sourceDir);
+  const sourceMediaPath = videoPath || sourceImagePath;
+  if (!sourceMediaPath) return { backgroundPath: '', sourceUrl, videoPath: '', sourceImagePath: '' };
+
+  const framePath = path.join(transcriptDir, `${prefix}.meeting-cover.background.video-frame.png`);
+  const seekArgs = sourceImagePath || path.basename(videoPath).startsWith('meeting-cover-source-clip.') ? [] : ['-ss', '120'];
+  await runWithStreaming({
+    cmd: 'ffmpeg',
+    args: [
+      '-y',
+      ...seekArgs,
+      '-i', sourceMediaPath,
+      '-filter_complex',
+      '[0:v]crop=iw:min(ih\\,iw*9/16):0:(ih-min(ih\\,iw*9/16))/2,split=2[fg][bg];'
+        + '[bg]scale=512:512:force_original_aspect_ratio=increase,crop=512:512,boxblur=18:2[blur];'
+        + '[fg]scale=512:-2[front];[blur][front]overlay=(W-w)/2:(H-h)/2',
+      '-frames:v', '1',
+      '-update', '1',
+      framePath,
+    ],
+    cwd: drawRunCwd,
+    timeoutMs: 5 * 60 * 1000,
+    label: 'meeting-cover-extract-video-frame',
+  });
+  return {
+    backgroundPath: existsFile(framePath) ? framePath : '',
+    sourceUrl,
+    videoPath,
+    sourceImagePath,
+  };
+}
+
 function extractMarkdownSection(mdText, headingText) {
   const lines = String(mdText || '').split(/\r?\n/u);
   const target = String(headingText || '').trim().toLowerCase();
@@ -93,8 +233,8 @@ function sanitizeStem(input) {
 function parseGeneratedImagePath(drawStdout, sourceFilename, runCwd = ROOT) {
   const text = String(drawStdout || '');
   const escapedRoot = ROOT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const imagePathAbsRe = new RegExp(`${escapedRoot}\\/(?:artifacts|know\\/produce)\\/[^\\s"']+\\.png`, 'gu');
-  const imagePathRelRe = /(?:^|[\s"'`])((?:artifacts|know\/produce)\/[^\s"'`]+\.png)(?=$|[\s"'`])/gu;
+  const imagePathAbsRe = new RegExp(`${escapedRoot}\\/(?:artifacts)\\/[^\\s"']+\\.png`, 'gu');
+  const imagePathRelRe = /(?:^|[\s"'`])((?:artifacts)\/[^\s"'`]+\.png)(?=$|[\s"'`])/gu;
   const matches = [
     ...[...text.matchAll(imagePathAbsRe)].map((m) => m[0]),
     ...[...text.matchAll(imagePathRelRe)].map((m) => path.resolve(runCwd, m[1])),
@@ -102,11 +242,7 @@ function parseGeneratedImagePath(drawStdout, sourceFilename, runCwd = ROOT) {
   for (let i = matches.length - 1; i >= 0; i -= 1) {
     if (existsFile(matches[i])) return matches[i];
   }
-  const stem = sanitizeStem(sourceFilename);
-  const fallbackRoot = path.join(ROOT, 'know/produce', `${stem}.png`);
-  if (existsFile(fallbackRoot)) return fallbackRoot;
-  const fallbackRun = path.join(runCwd, 'know/produce', `${stem}.png`);
-  return existsFile(fallbackRun) ? fallbackRun : '';
+  return '';
 }
 
 function countWords(text) {
@@ -291,24 +427,6 @@ async function forceSquare512(inputPath, outputPath, cwd = ROOT) {
 }
 
 
-async function generateSafeBackgroundFallback(outputPath, size = 512, cwd = ROOT) {
-  const vf = [
-    "color=c=#243748:s=" + size + "x" + size,
-    "format=rgba",
-    "drawgrid=w=64:h=64:t=1:c=white@0.10",
-    "drawbox=x=0:y=" + Math.floor(size * 0.58) + ":w=" + size + ":h=" + Math.floor(size * 0.42) + ":color=black@0.25:t=fill",
-    "gblur=sigma=0.6",
-  ].join(",");
-  await runWithStreaming({
-    cmd: "ffmpeg",
-    args: ["-y", "-f", "lavfi", "-i", vf, "-frames:v", "1", outputPath],
-    cwd,
-    timeoutMs: 120000,
-    label: "safe-background-fallback",
-  });
-}
-
-
 async function dischargeDrawBackend(cwd = ROOT) {
   try {
     await runWithStreaming({
@@ -348,6 +466,26 @@ function deriveRunCwdFromTranscriptDir(transcriptDir) {
   return ROOT;
 }
 
+function inferCoverContextFromTranscriptDir(transcriptDir) {
+  const lower = String(transcriptDir || '').toLowerCase();
+  if (lower.includes('grey-county-reporter') || lower.includes(`${path.sep}grey-county${path.sep}`)) {
+    return {
+      jurisdiction: 'Grey County',
+      meetingType: 'county council meeting',
+    };
+  }
+  if (lower.includes('owen-sound-reporter') || lower.includes(`${path.sep}owen-sound${path.sep}`)) {
+    return {
+      jurisdiction: 'Owen Sound',
+      meetingType: 'council meeting',
+    };
+  }
+  return {
+    jurisdiction: 'local government',
+    meetingType: 'public meeting',
+  };
+}
+
 async function main() {
   const transcriptDirArg = process.argv[2];
   const prefix = String(process.argv[3] || 'meeting-qwen-auto-normalized').trim();
@@ -358,6 +496,7 @@ async function main() {
   }
 
   const transcriptDir = path.resolve(process.cwd(), transcriptDirArg);
+  const inferredCoverContext = inferCoverContextFromTranscriptDir(transcriptDir);
   const drawRunCwd = deriveRunCwdFromTranscriptDir(transcriptDir);
   const hookPath = path.join(transcriptDir, `${prefix}.meeting-hook.txt`);
   const meetingSummaryPath = path.join(transcriptDir, `${prefix}.meeting-summary.md`);
@@ -410,8 +549,47 @@ async function main() {
   const shortOverlay = overlayDerived.finalOverlayText;
   verifyOverlayWordRange(shortOverlay, 3, 6);
 
-  const coverJurisdiction = String(process.env.COVER_JURISDICTION || "Owen Sound").trim();
-  const coverMeetingType = String(process.env.COVER_MEETING_TYPE || "council meeting").trim();
+  const videoFrame = await prepareVideoFrameBackground({ transcriptDir, prefix, drawRunCwd });
+  if (videoFrame.backgroundPath) {
+    const thumbnailSource = [
+      '# Thumbnail Brief',
+      'Source-video screenshot with deterministic text overlay.',
+      '',
+      `Source media: ${videoFrame.sourceUrl || videoFrame.videoPath || videoFrame.sourceImagePath}`,
+      `Frame: ${videoFrame.backgroundPath}`,
+      `Overlay: ${shortOverlay}`,
+    ].join('\n');
+    fs.writeFileSync(thumbnailSourcePath, `${thumbnailSource}\n`, 'utf8');
+    await renderDeterministicOverlay({
+      backgroundPath: videoFrame.backgroundPath,
+      overlayText: shortOverlay,
+      outputPath: coverImagePath,
+      size: 512,
+      cwd: drawRunCwd,
+    });
+    fs.copyFileSync(coverImagePath, coverImageStablePath);
+    writePyaReport(coverBackgroundDiagnosticPath, {
+      backgroundKind: 'source_video_frame',
+      backgroundPath: videoFrame.backgroundPath,
+      sourceVideoPath: videoFrame.videoPath,
+      sourceImagePath: videoFrame.sourceImagePath,
+      sourceVideoUrl: videoFrame.sourceUrl,
+      selectedOverlayText: shortOverlay,
+      backgroundUseful: true,
+      backgroundRelevancePass: true,
+    });
+    process.stdout.write(`[meeting-cover] source media: ${videoFrame.videoPath || videoFrame.sourceImagePath || videoFrame.sourceUrl}\n`);
+    process.stdout.write(`[meeting-cover] source frame: ${videoFrame.backgroundPath}\n`);
+    process.stdout.write(`[meeting-cover] wrote: ${coverImagePath}\n`);
+    process.stdout.write(`[meeting-cover] wrote: ${coverImageStablePath}\n`);
+    return;
+  }
+  if (String(process.env.COVER_REQUIRE_SOURCE_VIDEO || '').trim() === '1') {
+    throw new Error('meeting-cover source video required but no usable video frame was available');
+  }
+
+  const coverJurisdiction = String(process.env.COVER_JURISDICTION || inferredCoverContext.jurisdiction).trim();
+  const coverMeetingType = String(process.env.COVER_MEETING_TYPE || inferredCoverContext.meetingType).trim();
   const promptify = await runCoverPromptifyStage({
     hookText: shortOverlay,
     oneSentenceSummary,
@@ -514,32 +692,7 @@ async function main() {
   }
 
   if (!chosenBackgroundPath) {
-    const safeBgPath = `${coverImagePath}.background.safe.png`;
-    await generateSafeBackgroundFallback(safeBgPath, 512, drawRunCwd);
-    const safeDiag = await diagnoseCoverBackground({
-      backgroundPath: safeBgPath,
-      observedBackgroundText: '',
-      selectedOverlayText: shortOverlay,
-      rejectedOverlayTexts: overlayDecisionUsed.rejectedOverlayTexts,
-      sourceDisagreementDetected: false,
-      backgroundKind: 'abstract_fallback',
-      visualSubject: promptify.selectedVisualSubject,
-      abstractFallbackAllowed: ALLOW_SYMBOLIC_FALLBACK,
-      promptText: 'safe_background_fallback',
-      selectedOverlayTextHash: '',
-      reportPath: '',
-    });
-    backgroundAttempts.push({
-      label: 'abstract_fallback',
-      outputPath: safeBgPath,
-      squarePath: safeBgPath,
-      observedText: '',
-      diagnostics: safeDiag,
-      accepted: false,
-      rejectionReasons: safeDiag.failureReasons,
-    });
-    backgroundDiagnostic = safeDiag;
-    chosenBackgroundPath = safeBgPath;
+    throw new Error("meeting-cover generation failed: no acceptable generated background");
   }
 
   writePyaReport(coverBackgroundAttemptsPath, {

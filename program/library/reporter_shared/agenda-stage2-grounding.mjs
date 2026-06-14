@@ -235,26 +235,52 @@ function findExplicitTopLevelCueStart(section = {}, rows = [], maxRow = 0) {
     "1": "one", "2": "two", "3": "three", "4": "four", "5": "five",
     "6": "six", "7": "seven", "8": "eight", "9": "nine", "10": "ten",
     "11": "eleven", "12": "twelve", "13": "thirteen", "14": "fourteen",
+    "15": "fifteen", "16": "sixteen", "17": "seventeen", "18": "eighteen",
+    "19": "nineteen", "20": "twenty", "21": "twenty one", "22": "twenty two",
+    "23": "twenty three", "24": "twenty four", "25": "twenty five",
+    "26": "twenty six", "27": "twenty seven", "28": "twenty eight",
+    "29": "twenty nine", "30": "thirty",
   };
   const numberWord = words[item] || "";
   const cuePhrase = headingCuePhrase(section?.title || "");
+  const itemNumber = Number(item);
   const limit = Math.max(0, Number(maxRow || 0));
   for (let i = 0; i <= limit && i < rows.length; i += 1) {
     const text = normalizeText(rows[i]?.text || "").toLowerCase();
     if (!text) continue;
-    const numberHit = numberWord ? text.includes("number " + numberWord) : false;
-    if (!numberHit && !cuePhrase) continue;
+    const numberHit = numberWord ? (
+      text.includes("number " + numberWord)
+      || text.includes("item " + numberWord)
+      || text.includes("item number " + numberWord)
+      || text.includes("item " + item)
+      || text.includes("number " + item)
+    ) : false;
+    const downToHit = numberWord
+      ? new RegExp(`\\bdown\\s+to\\s+(?:item\\s+)?${numberWord.replace(/\s+/gu, "\\s+")}\\b`, "u").test(text)
+      : false;
+    const numericItemHit = new RegExp(`\\bitem\\s+${item.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\b`, "u").test(text);
+    const wordItemHit = numberWord
+      ? new RegExp(`\\bitem\\s+${numberWord.replace(/\s+/gu, "\\s+")}\\b`, "u").test(text)
+      : false;
+    if (!numberHit && !downToHit && !numericItemHit && !cuePhrase) continue;
     if (cuePhrase && text.includes(cuePhrase)) {
       if (["6", "8"].includes(item) && !numberHit) continue;
       return i;
     }
     if (numberHit && cuePhrase && text.includes(cuePhrase.split(/\s+/u)[0])) return i;
+    if ((downToHit || numericItemHit || wordItemHit) && Number.isFinite(itemNumber) && itemNumber >= 9) return i;
+    if (numberHit && Number.isFinite(itemNumber) && itemNumber >= 9) {
+      const escapedWord = numberWord.replace(/\s+/gu, "\\s+");
+      const escapedItem = item.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const agendaNumberRe = new RegExp(`\\b(?:at\\s+)?number\\s+(?:${escapedWord}|${escapedItem})\\s+(?:is|will|to|on|correspondence|reports|consent|matters|motions|discussion|notices|by-?laws?|adjournment)\\b`, "u");
+      if (agendaNumberRe.test(text)) return i;
+    }
   }
   return -1;
 }
 function findEarlyProceduralStart(section = {}, rows = [], maxRow = 0) {
   const item = String(section?.agendaItem || "").toLowerCase();
-  if (!["1", "2", "3", "4", "4.a", "4.b", "5", "6", "7", "8", "9", "10"].includes(item)) return -1;
+  if (!["1", "2", "3", "4", "4.a", "4.b", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"].includes(item)) return -1;
   const limit = Math.max(0, Number(maxRow || 0));
   for (let i = 0; i <= limit && i < rows.length; i += 1) {
     const text = normalizeText(rows[i]?.text || "").toLowerCase();
@@ -269,6 +295,18 @@ function findEarlyProceduralStart(section = {}, rows = [], maxRow = 0) {
     if (item === "8" && /(at\s+number\s+eight\s+in\s+our\s+agenda|number\s+eight\s+on\s+our\s+agenda\s+is\s+public\s+forum|number\s+eight.*public\s+forum|no\s+comments\s+for\s+public\s+forum\s+have\s+been\s+submitted|if\s+anyone\s+present\s+wishes\s+to\s+speak|each\s+speaker\s+is\s+limited\s+to|total\s+time\s+allotted\s+for\s+public\s+forum)/u.test(text)) return i;
     if (item === "9" && /(no\s+correspondence\s+items\s+being\s+presented\s+for\s+consideration|correspondence\s+received\s+for\s+which\s+direction\s+of\s+council\s+is\s+required|at\s+number\s+nine|number\s+nine)/u.test(text)) return i;
     if (item === "10" && /(reports\s+of\s+city\s+staff|at\s+number\s+ten|number\s+ten|report\s+cs-\d{2}-\d{3})/u.test(text)) return i;
+    if (item === "11" && /(item\s+eleven|item\s+11|number\s+eleven|consent\s+agenda)/u.test(text)) return i;
+    if (item === "12" && /(item\s+twelve|item\s+12|number\s+twelve|committee\s+minutes)/u.test(text)) return i;
+    if (item === "13" && /(item\s+thirteen|item\s+13|number\s+thirteen|matters\s+postponed)/u.test(text)) return i;
+    if (item === "14" && /(item\s+fourteen|item\s+14|number\s+fourteen|motions\s+for\s+which\s+notice\s+was\s+previously\s+given)/u.test(text)) return i;
+    if (item === "15" && /(item\s+fifteen|item\s+15|number\s+fifteen|additional\s+business)/u.test(text)) return i;
+    if (item === "16" && /(item\s+sixteen|item\s+16|number\s+sixteen|motion\s+that\s+committee\s+of\s+the\s+whole\s+rise\s+and\s+report)/u.test(text)) return i;
+    if (item === "17" && /(item\s+seventeen|item\s+17|number\s+seventeen|motion\s+to\s+adopt\s+proceedings\s+in\s+committee\s+of\s+the\s+whole)/u.test(text)) return i;
+    if (item === "18" && /(item\s+eighteen|item\s+18|number\s+eighteen|notices\s+of\s+motion)/u.test(text)) return i;
+    if (item === "19" && /(item\s+nineteen|item\s+19|number\s+nineteen|move\s+into\s+closed\s+session|closed\s+session)/u.test(text)) return i;
+    if (item === "20" && /(item\s+twenty|item\s+20|number\s+twenty|reporting\s+out\s+of\s+closed\s+session)/u.test(text)) return i;
+    if (item === "21" && /(item\s+twenty\s+one|item\s+21|number\s+twenty\s+one|by-?laws?)/u.test(text)) return i;
+    if (item === "22" && /(item\s+twenty\s+two|item\s+22|number\s+twenty\s+two|adjournment|adjourned)/u.test(text)) return i;
     if (item === "4.a" && /(four\s+a|4\s*a)/u.test(text)) return i;
     if (item === "4.b" && /(four\s+b|4\s*b)/u.test(text)) return i;
   }
@@ -493,10 +531,33 @@ function deriveChapterFieldsFromSpan({ parentUnit, chapterId, orderingIndex, row
   };
 }
 
-function attachChildChaptersByTransition({ units, chunks, rows, thresholdSeconds = 900 }) {
-  const out = [];
+function rowTextChars(row = {}) {
+  return String(row?.speaker || "").length + 2 + String(row?.text || "").length + 1;
+}
 
-  const minChapterSeconds = 600;
+function spanTextChars(rows = [], rowStart = 0, rowEnd = rowStart) {
+  const rs = Math.max(0, Number(rowStart || 0));
+  const re = Math.max(rs, Number(rowEnd || rs));
+  let total = 0;
+  for (let i = rs; i <= re; i += 1) total += rowTextChars(rows[i] || {});
+  return total;
+}
+
+function planChildChapterSpans({
+  parentUnit,
+  chunks,
+  rows,
+  maxSourceChars = 12000,
+  targetSeconds = 900,
+}) {
+  const duration = Number(parentUnit?.["duration seconds"] || 0);
+  const unitStart = Number(parentUnit?.["row start"] || 0);
+  const unitEnd = Number(parentUnit?.["row end"] || unitStart);
+  if (!Number.isInteger(unitStart) || !Number.isInteger(unitEnd) || unitEnd <= unitStart) return [];
+
+  const minChapterSeconds = Math.min(600, Math.max(120, Number(targetSeconds || 900) * 0.75));
+  const maxChapterSourceChars = Math.max(2000, Number(maxSourceChars || 12000));
+  const chapterSplitTargetChars = Math.max(1800, Math.floor(maxChapterSourceChars * 0.9));
   const maxSegmentFor = (durationSeconds) => {
     if (durationSeconds > 2400) return 600;
     if (durationSeconds > 1200) return 720;
@@ -512,6 +573,109 @@ function attachChildChaptersByTransition({ units, chunks, rows, thresholdSeconds
     return Math.max(0, until - since);
   };
 
+  if (duration <= minChapterSeconds && spanTextChars(rows, unitStart, unitEnd) <= maxChapterSourceChars) return [];
+
+  const candidateChunks = chunks
+    .filter((c) => Number(c["row end"]) >= unitStart && Number(c["row start"]) <= unitEnd)
+    .sort((a, b) => Number(a["row start"]) - Number(b["row start"]));
+
+  const boundaryStarts = candidateChunks
+    .map((c) => Number(c["row start"]))
+    .filter((n) => Number.isInteger(n) && n > unitStart && n < unitEnd);
+
+  const scored = new Map();
+  for (let idx = 0; idx < candidateChunks.length; idx += 1) {
+    const c = candidateChunks[idx];
+    const row = Number(c["row start"]);
+    if (!(row > unitStart && row < unitEnd)) continue;
+    let score = 0;
+    const transition = String(c["topic transition"] || "").trim().toLowerCase();
+    if (transition === "major") score += 3;
+    else if (transition === "minor") score += 2;
+    else if (transition && transition !== "none") score += 1;
+
+    const flow = String(c["signal flow"] || "").trim().toLowerCase();
+    if (flow === "start" || flow === "end") score += 1;
+
+    const prev = idx > 0 ? candidateChunks[idx - 1] : null;
+    const prevCue = String(prev?.["likely agenda item"] || "").trim().toLowerCase();
+    const cue = String(c["likely agenda item"] || "").trim().toLowerCase();
+    if (prev && cue && prevCue && cue !== prevCue) score += 1;
+
+    if (score > 0) scored.set(row, score);
+  }
+
+  const strong = [...scored.entries()].filter(([, sc]) => sc >= 2).map(([row]) => row).sort((a, b) => a - b);
+  const reasonable = [...scored.keys()].sort((a, b) => a - b);
+
+  let transitionRows = [];
+  if (duration > 1200) {
+    transitionRows = reasonable.length ? reasonable : boundaryStarts;
+  } else if (duration > targetSeconds) {
+    transitionRows = strong.length ? strong : (reasonable.length ? reasonable : boundaryStarts);
+  } else {
+    transitionRows = reasonable;
+  }
+
+  const targetMax = maxSegmentFor(duration);
+
+  const pickMidBoundary = (segStart, segEnd, usedSet) => {
+    const candidates = boundaryStarts.filter((r) => r > segStart && r < segEnd && !usedSet.has(r));
+    if (!candidates.length) {
+      const mid = Math.floor((segStart + segEnd) / 2);
+      return mid > segStart && mid < segEnd && !usedSet.has(mid) ? mid : null;
+    }
+    const mid = Math.floor((segStart + segEnd) / 2);
+    let best = candidates[0];
+    let bestDist = Math.abs(best - mid);
+    for (const c of candidates.slice(1)) {
+      const d = Math.abs(c - mid);
+      if (d < bestDist) {
+        best = c;
+        bestDist = d;
+      }
+    }
+    return best;
+  };
+
+  const used = new Set(transitionRows);
+  const maxAugment = 24;
+  let loops = 0;
+  while (loops < maxAugment) {
+    loops += 1;
+    const ordered = [...used].sort((a, b) => a - b);
+    const boundaries = [unitStart, ...ordered, unitEnd + 1];
+    let inserted = false;
+    for (let bi = 0; bi < boundaries.length - 1; bi += 1) {
+      const segStart = boundaries[bi];
+      const segEnd = Math.max(segStart, boundaries[bi + 1] - 1);
+      const segDuration = rowDuration(segStart, segEnd);
+      const segChars = spanTextChars(rows, segStart, segEnd);
+      if (segDuration <= targetMax && segChars <= chapterSplitTargetChars) continue;
+      const b = pickMidBoundary(segStart, segEnd, used);
+      if (b != null) {
+        used.add(b);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) break;
+  }
+
+  transitionRows = [...used].sort((a, b) => a - b);
+  if (!transitionRows.length) return [];
+  const boundaries = [unitStart, ...transitionRows, unitEnd + 1];
+  return boundaries.slice(0, -1)
+    .map((startRow, idx) => ({
+      "row start": startRow,
+      "row end": Math.max(startRow, boundaries[idx + 1] - 1),
+    }));
+}
+
+function attachChildChaptersByTransition({ units, chunks, rows, thresholdSeconds = 900 }) {
+  const out = [];
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 12000));
+
   for (const unit of units) {
     const parentUnit = {
       ...unit,
@@ -521,124 +685,34 @@ function attachChildChaptersByTransition({ units, chunks, rows, thresholdSeconds
       "child chapters": [],
     };
 
-    const duration = Number(unit["duration seconds"] || 0);
-    if (duration <= minChapterSeconds) {
+    const plannedSpans = planChildChapterSpans({
+      parentUnit,
+      chunks,
+      rows,
+      maxSourceChars: maxChapterSourceChars,
+      targetSeconds: thresholdSeconds,
+    });
+
+    if (!plannedSpans.length) {
       out.push(parentUnit);
       continue;
     }
 
-    const unitStart = Number(unit["row start"] || 0);
-    const unitEnd = Number(unit["row end"] || unitStart);
-
-    const candidateChunks = chunks
-      .filter((c) => Number(c["row end"]) >= unitStart && Number(c["row start"]) <= unitEnd)
-      .sort((a, b) => Number(a["row start"]) - Number(b["row start"]));
-
-    const boundaryStarts = candidateChunks
-      .map((c) => Number(c["row start"]))
-      .filter((n) => Number.isInteger(n) && n > unitStart && n < unitEnd);
-
-    const scored = new Map();
-    for (let idx = 0; idx < candidateChunks.length; idx += 1) {
-      const c = candidateChunks[idx];
-      const row = Number(c["row start"]);
-      if (!(row > unitStart && row < unitEnd)) continue;
-      let score = 0;
-      const transition = String(c["topic transition"] || "").trim().toLowerCase();
-      if (transition === "major") score += 3;
-      else if (transition === "minor") score += 2;
-      else if (transition && transition !== "none") score += 1;
-
-      const flow = String(c["signal flow"] || "").trim().toLowerCase();
-      if (flow === "start" || flow === "end") score += 1;
-
-      const prev = idx > 0 ? candidateChunks[idx - 1] : null;
-      const prevCue = String(prev?.["likely agenda item"] || "").trim().toLowerCase();
-      const cue = String(c["likely agenda item"] || "").trim().toLowerCase();
-      if (prev && cue && prevCue && cue !== prevCue) score += 1;
-
-      if (score > 0) scored.set(row, score);
-    }
-
-    const strong = [...scored.entries()].filter(([, sc]) => sc >= 2).map(([row]) => row).sort((a, b) => a - b);
-    const reasonable = [...scored.keys()].sort((a, b) => a - b);
-
-    let transitionRows = [];
-    if (duration > 1200) {
-      transitionRows = reasonable.length ? reasonable : boundaryStarts;
-    } else if (duration > thresholdSeconds) {
-      transitionRows = strong.length ? strong : (reasonable.length ? reasonable : boundaryStarts);
-    } else {
-      transitionRows = reasonable;
-    }
-
-    const targetMax = maxSegmentFor(duration);
-
-    const pickMidBoundary = (segStart, segEnd, usedSet) => {
-      const candidates = boundaryStarts.filter((r) => r > segStart && r < segEnd && !usedSet.has(r));
-      if (!candidates.length) return null;
-      const mid = Math.floor((segStart + segEnd) / 2);
-      let best = candidates[0];
-      let bestDist = Math.abs(best - mid);
-      for (const c of candidates.slice(1)) {
-        const d = Math.abs(c - mid);
-        if (d < bestDist) {
-          best = c;
-          bestDist = d;
-        }
-      }
-      return best;
-    };
-
-    const used = new Set(transitionRows);
-    const maxAugment = 24;
-    let loops = 0;
-    while (loops < maxAugment) {
-      loops += 1;
-      const ordered = [...used].sort((a, b) => a - b);
-      const boundaries = [unitStart, ...ordered, unitEnd + 1];
-      let inserted = false;
-      for (let bi = 0; bi < boundaries.length - 1; bi += 1) {
-        const segStart = boundaries[bi];
-        const segEnd = Math.max(segStart, boundaries[bi + 1] - 1);
-        const segDuration = rowDuration(segStart, segEnd);
-        if (segDuration <= targetMax) continue;
-        const b = pickMidBoundary(segStart, segEnd, used);
-        if (b != null) {
-          used.add(b);
-          inserted = true;
-          break;
-        }
-      }
-      if (!inserted) break;
-    }
-
-    transitionRows = [...used].sort((a, b) => a - b);
-
-    if (!transitionRows.length) {
-      out.push(parentUnit);
-      continue;
-    }
-
-    const boundaries = [unitStart, ...transitionRows, unitEnd + 1];
     const chapters = [];
-    let part = 0;
-    for (let bi = 0; bi < boundaries.length - 1; bi += 1) {
-      const startRow = boundaries[bi];
-      const endRow = Math.max(startRow, boundaries[bi + 1] - 1);
-      if (endRow - startRow < 8) continue;
-      part += 1;
-      chapters.push(
-        deriveChapterFieldsFromSpan({
-          parentUnit,
-          chapterId: `${parentUnit["unit id"]}_chapter_${String(part).padStart(2, "0")}`,
-          orderingIndex: part,
-          rowStart: startRow,
-          rowEnd: endRow,
-          rows,
-          chunks,
-        }),
-      );
+    for (let bi = 0; bi < plannedSpans.length; bi += 1) {
+      const startRow = Number(plannedSpans[bi]["row start"]);
+      const endRow = Number(plannedSpans[bi]["row end"]);
+      const chapter = deriveChapterFieldsFromSpan({
+        parentUnit,
+        chapterId: `${parentUnit["unit id"]}_chapter_${String(bi + 1).padStart(2, "0")}`,
+        orderingIndex: bi + 1,
+        rowStart: startRow,
+        rowEnd: endRow,
+        rows,
+        chunks,
+      });
+      chapter["source chars"] = spanTextChars(rows, startRow, endRow);
+      chapters.push(chapter);
     }
 
     if (chapters.length < 2) {
@@ -741,7 +815,13 @@ function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = [
     const compat = headingExcerptCompatibility(u);
 
     const shouldDemote = late && tiny && weak && !explicitCue && !isBylawParentOrAdjourn;
-    const shouldDemoteHeadingMismatch = !compat.ok && !isBylawParentOrAdjourn && !["neutral_heading","reports_neutral"].includes(String(compat.reason||""));
+    const shouldDemoteHeadingMismatch =
+      weak &&
+      tiny &&
+      !explicitCue &&
+      !compat.ok &&
+      !isBylawParentOrAdjourn &&
+      !["neutral_heading", "reports_neutral"].includes(String(compat.reason || ""));
     if (shouldDemote) {
       demoted.push({
         "agenda item": u["agenda item"],
@@ -909,6 +989,7 @@ function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = [
       const merged = deriveUnitFieldsFromSpan({ unit: host, rowStart: minRow, rowEnd: maxRow, rows, chunks });
       merged["boundary source"] = "parent_grouped";
       merged["boundary evidence strength"] = "parent_grouped";
+      merged["child chapters"] = [];
       kept[hostIdx] = merged;
     }
   }
@@ -955,9 +1036,87 @@ function pruneLateTinyWeakUnits(units = [], rowsTotal = 0, rows = [], chunks = [
     }
     const shifted = deriveUnitFieldsFromSpan({ unit: u, rowStart: prevEnd + 1, rowEnd: Number(u["row end"] || prevEnd + 1), rows, chunks });
     if (Number(shifted["row start"] || 0) <= prevEnd) continue;
+    shifted["child chapters"] = [];
     monotonic.push(shifted);
   }
   return monotonic.map((u, i) => ({ ...u, "unit id": `ground_${String(i + 1).padStart(3, "0")}` }));
+}
+
+function repairGroundedUnitRowCoverage(units = [], rows = [], chunks = []) {
+  const sorted = (Array.isArray(units) ? units : [])
+    .slice()
+    .sort((a, b) => Number(a["row start"] || 0) - Number(b["row start"] || 0));
+  if (!sorted.length || !Array.isArray(rows) || !rows.length) return sorted;
+
+  const repaired = sorted.map((u) => ({ ...u, "child chapters": [] }));
+  const markRepair = (unit, note) => ({
+    ...unit,
+    "coverage repair": [
+      ...(Array.isArray(unit["coverage repair"]) ? unit["coverage repair"] : []),
+      note,
+    ],
+  });
+
+  if (Number(repaired[0]["row start"] || 0) > 0) {
+    const oldStart = Number(repaired[0]["row start"] || 0);
+    repaired[0] = deriveUnitFieldsFromSpan({
+      unit: markRepair(repaired[0], {
+        reason: "fill_leading_gap",
+        "old row start": oldStart,
+        "new row start": 0,
+      }),
+      rowStart: 0,
+      rowEnd: Number(repaired[0]["row end"] || oldStart),
+      rows,
+      chunks,
+    });
+    repaired[0]["boundary source"] = String(repaired[0]["boundary source"] || "coverage_repair");
+    repaired[0]["child chapters"] = [];
+  }
+
+  for (let i = 1; i < repaired.length; i += 1) {
+    const prev = repaired[i - 1];
+    const cur = repaired[i];
+    const prevEnd = Number(prev["row end"] || 0);
+    const curStart = Number(cur["row start"] || 0);
+    if (curStart <= prevEnd + 1) continue;
+    const newPrevEnd = curStart - 1;
+    repaired[i - 1] = deriveUnitFieldsFromSpan({
+      unit: markRepair(prev, {
+        reason: "fill_internal_gap",
+        "old row end": prevEnd,
+        "new row end": newPrevEnd,
+        "next agenda item": String(cur["agenda item"] || ""),
+      }),
+      rowStart: Number(prev["row start"] || 0),
+      rowEnd: newPrevEnd,
+      rows,
+      chunks,
+    });
+    repaired[i - 1]["boundary source"] = String(repaired[i - 1]["boundary source"] || "coverage_repair");
+    repaired[i - 1]["child chapters"] = [];
+  }
+
+  const lastIdx = repaired.length - 1;
+  const finalRow = rows.length - 1;
+  if (Number(repaired[lastIdx]["row end"] || 0) < finalRow) {
+    const oldEnd = Number(repaired[lastIdx]["row end"] || 0);
+    repaired[lastIdx] = deriveUnitFieldsFromSpan({
+      unit: markRepair(repaired[lastIdx], {
+        reason: "fill_trailing_gap",
+        "old row end": oldEnd,
+        "new row end": finalRow,
+      }),
+      rowStart: Number(repaired[lastIdx]["row start"] || 0),
+      rowEnd: finalRow,
+      rows,
+      chunks,
+    });
+    repaired[lastIdx]["boundary source"] = String(repaired[lastIdx]["boundary source"] || "coverage_repair");
+    repaired[lastIdx]["child chapters"] = [];
+  }
+
+  return repaired.map((u, i) => ({ ...u, "unit id": `ground_${String(i + 1).padStart(3, "0")}` }));
 }
 
 function rebindChildChapterParents(units = []) {
@@ -976,6 +1135,55 @@ function rebindChildChapterParents(units = []) {
       "child chapters": reboundChapters,
     };
   });
+}
+
+function ensureCoverageChaptersForLongUnits(units = [], rows = [], chunks = []) {
+  const maxChapterSeconds = Math.max(600, Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900));
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 12000));
+  const chapterSplitTargetChars = Math.max(1800, Math.floor(maxChapterSourceChars * 0.9));
+  const out = [];
+  for (const unit of (Array.isArray(units) ? units : [])) {
+    const u = { ...unit };
+    const existing = Array.isArray(u["child chapters"]) ? u["child chapters"] : [];
+    const duration = Number(u["duration seconds"] || 0);
+    if (existing.length >= 2 || duration <= maxChapterSeconds) {
+      out.push(u);
+      continue;
+    }
+    const start = Math.max(0, Number(u["row start"] || 0));
+    const end = Math.max(start, Number(u["row end"] || start));
+    const chapters = [];
+    let segStart = start;
+    let segChars = 0;
+    let segSince = Number(rows[start]?.since || 0);
+    for (let i = start; i <= end; i += 1) {
+      const r = rows[i] || {};
+      const rUntil = Number(r.until || r.since || segSince);
+      segChars += rowTextChars(r);
+      const segDuration = Math.max(0, rUntil - segSince);
+      const shouldBreak = i > segStart && (segDuration >= maxChapterSeconds || segChars >= chapterSplitTargetChars);
+      if (!shouldBreak && i < end) continue;
+      const ch = deriveChapterFieldsFromSpan({
+        parentUnit: u,
+        chapterId: `${String(u["unit id"] || "")}_chapter_${String(chapters.length + 1).padStart(2, "0")}`,
+        orderingIndex: chapters.length + 1,
+        rowStart: segStart,
+        rowEnd: i,
+        rows,
+        chunks,
+      });
+      ch["source chars"] = Number(ch["source chars"] || String(ch["source excerpt"] || "").length || 0);
+      chapters.push(ch);
+      segStart = i + 1;
+      if (segStart <= end) {
+        segChars = 0;
+        segSince = Number(rows[segStart]?.since || rUntil);
+      }
+    }
+    u["child chapters"] = chapters.length >= 2 ? chapters : [];
+    out.push(u);
+  }
+  return out;
 }
 
 function findFirstChapterParentMismatch(units = []) {
@@ -1001,7 +1209,7 @@ function findFirstChapterParentMismatch(units = []) {
   return null;
 }
 
-function assertLocalParentChapterInvariant(units = []) {
+function assertLocalParentChapterInvariant(units = [], rows = []) {
   for (let ui = 0; ui < units.length; ui += 1) {
     const u = units[ui] || {};
     const uid = String(u["unit id"] || "").trim();
@@ -1025,6 +1233,35 @@ function assertLocalParentChapterInvariant(units = []) {
       const cUntil = Number(ch.until);
       if (!Number.isFinite(cSince) || !Number.isFinite(cUntil) || cSince < uSince || cUntil > uUntil || cUntil < cSince) {
         throw new Error(`stage2 local invariant failed: chapter timing out of parent bounds at unit=${ui + 1} chapter=${ci + 1} parent=${uSince}..${uUntil} chapter=${cSince}..${cUntil}`);
+      }
+    }
+    // If a unit is split into chapters, chapter coverage must fully equal the
+    // parent span (rows and text chars). This prevents silent dropped tails.
+    if (chapters.length >= 2) {
+      const coveredRows = new Set();
+      for (let ci = 0; ci < chapters.length; ci += 1) {
+        const ch = chapters[ci] || {};
+        const cStart = Number(ch["row start"]);
+        const cEnd = Number(ch["row end"]);
+        for (let r = cStart; r <= cEnd; r += 1) coveredRows.add(r);
+      }
+      const parentSpanRows = Math.max(0, uEnd - uStart + 1);
+      if (coveredRows.size !== parentSpanRows) {
+        throw new Error(
+          `stage2 local invariant failed: chapter row coverage mismatch at unit=${ui + 1} unitId=${uid} parent_rows=${parentSpanRows} covered_rows=${coveredRows.size} parent_span=${uStart}..${uEnd}`,
+        );
+      }
+      let parentChars = 0;
+      let coveredChars = 0;
+      for (let r = uStart; r <= uEnd; r += 1) {
+        const chars = rowTextChars(rows[r] || {});
+        parentChars += chars;
+        if (coveredRows.has(r)) coveredChars += chars;
+      }
+      if (coveredChars !== parentChars) {
+        throw new Error(
+          `stage2 local invariant failed: chapter char coverage mismatch at unit=${ui + 1} unitId=${uid} parent_chars=${parentChars} covered_chars=${coveredChars}`,
+        );
       }
     }
   }
@@ -1077,8 +1314,10 @@ export async function runAgendaStage2Grounding({
     const ch = preRebindMismatch.chapter || {};
     log(`[agenda-stage2][pre-rebind-mismatch] unit=${preRebindMismatch.unitIndex + 1} heading=${String(u.label || "")} chapter=${preRebindMismatch.chapterIndex + 1} expected_parent=${preRebindMismatch.expectedParentUnitId || "(empty)"} actual_parent=${preRebindMismatch.actualParentUnitId || "(empty)"} chapter_id=${String(ch["chapter id"] || "")} row_span=${Number(ch["row start"])}..${Number(ch["row end"])}`);
   }
-  const groundedUnits = rebindChildChapterParents(groundedUnitsPruned);
-  assertLocalParentChapterInvariant(groundedUnits);
+  const groundedUnitsCoverageRepaired = repairGroundedUnitRowCoverage(groundedUnitsPruned, rows, chunks);
+  const groundedUnitsWithCoverageChapters = ensureCoverageChaptersForLongUnits(groundedUnitsCoverageRepaired, rows, chunks);
+  const groundedUnits = rebindChildChapterParents(groundedUnitsWithCoverageChapters);
+  assertLocalParentChapterInvariant(groundedUnits, rows);
 
   const grounding = {
     "schema version": "agenda_section_grounding_v1",

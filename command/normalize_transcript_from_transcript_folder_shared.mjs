@@ -201,6 +201,25 @@ function firstExisting(paths) {
   return "";
 }
 
+function readMeetingNormalizationContext(transcriptDir) {
+  const meetingPath = path.join(path.dirname(transcriptDir), "meeting.json");
+  try {
+    const payload = JSON.parse(fs.readFileSync(meetingPath, "utf8"))?.payload || {};
+    const rows = [
+      ["Meeting/video name", payload?.meeting_name],
+      ["Jurisdiction", payload?.jurisdiction],
+      ["Body/topic", payload?.body],
+      ["Uploader", payload?.uploader],
+      ["Source", payload?.source],
+    ]
+      .filter(([, value]) => String(value || "").trim())
+      .map(([label, value]) => `${label}: ${String(value).trim()}`);
+    return rows.join("\n");
+  } catch {
+    return "";
+  }
+}
+
 function parseNormalizationTerms(text) {
   const lines = String(text || "").split(/\r?\n/u);
   const terms = [];
@@ -427,7 +446,10 @@ export async function runNormalizeShared(writer, argv = []) {
     String(process.env[profile.termsEnv] || "").trim(),
     ...profile.termsCandidates(transcriptDir),
   ]);
-  const rosterText = rosterPath ? fs.readFileSync(rosterPath, "utf8") : "";
+  const rosterText = [
+    rosterPath ? fs.readFileSync(rosterPath, "utf8") : "",
+    readMeetingNormalizationContext(transcriptDir),
+  ].filter(Boolean).join("\n\n");
   const normalizationTerms = loadNormalizationTerms(termsPath);
   const termMapText = termsForPrompt(normalizationTerms);
   const stringReplacementMap = buildStringReplacementMap(profile, normalizationTerms);

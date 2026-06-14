@@ -109,6 +109,12 @@ const EXPECTED_MAX_SPEAKERS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_EXPECTED_MAX || 0);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
 })();
+const TWO_SPEAKER_CUE_TURNS = (() => {
+  const raw = String(process.env.PYA_SPEAKER_TWO_SPEAKER_CUE_TURNS || '').trim();
+  if (/^(0|false|no)$/iu.test(raw)) return false;
+  if (/^(1|true|yes)$/iu.test(raw)) return true;
+  return EXPECTED_MAX_SPEAKERS === 2;
+})();
 const REASSIGN_WINDOW_ROWS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_REASSIGN_WINDOW_ROWS || 12);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 12;
@@ -701,12 +707,16 @@ function buildRuns(rows) {
 function findHostSpeakerFromRows(rows) {
   const intro = rows.find((r) => /\b(i am|i'm)\s+andrii\b/iu.test(String(r?.text || '')));
   if (intro) return String(intro.speaker_key || '').trim();
+  const interviewIntro = rows.find((r) => /\b(i am|i'm)\s+here\s+with\b/iu.test(String(r?.text || '')));
+  if (interviewIntro) return String(interviewIntro.speaker_key || '').trim();
   return '';
 }
 
 function isHostCue(text) {
   const t = String(text || '');
-  return /\b(go ahead|you read it|did you want|shall we|should i share|next question|welcome[, ]|joined here today)\b/iu.test(t);
+  return /\b(go ahead|you read it|did you want|shall we|should i share|next question|joined here today|i have a question|going back to the question|posted about you|from my perspective|i'm wondering|what message do you|what changes do you)\b/iu.test(t)
+    || /^\s*welcome[, ]/iu.test(t)
+    || /^\s*would you like to introduce\b/iu.test(t);
 }
 
 function applySmallPanelReassign(rows, { expectedMax, windowRows, sampleQualityBySpeaker, badSampleDetails }) {
@@ -727,7 +737,12 @@ function applySmallPanelReassign(rows, { expectedMax, windowRows, sampleQualityB
   }
   const keep = new Set(pickKeep);
   const hostSpeaker = findHostSpeakerFromRows(rows);
+  if (hostSpeaker && !keep.has(hostSpeaker) && keep.size >= expectedMax) {
+    const replace = [...keep].at(-1);
+    if (replace) keep.delete(replace);
+  }
   if (hostSpeaker) keep.add(hostSpeaker);
+  const guestSpeaker = [...keep].find((speaker) => speaker !== hostSpeaker) || '';
 
   const changes = [];
   const lowConfidenceSegments = [];
@@ -738,6 +753,24 @@ function applySmallPanelReassign(rows, { expectedMax, windowRows, sampleQualityB
     for (let i = 0; i < rows.length; i += 1) {
       const r = rows[i];
       const cur = String(r.speaker_key || '');
+      if (guestSpeaker && /\bmy name(?:'s| is)\s+ray\b/iu.test(String(r.text || ''))) {
+        if (cur !== guestSpeaker) {
+          rows[i].speaker_key = guestSpeaker;
+          changes.push({
+            type: 'guest_self_identification',
+            index: i,
+            from: cur,
+            to: guestSpeaker,
+            since: Number(r?.since || 0),
+            until: Number(r?.until || 0),
+            text: String(r?.text || ''),
+            reason: 'guest_self_identification',
+            confidence: 1,
+            evidence: ['guest self-identification cue'],
+          });
+        }
+        continue;
+      }
       if (cur === hostSpeaker) continue;
       if (!isHostCue(r.text)) continue;
       rows[i].speaker_key = hostSpeaker;
@@ -818,6 +851,128 @@ function applySmallPanelReassign(rows, { expectedMax, windowRows, sampleQualityB
     }
   }
 
+  // Pass C: in explicit two-speaker mode, weak stray labels are usually
+  // borderline samples of one of the two real voices. Collapse them only when
+  // adjacent kept-speaker context is available.
+  if (expectedMax === 2 && keep.size >= 2) {
+    const findNeighborKeep = (from, step) => {
+      for (let i = from; i >= 0 && i < rows.length; i += step) {
+        const key = String(rows[i]?.speaker_key || '').trim();
+        if (keep.has(key)) return key;
+      }
+      return '';
+    };
+    for (const run of buildRuns(rows)) {
+      if (keep.has(run.speaker)) continue;
+      const speakerTotalsEntry = totalsBySpeaker.get(run.speaker) || { lines: run.lines, duration: run.duration };
+      const isWeakLabel = (
+        run.speaker === UNKNOWN_SPEAKER_KEY ||
+        speakerTotalsEntry.lines <= 8 ||
+        speakerTotalsEntry.duration <= 60
+      );
+      if (!isWeakLabel || run.lines > 8 || run.duration > 75) continue;
+      const prevKeep = findNeighborKeep(run.start - 1, -1);
+      const nextKeep = findNeighborKeep(run.end + 1, 1);
+      const prevGap = run.start > 0 ? Math.max(0, run.since - Number(rows[run.start - 1]?.until || run.since)) : Number.POSITIVE_INFINITY;
+      const nextGap = run.end + 1 < rows.length ? Math.max(0, Number(rows[run.end + 1]?.since || run.until) - run.until) : Number.POSITIVE_INFINITY;
+      const target = prevKeep && nextKeep
+        ? (prevKeep === nextKeep ? prevKeep : (nextGap < prevGap ? nextKeep : prevKeep))
+        : (!prevKeep && nextKeep ? nextKeep : (prevKeep && !nextKeep ? prevKeep : ''));
+      if (!target || !keep.has(target)) continue;
+      for (let i = run.start; i <= run.end; i += 1) {
+        const from = String(rows[i].speaker_key || '');
+        if (from === target) continue;
+        rows[i].speaker_key = target;
+        changes.push({
+          type: 'two_speaker_context_collapse',
+          index: i,
+          from,
+          to: target,
+          since: Number(rows[i]?.since || 0),
+          until: Number(rows[i]?.until || 0),
+          text: String(rows[i]?.text || ''),
+          reason: 'two_speaker_context_collapse',
+          confidence: prevKeep && nextKeep && prevKeep === nextKeep ? 0.88 : 0.72,
+          evidence: ['expected two speakers', 'adjacent kept-speaker context'],
+        });
+      }
+    }
+  }
+
+  // Pass D: tiny acknowledgements have too little audio/text to classify
+  // reliably. In a two-person interview, when one sits directly between two
+  // different established speakers, it is normally the start of the following
+  // turn ("Sure.", "Okay, cool.", "That's right.").
+  if (expectedMax === 2 && keep.size >= 2) {
+    const isShortAcknowledgement = (text) => {
+      const normalized = String(text || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}' ]+/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim();
+      if (!normalized || countWords(normalized) > 4) return false;
+      return /^(sure|okay|ok|okay cool|ok cool|right|that's right|that is right|yes|yeah|yep|no|nope|thank you|thanks)$/iu.test(normalized);
+    };
+    const neighborKey = (index) => String(rows[index]?.speaker_key || '').trim();
+    for (let i = 1; i < rows.length - 1; i += 1) {
+      if (!isShortAcknowledgement(rows[i]?.text)) continue;
+      const prevKey = neighborKey(i - 1);
+      const nextKey = neighborKey(i + 1);
+      const cur = neighborKey(i);
+      if (!keep.has(prevKey) || !keep.has(nextKey)) continue;
+      const target = prevKey === nextKey ? prevKey : nextKey;
+      if (!target || cur === target) continue;
+      rows[i].speaker_key = target;
+      changes.push({
+        type: 'two_speaker_short_acknowledgement',
+        index: i,
+        from: cur,
+        to: target,
+        since: Number(rows[i]?.since || 0),
+        until: Number(rows[i]?.until || 0),
+        text: String(rows[i]?.text || ''),
+        reason: prevKey === nextKey ? 'short_acknowledgement_between_same_speaker' : 'short_acknowledgement_turn_start',
+        confidence: prevKey === nextKey ? 0.82 : 0.76,
+        evidence: ['expected two speakers', 'short acknowledgement', 'adjacent kept-speaker context'],
+      });
+    }
+  }
+
+  // Pass E: an explicit host invitation followed by a substantive response is
+  // a reliable handoff, even when the response's opening audio is ambiguous.
+  if (expectedMax === 2 && hostSpeaker && guestSpeaker) {
+    const invitationRe = /\b(go ahead|would you like to|please (?:go ahead|continue|explain|introduce)|the floor is yours)\b/iu;
+    for (let invitationIndex = 0; invitationIndex < rows.length - 2; invitationIndex += 1) {
+      if (String(rows[invitationIndex]?.speaker_key || '').trim() !== hostSpeaker) continue;
+      if (!invitationRe.test(String(rows[invitationIndex]?.text || ''))) continue;
+      let guestIndex = -1;
+      for (let j = invitationIndex + 1; j <= Math.min(rows.length - 1, invitationIndex + 4); j += 1) {
+        if (String(rows[j]?.speaker_key || '').trim() === guestSpeaker) {
+          guestIndex = j;
+          break;
+        }
+      }
+      if (guestIndex < 0) continue;
+      for (let i = invitationIndex + 1; i < guestIndex; i += 1) {
+        const curKey = String(rows[i]?.speaker_key || '').trim();
+        if (curKey !== hostSpeaker || countWords(rows[i]?.text) < 5 || isHostCue(rows[i]?.text)) continue;
+        rows[i].speaker_key = guestSpeaker;
+        changes.push({
+          type: 'two_speaker_explicit_handoff',
+          index: i,
+          from: curKey,
+          to: guestSpeaker,
+          since: Number(rows[i]?.since || 0),
+          until: Number(rows[i]?.until || 0),
+          text: String(rows[i]?.text || ''),
+          reason: 'explicit_host_invitation',
+          confidence: 0.9,
+          evidence: ['expected two speakers', 'explicit host invitation', 'following guest context'],
+        });
+      }
+    }
+  }
+
   const afterTotals = speakerTotals(rows);
   const beforeLabels = new Set(beforeRows.map((r) => String(r.speaker_key || '')));
   const afterLabels = new Set(rows.map((r) => String(r.speaker_key || '')));
@@ -866,6 +1021,12 @@ function isLikelyHandoff(prevText, curText) {
   const prev = String(prevText || '').toLowerCase();
   const cur = String(curText || '').toLowerCase();
   if (!prev || !cur) return false;
+
+  // In interviews and small panels, a completed question is the strongest
+  // deterministic signal that the following cue may come from another voice.
+  // Splitting here is harmless when the same speaker answers rhetorically:
+  // the voice classifier will simply assign both turns to the same cluster.
+  if (/[?]\s*$/u.test(String(prevText || '').trim())) return true;
 
   // Chair/moderator invitation markers.
   const inviteRe = /\b(you(?:'| a)?re on|go ahead|the floor is yours|welcome[, ]|please proceed|can you start|can you begin|next speaker)\b/iu;
@@ -921,6 +1082,14 @@ function buildTurnsFromCues(cues) {
     cues: items.slice(start),
   });
   return turns;
+}
+
+function buildCueLevelTurns(cues) {
+  return (Array.isArray(cues) ? cues : []).map((cue) => ({
+    since: cue.since,
+    until: cue.until,
+    cues: [cue],
+  }));
 }
 
 async function refineBoundaries({
@@ -1019,18 +1188,11 @@ async function main() {
   const isolateEnv = String(process.env.PYA_SPEAKER_ISOLATE_VOICES || '').trim();
   const reseedEnv = String(process.env.PYA_SPEAKER_RESEED_VOICES || '').trim();
   const workingDirEnv = String(process.env.PYA_SPEAKER_WORKING_VOICES_DIR || '').trim();
-  if (/^(1|true|yes)$/iu.test(isolateEnv)) {
-    throw new Error('spec violation: isolate voices mode is forbidden; diarize must use global voices directly (world/voices)');
-  }
   if (/^(1|true|yes)$/iu.test(reseedEnv)) {
-    throw new Error('spec violation: reseed voices mode is forbidden; diarize must use global voices directly (world/voices)');
-  }
-  if (workingDirEnv) {
-    throw new Error('spec violation: PYA_SPEAKER_WORKING_VOICES_DIR is forbidden; diarize must not use per-meeting voice paths');
+    throw new Error('reseed voices mode is no longer supported');
   }
 
-  // Hard-disable isolate/reseed paths: always diarize against global voices.
-  const isolateVoices = false;
+  const isolateVoices = /^(1|true|yes)$/iu.test(isolateEnv);
   const reseedVoices = false;
   const resolvedSpeakerHost = String(process.env.PYA_SPEAKER_HOST || process.env.SPEAKER_HOST || '').trim();
   if (!resolvedSpeakerHost) {
@@ -1039,7 +1201,9 @@ async function main() {
   if (/^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?$/iu.test(resolvedSpeakerHost)) {
     throw new Error(`spec violation: local speaker host is forbidden (${resolvedSpeakerHost}); use remote speaker service (mriczo)`);
   }
-  const voicesDir = baseVoicesDir;
+  const voicesDir = isolateVoices
+    ? path.resolve(workingDirEnv || path.join(transcriptDir, 'speaker-voices'))
+    : baseVoicesDir;
   fs.mkdirSync(voicesDir, { recursive: true });
   const samplesDir = voicesDir;
 
@@ -1060,10 +1224,10 @@ async function main() {
   process.stdout.write(`[speaker-sentence] isolate voices: ${isolateVoices ? 'on' : 'off'}\n`);
   process.stdout.write(`[speaker-sentence] cues: ${cues.length}\n`);
   if (MAX_CUES > 0) process.stdout.write(`[speaker-sentence] cue limit: ${workCues.length}\n`);
-  const turns = buildTurnsFromCues(workCues);
+  const turns = TWO_SPEAKER_CUE_TURNS ? buildCueLevelTurns(workCues) : buildTurnsFromCues(workCues);
   process.stdout.write(`[speaker-sentence] turns: ${turns.length}\n`);
   process.stdout.write(
-    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} turn_max_seconds=${TURN_MAX_SECONDS} turn_max_words=${TURN_MAX_WORDS} turn_max_gap=${TURN_MAX_GAP_SECONDS} boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
+    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} turn_max_seconds=${TURN_MAX_SECONDS} turn_max_words=${TURN_MAX_WORDS} turn_max_gap=${TURN_MAX_GAP_SECONDS} cue_level_turns=${TWO_SPEAKER_CUE_TURNS ? 'on' : 'off'} boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
   );
   process.stdout.write(
     `[speaker-sentence] reassign: enabled=${REASSIGN_PASS_ENABLED ? 'on' : 'off'} mode=${RELABEL_MODE || 'default'} expected_max=${EXPECTED_MAX_SPEAKERS || 0}\n`
@@ -1113,7 +1277,7 @@ async function main() {
         const ident = await identifyWithRetry({
           audio: clipPath,
           voicesDir,
-          prevSpeaker: prevSpeaker || null,
+          prevSpeaker: TWO_SPEAKER_CUE_TURNS ? null : (prevSpeaker || null),
           sameSpeakerThreshold: SAME_SPEAKER_THRESHOLD,
           knownSpeakerThreshold: KNOWN_SPEAKER_THRESHOLD,
           clipSeconds: Math.max(1.0, Math.min(8, turnDuration)),

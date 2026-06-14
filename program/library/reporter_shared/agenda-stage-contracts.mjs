@@ -141,6 +141,19 @@ function isSubstantiveUnit(unit = {}) {
   );
 }
 
+function isProceduralOrEmptyUnit(unit = {}) {
+  if (!isSubstantiveUnit(unit)) return true;
+  const heading = String(unit?.label || unit?.title || "").toLowerCase();
+  const excerpt = String(unit?.["source excerpt"] || "").toLowerCase();
+  if (Number(unit?.["source rows"] || 0) <= 2 || Number(unit?.["duration seconds"] || 0) <= 75) return true;
+  return (
+    /\bthere\s+are\s+no\b/u.test(heading) ||
+    /\bthere\s+are\s+no\b/u.test(excerpt) ||
+    /\b(no\s+notices?\s+of\s+motion|no\s+correspondence\s+items|no\s+public\s+meetings)\b/u.test(excerpt) ||
+    /\b(motion\s+that\s+committee\s+of\s+the\s+whole\s+rise\s+and\s+report|motion\s+to\s+adopt\s+proceedings)\b/u.test(heading)
+  );
+}
+
 export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
   assertNoSnakeCaseKeys(grounding, "stage2 grounding");
   assertExactKeys(grounding, ["schema version", "generated time", "transcript rows total", "grounded units"], "stage2 grounding");
@@ -153,6 +166,8 @@ export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
   const grossChunkIds = new Set(
     grossChunks.map((c) => String(c?.["chunk id"] || "")).filter(Boolean),
   );
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 12000));
+  const sectionSplitSeconds = Math.max(60, Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900));
 
   for (let i = 0; i < units.length; i += 1) {
     const u = units[i] || {};
@@ -223,7 +238,11 @@ export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
     if (chapters.length === 1) {
       throw new Error(`stage2 defective: child chapters must be 0 or >=2 at grounded unit=${i + 1}`);
     }
+    if (Number(u["duration seconds"] || 0) > sectionSplitSeconds && !isProceduralOrEmptyUnit(u) && chapters.length < 2) {
+      throw new Error(`stage2 defective: long grounded unit missing child chapters at grounded unit=${i + 1} duration=${Number(u["duration seconds"] || 0).toFixed(1)} threshold=${sectionSplitSeconds}`);
+    }
     let prevChapterEnd = null;
+    let chapterCoveredRows = 0;
     for (let ci = 0; ci < chapters.length; ci += 1) {
       const ch = chapters[ci] || {};
       assertNoSnakeCaseKeys(ch, `stage2 chapter ${i + 1}.${ci + 1}`);
@@ -247,11 +266,22 @@ export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
       if (prevChapterEnd != null && chStart <= prevChapterEnd) {
         throw new Error(`stage2 defective: child chapter overlap at grounded unit=${i + 1} chapter=${ci + 1}`);
       }
+      if (ci === 0 && chStart !== rowStart) {
+        throw new Error(`stage2 defective: child chapters do not start at parent row at grounded unit=${i + 1}`);
+      }
+      if (prevChapterEnd != null && chStart !== prevChapterEnd + 1) {
+        throw new Error(`stage2 defective: child chapter row gap at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
       prevChapterEnd = chEnd;
       const chRows = Number(ch["source rows"]);
       const chExpectedRows = (chEnd - chStart) + 1;
+      chapterCoveredRows += chExpectedRows;
       if (!Number.isInteger(chRows) || chRows !== chExpectedRows) {
         throw new Error(`stage2 defective: child chapter source rows mismatch at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+      const sourceChars = Number(ch["source chars"] || 0);
+      if (Number.isFinite(sourceChars) && sourceChars > maxChapterSourceChars) {
+        throw new Error(`stage2 defective: child chapter source chars too large at grounded unit=${i + 1} chapter=${ci + 1} source_chars=${sourceChars} max=${maxChapterSourceChars}`);
       }
       const chChunkIds = Array.isArray(ch["chunk ids"]) ? ch["chunk ids"] : [];
       if (!chChunkIds.length) {
@@ -278,6 +308,15 @@ export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
       }
       if (!String(ch["source excerpt"] || "").trim()) {
         throw new Error(`stage2 defective: empty child chapter source excerpt at grounded unit=${i + 1} chapter=${ci + 1}`);
+      }
+    }
+    if (chapters.length >= 2) {
+      if (prevChapterEnd !== rowEnd) {
+        throw new Error(`stage2 defective: child chapters do not end at parent row at grounded unit=${i + 1}`);
+      }
+      const expectedRows = rowEnd - rowStart + 1;
+      if (chapterCoveredRows !== expectedRows) {
+        throw new Error(`stage2 defective: child chapter row coverage mismatch at grounded unit=${i + 1} expected=${expectedRows} actual=${chapterCoveredRows}`);
       }
     }
   }

@@ -181,6 +181,34 @@ function inferFolder(row) {
   return `${day}_${slugify(payload.meeting_name)}_${id.slice(0, 8)}`;
 }
 
+function resolveMeetingDir(row, meetingsDir) {
+  const inferredFolder = inferFolder(row);
+  const inferredDir = path.join(meetingsDir, inferredFolder);
+  if (fs.existsSync(inferredDir)) {
+    return { folder: inferredFolder, meetingDir: inferredDir };
+  }
+
+  const payload = row.payload || {};
+  const day = String(row.since || '').slice(0, 10) || 'unknown-day';
+  const id8 = String(payload.meeting_id || 'unknown-id').slice(0, 8);
+  if (!fs.existsSync(meetingsDir) || !day || !id8) {
+    return { folder: inferredFolder, meetingDir: inferredDir };
+  }
+
+  const suffix = `_${id8}`;
+  const matches = fs.readdirSync(meetingsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .filter((name) => name.startsWith(`${day}_`) && name.endsWith(suffix))
+    .sort();
+  if (matches.length) {
+    const folder = matches[matches.length - 1];
+    return { folder, meetingDir: path.join(meetingsDir, folder) };
+  }
+
+  return { folder: inferredFolder, meetingDir: inferredDir };
+}
+
 function findPublishResponsePath(transcriptDir, basePrefix) {
   if (!fs.existsSync(transcriptDir)) return '';
   const direct = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.meeting-publish.response.json`);
@@ -339,8 +367,7 @@ function findAgendaPublishResponsePath(transcriptDir, basePrefix) {
 }
 
 function meetingState(row, meetingsDir, basePrefix) {
-  const folder = inferFolder(row);
-  const meetingDir = path.join(meetingsDir, folder);
+  const { folder, meetingDir } = resolveMeetingDir(row, meetingsDir);
   const transcriptDir = path.join(meetingDir, 'transcript');
   const payloadPath = path.join(transcriptDir, `${basePrefix}-normalized.lemmy-post.json`);
   const payloadContentType = readPayloadContentType(payloadPath);
@@ -400,7 +427,11 @@ function meetingState(row, meetingsDir, basePrefix) {
 
 function eligibleUpcomingAgendaStates(states, timezone, cfg = {}) {
   const now = nowLocalDate(timezone);
-  const notPosted = states.filter((s) => !s.posted_agenda && s.since_date instanceof Date);
+  const notPosted = states
+    .filter((s) => !s.posted_agenda && s.since_date instanceof Date)
+    // Cron "next" should only create brand-new meeting outputs.
+    // If transcript was already published for this meeting, do not pick it again.
+    .filter((s) => !s.posted_transcript);
   const requireSupportingDocs = /^(1|true|yes)$/iu.test(String(cfg.require_upcoming_supporting_docs || "0"));
   return notPosted
     .filter((s) => {
@@ -546,6 +577,9 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
       continue;
     }
     if (candidate.mode === 'past_video' && candidate.state.posted_transcript) {
+      continue;
+    }
+    if (candidate.mode === 'upcoming_agenda' && candidate.state.posted_transcript) {
       continue;
     }
 

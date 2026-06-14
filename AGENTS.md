@@ -83,3 +83,8 @@ This guide keeps contributions consistent for the Pyash codebase.
 - If a backend, network, or local model call (`ollama`, OpenAI-style runner, MCP server, etc.) is failing in a way that might be caused by the execution environment rather than the code, pause early and ask the user whether full permissions/network access are available before spending too long debugging the wrong layer.
 - Never commit secrets or personal data; prefer env vars or local, git-ignored config.
 - Do not introduce ad hoc `.json` state/config files. Prefer Pyash sentence files (`.pya`) unless a task explicitly requires JSON output.
+
+## GPU/LLM Concurrency Rule
+- Never start more than one GPU/LLM-heavy pipeline run at the same time (ASR, diarize, agenda stage3, image generation, or full transcript pipelines).
+- Before launching any such run, check for active related processes and wait/stop them first.
+- Treat pipeline execution as single-flight: one meeting pipeline at a time per host.

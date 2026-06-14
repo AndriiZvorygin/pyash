@@ -95,6 +95,21 @@ function summaryHasMinimalCompleteness(summary = "") {
   return true;
 }
 
+function hasEmbeddedArtifactJson(text = "") {
+  const s = String(text || "");
+  return /\[\s*\{\s*"index"\s*:\s*\d+\s*,\s*"unit id"/u.test(s)
+    || /"schema version"\s*:\s*"agenda_summary_v1"/u.test(s)
+    || /"grounding status"\s*:\s*"grounded"/u.test(s);
+}
+
+function assertCleanStage3Text(text = "", where = "stage3 text") {
+  const s = normalizeText(text);
+  if (!s) return;
+  if (hasEmbeddedArtifactJson(s)) {
+    throw new Error(`${where} defective: embedded artifact json`);
+  }
+}
+
 function toStandaloneOutcomeSentence(text = "") {
   let s = normalizeText(text).replace(/SPEAKER_[0-9A-Z]+:\s*/gu, "");
   if (!s) return "";
@@ -504,16 +519,6 @@ function assertExactGroundingSchema(grounding = {}) {
 }
 
 async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
-  const body = {
-    model: llmModel,
-    stream: false,
-    think: false,
-    options: { temperature: 0.12 },
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: prompt },
-    ],
-  };
   const maxAttempts = Math.max(1, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_ATTEMPTS || "5"), 10) || 5);
   const timeoutMs = Math.max(5_000, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS || "120000"), 10) || 120_000);
   const baseDelayMs = Math.max(250, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS || "1500"), 10) || 1500);
@@ -521,6 +526,19 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
   let lastErr = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
+      const retryJsonLine = attempt > 1
+        ? "\nRetry instruction: return one valid JSON object only. No markdown. Do not leave words unquoted. notes must be a string, not an array."
+        : "";
+      const body = {
+        model: llmModel,
+        stream: false,
+        think: false,
+        options: { temperature: attempt > 1 ? 0 : 0.12 },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: `${prompt}${retryJsonLine}` },
+        ],
+      };
       const res = await fetch(ollamaUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -545,7 +563,7 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
     } catch (err) {
       lastErr = err;
       const msg = String(err?.message || err).toLowerCase();
-      const retryable = /fetch failed|network|socket|timeout|timed out|econnreset|enotfound|eai_again/u.test(msg);
+      const retryable = /fetch failed|network|socket|timeout|timed out|econnreset|enotfound|eai_again|unexpected token|json|unparseable/u.test(msg);
       if (!retryable || attempt >= maxAttempts) break;
       const waitMs = baseDelayMs * attempt;
       await new Promise((r) => setTimeout(r, waitMs));
@@ -567,7 +585,10 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
   const prompt = [
     "You are stage3 of a strict agenda summary pipeline.",
     "Grounding is authoritative. Do not invent boundaries or facts.",
-    "Return strict JSON with keys: summary, chapter text, confidence, notes.",
+    "Return one valid JSON object only. Do not return markdown.",
+    "Required keys: summary, chapter text, confidence, notes.",
+    "notes must be a short string, not an array.",
+    "Example: {\"summary\":\"...\",\"chapter text\":\"...\",\"confidence\":0.9,\"notes\":\"\"}",
     "summary: factual, source-aligned, and proportional to section size.",
     "chapter text: short chapter-ready line. If not split, still provide a useful line.",
     `Summary budget tier: ${budget.tier}`,
@@ -620,6 +641,7 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
     };
   }
   let rawSummary = normalizeText(parsed?.summary || "");
+  assertCleanStage3Text(rawSummary, "stage3 summary");
   let summary = enforceSummaryBudget(rawSummary, budget);
 
   const longTier = budget.tier === "long" || budget.tier === "very_long";
@@ -627,6 +649,7 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
   if (longTier && summarySentences.length < 2) {
     parsed = await queryParsed("Long-tier requirement: return 3 to 5 complete sentences covering item, substance, and outcome from this grounded span only.");
     rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 summary retry");
     summary = enforceSummaryBudget(rawSummary, budget);
   }
   if (longTier) {
@@ -641,6 +664,8 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
       summary = normalizeText(summary + " " + supportSentence);
     }
   }
+  assertCleanStage3Text(summary, "stage3 final summary");
+  assertCleanStage3Text(parsed?.["chapter text"] || "", "stage3 chapter text");
 
   return {
     summary,
@@ -692,6 +717,7 @@ export async function runAgendaStage3SummaryRenderer({
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 12000));
   assertExactGroundingRoot(sectionGroundingPyaPath);
   const grounding = await readPyaMapArtifact(sectionGroundingPyaPath, STAGE2_GROUNDING_ROOT);
   assertExactGroundingSchema(grounding);
@@ -722,6 +748,12 @@ export async function runAgendaStage3SummaryRenderer({
     const seenLeadPhrases = new Set();
     for (let ci = 0; ci < sourceChapters.length; ci += 1) {
       const chapterUnit = sourceChapters[ci] || {};
+      const chapterSourceChars = Number(chapterUnit["source chars"] || String(chapterUnit["source excerpt"] || "").length || 0);
+      if (chapterSourceChars > maxChapterSourceChars) {
+        throw new Error(
+          `stage3 defective: oversized child chapter source text unit=${unitId} chapter=${ci + 1} source_chars=${chapterSourceChars} max_allowed=${maxChapterSourceChars}`,
+        );
+      }
       const chapterLlm = await summarizeGroundedUnit({
         unit: {
           ...unit,
@@ -746,6 +778,8 @@ export async function runAgendaStage3SummaryRenderer({
       if (!title) {
         throw new Error(`stage3 defective: empty nested chapter title for unit ${unitId} chapter ${ci + 1}`);
       }
+      assertCleanStage3Text(title, `stage3 chapter title unit=${unitId} chapter=${ci + 1}`);
+      assertCleanStage3Text(chapterLlm.summary, `stage3 chapter summary unit=${unitId} chapter=${ci + 1}`);
       const lead = leadingPhraseKey(title);
       if (lead) seenLeadPhrases.add(lead);
 
@@ -786,6 +820,7 @@ export async function runAgendaStage3SummaryRenderer({
       "clamp changed": llm.clampChanged ? "yes" : "no",
       "summary pre clamp": llm.clampChanged ? llm.rawSummary : "",
     });
+    assertCleanStage3Text(unitSummary, `stage3 section summary unit=${unitId}`);
 
     if (llm.clampChanged) {
       log(
