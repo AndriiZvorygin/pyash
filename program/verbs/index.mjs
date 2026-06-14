@@ -87,6 +87,7 @@ import concatenateFilename, { signatures as concatenateFilenameSignatures } from
 import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
 import android, { signatures as androidSignatures } from "./android.mjs";
+import gpu, { signatures as gpuSignatures } from "./gpu.mjs";
 import extract, { signatures as extractSignatures } from "./extract.mjs";
 import speakerIdentity, { signatures as speakerIdentitySignatures } from "./speaker_identity.mjs";
 
@@ -167,6 +168,7 @@ export {
   itineraryMedia,
   drawTextImage,
   android,
+  gpu,
   extract,
   speakerIdentity
 };
@@ -261,6 +263,7 @@ export const builtInSignatures = [
   ...itineraryMediaSignatures,
   ...drawTextImageSignatures,
   ...androidSignatures,
+  ...gpuSignatures,
   ...extractSignatures,
   ...speakerIdentitySignatures,
 ];

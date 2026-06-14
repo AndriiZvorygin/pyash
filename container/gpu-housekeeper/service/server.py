@@ -186,7 +186,8 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
       "error": "jobSpec must be map or text"
     }
 
-  if runtime_name.lower() == "ollama":
+  runtime_lower = runtime_name.lower()
+  if runtime_lower == "ollama":
     if not isinstance(job_spec, dict):
       return {
         "accepted": False,
@@ -197,6 +198,25 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
       return {
         "accepted": False,
         "error": "ollama jobSpec.kind must be ollama-generate or ollama-chat"
+      }
+
+  if runtime_lower == "comfyui":
+    if not isinstance(job_spec, dict):
+      return {
+        "accepted": False,
+        "error": "comfyui jobSpec must be map"
+      }
+    kind = normalize_text(job_spec.get("kind")).lower()
+    if kind not in {"comfyui-draw", "comfyui-say", "comfyui-hear", "comfyui-prompt"}:
+      return {
+        "accepted": False,
+        "error": "comfyui jobSpec.kind must be comfyui-draw, comfyui-say, comfyui-hear, or comfyui-prompt"
+      }
+    prompt = job_spec.get("prompt") or job_spec.get("workflow")
+    if not isinstance(prompt, dict):
+      return {
+        "accepted": False,
+        "error": "comfyui jobSpec.prompt must be map"
       }
 
   remote_job_id = f"job-{uuid.uuid4().hex[:12]}"
@@ -442,6 +462,39 @@ def ollama_runtime_url() -> str:
   return normalize_text(os.environ.get("OLLAMA_RUNTIME_URL")) or "http://host.docker.internal:11434"
 
 
+def comfyui_runtime_url() -> str:
+  return normalize_text(os.environ.get("COMFYUI_RUNTIME_URL")) or "http://host.docker.internal:8188"
+
+
+def request_comfyui_json(pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_sec: int = 600) -> Dict[str, Any]:
+  base = comfyui_runtime_url().rstrip("/")
+  url = f"{base}/{pathname.lstrip('/')}"
+  data = None if payload is None else json.dumps(payload).encode("utf-8")
+  req = Request(url, data=data, headers={"Content-Type": "application/json"})
+  if payload is None:
+    req.get_method = lambda: "GET"
+  try:
+    with urlopen(req, timeout=max(1, timeout_sec)) as response:
+      raw = response.read().decode("utf-8")
+  except HTTPError as err:
+    detail = ""
+    try:
+      detail = err.read().decode("utf-8")
+    except Exception:
+      detail = str(err)
+    raise RuntimeError(f"comfyui request failed {err.code}: {detail}")
+  except URLError as err:
+    raise RuntimeError(f"comfyui request failed: {err.reason}")
+
+  try:
+    parsed = json.loads(raw or "{}")
+  except Exception:
+    parsed = {}
+  if isinstance(parsed, dict):
+    return parsed
+  return {"value": parsed}
+
+
 def request_ollama_json(pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_sec: int = 600) -> Dict[str, Any]:
   base = ollama_runtime_url().rstrip("/")
   url = f"{base}/{pathname.lstrip('/')}"
@@ -569,10 +622,79 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   return result
 
 
+def normalize_comfyui_prompt(job_spec: Dict[str, Any]) -> Dict[str, Any]:
+  prompt = job_spec.get("prompt") if isinstance(job_spec.get("prompt"), dict) else job_spec.get("workflow")
+  if not isinstance(prompt, dict):
+    raise RuntimeError("comfyui prompt is required")
+  return prompt
+
+
+def poll_comfyui_history(prompt_id: str, timeout_sec: int, interval_sec: float = 0.5) -> Dict[str, Any]:
+  deadline = time.time() + max(1, timeout_sec)
+  while time.time() <= deadline:
+    history = request_comfyui_json(f"/history/{prompt_id}", None, timeout_sec=10)
+    entry = history.get(prompt_id) if isinstance(history, dict) else None
+    if isinstance(entry, dict):
+      status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
+      if isinstance(status, dict):
+        status_str = normalize_text(status.get("status_str")).lower()
+        completed = bool(status.get("completed", False))
+        if status_str in {"error", "failed", "fail"}:
+          raise RuntimeError(json.dumps(status, ensure_ascii=False))
+        if completed or status_str in {"success", "completed"}:
+          return entry
+      if entry.get("outputs"):
+        return entry
+    time.sleep(max(0.05, interval_sec))
+  raise RuntimeError(f"comfyui timed out waiting for prompt {prompt_id}")
+
+
+def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  profile_name = normalize_text(job.get("profileName"))
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    raise RuntimeError("comfyui jobSpec must be a map")
+
+  kind = normalize_text(job_spec.get("kind")).lower()
+  if kind not in {"comfyui-draw", "comfyui-say", "comfyui-hear", "comfyui-prompt"}:
+    raise RuntimeError(f"unsupported comfyui job kind: {kind or 'missing'}")
+
+  ensure_runtime_ready(runtime_registry, runtime_name)
+  prompt = normalize_comfyui_prompt(job_spec)
+  client_id = normalize_text(job_spec.get("clientId")) or f"pyash-{uuid.uuid4().hex[:12]}"
+  queued = request_comfyui_json("/prompt", {"client_id": client_id, "prompt": prompt}, timeout_sec=30)
+  if queued.get("error"):
+    raise RuntimeError(f"comfyui prompt rejected: {queued.get('error')}")
+  node_errors = queued.get("node_errors")
+  if isinstance(node_errors, dict) and len(node_errors) > 0:
+    raise RuntimeError(f"comfyui prompt node_errors: {json.dumps(node_errors, ensure_ascii=False)}")
+  prompt_id = normalize_text(queued.get("prompt_id"))
+  if not prompt_id:
+    raise RuntimeError("comfyui prompt_id missing")
+
+  timeout_sec = int(job_spec.get("timeoutSec") or os.environ.get("COMFYUI_RUNTIME_TIMEOUT_SEC", "900"))
+  history_entry = poll_comfyui_history(prompt_id, timeout_sec=timeout_sec)
+  with _LOCK:
+    if profile_name:
+      _PROFILES[profile_name] = {
+        "profileName": profile_name,
+        "runtimeName": runtime_name,
+        "loaded": True
+      }
+  return {
+    "promptId": prompt_id,
+    "kind": kind,
+    "history": history_entry
+  }
+
+
 def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   if runtime_name == "ollama":
     return execute_ollama_job(job, runtime_registry)
+  if runtime_name == "comfyui":
+    return execute_comfyui_job(job, runtime_registry)
 
   sleep_ms = 200
   if isinstance(job.get("jobSpec"), dict):

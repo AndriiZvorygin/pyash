@@ -14,12 +14,16 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.orig_runtime_action = server.runtime_action
     self.orig_request_ollama_json = server.request_ollama_json
     server._PROFILES.clear()
+    server._JOBS.clear()
+    server._QUEUE.clear()
 
   def tearDown(self):
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_ollama_json = self.orig_request_ollama_json
     server._PROFILES.clear()
+    server._JOBS.clear()
+    server._QUEUE.clear()
 
   def test_submit_accepts_ollama_generate_and_chat_jobs(self):
     generate = server.submit_job({
@@ -148,6 +152,107 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     self.assertEqual(server.job_status("ok")["result"], {"response": "ok"})
     self.assertEqual(server.job_status("fail")["error"], {"message": "boom"})
+
+
+class HousekeeperComfyuiTests(unittest.TestCase):
+  def setUp(self):
+    self.orig_parse_runtime_status = server.parse_runtime_status
+    self.orig_runtime_action = server.runtime_action
+    self.orig_request_comfyui_json = server.request_comfyui_json
+    server._PROFILES.clear()
+    server._JOBS.clear()
+    server._QUEUE.clear()
+
+  def tearDown(self):
+    server.parse_runtime_status = self.orig_parse_runtime_status
+    server.runtime_action = self.orig_runtime_action
+    server.request_comfyui_json = self.orig_request_comfyui_json
+    server._PROFILES.clear()
+    server._JOBS.clear()
+    server._QUEUE.clear()
+
+  def test_submit_accepts_comfyui_teaching_stage_jobs(self):
+    prompt = {"1": {"inputs": {}}}
+    for kind in ["comfyui-draw", "comfyui-say", "comfyui-hear", "comfyui-prompt"]:
+      result = server.submit_job({
+        "handleId": f"handle-{kind}",
+        "runtimeName": "comfyui",
+        "profileName": kind,
+        "jobSpec": {"kind": kind, "prompt": prompt}
+      })
+      self.assertTrue(result["accepted"], kind)
+
+    bad = server.submit_job({
+      "handleId": "bad",
+      "runtimeName": "comfyui",
+      "profileName": "draw",
+      "jobSpec": {"kind": "comfyui-draw"}
+    })
+    self.assertFalse(bad["accepted"])
+
+  def test_comfyui_execution_posts_prompt_and_returns_history(self):
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      calls.append((pathname, payload))
+      if pathname == "/prompt":
+        self.assertEqual(payload["prompt"], {"1": {"inputs": {"text": "hello"}}})
+        return {"prompt_id": "prompt-1"}
+      if pathname == "/history/prompt-1":
+        return {
+          "prompt-1": {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"9": {"audio": [{"filename": "voice.wav"}]}}
+          }
+        }
+      raise AssertionError(pathname)
+
+    server.request_comfyui_json = fake_request
+    result = server.execute_comfyui_job({
+      "runtimeName": "comfyui",
+      "profileName": "qwen-say",
+      "jobSpec": {
+        "kind": "comfyui-say",
+        "prompt": {"1": {"inputs": {"text": "hello"}}}
+      }
+    }, {"comfyui": {"runtimeName": "comfyui", "gpuExpected": True}})
+
+    self.assertEqual(calls[0][0], "/prompt")
+    self.assertEqual(calls[1][0], "/history/prompt-1")
+    self.assertEqual(result["promptId"], "prompt-1")
+    self.assertEqual(result["kind"], "comfyui-say")
+    self.assertIn("history", result)
+    self.assertTrue(server._PROFILES["qwen-say"]["loaded"])
+
+  def test_comfyui_stopped_runtime_triggers_begin(self):
+    actions = []
+    statuses = iter([
+      {"status": "exited", "gpuExpected": True, "gpuObserved": True},
+      {"status": "running", "gpuExpected": True, "gpuObserved": True}
+    ])
+    server.parse_runtime_status = lambda _entry: next(statuses)
+    server.runtime_action = lambda _registry, runtime_name, action_key: actions.append((runtime_name, action_key)) or {
+      "success": True,
+      "status": "running",
+      "message": "started"
+    }
+    server.request_comfyui_json = lambda pathname, payload=None, timeout_sec=600: (
+      {"prompt_id": "prompt-1"} if pathname == "/prompt" else {"prompt-1": {"outputs": {"1": {}}}}
+    )
+
+    server.execute_comfyui_job({
+      "runtimeName": "comfyui",
+      "profileName": "draw",
+      "jobSpec": {"kind": "comfyui-draw", "prompt": {"1": {"inputs": {}}}}
+    }, {"comfyui": {"runtimeName": "comfyui", "gpuExpected": True}})
+
+    self.assertEqual(actions, [("comfyui", "beginAction")])
 
 
 if __name__ == "__main__":
