@@ -1,0 +1,7 @@
+su name teaching video name duty ob text "Create a compelling YouTube Shorts name for a concise teaching video about why fractions matter. Plain text only, max 70 characters." vyah start future be gpu mind do
+su name teaching video header duty ob text "Create one 3-6 word thumbnail hook header for a concise teaching video about why fractions matter. Plain text only." vyah start future be gpu mind do
+su name teaching video specification duty ob text "Write two brief paragraphs and one tags line for a concise teaching video about why fractions matter. Plain text only." vyah start future be gpu mind do
+
+accordingto text "teaching video name duty" during num 120000 vyah await be gpu do
+accordingto text "teaching video header duty" during num 120000 vyah await be gpu do
+accordingto text "teaching video specification duty" during num 120000 vyah await be gpu do
