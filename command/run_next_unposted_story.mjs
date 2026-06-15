@@ -866,7 +866,13 @@ async function main() {
   });
 
   const responsePath = findPublishResponsePath(state.transcript_dir, cfg.base_prefix);
-  const postedInfo = parsePostedFromResponses(state.transcript_dir, cfg.base_prefix);
+  const agendaResponsePath = findAgendaPublishResponsePath(state.transcript_dir, cfg.base_prefix);
+  const postedInfo = mode === 'upcoming_agenda'
+    ? {
+        ...parsePostedFromAgendaResponse(agendaResponsePath),
+        response_path: agendaResponsePath,
+      }
+    : parsePostedFromResponses(state.transcript_dir, cfg.base_prefix);
   const summaryPath = path.join(state.meeting_dir, 'next-story.result.json');
 
   fs.writeFileSync(summaryPath, `${JSON.stringify({
@@ -880,6 +886,7 @@ async function main() {
     payload_path: path.join(state.transcript_dir, `${cfg.base_prefix}-normalized.lemmy-post.json`),
     response_path: postedInfo.response_path || responsePath,
     post_url: postedInfo.post_url,
+    agenda_url: postedInfo.agenda_url || '',
     transcript_url: postedInfo.transcript_url,
     posted: postedInfo.posted,
     generated_at_utc: new Date().toISOString(),
@@ -889,9 +896,10 @@ async function main() {
     `[reporter] Posted: ${payload.meeting_name || '(unknown meeting)'}`,
     `Date: ${state.row.since}`,
     postedInfo.post_url ? `Post: ${postedInfo.post_url}` : 'Post: (not found in response)',
+    postedInfo.agenda_url ? `Agenda: ${postedInfo.agenda_url}` : '',
     postedInfo.transcript_url ? `Transcript: ${postedInfo.transcript_url}` : 'Transcript: (not found in response)',
     `Meeting dir: ${state.meeting_dir}`,
-  ];
+  ].filter(Boolean);
   if (!postedInfo.posted) dmLines.unshift('[reporter] Run finished but publish confirmation was not found.');
 
   await maybeNotify(cfg, execMxid, dmLines.join('\n'));

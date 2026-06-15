@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 function normalizeSpaces(text) {
   return String(text || "")
@@ -49,6 +50,119 @@ function normalizeUrl(href, baseOrigin = "") {
     } catch {}
   }
   return value.replace(/^\.\//, "");
+}
+
+function hasMeaningfulAttachmentText(text = "") {
+  const clean = normalizeSpaces(text);
+  if (!clean) return false;
+  const words = clean.split(/\s+/u).filter(Boolean);
+  return words.length >= 16 && /[A-Za-z]{3}/u.test(clean);
+}
+
+async function extractAttachmentPdfSections({
+  attachmentsByItem,
+  existingSections,
+  outputDir,
+}) {
+  const existingItems = new Set(
+    (Array.isArray(existingSections) ? existingSections : [])
+      .map((section) => String(section?.item || "").toLowerCase())
+      .filter(Boolean),
+  );
+  const sections = [];
+  const diagnostics = [];
+  const attachmentDir = path.join(outputDir, "_attachments");
+  fs.mkdirSync(attachmentDir, { recursive: true });
+
+  for (const [item, data] of attachmentsByItem.entries()) {
+    const itemKey = String(item || "").toLowerCase();
+    if (!itemKey || existingItems.has(itemKey)) continue;
+    const extractedParts = [];
+    const extractedUrls = [];
+    const itemDiagnostics = [];
+
+    for (let i = 0; i < data.attachments.length; i += 1) {
+      const attachment = data.attachments[i];
+      const label = String(attachment?.label || "").trim();
+      const url = String(attachment?.url || "").trim();
+      const looksPdf = /\.pdf(?:$|[?#])/iu.test(label) || /\.pdf(?:$|[?#])/iu.test(url) || /filestream\.ashx/iu.test(url);
+      if (!url || !looksPdf) {
+        itemDiagnostics.push({ label, url, status: "skipped_non_pdf", extracted_words: 0 });
+        continue;
+      }
+
+      const stem = `${String(item).replace(/\./gu, "-")}-${i + 1}-${slugify(label || "attachment")}`;
+      const pdfPath = path.join(attachmentDir, `${stem}.pdf`);
+      const textPath = path.join(attachmentDir, `${stem}.txt`);
+      try {
+        const downloaded = spawnSync("curl", ["-fsSL", "--max-time", "60", "-o", pdfPath, url], {
+          encoding: "utf8",
+          timeout: 70_000,
+        });
+        if (downloaded.error) throw downloaded.error;
+        if (downloaded.status !== 0) {
+          throw new Error(`curl_exit_${downloaded.status}: ${String(downloaded.stderr || "").trim()}`);
+        }
+        const bytes = fs.readFileSync(pdfPath);
+        if (bytes.length < 8 || !bytes.subarray(0, 5).toString("ascii").startsWith("%PDF")) {
+          throw new Error("response_not_pdf");
+        }
+        const converted = spawnSync("pdftotext", ["-layout", pdfPath, textPath], {
+          encoding: "utf8",
+          timeout: 120_000,
+        });
+        if (converted.error) throw converted.error;
+        if (converted.status !== 0) {
+          throw new Error(`pdftotext_exit_${converted.status}: ${String(converted.stderr || "").trim()}`);
+        }
+        const text = fs.existsSync(textPath) ? fs.readFileSync(textPath, "utf8").trim() : "";
+        const wordCount = normalizeSpaces(text).split(/\s+/u).filter(Boolean).length;
+        if (!hasMeaningfulAttachmentText(text)) {
+          itemDiagnostics.push({ label, url, status: "empty_or_image_only", extracted_words: wordCount });
+          continue;
+        }
+        extractedParts.push(`Attachment: ${label || url}\nSource: ${url}\n\n${text}`);
+        extractedUrls.push(url);
+        itemDiagnostics.push({ label, url, status: "extracted", extracted_words: wordCount });
+      } catch (err) {
+        itemDiagnostics.push({
+          label,
+          url,
+          status: "extract_failed",
+          extracted_words: 0,
+          error: String(err?.message || err).slice(0, 300),
+        });
+      }
+    }
+
+    diagnostics.push({ item, title: data.title, attachments: itemDiagnostics });
+    if (!extractedParts.length) continue;
+
+    const filePath = path.join(outputDir, `${String(item).replace(/\./gu, "-")}_${slugify(data.title)}_attachment-pdf.md`);
+    const text = `${extractedParts.join("\n\n---\n\n").trim()}\n`;
+    fs.writeFileSync(filePath, text, "utf8");
+    sections.push({
+      item,
+      title: data.title,
+      start_page: null,
+      end_page: null,
+      line_start: null,
+      line_end: null,
+      file: filePath,
+      text,
+      extraction_method: "attachment_pdf",
+      source_file: "",
+      slice_source_file: "",
+      source_urls: extractedUrls,
+      start_anchor_text: "",
+      end_anchor_text: "",
+      confidence: 0.95,
+      contamination_scan: hasContaminationMarkers(text),
+    });
+    existingItems.add(itemKey);
+  }
+
+  return { sections, diagnostics };
 }
 
 function inferBaseOriginFromAgendaHtml(htmlText, explicitBase = "") {
@@ -551,7 +665,7 @@ function findTocWindow(lines) {
   return { start: -1, end: -1, pagesHeader };
 }
 
-function main() {
+async function main() {
   const [, , inputPath, outputDir, outputIndexPath, agendaHtmlPath, sourceBaseUrl, sliceSourcePathRaw] = process.argv;
   if (!inputPath || !outputDir) {
     process.stderr.write(
@@ -790,6 +904,12 @@ function main() {
   for (const section of fallbackSectionsFromAttachments) {
     fs.writeFileSync(section.file, section.text, "utf8");
   }
+  const attachmentPdfResult = await extractAttachmentPdfSections({
+    attachmentsByItem,
+    existingSections: [...sections, ...fallbackSections, ...fallbackSectionsFromAttachments],
+    outputDir,
+  });
+  const attachmentPdfSections = attachmentPdfResult.sections;
   const indexPath = outputIndexPath || path.join(outputDir, "subreports.index.json");
   const index = {
     source_file: tocSourcePath,
@@ -828,11 +948,12 @@ function main() {
       attachment_count: data.attachments.length,
       attachments: data.attachments,
     })),
+    attachment_extraction_diagnostics: attachmentPdfResult.diagnostics,
     source_base_origin: baseOrigin,
   };
 
   const duplicateSpanMap = new Map();
-  for (const sec of [...sections, ...fallbackSections, ...fallbackSectionsFromAttachments]) {
+  for (const sec of [...sections, ...fallbackSections, ...fallbackSectionsFromAttachments, ...attachmentPdfSections]) {
     const ls = Number(sec?.line_start || 0);
     const le = Number(sec?.line_end || 0);
     if (!Number.isFinite(ls) || !Number.isFinite(le) || ls <= 0 || le <= 0) continue;
@@ -866,6 +987,7 @@ function main() {
     })),
     ...fallbackSections,
     ...fallbackSectionsFromAttachments,
+    ...attachmentPdfSections,
   ];
   const sectionByItem = new Map(mergedSections
     .filter((sec) => {
@@ -894,6 +1016,7 @@ function main() {
         extraction_method: fromSection?.extraction_method ?? "none",
         source_file: fromSection?.source_file ?? tocSourcePath,
         slice_source_file: fromSection?.slice_source_file ?? sliceSourcePath,
+        source_urls: fromSection?.source_urls ?? [],
         start_anchor_text: fromSection?.start_anchor_text ?? "",
         end_anchor_text: fromSection?.end_anchor_text ?? "",
         confidence: fromSection?.confidence ?? 0,
@@ -915,8 +1038,11 @@ function main() {
     `[agenda-subreports] skipped weak inferred anchors: ${skippedWeakAnchorCount} | skipped duplicate inferred starts: ${skippedDuplicateInferredStartCount} | minutes boundary cuts: ${minutesBoundaryCutCount}\n`,
   );
   process.stdout.write(
-    `extracted ${sections.length} page-sliced subreports and ${index.attachments_from_html.length} attachment groups from ${path.basename(tocSourcePath)} -> ${outputDir} (base_origin=${baseOrigin || "none"})\n`,
+    `extracted ${sections.length} page-sliced subreports, ${attachmentPdfSections.length} attachment PDF subreports, and ${index.attachments_from_html.length} attachment groups from ${path.basename(tocSourcePath)} -> ${outputDir} (base_origin=${baseOrigin || "none"})\n`,
   );
 }
 
-main();
+main().catch((err) => {
+  process.stderr.write(`${String(err?.stack || err?.message || err)}\n`);
+  process.exit(1);
+});
