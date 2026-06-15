@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildSrtFromChunks } from "../command/srt_from_qwen_say_chunks.mjs";
+import { buildSrtFromChunks, buildSentenceSrtFromChunks } from "../command/srt_from_qwen_say_chunks.mjs";
 
 test("srt_from_qwen_say_chunks builds continuous srt from chunk timestamps", () => {
   const metadata = {
@@ -64,7 +64,7 @@ test("srt_from_qwen_say_chunks uses chunk duration fallback for short-final bypa
 
   const srt = buildSrtFromChunks(metadata);
   assert.match(srt, /00:00:03,840 --> 00:00:04,400\nAthens/u);
-  assert.match(srt, /00:00:04,400 --> 00:00:06,158\nsolon's athens\.\.\./u);
+  assert.match(srt, /00:00:04,635 --> 00:00:06,392\nsolon's athens\.\.\./u);
 });
 
 test("srt_from_qwen_say_chunks fails when timed cue data is missing", () => {
@@ -72,4 +72,56 @@ test("srt_from_qwen_say_chunks fails when timed cue data is missing", () => {
     chunks: [{ index: 0, verification: { asrTimestamps: "", hotTail: {} }, text: "" }]
   };
   assert.throws(() => buildSrtFromChunks(metadata), /missing timed cue data/u);
+});
+
+test("srt_from_qwen_say_chunks preserves chunk duration gaps between timestamped chunks", () => {
+  const metadata = {
+    chunks: [
+      {
+        index: 0,
+        verification: {
+          asrTimestamps: `0.00-0.50: First\n0.50-1.00: chunk`,
+          hotTail: { durationSeconds: 1.75 }
+        }
+      },
+      {
+        index: 1,
+        verification: {
+          asrTimestamps: `0.25-0.75: Second\n0.75-1.25: chunk`,
+          hotTail: { durationSeconds: 1.50 }
+        }
+      }
+    ]
+  };
+  const srt = buildSrtFromChunks(metadata);
+  assert.match(srt, /1\n00:00:00,000 --> 00:00:00,500\nFirst/u);
+  assert.match(srt, /2\n00:00:00,500 --> 00:00:01,000\nchunk/u);
+  assert.match(srt, /3\n00:00:02,000 --> 00:00:02,500\nSecond/u);
+  assert.match(srt, /4\n00:00:02,500 --> 00:00:03,000\nchunk/u);
+});
+
+test("srt_from_qwen_say_chunks builds sentence cues from chunk text and real offsets", () => {
+  const metadata = {
+    chunks: [
+      {
+        index: 0,
+        text: "First complete sentence...",
+        verification: {
+          asrTimestamps: `0.20-0.60: First\n0.60-1.00: sentence`,
+          hotTail: { durationSeconds: 1.75 }
+        }
+      },
+      {
+        index: 1,
+        text: "Second complete sentence...",
+        verification: {
+          asrTimestamps: `0.30-0.80: Second\n0.80-1.20: sentence`,
+          hotTail: { durationSeconds: 1.50 }
+        }
+      }
+    ]
+  };
+  const srt = buildSentenceSrtFromChunks(metadata);
+  assert.match(srt, /1\n00:00:00,200 --> 00:00:01,000\nFirst complete sentence\./u);
+  assert.match(srt, /2\n00:00:02,050 --> 00:00:02,950\nSecond complete sentence\./u);
 });

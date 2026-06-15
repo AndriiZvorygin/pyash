@@ -17,6 +17,15 @@ function parseSrtRows(text) {
   }).filter(Boolean);
 }
 
+function formatTestTime(seconds) {
+  const totalMs = Math.round(Number(seconds) * 1000);
+  const hh = Math.floor(totalMs / 3600000);
+  const mm = Math.floor((totalMs % 3600000) / 60000);
+  const ss = Math.floor((totalMs % 60000) / 1000);
+  const ms = totalMs % 1000;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+}
+
 function boundarySetFromSrt(text) {
   const rows = parseSrtRows(text);
   const set = new Set();
@@ -424,6 +433,59 @@ test("lyrics_to_srt_from_timing sentence-cues stay aligned to source timeline", 
 
   const last = rows[rows.length - 1];
   assert.ok(last.until <= 1.02, `last row should stay on source timeline, got ${last.until.toFixed(3)}s`);
+});
+
+test("lyrics_to_srt_from_timing sentence-cues anchor at each line first word", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-sentence-first-word-anchor.txt");
+  const timingPath = path.join(dir, "timing-sentence-first-word-anchor.srt");
+  const outputPath = path.join(dir, "lyrics-sentence-first-word-anchor.out.srt");
+
+  const lyrics = [
+    "Many believe joy requires special occasions or enforced discipline to sustain happiness.",
+    "True simplicity reveals that seeking it through control fails while allowing expansion from within works without effort.",
+    "We often think spiritual knowledge demands serial instruction, yet advanced civilizations understand simplicity as the key to unity."
+  ].join("\n");
+
+  const words = [
+    [0.16, 0.48, "Many"], [0.48, 0.80, "believe"], [0.80, 1.12, "joy"],
+    [1.12, 1.60, "requires"], [1.60, 1.92, "special"], [1.92, 2.56, "occasions"],
+    [2.56, 2.72, "or"], [2.72, 3.20, "enforced"], [3.20, 3.68, "discipline"],
+    [3.76, 4.24, "sustain"], [4.24, 4.88, "happiness"],
+    [5.44, 5.68, "True"], [5.68, 6.40, "simplicity"], [6.40, 6.96, "reveals"],
+    [6.96, 7.20, "that"], [7.20, 7.60, "seeking"], [7.60, 7.76, "it"],
+    [7.76, 8.00, "through"], [8.00, 8.48, "control"], [8.48, 9.12, "fails"],
+    [9.12, 9.36, "while"], [9.36, 9.76, "allowing"], [9.76, 10.40, "expansion"],
+    [10.40, 10.64, "from"], [10.64, 11.04, "within"], [11.04, 11.44, "works"],
+    [11.44, 11.76, "without"], [11.76, 12.24, "effort"],
+    [12.72, 12.88, "We"], [12.88, 13.20, "often"], [13.20, 13.52, "think"],
+    [13.52, 14.00, "spiritual"], [14.00, 14.48, "knowledge"], [14.48, 14.88, "demands"],
+    [14.88, 15.36, "serial"], [15.36, 16.08, "instruction"], [16.40, 16.56, "yet"],
+    [16.56, 17.04, "advanced"], [17.04, 17.84, "civilizations"], [17.84, 18.48, "understand"],
+    [18.48, 19.20, "simplicity"], [19.44, 19.60, "as"], [19.60, 19.68, "the"],
+    [19.68, 20.00, "key"], [20.08, 20.64, "unity"]
+  ];
+  const timing = words.flatMap(([since, until, word], index) => [
+    String(index + 1),
+    `${formatTestTime(since)} --> ${formatTestTime(until)}`,
+    word,
+    ""
+  ]).join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+
+  const rows = parseSrtRows(await fs.readFile(outputPath, "utf8"));
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].since, 0.16);
+  assert.equal(rows[0].until, 4.88);
+  assert.equal(rows[1].since, 5.44);
+  assert.equal(rows[1].until, 12.24);
+  assert.equal(rows[2].since, 12.72);
+  assert.equal(rows[2].until, 20.64);
 });
 
 test("lyrics_to_srt_from_timing sentence-cues never overlap", async () => {

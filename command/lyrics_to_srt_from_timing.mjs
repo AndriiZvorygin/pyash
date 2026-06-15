@@ -554,15 +554,21 @@ function lineStartAnchorScore(lyricWords, asrWords, wordIndex) {
   let cursor = wordIndex;
   let matched = 0;
   let firstMatched = false;
+  let firstMatchOffset = null;
   for (let i = 0; i < lyrics.length; i += 1) {
     for (let j = cursor; j < windowEnd; j += 1) {
       if (!wordsRoughlyMatch(lyrics[i], asrWords[j]?.word)) continue;
       matched += 1;
-      if (i === 0) firstMatched = true;
+      if (i === 0) {
+        firstMatched = true;
+        firstMatchOffset = j - wordIndex;
+      }
       cursor = j + 1;
       break;
     }
   }
+  const maxFirstWordSkip = Number(process.env.PYA_SRT_LINE_START_MAX_FIRST_WORD_SKIP || 0);
+  if (!firstMatched || Number(firstMatchOffset) > maxFirstWordSkip) return 0;
   const ratio = matched / Math.max(1, lyrics.length);
   const cueDistance = cursor > wordIndex ? cursor - wordIndex : windowEnd - wordIndex;
   const distancePenalty = Math.max(0, cueDistance - lyrics.length) / Math.max(lyrics.length + 4, 1) * 0.08;
@@ -617,7 +623,8 @@ function buildLineStartAnchors(lines, cuts) {
       : chooseLineStartCueIndex(lines[i], cuts, flatWords, cursorCue, remainingLines);
     const safeAnchor = Math.max(cursorCue, Math.min(cuts.length - 1, anchor));
     anchors.push(safeAnchor);
-    cursorCue = Math.min(cuts.length, safeAnchor + 1);
+    const lineEnd = chooseSentenceCueEnd(lines[i], cuts, safeAnchor, remainingLines);
+    cursorCue = Math.max(safeAnchor + 1, Math.min(cuts.length, lineEnd));
   }
   return anchors;
 }
