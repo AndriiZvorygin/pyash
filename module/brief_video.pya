@@ -363,12 +363,11 @@ su name teaching video section align mapper ob text section manuscript fromindex
   su name section timing srt stage from num of ob of section index stage with text "captions.srt" to name filename section timing srt be teaching video section leaf do
   su name section source text stage from num of ob of section index stage with text "captions-source.txt" to name filename section source text be teaching video section leaf do
   su name section aligned srt stage from num of ob of section index stage with text "captions-aligned.srt" to name filename section aligned srt be teaching video section leaf do
+  su name section chunk metadata stage from num of ob of section index stage with text "audio.qwen-say-chunks/chunks.metadata.json" to name filename section chunk metadata be teaching video section leaf do
 
   su name section source text write stage ob text of ob of this to filename of ob of section source text stage be write do
-  ob text "node command/lyrics_to_srt_from_timing.mjs \"" to name text section align cmd be text do
-  ob text of ob of section source text stage to name section align cmd be plus do
-  ob text "\" \"" to name section align cmd be plus do
-  ob text of ob of section timing srt stage to name section align cmd be plus do
+  ob text "node command/srt_from_qwen_say_chunks.mjs \"" to name text section align cmd be text do
+  ob text of ob of section chunk metadata stage to name section align cmd be plus do
   ob text "\" \"" to name section align cmd be plus do
   ob text of ob of section aligned srt stage to name section align cmd be plus do
   ob text "\" --sentence-cues" to name section align cmd be plus do

@@ -227,10 +227,10 @@ test("section mappers use section-local aligned srt timing for cuts and footnote
     source,
     /teaching video section hear mapper[\s\S]*ob filename of ob of this to name filename section audio input be filename do[\s\S]*from filename of ob of section audio input stage become wo srt/u
   );
-  assert.match(
-    source,
-    /teaching video section align mapper[\s\S]*with text "captions-source\.txt" to name filename section source text be teaching video section leaf do[\s\S]*with text "captions-aligned\.srt" to name filename section aligned srt be teaching video section leaf do[\s\S]*node command\/lyrics_to_srt_from_timing\.mjs[\s\S]*--sentence-cues/u
-  );
+  assert.match(source, /teaching video section align mapper[\s\S]*with text "captions-source\.txt" to name filename section source text be teaching video section leaf do/u);
+  assert.match(source, /teaching video section align mapper[\s\S]*with text "captions-aligned\.srt" to name filename section aligned srt be teaching video section leaf do/u);
+  assert.match(source, /teaching video section align mapper[\s\S]*with text "audio\.qwen-say-chunks\/chunks\.metadata\.json" to name filename section chunk metadata/u);
+  assert.match(source, /teaching video section align mapper[\s\S]*node command\/srt_from_qwen_say_chunks\.mjs[\s\S]*--sentence-cues/u);
   assert.match(
     source,
     /teaching video section video mapper[\s\S]*ob filename of ob of this to name filename section aligned srt input be filename do[\s\S]*from filename of ob of section aligned srt input stage to name itinerary section cuts itinerary be cut do/u
@@ -308,4 +308,10 @@ test("default wide subtitle mode is karaoke and non-ASR path is available", asyn
   assert.match(source, /ob name text subtitle mode chosen be equally from text "" then ob text "karaoke" to name text subtitle mode chosen be text do/u);
   assert.match(source, /subtitle mode chosen be equally from text "asr" then su name section hear stage/u);
   assert.match(source, /subtitle mode chosen be equally from text "karaoke" then su name section timing stage ob name text section timing cmd be command do/u);
+});
+
+test("teaching video section alignment uses qwen chunk sentence cues directly", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(source, /teaching video section align mapper[\s\S]*with text "audio\.qwen-say-chunks\/chunks\.metadata\.json" to name filename section chunk metadata/u);
+  assert.match(source, /teaching video section align mapper[\s\S]*node command\/srt_from_qwen_say_chunks\.mjs[\s\S]*--sentence-cues/u);
 });

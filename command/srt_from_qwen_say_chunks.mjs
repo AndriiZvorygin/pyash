@@ -2,7 +2,7 @@
 import fs from "node:fs/promises";
 
 function usage() {
-  return "Usage: node command/srt_from_qwen_say_chunks.mjs <chunks.metadata.json> <output.srt>";
+  return "Usage: node command/srt_from_qwen_say_chunks.mjs <chunks.metadata.json> <output.srt> [--sentence-cues]";
 }
 
 function formatSrtTime(seconds) {
@@ -73,6 +73,60 @@ function readChunkFallbackCueText(chunk = {}) {
   );
 }
 
+function normalizeSentenceCueText(raw = "") {
+  return normalizeCueText(String(raw ?? "").replace(/\.\.\.\s*$/u, "."));
+}
+
+export function buildSentenceSrtFromChunks(chunkMetadata) {
+  const chunks = Array.isArray(chunkMetadata?.chunks) ? chunkMetadata.chunks : [];
+  if (!chunks.length) {
+    throw new Error("qwen say chunks defective: missing chunks");
+  }
+  const cues = [];
+  let offsetSeconds = 0;
+  for (const chunk of chunks) {
+    const chunkIndex = Number(chunk?.index ?? 0) + 1;
+    const parsed = parseTimestampLines(readChunkTimestampText(chunk));
+    const fallbackText = normalizeSentenceCueText(readChunkFallbackCueText(chunk));
+    const chunkDuration = readChunkDurationSeconds(chunk);
+    if (!fallbackText) {
+      throw new Error(`qwen say chunks defective: missing sentence text at chunk ${chunkIndex}`);
+    }
+    if (parsed.length) {
+      cues.push({
+        start: offsetSeconds + Number(parsed[0].start),
+        end: offsetSeconds + Number(parsed[parsed.length - 1].end),
+        text: fallbackText
+      });
+      const chunkEnd = Number(parsed[parsed.length - 1]?.end ?? 0);
+      offsetSeconds += Math.max(0, Number(chunkDuration) || chunkEnd, chunkEnd);
+      continue;
+    }
+    if (Number.isFinite(chunkDuration) && chunkDuration > 0) {
+      cues.push({
+        start: offsetSeconds,
+        end: offsetSeconds + chunkDuration,
+        text: fallbackText
+      });
+      offsetSeconds += chunkDuration;
+      continue;
+    }
+    throw new Error(`qwen say chunks defective: missing timed cue data at chunk ${chunkIndex}`);
+  }
+  if (!cues.length) {
+    throw new Error("qwen say chunks defective: empty cue stream");
+  }
+  const lines = [];
+  for (let i = 0; i < cues.length; i += 1) {
+    const cue = cues[i];
+    lines.push(String(i + 1));
+    lines.push(`${formatSrtTime(cue.start)} --> ${formatSrtTime(cue.end)}`);
+    lines.push(cue.text);
+    lines.push("");
+  }
+  return `${lines.join("\n").trim()}\n`;
+}
+
 export function buildSrtFromChunks(chunkMetadata) {
   const chunks = Array.isArray(chunkMetadata?.chunks) ? chunkMetadata.chunks : [];
   if (!chunks.length) {
@@ -92,7 +146,11 @@ export function buildSrtFromChunks(chunkMetadata) {
         });
       }
       const chunkEnd = parsed[parsed.length - 1]?.end ?? 0;
-      offsetSeconds += Math.max(0, chunkEnd);
+      const chunkDuration = readChunkDurationSeconds(chunk);
+      // The final WAV concatenates the full chunk file, including trailing pauses.
+      // Advance by real chunk duration when available so downstream subtitles do not
+      // compress away silence and drift early across multi-chunk sections.
+      offsetSeconds += Math.max(0, Number(chunkDuration) || chunkEnd, chunkEnd);
       continue;
     }
 
@@ -125,13 +183,16 @@ export function buildSrtFromChunks(chunkMetadata) {
 }
 
 async function main() {
-  const [inputPath, outputPath] = process.argv.slice(2);
-  if (!inputPath || !outputPath) {
+  const args = process.argv.slice(2);
+  const sentenceCues = args.includes("--sentence-cues");
+  const positional = args.filter((arg) => arg !== "--sentence-cues");
+  const [inputPath, outputPath] = positional;
+  if (!inputPath || !outputPath || positional.length !== 2) {
     throw new Error(usage());
   }
   const raw = await fs.readFile(inputPath, "utf8");
   const metadata = JSON.parse(raw);
-  const srt = buildSrtFromChunks(metadata);
+  const srt = sentenceCues ? buildSentenceSrtFromChunks(metadata) : buildSrtFromChunks(metadata);
   await fs.writeFile(outputPath, srt, "utf8");
   process.stdout.write(`${outputPath}\n`);
 }
