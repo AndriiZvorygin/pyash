@@ -1,0 +1,31 @@
+from filename "../../module/brief_video.pya" ob name teaching video to name teaching video be import do
+
+exists su name style_prompt ob text "" be default ya
+ob ve filename text manuscript text text style_prompt be input ya
+exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name hear backend default ob text "qwen" be default ya
+exists su name hear whisperx fallback qwen ob bool truth be default ya
+exists su name draw widescreen mode ob text "lie" be default ya
+exists su name subtitle margin ratio override ob num 0.40 be num ya
+exists su name draw prompt style beard default ob text "" be default ya
+
+exists su name draw size shorts be map def
+su name width ob num 720 ya
+su name height ob num 1280 ya
+su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text" ya
+su name thumbnail_heading_y_ratio ob num 0.42 ya
+su name video_heading_y_ratio ob num 0.60 ya
+su name subtitle_margin_ratio ob num 0.40 ya
+su name footnote_mode ob text "wordflow" ya
+prah
+
+su name draw character routes be map def
+  su name andrii people ob text quoted.text.aliases: person or man or woman or people or human or figure or gardener or teacher or farmer or worker or face or portrait or owen or character or hands or wears or he or his or boy or girl or child
+workflow: andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled
+prefix: same adult Andrii Zvorygin guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones, mature adult face.
+suffix: no severed body parts. no extra limbs. no bad eyes. white sclera. irises visible..text.quoted ya
+prah
+
+su name teaching demo from filename of ob of manuscript with text of ob of style_prompt be teaching video do
+
+su name result out ob name teaching demo be write do

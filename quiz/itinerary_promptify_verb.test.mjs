@@ -263,7 +263,7 @@ test("promptify can mark generated person prompts with custom character route", 
       map: {
         "andrii people": {
           ob: {
-            text: "aliases: person or man or woman or people\nworkflow: andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled\nprefix: same guy but cartoony, long reddish-brown beard with copper tones.\nsuffix: no severed body parts. no extra limbs. no bad eyes. irises visible."
+            text: "aliases: person or man or woman or people\nworkflow: andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled\nprefix: same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones.\nsuffix: no severed body parts. no extra limbs. no bad eyes. irises visible."
           }
         }
       }

@@ -227,7 +227,7 @@ test("draw from name itinerary honors Andrii workflow metadata from promptify", 
 
   const request = exchange.find((s) => s?.be === "draw" && String(s?.su?.name || "").startsWith("draw request "));
   assert.equal(request?.as?.text, "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled");
-  assert.match(String(request?.ob?.text ?? ""), /same guy but cartoony, long reddish-brown beard with copper tones/u);
+  assert.match(String(request?.ob?.text ?? ""), /same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones/u);
   assert.match(String(request?.ob?.text ?? ""), /a quiet computer desk with a thoughtful man/u);
   assert.match(String(request?.ob?.text ?? ""), /no severed body parts\. no extra limbs\. no bad eyes\. irises visible\./u);
 });
@@ -360,7 +360,7 @@ test("draw from name itinerary wraps by workflow metadata even when source lacks
       map: {
         "andrii people": {
           ob: {
-            text: "aliases: person or man or woman or people\nworkflow: andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled\nprefix: same guy but cartoony, long reddish-brown beard with copper tones.\nsuffix: no severed body parts. no extra limbs. no bad eyes. irises visible."
+            text: "aliases: person or man or woman or people\nworkflow: andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled\nprefix: same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones.\nsuffix: no severed body parts. no extra limbs. no bad eyes. irises visible."
           }
         }
       }
@@ -411,6 +411,6 @@ test("draw from name itinerary wraps by workflow metadata even when source lacks
 
   const request = exchange.find((s) => s?.be === "draw" && String(s?.su?.name || "").startsWith("draw request "));
   assert.equal(request?.as?.text, "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled");
-  assert.match(String(request?.ob?.text ?? ""), /same guy but cartoony, long reddish-brown beard with copper tones/u);
+  assert.match(String(request?.ob?.text ?? ""), /same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones/u);
   assert.match(String(request?.ob?.text ?? ""), /a thoughtful person sitting at a computer/u);
 });

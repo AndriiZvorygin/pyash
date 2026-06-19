@@ -210,14 +210,7 @@ su name learning source support from text source with text teaching to name text
   ob text "\n\nTEACHING:\n" to name learning source support request be plus do
   ob text of with of this to name learning source support request be plus do
   su name learning source support write stage ob name text learning source support request for name learning source support verify mind to name text learning source support review by num 0 atmost num 520 be write do
-  ob name text learning source support review atmost num 1 to name text learning source support score line be line tail do
-  ob text "0" to name text score be text do
-  ob name text learning source support score line from text "/^\\s*PASS\\b/i" be resemble then
-  ob text "1" to name text score be text do
-  ob name text learning source support score line from text "/^\\s*FAIL\\b/i" be resemble then
-  ob text "0" to name text score be text do
-  ob name text learning source support score line from text "/^\\s*[01](?:\\.\\d+)?\\s*$/" be resemble then
-  ob name text learning source support score line to name text score be text do
+  ob text "node command/extract_verifier_score.mjs" fromtext name learning source support review to name text score be command do
   su name learning source support return stage ob name text score be text do
 prah
 
@@ -305,6 +298,8 @@ su name learn from filename source with text learning focus to name text teachin
   ob text of with of this to name text learning pipeline request be plus do
   su name teaching raw stage ob text "node command/learn_from_filename_pipeline.mjs" to name text teaching raw fromtext name text learning pipeline request be command do
   ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
+  ob text "node command/normalize_learn_card.mjs" fromtext name teaching out to name text teaching out be command do
+  ob text "node command/validate_learn_card.mjs" fromtext name teaching out to name text learning card valid be command do
   su name teaching out ret
 prah
 

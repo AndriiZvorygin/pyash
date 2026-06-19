@@ -68,6 +68,8 @@ test("learn module exports text and filename learning ceremonies", async () => {
   assert.doesNotMatch(text, /PYA_COMMAND_TIMEOUT_MS=900000 node command\/learn_from_filename_pipeline\.mjs/u);
   assert.match(text, /su name teaching raw stage ob text "node command\/learn_from_filename_pipeline\.mjs" to name text teaching raw fromtext name text learning pipeline request be command do/u);
   assert.match(text, /node command\/extract_learn_pipeline_result\.mjs/u);
+  assert.match(text, /node command\/normalize_learn_card\.mjs" fromtext name teaching out to name text teaching out be command do[\s\S]*su name learn from filename/u);
+  assert.match(text, /node command\/validate_learn_card\.mjs" fromtext name teaching out to name text learning card valid be command do[\s\S]*su name learn from filename/u);
   assert.match(text, /su name learn from text source with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /su name learn from filename source with text learning focus to name text teaching out be ceremony def/u);
   assert.equal((text.match(/su name mind discharge stage as wo mind be discharge do/gu) ?? []).length, 1);

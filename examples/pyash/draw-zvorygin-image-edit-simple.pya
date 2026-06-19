@@ -3,7 +3,7 @@ from filename "../../module/draw_comfyui.pya" ob name draw to name draw be impor
 ob text text scene be input ya
 exists su name scene ob text "running around being happy." be default ya
 
-exists su name zvorygin image edit prompt template ob text quoted.text.same guy but cartoony, long reddish-brown beard with copper tones.
+exists su name zvorygin image edit prompt template ob text quoted.text.same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones.
 
 [[scene]]
 

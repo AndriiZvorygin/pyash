@@ -37,7 +37,7 @@ Follow these rules:
 19. If people appear, depict modest opaque full-coverage clothing that covers shoulders, chest, torso, midriff, hips, upper legs, and buttocks.
 20. The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
 21. Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
-22. If current_cut mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; simplified medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
+22. If current_cut mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; simplified broad pale canvas gardener hat with mostly straight long brown hair tucked under it, with a few strands visible; naturally long brown auburn beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be default ya
 

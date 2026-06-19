@@ -62,7 +62,7 @@ test("draw runner preserves embedded LoadImage filenames in UI workflows", async
 test("draw-zvorygin image-edit example keeps only scene paragraph swappable", async () => {
   const source = await fs.readFile("examples/pyash/draw-zvorygin-image-edit.pya", "utf8");
   assert.match(source, /ob text text scene be input ya/u);
-  assert.match(source, /same guy but cartoony, long reddish-brown beard with copper tones/u);
+  assert.match(source, /same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones/u);
   assert.match(source, /\[\[scene\]\]/u);
   assert.match(source, /no severed body parts\. no extra limbs\. no bad eyes\. irises visible./u);
   assert.match(source, /zvorygin image edit replacements/u);
@@ -73,7 +73,7 @@ test("draw-zvorygin image-edit example keeps only scene paragraph swappable", as
 test("draw-zvorygin simple image-edit example accepts the middle scene as input", async () => {
   const source = await fs.readFile("examples/pyash/draw-zvorygin-image-edit-simple.pya", "utf8");
   assert.match(source, /ob text text scene be input ya/u);
-  assert.match(source, /same guy but cartoony, long reddish-brown beard with copper tones/u);
+  assert.match(source, /same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones/u);
   assert.match(source, /\[\[scene\]\]/u);
   assert.match(source, /no severed body parts\. no extra limbs\. no bad eyes\. irises visible./u);
   assert.match(source, /zvorygin image edit replacements/u);

@@ -1332,7 +1332,7 @@ prah
 su name module manuscript segment one checked to name text output be ceremony def
   ob text "false" to name text module manuscript segment one pass be text do
   ob text "segment one platform" to name text module manuscript platform be text do
-  su name module manuscript stage contract cap ob num 122 be number ya
+  su name module manuscript stage contract cap ob num 104 be number ya
   su name module manuscript segment one platform stage accordingto name module manuscript segment one platform checks for name module manuscript segment one mind from text of ob of module manuscript segment one request to name text output be module manuscript section verify do
   ob name text module manuscript segment one intent to name text module manuscript current intent be text do
   ob name text module manuscript segment one request to name text module manuscript current task be text do
@@ -1370,7 +1370,7 @@ su name module manuscript segment one retry fromindex num 0 toindex num 0 be cer
   ob text "true" to name text module manuscript segment one pass be text do
   ob name text module manuscript segment one pass be equally from text true then be depart do
   su name module manuscript segment one retry length stage be verify as wo word count atleast num 85 atmost num 105 from name text output to name map module manuscript segment one retry length do
-  ob num 112 to name num module manuscript segment one retry cap be plus do
+  ob num 104 to name num module manuscript segment one retry cap be plus do
   ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 104 to name num module manuscript segment one retry cap be plus do
   ob num of words of module manuscript segment one retry length be tiny from num 85 then ob num 128 to name num module manuscript segment one retry cap be plus do
   su name module manuscript segment one retry request role stage ob text "ROLE:\nSegment 1 establishes the system. Define it clearly and explain the basic mechanism.\n\nTARGET_WORDS:\n85-100\n\nGOAL_WORDS:\n90\n\nPOSITIVE_RULES:\nStay mainly with SEED CONCEPT and CARDINAL TRAINING SENTENCE. Prefer affirmative declarative language that says what the system is and how it works.\n\nOPTIONAL_ADD_ONS:\nYou may include one small example from AFFAIRS OR ACTIVITIES when it helps ground the segment. If you use an example, keep it brief and supportive rather than letting it become the paragraph's main job. Practice language is acceptable when it stays inside a simple illustration of how the teaching works. You may include one small immediate implication when it follows naturally from the definition and mechanism.\n\nNEGATIVE_RULES:\nAvoid negation-led or contrast-led phrasing like not, rather than, instead of, unlike, or however. If the source carries a contrast, translate it into a positive sentence about what the thing is or does. Keep scarcity, domination, blockage, counterfeit, or misunderstanding language out of the paragraph's main establish move when the source offers a cleaner affirmative lane. Prefer the fallible-service and raw-material/perfect-possibility frame before channel, transparent-vessel, or flow language. Do not introduce hidden contradictions, jump to large consequences, or turn the segment into a correction of misunderstanding.\n\nFEEDBACK:\nGenerate a fresh Segment 1 from the source and verifier feedback, not from the failed draft. Write about 90 words, and keep the result between 88 and 94 words. Use complete sentences. Cut before adding. If the section starts getting long, remove extra restatement instead of adding another explanation.\n\nSOURCE_THRUST_FEEDBACK:\n" to name text module manuscript segment one retry request be text do
@@ -1400,7 +1400,7 @@ prah
 su name module manuscript segment two checked to name text output be ceremony def
   ob text "false" to name text module manuscript segment two pass be text do
   ob text "segment two platform" to name text module manuscript platform be text do
-  su name module manuscript stage contract cap ob num 120 be number ya
+  su name module manuscript stage contract cap ob num 104 be number ya
   su name module manuscript segment two platform stage accordingto name module manuscript segment two platform checks for name module manuscript segment two mind from text of ob of module manuscript segment two request to name text output be module manuscript section verify do
   ob name text module manuscript segment two intent to name text module manuscript current intent be text do
   ob name text module manuscript segment two request to name text module manuscript current task be text do
@@ -1425,9 +1425,9 @@ su name module manuscript segment two retry fromindex num 0 toindex num 0 be cer
   su name module manuscript segment two retry request prior stage ob name text module manuscript segment one out to name module manuscript segment two retry request be plus do
   su name module manuscript segment two retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment two retry request be plus do
   su name module manuscript segment two retry request source stage ob name text module manuscript segment two source basis to name module manuscript segment two retry request be plus do
-  su name module manuscript segment two retry draft stage ob name text module manuscript segment two retry request for name module manuscript segment two mind to name text output by num 0 atmost num 120 be write do
+  su name module manuscript segment two retry draft stage ob name text module manuscript segment two retry request for name module manuscript segment two mind to name text output by num 0 atmost num 104 be write do
   ob text "segment two retry platform" to name text module manuscript platform be text do
-  su name module manuscript stage contract cap ob num 120 be number ya
+  su name module manuscript stage contract cap ob num 104 be number ya
   su name module manuscript segment two retry platform stage accordingto name module manuscript segment two platform checks for name module manuscript segment two mind from text of ob of module manuscript segment two retry request to name text output be module manuscript section verify do
   ob name text module manuscript segment two intent to name text module manuscript current intent be text do
   ob name text module manuscript segment two retry request to name text module manuscript current task be text do
@@ -1441,7 +1441,7 @@ prah
 su name module manuscript segment three checked to name text output be ceremony def
   ob text "false" to name text module manuscript segment three pass be text do
   ob text "segment three platform" to name text module manuscript platform be text do
-  su name module manuscript stage contract cap ob num 120 be number ya
+  su name module manuscript stage contract cap ob num 104 be number ya
   su name module manuscript segment three platform stage accordingto name module manuscript segment three platform checks for name module manuscript segment three mind from text of ob of module manuscript segment three request to name text output be module manuscript section verify do
   ob name text module manuscript segment three intent to name text module manuscript current intent be text do
   ob name text module manuscript segment three request to name text module manuscript current task be text do
@@ -1468,9 +1468,9 @@ su name module manuscript segment three retry fromindex num 0 toindex num 0 be c
   su name module manuscript segment three retry request prior two stage ob name text module manuscript segment two out to name module manuscript segment three retry request be plus do
   su name module manuscript segment three retry request source header stage ob text "\n\nSOURCE:\n" to name module manuscript segment three retry request be plus do
   su name module manuscript segment three retry request source stage ob name text module manuscript segment three source basis to name module manuscript segment three retry request be plus do
-  su name module manuscript segment three retry draft stage ob name text module manuscript segment three retry request for name module manuscript segment three mind to name text output by num 0 atmost num 120 be write do
+  su name module manuscript segment three retry draft stage ob name text module manuscript segment three retry request for name module manuscript segment three mind to name text output by num 0 atmost num 104 be write do
   ob text "segment three retry platform" to name text module manuscript platform be text do
-  su name module manuscript stage contract cap ob num 120 be number ya
+  su name module manuscript stage contract cap ob num 104 be number ya
   su name module manuscript segment three retry platform stage accordingto name module manuscript segment three platform checks for name module manuscript segment three mind from text of ob of module manuscript segment three retry request to name text output be module manuscript section verify do
   ob name text module manuscript segment three intent to name text module manuscript current intent be text do
   ob name text module manuscript segment three retry request to name text module manuscript current task be text do

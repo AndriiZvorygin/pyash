@@ -358,3 +358,24 @@ alpha line four.text.quoted to name text draft out be text do`);
   await run("su name first from text \"x\" for name alpha accordingto name checks to name text output atleast num 0.8 atmost num 9 fromindex num 1 toindex num 1 be helper do");
   assert.match(String(remember("output")?.ob?.text ?? ""), /^alpha line one/mu);
 });
+
+test("verify platform finalizes otherwise complete sentences for sentence_complete checks", async () => {
+  forget();
+
+  await run("su name draft maker ob text task to name text draft out be ceremony def");
+  await run("ob text \"This is already complete\" to name text draft out be text do");
+  await run("prah");
+
+  await run("su name pass verifier ob text packet to name text verdict be ceremony def");
+  await run("ob text PASS to name text verdict be text do");
+  await run("prah");
+
+  await run("su name checks be series def");
+  await run("su name sentence_complete ob bool truth ya");
+  await run("prah");
+
+  await run("ob text \"task\" for name draft maker among name pass verifier accordingto name checks fromindex num 1 toindex num 1 to name text result be verify platform do");
+
+  assert.equal(remember("result")?.ob?.text, "This is already complete.");
+  assert.equal(remember("verify platform stop reason")?.ob?.text, "pass");
+});
