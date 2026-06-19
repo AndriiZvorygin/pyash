@@ -135,3 +135,43 @@ test("gpu await timeout includes worker startup hint", async () => {
   assert.equal(awaited?.ob?.text, "queued");
   assert.match(String(awaited?.fromstate?.text ?? ""), /start gpu worker: PYA_GPU_HOUSEKEEPER_URL=/);
 });
+
+
+test("gpu katago accepts SGF text and submits analysis job", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-katago-handle-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+
+  await run('su name gpu katago handle ob text "(;GM[1]SZ[19];B[pd];W[dd])" vyah start future be gpu katago do');
+
+  const submitted = [];
+  await runGpuWorkerOnce({
+    worldRoot,
+    adapter: {
+      async submitJob(job) {
+        submitted.push(job);
+        return { remoteJobId: "remote-katago-1" };
+      },
+      async getJobStatus() {
+        return {
+          status: "success",
+          message: "katago ok",
+          result: { moveInfos: [{ move: "Q16", visits: 10, winrate: 0.6, scoreLead: 2.1 }] },
+          finishedAt: new Date().toISOString()
+        };
+      }
+    },
+    maxPolls: 2
+  });
+
+  assert.equal(submitted.length, 1);
+  assert.equal(submitted[0]?.runtimeName, "katago");
+  assert.equal(submitted[0]?.profileName, "default");
+  assert.equal(submitted[0]?.jobSpec?.kind, "katago-analyze");
+  assert.deepEqual(submitted[0]?.jobSpec?.query?.moves, [["B", "pd"], ["W", "dd"]]);
+
+  const awaited = await run('accordingto text "gpu katago handle" during num 2000 vyah await be gpu do');
+  assert.deepEqual(awaited?.vyah?.ve?.values, ["await", "success"]);
+  assert.match(awaited?.result?.text, /Q16/u);
+});

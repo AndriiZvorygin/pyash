@@ -1,0 +1,11 @@
+services:
+  katago:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: katago
+    restart: unless-stopped
+    volumes:
+      - ${KATAGO_MODEL_DIR:-./models}:/models:ro
+      - ${KATAGO_CONFIG_DIR:-./configure}:/katago:ro
+    command: ["sleep", "infinity"]

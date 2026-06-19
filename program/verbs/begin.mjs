@@ -2,6 +2,7 @@ import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { ensureMcpServer } from "../motor/mcp.mjs";
+import { katagoLifecycle } from "../motor/katago_admin.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
 import { schedulerBegin, schedulerServiceBegin } from "../agent/scheduler_control.mjs";
 import { beginAgent } from "../agent/admin.mjs";
@@ -61,7 +62,7 @@ export async function begin(sentence, { remember: rememberFn = remember } = {}) 
   const targetName = resolveTargetName(sentence, { rememberFn });
   const calendarScope = isCalendarScope(sentence);
   const houseScope = isHouseScope(sentence);
-  if (!targetName && beginType !== "scheduler") {
+  if (!targetName && beginType !== "scheduler" && beginType !== "katago") {
     if (!calendarScope) {
       throwErrorSentence({
         name: "begin target missing",
@@ -71,7 +72,7 @@ export async function begin(sentence, { remember: rememberFn = remember } = {}) 
       });
     }
   }
-  if (beginType && beginType !== "mcp") {
+  if (beginType && beginType !== "mcp" && beginType !== "katago") {
     if (beginType !== "scheduler") {
       throwErrorSentence({
         name: "begin target defective",
@@ -80,6 +81,16 @@ export async function begin(sentence, { remember: rememberFn = remember } = {}) 
         raw: { sentence }
       });
     }
+  }
+  if (beginType === "katago") {
+    const result = await katagoLifecycle("begin", targetName, { rememberFn });
+    return {
+      mood: "ya",
+      be: "begin",
+      as: { wo: "katago" },
+      ob: { boolean: true },
+      fromstate: { text: String(result?.response ?? result?.message?.content ?? "katago begun") }
+    };
   }
   if (houseScope) {
     if (!targetName) {
@@ -152,6 +163,8 @@ export const signatures = [
   { signatureWords: ["be", "begin", "as", "wo", "ob", "name", "text"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "ob", "name", "map"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "scheduler"], handler: begin },
+  { signatureWords: ["be", "begin", "as", "wo", "katago"], handler: begin },
+  { signatureWords: ["be", "begin", "as", "wo", "katago", "ob", "text"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "scheduler", "ob", "text"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "scheduler", "ob", "name", "num"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "scheduler", "ob", "name", "map"], handler: begin },

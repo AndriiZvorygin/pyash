@@ -8,6 +8,7 @@ import { schedulerRestart, schedulerServiceRestart } from "../agent/scheduler_co
 import { restartAgent } from "../agent/admin.mjs";
 import { restartDrawBackend } from "../motor/draw_admin.mjs";
 import { restartSayBackend } from "../motor/say_admin.mjs";
+import { katagoLifecycle } from "../motor/katago_admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
@@ -83,7 +84,7 @@ export async function restart(sentence, { remember: rememberFn = remember } = {}
   const targetName = resolveTargetName(sentence, { rememberFn });
   const calendarScope = isCalendarScope(sentence);
   const houseScope = isHouseScope(sentence);
-  if (!targetName && restartType !== "scheduler") {
+  if (!targetName && restartType !== "scheduler" && restartType !== "katago") {
     if (!calendarScope) {
       throwErrorSentence({
         name: "restart target missing",
@@ -93,7 +94,7 @@ export async function restart(sentence, { remember: rememberFn = remember } = {}
       });
     }
   }
-  if (restartType && restartType !== "mcp") {
+  if (restartType && restartType !== "mcp" && restartType !== "katago") {
     if (restartType !== "scheduler" && restartType !== "say") {
       throwErrorSentence({
         name: "restart target defective",
@@ -102,6 +103,16 @@ export async function restart(sentence, { remember: rememberFn = remember } = {}
         raw: { sentence }
       });
     }
+  }
+  if (restartType === "katago") {
+    const result = await katagoLifecycle("restart", targetName, { rememberFn });
+    return {
+      mood: "ya",
+      be: "restart",
+      as: { wo: "katago" },
+      ob: { boolean: true },
+      fromstate: { text: String(result?.response ?? result?.message?.content ?? "katago restarted") }
+    };
   }
   if (houseScope) {
     if (!targetName) {
@@ -177,6 +188,8 @@ export const signatures = [
   { signatureWords: ["be", "restart", "as", "wo", "scheduler"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "draw"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "say"], handler: restart },
+  { signatureWords: ["be", "restart", "as", "wo", "katago"], handler: restart },
+  { signatureWords: ["be", "restart", "as", "wo", "katago", "ob", "text"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "text"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "name", "num"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "name", "map"], handler: restart },

@@ -7,6 +7,7 @@ import { dischargeOllamaMind, listWarmOllamaMinds } from "../motor/ollama_admin.
 import { dischargeDrawBackend } from "../motor/draw_admin.mjs";
 import { dischargeHearBackend } from "../motor/hear_admin.mjs";
 import { dischargeQwenSayBackend, dischargeSayBackend } from "../motor/say_admin.mjs";
+import { katagoLifecycle } from "../motor/katago_admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   const ob = sentence?.ob ?? {};
@@ -71,13 +72,23 @@ export async function discharge(sentence, { remember: rememberFn = remember } = 
   const targetNames = resolveTargetNames(sentence);
   const targetName = resolveTargetName(sentence, { rememberFn });
   const dischargeType = resolveDischargeType(sentence);
-  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery" && dischargeType !== "ollama" && dischargeType !== "mind" && dischargeType !== "draw" && dischargeType !== "hear" && dischargeType !== "say" && dischargeType !== "qwen" && dischargeType !== "qwen say") {
+  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery" && dischargeType !== "ollama" && dischargeType !== "mind" && dischargeType !== "draw" && dischargeType !== "hear" && dischargeType !== "say" && dischargeType !== "qwen" && dischargeType !== "qwen say" && dischargeType !== "katago") {
     throwErrorSentence({
       name: "discharge target defective",
       message: `discharge target defective: ${dischargeType}`,
       from: { name: "discharge" },
       raw: { sentence }
     });
+  }
+  if (dischargeType === "katago") {
+    const result = await katagoLifecycle("discharge", targetName, { rememberFn });
+    return {
+      mood: "ya",
+      be: "discharge",
+      as: { wo: "katago" },
+      ob: { boolean: true },
+      fromstate: { text: String(result?.response ?? result?.message?.content ?? "katago discharged") }
+    };
   }
   if (dischargeType === "draw") {
     await dischargeDrawBackend({ rememberFn });
@@ -196,6 +207,8 @@ export const signatures = [
   { signatureWords: ["be", "discharge", "ob", "name", "map"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "mind"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "draw"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "katago"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "katago", "ob", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "hear"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "say"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "qwen"], handler: discharge },

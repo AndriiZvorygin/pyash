@@ -1,0 +1,89 @@
+su name mind ob text payload be ceremony def
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/katago_runner.mjs" be text ya
+  ob text of ob of this to name text payload text local be text do
+  ob text of cmd fromtext name payload text local be command do
+prah
+
+su name analyze ob text sgf be ceremony def
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/katago_runner.mjs" be text ya
+  ob text of ob of this to name text sgf text local be text do
+  ob text of cmd fromtext name sgf text local be command do
+prah
+
+su name begin ob text profile be ceremony def
+  exists su name payload ob text "{\"action\":\"begin\",\"katagoProfile\":\"" be text ya
+  ob text of ob of this to name payload be plus do
+  ob text "\"}" to name payload be plus do
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/katago_runner.mjs" be text ya
+  ob text of cmd fromtext text of payload be command do
+  ob text "katago begun" ret
+prah
+
+su name begin ob text profile to name text target be ceremony def
+  ob text of ob of this be begin do
+prah
+
+su name discharge ob text profile be ceremony def
+  exists su name payload ob text "{\"action\":\"discharge\",\"katagoProfile\":\"" be text ya
+  ob text of ob of this to name payload be plus do
+  ob text "\"}" to name payload be plus do
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/katago_runner.mjs" be text ya
+  ob text of cmd fromtext text of payload be command do
+  ob text "katago discharged" ret
+prah
+
+su name discharge ob text profile to name text target be ceremony def
+  ob text of ob of this be discharge do
+prah
+
+su name restart ob text profile be ceremony def
+  exists su name payload ob text "{\"action\":\"restart\",\"katagoProfile\":\"" be text ya
+  ob text of ob of this to name payload be plus do
+  ob text "\"}" to name payload be plus do
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/katago_runner.mjs" be text ya
+  ob text of cmd fromtext text of payload be command do
+  ob text "katago restarted" ret
+prah
+
+su name restart ob text profile to name text target be ceremony def
+  ob text of ob of this be restart do
+prah
+
+su name status ob text profile be ceremony def
+  exists su name payload ob text "{\"action\":\"status\",\"katagoProfile\":\"" be text ya
+  ob text of ob of this to name payload be plus do
+  ob text "\"}" to name payload be plus do
+  exists su name cmd ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/katago_runner.mjs" be text ya
+  ob text of cmd fromtext text of payload be command do
+prah
+
+su name mind begin ob text profile be ceremony def
+  ob text of ob of this be begin do
+prah
+
+su name mind begin ob text profile to name text target be ceremony def
+  ob text of ob of this to name text target be begin do
+prah
+
+su name mind discharge ob text profile be ceremony def
+  ob text of ob of this be discharge do
+prah
+
+su name mind discharge ob text profile to name text target be ceremony def
+  ob text of ob of this to name text target be discharge do
+prah
+
+su name mind restart ob text profile be ceremony def
+  ob text of ob of this be restart do
+prah
+
+su name mind restart ob text profile to name text target be ceremony def
+  ob text of ob of this to name text target be restart do
+prah
+
+exists su name mind be export ya
+exists su name analyze be export ya
+exists su name begin be export ya
+exists su name discharge be export ya
+exists su name restart be export ya
+exists su name status be export ya
