@@ -491,7 +491,7 @@ function defaultCharacterDrawRoutes() {
       name: "andrii zvorygin",
       aliases: ["andrii", "andrii zvorygin", "zvorygin"],
       workflowName: "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled",
-      prefix: "same guy but cartoony, long reddish-brown beard with copper tones.",
+      prefix: "same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones.",
       suffix: "no severed body parts. no extra limbs. no bad eyes. irises visible."
     }
   ];

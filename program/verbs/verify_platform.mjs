@@ -315,6 +315,21 @@ function resolveCheckText(value, sentence, fieldName) {
   throwVerifyPlatformError(`verify platform defective: ${fieldName} check expects text`, sentence);
 }
 
+function maybeFinalizeSentenceComplete(candidate, checks, sentence) {
+  const trimmed = String(candidate ?? "").trim();
+  if (!trimmed) return String(candidate ?? "");
+  const needsSentenceComplete = checks.some((entry) => {
+    const rawName = String(entry?.su?.name ?? "").trim().toLowerCase();
+    const nameParts = rawName.split(/\s+/u).filter(Boolean);
+    const name = nameParts.at(-1) ?? "";
+    return name === "sentence_complete" && resolveCheckBool(entry?.ob, sentence);
+  });
+  if (!needsSentenceComplete) return trimmed;
+  if (/[.!?]\s*$/u.test(trimmed)) return trimmed;
+  if (/[,;:]\s*$/u.test(trimmed)) return trimmed;
+  if (sentenceEndingConnector.test(trimmed)) return trimmed;
+  return `${trimmed}.`;
+}
 function evaluateDeterministicChecks(candidate, checks, sentence) {
   const rows = [];
   for (let index = 0; index < checks.length; index += 1) {
@@ -463,6 +478,7 @@ export async function verifyPlatform(sentence) {
     let checkRows = [];
     let checksPass = true;
     if (!generationErrorText && checkSeries.length) {
+      finalDraft = maybeFinalizeSentenceComplete(finalDraft, checkSeries, effectiveSentence);
       checkRows = evaluateDeterministicChecks(finalDraft, checkSeries, effectiveSentence);
       checksPass = checkRows.every(row => row.pass);
     }

@@ -41,7 +41,7 @@ If people appear, depict modest opaque full-coverage clothing that covers should
 When a person is visible, sentence two must state concrete full-coverage clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
 The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
 Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
-If current_cut mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
+If current_cut mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; broad pale canvas gardener hat with mostly straight long brown hair tucked under it, with a few strands visible; naturally long brown auburn beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
 Keep the final prompt line visual-only and descriptive; exclude moderation or policy terms..text.quoted be text ya
 su name lyric promptify style replacements be map def
 su text "[[style_prompt]]" ob name text draw system prompt ya

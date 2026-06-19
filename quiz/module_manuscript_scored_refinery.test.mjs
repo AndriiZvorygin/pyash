@@ -246,11 +246,24 @@ test("module manuscript scored segment one retry adapts atmost from prior word c
   assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*must_not_match_pattern ob text "\[,;:\]\\\\s\*\$"/u);
   assert.match(moduleSource, /module manuscript hook platform checks be series def[\s\S]*must_not_match_pattern ob text "\\\\b\(\?:and\|or\|but\|so\|because\|if\|when\|while\|than\|that\|which\|who\|whom\|whose\|a\|an\|the\)\\\\s\*\[\.!\?\]\*\\\\s\*\$"/u);
   assert.match(moduleSource, /module manuscript segment one retry length stage be verify as wo word count atleast num 85 atmost num 105 from name text output to name map module manuscript segment one retry length do/u);
-  assert.match(moduleSource, /ob num 112 to name num module manuscript segment one retry cap be plus do/u);
+  assert.match(moduleSource, /module manuscript stage contract cap ob num 104 be number ya\n  su name module manuscript segment one platform stage/u);
+  assert.doesNotMatch(moduleSource, /module manuscript stage contract cap ob num 122/u);
+  assert.match(moduleSource, /ob num 104 to name num module manuscript segment one retry cap be plus do/u);
   assert.match(moduleSource, /ob num of words of module manuscript segment one retry length be giant from num 105 then ob num 104 to name num module manuscript segment one retry cap be plus do/u);
   assert.match(moduleSource, /ob num of words of module manuscript segment one retry length be tiny from num 85 then ob num 128 to name num module manuscript segment one retry cap be plus do/u);
   assert.match(moduleSource, /for name module manuscript fit mind to name text output by num 0 atmost num of name module manuscript segment one retry cap be write do/u);
   assert.match(moduleSource, /for name module manuscript segment one mind to name text output by num 0 atmost num of name module manuscript segment one retry cap be write do/u);
+});
+
+test("module manuscript scored long segment generation caps stay below platform word max", async () => {
+  const moduleSource = await fs.readFile(moduleFilename, "utf8");
+
+  assert.match(moduleSource, /module manuscript segment two platform checks be series def[\s\S]*word_max ob num 120/u);
+  assert.match(moduleSource, /module manuscript segment three platform checks be series def[\s\S]*word_max ob num 120/u);
+  assert.doesNotMatch(moduleSource, /module manuscript stage contract cap ob num 120 be number ya/u);
+  assert.doesNotMatch(moduleSource, /atmost num 120 be write do/u);
+  assert.match(moduleSource, /module manuscript segment two retry draft stage[^\n]*atmost num 104 be write do/u);
+  assert.match(moduleSource, /module manuscript segment three retry draft stage[^\n]*atmost num 104 be write do/u);
 });
 
 test("module manuscript scored fixture refinery run avoids unknown-verb wiring failures", async () => {

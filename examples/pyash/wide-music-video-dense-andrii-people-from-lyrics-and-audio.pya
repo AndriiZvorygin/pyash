@@ -10,13 +10,13 @@ prah
 su name draw character routes be map def
 su name andrii people ob text quoted.text.aliases: person or man or woman or people or human or figure or gardener or teacher or farmer or worker or face or portrait or owen or character or hands or wears or he or his or boy or girl or child
 workflow: andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled
-prefix: same adult Andrii Zvorygin guy but cartoony, long reddish-brown beard with copper tones, mature adult face.
+prefix: Use exactly one primary named character from the base character prompt; supporting people have distinct faces, hair, clothing colours, ages, and body shapes.
 suffix: no severed body parts. no extra limbs. no bad eyes. white sclera. irises visible..text.quoted ya
 prah
 
 su name draw workflow default ob text "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled" be text ya
 
-exists su name draw system prompt ob text "same adult Andrii Zvorygin guy but cartoony, long reddish-brown beard with copper tones, mature adult male face, late 30s to 40s, tall adult proportions. Simple 2D hand-drawn cartoon storybook illustration, bold clean outlines, flat colours, soft cel shading, rounded plant and landscape shapes, natural garden backgrounds, warm pastel light, clean uncluttered composition, gentle storybook mood. white sclera. irises visible." be text ya
+exists su name draw system prompt ob text "same adult Andrii Zvorygin guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones, mature adult male face, late 30s to 40s, tall adult proportions. Surrounding people are clearly distinct neighbours with varied faces, hair, hats, clothing colours, ages, and body shapes. Simple 2D hand-drawn cartoon storybook illustration, bold clean outlines, flat colours, soft cel shading, rounded plant and landscape shapes, natural garden backgrounds, warm pastel light, clean uncluttered composition, gentle storybook mood. white sclera. irises visible." be text ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear qwen chunk max seconds ob num 30 be default ya
 exists su name subtitle margin ratio override ob num 0.10 be num ya
@@ -39,18 +39,23 @@ previous_prompt_1: [[previous_prompt_1]]
 previous_prompt_2: [[previous_prompt_2]].text.quoted be text ya
 exists su name lyric promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2.
 Focus on current_cut and output only one concise image-generation prompt line (about 30-70 words), no quotes, no markdown, no explanation.
+Prefer interactive community scenes where the primary named character actively engages with other people whenever the lyric allows: shared work, conversation, teaching, listening, exchanging tools, planting together, serving food, helping a neighbour, or gathering around a table.
 If a visible person is present, use exactly four sentences in this order: sentence one subject plus action, sentence two clothing, sentence three environment, sentence four mood plus lighting.
 If no visible person is present, use exactly three sentences in this order: sentence one subject plus action, sentence two environment, sentence three mood plus lighting.
 Sentence one must describe a concrete visible action using a strong verb and object; avoid static posing, standing, or looking-only portraits.
 Use flat 2D cartoon/cel-shaded language in the prompt. Avoid lifelike, photorealistic, cinematic, photographic, portrait, realistic-skin, and 3D-render language.
 Treat each cut as its own lyric moment and hard switch scenes when the lyric changes.
 Use natural backgrounds and simple clean props. Keep the prompt focused on scenery, actions, materials, light, and mood.
-If current_cut does not explicitly name or require a person, keep the prompt people-free and show only the named plant, object, landscape, place, weather, or setting details.
+For this character-focused people version, every scene must contain exactly one primary named character from style_prompt. If other people appear, describe each other person with a distinct role, face, hair, clothing colour, age, or body shape while keeping the primary character visually separate. For group scenes, describe two or three specific supporting people instead of a generic crowd.
 If people appear, depict modest opaque full-coverage clothing that covers shoulders, chest, torso, midriff, hips, upper legs, and buttocks.
 When a person is visible, sentence two must state concrete full-coverage clothing worn by visible people, matching style_prompt and any era cues in current_cut, and should not mention action or environment.
 The environment sentence must describe place and scenery with concrete location details (setting, background elements, spatial context), not just a generic room.
 Do not frame scenes like fashion/editorial posing or runway unless current_cut explicitly requests that.
-If current_cut mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; medium-length wavy brown hair visible around ears under a broad pale canvas sun hat; naturally long chestnut-brown beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
+If current_cut mentions "Andrii" or "Andrii Zvorygin", depict this exact person profile: fully clothed friendly cartoon gardener in late 30s; broad pale canvas gardener hat with mostly straight long brown hair tucked under it, with a few strands visible; naturally long brown auburn beard hanging over upper chest with thick soft moustache; charcoal-grey blazer over buttoned plain white collared shirt covering the entire chest and torso; gentle joyful sincere expression with grounded caring presence.
+Default to the broad pale canvas gardener hat; use an indoor top bun only when the scene is clearly indoors and hat-free.
+Use group interaction instead of isolated portraits; show the primary named character facing, helping, listening to, or working alongside other people.
+When one or more other people share the activity, sentence one must describe each supporting person's role, action, and concrete visual identity alongside the primary character, using distinct face, hair, clothing colour, age, or body shape. Do not leave supporting people as generic neighbour, person, group, or crowd labels; give each visible supporting person at least one concrete clothing colour and one visible body or face trait.
+Keep exactly one primary character in the scene. Give other men clearly different identities: different hairstyles or bare heads, different hats, different beard lengths or clean-shaven faces, different clothing colors, ages, and body shapes.
 Keep the final prompt line visual-only and descriptive; exclude moderation or policy terms..text.quoted be text ya
 su name lyric promptify style replacements be map def
 su text "[[style_prompt]]" ob name text draw system prompt ya
