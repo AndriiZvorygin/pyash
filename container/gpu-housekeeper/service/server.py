@@ -768,7 +768,7 @@ def execute_katago_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   model_path = katago_model_path(job_spec, profile_name)
   config_path = katago_config_path(job_spec)
   timeout_sec = int(job_spec.get("timeoutSec") or os.environ.get("KATAGO_RUNTIME_TIMEOUT_SEC", "120"))
-  args = ["katago", "analysis", "-model", model_path, "-config", config_path]
+  args = ["env", "APPIMAGE_EXTRACT_AND_RUN=1", "katago", "analysis", "-model", model_path, "-config", config_path]
   result = docker_exec_json_line(container_name, args, query, timeout_sec=timeout_sec)
   with _LOCK:
     _PROFILES[profile_name] = {
