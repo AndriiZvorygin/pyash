@@ -169,7 +169,7 @@ test("gpu katago accepts SGF text and submits analysis job", async () => {
   assert.equal(submitted[0]?.runtimeName, "katago");
   assert.equal(submitted[0]?.profileName, "default");
   assert.equal(submitted[0]?.jobSpec?.kind, "katago-analyze");
-  assert.deepEqual(submitted[0]?.jobSpec?.query?.moves, [["B", "pd"], ["W", "dd"]]);
+  assert.deepEqual(submitted[0]?.jobSpec?.query?.moves, [["B", "Q16"], ["W", "D16"]]);
 
   const awaited = await run('accordingto text "gpu katago handle" during num 2000 vyah await be gpu do');
   assert.deepEqual(awaited?.vyah?.ve?.values, ["await", "success"]);
