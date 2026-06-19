@@ -42,6 +42,20 @@ export function parseSgfMoves(sgfText = "") {
   return moves;
 }
 
+
+function sgfPointToKataGo(point = "", boardYSize = 19) {
+  const raw = String(point ?? "").trim();
+  if (!raw) return "pass";
+  if (raw.length < 2) return raw;
+  const x = raw.charCodeAt(0) - 97;
+  const y = raw.charCodeAt(1) - 97;
+  if (x < 0 || y < 0 || x >= 25 || y >= 25) return raw;
+  const letters = "ABCDEFGHJKLMNOPQRSTUVWXYZ";
+  const col = letters[x] ?? raw[0].toUpperCase();
+  const row = Math.max(1, Math.trunc(Number(boardYSize) || 19) - y);
+  return `${col}${row}`;
+}
+
 export function buildKataGoQuery({
   sgf = "",
   id = "pyash-katago",
@@ -51,10 +65,11 @@ export function buildKataGoQuery({
   rules,
   komi: rawKomi
 } = {}) {
-  const moves = parseSgfMoves(sgf);
+  const rawMoves = parseSgfMoves(sgf);
   const initialStones = [];
   const boardXSize = Number.isFinite(Number(rawBoardXSize)) ? Number(rawBoardXSize) : 19;
   const boardYSize = Number.isFinite(Number(rawBoardYSize)) ? Number(rawBoardYSize) : boardXSize;
+  const moves = rawMoves.map(([color, point]) => [color, sgfPointToKataGo(point, boardYSize)]);
   return {
     id: normalizeText(id) || "pyash-katago",
     moves,

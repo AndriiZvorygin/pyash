@@ -18,6 +18,7 @@ test("katago extracts SGF from fenced text and builds analysis query", () => {
   const query = buildKataGoQuery({ sgf, maxVisits: 12, komi: 6.5 });
   assert.equal(query.maxVisits, 12);
   assert.equal(query.komi, 6.5);
+  assert.deepEqual(query.moves, [["B", "Q16"], ["W", "D16"]]);
   assert.deepEqual(query.analyzeTurns, [2]);
 });
 
