@@ -542,6 +542,18 @@ function buildPreviewHookFromRankedItems(headings = []) {
   return sanitizeFinalPreviewHook(subjectA);
 }
 
+function buildRecapHookFromRankedItems(headings = [], sourceSummary = '', jurisdiction = '', body = '') {
+  const candidates = (Array.isArray(headings) ? headings : [])
+    .map((h) => deriveSubjectFromHeading(h) || h)
+    .map((h) => sanitizeChapterStyleHook(h, { jurisdiction, body }))
+    .filter(Boolean)
+    .filter((s, i, arr) => arr.findIndex((x) => normalizeForMatch(x) === normalizeForMatch(s)) === i);
+  for (const candidate of candidates) {
+    if (isKeywordHookReady(candidate, sourceSummary, 'recap') && !isGenericRecapHook(candidate)) return candidate;
+  }
+  return '';
+}
+
 function normalizeForMatch(text) {
   return String(text || '')
     .toLowerCase()
@@ -926,10 +938,18 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
   }
 
 	  let safeHook = bestHook || '';
+	  let fallbackReason = '';
 	  if (hookMode !== 'preview' && bestScore < PASS_THRESHOLD) {
-	    throw new Error(`meeting-hook failed quality threshold score=${Number(bestScore || 0).toFixed(3)} hook=${JSON.stringify(bestHook || '')} feedback=${String(bestReview || '').replace(/\s+/gu, ' ').trim()}`);
+	    const rankedLead = buildRecapHookFromRankedItems(topNewsHeadings, sourceSummary, jurisdiction, body);
+	    const textLead = deriveRecapHookFromTopNewsText(sourceSummary, jurisdiction, body);
+	    safeHook = rankedLead || textLead || fallbackHookFromSummary(sourceSummary);
+	    fallbackReason = `quality threshold fallback from source heading; rejected hook=${JSON.stringify(bestHook || '')} score=${Number(bestScore || 0).toFixed(3)} feedback=${String(bestReview || '').replace(/\s+/gu, ' ').trim()}`;
 	  }
-	  if (!safeHook) safeHook = fallbackHookFromSummary(sourceSummary);
+	  if (!safeHook) {
+	    safeHook = buildRecapHookFromRankedItems(topNewsHeadings, sourceSummary, jurisdiction, body)
+	      || fallbackHookFromSummary(sourceSummary);
+	    fallbackReason = fallbackReason || 'empty hook fallback from source heading';
+	  }
   safeHook = sanitizeChapterStyleHook(safeHook, { jurisdiction, body });
   if (hookMode === 'preview') {
     const rankedHook = buildPreviewHookFromRankedItems(topNewsHeadings);
@@ -963,14 +983,22 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
     }
   }
   if (!isKeywordHookReady(safeHook, sourceSummary, hookMode)) {
-    throw new Error(`meeting-hook failed keyword quality gate hook=${JSON.stringify(safeHook)} mode=${hookMode}`);
+    const rankedLead = hookMode === 'preview'
+      ? buildPreviewHookFromRankedItems(topNewsHeadings)
+      : buildRecapHookFromRankedItems(topNewsHeadings, sourceSummary, jurisdiction, body);
+    if (rankedLead && isKeywordHookReady(rankedLead, sourceSummary, hookMode)) {
+      safeHook = sanitizeChapterStyleHook(rankedLead, { jurisdiction, body });
+      fallbackReason = fallbackReason || `keyword quality gate fallback from source heading; rejected hook=${JSON.stringify(bestHook || '')}`;
+    } else {
+      throw new Error(`meeting-hook failed keyword quality gate hook=${JSON.stringify(safeHook)} mode=${hookMode}`);
+    }
   }
 
   return {
     hook: safeHook,
-    score: Number(bestScore.toFixed(3)),
-    verifier_feedback: bestReview,
-    fallback_used: bestScore < PASS_THRESHOLD,
+    score: Number(Math.max(0, bestScore).toFixed(3)),
+    verifier_feedback: fallbackReason || bestReview,
+    fallback_used: Boolean(fallbackReason) || bestScore < PASS_THRESHOLD,
   };
 }
 

@@ -346,6 +346,14 @@ function termsForPrompt(terms) {
   return lines.join("\n");
 }
 
+function envFlag(name, fallback = false) {
+  const raw = String(process.env[name] || "").trim().toLowerCase();
+  if (!raw) return fallback;
+  if (["1", "true", "yes", "on"].includes(raw)) return true;
+  if (["0", "false", "no", "off"].includes(raw)) return false;
+  return fallback;
+}
+
 async function askNormalize({ chunk, rosterText, termMapText, index, total, ollamaUrl, model }) {
   const prompt = [
     "Clean this transcript chunk with minimal edits.",
@@ -395,7 +403,9 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
   const attempts = Number.isFinite(attemptsRaw) && attemptsRaw > 0 ? Math.floor(attemptsRaw) : 3;
 
   let lastErr = "";
+  let attemptsUsed = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    attemptsUsed = attempt;
     let timer = null;
     try {
       const ctl = new AbortController();
@@ -413,6 +423,8 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
       return out;
     } catch (err) {
       lastErr = String(err?.message || err || "unknown normalize error");
+      process.stderr.write(`[normalize-transcript] warn chunk ${index}/${total} attempt ${attempt}/${attempts} failed: ${lastErr}\n`);
+      if (String(err?.name || "").toLowerCase() === "aborterror" || /aborted|abort/iu.test(lastErr)) break;
       if (attempt >= attempts) break;
       const delay = 1200 * attempt;
       await new Promise((r) => setTimeout(r, delay));
@@ -420,7 +432,7 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
       if (timer) clearTimeout(timer);
     }
   }
-  throw new Error(`normalize fetch failed after ${attempts} attempts: ${lastErr}`);
+  throw new Error(`normalize fetch failed after ${attemptsUsed} attempt${attemptsUsed === 1 ? "" : "s"}: ${lastErr}`);
 }
 
 export async function runNormalizeShared(writer, argv = []) {
@@ -464,6 +476,9 @@ export async function runNormalizeShared(writer, argv = []) {
 
   const chunks = splitIntoChunks(sourceText, maxChars);
   if (!chunks.length) throw new Error("source transcript is empty");
+  const requireLlmNormalize = envFlag("PYA_NORMALIZE_REQUIRE_LLM", false);
+  const maxFailedChunksRaw = Number(process.env.PYA_NORMALIZE_MAX_FAILED_CHUNKS || 2);
+  const maxFailedChunks = Number.isFinite(maxFailedChunksRaw) && maxFailedChunksRaw >= 0 ? Math.floor(maxFailedChunksRaw) : 2;
 
   process.stdout.write(`[normalize-transcript] source: ${plainPath}\n`);
   process.stdout.write(`[normalize-transcript] roster: ${rosterPath || "(none)"}\n`);
@@ -473,17 +488,34 @@ export async function runNormalizeShared(writer, argv = []) {
 
   const runChunks = maxChunks > 0 ? chunks.slice(0, maxChunks) : chunks;
   const out = [];
+  const fallbackChunks = [];
   for (let i = 0; i < runChunks.length; i += 1) {
     process.stdout.write(`[normalize-transcript] atindex num ${i + 1} toindex num ${runChunks.length}\n`);
-    const cleaned = await askNormalize({
-      chunk: runChunks[i],
-      rosterText,
-      termMapText,
-      index: i + 1,
-      total: runChunks.length,
-      ollamaUrl,
-      model,
-    });
+    let cleaned = "";
+    if (!requireLlmNormalize && maxFailedChunks >= 0 && fallbackChunks.length >= maxFailedChunks) {
+      const message = `normalize circuit open after ${fallbackChunks.length} failed chunk(s)`;
+      fallbackChunks.push({ index: i + 1, error: message, skipped_llm: true });
+      process.stderr.write(`[normalize-transcript] warn chunk ${i + 1}/${runChunks.length} using source fallback: ${message}\n`);
+      cleaned = runChunks[i];
+    } else {
+      try {
+        cleaned = await askNormalize({
+          chunk: runChunks[i],
+          rosterText,
+          termMapText,
+          index: i + 1,
+          total: runChunks.length,
+          ollamaUrl,
+          model,
+        });
+      } catch (err) {
+        if (requireLlmNormalize) throw err;
+        const message = String(err?.message || err || "unknown normalize error");
+        fallbackChunks.push({ index: i + 1, error: message });
+        process.stderr.write(`[normalize-transcript] warn chunk ${i + 1}/${runChunks.length} using source fallback after normalize failure: ${message}\n`);
+        cleaned = runChunks[i];
+      }
+    }
     const canon = profile.canonicalCleanup(cleaned || runChunks[i]);
     out.push(applyNormalizationTerms(canon, normalizationTerms));
   }
@@ -502,6 +534,10 @@ export async function runNormalizeShared(writer, argv = []) {
     chunks_total: chunks.length,
     chunks_processed: runChunks.length,
     max_chars_per_chunk: maxChars,
+    llm_required: requireLlmNormalize,
+    max_failed_chunks_before_circuit: maxFailedChunks,
+    fallback_chunk_count: fallbackChunks.length,
+    fallback_chunks: fallbackChunks,
   }, null, 2), "utf8");
   process.stdout.write(`[normalize-transcript] wrote: ${outputPath}\n`);
   process.stdout.write(`[normalize-transcript] wrote: ${metadataPath}\n`);
