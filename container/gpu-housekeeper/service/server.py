@@ -37,6 +37,14 @@ DEFAULT_RUNTIME_REGISTRY = {
     "beginAction": ["start", "comfyui"],
     "stopAction": ["stop", "comfyui"],
     "restartAction": ["restart", "comfyui"]
+  },
+  "katago": {
+    "runtimeName": "katago",
+    "containerName": "katago",
+    "gpuExpected": True,
+    "beginAction": ["start", "katago"],
+    "stopAction": ["stop", "katago"],
+    "restartAction": ["restart", "katago"]
   }
 }
 
@@ -217,6 +225,25 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
       return {
         "accepted": False,
         "error": "comfyui jobSpec.prompt must be map"
+      }
+
+  if runtime_lower == "katago":
+    if not isinstance(job_spec, dict):
+      return {
+        "accepted": False,
+        "error": "katago jobSpec must be map"
+      }
+    kind = normalize_text(job_spec.get("kind")).lower()
+    allowed = {"katago-analyze", "katago-begin", "katago-discharge", "katago-restart", "katago-status"}
+    if kind not in allowed:
+      return {
+        "accepted": False,
+        "error": "katago jobSpec.kind must be katago-analyze, katago-begin, katago-discharge, katago-restart, or katago-status"
+      }
+    if kind == "katago-analyze" and not isinstance(job_spec.get("query"), dict):
+      return {
+        "accepted": False,
+        "error": "katago jobSpec.query must be map"
       }
 
   remote_job_id = f"job-{uuid.uuid4().hex[:12]}"
@@ -649,6 +676,109 @@ def poll_comfyui_history(prompt_id: str, timeout_sec: int, interval_sec: float =
   raise RuntimeError(f"comfyui timed out waiting for prompt {prompt_id}")
 
 
+
+def katago_model_path(job_spec: Dict[str, Any], profile_name: str) -> str:
+  return normalize_text(job_spec.get("modelPath") or os.environ.get("KATAGO_MODEL_PATH")) or f"/models/{profile_name}.bin.gz"
+
+
+def katago_config_path(job_spec: Dict[str, Any]) -> str:
+  return normalize_text(job_spec.get("configPath") or os.environ.get("KATAGO_CONFIG_PATH")) or "/katago/analysis.cfg"
+
+
+def docker_exec_json_line(container_name: str, args: List[str], payload: Dict[str, Any], timeout_sec: int) -> Dict[str, Any]:
+  try:
+    proc = subprocess.run(
+      ["docker", "exec", "-i", container_name, *args],
+      input=json.dumps(payload, ensure_ascii=False) + "\n",
+      capture_output=True,
+      text=True,
+      timeout=max(1, timeout_sec)
+    )
+  except FileNotFoundError:
+    raise RuntimeError("docker CLI unavailable")
+  except subprocess.TimeoutExpired:
+    raise RuntimeError("katago analysis timed out")
+
+  stdout = proc.stdout or ""
+  stderr = normalize_text(proc.stderr)
+  if proc.returncode != 0:
+    raise RuntimeError(stderr or f"katago exited {proc.returncode}")
+
+  for raw_line in stdout.splitlines():
+    line = raw_line.strip()
+    if not line or not (line.startswith("{") or line.startswith("[")):
+      continue
+    try:
+      parsed = json.loads(line)
+    except Exception:
+      continue
+    if isinstance(parsed, dict):
+      return parsed
+  raise RuntimeError(stderr or "katago returned no JSON result")
+
+
+def execute_katago_lifecycle(kind: str, runtime_name: str, profile_name: str, runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  entry = runtime_registry.get(runtime_name)
+  if not entry:
+    raise RuntimeError(f"runtime not managed: {runtime_name}")
+
+  if kind == "katago-status":
+    status = parse_runtime_status(entry)
+    return {"message": status.get("message") or status.get("status") or "status", "runtime": status}
+  if kind == "katago-begin":
+    ensure_runtime_ready(runtime_registry, runtime_name)
+    status = parse_runtime_status(entry)
+    return {"message": "katago begun", "runtime": status}
+  if kind == "katago-discharge":
+    result = runtime_action(runtime_registry, runtime_name, "stopAction")
+    with _LOCK:
+      if profile_name in _PROFILES:
+        _PROFILES[profile_name]["loaded"] = False
+    if not result.get("success"):
+      raise RuntimeError(result.get("message") or "katago discharge failed")
+    return {"message": "katago discharged", "runtime": result}
+  if kind == "katago-restart":
+    result = runtime_action(runtime_registry, runtime_name, "restartAction")
+    if not result.get("success"):
+      raise RuntimeError(result.get("message") or "katago restart failed")
+    status = parse_runtime_status(entry)
+    return {"message": "katago restarted", "runtime": status}
+  raise RuntimeError(f"unsupported katago lifecycle kind: {kind}")
+
+
+def execute_katago_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  profile_name = normalize_text(job.get("profileName")) or "default"
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    raise RuntimeError("katago jobSpec must be a map")
+
+  kind = normalize_text(job_spec.get("kind")).lower()
+  if kind in {"katago-begin", "katago-discharge", "katago-restart", "katago-status"}:
+    return execute_katago_lifecycle(kind, runtime_name, profile_name, runtime_registry)
+  if kind != "katago-analyze":
+    raise RuntimeError(f"unsupported katago job kind: {kind or 'missing'}")
+
+  ensure_runtime_ready(runtime_registry, runtime_name)
+  entry = runtime_registry.get(runtime_name) or {}
+  container_name = normalize_text(entry.get("containerName")) or "katago"
+  query = job_spec.get("query")
+  if not isinstance(query, dict):
+    raise RuntimeError("katago query is required")
+  model_path = katago_model_path(job_spec, profile_name)
+  config_path = katago_config_path(job_spec)
+  timeout_sec = int(job_spec.get("timeoutSec") or os.environ.get("KATAGO_RUNTIME_TIMEOUT_SEC", "120"))
+  args = ["katago", "analysis", "-model", model_path, "-config", config_path]
+  result = docker_exec_json_line(container_name, args, query, timeout_sec=timeout_sec)
+  with _LOCK:
+    _PROFILES[profile_name] = {
+      "profileName": profile_name,
+      "runtimeName": runtime_name,
+      "loaded": True
+    }
+  return result
+
+
 def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   profile_name = normalize_text(job.get("profileName"))
@@ -695,6 +825,8 @@ def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]
     return execute_ollama_job(job, runtime_registry)
   if runtime_name == "comfyui":
     return execute_comfyui_job(job, runtime_registry)
+  if runtime_name == "katago":
+    return execute_katago_job(job, runtime_registry)
 
   sleep_ms = 200
   if isinstance(job.get("jobSpec"), dict):

@@ -5,6 +5,8 @@ from filename "./module/mind_openai.pya" ob name openai command mind be import d
 from filename "./module/mind_openai.pya" ob name litellm command mind be import do
 from filename "./module/mind_openai.pya" ob name openrouter command mind be import do
 from filename "./module/mind_openai.pya" ob name vllm command mind be import do
+from filename "./module/mind_katago.pya" ob name mind to name katago command mind be import do
+from filename "./module/mind_katago.pya" ob name analyze to name katago analyze be import do
 from filename "./module/verify.pya" ob name verify be import do
 from filename "./module/keyboard_write.pya" ob name keyboard write be import do
 from filename "./module/piper_say_command.pya" ob name say to name piper command say be import do
@@ -39,6 +41,7 @@ exists su name see default prompter ob la be see ko ob text "Describe the image.
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
 exists su name mind model ob text "qwen3.5:9b" be default ya
+exists su name katago profile ob text "default" be default ya
 su name mind configure be map def
   su name think ob bool lie ya
 prah

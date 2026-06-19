@@ -255,5 +255,103 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     self.assertEqual(actions, [("comfyui", "beginAction")])
 
 
+class HousekeeperKatagoTests(unittest.TestCase):
+  def setUp(self):
+    self.orig_parse_runtime_status = server.parse_runtime_status
+    self.orig_runtime_action = server.runtime_action
+    self.orig_docker_exec_json_line = server.docker_exec_json_line
+    server._PROFILES.clear()
+    server._JOBS.clear()
+    server._QUEUE.clear()
+
+  def tearDown(self):
+    server.parse_runtime_status = self.orig_parse_runtime_status
+    server.runtime_action = self.orig_runtime_action
+    server.docker_exec_json_line = self.orig_docker_exec_json_line
+    server._PROFILES.clear()
+    server._JOBS.clear()
+    server._QUEUE.clear()
+
+  def test_submit_accepts_katago_analysis_and_lifecycle_jobs(self):
+    query = {"id": "q", "moves": [["B", "pd"]], "rules": "tromp-taylor"}
+    analyze = server.submit_job({
+      "handleId": "katago-one",
+      "runtimeName": "katago",
+      "profileName": "default",
+      "jobSpec": {"kind": "katago-analyze", "query": query}
+    })
+    begin = server.submit_job({
+      "handleId": "katago-two",
+      "runtimeName": "katago",
+      "profileName": "default",
+      "jobSpec": {"kind": "katago-begin"}
+    })
+    bad = server.submit_job({
+      "handleId": "katago-three",
+      "runtimeName": "katago",
+      "profileName": "default",
+      "jobSpec": {"kind": "katago-analyze"}
+    })
+
+    self.assertTrue(analyze["accepted"])
+    self.assertTrue(begin["accepted"])
+    self.assertFalse(bad["accepted"])
+
+  def test_katago_analysis_executes_inside_runtime_container(self):
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+
+    def fake_exec(container_name, args, payload, timeout_sec):
+      calls.append((container_name, args, payload, timeout_sec))
+      return {"id": payload["id"], "moveInfos": [{"move": "Q16", "visits": 8, "winrate": 0.6}]}
+
+    server.docker_exec_json_line = fake_exec
+    result = server.execute_katago_job({
+      "runtimeName": "katago",
+      "profileName": "default",
+      "jobSpec": {
+        "kind": "katago-analyze",
+        "query": {"id": "q", "moves": [["B", "pd"]]},
+        "timeoutSec": 33
+      }
+    }, {"katago": {"runtimeName": "katago", "containerName": "katago", "gpuExpected": True}})
+
+    self.assertEqual(result["moveInfos"][0]["move"], "Q16")
+    self.assertEqual(calls[0][0], "katago")
+    self.assertIn("analysis", calls[0][1])
+    self.assertEqual(calls[0][2]["id"], "q")
+    self.assertEqual(calls[0][3], 33)
+    self.assertTrue(server._PROFILES["default"]["loaded"])
+
+  def test_katago_lifecycle_uses_runtime_actions(self):
+    actions = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    server.runtime_action = lambda _registry, runtime_name, action_key: actions.append((runtime_name, action_key)) or {
+      "success": True,
+      "status": "running",
+      "message": action_key
+    }
+
+    registry = {"katago": {"runtimeName": "katago", "containerName": "katago", "gpuExpected": True}}
+    begin = server.execute_katago_job({"runtimeName": "katago", "profileName": "default", "jobSpec": {"kind": "katago-begin"}}, registry)
+    discharge = server.execute_katago_job({"runtimeName": "katago", "profileName": "default", "jobSpec": {"kind": "katago-discharge"}}, registry)
+    restart = server.execute_katago_job({"runtimeName": "katago", "profileName": "default", "jobSpec": {"kind": "katago-restart"}}, registry)
+
+    self.assertEqual(begin["message"], "katago begun")
+    self.assertEqual(discharge["message"], "katago discharged")
+    self.assertEqual(restart["message"], "katago restarted")
+    self.assertEqual(actions, [("katago", "stopAction"), ("katago", "restartAction")])
+
+
 if __name__ == "__main__":
   unittest.main()

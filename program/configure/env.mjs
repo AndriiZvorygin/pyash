@@ -36,6 +36,8 @@ const ENV_BINDINGS = [
   { env: "PYA_NEWSPAPER", name: "newspaper enabled", type: "bool" },
   { env: "PYA_NEWSPAPER_MIND_AUTO", name: "newspaper mind auto", type: "bool" },
   { env: "PYA_RUN_ID", name: "run id", type: "text" },
+  { env: "PYA_GPU_HOUSEKEEPER_URL", name: "gpu housekeeper url", type: "text" },
+  { env: "PYA_KATAGO_PROFILE", name: "katago profile", type: "text" },
   { env: "PYA_REFINERY", name: "refinery name", type: "text" },
   { env: "OLLAMA_HOST", name: "ollama host", type: "text" },
   { env: "OPENAI_BASE_URL", name: "ai host", type: "text" },

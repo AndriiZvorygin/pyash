@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 
 import { remember } from "../remember/index.mjs";
+import { buildKataGoJobSpec } from "../katago/analysis.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
 import {
@@ -114,6 +115,7 @@ function defaultRuntimeForIntent(intent, jobSpec = {}, sentence = {}) {
   if (runtimeName) return runtimeName;
   if (intent === "mind") return "ollama";
   if (intent === "draw" || intent === "say" || intent === "hear") return "comfyui";
+  if (intent === "katago") return "katago";
   return "";
 }
 
@@ -124,6 +126,11 @@ function defaultProfileForIntent(intent, jobSpec = {}, sentence = {}, { remember
     const configured = rememberFn("mind model") || rememberFn("mind ollama model");
     const model = String(configured?.ob?.text ?? configured?.ob?.name ?? "").trim();
     return model || String(jobSpec.model ?? "").trim() || "llama3.2";
+  }
+  if (intent === "katago") {
+    const configured = rememberFn("katago profile");
+    const profile = String(configured?.ob?.text ?? configured?.ob?.name ?? "").trim();
+    return String(jobSpec.profileName ?? jobSpec.katagoProfile ?? "").trim() || profile || "default";
   }
   return String(jobSpec.model ?? jobSpec.workflow ?? intent).trim() || intent;
 }
@@ -155,6 +162,18 @@ function buildJobSpec(sentence = {}, intent = "", { rememberFn = remember } = {}
   if (intent === "mind") return buildMindJobSpec(sentence, intent, { rememberFn });
   const explicit = sentence?.ob?.map ? pyashMapToPlain(sentence.ob.map) : parseJsonMap(sentence?.ob?.text);
   if (explicit) return explicit;
+  if (intent === "katago") {
+    try {
+      return buildKataGoJobSpec({ sgf: sentence?.ob?.text });
+    } catch (err) {
+      throwErrorSentence({
+        name: "gpu duty defective",
+        message: `katago gpu duty defective: ${err?.message ?? err}`,
+        from: { name: "gpu" },
+        raw: { sentence }
+      });
+    }
+  }
   throwErrorSentence({
     name: "gpu duty defective",
     message: `${intent} gpu duty defective: requires ob map or ob text JSON jobSpec`,
@@ -347,6 +366,9 @@ export const signatures = [
   { signatureWords: ["be", "gpu", "say", "ob", "map", "vyah", "start"], handler: gpu },
   { signatureWords: ["be", "gpu", "hear", "ob", "text", "vyah", "start"], handler: gpu },
   { signatureWords: ["be", "gpu", "hear", "ob", "map", "vyah", "start"], handler: gpu },
+  { signatureWords: ["be", "gpu", "katago", "ob", "text", "vyah", "start"], handler: gpu },
+  { signatureWords: ["be", "gpu", "katago", "ob", "text", "to", "name", "vyah", "start"], handler: gpu },
+  { signatureWords: ["be", "gpu", "katago", "ob", "map", "vyah", "start"], handler: gpu },
   { signatureWords: ["be", "gpu", "status", "accordingto", "text"], handler: gpu },
   { signatureWords: ["be", "gpu", "await", "accordingto", "text"], handler: gpu },
   { signatureWords: ["be", "gpu", "await", "accordingto", "text", "during", "num"], handler: gpu },

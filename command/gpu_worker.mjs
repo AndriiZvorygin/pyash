@@ -9,6 +9,7 @@ import { loadDefaultConfig, readFlagValue } from "./run_pya_helpers.mjs";
 import { resolveWorldRoot } from "../program/library/world.mjs";
 import { updateAgentPresence } from "../program/agent/presence.mjs";
 import { runGpuWorkerOnce } from "../program/runtime/gpu/worker.mjs";
+import { resolveConfigText } from "../program/configure/env.mjs";
 
 function usage() {
   return "Usage: node command/gpu_worker.mjs [--world <path>] [--interval-ms 400] [--once]";
@@ -56,12 +57,16 @@ async function main() {
     process.exit(0);
   }
 
-  const housekeeperUrl = String(process.env.PYA_GPU_HOUSEKEEPER_URL ?? "").trim();
+  await initializeRuntime({ cwd: process.cwd() });
+  const housekeeperUrl = String(
+    process.env.PYA_GPU_HOUSEKEEPER_URL
+      ?? resolveConfigText("gpu housekeeper url", { rememberFn: remember })
+      ?? ""
+  ).trim();
   if (!housekeeperUrl) {
-    throw new Error("gpu_worker: PYA_GPU_HOUSEKEEPER_URL is required");
+    throw new Error("gpu_worker: PYA_GPU_HOUSEKEEPER_URL or gpu housekeeper url is required");
   }
 
-  await initializeRuntime({ cwd: process.cwd() });
   const worldArg = readFlagValue(args, "--world");
   const worldRoot = worldArg
     ? path.resolve(worldArg)
