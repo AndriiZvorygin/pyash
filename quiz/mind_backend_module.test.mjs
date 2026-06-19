@@ -49,7 +49,7 @@ test("katago mind backend module exposes configured signature", async () => {
   process.env.PYA_COMMAND_RESPONSE = "{\"response\":\"katago module ok\",\"katago\":{\"bestMove\":\"Q16\"}}";
 
   try {
-    await run('from filename "./module/mind_katago.pya" ob name mind to name katago command mind be import do');
+    await run('from filename "./module/mind_katago.pya" ob name katago command mind be import do');
     await run("exists su name mind backend be default ob name katago command mind ya");
     await run("exists su name mind be mind ya");
 
