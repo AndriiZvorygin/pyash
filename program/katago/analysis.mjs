@@ -136,11 +136,14 @@ export function buildKataGoJobSpec(input = {}) {
       rules: input?.rules,
       komi: input?.komi
     });
-  return {
+  const spec = {
     kind: "katago-analyze",
     sgf,
     query,
     timeoutSec: Number.isFinite(Number(input?.timeoutSec)) ? Math.max(1, Math.trunc(Number(input.timeoutSec))) : 120
   };
+  if (input?.modelPath) spec.modelPath = String(input.modelPath);
+  if (input?.configPath) spec.configPath = String(input.configPath);
+  return spec;
 }
 
