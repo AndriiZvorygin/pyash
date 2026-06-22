@@ -15,7 +15,6 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.orig_request_ollama_json = server.request_ollama_json
     server._PROFILES.clear()
     server._JOBS.clear()
-    server._QUEUE.clear()
 
   def tearDown(self):
     server.parse_runtime_status = self.orig_parse_runtime_status
@@ -23,7 +22,6 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.request_ollama_json = self.orig_request_ollama_json
     server._PROFILES.clear()
     server._JOBS.clear()
-    server._QUEUE.clear()
 
   def test_submit_accepts_ollama_generate_and_chat_jobs(self):
     generate = server.submit_job({
@@ -153,6 +151,33 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(server.job_status("ok")["result"], {"response": "ok"})
     self.assertEqual(server.job_status("fail")["error"], {"message": "boom"})
 
+  def test_registered_job_executes_without_housekeeper_backlog(self):
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      {"models": []} if pathname == "/api/ps" else {"response": "ok"}
+    )
+
+    submitted = server.submit_job({
+      "handleId": "handle-direct",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen-test", "prompt": "hi"}}
+    })
+
+    self.assertTrue(submitted["accepted"])
+    self.assertEqual(server.queue_depth(), 0)
+    server.execute_registered_job(submitted["remoteJobId"], {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    status = server.job_status(submitted["remoteJobId"])
+    self.assertEqual(status["status"], "success")
+    self.assertEqual(status["result"], {"response": "ok"})
+    self.assertEqual(server.queue_depth(), 0)
+
 
 class HousekeeperComfyuiTests(unittest.TestCase):
   def setUp(self):
@@ -161,7 +186,6 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     self.orig_request_comfyui_json = server.request_comfyui_json
     server._PROFILES.clear()
     server._JOBS.clear()
-    server._QUEUE.clear()
 
   def tearDown(self):
     server.parse_runtime_status = self.orig_parse_runtime_status
@@ -169,7 +193,6 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     server.request_comfyui_json = self.orig_request_comfyui_json
     server._PROFILES.clear()
     server._JOBS.clear()
-    server._QUEUE.clear()
 
   def test_submit_accepts_comfyui_teaching_stage_jobs(self):
     prompt = {"1": {"inputs": {}}}
@@ -262,7 +285,6 @@ class HousekeeperKatagoTests(unittest.TestCase):
     self.orig_docker_exec_json_line = server.docker_exec_json_line
     server._PROFILES.clear()
     server._JOBS.clear()
-    server._QUEUE.clear()
 
   def tearDown(self):
     server.parse_runtime_status = self.orig_parse_runtime_status
@@ -270,7 +292,6 @@ class HousekeeperKatagoTests(unittest.TestCase):
     server.docker_exec_json_line = self.orig_docker_exec_json_line
     server._PROFILES.clear()
     server._JOBS.clear()
-    server._QUEUE.clear()
 
   def test_submit_accepts_katago_analysis_and_lifecycle_jobs(self):
     query = {"id": "q", "moves": [["B", "pd"]], "rules": "tromp-taylor"}
