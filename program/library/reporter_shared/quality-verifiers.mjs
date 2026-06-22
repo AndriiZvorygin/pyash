@@ -335,12 +335,18 @@ function buildSourceCorpus({ meetingSummaryMd = "", meetingSummaryChunksPyaPath 
   const secondary = [];
   const weak = [];
   if (agendaSectionGroundingPyaPath) {
-    const v = readPyaTextValues(agendaSectionGroundingPyaPath, ["sections"]);
-    const sections = Array.isArray(v?.sections) ? v.sections : safeJsonFromText(v?.sections);
-    const sectionList = Array.isArray(sections) ? sections : [];
-    for (const s of sectionList) {
-      strong.push(String(s?.heading || "").trim());
-      strong.push(String(s?.["source excerpt"] || "").trim());
+    const v = readPyaTextValues(agendaSectionGroundingPyaPath, ["grounded units", "sections"]);
+    const rawUnits = String(v?.["grounded units"] || "").trim() || String(v?.sections || "").trim();
+    const units = safeJsonFromText(rawUnits);
+    const unitList = Array.isArray(units) ? units : [];
+    for (const u of unitList) {
+      strong.push(String(u?.label || u?.heading || u?.["agenda item"] || "").trim());
+      strong.push(String(u?.["source excerpt"] || "").trim());
+      const chapters = Array.isArray(u?.["child chapters"]) ? u["child chapters"] : [];
+      for (const ch of chapters) {
+        strong.push(String(ch?.["chapter title"] || ch?.title || "").trim());
+        strong.push(String(ch?.["source excerpt"] || ch?.text || "").trim());
+      }
     }
   }
   if (meetingSummaryChunksPyaPath) {
@@ -368,7 +374,8 @@ function buildSourceCorpus({ meetingSummaryMd = "", meetingSummaryChunksPyaPath 
 
 function supportSnippet(sentenceNorm, sourceCorpus) {
   const corpus = String(sourceCorpus || "");
-  const sentenceTerms = sentenceNorm.split(" ").filter((w) => w.length >= 5);
+  const sentenceTerms = [...new Set(sentenceNorm.split(" ").filter((w) => w.length >= 5))];
+  const minScore = sentenceTerms.length <= 3 ? 2 : Math.max(3, Math.ceil(Math.min(10, sentenceTerms.length) * 0.35));
   const srcSentences = splitSentences(corpus);
   let best = "";
   let bestScore = 0;
@@ -379,8 +386,9 @@ function supportSnippet(sentenceNorm, sourceCorpus) {
     if (score > bestScore) { bestScore = score; best = s; }
   }
   return {
-    snippet: bestScore >= 2 ? String(best || "").slice(0, 220) : "",
+    snippet: bestScore >= minScore ? String(best || "").slice(0, 220) : "",
     score: bestScore,
+    minScore,
   };
 }
 
@@ -518,9 +526,9 @@ export function verifyArticleClaims({
       const secondaryHit = supportSnippet(sentenceNorm, source.secondary);
       const weakHit = supportSnippet(sentenceNorm, source.weak);
       const snippet = strongHit.snippet || secondaryHit.snippet || weakHit.snippet || "";
-      const supportedByStrong = strongHit.score >= 2;
-      const supportedBySecondary = secondaryHit.score >= 2;
-      const supportedByWeakOnly = !supportedByStrong && !supportedBySecondary && weakHit.score >= 2;
+      const supportedByStrong = Boolean(strongHit.snippet);
+      const supportedBySecondary = Boolean(secondaryHit.snippet);
+      const supportedByWeakOnly = !supportedByStrong && !supportedBySecondary && Boolean(weakHit.snippet);
       const isSupportedOutcome = !hasOutcome || (outcomeWords.test(strongNorm) || outcomeWords.test(secondaryNorm));
 
       let severity = "supported";

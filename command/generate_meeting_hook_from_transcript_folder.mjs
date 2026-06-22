@@ -387,6 +387,7 @@ function isGenericRecapHook(text) {
     || n.includes('key council development')
     || n.includes('council decisions at')
     || n.includes('meeting highlights')
+    || (n.includes('protocol non compliance') && n.includes('downtown'))
     || isProseSpeakerHook(text);
 }
 
@@ -473,7 +474,7 @@ function extractTopNewsHeadings(mdText) {
   const out = [];
   for (const line of lines) {
     const bullet = line.match(/^\s*-\s+\*\*(.+?)\*\*/u);
-    const bold = line.match(/^\s*\*\*(.+?):\*\*/u);
+    const bold = line.match(/^\s*\*\*(.+?)(?::)?\*\*/u);
     const heading = String((bullet?.[1] || bold?.[1] || '')).trim();
     if (heading) out.push(heading);
   }
@@ -661,6 +662,18 @@ function fallbackHookFromSummary(summaryText) {
 
 function deriveRecapHookFromTopNewsText(summaryText = "", jurisdiction = "", body = "") {
   const s = normalizeForMatch(summaryText);
+  if (/\bweapons\b/.test(s) && /\bmental health\b/.test(s) && /\bcalls?\b/.test(s)) {
+    return sanitizeChapterStyleHook("Weapons Mental Health Calls Surge", { jurisdiction, body });
+  }
+  if (/\bdowntown\b/.test(s) && /\bcalls?\b/.test(s) && /\bweapons\b/.test(s)) {
+    return sanitizeChapterStyleHook("Downtown Weapons Calls Surge", { jurisdiction, body });
+  }
+  if (/\bproactive\b/.test(s) && /\bdowntown patrols?\b/.test(s) && /\btraffickers?\b/.test(s)) {
+    return sanitizeChapterStyleHook("Downtown Patrols Target Traffickers", { jurisdiction, body });
+  }
+  if (/\bpick up pieces\b/.test(s) && /\bservices?\b/.test(s) && /\bunavailable\b/.test(s)) {
+    return sanitizeChapterStyleHook("Police Fill Service Gaps", { jurisdiction, body });
+  }
   if (/\bfive projects\b/.test(s) && /\blegislative verbal updates?\b/.test(s)) {
     return sanitizeChapterStyleHook("Projects Legislative Updates Roundtable", { jurisdiction, body });
   }
@@ -1049,10 +1062,12 @@ async function main() {
     focus: focusArg,
   });
   const meetingSummaryMd = fs.readFileSync(summaryPath, 'utf8');
-  const topNewsworthyMd = extractMarkdownSection(meetingSummaryMd, 'Top Newsworthy Developments');
+  let topNewsworthyMd = extractMarkdownSection(meetingSummaryMd, 'Top Newsworthy Developments');
+  if (!topNewsworthyMd) topNewsworthyMd = extractMarkdownSection(meetingSummaryMd, 'Most Newsworthy Agenda Items');
+  if (!topNewsworthyMd) topNewsworthyMd = extractMarkdownSection(meetingSummaryMd, 'Top Newsworthy Items');
   const wholeMeetingMd = extractMarkdownSection(meetingSummaryMd, 'Whole Meeting Summary');
   const topNewsHeadings = extractTopNewsHeadings(topNewsworthyMd);
-  const sourceSummary = stripMarkdown(String(topNewsworthyMd || '')).slice(0, 32000);
+  const sourceSummary = stripMarkdown(String(topNewsworthyMd || wholeMeetingMd || meetingSummaryMd || '')).slice(0, 32000);
   if (!sourceSummary) throw new Error(`Top Newsworthy Developments is empty: ${summaryPath}`);
   const plainPath = path.join(transcriptDir, `${resolvedPrefix}.plain.txt`);
   const transcriptEvidence = fs.existsSync(plainPath) ? fs.readFileSync(plainPath, 'utf8').slice(0, 80000) : '';
