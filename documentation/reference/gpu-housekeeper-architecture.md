@@ -15,9 +15,14 @@ The housekeeper owns host-local GPU runtime control:
 
 - inspect runtime containers,
 - start/restart/discharge managed runtimes,
-- serialize submitted jobs,
+- serialize active execution,
 - execute real Ollama, ComfyUI, and KataGo jobs,
 - expose job status and results over HTTP.
+
+It should not duplicate the durable queue. The Pyash holding spool is the
+system of record for queued duties and final handles; housekeeper job state is
+only a transient execution projection used by the worker while a submitted job
+is running or has just completed.
 
 ## 2. Main Components
 
@@ -57,7 +62,7 @@ It:
 4. acquires a local GPU lease keyed by `gpuId`,
 5. submits the job to the housekeeper,
 6. polls `/job/<remoteJobId>`,
-7. writes terminal handle status,
+7. writes terminal handle status back to Pyash holding,
 8. acks success/fail in the durable queue.
 
 The worker currently talks to one configured housekeeper URL at a time. It does not choose among multiple remote hosts.
@@ -78,7 +83,11 @@ The worker currently talks to one configured housekeeper URL at a time. It does 
 - `POST /runtime/stop`
 - `POST /runtime/restart`
 
-The housekeeper has an in-memory local queue and one active running job slot. This means one housekeeper process serializes execution even if the host has multiple GPUs.
+The housekeeper has one active execution slot. It does not own a durable job
+queue; `world/holding/gpu/` owns that. `/submit` registers an execution record,
+runs it under the housekeeper execution lock, and `/job/<remoteJobId>` exposes
+that transient status so `gpu_worker` can copy the final result back into the
+Pyash handle.
 
 The default managed runtimes are:
 
@@ -182,10 +191,11 @@ Each GPU machine runs its own housekeeper. A housekeeper may know peers such as:
 - `swac`
 - future GPU hosts
 
-On `/submit`, a housekeeper should decide whether to:
+When a local worker claims a Pyash holding duty and submits it, a housekeeper
+should decide whether to:
 
 1. accept and run locally,
-2. queue locally,
+2. wait on its local execution lock briefly,
 3. forward once to a better peer,
 4. reject if no local or peer capacity is suitable.
 
@@ -214,6 +224,11 @@ The original housekeeper remains responsible to the caller. If it forwards a job
 - final reflected result/error.
 
 `GET /job/<id>` on the original housekeeper should transparently reflect the peer job status.
+
+This forwarding state should remain a transient projection. The durable duty
+and terminal outcome still belong in Pyash holding, written by `gpu_worker`.
+If a future housekeeper directly claims remote Pyash duties, it should use the
+same holding spool layout instead of introducing a new persistent queue format.
 
 ### 6.2 Suggested Snapshot Fields
 
@@ -284,4 +299,3 @@ Direct queued KataGo analysis can use `command/katago_runner.mjs`; Pyash mind-st
 The housekeeper should be the federation boundary.
 
 Pyash and `gpu_worker` should not need to know whether a job ran locally on the selected housekeeper or was forwarded to another host. That keeps the durable queue and handle contract stable while allowing housekeepers to grow smarter about residency, capacity, and peer routing.
-

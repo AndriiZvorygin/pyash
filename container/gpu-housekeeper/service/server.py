@@ -6,7 +6,6 @@ import subprocess
 import threading
 import time
 import uuid
-from collections import deque
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional
@@ -14,10 +13,10 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote
 from urllib.request import Request, urlopen
 
-_QUEUE = deque()
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _PROFILES: Dict[str, Dict[str, Any]] = {}
 _LOCK = threading.Lock()
+_EXECUTION_LOCK = threading.Lock()
 _RUNNING_JOB_ID: Optional[str] = None
 
 
@@ -131,9 +130,8 @@ def parse_nvidia_smi() -> Dict[str, Any]:
 
 def queue_depth() -> int:
   with _LOCK:
-    queued = len(_QUEUE)
     running = 1 if _RUNNING_JOB_ID else 0
-  return queued + running
+  return running
 
 
 def profile_list() -> List[Dict[str, Any]]:
@@ -154,7 +152,7 @@ def minimal_jobs() -> List[Dict[str, Any]]:
   values.sort(key=lambda item: item.get("submittedAt") or "")
   out = []
   for job in values:
-    if job.get("status") not in {"queued", "running"}:
+    if job.get("status") != "running":
       continue
     out.append({
       "remoteJobId": job.get("remoteJobId"),
@@ -263,7 +261,6 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
 
   with _LOCK:
     _JOBS[remote_job_id] = job
-    _QUEUE.append(remote_job_id)
     existing = _PROFILES.get(profile_name, {})
     _PROFILES[profile_name] = {
       "profileName": profile_name,
@@ -873,24 +870,14 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
   return {key: dict(value) for key, value in DEFAULT_RUNTIME_REGISTRY.items()}
 
 
-def worker_loop() -> None:
+def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
   global _RUNNING_JOB_ID
-  while True:
-    remote_job_id = None
-    with _LOCK:
-      if _RUNNING_JOB_ID is None and len(_QUEUE) > 0:
-        remote_job_id = _QUEUE.popleft()
-        _RUNNING_JOB_ID = remote_job_id
-
-    if not remote_job_id:
-      time.sleep(0.05)
-      continue
-
+  with _EXECUTION_LOCK:
     with _LOCK:
       job = _JOBS.get(remote_job_id)
       if not job:
-        _RUNNING_JOB_ID = None
-        continue
+        return
+      _RUNNING_JOB_ID = remote_job_id
       job["status"] = "running"
       job["message"] = "running"
       job["startedAt"] = utc_now_iso()
@@ -904,7 +891,7 @@ def worker_loop() -> None:
         }
 
     try:
-      result = execute_job(job, Handler.runtime_registry)
+      result = execute_job(job, runtime_registry)
       with _LOCK:
         current = _JOBS.get(remote_job_id)
         if current:
@@ -989,6 +976,7 @@ class Handler(BaseHTTPRequestHandler):
       payload = read_json_body(self)
       result = submit_job(payload)
       if result.get("accepted"):
+        execute_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)
         json_response(self, 200, result)
       else:
         json_response(self, 400, result)
@@ -1044,9 +1032,6 @@ def main() -> None:
 
   Handler.host_id = normalize_text(args.host_id) or "gpu-housekeeper"
   Handler.runtime_registry = load_runtime_registry()
-
-  worker = threading.Thread(target=worker_loop, daemon=True)
-  worker.start()
 
   server = ThreadingHTTPServer((args.host, args.port), Handler)
   server.serve_forever()
