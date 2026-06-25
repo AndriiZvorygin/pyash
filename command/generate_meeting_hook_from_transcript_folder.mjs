@@ -413,9 +413,17 @@ function isKeywordHookReady(hook = "", sourceSummary = "", hookMode = "recap") {
   const words = String(hook || "").trim().split(/\s+/u).filter(Boolean);
   if (words.length < 3 || words.length > 6) return false;
   if (/\b(january|february|march|april|may|june|july|august|september|october|november|december)$/iu.test(String(hook || "").trim())) return false;
+  if (isProseHookLike(hook)) return false;
   if (isGenericRecapHook(hook)) return false;
   if (hookMode === "preview" && (isGenericPreviewHook(hook) || isWeakPreviewHook(hook))) return false;
   return hasConcreteKeywordOverlap(hook, sourceSummary);
+}
+
+function isProseHookLike(text = "") {
+  const s = String(text || "").replace(/\s+/gu, " ").trim();
+  if (!s) return true;
+  if (/[.!?,:;()[\]{}]/u.test(s)) return true;
+  return /^(the successful|a proposed|an? presentation|the presentation|the committee|the council|staff presented|staff proposed|council approved|council requested|motion to|speaker\s+\d+\b|representative voices?|resident voices?|residents voice)\b/iu.test(s);
 }
 
 function isRedundantDurationHook(text = '') {
