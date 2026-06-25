@@ -63,6 +63,13 @@ function runDiskPreflight({ outFile, outDir, url }) {
   }
 }
 
+function isCompleteDownload({ outFile, url }) {
+  const existingBytes = fs.statSync(outFile, { throwIfNoEntry: false })?.size || 0;
+  if (existingBytes <= 0) return false;
+  const remoteBytes = remoteContentLength(url);
+  return remoteBytes > 0 && existingBytes >= remoteBytes;
+}
+
 async function main() {
   const url = String(process.argv[2] || "").trim();
   const outFile = String(process.argv[3] || "").trim();
@@ -73,6 +80,10 @@ async function main() {
   }
   const outDir = path.dirname(outFile);
   fs.mkdirSync(outDir, { recursive: true });
+  if (isCompleteDownload({ outFile, url })) {
+    process.stdout.write(`[resumable-download] already complete: ${outFile}\n`);
+    return;
+  }
   runDiskPreflight({ outFile, outDir, url });
   for (let i = 1; i <= attempts; i += 1) {
     try {
