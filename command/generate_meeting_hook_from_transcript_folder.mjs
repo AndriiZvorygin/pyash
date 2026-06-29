@@ -645,6 +645,9 @@ function fallbackHookFromSummary(summaryText) {
   const src = String(summaryText || '');
   if (!src) return 'Council Integrity Report Flashpoint';
 
+  const keywordHook = deriveKeywordHookFromSummary(src);
+  if (keywordHook) return keywordHook;
+
   if (/\b17,?000\b/u.test(src) && /\bintegrity\b/iu.test(src)) {
     return '17K Integrity Report Flashpoint';
   }
@@ -668,8 +671,70 @@ function fallbackHookFromSummary(summaryText) {
   return 'Council Integrity Report Flashpoint';
 }
 
+function deriveKeywordHookFromSummary(summaryText = "") {
+  const src = String(summaryText || "");
+  const n = normalizeForMatch(src);
+  if (!n) return "";
+
+  if (/\btaxation\b/u.test(n) && /\bestimates?\b/u.test(n)) {
+    if (/\b2026\b/u.test(n) && /\bbudget\b/u.test(n)) return "2026 Budget Taxation Estimates";
+    const bylaw = src.match(/\bBy-?law\s+(\d{3,6})\b/iu);
+    if (bylaw) return `Bylaw ${bylaw[1]} Taxation Estimates`;
+    return "Budget Taxation Estimates Approved";
+  }
+  if (/\btax\b/u.test(n) && /\bbylaw\b/u.test(n)) {
+    if (/\b2026\b/u.test(n)) return "2026 Tax Bylaw Approval";
+    return "Tax Bylaw Approval";
+  }
+  if (/\bbudget\b/u.test(n) && /\btax(?:es|ation)?\b/u.test(n)) {
+    return "Budget Taxation Revenue Requirements";
+  }
+  if (/\bbudget\b/u.test(n) && /\b(finali[sz]e[ds]?|approv(?:e|ed|al|es)|adopt(?:ed|ion)?|fiscal|revenue|estimates?)\b/u.test(n)) {
+    if (/\b2026\b/u.test(n)) return "2026 Budget Fiscal Approval";
+    return "Budget Fiscal Approval";
+  }
+
+  const phrases = [
+    { re: /\bmechanical systems?\b/iu, hook: "Mechanical Systems Inspection Gables" },
+    { re: /\bland acknowledgement\b/iu, hook: "Land Acknowledgement Fiscal Approvals" },
+    { re: /\bwaste reclamation\b/iu, hook: "Waste Reclamation Funding Levels" },
+    { re: /\bservice impacts?\b/iu, hook: "Service Impacts Fiscal Estimates" },
+    { re: /\brockwood terrace\b/iu, hook: "Rockwood Terrace Planning Options" },
+    { re: /\bgrey gables\b/iu, hook: "Grey Gables Planning Options" },
+    { re: /\bresident and family experience\b/iu, hook: "Resident Family Experience Survey" },
+    { re: /\bministry inspections?\b/iu, hook: "Ministry Inspection Compliance Findings" },
+    { re: /\bdementia care\b/iu, hook: "Dementia Care Training Funding" },
+  ];
+  for (const item of phrases) {
+    if (item.re.test(src)) return item.hook;
+  }
+
+  const stop = new Set([
+    ...GENERIC_HOOK_TERMS,
+    "grey", "county", "council", "committee", "meeting", "session", "tonight",
+    "january", "february", "march", "april", "may", "june", "july", "august",
+    "september", "october", "november", "december", "residents", "members",
+    "business", "future", "current", "local", "public", "formal", "standard",
+  ]);
+  const tokens = normalizeForMatch(src)
+    .split(" ")
+    .filter((x) => x.length >= 4)
+    .filter((x) => !stop.has(x));
+  const counts = new Map();
+  for (const token of tokens) counts.set(token, (counts.get(token) || 0) + 1);
+  const picked = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length || a[0].localeCompare(b[0]))
+    .map(([term]) => term)
+    .filter((term) => !/^\d{4}$/u.test(term))
+    .slice(0, 5);
+  if (picked.length >= 3) return toTitleWords(picked.join(" "));
+  return "";
+}
+
 function deriveRecapHookFromTopNewsText(summaryText = "", jurisdiction = "", body = "") {
   const s = normalizeForMatch(summaryText);
+  const keywordHook = deriveKeywordHookFromSummary(summaryText);
+  if (keywordHook) return sanitizeChapterStyleHook(keywordHook, { jurisdiction, body });
   if (/\bweapons\b/.test(s) && /\bmental health\b/.test(s) && /\bcalls?\b/.test(s)) {
     return sanitizeChapterStyleHook("Weapons Mental Health Calls Surge", { jurisdiction, body });
   }
@@ -971,6 +1036,13 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
 	      || fallbackHookFromSummary(sourceSummary);
 	    fallbackReason = fallbackReason || 'empty hook fallback from source heading';
 	  }
+  if (hookMode !== 'preview' && /\bland acknowledgement\b/iu.test(safeHook || '')) {
+    const fiscalHook = deriveKeywordHookFromSummary(sourceSummary);
+    if (/\b(budget|taxation|fiscal|revenue|bylaw)\b/iu.test(fiscalHook || '')) {
+      safeHook = fiscalHook;
+      fallbackReason = fallbackReason || 'source-grounded fiscal hook preferred over ceremonial hook';
+    }
+  }
   safeHook = sanitizeChapterStyleHook(safeHook, { jurisdiction, body });
   if (hookMode === 'preview') {
     const rankedHook = buildPreviewHookFromRankedItems(topNewsHeadings);
