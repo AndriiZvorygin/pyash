@@ -387,6 +387,10 @@ function isGenericRecapHook(text) {
     || n.includes('key council development')
     || n.includes('council decisions at')
     || n.includes('meeting highlights')
+    || n === 'budget fiscal approval'
+    || n === 'fiscal approval'
+    || n === 'budget approval'
+    || n === 'budget fiscal review'
     || (n.includes('protocol non compliance') && n.includes('downtown'))
     || isProseSpeakerHook(text);
 }
@@ -675,6 +679,22 @@ function deriveKeywordHookFromSummary(summaryText = "") {
   const src = String(summaryText || "");
   const n = normalizeForMatch(src);
   if (!n) return "";
+
+  if (/\bconservation authorit(?:y|ies)\b/u.test(n) && /\bamalgamat(?:e|ed|ion)\b/u.test(n)) {
+    if (/\blocal voice\b/u.test(n) || /\blocal governance\b/u.test(n) || /\blocal input\b/u.test(n)) {
+      return "Conservation Authority Local Voice";
+    }
+    return "Conservation Authority Amalgamation";
+  }
+  if (/\bbill 97\b/u.test(n) && /\bconservation\b/u.test(n)) {
+    return "Bill 97 Conservation Amalgamation";
+  }
+  if (/\btourism development fund\b/u.test(n) || (/\bmunicipal accommodation tax\b/u.test(n) && /\bfunding streams?\b/u.test(n))) {
+    return "Tourism Development Fund Allocations";
+  }
+  if (/\bheritage\b/u.test(n) && /\bhousing grant\b/u.test(n)) {
+    return "Heritage Housing Grant Endorsement";
+  }
 
   if (/\btaxation\b/u.test(n) && /\bestimates?\b/u.test(n)) {
     if (/\b2026\b/u.test(n) && /\bbudget\b/u.test(n)) return "2026 Budget Taxation Estimates";
