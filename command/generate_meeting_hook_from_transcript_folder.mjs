@@ -401,21 +401,34 @@ const GENERIC_HOOK_TERMS = new Set([
   'hears', 'item', 'items', 'matter', 'matters', 'meeting', 'most', 'newsworthy',
   'open', 'procedural', 'receives', 'report', 'reports', 'review', 'reviews', 'routine',
   'significant', 'slate', 'standard', 'substantive', 'the', 'update', 'updates',
+  'about', 'after', 'also', 'before', 'being', 'between', 'could', 'during', 'from',
+  'have', 'into', 'more', 'other', 'regarding', 'should', 'that', 'their', 'there',
+  'these', 'this', 'those', 'through', 'under', 'what', 'when', 'where', 'which',
+  'while', 'with', 'would',
+  'decision', 'evidence', 'property', 'testified', 'testimony',
 ]);
 
-function hasConcreteKeywordOverlap(hook = "", sourceSummary = "") {
-  const hookTerms = normalizeForMatch(hook)
+function hookContentTerms(hook = "") {
+  return normalizeForMatch(hook)
     .split(" ")
     .filter((term) => term.length >= 4)
     .filter((term) => !GENERIC_HOOK_TERMS.has(term));
+}
+
+function hasConcreteKeywordOverlap(hook = "", sourceSummary = "") {
+  const hookTerms = hookContentTerms(hook);
   if (!hookTerms.length) return false;
   const source = normalizeForMatch(sourceSummary);
-  return hookTerms.some((term) => source.includes(term));
+  const overlapping = hookTerms.filter((term) => source.includes(term));
+  if (overlapping.length >= 2) return true;
+  const concreteAnchor = /\b[A-Z]?\d{2,}|(?:\$|percent|million|thousand)|\b[A-Z][a-z]+(?:\s+(?:Street|Avenue|Road|Drive|Boulevard|Trail|Lane|Place|Court|West|East|North|South))\b/u;
+  return overlapping.length >= 1 && concreteAnchor.test(String(hook || ""));
 }
 
 function isKeywordHookReady(hook = "", sourceSummary = "", hookMode = "recap") {
   const words = String(hook || "").trim().split(/\s+/u).filter(Boolean);
   if (words.length < 3 || words.length > 6) return false;
+  if (hookContentTerms(hook).length < 2) return false;
   if (/\b(january|february|march|april|may|june|july|august|september|october|november|december)$/iu.test(String(hook || "").trim())) return false;
   if (isProseHookLike(hook)) return false;
   if (isGenericRecapHook(hook)) return false;
@@ -695,6 +708,18 @@ function deriveKeywordHookFromSummary(summaryText = "") {
   if (/\bheritage\b/u.test(n) && /\bhousing grant\b/u.test(n)) {
     return "Heritage Housing Grant Endorsement";
   }
+  if (/\btawanda\b/u.test(n) && /\bmuzzle\b/u.test(n) && /\b(upheld|denied|appeal board|order)\b/u.test(n)) {
+    return "Tawanda Muzzle Order Upheld";
+  }
+  if (/\bleash\b/u.test(n) && /\bmuzzle\b/u.test(n) && /\b(fractured finger|public safety|stony orchard|dog)\b/u.test(n)) {
+    return "Dog Muzzle Order Upheld";
+  }
+  if (/\bpropane\b/u.test(n) && /\bfence\b/u.test(n) && /\bfire safety\b/u.test(n)) {
+    return "Propane Fence Fire Concerns";
+  }
+  if (/\bthird avenue west\b/u.test(n) && /\b(drainage|swale|snow|foundation)\b/u.test(n)) {
+    return "Third Avenue Drainage Concerns";
+  }
 
   if (/\btaxation\b/u.test(n) && /\bestimates?\b/u.test(n)) {
     if (/\b2026\b/u.test(n) && /\bbudget\b/u.test(n)) return "2026 Budget Taxation Estimates";
@@ -753,8 +778,6 @@ function deriveKeywordHookFromSummary(summaryText = "") {
 
 function deriveRecapHookFromTopNewsText(summaryText = "", jurisdiction = "", body = "") {
   const s = normalizeForMatch(summaryText);
-  const keywordHook = deriveKeywordHookFromSummary(summaryText);
-  if (keywordHook) return sanitizeChapterStyleHook(keywordHook, { jurisdiction, body });
   if (/\bweapons\b/.test(s) && /\bmental health\b/.test(s) && /\bcalls?\b/.test(s)) {
     return sanitizeChapterStyleHook("Weapons Mental Health Calls Surge", { jurisdiction, body });
   }
@@ -782,6 +805,20 @@ function deriveRecapHookFromTopNewsText(summaryText = "", jurisdiction = "", bod
   if (/\bhousing\b/.test(s) && /\bfood\b/.test(s) && /\bland trust\b/.test(s)) {
     return sanitizeChapterStyleHook("Housing Food Land Trust", { jurisdiction, body });
   }
+  if (/\btawanda\b/.test(s) && /\bmuzzle\b/.test(s) && /\b(upheld|denied|appeal board|order)\b/.test(s)) {
+    return sanitizeChapterStyleHook("Tawanda Muzzle Order Upheld", { jurisdiction, body });
+  }
+  if (/\bleash\b/.test(s) && /\bmuzzle\b/.test(s) && /\b(fractured finger|public safety|stony orchard|dog)\b/.test(s)) {
+    return sanitizeChapterStyleHook("Dog Muzzle Order Upheld", { jurisdiction, body });
+  }
+  if (/\bpropane\b/.test(s) && /\bfence\b/.test(s) && /\bfire safety\b/.test(s)) {
+    return sanitizeChapterStyleHook("Propane Fence Fire Concerns", { jurisdiction, body });
+  }
+  if (/\bthird avenue west\b/.test(s) && /\b(drainage|swale|snow|foundation)\b/.test(s)) {
+    return sanitizeChapterStyleHook("Third Avenue Drainage Concerns", { jurisdiction, body });
+  }
+  const keywordHook = deriveKeywordHookFromSummary(summaryText);
+  if (keywordHook) return sanitizeChapterStyleHook(keywordHook, { jurisdiction, body });
   return "";
 }
 
