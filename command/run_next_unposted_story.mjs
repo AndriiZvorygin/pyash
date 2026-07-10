@@ -447,12 +447,22 @@ function pickCandidate(states, timezone, cfg = {}) {
   const now = nowLocalDate(timezone);
   const notPostedPastVideo = states.filter((s) => !s.posted_transcript && s.since_date instanceof Date);
 
-  const upcomingWithAgenda = eligibleUpcomingAgendaStates(states, timezone, cfg);
-  if (upcomingWithAgenda.length) return { mode: 'upcoming_agenda', state: upcomingWithAgenda[0] };
-
   const pastWithVideo = notPostedPastVideo
     .filter((s) => s.has_video && s.since_date < now)
     .sort((a, b) => b.since_date - a.since_date);
+  const recentPastMaxAgeDays = Math.max(0, Number(cfg.prefer_past_video_max_age_days || 14));
+  const recentPastCutoff = new Date(now.getTime() - recentPastMaxAgeDays * 24 * 60 * 60 * 1000);
+  const recentPastWithVideo = pastWithVideo.filter((s) => s.since_date >= recentPastCutoff);
+
+  const upcomingWithAgenda = eligibleUpcomingAgendaStates(states, timezone, cfg);
+  const imminentAgendaDays = Math.max(0, Number(cfg.imminent_agenda_priority_days || 7));
+  const imminentAgendaCutoff = new Date(now.getTime() + imminentAgendaDays * 24 * 60 * 60 * 1000);
+  const imminentUpcomingWithAgenda = upcomingWithAgenda.filter((s) => s.since_date <= imminentAgendaCutoff);
+  const laterUpcomingWithAgenda = upcomingWithAgenda.filter((s) => s.since_date > imminentAgendaCutoff);
+  const preferPastVideo = !/^(0|false|no)$/iu.test(String(cfg.prefer_past_video_before_agenda || "1"));
+  if (imminentUpcomingWithAgenda.length) return { mode: 'upcoming_agenda', state: imminentUpcomingWithAgenda[0] };
+  if (preferPastVideo && recentPastWithVideo.length) return { mode: 'past_video', state: recentPastWithVideo[0] };
+  if (laterUpcomingWithAgenda.length) return { mode: 'upcoming_agenda', state: laterUpcomingWithAgenda[0] };
   if (pastWithVideo.length) return { mode: 'past_video', state: pastWithVideo[0] };
 
   return null;
@@ -566,7 +576,18 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
     .filter((s) => s.has_video && s.since_date < now)
     .sort((a, b) => b.since_date - a.since_date)
     .map((s) => ({ mode: 'past_video', state: s }));
-  const ordered = [...upcomingWithAgenda, ...pastWithVideo];
+  const preferPastVideo = !/^(0|false|no)$/iu.test(String(cfg.prefer_past_video_before_agenda || "1"));
+  const recentPastMaxAgeDays = Math.max(0, Number(cfg.prefer_past_video_max_age_days || 14));
+  const recentPastCutoff = new Date(now.getTime() - recentPastMaxAgeDays * 24 * 60 * 60 * 1000);
+  const recentPastWithVideo = pastWithVideo.filter((c) => c.state.since_date >= recentPastCutoff);
+  const stalePastWithVideo = pastWithVideo.filter((c) => c.state.since_date < recentPastCutoff);
+  const imminentAgendaDays = Math.max(0, Number(cfg.imminent_agenda_priority_days || 7));
+  const imminentAgendaCutoff = new Date(now.getTime() + imminentAgendaDays * 24 * 60 * 60 * 1000);
+  const imminentUpcomingWithAgenda = upcomingWithAgenda.filter((c) => c.state.since_date <= imminentAgendaCutoff);
+  const laterUpcomingWithAgenda = upcomingWithAgenda.filter((c) => c.state.since_date > imminentAgendaCutoff);
+  const ordered = preferPastVideo
+    ? [...imminentUpcomingWithAgenda, ...recentPastWithVideo, ...laterUpcomingWithAgenda, ...stalePastWithVideo]
+    : [...upcomingWithAgenda, ...pastWithVideo];
   const cache = new Map();
 
   for (const candidate of ordered) {

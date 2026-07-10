@@ -19,7 +19,14 @@ const MODEL = process.env.MEETING_SUMMARY_MODEL
   || process.env.OWEN_MEETING_SUMMARY_MODEL
   || process.env.OWEN_SUMMARY_MODEL
   || "qwen3.5:9b";
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = Math.max(
+  1,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_ATTEMPTS || "2"), 10) || 2,
+);
+const OLLAMA_TIMEOUT_MS = Math.max(
+  5000,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_TIMEOUT_MS || "90000"), 10) || 90000,
+);
 const PASS_THRESHOLD = 0.8;
 const SUMMARY_TIME_MODE = String(process.env.AGENDA_SUMMARY_TIME_MODE || "standard").trim().toLowerCase();
 
@@ -128,6 +135,7 @@ async function ask(messages, { numPredict = 520 } = {}) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
     });
   } catch (err) {
     throw new Error(`Ollama fetch failed for whole-meeting-summary using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(err?.message || err)})`);
