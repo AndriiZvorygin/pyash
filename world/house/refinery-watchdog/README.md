@@ -9,7 +9,7 @@ This house monitors the Andrii YouTube, Owen Sound, and Grey County nightly repo
 - `node world/house/refinery-watchdog/program/run-nightly-refinery.mjs <andrii|owen|grey>` runs one scheduled reporter with status artifacts and overlap protection.
 - `node world/house/refinery-watchdog/program/install-cron.mjs` idempotently installs the managed cron block.
 
-Artifacts are written beneath `artifacts/nightly/<date>/` and `artifacts/watchdog/<date>/`. The watchdog deduplicates Codex launches with `artifacts/state/<date>.recovery.json` and sends executive Matrix DMs for recovery starts, verified fixes, unresolved incidents, and work still active at 06:00.
+Artifacts are written beneath `artifacts/nightly/<date>/` and `artifacts/watchdog/<date>/`. The watchdog deduplicates Codex launches with `artifacts/state/<date>.recovery.pya` and sends executive Matrix DMs for recovery starts, verified fixes, unresolved incidents, and work still active at 06:00.
 
 The reporter pipelines already serialize GPU-heavy execution with `/tmp/municipal-reporter-pipeline.lock`. The watchdog also respects each reporter's cron lock and never interrupts an active job.
 

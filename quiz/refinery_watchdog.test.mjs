@@ -8,8 +8,10 @@ import {
   buildCodexPrompt,
   classifyProbe,
   mergeManagedCrontab,
+  readRecoveryState,
   runProcess,
   shouldLaunchRecovery,
+  writeRecoveryState,
 } from "../world/house/refinery-watchdog/program/watchdog-lib.mjs";
 
 test("classifyProbe distinguishes active, healthy, unpublished, and failed probes", () => {
@@ -31,6 +33,27 @@ test("recovery launches only for a new confirmed failure without active work", (
   assert.equal(shouldLaunchRecovery({ failures, active: true }), false);
   assert.equal(shouldLaunchRecovery({ failures, alreadyLaunched: true }), false);
   assert.equal(shouldLaunchRecovery({ failures: [] }), false);
+});
+
+test("daily recovery deduplication state round-trips through Pyash", (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "refinery-watchdog-state-test-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const statePath = path.join(tempDir, "recovery.pya");
+  writeRecoveryState(statePath, {
+    run_id: "run-1",
+    status: "running",
+    launched_at_utc: "2026-07-18T10:00:00Z",
+    reporters: ["owen", "grey"],
+    artifact_dir: "/tmp/artifact",
+  });
+  assert.deepEqual(readRecoveryState(statePath), {
+    run_id: "run-1",
+    status: "running",
+    launched_at_utc: "2026-07-18T10:00:00Z",
+    finished_at_utc: "",
+    reporters: ["owen", "grey"],
+    artifact_dir: "/tmp/artifact",
+  });
 });
 
 test("managed crontab replaces legacy reporter entries and is idempotent", () => {

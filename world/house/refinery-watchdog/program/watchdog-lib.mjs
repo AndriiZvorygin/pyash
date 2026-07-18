@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { readPyaTextValues } from "../../../../command/pya_lookup.mjs";
 
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const HOUSE_ROOT = path.resolve(PROGRAM_DIR, "..");
@@ -86,8 +87,8 @@ export function writePyaStatus(filePath, status) {
   const lines = [
     `su name run id ob text "${pyaText(status.run_id)}" ya`,
     `su name status ob text "${pyaText(status.status)}" ya`,
-    `su name started at utc ob text "${pyaText(status.started_at_utc)}" ya`,
-    `su name finished at utc ob text "${pyaText(status.finished_at_utc)}" ya`,
+    `su name started utc ob text "${pyaText(status.started_at_utc)}" ya`,
+    `su name finished utc ob text "${pyaText(status.finished_at_utc)}" ya`,
   ];
   if (status.reporter) lines.push(`su name reporter ob text "${pyaText(status.reporter)}" ya`);
   if (status.reason) lines.push(`su name reason ob text "${pyaText(status.reason)}" ya`);
@@ -96,6 +97,41 @@ export function writePyaStatus(filePath, status) {
   const temp = `${filePath}.${process.pid}.tmp`;
   fs.writeFileSync(temp, `${lines.join("\n")}\n`, "utf8");
   fs.renameSync(temp, filePath);
+}
+
+export function writeRecoveryState(filePath, state) {
+  const lines = [
+    `su name run id ob text "${pyaText(state.run_id)}" ya`,
+    `su name recovery status ob text "${pyaText(state.status)}" ya`,
+    `su name launched utc ob text "${pyaText(state.launched_at_utc)}" ya`,
+    `su name finished utc ob text "${pyaText(state.finished_at_utc)}" ya`,
+    `su name recovery reporters ob text "${pyaText((state.reporters || []).join(","))}" ya`,
+    `su name artifact directory ob text "${pyaText(state.artifact_dir)}" ya`,
+  ];
+  ensureDir(path.dirname(filePath));
+  const temp = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, `${lines.join("\n")}\n`, "utf8");
+  fs.renameSync(temp, filePath);
+}
+
+export function readRecoveryState(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  const values = readPyaTextValues(filePath, [
+    "run id",
+    "recovery status",
+    "launched utc",
+    "finished utc",
+    "recovery reporters",
+    "artifact directory",
+  ]);
+  return {
+    run_id: String(values["run id"] || ""),
+    status: String(values["recovery status"] || ""),
+    launched_at_utc: String(values["launched utc"] || ""),
+    finished_at_utc: String(values["finished utc"] || ""),
+    reporters: String(values["recovery reporters"] || "").split(",").filter(Boolean),
+    artifact_dir: String(values["artifact directory"] || ""),
+  };
 }
 
 export function runProcess({ cmd, args = [], cwd = PYASH_ROOT, env = {}, timeoutMs = 10 * 60 * 60 * 1000, logPath = "", stream = true }) {
