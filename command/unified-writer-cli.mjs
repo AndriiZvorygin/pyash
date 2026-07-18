@@ -68,6 +68,24 @@ function usage() {
   ].join("\n");
 }
 
+async function runWithReporterPipelineLock({ cmd, args, cwd, env, label, parsedArgs }) {
+  const lockDisabled = /^(0|false|no)$/iu.test(String(env.REPORTER_SHARED_PIPELINE_LOCK || "1"));
+  const isProbeOnly = Boolean(parsedArgs?.pickOnly) || ["list", "inspect"].includes(String(parsedArgs?.command || ""));
+  if (lockDisabled || isProbeOnly) {
+    return runWithStreaming({ cmd, args, cwd, env, label });
+  }
+
+  const lockPath = String(env.REPORTER_SHARED_PIPELINE_LOCK_PATH || "/tmp/municipal-reporter-pipeline.lock").trim();
+  process.stdout.write(`[operator] waiting for shared reporter pipeline lock: ${lockPath}\n`);
+  return runWithStreaming({
+    cmd: "flock",
+    args: [lockPath, cmd, ...args],
+    cwd,
+    env,
+    label,
+  });
+}
+
 function parseArgs(argv) {
   const out = {
     command: "",
@@ -445,6 +463,9 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
   const envPrefix = map.envPrefix;
 
   env.PYA_COMMAND_TIMEOUT_MS = env.PYA_COMMAND_TIMEOUT_MS || "28800000";
+  env.AGENDA_STAGE3_OLLAMA_ATTEMPTS = env.AGENDA_STAGE3_OLLAMA_ATTEMPTS || "2";
+  env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS = env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS || "90000";
+  env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS = env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS || "2500";
 
   const skipRefresh = args.refresh ? "0" : "1";
   env.NEXT_STORY_SKIP_REFRESH = skipRefresh;
@@ -663,12 +684,13 @@ async function runMain() {
   }
 
   if (args.command === "next") {
-    await runWithStreaming({
+    await runWithReporterPipelineLock({
       cmd: "node",
       args: [map.nextStoryScript],
       cwd: adapter.house_root,
       env,
       label: "next",
+      parsedArgs: args,
     });
     return;
   }
@@ -752,12 +774,13 @@ async function runMain() {
   const runnerCmd = Array.isArray(adapter.run_meeting_from_ref_cmd) ? adapter.run_meeting_from_ref_cmd : [];
   if (!runnerCmd.length) throw new Error("writer adapter missing run_meeting_from_ref_cmd");
 
-  await runWithStreaming({
+  await runWithReporterPipelineLock({
     cmd: runnerCmd[0],
     args: [...runnerCmd.slice(1), meetingRef],
     cwd: adapter.house_root,
     env,
     label: `${args.command}-meeting`,
+    parsedArgs: args,
   });
 }
 

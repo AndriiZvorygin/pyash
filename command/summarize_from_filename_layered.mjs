@@ -9,6 +9,10 @@ const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, "")
 const CHUNK_SIZE = 12000;
 const CHUNK_OVERLAP = 1200;
 const MERGE_GROUP_SIZE = 12;
+const OLLAMA_TIMEOUT_MS = Math.max(
+  5000,
+  Number.parseInt(String(process.env.SUMMARIZE_FROM_FILENAME_OLLAMA_TIMEOUT_MS || "90000"), 10) || 90000,
+);
 
 async function ask(messages, { numPredict = 260 } = {}) {
   const body = {
@@ -24,6 +28,7 @@ async function ask(messages, { numPredict = 260 } = {}) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`ollama status ${res.status}`);
   const json = await res.json();

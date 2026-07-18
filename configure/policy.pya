@@ -1,0 +1,8 @@
+su name disk housekeeping enabled ob text "true" ya
+su name disk download preflight enabled ob text "true" ya
+su name disk housekeeping roots ob text "/home/htaf/pyash/artifacts:/home/htaf/pyash/world/house/owen-sound-reporter/artifacts:/home/htaf/pyash/world/house/grey-county-reporter/artifacts:/home/htaf/pyash/world/house/andrii-youtube-reporter/artifacts:/home/htaf/pyash/world/temporary" ya
+su name disk housekeeping video max age days ob text "7" ya
+su name disk housekeeping part max age days ob text "1" ya
+su name disk housekeeping fresh cache max bytes ob text "10737418240" ya
+su name disk warning free gb ob text "10" ya
+su name disk minimum free gb ob text "10" ya

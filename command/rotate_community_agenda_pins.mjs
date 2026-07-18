@@ -51,6 +51,12 @@ function loadEnvFallbacks(cwd) {
 
 function readSecrets(cwd) {
   const names = [
+    "lemmy mod jwt",
+    "lemmy mod username",
+    "lemmy mod password",
+    "lemmy admin jwt",
+    "lemmy admin username",
+    "lemmy admin password",
     "meeting publish username",
     "meeting publish password",
     "owen sound reporter username",
@@ -63,6 +69,9 @@ function readSecrets(cwd) {
     path.join(cwd, "../../configure/secret.pya"),
     path.join(cwd, "../../../configure/secret.pya"),
     path.join(cwd, "../../../../configure/secret.pya"),
+    path.join(cwd, "../../../../../configure/secret.pya"),
+    path.join(cwd, "../../../../../../configure/secret.pya"),
+    path.join(path.dirname(new URL(import.meta.url).pathname), "../configure/secret.pya"),
     path.join(cwd, "world/house/owen-sound-reporter/configure/secret.pya"),
     path.join(cwd, "world/house/grey-county-reporter/configure/secret.pya"),
   ].map((p) => path.resolve(p));
@@ -149,6 +158,8 @@ async function main() {
   const username = String(
     process.env.LEMMY_MOD_USERNAME
     || envFile.LEMMY_MOD_USERNAME
+    || secret["lemmy mod username"]
+    || secret["lemmy admin username"]
     || process.env.MEETING_PUBLISH_USERNAME
     || envFile.MEETING_PUBLISH_USERNAME
     || secret["meeting publish username"]
@@ -159,6 +170,8 @@ async function main() {
   const password = String(
     process.env.LEMMY_MOD_PASSWORD
     || envFile.LEMMY_MOD_PASSWORD
+    || secret["lemmy mod password"]
+    || secret["lemmy admin password"]
     || process.env.MEETING_PUBLISH_PASSWORD
     || envFile.MEETING_PUBLISH_PASSWORD
     || secret["meeting publish password"]
@@ -174,20 +187,31 @@ async function main() {
     .filter((item) => item.date)
     .sort((a, b) => a.date.localeCompare(b.date) || b.post.id - a.post.id);
   const upcoming = agendaPosts.filter((item) => item.date >= today);
-  const selected = upcoming.length ? upcoming[upcoming.length - 1] : null;
+  const selectedDate = upcoming.length ? upcoming[0].date : "";
+  const selectedPostIds = new Set(
+    selectedDate
+      ? upcoming.filter((item) => item.date === selectedDate).map((item) => item.post.id)
+      : [],
+  );
   const changes = agendaPosts
-    .filter((item) => Boolean(item.post.featured_community) !== Boolean(selected && item.post.id === selected.post.id))
+    .filter((item) => Boolean(item.post.featured_community) !== selectedPostIds.has(item.post.id))
     .map((item) => ({
       postId: item.post.id,
       title: item.post.name,
       date: item.date,
-      featured: Boolean(selected && item.post.id === selected.post.id),
+      featured: selectedPostIds.has(item.post.id),
     }));
 
-  console.log(`[agenda-pin] community=${args.community} today=${today} selected=${selected?.post?.id || "none"} changes=${changes.length}`);
+  console.log(`[agenda-pin] community=${args.community} today=${today} selected_date=${selectedDate || "none"} selected=${[...selectedPostIds].join(",") || "none"} changes=${changes.length}`);
   for (const change of changes) console.log(`[agenda-pin] ${change.featured ? "pin" : "unpin"} ${change.postId} date=${change.date} ${change.title}`);
   if (args.dryRun || !changes.length) return;
-  const configuredToken = String(process.env.LEMMY_MOD_JWT || envFile.LEMMY_MOD_JWT || "").trim();
+  const configuredToken = String(
+    process.env.LEMMY_MOD_JWT
+    || envFile.LEMMY_MOD_JWT
+    || secret["lemmy mod jwt"]
+    || secret["lemmy admin jwt"]
+    || ""
+  ).trim();
   if (!configuredToken && (!username || !password)) {
     throw new Error("moderator authorization missing; set LEMMY_MOD_JWT or LEMMY_MOD_USERNAME and LEMMY_MOD_PASSWORD");
   }
