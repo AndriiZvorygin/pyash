@@ -30,6 +30,10 @@ world/conduct/*
 world/house/*
 !world/house/base/
 !world/house/base/**
+!world/house/refinery-watchdog/
+!world/house/refinery-watchdog/**
+world/house/refinery-watchdog/artifacts/**
+!world/house/refinery-watchdog/artifacts/.gitkeep
 !world/holding/
 world/holding/**
 !world/holding/**/

@@ -1,0 +1,6 @@
+# The system crontab is the active scheduler; install it with program/install-cron.mjs.
+su name andrii nightly refinery schedule ob text "02:00 America/Toronto daily" ya
+su name owen sound nightly refinery schedule ob text "03:00 America/Toronto daily" ya
+su name grey county nightly refinery schedule ob text "04:00 America/Toronto daily" ya
+su name refinery watchdog first checkpoint ob text "05:00 America/Toronto daily" ya
+su name refinery watchdog second checkpoint ob text "06:00 America/Toronto daily" ya
