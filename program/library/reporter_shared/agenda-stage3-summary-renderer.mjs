@@ -78,9 +78,28 @@ function cleanupIncompleteTail(sentences = [], { allowOriginalEllipsis = false }
       out.pop();
       continue;
     }
+    if (/^(So you|And so|But then|I mean),?\s+/iu.test(last) || /\bSpeaker\s+\d+\s+Section\s+\d+\b/iu.test(last)) {
+      out.pop();
+      continue;
+    }
     break;
   }
   return out;
+}
+
+function isTranscriptScrapSentence(sentence = "") {
+  const s = normalizeText(sentence);
+  if (!s) return false;
+  return /^(So you|So when|And so|But then|I mean),?\s+/iu.test(s)
+    || /\bSpeaker\s+\d+\s+Section\s+\d+\b/iu.test(s);
+}
+
+function cleanupTranscriptScrapSentences(sentences = []) {
+  return sentences.filter((s) => !isTranscriptScrapSentence(s));
+}
+
+function cleanupTranscriptScrapText(text = "") {
+  return normalizeText(cleanupTranscriptScrapSentences(splitSentences(text)).join(" "));
 }
 
 function summaryHasMinimalCompleteness(summary = "") {
@@ -131,14 +150,7 @@ function buildLongTierSupportSentence({ unit, summary = "", rawSummary = "", cha
   const outcome = merged.find((x) => isOutcomeSentence(x));
   const support = toStandaloneOutcomeSentence(outcome || "");
   if (support && !wordsKey(summary).includes(wordsKey(support))) return support;
-  const hook = normalizeSplitChapterCandidate(chapterText || chapterFromSummary(rawSummary), unit.label || unit["agenda item"] || "");
-  if (hook) {
-    const sentence = "The section also covers " + hook.toLowerCase() + ".";
-    if (!wordsKey(summary).includes(wordsKey(sentence))) return sentence;
-  }
-  const item = stripLeadingAgendaNumber(unit.label || unit["agenda item"] || "");
-  if (item) return "The section also details key arguments and outcome context for " + item + ".";
-  return "The section also details key arguments and outcome context from the hearing record.";
+  return "";
 }
 
 function looksProceduralLabel(label = "") {
@@ -247,6 +259,7 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
   const minSentences = Math.max(1, Number.isFinite(Number(budget.minSentences)) ? Number(budget.minSentences) : 1);
 
   let sentences = splitSentences(before);
+  sentences = cleanupTranscriptScrapSentences(sentences);
   sentences = cleanupIncompleteTail(sentences, { allowOriginalEllipsis });
   if (!sentences.length) return "";
   const fullSentences = sentences.slice();
@@ -282,6 +295,7 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
   let summary = normalizeText(sentences.join(" "));
   if (!summaryHasMinimalCompleteness(summary)) {
     let strictSentences = splitSentences(summary);
+    strictSentences = cleanupTranscriptScrapSentences(strictSentences);
     strictSentences = cleanupIncompleteTail(strictSentences, { allowOriginalEllipsis: false });
     if (strictSentences.length > Math.max(1, minSentences) && !summaryHasMinimalCompleteness(strictSentences.join(" "))) {
       strictSentences = strictSentences.slice(0, strictSentences.length - 1);
@@ -303,6 +317,7 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
     const retry = cleanupIncompleteTail(splitSentences(summary), { allowOriginalEllipsis: false });
     summary = normalizeText(retry.join(" "));
   }
+  summary = cleanupTranscriptScrapText(summary);
   return summary;
 }
 
@@ -454,6 +469,8 @@ function pickSplitChapterText({ llmText = "", summary = "", heading = "", seenLe
   const hasForbidden = (cand) => SPLIT_GENERIC_PREFIXES.some((p) => wordsKey(cand).startsWith(wordsKey(p)));
   for (const c of candidates) {
     if (hasForbidden(c)) continue;
+    if (/^(the\s+discussion\s+addresses|the\s+presentation\s+addresses|the\s+section\s+addresses)\b/iu.test(c)) continue;
+    if (/\bOwen Sound Police Service Re\b/iu.test(c) || /\bRe$/iu.test(c)) continue;
     const words = c.split(/\s+/u).filter(Boolean);
     if (words.length < 6 || words.length > 12) continue;
     if (isLikelyFragmentEnding(words)) continue;
@@ -591,6 +608,9 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
     "Example: {\"summary\":\"...\",\"chapter text\":\"...\",\"confidence\":0.9,\"notes\":\"\"}",
     "summary: factual, source-aligned, and proportional to section size.",
     "chapter text: short chapter-ready line. If not split, still provide a useful line.",
+    "Use transcript-specific nouns, actions, concerns, and outcomes from the source excerpt. Do not use agenda-label prose as a substitute for what was said.",
+    "chapter text must use concrete keywords from the source. Do not start it with 'the discussion addresses', 'the presentation addresses', or an agenda label ending in 'Re'.",
+    "Do not write filler such as 'the section also covers' or 'the section also details'.",
     `Summary budget tier: ${budget.tier}`,
     `Budget max sentences: ${budget.maxSentences}`,
     `Budget max words: ${budget.maxWords}`,
@@ -664,6 +684,7 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
       summary = normalizeText(summary + " " + supportSentence);
     }
   }
+  summary = cleanupTranscriptScrapText(summary);
   assertCleanStage3Text(summary, "stage3 final summary");
   assertCleanStage3Text(parsed?.["chapter text"] || "", "stage3 chapter text");
 

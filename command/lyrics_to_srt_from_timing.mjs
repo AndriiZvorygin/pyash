@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseSrtToCuts } from "./itinerary_io.mjs";
 
 const MAX_SENTENCE_WORDS = (() => {
@@ -922,7 +924,16 @@ export async function runLyricsToSrt(args = process.argv.slice(2), {
   writeOut(`${outputPath}\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return process.argv[1] === fileURLToPath(import.meta.url);
+  }
+}
+
+if (isMainModule()) {
   main().catch((err) => {
     process.stderr.write(`${err?.message ?? String(err)}\n`);
     process.exit(1);
