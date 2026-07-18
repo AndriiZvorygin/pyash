@@ -85,14 +85,14 @@ function pyaText(value) {
 
 export function writePyaStatus(filePath, status) {
   const lines = [
-    `su name run id ob text "${pyaText(status.run_id)}" ya`,
-    `su name status ob text "${pyaText(status.status)}" ya`,
-    `su name started utc ob text "${pyaText(status.started_at_utc)}" ya`,
-    `su name finished utc ob text "${pyaText(status.finished_at_utc)}" ya`,
+    `exists su name run id ob text "${pyaText(status.run_id)}" be text ya`,
+    `exists su name status ob text "${pyaText(status.status)}" be text ya`,
+    `exists su name started utc ob text "${pyaText(status.started_at_utc)}" be text ya`,
+    `exists su name finished utc ob text "${pyaText(status.finished_at_utc)}" be text ya`,
   ];
-  if (status.reporter) lines.push(`su name reporter ob text "${pyaText(status.reporter)}" ya`);
-  if (status.reason) lines.push(`su name reason ob text "${pyaText(status.reason)}" ya`);
-  if (status.artifact_dir) lines.push(`su name artifact directory ob text "${pyaText(status.artifact_dir)}" ya`);
+  if (status.reporter) lines.push(`exists su name reporter ob text "${pyaText(status.reporter)}" be text ya`);
+  if (status.reason) lines.push(`exists su name reason ob text "${pyaText(status.reason)}" be text ya`);
+  if (status.artifact_dir) lines.push(`exists su name artifact directory ob text "${pyaText(status.artifact_dir)}" be text ya`);
   ensureDir(path.dirname(filePath));
   const temp = `${filePath}.${process.pid}.tmp`;
   fs.writeFileSync(temp, `${lines.join("\n")}\n`, "utf8");
@@ -101,12 +101,12 @@ export function writePyaStatus(filePath, status) {
 
 export function writeRecoveryState(filePath, state) {
   const lines = [
-    `su name run id ob text "${pyaText(state.run_id)}" ya`,
-    `su name recovery status ob text "${pyaText(state.status)}" ya`,
-    `su name launched utc ob text "${pyaText(state.launched_at_utc)}" ya`,
-    `su name finished utc ob text "${pyaText(state.finished_at_utc)}" ya`,
-    `su name recovery reporters ob text "${pyaText((state.reporters || []).join(","))}" ya`,
-    `su name artifact directory ob text "${pyaText(state.artifact_dir)}" ya`,
+    `exists su name run id ob text "${pyaText(state.run_id)}" be text ya`,
+    `exists su name recovery status ob text "${pyaText(state.status)}" be text ya`,
+    `exists su name launched utc ob text "${pyaText(state.launched_at_utc)}" be text ya`,
+    `exists su name finished utc ob text "${pyaText(state.finished_at_utc)}" be text ya`,
+    `exists su name recovery reporters ob text "${pyaText((state.reporters || []).join(","))}" be text ya`,
+    `exists su name artifact directory ob text "${pyaText(state.artifact_dir)}" be text ya`,
   ];
   ensureDir(path.dirname(filePath));
   const temp = `${filePath}.${process.pid}.tmp`;
