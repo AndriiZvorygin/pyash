@@ -1,3 +1,3 @@
-su name managed agent ob text "refinery-watchdog" ya
-su name managed purpose ob text "Detect missing scheduled reporter publications and launch bounded Codex recovery." ya
-su name managed interval minutes ob num 60 ya
+exists su name managed agent ob text "refinery-watchdog" be text ya
+exists su name managed purpose ob text "Detect missing scheduled reporter publications and launch bounded Codex recovery." be text ya
+exists su name managed interval minutes ob num 60 be num ya
