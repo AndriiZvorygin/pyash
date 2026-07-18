@@ -13,6 +13,7 @@ import {
   ensureDir,
   isLockHeld,
   probeReporter,
+  readRecoveryState,
   reexecWithLock,
   resolveCodexBin,
   runId,
@@ -22,6 +23,7 @@ import {
   torontoParts,
   writeJson,
   writePyaStatus,
+  writeRecoveryState,
 } from "./watchdog-lib.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -42,7 +44,7 @@ const id = runId(`checkpoint-${checkpoint}`, started);
 const artifactDir = ensureDir(path.join(ARTIFACT_ROOT, "watchdog", day, id));
 const incidentPath = path.join(artifactDir, "incident.json");
 const recoveryStateDir = ensureDir(path.join(ARTIFACT_ROOT, "state"));
-const recoveryStatePath = path.join(recoveryStateDir, `${day}.recovery.json`);
+const recoveryStatePath = path.join(recoveryStateDir, `${day}.recovery.pya`);
 const logPath = path.join(artifactDir, "watchdog.log");
 const baseStatus = {
   run_id: id,
@@ -54,12 +56,7 @@ const baseStatus = {
 writeJson(path.join(artifactDir, "status.json"), baseStatus);
 writePyaStatus(path.join(artifactDir, "status.pya"), baseStatus);
 
-let recoveryState = null;
-try {
-  recoveryState = JSON.parse(fs.readFileSync(recoveryStatePath, "utf8"));
-} catch {
-  recoveryState = null;
-}
+const recoveryState = readRecoveryState(recoveryStatePath);
 
 const sharedActive = isLockHeld(PIPELINE_LOCK);
 const reporterResults = [];
@@ -162,7 +159,7 @@ const launchedState = {
   artifact_dir: artifactDir,
   status: "running",
 };
-writeJson(recoveryStatePath, launchedState);
+writeRecoveryState(recoveryStatePath, launchedState);
 await sendMatrixAlert(`[refinery-watchdog] Starting Codex recovery for ${failures.map((item) => item.label).join(", ")}. Evidence: ${artifactDir}`);
 
 const codex = await runProcess({
@@ -205,7 +202,7 @@ const final = {
 };
 writeJson(path.join(artifactDir, "status.json"), final);
 writePyaStatus(path.join(artifactDir, "status.pya"), final);
-writeJson(recoveryStatePath, { ...launchedState, status, finished_at_utc: final.finished_at_utc, verification });
+writeRecoveryState(recoveryStatePath, { ...launchedState, status, finished_at_utc: final.finished_at_utc });
 
 if (fixed) {
   await sendMatrixAlert(`[refinery-watchdog] Recovery verified for ${failures.map((item) => item.label).join(", ")}. Publications: ${(codexResult.publication_urls || []).join(", ") || "verified remotely"}. Evidence: ${artifactDir}`);
