@@ -16,6 +16,7 @@ description: Write, read, and refactor Pyash code in the pyash repo. Use when ed
 - Respect compositional cases and genitive rules (of/ti).
 - Treat output typing as part of the contract, not just the slot name. Use `to name text ...`, `to name map ...`, `to name itinerary ...`, `to name vec text ...`, etc. intentionally.
 - Use `series` for ordered sentence rows/manifests and `vec` for ordered primitive values. If a verb returns multiple plain strings, prefer `vec text` over `series`.
+- Keep configurable media identities and character workflows in explicit Pyash maps such as `draw character routes`; do not hide named-character defaults in shared JavaScript routing.
 
 3) Validate behavior
 - Prefer `node --test quiz/...` for targeted changes.
