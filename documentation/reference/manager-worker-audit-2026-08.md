@@ -2,259 +2,223 @@
 
 Audit date: 2026-08-07
 
-This document reconciles the older roadmap and the proposed Sol manager / Luna
-worker direction with the repository state at `ed7dae5b`. It is an engineering
-decision record for the first bounded implementation slice, not a promise that
-the historical calendar dates remain current.
+This document records the repository state and the bounded Sol/Luna execution
+slice implemented after the durable work queue foundation. Historical roadmaps
+are evidence, not current commitments.
 
-## Repository State
+## Current State
 
-The repository was fetched and fast-forwarded before this audit. `master` is
-clean, tracks `origin/master`, and has no other worktree or local branch with
-unfinished changes. The current tip is the reporter hardening commit
-`ed7dae5b`.
+The repository was fetched and fast-forwarded before implementation. The
+starting branch was clean at `b50c94de`, `master` tracked both configured
+remotes, and no additional worktree or local WIP was found.
 
-The latest work is active rather than abandoned WIP:
-
-- reporter agenda, transcript verification, and refinery recovery were just
-  hardened;
-- GPU routing, KataGo support, and the housekeeper ownership boundary are
-  already committed;
-- watchdog state was recently moved into Pyash `.pya` records.
-
-There are no modified or untracked files to preserve. External reporter houses
-are intentionally not tracked in this repository. Commit `fd264b78` removed
-the top-level Grey County house files, while shared reporter behavior now lives
-in `program/library/reporter_shared/` and deployment-specific wrappers remain
-house-local.
-
-## Current Architecture
-
-### Canonical Pyash state
-
-Pyash already has the right persistence vocabulary for this problem:
-
-- `world/house/<agent>/` owns identity, memory, sessions, conduct, artifacts,
-  and gold;
-- `world/newspaper/` records human-readable run outcomes;
-- `world/holding/<lane>/` is the durable spool for external work;
-- `.pya` files are the canonical state format, with JSON reserved for explicit
-  interchange or generated reports;
-- `duty`, `stream`, and `vyah await|finish|cancel` provide the existing runtime
-  handle concepts;
-- schedulers, channel routers, leases, retries, and agent presence already
-  provide most of the operational vocabulary a worker needs.
-
-The important missing generalization is a durable backlog record for bounded
-engineering work. GPU, Android, and channel queues each implement a related
-lane-specific envelope, but there is no shared work item carrying acceptance
-criteria, priority, review state, retry state, and external thread metadata.
-
-### GPU and workload runtime
-
-The GPU path is substantially implemented:
-
-- `program/runtime/gpu/queue.mjs` writes and claims the Pyash holding spool;
-- `handle_status.mjs` persists queued/running/success/fail handles as `.pya`;
-- `lease.mjs` provides exclusive TTL leases and heartbeats;
-- `worker.mjs` claims, leases, submits, polls, writes the terminal handle, and
-  acknowledges the spool item;
-- `housekeeper_adapter.mjs` speaks to a host-local housekeeper;
-- the housekeeper executes Ollama, ComfyUI, and KataGo jobs and exposes transient
-  status;
-- `documentation/reference/gpu-housekeeper-architecture.md` explicitly makes
-  the Pyash holding spool the system of record.
-
-The housekeeper does not duplicate the durable queue. Its job record is an
-in-memory execution projection. This is the correct ownership boundary for
-remote GPU hosts, including hosts that do not run Pyash locally.
-
-Remaining runtime risks are real but outside this first slice: one configured
-housekeeper URL per worker, no peer selection or forwarding yet, transient
-remote status after a housekeeper restart, and possible duplicate execution if
-the local worker dies after remote submission but before terminal handle
-acknowledgement.
-
-### Reporter and Grey/Owen parity
-
-The shared reporter surface is now the dominant implementation:
-
-- stage 2 grounding, stage 3 rendering, lineage, timing, motion attribution,
-  attachment mirroring, quality verification, and transcript reliability are in
-  `program/library/reporter_shared/`;
-- `agenda-stage-contracts.mjs` validates canonical space-key `.pya` artifacts,
-  contiguous coverage, parent/child lineage, monotonic chapters, source
-  excerpts, and stage 3 summary shape;
-- the current refinery runbook defines retryable generation failures,
-  independent probes, shared pipeline locks, and `needs_human` for external
-  authority or credentials;
-- the current test suite has focused reporter, verifier, and refinery coverage.
-
-Classification:
-
-| Area | Status | Evidence / interpretation |
-| --- | --- | --- |
-| Shared Stage 2/3 contracts | DONE | `agenda-stage-contracts.mjs` and its quizzes enforce canonical artifact shapes and lineage. |
-| Shared synthesis and quality logic | ACTIVE | Recent `ed7dae5b` changes show this is still being hardened. |
-| Grey/Owen wrapper parity | PARTIAL | Houses are external; shared logic is in-repo, but live wrapper parity cannot be proven from this checkout. |
-| JSON compatibility paths | PARTIAL / compatibility debt | `command/render_transcript_html_from_transcript_folder.mjs` still accepts legacy JSON and `meeting.json` fallbacks at the boundary. |
-| Child chapter and timing validation | DONE at contract level | Contract validators cover ranges, backing chunks, lineage, monotonicity, source anchors, and timing. |
-| Speaker auto-assignment and top-news quality | ACTIVE | Verifiers and grounded selection exist, but these remain quality-sensitive live workflows. |
-| Agenda publishing and cover upload | BLOCKED outside this repo when credentials or external services fail | The runbook correctly treats these as external-authority outcomes, not silent local success. |
-
-The remaining work should stay shared when behavior is genuinely shared. New
-paired Grey/Owen fixes would be a regression in architecture unless a source
-adapter is truly different.
-
-## Roadmap Reconciliation
-
-The historical `documentation/roadmap.md` is valuable as design evidence but
-its 2026 weekly calendar is stale. The present classifications are:
-
-| Historical goal | Status | Current reality |
-| --- | --- | --- |
-| Parity-first interpreter / JS / C | ACTIVE | Core examples and many data-format/compiler goldens exist, but `documentation/parity/status.json` is not checked in and higher-level translation parity remains in `documentation/todo.md`. |
-| Feature gates for lagging backends | PARTIAL | Gates and targeted parity tests exist; the full status inventory is not maintained as a current artifact. |
-| Frozen specs before promotion | ACTIVE | Numbered specs are the source of truth, but the old roadmap still describes future work as if it were pending on its original dates. |
-| Growing golden / replay corpus | ACTIVE | Examples, newspapers, artifacts, retry checkpoints, and `again` support exist; breadth and live-backend coverage continue to grow. |
-| Human-speakable sentence-shaped Pyash | ACTIVE | This remains a central design constraint and is implemented in the interpreter, docs, and `.pya` state surfaces. |
-| Media IO and listen -> mind -> TTS loop | PARTIAL | `hear`, `say`, streaming, Piper, Whisper, and refinery examples exist; one simple unified production loop is not yet the default product path. |
-| MCP bridge | DONE | MCP stdio/HTTP support, schemas, replay, policy, timeouts, restart, and `discharge` are implemented and tested. |
-| Minimal agent loop | PARTIAL / ACTIVE | Agent houses, sessions, memory, channels, scheduler, MCP, Codex TUI projection, and watchdogs exist; a generic durable manager/worker backlog does not. |
-| Concurrency | PARTIAL | Scheduler, leases, channels, and runtime lifecycle primitives exist; generalized fair-share work scheduling and cancellation/backpressure remain unfinished. |
-| Replayable newspaper-style history | ACTIVE | Newspaper, artifacts, content-addressed outputs, checkpoints, and Pyash-first Codex projection exist; not every external workflow has the same replay fidelity. |
-| Knowledge core, digestion, adjudication | HIGH-VALUE UNSTARTED | The old roadmap describes useful future capabilities, but no current implementation should be inferred from those sections. |
-| Genetic programming / speculative packaging work | STALE | These are not the best next use of the current architecture or user capacity. |
-
-The short `documentation/todo.md` is more current than the weekly roadmap for
-language work: higher-level parity, richer mind reply envelopes, stale wording,
-additional noun/class verbs, `hnuc` validation, ceremony error paths, and CLI
-smoke coverage remain open.
-
-## Manager and Worker Options
-
-### Codex App Server
-
-The installed Codex is `0.146.1`. The existing `command/codex_account.mjs`
-already proves local stdio App Server integration for initialization, account
-state, rate limits, and model listing. The current protocol also provides
-persistent threads, thread goals, turns, streamed item events, interruption,
-resumption, file-change events, model selection, and usage-limited statuses.
-The exact version schema can be generated with
-`codex app-server generate-json-schema`.
-
-App Server is the best execution adapter for Sol and Luna because Pyash can own
-the task, priority, retry, acceptance, and result records while storing only
-Codex thread ids as external metadata. It also allows a future worker to
-checkpoint on usage-limited events without treating a Codex cache as durable
-business state. The adapter should use local stdio first; remote WebSocket
-operation is experimental and should not become the first deployment contract.
-
-### CAO-style MCP and tmux
-
-AWS CLI Agent Orchestrator is useful prior art for supervisor-to-worker
-delegation, asynchronous assignment, synchronous handoff, `send_message`, MCP
-operations, status detection, and visible tmux sessions. It solves provider
-launch and human observability problems well, but its supervisor/session layer
-should not replace Pyash holding records.
-
-### CCB and related tmux bridges
-
-Claude Codex Bridge is useful for visible provider panes, worktrees, callbacks,
-inboxes, project memory, attachment, and intervention. It is a good optional
-operator surface. It is not the right owner for Pyash task state, retries,
-usage policy, or replayable outcomes.
-
-## Recommended Architecture
-
-Use one coherent ownership model:
+The durable work lane is under `program/runtime/work/` and reuses the existing
+holding spool:
 
 ```text
 world/holding/work/*.pya
         |
         v
-Pyash work supervisor state machine
+Pyash supervisor claims one task
         |
-        +--> Sol App Server thread: bounded plan and acceptance criteria
-        |
-        +--> Luna App Server thread: bounded implementation and tests
+        +--> Sol App Server thread: plan and review
+        +--> Luna App Server thread: implementation and tests
         |
         v
-Pyash review outcome, diff/test evidence, newspaper, and handle
+Pyash .pya checkpoint, queue ack, and final decision
 ```
 
-Pyash owns:
+A task envelope carries its bounded prompt, context, acceptance criteria,
+retry policy, status, and work specification. The status projection now
+preserves named `.pya` sections for:
 
-- durable task records and priorities;
-- lifecycle state: `ready`, `planning`, `implementing`, `reviewing`,
-  `revision`, `blocked`, `usage-limited`, `accepted`, `failed`;
-- retry and resumption policy;
-- foreground-over-background admission and usage checkpoints;
-- acceptance criteria, tests, diffs, and durable results.
+- workspace: repository, base revision, detached worktree, and mode;
+- roles: manager/worker models, reasoning effort, and App Server thread ids;
+- plan: Sol summary, work order, and risks;
+- implementation: summary, changed files, file-change events, diff, tests,
+  blockers, and uncertainty;
+- review: `ACCEPT`, `REVISE`, or `BLOCK`, rationale, and correction request;
+- interruption: phase, timestamp, reason, and last turn;
+- revision count, original `workSpec`, and original payload sentence.
 
-Codex App Server owns provider execution and thread continuity. Sol and Luna
-are roles backed by persistent App Server threads, not separate durable queue
-systems. tmux/CAO/CCB can be added later as an observation and intervention
-surface around the same Pyash work item.
+This is one canonical Pyash checkpoint artifact, not a second JSON state store.
+Structured values are encoded inside named Pyash map fields using the existing
+artifact convention.
 
-## Prioritized Course of Action
+Task claiming remains atomic through spool rename and oldest-first. `priority`
+is persisted and validated but is deliberately not used for claiming in this
+first supervisor cycle. Operational priority scheduling is a follow-up.
 
-1. **Work item contract and holding lane.** Create the durable `.pya` task
-   record, explicit state transitions, oldest-first claim, retry metadata, and
-   tests. This is the first slice implemented in this audit.
-2. **App Server execution adapter.** Extract/reuse the existing JSONL RPC
-   pattern for persistent thread start/resume, goal updates, turn events,
-   interruption, and usage/rate-limit snapshots. Keep it injectable in tests.
-3. **Small supervisor.** Add one bounded cycle: select one ready task, ask Sol
-   for a plan and acceptance criteria, persist the plan, then hand off to Luna.
-   Foreground work must preempt background work; usage-limited status must leave
-   a resumable record.
-4. **Independent review and evidence.** Run Luna's declared tests and diff
-   checks, have Sol review the bounded result, and write a Pyash newspaper
-   outcome plus accepted/rejected artifact.
-5. **Operational integration.** Attach scheduler health, agent presence, Matrix
-   reporting, and optional tmux/CAO/CCB observation. Only after local recovery
-   is reliable should GPU-housekeeper-style peer routing be generalized.
+## Reporter and Roadmap Reality
 
-## First Slice and Acceptance Criteria
+Reporter work is shared in `program/library/reporter_shared/`; Grey County and
+Owen Sound houses are deployment-specific and are not present in this checkout.
+Shared Stage 2/3 contracts cover canonical `.pya` artifacts, source anchors,
+child/parent lineage, contiguous ranges, timing, monotonicity, motion grounding,
+and quality verification. JSON and `meeting.json` paths remain boundary
+compatibility debt. Live publishing, cover upload, external house imports, and
+some reporter quizzes still require credentials or ignored house assets.
 
-This change adds `program/runtime/work/` and the `world/holding/work/` lane.
-It deliberately does not launch Codex or make `.codex` state canonical yet.
+| Historical goal | Status | Current evidence |
+| --- | --- | --- |
+| Parity-first interpreter, JavaScript, and C | ACTIVE | Cross-backend examples and compiler goldens exist; higher-level parity remains incomplete. |
+| Feature gates for lagging backends | PARTIAL | Targeted gates and parity quizzes exist, but no complete current status artifact exists. |
+| Frozen specifications before promotion | ACTIVE | Numbered specifications remain the design source of truth. |
+| Golden and replay corpus | ACTIVE | Examples, artifacts, newspapers, checkpoints, and `again` support exist. |
+| Sentence-shaped, human-speakable Pyash | ACTIVE | It remains an interpreter and `.pya` design constraint. |
+| Media IO and listen -> mind -> TTS | PARTIAL | `hear`, streaming, Piper, Whisper, and refinery paths exist; one default loop is unfinished. |
+| MCP bridge | DONE | MCP stdio/HTTP, policy, replay, timeouts, restart, and discharge are implemented. |
+| Minimal agent loop | ACTIVE | Houses, sessions, memory, channels, MCP, Codex projection, and one durable Sol/Luna cycle exist. |
+| General concurrency | PARTIAL | Schedulers, leases, channels, and runtime handles exist; fair-share work scheduling remains open. |
+| Newspaper-style replayable history | ACTIVE | Newspaper, artifacts, checkpoints, and Pyash-first Codex projection exist. |
+| Knowledge core and adjudication | HIGH-VALUE UNSTARTED | Useful old roadmap work with no current implementation to assume. |
+| Genetic/speculative packaging branches | STALE | Not the highest-value use of the current architecture. |
 
-Acceptance criteria:
+## Manager and Worker Foundation
 
-- a task is represented by a `.pya` envelope in the Pyash holding area;
-- the envelope carries bounded prompt and acceptance text, priority, retry cap,
-  and Sol/Luna thread metadata;
-- status records are `.pya`, not ad hoc JSON;
-- task states and legal transitions are explicit and validated;
-- oldest-first claim is atomic through the existing spool rename operation;
-- success and terminal failure move the claimed record to the existing produce
-  paths;
-- tests cover round-trip persistence, ordering, transitions, invalid states,
-  retry metadata, and terminal acknowledgement.
+### App Server adapter
+
+`program/runtime/codex/app_server.mjs` extracts the JSONL transport that was
+previously private to `command/codex_account.mjs`. It launches and initializes
+`codex app-server`, supports request/notification subscriptions, persists
+stderr, validates malformed JSON, and detects server errors or process exit.
+
+The first-cycle operations are:
+
+- `initialize` and `initialized`;
+- `thread/start` with model, working directory, approval policy, and sandbox;
+- `thread/resume`;
+- `turn/start` with model, working directory, reasoning effort, input, and
+  sandbox policy;
+- streamed `item/agentMessage/delta`, `item/fileChange/patchUpdated`, and
+  `turn/diff/updated` events;
+- `turn/completed` success/failure classification;
+- `turn/interrupt` and clean process termination.
+
+The installed Codex was `0.146.1` during this audit. The adapter is injectable,
+so ordinary tests never launch Codex. Its protocol schema was generated from
+the installed binary rather than copied into Pyash.
+
+### Roles and supervisor
+
+Roles are configurable through supervisor options or environment variables:
+
+```text
+manager model: gpt-5.6-sol
+manager effort: high
+worker model: gpt-5.6-luna
+worker effort: high
+```
+
+The role names are architectural. Model names are configuration defaults, not
+provider assumptions.
+
+`runWorkSupervisorOnce` claims one ready task, prepares a task-specific
+detached Git worktree, transitions `ready -> planning`, starts or resumes Sol,
+persists the work order, starts or resumes Luna, persists implementation and
+Git evidence, then resumes Sol for review. It maps decisions as follows:
+
+```text
+ACCEPT -> accepted
+REVISE -> one revision loop, then implement/review again
+BLOCK  -> blocked
+```
+
+`accepted` means Sol judged the bounded implementation satisfactory. It does
+not mean Pyash automatically merged or pushed it. The worktree and diff remain
+available for human inspection.
+
+### Recovery
+
+The claimed spool file stays in `world/holding/work/runtime/` until the
+supervisor reaches `accepted` or `blocked` and acknowledges success. A process
+restart can claim an existing runtime item, read the `.pya` checkpoint, resume
+the persisted Sol/Luna threads, and continue from `planning`, `implementing`,
+`reviewing`, or `revision`.
+
+`usage-limited` is distinct from `failed`: it leaves the runtime item in place
+and records the interruption checkpoint for later resumption. Ordinary remote
+failure is acknowledged through the existing retry policy. A crash between a
+remote turn and its evidence write can still repeat that turn; turn-level
+idempotency and stronger stale-runtime ownership are follow-up work.
+
+## Proof
+
+### Implemented
+
+- durable named `.pya` checkpoint sections;
+- extracted shared App Server JSONL transport;
+- configurable manager/worker roles and reasoning effort;
+- one Sol plan -> Luna implementation -> Sol review cycle;
+- one revision loop with a revision cap;
+- task-specific detached Git worktrees;
+- runtime recovery for persisted checkpoints and usage limits;
+- explicit supervisor and smoke commands.
+
+### Proven by fake tests
+
+`quiz/runtime/codex_app_server.test.mjs` covers initialization, thread start,
+thread resume, streamed assistant output, diff/file-change events, server
+errors, malformed responses, and process exit. `quiz/runtime/work_queue.test.mjs`
+and `quiz/runtime/work_supervisor.test.mjs` cover checkpoint round trips,
+ACCEPT, REVISE, BLOCK, usage-limited recovery, queue acknowledgement, and
+role/workspace evidence.
+
+### Proven by real Codex smoke
+
+`npm run work:smoke` created a temporary Git repository and ran the complete
+real cycle with the installed App Server models. The successful run produced a
+real Sol work order, a real Luna file and test result in the isolated worktree,
+real Git evidence, a real Sol `ACCEPT`, and an acknowledged empty queue.
+
+The smoke command uses `danger-full-access` only for its disposable fixture
+because this host's nested workspace-write sandbox failed with
+`bwrap: loopback: Failed RTM_NEWADDR`. The normal supervisor default remains
+`workspace-write` with the task worktree as its writable root.
+
+## Options and Trade-offs
+
+Codex App Server is the execution adapter because it supplies persistent
+threads, streamed turns, model selection, interruption, and resumption while
+Pyash retains task state, acceptance, retry, and evidence ownership. CAO-style
+MCP orchestration and CCB/tmux bridges remain useful prior art for visible
+sessions, handoff, callbacks, and human intervention, but they should wrap
+Pyash records rather than replace the holding spool.
 
 ## Deferred Work
 
-- multi-host Codex routing and peer forwarding;
-- automatic GPU-housekeeper host selection and residency scoring;
-- a custom CAO/CCB replacement;
-- background quota prediction beyond the App Server rate-limit snapshot;
-- streaming mind work through the durable queue;
-- broad parity cleanup unrelated to the work-item contract;
-- reporter wrapper changes that belong to external house deployments;
-- knowledge-core and genetic-programming roadmap branches.
+- priority-aware or fair-share scheduling beyond oldest-first;
+- quota-aware background admission and spare-capacity consumption;
+- turn idempotency, stale runtime ownership, and stronger crash recovery;
+- formal machine-readable Sol plan/review schema beyond bounded headings;
+- automatic merge, push, or cleanup of accepted worktrees;
+- multi-host Codex execution, CAO/CCB replacement, and tmux dashboard work;
+- generalized multi-worker concurrency;
+- unrelated reporter parity and external house repairs;
+- GPU peer routing and residency-aware forwarding.
+
+## Next Highest-Value Slice
+
+1. Add explicit turn checkpoints/idempotency keys and stale-runtime recovery so
+   a worker crash cannot unknowingly repeat a remote turn.
+2. Add a human-facing inspect/accept handoff for accepted worktrees, without
+   giving Pyash automatic push authority.
+3. Add deterministic priority/quota admission after the first cycle has been
+   operated on real backlog items.
 
 ## Sources
 
+- `program/runtime/work/contract.mjs`
+- `program/runtime/work/queue.mjs`
+- `program/runtime/work/checkpoint.mjs`
+- `program/runtime/work/supervisor.mjs`
+- `program/runtime/codex/app_server.mjs`
 - `documentation/specifications/04-runtime-primitives.md`
 - `documentation/specifications/18-pyash-agent.md`
-- `documentation/reference/agent-tui-session-projection.md`
 - `documentation/reference/gpu-housekeeper-architecture.md`
 - `documentation/runbooks/reporter-refinery-recovery.md`
 - `documentation/roadmap.md`
 - `documentation/todo.md`
-- `command/codex_account.mjs`
 - [Codex App Server manual](https://learn.chatgpt.com/docs/app-server.md)
 - [AWS CLI Agent Orchestrator](https://github.com/awslabs/cli-agent-orchestrator)
 - [Claude Codex Bridge](https://github.com/SeemSeam/claude_codex_bridge)

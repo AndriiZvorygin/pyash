@@ -1,3 +1,5 @@
+import { buildWorkCheckpoint } from "./checkpoint.mjs";
+
 const WORK_STATUSES = [
   "ready",
   "planning",
@@ -105,7 +107,8 @@ export function buildWorkTask(input = {}) {
       : null,
     workSpec: input.workSpec && typeof input.workSpec === "object" && !Array.isArray(input.workSpec)
       ? { ...input.workSpec }
-      : {}
+      : {},
+    checkpoint: buildWorkCheckpoint(input.checkpoint)
   };
 }
 

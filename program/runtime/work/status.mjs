@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { sentenceToPyash } from "../../beautiful.mjs";
+import { parse } from "../../understand/index.mjs";
 import { ensureHoldingLaneDirs } from "../../agent/holding_lane/layout.mjs";
 import {
   assertWorkTask,
@@ -8,6 +10,7 @@ import {
   normalizeWorkTaskId,
   transitionWorkTask
 } from "./contract.mjs";
+import { buildWorkCheckpoint, mergeWorkCheckpoint } from "./checkpoint.mjs";
 
 function quoteText(value) {
   return JSON.stringify(String(value ?? ""));
@@ -30,8 +33,12 @@ function mapBlock(name, entries) {
   return lines.join("\n");
 }
 
-function parseMap(text) {
-  const block = String(text ?? "").match(/su name work task status be map def\n([\s\S]*?)\nprah/i);
+function parseMap(text, name) {
+  const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const block = String(text ?? "").match(new RegExp(
+    `su name ${escaped} be map def\\n([\\s\\S]*?)\\nprah`,
+    "i"
+  ));
   const out = {};
   if (!block) return out;
   for (const line of String(block[1] ?? "").split("\n")) {
@@ -45,8 +52,23 @@ function parseMap(text) {
   return out;
 }
 
-function statusToText(task) {
-  const entries = [
+function encodeJson(value) {
+  return JSON.stringify(value && typeof value === "object" ? value : {});
+}
+
+function decodeJson(value, fallback = {}) {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function statusEntries(task) {
+  return [
     { key: "task id", type: "text", value: quoteText(task.taskId) },
     { key: "owner", type: "text", value: quoteText(task.owner) },
     { key: "kind", type: "text", value: quoteText(task.kind) },
@@ -68,11 +90,88 @@ function statusToText(task) {
     { key: "result", type: "text", value: quoteText(task.result) },
     { key: "error", type: "text", value: quoteText(task.error) }
   ];
-  return `${mapBlock("work task status", entries)}\n`;
+}
+
+function checkpointBlocks(task) {
+  const checkpoint = buildWorkCheckpoint(task.checkpoint);
+  return [
+    mapBlock("work task source", [
+      { key: "work spec", type: "text", value: quoteText(encodeJson(task.workSpec)) },
+      {
+        key: "payload",
+        type: "text",
+        value: quoteText(task.payloadSentence ? sentenceToPyash(task.payloadSentence) : "")
+      }
+    ]),
+    mapBlock("work task workspace", [
+      { key: "repository", type: "text", value: quoteText(checkpoint.workspace.repository) },
+      { key: "base revision", type: "text", value: quoteText(checkpoint.workspace.baseRevision) },
+      { key: "branch", type: "text", value: quoteText(checkpoint.workspace.branch) },
+      { key: "worktree path", type: "text", value: quoteText(checkpoint.workspace.worktreePath) },
+      { key: "mode", type: "text", value: quoteText(checkpoint.workspace.mode) }
+    ]),
+    mapBlock("work task roles", [
+      { key: "manager model", type: "text", value: quoteText(checkpoint.manager.model) },
+      { key: "manager reasoning effort", type: "text", value: quoteText(checkpoint.manager.reasoningEffort) },
+      { key: "manager thread id", type: "text", value: quoteText(checkpoint.manager.threadId) },
+      { key: "worker model", type: "text", value: quoteText(checkpoint.worker.model) },
+      { key: "worker reasoning effort", type: "text", value: quoteText(checkpoint.worker.reasoningEffort) },
+      { key: "worker thread id", type: "text", value: quoteText(checkpoint.worker.threadId) }
+    ]),
+    mapBlock("work task plan", [
+      { key: "summary", type: "text", value: quoteText(checkpoint.plan.summary) },
+      { key: "work order", type: "text", value: quoteText(checkpoint.plan.workOrder) },
+      { key: "risks", type: "text", value: quoteText(checkpoint.plan.risks) }
+    ]),
+    mapBlock("work task implementation", [
+      { key: "summary", type: "text", value: quoteText(checkpoint.implementation.summary) },
+      { key: "changed files", type: "text", value: quoteText(encodeJson(checkpoint.implementation.changedFiles)) },
+      { key: "file changes", type: "text", value: quoteText(encodeJson(checkpoint.implementation.fileChanges)) },
+      { key: "diff", type: "text", value: quoteText(checkpoint.implementation.diff) },
+      { key: "tests", type: "text", value: quoteText(encodeJson(checkpoint.implementation.tests)) },
+      { key: "blockers", type: "text", value: quoteText(checkpoint.implementation.blockers) },
+      { key: "uncertainty", type: "text", value: quoteText(checkpoint.implementation.uncertainty) }
+    ]),
+    mapBlock("work task review", [
+      { key: "decision", type: "text", value: quoteText(checkpoint.review.decision) },
+      { key: "explanation", type: "text", value: quoteText(checkpoint.review.explanation) },
+      { key: "revision instructions", type: "text", value: quoteText(checkpoint.review.revisionInstructions) }
+    ]),
+    mapBlock("work task checkpoint", [
+      { key: "phase", type: "text", value: quoteText(checkpoint.interruption.phase) },
+      { key: "at", type: "text", value: quoteText(checkpoint.interruption.at) },
+      { key: "reason", type: "text", value: quoteText(checkpoint.interruption.reason) },
+      { key: "last turn id", type: "text", value: quoteText(checkpoint.interruption.lastTurnId) },
+      { key: "revision count", type: "num", value: checkpoint.revisionCount }
+    ])
+  ];
+}
+
+function statusToText(task) {
+  return [
+    mapBlock("work task status", statusEntries(task)),
+    ...checkpointBlocks(task)
+  ].join("\n") + "\n";
 }
 
 function statusFromText(text) {
-  const values = parseMap(text);
+  const values = parseMap(text, "work task status");
+  const source = parseMap(text, "work task source");
+  const workspace = parseMap(text, "work task workspace");
+  const roles = parseMap(text, "work task roles");
+  const plan = parseMap(text, "work task plan");
+  const implementation = parseMap(text, "work task implementation");
+  const review = parseMap(text, "work task review");
+  const checkpoint = parseMap(text, "work task checkpoint");
+  let payloadSentence = null;
+  const payloadText = String(source.payload ?? "").trim();
+  if (payloadText) {
+    try {
+      payloadSentence = parse(payloadText);
+    } catch {
+      payloadSentence = null;
+    }
+  }
   return buildWorkTask({
     taskId: values["task id"],
     owner: values.owner,
@@ -94,7 +193,53 @@ function statusFromText(text) {
     message: values.message,
     result: values.result,
     error: values.error,
-    workSpec: {}
+    workSpec: decodeJson(source["work spec"]),
+    payloadSentence,
+    checkpoint: {
+      workspace: {
+        repository: workspace.repository,
+        baseRevision: workspace["base revision"],
+        branch: workspace.branch,
+        worktreePath: workspace["worktree path"],
+        mode: workspace.mode
+      },
+      manager: {
+        model: roles["manager model"],
+        reasoningEffort: roles["manager reasoning effort"],
+        threadId: roles["manager thread id"]
+      },
+      worker: {
+        model: roles["worker model"],
+        reasoningEffort: roles["worker reasoning effort"],
+        threadId: roles["worker thread id"]
+      },
+      plan: {
+        summary: plan.summary,
+        workOrder: plan["work order"],
+        risks: plan.risks
+      },
+      implementation: {
+        summary: implementation.summary,
+        changedFiles: decodeJson(implementation["changed files"], []),
+        fileChanges: decodeJson(implementation["file changes"], []),
+        diff: implementation.diff,
+        tests: decodeJson(implementation.tests, []),
+        blockers: implementation.blockers,
+        uncertainty: implementation.uncertainty
+      },
+      review: {
+        decision: review.decision,
+        explanation: review.explanation,
+        revisionInstructions: review["revision instructions"]
+      },
+      interruption: {
+        phase: checkpoint.phase,
+        at: checkpoint.at,
+        reason: checkpoint.reason,
+        lastTurnId: checkpoint["last turn id"]
+      },
+      revisionCount: checkpoint["revision count"]
+    }
   });
 }
 
@@ -111,6 +256,23 @@ async function statusPath(worldRoot, taskId) {
   return path.join(await statusDir(worldRoot), `${id}.pya`);
 }
 
+function checkpointHasData(checkpoint) {
+  return JSON.stringify(buildWorkCheckpoint(checkpoint)) !== JSON.stringify(buildWorkCheckpoint());
+}
+
+async function mergeStoredTask(worldRoot, task) {
+  const candidate = buildWorkTask(task);
+  const stored = await readWorkTaskStatus(worldRoot, candidate.taskId);
+  if (!stored) return candidate;
+  return buildWorkTask({
+    ...stored,
+    ...candidate,
+    workSpec: Object.keys(candidate.workSpec).length ? candidate.workSpec : stored.workSpec,
+    payloadSentence: candidate.payloadSentence || stored.payloadSentence,
+    checkpoint: checkpointHasData(candidate.checkpoint) ? candidate.checkpoint : stored.checkpoint
+  });
+}
+
 export async function readWorkTaskStatus(worldRoot, taskId) {
   const target = await statusPath(worldRoot, taskId);
   if (!target) return null;
@@ -123,7 +285,7 @@ export async function readWorkTaskStatus(worldRoot, taskId) {
 }
 
 export async function writeWorkTaskStatus(worldRoot, task, nextStatus = null) {
-  const current = buildWorkTask(task);
+  const current = await mergeStoredTask(worldRoot, task);
   const next = nextStatus == null
     ? current
     : transitionWorkTask(current, nextStatus, {
@@ -137,6 +299,15 @@ export async function writeWorkTaskStatus(worldRoot, task, nextStatus = null) {
   await fs.writeFile(tmp, statusToText(next), "utf8");
   await fs.rename(tmp, target);
   return next;
+}
+
+export async function updateWorkTaskCheckpoint(worldRoot, taskId, patch = {}) {
+  const current = await readWorkTaskStatus(worldRoot, taskId);
+  if (!current) throw new Error(`work task status missing: ${taskId}`);
+  return writeWorkTaskStatus(worldRoot, {
+    ...current,
+    checkpoint: mergeWorkCheckpoint(current.checkpoint, patch)
+  });
 }
 
 export async function transitionWorkTaskStatus(worldRoot, taskId, nextStatus, options = {}) {

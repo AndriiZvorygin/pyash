@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import process from "node:process";
-import { spawn } from "node:child_process";
-import readline from "node:readline";
 import { URL } from "node:url";
+
+import { spawnCodexAppServer } from "../program/runtime/codex/app_server.mjs";
 
 function parseArgValue(args, flag) {
   const idx = args.findIndex((arg) => arg === flag);
@@ -41,157 +41,6 @@ function usage() {
   ].join("\n");
 }
 
-class RpcClient {
-  constructor(child) {
-    this.child = child;
-    this.nextId = 1;
-    this.closed = false;
-    this.pending = new Map();
-    this.waiters = [];
-    this.stderr = "";
-
-    this.outRl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
-    this.errRl = readline.createInterface({ input: child.stderr, crlfDelay: Infinity });
-
-    this.outRl.on("line", (line) => this.handleStdoutLine(line));
-    this.errRl.on("line", (line) => {
-      this.stderr += `${line}\n`;
-    });
-
-    child.on("error", (err) => this.failAll(err));
-    child.on("exit", (code, signal) => {
-      if (this.closed) return;
-      const reason = signal
-        ? `codex app-server exited via signal ${signal}`
-        : `codex app-server exited with code ${code ?? "unknown"}`;
-      this.failAll(new Error(reason));
-    });
-  }
-
-  send(message) {
-    if (this.closed) throw new Error("rpc client closed");
-    this.child.stdin.write(`${JSON.stringify(message)}\n`);
-  }
-
-  request(method, params = {}, { timeoutMs = 30000, id = null } = {}) {
-    if (this.closed) return Promise.reject(new Error("rpc client closed"));
-    const requestId = id == null ? this.nextId++ : id;
-    if (requestId >= this.nextId) this.nextId = requestId + 1;
-    const message = { jsonrpc: "2.0", id: requestId, method, params };
-    this.send(message);
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(requestId);
-        reject(new Error(`request timeout: ${method}`));
-      }, Math.max(1, timeoutMs));
-      this.pending.set(requestId, { resolve, reject, timer, method });
-    });
-  }
-
-  notify(method, params = {}) {
-    this.send({ jsonrpc: "2.0", method, params });
-  }
-
-  waitForNotification(method, predicate = () => true, { timeoutMs = 30000 } = {}) {
-    if (this.closed) return Promise.reject(new Error("rpc client closed"));
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.waiters = this.waiters.filter((entry) => entry !== waiter);
-        reject(new Error(`notification timeout: ${method}`));
-      }, Math.max(1, timeoutMs));
-      const waiter = { method, predicate, resolve, reject, timer };
-      this.waiters.push(waiter);
-    });
-  }
-
-  handleStdoutLine(line) {
-    let payload;
-    try {
-      payload = JSON.parse(line);
-    } catch {
-      return;
-    }
-    if (payload && Object.prototype.hasOwnProperty.call(payload, "id")) {
-      const pending = this.pending.get(payload.id);
-      if (!pending) return;
-      clearTimeout(pending.timer);
-      this.pending.delete(payload.id);
-      if (payload.error) {
-        const msg = payload.error?.message || `request failed: ${pending.method}`;
-        pending.reject(new Error(msg));
-      } else {
-        pending.resolve(payload.result ?? {});
-      }
-      return;
-    }
-    if (!payload?.method) return;
-    const waiters = this.waiters.slice();
-    for (const waiter of waiters) {
-      if (waiter.method !== payload.method) continue;
-      let matched = false;
-      try {
-        matched = Boolean(waiter.predicate(payload.params ?? {}));
-      } catch {
-        matched = false;
-      }
-      if (!matched) continue;
-      clearTimeout(waiter.timer);
-      this.waiters = this.waiters.filter((entry) => entry !== waiter);
-      waiter.resolve(payload.params ?? {});
-    }
-  }
-
-  failAll(err) {
-    if (this.closed) return;
-    this.closed = true;
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(err);
-    }
-    this.pending.clear();
-    for (const waiter of this.waiters) {
-      clearTimeout(waiter.timer);
-      waiter.reject(err);
-    }
-    this.waiters = [];
-    try {
-      this.outRl.close();
-    } catch {}
-    try {
-      this.errRl.close();
-    } catch {}
-  }
-
-  async close() {
-    if (this.closed) return;
-    this.closed = true;
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(new Error("rpc client closed"));
-    }
-    this.pending.clear();
-    for (const waiter of this.waiters) {
-      clearTimeout(waiter.timer);
-      waiter.reject(new Error("rpc client closed"));
-    }
-    this.waiters = [];
-    try {
-      this.outRl.close();
-    } catch {}
-    try {
-      this.errRl.close();
-    } catch {}
-    try {
-      this.child.stdin.end();
-    } catch {}
-    if (this.child.exitCode == null && !this.child.killed) {
-      this.child.kill("SIGTERM");
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      if (this.child.exitCode == null && !this.child.killed) this.child.kill("SIGKILL");
-    }
-  }
-}
-
 function parseLoginLocalPort(authUrl) {
   try {
     const url = new URL(String(authUrl ?? ""));
@@ -215,21 +64,9 @@ function makeSshHint(authUrl) {
 }
 
 async function openRpcClient({ codexBin }) {
-  const bin = String(codexBin || process.env.PYA_CODEX_BIN || "codex").trim() || "codex";
-  const child = spawn(bin, ["app-server"], {
-    stdio: ["pipe", "pipe", "pipe"],
-    env: process.env
+  return spawnCodexAppServer({
+    codexBin: String(codexBin || process.env.PYA_CODEX_BIN || "codex").trim() || "codex"
   });
-  const rpc = new RpcClient(child);
-  await rpc.request("initialize", {
-    clientInfo: {
-      name: "pyash",
-      title: "Pyash",
-      version: "0.1.0"
-    }
-  }, { id: 0, timeoutMs: 10000 });
-  rpc.notify("initialized", {});
-  return rpc;
 }
 
 async function runRead({ rpc, timeoutMs, refreshToken }) {

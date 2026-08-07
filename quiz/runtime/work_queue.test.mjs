@@ -86,6 +86,7 @@ test("work queue persists status, claims oldest task, and acknowledges success",
   const persisted = await readWorkTaskStatus(worldRoot, "old-task");
   assert.equal(persisted.status, "ready");
   assert.equal(persisted.acceptanceText, "Targeted quiz passes and git diff check is clean.");
+  assert.deepEqual(persisted.workSpec, {});
 
   const claimed = await claimOldestWorkTask(worldRoot, { workerTag: "sol" });
   assert.equal(claimed.task.taskId, "old-task");
@@ -106,6 +107,40 @@ test("work queue persists status, claims oldest task, and acknowledges success",
   const paths = await ensureWorkQueueDirs(worldRoot);
   const successes = await fs.readdir(paths.produceSuccessDir);
   assert.equal(successes.length, 1);
+});
+
+test("work status retains structured checkpoint data across a claimed runtime item", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-checkpoint-");
+  await enqueueWorkTask(worldRoot, task({
+    taskId: "checkpoint-task",
+    workSpec: { source: "roadmap", acceptance: { test: "node --test" } }
+  }));
+  const claimed = await claimOldestWorkTask(worldRoot, { workerTag: "supervisor" });
+  await transitionWorkTaskStatus(worldRoot, "checkpoint-task", "planning", {
+    now: "2026-08-07T12:02:00.000Z"
+  });
+  const { updateWorkTaskCheckpoint } = await import("../../program/runtime/work/status.mjs");
+  await updateWorkTaskCheckpoint(worldRoot, "checkpoint-task", {
+    workspace: {
+      repository: "/repo",
+      baseRevision: "abc123",
+      worktreePath: "/tmp/worktree/checkpoint-task",
+      mode: "git-worktree"
+    },
+    manager: { model: "gpt-5.6-sol", threadId: "sol-thread" },
+    plan: { workOrder: "make the change" },
+    implementation: { changedFiles: ["file.txt"], tests: ["node --test"], diff: "+file" },
+    review: { decision: "ACCEPT", explanation: "meets criteria" },
+    revisionCount: 1
+  });
+  const recovered = await readWorkTaskStatus(worldRoot, "checkpoint-task");
+  assert.equal(recovered.workSpec.source, "roadmap");
+  assert.equal(recovered.checkpoint.workspace.baseRevision, "abc123");
+  assert.equal(recovered.checkpoint.manager.threadId, "sol-thread");
+  assert.deepEqual(recovered.checkpoint.implementation.changedFiles, ["file.txt"]);
+  assert.equal(recovered.checkpoint.review.decision, "ACCEPT");
+  assert.equal(recovered.checkpoint.revisionCount, 1);
+  await ackWorkTaskSuccess(worldRoot, { runtimePath: claimed.path });
 });
 
 test("work queue persists retry count and moves terminal failure to fail", async () => {
