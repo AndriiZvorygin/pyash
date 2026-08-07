@@ -12,6 +12,7 @@
 - `documentation/agent-memory.md` — current agent memory model (session files, summary, and runtime memory).
 - `documentation/reference/pyash-cli-modules.md` — module ownership, low-churn update checklist, and CLI regression guardrails.
 - `documentation/reference/agent-tui-session-projection.md` — implementation reference for external TUI (`.codex`) to Pyash session/newspaper projection.
+- `documentation/reference/manager-worker-audit-2026-08.md` — current roadmap reconciliation and Pyash-first Sol/Luna manager-worker direction.
 - `documentation/reference/verify-envelope.md` — provisional sentence envelope for `verify` outcomes.
 - `documentation/reference/verify-count-modes.md` — reference profile for `verify` word/letter count modes.
 - `documentation/reference/music-module.md` — reference profile for `music video` and `music say` contracts.
