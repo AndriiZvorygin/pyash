@@ -1,4 +1,4 @@
-const SPELLING_PAIRS = [
+export const CANADIAN_ENGLISH_SPELLING_PAIRS = [
   ["color", "colour"],
   ["colors", "colours"],
   ["colored", "coloured"],
@@ -15,6 +15,9 @@ const SPELLING_PAIRS = [
   ["honors", "honours"],
   ["honored", "honoured"],
   ["honoring", "honouring"],
+  ["behavior", "behaviour"],
+  ["behaviors", "behaviours"],
+  ["behavioral", "behavioural"],
   ["labor", "labour"],
   ["labors", "labours"],
   ["labeled", "labelled"],
@@ -65,6 +68,12 @@ const SPELLING_PAIRS = [
   ["canceled", "cancelled"],
   ["canceling", "cancelling"],
   ["modeling", "modelling"],
+  ["installment", "instalment"],
+  ["installments", "instalments"],
+  ["enroll", "enrol"],
+  ["enrollment", "enrolment"],
+  ["fulfill", "fulfil"],
+  ["fulfillment", "fulfilment"],
   ["councilor", "councillor"],
   ["councilors", "councillors"],
 ];
@@ -80,7 +89,7 @@ function preserveCase(src, replacement) {
 
 export function normalizeCanadianEnglish(text = "") {
   let out = String(text || "");
-  for (const [us, ca] of SPELLING_PAIRS) {
+  for (const [us, ca] of CANADIAN_ENGLISH_SPELLING_PAIRS) {
     const re = new RegExp(`\\b${us}\\b`, "giu");
     out = out.replace(re, (m) => preserveCase(m, ca));
   }

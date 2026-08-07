@@ -6,13 +6,60 @@ import test from "node:test";
 import {
   buildCodexExecArgs,
   buildCodexPrompt,
+  classifyNightlyOutcome,
   classifyProbe,
   mergeManagedCrontab,
+  nightlyReporterInvocation,
+  REPORTERS,
   readRecoveryState,
+  recoveryIsDeduplicated,
   runProcess,
   shouldLaunchRecovery,
   writeRecoveryState,
 } from "../world/house/refinery-watchdog/program/watchdog-lib.mjs";
+
+test("nightly recovery can pin a supported reporter meeting without changing scheduled defaults", () => {
+  const scheduled = nightlyReporterInvocation(REPORTERS.owen);
+  assert.equal(scheduled.cmd, REPORTERS.owen.runScript);
+  assert.deepEqual(scheduled.args, ["--refresh"]);
+
+  const pinned = nightlyReporterInvocation(
+    REPORTERS.owen,
+    "fcdfabfa-a9be-4af5-81d6-d65676478c99",
+    "https://helpos.ca/c/owen-sound-council/8526/example",
+  );
+  assert.equal(pinned.cmd, process.execPath);
+  assert.deepEqual(pinned.args, [
+    REPORTERS.owen.recoveryScript,
+    "fcdfabfa-a9be-4af5-81d6-d65676478c99",
+  ]);
+  assert.deepEqual(pinned.env, {
+    MEETING_POST_COMMAND: `node ${REPORTERS.owen.publishScript}`,
+    PIPELINE_FORCE_POST: "1",
+    MEETING_PUBLISH_COMMUNITY_NAME: "owen-sound-council",
+    MEETING_PUBLISH_POST_REF: "https://helpos.ca/c/owen-sound-council/8526/example",
+  });
+});
+
+test("nightly recovery can pin and republish a Grey County meeting", () => {
+  const pinned = nightlyReporterInvocation(
+    REPORTERS.grey,
+    "9098944f-3e9c-4d24-8d32-6d2c70673f40",
+    "https://helpos.ca/c/grey-county-council/8536/example",
+  );
+  assert.equal(pinned.cmd, process.execPath);
+  assert.deepEqual(pinned.args, [
+    REPORTERS.grey.recoveryScript,
+    "9098944f-3e9c-4d24-8d32-6d2c70673f40",
+  ]);
+  assert.deepEqual(pinned.env, {
+    GREY_PIPELINE_FORCE_WHOLE_SUMMARY: "1",
+    MEETING_POST_COMMAND: `node ${REPORTERS.grey.publishScript}`,
+    PIPELINE_FORCE_POST: "1",
+    MEETING_PUBLISH_COMMUNITY_NAME: "grey-county-council",
+    MEETING_PUBLISH_POST_REF: "https://helpos.ca/c/grey-county-council/8536/example",
+  });
+});
 
 test("classifyProbe distinguishes active, healthy, unpublished, and failed probes", () => {
   assert.deepEqual(classifyProbe({ active: true }), {
@@ -27,12 +74,26 @@ test("classifyProbe distinguishes active, healthy, unpublished, and failed probe
   assert.equal(classifyProbe({ error: "timeout" }).needs_repair, true);
 });
 
+test("a successful nightly outcome is healthy even when backlog may remain", () => {
+  assert.deepEqual(classifyNightlyOutcome({ status: "completed" }), {
+    state: "healthy_published_today",
+    needs_repair: false,
+    reason: "today's nightly reporter run published successfully",
+  });
+  assert.equal(classifyNightlyOutcome({ status: "failed" }), null);
+  assert.equal(classifyNightlyOutcome(null), null);
+});
+
 test("recovery launches only for a new confirmed failure without active work", () => {
   const failures = [{ reporter: "owen" }];
   assert.equal(shouldLaunchRecovery({ failures }), true);
   assert.equal(shouldLaunchRecovery({ failures, active: true }), false);
   assert.equal(shouldLaunchRecovery({ failures, alreadyLaunched: true }), false);
   assert.equal(shouldLaunchRecovery({ failures: [] }), false);
+  assert.equal(recoveryIsDeduplicated({ status: "running" }), true);
+  assert.equal(recoveryIsDeduplicated({ status: "fixed" }), true);
+  assert.equal(recoveryIsDeduplicated({ status: "needs_human" }), false);
+  assert.equal(recoveryIsDeduplicated({ status: "failed" }), false);
 });
 
 test("daily recovery deduplication state round-trips through Pyash", (t) => {
@@ -112,5 +173,5 @@ test("Codex launcher contract works with a noninteractive fake executable", asyn
   assert.equal(result.code, 0);
   assert.equal(JSON.parse(fs.readFileSync(outputPath, "utf8")).status, "no_action");
   assert.match(result.stdout, /simulation\.complete/u);
-  assert.deepEqual(args.slice(0, 3), ["exec", "--full-auto", "--json"]);
+  assert.deepEqual(args.slice(0, 6), ["exec", "--sandbox", "danger-full-access", "-c", 'approval_policy="never"', "--json"]);
 });

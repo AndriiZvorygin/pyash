@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+
+import { selectCanonicalAgendaItemKeys } from "../program/library/reporter_shared/escribe-agenda-identity.mjs";
+import { extractHybridPdfText } from "../program/library/reporter_shared/hybrid-pdf-text.mjs";
 import { spawnSync } from "node:child_process";
 
 function normalizeSpaces(text) {
@@ -76,7 +79,7 @@ async function extractAttachmentPdfSections({
 
   for (const [item, data] of attachmentsByItem.entries()) {
     const itemKey = String(item || "").toLowerCase();
-    if (!itemKey || existingItems.has(itemKey)) continue;
+    if (!itemKey) continue;
     const extractedParts = [];
     const extractedUrls = [];
     const itemDiagnostics = [];
@@ -107,30 +110,31 @@ async function extractAttachmentPdfSections({
         if (bytes.length < 8 || !bytes.subarray(0, 5).toString("ascii").startsWith("%PDF")) {
           throw new Error("response_not_pdf");
         }
-        const converted = spawnSync("pdftotext", ["-layout", pdfPath, textPath], {
-          encoding: "utf8",
-          timeout: 120_000,
-        });
-        if (converted.error) throw converted.error;
-        if (converted.status !== 0) {
-          throw new Error(`pdftotext_exit_${converted.status}: ${String(converted.stderr || "").trim()}`);
-        }
-        const text = fs.existsSync(textPath) ? fs.readFileSync(textPath, "utf8").trim() : "";
+        const hybrid = await extractHybridPdfText({ pdfPath, textPath });
+        const text = hybrid.text;
         const wordCount = normalizeSpaces(text).split(/\s+/u).filter(Boolean).length;
         if (!hasMeaningfulAttachmentText(text)) {
-          itemDiagnostics.push({ label, url, status: "empty_or_image_only", extracted_words: wordCount });
+          itemDiagnostics.push({ label, url, status: "empty_or_image_only", extracted_words: wordCount, local_file: pdfPath });
           continue;
         }
         extractedParts.push(`Attachment: ${label || url}\nSource: ${url}\n\n${text}`);
         extractedUrls.push(url);
-        itemDiagnostics.push({ label, url, status: "extracted", extracted_words: wordCount });
+        itemDiagnostics.push({ label, url, status: "extracted", extracted_words: wordCount, ocr_pages: hybrid.ocrPages, page_count: hybrid.totalPages, local_file: pdfPath });
       } catch (err) {
+        let retainedLocalFile = "";
+        try {
+          const bytes = fs.readFileSync(pdfPath);
+          if (bytes.length >= 8 && bytes.subarray(0, 5).toString("ascii").startsWith("%PDF")) {
+            retainedLocalFile = pdfPath;
+          }
+        } catch {}
         itemDiagnostics.push({
           label,
           url,
           status: "extract_failed",
           extracted_words: 0,
           error: String(err?.message || err).slice(0, 300),
+          local_file: retainedLocalFile,
         });
       }
     }
@@ -159,7 +163,7 @@ async function extractAttachmentPdfSections({
       confidence: 0.95,
       contamination_scan: hasContaminationMarkers(text),
     });
-    existingItems.add(itemKey);
+    // Direct attachments intentionally override any overlapping combined-package range.
   }
 
   return { sections, diagnostics };
@@ -195,10 +199,15 @@ function parseAgendaHtmlAttachments(htmlText, { baseOrigin = "" } = {}) {
   let m = null;
   while ((m = itemRe.exec(htmlText))) {
     const id = Number(m[1]);
-    const item = normalizeSpaces(decodeHtmlEntities(m[2])).toLowerCase();
+    const item = normalizeSpaces(decodeHtmlEntities(m[2])).toLowerCase().replace(/\.$/u, "");
     const title = normalizeSpaces(decodeHtmlEntities(m[3]));
     if (!item || !title) continue;
     idToItem.set(id, { item, title });
+    // Structured HTML is authoritative even when an item has no attachments.
+    if (!byItem.has(item)) {
+      byItem.set(item, { title, attachments: [], order: byItem.size });
+      seenAttachmentUrlByItem.set(item, new Set());
+    }
   }
 
   const attRe =
@@ -211,7 +220,7 @@ function parseAgendaHtmlAttachments(htmlText, { baseOrigin = "" } = {}) {
     const label = normalizeSpaces(decodeHtmlEntities(m[3]));
     if (!href) continue;
     if (!byItem.has(mapping.item)) {
-      byItem.set(mapping.item, { title: mapping.title, attachments: [] });
+      byItem.set(mapping.item, { title: mapping.title, attachments: [], order: byItem.size });
       seenAttachmentUrlByItem.set(mapping.item, new Set());
     }
     const seen = seenAttachmentUrlByItem.get(mapping.item);
@@ -851,6 +860,16 @@ async function main() {
   })();
   const attachmentsByItem = attachmentsResult?.byItem || new Map();
   const baseOrigin = attachmentsResult?.baseOrigin || "";
+  const attachmentOwner = new Map();
+  for (const [item, data] of attachmentsByItem.entries()) {
+    for (const attachment of data.attachments || []) {
+      const prior = attachmentOwner.get(attachment.url);
+      if (prior && prior !== item) {
+        throw new Error(`attachment ownership conflict: ${attachment.url} belongs to both ${prior} and ${item}`);
+      }
+      attachmentOwner.set(attachment.url, item);
+    }
+  }
 
   const fallbackSectionsFromAttachments = [];
   if (attachmentsByItem.size > 0) {
@@ -910,6 +929,45 @@ async function main() {
     outputDir,
   });
   const attachmentPdfSections = attachmentPdfResult.sections;
+  const directItems = new Set(attachmentPdfSections.map((section) => String(section.item || "").toLowerCase()));
+  let suspiciousRangeCutCount = 0;
+  const canonicalAttachmentEntries = Array.from(attachmentsByItem.entries());
+  for (const section of sections) {
+    const owner = String(section.item || "").toLowerCase();
+    if (!attachmentsByItem.get(owner)?.attachments?.length || directItems.has(owner)) continue;
+    const sectionLines = String(section.text || "").split(/\r?\n/u);
+    let cutAt = sectionLines.length;
+    const ownerIndex = canonicalAttachmentEntries.findIndex(([item]) => item === owner);
+    const nextKnownOwner = canonicalAttachmentEntries.slice(ownerIndex + 1).find(([, data]) => data.attachments?.length);
+    for (const [otherItem, other] of nextKnownOwner ? [nextKnownOwner] : []) {
+      if (otherItem === owner) continue;
+      const otherReportCode = extractReportCode(other.title);
+      const phrases = otherReportCode ? [otherReportCode] : [other.title, ...other.attachments.map((attachment) => attachment.label)];
+      for (const phrase of phrases) {
+        if (otherReportCode) {
+          const found = sectionLines.findIndex((line, lineIndex) => lineIndex >= 10 && normalizeSpaces(line).toUpperCase().includes(otherReportCode.toUpperCase()));
+          if (found >= 0) cutAt = Math.min(cutAt, found);
+          continue;
+        }
+        const tokens = normalizeSpaces(phrase).toLowerCase().split(/[^a-z0-9]+/u)
+          .filter((token) => token.length >= 5 && !["report", "minutes", "meeting", "council", "attachment", "presentation"].includes(token));
+        if (tokens.length < 2) continue;
+        for (let lineIndex = 10; lineIndex < cutAt; lineIndex += 1) {
+          const probe = normalizeSpaces(sectionLines.slice(lineIndex, lineIndex + 4).join(" ")).toLowerCase();
+          if (tokens.filter((token) => probe.includes(token)).length >= Math.min(3, tokens.length)) {
+            cutAt = lineIndex;
+            break;
+          }
+        }
+      }
+    }
+    if (cutAt < sectionLines.length) {
+      while (cutAt > 0 && !parseGlobalPageMarker(sectionLines[cutAt])) cutAt -= 1;
+      section.text = `${sectionLines.slice(0, Math.max(1, cutAt)).join("\n").trim()}\n`;
+      fs.writeFileSync(section.file, section.text, "utf8");
+      suspiciousRangeCutCount += 1;
+    }
+  }
   const indexPath = outputIndexPath || path.join(outputDir, "subreports.index.json");
   const index = {
     source_file: tocSourcePath,
@@ -928,6 +986,7 @@ async function main() {
     toc_items_skipped_weak_inferred_anchor_count: skippedWeakAnchorCount,
     toc_items_skipped_duplicate_inferred_start_count: skippedDuplicateInferredStartCount,
     minutes_action_boundary_cut_count: minutesBoundaryCutCount,
+    suspicious_cross_owner_range_cut_count: suspiciousRangeCutCount,
     duplicate_range_invalidated_count: 0,
     section_count: sections.length,
     sections: sections.map((s) => ({
@@ -1001,14 +1060,13 @@ async function main() {
       return true;
     })
     .map((x) => [String(x.item || "").toLowerCase(), x]));
-  index.items = Array.from(new Set([...index.sections.map((x) => x.item), ...Array.from(attachmentsByItem.keys())]))
-    .sort()
+  index.items = selectCanonicalAgendaItemKeys(attachmentsByItem, index.sections)
     .map((item) => {
       const fromSection = sectionByItem.get(String(item || "").toLowerCase());
       const fromHtml = attachmentsByItem.get(item);
       return {
         item,
-        title: fromSection?.title || fromHtml?.title || item,
+        title: fromHtml?.title || fromSection?.title || item,
         has_page_slice: Boolean(fromSection),
         start_page: fromSection?.start_page ?? null,
         end_page: fromSection?.end_page ?? null,

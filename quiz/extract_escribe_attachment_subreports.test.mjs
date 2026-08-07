@@ -6,9 +6,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-function runNode(args, cwd) {
+import {
+  buildCanonicalAgendaEvidence,
+  selectCanonicalAgendaItemKeys,
+} from "../program/library/reporter_shared/escribe-agenda-identity.mjs";
+
+function runNode(args, cwd, env = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn("node", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("node", args, { cwd, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += String(chunk); });
@@ -75,7 +80,7 @@ test("eScribe attachment PDFs become item-specific subreports when text is meani
     agendaHtml,
     `http://127.0.0.1:${port}/meeting`,
     agendaMd,
-  ], process.cwd());
+  ], process.cwd(), { PDF_OCR_QWEN_FIXTURE: JSON.stringify({ 1: "[[BLANK PAGE]]" }) });
 
   const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
   const report = index.items.find((item) => item.item === "5.a");
@@ -90,4 +95,33 @@ test("eScribe attachment PDFs become item-specific subreports when text is meani
       .attachments[0].status,
     "empty_or_image_only",
   );
+});
+
+test("structured eScribe agenda identity excludes PDF-only inferred items", () => {
+  assert.deepEqual(
+    selectCanonicalAgendaItemKeys(
+      new Map([
+        ["11.a", { title: "Annual Development Update" }],
+        ["12", { title: "Discussion of Additional Business" }],
+      ]),
+      [{ item: "11.a" }, { item: "12" }, { item: "11.b" }],
+    ),
+    ["11.a", "12"],
+  );
+});
+
+test("structured eScribe evidence carries parent roles and attachment ownership to child items", () => {
+  const evidence = buildCanonicalAgendaEvidence([
+    { item: "6", title: "PUBLIC MEETINGS", attachments: [] },
+    {
+      item: "6.a",
+      title: "Zoning By-law Amendment No. 59",
+      attachments: [{ label: "Planning Presentation - Public Meeting - ZBA No. 59.pdf" }],
+    },
+  ]);
+  assert.deepEqual(evidence.get("6.a"), [
+    "PUBLIC MEETINGS",
+    "Zoning By-law Amendment No. 59",
+    "Planning Presentation - Public Meeting - ZBA No. 59.pdf",
+  ]);
 });

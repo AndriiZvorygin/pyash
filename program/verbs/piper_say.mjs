@@ -11,6 +11,7 @@ import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../confi
 import { resolveVoiceId, resolvePiperBinary, resolveVoicePath, resolveStreamChunkPath, resolveStreamDelayMs, resolveOutputPath, metadataPathForOutput, canonicalJsonStringify, sha256 } from "./piper_utils.mjs";
 import { ensureWholeWordSplit, splitAtWordBoundary, normalizeSpeechText, appendSpeechText, appendChunkText, appendWordChunkText, shouldFlushChunk } from "./piper_text.mjs";
 import { startFileTail } from "./piper_tail.mjs";
+import { playAudio } from "./piper_audio.mjs";
 
 export async function piperSay(sentence, { remember: rememberFn = remember } = {}) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];

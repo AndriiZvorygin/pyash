@@ -8,20 +8,18 @@ import {
   validateMeetingSummaryChunksStrict,
   validateMeetingSummaryArtifactStrict,
 } from "./agenda-stage-contracts.mjs";
+import { unsupportedNumericTokens } from "./grounded-numeric-fidelity.mjs";
+import { agendaPreviewPriorityAdjustment } from "./agenda-preview-priority.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, "")
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, "")}/api/chat`
   : "http://mriczo:11434/api/chat";
 const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
-const MODEL = process.env.MEETING_SUMMARY_MODEL
-  || process.env.SUMMARY_MODEL
-  || process.env.OWEN_MEETING_SUMMARY_MODEL
-  || process.env.OWEN_SUMMARY_MODEL
-  || "qwen3.5:9b";
+const MODEL = "qwen3.5:9b";
 const MAX_ATTEMPTS = Math.max(
   1,
-  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_ATTEMPTS || "2"), 10) || 2,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_ATTEMPTS || "4"), 10) || 4,
 );
 const OLLAMA_TIMEOUT_MS = Math.max(
   5000,
@@ -30,8 +28,8 @@ const OLLAMA_TIMEOUT_MS = Math.max(
 const PASS_THRESHOLD = 0.8;
 const SUMMARY_TIME_MODE = String(process.env.AGENDA_SUMMARY_TIME_MODE || "standard").trim().toLowerCase();
 
-const STAGE_A_TARGET_BYTES = Number.parseInt(String(process.env.MEETING_SUMMARY_STAGE_A_TARGET_BYTES || "12000"), 10);
-const STAGE_A_HARD_MAX_BYTES = Number.parseInt(String(process.env.MEETING_SUMMARY_STAGE_A_HARD_MAX_BYTES || "16000"), 10);
+const STAGE_A_TARGET_BYTES = Number.parseInt(String(process.env.MEETING_SUMMARY_STAGE_A_TARGET_BYTES || "2500"), 10);
+const STAGE_A_HARD_MAX_BYTES = Number.parseInt(String(process.env.MEETING_SUMMARY_STAGE_A_HARD_MAX_BYTES || "4500"), 10);
 
 const AGENDA_SUMMARY_ROOT = "agenda summary artifact";
 const MEETING_SUMMARY_CHUNKS_ROOT = "meeting summary chunks artifact";
@@ -178,7 +176,7 @@ function hasCompleteRequiredSections(mdText) {
   const top = sectionContent(text, "Top Newsworthy Developments");
   const why = sectionContent(text, "Why It Matters");
   const watch = sectionContent(text, "Watch Next");
-  return top.length >= 300 && why.length >= 80 && watch.length >= 80;
+  return top.length >= 180 && why.length >= 30 && watch.length >= 20;
 }
 
 function normalizeRequiredSummaryHeadings(mdText = "") {
@@ -237,7 +235,7 @@ function scoreNewsCandidate(section = {}) {
   const words = summary.split(/\s+/u).filter(Boolean).length;
   if (words >= 22) score += 2;
   if (words < 8) score -= 3;
-  return score;
+  return score + agendaPreviewPriorityAdjustment({ title: heading, summary });
 }
 
 function humanImpactPriority(section = {}) {
@@ -279,6 +277,37 @@ function synthesisPenalty(mdText = "") {
   const opener = text.split(/\n\n/u).find((x) => x.trim() && !x.trim().startsWith("#")) || "";
   if (/\bmove into committee of the whole\b/iu.test(opener)) penalty += 0.22;
   return Math.min(0.7, penalty);
+}
+
+export function governingBodyDefects(mdText = "", bodyLabel = "", authoritativeSource = "") {
+  const text = String(mdText || "");
+  const source = String(authoritativeSource || "").toLowerCase();
+  const body = String(bodyLabel || "").toLowerCase();
+  const action = String.raw`(?:members?\s+)?(?:convened|met|heard|reviewed|considered|approved|adopted|voted|directed|received|discussed|deliberated|authorized|awarded|supported|expressed\s+support)`;
+  const defects = [];
+  const collectUnsupported = (pattern) => Array.from(text.matchAll(pattern), (match) => match[0])
+    .filter((match) => !source.includes(match.toLowerCase()));
+  if (!body.includes("council")) {
+    defects.push(...collectUnsupported(new RegExp(String.raw`\bcouncil\s+${action}\b`, "giu")));
+  }
+  if (!body.includes("committee")) {
+    defects.push(...collectUnsupported(new RegExp(String.raw`\bcommittee\s+${action}\b`, "giu")));
+  }
+  if (!body.includes("board")) {
+    defects.push(...collectUnsupported(new RegExp(String.raw`\bboard\s+${action}\b`, "giu")));
+  }
+  return [...new Set(defects)];
+}
+
+export function previewTemporalDefects(mdText = "") {
+  const text = String(mdText || "");
+  const patterns = [
+    /\b(?:council|committee|board)(?: members)?\s+(?:convened|met|heard|reviewed|considered|approved|adopted|voted|directed|received|transitioned|discussed)\b/giu,
+    /\b(?:the )?(?:meeting|session)\s+(?:convened|met|opened|prioritized|focused|heard|reviewed|considered|approved|adopted|transitioned|discussed)\b/giu,
+    /\b(?:the )?(?:morning|afternoon|evening)\s+(?:also\s+)?saw\b/giu,
+    /\bofficials\s+moved\s+forward\b/giu,
+  ];
+  return [...new Set(patterns.flatMap((pattern) => Array.from(text.matchAll(pattern), (match) => match[0])))];
 }
 
 function extractHeadings(mdText) {
@@ -366,6 +395,14 @@ function toSectionSourceBlock(section = {}, sectionIndex = 1) {
     `Summary: ${summary || "(none)"}`,
   ];
   if (chapterText) lines.push(`Chapter text: ${chapterText}`);
+  const chapters = Array.isArray(section.chapters) ? section.chapters : [];
+  for (const chapter of chapters) {
+    const title = String(chapter?.title || "").trim();
+    const text = String(chapter?.text || "").trim();
+    if (!title && !text) continue;
+    lines.push(`Child topic: ${title || "(untitled)"}`);
+    if (text) lines.push(`Child summary: ${text}`);
+  }
   return lines.join("\n");
 }
 
@@ -487,8 +524,15 @@ function buildChunkSummaryPrompt({
     headings || "- (none)",
     "",
     "Required coverage:",
-    "- Major topics discussed in this range.",
-    "- Important decisions / vote outcomes, and clearly state when no decision was taken.",
+    ...(SUMMARY_TIME_MODE === "upcoming"
+      ? [
+        "- Major topics scheduled or proposed for consideration in this range.",
+        "- Decisions requested in the agenda package; do not claim Council has voted or acted.",
+      ]
+      : [
+        "- Major topics discussed in this range.",
+        "- Important decisions / vote outcomes, and clearly state when no decision was taken.",
+      ]),
     "- Unresolved issues / follow-up requested by council/staff.",
     "- Notable events that matter to readers.",
     "",
@@ -498,12 +542,92 @@ function buildChunkSummaryPrompt({
     "- Do not use: distributive justice, ring-fenced, reclamation, spirited debate, stark reality check, no unresolved issues.",
     "",
     "Output constraints:",
-    "- 2 to 6 sentences.",
+    "- Output one labeled bullet for every covered heading, in the same order.",
+    "- Begin each bullet with the exact covered heading, followed by a colon.",
+    "- Give each substantive bullet 1 to 2 sentences. Keep procedural bullets to one short clause.",
+    "- Never combine two covered headings in one bullet.",
     "- Source-faithful and concrete.",
     "- No invented facts.",
+    `- Refer to the meeting's governing body as "${bodyLabel || "the governing body"}"; do not substitute Council, county council, or another body label.`,
+    "- Preserve an action by a subordinate committee or board only when that acting body and action are explicit in the source.",
+    "- Do not name individual councillors, motion movers, or seconders. Describe the committee, staff, presenter, report, or correspondence instead.",
+    "- Do not add a person's name merely to make a sentence sound specific. A presenter or correspondence author's name is allowed only when it appears verbatim in the source and is essential to understanding the topic.",
+    "- Do not turn reviewed, discussed, proposed, considered, or received items into approved, adopted, awarded, authorized, or funded outcomes.",
+    "- Preserve status and tense exactly: do not change cleared/completed/authorized into targeting/planned/pending, or change a proposal into a completed outcome.",
+    "- If a person's name in a heading differs from a person's name in its summary, omit both names rather than merging or choosing between them.",
+    "- Canonical covered headings are authoritative for agenda item names, report codes, projects, and locations. If body text conflicts with a heading on one of those identifiers, use the heading value and omit the conflicting value.",
+    "- Do not combine separate agenda items into one motion, outcome, cause, or attribution.",
+    ...(SUMMARY_TIME_MODE === "upcoming"
+      ? [
+        "- This is an upcoming agenda preview before the meeting occurs.",
+        "- Use present/future framing such as is scheduled, will consider, or the agenda proposes.",
+        "- Never say the meeting convened, Council heard/reviewed/approved/directed, the session prioritized, or the afternoon saw an event.",
+        "- Past actions described inside supporting reports must be clearly attributed to those reports or earlier dated meetings.",
+      ]
+      : []),
     "",
     "SOURCE_SECTION_SUMMARIES:",
     chunkSource,
+  ].join("\n");
+}
+
+function buildChunkScorePrompt({ chunkSource = "", chunkSummary = "", bodyLabel = "" }) {
+  return [
+    "Score CHUNK_SUMMARY for strict semantic faithfulness to CHUNK_SOURCE.",
+    "",
+    "Rules:",
+    "- Penalize inverted amounts, terms, dates, directions, approvals, or outcomes.",
+    "- Penalize invented causality, funding links, motives, constraints, and vote results.",
+    "- Penalize facts moved between separate agenda topics.",
+    "- Penalize named councillors, motion movers, or seconders.",
+    `- Penalize unsupported substitution of the meeting body "${bodyLabel || "the supplied governing body"}".`,
+    "- Do not penalize a subordinate committee or board action explicitly stated in CHUNK_SOURCE.",
+    "- Do not penalize concise omission; this is a bounded intermediate summary.",
+    "",
+    "Output:",
+    "- Return exactly two lines and no analysis.",
+    "- First line: FINAL_SCORE: <number from 0.00 to 1.00>.",
+    "- Second line: FEEDBACK: <one short correction sentence>.",
+    "",
+    "CHUNK_SOURCE:",
+    chunkSource,
+    "",
+    "CHUNK_SUMMARY:",
+    chunkSummary,
+  ].join("\n");
+}
+
+function buildChunkReviewAdjudicationPrompt({
+  chunkSource = "",
+  chunkSummary = "",
+  bodyLabel = "",
+  priorReview = "",
+}) {
+  return [
+    "Adjudicate a prior semantic review of CHUNK_SUMMARY against CHUNK_SOURCE.",
+    "The prior review is only a claim and may be wrong. Recheck every alleged defect against literal source evidence.",
+    "",
+    "Rules:",
+    "- Do not infer approval, rejection, or a final outcome from an agenda heading, project purpose, by-law title, chapter title, or proposed use.",
+    "- Treat a conservative omission of an unclear outcome as faithful unless the source explicitly states the outcome.",
+    "- Penalize an outcome claim in the summary only when it contradicts an explicit source statement.",
+    "- Penalize invented amounts, dates, causality, funding links, motives, or facts moved between topics.",
+    "- Penalize named councillors, movers, seconders, or unsupported substitution of the supplied meeting body.",
+    "- Do not penalize a subordinate committee or board action explicitly stated in CHUNK_SOURCE.",
+    `- The supplied governing body is "${bodyLabel || "the supplied governing body"}".`,
+    "",
+    "Output exactly two lines and no analysis:",
+    "FINAL_SCORE: <number from 0.00 to 1.00>",
+    "FEEDBACK: <one short evidence-based correction sentence>",
+    "",
+    "CHUNK_SOURCE:",
+    chunkSource,
+    "",
+    "CHUNK_SUMMARY:",
+    chunkSummary,
+    "",
+    "PRIOR_REVIEW_TO_ADJUDICATE:",
+    priorReview,
   ].join("\n");
 }
 
@@ -519,7 +643,10 @@ function buildFinalSummaryPrompt({
 }) {
   const focusLine = String(focus || "").trim() || "factual civic reporting";
   const rankedItemsText = (Array.isArray(priorityItems) ? priorityItems : [])
-    .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading} -- ${it.summary}`)
+    // Stage B receives ranking identity only. Re-supplying the raw section
+    // summaries here bypasses Stage A's bounded normalization and can
+    // reintroduce conflicting attributions or outcomes.
+    .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
     .join("\n");
   return [
     "Create a readable, grounded whole-meeting local-news recap from chunk summaries.",
@@ -534,21 +661,44 @@ function buildFinalSummaryPrompt({
     "2) ## Top Newsworthy Developments",
     "3) ## Why It Matters",
     "4) ## Watch Next",
+    "- Under the H1, write one paragraph of 2 to 3 sentences.",
+    "- Under Top Newsworthy Developments, write 6 to 12 bullets. Each bullet must cover exactly one substantive agenda topic and one source-supported status or outcome.",
+    "- Under Why It Matters, write 2 to 4 bullets. Each bullet must cover exactly one agenda topic and only impacts explicitly supplied in the chunks.",
+    "- Under Watch Next, write bullets only for explicit unresolved decisions, applications, or staff follow-ups. If none are explicit, write one plain sentence saying so.",
     "",
     "Rules:",
-    "- Use only facts present in CHUNK_SUMMARIES.",
+    "- Use only facts present in CHUNK_SUMMARIES or RANKED_NEWS_CANDIDATES.",
     "- Lead with the most consequential substantive item from RANKED_NEWS_CANDIDATES, not procedural openers.",
-    "- Write like strong local journalism, not dry minutes: concise, concrete, and engaging.",
-    "- Use concrete local stakes (costs, votes, projects, bylaws, speakers, service impacts).",
-    "- Preserve coverage from early, middle, and late meeting phases.",
+    "- Write in plain local-news language: concise, concrete, and restrained.",
+    "- Use only stakes and impacts explicitly stated in the supplied chunks. Do not infer who relies on a service, what a proposal threatens, or why an outcome occurred.",
+    "- Preserve coverage from early, middle, and late meeting phases. Include at least one substantive topic from every supplied chunk, including the final chunk.",
+    "- Keep facts from separate agenda sections separate. Never invent a causal relationship, funding relationship, or common decision between sections.",
+    "- Preserve organization, program, place, report, and speaker names exactly as supplied; do not invent abbreviations or rename entities.",
+    "- RANKED_NEWS_CANDIDATES and covered headings are authoritative for agenda item names, report codes, projects, and locations when a chunk sentence conflicts with them.",
+    "- Never name individual councillors, motion movers, or seconders in the whole-meeting recap. Describe the committee, staff, presenter, report, or correspondence instead.",
+    "- A presenter or correspondence author's name may appear only when copied verbatim from a supplied chunk and essential to the story.",
+    `- Refer to the meeting's governing body as "${bodyLabel || "the governing body"}"; never substitute Council, county council, or another body label.`,
+    "- Preserve an action by a subordinate committee or board only when that acting body and action are explicit in the supplied chunks.",
     "- Do not overweight opening procedural sections.",
     "- Include key decisions and outcomes where present.",
     "- If a point is proposal-only or uncertain, say it was discussed/considered rather than adopted.",
+    "- When source summaries disagree about whether a motion or approval occurred, omit the outcome claim and describe the proposal, report, or discussion conservatively.",
+    "- Preserve status and tense exactly: do not change cleared/completed/authorized into targeting/planned/pending, or change a proposal into a completed outcome.",
+    "- When motion wording or its outcome is unclear, do not say an item was moved, seconded, carried, or defeated; report only the underlying topic.",
+    "- Never add unanimous, approved, adopted, awarded, or authorized when the supplied sources do not agree on that exact outcome.",
     "- For vote language (carried, defeated, approved, deferred, unanimous, split), use only when explicitly supported in CHUNK_SUMMARIES.",
     "- Keep tone grounded and specific; avoid generic civic filler or abstract framing.",
+    "- Avoid promotional or interpretive modifiers such as critical, major, substantial, high-stakes, successful, positive momentum, or lack of effort unless the supplied chunk uses that characterization.",
+    "- Do not recast waitlist attachment as administrative backlog clearing or access to specialized care unless the supplied chunk says so.",
+    "- Do not describe Healthcare Connect attachment as specialized care; use primary-care attachment or waitlist clearance only when supplied.",
+    "- In Why It Matters, restate only direct service, financial, regulatory, land-use, or safety effects found in the chunks; do not predict broader consequences.",
+    "- In Watch Next, include only an explicit unresolved question, staff follow-up, future report, application, or decision found in a supplied chunk. Do not invent monitoring tasks, grant applications, capital plans, audits, recruitment effects, or development impacts.",
+    "- If no explicit follow-up is supplied, write one plain sentence saying no explicit follow-up was recorded; do not turn discussed items into future tasks.",
     "- Avoid opening with call-to-order, committee-of-the-whole motions, minutes confirmation, or adjournment.",
+    "- Do not mention the weekday, time of day, today, tonight, this evening, or repeat the meeting date unless a source event specifically depends on that timing.",
+    "- Do not add motives or loaded characterizations such as corporate offloads, volatile funding, deep-seated deficits, or historical neglect unless those exact claims are supported.",
     "- Do not use these phrases unless directly quoted from source: distributive justice; ring-fenced; reclamation; spirited debate; stark reality check; no unresolved issues; complex landscape.",
-    "- Keep total length under 900 words.",
+    "- Keep total length under 500 words.",
     ...(SUMMARY_TIME_MODE === "upcoming"
       ? [
         "- This is an upcoming agenda preview before the meeting occurs.",
@@ -577,7 +727,7 @@ function buildFinalScorePrompt({
   priorityItems,
 }) {
   const rankedItemsText = (Array.isArray(priorityItems) ? priorityItems : [])
-    .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading} -- ${it.summary}`)
+    .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
     .join("\n");
   return [
     "Score WHOLE_MEETING_SUMMARY for semantic faithfulness to CHUNK_SUMMARIES.",
@@ -590,16 +740,34 @@ function buildFinalScorePrompt({
     "",
     "Rules:",
     "- Penalize invented claims, wrong attributions, or nonexistent outcomes.",
+    "- Penalize any named councillor, motion mover, or seconder in the recap. A presenter or correspondence author's verbatim name is allowed when essential.",
+    "- Penalize omission of every substantive topic from an entire supplied chunk, especially the final chunk.",
+    "- Do not penalize omission of secondary details when at least one substantive topic from that chunk is accurately covered.",
+    "- When supplied sources conflict on vote or approval status, reward conservative proposal/discussion wording and penalize a definite outcome claim.",
+    "- When a chunk reports debate or consideration without an explicit outcome, reward conservative wording such as debated, considered, unresolved, or under consideration.",
+    "- Watch Next may mention an unresolved decision only when a supplied chunk explicitly describes the terms as debated or under consideration.",
+    "- Penalize invented causal or funding links between separate agenda sections.",
+    "- Do not penalize a causal or funding relationship copied from within the same supplied chunk.",
+    "- Judge only against CHUNK_SUMMARIES and RANKED_NEWS_CANDIDATES; do not infer missing events or outcomes from outside knowledge.",
+    "- Penalize renamed organizations, invented abbreviations, loaded motives, and unsupported characterizations.",
+    "- Penalize weekday/time-of-day/today/tonight framing that is not explicitly supported and necessary.",
     `- Penalize incorrect governing body label; required body is "${bodyLabel || "unknown"}".`,
     `- Penalize incorrect jurisdiction label; required jurisdiction is "${jurisdiction || "unknown"}".`,
     `- Penalize incorrect meeting date; required date is "${meetingDateLong || meetingDateIso || "unknown"}".`,
     "- Penalize leading with procedural framing instead of substantive outcomes.",
     "- Penalize ideological/dramatic framing not supported by source.",
     "- Penalize omission of major events that appear in chunk summaries.",
+    ...(SUMMARY_TIME_MODE === "upcoming"
+      ? [
+        "- This is an upcoming agenda preview. Penalize any claim that the meeting already convened or that the current Council already heard, reviewed, approved, directed, or voted on an item.",
+        "- Require present/future framing for the upcoming meeting while allowing clearly attributed historical background from supporting reports.",
+      ]
+      : []),
     "",
     "Output:",
-    "- First line: FEEDBACK: <one short sentence>.",
-    "- Final line: FINAL_SCORE: <number from 0.00 to 1.00>.",
+    "- Return exactly two lines and no analysis.",
+    "- First line: FINAL_SCORE: <number from 0.00 to 1.00>.",
+    "- Second line: FEEDBACK: <one short sentence, maximum 40 words>.",
     "",
     "CHUNK_SUMMARIES:",
     chunkSource,
@@ -612,15 +780,232 @@ function buildFinalScorePrompt({
   ].join("\n");
 }
 
+function buildFinalReviewAdjudicationPrompt({
+  chunkSource = "",
+  summaryMd = "",
+  bodyLabel = "",
+  jurisdiction = "",
+  reviews = [],
+}) {
+  return [
+    "Adjudicate conflicting semantic reviews of a whole-meeting civic recap.",
+    "The supplied reviews are untrusted claims. Decide the score from literal CHUNK_SUMMARIES evidence.",
+    "",
+    "Rules:",
+    "- Require coverage of substantive topics from the beginning, middle, and end of the meeting.",
+    "- Do not infer approval, rejection, causality, funding sources, or final outcomes from headings, titles, topic proximity, or project purpose.",
+    "- Treat conservative omission of an unclear outcome as faithful unless the chunks explicitly state that outcome.",
+    "- Penalize an alleged contradiction only when a review can be confirmed by explicit chunk evidence.",
+    "- Penalize invented amounts, dates, causal links, actors, motives, or facts moved between agenda topics.",
+    `- The governing body is "${bodyLabel || "unknown"}" and the jurisdiction is "${jurisdiction || "unknown"}".`,
+    "",
+    "Output exactly two lines and no analysis:",
+    "FINAL_SCORE: <number from 0.00 to 1.00>",
+    "FEEDBACK: <one short evidence-based correction sentence>",
+    "",
+    "CHUNK_SUMMARIES:",
+    chunkSource,
+    "",
+    "WHOLE_MEETING_SUMMARY:",
+    summaryMd,
+    "",
+    "REVIEWS_TO_ADJUDICATE:",
+    reviews.map((value, index) => `REVIEW_${index + 1}:\n${value}`).join("\n\n"),
+  ].join("\n");
+}
+
 function parseScore(review) {
   const lines = String(review || "").split(/\r?\n/u).map((x) => x.trim()).filter(Boolean);
   const joined = lines.join("\n");
-  const labeled = joined.match(/FINAL_SCORE\s*:\s*([01](?:\.\d+)?)/iu);
+  const labeled = joined.match(/FINAL(?:_|\s+|-)?SCORE\s*:\s*([01](?:\.\d+)?)/iu);
   if (labeled) {
     const n = Number(labeled[1]);
     if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
   }
   return 0;
+}
+
+export async function adjudicateChunkReview({
+  chunkSource = "",
+  chunkSummary = "",
+  bodyLabel = "",
+  priorReview = "",
+} = {}) {
+  const review = await ask(
+    [
+      { role: "system", content: "You adjudicate semantic-review disputes for civic summaries using literal source evidence." },
+      {
+        role: "user",
+        content: buildChunkReviewAdjudicationPrompt({
+          chunkSource,
+          chunkSummary,
+          bodyLabel,
+          priorReview,
+        }),
+      },
+    ],
+    { numPredict: 260 },
+  );
+  return { review, score: parseScore(review) };
+}
+
+export async function adjudicateFinalReviews({
+  chunkSource = "",
+  summaryMd = "",
+  bodyLabel = "",
+  jurisdiction = "",
+  reviews = [],
+} = {}) {
+  const review = await ask(
+    [
+      { role: "system", content: "You adjudicate disputed whole-meeting civic-summary reviews using literal source evidence." },
+      {
+        role: "user",
+        content: buildFinalReviewAdjudicationPrompt({
+          chunkSource,
+          summaryMd,
+          bodyLabel,
+          jurisdiction,
+          reviews,
+        }),
+      },
+    ],
+    { numPredict: 420 },
+  );
+  return { review, score: parseScore(review) };
+}
+
+function parseJsonObject(text = "") {
+  const value = String(text || "").replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "").trim();
+  const start = value.indexOf("{");
+  const end = value.lastIndexOf("}");
+  if (start < 0 || end < start) return null;
+  try {
+    return JSON.parse(value.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+export async function auditFinalChunkCoverage({ chunks = [], summaryMd = "" }) {
+  const missing = [];
+  const rawRows = [];
+  const adjudicationRows = [];
+  for (const chunk of chunks) {
+    const chunkId = String(chunk?.["chunk id"] || "").trim();
+    if (!chunkId) continue;
+    const chunkSummary = String(chunk?.["chunk summary text"] || "").trim();
+    const buildPrompt = ({ priorAudit = "" } = {}) => [
+      priorAudit
+        ? "Adjudicate a disputed semantic coverage result for one chronology chunk."
+        : "Decide semantic topic coverage for one chronology chunk.",
+      priorAudit ? "The prior audit is an untrusted claim; recheck against literal evidence." : "",
+      "covered is true only when FINAL_SUMMARY contains at least one identifiable substantive presentation, service, report, public input, decision, or outcome from CHUNK_SUMMARY.",
+      "A procedural mention alone is insufficient when CHUNK_SUMMARY contains substantive material.",
+      "Coverage may be concise and paraphrased; do not require exact wording.",
+      "Return exactly: {\"covered\":true,\"evidence\":\"short phrase identifying the covered topic\"}",
+      "",
+      `CHUNK_ID: ${chunkId}`,
+      `CHUNK_SUMMARY: ${chunkSummary}`,
+      "",
+      "FINAL_SUMMARY:",
+      summaryMd,
+      priorAudit ? `\nPRIOR_AUDIT:\n${priorAudit}` : "",
+    ].filter(Boolean).join("\n");
+    const raw = await ask(
+      [
+        {
+          role: "system",
+          content: "You audit one chronology chunk for semantic topic coverage in a civic recap. Return strict JSON only.",
+        },
+        {
+          role: "user",
+          content: buildPrompt(),
+        },
+      ],
+      { numPredict: 180 },
+    );
+    rawRows.push({ "chunk id": chunkId, raw });
+    let parsed = parseJsonObject(raw);
+    if (parsed?.covered !== true) {
+      const adjudication = await ask(
+        [
+          {
+            role: "system",
+            content: "You adjudicate one disputed chronology-chunk coverage result. Return strict JSON only.",
+          },
+          {
+            role: "user",
+            content: buildPrompt({ priorAudit: raw }),
+          },
+        ],
+        { numPredict: 220 },
+      );
+      adjudicationRows.push({ "chunk id": chunkId, raw: adjudication });
+      parsed = parseJsonObject(adjudication);
+    }
+    if (parsed?.covered !== true) missing.push(chunkId);
+  }
+  return {
+    missing,
+    raw: JSON.stringify(rawRows),
+    adjudication: JSON.stringify(adjudicationRows),
+  };
+}
+
+export function namedCouncilActorDefects(text = "", authoritativeHeadings = []) {
+  let candidate = String(text || "");
+  for (const heading of (Array.isArray(authoritativeHeadings) ? authoritativeHeadings : [])) {
+    const exact = String(heading || "").trim();
+    if (!exact) continue;
+    const escaped = exact.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    candidate = candidate.replace(
+      new RegExp(`(^|\\n)\\s*[-*]?\\s*${escaped}(?=\\s*:)`, "giu"),
+      "$1",
+    );
+  }
+  return [
+    ...Array.from(
+      candidate.matchAll(/\b(?:Chair|chair|Councillor|councillor|Councilor|councilor)\s+\p{Lu}[\p{L}'’-]*/gu),
+      (match) => match[0],
+    ),
+    ...Array.from(
+      candidate.matchAll(/\b\p{Lu}[\p{L}'’-]+\s+\p{Lu}[\p{L}'’-]+\s+(?:moved|seconded)\b/gu),
+      (match) => match[0],
+    ),
+  ];
+}
+
+export function buildChunkRetryGuidance({
+  candidate = "",
+  forbiddenNames = [],
+  wrongBody = [],
+  bodyLabel = "",
+  semanticReview = "",
+  attempt = 1,
+} = {}) {
+  const rejectedDraft = String(candidate || "").trim().slice(0, 6000);
+  const freshActorRepair = Number(attempt) >= 3 && forbiddenNames.length;
+  const repeatedActorRepair = Number(attempt) >= 2 && forbiddenNames.length
+    ? [
+      "Use a third-pass repair strategy for the repeated actor defect.",
+      "Delete every listed named-actor occurrence, then rewrite only the affected clause with a generic body, staff, presenter, or report attribution supported by the source.",
+      "Scan the full corrected draft before returning it and ensure none of the listed occurrences remain outside an exact required heading.",
+      freshActorRepair
+        ? "Do not edit the rejected sentences in place. Write a fresh summary from the grounded source using no personal names anywhere in prose."
+        : "",
+    ].join(" ")
+    : "";
+  return [
+    freshActorRepair
+      ? "Write a fresh source-grounded replacement that preserves the required headings and topic coverage while fixing every listed defect."
+      : "Revise the rejected draft below instead of generating an unrelated replacement. Preserve every correct heading and grounded fact while fixing every listed defect.",
+    repeatedActorRepair,
+    forbiddenNames.length ? `Remove named councillors/movers: ${forbiddenNames.join(", ")}.` : "",
+    wrongBody.length ? `Use only "${bodyLabel}" as the acting body: ${wrongBody.join(", ")}.` : "",
+    semanticReview ? `SEMANTIC_RETRY:\n${semanticReview}` : "",
+    rejectedDraft ? `REJECTED_DRAFT:\n${rejectedDraft}` : "",
+  ].filter(Boolean).join("\n\n");
 }
 
 async function synthesizeChunkSummaries({
@@ -638,30 +1023,90 @@ async function synthesizeChunkSummaries({
     log(
       `[meeting-summary][chunk] ${i + 1}/${units.length} sections ${u["section start index"]}-${u["section end index"]} bytes=${u["source byte count"]}`,
     );
-    const summaryText = await ask(
-      [
-        { role: "system", content: "You are a strict local-news summarizer. Stay source-faithful." },
-        {
-          role: "user",
-          content: buildChunkSummaryPrompt({
-            chunkId: u["chunk id"],
-            sectionStartIndex: u["section start index"],
-            sectionEndIndex: u["section end index"],
-            coveredHeadings: u["covered headings"],
+    let cleaned = "";
+    let chunkFeedback = "";
+    const accumulatedForbiddenNames = new Set();
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const summaryText = await ask(
+        [
+          { role: "system", content: "You are a strict local-news summarizer. Stay source-faithful." },
+          {
+            role: "user",
+            content: [
+              buildChunkSummaryPrompt({
+                chunkId: u["chunk id"],
+                sectionStartIndex: u["section start index"],
+                sectionEndIndex: u["section end index"],
+                coveredHeadings: u["covered headings"],
+                chunkSource: u.source,
+                focus,
+                meetingDateIso,
+                meetingDateLong,
+                bodyLabel,
+                jurisdiction,
+              }),
+              chunkFeedback ? `\nRETRY_FEEDBACK:\n${chunkFeedback}` : "",
+            ].join("\n"),
+          },
+        ],
+        { numPredict: 700 },
+      );
+      const candidate = String(summaryText || "").trim();
+      const forbiddenNames = namedCouncilActorDefects(candidate, u["covered headings"]);
+      for (const name of forbiddenNames) accumulatedForbiddenNames.add(name);
+      const wrongBody = governingBodyDefects(candidate, bodyLabel, u.source);
+      let semanticReview = "";
+      let semanticScore = 0;
+      if (candidate && forbiddenNames.length === 0 && wrongBody.length === 0) {
+        semanticReview = await ask(
+          [
+            { role: "system", content: "You are a strict semantic verifier for civic source summaries." },
+            {
+              role: "user",
+              content: buildChunkScorePrompt({
+                chunkSource: u.source,
+                chunkSummary: candidate,
+                bodyLabel,
+              }),
+            },
+          ],
+          { numPredict: 260 },
+        );
+        semanticScore = parseScore(semanticReview);
+        if (semanticScore < PASS_THRESHOLD) {
+          const adjudication = await adjudicateChunkReview({
             chunkSource: u.source,
-            focus,
-            meetingDateIso,
-            meetingDateLong,
+            chunkSummary: candidate,
             bodyLabel,
-            jurisdiction,
-          }),
-        },
-      ],
-      { numPredict: 460 },
-    );
-    const cleaned = String(summaryText || "").trim();
+            priorReview: semanticReview,
+          });
+          semanticReview = adjudication.review;
+          semanticScore = adjudication.score;
+        }
+        if (semanticScore >= PASS_THRESHOLD) {
+          cleaned = candidate;
+          break;
+        }
+      }
+      chunkFeedback = buildChunkRetryGuidance({
+        candidate,
+        forbiddenNames: [...accumulatedForbiddenNames],
+        wrongBody,
+        bodyLabel,
+        semanticReview,
+        attempt,
+      });
+      log(
+        `[meeting-summary][chunk] rejected ${u["chunk id"]} attempt=${attempt} `
+        + `empty=${candidate ? "no" : "yes"} actor_defects=${forbiddenNames.length} `
+        + `body_defects=${wrongBody.length} semantic_score=${semanticScore.toFixed(3)} `
+        + `actor_feedback=${forbiddenNames.join(" | ") || "(none)"} `
+        + `body_feedback=${wrongBody.join(" | ") || "(none)"} `
+        + `feedback=${String(semanticReview || "").replace(/\s+/gu, " ").trim().slice(0, 500) || "(none)"}`,
+      );
+    }
     if (!cleaned) {
-      throw new Error(`meeting summary stage A defective: empty chunk summary for ${u["chunk id"]}`);
+      throw new Error(`meeting summary stage A defective: no constraint-safe chunk summary for ${u["chunk id"]}`);
     }
     chunks.push({
       "chunk id": u["chunk id"],
@@ -687,6 +1132,23 @@ function buildChunkSourceForStageB(chunks = []) {
   }).join("\n\n---\n\n");
 }
 
+export function buildFinalNumericGroundingSource(chunkSource = "", priorityItems = [], authoritativeContext = []) {
+  const rankedSource = (Array.isArray(priorityItems) ? priorityItems : [])
+    .map((item) => [
+      String(item?.heading || "").trim(),
+      String(item?.summary || "").trim(),
+    ].filter(Boolean).join("\n"))
+    .filter(Boolean)
+    .join("\n\n");
+  const contextSource = (Array.isArray(authoritativeContext) ? authoritativeContext : [authoritativeContext])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join("\n");
+  return [String(chunkSource || "").trim(), rankedSource, contextSource]
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+}
+
 async function synthesizeFinalMeetingSummary({
   chunksArtifact,
   focus,
@@ -695,12 +1157,19 @@ async function synthesizeFinalMeetingSummary({
   bodyLabel,
   jurisdiction,
   priorityItems,
+  log = () => {},
 }) {
   const chunkSource = buildChunkSourceForStageB(chunksArtifact?.chunks || []);
+  const numericGroundingSource = buildFinalNumericGroundingSource(
+    chunkSource,
+    priorityItems,
+    [meetingDateIso, meetingDateLong],
+  );
   let feedback = "";
   let bestText = "";
   let bestScore = -1;
   let bestReview = "";
+  let bestDiagnostics = "";
 
   for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
     const draftRaw = await ask(
@@ -723,36 +1192,108 @@ async function synthesizeFinalMeetingSummary({
       { numPredict: 1200 },
     );
     const draft = normalizeRequiredSummaryHeadings(String(draftRaw || "").trim());
+    const coverageAudit = await auditFinalChunkCoverage({
+      chunks: chunksArtifact?.chunks || [],
+      summaryMd: draft,
+    });
 
-    const review = await ask(
-      [
-        { role: "system", content: "You are a strict semantic verifier for civic summaries." },
-        {
-          role: "user",
-          content: buildFinalScorePrompt({
-            chunkSource,
-            summaryMd: draft,
-            bodyLabel,
-            jurisdiction,
-            meetingDateIso,
-            meetingDateLong,
-            priorityItems,
-          }),
-        },
-      ],
-      { numPredict: 220 },
-    );
+    const reviews = [];
+    for (let reviewIndex = 0; reviewIndex < 3; reviewIndex += 1) {
+      reviews.push(await ask(
+        [
+          { role: "system", content: "You are a strict semantic verifier for civic summaries. Judge only against the supplied sources." },
+          {
+            role: "user",
+            content: buildFinalScorePrompt({
+              chunkSource,
+              summaryMd: draft,
+              bodyLabel,
+              jurisdiction,
+              meetingDateIso,
+              meetingDateLong,
+              priorityItems,
+            }),
+          },
+        ],
+        // Leave enough room for the mandatory trailing score. Truncating a
+        // detailed critique before FINAL_SCORE silently parses as zero.
+        { numPredict: 360 },
+      ));
+    }
+    const reviewScores = reviews.map(parseScore).sort((a, b) => a - b);
+    let verifierScore = reviewScores[Math.floor(reviewScores.length / 2)] || 0;
+    let review = reviews.map((value, index) => `REVIEW_${index + 1}:\n${value}`).join("\n\n");
+    if (verifierScore < PASS_THRESHOLD
+      || (reviewScores.at(-1) || 0) - (reviewScores[0] || 0) >= 0.2) {
+      const adjudication = await adjudicateFinalReviews({
+        chunkSource,
+        summaryMd: draft,
+        bodyLabel,
+        jurisdiction,
+        reviews,
+      });
+      verifierScore = adjudication.score;
+      review = [
+        review,
+        `ADJUDICATION:\n${adjudication.review}`,
+      ].join("\n\n");
+    }
 
     const completenessPenalty = hasCompleteRequiredSections(draft) ? 0 : 0.4;
     const stylePenalty = synthesisPenalty(draft);
-    const score = Math.max(0, parseScore(review) - completenessPenalty - stylePenalty);
+    const temporalDefects = SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(draft) : [];
+    const temporalPenalty = temporalDefects.length ? 0.6 : 0;
+    const bodyDefects = governingBodyDefects(draft, bodyLabel, chunkSource);
+    const bodyPenalty = bodyDefects.length ? 0.6 : 0;
+    const numericDefects = unsupportedNumericTokens(draft, numericGroundingSource);
+    const numericPenalty = numericDefects.length ? 0.6 : 0;
+    const coveragePenalty = coverageAudit.missing.length ? 1 : 0;
+    const score = Math.max(0, verifierScore - completenessPenalty - stylePenalty - temporalPenalty - bodyPenalty - numericPenalty - coveragePenalty);
+    const diagnostics = [
+      `attempt=${i}`,
+      `verifier=${verifierScore.toFixed(3)}`,
+      `completeness_penalty=${completenessPenalty.toFixed(3)}`,
+      `style_penalty=${stylePenalty.toFixed(3)}`,
+      `temporal_penalty=${temporalPenalty.toFixed(3)}`,
+      `body_penalty=${bodyPenalty.toFixed(3)}`,
+      `numeric_penalty=${numericPenalty.toFixed(3)}`,
+      `coverage_penalty=${coveragePenalty.toFixed(3)}`,
+      `missing_chunks=${coverageAudit.missing.join(",") || "(none)"}`,
+      `score=${score.toFixed(3)}`,
+    ].join(" ");
+    log(`[meeting-summary][final] ${diagnostics}`);
     if (bestText === "" || score > bestScore) {
       bestText = draft;
       bestScore = score;
       bestReview = review;
+      bestDiagnostics = diagnostics;
     }
-    feedback = review;
+    feedback = [
+      review,
+      temporalDefects.length ? `UPCOMING_TENSE_RETRY: Rewrite without completed-meeting claims: ${temporalDefects.join(", ")}.` : "",
+      bodyDefects.length ? `GOVERNING_BODY_RETRY: Use only "${bodyLabel}" as the acting body; remove: ${bodyDefects.join(", ")}.` : "",
+      numericDefects.length ? `NUMERIC_GROUNDING_RETRY: Remove or correct numeric tokens absent from source: ${numericDefects.join(", ")}.` : "",
+      coverageAudit.missing.length ? `CHUNK_COVERAGE_RETRY: Cover a substantive topic from each missing chunk: ${coverageAudit.missing.join(", ")}.` : "",
+    ].filter(Boolean).join("\n");
     if (score >= PASS_THRESHOLD) break;
+  }
+
+  if (SUMMARY_TIME_MODE === "upcoming") {
+    const defects = previewTemporalDefects(bestText);
+    if (defects.length) {
+      throw new Error(`meeting summary retryable: upcoming preview contains completed-meeting claims: ${defects.join(", ")}`);
+    }
+  }
+  const unsupported = unsupportedNumericTokens(bestText, numericGroundingSource);
+  if (unsupported.length) {
+    throw new Error(`meeting summary retryable: unsupported numeric claims: ${unsupported.join(", ")}`);
+  }
+  const bodyDefects = governingBodyDefects(bestText, bodyLabel, chunkSource);
+  if (bodyDefects.length) {
+    throw new Error(`meeting summary retryable: incorrect governing body attribution for "${bodyLabel}": ${bodyDefects.join(", ")}`);
+  }
+  if (!bestText || bestScore < PASS_THRESHOLD) {
+    throw new Error(`meeting summary retryable: Qwen synthesis score ${Number(bestScore || 0).toFixed(3)} below publish threshold ${PASS_THRESHOLD.toFixed(2)} diagnostics=${bestDiagnostics} feedback=${String(bestReview || "").replace(/\s+/gu, " ").trim()}`);
   }
 
   return {
@@ -846,6 +1387,7 @@ export async function summarizeWholeMeetingArtifacts({
     bodyLabel: meetingContext.bodyLabel,
     jurisdiction: meetingContext.jurisdiction,
     priorityItems,
+    log,
   });
   fs.writeFileSync(outMd, `${String(stageB.markdown || "").trim()}\n`, "utf8");
 

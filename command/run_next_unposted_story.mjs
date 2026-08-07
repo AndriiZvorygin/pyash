@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
+import { isiMeetingVideoIsReachable } from '../program/library/reporter_shared/video-source-availability.mjs';
+
 const DEFAULTS = {
   timezone: process.env.TZ || 'America/Toronto',
   base_prefix: 'meeting-qwen-auto',
@@ -203,6 +205,20 @@ function resolveMeetingDir(row, meetingsDir) {
     .sort();
   if (matches.length) {
     const folder = matches[matches.length - 1];
+    return { folder, meetingDir: path.join(meetingsDir, folder) };
+  }
+
+  // Some sources publish timestamps in UTC while their meeting workspace is
+  // named from the source's local calendar date. The stable meeting id is a
+  // stronger identity than the derived day, so accept a unique cross-day id
+  // match instead of writing results into a nonexistent inferred directory.
+  const idMatches = fs.readdirSync(meetingsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .filter((name) => name.endsWith(suffix))
+    .sort();
+  if (idMatches.length === 1) {
+    const folder = idMatches[0];
     return { folder, meetingDir: path.join(meetingsDir, folder) };
   }
 
@@ -633,6 +649,10 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
       if (requireSupportingDocs && !candidate.state.has_supporting_docs) continue;
     }
     if (candidate.mode === 'past_video' && !candidate.state.has_video) continue;
+    if (candidate.mode === 'past_video' && !await isiMeetingVideoIsReachable(candidate.state?.row?.payload || {})) {
+      log(`[next-story] skipping unavailable ISI recording: ${candidate.state?.row?.payload?.meeting_id || candidate.state?.row?.suName || "unknown"}`);
+      continue;
+    }
     return candidate;
   }
   return null;

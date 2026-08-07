@@ -372,6 +372,51 @@ function buildSourceCorpus({ meetingSummaryMd = "", meetingSummaryChunksPyaPath 
   };
 }
 
+function readGroundedClaimUnits(agendaSectionGroundingPyaPath = "") {
+  if (!agendaSectionGroundingPyaPath) return [];
+  const values = readPyaTextValues(agendaSectionGroundingPyaPath, ["schema version", "grounded units"]);
+  const schemaVersion = safeJsonFromText(values?.["schema version"]);
+  if (String(schemaVersion || "") !== "agenda_section_grounding_v2") return [];
+  const units = Array.isArray(values?.["grounded units"])
+    ? values["grounded units"]
+    : safeJsonFromText(values?.["grounded units"]);
+  return Array.isArray(units) ? units : [];
+}
+
+function bestClaimUnit(sentenceNorm, units = []) {
+  const ignored = new Set(["council", "meeting", "owen", "sound", "approved", "adopted", "rejected", "defeated", "deferred", "carried"]);
+  const terms = [...new Set(String(sentenceNorm || "").split(" ").filter((word) => word.length >= 4 && !ignored.has(word)))];
+  let best = null;
+  let bestScore = 0;
+  for (const unit of units) {
+    const corpus = normalizeText(`${String(unit?.label || "")} ${String(unit?.["source excerpt"] || "")}`);
+    let score = 0;
+    for (const term of terms) if (corpus.includes(term)) score += 1;
+    if (score > bestScore) {
+      best = unit;
+      bestScore = score;
+    }
+  }
+  return bestScore >= Math.min(3, Math.max(2, Math.ceil(terms.length * 0.2))) ? { unit: best, score: bestScore } : { unit: null, score: bestScore };
+}
+
+function itemScopedOutcomeSupport(sentenceNorm, groundedUnits = []) {
+  if (!groundedUnits.length) return null;
+  const match = bestClaimUnit(sentenceNorm, groundedUnits);
+  if (!match.unit) return { supported: false, reason: "no_item_scoped_source", unit: null };
+  const role = String(match.unit.role || "").toLowerCase();
+  const excerpt = normalizeText(match.unit["source excerpt"] || "");
+  const directDisposition = /\b(carried|defeated|recorded vote|motion (?:was |is )?(?:approved|adopted|carried|defeated)|council (?:approved|adopted|rejected|deferred)|voted to|direction (?:was )?given)\b/iu.test(excerpt);
+  if (["deputation", "public_forum", "public_meeting"].includes(role) && !directDisposition) {
+    return { supported: false, reason: `non_decision_role_${role}`, unit: match.unit };
+  }
+  return {
+    supported: directDisposition,
+    reason: directDisposition ? "item_scoped_disposition" : "no_motion_or_vote_in_item",
+    unit: match.unit,
+  };
+}
+
 function supportSnippet(sentenceNorm, sourceCorpus) {
   const corpus = String(sourceCorpus || "");
   const sentenceTerms = [...new Set(sentenceNorm.split(" ").filter((w) => w.length >= 5))];
@@ -478,6 +523,18 @@ function escalationClaimSupported(sentenceNorm = "", sourceNorm = "") {
   return used.length > 0 && used.every(([, supportedPattern]) => supportedPattern.test(sourceNorm));
 }
 
+export function groundedCrisisServiceLanguage(sentenceNorm = "", sourceNorm = "") {
+  const phrases = Array.from(
+    String(sentenceNorm || "").matchAll(
+      /\bcrisis\s+(?:centre|center|housing|program|residence|response|service|services|shelter)\b/giu,
+    ),
+    (match) => normalizeText(match[0]),
+  );
+  if (!phrases.length) return false;
+  const source = normalizeText(sourceNorm);
+  return phrases.every((phrase) => source.includes(phrase));
+}
+
 export function verifyArticleClaims({
   bodyMarkdown = "",
   meetingSummaryMd = "",
@@ -487,6 +544,7 @@ export function verifyArticleClaims({
   reportPath = "",
 } = {}) {
   const source = buildSourceCorpus({ meetingSummaryMd, meetingSummaryChunksPyaPath, agendaSummaryPyaPath, agendaSectionGroundingPyaPath });
+  const groundedClaimUnits = readGroundedClaimUnits(agendaSectionGroundingPyaPath);
   const strongNorm = normalizeText(source.strong);
   const secondaryNorm = normalizeText(source.secondary);
   const weakNorm = normalizeText(source.weak);
@@ -502,12 +560,13 @@ export function verifyArticleClaims({
     { key: "one-sentence summary", heading: "One-Sentence Summary", isSingleLine: true },
     { key: "top newsworthy developments", heading: "Top Newsworthy Developments", isSingleLine: false },
     { key: "why it matters", heading: "Why It Matters", isSingleLine: false },
+    { key: "meeting recap", heading: "Meeting Recap", isSingleLine: false },
   ];
 
-  const valueWords = /\b(unfair|unjust|victory|win|crisis|defensive move|protecting|protect|compassionately|insurmountable|stark reality|stark reality check|distributive|distributist|ring-?fenc|vulnerable|fiscal\s+.*gambling|protective stance|prioritizing safety over speed|preserves community access|support cultural access|directly addressing the needs|gritty,? snowy reality|broader goal|prioritized public safety)\b/iu;
+  const valueWords = /\b(unfair|unjust|victory|win|defensive move|protecting|protect|compassionately|insurmountable|stark reality|stark reality check|distributive|distributist|ring-?fenc|vulnerable|fiscal\s+.*gambling|protective stance|prioritizing safety over speed|preserves community access|support cultural access|directly addressing the needs|gritty,? snowy reality|broader goal|prioritized public safety)\b/iu;
   const escalationWords = /\b(secured|protected|ensured|saved|prevented|delivered|won|resisting)\b/iu;
   const causalWords = /\b(because|so that|in order to|this means|this proves|this shows|reflects a commitment)\b/iu;
-  const outcomeWords = /\b(approved|adopted|rejected|defeated|deferred|carried|unanimously|split vote)\b/iu;
+  const outcomeWords = /\b(approv(?:ed|ing)|adopt(?:ed|ing)|reject(?:ed|ing)|defeat(?:ed|ing)|carried|unanimously|split vote|vot(?:ed|ing) (?:on|to|for|against)|(?:council|committee|motion|item|request) (?:was )?deferr(?:ed|ing)|deferr(?:ed|ing) (?:the|this|motion|item|request)|direct(?:ed|ing) staff|gave direction|direction was given|instruct(?:ed|ing) staff|authoriz(?:ed|ing)|endors(?:ed|ing))\b/iu;
 
   for (const target of targets) {
     const sectionText = target.isSingleLine ? firstContentLine(sectionMarkdown(rewritten, target.heading)) : sectionMarkdown(rewritten, target.heading);
@@ -517,7 +576,9 @@ export function verifyArticleClaims({
     for (const sentence of sentences) {
       const sentenceNorm = normalizeText(sentence);
       if (!sentenceNorm) continue;
-      const hasValue = valueWords.test(sentenceNorm);
+      const hasUngroundedCrisis = /\bcrisis\b/iu.test(sentenceNorm)
+        && !groundedCrisisServiceLanguage(sentenceNorm, `${strongNorm} ${secondaryNorm}`);
+      const hasValue = valueWords.test(sentenceNorm) || hasUngroundedCrisis;
       const hasEsc = escalationWords.test(sentenceNorm);
       const supportedEsc = hasEsc && escalationClaimSupported(sentenceNorm, `${strongNorm} ${secondaryNorm}`);
       const hasCausal = causalWords.test(sentenceNorm);
@@ -529,17 +590,20 @@ export function verifyArticleClaims({
       const supportedByStrong = Boolean(strongHit.snippet);
       const supportedBySecondary = Boolean(secondaryHit.snippet);
       const supportedByWeakOnly = !supportedByStrong && !supportedBySecondary && Boolean(weakHit.snippet);
-      const isSupportedOutcome = !hasOutcome || (outcomeWords.test(strongNorm) || outcomeWords.test(secondaryNorm));
+      const scopedOutcome = hasOutcome ? itemScopedOutcomeSupport(sentenceNorm, groundedClaimUnits) : null;
+      const isSupportedOutcome = !hasOutcome || (scopedOutcome == null
+        ? (outcomeWords.test(strongNorm) || outcomeWords.test(secondaryNorm))
+        : scopedOutcome.supported);
 
       let severity = "supported";
       let issueType = "";
-      if (hasValue || (hasEsc && !supportedEsc) || hasCausal) {
+      if (hasValue || (hasEsc && !supportedEsc) || (hasCausal && !supportedByStrong && !supportedBySecondary)) {
         severity = "unsupported";
         issueType = hasValue ? "value_judgment_overclaim" : ((hasEsc && !supportedEsc) ? "action_escalation" : "causal_overclaim");
       }
       if (hasOutcome && !isSupportedOutcome) {
         severity = "unsupported_high_severity";
-        issueType = issueType || "outcome_claim_unsupported";
+        issueType = issueType || `outcome_claim_unsupported_${scopedOutcome?.reason || "global"}`;
       }
       if (severity === "supported" && supportedByWeakOnly) {
         severity = "unsupported";

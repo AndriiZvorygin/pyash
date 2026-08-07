@@ -435,6 +435,70 @@ test("lyrics_to_srt_from_timing sentence-cues stay aligned to source timeline", 
   assert.ok(last.until <= 1.02, `last row should stay on source timeline, got ${last.until.toFixed(3)}s`);
 });
 
+test("lyrics_to_srt_from_timing sentence-cues do not double-advance after an unmatched correction", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-sentence-unmatched-correction.txt");
+  const timingPath = path.join(dir, "timing-sentence-unmatched-correction.srt");
+  const outputPath = path.join(dir, "lyrics-sentence-unmatched-correction.out.srt");
+
+  const lyrics = [
+    "Alpha beta gamma.",
+    "Corrected wording absent.",
+    "Delta epsilon zeta.",
+    "Final unique phrase."
+  ].join("\n");
+  const words = [
+    "Alpha", "beta", "gamma",
+    "raw", "words", "differ",
+    "Delta", "epsilon", "zeta",
+    "Final", "unique", "phrase"
+  ];
+  const timing = words.flatMap((word, index) => [
+    String(index + 1),
+    `${formatTestTime(index)} --> ${formatTestTime(index + 0.8)}`,
+    word,
+    ""
+  ]).join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]);
+
+  const rows = parseSrtRows(await fs.readFile(outputPath, "utf8"));
+  const deltaRow = rows.find((row) => /Delta epsilon zeta/u.test(row.text));
+  assert.ok(deltaRow, "expected corrected text after the unmatched sentence");
+  assert.equal(deltaRow.since, 6, "a mismatched sentence must consume its own interval only once");
+  const finalRow = rows.find((row) => /Final unique phrase/u.test(row.text));
+  assert.ok(finalRow);
+  assert.equal(finalRow.since, 9);
+});
+
+test("lyrics_to_srt_from_timing rejects a long sentence transcript without document anchors", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-sentence-unaligned-long.txt");
+  const timingPath = path.join(dir, "timing-sentence-unaligned-long.srt");
+  const outputPath = path.join(dir, "lyrics-sentence-unaligned-long.out.srt");
+  const lyricWords = Array.from({ length: 220 }, (_, index) => `lyricword${index}`);
+  const timingWords = Array.from({ length: 220 }, (_, index) => `asrword${index}`);
+  const lyrics = lyricWords.join(" ");
+  const timing = timingWords.flatMap((word, index) => [
+    String(index + 1),
+    `${formatTestTime(index)} --> ${formatTestTime(index + 0.8)}`,
+    word,
+    ""
+  ]).join("\n");
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  await assert.rejects(
+    runLyricsToSrt([lyricsPath, timingPath, outputPath, "--sentence-cues"]),
+    /monotonic document anchor coverage/u
+  );
+});
+
 test("lyrics_to_srt_from_timing sentence-cues anchor at each line first word", async () => {
   const dir = path.resolve("quiz/sandpit");
   await fs.mkdir(dir, { recursive: true });
@@ -723,4 +787,3 @@ test("lyrics_to_srt_from_timing sentence-cues keep repeated misheard name chorus
   assert.ok(sayRow, "expected a Say his name cue");
   assert.ok(sayRow.since >= 121.28, `Say his name should not lead ASR, got ${sayRow.since.toFixed(3)}`);
 });
-

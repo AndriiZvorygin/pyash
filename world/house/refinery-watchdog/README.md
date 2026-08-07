@@ -1,6 +1,6 @@
 # Refinery Watchdog
 
-This house monitors the Andrii YouTube, Owen Sound, and Grey County nightly reporters. It checks the same remote-aware candidate state used by the reporters. A clean `no candidate` result is healthy; an eligible unpublished candidate or a failed probe is an incident.
+This house monitors the Andrii YouTube, Owen Sound, and Grey County nightly reporters. A completed nightly run today is healthy even when older backlog remains, because each scheduled run intentionally publishes at most one item. When today's run is missing or failed, the watchdog uses the same remote-aware candidate probe as the reporter: an eligible unpublished candidate or a failed probe is then an incident, while `no candidate` is healthy.
 
 ## Entry points
 
@@ -15,6 +15,8 @@ The reporter pipelines already serialize GPU-heavy execution with `/tmp/municipa
 
 ## Operating policy
 
-The 05:00 check defers if reporter work is active. The 06:00 check tries again; if work remains active it alerts and exits without overlap. Multiple failures are sent to one Codex session. A Codex success is not accepted until an independent remote-aware candidate probe confirms that no affected candidate remains.
+The 05:00 check defers if reporter work is active. The 06:00 check tries again; if work remains active it alerts and exits without overlap. Multiple failures are sent to one Codex session. A Codex success is not accepted until the affected reporter has a successful nightly status for today (or an independent remote-aware probe confirms that no eligible candidate remains).
+
+The unattended Codex process uses `danger-full-access` with approval policy `never` so it can reach the LAN Ollama service and HelpOS. The prompt and recovery skill narrowly constrain its scope. A `running` or `fixed` daily recovery is deduplicated; a failed or `needs_human` 05:00 attempt remains eligible for the 06:00 retry.
 
 See [the recovery runbook](../../../documentation/runbooks/reporter-refinery-recovery.md) for diagnosis, repair, publishing, and escalation rules.

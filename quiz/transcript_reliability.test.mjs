@@ -8,6 +8,7 @@ import {
   extractAgendaTimestampBoundaries,
   refineBoundariesWithMinutes,
   runTranscriptPublishGate,
+  writePyaMap,
 } from '../program/library/reporter_shared/transcript_reliability.mjs';
 
 function mkTmp() {
@@ -67,4 +68,30 @@ test('publish gate blocks missing transcript html', () => {
   const out = runTranscriptPublishGate({ payloadPath, payload, provenancePath: '', timestampPath: '', refinePath: '' });
   assert.equal(out.pass, false);
   assert.match(out.blockedReasons.join(','), /missing_transcript_html/);
+});
+
+test('publish gate blocks unsupported named motion attribution', () => {
+  const root = mkTmp();
+  const prefix = 'x';
+  const payloadPath = path.join(root, `${prefix}.lemmy-post.json`);
+  const htmlPath = path.join(root, 'transcript.html');
+  const provenancePath = path.join(root, 'provenance.pya');
+  const timestampPath = path.join(root, 'timestamps.pya');
+  fs.writeFileSync(htmlPath, `<html><body>${'meaningful transcript text '.repeat(20)}</body></html>`);
+  fs.writeFileSync(provenancePath, 'present');
+  fs.writeFileSync(timestampPath, 'present');
+  writePyaMap(path.join(root, `${prefix}.agenda-summary.pya`), {
+    sections: [{ 'unit id': 'ground_001', summary: 'Councillor Kukreja moved the motion.', chapters: [] }],
+  });
+  writePyaMap(path.join(root, `${prefix}.agenda.section-grounding.pya`), {
+    'grounded units': [{
+      'unit id': 'ground_001',
+      'source excerpt': 'SPEAKER_251: I move the motion.\nSPEAKER_009: Councillor Kukreja.\nSPEAKER_009: I declare a conflict.',
+    }],
+  });
+  const payload = { title: 'Title', local_transcript_html: 'transcript.html' };
+  fs.writeFileSync(payloadPath, JSON.stringify(payload));
+  const out = runTranscriptPublishGate({ payloadPath, payload, provenancePath, timestampPath, refinePath: '' });
+  assert.equal(out.pass, false);
+  assert.match(out.blockedReasons.join(','), /unsupported_named_motion_attribution/u);
 });

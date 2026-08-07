@@ -12,11 +12,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
   : 'http://mriczo:11434/api/chat';
-const MODEL = process.env.AGENDA_SECTION_SUMMARY_MODEL
-  || process.env.MEETING_SUMMARY_MODEL
-  || process.env.SUMMARY_MODEL
-  || process.env.OWEN_SUMMARY_MODEL
-  || 'qwen3.5:9b';
+const MODEL = 'qwen3.5:9b';
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_PASS_THRESHOLD || process.env.MEETING_SUMMARY_PASS_THRESHOLD || process.env.OWEN_SUMMARY_PASS_THRESHOLD || 0.65);

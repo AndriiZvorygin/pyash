@@ -3,6 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readPyaTextValues } from "./pya_lookup.mjs";
+import {
+  CANADIAN_ENGLISH_SPELLING_PAIRS,
+  normalizeCanadianEnglish,
+} from "../program/library/reporter_shared/canadian-english.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -55,6 +59,7 @@ const PROFILES = {
       let out = String(text || "");
       out = out.replace(/\bOceansound\b/giu, "Owen Sound");
       out = out.replace(/\bOnsound\b/giu, "Owen Sound");
+      out = out.replace(/\bOnondaga\b/giu, "Owen Sound");
       out = out.replace(/\bCity of Oceansound\b/giu, "City of Owen Sound");
       out = out.replace(/\bDeputy Mayor Greg\b/gu, "Deputy Mayor Greig");
       out = out.replace(/\bDeputy Mayor Gregg\b/gu, "Deputy Mayor Greig");
@@ -71,11 +76,13 @@ const PROFILES = {
       out = out.replace(/\bAndrii Zvorov\b/gu, "Andrii Zvorygin");
       out = out.replace(/\bAndre Zvorogin\b/gu, "Andrii Zvorygin");
       out = out.replace(/\bGrey Sable\b/giu, "Grey Sauble");
+      out = out.replace(/\b(?:Moquehadong|Malwiquadong)\b/giu, "M'Wikwedong");
       return out;
     },
     literalReplacements: [
       ["Oceansound", "Owen Sound"],
       ["Onsound", "Owen Sound"],
+      ["Onondaga", "Owen Sound"],
       ["City of Oceansound", "City of Owen Sound"],
       ["Deputy Mayor Greg", "Deputy Mayor Greig"],
       ["Deputy Mayor Gregg", "Deputy Mayor Greig"],
@@ -89,6 +96,8 @@ const PROFILES = {
       ["Andrii Zvorov", "Andrii Zvorygin"],
       ["Andre Zvorogin", "Andrii Zvorygin"],
       ["Grey Sable", "Grey Sauble"],
+      ["Moquehadong", "M'Wikwedong"],
+      ["Malwiquadong", "M'Wikwedong"],
     ],
     rosterCandidates(transcriptDir) {
       const meetingDir = path.dirname(transcriptDir);
@@ -310,6 +319,11 @@ function buildStringReplacementMap(profile, normalizationTerms) {
       addReplacement(map, titleCaseWords(alias), titleCaseWords(canonical));
     }
   }
+  for (const [american, canadian] of CANADIAN_ENGLISH_SPELLING_PAIRS) {
+    addReplacement(map, american, canadian);
+    addReplacement(map, american.toUpperCase(), canadian.toUpperCase());
+    addReplacement(map, titleCaseWords(american), titleCaseWords(canadian));
+  }
   return map;
 }
 
@@ -361,6 +375,7 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
     "Allowed edits only:",
     "- Fix obvious ASR spelling mistakes.",
     "- Normalize person/place names to canonical roster/place spellings when clear from context.",
+    "- Use Canadian English spelling without changing meaning.",
     "- Split/merge accidental word boundaries caused by ASR.",
     "",
     "Forbidden edits:",
@@ -517,7 +532,8 @@ export async function runNormalizeShared(writer, argv = []) {
       }
     }
     const canon = profile.canonicalCleanup(cleaned || runChunks[i]);
-    out.push(applyNormalizationTerms(canon, normalizationTerms));
+    const termsNormalized = applyNormalizationTerms(canon, normalizationTerms);
+    out.push(normalizeCanadianEnglish(termsNormalized));
   }
 
   const normalized = out.join("\n\n").replace(/\n{3,}/gu, "\n\n").trim();
