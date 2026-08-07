@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test \"quiz/**/*.test.mjs\"",
+    "test:ci": "node --test --test-concurrency=1 quiz/core.test.mjs quiz/codex_account_cli.test.mjs quiz/runtime/*.test.mjs",
     "quiz": "node --test \"quiz/**/*.test.mjs\"",
     "config:safety": "node command/check_local_config_safety.mjs",
     "android:default": "node command/android_default_device.mjs",
