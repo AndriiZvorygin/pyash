@@ -46,6 +46,7 @@ world/holding/**
 !world/holding/channel/produce/fail/.gitkeep
 !world/holding/channel/artifacts/.gitkeep
 !world/holding/channel/tmp/.gitkeep
+world/holding/work/
 .config/
 *.log
 newspaper/

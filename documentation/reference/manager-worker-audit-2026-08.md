@@ -9,7 +9,7 @@ are evidence, not current commitments.
 ## Current State
 
 The repository was fetched and fast-forwarded before implementation. The
-starting branch was clean at `b50c94de`, `master` tracked both configured
+starting branch was clean at `f539ae5d`, `master` tracked both configured
 remotes, and no additional worktree or local WIP was found.
 
 The durable work lane is under `program/runtime/work/` and reuses the existing
@@ -39,15 +39,20 @@ preserves named `.pya` sections for:
   blockers, and uncertainty;
 - review: `ACCEPT`, `REVISE`, or `BLOCK`, rationale, and correction request;
 - interruption: phase, timestamp, reason, and last turn;
-- revision count, original `workSpec`, and original payload sentence.
+- active turn identity: phase, role, thread id, turn id, deterministic request
+  identity, state, timestamps, result capture, and ambiguity;
+- completed/abandoned turn history, blocker, human response, last action,
+  selection reason, revision count, original `workSpec`, and original payload
+  sentence.
 
 This is one canonical Pyash checkpoint artifact, not a second JSON state store.
 Structured values are encoded inside named Pyash map fields using the existing
 artifact convention.
 
-Task claiming remains atomic through spool rename and oldest-first. `priority`
-is persisted and validated but is deliberately not used for claiming in this
-first supervisor cycle. Operational priority scheduling is a follow-up.
+Task claiming remains atomic through spool rename. Selection is deterministic:
+higher numeric `priority` wins, then the oldest `queuedAt`, then the filename.
+Equal-priority work is therefore FIFO. A larger number means more urgent; this
+simple rule is intentionally not a fair-share scoring engine.
 
 ## Reporter and Roadmap Reality
 
@@ -89,7 +94,7 @@ The first-cycle operations are:
 - `thread/start` with model, working directory, approval policy, and sandbox;
 - `thread/resume`;
 - `turn/start` with model, working directory, reasoning effort, input, and
-  sandbox policy;
+  sandbox policy plus a deterministic `clientUserMessageId` request identity;
 - streamed `item/agentMessage/delta`, `item/fileChange/patchUpdated`, and
   `turn/diff/updated` events;
 - `turn/completed` success/failure classification;
@@ -131,22 +136,82 @@ available for human inspection.
 ### Recovery
 
 The claimed spool file stays in `world/holding/work/runtime/` until the
-supervisor reaches `accepted` or `blocked` and acknowledges success. A process
-restart can claim an existing runtime item, read the `.pya` checkpoint, resume
-the persisted Sol/Luna threads, and continue from `planning`, `implementing`,
-`reviewing`, or `revision`.
+supervisor reaches `accepted` and acknowledges success. A `blocked` task stays
+in the runtime spool (or input spool when blocked before claiming), so it is
+visible and cannot be mistaken for successful work. `work resume <task-id>
+--context ...` records the human response, preserves all prior threads,
+worktree, plans, evidence, and history, abandons an ambiguous active turn
+explicitly, and returns the task to `ready`.
 
-`usage-limited` is distinct from `failed`: it leaves the runtime item in place
-and records the interruption checkpoint for later resumption. Ordinary remote
-failure is acknowledged through the existing retry policy. A crash between a
-remote turn and its evidence write can still repeat that turn; turn-level
-idempotency and stronger stale-runtime ownership are follow-up work.
+Before each external Codex turn, the supervisor persists a deterministic
+request identity and `started` state. After the adapter returns, it persists
+the turn id and complete bounded result before applying the phase checkpoint.
+On restart, a captured-but-not-applied result is consumed locally rather than
+replaying Codex. If a turn is still `started` or otherwise ambiguous, the task
+becomes `blocked` with the request identity and reason recorded. This is the
+safe recovery boundary because the current App Server does not provide a
+reliable Pyash-visible lookup that can prove an unknown turn completed.
+
+`usage-limited` is distinct from `failed`: quota rejection clears the active
+attempt for a later retry, while a remote operation whose outcome is unknown
+remains human-resumable. Accepted work is terminal and is never silently
+reopened.
+
+Ordinary failures before a remote operation use the existing retry policy.
+Filesystem evidence is collected after the worker turn, but the completed
+turn result is already durable, so a restart can collect evidence and finish
+without another worker turn. There is still no distributed lease/heartbeat
+for two independently started supervisors; operationally run one background
+coding worker per world until stale-runtime ownership is added.
+
+## Unattended Operation
+
+The operator surface is intentionally small:
+
+```text
+work_supervisor.mjs add --title ... --prompt ... --acceptance ...
+work_supervisor.mjs list [--active]
+work_supervisor.mjs show <task-id>
+work_supervisor.mjs run-next
+work_supervisor.mjs block <task-id> --reason ...
+work_supervisor.mjs resume <task-id> --context ...
+work_supervisor.mjs fail|cancel <task-id> [--reason ...]
+work_supervisor.mjs background [--continuous]
+work_supervisor.mjs health
+```
+
+Human output is compact; `--json` exposes the complete durable task or
+snapshot. The status includes priority, phase, role models, worktree,
+blocker, last action, and revision count. No command merges, commits, pushes,
+or deletes an accepted worktree.
+
+`program/runtime/work/capacity.mjs` normalizes the installed Codex
+`account/rateLimits/read` response, including its nested `rateLimits.primary`
+window, to `available`, `usage-limited`, or
+`unknown`, with remaining/used percentage, reset time, window, observed time,
+and the raw provider payload. Unknown capacity is conservative and defers
+background work. The background policy also defers when foreground activity is
+reported, when no eligible task exists, or when remaining capacity is at or
+below the default 20 percent reserve. It is disabled by default; the explicit
+`background` command enables it for that invocation. `--near-reset` is an
+operator choice to spend capacity that would otherwise expire. Continuous
+mode polls rather than busy-waits and processes one coding task at a time.
+
+Scheduler health is a named `.pya` artifact under
+`world/holding/work/artifacts/scheduler-health.pya`. Task decisions and
+outcomes are also appended to the world newspaper, including selection
+reason, plan, implementation, tests, review, revision count, blocker, and
+capacity state.
 
 ## Proof
 
 ### Implemented
 
 - durable named `.pya` checkpoint sections;
+- deterministic priority selection and durable turn idempotency checkpoints;
+- explicit blocked/resume lifecycle and operator commands;
+- normalized capacity observation, conservative background admission, and
+  scheduler health/newspaper outcomes;
 - extracted shared App Server JSONL transport;
 - configurable manager/worker roles and reasoning effort;
 - one Sol plan -> Luna implementation -> Sol review cycle;
@@ -159,10 +224,12 @@ idempotency and stronger stale-runtime ownership are follow-up work.
 
 `quiz/runtime/codex_app_server.test.mjs` covers initialization, thread start,
 thread resume, streamed assistant output, diff/file-change events, server
-errors, malformed responses, and process exit. `quiz/runtime/work_queue.test.mjs`
-and `quiz/runtime/work_supervisor.test.mjs` cover checkpoint round trips,
-ACCEPT, REVISE, BLOCK, usage-limited recovery, queue acknowledgement, and
-role/workspace evidence.
+errors, malformed responses, and process exit. `quiz/runtime/work_queue.test.mjs`,
+`quiz/runtime/work_supervisor.test.mjs`, and `quiz/runtime/work_runner.test.mjs`
+cover checkpoint round trips, priority ordering, ACCEPT, REVISE, BLOCK,
+blocked/resume, ambiguous-turn recovery, usage-limited recovery, capacity
+admission, queue acknowledgement, scheduler health, and role/workspace
+evidence.
 
 ### Proven by real Codex smoke
 
@@ -187,9 +254,7 @@ Pyash records rather than replace the holding spool.
 
 ## Deferred Work
 
-- priority-aware or fair-share scheduling beyond oldest-first;
-- quota-aware background admission and spare-capacity consumption;
-- turn idempotency, stale runtime ownership, and stronger crash recovery;
+- distributed stale-runtime ownership, heartbeats, and two-supervisor fencing;
 - formal machine-readable Sol plan/review schema beyond bounded headings;
 - automatic merge, push, or cleanup of accepted worktrees;
 - multi-host Codex execution, CAO/CCB replacement, and tmux dashboard work;
@@ -199,12 +264,12 @@ Pyash records rather than replace the holding spool.
 
 ## Next Highest-Value Slice
 
-1. Add explicit turn checkpoints/idempotency keys and stale-runtime recovery so
-   a worker crash cannot unknowingly repeat a remote turn.
-2. Add a human-facing inspect/accept handoff for accepted worktrees, without
-   giving Pyash automatic push authority.
-3. Add deterministic priority/quota admission after the first cycle has been
-   operated on real backlog items.
+1. Add a durable accepted-worktree report and human merge/cleanup workflow,
+   without giving Pyash automatic push authority.
+2. Add stale-runtime ownership/heartbeat fencing before allowing two workers
+   against one world.
+3. Operate the seeded bounded backlog, then tune capacity reserve values from
+   observed Codex rate-limit payloads rather than guesses.
 
 ## Sources
 

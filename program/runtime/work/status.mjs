@@ -142,7 +142,14 @@ function checkpointBlocks(task) {
       { key: "at", type: "text", value: quoteText(checkpoint.interruption.at) },
       { key: "reason", type: "text", value: quoteText(checkpoint.interruption.reason) },
       { key: "last turn id", type: "text", value: quoteText(checkpoint.interruption.lastTurnId) },
-      { key: "revision count", type: "num", value: checkpoint.revisionCount }
+      { key: "active turn", type: "text", value: quoteText(encodeJson(checkpoint.activeTurn)) },
+      { key: "turn history", type: "text", value: quoteText(encodeJson(checkpoint.turnHistory)) },
+      { key: "blocker", type: "text", value: quoteText(checkpoint.blocker) },
+      { key: "human response", type: "text", value: quoteText(checkpoint.humanResponse) },
+      { key: "last action", type: "text", value: quoteText(checkpoint.lastAction) },
+      { key: "selection reason", type: "text", value: quoteText(checkpoint.selectionReason) },
+      { key: "revision count", type: "num", value: checkpoint.revisionCount },
+      { key: "resume count", type: "num", value: checkpoint.resumeCount }
     ])
   ];
 }
@@ -238,7 +245,14 @@ function statusFromText(text) {
         reason: checkpoint.reason,
         lastTurnId: checkpoint["last turn id"]
       },
-      revisionCount: checkpoint["revision count"]
+      activeTurn: decodeJson(checkpoint["active turn"]),
+      turnHistory: decodeJson(checkpoint["turn history"], []),
+      blocker: checkpoint.blocker,
+      humanResponse: checkpoint["human response"],
+      lastAction: checkpoint["last action"],
+      selectionReason: checkpoint["selection reason"],
+      revisionCount: checkpoint["revision count"],
+      resumeCount: checkpoint["resume count"]
     }
   });
 }
@@ -248,6 +262,10 @@ async function statusDir(worldRoot) {
   const dir = path.join(paths.artifactsDir, "task");
   await fs.mkdir(dir, { recursive: true });
   return dir;
+}
+
+export async function workTaskStatusDir(worldRoot) {
+  return statusDir(worldRoot);
 }
 
 async function statusPath(worldRoot, taskId) {
@@ -282,6 +300,36 @@ export async function readWorkTaskStatus(worldRoot, taskId) {
     if (err?.code === "ENOENT") return null;
     throw err;
   }
+}
+
+export async function listWorkTaskStatuses(worldRoot, { includeTerminal = true } = {}) {
+  const dir = await statusDir(worldRoot);
+  let entries = [];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    if (err?.code === "ENOENT") return [];
+    throw err;
+  }
+  const tasks = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".pya")) continue;
+    try {
+      const task = statusFromText(await fs.readFile(path.join(dir, entry.name), "utf8"));
+      if (!task.taskId) continue;
+      if (!includeTerminal && (task.status === "accepted" || task.status === "failed")) continue;
+      tasks.push(task);
+    } catch {
+      continue;
+    }
+  }
+  return tasks.sort((left, right) => {
+    const priority = Number(right.priority) - Number(left.priority);
+    if (priority) return priority;
+    const queued = Date.parse(left.queuedAt) - Date.parse(right.queuedAt);
+    if (queued) return queued;
+    return left.taskId.localeCompare(right.taskId);
+  });
 }
 
 export async function writeWorkTaskStatus(worldRoot, task, nextStatus = null) {

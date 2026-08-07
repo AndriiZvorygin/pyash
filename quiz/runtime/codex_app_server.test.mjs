@@ -29,6 +29,7 @@ function makeFakeChild({ mode = "success" } = {}) {
       } else if (message.method === "thread/resume") {
         reply({ thread: { id: message.params.threadId } });
       } else if (message.method === "turn/start") {
+        child.turnRequestIdentity = message.params.clientUserMessageId || "";
         nextTurn += 1;
         const turnId = `turn-${nextTurn}`;
         if (mode === "server-error") {
@@ -98,10 +99,12 @@ test("app server adapter initializes, resumes, streams output, and captures diff
     input: "say hello",
     cwd: "/tmp/work",
     model: "gpt-test",
-    reasoningEffort: "low"
+    reasoningEffort: "low",
+    requestIdentity: "pyash-test-planning-0"
   });
   assert.equal(turn.text, "hello world");
   assert.equal(turn.turnId, "turn-1");
+  assert.equal(client.child.turnRequestIdentity, "pyash-test-planning-0");
   assert.match(turn.diff, /diff --git/);
   assert.equal(turn.fileChanges[0].path, "hello.txt");
   await client.close();

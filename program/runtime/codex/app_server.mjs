@@ -248,6 +248,7 @@ export async function runCodexTurn(client, {
   reasoningEffort = null,
   sandboxPolicy = null,
   approvalPolicy = null,
+  requestIdentity = "",
   timeoutMs = 300000
 } = {}) {
   const events = [];
@@ -296,6 +297,7 @@ export async function runCodexTurn(client, {
       ...(cwd ? { cwd } : {}),
       ...(model ? { model } : {}),
       ...(reasoningEffort ? { effort: reasoningEffort } : {}),
+      ...(requestIdentity ? { clientUserMessageId: requestIdentity } : {}),
       ...(sandboxPolicy ? { sandboxPolicy } : {}),
       ...(approvalPolicy ? { approvalPolicy } : {})
     });
@@ -307,6 +309,7 @@ export async function runCodexTurn(client, {
     return {
       status: status || "completed",
       turnId,
+      requestIdentity: String(requestIdentity || ""),
       text: deltas.length ? deltas.join("") : completedMessages.join(""),
       diff,
       fileChanges,

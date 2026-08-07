@@ -181,6 +181,53 @@ function resultText(result) {
   return text(result?.text || result?.message || result?.output);
 }
 
+function isoText(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : String(value ?? "");
+}
+
+function requestIdentity(task, phase) {
+  return `pyash-${task.taskId}-${phase}-${task.checkpoint.revisionCount}-${task.checkpoint.resumeCount}`;
+}
+
+function storedTurnResult(turn) {
+  return {
+    status: turn?.result?.status || "completed",
+    text: turn?.result?.text || "",
+    diff: turn?.result?.diff || "",
+    fileChanges: Array.isArray(turn?.result?.fileChanges) ? turn.result.fileChanges : [],
+    turn: turn?.result?.turn || {},
+    turnId: turn?.turnId || "",
+    requestIdentity: turn?.requestIdentity || ""
+  };
+}
+
+function emptyTurn() {
+  return {
+    phase: "",
+    role: "",
+    threadId: "",
+    turnId: "",
+    requestIdentity: "",
+    state: "",
+    startedAt: "",
+    completedAt: "",
+    resultCaptured: false,
+    ambiguity: "",
+    result: { status: "", text: "", diff: "", fileChanges: [], turn: {} }
+  };
+}
+
+export class AmbiguousWorkTurnError extends Error {
+  constructor(message, { phase = "", requestIdentity: identity = "" } = {}) {
+    super(String(message));
+    this.name = "AmbiguousWorkTurnError";
+    this.kind = "ambiguous";
+    this.phase = phase;
+    this.requestIdentity = identity;
+  }
+}
+
 async function closeClient(client) {
   try {
     await client?.close?.();
@@ -317,7 +364,14 @@ export async function runWorkSupervisorOnce({
 
   const fail = async (err) => {
     const kind = err?.kind || "failed";
-    const status = kind === "usage-limited" ? "usage-limited" : kind === "interrupted" ? "blocked" : "failed";
+    const activeTurn = task.checkpoint.activeTurn;
+    const turnPending = activeTurn.state === "started" || activeTurn.state === "awaiting-completion";
+    const turnUncaptured = activeTurn.state === "completed" && activeTurn.resultCaptured === false;
+    const status = kind === "usage-limited"
+      ? "usage-limited"
+      : kind === "interrupted" || kind === "ambiguous" || turnPending || turnUncaptured
+        ? "blocked"
+        : "failed";
     const message = text(err?.message || err) || "supervisor failed";
     const atValue = nowValue(now);
     const at = typeof atValue?.toISOString === "function" ? atValue.toISOString() : String(atValue);
@@ -326,8 +380,14 @@ export async function runWorkSupervisorOnce({
         phase: task.status,
         at,
         reason: message,
-        lastTurnId: ""
-      }
+        lastTurnId: activeTurn.turnId || ""
+      },
+      blocker: status === "blocked" ? message : task.checkpoint.blocker,
+      activeTurn: status === "usage-limited"
+        ? emptyTurn()
+        : turnPending || turnUncaptured
+          ? { ...activeTurn, state: turnUncaptured ? "completed" : "ambiguous", ambiguity: message }
+          : task.checkpoint.activeTurn
     };
     if (task.status !== status) task = transitionWorkTask(task, status, { now: atValue, message, error: message });
     await save(checkpoint, { error: message, message });
@@ -343,7 +403,7 @@ export async function runWorkSupervisorOnce({
       taskId: task.taskId,
       status,
       error: message,
-      resumable: status === "usage-limited"
+      resumable: status === "usage-limited" || status === "blocked"
     };
   };
 
@@ -417,9 +477,96 @@ export async function runWorkSupervisorOnce({
     return { client: workerClient, threadId };
   }
 
+  async function executeTurn(phase, role, client, options) {
+    const identity = requestIdentity(task, phase);
+    const active = task.checkpoint.activeTurn;
+    if (active.state && active.requestIdentity !== identity) {
+      throw new AmbiguousWorkTurnError(
+        `unresolved Codex turn ${active.requestIdentity || active.turnId || "without identity"}`,
+        { phase: active.phase, requestIdentity: active.requestIdentity }
+      );
+    }
+    if (active.requestIdentity === identity && active.state === "completed" && !active.resultCaptured) {
+      return storedTurnResult(active);
+    }
+    if (active.requestIdentity === identity && active.state && active.state !== "completed") {
+      throw new AmbiguousWorkTurnError(
+        `Codex turn ${identity} may have completed before the checkpoint was written`,
+        { phase, requestIdentity: identity }
+      );
+    }
+    const startedAt = isoText(nowValue(now));
+    await save({
+      activeTurn: {
+        ...emptyTurn(),
+        phase,
+        role,
+        threadId: options.threadId,
+        requestIdentity: identity,
+        state: "started",
+        startedAt
+      },
+      lastAction: `${phase} turn started`
+    });
+    let result;
+    try {
+      result = await runTurn(client, { ...options, requestIdentity: identity });
+    } catch (err) {
+      throw err;
+    }
+    const completedAt = isoText(nowValue(now));
+    await save({
+      activeTurn: {
+        ...emptyTurn(),
+        phase,
+        role,
+        threadId: options.threadId,
+        turnId: result?.turnId || "",
+        requestIdentity: identity,
+        state: "completed",
+        startedAt,
+        completedAt,
+        resultCaptured: false,
+        result: {
+          status: result?.status || "completed",
+          text: resultText(result),
+          diff: result?.diff || "",
+          fileChanges: uniqueFileChanges(result?.fileChanges || []),
+          turn: result?.turn || {}
+        }
+      },
+      lastAction: `${phase} turn completed; result checkpointed`
+    });
+    return { ...result, requestIdentity: identity };
+  }
+
+  async function captureTurn(phase, patch = {}, fields = {}) {
+    const active = task.checkpoint.activeTurn;
+    if (!active || active.phase !== phase || active.state !== "completed") {
+      throw new Error(`missing completed ${phase} turn checkpoint`);
+    }
+    const history = [
+      ...task.checkpoint.turnHistory,
+      { ...active, resultCaptured: true }
+    ];
+    await save({
+      ...patch,
+      activeTurn: emptyTurn(),
+      turnHistory: history,
+      lastAction: `${phase} result captured`
+    }, fields);
+  }
+
+  function hasCapturedTurn(phase) {
+    const identity = requestIdentity(task, phase);
+    return task.checkpoint.turnHistory.some((entry) => (
+      entry.requestIdentity === identity && entry.resultCaptured === true
+    ));
+  }
+
   async function doPlanning() {
     const { client, threadId } = await getManager();
-    const result = await runTurn(client, {
+    const result = await executeTurn("planning", "manager", client, {
       threadId,
       cwd: workspace.worktreePath,
       model: roleSettings.manager.model,
@@ -431,7 +578,7 @@ export async function runWorkSupervisorOnce({
       input: [{ type: "text", text: promptPlan(task, workspace, roleSettings) }]
     });
     const plan = parsePlan(resultText(result));
-    await save({
+    await captureTurn("planning", {
       plan,
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     });
@@ -439,7 +586,7 @@ export async function runWorkSupervisorOnce({
 
   async function doImplementation(correction = "") {
     const { client, threadId } = await getWorker();
-    const result = await runTurn(client, {
+    const result = await executeTurn("implementation", "worker", client, {
       threadId,
       cwd: workspace.worktreePath,
       model: roleSettings.worker.model,
@@ -457,7 +604,7 @@ export async function runWorkSupervisorOnce({
       ...changedFilesFromResult(result, workspace.worktreePath),
       ...(evidence?.changedFiles || [])
     ])];
-    await save({
+    await captureTurn("implementation", {
       implementation: {
         ...report,
         changedFiles,
@@ -470,7 +617,7 @@ export async function runWorkSupervisorOnce({
 
   async function doReview() {
     const { client, threadId } = await getManager();
-    const result = await runTurn(client, {
+    const result = await executeTurn("review", "manager", client, {
       threadId,
       cwd: workspace.worktreePath,
       model: roleSettings.manager.model,
@@ -482,7 +629,7 @@ export async function runWorkSupervisorOnce({
       input: [{ type: "text", text: promptReview(task, task.checkpoint, workspace) }]
     });
     const review = parseReview(resultText(result));
-    await save({
+    await captureTurn("review", {
       review,
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     }, { message: review.explanation, result: review.decision });
@@ -491,7 +638,13 @@ export async function runWorkSupervisorOnce({
 
   async function finish(status, message) {
     task = await move(status, { message, result: status });
-    await ackWorkTaskSuccess(worldRoot, { runtimePath: claimed.path });
+    if (status === "blocked") {
+      task = await save({
+        blocker: message,
+        lastAction: "blocked by Sol review"
+      });
+    }
+    if (status === "accepted") await ackWorkTaskSuccess(worldRoot, { runtimePath: claimed.path });
     return { claimed: true, taskId: task.taskId, status: task.status, message, queue: await queueDepth(worldRoot) };
   }
 
@@ -511,17 +664,24 @@ export async function runWorkSupervisorOnce({
         await move("implementing", { message: "applying Sol revision request" });
       }
       if (task.status === "implementing") {
-        await doImplementation(correction);
+        if (!hasCapturedTurn("implementation")) await doImplementation(correction);
         await move("reviewing");
       }
       if (task.status !== "reviewing") throw new Error(`supervisor cannot review status ${task.status}`);
-      const review = await doReview();
+      const review = hasCapturedTurn("review")
+        ? task.checkpoint.review
+        : await doReview();
       if (review.decision === "ACCEPT") return await finish("accepted", review.explanation);
       if (review.decision === "BLOCK") return await finish("blocked", review.explanation);
       if (task.checkpoint.revisionCount >= maxRevisions) {
         return await finish("blocked", "revision limit reached: " + review.explanation);
       }
-      await save({ revisionCount: task.checkpoint.revisionCount + 1 });
+      if (task.checkpoint.lastAction !== "revision queued") {
+        await save({
+          revisionCount: task.checkpoint.revisionCount + 1,
+          lastAction: "revision queued"
+        });
+      }
       await move("revision", { message: review.explanation });
     }
   } catch (err) {
