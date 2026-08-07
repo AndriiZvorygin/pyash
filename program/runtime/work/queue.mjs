@@ -192,8 +192,9 @@ export async function enqueueWorkTask(worldRoot, input = {}) {
 
 export async function claimOldestWorkTask(worldRoot, { workerTag = "", owner = "" } = {}) {
   const paths = await ensureWorkQueueDirs(worldRoot);
-  const pending = await listSpoolItemsOldestFirst(paths.inputDir);
-  for (const filename of pending) {
+  const pending = await listQueuedWorkTasks(worldRoot, { owner });
+  for (const candidate of pending) {
+    const filename = candidate.filename;
     if (!filenameMatchesOwner(filename, owner)) continue;
     const claim = await claimSpoolItem({
       fromDir: paths.inputDir,
@@ -214,6 +215,10 @@ export async function claimOldestWorkTask(worldRoot, { workerTag = "", owner = "
       await requeueClaim(paths, claim);
       continue;
     }
+    if (task.status !== "ready") {
+      await requeueClaim(paths, claim);
+      continue;
+    }
     return { ...claim, task };
   }
   return null;
@@ -221,16 +226,11 @@ export async function claimOldestWorkTask(worldRoot, { workerTag = "", owner = "
 
 export async function claimOldestRuntimeWorkTask(worldRoot, { owner = "" } = {}) {
   const paths = await ensureWorkQueueDirs(worldRoot);
-  const runtime = await listSpoolItemsOldestFirst(paths.runtimeDir);
-  for (const filename of runtime) {
+  const runtime = await listWorkFiles(worldRoot, paths.runtimeDir, { owner });
+  for (const candidate of runtime) {
+    const filename = candidate.filename;
     if (!filenameMatchesOwner(filename, owner)) continue;
-    let task;
-    try {
-      task = await readTaskFile(path.join(paths.runtimeDir, filename));
-      assertWorkTask(task);
-    } catch {
-      continue;
-    }
+    const task = candidate.task;
     if (owner && task.owner !== owner) continue;
     return {
       path: path.join(paths.runtimeDir, filename),
@@ -253,6 +253,68 @@ export async function writeWorkTaskRuntime(runtimePath, task) {
   const tmp = `${runtimePath}.tmp-${process.pid}-${Date.now()}`;
   await fs.writeFile(tmp, taskToText(current), "utf8");
   await fs.rename(tmp, runtimePath);
+  return current;
+}
+
+async function listWorkFiles(worldRoot, directory, { owner = "", readyOnly = false } = {}) {
+  await ensureWorkQueueDirs(worldRoot);
+  let filenames = [];
+  try {
+    filenames = await listSpoolItemsOldestFirst(directory);
+  } catch {
+    return [];
+  }
+  const candidates = [];
+  for (const filename of filenames) {
+    if (!filenameMatchesOwner(filename, owner)) continue;
+    try {
+      const task = await readTaskFile(path.join(directory, filename));
+      assertWorkTask(task);
+      if (owner && task.owner !== owner) continue;
+      if (readyOnly && task.status !== "ready") continue;
+      candidates.push({ filename, task });
+    } catch {
+      continue;
+    }
+  }
+  return candidates.sort((left, right) => {
+    const priority = Number(right.task.priority) - Number(left.task.priority);
+    if (priority) return priority;
+    const queued = Date.parse(left.task.queuedAt) - Date.parse(right.task.queuedAt);
+    if (queued) return queued;
+    return left.filename.localeCompare(right.filename);
+  });
+}
+
+export async function listQueuedWorkTasks(worldRoot, { owner = "" } = {}) {
+  const paths = await ensureWorkQueueDirs(worldRoot);
+  return listWorkFiles(worldRoot, paths.inputDir, { owner, readyOnly: true });
+}
+
+export async function listRuntimeWorkTasks(worldRoot, { owner = "" } = {}) {
+  const paths = await ensureWorkQueueDirs(worldRoot);
+  return listWorkFiles(worldRoot, paths.runtimeDir, { owner });
+}
+
+export async function findWorkTaskEnvelope(worldRoot, taskId, { owner = "" } = {}) {
+  const paths = await ensureWorkQueueDirs(worldRoot);
+  const id = normalizeWorkTaskId(taskId);
+  for (const directory of [paths.runtimeDir, paths.inputDir]) {
+    const candidates = await listWorkFiles(worldRoot, directory, { owner });
+    const found = candidates.find((entry) => entry.task.taskId === id);
+    if (found) return { ...found, path: path.join(directory, found.filename), runtime: directory === paths.runtimeDir };
+  }
+  return null;
+}
+
+export async function updateWorkTaskEnvelope(worldRoot, envelope, task) {
+  if (!envelope?.path) throw new Error("work envelope path missing");
+  const current = buildWorkTask(task);
+  assertWorkTask(current);
+  const tmp = `${envelope.path}.tmp-${process.pid}-${Date.now()}`;
+  await fs.writeFile(tmp, taskToText(current), "utf8");
+  await fs.rename(tmp, envelope.path);
+  await writeWorkTaskStatus(worldRoot, current);
   return current;
 }
 
@@ -284,7 +346,7 @@ export async function ackWorkTaskFail(worldRoot, {
         { now: new Date(), message: task.message, error: task.error }
       );
     assertWorkTask(nextTask);
-    await fs.writeFile(runtimePath, taskToText(nextTask), "utf8");
+    await writeWorkTaskRuntime(runtimePath, nextTask);
     await writeWorkTaskStatus(worldRoot, nextTask);
     retryCount = currentRetry;
     retryMax = limit;
@@ -295,6 +357,16 @@ export async function ackWorkTaskFail(worldRoot, {
     requeueDir: paths.inputDir,
     retryCount,
     maxRetries: retryMax
+  });
+}
+
+export async function ackWorkTaskTerminalFailure(worldRoot, { runtimePath } = {}) {
+  const paths = await ensureWorkQueueDirs(worldRoot);
+  return failSpoolItem({
+    runtimePath,
+    failDir: paths.produceFailDir,
+    retryCount: 1,
+    maxRetries: 0
   });
 }
 

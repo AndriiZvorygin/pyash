@@ -6,11 +6,13 @@ import path from "node:path";
 
 import {
   enqueueWorkTask,
+  claimOldestWorkTask,
   ensureWorkQueueDirs,
   queueDepth,
   taskFromText
 } from "../../program/runtime/work/queue.mjs";
-import { readWorkTaskStatus } from "../../program/runtime/work/status.mjs";
+import { readWorkTaskStatus, transitionWorkTaskStatus, updateWorkTaskCheckpoint } from "../../program/runtime/work/status.mjs";
+import { failWorkTask, resumeWorkTask } from "../../program/runtime/work/operator.mjs";
 import { runWorkSupervisorOnce } from "../../program/runtime/work/supervisor.mjs";
 
 async function makeWorldRoot(prefix) {
@@ -118,6 +120,10 @@ test("supervisor persists Sol plan, Luna evidence, and ACCEPT review", async () 
   assert.equal(status.checkpoint.plan.workOrder, "edit hello.txt and run node test.mjs");
   assert.deepEqual(status.checkpoint.implementation.changedFiles, ["hello.txt"]);
   assert.equal(status.checkpoint.review.decision, "ACCEPT");
+  assert.equal(status.checkpoint.activeTurn.state, "");
+  assert.equal(status.checkpoint.turnHistory.length, 3);
+  assert.match(status.checkpoint.turnHistory[0].requestIdentity, /accept-task-planning-0/);
+  assert.equal(status.checkpoint.turnHistory[0].resultCaptured, true);
   assert.equal((await queueDepth(worldRoot)).total, 0);
   const paths = await ensureWorkQueueDirs(worldRoot);
   const successFiles = await fs.readdir(paths.produceSuccessDir);
@@ -145,7 +151,121 @@ test("supervisor preserves a BLOCK review as a durable terminal decision", async
   const status = await readWorkTaskStatus(worldRoot, "block-task");
   assert.equal(status.status, "blocked");
   assert.equal(status.checkpoint.review.decision, "BLOCK");
+  assert.equal((await queueDepth(worldRoot)).runtime, 1);
+  await resumeWorkTask(worldRoot, "block-task", "Human confirmed the external dependency is now available.");
+  assert.equal((await readWorkTaskStatus(worldRoot, "block-task")).status, "ready");
+});
+
+test("supervisor does not replay an ambiguous in-flight turn until a human resumes it", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-ambiguous-");
+  await enqueueWorkTask(worldRoot, task("ambiguous-task"));
+  let turnCalls = 0;
+  const first = await runWorkSupervisorOnce({
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    appServerFactory: async () => ({
+      async startThread() { return { thread: { id: "manager-thread" } }; },
+      async runTurn() {
+        turnCalls += 1;
+        const error = new Error("app-server process exited after turn start");
+        error.kind = "process-exit";
+        throw error;
+      },
+      async close() {}
+    }),
+    workspaceFactory: async () => ({
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/task",
+      mode: "git-worktree"
+    }),
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(first.status, "blocked");
+  assert.equal(turnCalls, 1);
+  const repeated = await runWorkSupervisorOnce({ worldRoot, repositoryRoot: "/repo", owner: "background" });
+  assert.equal(repeated.status, "blocked");
+  assert.equal(turnCalls, 1);
+  const resumed = await resumeWorkTask(worldRoot, "ambiguous-task", "Retry this turn after checking the worktree.");
+  assert.equal(resumed.status, "ready");
+  assert.equal(resumed.checkpoint.turnHistory[0].state, "abandoned");
+});
+
+test("supervisor consumes a durable completed turn result after a checkpoint boundary", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-captured-");
+  await enqueueWorkTask(worldRoot, task("captured-task"));
+  await claimOldestWorkTask(worldRoot, { workerTag: "supervisor" });
+  await transitionWorkTaskStatus(worldRoot, "captured-task", "planning");
+  await transitionWorkTaskStatus(worldRoot, "captured-task", "implementing");
+  await updateWorkTaskCheckpoint(worldRoot, "captured-task", {
+    workspace: {
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/task",
+      mode: "git-worktree"
+    },
+    manager: { threadId: "manager-thread" },
+    worker: { threadId: "worker-thread" },
+    plan: { workOrder: "make the change" },
+    activeTurn: {
+      phase: "implementation",
+      role: "worker",
+      threadId: "worker-thread",
+      turnId: "worker-turn-1",
+      requestIdentity: "pyash-captured-task-implementation-0-0",
+      state: "completed",
+      startedAt: "2026-08-07T12:00:00.000Z",
+      completedAt: "2026-08-07T12:00:30.000Z",
+      resultCaptured: false,
+      result: {
+        status: "completed",
+        text: "SUMMARY: recovered implementation\nCHANGED FILES: hello.txt\nTESTS: node test.mjs passes\nBLOCKERS: \nUNCERTAINTY: none",
+        fileChanges: [{ path: "hello.txt", kind: "update", diff: "+hello" }]
+      }
+    }
+  });
+  const calls = { manager: 0, worker: 0 };
+  const result = await runWorkSupervisorOnce({
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    appServerFactory: async ({ role }) => ({
+      async resumeThread() {},
+      async runTurn() {
+        calls[role] += 1;
+        if (role === "worker") throw new Error("worker turn must not be replayed");
+        return { turnId: "review-turn-1", text: "DECISION: ACCEPT\nRATIONALE: recovered result is sufficient" };
+      },
+      async close() {}
+    }),
+    workspaceFactory: async () => ({
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/task",
+      mode: "git-worktree"
+    }),
+    evidenceFactory: async () => ({ diff: "+hello", changedFiles: ["hello.txt"] }),
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(result.status, "accepted");
+  assert.equal(calls.worker, 0);
+  assert.equal(calls.manager, 1);
+  const status = await readWorkTaskStatus(worldRoot, "captured-task");
+  assert.equal(status.checkpoint.activeTurn.state, "");
+  assert.equal(status.checkpoint.turnHistory.find((turn) => turn.turnId === "worker-turn-1").resultCaptured, true);
+});
+
+test("operator failure cancels an unclaimed task into the fail spool", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-cancel-");
+  await enqueueWorkTask(worldRoot, task("cancel-task"));
+  const failed = await failWorkTask(worldRoot, "cancel-task", "operator cancelled this task");
+  assert.equal(failed.status, "failed");
   assert.equal((await queueDepth(worldRoot)).total, 0);
+  assert.equal((await readWorkTaskStatus(worldRoot, "cancel-task")).error, "operator cancelled this task");
 });
 
 test("usage-limited work remains in runtime with a resumable checkpoint", async () => {

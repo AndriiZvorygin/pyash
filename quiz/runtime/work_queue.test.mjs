@@ -16,7 +16,8 @@ import {
   claimOldestWorkTask,
   enqueueWorkTask,
   ensureWorkQueueDirs,
-  queueDepth
+  queueDepth,
+  listQueuedWorkTasks
 } from "../../program/runtime/work/queue.mjs";
 import {
   readWorkTaskStatus,
@@ -180,4 +181,20 @@ test("work queue persists retry count and moves terminal failure to fail", async
   assert.equal(status.status, "failed");
   assert.equal(status.retryCount, 3);
   assert.equal(Number.isFinite(Date.parse(status.finishedAt)), true);
+});
+
+test("work queue claims higher priority first and preserves FIFO within a priority", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-priority-");
+  await enqueueWorkTask(worldRoot, task({ taskId: "low", priority: 10, queuedAt: "2026-08-07T12:00:00.000Z" }));
+  await enqueueWorkTask(worldRoot, task({ taskId: "high-old", priority: 50, queuedAt: "2026-08-07T12:02:00.000Z" }));
+  await enqueueWorkTask(worldRoot, task({ taskId: "high-new", priority: 50, queuedAt: "2026-08-07T12:03:00.000Z" }));
+  assert.deepEqual(
+    (await listQueuedWorkTasks(worldRoot)).map((entry) => entry.task.taskId),
+    ["high-old", "high-new", "low"]
+  );
+  const first = await claimOldestWorkTask(worldRoot, { workerTag: "priority" });
+  assert.equal(first.task.taskId, "high-old");
+  await ackWorkTaskSuccess(worldRoot, { runtimePath: first.path });
+  const second = await claimOldestWorkTask(worldRoot, { workerTag: "priority" });
+  assert.equal(second.task.taskId, "high-new");
 });

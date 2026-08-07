@@ -10,6 +10,34 @@ function list(value) {
   return Array.isArray(value) ? [...value] : [];
 }
 
+function turnResult(value) {
+  const source = object(value);
+  return {
+    status: text(source.status),
+    text: text(source.text),
+    diff: text(source.diff),
+    fileChanges: list(source.fileChanges),
+    turn: object(source.turn)
+  };
+}
+
+function turnRecord(value = {}) {
+  const source = object(value);
+  return {
+    phase: text(source.phase),
+    role: text(source.role),
+    threadId: text(source.threadId),
+    turnId: text(source.turnId),
+    requestIdentity: text(source.requestIdentity),
+    state: text(source.state),
+    startedAt: text(source.startedAt),
+    completedAt: text(source.completedAt),
+    resultCaptured: source.resultCaptured === true,
+    ambiguity: text(source.ambiguity),
+    result: turnResult(source.result)
+  };
+}
+
 export function buildWorkCheckpoint(input = {}) {
   const workspace = object(input.workspace);
   const manager = object(input.manager);
@@ -18,6 +46,8 @@ export function buildWorkCheckpoint(input = {}) {
   const implementation = object(input.implementation);
   const review = object(input.review);
   const interruption = object(input.interruption);
+  const activeTurn = turnRecord(input.activeTurn);
+  const turnHistory = list(input.turnHistory).map((entry) => turnRecord(entry));
   return {
     workspace: {
       repository: text(workspace.repository),
@@ -61,7 +91,14 @@ export function buildWorkCheckpoint(input = {}) {
       reason: text(interruption.reason),
       lastTurnId: text(interruption.lastTurnId)
     },
-    revisionCount: Math.max(0, Math.trunc(Number(input.revisionCount) || 0))
+    activeTurn,
+    turnHistory,
+    blocker: text(input.blocker),
+    humanResponse: text(input.humanResponse),
+    lastAction: text(input.lastAction),
+    selectionReason: text(input.selectionReason),
+    revisionCount: Math.max(0, Math.trunc(Number(input.revisionCount) || 0)),
+    resumeCount: Math.max(0, Math.trunc(Number(input.resumeCount) || 0))
   };
 }
 
@@ -76,10 +113,31 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     plan: { ...current.plan, ...object(update.plan) },
     implementation: { ...current.implementation, ...object(update.implementation) },
     review: { ...current.review, ...object(update.review) },
-    interruption: { ...current.interruption, ...object(update.interruption) }
+    interruption: { ...current.interruption, ...object(update.interruption) },
+    activeTurn: Object.prototype.hasOwnProperty.call(update, "activeTurn")
+      ? turnRecord(update.activeTurn)
+      : current.activeTurn,
+    turnHistory: Object.prototype.hasOwnProperty.call(update, "turnHistory")
+      ? list(update.turnHistory).map((entry) => turnRecord(entry))
+      : current.turnHistory,
+    blocker: Object.prototype.hasOwnProperty.call(update, "blocker")
+      ? text(update.blocker)
+      : current.blocker,
+    humanResponse: Object.prototype.hasOwnProperty.call(update, "humanResponse")
+      ? text(update.humanResponse)
+      : current.humanResponse,
+    lastAction: Object.prototype.hasOwnProperty.call(update, "lastAction")
+      ? text(update.lastAction)
+      : current.lastAction,
+    selectionReason: Object.prototype.hasOwnProperty.call(update, "selectionReason")
+      ? text(update.selectionReason)
+      : current.selectionReason
   };
   if (Object.prototype.hasOwnProperty.call(update, "revisionCount")) {
     merged.revisionCount = Math.max(0, Math.trunc(Number(update.revisionCount) || 0));
+  }
+  if (Object.prototype.hasOwnProperty.call(update, "resumeCount")) {
+    merged.resumeCount = Math.max(0, Math.trunc(Number(update.resumeCount) || 0));
   }
   return buildWorkCheckpoint(merged);
 }
