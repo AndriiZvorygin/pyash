@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { parse } from "../../understand/index.mjs";
@@ -94,6 +95,7 @@ function taskToText(task) {
     { key: "result", type: "text", value: quoteText(task.result) },
     { key: "error", type: "text", value: quoteText(task.error) },
     { key: "work spec", type: "text", value: quoteText(encodeJson(task.workSpec)) },
+    { key: "checkpoint", type: "text", value: quoteText(encodeJson(task.checkpoint)) },
     { key: "payload", type: "text", value: quoteText(payload) }
   ];
   return `${mapBlock("work task", entries)}\n`;
@@ -132,6 +134,7 @@ function taskFromText(text) {
     result: values.result,
     error: values.error,
     workSpec: decodeJson(values["work spec"]),
+    checkpoint: decodeJson(values.checkpoint),
     payloadSentence
   });
 }
@@ -216,9 +219,41 @@ export async function claimOldestWorkTask(worldRoot, { workerTag = "", owner = "
   return null;
 }
 
+export async function claimOldestRuntimeWorkTask(worldRoot, { owner = "" } = {}) {
+  const paths = await ensureWorkQueueDirs(worldRoot);
+  const runtime = await listSpoolItemsOldestFirst(paths.runtimeDir);
+  for (const filename of runtime) {
+    if (!filenameMatchesOwner(filename, owner)) continue;
+    let task;
+    try {
+      task = await readTaskFile(path.join(paths.runtimeDir, filename));
+      assertWorkTask(task);
+    } catch {
+      continue;
+    }
+    if (owner && task.owner !== owner) continue;
+    return {
+      path: path.join(paths.runtimeDir, filename),
+      filename,
+      task,
+      recovered: true
+    };
+  }
+  return null;
+}
+
 export async function ackWorkTaskSuccess(worldRoot, { runtimePath } = {}) {
   const paths = await ensureWorkQueueDirs(worldRoot);
   return completeSpoolItem({ runtimePath, successDir: paths.produceSuccessDir });
+}
+
+export async function writeWorkTaskRuntime(runtimePath, task) {
+  const current = buildWorkTask(task);
+  assertWorkTask(current);
+  const tmp = `${runtimePath}.tmp-${process.pid}-${Date.now()}`;
+  await fs.writeFile(tmp, taskToText(current), "utf8");
+  await fs.rename(tmp, runtimePath);
+  return current;
 }
 
 export async function ackWorkTaskFail(worldRoot, {
