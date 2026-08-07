@@ -27,5 +27,6 @@ Utility scripts for working with Pyash from the shell:
 - `vocab_suggest.mjs "word"` — check a proposed token/phrase; pass a file/dir to scan `.pya` files.
 - `android_default_device.mjs [--yes] [--serial <id>] [--file <path>]` — detect attached ADB device(s) and set `su name android device id ...` in `configure/secret.pya` (prompts before writing).
 - `codex_account.mjs <read|login|cancel|logout|rate-limits|models> ...` — Codex App Server account/auth helper for `openai-codex` setup.
+- `push_all.sh` — pushes the current clean branch to both the configured `origin` and the Pyash GitHub mirror.
 
 Run with `node command/<file>.mjs ...`.
