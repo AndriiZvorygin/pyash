@@ -28,22 +28,59 @@ export const REPORTERS = Object.freeze({
     label: "Owen Sound",
     house: path.join(PYASH_ROOT, "world/house/owen-sound-reporter"),
     runScript: path.join(PYASH_ROOT, "world/house/owen-sound-reporter/run-next-story.sh"),
+    recoveryScript: path.join(PYASH_ROOT, "world/house/owen-sound-reporter/program/run-owen-sound-meeting-from-ref.mjs"),
+    publishScript: path.join(PYASH_ROOT, "world/house/owen-sound-reporter/program/publish-meeting-to-helpos-from-payload.mjs"),
     lock: "/tmp/owen-sound-reporter.cron.lock",
     adapterFile: path.join(PYASH_ROOT, "world/house/owen-sound-reporter/program/writer-adapter-owen-sound.mjs"),
     adapterExport: "OWEN_ADAPTER",
     envPrefix: "OWEN",
+    communityName: "owen-sound-council",
   }),
   grey: Object.freeze({
     key: "grey",
     label: "Grey County",
     house: path.join(PYASH_ROOT, "world/house/grey-county-reporter"),
     runScript: path.join(PYASH_ROOT, "world/house/grey-county-reporter/run-next-story.sh"),
+    recoveryScript: path.join(PYASH_ROOT, "world/house/grey-county-reporter/program/run-grey-county-meeting-from-ref.mjs"),
+    publishScript: path.join(PYASH_ROOT, "world/house/grey-county-reporter/program/publish-meeting-to-helpos-from-payload.mjs"),
     lock: "/tmp/grey-county-reporter.cron.lock",
     adapterFile: path.join(PYASH_ROOT, "world/house/grey-county-reporter/program/writer-adapter-grey-county.mjs"),
     adapterExport: "GREY_ADAPTER",
     envPrefix: "GREY",
+    communityName: "grey-county-council",
+    recoveryEnv: Object.freeze({
+      GREY_PIPELINE_FORCE_WHOLE_SUMMARY: "1",
+    }),
   }),
 });
+
+export function nightlyReporterInvocation(reporter, recoveryMeetingRef = "", recoveryPostRef = "") {
+  const meetingRef = String(recoveryMeetingRef || "").trim();
+  if (!meetingRef) {
+    return { cmd: reporter.runScript, args: ["--refresh"], cwd: reporter.house };
+  }
+  if (!reporter.recoveryScript) {
+    throw new Error(`reporter ${reporter.key} does not support a pinned recovery meeting`);
+  }
+  return {
+    cmd: process.execPath,
+    args: [reporter.recoveryScript, meetingRef],
+    cwd: reporter.house,
+    env: {
+      ...(reporter.recoveryEnv || {}),
+      ...(reporter.publishScript
+        ? {
+          MEETING_POST_COMMAND: `node ${reporter.publishScript}`,
+          PIPELINE_FORCE_POST: "1",
+        }
+        : {}),
+      ...(reporter.communityName ? { MEETING_PUBLISH_COMMUNITY_NAME: reporter.communityName } : {}),
+      ...(String(recoveryPostRef || "").trim()
+        ? { MEETING_PUBLISH_POST_REF: String(recoveryPostRef).trim() }
+        : {}),
+    },
+  };
+}
 
 export function torontoParts(date = new Date()) {
   const values = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
@@ -217,10 +254,47 @@ export function classifyProbe({ active = false, exitCode = 0, candidate = null, 
   return { state: "healthy_no_candidate", needs_repair: false, reason: "no eligible unpublished candidate remains" };
 }
 
-export async function probeReporter(reporter, { refresh = true, logPath = "", stream = false } = {}) {
+export function classifyNightlyOutcome(status) {
+  const value = String(status?.status || "").trim().toLowerCase();
+  if (value === "completed") {
+    return { state: "healthy_published_today", needs_repair: false, reason: "today's nightly reporter run published successfully" };
+  }
+  if (value === "healthy_no_candidate") {
+    return { state: "healthy_no_candidate", needs_repair: false, reason: "today's nightly reporter run found no eligible unpublished candidate" };
+  }
+  return null;
+}
+
+export function readTodayNightlyOutcome(reporter, { now = new Date(), artifactRoot = ARTIFACT_ROOT } = {}) {
+  const pointerPath = path.join(artifactRoot, `latest-${reporter.key}.txt`);
+  if (!fs.existsSync(pointerPath)) return null;
+  try {
+    const artifactDir = path.resolve(fs.readFileSync(pointerPath, "utf8").trim());
+    const expectedDayDir = path.resolve(artifactRoot, "nightly", torontoParts(now).day);
+    if (artifactDir !== expectedDayDir && !artifactDir.startsWith(`${expectedDayDir}${path.sep}`)) return null;
+    const status = JSON.parse(fs.readFileSync(path.join(artifactDir, "status.json"), "utf8"));
+    if (String(status?.reporter || "") !== reporter.key) return null;
+    return { ...status, artifact_dir: artifactDir };
+  } catch {
+    return null;
+  }
+}
+
+export async function probeReporter(reporter, { refresh = true, logPath = "", stream = false, now = new Date() } = {}) {
   if (!reporter) throw new Error("reporter configuration is required");
   if (isLockHeld(reporter.lock) || isLockHeld(PIPELINE_LOCK)) {
     return { reporter: reporter.key, label: reporter.label, ...classifyProbe({ active: true }) };
+  }
+
+  const nightlyOutcome = readTodayNightlyOutcome(reporter, { now });
+  const nightlyHealth = classifyNightlyOutcome(nightlyOutcome);
+  if (nightlyHealth) {
+    return {
+      reporter: reporter.key,
+      label: reporter.label,
+      ...nightlyHealth,
+      nightly_status: nightlyOutcome,
+    };
   }
 
   const [{ buildRunNextConfig }, adapterModule] = await Promise.all([
@@ -281,6 +355,11 @@ export function shouldLaunchRecovery({ failures = [], active = false, alreadyLau
   return failures.length > 0 && !active && !alreadyLaunched;
 }
 
+export function recoveryIsDeduplicated(state) {
+  const status = String(state?.status || "").trim().toLowerCase();
+  return status === "running" || status === "fixed";
+}
+
 export function buildCodexPrompt({ incidentPath, reporters, artifactDir }) {
   const keys = reporters.map((item) => item.reporter).join(", ");
   return [
@@ -291,6 +370,7 @@ export function buildCodexPrompt({ incidentPath, reporters, artifactDir }) {
     "",
     "Before acting, read /home/htaf/pyash/AGENTS.md, /home/htaf/pyash/skills/reporter-refinery-recovery/SKILL.md, and its linked runbook completely.",
     "Diagnose from the incident evidence, reproduce narrowly, implement the general pipeline fix, run targeted tests, and then rerun only the affected reporter entry points to publish or update the missing work.",
+    "For the final recovery run, use world/house/refinery-watchdog/program/run-nightly-refinery.mjs so the watchdog records and can independently verify today's successful outcome.",
     "Use qwen3.5:9b exclusively for local reporter-pipeline LLM work. Do not configure, invoke, or add references to any other local model.",
     "Do not create meeting-specific, date-specific, page-specific, or agenda-item-specific exceptions. Do not replace LLM transcript segmentation, prose generation, or summaries with regexes, opening fragments, first-sentence extraction, or other deterministic prose fallbacks.",
     "Respect the shared municipal reporter pipeline lock, do not overlap GPU-heavy work, preserve unrelated dirty-worktree changes, do not commit or push, do not use destructive Git commands, and never print credentials.",
@@ -351,7 +431,8 @@ export function resolveCodexBin() {
 export function buildCodexExecArgs({ prompt, schemaPath, outputPath }) {
   return [
     "exec",
-    "--full-auto",
+    "--sandbox", "danger-full-access",
+    "-c", 'approval_policy="never"',
     "--json",
     "-C", PYASH_ROOT,
     "--output-schema", schemaPath,

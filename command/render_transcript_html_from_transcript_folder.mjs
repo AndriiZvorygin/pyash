@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readPyaTextValues } from "./pya_lookup.mjs";
+import { normalizeCanadianEnglish } from "../program/library/reporter_shared/canadian-english.mjs";
 
 const SITE_URL_DEFAULT = "https://helpos.ca";
 
@@ -448,6 +449,15 @@ function distinct(list) {
   return out;
 }
 
+function normalizeCanadianProseDeep(value) {
+  if (typeof value === "string") return normalizeCanadianEnglish(value);
+  if (Array.isArray(value)) return value.map((entry) => normalizeCanadianProseDeep(entry));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, normalizeCanadianProseDeep(entry)]),
+  );
+}
+
 function parseLeadingItemNumber(heading) {
   const raw = String(heading || "").trim();
   const full = raw.match(/^\s*(\d+)(?:\s*[.\-]\s*([a-z0-9]+))?\b/iu);
@@ -714,20 +724,32 @@ function buildRangesFromGrossChunks(rows, grossChunks) {
   return normalizeSectionRanges(rows, out);
 }
 
-function attachSectionChaptersByIndex(ranges, sections) {
+function attachSectionChaptersByIndex(ranges, sections, transcriptRows = []) {
   const out = Array.isArray(ranges) ? ranges.map((r) => ({ ...r })) : [];
   const src = Array.isArray(sections) ? sections : [];
+  const rows = Array.isArray(transcriptRows) ? transcriptRows : [];
   if (!out.length || !src.length) return out;
+  const projectChapters = (chapters) => (Array.isArray(chapters) ? chapters : []).map((chapter) => {
+    const rowStart = Number(chapter?.["row start"] ?? chapter?.start_row);
+    const rowEnd = Number(chapter?.["row end"] ?? chapter?.end_row);
+    const start = Number.isFinite(rowStart) ? rows[Math.max(0, Math.min(rows.length - 1, Math.floor(rowStart)))] : null;
+    const end = Number.isFinite(rowEnd) ? rows[Math.max(0, Math.min(rows.length - 1, Math.floor(rowEnd)))] : null;
+    return {
+      ...chapter,
+      since: start ? Number(start.since) : Number(chapter?.since),
+      until: end ? Number(end.until ?? end.since) : Number(chapter?.until),
+    };
+  });
   if (out.length === src.length) {
     for (let i = 0; i < out.length; i += 1) {
       const ch = src[i]?.chapters;
-      out[i].chapters = Array.isArray(ch) ? ch : [];
+      out[i].chapters = projectChapters(ch);
     }
     return out;
   }
   const byHeading = new Map(src.map((s) => [String(s?.heading || "").trim(), Array.isArray(s?.chapters) ? s.chapters : []]));
   for (const r of out) {
-    r.chapters = byHeading.get(String(r?.heading || "").trim()) || [];
+    r.chapters = projectChapters(byHeading.get(String(r?.heading || "").trim()) || []);
   }
   return out;
 }
@@ -1116,6 +1138,7 @@ function buildPage({
     ? transcriptSections.map((s) => ({
       href: `#${s.id}`,
       label: s.heading,
+      since: Number(transcriptRows[s.startRow]?.since),
       chapters: (Array.isArray(s.chapters) ? s.chapters : []).map((ch, i) => ({
         href: `#${chapterAnchor(s, ch, i)}`,
         label: String(ch?.title || ch?.text || `Chapter ${i + 1}`).trim() || `Chapter ${i + 1}`,
@@ -1130,7 +1153,8 @@ function buildPage({
         return `<li><a href="${escapeHtml(ch.href)}">${escapeHtml(ts)}${escapeHtml(ch.label)}</a></li>`;
       }).join("")}</ol>`
       : "";
-    return `<li><a href="${escapeHtml(row.href)}">${escapeHtml(row.label)}</a>${chapters}</li>`;
+    const ts = Number.isFinite(row.since) ? `${fmtClock(row.since)} ` : "";
+    return `<li><a href="${escapeHtml(row.href)}">${escapeHtml(ts)}${escapeHtml(row.label)}</a>${chapters}</li>`;
   }).join("")}</ol></nav>`;
   const transcriptHtml = hasSections
     ? transcriptSections.map((s) => {
@@ -1321,6 +1345,7 @@ function main() {
   const videoArg = process.argv[9] || "";
   const hookArg = process.argv[10] || "";
   const agendaPageArg = process.argv[11] || "";
+  const canonicalUrlArg = process.argv[12] || "";
 
   if (!transcriptDirArg) {
     process.stdout.write(`${usage()}\n`);
@@ -1409,16 +1434,16 @@ function main() {
   const agendaWiseSeriesPath = pickFile(transcriptDir, [/\.agenda-wise\.series\.pya$/u]);
   const agendaGrossChunksPath = pickFile(transcriptDir, [/\.agenda\.gross-chunks\.pya$/u]);
   const meetingSummaryPath = pickFile(transcriptDir, [/\.meeting-summary\.md$/u]);
-  const agendaSummary = agendaSummaryPath
+  const agendaSummary = normalizeCanadianEnglish(agendaSummaryPath
     ? fs.readFileSync(agendaSummaryPath, "utf8")
-    : (chapterSummaryPath ? fs.readFileSync(chapterSummaryPath, "utf8") : "");
+    : (chapterSummaryPath ? fs.readFileSync(chapterSummaryPath, "utf8") : ""));
   let agendaSummaryJson = {};
   let agendaMatches = {};
   let wiseRanges = [];
   if (agendaSummaryPyaPath) {
-    agendaSummaryJson = { sections: parseAgendaSummarySectionsFromPya(agendaSummaryPyaPath) };
+    agendaSummaryJson = normalizeCanadianProseDeep({ sections: parseAgendaSummarySectionsFromPya(agendaSummaryPyaPath) });
   } else if (chapterSummaryPyaPath) {
-    agendaSummaryJson = { sections: parseChapterSummarySectionsFromPya(chapterSummaryPyaPath, chapterGroundingPyaPath) };
+    agendaSummaryJson = normalizeCanadianProseDeep({ sections: parseChapterSummarySectionsFromPya(chapterSummaryPyaPath, chapterGroundingPyaPath) });
   }
   if (agendaMatchesPath) {
     agendaMatches = parseAgendaMatchesFromPya(agendaMatchesPath);
@@ -1427,7 +1452,7 @@ function main() {
     try { wiseRanges = parseWiseRanges(fs.readFileSync(agendaWiseSeriesPath, "utf8")); } catch {}
   }
   const grossChunks = agendaGrossChunksPath ? parseGrossChunksFromPya(agendaGrossChunksPath) : [];
-  const meetingSummary = meetingSummaryPath ? fs.readFileSync(meetingSummaryPath, "utf8") : "";
+  const meetingSummary = normalizeCanadianEnglish(meetingSummaryPath ? fs.readFileSync(meetingSummaryPath, "utf8") : "");
   const meetingDir = path.dirname(transcriptDir);
   const meetingJsonPath = path.join(meetingDir, "meeting.json");
   let meetingPayload = {};
@@ -1438,6 +1463,7 @@ function main() {
     } catch {}
   }
 
+  transcriptRows = normalizeCanadianProseDeep(transcriptRows);
   const topics = distinct(parseMdHeadings(agendaSummary)).slice(0, 30);
   if (!topics.length) {
     topics.push("Council procedure", "Public forum", "Planning and development");
@@ -1456,7 +1482,8 @@ function main() {
   const dateInfo = deriveDateText(meetingDirName);
   const jurisdictionSlug = slugify(jurisdictionArg);
   const bodySlug = slugify(bodyArg);
-  const canonicalUrl = `${siteUrlArg.replace(/\/+$/u, "")}/transcripts/${jurisdictionSlug}/${bodySlug}/${dateInfo.iso || "unknown-date"}`;
+  const inferredCanonicalUrl = `${siteUrlArg.replace(/\/+$/u, "")}/transcripts/${jurisdictionSlug}/${bodySlug}/${dateInfo.iso || "unknown-date"}`;
+  const canonicalUrl = String(canonicalUrlArg || inferredCanonicalUrl).trim();
   const inferredAgendaPage = `${siteUrlArg.replace(/\/+$/u, "")}/agendas/${jurisdictionSlug}/${bodySlug}/${dateInfo.iso || "unknown-date"}`;
   const descTopics = topics.slice(0, 3).join(", ");
   const description = `Transcript and summary of the ${jurisdictionArg} ${bodyArg} meeting held on ${dateInfo.long}, including discussion of ${descTopics}.`;
@@ -1485,6 +1512,7 @@ function main() {
       grossChunks,
     }),
     agendaSummaryJson?.sections,
+    transcriptRows,
   );
   assertNoLongUnsummarizedSections(
     transcriptRows,
@@ -1508,7 +1536,7 @@ function main() {
     body: bodyArg,
     dateIso: dateInfo.iso || "1970-01-01",
     dateLong: dateInfo.long,
-    hook: hookArg,
+    hook: normalizeCanadianEnglish(hookArg),
     canonicalUrl,
     description,
     discussionUrl: discussionArg,

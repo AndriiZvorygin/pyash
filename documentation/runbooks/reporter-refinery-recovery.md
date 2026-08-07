@@ -32,3 +32,5 @@ Restore missing Andrii YouTube, Owen Sound, or Grey County publications by fixin
 5. If verification fails, keep the incident retryable. Do not claim success from local files alone.
 
 Return `needs_human` when credentials, external authority, ambiguous editorial judgment, or an active job prevents safe completion.
+
+The scheduled recovery launcher intentionally provides host network and filesystem access because the reporter pipeline requires the LAN Ollama service and HelpOS. Treat that authority as limited to the incident and the constraints above.

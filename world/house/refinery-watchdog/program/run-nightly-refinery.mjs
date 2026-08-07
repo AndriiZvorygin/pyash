@@ -4,9 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ARTIFACT_ROOT,
+  PIPELINE_LOCK,
   PYASH_ROOT,
   REPORTERS,
   ensureDir,
+  nightlyReporterInvocation,
   reexecWithLock,
   runId,
   runProcess,
@@ -30,6 +32,21 @@ if (reexecStatus !== null) {
   process.exit(reexecStatus);
 }
 
+if (String(process.env.REFINERY_RECOVERY_MEETING_REF || "").trim()) {
+  const pipelineMarker = `REFINERY_NIGHTLY_PIPELINE_LOCK_${key.toUpperCase()}`;
+  const pipelineLockStatus = reexecWithLock({
+    lockPath: PIPELINE_LOCK,
+    marker: pipelineMarker,
+    scriptPath,
+  });
+  if (pipelineLockStatus !== null) {
+    if (pipelineLockStatus === 75) {
+      process.stderr.write(`[refinery-watchdog] ${key} recovery skipped because the shared pipeline lock is held\n`);
+    }
+    process.exit(pipelineLockStatus);
+  }
+}
+
 const started = new Date();
 const id = runId(`nightly-${key}`, started);
 const day = torontoParts(started).day;
@@ -44,10 +61,13 @@ const base = {
 writeJson(path.join(artifactDir, "status.json"), { ...base, status: "running" });
 writePyaStatus(path.join(artifactDir, "status.pya"), { ...base, status: "running" });
 
+const invocation = nightlyReporterInvocation(
+  reporter,
+  process.env.REFINERY_RECOVERY_MEETING_REF,
+  process.env.REFINERY_RECOVERY_POST_REF,
+);
 const result = await runProcess({
-  cmd: reporter.runScript,
-  args: ["--refresh"],
-  cwd: reporter.house,
+  ...invocation,
   timeoutMs: 10 * 60 * 60 * 1000,
   logPath,
   stream: true,

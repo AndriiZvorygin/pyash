@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { verifyAgendaMotionAttributions } from './motion-attribution-verifier.mjs';
 
 function safeReadJson(filePath, fallback = null) {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; }
@@ -153,6 +154,10 @@ export function runTranscriptPublishGate({ payloadPath, payload, provenancePath,
   const dir = path.dirname(payloadPath);
   const prefix = path.basename(payloadPath).replace(/\.lemmy-post\.json$/u, '');
   const gatePath = path.join(dir, `${prefix}.transcript-publish-gate.pya`);
+  const motionAttribution = verifyAgendaMotionAttributions({
+    agendaSummaryPyaPath: path.join(dir, `${prefix}.agenda-summary.pya`),
+    sectionGroundingPyaPath: path.join(dir, `${prefix}.agenda.section-grounding.pya`),
+  });
 
   const htmlPath = path.resolve(dir, String(payload?.local_transcript_html || ''));
   const checks = {
@@ -162,6 +167,7 @@ export function runTranscriptPublishGate({ payloadPath, payload, provenancePath,
     has_meaningful_html_body: false,
     provenance_present: Boolean(provenancePath && fs.existsSync(provenancePath)),
     boundary_diagnostics_present: Boolean((timestampPath && fs.existsSync(timestampPath)) || (refinePath && fs.existsSync(refinePath))),
+    motion_attribution_supported: motionAttribution.ok,
   };
 
   if (checks.transcript_html_exists) {
@@ -176,12 +182,14 @@ export function runTranscriptPublishGate({ payloadPath, payload, provenancePath,
   if (!checks.has_meaningful_html_body) blockedReasons.push('empty_transcript_body');
   if (!checks.provenance_present) blockedReasons.push('missing_source_provenance');
   if (!checks.boundary_diagnostics_present) blockedReasons.push('missing_boundary_diagnostics');
+  if (!checks.motion_attribution_supported) blockedReasons.push('unsupported_named_motion_attribution');
 
   const status = blockedReasons.length ? 'blocked' : 'pass';
   writePyaMap(gatePath, {
     schema_version: 'transcript_publish_gate_v1',
     status,
     checks,
+    motion_attribution_defects: motionAttribution.defects,
     blocked_reasons: blockedReasons,
     pass: status === 'pass',
   });

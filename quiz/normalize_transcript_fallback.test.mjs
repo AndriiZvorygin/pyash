@@ -14,7 +14,7 @@ test("transcript normalization falls back to source chunks when LLM fetch fails"
   fs.mkdirSync(transcriptDir, { recursive: true });
   fs.writeFileSync(
     path.join(transcriptDir, "meeting-qwen-auto.plain.txt"),
-    "Mayor Body called the City of Oceansound meeting to order.\n",
+    "Mayor Body called the City of Onondaga meeting to order and discussed a neighborhood labor program with Moquehadong.\n",
     "utf8",
   );
 
@@ -38,7 +38,10 @@ test("transcript normalization falls back to source chunks when LLM fetch fails"
   const output = fs.readFileSync(path.join(transcriptDir, "meeting-qwen-auto-normalized.plain.txt"), "utf8");
   const meta = JSON.parse(fs.readFileSync(path.join(transcriptDir, "meeting-qwen-auto-normalized.normalize.metadata.json"), "utf8"));
 
-  assert.match(output, /Mayor Boddy called the City of Owen Sound meeting to order\./u);
+  assert.match(output, /Mayor Boddy called the City of Owen Sound meeting to order and discussed a neighbourhood labour programme with M'Wikwedong\./u);
+  assert.equal(meta.string_replacement_map.Onondaga, "Owen Sound");
+  assert.equal(meta.string_replacement_map.neighborhood, "neighbourhood");
+  assert.equal(meta.string_replacement_map.Moquehadong, "M'Wikwedong");
   assert.equal(meta.fallback_chunk_count, 1);
   assert.equal(meta.fallback_chunks[0].index, 1);
 });

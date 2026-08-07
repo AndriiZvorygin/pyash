@@ -19,6 +19,10 @@ const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
 const MODEL = process.env.OWEN_HOOK_MODEL || process.env.OWEN_SUMMARY_MODEL || 'qwen3.5:9b';
 const MAX_ATTEMPTS = 8;
 const PASS_THRESHOLD = 0.8;
+// eScribe report identifiers are metadata, not human-facing news hooks. Keep
+// this broad enough for municipality-specific prefixes/types (for example
+// CSR-CS-19-26) without hard-coding one meeting's report family.
+const AGENDA_REPORT_CODE_RE = /\b[A-Z]{2,8}-[A-Z]{2,8}-\d{1,3}-\d{2}\b/giu;
 
 function usage() {
   return [
@@ -78,21 +82,25 @@ function stripMarkdown(text) {
     .trim();
 }
 
-function selectHookGenerationSource(sourceSummary = '') {
+function stripAgendaReportCodes(text = '') {
+  return String(text || '')
+    .replace(AGENDA_REPORT_CODE_RE, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function hasAgendaReportCode(text = '') {
+  AGENDA_REPORT_CODE_RE.lastIndex = 0;
+  return AGENDA_REPORT_CODE_RE.test(String(text || ''));
+}
+
+export function selectHookGenerationSource(sourceSummary = '') {
   const text = String(sourceSummary || '').replace(/\s+/gu, ' ').trim();
   if (!text) return '';
-  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/gu) || [text];
-  const kept = [];
-  let total = 0;
-  for (const sentence of sentences) {
-    const cleaned = String(sentence || '').replace(/\s+/gu, ' ').trim();
-    if (!cleaned) continue;
-    if (kept.length >= 3 && total >= 500) break;
-    if (total + cleaned.length > 1400 && kept.length) break;
-    kept.push(cleaned);
-    total += cleaned.length;
-  }
-  return (kept.join(' ') || text).slice(0, 1800).trim();
+  // The whole-meeting summary is already bounded upstream. Keep its complete
+  // Top Newsworthy chronology so a hook can select a later substantive item
+  // instead of being forced to overrepresent the opening bullets.
+  return text.slice(0, 6000).trim();
 }
 
 function toTitleWords(value) {
@@ -102,14 +110,14 @@ function toTitleWords(value) {
     .trim()
     .split(' ')
     .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .map((w) => /^[A-Z0-9]{2,}$/u.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ')
     .trim();
 }
 
 function sanitizeHook(text) {
   const line = String(text || '').split(/\r?\n/u).map((x) => x.trim()).filter(Boolean)[0] || '';
-  const t = toTitleWords(line);
+  const t = toTitleWords(stripAgendaReportCodes(line));
   const words = t.split(/\s+/u).filter(Boolean).slice(0, 6);
   if (words.length < 3) {
     const fallback = ['Council', 'Decisions', 'At', 'A', 'Turning', 'Point'];
@@ -428,6 +436,7 @@ function hasConcreteKeywordOverlap(hook = "", sourceSummary = "") {
 function isKeywordHookReady(hook = "", sourceSummary = "", hookMode = "recap") {
   const words = String(hook || "").trim().split(/\s+/u).filter(Boolean);
   if (words.length < 3 || words.length > 6) return false;
+  if (hasAgendaReportCode(hook)) return false;
   if (hookContentTerms(hook).length < 2) return false;
   if (/\b(january|february|march|april|may|june|july|august|september|october|november|december)$/iu.test(String(hook || "").trim())) return false;
   if (isProseHookLike(hook)) return false;
@@ -462,7 +471,8 @@ function isProseSpeakerHook(text = "") {
 function isClippedContrastHook(text = "") {
   const n = normalizeForMatch(text);
   if (!n) return false;
-  return /\b(despite|amid|over)\s+(safety|concerns|issues|questions|debate|pushback)\b/u.test(n);
+  return /\b(despite|amid|over)\s+(safety|concerns|issues|questions|debate|pushback)\b/u.test(n)
+    || /\b(against|for|with|without|over|amid|despite|during|from|into|about|after|before)$/u.test(n);
 }
 
 function isPartialStreetHook(text = "") {
@@ -853,6 +863,7 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, h
 	    '- Avoid bland joins like "and" unless absolutely necessary.',
 	    '- Do not use contrast/preposition fragments like "despite safety", "amid concerns", or "over issues".',
 	    '- Reuse concrete wording from SOURCE_SUMMARY instead of inventing labels.',
+	    '- Never imply that one development caused, blocked, funded, or enabled another unless SOURCE_SUMMARY explicitly states that relationship.',
 	    '- If SOURCE_SUMMARY says "servicing", use "servicing"; do not change it to water, sewer, hydro, or wastewater unless that exact utility appears.',
 	    '- If SOURCE_SUMMARY contains subdivision/frontage/parking/pedestrian concerns, include one of those concrete issue terms in the hook.',
 	    '- For subdivision concern stories, acceptable keyword shapes include "Reduced Frontage Subdivision Concerns" or "Twenty Third Parking Concerns".',
@@ -887,6 +898,7 @@ function buildScorePrompt({ sourceSummary, hook, jurisdiction, body, hookMode })
     '',
     'Rules:',
     '- Penalize invented claims not in SOURCE_SUMMARY.',
+    '- Fail hooks that invent a causal relationship between separate developments, including wording that one item blocked, funded, enabled, or caused another.',
     '- Treat equivalent number words and digits as the same amount (for example "Five Hundred Thousand" equals "$500,000"); do not claim digits are missing when the amount is written in words.',
     '- Do not require currency symbols or comma-formatted numbers; hooks are punctuation-free keyword titles.',
     '- Penalize action verbs that overstate status (adopted/approved/passed) unless SOURCE_SUMMARY explicitly supports that action for the same subject.',
@@ -1004,17 +1016,6 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
       };
     }
   }
-  if (hookMode !== 'preview') {
-    const leadFromText = deriveRecapHookFromTopNewsText(sourceSummary, jurisdiction, body);
-    if (leadFromText && isKeywordHookReady(leadFromText, sourceSummary, hookMode) && !isRedundantDurationHook(leadFromText)) {
-      return {
-        hook: leadFromText,
-        score: 1,
-        verifier_feedback: 'Hook sourced directly from Top Newsworthy Developments text.',
-        fallback_used: false,
-      };
-    }
-  }
   const verifierSource = String(verifierSourceText || sourceSummary || '');
   const generationSource = hookMode === 'preview'
     ? sourceSummary
@@ -1080,75 +1081,23 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
     if (score >= PASS_THRESHOLD && isKeywordHookReady(draft, sourceSummary, hookMode)) break;
   }
 
-	  let safeHook = bestHook || '';
-	  let fallbackReason = '';
-	  if (hookMode !== 'preview' && bestScore < PASS_THRESHOLD) {
-	    const rankedLead = buildRecapHookFromRankedItems(topNewsHeadings, sourceSummary, jurisdiction, body);
-	    const textLead = deriveRecapHookFromTopNewsText(sourceSummary, jurisdiction, body);
-	    safeHook = rankedLead || textLead || fallbackHookFromSummary(sourceSummary);
-	    fallbackReason = `quality threshold fallback from source heading; rejected hook=${JSON.stringify(bestHook || '')} score=${Number(bestScore || 0).toFixed(3)} feedback=${String(bestReview || '').replace(/\s+/gu, ' ').trim()}`;
-	  }
-	  if (!safeHook) {
-	    safeHook = buildRecapHookFromRankedItems(topNewsHeadings, sourceSummary, jurisdiction, body)
-	      || fallbackHookFromSummary(sourceSummary);
-	    fallbackReason = fallbackReason || 'empty hook fallback from source heading';
-	  }
-  if (hookMode !== 'preview' && /\bland acknowledgement\b/iu.test(safeHook || '')) {
-    const fiscalHook = deriveKeywordHookFromSummary(sourceSummary);
-    if (/\b(budget|taxation|fiscal|revenue|bylaw)\b/iu.test(fiscalHook || '')) {
-      safeHook = fiscalHook;
-      fallbackReason = fallbackReason || 'source-grounded fiscal hook preferred over ceremonial hook';
-    }
+  if (!bestHook || bestScore < PASS_THRESHOLD) {
+    throw new Error(`meeting-hook retryable: Qwen did not produce a verified hook score=${Number(bestScore || 0).toFixed(3)} feedback=${String(bestReview || '').replace(/\s+/gu, ' ').trim()}`);
   }
-  safeHook = sanitizeChapterStyleHook(safeHook, { jurisdiction, body });
-  if (hookMode === 'preview') {
-    const rankedHook = buildPreviewHookFromRankedItems(topNewsHeadings);
-    if (rankedHook) {
-      safeHook = sanitizeFinalPreviewHook(rankedHook) || rankedHook;
-    } else {
-      safeHook = enforcePreviewVerbTense(safeHook);
-      if (isGenericPreviewHook(safeHook)) {
-        safeHook = sanitizeFinalPreviewHook(deriveSubjectFromHeading(topNewsHeadings[0] || '')) || safeHook;
-      }
-      safeHook = safeHook.replace(/\bCouncil\b/giu, '').replace(/\s+/gu, ' ').trim();
-      safeHook = sanitizeFinalPreviewHook(safeHook) || safeHook;
-    }
-    safeHook = enforcePreviewTemporalStyle(safeHook);
-    if (isWeakPreviewHook(safeHook)) {
-      const fromTop = buildPreviewHookFromRankedItems(topNewsHeadings);
-      if (fromTop) safeHook = sanitizeFinalPreviewHook(fromTop) || fromTop;
-    }
-    if (isWeakPreviewHook(safeHook)) {
-      const fromSummary = derivePreviewHookFromTopNewsText(sourceSummary, jurisdiction, body);
-      if (fromSummary) safeHook = fromSummary;
-    }
-    safeHook = sanitizeChapterStyleHook(safeHook, { jurisdiction, body });
-  }
-  if (hookMode !== 'preview' && isGenericRecapHook(safeHook)) {
-    const recapLead = deriveRecapHookFromTopNewsText(sourceSummary, jurisdiction, body);
-    if (recapLead && !isGenericRecapHook(recapLead)) safeHook = recapLead;
-    else {
-      const rankedLead = sanitizeChapterStyleHook(String(topNewsHeadings?.[0] || ""), { jurisdiction, body });
-      if (rankedLead && !isGenericRecapHook(rankedLead)) safeHook = rankedLead;
-    }
+  const safeHook = sanitizeChapterStyleHook(bestHook, { jurisdiction, body });
+  if ((hookMode === 'preview' && (containsPreviewBannedVerb(safeHook) || isGenericPreviewHook(safeHook) || isWeakPreviewHook(safeHook)))
+    || (hookMode !== 'preview' && isGenericRecapHook(safeHook))) {
+    throw new Error(`meeting-hook retryable: verified output failed final mode gate hook=${JSON.stringify(safeHook)} mode=${hookMode}`);
   }
   if (!isKeywordHookReady(safeHook, sourceSummary, hookMode)) {
-    const rankedLead = hookMode === 'preview'
-      ? buildPreviewHookFromRankedItems(topNewsHeadings)
-      : buildRecapHookFromRankedItems(topNewsHeadings, sourceSummary, jurisdiction, body);
-    if (rankedLead && isKeywordHookReady(rankedLead, sourceSummary, hookMode)) {
-      safeHook = sanitizeChapterStyleHook(rankedLead, { jurisdiction, body });
-      fallbackReason = fallbackReason || `keyword quality gate fallback from source heading; rejected hook=${JSON.stringify(bestHook || '')}`;
-    } else {
-      throw new Error(`meeting-hook failed keyword quality gate hook=${JSON.stringify(safeHook)} mode=${hookMode}`);
-    }
+    throw new Error(`meeting-hook retryable: Qwen output failed keyword quality gate hook=${JSON.stringify(safeHook)} mode=${hookMode}`);
   }
 
   return {
     hook: safeHook,
     score: Number(Math.max(0, bestScore).toFixed(3)),
-    verifier_feedback: fallbackReason || bestReview,
-    fallback_used: Boolean(fallbackReason) || bestScore < PASS_THRESHOLD,
+    verifier_feedback: bestReview,
+    fallback_used: false,
   };
 }
 
@@ -1253,9 +1202,12 @@ async function main() {
 
 export {
   hasConcreteKeywordOverlap,
+  hasAgendaReportCode,
   hookDecisionClaimUnsupported,
   hookSourcePolarityUnsupported,
+  isClippedContrastHook,
   isKeywordHookReady,
+  stripAgendaReportCodes,
 };
 
 function isCliEntry() {

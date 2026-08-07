@@ -14,6 +14,7 @@ import {
   isLockHeld,
   probeReporter,
   readRecoveryState,
+  recoveryIsDeduplicated,
   reexecWithLock,
   resolveCodexBin,
   runId,
@@ -131,7 +132,7 @@ if (!failures.length) {
   process.exit(0);
 }
 
-if (!shouldLaunchRecovery({ failures, active: false, alreadyLaunched: Boolean(recoveryState?.launched_at_utc) })) {
+if (!shouldLaunchRecovery({ failures, active: false, alreadyLaunched: recoveryIsDeduplicated(recoveryState) })) {
   const final = {
     ...baseStatus,
     status: "unresolved_deduplicated",

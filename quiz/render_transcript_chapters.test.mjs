@@ -16,7 +16,7 @@ test("transcript renderer displays only Stage 3 chapters", () => {
     path.join(transcriptDir, "meeting-qwen-auto-normalized.sentences.speaker.sentences.json"),
     JSON.stringify({
       rows: [
-        { since: 0, until: 10, display: "Chair", text: "The first item begins." },
+        { since: 0, until: 10, display: "Chair", text: "The neighborhood program begins." },
         { since: 10, until: 20, display: "Chair", text: "The first item continues." },
         { since: 20, until: 30, display: "Chair", text: "The second item begins." },
         { since: 30, until: 40, display: "Chair", text: "The second item continues." },
@@ -29,7 +29,7 @@ test("transcript renderer displays only Stage 3 chapters", () => {
     [
       "1",
       "00:00:00,000 --> 00:00:10,000",
-      "Chair: The first item begins.",
+      "Chair: The neighborhood program begins.",
       "",
       "2",
       "00:00:10,000 --> 00:00:20,000",
@@ -107,10 +107,12 @@ test("transcript renderer displays only Stage 3 chapters", () => {
   assert.match(html, /This chapter came from Stage 3/u);
   assert.equal((html.match(/class="chapter-summary"/gu) || []).length, 1);
   assert.equal((html.match(/class="section-chapters"/gu) || []).length, 0);
-  assert.match(html, /<ol class="toc-chapters"><li><a href="#chapter-ground-001-chapter-01">00:00:00 Stage 3 Chapter<\/a><\/li><\/ol>/u);
+  assert.match(html, /<ol class="toc-chapters"><li><a href="#chapter-ground-001-chapter-01">00:00:10 Stage 3 Chapter<\/a><\/li><\/ol>/u);
+  assert.match(html, /The neighbourhood programme begins\./u);
+  assert.doesNotMatch(html, /\bneighborhood\b|\bprogram\b/u);
   assert.match(
     html,
-    /The first item begins\.[\s\S]*<aside id="chapter-ground-001-chapter-01" class="chapter-summary">[\s\S]*This chapter came from Stage 3\.[\s\S]*The first item continues\./u,
+    /The neighbourhood programme begins\.[\s\S]*<aside id="chapter-ground-001-chapter-01" class="chapter-summary">[\s\S]*This chapter came from Stage 3\.[\s\S]*The first item continues\./u,
   );
   assert.doesNotMatch(html, /The second item has no Stage 3 chapters[\s\S]*class="chapter-summary"/u);
 });

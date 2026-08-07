@@ -3,6 +3,12 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { readPyaTextValues } from "./pya_lookup.mjs";
+import {
+  buildSupportingAttachmentMirrorPlan,
+  DEFAULT_ATTACHMENT_ENDPOINT,
+  mirrorSupportingAttachments,
+  rewriteSupportingAttachmentUrls,
+} from "../program/library/reporter_shared/supporting-attachment-mirror.mjs";
 
 const DEFAULT_ENDPOINT = "https://helpos.ca/api/helpos/v1/agenda-publish";
 
@@ -221,7 +227,7 @@ async function main() {
   const body = String(payload?.body || "").trim();
   const dateIso = String(payload?.date_iso || "").trim();
   const postTitle = String(payload?.title || "").trim();
-  const postBody = String(payload?.body_markdown || "").trim();
+  let postBody = String(payload?.body_markdown || "").trim();
   const suffix = String(payload?.suffix || "").trim();
   const transcriptUrl = String(payload?.transcript_url || "").trim();
   const officialSourceUrl = String(payload?.source?.meeting_url || payload?.meeting_url || "").trim();
@@ -290,15 +296,6 @@ async function main() {
     throw new Error("CREATE mode requires community_name (arg2 or AGENDA_PUBLISH_COMMUNITY_NAME)");
   }
 
-  const idempotencyKey = buildIdempotencyKey({
-    jurisdiction,
-    body,
-    dateIso,
-    postTitle,
-    postBody,
-    explicit: process.env.AGENDA_PUBLISH_IDEMPOTENCY_KEY || envFallback.AGENDA_PUBLISH_IDEMPOTENCY_KEY || idempotencyArg,
-  });
-
   const htmlSourcePath = resolveMaybeRelative(payloadDir, payload?.local_agenda_html || payload?.local_transcript_html);
   if (!htmlSourcePath || !fs.existsSync(htmlSourcePath)) {
     throw new Error(`agenda html not found: ${String(payload?.local_agenda_html || payload?.local_transcript_html || "")}`);
@@ -318,6 +315,49 @@ async function main() {
   if (foundCanonical !== expectedCanonical) {
     throw new Error(`canonical mismatch: found=${foundCanonical} expected=${expectedCanonical}`);
   }
+
+  const attachmentIndexPath = resolveMaybeRelative(payloadDir, payload?.local_attachment_index);
+  const sourceAttachments = Array.isArray(payload?.local_source_attachments) ? payload.local_source_attachments : [];
+  const attachmentPlan = buildSupportingAttachmentMirrorPlan({ payloadDir, attachmentIndexPath, sourceAttachments });
+  process.stdout.write(`[agenda-publish] supporting attachments: ${attachmentPlan.length}\n`);
+  if (!dryRun && attachmentPlan.length) {
+    if (!token) throw new Error("AGENDA_PUBLISH_AUTH_TOKEN (or MEETING_PUBLISH_AUTH_TOKEN) is required to mirror attachments");
+    const attachmentEndpoint = String(
+      process.env.ATTACHMENT_PUBLISH_ENDPOINT
+      || envFallback.ATTACHMENT_PUBLISH_ENDPOINT
+      || DEFAULT_ATTACHMENT_ENDPOINT
+    ).trim();
+    const responseBase = path.basename(payloadPath, path.extname(payloadPath));
+    const mirrored = await mirrorSupportingAttachments({
+      payloadDir,
+      attachmentIndexPath,
+      sourceAttachments,
+      endpoint: attachmentEndpoint,
+      token,
+      jurisdiction,
+      body,
+      dateIso,
+      responsePath: path.join(payloadDir, `${responseBase}.supporting-attachments.mirror.response.json`),
+      log: (message) => process.stdout.write(`${message}\n`),
+    });
+    postBody = rewriteSupportingAttachmentUrls(postBody, mirrored.mapping);
+    html = rewriteSupportingAttachmentUrls(html, mirrored.mapping);
+    const survivors = attachmentPlan
+      .map((entry) => entry.sourceUrl)
+      .filter((sourceUrl) => postBody.includes(sourceUrl) || html.includes(sourceUrl));
+    if (survivors.length) {
+      throw new Error(`official supporting attachment URLs survived mirror rewrite: ${survivors.join(", ")}`);
+    }
+  }
+
+  const idempotencyKey = buildIdempotencyKey({
+    jurisdiction,
+    body,
+    dateIso,
+    postTitle,
+    postBody,
+    explicit: process.env.AGENDA_PUBLISH_IDEMPOTENCY_KEY || envFallback.AGENDA_PUBLISH_IDEMPOTENCY_KEY || idempotencyArg,
+  });
 
   const uploadHtmlPath = path.join(payloadDir, `${path.basename(htmlSourcePath, path.extname(htmlSourcePath))}.agenda-publish.html`);
   fs.writeFileSync(uploadHtmlPath, html, "utf8");
