@@ -85,6 +85,7 @@ export async function runWorkBackgroundOnce({
   repositoryRoot = process.cwd(),
   curate = false,
   baselineSync = null,
+  executionPreflight = null,
   onEvent = null,
   now = () => new Date()
 } = {}) {
@@ -213,6 +214,61 @@ export async function runWorkBackgroundOnce({
       curation
     };
   }
+  let preflight = { status: executionPreflight ? "pending" : "not-configured" };
+  if (executionPreflight) {
+    try {
+      preflight = await executionPreflight({
+        repositoryRoot,
+        selected,
+        worktreePath: selected.checkpoint?.workspace?.worktreePath || repositoryRoot,
+        now
+      });
+    } catch (error) {
+      preflight = {
+        ok: false,
+        status: "blocked",
+        reason: text(error?.message || error),
+        error: text(error?.message || error)
+      };
+    }
+    if (!preflight?.ok) {
+      const reason = `execution environment blocked: ${text(preflight?.reason) || "preflight failed"}`;
+      await emitWorkEvent(onEvent, "deferred", {
+        reason,
+        selected: selected.taskId,
+        preflight
+      }, { now });
+      await writeWorkSchedulerHealth(worldRoot, {
+        ...baseHealth,
+        "last decision": reason,
+        "execution preflight status": "blocked",
+        "execution preflight check": preflight?.check || "",
+        "execution preflight reason": text(preflight?.reason) || reason,
+        "execution preflight observed at": preflight?.observedAt || wake,
+        "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + 1)
+      });
+      await appendWorkSchedulerEvent(worldRoot, {
+        type: "deferred",
+        reason,
+        capacity,
+        pacing: admission.pacing,
+        taskCount: eligible.length,
+        selected: selected.taskId,
+        preflight: "blocked"
+      }, { now });
+      return {
+        admitted: false,
+        reason,
+        capacity,
+        eligible: eligible.length,
+        selected: selected.taskId,
+        preflight,
+        report: renderWorkDeferredReport({ result: { reason, eligible: eligible.length }, capacity }),
+        queue: await queueDepth(worldRoot),
+        curation
+      };
+    }
+  }
   const activeRuntime = eligible.some(({ task }) => ACTIVE_WORK_STATUSES.has(task.status));
   let baseline = { status: baselineSync ? (activeRuntime ? "skipped-active-task" : "pending") : "not-configured" };
   if (baselineSync && !activeRuntime) {
@@ -280,6 +336,10 @@ export async function runWorkBackgroundOnce({
   }
   const health = {
     ...baseHealth,
+    "execution preflight status": preflight.status || (preflight.ok ? "ready" : ""),
+    "execution preflight check": preflight.check || "",
+    "execution preflight reason": preflight.reason || "",
+    "execution preflight observed at": preflight.observedAt || "",
     "baseline status": baseline.status,
     "baseline commit": baseline.commit || "",
     "last admitted task": result.taskId || selected.taskId,
@@ -316,6 +376,7 @@ export async function runWorkBackgroundOnce({
     report: renderWorkTaskReport(finalTask || selected),
     curation,
     baseline,
+    preflight,
     ...result
   };
 }

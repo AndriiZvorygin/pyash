@@ -97,6 +97,20 @@ The hourly runner skips baseline synchronization while a substantial task is alr
 
 The daily digest includes a compact roadmap section showing active work, the next queued packages, later candidates, and decisions requiring human input.
 
+## Codex execution preflight
+
+Before a background task is claimed, Pyash checks the selected repository/worktree, writable access, Git, Node, Codex App Server initialization, and the configured thread sandbox. The supervisor repeats the check against the task worktree before opening manager or worker turns. A failed check is recorded as an infrastructure deferral in scheduler health and newspaper history; it does not make a roadmap task defective or claim the next task.
+
+Run the disposable smoke explicitly with:
+
+```bash
+node command/work_supervisor.mjs sandbox-smoke --repository /home/htaf/pyash --json
+```
+
+The normal `workspace-write`/`workspaceWrite` mode currently cannot execute shell operations on this host because its bubblewrap network namespace setup fails with `RTM_NEWADDR: Operation not permitted`, even though the repository and worktrees are writable. Until the host sandbox capability is repaired, the private cron environment uses `danger-full-access`/`dangerFullAccess` as an explicit fallback. Pyash still pins every task to its assigned worktree, limits the prompt/work order, integrates only onto `automation/roadmap`, and never updates `master` automatically. The fallback must be revalidated with `sandbox-smoke` after host or Codex changes.
+
+Set `PYA_BACKGROUND_EXECUTION_BLOCKED=truth` to keep hourly implementation wakes globally deferred while preserving daily digest operation. Remove that gate only after the smoke passes.
+
 ## Verify and disable
 
 The doctor checks permissions, executables, Codex weekly capacity, Docker
