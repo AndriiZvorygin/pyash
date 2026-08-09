@@ -59,7 +59,8 @@ export function handleDoSentence(context, helpers) {
       if (sentence.to?.name) {
         const targetVar = sanitizeName(sentence.to.name);
         const lines = [];
-        if (!locals?.has(targetVar) && !declared?.has(targetVar)) {
+        const targetExists = locals?.has(targetVar) || declared?.has(targetVar);
+        if (!targetExists) {
           lines.push(`let ${targetVar};`);
           locals?.add(targetVar);
         }
@@ -72,10 +73,22 @@ export function handleDoSentence(context, helpers) {
           if (genByExpr) {
             lines.push(`_call.by = { num: ${genByExpr} };`);
           }
-          lines.push(`${targetVar} = ${fn}(_call);`);
+          const resultVar = `_pya_ceremony_result_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
+          lines.push(`const ${resultVar} = ${fn}(_call);`);
+          if (targetExists) {
+            lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+          } else {
+            lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+          }
           lines.push("}");
         } else {
-          lines.push(`${targetVar} = ${fn}(${arg});`);
+          const resultVar = `_pya_ceremony_result_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
+          lines.push(`const ${resultVar} = ${fn}(${arg});`);
+          if (declared?.has(targetVar) || locals?.has(targetVar)) {
+            lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+          } else {
+            lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+          }
         }
         return lines.join("\n");
       }
@@ -224,11 +237,18 @@ export function handleDoSentence(context, helpers) {
     if (sentence.to?.name) {
       const targetVar = sanitizeName(sentence.to.name);
       const lines = [];
-      if (!declared?.has(targetVar)) {
+      const targetExists = declared?.has(targetVar) || locals?.has(targetVar);
+      if (!targetExists) {
         lines.push(`let ${targetVar};`);
         markDeclared(declared, sentence.to.name);
       }
-      lines.push(`${targetVar} = ${fn}(${arg});`);
+      const resultVar = `_pya_ceremony_result_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
+      lines.push(`const ${resultVar} = ${fn}(${arg});`);
+      if (targetExists) {
+        lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+      } else {
+        lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+      }
       lines.push(`globalThis["${sentence.to.name}"] = ${targetVar};`);
       return lines.join("\n");
     }

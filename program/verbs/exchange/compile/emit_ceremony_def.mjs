@@ -58,6 +58,10 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
   const fnName = sanitizeName(fnBaseName);
 
   const bodyLines = [];
+  if (lang !== "c" && signatureWords && signatureWords.length > 2) {
+    jsHelpers.usesCeremony = true;
+    bodyLines.push(`pyaAssertCeremonySignature(sentence, ${JSON.stringify(joinSignatureWords(signatureWords))});`);
+  }
   let hasReturn = false;
   const locals = new Set();
   const localsTypes = new Map();

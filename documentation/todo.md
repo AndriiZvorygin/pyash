@@ -2,7 +2,7 @@
 
 ## Now
 - Parity gaps to close (non-external):
-  - Higher-level translation paths parity (interpreter/JS only; defer C parity until stable).
+  - Higher-level translation paths parity (interpreter/JS only; defer C parity until stable) [partial: typed top-level ceremony tranche completed; broader exclusions remain].
 - Mind: plus streaming path and richer reply envelopes per `mind.md`.
 - Docs sweep: remove stale `tloh` wording in documentation (it is deprecated; loops are `fromindex`/`toindex` stop-when-equal).
 
@@ -12,6 +12,9 @@
 - Improve mind integration: streaming handling for Ollama responses and richer reply mapping (assistant/thinking/timestamps) per `mind.md`.
 - Add error-handling paths for ceremonies/sandpits using `ret` with `be error`, and surface those in main memory/results.
 - Strengthen CLI UX: document `./compile`, `./run`, `./interpret` case-parsed args; plus smoke tests for CLI wrappers.
+
+## Completed bounded tranches
+- Typed top-level ceremony translation parity: signature-derived JavaScript functions now validate typed calls, use fresh call frames, propagate `this`/`ret` payloads into caller targets, and have interpreter/JavaScript golden and regression coverage. Nested/dynamic, recursive, closure, imported, broader control-flow, and C paths remain deferred.
 
 ## Later
 - Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.

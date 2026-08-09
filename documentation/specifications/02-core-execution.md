@@ -36,11 +36,13 @@ Define how signature words are derived and used for dispatch.
 
 ## 5. Examples (existing files only)
 - Run: `examples/pyash/ceremony-plus-two.pya`
+- Typed JS parity: `examples/pyash/compile-ceremony-parity.pya`
 
 ## 6. Tests that define truth
 - `quiz/ceremony_signature_inconsistency.test.mjs`
 - `quiz/ceremony_sequence_signature.test.mjs`
 - `quiz/map_signature.test.mjs`
+- `quiz/compile_ceremony_parity.test.mjs`
 
 ---
 
@@ -94,11 +96,19 @@ Define ceremony definition/invocation, `this` access, and return behavior.
 ## 5. Examples (existing files only)
 - Run: `examples/pyash/ceremony-invoke.pya`
 - Run: `examples/pyash/ceremony-plus-two.pya`
+- Run and compile: `examples/pyash/compile-ceremony-parity.pya`
 
 ## 6. Tests that define truth
 - `quiz/ceremony_signature_inconsistency.test.mjs`
 - `quiz/ceremony_overwrite_warning.test.mjs`
 - `quiz/compile_ceremony_overwrite_warning.test.mjs`
+- `quiz/compile_ceremony_parity.test.mjs`
+
+## 4.1 JavaScript lowering boundary
+
+The interpreter and JavaScript compiler share the definition signature derived from the `def` header. For the supported top-level subset, a generated function validates the incoming sentence signature, executes the body with a fresh local frame, and returns the evoker sentence after `ret` updates its `ob`. A generated caller merges that `ob` into the addressed target instead of replacing the target sentence, preserving `su`, `be`, and the caller's value shape. The generated guard uses the interpreter's `signature inconsistency` identity and message contract.
+
+The lowering is intentionally limited to direct top-level ceremony definitions with scalar typed arguments and existing supported body emitters. Nested/dynamic definitions, recursion, closures, imported ceremonies, broader control-flow lowering, and C output remain deferred.
 
 
 ---
