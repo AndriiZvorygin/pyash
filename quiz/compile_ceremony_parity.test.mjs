@@ -55,7 +55,7 @@ async function runSource(source) {
     if (!raw.trim()) continue;
     await interpret(parse(raw));
   }
-  return remember("result");
+  return remember("answer");
 }
 
 async function compileSource(source) {
@@ -136,17 +136,17 @@ test("typed ceremony rejects an incompatible argument in both paths", async () =
 
 test("nested typed ceremony initializes an undeclared local target in both paths", async () => {
   const source = [
-    "exists su name result ob num 0 be number ya",
+    "exists su name answer ob num 0 be number ya",
     "su name plus two ob num 0 to name num input be ceremony def",
     "exists su name input ob num of ob of this be number ya",
     "ob num 1 to name input be plus do",
     "this ob name input ret",
     "su name plus two be ceremony prah",
     "su name plus three ob num 0 to name num input be ceremony def",
-    "ob num 4 to name num local be plus two do",
-    "this ob name local ret",
+    "ob num 4 to name num produce be plus two do",
+    "this ob name produce ret",
     "su name plus three be ceremony prah",
-    "ob num 9 to name result be plus three do"
+    "ob num 9 to name answer be plus three do"
   ].join("\n");
 
   const interpreted = await runSource(source);
@@ -154,6 +154,6 @@ test("nested typed ceremony initializes an undeclared local target in both paths
   const context = { console: { log() {} } };
   vm.runInNewContext(js, context);
 
-  assert.deepEqual(JSON.parse(JSON.stringify(context.result?.ob)), interpreted?.ob);
-  assert.equal(context.result?.su?.name, "result");
+  assert.deepEqual(JSON.parse(JSON.stringify(context.answer?.ob)), interpreted?.ob);
+  assert.equal(context.answer?.su?.name, "answer");
 });
