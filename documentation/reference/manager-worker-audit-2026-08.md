@@ -179,12 +179,14 @@ work_supervisor.mjs fail|cancel <task-id> [--reason ...]
 work_supervisor.mjs background [--continuous] [--watch]
 work_supervisor.mjs report <task-id>
 work_supervisor.mjs health
+work_supervisor.mjs digest [--since <ISO>] [--email-report <address>]
 ```
 
 Human output is compact; `--json` exposes the complete durable task or
 snapshot. The status includes priority, phase, role models, worktree,
-blocker, last action, and revision count. No command merges, commits, pushes,
-or deletes an accepted worktree.
+blocker, last action, and revision count. Accepted task worktrees remain
+available for inspection; background integration advances only
+`automation/roadmap`, never `master`.
 
 `--watch` attaches an optional observer to the same supervisor events used by
 the runner. It renders capacity admission, selection, Sol planning, Luna
@@ -216,15 +218,51 @@ failed state.
 
 `program/runtime/work/capacity.mjs` normalizes the installed Codex
 `account/rateLimits/read` response, including its nested `rateLimits.primary`
-window, to `available`, `usage-limited`, or
-`unknown`, with remaining/used percentage, reset time, window, observed time,
-and the raw provider payload. Unknown capacity is conservative and defers
-background work. The background policy also defers when foreground activity is
-reported, when no eligible task exists, or when remaining capacity is at or
-below the default 20 percent reserve. It is disabled by default; the explicit
-`background` command enables it for that invocation. `--near-reset` is an
-operator choice to spend capacity that would otherwise expire. Continuous
-mode polls rather than busy-waits and processes one coding task at a time.
+window, to `available`, `usage-limited`, or `unknown`, with remaining/used
+percentage, reset time, window, observed time, and the raw provider payload.
+On this host the primary bucket is confidently weekly because
+`windowDurationMins` is `10080`; the normalized record persists that raw
+bucket, window start, reset, and observation diagnostics in scheduler health.
+If a seven-day bucket cannot be identified, background work defers rather than
+guessing.
+
+Background admission uses one weekly budget with a default 15 percent final
+reserve. At elapsed fraction `E` of the weekly window, the normal usage limit
+is `(100 - reserve) * E`; actual total observed usage includes interactive
+Codex activity, so foreground use automatically reduces background headroom.
+A one-percent deadband avoids hourly oscillation around the line. The policy
+also defers for foreground activity, no eligible task, usage limiting, and the
+weekly reserve. It is disabled by default; the explicit `background` command
+enables it for that invocation. Continuous mode polls rather than busy-waits
+and processes one coding task at a time.
+
+Normal background work is curated as substantial packages, not micro-fixes.
+When active work falls below the threshold, `curator.mjs` inspects current
+TODO anchors and proposes at most three bounded packages with source and
+`why now` provenance. Existing task IDs and provenance keys prevent duplicate
+generation. When no active, ready, or credible curated task remains, the
+digest reports `needs-direction` instead of inventing work.
+
+Luna can pause after an implementation pass and resume the same durable task,
+Sol thread, Luna thread, and worktree on a later wake. The initial Sol plan is
+not repeated while its work order is present; review normally waits until the
+configured implementation pass threshold or Luna explicitly reports review
+readiness. Weekly pacing pauses are recorded as implementation checkpoints,
+not failures.
+
+Accepted work is integrated only into the separate `automation/roadmap`
+branch. Each task worktree starts from that branch's current tip. Integration
+requires the branch tip to equal the task base and advances it with a
+fast-forward ref update; a stale branch or push conflict blocks the task for
+human attention. `master` is never changed by the background runner.
+
+Hourly wakes append compact outcomes to the daily `work-scheduler` newspaper.
+`digest` renders one durable daily report from those events, task checkpoints,
+capacity, curation, and automation-branch integration records. It can send
+that exact body through the existing local Docker Mailserver notification
+sink. Hourly background runs should not send individual email; cron should
+invoke `background` without a mail flag and invoke `digest --email-report`
+once daily.
 
 Scheduler health is a named `.pya` artifact under
 `world/holding/work/artifacts/scheduler-health.pya`. Task decisions and
@@ -241,6 +279,8 @@ capacity state.
 - explicit blocked/resume lifecycle and operator commands;
 - normalized capacity observation, conservative background admission, and
   scheduler health/newspaper outcomes;
+- weekly pacing with a protected reserve, substantial-task curation, resumable
+  implementation passes, automation-branch integration, and daily digest;
 - extracted shared App Server JSONL transport;
 - configurable manager/worker roles and reasoning effort;
 - one Sol plan -> Luna implementation -> Sol review cycle;
@@ -258,7 +298,9 @@ errors, malformed responses, and process exit. `quiz/runtime/work_queue.test.mjs
 cover checkpoint round trips, priority ordering, ACCEPT, REVISE, BLOCK,
 blocked/resume, ambiguous-turn recovery, usage-limited recovery, capacity
 admission, queue acknowledgement, scheduler health, and role/workspace
-evidence.
+evidence. `quiz/runtime/work_scheduler.test.mjs` covers TODO curation and
+deduplication, fast-forward automation integration, stale-base conflict
+blocking, and daily digest aggregation.
 
 ### Proven by real Codex smoke
 
@@ -308,6 +350,26 @@ accepted the message through Postfix, stored it in the recipient's INBOX, and
 reported `status=sent`. The notification record is separate from the work
 task record, so a future mail failure will not rewrite an accepted task.
 
+### Weekly pacing demonstration
+
+The live `account/rateLimits/read` query on 2026-08-09 returned a `primary`
+bucket with `usedPercent: 4`, `windowDurationMins: 10080`, and reset
+`2026-08-16T01:22:59.000Z`. The corresponding weekly window started at
+`2026-08-09T01:22:59.000Z`. At the observation time, the 15-percent reserve
+curve allowed only about one percent cumulative use, so actual four-percent
+use correctly deferred background work for weekly pacing. No real task was
+started merely to test the policy.
+
+The dry-run command is quota-safe apart from the minimal capacity query:
+
+```text
+node command/work_supervisor.mjs background --repository /home/htaf/pyash --dry-run --watch
+```
+
+It displays weekly reset/window start, actual usage, elapsed-week allowance,
+minimum remaining floor, pacing headroom, reserve, curated next work, and the
+admit/defer reason. Cron has deliberately not been installed.
+
 ## Options and Trade-offs
 
 Codex App Server is the execution adapter because it supplies persistent
@@ -321,7 +383,7 @@ Pyash records rather than replace the holding spool.
 
 - distributed stale-runtime ownership, heartbeats, and two-supervisor fencing;
 - formal machine-readable Sol plan/review schema beyond bounded headings;
-- automatic merge, push, or cleanup of accepted worktrees;
+- automatic merge into `master` or cleanup of accepted worktrees;
 - multi-host Codex execution, CAO/CCB replacement, and tmux dashboard work;
 - generalized multi-worker concurrency;
 - unrelated reporter parity and external house repairs;
@@ -329,8 +391,8 @@ Pyash records rather than replace the holding spool.
 
 ## Next Highest-Value Slice
 
-1. Add a durable accepted-worktree report and human merge/cleanup workflow,
-   without giving Pyash automatic push authority.
+1. Add a durable accepted-worktree report and human merge/cleanup workflow for
+   promoting `automation/roadmap` into `master`.
 2. Add stale-runtime ownership/heartbeat fencing before allowing two workers
    against one world.
 3. Operate the seeded bounded backlog, then tune capacity reserve values from

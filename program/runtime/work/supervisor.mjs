@@ -18,6 +18,7 @@ import { mergeWorkCheckpoint } from "./checkpoint.mjs";
 import { emitWorkEvent } from "./observer.mjs";
 import { diffStat } from "./report.mjs";
 import { collectGitEvidence, prepareWorktree } from "./workspace.mjs";
+import { integrateAcceptedWork } from "./integration.mjs";
 import {
   resumeCodexThread,
   runCodexTurn,
@@ -113,6 +114,7 @@ function parseImplementation(output) {
   const fallback = text(output);
   return {
     summary: firstSection(sections, ["SUMMARY", "IMPLEMENTATION SUMMARY"]) || fallback.slice(0, 1000),
+    reviewReady: /(?:REVIEW READY|READY FOR REVIEW):\s*(?:yes|true|truth|1)\b/iu.test(fallback),
     changedFiles: lines(firstSection(sections, ["CHANGED FILES", "FILES"])),
     tests: lines(firstSection(sections, ["TESTS", "TEST EVIDENCE"])),
     blockers: firstSection(sections, ["BLOCKERS", "BLOCKER"]),
@@ -142,7 +144,10 @@ function promptPlan(task, workspace, roles) {
     `Repository: ${workspace.repository}`,
     `Assigned worktree: ${workspace.worktreePath}`,
     `Worker role model: ${roles.worker.model}`,
-    "The work order must tell Luna what to change, how to test it, and what evidence to report."
+    "Prefer one substantial coherent roadmap increment or parity tranche over a micro-fix.",
+    "Pyash-first policy: prefer implementing workflow logic, reusable verbs, modules, configuration, and tests in Pyash when Pyash can express them reasonably.",
+    "Use JavaScript, C, shell, or another host language for interpreter/compiler/runtime substrate, backend parity, operating-system integration, or capabilities Pyash cannot yet express cleanly. State the architectural reason whenever host-language implementation is chosen.",
+    "The work order must tell Luna what to change, how to test it, what evidence to report, and what remains for a later bounded wake."
   ].join("\n");
 }
 
@@ -158,9 +163,11 @@ function promptImplementation(task, checkpoint, workspace, correction = "") {
     `Sol work order: ${checkpoint.plan.workOrder}`,
     `Sol risks: ${checkpoint.plan.risks || "none reported"}`,
     correction ? `Sol correction request: ${correction}` : "",
+    `Implementation pass: ${Number(checkpoint.implementation.passes || 0) + 1}`,
+    "Continue from the existing worktree and persistent Luna thread. Do not redo completed work. Prefer Pyash workflow logic and modules when the language can express the change; explain any host-language choice in the final report.",
     `Repository: ${workspace.repository}`,
     `Worktree: ${workspace.worktreePath}`,
-    "Do not push or merge. Report actual changed files and test commands/results."
+    "Do not push or merge. Report actual changed files and test commands/results. Include REVIEW READY: yes only when the acceptance criteria are sufficiently implemented for Sol to review; otherwise use REVIEW READY: no and state the next concrete checkpoint."
   ].filter(Boolean).join("\n");
 }
 
@@ -190,7 +197,8 @@ function isoText(value) {
 }
 
 function requestIdentity(task, phase) {
-  return `pyash-${task.taskId}-${phase}-${task.checkpoint.revisionCount}-${task.checkpoint.resumeCount}`;
+  const pass = phase === "implementation" ? task.checkpoint.implementation.passes : 0;
+  return `pyash-${task.taskId}-${phase}-${task.checkpoint.revisionCount}-${task.checkpoint.resumeCount}-${pass}`;
 }
 
 function storedTurnResult(turn) {
@@ -300,7 +308,15 @@ export async function runWorkSupervisorOnce({
   appServerFactory = ({}) => spawnCodexAppServer({}),
   workspaceFactory = prepareWorktree,
   evidenceFactory = collectGitEvidence,
+  baseRef = "",
+  integrationBranch = "",
+  integrateAccepted = false,
+  pushIntegration = false,
+  integrationRemotes = ["origin", "github"],
   maxRevisions = 1,
+  pauseAfterImplementation = false,
+  reviewAfterImplementationPasses = 2,
+  pyashFirstPolicy = true,
   approvalPolicy = "never",
   threadSandbox = "workspace-write",
   turnSandboxPolicy = ({ worktreePath }) => ({
@@ -436,7 +452,8 @@ export async function runWorkSupervisorOnce({
       repositoryRoot,
       worldRoot,
       taskId: task.taskId,
-      baseRevision: task.checkpoint.workspace.baseRevision
+      baseRevision: task.checkpoint.workspace.baseRevision,
+      baseRef
     });
     await save({
       workspace,
@@ -655,6 +672,8 @@ export async function runWorkSupervisorOnce({
         commit: evidence?.revision && evidence.revision !== workspace.baseRevision
           ? evidence.revision
           : report.commit || "",
+        passes: task.checkpoint.implementation.passes + 1,
+        reviewReady: report.reviewReady,
         changedFiles,
         fileChanges: uniqueFileChanges(result?.fileChanges || []),
         diff: evidence?.diff || result?.diff || ""
@@ -722,6 +741,26 @@ export async function runWorkSupervisorOnce({
   }
 
   async function finish(status, message) {
+    if (status === "accepted" && integrateAccepted && integrationBranch) {
+      try {
+        const integration = await integrateAcceptedWork({
+          repositoryRoot,
+          worktreePath: workspace.worktreePath,
+          baseRevision: workspace.baseRevision,
+          branch: integrationBranch,
+          push: pushIntegration,
+          pushRemotes: integrationRemotes,
+          now
+        });
+        task = await save({ integration });
+      } catch (error) {
+        const reason = `automation branch integration blocked: ${text(error?.message || error)}`;
+        task = await move("blocked", { message: reason, error: reason });
+        task = await save({ blocker: reason, lastAction: "blocked during automation branch integration" });
+        await emit("blocked", { reason, phase: "integration", worktree: workspace.worktreePath });
+        return { claimed: true, taskId: task.taskId, status: task.status, message: reason, queue: await queueDepth(worldRoot) };
+      }
+    }
     task = await move(status, { message, result: status });
     if (status === "blocked") {
       task = await save({
@@ -759,6 +798,33 @@ export async function runWorkSupervisorOnce({
       }
       if (task.status === "implementing") {
         if (!hasCapturedTurn("implementation")) await doImplementation(correction);
+        if (pauseAfterImplementation
+          && !task.checkpoint.implementation.reviewReady
+          && task.checkpoint.implementation.passes < Math.max(1, Number(reviewAfterImplementationPasses) || 1)) {
+          const pauseAt = isoText(nowValue(now));
+          await save({
+            interruption: {
+              phase: "implementing",
+              at: pauseAt,
+              reason: "implementation checkpoint; awaiting next background wake",
+              lastTurnId: task.checkpoint.turnHistory.at(-1)?.turnId || ""
+            },
+            lastAction: "implementation checkpoint; awaiting next background wake"
+          });
+          await emit("budget-paused", {
+            phase: "implementing",
+            reason: "implementation checkpoint; awaiting next background wake",
+            passes: task.checkpoint.implementation.passes,
+            worktree: workspace.worktreePath
+          });
+          return {
+            claimed: true,
+            taskId: task.taskId,
+            status: "implementing",
+            message: "implementation checkpoint; awaiting next background wake",
+            queue: await queueDepth(worldRoot)
+          };
+        }
         await move("reviewing");
       }
       if (task.status !== "reviewing") throw new Error(`supervisor cannot review status ${task.status}`);
@@ -778,6 +844,7 @@ export async function runWorkSupervisorOnce({
       if (task.checkpoint.lastAction !== "revision queued") {
         await save({
           revisionCount: task.checkpoint.revisionCount + 1,
+          implementation: { passes: 0, reviewReady: false },
           lastAction: "revision queued"
         });
       }

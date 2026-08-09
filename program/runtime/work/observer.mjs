@@ -11,6 +11,7 @@ const WORK_EVENT_TYPES = [
   "review-started",
   "review-completed",
   "revision-requested",
+  "budget-paused",
   "blocked",
   "usage-limited",
   "accepted",

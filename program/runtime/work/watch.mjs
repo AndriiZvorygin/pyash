@@ -58,6 +58,8 @@ export function renderWorkEvent(event) {
       return [`${prefix} SOL REVIEW ${text(event.decision) || "UNKNOWN"}`, ...block("  rationale:", event.explanation)];
     case "revision-requested":
       return [`${prefix} REVISION   Sol requested another pass`, ...block("  correction:", event.correction)];
+    case "budget-paused":
+      return [`${prefix} PAUSED     ${title}`, `  ${text(event.reason) || "awaiting the next eligible wake"}`, `  implementation passes: ${event.passes ?? "unknown"}`];
     case "accepted":
       return [`${prefix} ACCEPTED   ${title}`, ...block("  rationale:", event.explanation)];
     case "blocked":

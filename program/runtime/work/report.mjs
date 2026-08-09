@@ -107,6 +107,10 @@ export function renderWorkTaskReport(task) {
   lines.push("", `Diff: ${diffStat(implementation.diff, changedFiles)}`);
   lines.push(`Worktree: ${text(workspace.worktreePath) || "(not created)"}`);
   if (text(implementation.commit)) lines.push(`Commit: ${text(implementation.commit)}`);
+  if (text(checkpoint.integration?.branch)) {
+    lines.push(`Automation branch: ${text(checkpoint.integration.branch)}`);
+    lines.push(`Integration: ${text(checkpoint.integration.status) || "pending"}`);
+  }
   lines.push(`Started: ${text(current.startedAt) || "(not started)"}`);
   lines.push(`Finished: ${text(current.finishedAt) || text(checkpoint.interruption?.at) || "(in progress)"}`);
   const operatorNote = current.error
@@ -140,6 +144,42 @@ export function renderWorkIdleReport({ result = {}, capacity = {} } = {}) {
     `Eligible tasks: ${Number(result.eligible) || 0}`,
     `Codex usage: ${capacity.usedPercent == null ? "unknown" : `${capacity.usedPercent}% used`}`,
     `Next reset: ${text(capacity.resetAt) || "unknown"}`,
+    ""
+  ].join("\n");
+}
+
+export function renderWorkDryRunReport({ inspection = {}, policy = {} } = {}) {
+  const capacity = inspection.capacity || {};
+  const weekly = capacity.weekly || {};
+  const pacing = inspection.admission?.pacing || {};
+  const selected = inspection.selected || inspection.curation?.proposed?.[0] || null;
+  const percent = (value) => value == null ? "unknown" : `${Math.round(Number(value) * 10) / 10}%`;
+  return [
+    "PYASH BACKGROUND DRY RUN",
+    "",
+    "Weekly capacity:",
+    `  Reset: ${text(weekly.resetAt) || "unknown"}`,
+    `  Window start: ${text(weekly.windowStartAt) || "unknown"}`,
+    `  Used: ${percent(weekly.usedPercent)}`,
+    `  Remaining: ${percent(weekly.remainingPercent)}`,
+    `  Observed: ${text(weekly.observedAt || capacity.observedAt) || "unknown"}`,
+    "",
+    "Pacing:",
+    `  Week elapsed: ${pacing.elapsedFraction == null ? "unknown" : percent(pacing.elapsedFraction * 100)}`,
+    `  Allowed used by now: ${percent(pacing.allowedUsedPercent)}`,
+    `  Minimum remaining: ${percent(pacing.minimumRemainingPercent)}`,
+    `  Actual used: ${percent(pacing.actualUsedPercent)}`,
+    `  Pacing headroom: ${percent(pacing.headroomPercent)}`,
+    `  Final reserve: ${percent(policy.reservePercent ?? 15)}`,
+    "",
+    "Next task:",
+    selected ? `  ${selected.taskId} [priority ${selected.priority}] ${selected.title}` : "  (none)",
+    inspection.curation?.proposed?.length
+      ? `  Curated candidates: ${inspection.curation.proposed.map((item) => item.taskId).join(", ")}`
+      : "",
+    "",
+    `Would admit: ${inspection.admission?.admit ? "yes" : "no"}`,
+    `Reason: ${text(inspection.admission?.reason) || "unknown"}`,
     ""
   ].join("\n");
 }

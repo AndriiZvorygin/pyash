@@ -61,6 +61,15 @@ test("accepted, revision, blocked, and deferred reports become distinct email su
   assert.match(deferred.subject, /DEFERRED$/);
   assert.match(accepted.message, /\r\n\r\nACCEPTED REPORT\r\n$/);
   assert.match(accepted.subject, /Close the parity gap/);
+  const digest = buildWorkReportEmail({
+    title: "daily improvement",
+    status: "progress",
+    subjectOverride: "Pyash daily: substantial progress on parity",
+    report: "DIGEST",
+    recipient: "andrii@example.com",
+    from: "pyash@example.com"
+  });
+  assert.equal(digest.subject, "Pyash daily: substantial progress on parity");
 });
 
 test("mail transport success submits the exact durable report and persists status", async () => {

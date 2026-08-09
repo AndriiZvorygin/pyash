@@ -32,6 +32,7 @@ export async function prepareWorktree({
   worldRoot,
   taskId,
   baseRevision = "",
+  baseRef = "",
   gitRunner = null
 } = {}) {
   const repository = path.resolve(String(repositoryRoot || process.cwd()));
@@ -45,7 +46,7 @@ export async function prepareWorktree({
   await fs.mkdir(path.dirname(worktreePath), { recursive: true });
   const revision = String(baseRevision || stdout(await git({
     cwd: repository,
-    args: ["rev-parse", "HEAD"],
+    args: ["rev-parse", baseRef || "HEAD"],
     gitRunner
   }))).trim();
   if (!revision) throw new Error("worktree requires a base revision");
@@ -67,7 +68,7 @@ export async function prepareWorktree({
   return {
     repository,
     baseRevision: revision,
-    branch: "detached",
+    branch: baseRef || "detached",
     worktreePath,
     mode: "git-worktree"
   };

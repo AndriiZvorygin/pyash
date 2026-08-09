@@ -73,13 +73,14 @@ export function buildWorkReportEmail({
   status = "",
   report = "",
   recipient,
-  from
+  from,
+  subjectOverride = ""
 } = {}) {
   const to = validAddress(recipient, "email recipient");
   const sender = validAddress(from, "email sender");
   const taskTitle = text(task?.title) || text(title) || "background work";
   const result = text(task?.status) || text(status) || "reported";
-  const subject = `Pyash daily improvement: ${taskTitle} \u2014 ${result.toUpperCase()}`;
+  const subject = text(subjectOverride) || `Pyash daily improvement: ${taskTitle} \u2014 ${result.toUpperCase()}`;
   const body = `${text(report).replace(/\r?\n/gu, "\r\n")}\r\n`;
   return {
     to,
@@ -193,7 +194,8 @@ export async function sendWorkReportNotification({
   dockerCommand = "docker",
   dockerContainer = "mailserver",
   commandRunner,
-  now = () => new Date()
+  now = () => new Date(),
+  subjectOverride = ""
 } = {}) {
   const attemptedAt = nowIso(now);
   const identity = text(task?.taskId) || text(taskId) || "scheduler-latest";
@@ -205,13 +207,13 @@ export async function sendWorkReportNotification({
     title: requestedTitle,
     recipient: text(recipient),
     transport: selectedTransport,
-    subject: `Pyash daily improvement: ${requestedTitle || "background work"} \u2014 ${text(task?.status) || text(status) || "REPORTED"}`,
+    subject: text(subjectOverride) || `Pyash daily improvement: ${requestedTitle || "background work"} \u2014 ${text(task?.status) || text(status) || "REPORTED"}`,
     attemptedAt,
     submittedAt: "",
     error: ""
   };
   try {
-    email = buildWorkReportEmail({ task, title, status, report, recipient, from });
+    email = buildWorkReportEmail({ task, title, status, report, recipient, from, subjectOverride });
     selectedTransport = await resolveWorkMailTransport({ transport, sendmailPath });
     await deliver({
       transport: selectedTransport,

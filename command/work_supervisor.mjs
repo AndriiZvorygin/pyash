@@ -11,11 +11,18 @@ import {
   resumeWorkTask,
   showWorkTask
 } from "../program/runtime/work/operator.mjs";
-import { runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../program/runtime/work/runner.mjs";
+import {
+  inspectWorkBackground,
+  runWorkBackgroundContinuous,
+  runWorkBackgroundOnce
+} from "../program/runtime/work/runner.mjs";
+import { DEFAULT_BACKGROUND_POLICY } from "../program/runtime/work/capacity.mjs";
 import { readWorkSchedulerHealth } from "../program/runtime/work/health.mjs";
-import { readAndRenderWorkTaskReport } from "../program/runtime/work/report.mjs";
+import { readAndRenderWorkTaskReport, renderWorkDryRunReport } from "../program/runtime/work/report.mjs";
 import { createWorkWatchRenderer } from "../program/runtime/work/watch.mjs";
 import { readWorkTaskStatus } from "../program/runtime/work/status.mjs";
+import { curateWorkBacklog } from "../program/runtime/work/curator.mjs";
+import { buildWorkDailyDigest } from "../program/runtime/work/digest.mjs";
 import {
   defaultWorkEmailFrom,
   sendWorkReportNotification
@@ -82,9 +89,10 @@ async function notifyResult(result, { worldRoot, email } = {}) {
     worldRoot,
     task,
     taskId,
-    title: task?.title || "background work",
-    status: task?.status || (result.reason === "no eligible work" ? "idle" : "deferred"),
+    title: task?.title || (result.subject ? "daily improvement" : "background work"),
+    status: task?.status || result.status || (result.reason === "no eligible work" ? "idle" : "deferred"),
     report: result.report,
+    subjectOverride: result.subject || "",
     ...email
   });
   return { ...result, notification };
@@ -172,8 +180,9 @@ function usage() {
     "  node command/work_supervisor.mjs block <task-id> --reason <text> [--json]",
     "  node command/work_supervisor.mjs resume <task-id> --context <text> [--json]",
     "  node command/work_supervisor.mjs fail|cancel <task-id> [--reason <text>] [--json]",
-    "  node command/work_supervisor.mjs background [--continuous] [--watch] [--email-report <address>] [--email-from <address>] [--interval-ms <n>] [--reserve-percent <n>] [--json]",
+    "  node command/work_supervisor.mjs background [--continuous] [--dry-run] [--watch] [--interval-ms <n>] [--reserve-percent <n>] [--json]",
     "  node command/work_supervisor.mjs report <task-id> [--email-report <address>] [--email-from <address>] [--json]",
+    "  node command/work_supervisor.mjs digest [--since <ISO>] [--email-report <address>] [--email-from <address>] [--json]",
     "  node command/work_supervisor.mjs health [--json]",
     "",
     "Without a subcommand, the legacy one-shot supervisor behaviour is used."
@@ -181,7 +190,7 @@ function usage() {
 }
 
 const args = process.argv.slice(2);
-const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report"]);
+const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report", "digest"]);
 const action = knownActions.has(args[0]) ? args[0] : "run-next";
 const asJson = has(args, "--json");
 const watch = has(args, "--watch");
@@ -231,35 +240,84 @@ try {
     result = email
       ? await notifyResult({ report, selected: args[1] }, { worldRoot, email })
       : report;
-  } else if (action === "background") {
+  } else if (action === "digest") {
+    const policy = {
+      ...DEFAULT_BACKGROUND_POLICY,
+      reservePercent: Number(process.env.PYA_BACKGROUND_RESERVE_PERCENT || "15"),
+      pacingDeadbandPercent: Number(process.env.PYA_BACKGROUND_PACING_DEADBAND_PERCENT || "1"),
+      curationThreshold: Number(process.env.PYA_BACKGROUND_CURATION_THRESHOLD || "1"),
+      curationMaxTasks: Number(process.env.PYA_BACKGROUND_CURATION_MAX_TASKS || "3")
+    };
+    const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
+    result = await buildWorkDailyDigest({
+      worldRoot,
+      repositoryRoot,
+      owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
+      since: value(args, "--since"),
+      policy,
+      automationBranch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap"
+    });
     const email = emailOptions(args);
+    if (email) result = await notifyResult(result, { worldRoot, email });
+  } else if (action === "background") {
     const policy = {
       enabled: true,
-      reservePercent: Number(value(args, "--reserve-percent", process.env.PYA_BACKGROUND_RESERVE_PERCENT || "20")),
-      nearResetWilling: has(args, "--near-reset")
+      reservePercent: Number(value(args, "--reserve-percent", process.env.PYA_BACKGROUND_RESERVE_PERCENT || "15")),
+      pacingDeadbandPercent: Number(process.env.PYA_BACKGROUND_PACING_DEADBAND_PERCENT || "1"),
+      curationThreshold: Number(process.env.PYA_BACKGROUND_CURATION_THRESHOLD || "1"),
+      curationMaxTasks: Number(process.env.PYA_BACKGROUND_CURATION_MAX_TASKS || "3")
     };
-    const options = {
-      worldRoot,
-      owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
-      policy,
-      foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE),
-      onEvent: observer,
-      supervisorOptions: {
-        repositoryRoot: path.resolve(value(args, "--repository", process.cwd())),
-        ...codexSandboxOptions()
-      }
-    };
-    result = has(args, "--continuous")
-      ? await runWorkBackgroundContinuous({
-        ...options,
-        intervalMs: positive(value(args, "--interval-ms", "60000"), 60000),
-        maxTasksPerWake: positive(value(args, "--max-tasks", "1"), 1)
-      })
-      : await runWorkBackgroundOnce(options);
-    if (email) {
-      result = Array.isArray(result)
-        ? await Promise.all(result.map((item) => notifyResult(item, { worldRoot, email })))
-        : await notifyResult(result, { worldRoot, email });
+    if (has(args, "--dry-run")) {
+      const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
+      const curation = await curateWorkBacklog({
+        worldRoot,
+        repositoryRoot,
+        owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
+        threshold: policy.curationThreshold,
+        maxTasks: policy.curationMaxTasks,
+        dryRun: true
+      });
+      const inspection = await inspectWorkBackground({
+        worldRoot,
+        owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
+        policy,
+        foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE)
+      });
+      const inspected = { ...inspection, curation };
+      result = {
+        ...inspection,
+        curation,
+        report: renderWorkDryRunReport({ inspection: inspected, policy })
+      };
+    } else {
+      const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
+      const options = {
+        worldRoot,
+        owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
+        policy,
+        repositoryRoot,
+        curate: true,
+        foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE),
+        onEvent: observer,
+        supervisorOptions: {
+          repositoryRoot,
+          baseRef: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap",
+          integrationBranch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap",
+          integrateAccepted: true,
+          pushIntegration: true,
+          pauseAfterImplementation: true,
+          reviewAfterImplementationPasses: 2,
+          pyashFirstPolicy: true,
+          ...codexSandboxOptions()
+        }
+      };
+      result = has(args, "--continuous")
+        ? await runWorkBackgroundContinuous({
+          ...options,
+          intervalMs: positive(value(args, "--interval-ms", "60000"), 60000),
+          maxTasksPerWake: positive(value(args, "--max-tasks", "1"), 1)
+        })
+        : await runWorkBackgroundOnce(options);
     }
   } else {
     result = await runWorkSupervisorOnce({
