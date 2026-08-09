@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 PYASH_BACKGROUND_REPOSITORY="${PYASH_BACKGROUND_REPOSITORY:-/home/htaf/pyash}"
 PYASH_BACKGROUND_ENV="${PYASH_BACKGROUND_ENV:-/home/htaf/.config/pyash/background.env}"
