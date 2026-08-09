@@ -49,7 +49,8 @@ export async function appendWorkSchedulerEvent(worldRoot, event = {}, { now = ()
     pacingFloor: event.pacing?.minimumRemainingPercent,
     headroom: event.pacing?.headroomPercent,
     taskCount: event.taskCount,
-    selected: event.selected
+    selected: event.selected,
+    baseline: event.baseline
   };
   const lines = [
     "su name work scheduler event be map def",

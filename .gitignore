@@ -20,6 +20,7 @@ know/**
 !know/produce/
 !know/produce/.gitkeep
 node_modules/
+log/
 world/
 !world/
 world/*

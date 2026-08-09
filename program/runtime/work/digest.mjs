@@ -6,6 +6,7 @@ import { curateWorkBacklog } from "./curator.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
 import { renderWorkTaskReport } from "./report.mjs";
+import { buildAutonomousRoadmap } from "./roadmap.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -110,6 +111,7 @@ export function renderWorkDailyDigest({
   events = [],
   tasks = [],
   curation = {},
+  roadmap = null,
   automationBranch = "automation/roadmap"
 } = {}) {
   const weekly = capacity.weekly || {};
@@ -175,6 +177,20 @@ export function renderWorkDailyDigest({
   } else if (curation.proposed?.length) {
     lines.push("", "Next likely work", "----------------", ...curation.proposed.slice(0, 3).map((item) => `${item.taskId}: ${item.title}`));
   }
+  if (roadmap) {
+    lines.push("", "ROADMAP", "-------", "Active:");
+    const activePackages = (roadmap.packages || []).filter((item) => item.status === "ACTIVE");
+    const queuedPackages = (roadmap.packages || []).filter((item) => item.status === "QUEUED");
+    const candidatePackages = (roadmap.packages || []).filter((item) => item.status === "CANDIDATE");
+    const blockedPackages = [
+      ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
+      ...(roadmap.needsDecision || [])
+    ];
+    lines.push(...(activePackages.length ? activePackages.map((item) => `  ${item.title} — ${item.progress}`) : ["  (none)"]));
+    lines.push("Next:", ...(queuedPackages.length ? queuedPackages.slice(0, 3).map((item) => `  ${item.title}`) : ["  (none)"]));
+    lines.push("Later:", ...(candidatePackages.length ? candidatePackages.slice(0, 4).map((item) => `  ${item.title}`) : ["  (none)"]));
+    lines.push("Needs decision:", ...(blockedPackages.length ? blockedPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${item.blocker || item.progress || "blocked"}`) : ["  (none)"]));
+  }
   lines.push("", "Automation branch", "-----------------", automationBranch, `Commits integrated this window: ${completed.filter((task) => task.checkpoint?.integration?.status === "integrated").length}`);
   lines.push("", `Digest status: ${status.toUpperCase()}`, `Subject: ${subject}`, "");
   return { subject, status, report: lines.join("\n") };
@@ -202,6 +218,13 @@ export async function buildWorkDailyDigest({
     readWorkSchedulerEvents(worldRoot, { since: start.toISOString(), until: end.toISOString() }),
     curateWorkBacklog({ worldRoot, repositoryRoot, owner, threshold: policy.curationThreshold, maxTasks: policy.curationMaxTasks, dryRun: true, now: end })
   ]);
+  const roadmap = await buildAutonomousRoadmap({
+    worldRoot,
+    repositoryRoot,
+    tasks,
+    now: end,
+    persist
+  });
   const rendered = renderWorkDailyDigest({
     date: end.toISOString().slice(0, 10),
     since: start.toISOString(),
@@ -211,6 +234,7 @@ export async function buildWorkDailyDigest({
     events,
     tasks,
     curation,
+    roadmap,
     automationBranch
   });
   if (persist) {
@@ -220,5 +244,5 @@ export async function buildWorkDailyDigest({
       status: rendered.status
     });
   }
-  return { ...rendered, since: start.toISOString(), until: end.toISOString(), capacity, tasks, events, curation };
+  return { ...rendered, since: start.toISOString(), until: end.toISOString(), capacity, tasks, events, curation, roadmap };
 }

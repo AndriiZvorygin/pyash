@@ -28,7 +28,13 @@ async function eligibleWork(worldRoot, owner) {
     listQueuedWorkTasks(worldRoot, { owner }),
     listRuntimeWorkTasks(worldRoot, { owner })
   ]);
-  return [...runtime, ...input]
+  const candidates = await Promise.all([...runtime, ...input].map(async (entry) => {
+    const persisted = await readWorkTaskStatus(worldRoot, entry.task.taskId);
+    return persisted
+      ? { ...entry, task: { ...entry.task, ...persisted, checkpoint: persisted.checkpoint || entry.task.checkpoint } }
+      : entry;
+  }));
+  return candidates
     .filter((entry) => !["accepted", "failed", "blocked"].includes(entry.task.status))
     .sort((left, right) => {
       const priority = Number(right.task.priority) - Number(left.task.priority);
@@ -74,6 +80,7 @@ export async function runWorkBackgroundOnce({
   supervisorOptions = {},
   repositoryRoot = process.cwd(),
   curate = false,
+  baselineSync = null,
   onEvent = null,
   now = () => new Date()
 } = {}) {
@@ -202,6 +209,49 @@ export async function runWorkBackgroundOnce({
       curation
     };
   }
+  const activeRuntime = eligible.some(({ task }) => ["planning", "implementing", "reviewing", "revision", "usage-limited"].includes(task.status));
+  let baseline = { status: baselineSync ? (activeRuntime ? "skipped-active-task" : "pending") : "not-configured" };
+  if (baselineSync && !activeRuntime) {
+    try {
+      baseline = await baselineSync({ repositoryRoot, selected, now });
+      await emitWorkEvent(onEvent, "baseline-synced", {
+        status: baseline.status,
+        branch: baseline.branch,
+        commit: baseline.commit,
+        selected: selected.taskId
+      }, { now });
+    } catch (error) {
+      const reason = `automation baseline sync blocked: ${text(error?.message || error)}`;
+      await emitWorkEvent(onEvent, "deferred", { reason, selected: selected.taskId }, { now });
+      await writeWorkSchedulerHealth(worldRoot, {
+        ...baseHealth,
+        "last decision": reason,
+        "baseline status": "blocked",
+        "baseline error": text(error?.message || error),
+        "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + 1)
+      });
+      await appendWorkSchedulerEvent(worldRoot, {
+        type: "deferred",
+        reason,
+        capacity,
+        pacing: admission.pacing,
+        taskCount: eligible.length,
+        selected: selected.taskId,
+        baseline: "blocked"
+      }, { now });
+      return {
+        admitted: false,
+        reason,
+        capacity,
+        eligible: eligible.length,
+        selected: selected.taskId,
+        baseline: { status: "blocked", error: text(error?.message || error) },
+        report: renderWorkDeferredReport({ result: { reason, eligible: eligible.length }, capacity }),
+        queue: await queueDepth(worldRoot),
+        curation
+      };
+    }
+  }
   await updateWorkTaskCheckpoint(worldRoot, selected.taskId, {
     selectionReason: admission.reason,
     lastAction: "admitted by background runner"
@@ -226,6 +276,8 @@ export async function runWorkBackgroundOnce({
   }
   const health = {
     ...baseHealth,
+    "baseline status": baseline.status,
+    "baseline commit": baseline.commit || "",
     "last admitted task": result.taskId || selected.taskId,
     "last completed task": ["accepted", "blocked", "failed"].includes(result.status) ? result.taskId || selected.taskId : prior["last completed task"] || "",
     "current task": ["accepted", "blocked", "failed", "idle"].includes(result.status) ? "" : result.taskId || selected.taskId,
@@ -249,7 +301,8 @@ export async function runWorkBackgroundOnce({
     capacity,
     pacing: admission.pacing,
     taskCount: eligible.length,
-    selected: selected.taskId
+    selected: selected.taskId,
+    baseline: baseline.status
   }, { now });
   return {
     admitted: true,
@@ -258,6 +311,7 @@ export async function runWorkBackgroundOnce({
     selected: selected.taskId,
     report: renderWorkTaskReport(finalTask || selected),
     curation,
+    baseline,
     ...result
   };
 }
