@@ -111,6 +111,10 @@ The normal `workspace-write`/`workspaceWrite` mode currently cannot execute shel
 
 Set `PYA_BACKGROUND_EXECUTION_BLOCKED=truth` to keep hourly implementation wakes globally deferred while preserving daily digest operation. Remove that gate only after the smoke passes.
 
+Long-running manager or worker turns can use a larger bounded client timeout through
+`PYA_CODEX_TURN_TIMEOUT_MS`. The deployed host uses `900000` (15 minutes); this changes only how
+long Pyash waits for a turn and does not remove the worktree or task-scope controls.
+
 ## Verify and disable
 
 The doctor checks permissions, executables, Codex weekly capacity, Docker
