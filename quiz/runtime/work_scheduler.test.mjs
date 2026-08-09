@@ -64,6 +64,9 @@ test("accepted work integrates onto a synchronized automation baseline", async (
   await fs.writeFile(path.join(worktreePath, "README.md"), "automation\n");
   await git(worktreePath, "add", "README.md");
   await git(worktreePath, "commit", "-qm", "automation change");
+  await fs.writeFile(path.join(worktreePath, "TASK.md"), "task evidence\n");
+  await git(worktreePath, "add", "TASK.md");
+  await git(worktreePath, "commit", "-qm", "automation evidence");
   await fs.writeFile(path.join(repositoryRoot, "HUMAN.md"), "human\n");
   await git(repositoryRoot, "add", "HUMAN.md");
   await git(repositoryRoot, "commit", "-qm", "human baseline change");
@@ -82,11 +85,13 @@ test("accepted work integrates onto a synchronized automation baseline", async (
     now: "2026-08-09T05:00:00.000Z"
   });
   assert.equal(integrated.status, "integrated");
-  assert.equal(integrated.strategy, "cherry-pick onto synchronized branch");
+  assert.equal(integrated.strategy, "cherry-pick task history onto synchronized branch");
   assert.notEqual(integrated.commit, baseRevision);
   assert.equal((await git(repositoryRoot, "rev-parse", "refs/heads/automation/roadmap")).stdout.trim(), integrated.branchCommit);
   assert.notEqual(integrated.branchCommit, synced.commit);
-  assert.equal((await git(repositoryRoot, "show", "--format=%s", "--no-patch", integrated.branchCommit)).stdout.trim(), "automation change");
+  assert.equal((await git(repositoryRoot, "show", "--format=%s", "--no-patch", integrated.branchCommit)).stdout.trim(), "automation evidence");
+  assert.equal((await git(repositoryRoot, "show", `refs/heads/automation/roadmap:README.md`)).stdout, "automation\n");
+  assert.equal((await git(repositoryRoot, "show", `refs/heads/automation/roadmap:TASK.md`)).stdout, "task evidence\n");
 });
 
 test("conflicting accepted work remains blocked instead of improvising a merge", async () => {

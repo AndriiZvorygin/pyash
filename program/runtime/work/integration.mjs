@@ -177,10 +177,10 @@ export async function integrateAcceptedWork({
         repositoryRoot: repository,
         branchRevision: currentBranch,
         sourceRevision: taskCommit,
-        operation: ["cherry-pick", taskCommit],
+        operation: ["cherry-pick", `${text(baseRevision)}..${taskCommit}`],
         gitRunner
       });
-      strategy = "cherry-pick onto synchronized branch";
+      strategy = "cherry-pick task history onto synchronized branch";
     }
   }
   await updateBranchRef({

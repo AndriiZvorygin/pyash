@@ -85,7 +85,7 @@ Refresh is appropriate when fewer than three credible candidates remain, depende
 
 ## Automation baseline policy
 
-`master` remains human-controlled. Before a new autonomous task is based, the runner synchronizes `automation/roadmap` with local `master`, preserving both histories. An active task is never rebased or restarted; its existing worktree and checkpoint continue untouched. If its accepted commit is based on the previous automation tip, integration safely cherry-picks it onto the synchronized branch. Merge or cherry-pick conflicts block the task for human attention.
+`master` remains human-controlled. Before a new autonomous task is based, the runner synchronizes `automation/roadmap` with local `master`, preserving both histories. An active task is never rebased or restarted; its existing worktree and checkpoint continue untouched. When an accepted task is based on the previous automation tip, integration fast-forwards it; when the automation branch has advanced, integration cherry-picks the complete task history from the recorded base revision through the task tip. Merge or cherry-pick conflicts block the task for human attention.
 
 Inspect or perform synchronization explicitly with:
 
