@@ -5,7 +5,7 @@ import { appendWorkOutcome } from "./outcome.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
 import { readWorkTaskStatus, updateWorkTaskCheckpoint } from "./status.mjs";
 import { emitWorkEvent } from "./observer.mjs";
-import { renderWorkDeferredReport, renderWorkTaskReport } from "./report.mjs";
+import { renderWorkDeferredReport, renderWorkIdleReport, renderWorkTaskReport } from "./report.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -87,19 +87,28 @@ export async function runWorkBackgroundOnce({
       capacity,
       action: "deferred"
     });
+    const report = admission.reason === "no eligible work"
+      ? renderWorkIdleReport({ result: { reason: admission.reason, eligible: eligible.length }, capacity })
+      : renderWorkDeferredReport({ result: { reason: admission.reason, eligible: eligible.length }, capacity });
     return {
       admitted: false,
       reason: admission.reason,
       capacity,
       eligible: eligible.length,
-      report: renderWorkDeferredReport({ result: { reason: admission.reason, eligible: eligible.length }, capacity }),
+      report,
       queue: await queueDepth(worldRoot)
     };
   }
   const selected = eligible[0]?.task || null;
   if (!selected) {
     await writeWorkSchedulerHealth(worldRoot, baseHealth);
-    return { admitted: false, reason: "no eligible work", capacity, eligible: 0 };
+    return {
+      admitted: false,
+      reason: "no eligible work",
+      capacity,
+      eligible: 0,
+      report: renderWorkIdleReport({ result: { reason: "no eligible work", eligible: 0 }, capacity })
+    };
   }
   await updateWorkTaskCheckpoint(worldRoot, selected.taskId, {
     selectionReason: admission.reason,

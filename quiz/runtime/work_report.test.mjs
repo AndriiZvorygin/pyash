@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { diffStat, renderWorkDeferredReport, renderWorkTaskReport } from "../../program/runtime/work/report.mjs";
+import {
+  diffStat,
+  renderWorkDeferredReport,
+  renderWorkIdleReport,
+  renderWorkTaskReport
+} from "../../program/runtime/work/report.mjs";
 
 function task(status = "accepted") {
   return {
@@ -64,6 +69,16 @@ test("work report represents deferred capacity without a task checkpoint", () =>
   assert.match(report, /Result: DEFERRED/);
   assert.match(report, /Reason: foreground reserve/);
   assert.match(report, /Remaining capacity: 12%/);
+});
+
+test("work report represents an empty backlog as idle", () => {
+  const report = renderWorkIdleReport({
+    result: { reason: "no eligible work", eligible: 0 },
+    capacity: { usedPercent: 37, resetAt: "2026-08-09T03:00:00.000Z" }
+  });
+  assert.match(report, /Result: IDLE/);
+  assert.match(report, /Reason: no eligible work/);
+  assert.match(report, /Codex usage: 37% used/);
 });
 
 test("accepted work report does not present a prior blocker as a current operator note", () => {

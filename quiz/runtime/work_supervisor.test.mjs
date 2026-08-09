@@ -101,7 +101,8 @@ async function runFake(worldRoot, decisions, { onEvent = null } = {}) {
     }),
     evidenceFactory: async () => ({
       diff: "diff --git a/hello.txt b/hello.txt\n+hello",
-      changedFiles: ["hello.txt"]
+      changedFiles: ["hello.txt"],
+      revision: "task-revision"
     }),
     onEvent,
     now: () => "2026-08-07T12:01:00.000Z"
@@ -145,6 +146,7 @@ test("supervisor persists Sol plan, Luna evidence, and ACCEPT review", async () 
   assert.equal(status.checkpoint.worker.model, "worker-test");
   assert.equal(status.checkpoint.plan.workOrder, "edit hello.txt and run node test.mjs");
   assert.deepEqual(status.checkpoint.implementation.changedFiles, ["hello.txt"]);
+  assert.equal(status.checkpoint.implementation.commit, "task-revision");
   assert.equal(status.checkpoint.review.decision, "ACCEPT");
   assert.equal(status.checkpoint.activeTurn.state, "");
   assert.equal(status.checkpoint.turnHistory.length, 3);

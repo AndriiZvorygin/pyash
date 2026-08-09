@@ -73,6 +73,7 @@ export function buildWorkCheckpoint(input = {}) {
     },
     implementation: {
       summary: text(implementation.summary),
+      commit: text(implementation.commit),
       changedFiles: list(implementation.changedFiles),
       fileChanges: list(implementation.fileChanges),
       diff: text(implementation.diff),

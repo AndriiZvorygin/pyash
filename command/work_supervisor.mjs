@@ -15,6 +15,11 @@ import { runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../program/r
 import { readWorkSchedulerHealth } from "../program/runtime/work/health.mjs";
 import { readAndRenderWorkTaskReport } from "../program/runtime/work/report.mjs";
 import { createWorkWatchRenderer } from "../program/runtime/work/watch.mjs";
+import { readWorkTaskStatus } from "../program/runtime/work/status.mjs";
+import {
+  defaultWorkEmailFrom,
+  sendWorkReportNotification
+} from "../program/runtime/work/notification.mjs";
 
 function value(args, flag, fallback = "") {
   const index = args.indexOf(flag);
@@ -52,6 +57,42 @@ function codexSandboxOptions(env = process.env) {
     ...(threadSandbox ? { threadSandbox } : {}),
     ...(turnSandbox ? { turnSandboxPolicy: { type: turnSandbox } } : {})
   };
+}
+
+function emailOptions(args, env = process.env) {
+  const requested = has(args, "--email-report");
+  const recipient = value(args, "--email-report", env.PYA_WORK_EMAIL_REPORT || "");
+  if (requested && !recipient) throw new Error("--email-report requires a recipient address");
+  if (!recipient) return null;
+  return {
+    recipient,
+    from: value(args, "--email-from", defaultWorkEmailFrom(env)),
+    transport: env.PYA_WORK_MAIL_TRANSPORT || "auto",
+    sendmailPath: env.PYA_WORK_SENDMAIL_PATH || "/usr/sbin/sendmail",
+    dockerCommand: env.PYA_WORK_DOCKER_COMMAND || "docker",
+    dockerContainer: env.PYA_WORK_MAIL_CONTAINER || "mailserver"
+  };
+}
+
+async function notifyResult(result, { worldRoot, email } = {}) {
+  if (!email || !result?.report) return result;
+  const taskId = result.selected || result.taskId || "";
+  const task = taskId ? await readWorkTaskStatus(worldRoot, taskId) : null;
+  const notification = await sendWorkReportNotification({
+    worldRoot,
+    task,
+    taskId,
+    title: task?.title || "background work",
+    status: task?.status || (result.reason === "no eligible work" ? "idle" : "deferred"),
+    report: result.report,
+    ...email
+  });
+  return { ...result, notification };
+}
+
+function notificationFailed(result) {
+  if (Array.isArray(result)) return result.some((item) => item?.notification?.status === "failed");
+  return result?.notification?.status === "failed";
 }
 
 function world(args) {
@@ -101,6 +142,26 @@ function output(result, asJson) {
   process.stdout.write(`${String(result ?? "")}\n`);
 }
 
+function printResult(result, asJson, watchOutput = false) {
+  if (asJson) {
+    output(result, true);
+    return;
+  }
+  const items = Array.isArray(result) ? result : [result];
+  if (items.some((item) => item?.report)) {
+    for (const item of items) {
+      if (!item?.report) continue;
+      process.stdout.write(`${watchOutput ? "\n" : ""}${item.report}\n`);
+      if (item.notification) {
+        const detail = item.notification.error ? `: ${item.notification.error}` : "";
+        process.stdout.write(`Notification: ${item.notification.status}${detail}\n`);
+      }
+    }
+    return;
+  }
+  output(result, false);
+}
+
 function usage() {
   return [
     "Usage:",
@@ -111,8 +172,8 @@ function usage() {
     "  node command/work_supervisor.mjs block <task-id> --reason <text> [--json]",
     "  node command/work_supervisor.mjs resume <task-id> --context <text> [--json]",
     "  node command/work_supervisor.mjs fail|cancel <task-id> [--reason <text>] [--json]",
-    "  node command/work_supervisor.mjs background [--continuous] [--watch] [--interval-ms <n>] [--reserve-percent <n>] [--json]",
-    "  node command/work_supervisor.mjs report <task-id> [--json]",
+    "  node command/work_supervisor.mjs background [--continuous] [--watch] [--email-report <address>] [--email-from <address>] [--interval-ms <n>] [--reserve-percent <n>] [--json]",
+    "  node command/work_supervisor.mjs report <task-id> [--email-report <address>] [--email-from <address>] [--json]",
     "  node command/work_supervisor.mjs health [--json]",
     "",
     "Without a subcommand, the legacy one-shot supervisor behaviour is used."
@@ -165,8 +226,13 @@ try {
   } else if (action === "health") {
     result = await readWorkSchedulerHealth(worldRoot);
   } else if (action === "report") {
-    result = await readAndRenderWorkTaskReport(worldRoot, args[1]);
+    const report = await readAndRenderWorkTaskReport(worldRoot, args[1]);
+    const email = emailOptions(args);
+    result = email
+      ? await notifyResult({ report, selected: args[1] }, { worldRoot, email })
+      : report;
   } else if (action === "background") {
+    const email = emailOptions(args);
     const policy = {
       enabled: true,
       reservePercent: Number(value(args, "--reserve-percent", process.env.PYA_BACKGROUND_RESERVE_PERCENT || "20")),
@@ -190,6 +256,11 @@ try {
         maxTasksPerWake: positive(value(args, "--max-tasks", "1"), 1)
       })
       : await runWorkBackgroundOnce(options);
+    if (email) {
+      result = Array.isArray(result)
+        ? await Promise.all(result.map((item) => notifyResult(item, { worldRoot, email })))
+        : await notifyResult(result, { worldRoot, email });
+    }
   } else {
     result = await runWorkSupervisorOnce({
       worldRoot,
@@ -199,11 +270,8 @@ try {
       onEvent: observer
     });
   }
-  if (watch && !asJson && Array.isArray(result)) {
-    for (const item of result) if (item?.report) process.stdout.write(`\n${item.report}`);
-  } else if (watch && result?.report && !asJson) process.stdout.write(`\n${result.report}`);
-  else output(result, asJson);
-  if (result?.status === "failed" || result?.error) process.exitCode = 1;
+  printResult(result, asJson, watch);
+  if (result?.status === "failed" || result?.error || notificationFailed(result)) process.exitCode = 1;
 } catch (error) {
   process.stderr.write(`${error?.message || error}\n`);
   process.stderr.write(`${usage()}\n`);
