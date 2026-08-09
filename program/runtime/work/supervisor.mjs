@@ -318,6 +318,7 @@ export async function runWorkSupervisorOnce({
   reviewAfterImplementationPasses = 2,
   pyashFirstPolicy = true,
   executionPreflight = null,
+  turnTimeoutMs = 300000,
   approvalPolicy = "never",
   threadSandbox = "workspace-write",
   turnSandboxPolicy = ({ worktreePath }) => ({
@@ -659,6 +660,7 @@ export async function runWorkSupervisorOnce({
       sandboxPolicy: typeof turnSandboxPolicy === "function"
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
+      timeoutMs: turnTimeoutMs,
       input: [{ type: "text", text: promptPlan(task, workspace, roleSettings) }]
     });
     const plan = parsePlan(resultText(result));
@@ -695,6 +697,7 @@ export async function runWorkSupervisorOnce({
       sandboxPolicy: typeof turnSandboxPolicy === "function"
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
+      timeoutMs: turnTimeoutMs,
       input: [{ type: "text", text: promptImplementation(task, task.checkpoint, workspace, correction) }]
     });
     const report = parseImplementation(resultText(result));
@@ -759,6 +762,7 @@ export async function runWorkSupervisorOnce({
       sandboxPolicy: typeof turnSandboxPolicy === "function"
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
+      timeoutMs: turnTimeoutMs,
       input: [{ type: "text", text: promptReview(task, task.checkpoint, workspace) }]
     });
     const review = parseReview(resultText(result));
