@@ -11,7 +11,7 @@ import {
 } from "../../program/runtime/work/capacity.mjs";
 import { claimOldestWorkTask, enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { readWorkSchedulerHealth } from "../../program/runtime/work/health.mjs";
-import { transitionWorkTaskStatus } from "../../program/runtime/work/status.mjs";
+import { readWorkTaskStatus, transitionWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import { runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
 
 async function makeWorldRoot(prefix) {
@@ -225,6 +225,48 @@ test("background baseline sync skips active work and runs before a new task", as
   });
   assert.equal(next.baseline.status, "synchronized");
   assert.equal(syncCalls, 1);
+});
+
+test("background preflight defers globally without claiming a task", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-preflight-");
+  await enqueueWorkTask(worldRoot, task("preflight-task"));
+  let supervisorCalls = 0;
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => ({
+      state: "available",
+      remainingPercent: 80,
+      usedPercent: 20,
+      weekly: {
+        identified: true,
+        state: "available",
+        remainingPercent: 80,
+        usedPercent: 20,
+        windowStartAt: "2026-08-03T12:00:00.000Z",
+        resetAt: "2026-08-10T12:00:00.000Z"
+      }
+    }),
+    executionPreflight: async () => ({
+      ok: false,
+      status: "blocked",
+      check: "Codex App Server/sandbox initialization",
+      reason: "bwrap: loopback: Failed RTM_NEWADDR"
+    }),
+    supervisor: async () => {
+      supervisorCalls += 1;
+      return { claimed: true, taskId: "preflight-task", status: "accepted" };
+    },
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(result.admitted, false);
+  assert.match(result.reason, /execution environment blocked/u);
+  assert.equal(supervisorCalls, 0);
+  assert.equal((await readWorkTaskStatus(worldRoot, "preflight-task")).status, "ready");
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["execution preflight status"], "blocked");
+  assert.match(health["execution preflight reason"], /RTM_NEWADDR/u);
 });
 
 test("continuous runner sleeps between bounded wakes and can defer safely", async () => {

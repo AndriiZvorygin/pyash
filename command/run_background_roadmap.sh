@@ -7,6 +7,9 @@ source "$SCRIPT_DIR/pyash_background_common.sh"
 pyash_background_prepare
 
 log_file="$PYA_BACKGROUND_LOG_DIR/background-roadmap.log"
+if [[ "${PYA_BACKGROUND_EXECUTION_BLOCKED:-}" =~ ^(truth|true|yes|1|y)$ ]]; then
+  pyash_background_log "roadmap execution gate: infrastructure preflight required" >> "$log_file"
+fi
 exec 9>"$PYASH_BACKGROUND_LOCK"
 if ! flock -n 9; then
   pyash_background_log "roadmap skipped: another Pyash background process owns $PYASH_BACKGROUND_LOCK" >> "$log_file"
