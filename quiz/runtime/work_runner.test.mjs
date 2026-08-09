@@ -190,6 +190,7 @@ test("background baseline sync skips active work and runs before a new task", as
   await claimOldestWorkTask(worldRoot, { workerTag: "test" });
   await transitionWorkTaskStatus(worldRoot, "active-task", "planning");
   await transitionWorkTaskStatus(worldRoot, "active-task", "implementing");
+  await enqueueWorkTask(worldRoot, task("queued-high", 200));
   let syncCalls = 0;
   const active = await runWorkBackgroundOnce({
     worldRoot,
@@ -200,10 +201,11 @@ test("background baseline sync skips active work and runs before a new task", as
       syncCalls += 1;
       return { status: "synchronized", commit: "unexpected" };
     },
-    supervisor: async () => ({ claimed: true, taskId: "active-task", status: "implementing" }),
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "implementing" }),
     now: () => "2026-08-07T12:01:00.000Z"
   });
   assert.equal(active.admitted, true);
+  assert.equal(active.selected, "active-task");
   assert.equal(active.baseline.status, "skipped-active-task");
   assert.equal(syncCalls, 0);
 
