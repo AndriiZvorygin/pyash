@@ -46,6 +46,7 @@ export function buildWorkCheckpoint(input = {}) {
   const implementation = object(input.implementation);
   const review = object(input.review);
   const integration = object(input.integration);
+  const executionPreflight = object(input.executionPreflight);
   const interruption = object(input.interruption);
   const activeTurn = turnRecord(input.activeTurn);
   const turnHistory = list(input.turnHistory).map((entry) => turnRecord(entry));
@@ -98,6 +99,15 @@ export function buildWorkCheckpoint(input = {}) {
       error: text(integration.error),
       pushed: integration.pushed === true
     },
+    executionPreflight: {
+      status: text(executionPreflight.status),
+      check: text(executionPreflight.check),
+      reason: text(executionPreflight.reason),
+      observedAt: text(executionPreflight.observedAt),
+      worktree: text(executionPreflight.worktree),
+      threadSandbox: text(executionPreflight.threadSandbox),
+      turnSandbox: text(executionPreflight.turnSandbox)
+    },
     interruption: {
       phase: text(interruption.phase),
       at: text(interruption.at),
@@ -127,6 +137,7 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     implementation: { ...current.implementation, ...object(update.implementation) },
     review: { ...current.review, ...object(update.review) },
     integration: { ...current.integration, ...object(update.integration) },
+    executionPreflight: { ...current.executionPreflight, ...object(update.executionPreflight) },
     interruption: { ...current.interruption, ...object(update.interruption) },
     activeTurn: Object.prototype.hasOwnProperty.call(update, "activeTurn")
       ? turnRecord(update.activeTurn)

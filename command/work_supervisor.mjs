@@ -29,6 +29,8 @@ import {
   renderAutonomousRoadmapReport
 } from "../program/runtime/work/roadmap.mjs";
 import { synchronizeAutomationBranch } from "../program/runtime/work/integration.mjs";
+import { inspectWorkExecutionPreflight } from "../program/runtime/work/preflight.mjs";
+import { runSandboxSmoke } from "../program/runtime/work/sandbox_smoke.mjs";
 import {
   defaultWorkEmailFrom,
   sendWorkReportNotification
@@ -70,6 +72,22 @@ function codexSandboxOptions(env = process.env) {
     ...(threadSandbox ? { threadSandbox } : {}),
     ...(turnSandbox ? { turnSandboxPolicy: { type: turnSandbox } } : {})
   };
+}
+
+async function configuredExecutionPreflight({ repositoryRoot, worktreePath }) {
+  if (truthy(process.env.PYA_BACKGROUND_EXECUTION_BLOCKED)) {
+    return {
+      ok: false,
+      status: "blocked",
+      check: "operator gate",
+      reason: "background execution disabled until the sandbox preflight passes"
+    };
+  }
+  return inspectWorkExecutionPreflight({
+    repositoryRoot,
+    worktreePath,
+    ...codexSandboxOptions()
+  });
 }
 
 function emailOptions(args, env = process.env) {
@@ -190,6 +208,7 @@ function usage() {
     "  node command/work_supervisor.mjs report <task-id> [--email-report <address>] [--email-from <address>] [--json]",
     "  node command/work_supervisor.mjs digest [--since <ISO>] [--email-report <address>] [--email-from <address>] [--json]",
     "  node command/work_supervisor.mjs health [--json]",
+    "  node command/work_supervisor.mjs sandbox-smoke [--repository <path>] [--json]",
     "  node command/work_supervisor.mjs roadmap [--json]",
     "  node command/work_supervisor.mjs roadmap refresh [--if-needed] [--json]",
     "  node command/work_supervisor.mjs roadmap sync-baseline [--json]",
@@ -199,7 +218,7 @@ function usage() {
 }
 
 const args = process.argv.slice(2);
-const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report", "digest", "roadmap"]);
+const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report", "digest", "roadmap", "sandbox-smoke"]);
 const action = knownActions.has(args[0]) ? args[0] : "run-next";
 const asJson = has(args, "--json");
 const watch = has(args, "--watch");
@@ -243,6 +262,11 @@ try {
     result = await failWorkTask(worldRoot, args[1], value(args, "--reason", "cancelled by operator"));
   } else if (action === "health") {
     result = await readWorkSchedulerHealth(worldRoot);
+  } else if (action === "sandbox-smoke") {
+    result = await runSandboxSmoke({
+      repositoryRoot: path.resolve(value(args, "--repository", process.cwd())),
+      ...codexSandboxOptions()
+    });
   } else if (action === "roadmap") {
     const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
     if (args[1] === "refresh") {
@@ -352,6 +376,7 @@ try {
         policy,
         repositoryRoot,
         curate: true,
+        executionPreflight: ({ worktreePath }) => configuredExecutionPreflight({ repositoryRoot, worktreePath }),
         baselineSync: async () => synchronizeAutomationBranch({
           repositoryRoot,
           branch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap",
@@ -370,6 +395,7 @@ try {
           pauseAfterImplementation: true,
           reviewAfterImplementationPasses: 2,
           pyashFirstPolicy: true,
+          executionPreflight: ({ worktreePath }) => configuredExecutionPreflight({ repositoryRoot, worktreePath }),
           ...codexSandboxOptions()
         }
       };

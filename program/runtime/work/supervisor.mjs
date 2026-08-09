@@ -317,6 +317,7 @@ export async function runWorkSupervisorOnce({
   pauseAfterImplementation = false,
   reviewAfterImplementationPasses = 2,
   pyashFirstPolicy = true,
+  executionPreflight = null,
   approvalPolicy = "never",
   threadSandbox = "workspace-write",
   turnSandboxPolicy = ({ worktreePath }) => ({
@@ -407,7 +408,7 @@ export async function runWorkSupervisorOnce({
     const turnUncaptured = activeTurn.state === "completed" && activeTurn.resultCaptured === false;
     const status = kind === "usage-limited"
       ? "usage-limited"
-      : kind === "interrupted" || kind === "ambiguous" || turnPending || turnUncaptured
+      : kind === "infrastructure" || kind === "interrupted" || kind === "ambiguous" || turnPending || turnUncaptured
         ? "blocked"
         : "failed";
     const message = text(err?.message || err) || "supervisor failed";
@@ -426,6 +427,15 @@ export async function runWorkSupervisorOnce({
         : turnPending || turnUncaptured
           ? { ...activeTurn, state: turnUncaptured ? "completed" : "ambiguous", ambiguity: message }
           : task.checkpoint.activeTurn
+    };
+    if (err?.preflight) checkpoint.executionPreflight = {
+      status: err.preflight.status || "blocked",
+      check: err.preflight.check || "",
+      reason: err.preflight.reason || message,
+      observedAt: err.preflight.observedAt || at,
+      worktree: err.preflight.worktree || task.checkpoint.workspace.worktreePath,
+      threadSandbox: err.preflight.details?.threadSandbox || "",
+      turnSandbox: err.preflight.details?.turnSandbox || ""
     };
     if (task.status !== status) task = transitionWorkTask(task, status, { now: atValue, message, error: message });
     await save(checkpoint, { error: message, message });
@@ -455,6 +465,34 @@ export async function runWorkSupervisorOnce({
       baseRevision: task.checkpoint.workspace.baseRevision,
       baseRef
     });
+    if (executionPreflight) {
+      const preflight = await executionPreflight({
+        repositoryRoot,
+        worldRoot,
+        taskId: task.taskId,
+        worktreePath: workspace.worktreePath,
+        threadSandbox,
+        turnSandboxPolicy,
+        roleConfig: roleSettings
+      });
+      if (!preflight?.ok) {
+        const error = new Error(preflight?.reason || "execution preflight failed");
+        error.kind = "infrastructure";
+        error.preflight = preflight;
+        throw error;
+      }
+      await save({
+        executionPreflight: {
+          status: preflight.status || "ready",
+          check: preflight.check || "",
+          reason: preflight.reason || "",
+          observedAt: preflight.observedAt || "",
+          worktree: preflight.worktree || workspace.worktreePath,
+          threadSandbox,
+          turnSandbox: turnSandboxPolicy?.type || "workspaceWrite"
+        }
+      });
+    }
     await save({
       workspace,
       manager: {
