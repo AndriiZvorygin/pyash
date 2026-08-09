@@ -13,6 +13,8 @@ import {
 } from "../program/runtime/work/operator.mjs";
 import { runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../program/runtime/work/runner.mjs";
 import { readWorkSchedulerHealth } from "../program/runtime/work/health.mjs";
+import { readAndRenderWorkTaskReport } from "../program/runtime/work/report.mjs";
+import { createWorkWatchRenderer } from "../program/runtime/work/watch.mjs";
 
 function value(args, flag, fallback = "") {
   const index = args.indexOf(flag);
@@ -41,6 +43,15 @@ function jsonValue(args, flag, fallback = {}) {
 function positive(valueText, fallback) {
   const parsed = Number(valueText);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function codexSandboxOptions(env = process.env) {
+  const threadSandbox = String(env.PYA_CODEX_THREAD_SANDBOX || "").trim();
+  const turnSandbox = String(env.PYA_CODEX_TURN_SANDBOX || "").trim();
+  return {
+    ...(threadSandbox ? { threadSandbox } : {}),
+    ...(turnSandbox ? { turnSandboxPolicy: { type: turnSandbox } } : {})
+  };
 }
 
 function world(args) {
@@ -100,7 +111,8 @@ function usage() {
     "  node command/work_supervisor.mjs block <task-id> --reason <text> [--json]",
     "  node command/work_supervisor.mjs resume <task-id> --context <text> [--json]",
     "  node command/work_supervisor.mjs fail|cancel <task-id> [--reason <text>] [--json]",
-    "  node command/work_supervisor.mjs background [--continuous] [--interval-ms <n>] [--reserve-percent <n>] [--json]",
+    "  node command/work_supervisor.mjs background [--continuous] [--watch] [--interval-ms <n>] [--reserve-percent <n>] [--json]",
+    "  node command/work_supervisor.mjs report <task-id> [--json]",
     "  node command/work_supervisor.mjs health [--json]",
     "",
     "Without a subcommand, the legacy one-shot supervisor behaviour is used."
@@ -108,10 +120,12 @@ function usage() {
 }
 
 const args = process.argv.slice(2);
-const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health"]);
+const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report"]);
 const action = knownActions.has(args[0]) ? args[0] : "run-next";
 const asJson = has(args, "--json");
+const watch = has(args, "--watch");
 const worldRoot = world(args);
+const observer = watch ? createWorkWatchRenderer() : null;
 
 try {
   let result;
@@ -150,6 +164,8 @@ try {
     result = await failWorkTask(worldRoot, args[1], value(args, "--reason", "cancelled by operator"));
   } else if (action === "health") {
     result = await readWorkSchedulerHealth(worldRoot);
+  } else if (action === "report") {
+    result = await readAndRenderWorkTaskReport(worldRoot, args[1]);
   } else if (action === "background") {
     const policy = {
       enabled: true,
@@ -161,7 +177,11 @@ try {
       owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
       policy,
       foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE),
-      supervisorOptions: { repositoryRoot: path.resolve(value(args, "--repository", process.cwd())) }
+      onEvent: observer,
+      supervisorOptions: {
+        repositoryRoot: path.resolve(value(args, "--repository", process.cwd())),
+        ...codexSandboxOptions()
+      }
     };
     result = has(args, "--continuous")
       ? await runWorkBackgroundContinuous({
@@ -174,10 +194,15 @@ try {
     result = await runWorkSupervisorOnce({
       worldRoot,
       repositoryRoot: path.resolve(value(args, "--repository", process.cwd())),
-      owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "")
+      owner: value(args, "--owner", process.env.PYA_WORK_OWNER || ""),
+      ...codexSandboxOptions(),
+      onEvent: observer
     });
   }
-  output(result, asJson);
+  if (watch && !asJson && Array.isArray(result)) {
+    for (const item of result) if (item?.report) process.stdout.write(`\n${item.report}`);
+  } else if (watch && result?.report && !asJson) process.stdout.write(`\n${result.report}`);
+  else output(result, asJson);
   if (result?.status === "failed" || result?.error) process.exitCode = 1;
 } catch (error) {
   process.stderr.write(`${error?.message || error}\n`);

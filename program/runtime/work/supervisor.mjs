@@ -4,6 +4,7 @@ import { buildWorkTask, transitionWorkTask } from "./contract.mjs";
 import {
   ackWorkTaskFail,
   ackWorkTaskSuccess,
+  claimWorkTaskById,
   claimOldestRuntimeWorkTask,
   claimOldestWorkTask,
   queueDepth,
@@ -14,6 +15,8 @@ import {
   writeWorkTaskStatus
 } from "./status.mjs";
 import { mergeWorkCheckpoint } from "./checkpoint.mjs";
+import { emitWorkEvent } from "./observer.mjs";
+import { diffStat } from "./report.mjs";
 import { collectGitEvidence, prepareWorktree } from "./workspace.mjs";
 import {
   resumeCodexThread,
@@ -291,6 +294,7 @@ export async function runWorkSupervisorOnce({
   worldRoot,
   repositoryRoot = process.cwd(),
   owner = "",
+  taskId = "",
   workerTag = "sol-luna",
   roleConfig = {},
   appServerFactory = ({}) => spawnCodexAppServer({}),
@@ -303,11 +307,14 @@ export async function runWorkSupervisorOnce({
     type: "workspaceWrite",
     writableRoots: [worktreePath]
   }),
+  onEvent = null,
   now = () => new Date()
 } = {}) {
   const roleSettings = resolveWorkRoleConfig(roleConfig);
-  const claimed = await claimOldestWorkTask(worldRoot, { workerTag, owner })
-    || await claimOldestRuntimeWorkTask(worldRoot, { owner });
+  const claimed = taskId
+    ? await claimWorkTaskById(worldRoot, taskId, { workerTag, owner })
+    : await claimOldestWorkTask(worldRoot, { workerTag, owner })
+      || await claimOldestRuntimeWorkTask(worldRoot, { owner });
   if (!claimed) return { claimed: false, status: "idle", queue: await queueDepth(worldRoot) };
 
   const persisted = await readWorkTaskStatus(worldRoot, claimed.task.taskId);
@@ -317,9 +324,20 @@ export async function runWorkSupervisorOnce({
     checkpoint: persisted?.checkpoint || claimed.task.checkpoint,
     workSpec: persisted?.workSpec || claimed.task.workSpec
   });
+  const emit = (type, fields = {}) => emitWorkEvent(onEvent, type, {
+    taskId: task.taskId,
+    title: task.title,
+    priority: task.priority,
+    ...fields
+  }, { now });
   const startedClients = [];
   let managerClient = null;
   let workerClient = null;
+
+  await emit("selected", {
+    reason: task.checkpoint.selectionReason || "selected by priority",
+    status: task.status
+  });
 
   const save = async (checkpointPatch = {}, fields = {}) => {
     task = await writeWorkTaskStatus(worldRoot, {
@@ -333,6 +351,10 @@ export async function runWorkSupervisorOnce({
 
   if (task.status === "accepted" || task.status === "blocked") {
     await ackWorkTaskSuccess(worldRoot, { runtimePath: claimed.path });
+    await emit(task.status, {
+      reason: task.checkpoint.blocker || task.message || task.result,
+      explanation: task.checkpoint.review.explanation
+    });
     return {
       claimed: true,
       taskId: task.taskId,
@@ -398,6 +420,7 @@ export async function runWorkSupervisorOnce({
         retryMax: task.retryMax
       });
     }
+    await emit(status, { reason: message, phase: task.status });
     return {
       claimed: true,
       taskId: task.taskId,
@@ -566,6 +589,12 @@ export async function runWorkSupervisorOnce({
 
   async function doPlanning() {
     const { client, threadId } = await getManager();
+    await emit("planning-started", {
+      role: "manager",
+      model: roleSettings.manager.model,
+      threadId,
+      phase: "planning"
+    });
     const result = await executeTurn("planning", "manager", client, {
       threadId,
       cwd: workspace.worktreePath,
@@ -582,10 +611,26 @@ export async function runWorkSupervisorOnce({
       plan,
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     });
+    await emit("plan-completed", {
+      role: "manager",
+      model: roleSettings.manager.model,
+      threadId,
+      phase: "planning",
+      summary: plan.summary,
+      workOrder: plan.workOrder,
+      risks: plan.risks
+    });
   }
 
   async function doImplementation(correction = "") {
     const { client, threadId } = await getWorker();
+    await emit("implementation-started", {
+      role: "worker",
+      model: roleSettings.worker.model,
+      threadId,
+      phase: "implementation",
+      worktree: workspace.worktreePath
+    });
     const result = await executeTurn("implementation", "worker", client, {
       threadId,
       cwd: workspace.worktreePath,
@@ -613,10 +658,38 @@ export async function runWorkSupervisorOnce({
       },
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     }, { result: report.summary });
+    await emit("implementation-completed", {
+      role: "worker",
+      model: roleSettings.worker.model,
+      threadId,
+      phase: "implementation",
+      summary: report.summary,
+      changedFiles,
+      tests: report.tests,
+      worktree: workspace.worktreePath
+    });
+    await emit("tests-reported", {
+      role: "worker",
+      model: roleSettings.worker.model,
+      tests: report.tests,
+      blockers: report.blockers
+    });
+    await emit("diff-collected", {
+      role: "worker",
+      changedFiles,
+      diff: evidence?.diff || result?.diff || "",
+      diffStat: diffStat(evidence?.diff || result?.diff || "", changedFiles)
+    });
   }
 
   async function doReview() {
     const { client, threadId } = await getManager();
+    await emit("review-started", {
+      role: "manager",
+      model: roleSettings.manager.model,
+      threadId,
+      phase: "review"
+    });
     const result = await executeTurn("review", "manager", client, {
       threadId,
       cwd: workspace.worktreePath,
@@ -633,6 +706,15 @@ export async function runWorkSupervisorOnce({
       review,
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     }, { message: review.explanation, result: review.decision });
+    await emit("review-completed", {
+      role: "manager",
+      model: roleSettings.manager.model,
+      threadId,
+      phase: "review",
+      decision: review.decision,
+      explanation: review.explanation,
+      correction: review.revisionInstructions
+    });
     return review;
   }
 
@@ -644,7 +726,16 @@ export async function runWorkSupervisorOnce({
         lastAction: "blocked by Sol review"
       });
     }
-    if (status === "accepted") await ackWorkTaskSuccess(worldRoot, { runtimePath: claimed.path });
+    if (status === "accepted") {
+      task = await save({ blocker: "" }, { error: "" });
+      await ackWorkTaskSuccess(worldRoot, { runtimePath: claimed.path });
+    }
+    await emit(status, {
+      decision: task.checkpoint.review.decision,
+      explanation: task.checkpoint.review.explanation || message,
+      reason: task.checkpoint.blocker || message,
+      worktree: task.checkpoint.workspace.worktreePath
+    });
     return { claimed: true, taskId: task.taskId, status: task.status, message, queue: await queueDepth(worldRoot) };
   }
 
@@ -676,6 +767,11 @@ export async function runWorkSupervisorOnce({
       if (task.checkpoint.revisionCount >= maxRevisions) {
         return await finish("blocked", "revision limit reached: " + review.explanation);
       }
+      await emit("revision-requested", {
+        phase: "revision",
+        correction: review.revisionInstructions,
+        decision: review.decision
+      });
       if (task.checkpoint.lastAction !== "revision queued") {
         await save({
           revisionCount: task.checkpoint.revisionCount + 1,

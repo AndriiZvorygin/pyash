@@ -176,7 +176,8 @@ work_supervisor.mjs run-next
 work_supervisor.mjs block <task-id> --reason ...
 work_supervisor.mjs resume <task-id> --context ...
 work_supervisor.mjs fail|cancel <task-id> [--reason ...]
-work_supervisor.mjs background [--continuous]
+work_supervisor.mjs background [--continuous] [--watch]
+work_supervisor.mjs report <task-id>
 work_supervisor.mjs health
 ```
 
@@ -184,6 +185,15 @@ Human output is compact; `--json` exposes the complete durable task or
 snapshot. The status includes priority, phase, role models, worktree,
 blocker, last action, and revision count. No command merges, commits, pushes,
 or deletes an accepted worktree.
+
+`--watch` attaches an optional observer to the same supervisor events used by
+the runner. It renders capacity admission, selection, Sol planning, Luna
+implementation, tests and diff evidence, review decisions, revisions, and
+terminal outcomes without exposing JSONL protocol traffic or token deltas.
+The reusable report renderer reads the persisted task/checkpoint/evidence
+artifacts, so `report <task-id>` produces the same report body after the
+original process has exited. This body is intentionally suitable for a later
+email or other notifier.
 
 `program/runtime/work/capacity.mjs` normalizes the installed Codex
 `account/rateLimits/read` response, including its nested `rateLimits.primary`
@@ -242,6 +252,28 @@ The smoke command uses `danger-full-access` only for its disposable fixture
 because this host's nested workspace-write sandbox failed with
 `bwrap: loopback: Failed RTM_NEWADDR`. The normal supervisor default remains
 `workspace-write` with the task worktree as its writable root.
+
+### Proven by real Pyash language task
+
+The watched background command was run against the genuine Pyash task
+`language-ret-register-live` (priority 131), which closed a specific ceremony
+`ret` register-parity gap. The terminal showed capacity admission, task
+selection, a Sol plan, Luna implementation, tests and diff evidence, a Sol
+`REVISE` request, a second Luna implementation, and a final Sol `ACCEPT`.
+The accepted task is retained in its isolated worktree with one revision and
+was not merged or pushed into `master`:
+
+```text
+/home/htaf/pyash/world/holding/work/worktrees/language-ret-register-live
+```
+
+The live run also exposed and fixed a real runner boundary: after selecting a
+task, the runner now passes that task id into the supervisor for an exact
+claim, so an older ready task cannot be substituted between selection and
+execution. The host's nested Codex sandbox also required the explicitly
+opt-in `PYA_CODEX_THREAD_SANDBOX=danger-full-access` and
+`PYA_CODEX_TURN_SANDBOX=dangerFullAccess` settings for this demonstration;
+the default remains unchanged.
 
 ## Options and Trade-offs
 

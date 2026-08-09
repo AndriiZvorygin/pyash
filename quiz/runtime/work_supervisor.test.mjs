@@ -78,7 +78,7 @@ class FakeClient {
   async close() {}
 }
 
-async function runFake(worldRoot, decisions) {
+async function runFake(worldRoot, decisions, { onEvent = null } = {}) {
   const clients = new Map();
   return runWorkSupervisorOnce({
     worldRoot,
@@ -103,9 +103,35 @@ async function runFake(worldRoot, decisions) {
       diff: "diff --git a/hello.txt b/hello.txt\n+hello",
       changedFiles: ["hello.txt"]
     }),
+    onEvent,
     now: () => "2026-08-07T12:01:00.000Z"
   });
 }
+
+test("supervisor observer reports the useful lifecycle without token noise", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-events-");
+  await enqueueWorkTask(worldRoot, task("event-task"));
+  const events = [];
+  const result = await runFake(worldRoot, ["ACCEPT"], {
+    onEvent: async (event) => events.push(event)
+  });
+  assert.equal(result.status, "accepted");
+  assert.deepEqual(events.map((event) => event.type), [
+    "selected",
+    "planning-started",
+    "plan-completed",
+    "implementation-started",
+    "implementation-completed",
+    "tests-reported",
+    "diff-collected",
+    "review-started",
+    "review-completed",
+    "accepted"
+  ]);
+  assert.equal(events.find((event) => event.type === "plan-completed").summary, "small plan");
+  assert.deepEqual(events.find((event) => event.type === "tests-reported").tests, ["node test.mjs passes"]);
+  assert.equal(events.find((event) => event.type === "review-completed").decision, "ACCEPT");
+});
 
 test("supervisor persists Sol plan, Luna evidence, and ACCEPT review", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-accept-");

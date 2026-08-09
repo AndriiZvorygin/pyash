@@ -63,13 +63,16 @@ test("background one-shot records admission and scheduler health", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-runner-");
   await enqueueWorkTask(worldRoot, task("low", 100));
   await enqueueWorkTask(worldRoot, task("high", 200));
+  const events = [];
   const result = await runWorkBackgroundOnce({
     worldRoot,
     owner: "background",
     policy: { enabled: true, reservePercent: 20 },
     capacitySource: async () => ({ state: "available", remainingPercent: 80, usedPercent: 20, resetAt: "" }),
-    supervisor: async ({ worldRoot: root }) => {
+    onEvent: async (event) => events.push(event),
+    supervisor: async ({ worldRoot: root, taskId }) => {
       assert.equal(root, worldRoot);
+      assert.equal(taskId, "high");
       return { claimed: true, taskId: "high", status: "accepted" };
     },
     now: () => "2026-08-07T12:01:00.000Z"
@@ -80,22 +83,27 @@ test("background one-shot records admission and scheduler health", async () => {
   assert.equal(health["last admitted task"], "high");
   assert.equal(health["capacity state"], "available");
   assert.equal(health["last decision"], "capacity above reserve");
+  assert.deepEqual(events.map((event) => event.type), ["capacity"]);
 });
 
 test("continuous runner sleeps between bounded wakes and can defer safely", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-continuous-");
   await enqueueWorkTask(worldRoot, task("one"));
   const sleeps = [];
+  const events = [];
   const results = await runWorkBackgroundContinuous({
     worldRoot,
     owner: "background",
     policy: { enabled: true },
     capacitySource: async () => ({ state: "unknown", remainingPercent: null }),
+    onEvent: async (event) => events.push(event),
     intervalMs: 17,
     maxCycles: 2,
     sleep: async (ms) => sleeps.push(ms)
   });
   assert.equal(results.length, 2);
   assert.deepEqual(results.map((item) => item.reason), ["capacity unknown", "capacity unknown"]);
+  assert.match(results[0].report, /Result: DEFERRED/);
+  assert.deepEqual(events.map((event) => event.type), ["capacity", "deferred", "capacity", "deferred"]);
   assert.deepEqual(sleeps, [17, 17]);
 });

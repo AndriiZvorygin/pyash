@@ -4,6 +4,8 @@ import { readCodexCapacity, admitBackgroundWork, DEFAULT_BACKGROUND_POLICY } fro
 import { appendWorkOutcome } from "./outcome.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
 import { readWorkTaskStatus, updateWorkTaskCheckpoint } from "./status.mjs";
+import { emitWorkEvent } from "./observer.mjs";
+import { renderWorkDeferredReport, renderWorkTaskReport } from "./report.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -43,6 +45,7 @@ export async function runWorkBackgroundOnce({
   foregroundActive = false,
   supervisor = runWorkSupervisorOnce,
   supervisorOptions = {},
+  onEvent = null,
   now = () => new Date()
 } = {}) {
   const wake = nowIso(now);
@@ -57,6 +60,12 @@ export async function runWorkBackgroundOnce({
     hasEligibleWork: eligible.length > 0,
     now: typeof now === "function" ? now() : now
   });
+  await emitWorkEvent(onEvent, "capacity", {
+    capacity,
+    admitted: admission.admit,
+    reason: admission.reason,
+    eligible: eligible.length
+  }, { now });
   const prior = await readWorkSchedulerHealth(worldRoot);
   const baseHealth = {
     ...prior,
@@ -67,6 +76,11 @@ export async function runWorkBackgroundOnce({
     "last decision": admission.reason
   };
   if (!admission.admit) {
+    await emitWorkEvent(onEvent, "deferred", {
+      reason: admission.reason,
+      capacity,
+      eligible: eligible.length
+    }, { now });
     await writeWorkSchedulerHealth(worldRoot, baseHealth);
     if (eligible[0]?.task) await appendWorkOutcome(worldRoot, eligible[0].task, {
       reason: admission.reason,
@@ -78,6 +92,7 @@ export async function runWorkBackgroundOnce({
       reason: admission.reason,
       capacity,
       eligible: eligible.length,
+      report: renderWorkDeferredReport({ result: { reason: admission.reason, eligible: eligible.length }, capacity }),
       queue: await queueDepth(worldRoot)
     };
   }
@@ -96,7 +111,9 @@ export async function runWorkBackgroundOnce({
       ...supervisorOptions,
       worldRoot,
       owner,
-      now
+      taskId: selected.taskId,
+      now,
+      onEvent
     });
   } catch (error) {
     result = {
@@ -120,7 +137,14 @@ export async function runWorkBackgroundOnce({
     capacity,
     action: "admitted"
   });
-  return { admitted: true, reason: admission.reason, capacity, selected: selected.taskId, ...result };
+  return {
+    admitted: true,
+    reason: admission.reason,
+    capacity,
+    selected: selected.taskId,
+    report: renderWorkTaskReport(finalTask || selected),
+    ...result
+  };
 }
 
 export async function runWorkBackgroundContinuous({
