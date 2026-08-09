@@ -230,6 +230,8 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const cloneSentence = (step) => cloneSentenceValue(step);
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
   const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
+  const defTargetName = memory.allRemember()[defEntry.index]?.to?.name;
+  const callerTarget = to?.name ? memory.remember(to.name) : null;
   let lastResult;
   let updatedTarget = null;
   let evoke = sentence;
@@ -242,6 +244,9 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   state.currentEvoke = evokeSeed;
   state.executingBody = true;
   memory.pushMemoryContext({ seedFromCurrent: true });
+  if (defTargetName && callerTarget) {
+    memory.doRemember({ ...cloneSentenceValue(callerTarget), su: { name: defTargetName } });
+  }
   state.currentEvokeRef = evokeSeed;
   state.lastCondition = true;
 
