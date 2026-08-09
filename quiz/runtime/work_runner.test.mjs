@@ -9,8 +9,9 @@ import {
   normalizeCodexCapacity,
   admitBackgroundWork
 } from "../../program/runtime/work/capacity.mjs";
-import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
+import { claimOldestWorkTask, enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { readWorkSchedulerHealth } from "../../program/runtime/work/health.mjs";
+import { transitionWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import { runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
 
 async function makeWorldRoot(prefix) {
@@ -168,6 +169,60 @@ test("background one-shot records admission and scheduler health", async () => {
   assert.equal(health["capacity state"], "available");
   assert.equal(health["last decision"], "weekly pacing headroom");
   assert.deepEqual(events.map((event) => event.type), ["capacity"]);
+});
+
+test("background baseline sync skips active work and runs before a new task", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-baseline-");
+  const capacitySource = async () => ({
+    state: "available",
+    remainingPercent: 80,
+    usedPercent: 20,
+    weekly: {
+      identified: true,
+      state: "available",
+      remainingPercent: 80,
+      usedPercent: 20,
+      windowStartAt: "2026-08-03T12:00:00.000Z",
+      resetAt: "2026-08-10T12:00:00.000Z"
+    }
+  });
+  await enqueueWorkTask(worldRoot, task("active-task"));
+  await claimOldestWorkTask(worldRoot, { workerTag: "test" });
+  await transitionWorkTaskStatus(worldRoot, "active-task", "planning");
+  await transitionWorkTaskStatus(worldRoot, "active-task", "implementing");
+  let syncCalls = 0;
+  const active = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource,
+    baselineSync: async () => {
+      syncCalls += 1;
+      return { status: "synchronized", commit: "unexpected" };
+    },
+    supervisor: async () => ({ claimed: true, taskId: "active-task", status: "implementing" }),
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(active.admitted, true);
+  assert.equal(active.baseline.status, "skipped-active-task");
+  assert.equal(syncCalls, 0);
+
+  const nextWorld = await makeWorldRoot("pyash-work-baseline-next-");
+  await enqueueWorkTask(nextWorld, task("next-task"));
+  const next = await runWorkBackgroundOnce({
+    worldRoot: nextWorld,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource,
+    baselineSync: async () => {
+      syncCalls += 1;
+      return { status: "synchronized", commit: "baseline-2" };
+    },
+    supervisor: async () => ({ claimed: true, taskId: "next-task", status: "accepted" }),
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(next.baseline.status, "synchronized");
+  assert.equal(syncCalls, 1);
 });
 
 test("continuous runner sleeps between bounded wakes and can defer safely", async () => {

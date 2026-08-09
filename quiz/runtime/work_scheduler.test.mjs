@@ -7,7 +7,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
-import { integrateAcceptedWork } from "../../program/runtime/work/integration.mjs";
+import { integrateAcceptedWork, synchronizeAutomationBranch } from "../../program/runtime/work/integration.mjs";
 import { appendWorkSchedulerEvent } from "../../program/runtime/work/history.mjs";
 import { buildWorkDailyDigest } from "../../program/runtime/work/digest.mjs";
 import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
@@ -47,7 +47,7 @@ test("backlog curation creates bounded TODO-sourced substantial packages without
   assert.match(stored[0].contextText, /Why now/u);
 });
 
-test("accepted work fast-forwards automation branch and blocks a stale base", async () => {
+test("accepted work integrates onto a synchronized automation baseline", async () => {
   const { root } = await world("pyash-work-integration-");
   const repositoryRoot = path.join(root, "repo");
   const worktreePath = path.join(root, "task");
@@ -64,6 +64,16 @@ test("accepted work fast-forwards automation branch and blocks a stale base", as
   await fs.writeFile(path.join(worktreePath, "README.md"), "automation\n");
   await git(worktreePath, "add", "README.md");
   await git(worktreePath, "commit", "-qm", "automation change");
+  await fs.writeFile(path.join(repositoryRoot, "HUMAN.md"), "human\n");
+  await git(repositoryRoot, "add", "HUMAN.md");
+  await git(repositoryRoot, "commit", "-qm", "human baseline change");
+  const synced = await synchronizeAutomationBranch({
+    repositoryRoot,
+    branch: "automation/roadmap",
+    masterRef: "master",
+    now: "2026-08-09T04:30:00.000Z"
+  });
+  assert.equal(synced.status, "synchronized");
   const integrated = await integrateAcceptedWork({
     repositoryRoot,
     worktreePath,
@@ -72,12 +82,39 @@ test("accepted work fast-forwards automation branch and blocks a stale base", as
     now: "2026-08-09T05:00:00.000Z"
   });
   assert.equal(integrated.status, "integrated");
+  assert.equal(integrated.strategy, "cherry-pick onto synchronized branch");
   assert.notEqual(integrated.commit, baseRevision);
-  assert.equal((await git(repositoryRoot, "rev-parse", "refs/heads/automation/roadmap")).stdout.trim(), integrated.commit);
+  assert.equal((await git(repositoryRoot, "rev-parse", "refs/heads/automation/roadmap")).stdout.trim(), integrated.branchCommit);
+  assert.notEqual(integrated.branchCommit, synced.commit);
+  assert.equal((await git(repositoryRoot, "show", "--format=%s", "--no-patch", integrated.branchCommit)).stdout.trim(), "automation change");
+});
+
+test("conflicting accepted work remains blocked instead of improvising a merge", async () => {
+  const { root } = await world("pyash-work-integration-conflict-");
+  const repositoryRoot = path.join(root, "repo");
+  const worktreePath = path.join(root, "task");
+  await fs.mkdir(repositoryRoot, { recursive: true });
+  await git(repositoryRoot, "init", "-q");
+  await git(repositoryRoot, "config", "user.email", "test@example.com");
+  await git(repositoryRoot, "config", "user.name", "Pyash Test");
+  await fs.writeFile(path.join(repositoryRoot, "README.md"), "base\n");
+  await git(repositoryRoot, "add", "README.md");
+  await git(repositoryRoot, "commit", "-qm", "base");
+  const baseRevision = (await git(repositoryRoot, "rev-parse", "HEAD")).stdout.trim();
+  await git(repositoryRoot, "branch", "automation/roadmap", baseRevision);
+  await git(repositoryRoot, "worktree", "add", "--detach", worktreePath, baseRevision);
+  await fs.writeFile(path.join(worktreePath, "README.md"), "automation\n");
+  await git(worktreePath, "add", "README.md");
+  await git(worktreePath, "commit", "-qm", "conflicting automation change");
+  await fs.writeFile(path.join(repositoryRoot, "README.md"), "human\n");
+  await git(repositoryRoot, "add", "README.md");
+  await git(repositoryRoot, "commit", "-qm", "human conflicting change");
+  await synchronizeAutomationBranch({ repositoryRoot, branch: "automation/roadmap", masterRef: "master" });
   await assert.rejects(
     integrateAcceptedWork({ repositoryRoot, worktreePath, baseRevision, branch: "automation/roadmap" }),
-    /advanced from task base/u
+    /cherry-pick|conflict|patch failed/iu
   );
+  assert.equal((await git(repositoryRoot, "rev-parse", "refs/heads/automation/roadmap")).stdout.trim(), (await git(repositoryRoot, "rev-parse", "master")).stdout.trim());
 });
 
 test("daily digest aggregates scheduler events and durable task progress", async () => {
@@ -132,6 +169,9 @@ test("daily digest aggregates scheduler events and durable task progress", async
   assert.match(digest.report, /Sol plan: Plan the tranche\./u);
   assert.match(digest.report, /Sol review: ACCEPT Evidence is sufficient\./u);
   assert.match(digest.report, /Admitted: 1/u);
+  assert.match(digest.report, /ROADMAP/u);
+  assert.match(digest.report, /Complete the higher-level translation parity tranche/u);
+  assert.match(digest.report, /Add HNUC compositional-case validation/u);
   assert.match(digest.report, /Digest status:/u);
   assert.match(digest.subject, /Pyash needs direction:/u);
 });
