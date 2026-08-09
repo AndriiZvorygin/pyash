@@ -175,6 +175,8 @@ function fieldEntries(item) {
     ["task id", item.taskId],
     ["title", item.title],
     ["source", item.source],
+    ["source path", item.sourcePath],
+    ["source anchor", item.sourceAnchor],
     ["why matters", item.whyMatters],
     ["dependencies", listField(item.dependencies)],
     ["intended scope", item.scope],
@@ -259,6 +261,8 @@ function packageFromMap(map) {
     taskId: mapValue(map, "task id"),
     title: mapValue(map, "title"),
     source: mapValue(map, "source"),
+    sourcePath: mapValue(map, "source path"),
+    sourceAnchor: mapValue(map, "source anchor"),
     whyMatters: mapValue(map, "why matters"),
     dependencies: splitList(mapValue(map, "dependencies")),
     scope: mapValue(map, "intended scope"),
@@ -298,7 +302,10 @@ export function renderAutonomousRoadmapMarkdown(roadmap = {}) {
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...(roadmap.needsDecision || [])
     ]],
-    ["Complete", [...(roadmap.completed || [])]]
+    ["Complete", [
+      ...(roadmap.packages || []).filter((item) => item.status === "COMPLETE"),
+      ...(roadmap.completed || [])
+    ]]
   ];
   const output = ["# Pyash Autonomous Roadmap", "", `Generated: ${roadmap.generatedAt || "unknown"}`, `Refresh needed: ${roadmap.refreshNeeded ? "yes" : "no"}`, `Refresh reason: ${roadmap.refreshReason || "roadmap has enough credible packages"}`, ""];
   for (const [heading, items] of sections) {
@@ -333,7 +340,10 @@ export function renderAutonomousRoadmapReport(roadmap = {}) {
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...(roadmap.needsDecision || [])
     ]],
-    ["COMPLETE", roadmap.completed || []]
+    ["COMPLETE", [
+      ...(roadmap.packages || []).filter((item) => item.status === "COMPLETE"),
+      ...(roadmap.completed || [])
+    ]]
   ];
   const lines = [
     "PYASH AUTONOMOUS ROADMAP",
@@ -438,7 +448,9 @@ export async function buildAutonomousRoadmap({
 } = {}) {
   const allTasks = tasks || await listWorkTasks(worldRoot, { includeTerminal: true });
   const previous = await readAutonomousRoadmap(worldRoot);
-  const packages = ROADMAP_PACKAGES.map((item) => normalizePackage(item, taskMatch(item, allTasks)));
+  const persistedCatalog = previous?.packages?.filter((item) => item.taskId && item.sourcePath && item.sourceAnchor) || [];
+  const catalog = persistedCatalog.length >= 5 ? persistedCatalog : ROADMAP_PACKAGES;
+  const packages = catalog.map((item) => normalizePackage(item, taskMatch(item, allTasks)));
   const completed = COMPLETED_PACKAGES.map((item) => normalizePackage(item, taskMatch(item, allTasks)));
   const needsDecision = allTasks
     .filter((task) => task.status === "blocked")
