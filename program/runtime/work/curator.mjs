@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { addWorkTask, listWorkTasks } from "./operator.mjs";
+import { autonomousRoadmapPackages } from "./roadmap.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -13,56 +14,25 @@ function iso(now) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : new Date().toISOString();
 }
 
-const CANDIDATES = Object.freeze([
-  {
-    taskId: "roadmap-translation-parity-tranche",
-    title: "Complete the higher-level translation parity tranche",
-    anchor: "Higher-level translation paths parity",
-    priority: 125,
-    prompt: "Complete one bounded higher-level translation parity tranche across the current interpreter and JavaScript paths, with the corresponding golden and regression coverage.",
-    acceptance: "The selected translation capability works end-to-end in the interpreter and JavaScript backend, relevant parity tests and goldens pass, and the implementation boundary is documented.",
-    whyNow: "This is the highest non-external parity item in the current TODO and is a coherent capability slice rather than a micro-fix."
-  },
-  {
-    taskId: "roadmap-mind-reply-envelope-streaming",
-    title: "Complete mind reply envelopes and streaming parity",
-    anchor: "Mind: plus streaming path and richer reply envelopes",
-    priority: 120,
-    prompt: "Implement the next coherent mind capability slice: richer reply envelopes and the plus streaming path across the current supported runtime surfaces, with durable tests and documentation alignment.",
-    acceptance: "Mind replies preserve assistant text, metadata, and streaming behavior through the supported runtime paths, focused tests cover success and failure envelopes, and no fixture-only path is required.",
-    whyNow: "Mind integration is an active language/runtime milestone and unlocks more useful Pyash-first agent workflows."
-  },
-  {
-    taskId: "roadmap-ceremony-error-propagation",
-    title: "Complete ceremony and sandpit error propagation",
-    anchor: "Add error-handling paths for ceremonies/sandpits",
-    priority: 115,
-    prompt: "Implement one coherent ceremony and sandpit error-propagation slice using ret with be error, preserving surfaced main-memory/results behavior and parity coverage.",
-    acceptance: "Ceremony and sandpit errors become truthful Pyash error sentences, propagate through interpreter and supported compiled paths, and focused regression tests cover nested and returned errors.",
-    whyNow: "This closes a language-runtime correctness gap that affects reliable autonomous work and is explicitly called out in the current TODO."
-  }
-]);
-
 function sourceKey(candidate) {
-  return `documentation/todo.md:${candidate.anchor}`;
+  return `${candidate.sourcePath}:${candidate.sourceAnchor}`;
 }
 
-async function todoSource(repositoryRoot) {
-  const filename = path.join(repositoryRoot, "documentation", "todo.md");
+async function sourceText(repositoryRoot, candidate) {
   try {
-    return await fs.readFile(filename, "utf8");
+    return await fs.readFile(path.join(repositoryRoot, candidate.sourcePath), "utf8");
   } catch {
     return "";
   }
 }
 
 function sourceRecord(candidate, source) {
-  const offset = source.indexOf(candidate.anchor);
+  const offset = source.indexOf(candidate.sourceAnchor);
   const line = offset < 0 ? 0 : source.slice(0, offset).split("\n").length;
   return {
-    kind: "todo",
-    path: "documentation/todo.md",
-    anchor: candidate.anchor,
+    kind: candidate.sourcePath.includes("todo") ? "todo" : "roadmap",
+    path: candidate.sourcePath,
+    anchor: candidate.sourceAnchor,
     line,
     key: sourceKey(candidate),
     whyNow: candidate.whyNow
@@ -83,18 +53,20 @@ export async function curateWorkBacklog({
   if (active.length >= Math.max(0, Number(threshold) || 0)) {
     return { created: [], proposed: [], needsDirection: false, reason: "backlog threshold satisfied", active: active.length };
   }
-  const source = await todoSource(repositoryRoot);
+  const candidates = autonomousRoadmapPackages();
+  const sources = new Map();
+  for (const candidate of candidates) sources.set(candidate.taskId, await sourceText(repositoryRoot, candidate));
   const known = new Set(tasks.flatMap((task) => [
     task.taskId,
     task.workSpec?.provenance?.key
   ].filter(Boolean)));
-  const proposed = CANDIDATES
-    .filter((candidate) => source.includes(candidate.anchor))
+  const proposed = candidates
+    .filter((candidate) => sources.get(candidate.taskId)?.includes(candidate.sourceAnchor))
     .filter((candidate) => !known.has(candidate.taskId) && !known.has(sourceKey(candidate)))
     .slice(0, Math.max(0, Number(maxTasks) || 0))
     .map((candidate) => ({
       ...candidate,
-      provenance: sourceRecord(candidate, source)
+      provenance: sourceRecord(candidate, sources.get(candidate.taskId) || "")
     }));
   if (dryRun) {
     return {
@@ -121,7 +93,12 @@ export async function curateWorkBacklog({
       workSpec: {
         granularity: "substantial",
         pyashFirst: true,
-        provenance: candidate.provenance
+        provenance: candidate.provenance,
+        packageId: candidate.taskId,
+        whyMatters: candidate.whyMatters,
+        dependencies: candidate.dependencies,
+        intendedScope: candidate.scope,
+        nonGoals: candidate.nonGoals
       }
     });
     created.push(candidate.taskId);
@@ -138,6 +115,5 @@ export async function curateWorkBacklog({
 }
 
 export function curatedCandidates() {
-  return CANDIDATES.map((candidate) => ({ ...candidate }));
+  return autonomousRoadmapPackages();
 }
-

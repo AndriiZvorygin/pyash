@@ -57,6 +57,46 @@ Logs are:
 `/etc/logrotate.d/pyash-background` rotates them weekly, keeps eight compressed
 rotations, and leaves missing or empty logs alone.
 
+## Autonomous roadmap
+
+The durable roadmap is derived from the work queue and current repository planning inputs. Its canonical artifact is:
+
+```text
+world/holding/work/artifacts/autonomous-roadmap.pya
+```
+
+The generated review copy is `autonomous-roadmap.md`. Inspect it without using Codex:
+
+```bash
+node command/work_supervisor.mjs roadmap
+node command/work_supervisor.mjs roadmap --json
+```
+
+Packages are grouped as `ACTIVE`, `QUEUED`, `CANDIDATE`, `BLOCKED / NEEDS DECISION`, or `COMPLETE`. The active package is enriched from its durable task checkpoint, including Sol's plan, Luna's pass count, worktree, commit, and blocker. The catalog is intentionally limited to substantial roadmap increments.
+
+Sol roadmap review is explicit and occasional, not part of every hourly wake:
+
+```bash
+node command/work_supervisor.mjs roadmap refresh
+node command/work_supervisor.mjs roadmap refresh --if-needed
+```
+
+Refresh is appropriate when fewer than three credible candidates remain, dependencies materially change, a blocker requires architecture input, or the roadmap/TODO changes materially. A refresh must return five to eight structured packages before replacing the durable package catalog; malformed or undersized output is rejected without discarding the previous roadmap.
+
+## Automation baseline policy
+
+`master` remains human-controlled. Before a new autonomous task is based, the runner synchronizes `automation/roadmap` with local `master`, preserving both histories. An active task is never rebased or restarted; its existing worktree and checkpoint continue untouched. If its accepted commit is based on the previous automation tip, integration safely cherry-picks it onto the synchronized branch. Merge or cherry-pick conflicts block the task for human attention.
+
+Inspect or perform synchronization explicitly with:
+
+```bash
+node command/work_supervisor.mjs roadmap sync-baseline
+```
+
+The hourly runner skips baseline synchronization while a substantial task is already active and performs it before starting the next task. Set `PYA_AUTOMATION_PUSH_BASELINE=truth` in the private environment when synchronized automation-branch tips should also be pushed to both configured remotes.
+
+The daily digest includes a compact roadmap section showing active work, the next queued packages, later candidates, and decisions requiring human input.
+
 ## Verify and disable
 
 The doctor checks permissions, executables, Codex weekly capacity, Docker
