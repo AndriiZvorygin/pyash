@@ -78,9 +78,9 @@ class FakeClient {
   async close() {}
 }
 
-async function runFake(worldRoot, decisions, { onEvent = null } = {}) {
+async function runFake(worldRoot, decisions, { onEvent = null, onClients = null, turnTimeoutMs } = {}) {
   const clients = new Map();
-  return runWorkSupervisorOnce({
+  const result = await runWorkSupervisorOnce({
     worldRoot,
     repositoryRoot: "/repo",
     owner: "background",
@@ -104,9 +104,12 @@ async function runFake(worldRoot, decisions, { onEvent = null } = {}) {
       changedFiles: ["hello.txt"],
       revision: "task-revision"
     }),
+    ...(turnTimeoutMs ? { turnTimeoutMs } : {}),
     onEvent,
     now: () => "2026-08-07T12:01:00.000Z"
   });
+  onClients?.(clients);
+  return result;
 }
 
 test("supervisor observer reports the useful lifecycle without token noise", async () => {
@@ -132,6 +135,24 @@ test("supervisor observer reports the useful lifecycle without token noise", asy
   assert.equal(events.find((event) => event.type === "plan-completed").summary, "small plan");
   assert.deepEqual(events.find((event) => event.type === "tests-reported").tests, ["node test.mjs passes"]);
   assert.equal(events.find((event) => event.type === "review-completed").decision, "ACCEPT");
+});
+
+test("supervisor passes the configured Codex turn timeout to every role", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-timeout-");
+  await enqueueWorkTask(worldRoot, task("timeout-task"));
+  const timeouts = [];
+  const result = await runFake(worldRoot, ["ACCEPT"], {
+    turnTimeoutMs: 900000,
+    onClients: (clients) => {
+      for (const client of clients.values()) {
+        timeouts.push(...client.calls
+          .filter((call) => call.method === "runTurn")
+          .map((call) => call.options.timeoutMs));
+      }
+    }
+  });
+  assert.equal(result.status, "accepted");
+  assert.deepEqual(timeouts, [900000, 900000, 900000]);
 });
 
 test("background supervisor checkpoints Luna and reuses the same thread before review", async () => {

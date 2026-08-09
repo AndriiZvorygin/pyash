@@ -68,9 +68,11 @@ function positive(valueText, fallback) {
 function codexSandboxOptions(env = process.env) {
   const threadSandbox = String(env.PYA_CODEX_THREAD_SANDBOX || "").trim();
   const turnSandbox = String(env.PYA_CODEX_TURN_SANDBOX || "").trim();
+  const timeoutMs = Number(env.PYA_CODEX_TURN_TIMEOUT_MS || "");
   return {
     ...(threadSandbox ? { threadSandbox } : {}),
-    ...(turnSandbox ? { turnSandboxPolicy: { type: turnSandbox } } : {})
+    ...(turnSandbox ? { turnSandboxPolicy: { type: turnSandbox } } : {}),
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { turnTimeoutMs: Math.floor(timeoutMs) } : {})
   };
 }
 
