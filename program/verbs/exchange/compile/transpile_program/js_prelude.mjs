@@ -4,6 +4,7 @@ import { mindToolHelperSource } from "../js/mind_tool_helper.mjs";
 import { csvRuntimeHelper, exchangeRuntimeHelper, jsonRuntimeHelper, newspaperRuntimeHelper, yamlRuntimeHelper, yamlStringifyHelper } from "../js/runtime_helpers.mjs";
 import { CSV_PARSE_RUNTIME_URL, YAML_RUNTIME_URL } from "../constants.mjs";
 import { boolHelperSource } from "./js_helpers/bool_helper.mjs";
+import { ceremonyHelperSource } from "./js_helpers/ceremony_helper.mjs";
 import { commandHelperSource } from "./js_helpers/command_helper.mjs";
 import { csvMapHelperSource } from "./js_helpers/csv_map_helper.mjs";
 import { dateHelperSource } from "./js_helpers/date_helper.mjs";
@@ -48,6 +49,9 @@ export function applyJsPrelude(lines, {
   }
   if (jsHelpers.usesBoolHelper) {
     prelude.push(boolHelperSource());
+  }
+  if (jsHelpers.usesCeremony) {
+    prelude.push(ceremonyHelperSource());
   }
   if (jsHelpers.usesDateMath) {
     prelude.push(dateHelperSource());

@@ -38,19 +38,27 @@ function handleRetSentence(sentence, { lang, sentenceArg, locals, declared, loca
   if (sourceName) {
     const sourceVar = sanitizeName(sourceName);
     const kind = inferRetKind({ name: sourceName }, { localsTypes, declaredTypes });
+    if (lang !== "c") {
+      return `sentence.ob = ${sourceVar}?.ob ?? ${sourceVar};\nreturn sentence;`;
+    }
     return wrapRetValue(sourceVar, kind, lang);
   }
   if (sentence.ob?.genitive) {
     const expr = pathFromGenitive(sentence.ob.genitive, sentenceArg, { locals, declared, allowCGlobals: lang === "c" });
     if (expr) {
       const kind = inferRetKind(sentence.ob, { localsTypes, declaredTypes });
+      if (lang !== "c") {
+        return `sentence.ob = ${expr};\nreturn sentence;`;
+      }
       return wrapRetValue(expr, kind, lang);
     }
   }
   if (sentence.ob?.num !== undefined) {
+    if (lang !== "c") return `sentence.ob = { num: ${Number(sentence.ob.num) || 0} };\nreturn sentence;`;
     return wrapRetValue(`${Number(sentence.ob.num) || 0}`, "number", lang);
   }
   if (typeof sentence.ob?.text === "string") {
+    if (lang !== "c") return `sentence.ob = { text: ${JSON.stringify(sentence.ob.text)} };\nreturn sentence;`;
     return wrapRetValue(JSON.stringify(sentence.ob.text), "text", lang);
   }
   if (lang === "c") return "return pya_value_from_this();";

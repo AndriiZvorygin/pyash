@@ -72,6 +72,14 @@ This document summarizes the current core language model used by the interpreter
 - If a ceremony body reads a sequence register via `this`, include that case in the ceremony definition to declare the dependency.
 - If a ceremony name is defined more than once, the later definition takes priority (a compile-time warning may be emitted).
 
+### Interpreter/JavaScript parity boundary
+
+The current higher-level parity tranche supports top-level, statically defined ceremonies whose signature contains scalar `ob num` and/or typed `to name <type>` cases. Multi-word ceremony names are preserved in Pyash and become deterministic signature-derived JavaScript identifiers. The compiler uses the same signature words registered by the interpreter; it does not dispatch by surface name alone.
+
+For the supported subset, a generated ceremony receives a fresh sentence call frame. `this` genitives read that frame, body sentences run in source order, and `ret` copies only the returned payload into the frame's `ob`. The caller then applies that payload to its addressed target while preserving the target subject and existing value shape. Generated calls validate the same canonical signature and raise `signature inconsistency` when an argument shape differs.
+
+This tranche does not cover nested or dynamically defined ceremonies, recursion, captured scopes, imported/cross-file ceremony bodies, additional control-flow lowering, or C parity. Those remain separate bounded work.
+
 ## Loops
 - `fromindex <start> [toindex <bound>] be <ceremony> do` runs a loop:
   - JS uses `runLoop(sentence, fn)` helper (stop-when-equal): after each body run, the supervisor stops when `fromindex === toindex` (or when `fromindex === 0` if `toindex` is absent). In the common forward form, `fromindex num 0 toindex num 3` runs indices `0, 1, 2` and stops before `3`.
@@ -124,3 +132,4 @@ The thrown exception message mirrors `ob.text` when present.
     su name plus two be ceremony prah
     ```
 - FizzBuzz (compiled to JS): see `examples/pyash/compile-fizzbuzz.txt`.
+- Typed ceremony parity golden: see `examples/pyash/compile-ceremony-parity.pya` and `quiz/compile_ceremony_parity.test.mjs`.

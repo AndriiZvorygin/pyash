@@ -1,0 +1,13 @@
+exists su name first ob num 3 be number ya
+exists su name second ob num 8 be number ya
+
+su name plus two ob num 0 to name num input be ceremony def
+exists su name input ob num of ob of this be number ya
+ob num 2 to name input be plus do
+this ob name input ret
+su name plus two be ceremony prah
+
+ob num 3 to name num first be plus two do
+ob num 8 to name num second be plus two do
+ob name first be write do
+ob name second be write do
