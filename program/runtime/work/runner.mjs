@@ -23,6 +23,8 @@ function nowIso(now) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : String(value);
 }
 
+const ACTIVE_WORK_STATUSES = new Set(["planning", "implementing", "reviewing", "revision", "usage-limited"]);
+
 async function eligibleWork(worldRoot, owner) {
   const [input, runtime] = await Promise.all([
     listQueuedWorkTasks(worldRoot, { owner }),
@@ -37,6 +39,8 @@ async function eligibleWork(worldRoot, owner) {
   return candidates
     .filter((entry) => !["accepted", "failed", "blocked"].includes(entry.task.status))
     .sort((left, right) => {
+      const lifecycle = Number(!ACTIVE_WORK_STATUSES.has(left.task.status)) - Number(!ACTIVE_WORK_STATUSES.has(right.task.status));
+      if (lifecycle) return lifecycle;
       const priority = Number(right.task.priority) - Number(left.task.priority);
       if (priority) return priority;
       const queued = Date.parse(left.task.queuedAt) - Date.parse(right.task.queuedAt);
@@ -209,7 +213,7 @@ export async function runWorkBackgroundOnce({
       curation
     };
   }
-  const activeRuntime = eligible.some(({ task }) => ["planning", "implementing", "reviewing", "revision", "usage-limited"].includes(task.status));
+  const activeRuntime = eligible.some(({ task }) => ACTIVE_WORK_STATUSES.has(task.status));
   let baseline = { status: baselineSync ? (activeRuntime ? "skipped-active-task" : "pending") : "not-configured" };
   if (baselineSync && !activeRuntime) {
     try {
