@@ -49,6 +49,23 @@ async function runInterpreter(source) {
   };
 }
 
+async function runSource(source) {
+  forget();
+  for (const raw of splitSentences(source)) {
+    if (!raw.trim()) continue;
+    await interpret(parse(raw));
+  }
+  return remember("result");
+}
+
+async function compileSource(source) {
+  forget();
+  const result = await interpret(parse(
+    `from text quoted.pyash.${source}.pyash.quoted to state javascript to text output be compile do`
+  ));
+  return unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? result?.value?.value?.text ?? "", "javascript");
+}
+
 async function compileToJavaScript(sourcePath) {
   forget();
   const result = await interpret(parse(
@@ -115,4 +132,28 @@ test("typed ceremony rejects an incompatible argument in both paths", async () =
     javascriptError = errorIdentity(error);
   }
   assert.deepEqual(javascriptError, interpreterError);
+});
+
+test("nested typed ceremony initializes an undeclared local target in both paths", async () => {
+  const source = [
+    "exists su name result ob num 0 be number ya",
+    "su name plus two ob num 0 to name num input be ceremony def",
+    "exists su name input ob num of ob of this be number ya",
+    "ob num 1 to name input be plus do",
+    "this ob name input ret",
+    "su name plus two be ceremony prah",
+    "su name plus three ob num 0 to name num input be ceremony def",
+    "ob num 4 to name num local be plus two do",
+    "this ob name local ret",
+    "su name plus three be ceremony prah",
+    "ob num 9 to name result be plus three do"
+  ].join("\n");
+
+  const interpreted = await runSource(source);
+  const js = await compileSource(source);
+  const context = { console: { log() {} } };
+  vm.runInNewContext(js, context);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(context.result?.ob)), interpreted?.ob);
+  assert.equal(context.result?.su?.name, "result");
 });
