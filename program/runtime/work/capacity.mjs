@@ -210,9 +210,9 @@ export function admitBackgroundWork({
     deadbandPercent: settings.pacingDeadbandPercent,
     now
   });
-  if (settings.enabled !== true) return { admit: false, reason: "background disabled" };
-  if (foregroundActive) return { admit: false, reason: "active task conflict" };
-  if (!hasEligibleWork) return { admit: false, reason: "no eligible work" };
+  if (settings.enabled !== true) return { admit: false, reason: "background disabled", pacing };
+  if (foregroundActive) return { admit: false, reason: "active task conflict", pacing };
+  if (!hasEligibleWork) return { admit: false, reason: "no eligible work", pacing };
   if (pacing.state === "usage-limited") return { admit: false, reason: "usage limited", pacing };
   if (pacing.state !== "available") return { admit: false, reason: "capacity unknown", pacing };
   if (pacing.actualRemainingPercent <= pacing.reservePercent) {
