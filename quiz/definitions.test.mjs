@@ -148,6 +148,20 @@ test("ceremony def headers declare signature cases/types (new signature style)",
   assert.equal(bucket.ob.num, 2);
 });
 
-test.todo("ceremony with ret returns updated evoke registers to caller names");
+test("ceremony with ret returns updated evoke registers to caller names", async () => {
+  forget();
+
+  await run("exists su name caller ob num 5 be number ya");
+  await run("su name relay to name implementation be ceremony def");
+  await run("ob num 2 to name implementation be plus do");
+  await run("ob name implementation ret");
+  await run("su name relay be ceremony prah");
+
+  await run("to name caller be relay do");
+
+  const caller = remember("caller");
+  assert.equal(caller?.ob?.num, 7, "ret should return the caller value updated by the local binding");
+  assert.equal(remember("implementation"), undefined, "local ceremony binding should not leak to main memory");
+});
 
 test.todo("ceremony ret returns multiple registers (ob/fromindex/toindex) to caller names");
