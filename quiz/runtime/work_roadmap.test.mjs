@@ -51,9 +51,11 @@ test("autonomous roadmap derives substantial package status from durable work st
 test("roadmap refresh uses an injected Sol client and persists a bounded proposal", async () => {
   const { worldRoot, repositoryRoot } = await world("pyash-roadmap-refresh-");
   const packages = autonomousRoadmapPackages().slice(0, 5).map((item, index) => ({
-    taskId: item.taskId,
+    taskId: `architect-package-${index + 1}`,
     title: item.title,
     source: item.sourceAnchor,
+    sourcePath: item.sourcePath,
+    sourceAnchor: item.sourceAnchor,
     whyMatters: item.whyMatters,
     dependencies: item.dependencies,
     scope: item.scope,
@@ -88,6 +90,11 @@ test("roadmap refresh uses an injected Sol client and persists a bounded proposa
   assert.equal(result.roadmap.architect.threadId, "roadmap-sol-thread");
   assert.equal(result.roadmap.packages.length, 5);
   assert.match(await fs.readFile(result.roadmap.paths.pya, "utf8"), /last sol summary/iu);
+  const rebuilt = await buildAutonomousRoadmap({ worldRoot, repositoryRoot });
+  assert.deepEqual(
+    rebuilt.packages.map((item) => item.taskId),
+    result.roadmap.packages.map((item) => item.taskId)
+  );
 });
 
 test("roadmap progress preserves active Luna checkpoint evidence", async () => {
