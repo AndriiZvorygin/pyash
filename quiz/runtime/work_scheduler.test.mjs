@@ -129,6 +129,8 @@ test("daily digest aggregates scheduler events and durable task progress", async
     now: "2026-08-09T23:00:00.000Z"
   });
   assert.match(digest.report, /Complete a substantial parity tranche/u);
+  assert.match(digest.report, /Sol plan: Plan the tranche\./u);
+  assert.match(digest.report, /Sol review: ACCEPT Evidence is sufficient\./u);
   assert.match(digest.report, /Admitted: 1/u);
   assert.match(digest.report, /Digest status:/u);
   assert.match(digest.subject, /Pyash needs direction:/u);

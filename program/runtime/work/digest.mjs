@@ -82,9 +82,23 @@ function taskTouched(task, start, end) {
 }
 
 function compactReport(task) {
-  const report = renderWorkTaskReport(task).split("\n");
-  const keep = report.filter((line) => /^(Task:|Task ID:|Result:|Sol plan:|Luna implementation:|Sol review:|Diff:|Automation branch:|Integration:|Commit:|Worktree:)/u.test(line));
-  return keep.join("\n");
+  const checkpoint = task.checkpoint || {};
+  const excerpt = (value, limit = 700) => {
+    const body = text(value).replace(/\s+/gu, " ");
+    return body.length <= limit ? body : `${body.slice(0, limit - 3)}...`;
+  };
+  return [
+    `Task: ${task.title}`,
+    `Task ID: ${task.taskId}`,
+    `Result: ${String(task.status).toUpperCase()}`,
+    `Sol plan: ${excerpt(checkpoint.plan?.summary || checkpoint.plan?.workOrder) || "(not recorded)"}`,
+    `Luna implementation: ${excerpt(checkpoint.implementation?.summary) || "(not recorded)"}`,
+    `Tests: ${(checkpoint.implementation?.tests || []).map((test) => excerpt(test, 280)).join("; ") || "(not recorded)"}`,
+    `Sol review: ${checkpoint.review?.decision || "(not recorded)"} ${excerpt(checkpoint.review?.explanation)}`,
+    `Diff: ${renderWorkTaskReport(task).match(/^Diff: .*$/mu)?.[0]?.replace(/^Diff:\s*/u, "") || "not recorded"}`,
+    checkpoint.workspace?.worktreePath ? `Worktree: ${checkpoint.workspace.worktreePath}` : "",
+    checkpoint.implementation?.commit ? `Commit: ${checkpoint.implementation.commit}` : ""
+  ].filter(Boolean).join("\n");
 }
 
 export function renderWorkDailyDigest({
