@@ -16,7 +16,7 @@ import {
   runWorkBackgroundContinuous,
   runWorkBackgroundOnce
 } from "../program/runtime/work/runner.mjs";
-import { DEFAULT_BACKGROUND_POLICY } from "../program/runtime/work/capacity.mjs";
+import { DEFAULT_BACKGROUND_POLICY, admitBackgroundWork } from "../program/runtime/work/capacity.mjs";
 import { readWorkSchedulerHealth } from "../program/runtime/work/health.mjs";
 import { readAndRenderWorkTaskReport, renderWorkDryRunReport } from "../program/runtime/work/report.mjs";
 import { createWorkWatchRenderer } from "../program/runtime/work/watch.mjs";
@@ -283,9 +283,29 @@ try {
         policy,
         foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE)
       });
-      const inspected = { ...inspection, curation };
-      result = {
+      const dryEligible = inspection.eligible.length
+        ? inspection.eligible
+        : curation.proposed.map((candidate) => ({ task: {
+          taskId: candidate.taskId,
+          title: candidate.title,
+          priority: candidate.priority,
+          queuedAt: new Date().toISOString()
+        } }));
+      const dryAdmission = admitBackgroundWork({
+        capacity: inspection.capacity,
+        policy,
+        foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE),
+        hasEligibleWork: dryEligible.length > 0
+      });
+      const inspected = {
         ...inspection,
+        eligible: dryEligible,
+        selected: dryEligible[0]?.task || null,
+        admission: dryAdmission,
+        curation
+      };
+      result = {
+        ...inspected,
         curation,
         report: renderWorkDryRunReport({ inspection: inspected, policy })
       };
