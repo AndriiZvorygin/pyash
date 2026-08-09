@@ -32,12 +32,16 @@ mailserver_available() {
   docker ps --format '{{.Names}}' | grep -Fxq "${PYA_WORK_MAIL_CONTAINER:-mailserver}"
 }
 
+git_identity_available() {
+  git -C "$REPOSITORY_ROOT" var GIT_AUTHOR_IDENT >/dev/null 2>&1
+}
+
 check "environment directory permissions" test "$(stat -c '%a' "$(dirname "$PYASH_BACKGROUND_ENV")")" = 700
 check "environment file permissions" test "$(stat -c '%a' "$PYASH_BACKGROUND_ENV")" = 600
 check "Node executable" test -x "$PYA_NODE_BIN"
 check "Codex executable" test -x "$PYA_CODEX_BIN"
 check "Docker Mailserver" mailserver_available
-check "git identity" test -n "$(git -C "$REPOSITORY_ROOT" config --get user.name)" -a -n "$(git -C "$REPOSITORY_ROOT" config --get user.email)"
+check "git identity" git_identity_available
 check "clean primary checkout" test -z "$(git -C "$REPOSITORY_ROOT" status --porcelain)"
 check "automation branch" git -C "$REPOSITORY_ROOT" show-ref --verify --quiet "refs/heads/${PYA_AUTOMATION_BRANCH:-automation/roadmap}"
 check "scheduler health readable" test -r "$REPOSITORY_ROOT/world/holding/work/artifacts/scheduler-health.pya"
