@@ -24,6 +24,12 @@ import { readWorkTaskStatus } from "../program/runtime/work/status.mjs";
 import { curateWorkBacklog } from "../program/runtime/work/curator.mjs";
 import { buildWorkDailyDigest } from "../program/runtime/work/digest.mjs";
 import {
+  buildAutonomousRoadmap,
+  refreshAutonomousRoadmap,
+  renderAutonomousRoadmapReport
+} from "../program/runtime/work/roadmap.mjs";
+import { synchronizeAutomationBranch } from "../program/runtime/work/integration.mjs";
+import {
   defaultWorkEmailFrom,
   sendWorkReportNotification
 } from "../program/runtime/work/notification.mjs";
@@ -184,13 +190,16 @@ function usage() {
     "  node command/work_supervisor.mjs report <task-id> [--email-report <address>] [--email-from <address>] [--json]",
     "  node command/work_supervisor.mjs digest [--since <ISO>] [--email-report <address>] [--email-from <address>] [--json]",
     "  node command/work_supervisor.mjs health [--json]",
+    "  node command/work_supervisor.mjs roadmap [--json]",
+    "  node command/work_supervisor.mjs roadmap refresh [--if-needed] [--json]",
+    "  node command/work_supervisor.mjs roadmap sync-baseline [--json]",
     "",
     "Without a subcommand, the legacy one-shot supervisor behaviour is used."
   ].join("\n");
 }
 
 const args = process.argv.slice(2);
-const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report", "digest"]);
+const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report", "digest", "roadmap"]);
 const action = knownActions.has(args[0]) ? args[0] : "run-next";
 const asJson = has(args, "--json");
 const watch = has(args, "--watch");
@@ -234,6 +243,32 @@ try {
     result = await failWorkTask(worldRoot, args[1], value(args, "--reason", "cancelled by operator"));
   } else if (action === "health") {
     result = await readWorkSchedulerHealth(worldRoot);
+  } else if (action === "roadmap") {
+    const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
+    if (args[1] === "refresh") {
+      const refreshed = await refreshAutonomousRoadmap({
+        worldRoot,
+        repositoryRoot,
+        ifNeeded: has(args, "--if-needed"),
+        ...codexSandboxOptions()
+      });
+      result = {
+        ...refreshed,
+        report: renderAutonomousRoadmapReport(refreshed.roadmap)
+      };
+    } else if (args[1] === "sync-baseline") {
+      const sync = await synchronizeAutomationBranch({
+        repositoryRoot,
+        branch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap",
+        masterRef: process.env.PYA_AUTOMATION_MASTER_REF || "master",
+        push: truthy(process.env.PYA_AUTOMATION_PUSH_BASELINE),
+        pushRemotes: String(process.env.PYA_AUTOMATION_PUSH_REMOTES || "origin,github").split(",").map((item) => item.trim()).filter(Boolean)
+      });
+      result = { kind: "baseline", ...sync };
+    } else {
+      const roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot });
+      result = { kind: "roadmap", roadmap, report: renderAutonomousRoadmapReport(roadmap) };
+    }
   } else if (action === "report") {
     const report = await readAndRenderWorkTaskReport(worldRoot, args[1]);
     const email = emailOptions(args);
@@ -317,6 +352,13 @@ try {
         policy,
         repositoryRoot,
         curate: true,
+        baselineSync: async () => synchronizeAutomationBranch({
+          repositoryRoot,
+          branch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap",
+          masterRef: process.env.PYA_AUTOMATION_MASTER_REF || "master",
+          push: process.env.PYA_AUTOMATION_PUSH_BASELINE === "truth",
+          pushRemotes: String(process.env.PYA_AUTOMATION_PUSH_REMOTES || "origin,github").split(",").map((item) => item.trim()).filter(Boolean)
+        }),
         foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE),
         onEvent: observer,
         supervisorOptions: {
