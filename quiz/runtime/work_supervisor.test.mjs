@@ -134,6 +134,46 @@ test("supervisor observer reports the useful lifecycle without token noise", asy
   assert.equal(events.find((event) => event.type === "review-completed").decision, "ACCEPT");
 });
 
+test("background supervisor checkpoints Luna and reuses the same thread before review", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-multiwake-");
+  await enqueueWorkTask(worldRoot, task("multiwake-task"));
+  const clients = new Map();
+  const common = {
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    pauseAfterImplementation: true,
+    reviewAfterImplementationPasses: 2,
+    appServerFactory: async ({ role }) => {
+      if (!clients.has(role)) clients.set(role, new FakeClient(role, ["ACCEPT"]));
+      return clients.get(role);
+    },
+    workspaceFactory: async () => ({
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/task",
+      mode: "git-worktree"
+    }),
+    evidenceFactory: async () => ({
+      diff: "diff --git a/hello.txt b/hello.txt\n+hello",
+      changedFiles: ["hello.txt"]
+    }),
+    now: () => "2026-08-07T12:01:00.000Z"
+  };
+  const first = await runWorkSupervisorOnce(common);
+  assert.equal(first.status, "implementing");
+  assert.equal((await readWorkTaskStatus(worldRoot, "multiwake-task")).checkpoint.implementation.passes, 1);
+  const second = await runWorkSupervisorOnce(common);
+  assert.equal(second.status, "accepted");
+  const status = await readWorkTaskStatus(worldRoot, "multiwake-task");
+  assert.equal(status.checkpoint.implementation.passes, 2);
+  assert.equal(status.checkpoint.manager.threadId, "manager-thread");
+  assert.equal(status.checkpoint.worker.threadId, "worker-thread");
+  assert.equal(clients.get("manager").turns, 2, "Sol plans once and reviews after implementation is ready");
+  assert.equal(clients.get("worker").turns, 2, "Luna continues across wakes");
+});
+
 test("supervisor persists Sol plan, Luna evidence, and ACCEPT review", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-accept-");
   await enqueueWorkTask(worldRoot, task("accept-task"));
@@ -243,7 +283,7 @@ test("supervisor consumes a durable completed turn result after a checkpoint bou
       role: "worker",
       threadId: "worker-thread",
       turnId: "worker-turn-1",
-      requestIdentity: "pyash-captured-task-implementation-0-0",
+      requestIdentity: "pyash-captured-task-implementation-0-0-0",
       state: "completed",
       startedAt: "2026-08-07T12:00:00.000Z",
       completedAt: "2026-08-07T12:00:30.000Z",

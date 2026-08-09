@@ -13,6 +13,8 @@ function firstObject(...values) {
   return values.find((value) => value && typeof value === "object" && !Array.isArray(value)) || {};
 }
 
+const WEEK_MINUTES = 7 * 24 * 60;
+
 function resetAt(source) {
   const value = source.resetAt ?? source.resetsAt ?? source.reset_at ?? source.resetTime ?? source.reset_time;
   if (typeof value === "number") {
@@ -50,7 +52,7 @@ export function normalizeCodexCapacity(payload, { now = new Date() } = {}) {
   ) || Boolean(raw?.rateLimitReachedType || raw?.spendControlReached) || remainingPercent === 0;
   const available = limited ? false : remainingPercent != null ? remainingPercent > 0 : null;
   const observedAt = now instanceof Date ? now.toISOString() : new Date(now).toISOString();
-  return {
+  const generic = {
     state: limited ? "usage-limited" : available === true ? "available" : "unknown",
     available,
     usedPercent,
@@ -61,6 +63,103 @@ export function normalizeCodexCapacity(payload, { now = new Date() } = {}) {
     windowMinutes,
     observedAt,
     raw: raw && typeof raw === "object" ? raw : {}
+  };
+  const weeklySource = firstObject(raw?.weekly, raw?.week, raw?.primary);
+  const weeklyWindowMinutes = number(
+    weeklySource.windowMinutes ?? weeklySource.window_minutes ?? weeklySource.windowDurationMins
+  );
+  const weeklyIdentified = weeklySource === raw?.weekly
+    || weeklySource === raw?.week
+    || weeklyWindowMinutes === WEEK_MINUTES;
+  const weeklyResetAt = resetAt(weeklySource);
+  const weeklyStartAt = weeklyResetAt && weeklyWindowMinutes
+    ? new Date(Date.parse(weeklyResetAt) - weeklyWindowMinutes * 60000).toISOString()
+    : "";
+  const weekly = {
+    identified: weeklyIdentified,
+    state: weeklyIdentified ? generic.state : "unknown",
+    available: weeklyIdentified ? generic.available : null,
+    usedPercent: weeklyIdentified ? usedPercent : null,
+    remainingPercent: weeklyIdentified ? remainingPercent : null,
+    resetAt: weeklyIdentified ? weeklyResetAt : "",
+    observedAt,
+    windowMinutes: weeklyIdentified ? weeklyWindowMinutes : null,
+    windowStartAt: weeklyIdentified ? weeklyStartAt : "",
+    raw: weeklyIdentified ? weeklySource : {},
+    reason: weeklyIdentified ? "weekly bucket identified" : "weekly bucket unavailable"
+  };
+  return { ...generic, weekly };
+}
+
+export function weeklyCapacity(capacity = {}) {
+  const weekly = capacity?.weekly;
+  return weekly && weekly.identified === true
+    ? weekly
+    : {
+      identified: false,
+      state: "unknown",
+      available: null,
+      usedPercent: null,
+      remainingPercent: null,
+      resetAt: "",
+      observedAt: "",
+      windowMinutes: null,
+      windowStartAt: "",
+      raw: {},
+      reason: "weekly bucket unavailable"
+    };
+}
+
+export function calculateWeeklyPacing(capacity, {
+  reservePercent = 15,
+  deadbandPercent = 1,
+  now = new Date()
+} = {}) {
+  const weekly = weeklyCapacity(capacity);
+  const reserve = Math.min(100, Math.max(0, Number(reservePercent) || 0));
+  const deadband = Math.max(0, Number(deadbandPercent) || 0);
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const start = Date.parse(weekly.windowStartAt);
+  const reset = Date.parse(weekly.resetAt);
+  if (!weekly.identified || !Number.isFinite(start) || !Number.isFinite(reset) || reset <= start) {
+    return {
+      state: "unknown",
+      reason: weekly.reason || "weekly window unknown",
+      reservePercent: reserve,
+      deadbandPercent: deadband,
+      elapsedFraction: null,
+      allowedUsedPercent: null,
+      minimumRemainingPercent: null,
+      actualUsedPercent: weekly.usedPercent,
+      actualRemainingPercent: weekly.remainingPercent,
+      headroomPercent: null,
+      weekly
+    };
+  }
+  const elapsedFraction = Math.min(1, Math.max(0, (nowDate.getTime() - start) / (reset - start)));
+  const allowedUsedPercent = (100 - reserve) * elapsedFraction;
+  const minimumRemainingPercent = 100 - allowedUsedPercent;
+  const actualUsedPercent = weekly.usedPercent;
+  const actualRemainingPercent = weekly.remainingPercent ?? (
+    actualUsedPercent == null ? null : 100 - actualUsedPercent
+  );
+  const state = weekly.state === "usage-limited"
+    ? "usage-limited"
+    : actualUsedPercent == null || actualRemainingPercent == null
+      ? "unknown"
+      : "available";
+  return {
+    state,
+    reason: state === "available" ? "weekly pacing calculated" : weekly.state,
+    reservePercent: reserve,
+    deadbandPercent: deadband,
+    elapsedFraction,
+    allowedUsedPercent,
+    minimumRemainingPercent,
+    actualUsedPercent,
+    actualRemainingPercent,
+    headroomPercent: actualUsedPercent == null ? null : allowedUsedPercent - actualUsedPercent,
+    weekly
   };
 }
 
@@ -90,19 +189,13 @@ export async function readCodexCapacity({
 
 export const DEFAULT_BACKGROUND_POLICY = Object.freeze({
   enabled: false,
-  reservePercent: 20,
-  nearResetWilling: false,
-  nearResetMinutes: 15,
+  reservePercent: 15,
+  pacingDeadbandPercent: 1,
   pollIntervalMs: 60000,
-  maxTasksPerWake: 1
+  maxTasksPerWake: 1,
+  curationThreshold: 1,
+  curationMaxTasks: 3
 });
-
-function resetIsNear(capacity, now, minutes) {
-  const reset = Date.parse(String(capacity?.resetAt || ""));
-  if (!Number.isFinite(reset)) return false;
-  const current = now instanceof Date ? now.getTime() : new Date(now).getTime();
-  return reset >= current && reset - current <= Math.max(0, Number(minutes) || 0) * 60000;
-}
 
 export function admitBackgroundWork({
   capacity,
@@ -112,19 +205,21 @@ export function admitBackgroundWork({
   now = new Date()
 } = {}) {
   const settings = { ...DEFAULT_BACKGROUND_POLICY, ...policy };
+  const pacing = calculateWeeklyPacing(capacity, {
+    reservePercent: settings.reservePercent,
+    deadbandPercent: settings.pacingDeadbandPercent,
+    now
+  });
   if (settings.enabled !== true) return { admit: false, reason: "background disabled" };
   if (foregroundActive) return { admit: false, reason: "active task conflict" };
   if (!hasEligibleWork) return { admit: false, reason: "no eligible work" };
-  if (capacity?.state === "usage-limited") return { admit: false, reason: "usage limited" };
-  if (capacity?.state !== "available") return { admit: false, reason: "capacity unknown" };
-  if (resetIsNear(capacity, now, settings.nearResetMinutes)
-    && settings.nearResetWilling === true
-    && (capacity.remainingPercent == null || capacity.remainingPercent > 0)) {
-    return { admit: true, reason: "capacity near reset" };
+  if (pacing.state === "usage-limited") return { admit: false, reason: "usage limited", pacing };
+  if (pacing.state !== "available") return { admit: false, reason: "capacity unknown", pacing };
+  if (pacing.actualRemainingPercent <= pacing.reservePercent) {
+    return { admit: false, reason: "weekly reserve", pacing };
   }
-  if (capacity.remainingPercent == null) return { admit: false, reason: "capacity unknown" };
-  if (capacity.remainingPercent <= Number(settings.reservePercent)) {
-    return { admit: false, reason: "foreground reserve" };
+  if (pacing.headroomPercent < -pacing.deadbandPercent) {
+    return { admit: false, reason: "weekly pacing limit", pacing };
   }
-  return { admit: true, reason: "capacity above reserve" };
+  return { admit: true, reason: "weekly pacing headroom", pacing };
 }

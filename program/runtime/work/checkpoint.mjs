@@ -45,6 +45,7 @@ export function buildWorkCheckpoint(input = {}) {
   const plan = object(input.plan);
   const implementation = object(input.implementation);
   const review = object(input.review);
+  const integration = object(input.integration);
   const interruption = object(input.interruption);
   const activeTurn = turnRecord(input.activeTurn);
   const turnHistory = list(input.turnHistory).map((entry) => turnRecord(entry));
@@ -74,6 +75,8 @@ export function buildWorkCheckpoint(input = {}) {
     implementation: {
       summary: text(implementation.summary),
       commit: text(implementation.commit),
+      passes: Math.max(0, Math.trunc(Number(implementation.passes) || 0)),
+      reviewReady: implementation.reviewReady === true,
       changedFiles: list(implementation.changedFiles),
       fileChanges: list(implementation.fileChanges),
       diff: text(implementation.diff),
@@ -85,6 +88,15 @@ export function buildWorkCheckpoint(input = {}) {
       decision: text(review.decision).toUpperCase(),
       explanation: text(review.explanation),
       revisionInstructions: text(review.revisionInstructions)
+    },
+    integration: {
+      branch: text(integration.branch),
+      baseRevision: text(integration.baseRevision),
+      commit: text(integration.commit),
+      status: text(integration.status),
+      integratedAt: text(integration.integratedAt),
+      error: text(integration.error),
+      pushed: integration.pushed === true
     },
     interruption: {
       phase: text(interruption.phase),
@@ -114,6 +126,7 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     plan: { ...current.plan, ...object(update.plan) },
     implementation: { ...current.implementation, ...object(update.implementation) },
     review: { ...current.review, ...object(update.review) },
+    integration: { ...current.integration, ...object(update.integration) },
     interruption: { ...current.interruption, ...object(update.interruption) },
     activeTurn: Object.prototype.hasOwnProperty.call(update, "activeTurn")
       ? turnRecord(update.activeTurn)

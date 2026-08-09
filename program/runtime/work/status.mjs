@@ -126,6 +126,8 @@ function checkpointBlocks(task) {
     mapBlock("work task implementation", [
       { key: "summary", type: "text", value: quoteText(checkpoint.implementation.summary) },
       { key: "commit", type: "text", value: quoteText(checkpoint.implementation.commit) },
+      { key: "passes", type: "num", value: checkpoint.implementation.passes },
+      { key: "review ready", type: "text", value: quoteText(checkpoint.implementation.reviewReady ? "truth" : "lie") },
       { key: "changed files", type: "text", value: quoteText(encodeJson(checkpoint.implementation.changedFiles)) },
       { key: "file changes", type: "text", value: quoteText(encodeJson(checkpoint.implementation.fileChanges)) },
       { key: "diff", type: "text", value: quoteText(checkpoint.implementation.diff) },
@@ -137,6 +139,15 @@ function checkpointBlocks(task) {
       { key: "decision", type: "text", value: quoteText(checkpoint.review.decision) },
       { key: "explanation", type: "text", value: quoteText(checkpoint.review.explanation) },
       { key: "revision instructions", type: "text", value: quoteText(checkpoint.review.revisionInstructions) }
+    ]),
+    mapBlock("work task integration", [
+      { key: "branch", type: "text", value: quoteText(checkpoint.integration.branch) },
+      { key: "base revision", type: "text", value: quoteText(checkpoint.integration.baseRevision) },
+      { key: "commit", type: "text", value: quoteText(checkpoint.integration.commit) },
+      { key: "status", type: "text", value: quoteText(checkpoint.integration.status) },
+      { key: "integrated at", type: "text", value: quoteText(checkpoint.integration.integratedAt) },
+      { key: "error", type: "text", value: quoteText(checkpoint.integration.error) },
+      { key: "pushed", type: "text", value: quoteText(checkpoint.integration.pushed ? "truth" : "lie") }
     ]),
     mapBlock("work task checkpoint", [
       { key: "phase", type: "text", value: quoteText(checkpoint.interruption.phase) },
@@ -170,6 +181,7 @@ function statusFromText(text) {
   const plan = parseMap(text, "work task plan");
   const implementation = parseMap(text, "work task implementation");
   const review = parseMap(text, "work task review");
+  const integration = parseMap(text, "work task integration");
   const checkpoint = parseMap(text, "work task checkpoint");
   let payloadSentence = null;
   const payloadText = String(source.payload ?? "").trim();
@@ -229,6 +241,8 @@ function statusFromText(text) {
       implementation: {
         summary: implementation.summary,
         commit: implementation.commit,
+        passes: implementation.passes,
+        reviewReady: /^(truth|true|yes|1)$/iu.test(String(implementation["review ready"] || "")),
         changedFiles: decodeJson(implementation["changed files"], []),
         fileChanges: decodeJson(implementation["file changes"], []),
         diff: implementation.diff,
@@ -240,6 +254,15 @@ function statusFromText(text) {
         decision: review.decision,
         explanation: review.explanation,
         revisionInstructions: review["revision instructions"]
+      },
+      integration: {
+        branch: integration.branch,
+        baseRevision: integration["base revision"],
+        commit: integration.commit,
+        status: integration.status,
+        integratedAt: integration["integrated at"],
+        error: integration.error,
+        pushed: /^(truth|true|yes|1)$/iu.test(String(integration.pushed || ""))
       },
       interruption: {
         phase: checkpoint.phase,
