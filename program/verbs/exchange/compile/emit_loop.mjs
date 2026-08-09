@@ -84,7 +84,7 @@ export function handleDoSentence(context, helpers) {
         } else {
           const resultVar = `_pya_ceremony_result_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
           lines.push(`const ${resultVar} = ${fn}(${arg});`);
-          if (declared?.has(targetVar) || locals?.has(targetVar)) {
+          if (targetExists) {
             lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
           } else {
             lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
