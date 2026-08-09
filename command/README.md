@@ -27,7 +27,7 @@ Utility scripts for working with Pyash from the shell:
 - `vocab_suggest.mjs "word"` — check a proposed token/phrase; pass a file/dir to scan `.pya` files.
 - `android_default_device.mjs [--yes] [--serial <id>] [--file <path>]` — detect attached ADB device(s) and set `su name android device id ...` in `configure/secret.pya` (prompts before writing).
 - `codex_account.mjs <read|login|cancel|logout|rate-limits|models> ...` — Codex App Server account/auth helper for `openai-codex` setup.
-- `work_supervisor.mjs [--world <path>] [--repository <path>]` — claim and run one durable Sol/Luna work item.
+- `work_supervisor.mjs [--world <path>] [--repository <path>]` — manage durable Sol/Luna work items. Use `background --watch` for a live human-readable run view and `report <task-id>` to regenerate a completed task report.
 - `run_work_supervisor_smoke.mjs` — explicitly run the real Codex supervisor smoke against a temporary fixture repository; never part of `npm test`.
 - `push_all.sh` — pushes the current clean branch to both the configured `origin` and the Pyash GitHub mirror.
 

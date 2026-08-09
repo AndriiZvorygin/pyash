@@ -242,6 +242,45 @@ export async function claimOldestRuntimeWorkTask(worldRoot, { owner = "" } = {})
   return null;
 }
 
+export async function claimWorkTaskById(worldRoot, taskId, { workerTag = "", owner = "" } = {}) {
+  const paths = await ensureWorkQueueDirs(worldRoot);
+  const id = normalizeWorkTaskId(taskId);
+  if (!id) return null;
+
+  const queued = await listWorkFiles(worldRoot, paths.inputDir, { owner, readyOnly: true });
+  const pending = queued.find((candidate) => candidate.task.taskId === id);
+  if (pending) {
+    const claim = await claimSpoolItem({
+      fromDir: paths.inputDir,
+      runtimeDir: paths.runtimeDir,
+      filename: pending.filename,
+      workerTag
+    });
+    if (!claim) return null;
+    const task = await readTaskFile(claim.path);
+    assertWorkTask(task);
+    if (owner && task.owner !== owner) {
+      await requeueClaim(paths, claim);
+      return null;
+    }
+    if (task.taskId !== id || task.status !== "ready") {
+      await requeueClaim(paths, claim);
+      return null;
+    }
+    return { ...claim, task };
+  }
+
+  const runtime = await listWorkFiles(worldRoot, paths.runtimeDir, { owner });
+  const recovered = runtime.find((candidate) => candidate.task.taskId === id);
+  if (!recovered || ["accepted", "failed", "blocked"].includes(recovered.task.status)) return null;
+  return {
+    path: path.join(paths.runtimeDir, recovered.filename),
+    filename: recovered.filename,
+    task: recovered.task,
+    recovered: true
+  };
+}
+
 export async function ackWorkTaskSuccess(worldRoot, { runtimePath } = {}) {
   const paths = await ensureWorkQueueDirs(worldRoot);
   return completeSpoolItem({ runtimePath, successDir: paths.produceSuccessDir });

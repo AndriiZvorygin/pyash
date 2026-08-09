@@ -13,6 +13,8 @@ import {
 import {
   ackWorkTaskFail,
   ackWorkTaskSuccess,
+  claimOldestRuntimeWorkTask,
+  claimWorkTaskById,
   claimOldestWorkTask,
   enqueueWorkTask,
   ensureWorkQueueDirs,
@@ -197,4 +199,25 @@ test("work queue claims higher priority first and preserves FIFO within a priori
   await ackWorkTaskSuccess(worldRoot, { runtimePath: first.path });
   const second = await claimOldestWorkTask(worldRoot, { workerTag: "priority" });
   assert.equal(second.task.taskId, "high-new");
+});
+
+test("work queue can claim the selected task exactly and skips blocked runtime work", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-claim-selected-");
+  await enqueueWorkTask(worldRoot, task({ taskId: "selected-low", priority: 10 }));
+  await enqueueWorkTask(worldRoot, task({ taskId: "other-high", priority: 90 }));
+
+  const selected = await claimWorkTaskById(worldRoot, "selected-low", { workerTag: "background" });
+  assert.equal(selected.task.taskId, "selected-low");
+  const other = await claimWorkTaskById(worldRoot, "other-high", { workerTag: "background" });
+  assert.equal(other.task.taskId, "other-high");
+  await transitionWorkTaskStatus(worldRoot, "selected-low", "blocked", {
+    now: "2026-08-07T12:02:00.000Z",
+    message: "needs human input"
+  });
+
+  const recovered = await claimOldestRuntimeWorkTask(worldRoot, { owner: "luna" });
+  assert.equal(recovered.task.taskId, "other-high");
+
+  await ackWorkTaskSuccess(worldRoot, { runtimePath: selected.path });
+  await ackWorkTaskSuccess(worldRoot, { runtimePath: other.path });
 });
