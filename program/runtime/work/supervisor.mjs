@@ -652,6 +652,9 @@ export async function runWorkSupervisorOnce({
     await captureTurn("implementation", {
       implementation: {
         ...report,
+        commit: evidence?.revision && evidence.revision !== workspace.baseRevision
+          ? evidence.revision
+          : report.commit || "",
         changedFiles,
         fileChanges: uniqueFileChanges(result?.fileChanges || []),
         diff: evidence?.diff || result?.diff || ""

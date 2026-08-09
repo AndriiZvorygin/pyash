@@ -107,3 +107,16 @@ test("continuous runner sleeps between bounded wakes and can defer safely", asyn
   assert.deepEqual(events.map((event) => event.type), ["capacity", "deferred", "capacity", "deferred"]);
   assert.deepEqual(sleeps, [17, 17]);
 });
+
+test("background runner reports an empty backlog as idle", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-idle-");
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => ({ state: "unknown", remainingPercent: null }),
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(result.reason, "no eligible work");
+  assert.match(result.report, /Result: IDLE/);
+});

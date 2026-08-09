@@ -195,6 +195,25 @@ artifacts, so `report <task-id>` produces the same report body after the
 original process has exited. This body is intentionally suitable for a later
 email or other notifier.
 
+Report notification is an explicit thin sink over that renderer:
+
+```text
+PYA_WORK_EMAIL_FROM=pyash@example.com node command/work_supervisor.mjs report <task-id> --email-report recipient@example.com
+```
+
+`--email-report` is also accepted by `background`; `PYA_WORK_EMAIL_REPORT`
+may provide the recipient for unattended operation. The default `auto` mail
+transport uses `/usr/sbin/sendmail` when present, otherwise the local Docker
+Mailserver-compatible path `docker exec --interactive mailserver
+/usr/sbin/sendmail -i -t`. Override the transport/container with
+`PYA_WORK_MAIL_TRANSPORT`, `PYA_WORK_MAIL_CONTAINER`, and
+`PYA_WORK_SENDMAIL_PATH`. The sender remains external configuration through
+`PYA_WORK_EMAIL_FROM`; no address or credential is stored in the repository.
+Each attempt is persisted separately under
+`world/holding/work/artifacts/notification/`. A failed notification sets the
+command result nonzero but never changes the task's accepted, blocked, or
+failed state.
+
 `program/runtime/work/capacity.mjs` normalizes the installed Codex
 `account/rateLimits/read` response, including its nested `rateLimits.primary`
 window, to `available`, `usage-limited`, or
@@ -274,6 +293,20 @@ execution. The host's nested Codex sandbox also required the explicitly
 opt-in `PYA_CODEX_THREAD_SANDBOX=danger-full-access` and
 `PYA_CODEX_TURN_SANDBOX=dangerFullAccess` settings for this demonstration;
 the default remains unchanged.
+
+### Proven by real report email
+
+The completed `language-ret-register-live` report was regenerated and
+submitted without starting another Codex task:
+
+```text
+PYA_WORK_EMAIL_FROM=andrii@zvorygin.ca node command/work_supervisor.mjs report language-ret-register-live --email-report andrii@zvorygin.ca
+```
+
+The command returned `Notification: submitted`. The local Docker Mailserver
+accepted the message through Postfix, stored it in the recipient's INBOX, and
+reported `status=sent`. The notification record is separate from the work
+task record, so a future mail failure will not rewrite an accepted task.
 
 ## Options and Trade-offs
 

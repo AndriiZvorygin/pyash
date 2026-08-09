@@ -74,10 +74,11 @@ export async function prepareWorktree({
 }
 
 export async function collectGitEvidence({ worktreePath, gitRunner = null } = {}) {
-  const [diffResult, namesResult, statusResult] = await Promise.all([
+  const [diffResult, namesResult, statusResult, revisionResult] = await Promise.all([
     git({ cwd: worktreePath, args: ["diff", "--no-ext-diff"], gitRunner }),
     git({ cwd: worktreePath, args: ["diff", "--name-only", "--no-ext-diff"], gitRunner }),
-    git({ cwd: worktreePath, args: ["status", "--short"], gitRunner })
+    git({ cwd: worktreePath, args: ["status", "--short"], gitRunner }),
+    git({ cwd: worktreePath, args: ["rev-parse", "HEAD"], gitRunner })
   ]);
   const status = stdout(statusResult);
   const trackedNames = stdout(namesResult).split("\n").map((value) => value.trim()).filter(Boolean);
@@ -87,6 +88,7 @@ export async function collectGitEvidence({ worktreePath, gitRunner = null } = {}
   return {
     diff: String(diffResult?.stdout ?? "").slice(0, 250000),
     changedFiles: [...new Set([...trackedNames, ...statusNames])],
-    status
+    status,
+    revision: stdout(revisionResult)
   };
 }

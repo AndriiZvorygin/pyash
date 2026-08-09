@@ -125,6 +125,7 @@ function checkpointBlocks(task) {
     ]),
     mapBlock("work task implementation", [
       { key: "summary", type: "text", value: quoteText(checkpoint.implementation.summary) },
+      { key: "commit", type: "text", value: quoteText(checkpoint.implementation.commit) },
       { key: "changed files", type: "text", value: quoteText(encodeJson(checkpoint.implementation.changedFiles)) },
       { key: "file changes", type: "text", value: quoteText(encodeJson(checkpoint.implementation.fileChanges)) },
       { key: "diff", type: "text", value: quoteText(checkpoint.implementation.diff) },
@@ -227,6 +228,7 @@ function statusFromText(text) {
       },
       implementation: {
         summary: implementation.summary,
+        commit: implementation.commit,
         changedFiles: decodeJson(implementation["changed files"], []),
         fileChanges: decodeJson(implementation["file changes"], []),
         diff: implementation.diff,

@@ -106,6 +106,7 @@ export function renderWorkTaskReport(task) {
   }
   lines.push("", `Diff: ${diffStat(implementation.diff, changedFiles)}`);
   lines.push(`Worktree: ${text(workspace.worktreePath) || "(not created)"}`);
+  if (text(implementation.commit)) lines.push(`Commit: ${text(implementation.commit)}`);
   lines.push(`Started: ${text(current.startedAt) || "(not started)"}`);
   lines.push(`Finished: ${text(current.finishedAt) || text(checkpoint.interruption?.at) || "(in progress)"}`);
   const operatorNote = current.error
@@ -122,9 +123,23 @@ export function renderWorkDeferredReport({ result = {}, capacity = {} } = {}) {
     "",
     "Result: DEFERRED",
     `Reason: ${text(result.reason) || "background work deferred"}`,
-    `Capacity: ${text(capacity.state) || "unknown"}`,
+    `Codex usage: ${capacity.usedPercent == null ? "unknown" : `${capacity.usedPercent}% used`}`,
     capacity.remainingPercent == null ? "Remaining capacity: unknown" : `Remaining capacity: ${capacity.remainingPercent}%`,
     `Eligible tasks: ${Number(result.eligible) || 0}`,
+    `Next reset: ${text(capacity.resetAt) || "unknown"}`,
+    ""
+  ].join("\n");
+}
+
+export function renderWorkIdleReport({ result = {}, capacity = {} } = {}) {
+  return [
+    "PYASH BACKGROUND WORK REPORT",
+    "",
+    "Result: IDLE",
+    `Reason: ${text(result.reason) || "no eligible work"}`,
+    `Eligible tasks: ${Number(result.eligible) || 0}`,
+    `Codex usage: ${capacity.usedPercent == null ? "unknown" : `${capacity.usedPercent}% used`}`,
+    `Next reset: ${text(capacity.resetAt) || "unknown"}`,
     ""
   ].join("\n");
 }
