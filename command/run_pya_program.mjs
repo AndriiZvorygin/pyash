@@ -19,7 +19,7 @@ import { setEntryModulePath } from "../program/bridge/modules.mjs";
 import { state } from "../program/bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../program/bridge/exchange.mjs";
 import { recordArtifact } from "../program/bridge/exchange.mjs";
-import { setRunNewspaperLines } from "../program/bridge/newspaper.mjs";
+import { setRunNewspaperLines, setRunToolEventRecorder, clearRunToolEventRecorder } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
@@ -486,10 +486,41 @@ async function main() {
     const counter = nextToolCounter();
     pushNewspaper(`su name tool event ${counter} ob la ${evokedSentence} ko to la ${resultSentence} ko be tool ya`);
   };
+  const pendingNestedToolCalls = new Map();
+  const pendingToolKey = (event) => String(event?.toolCall?.id ?? event?.toolName ?? "");
+  const rememberNestedToolCall = (event) => {
+    const key = pendingToolKey(event);
+    if (!key) return;
+    const pending = pendingNestedToolCalls.get(key) ?? [];
+    pending.push(event);
+    pendingNestedToolCalls.set(key, pending);
+  };
+  const takeNestedToolCall = (event) => {
+    const key = pendingToolKey(event);
+    if (!key) return null;
+    const pending = pendingNestedToolCalls.get(key) ?? [];
+    const call = pending.shift() ?? null;
+    if (pending.length > 0) pendingNestedToolCalls.set(key, pending);
+    else pendingNestedToolCalls.delete(key);
+    return call;
+  };
+  if (useNewspaper) {
+    setRunToolEventRecorder((event) => {
+      if (event?.stage === "call") {
+        rememberNestedToolCall(event);
+        return true;
+      }
+      if (event?.stage !== "result") return false;
+      const call = takeNestedToolCall(event);
+      if (!call?.toolSentence || !event?.resultSentence) return false;
+      emitToolEvent(sentenceToPyash(call.toolSentence), sentenceToPyash(event.resultSentence));
+      return true;
+    });
+  }
   const isToolSentence = (sentence) => {
     if (!sentence) return false;
     if (sentence.be === "mind") return sentence.mood === "do";
-    if (sentence.be === "command") return true;
+    if (sentence.be === "command") return sentence.mood === "do";
     if (sentence.be !== "write") return false;
     const targetName = sentence.to?.name;
     if (!targetName) return false;
@@ -804,6 +835,7 @@ async function main() {
     await fs.writeFile(newspaperPath, `${newspaperLines.join("\n")}\n`, "utf8");
   }
   clearExchangeRecorder();
+  clearRunToolEventRecorder();
   const closedServers = closeMcpServers();
   if (closedServers > 0) {
     console.warn("warning: MCP servers were still running at exit; add `be discharge ob name <server> as wo mcp do` to shut them down explicitly.");
@@ -857,6 +889,7 @@ async function main() {
     return { artifactFile, knowProduceFiles };
   };
   if (runError) {
+    clearRunToolEventRecorder();
     if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
@@ -973,6 +1006,7 @@ async function main() {
 try {
   await main();
 } catch (err) {
+  clearRunToolEventRecorder();
   const surfaced = surfaceErrorSentence(err?.sentence ?? err);
   if (surfaced?.mood && surfaced?.be) {
     console.error(sentenceToPyash(surfaced));

@@ -9,6 +9,7 @@ import { appendLog } from "./history.mjs";
 import { buildToolSentence } from "./tooling.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
+import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
 
 function buildPromptText(messages) {
   if (!Array.isArray(messages)) return "";
@@ -252,6 +253,7 @@ export async function runToolChat({
       const toolSignatureWords = deriveSignatureFromCall(capability, { remember });
       const toolSignature = joinSignatureWords(toolSignatureWords);
       await emitToolCall({ stage: "call", toolName, toolSentence, toolCall: call });
+      submitRunToolEvent({ stage: "call", toolName, toolSentence, toolCall: call });
       if (capability?.be === "read" && !toolSentence.to) {
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
       }
@@ -293,6 +295,14 @@ export async function runToolChat({
       }
       const surfacedTool = (() => {
         if (toolResult && toolResult.mood) return toolResult;
+        if (toolResult && toolResult.be) {
+          return {
+            mood: "ya",
+            su: toolResult.su ?? { name: "result" },
+            be: toolResult.be,
+            ob: toolResult.ob ?? {}
+          };
+        }
         if (toolResult && typeof toolResult === "object" && toolResult.result && typeof toolResult.result === "object") {
           return {
             mood: "ya",
@@ -326,6 +336,14 @@ export async function runToolChat({
         toolText = String(surfacedTool ?? "");
       }
       await emitToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText });
+      submitRunToolEvent({
+        stage: "result",
+        toolName,
+        toolSentence,
+        toolCall: call,
+        resultSentence: surfacedTool,
+        toolText
+      });
       const toolMessage = { role: "tool", content: toolText };
       if (toolCallId) toolMessage.tool_call_id = toolCallId;
       toolMessage.tool_name = toolName;
