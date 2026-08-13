@@ -53,7 +53,9 @@ export async function appendWorkSchedulerEvent(worldRoot, event = {}, { now = ()
     baseline: event.baseline,
     preflight: event.preflight,
     previousBlocker: event.previousBlocker,
-    recoveryCount: event.recoveryCount
+    recoveryCount: event.recoveryCount,
+    replacementWorktree: event.replacementWorktree,
+    previousThreadId: event.previousThreadId
   };
   const lines = [
     "su name work scheduler event be map def",

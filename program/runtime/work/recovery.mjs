@@ -7,9 +7,10 @@ import {
 import { mergeWorkCheckpoint } from "./checkpoint.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { isRetryableWorkBlock } from "./roadmap.mjs";
-import { readWorkTaskStatus, writeWorkTaskStatus } from "./status.mjs";
+import { readWorkTaskStatus } from "./status.mjs";
 
 export const DEFAULT_STALE_OPERATIONAL_TURN_MS = 30 * 60 * 1000;
+export const DEFAULT_MAX_OPERATIONAL_RECOVERIES = 2;
 
 function text(value) {
   return String(value ?? "").trim();
@@ -42,6 +43,10 @@ function hasRecentOrLiveAmbiguousTurn(task, now, staleTurnMs) {
     const operational = /turn timeout|sandbox|app server|process exit|execution environment/iu.test(
       `${text(active.ambiguity)} ${text(task.checkpoint?.blocker)}`
     );
+    const activeWriter = /active writer|thread .* writer/iu.test(
+      `${text(active.ambiguity)} ${text(task.checkpoint?.blocker)}`
+    );
+    if (activeWriter && (Number(task.checkpoint?.recoveryCount) || 0) > 0) return false;
     return !(operational && age != null && age >= staleTurnMs);
   }
   return active.state === "started"
@@ -52,7 +57,7 @@ function hasRecentOrLiveAmbiguousTurn(task, now, staleTurnMs) {
 export function isRecoverableOperationalWorkTask(task, {
   now = new Date(),
   staleTurnMs = DEFAULT_STALE_OPERATIONAL_TURN_MS,
-  maxRecoveryCount = 1
+  maxRecoveryCount = DEFAULT_MAX_OPERATIONAL_RECOVERIES
 } = {}) {
   if (!isSubstantialRoadmapTask(task)) return false;
   if (!task || !["blocked", "failed"].includes(task.status)) return false;
@@ -76,13 +81,21 @@ function recoveryRecord(task, now, reason) {
 export async function recoverOperationalWorkTask(worldRoot, taskId, {
   now = new Date(),
   staleTurnMs = DEFAULT_STALE_OPERATIONAL_TURN_MS,
-  maxRecoveryCount = 1
+  maxRecoveryCount = DEFAULT_MAX_OPERATIONAL_RECOVERIES
 } = {}) {
   const current = await readWorkTaskStatus(worldRoot, taskId);
   if (!isRecoverableOperationalWorkTask(current, { now, staleTurnMs, maxRecoveryCount })) return null;
   const date = nowDate(now);
   const reason = "recovered because execution preflight passed after an operational blocker";
   const record = recoveryRecord(current, date, reason);
+  const previousBlocker = record.previousBlocker;
+  const replacement = /active writer|thread .* writer/iu.test(previousBlocker)
+    && (Number(current.checkpoint?.recoveryCount) || 0) > 0;
+  const oldWorktree = current.checkpoint?.workspace?.worktreePath || "";
+  const replacementPath = replacement
+    ? `${oldWorktree}-replacement-${(Number(current.checkpoint?.recoveryCount) || 0)}`
+    : "";
+  const previousThreadId = current.checkpoint?.worker?.threadId || "";
   const transitioned = transitionWorkTask(current, "ready", {
     now: date,
     message: reason,
@@ -95,6 +108,18 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
     checkpoint: mergeWorkCheckpoint(transitioned.checkpoint, {
       activeTurn: {},
       blocker: "",
+      workspace: replacement
+        ? { worktreePath: replacementPath, replacementOf: oldWorktree }
+        : {},
+      worker: replacement
+        ? {
+          threadId: "",
+          previousThreadIds: [
+            ...(current.checkpoint?.worker?.previousThreadIds || []),
+            ...(previousThreadId ? [previousThreadId] : [])
+          ]
+        }
+        : {},
       interruption: {},
       recoveryCount: (current.checkpoint?.recoveryCount || 0) + 1,
       recoveryHistory: [...(current.checkpoint?.recoveryHistory || []), record],
@@ -109,7 +134,9 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
     previousBlocker: record.previousBlocker,
     reason,
     recoveryCount: next.checkpoint.recoveryCount,
-    staleTurn: record.staleTurn
+    staleTurn: record.staleTurn,
+    replacementWorktree: replacementPath,
+    previousThreadId
   };
 }
 
@@ -117,7 +144,7 @@ export async function findRecoverableOperationalWorkTasks(worldRoot, {
   owner = "",
   now = new Date(),
   staleTurnMs = DEFAULT_STALE_OPERATIONAL_TURN_MS,
-  maxRecoveryCount = 1
+  maxRecoveryCount = DEFAULT_MAX_OPERATIONAL_RECOVERIES
 } = {}) {
   const tasks = await listWorkTasks(worldRoot, { includeTerminal: true });
   return tasks
@@ -131,3 +158,4 @@ export async function findRecoverableOperationalWorkTasks(worldRoot, {
       return left.taskId.localeCompare(right.taskId);
     });
 }
+import path from "node:path";

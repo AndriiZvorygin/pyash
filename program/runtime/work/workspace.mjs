@@ -33,16 +33,17 @@ export async function prepareWorktree({
   taskId,
   baseRevision = "",
   baseRef = "",
+  worktreePath: requestedWorktreePath = "",
   gitRunner = null
 } = {}) {
   const repository = path.resolve(String(repositoryRoot || process.cwd()));
-  const worktreePath = path.join(
+  const worktreePath = path.resolve(String(requestedWorktreePath || path.join(
     path.resolve(String(worldRoot)),
     "holding",
     "work",
     "worktrees",
     String(taskId)
-  );
+  )));
   await fs.mkdir(path.dirname(worktreePath), { recursive: true });
   const revision = String(baseRevision || stdout(await git({
     cwd: repository,
