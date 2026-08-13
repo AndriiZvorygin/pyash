@@ -83,6 +83,7 @@ import establish, { signatures as establishSignatures } from "./establish.mjs";
 import improve, { signatures as improveSignatures } from "./improve.mjs";
 import router, { signatures as routerSignatures } from "./router.mjs";
 import verify, { signatures as verifySignatures } from "./verify.mjs";
+import verifyHnucGrammar, { signatures as verifyHnucGrammarSignatures } from "./verify_hnuc_grammar.mjs";
 import concatenateFilename, { signatures as concatenateFilenameSignatures } from "./path_join.mjs";
 import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
@@ -164,6 +165,7 @@ export {
   improve,
   router,
   verify,
+  verifyHnucGrammar,
   concatenateFilename,
   itineraryMedia,
   drawTextImage,
@@ -259,6 +261,7 @@ export const builtInSignatures = [
   ...improveSignatures,
   ...routerSignatures,
   ...verifySignatures,
+  ...verifyHnucGrammarSignatures,
   ...concatenateFilenameSignatures,
   ...itineraryMediaSignatures,
   ...drawTextImageSignatures,

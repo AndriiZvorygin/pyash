@@ -1,4 +1,8 @@
-import { compositionalGrid } from "../compositionalCases.mjs";
+import {
+  AXIS_ORDER,
+  COMPOSITIONAL_CONTEXT_ORDER,
+  compositionalGrid
+} from "../compositionalCases.mjs";
 
 export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can", "pe"];
 
@@ -9,17 +13,11 @@ export const COMPOSITIONAL_ALIASES = {
   every: "per"
 };
 
-const EXTRA_CONTEXT_KEYWORDS = {
-  sequence: { source: "fromindex", way: "atindex", destination: "toindex" }
-};
-
 export const COMPOSITIONAL_KEYWORDS = Array.from(
   new Set(
-    Object.values(compositionalGrid)
-      .flatMap((ctx) => ["source", "way", "destination"].map((axis) => ctx?.[axis]?.prep))
-      .concat(
-        Object.values(EXTRA_CONTEXT_KEYWORDS).flatMap((ctx) => Object.values(ctx))
-      )
+    COMPOSITIONAL_CONTEXT_ORDER.flatMap(context =>
+      AXIS_ORDER.map(axis => compositionalGrid[context]?.[axis]?.keyword)
+    )
       .filter(Boolean)
   )
 );
@@ -68,21 +66,17 @@ export const TYPE_TOKENS = [
   "bytes"
 ];
 
-export const CONTEXT_KEYS = [...Object.keys(compositionalGrid), ...Object.keys(EXTRA_CONTEXT_KEYWORDS)];
+export const CONTEXT_KEYS = [...COMPOSITIONAL_CONTEXT_ORDER];
 
-export const AXIS_CONTEXT_TO_KEYWORD = {
-  ...Object.fromEntries(
-    Object.entries(compositionalGrid).map(([context, ctx]) => [
-      context,
-      {
-        source: ctx?.source?.prep,
-        way: ctx?.way?.prep,
-        destination: ctx?.destination?.prep
-      }
-    ])
-  ),
-  ...EXTRA_CONTEXT_KEYWORDS
-};
+export const AXIS_CONTEXT_TO_KEYWORD = Object.fromEntries(
+  COMPOSITIONAL_CONTEXT_ORDER.map(context => [
+    context,
+    Object.fromEntries(AXIS_ORDER.map(axis => [
+      axis,
+      compositionalGrid[context]?.[axis]?.keyword
+    ]))
+  ])
+);
 
 export const VYAH_ASPECT_MODIFIERS = [
   "eval",

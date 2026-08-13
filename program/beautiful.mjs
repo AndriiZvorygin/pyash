@@ -1,28 +1,18 @@
 // beautiful.mjs
 
-import { compositionalGrid } from "./library/compositionalCases.mjs";
+import {
+  COMPOSITIONAL_AXIS_ORDER,
+  COMPOSITIONAL_CONTEXT_ORDER,
+  compositionalGrid
+} from "./library/compositionalCases.mjs";
 import { orderVyahModifiers } from "./library/grammar/vyah.mjs";
-
-const COMPOSITIONAL_CONTEXT_ORDER = [
-  "space",
-  "interior",
-  "surface",
-  "under",
-  "time",
-  "state",
-  "person",
-  "social",
-  "discourse",
-  "quantity",
-  "limit"
-];
 
 const COMPOSITIONAL_PREPS = [];
 for (const ctxKey of COMPOSITIONAL_CONTEXT_ORDER) {
   const ctx = compositionalGrid[ctxKey];
   if (!ctx) continue;
-  for (const axis of ["source", "way", "destination"]) {
-    const prep = ctx[axis]?.prep;
+  for (const axis of COMPOSITIONAL_AXIS_ORDER) {
+    const prep = ctx[axis]?.keyword;
     if (prep && !COMPOSITIONAL_PREPS.includes(prep)) COMPOSITIONAL_PREPS.push(prep);
   }
 }
