@@ -56,7 +56,8 @@ export function buildWorkCheckpoint(input = {}) {
       baseRevision: text(workspace.baseRevision),
       branch: text(workspace.branch),
       worktreePath: text(workspace.worktreePath),
-      mode: text(workspace.mode)
+      mode: text(workspace.mode),
+      replacementOf: text(workspace.replacementOf)
     },
     manager: {
       model: text(manager.model),
@@ -66,7 +67,8 @@ export function buildWorkCheckpoint(input = {}) {
     worker: {
       model: text(worker.model),
       reasoningEffort: text(worker.reasoningEffort),
-      threadId: text(worker.threadId)
+      threadId: text(worker.threadId),
+      previousThreadIds: list(worker.previousThreadIds)
     },
     plan: {
       summary: text(plan.summary),

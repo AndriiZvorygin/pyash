@@ -105,6 +105,33 @@ test("recovery preserves the blocker and cannot revive the same task twice", asy
   assert.deepEqual((await findRecoverableOperationalWorkTasks(worldRoot)).map((task) => task.taskId), []);
 });
 
+test("active-writer recovery preserves the old thread and isolates the replacement worktree", async () => {
+  const worldRoot = await world("pyash-work-recovery-replacement-");
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-active-writer",
+    blocker: "thread luna-thread already has an active writer",
+    activeTurn: { state: "ambiguous", startedAt: "2026-08-12T12:00:00.000Z" }
+  });
+  const task = await readWorkTaskStatus(worldRoot, "roadmap-active-writer");
+  await writeWorkTaskStatus(worldRoot, {
+    ...task,
+    checkpoint: {
+      ...task.checkpoint,
+      recoveryCount: 1,
+      worker: { ...task.checkpoint.worker, threadId: "luna-thread" },
+      workspace: { ...task.checkpoint.workspace, worktreePath: "/tmp/roadmap-active-writer" }
+    }
+  });
+  const recovered = await recoverOperationalWorkTask(worldRoot, "roadmap-active-writer", {
+    now: "2026-08-12T12:01:00.000Z"
+  });
+  assert.equal(recovered.task.status, "ready");
+  assert.equal(recovered.task.checkpoint.worker.threadId, "");
+  assert.deepEqual(recovered.task.checkpoint.worker.previousThreadIds, ["luna-thread"]);
+  assert.equal(recovered.task.checkpoint.workspace.worktreePath, "/tmp/roadmap-active-writer-replacement-1");
+  assert.equal(recovered.task.checkpoint.workspace.replacementOf, "/tmp/roadmap-active-writer");
+});
+
 test("healthy preflight recovers operational roadmap work before a new ready package", async () => {
   const worldRoot = await world("pyash-work-recovery-runner-");
   await blockedTask(worldRoot, {
