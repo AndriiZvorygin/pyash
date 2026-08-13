@@ -91,6 +91,61 @@ function validateUnassignedShape(info, path, errors) {
   return true;
 }
 
+function assignmentStatus(info) {
+  return info?.status === "unassigned" ? "unassigned" : "assigned";
+}
+
+function addCanonicalMismatch(errors, code, path, field, expected, actual) {
+  addError(
+    errors,
+    code,
+    path,
+    `${field} must be ${String(expected)}, got ${String(actual)}`
+  );
+}
+
+function validateCanonicalPath(expected, actual, path, errors, { context = false } = {}) {
+  if (!actual || typeof actual !== "object") return;
+
+  const expectedStatus = assignmentStatus(expected);
+  const actualStatus = assignmentStatus(actual);
+  if (actualStatus !== expectedStatus) {
+    addCanonicalMismatch(errors, "CANONICAL_STATUS_MISMATCH", path, "status", expectedStatus, actualStatus);
+    return;
+  }
+
+  if (context) {
+    if (actual.name !== expected.name) {
+      addCanonicalMismatch(errors, "CANONICAL_CONTEXT_MISMATCH", path, "context identity", expected.name, actual.name);
+    }
+  } else if (typeof actual.keyword === "string" && KEYWORD_PATTERN.test(actual.keyword)) {
+    if (actual.keyword !== expected.keyword) {
+      addCanonicalMismatch(errors, "CANONICAL_KEYWORD_MISMATCH", path, "keyword", expected.keyword, actual.keyword);
+    }
+  }
+
+  if (expectedStatus === "assigned") {
+    if (context) {
+      if (actual.hnuc !== expected.hnuc) {
+        addCanonicalMismatch(errors, "CANONICAL_HNUC_MISMATCH", path, "hnuc", expected.hnuc, actual.hnuc);
+      }
+      if (actual.pya !== expected.pya) {
+        addCanonicalMismatch(errors, "CANONICAL_PYA_MISMATCH", path, "pya", expected.pya, actual.pya);
+      }
+    } else {
+      if (actual.case !== expected.case) {
+        addCanonicalMismatch(errors, "CANONICAL_CASE_MISMATCH", path, "case", expected.case, actual.case);
+      }
+      if (typeof actual.hnuc === "string" && HNUC_PATTERN.test(actual.hnuc) && actual.hnuc !== "0x0000" && actual.hnuc !== expected.hnuc) {
+        addCanonicalMismatch(errors, "CANONICAL_HNUC_MISMATCH", path, "hnuc", expected.hnuc, actual.hnuc);
+      }
+      if (actual.pya !== expected.pya) {
+        addCanonicalMismatch(errors, "CANONICAL_PYA_MISMATCH", path, "pya", expected.pya, actual.pya);
+      }
+    }
+  }
+}
+
 function sortIssues(issues) {
   const contextRank = new Map(COMPOSITIONAL_CONTEXT_ORDER.map((value, index) => [value, index]));
   const axisRank = new Map(COMPOSITIONAL_AXIS_ORDER.map((value, index) => [value, index]));
@@ -160,6 +215,7 @@ export function validateCompositionalCases({ grid = compositionalGrid, lexicon =
         addError(errors, "LEXICON_MISMATCH", contextPath, `${contextEntry.context.name} disagrees with lexicon`);
       }
     }
+    validateCanonicalPath(compositionalGrid[context]?.context, contextEntry.context, contextPath, errors, { context: true });
 
     for (const axis of Object.keys(contextEntry)) {
       if (axis !== "context" && !COMPOSITIONAL_AXIS_ORDER.includes(axis)) {
@@ -191,6 +247,7 @@ export function validateCompositionalCases({ grid = compositionalGrid, lexicon =
       const assigned = !unassignedEntry || info.hnuc != null;
       if (unassignedEntry) knownUnassigned += 1;
       const validHnuc = validateHnuc(info, path, errors, warnings, { assigned });
+      validateCanonicalPath(compositionalGrid[context]?.[axis], info, path, errors);
       if (!validHnuc) continue;
       assignedCodes += 1;
       const lexeme = validateLexeme(info, path, byEnglish, errors);

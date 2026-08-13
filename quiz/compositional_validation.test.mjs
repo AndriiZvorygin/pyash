@@ -153,6 +153,69 @@ test("validation catches wrong axis, duplicate and empty keywords", () => {
   assert.ok(issueCodes(result).includes("EMPTY_KEYWORD"));
 });
 
+test("canonical path validation rejects a valid lexeme in the wrong axis-context cell", () => {
+  const grid = cloneGrid();
+  grid.space.source = structuredClone(grid.interior.source);
+
+  const result = validateCompositionalCases({ grid });
+
+  assert.equal(result.ok, false);
+  assert.ok(issueCodes(result).includes("CANONICAL_KEYWORD_MISMATCH"));
+  assert.ok(issueCodes(result).includes("CANONICAL_CASE_MISMATCH"));
+  assert.ok(issueCodes(result).includes("CANONICAL_HNUC_MISMATCH"));
+  assert.ok(issueCodes(result).includes("CANONICAL_PYA_MISMATCH"));
+  assert.match(
+    formatCompositionalValidationReport(result),
+    /ERROR CANONICAL_CASE_MISMATCH space\.source: case must be source_case_, got elative_case_/u
+  );
+});
+
+test("canonical path validation rejects a substituted valid context identity", () => {
+  const grid = cloneGrid();
+  grid.space.context = structuredClone(grid.interior.context);
+
+  const result = validateCompositionalCases({ grid });
+
+  assert.equal(result.ok, false);
+  assert.ok(issueCodes(result).includes("CANONICAL_CONTEXT_MISMATCH"));
+  assert.ok(issueCodes(result).includes("CANONICAL_HNUC_MISMATCH"));
+  assert.ok(issueCodes(result).includes("CANONICAL_PYA_MISMATCH"));
+});
+
+test("canonical path validation rejects an assigned path changed to unassigned", () => {
+  const grid = cloneGrid();
+  grid.space.source = {
+    ...grid.space.source,
+    status: "unassigned",
+    case: null,
+    hnuc: null,
+    pya: null
+  };
+
+  const result = validateCompositionalCases({ grid });
+
+  assert.equal(result.ok, false);
+  assert.ok(issueCodes(result).includes("CANONICAL_STATUS_MISMATCH"));
+  assert.match(
+    formatCompositionalValidationReport(result),
+    /ERROR CANONICAL_STATUS_MISMATCH space\.source: status must be assigned, got unassigned/u
+  );
+});
+
+test("canonical path validation rejects a valid but noncanonical keyword", () => {
+  const grid = cloneGrid();
+  grid.space.source.keyword = "to";
+
+  const result = validateCompositionalCases({ grid });
+
+  assert.equal(result.ok, false);
+  assert.ok(issueCodes(result).includes("CANONICAL_KEYWORD_MISMATCH"));
+  assert.match(
+    formatCompositionalValidationReport(result),
+    /ERROR CANONICAL_KEYWORD_MISMATCH space\.source: keyword must be from, got to/u
+  );
+});
+
 test("validation catches malformed, zero, absent, and lexicon-mismatched HNUCs", () => {
   const malformed = cloneGrid();
   malformed.space.source.hnuc = "0x123";
