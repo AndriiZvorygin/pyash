@@ -62,6 +62,9 @@ export function isRecoverableOperationalWorkTask(task, {
   if (!isSubstantialRoadmapTask(task)) return false;
   if (!task || !["blocked", "failed"].includes(task.status)) return false;
   if (!isRetryableWorkBlock(task)) return false;
+  if (/revision limit|sol review block|merge conflict|human decision/iu.test(
+    `${text(task.checkpoint?.blocker)} ${text(task.message)} ${text(task.error)}`
+  )) return false;
   if ((Number(task.checkpoint?.recoveryCount) || 0) >= maxRecoveryCount) return false;
   return !hasRecentOrLiveAmbiguousTurn(task, nowDate(now), Math.max(1, Number(staleTurnMs) || DEFAULT_STALE_OPERATIONAL_TURN_MS));
 }

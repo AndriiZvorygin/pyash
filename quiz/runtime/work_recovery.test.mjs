@@ -11,6 +11,7 @@ import {
   isRecoverableOperationalWorkTask,
   recoverOperationalWorkTask
 } from "../../program/runtime/work/recovery.mjs";
+import { isRetryableWorkBlock } from "../../program/runtime/work/roadmap.mjs";
 import { listWorkTasks } from "../../program/runtime/work/operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 
@@ -79,6 +80,14 @@ test("stale operational timeout is recoverable but live or human blockers are no
     ...task,
     checkpoint: { blocker: "automation branch integration blocked: merge conflict", activeTurn: {} }
   }, { now }), false);
+  assert.equal(isRecoverableOperationalWorkTask({
+    ...task,
+    checkpoint: { blocker: "revision limit reached: Sol requested another pass", activeTurn: {} }
+  }, { now }), false);
+  assert.equal(isRetryableWorkBlock({
+    ...task,
+    checkpoint: { blocker: "revision limit reached: Sol requested another pass", activeTurn: {} }
+  }), false);
   assert.equal(isRecoverableOperationalWorkTask({
     ...task,
     checkpoint: { blocker: "turn timeout", activeTurn: { state: "ambiguous", startedAt: "2026-08-12T11:45:00.000Z" } }
