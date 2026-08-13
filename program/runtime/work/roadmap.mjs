@@ -282,6 +282,7 @@ const OPERATIONAL_BLOCK_PATTERNS = Object.freeze([
   /pacing/iu,
   /provider/iu,
   /app[- ]server/iu,
+  /active writer/iu,
   /codex/iu,
   /interrupted/iu,
   /temporary/iu

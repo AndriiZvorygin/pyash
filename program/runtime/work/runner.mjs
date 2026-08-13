@@ -336,6 +336,8 @@ export async function runWorkBackgroundOnce({
       reason: recovery.reason,
       recoveryCount: recovery.recoveryCount,
       staleTurn: recovery.staleTurn,
+      replacementWorktree: recovery.replacementWorktree,
+      previousThreadId: recovery.previousThreadId,
       phase: selected.status
     }, { now });
     await appendWorkSchedulerEvent(worldRoot, {
@@ -345,6 +347,8 @@ export async function runWorkBackgroundOnce({
       reason: recovery.reason,
       previousBlocker: recovery.previousBlocker,
       recoveryCount: recovery.recoveryCount,
+      replacementWorktree: recovery.replacementWorktree,
+      previousThreadId: recovery.previousThreadId,
       capacity,
       pacing: admission.pacing,
       taskCount,

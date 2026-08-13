@@ -464,6 +464,7 @@ export async function runWorkSupervisorOnce({
       worldRoot,
       taskId: task.taskId,
       baseRevision: task.checkpoint.workspace.baseRevision,
+      worktreePath: task.checkpoint.workspace.worktreePath,
       baseRef
     });
     if (executionPreflight) {

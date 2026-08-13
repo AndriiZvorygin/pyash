@@ -108,7 +108,8 @@ function checkpointBlocks(task) {
       { key: "base revision", type: "text", value: quoteText(checkpoint.workspace.baseRevision) },
       { key: "branch", type: "text", value: quoteText(checkpoint.workspace.branch) },
       { key: "worktree path", type: "text", value: quoteText(checkpoint.workspace.worktreePath) },
-      { key: "mode", type: "text", value: quoteText(checkpoint.workspace.mode) }
+      { key: "mode", type: "text", value: quoteText(checkpoint.workspace.mode) },
+      { key: "replacement of", type: "text", value: quoteText(checkpoint.workspace.replacementOf) }
     ]),
     mapBlock("work task roles", [
       { key: "manager model", type: "text", value: quoteText(checkpoint.manager.model) },
@@ -116,7 +117,8 @@ function checkpointBlocks(task) {
       { key: "manager thread id", type: "text", value: quoteText(checkpoint.manager.threadId) },
       { key: "worker model", type: "text", value: quoteText(checkpoint.worker.model) },
       { key: "worker reasoning effort", type: "text", value: quoteText(checkpoint.worker.reasoningEffort) },
-      { key: "worker thread id", type: "text", value: quoteText(checkpoint.worker.threadId) }
+      { key: "worker thread id", type: "text", value: quoteText(checkpoint.worker.threadId) },
+      { key: "worker previous thread ids", type: "text", value: quoteText(encodeJson(checkpoint.worker.previousThreadIds)) }
     ]),
     mapBlock("work task plan", [
       { key: "summary", type: "text", value: quoteText(checkpoint.plan.summary) },
@@ -223,7 +225,8 @@ function statusFromText(text) {
         baseRevision: workspace["base revision"],
         branch: workspace.branch,
         worktreePath: workspace["worktree path"],
-        mode: workspace.mode
+        mode: workspace.mode,
+        replacementOf: workspace["replacement of"]
       },
       manager: {
         model: roles["manager model"],
@@ -233,7 +236,8 @@ function statusFromText(text) {
       worker: {
         model: roles["worker model"],
         reasoningEffort: roles["worker reasoning effort"],
-        threadId: roles["worker thread id"]
+        threadId: roles["worker thread id"],
+        previousThreadIds: decodeJson(roles["worker previous thread ids"], [])
       },
       plan: {
         summary: plan.summary,
