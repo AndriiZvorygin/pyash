@@ -126,6 +126,7 @@ export function renderWorkDailyDigest({
   const admitted = events.filter((event) => event.action === "admitted");
   const deferred = events.filter((event) => event.action === "deferred");
   const idle = events.filter((event) => event.action === "idle");
+  const recovered = events.filter((event) => event.action === "recovered");
   const ready = tasks.some((task) => task.status === "ready");
   const retryable = roadmap?.retryable?.length
     ? roadmap.retryable
@@ -172,6 +173,7 @@ export function renderWorkDailyDigest({
     `Admitted: ${admitted.length}`,
     `Deferred for pacing/conditions: ${deferred.length}`,
     `Idle: ${idle.length}`,
+    `Operational recoveries: ${recovered.length}`,
     "",
     "Completed work",
     "--------------"
@@ -180,6 +182,16 @@ export function renderWorkDailyDigest({
     for (const task of completed) lines.push("", compactReport(task));
   } else {
     lines.push("(none in this window)");
+  }
+  if (recovered.length) {
+    lines.push("", "Operational recovery", "--------------------");
+    for (const event of recovered.slice(-4)) {
+      lines.push(
+        `${event.taskId || event.selected}: ${event.reason || "recovered"}`,
+        `Previous blocker: ${event.previousBlocker || "operational blocker"}`,
+        `Recovery count: ${event.recoveryCount || "1"}`
+      );
+    }
   }
   lines.push("", "Current work", "------------");
   if (active.length) {

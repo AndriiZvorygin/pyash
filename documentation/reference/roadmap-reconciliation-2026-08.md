@@ -309,3 +309,29 @@ Those conditions are reported as operational blockage, pacing deferral, or recon
 ## Human Decisions
 
 No immediate product decision is required to continue. The real decisions that may eventually need explicit input are the scope/order of C parity after the interpreter/JavaScript boundary, Matrix credentials/environment for alpha evidence, and the acceptable definition of a seven-day real-backend soak. These are not reasons to declare the roadmap exhausted.
+
+## Translation Parity Verification (2026-08-13)
+
+The `roadmap-translation-parity-tranche` classification is `COMPLETE` for the bounded automation-branch boundary, but not because its task record says `accepted`. The accepted worktree is clean at `75ee904b`; its parent history contains the implementation commits `21a5ae46` (ret register parity), `f43a7226` (typed ceremony JavaScript parity), and `b27a1147` (nested ceremony target state), followed by the vocabulary-safe regression update.
+
+The following focused command passed in that worktree with 25 passing tests and 2 pre-existing TODOs:
+
+```text
+node --test quiz/compile_ceremony_parity.test.mjs quiz/definitions.test.mjs quiz/compile_loop_js.test.mjs quiz/compile_c_loop_run.test.mjs quiz/ceremony_signature_inconsistency.test.mjs quiz/ceremony_sequence_signature.test.mjs
+```
+
+The evidence covers typed multi-word ceremonies, signature binding and wrong-signature guards, isolated local frames, `this`/`ret` propagation, repeated calls, nested typed calls, interpreter/JavaScript agreement, the JavaScript golden, and fixture-free example execution. The C loop tests confirm the supported lower-level parity boundary. The multiple-register `ret` case remains an explicit TODO, and broader C ceremony translation is outside this accepted tranche; both remain adjacent roadmap work rather than evidence against the bounded completion.
+
+The implementation is currently present on `automation/roadmap`, not `master`. That is intentional: accepted autonomous work is reviewable on the automation branch while `master` remains human-controlled. Future scheduler work must base itself on the synchronized automation branch.
+
+## Operational Recovery Verification (2026-08-13)
+
+The historical blockers share a host-level cause rather than a product defect. The current unattended environment uses `PYA_CODEX_TURN_TIMEOUT_MS=900000`, `PYA_CODEX_THREAD_SANDBOX=danger-full-access`, and `PYA_CODEX_TURN_SANDBOX=dangerFullAccess`. The danger-mode disposable sandbox smoke passed, including file creation, a Node test, and cleanup. The narrower `workspace-write`/`workspaceWrite` smoke initialized the App Server and worktree but failed before every shell command with:
+
+```text
+bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted
+```
+
+The practical fallback is therefore the existing danger-mode setting, constrained by the assigned worktree, Pyash task checkpoint, isolated integration branch, master protection, and audited filesystem evidence. It is not equivalent to unrestricted unattended host control, but the sandbox wrapper itself cannot provide the narrower policy on this host until the missing user/network namespace capability is fixed.
+
+Stale operational blockers are now recoverable only after a healthy preflight, only for substantial roadmap tasks, only when the old timeout/sandbox turn has no remote turn ID and is older than 30 minutes, and only once by automatic recovery. The prior blocker, phase, turn identity, recovery time, and recovery count remain in the `.pya` checkpoint. Recent or identified ambiguous turns, Sol review blocks, human decisions, merge conflicts, and other non-operational blocks remain blocked.

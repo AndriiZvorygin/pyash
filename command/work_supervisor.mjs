@@ -346,6 +346,8 @@ try {
       });
       const dryEligible = inspection.eligible.length
         ? inspection.eligible
+        : inspection.recoverable.length
+          ? inspection.recoverable.map((task) => ({ task }))
         : curation.proposed.map((candidate) => ({ task: {
           taskId: candidate.taskId,
           title: candidate.title,

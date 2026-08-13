@@ -193,6 +193,8 @@ export const DEFAULT_BACKGROUND_POLICY = Object.freeze({
   pacingDeadbandPercent: 1,
   pollIntervalMs: 60000,
   maxTasksPerWake: 1,
+  staleOperationalTurnMs: 30 * 60 * 1000,
+  maxOperationalRecoveries: 1,
   curationThreshold: 1,
   curationMaxTasks: 3
 });
