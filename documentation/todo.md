@@ -8,13 +8,13 @@
 
 ## Soon
 - Expand verb coverage with quizzes for additional nouns/classes hinted in `pyac.txt` (e.g., files/models/pipeline nodes) before adding code.
-- Add hnuc/code validation utilities for compositional cases to align runtime with `compositionalCases.mjs` and the longer-term spec.
 - Improve mind integration: streaming handling for Ollama responses and richer reply mapping (assistant/thinking/timestamps) per `mind.md`.
 - Add error-handling paths for ceremonies/sandpits using `ret` with `be error`, and surface those in main memory/results.
 - Strengthen CLI UX: document `./compile`, `./run`, `./interpret` case-parsed args; plus smoke tests for CLI wrappers.
 
 ## Completed bounded tranches
 - Typed top-level ceremony translation parity: signature-derived JavaScript functions now validate typed calls, use fresh call frames, propagate `this`/`ret` payloads into caller targets, and have interpreter/JavaScript golden and regression coverage. Nested/dynamic, recursive, closure, imported, broader control-flow, and C paths remain deferred.
+- HNUC/compositional validation: the canonical 12×3 grid, parser/signature projections, deterministic injected-defect validator, operator-readable `be verify hnuc grammar do` workflow, and conformance documentation are complete. Remaining allocation gap: authoritative HNUCs and lexicon entries for `quantity.way`, `quantity.destination`, all three `limit` cells, and all three `sequence` cells, plus authoritative context codes for `quantity`, `limit`, and `sequence`; C/backend parity and broader translation coverage remain later work.
 
 ## Later
 - Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.

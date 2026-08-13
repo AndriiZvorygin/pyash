@@ -177,6 +177,8 @@ Implementation conforms when it:
 - preserves evidential/provenance carriage when present.
 - keeps the common-case table in this chapter updated when new high-frequency signatures/cases are introduced.
 
+Compositional conformance additionally requires the canonical 12-context × 3-axis grid and its parser/signature projections to remain in parity. The host-side validator in `program/library/compositional_case_validation.mjs` is the deterministic check: it validates coverage, canonical keyword tokens, assigned 16-bit HNUCs, and exact `case`/`hnuc`/`pya` agreement with `program/library/pyashWords.json`. Known unassigned identities are explicit warnings and must not be fabricated as valid codes. The operator-facing Pyash entry point is `be verify hnuc grammar do`; see `documentation/compositional-cases.md` for the grid and allocation boundary.
+
 ## 12. Full draft reference
 
 `documentation/recipes/spec-archive/01-sentence-and-grammar.full.md`
