@@ -178,5 +178,44 @@ test("daily digest aggregates scheduler events and durable task progress", async
   assert.match(digest.report, /Complete the higher-level translation parity tranche/u);
   assert.match(digest.report, /Add HNUC compositional-case validation/u);
   assert.match(digest.report, /Digest status:/u);
-  assert.match(digest.subject, /Pyash needs direction:/u);
+  assert.doesNotMatch(digest.subject, /needs direction/iu);
+  assert.match(digest.report, /ROADMAP WORK REMAINS|READY QUEUE EMPTY|Current pacing floor/iu);
+});
+
+test("timeout-blocked work is operationally blocked, not roadmap exhaustion", async () => {
+  const { root, worldRoot } = await world("pyash-work-timeout-block-");
+  const repositoryRoot = path.join(root, "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(path.join(repositoryRoot, "documentation", "todo.md"), "Higher-level translation paths parity\n");
+  await enqueueWorkTask(worldRoot, {
+    taskId: "roadmap-translation-parity-tranche",
+    owner: "background",
+    kind: "roadmap",
+    title: "Complete a translation tranche",
+    priority: 130,
+    queuedAt: "2026-08-09T06:00:00.000Z",
+    promptText: "Implement it.",
+    acceptanceText: "Tests pass."
+  });
+  const task = await readWorkTaskStatus(worldRoot, "roadmap-translation-parity-tranche");
+  await writeWorkTaskStatus(worldRoot, {
+    ...task,
+    status: "blocked",
+    checkpoint: { ...task.checkpoint, blocker: "turn timeout while starting Luna" }
+  });
+  const curation = await curateWorkBacklog({ worldRoot, repositoryRoot, dryRun: true });
+  assert.equal(curation.needsDirection, false);
+  assert.deepEqual(curation.retryable, ["roadmap-translation-parity-tranche"]);
+  const digest = await buildWorkDailyDigest({
+    worldRoot,
+    repositoryRoot,
+    since: "2026-08-09T00:00:00.000Z",
+    until: "2026-08-09T23:00:00.000Z",
+    capacitySource: async () => ({ weekly: { remainingPercent: 80, usedPercent: 20, resetAt: "2026-08-10T00:00:00.000Z" } }),
+    now: "2026-08-09T23:00:00.000Z"
+  });
+  assert.equal(digest.status, "roadmap-blocked");
+  assert.match(digest.subject, /temporarily blocked/iu);
+  assert.match(digest.report, /operational failures are not roadmap completion/iu);
+  assert.doesNotMatch(digest.report, /backlog exhausted/iu);
 });

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { addWorkTask, listWorkTasks } from "./operator.mjs";
-import { autonomousRoadmapPackages } from "./roadmap.mjs";
+import { autonomousRoadmapPackages, isRetryableWorkBlock } from "./roadmap.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -50,8 +50,19 @@ export async function curateWorkBacklog({
 } = {}) {
   const tasks = await listWorkTasks(worldRoot, { includeTerminal: true });
   const active = tasks.filter((task) => !["accepted", "failed", "blocked"].includes(task.status));
+  const retryable = tasks.filter((task) => isRetryableWorkBlock(task));
   if (active.length >= Math.max(0, Number(threshold) || 0)) {
-    return { created: [], proposed: [], needsDirection: false, reason: "backlog threshold satisfied", active: active.length };
+    return { created: [], proposed: [], needsDirection: false, reason: "backlog threshold satisfied", active: active.length, retryable: retryable.map((task) => task.taskId) };
+  }
+  if (retryable.length) {
+    return {
+      created: [],
+      proposed: [],
+      needsDirection: false,
+      reason: "retryable operational work remains",
+      active: active.length,
+      retryable: retryable.map((task) => task.taskId)
+    };
   }
   const candidates = autonomousRoadmapPackages();
   const sources = new Map();
@@ -68,13 +79,16 @@ export async function curateWorkBacklog({
       ...candidate,
       provenance: sourceRecord(candidate, sources.get(candidate.taskId) || "")
     }));
+  const credibleCandidates = candidates.filter((candidate) => sources.get(candidate.taskId)?.includes(candidate.sourceAnchor))
+    .filter((candidate) => !known.has(candidate.taskId) && !known.has(sourceKey(candidate)));
   if (dryRun) {
     return {
       created: [],
       proposed,
-      needsDirection: active.length === 0 && proposed.length === 0,
-      reason: proposed.length ? "curated current TODO" : "roadmap backlog exhausted",
-      active: active.length
+      needsDirection: active.length === 0 && proposed.length === 0 && credibleCandidates.length === 0,
+      reason: proposed.length ? "curated current TODO" : credibleCandidates.length ? "ready queue empty; roadmap candidates remain" : "fresh reconciliation found no credible roadmap work",
+      active: active.length,
+      retryable: []
     };
   }
   const created = [];
@@ -108,9 +122,10 @@ export async function curateWorkBacklog({
   return {
     created,
     proposed,
-    needsDirection: active.length === 0 && created.length === 0,
-    reason: created.length ? "curated current TODO" : "roadmap backlog exhausted",
-    active: active.length
+    needsDirection: active.length === 0 && created.length === 0 && credibleCandidates.length === 0,
+    reason: created.length ? "curated current TODO" : credibleCandidates.length ? "ready queue empty; roadmap candidates remain" : "fresh reconciliation found no credible roadmap work",
+    active: active.length,
+    retryable: []
   };
 }
 
