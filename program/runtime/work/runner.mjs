@@ -8,6 +8,10 @@ import { emitWorkEvent } from "./observer.mjs";
 import { renderWorkDeferredReport, renderWorkIdleReport, renderWorkTaskReport } from "./report.mjs";
 import { curateWorkBacklog } from "./curator.mjs";
 import { appendWorkSchedulerEvent } from "./history.mjs";
+import {
+  findRecoverableOperationalWorkTasks,
+  recoverOperationalWorkTask
+} from "./recovery.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -24,6 +28,13 @@ function nowIso(now) {
 }
 
 const ACTIVE_WORK_STATUSES = new Set(["planning", "implementing", "reviewing", "revision", "usage-limited"]);
+
+function selectWorkCandidate(eligible, recoverable) {
+  return eligible.find((entry) => ACTIVE_WORK_STATUSES.has(entry.task.status))?.task
+    || recoverable[0]
+    || eligible[0]?.task
+    || null;
+}
 
 async function eligibleWork(worldRoot, owner) {
   const [input, runtime] = await Promise.all([
@@ -58,19 +69,26 @@ export async function inspectWorkBackground({
   now = () => new Date()
 } = {}) {
   const eligible = await eligibleWork(worldRoot, owner);
+  const recoverable = await findRecoverableOperationalWorkTasks(worldRoot, {
+    owner,
+    now,
+    staleTurnMs: policy.staleOperationalTurnMs,
+    maxRecoveryCount: policy.maxOperationalRecoveries
+  });
   const capacity = await capacitySource({ now: typeof now === "function" ? now() : now });
   const admission = admitBackgroundWork({
     capacity,
     policy: { ...DEFAULT_BACKGROUND_POLICY, ...policy },
     foregroundActive: typeof foregroundActive === "function" ? await foregroundActive() : foregroundActive,
-    hasEligibleWork: eligible.length > 0,
+    hasEligibleWork: eligible.length > 0 || recoverable.length > 0,
     now: typeof now === "function" ? now() : now
   });
   return {
     eligible,
+    recoverable,
     capacity,
     admission,
-    selected: eligible[0]?.task || null
+    selected: selectWorkCandidate(eligible, recoverable)
   };
 }
 
@@ -100,7 +118,7 @@ export async function runWorkBackgroundOnce({
       now
     })
     : null;
-  const { eligible, capacity, admission } = await inspectWorkBackground({
+  const { eligible, recoverable, capacity, admission } = await inspectWorkBackground({
     worldRoot,
     owner,
     policy,
@@ -108,11 +126,13 @@ export async function runWorkBackgroundOnce({
     foregroundActive,
     now
   });
+  const taskCount = eligible.length + recoverable.length;
   await emitWorkEvent(onEvent, "capacity", {
     capacity,
     admitted: admission.admit,
     reason: admission.reason,
-    eligible: eligible.length
+    eligible: eligible.length,
+    recoverable: recoverable.length
   }, { now });
   const prior = await readWorkSchedulerHealth(worldRoot);
   const baseHealth = {
@@ -146,7 +166,7 @@ export async function runWorkBackgroundOnce({
     await emitWorkEvent(onEvent, "deferred", {
       reason: admission.reason,
       capacity,
-      eligible: eligible.length
+      eligible: taskCount
     }, { now });
     const idle = admission.reason === "no eligible work";
     const health = {
@@ -160,39 +180,40 @@ export async function runWorkBackgroundOnce({
       reason: admission.reason,
       capacity,
       pacing: admission.pacing,
-      taskCount: eligible.length,
-      selected: eligible[0]?.task?.taskId || ""
+      taskCount,
+      selected: selectWorkCandidate(eligible, recoverable)?.taskId || ""
     }, { now });
-    if (eligible[0]?.task) {
-      await updateWorkTaskCheckpoint(worldRoot, eligible[0].task.taskId, {
+    const deferredTask = selectWorkCandidate(eligible, recoverable);
+    if (deferredTask) {
+      await updateWorkTaskCheckpoint(worldRoot, deferredTask.taskId, {
         interruption: {
-          phase: eligible[0].task.status,
+          phase: deferredTask.status,
           at: wake,
           reason: admission.reason,
-          lastTurnId: eligible[0].task.checkpoint.activeTurn.turnId || ""
+          lastTurnId: deferredTask.checkpoint.activeTurn.turnId || ""
         },
         lastAction: `deferred: ${admission.reason}`
       });
-      await appendWorkOutcome(worldRoot, eligible[0].task, {
+      await appendWorkOutcome(worldRoot, deferredTask, {
         reason: admission.reason,
         capacity,
         action: "deferred"
       });
     }
     const report = admission.reason === "no eligible work"
-      ? renderWorkIdleReport({ result: { reason: admission.reason, eligible: eligible.length }, capacity })
-      : renderWorkDeferredReport({ result: { reason: admission.reason, eligible: eligible.length }, capacity });
+      ? renderWorkIdleReport({ result: { reason: admission.reason, eligible: taskCount }, capacity })
+      : renderWorkDeferredReport({ result: { reason: admission.reason, eligible: taskCount }, capacity });
     return {
       admitted: false,
       reason: admission.reason,
       capacity,
-      eligible: eligible.length,
+      eligible: taskCount,
       report,
       queue: await queueDepth(worldRoot),
       curation
     };
   }
-  const selected = eligible[0]?.task || null;
+  let selected = selectWorkCandidate(eligible, recoverable);
   if (!selected) {
     await writeWorkSchedulerHealth(worldRoot, {
       ...baseHealth,
@@ -203,14 +224,14 @@ export async function runWorkBackgroundOnce({
       reason: "no eligible work",
       capacity,
       pacing: admission.pacing,
-      taskCount: 0
+      taskCount
     }, { now });
     return {
       admitted: false,
       reason: "no eligible work",
       capacity,
-      eligible: 0,
-      report: renderWorkIdleReport({ result: { reason: "no eligible work", eligible: 0 }, capacity }),
+      eligible: taskCount,
+      report: renderWorkIdleReport({ result: { reason: "no eligible work", eligible: taskCount }, capacity }),
       curation
     };
   }
@@ -252,7 +273,7 @@ export async function runWorkBackgroundOnce({
         reason,
         capacity,
         pacing: admission.pacing,
-        taskCount: eligible.length,
+        taskCount,
         selected: selected.taskId,
         preflight: "blocked"
       }, { now });
@@ -260,14 +281,76 @@ export async function runWorkBackgroundOnce({
         admitted: false,
         reason,
         capacity,
-        eligible: eligible.length,
+        eligible: taskCount,
         selected: selected.taskId,
         preflight,
-        report: renderWorkDeferredReport({ result: { reason, eligible: eligible.length }, capacity }),
+        report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
         curation
       };
     }
+  }
+  let recovery = null;
+  if (recoverable.some((task) => task.taskId === selected.taskId)) {
+    recovery = await recoverOperationalWorkTask(worldRoot, selected.taskId, {
+      now,
+      staleTurnMs: policy.staleOperationalTurnMs,
+      maxRecoveryCount: policy.maxOperationalRecoveries
+    });
+    if (!recovery) {
+      const reason = "operational recovery unavailable: task still has an ambiguous or live turn";
+      await emitWorkEvent(onEvent, "deferred", {
+        reason,
+        selected: selected.taskId,
+        preflight
+      }, { now });
+      await writeWorkSchedulerHealth(worldRoot, {
+        ...baseHealth,
+        "last decision": reason,
+        "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + 1)
+      });
+      await appendWorkSchedulerEvent(worldRoot, {
+        type: "deferred",
+        reason,
+        capacity,
+        pacing: admission.pacing,
+        taskCount,
+        selected: selected.taskId,
+        preflight: "ready"
+      }, { now });
+      return {
+        admitted: false,
+        reason,
+        capacity,
+        eligible: taskCount,
+        selected: selected.taskId,
+        preflight,
+        report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
+        queue: await queueDepth(worldRoot),
+        curation
+      };
+    }
+    selected = recovery.task;
+    await emitWorkEvent(onEvent, "recovered", {
+      previousBlocker: recovery.previousBlocker,
+      reason: recovery.reason,
+      recoveryCount: recovery.recoveryCount,
+      staleTurn: recovery.staleTurn,
+      phase: selected.status
+    }, { now });
+    await appendWorkSchedulerEvent(worldRoot, {
+      type: "recovered",
+      taskId: selected.taskId,
+      status: selected.status,
+      reason: recovery.reason,
+      previousBlocker: recovery.previousBlocker,
+      recoveryCount: recovery.recoveryCount,
+      capacity,
+      pacing: admission.pacing,
+      taskCount,
+      selected: selected.taskId,
+      preflight: "ready"
+    }, { now });
   }
   const activeRuntime = eligible.some(({ task }) => ACTIVE_WORK_STATUSES.has(task.status));
   let baseline = { status: baselineSync ? (activeRuntime ? "skipped-active-task" : "pending") : "not-configured" };
@@ -295,7 +378,7 @@ export async function runWorkBackgroundOnce({
         reason,
         capacity,
         pacing: admission.pacing,
-        taskCount: eligible.length,
+        taskCount,
         selected: selected.taskId,
         baseline: "blocked"
       }, { now });
@@ -303,10 +386,10 @@ export async function runWorkBackgroundOnce({
         admitted: false,
         reason,
         capacity,
-        eligible: eligible.length,
+        eligible: taskCount,
         selected: selected.taskId,
         baseline: { status: "blocked", error: text(error?.message || error) },
-        report: renderWorkDeferredReport({ result: { reason, eligible: eligible.length }, capacity }),
+        report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
         curation
       };
@@ -346,6 +429,8 @@ export async function runWorkBackgroundOnce({
     "last completed task": ["accepted", "blocked", "failed"].includes(result.status) ? result.taskId || selected.taskId : prior["last completed task"] || "",
     "current task": ["accepted", "blocked", "failed", "idle"].includes(result.status) ? "" : result.taskId || selected.taskId,
     "last error": result.error || "",
+    "last recovered task": recovery?.task.taskId || prior["last recovered task"] || "",
+    "last recovery reason": recovery?.reason || prior["last recovery reason"] || "",
     "admitted wakes": String((Number(prior["admitted wakes"]) || 0) + 1),
     "completed tasks": String((Number(prior["completed tasks"]) || 0)
       + (["accepted", "blocked", "failed"].includes(result.status) ? 1 : 0))
@@ -364,7 +449,7 @@ export async function runWorkBackgroundOnce({
     reason: admission.reason,
     capacity,
     pacing: admission.pacing,
-    taskCount: eligible.length,
+    taskCount,
     selected: selected.taskId,
     baseline: baseline.status
   }, { now });
@@ -377,6 +462,7 @@ export async function runWorkBackgroundOnce({
     curation,
     baseline,
     preflight,
+    recovery,
     ...result
   };
 }

@@ -39,8 +39,8 @@ test("autonomous roadmap derives substantial package status from durable work st
   const roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, now: "2026-08-09T12:00:00.000Z" });
   const active = roadmap.packages.find((item) => item.taskId === "roadmap-translation-parity-tranche");
   assert.equal(active.status, "QUEUED");
-  assert.equal(roadmap.packages.length, 8);
-  assert.ok(roadmap.packages.filter((item) => item.status === "CANDIDATE").length >= 5);
+  assert.ok(roadmap.packages.length >= 11);
+  assert.ok(roadmap.packages.filter((item) => item.status === "CANDIDATE").length >= 8);
   assert.match(renderAutonomousRoadmapReport(roadmap), /PYASH AUTONOMOUS ROADMAP/);
   assert.match(await fs.readFile(roadmap.paths.pya, "utf8"), /work autonomous roadmap package roadmap-translation-parity-tranche/u);
   assert.match(await fs.readFile(roadmap.paths.markdown, "utf8"), /Complete the higher-level translation parity tranche/u);
@@ -125,4 +125,25 @@ test("roadmap progress preserves active Luna checkpoint evidence", async () => {
   const active = roadmap.packages.find((item) => item.taskId === "roadmap-translation-parity-tranche");
   assert.equal(active.status, "ACTIVE");
   assert.match(active.progress, /implementation pass/iu);
+});
+
+test("schema change discards stale generated catalogs during reconciliation", async () => {
+  const { worldRoot, repositoryRoot } = await world("pyash-roadmap-schema-");
+  await fs.mkdir(path.join(worldRoot, "holding", "work", "artifacts"), { recursive: true });
+  await fs.writeFile(path.join(worldRoot, "holding", "work", "artifacts", "autonomous-roadmap.pya"), [
+    "su name work autonomous roadmap state be map def",
+    "  su name schema ob text \"1\" ya",
+    "prah",
+    "su name work autonomous roadmap package stale-generated-task be map def",
+    "  su name task id ob text \"stale-generated-task\" ya",
+    "  su name title ob text \"Stale generated task\" ya",
+    "  su name source path ob text \"documentation/todo.md\" ya",
+    "  su name source anchor ob text \"stale\" ya",
+    "prah",
+    ""
+  ].join("\n"));
+  const roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot });
+  assert.equal(roadmap.packages.some((item) => item.taskId === "stale-generated-task"), false);
+  assert.ok(roadmap.packages.some((item) => item.taskId === "roadmap-agent-research-tool-chain"));
+  assert.equal(roadmap.reconciliation.source, "documentation/reference/roadmap-reconciliation-2026-08.md");
 });

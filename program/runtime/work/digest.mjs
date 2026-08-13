@@ -6,7 +6,7 @@ import { curateWorkBacklog } from "./curator.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
 import { renderWorkTaskReport } from "./report.mjs";
-import { buildAutonomousRoadmap } from "./roadmap.mjs";
+import { buildAutonomousRoadmap, hasCredibleRoadmapWork, isRetryableWorkBlock } from "./roadmap.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -126,11 +126,29 @@ export function renderWorkDailyDigest({
   const admitted = events.filter((event) => event.action === "admitted");
   const deferred = events.filter((event) => event.action === "deferred");
   const idle = events.filter((event) => event.action === "idle");
-  const exhausted = active.length === 0 && !tasks.some((task) => task.status === "ready") && !(curation.proposed || []).length;
-  const status = exhausted ? "needs-direction" : completed.length ? "progress" : active.length ? "in-progress" : "idle";
+  const recovered = events.filter((event) => event.action === "recovered");
+  const ready = tasks.some((task) => task.status === "ready");
+  const retryable = roadmap?.retryable?.length
+    ? roadmap.retryable
+    : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
+  const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
+  const humanDecisions = roadmap?.needsDecision || [];
+  const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
+  const temporarilyBlocked = retryable.length > 0;
+  const status = exhausted
+    ? "needs-direction"
+    : temporarilyBlocked
+      ? "roadmap-blocked"
+      : completed.length
+        ? "progress"
+        : active.length
+          ? "in-progress"
+          : "idle";
   const subject = exhausted
     ? "Pyash needs direction: roadmap backlog exhausted"
-    : completed.length
+    : temporarilyBlocked
+      ? "Pyash daily: roadmap work temporarily blocked"
+      : completed.length
       ? `Pyash daily: substantial progress on ${completed[0].title}`
       : "Pyash daily: background development status";
   const lines = [
@@ -155,6 +173,7 @@ export function renderWorkDailyDigest({
     `Admitted: ${admitted.length}`,
     `Deferred for pacing/conditions: ${deferred.length}`,
     `Idle: ${idle.length}`,
+    `Operational recoveries: ${recovered.length}`,
     "",
     "Completed work",
     "--------------"
@@ -163,6 +182,16 @@ export function renderWorkDailyDigest({
     for (const task of completed) lines.push("", compactReport(task));
   } else {
     lines.push("(none in this window)");
+  }
+  if (recovered.length) {
+    lines.push("", "Operational recovery", "--------------------");
+    for (const event of recovered.slice(-4)) {
+      lines.push(
+        `${event.taskId || event.selected}: ${event.reason || "recovered"}`,
+        `Previous blocker: ${event.previousBlocker || "operational blocker"}`,
+        `Recovery count: ${event.recoveryCount || "1"}`
+      );
+    }
   }
   lines.push("", "Current work", "------------");
   if (active.length) {
@@ -174,6 +203,10 @@ export function renderWorkDailyDigest({
   }
   if (exhausted) {
     lines.push("", "Needs direction", "---------------", "No active or ready substantial task remains, and current roadmap/TODO curation found no safe bounded next package.");
+  } else if (temporarilyBlocked) {
+    lines.push("", "ROADMAP WORK TEMPORARILY BLOCKED", "--------------------------------", "Roadmap work remains; operational failures are not roadmap completion.", "No package completed today.", `Blocked packages: ${retryable.map((item) => `${item.taskId}: ${item.blocker || item.progress || "retryable operational failure"}`).join("; ")}`, "Next action: recover or retry the highest-value valid package.");
+  } else if (!active.length && !ready && !curation.proposed?.length && roadmapWork) {
+    lines.push("", "READY QUEUE EMPTY - RECONCILIATION REQUIRED", "--------------------------------------------", "The generated queue is empty, but the authoritative roadmap still contains unfinished packages.");
   } else if (curation.proposed?.length) {
     lines.push("", "Next likely work", "----------------", ...curation.proposed.slice(0, 3).map((item) => `${item.taskId}: ${item.title}`));
   }
@@ -184,11 +217,16 @@ export function renderWorkDailyDigest({
     const candidatePackages = (roadmap.packages || []).filter((item) => item.status === "CANDIDATE");
     const blockedPackages = [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
-      ...(roadmap.needsDecision || [])
+      ...humanDecisions
+    ];
+    const operationalPackages = [
+      ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / OPERATIONAL"),
+      ...(roadmap.retryable || []).filter((item) => !(roadmap.packages || []).some((candidate) => candidate.taskId === item.taskId))
     ];
     lines.push(...(activePackages.length ? activePackages.map((item) => `  ${item.title} — ${item.progress}`) : ["  (none)"]));
     lines.push("Next:", ...(queuedPackages.length ? queuedPackages.slice(0, 3).map((item) => `  ${item.title}`) : ["  (none)"]));
     lines.push("Later:", ...(candidatePackages.length ? candidatePackages.slice(0, 4).map((item) => `  ${item.title}`) : ["  (none)"]));
+    lines.push("Operational blocks:", ...(operationalPackages.length ? operationalPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${item.blocker || item.progress || "retryable"}`) : ["  (none)"]));
     lines.push("Needs decision:", ...(blockedPackages.length ? blockedPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${item.blocker || item.progress || "blocked"}`) : ["  (none)"]));
   }
   lines.push("", "Automation branch", "-----------------", automationBranch, `Commits integrated this window: ${completed.filter((task) => task.checkpoint?.integration?.status === "integrated").length}`);

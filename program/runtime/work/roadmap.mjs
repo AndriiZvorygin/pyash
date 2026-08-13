@@ -19,42 +19,14 @@ const ROADMAP_PACKAGES = Object.freeze([
     title: "Complete the higher-level translation parity tranche",
     sourcePath: "documentation/todo.md",
     sourceAnchor: "Higher-level translation paths parity",
-    whyMatters: "Closes the highest current non-external parity gap and makes the language surface safer to use across interpreter and JavaScript execution.",
+    whyMatters: "Completes the accepted interpreter/JavaScript ceremony boundary while keeping the deferred C boundary explicit.",
     dependencies: ["stable ceremony signature and return semantics"],
     scope: "Top-level multi-word ceremonies, signature-first binding, isolated call frames, this/ret propagation, repeated calls, interpreter/JavaScript parity tests and goldens.",
     nonGoals: "Nested or dynamic definitions, recursion, closures, imports, C parity, and general translator refactoring.",
     acceptance: "The selected capability works end-to-end in the interpreter and JavaScript backend; focused parity tests, wrong-signature guards, and goldens pass; the supported boundary is documented.",
-    priority: 125,
+    priority: 130,
     prompt: "Complete one bounded higher-level translation parity tranche across the current interpreter and JavaScript paths, with the corresponding golden and regression coverage.",
-    whyNow: "This is the highest non-external parity item in the current TODO and is a coherent capability slice rather than a micro-fix."
-  },
-  {
-    taskId: "roadmap-mind-reply-envelope-streaming",
-    title: "Complete mind reply envelopes and streaming parity",
-    sourcePath: "documentation/todo.md",
-    sourceAnchor: "Mind: plus streaming path and richer reply envelopes",
-    whyMatters: "Makes mind calls useful as a durable language/runtime primitive by preserving assistant, thinking, timestamp, and streaming evidence.",
-    dependencies: ["current mind contract", "translation/runtime parity baseline"],
-    scope: "Richer reply envelope mapping, Ollama streaming path, supported interpreter/JavaScript surfaces, durable success/failure tests, and aligned documentation.",
-    nonGoals: "New providers, multi-host scheduling, UI work, and fixture-only behavior.",
-    acceptance: "Mind replies preserve text, metadata, and streaming behavior through supported runtime paths; focused success/failure tests pass without fixture-only backends.",
-    priority: 120,
-    prompt: "Implement the next coherent mind capability slice: richer reply envelopes and the plus streaming path across the current supported runtime surfaces, with durable tests and documentation alignment.",
-    whyNow: "Mind integration is an active language/runtime milestone and unlocks more useful Pyash-first agent workflows."
-  },
-  {
-    taskId: "roadmap-ceremony-error-propagation",
-    title: "Complete ceremony and sandpit error propagation",
-    sourcePath: "documentation/todo.md",
-    sourceAnchor: "Add error-handling paths for ceremonies/sandpits",
-    whyMatters: "Reliable autonomous work needs truthful errors to cross ceremony boundaries without losing source context or result shape.",
-    dependencies: ["ceremony this/ret semantics", "error sentence contract"],
-    scope: "ret with be error, nested and returned ceremony errors, surfaced main-memory/results behavior, and supported parity coverage.",
-    nonGoals: "A new exception system, undocumented error names, or broad compiler redesign.",
-    acceptance: "Ceremony and sandpit errors become truthful Pyash error sentences, propagate through supported paths, and focused nested/returned error tests pass.",
-    priority: 115,
-    prompt: "Implement one coherent ceremony and sandpit error-propagation slice using ret with be error, preserving surfaced main-memory/results behavior and parity coverage.",
-    whyNow: "This closes a language-runtime correctness gap that affects reliable autonomous work and is explicitly called out in the current TODO."
+    whyNow: "Accepted on automation/roadmap; the remaining C parity is a separate explicitly deferred boundary."
   },
   {
     taskId: "roadmap-hnuc-compositional-validation",
@@ -66,9 +38,23 @@ const ROADMAP_PACKAGES = Object.freeze([
     scope: "HNUC/code validation utilities, case-grid coverage, deterministic diagnostics, and focused parser/signature regression tests.",
     nonGoals: "Inventing new compositional keywords or replacing the canonical case table.",
     acceptance: "The validator checks the canonical compositional grid and catches missing/invalid axis-context mappings with deterministic tests and operator-readable output.",
-    priority: 110,
-    prompt: "Add a bounded HNUC/code validation capability for compositional cases, aligned with the canonical case grid and covered by deterministic parser/signature tests.",
-    whyNow: "The runtime already centralizes compositional cases; validation is a high-leverage guard against future parity regressions."
+    priority: 125,
+    prompt: "Finish the existing HNUC/code validation worktree, preserve the explicit unassigned identity warnings, and obtain focused Sol-reviewed acceptance.",
+    whyNow: "The isolated worktree has a real validator and 28 passing focused tests; recover and review it before starting unrelated work."
+  },
+  {
+    taskId: "roadmap-ceremony-error-propagation",
+    title: "Complete ceremony and sandpit error propagation",
+    sourcePath: "documentation/todo.md",
+    sourceAnchor: "Add error-handling paths for ceremonies/sandpits",
+    whyMatters: "Reliable autonomous work needs truthful errors to cross ceremony boundaries without losing source context or result shape.",
+    dependencies: ["accepted ceremony translation boundary", "error sentence contract"],
+    scope: "ret with be error, nested and returned ceremony errors, surfaced main-memory/results behavior, and supported parity coverage.",
+    nonGoals: "A new exception system, undocumented error names, or broad compiler redesign.",
+    acceptance: "Ceremony and sandpit errors become truthful Pyash error sentences, propagate through supported paths, and focused nested/returned error tests pass.",
+    priority: 120,
+    prompt: "Finish the existing ceremony error-propagation worktree and obtain Sol review; retain the supported interpreter/JavaScript boundary and do not broaden into a new exception system.",
+    whyNow: "The timeout left a focused implementation with 7 passing tests in its worktree, so this is retryable correctness work rather than a direction question."
   },
   {
     taskId: "roadmap-register-state-ground-truth",
@@ -80,9 +66,51 @@ const ROADMAP_PACKAGES = Object.freeze([
     scope: "Derive register lookups from the evoking sentence, preserve observable loop behavior, and add interpreter/JavaScript/C parity guards where supported.",
     nonGoals: "Removing legitimate result facts or changing the public loop vocabulary.",
     acceptance: "Loop and ceremony paths no longer depend on stale separate register facts; existing loop behavior and backend parity remain green.",
+    priority: 115,
+    prompt: "Finish the existing register-state worktree and obtain Sol review, preserving evoking-sentence authority and the current loop vocabulary.",
+    whyNow: "The isolated worktree has passing interpreter/JavaScript/C loop regressions and documentation changes; it is valid retryable WIP."
+  },
+  {
+    taskId: "roadmap-mind-reply-envelope-streaming",
+    title: "Complete mind reply envelopes and streaming parity",
+    sourcePath: "documentation/todo.md",
+    sourceAnchor: "Mind: plus streaming path and richer reply envelopes",
+    whyMatters: "Makes mind calls useful as a durable language/runtime primitive by preserving assistant, thinking, timestamp, and streaming evidence.",
+    dependencies: ["current mind contract", "translation/runtime parity baseline"],
+    scope: "Richer reply envelope mapping, Ollama streaming path, supported interpreter/JavaScript surfaces, durable success/failure tests, and aligned documentation.",
+    nonGoals: "New providers, multi-host scheduling, UI work, and fixture-only behavior.",
+    acceptance: "Mind replies preserve text, metadata, and streaming behavior through supported runtime paths; focused success/failure tests pass without fixture-only backends.",
+    priority: 110,
+    prompt: "Finish the existing mind reply/streaming worktree, fix the failing delayed-terminal streaming assertion, and obtain focused Sol review without re-planning.",
+    whyNow: "The timeout left a substantial reply module and tests; one focused streaming test still fails, so the package is partial and retryable."
+  },
+  {
+    taskId: "roadmap-pyash-native-agent-workflows",
+    title: "Strengthen Pyash-native agent workflows",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Next milestone: Agent harness (research + builder)",
+    whyMatters: "Exercises Pyash itself as the workflow language and improves the agent/runtime substrate that operates the roadmap.",
+    dependencies: ["mind reply envelopes", "agent session and scheduler contracts", "tool/MCP lifecycle"],
+    scope: "One end-to-end Pyash-defined agent workflow using existing session, tool, newspaper, and command primitives, with a durable example and tests.",
+    nonGoals: "Replacing the supervisor, adding parallel workers, or inventing a second agent framework.",
+    acceptance: "A bounded agent workflow is expressed in Pyash where reasonable, runs through supported runtime primitives, records durable evidence, and has zero-quota tests.",
     priority: 105,
-    prompt: "Complete a focused register-state cleanup so evoking sentences remain ground truth while preserving loop behavior and parity coverage.",
-    whyNow: "This is an explicitly recorded correctness debt in the TODO and supports reliable multi-wake language work."
+    prompt: "Recover the existing accepted-looking native agent workflow commit, verify its durable example and zero-quota tests, then obtain Sol review before integration.",
+    whyNow: "The worktree contains commit 65325b78 and passing agent workflow tests, but the durable task record missed the result because the turn timed out."
+  },
+  {
+    taskId: "roadmap-standard-verb-coverage",
+    title: "Expand standard verb and noun coverage",
+    sourcePath: "documentation/todo.md",
+    sourceAnchor: "Expand verb coverage with quizzes for additional nouns/classes",
+    whyMatters: "Builds language capability from tested vocabulary instead of adding runtime behavior without a stable surface contract.",
+    dependencies: ["signature-first dispatch", "filename IO contract"],
+    scope: "Complete the filename mutation family across interpreter, JavaScript, and C, then retain a frozen contract and runnable example.",
+    nonGoals: "A speculative standard library expansion or untested vocabulary aliases.",
+    acceptance: "Touch, copy, rename, and file-mode delete have matching interpreter/JS/C behavior, guards, signatures, and focused parity tests.",
+    priority: 100,
+    prompt: "Recover the filename mutation worktree, fix the three reported parity/code-generation failures, and obtain Sol review without broadening the noun family.",
+    whyNow: "The timeout left meaningful implementation and tests, but focused validation still has three failures; it is partial retryable work."
   },
   {
     taskId: "roadmap-cli-language-ux",
@@ -94,37 +122,135 @@ const ROADMAP_PACKAGES = Object.freeze([
     scope: "Document case-parsed compile/run/interpret arguments, add smoke coverage for the wrappers, and keep command output/error contracts explicit.",
     nonGoals: "A new CLI framework or a broad flag/alias compatibility layer.",
     acceptance: "The documented CLI forms work from a clean checkout, focused smoke tests cover success and error paths, and command contracts are clear.",
-    priority: 100,
-    prompt: "Strengthen the Pyash CLI language UX with documented case-parsed compile/run/interpret forms and deterministic wrapper smoke tests.",
-    whyNow: "Operator usability is a direct multiplier for every later language and automation milestone."
-  },
-  {
-    taskId: "roadmap-standard-verb-coverage",
-    title: "Expand standard verb and noun coverage",
-    sourcePath: "documentation/todo.md",
-    sourceAnchor: "Expand verb coverage with quizzes for additional nouns/classes",
-    whyMatters: "Builds language capability from tested vocabulary instead of adding runtime behavior without a stable surface contract.",
-    dependencies: ["pyac.md noun/class hints", "signature-first dispatch"],
-    scope: "Choose one coherent noun/class family, add specification-aligned signatures, interpreter behavior, parity quizzes, and examples before implementation broadens.",
-    nonGoals: "A speculative standard library expansion or untested vocabulary aliases.",
-    acceptance: "One noun/class family has a frozen sentence contract, interpreter behavior, parity coverage, and runnable examples without unrelated verb churn.",
     priority: 95,
-    prompt: "Choose and complete one bounded standard verb/noun coverage family from pyac.md, with frozen signatures, interpreter behavior, parity quizzes, and a runnable example.",
-    whyNow: "The current TODO explicitly prioritizes vocabulary contracts before adding more code."
+    prompt: "Recover the CLI language UX worktree and obtain Sol review for the existing wrapper documentation and 8 passing smoke tests.",
+    whyNow: "The isolated worktree has a complete-looking command helper and passing focused tests, but no durable review result was captured."
   },
   {
-    taskId: "roadmap-pyash-native-agent-workflows",
-    title: "Strengthen Pyash-native agent workflows",
+    taskId: "roadmap-agent-research-tool-chain",
+    title: "Complete the Pyash agent research tool chain",
     sourcePath: "documentation/roadmap.md",
-    sourceAnchor: "Next milestone: Agent harness (research + builder)",
-    whyMatters: "Exercises Pyash itself as the workflow language and improves the agent/runtime substrate that operates the roadmap.",
-    dependencies: ["agent session and scheduler contracts", "mind reply envelopes", "tool/MCP lifecycle"],
-    scope: "One end-to-end Pyash-defined agent workflow using existing session, tool, newspaper, and command primitives, with a durable example and tests.",
-    nonGoals: "Replacing the supervisor, adding parallel workers, or inventing a second agent framework.",
-    acceptance: "A bounded agent workflow is expressed in Pyash where reasonable, runs through supported runtime primitives, records durable evidence, and has zero-quota tests.",
+    sourceAnchor: "Goal: runnable agent loop with search, download, read-to-markdown, tool-calling minds, and project command execution.",
+    whyMatters: "Turns the separate search, download, markdown, command, and mind primitives into one useful user-facing agent capability.",
+    dependencies: ["native agent command workflow", "mind reply envelopes", "search/download/read tool contracts"],
+    scope: "A Pyash-defined research workflow that searches, downloads, reads to markdown, and records durable tool/session/newspaper evidence.",
+    nonGoals: "Browser automation, arbitrary web crawling, new providers, and a second agent framework.",
+    acceptance: "A fixture-free local end-to-end example exercises the supported tool chain with bounded policy and durable evidence; focused tests cover success and typed failure paths.",
     priority: 90,
-    prompt: "Complete one Pyash-first agent workflow slice using existing session, tool, newspaper, and command primitives, with a durable example and tests.",
-    whyNow: "The roadmap names the agent harness as the next product milestone, and the manager policy explicitly asks autonomous work to dogfood Pyash."
+    prompt: "Implement one Pyash-first research workflow using the existing search, download, read-to-markdown, mind, session, and newspaper primitives, with bounded policy and evidence.",
+    whyNow: "The individual capabilities exist, but the roadmap's runnable agent loop is not yet proven as one coherent workflow."
+  },
+  {
+    taskId: "roadmap-product-alpha-soak",
+    title: "Prove the product-alpha scheduler and Matrix runtime",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Goal: ship a narrow but reliable multi-agent runtime for real users (single workspace, scheduler + Matrix + file/tool workflows).",
+    whyMatters: "Converts the existing scheduler/channel code into an evidence-backed product-alpha claim instead of relying on unit tests alone.",
+    dependencies: ["agent research workflow", "Matrix channel contract", "scheduler health and dedup"],
+    scope: "A bounded real-environment alpha validation tranche: Matrix intake/produce, scheduler operation, dedup/checkpoint behavior, three real task traces, and a seven-day soak runbook/evidence summary.",
+    nonGoals: "Multi-host deployment, arbitrary parallel workers, and UI/dashboard redesign.",
+    acceptance: "The alpha exit evidence exists: seven-day soak without manual restart, three real end-to-end tasks, green scheduler/channel/agent tests, and a daily real-backend smoke record.",
+    priority: 85,
+    prompt: "Design and execute the smallest evidence-backed product-alpha reliability tranche around the existing Matrix and scheduler runtime; record external prerequisites and do not fake soak evidence.",
+    whyNow: "The code and tests exist, but the roadmap exit criteria have not been demonstrated."
+  },
+  {
+    taskId: "roadmap-session-replay-hardening",
+    title: "Harden long-run session replay and context compaction",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Session behavior hardening for long runs",
+    whyMatters: "Makes agent work resumable and keeps prompt context bounded as real workflows span many turns.",
+    dependencies: ["agent session contract", "newspaper/artifact replay", "mind reply envelopes"],
+    scope: "Accepted retry-pair compaction, stable session records, replay-safe checkpoints, and deterministic context-window tests.",
+    nonGoals: "Model training, arbitrary memory retrieval, and parallel session execution.",
+    acceptance: "Long sessions compact deterministically, preserve accepted evidence, resume without duplicate turns, and pass replay/fixture-free regression coverage.",
+    priority: 80,
+    prompt: "Complete a bounded long-run session/replay hardening package using the existing session, checkpoint, newspaper, and artifact contracts.",
+    whyNow: "The roadmap marks session hardening partial, and durable autonomous work has already exposed the cost of ambiguous long turns."
+  },
+  {
+    taskId: "roadmap-command-result-identity",
+    title: "Add durable per-command result identity",
+    sourcePath: "documentation/todo.md",
+    sourceAnchor: "Introduce result tracking with per-command IDs instead of generic result",
+    whyMatters: "Improves debugging and replay when one Pyash program performs several external commands or tool calls.",
+    dependencies: ["command audit IDs", "newspaper/tool event ordering", "result artifact contract"],
+    scope: "A sentence-native result identity contract that links command/tool requests, surfaced results, artifacts, and replay evidence without breaking generic result compatibility.",
+    nonGoals: "A new JSON state store, replacing all existing result names at once, or changing backend semantics without parity tests.",
+    acceptance: "Repeated commands receive deterministic IDs, their results and artifacts are linked in newspapers, replay preserves identity, and focused interpreter/JS/C tests pass where supported.",
+    priority: 75,
+    prompt: "Design and implement a small sentence-native per-command result identity layer over the existing audit/newspaper/artifact primitives, with compatibility and parity tests.",
+    whyNow: "This later TODO is a direct reliability multiplier for the agent and product-alpha packages."
+  },
+  {
+    taskId: "roadmap-review-loop-compaction",
+    title: "Complete review-loop context compaction",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Review-loop context compaction (golden context)",
+    whyMatters: "Keeps repeated implementation and review cycles bounded while preserving accepted evidence for replay.",
+    dependencies: ["durable work checkpoints", "session replay records"],
+    scope: "Original objective plus latest accepted success pair in live prompts, failed retry chains retained in newspapers/artifacts, and deterministic compaction goldens.",
+    nonGoals: "Provider-specific context heuristics, arbitrary memory retrieval, or multi-worker concurrency.",
+    acceptance: "Repeated review loops produce bounded deterministic context, preserve accepted evidence, and replay without duplicating obsolete retry history.",
+    priority: 70,
+    prompt: "Complete the bounded review-loop context compaction package described by the Week 4 roadmap, using existing checkpoint and newspaper evidence.",
+    whyNow: "The manager/worker lane already exposes long-turn context pressure; this is a direct reliability prerequisite for unattended work."
+  },
+  {
+    taskId: "roadmap-library-refinement-cache",
+    title: "Complete the library refinement cache model",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Library refinement cache model",
+    whyMatters: "Avoids repeated expensive refinement work and makes document/tool pipelines replayable and practical.",
+    dependencies: ["download cache records", "document digestion evidence"],
+    scope: "Fresh/text/abridged/summarized staged roots, content-hash cache hits, deterministic reuse records, and replay tests.",
+    nonGoals: "A new storage engine, uncontrolled cache eviction, or provider-specific cache semantics.",
+    acceptance: "Unchanged inputs reuse staged outputs with identical artifacts and run records; changed inputs invalidate only the affected stages.",
+    priority: 65,
+    prompt: "Complete the roadmap library refinement cache model using existing download, artifact, and newspaper conventions, with deterministic cache-hit tests.",
+    whyNow: "The research agent and document workflows need predictable cost and replay before they can scale beyond fixtures."
+  },
+  {
+    taskId: "roadmap-concurrency-deterministic-simulation",
+    title: "Build deterministic concurrency simulation",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Week 5: Concurrency v0.7 (ready queue, cancellation, backpressure, simulation)",
+    whyMatters: "Establishes a testable concurrency contract without making unattended coding multi-worker yet.",
+    dependencies: ["scheduler trace events", "stream lifecycle contract", "timeout and cancellation vocabulary"],
+    scope: "Fixed-seed simulated clock, deterministic ready-queue ordering, cancellation/timeouts, bounded stream buffering, and newspaper schedule traces.",
+    nonGoals: "Arbitrary parallel background coders, production load balancing, or changing the one-worker safety policy.",
+    acceptance: "Seeded simulations replay identically across supported backends and surface stable timeout/cancel/backpressure evidence.",
+    priority: 60,
+    prompt: "Implement the smallest spec-aligned deterministic concurrency simulation slice from Week 5, keeping real background coding single-flight.",
+    whyNow: "Scheduler and channel code exist, but the roadmap's deterministic concurrency and simulation gates remain unproven."
+  },
+  {
+    taskId: "roadmap-knowledge-core",
+    title: "Implement the sentence-native knowledge core",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Week 9: Knowledge core v0.9 (claim identity, evidence shell, KB layout)",
+    whyMatters: "Gives Pyash agent workflows a truthful claim/evidence substrate instead of leaving durable knowledge as generic artifacts.",
+    dependencies: ["evidential sentence conventions", "source anchoring", "parity canonical ordering"],
+    scope: "Claim-key derivation, evidential shell, source/anchor identity, entity-page layout, registries, held/rejected stores, and current/contested/provenance views.",
+    nonGoals: "A hosted database, opaque vector store, or model-dependent truth scoring.",
+    acceptance: "Golden claim/evidence/resolver fixtures pass with canonical interpreter/JavaScript/C output for the supported boundary.",
+    priority: 55,
+    prompt: "Implement a bounded sentence-native knowledge-core slice from Week 9, starting with claim identity and evidence fixtures before broader retrieval.",
+    whyNow: "The later research, digestion, and adjudication milestones depend on a durable claim and provenance contract."
+  },
+  {
+    taskId: "roadmap-document-digestion",
+    title: "Build anchored document digestion",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Week 10: Document digestion v0.92 (policy ingest to sentences, segmentation, draft extraction)",
+    whyMatters: "Moves document conversion from Markdown output toward replayable, sentence-native knowledge input.",
+    dependencies: ["knowledge core claim identity", "read-to-markdown", "source artifact anchors"],
+    scope: "Source registration, deterministic anchors, sentence segmentation, high-recall draft extraction, normalization, and three golden document fixtures.",
+    nonGoals: "Full autonomous truth adjudication, arbitrary OCR, or replacing existing read/download primitives.",
+    acceptance: "Policy, technical, and tabular golden documents produce stable anchored candidate sentences and replay-identical records.",
+    priority: 50,
+    prompt: "Build the smallest Pyash-first anchored document digestion package on top of the existing read and artifact paths, with deterministic golden outputs.",
+    whyNow: "Read-to-Markdown is present, but the roadmap's sentence-native ingest and anchoring boundary remains unfinished."
   }
 ]);
 
@@ -143,7 +269,23 @@ const COMPLETED_PACKAGES = Object.freeze([
   }
 ]);
 
-const ROADMAP_SCHEMA = "1";
+const ROADMAP_SCHEMA = "3";
+
+const OPERATIONAL_BLOCK_PATTERNS = Object.freeze([
+  /turn timeout/iu,
+  /timed out/iu,
+  /sandbox/iu,
+  /infrastructure/iu,
+  /execution environment/iu,
+  /usage[- ]limited/iu,
+  /capacity/iu,
+  /pacing/iu,
+  /provider/iu,
+  /app[- ]server/iu,
+  /codex/iu,
+  /interrupted/iu,
+  /temporary/iu
+]);
 
 function text(value) {
   return String(value ?? "").trim();
@@ -205,6 +347,14 @@ function sourceForPackage(item) {
   return item.source || `${item.sourcePath}:${item.sourceAnchor}`;
 }
 
+function operationalItems(roadmap) {
+  const packageIds = new Set((roadmap.packages || []).map((item) => item.taskId));
+  return [
+    ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / OPERATIONAL"),
+    ...(roadmap.retryable || []).filter((item) => !packageIds.has(item.taskId))
+  ];
+}
+
 function taskMatch(item, tasks) {
   return tasks.find((task) => task.taskId === item.taskId)
     || tasks.find((task) => task.workSpec?.provenance?.key === `${item.sourcePath}:${item.sourceAnchor}`);
@@ -216,7 +366,10 @@ function progressForTask(task) {
   const passes = Number(checkpoint.implementation?.passes || 0);
   const action = text(checkpoint.lastAction || checkpoint.interruption?.reason);
   if (task.status === "accepted") return `accepted; Sol review ${text(checkpoint.review?.decision) || "complete"}`;
-  if (task.status === "blocked" || task.status === "failed") return text(checkpoint.blocker || task.message || task.error) || task.status;
+  if (task.status === "blocked" || task.status === "failed") {
+    const reason = text(checkpoint.blocker || task.message || task.error) || task.status;
+    return `${isRetryableWorkBlock(task) ? "retryable operational block" : "human decision block"}: ${reason}`;
+  }
   if (task.status === "ready") return "queued for the next eligible background wake";
   return `${passes} implementation pass${passes === 1 ? "" : "es"}; ${action || `phase ${task.status}`}`;
 }
@@ -224,7 +377,9 @@ function progressForTask(task) {
 function statusForTask(task) {
   if (!task) return "CANDIDATE";
   if (task.status === "accepted") return "COMPLETE";
-  if (task.status === "blocked" || task.status === "failed") return "BLOCKED / NEEDS DECISION";
+  if (task.status === "blocked" || task.status === "failed") {
+    return isRetryableWorkBlock(task) ? "BLOCKED / OPERATIONAL" : "BLOCKED / NEEDS DECISION";
+  }
   if (task.status === "ready") return "QUEUED";
   return "ACTIVE";
 }
@@ -236,10 +391,32 @@ function normalizePackage(item, task) {
     dependencies: Array.isArray(item.dependencies) ? item.dependencies : text(item.dependencies).split(" | ").filter(Boolean),
     nonGoals: Array.isArray(item.nonGoals) ? item.nonGoals : text(item.nonGoals),
     status: statusForTask(task),
+    blockClass: task && (task.status === "blocked" || task.status === "failed")
+      ? (isRetryableWorkBlock(task) ? "operational" : "human-decision")
+      : "",
     progress: progressForTask(task),
     worktree: text(task?.checkpoint?.workspace?.worktreePath),
     commit: text(task?.checkpoint?.integration?.commit || task?.checkpoint?.implementation?.commit)
   };
+}
+
+function taskBlockReason(task) {
+  return text(task?.checkpoint?.blocker || task?.message || task?.error);
+}
+
+export function isRetryableWorkBlock(task) {
+  if (!task || !["blocked", "failed"].includes(task.status)) return false;
+  const reason = taskBlockReason(task);
+  return OPERATIONAL_BLOCK_PATTERNS.some((pattern) => pattern.test(reason));
+}
+
+export function isHumanDecisionBlock(task) {
+  return Boolean(task && ["blocked", "failed"].includes(task.status) && !isRetryableWorkBlock(task));
+}
+
+export function hasCredibleRoadmapWork(roadmap = {}) {
+  return (roadmap.packages || []).some((item) => ["ACTIVE", "QUEUED", "CANDIDATE", "BLOCKED / OPERATIONAL"].includes(item.status))
+    || (roadmap.retryable || []).length > 0;
 }
 
 function mapValue(map, key) {
@@ -298,6 +475,7 @@ export function renderAutonomousRoadmapMarkdown(roadmap = {}) {
     ["Active", (roadmap.packages || []).filter((item) => item.status === "ACTIVE")],
     ["Queued", (roadmap.packages || []).filter((item) => item.status === "QUEUED")],
     ["Candidate", (roadmap.packages || []).filter((item) => item.status === "CANDIDATE")],
+    ["Blocked / Operational", operationalItems(roadmap)],
     ["Blocked / Needs Decision", [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...(roadmap.needsDecision || [])
@@ -336,6 +514,7 @@ export function renderAutonomousRoadmapReport(roadmap = {}) {
     ["ACTIVE", (roadmap.packages || []).filter((item) => item.status === "ACTIVE")],
     ["QUEUED", (roadmap.packages || []).filter((item) => item.status === "QUEUED")],
     ["CANDIDATE", (roadmap.packages || []).filter((item) => item.status === "CANDIDATE")],
+    ["BLOCKED / OPERATIONAL", operationalItems(roadmap)],
     ["BLOCKED / NEEDS DECISION", [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...(roadmap.needsDecision || [])
@@ -382,6 +561,8 @@ function renderAutonomousRoadmapPya(roadmap) {
     ["generated at", roadmap.generatedAt],
     ["refresh needed", roadmap.refreshNeeded ? "true" : "false"],
     ["refresh reason", roadmap.refreshReason],
+    ["reconciliation source", roadmap.reconciliation?.source || ""],
+    ["reconciliation status", roadmap.reconciliation?.status || ""],
     ["last refresh at", roadmap.architect?.refreshedAt || ""],
     ["manager thread id", roadmap.architect?.threadId || ""],
     ["last sol summary", roadmap.architect?.summary || ""]
@@ -390,7 +571,8 @@ function renderAutonomousRoadmapPya(roadmap) {
     .map((item) => renderMap(`work autonomous roadmap package ${item.taskId}`, fieldEntries(item)))
     .join("\n");
   const decisions = renderMap("work autonomous roadmap decisions", (roadmap.needsDecision || []).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
-  return `${header}${packageText}${decisions}`;
+  const retryable = renderMap("work autonomous roadmap operational blocks", (roadmap.retryable || []).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
+  return `${header}${packageText}${retryable}${decisions}`;
 }
 
 export async function readAutonomousRoadmap(worldRoot) {
@@ -409,6 +591,10 @@ export async function readAutonomousRoadmap(worldRoot) {
       generatedAt: mapValue(stateMap, "generated at"),
       refreshNeeded: mapValue(stateMap, "refresh needed") === "true",
       refreshReason: mapValue(stateMap, "refresh reason"),
+      reconciliation: {
+        source: mapValue(stateMap, "reconciliation source"),
+        status: mapValue(stateMap, "reconciliation status")
+      },
       architect: {
         refreshedAt: mapValue(stateMap, "last refresh at"),
         threadId: mapValue(stateMap, "manager thread id"),
@@ -418,6 +604,7 @@ export async function readAutonomousRoadmap(worldRoot) {
       packages: packageMaps.filter((item) => !COMPLETED_PACKAGES.some((completed) => completed.taskId === item.taskId)),
       completed: packageMaps.filter((item) => COMPLETED_PACKAGES.some((completed) => completed.taskId === item.taskId)),
       needsDecision: decisions,
+      retryable: [],
       paths: { pya, markdown }
     };
   } catch (error) {
@@ -448,12 +635,26 @@ export async function buildAutonomousRoadmap({
 } = {}) {
   const allTasks = tasks || await listWorkTasks(worldRoot, { includeTerminal: true });
   const previous = await readAutonomousRoadmap(worldRoot);
-  const persistedCatalog = previous?.packages?.filter((item) => item.taskId && item.sourcePath && item.sourceAnchor) || [];
+  const persistedCatalog = previous?.schema === ROADMAP_SCHEMA
+    ? previous.packages?.filter((item) => item.taskId && item.sourcePath && item.sourceAnchor) || []
+    : [];
   const catalog = persistedCatalog.length >= 5 ? persistedCatalog : ROADMAP_PACKAGES;
   const packages = catalog.map((item) => normalizePackage(item, taskMatch(item, allTasks)));
   const completed = COMPLETED_PACKAGES.map((item) => normalizePackage(item, taskMatch(item, allTasks)));
+  const operationalBlocks = allTasks
+    .filter((task) => isRetryableWorkBlock(task))
+    .map((task) => ({
+      taskId: task.taskId,
+      title: task.title,
+      status: "BLOCKED / OPERATIONAL",
+      priority: task.priority,
+      blocker: taskBlockReason(task),
+      progress: progressForTask(task),
+      worktree: text(task.checkpoint?.workspace?.worktreePath)
+    }));
   const needsDecision = allTasks
-    .filter((task) => task.status === "blocked")
+    .filter((task) => ["blocked", "failed"].includes(task.status))
+    .filter((task) => !isRetryableWorkBlock(task))
     .filter((task) => !packages.some((item) => item.taskId === task.taskId))
     .map((task) => ({
       taskId: task.taskId,
@@ -463,6 +664,7 @@ export async function buildAutonomousRoadmap({
       blocker: text(task.checkpoint?.blocker || task.message || task.error),
       progress: progressForTask(task)
     }));
+  const storedArchitect = previous?.schema === ROADMAP_SCHEMA ? previous.architect || {} : {};
   const roadmap = {
     schema: ROADMAP_SCHEMA,
     generatedAt: iso(typeof now === "function" ? now() : now),
@@ -471,7 +673,12 @@ export async function buildAutonomousRoadmap({
     packages,
     completed,
     needsDecision,
-    architect: architect || previous?.architect || {},
+    retryable: operationalBlocks,
+    reconciliation: {
+      source: "documentation/reference/roadmap-reconciliation-2026-08.md",
+      status: "unfinished roadmap work remains; generated candidates are not exhaustion evidence"
+    },
+    architect: architect || (storedArchitect.summary || storedArchitect.threadId || storedArchitect.refreshedAt ? storedArchitect : {}),
     repositoryRoot
   };
   roadmap.refreshNeeded = roadmapNeedsRefresh(roadmap);
