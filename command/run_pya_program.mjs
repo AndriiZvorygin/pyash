@@ -520,7 +520,7 @@ async function main() {
   const isToolSentence = (sentence) => {
     if (!sentence) return false;
     if (sentence.be === "mind") return sentence.mood === "do";
-    if (sentence.be === "command") return sentence.mood === "do";
+    if (sentence.be === "command") return sentence.mood === "do" || sentence.mood === "propose";
     if (sentence.be !== "write") return false;
     const targetName = sentence.to?.name;
     if (!targetName) return false;
