@@ -16,6 +16,7 @@ const examplePath = path.join(repoRoot, "examples", "pyash", "agent-command-work
 const runnerPath = path.join(repoRoot, "command", "run_pya_program.mjs");
 
 const fixtureNames = [
+  "PYA_MIND_RESPONSE",
   "PYA_COMMAND_RESPONSE",
   "PYA_HEAR_FIXTURE",
   "PYA_MIND_TOOL",
@@ -25,8 +26,9 @@ const fixtureNames = [
 ];
 
 function fixtureEnv(response) {
-  const env = { ...process.env, PYA_MIND_RESPONSE: JSON.stringify(response) };
+  const env = { ...process.env };
   for (const name of fixtureNames) delete env[name];
+  if (response !== undefined) env.PYA_MIND_RESPONSE = JSON.stringify(response);
   return env;
 }
 
@@ -36,9 +38,9 @@ function parsedFile(text) {
     .filter(Boolean);
 }
 
-async function runExample({ cwd, runId, response }) {
+async function runProgram({ cwd, runId, response, sourceText }) {
   const programPath = path.join(cwd, "agent-command-workflow.pya");
-  await fs.copyFile(examplePath, programPath);
+  await fs.writeFile(programPath, sourceText ?? await fs.readFile(examplePath, "utf8"), "utf8");
   return execFileAsync("node", [
     runnerPath,
     "--newspaper",
@@ -50,6 +52,10 @@ async function runExample({ cwd, runId, response }) {
     timeout: 120000,
     env: fixtureEnv(response)
   });
+}
+
+async function runExample({ cwd, runId, response }) {
+  return runProgram({ cwd, runId, response });
 }
 
 function toolName() {
@@ -126,4 +132,60 @@ test("empty nested command records an error tool event without losing run eviden
   const resultPath = path.join(cwd, "artifacts", runId, "result.pya");
   assert.ok((await fs.stat(resultPath)).isFile());
   assert.ok(parsedFile(await fs.readFile(resultPath, "utf8")).length > 0);
+});
+
+test("outer and nested tool events use consecutive ids after their request and audit records", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-command-workflow-order-"));
+  const runId = "agent-command-workflow-order";
+  const sourceText = `${await fs.readFile(examplePath, "utf8")}\nob text "node --version" to name text outer answer be command do\n`;
+  await runProgram({ cwd, runId, response: toolResponse(), sourceText });
+
+  const newspaper = parsedFile(await fs.readFile(path.join(cwd, "newspaper", `${runId}.pya`), "utf8"));
+  const toolEvents = newspaper.filter(sentence => sentence?.be === "tool");
+  assert.equal(toolEvents.length, 2);
+  const eventIds = toolEvents.map(sentence => sentence?.su?.name);
+  assert.deepEqual(eventIds, ["tool event 000001", "tool event 000002"]);
+  assert.equal(new Set(eventIds).size, eventIds.length);
+
+  const auditIndexes = newspaper
+    .map((sentence, index) => sentence?.be === "command audit" ? index : -1)
+    .filter(index => index >= 0);
+  assert.equal(auditIndexes.length, 4);
+  const firstRequest = newspaper.findIndex(sentence => sentence?.su?.name === "agent request 1 messages");
+  const firstResponse = newspaper.findIndex(sentence => {
+    const name = String(sentence?.su?.name ?? "");
+    return name.startsWith("agent response ") && name.endsWith(" message");
+  });
+  assert.notEqual(firstRequest, -1);
+  assert.notEqual(firstResponse, -1);
+  assert.ok(firstRequest < firstResponse);
+  const firstEventIndex = newspaper.indexOf(toolEvents[0]);
+  const secondEventIndex = newspaper.indexOf(toolEvents[1]);
+  assert.ok(Math.max(...auditIndexes.slice(0, 2)) < firstEventIndex);
+  assert.ok(firstRequest < secondEventIndex);
+  assert.ok(firstResponse < secondEventIndex);
+  assert.ok(Math.max(...auditIndexes) < secondEventIndex);
+});
+
+test("executable command propose records a tool event while passive command can stays unrecorded", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-command-workflow-propose-"));
+  const runId = "agent-command-workflow-propose";
+  const sourceText = [
+    "su name tools be map def",
+    "su name command be command ob text input to name text answer can",
+    "prah",
+    "su name flow be refinery def",
+    "su name gate ob text \"Approve?\" be command propose",
+    "su name after ob num 1 be number ya",
+    "prah",
+    "from name flow be refinery do"
+  ].join("\n");
+  await runProgram({ cwd, runId, response: undefined, sourceText });
+
+  const newspaper = parsedFile(await fs.readFile(path.join(cwd, "newspaper", `${runId}.pya`), "utf8"));
+  const toolEvents = newspaper.filter(sentence => sentence?.be === "tool");
+  assert.equal(toolEvents.length, 1);
+  assert.equal(sentenceToPyash(toolEvents[0]?.ob?.la), "su name gate ob text \"Approve?\" be command propose");
+  assert.equal(toolEvents[0]?.to?.la?.be, "command propose");
+  assert.ok(newspaper.some(sentence => sentence?.be === "end"));
 });
