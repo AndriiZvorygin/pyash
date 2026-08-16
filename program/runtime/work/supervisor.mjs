@@ -799,7 +799,11 @@ export async function runWorkSupervisorOnce({
       } catch (error) {
         const reason = `automation branch integration blocked: ${text(error?.message || error)}`;
         task = await move("blocked", { message: reason, error: reason });
-        task = await save({ blocker: reason, lastAction: "blocked during automation branch integration" });
+        task = await save({
+          blocker: reason,
+          integration: { status: "blocked", error: reason },
+          lastAction: "blocked during automation branch integration"
+        });
         await emit("blocked", { reason, phase: "integration", worktree: workspace.worktreePath });
         return { claimed: true, taskId: task.taskId, status: task.status, message: reason, queue: await queueDepth(worldRoot) };
       }
