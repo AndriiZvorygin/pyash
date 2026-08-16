@@ -31,6 +31,11 @@ function hasConcreteRevision(task) {
   return Boolean(String(task?.checkpoint?.review?.revisionInstructions || "").trim());
 }
 
+function hasIntegrationConflict(task) {
+  const reason = `${text(task?.checkpoint?.blocker)} ${text(task?.message)} ${text(task?.error)}`;
+  return /integration|cherry-pick|rebase|merge conflict/iu.test(reason);
+}
+
 function activeTurnAge(task, now) {
   const active = task?.checkpoint?.activeTurn || {};
   const source = active.startedAt || task?.checkpoint?.interruption?.at || "";
@@ -69,7 +74,9 @@ export function isRecoverableOperationalWorkTask(task, {
   if (/sol review block|human decision/iu.test(
     `${text(task.checkpoint?.blocker)} ${text(task.message)} ${text(task.error)}`
   )) return false;
-  if (!hasConcreteRevision(task) && (Number(task.checkpoint?.recoveryCount) || 0) >= maxRecoveryCount) return false;
+  const integration = hasIntegrationConflict(task);
+  if (task.checkpoint?.integration?.status === "blocked") return false;
+  if (!hasConcreteRevision(task) && !integration && (Number(task.checkpoint?.recoveryCount) || 0) >= maxRecoveryCount) return false;
   return !hasRecentOrLiveAmbiguousTurn(task, nowDate(now), Math.max(1, Number(staleTurnMs) || DEFAULT_STALE_OPERATIONAL_TURN_MS));
 }
 
@@ -104,7 +111,8 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
     : "";
   const previousThreadId = current.checkpoint?.worker?.threadId || "";
   const continuation = hasConcreteRevision(current);
-  const transitioned = transitionWorkTask(current, continuation ? "revision" : "ready", {
+  const integration = hasIntegrationConflict(current);
+  const transitioned = transitionWorkTask(current, continuation || integration ? "revision" : "ready", {
     now: date,
     message: reason,
     error: ""
@@ -130,11 +138,14 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
         : {},
       interruption: {},
       recoveryCount: (current.checkpoint?.recoveryCount || 0) + (continuation ? 0 : 1),
+      integration: integration ? { status: "reconciliation", error: previousBlocker } : {},
       recoveryHistory: [...(current.checkpoint?.recoveryHistory || []), record],
       lastAction: continuation
         ? "recovered technical revision; continuing concrete Sol correction"
-        : reason,
-      continuationCount: continuation
+        : integration
+          ? "entered automation integration reconciliation"
+          : reason,
+      continuationCount: continuation || integration
         ? (current.checkpoint?.continuationCount || 0) + 1
         : current.checkpoint?.continuationCount || 0
     })
