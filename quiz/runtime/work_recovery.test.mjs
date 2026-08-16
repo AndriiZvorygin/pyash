@@ -279,3 +279,36 @@ test("a concrete revision outranks a higher-priority timeout and a new candidate
   assert.equal(result.selected, "roadmap-concrete-correction-priority");
   assert.equal(result.recovery.task.status, "revision");
 });
+
+test("integration conflicts enter a durable reconciliation phase", async () => {
+  const worldRoot = await world("pyash-work-recovery-integration-");
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-integration-reconciliation",
+    priority: 100,
+    blocker: "automation branch integration blocked: merge conflict",
+    activeTurn: {}
+  });
+  const recovered = await recoverOperationalWorkTask(worldRoot, "roadmap-integration-reconciliation", {
+    now: "2026-08-12T12:00:00.000Z"
+  });
+  assert.equal(recovered.task.status, "revision");
+  assert.equal(recovered.task.checkpoint.integration.status, "reconciliation");
+  assert.match(recovered.task.checkpoint.lastAction, /integration reconciliation/iu);
+});
+
+test("an integration conflict that failed reconciliation waits for a new operator baseline", async () => {
+  const worldRoot = await world("pyash-work-recovery-integration-blocked-");
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-integration-reconciliation-blocked",
+    blocker: "automation branch integration blocked: merge conflict",
+    activeTurn: {}
+  });
+  const current = await readWorkTaskStatus(worldRoot, "roadmap-integration-reconciliation-blocked");
+  await writeWorkTaskStatus(worldRoot, {
+    ...current,
+    checkpoint: { ...current.checkpoint, integration: { status: "blocked" } }
+  });
+  assert.equal(await recoverOperationalWorkTask(worldRoot, "roadmap-integration-reconciliation-blocked", {
+    now: "2026-08-12T12:00:00.000Z"
+  }), null);
+});
