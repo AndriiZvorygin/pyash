@@ -1,5 +1,6 @@
 import { runWorkSupervisorOnce } from "./supervisor.mjs";
 import { listQueuedWorkTasks, listRuntimeWorkTasks, queueDepth } from "./queue.mjs";
+import { listWorkTasks } from "./operator.mjs";
 import { readCodexCapacity, admitBackgroundWork, DEFAULT_BACKGROUND_POLICY } from "./capacity.mjs";
 import { appendWorkOutcome } from "./outcome.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
@@ -12,6 +13,7 @@ import {
   findRecoverableOperationalWorkTasks,
   recoverOperationalWorkTask
 } from "./recovery.mjs";
+import { isTechnicalContinuationBlock } from "./roadmap.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -75,6 +77,9 @@ export async function inspectWorkBackground({
     staleTurnMs: policy.staleOperationalTurnMs,
     maxRecoveryCount: policy.maxOperationalRecoveries
   });
+  const blocked = (await listWorkTasks(worldRoot, { includeTerminal: true }))
+    .filter((task) => !owner || task.owner === owner)
+    .filter((task) => isTechnicalContinuationBlock(task));
   const capacity = await capacitySource({ now: typeof now === "function" ? now() : now });
   const admission = admitBackgroundWork({
     capacity,
@@ -86,6 +91,7 @@ export async function inspectWorkBackground({
   return {
     eligible,
     recoverable,
+    technicalBlocked: blocked,
     capacity,
     admission,
     selected: selectWorkCandidate(eligible, recoverable)
@@ -118,7 +124,7 @@ export async function runWorkBackgroundOnce({
       now
     })
     : null;
-  const { eligible, recoverable, capacity, admission } = await inspectWorkBackground({
+  const { eligible, recoverable, technicalBlocked, capacity, admission } = await inspectWorkBackground({
     worldRoot,
     owner,
     policy,
@@ -163,21 +169,26 @@ export async function runWorkBackgroundOnce({
     "curated tasks": curation?.created?.join(", ") || prior["curated tasks"] || ""
   };
   if (!admission.admit) {
-    await emitWorkEvent(onEvent, "deferred", {
-      reason: admission.reason,
+    const technicalUnavailable = admission.reason === "no eligible work" && technicalBlocked.length > 0;
+    const reason = technicalUnavailable ? "technical continuation unavailable" : admission.reason;
+    const idle = reason === "no eligible work";
+    const action = technicalUnavailable ? "technical-blocked" : idle ? "idle" : "deferred";
+    await emitWorkEvent(onEvent, technicalUnavailable ? "technical-blocked" : "deferred", {
+      reason,
       capacity,
-      eligible: taskCount
+      eligible: taskCount,
+      blocked: technicalBlocked.map((task) => task.taskId)
     }, { now });
-    const idle = admission.reason === "no eligible work";
     const health = {
       ...baseHealth,
-      "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + (idle ? 0 : 1)),
-      "idle wakes": String((Number(prior["idle wakes"]) || 0) + (idle ? 1 : 0))
+      "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + (idle || technicalUnavailable ? 0 : 1)),
+      "idle wakes": String((Number(prior["idle wakes"]) || 0) + (idle ? 1 : 0)),
+      "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + (technicalUnavailable ? 1 : 0))
     };
     await writeWorkSchedulerHealth(worldRoot, health);
     await appendWorkSchedulerEvent(worldRoot, {
-      type: idle ? "idle" : "deferred",
-      reason: admission.reason,
+      type: action,
+      reason,
       capacity,
       pacing: admission.pacing,
       taskCount,
@@ -195,17 +206,17 @@ export async function runWorkBackgroundOnce({
         lastAction: `deferred: ${admission.reason}`
       });
       await appendWorkOutcome(worldRoot, deferredTask, {
-        reason: admission.reason,
+        reason,
         capacity,
         action: "deferred"
       });
     }
-    const report = admission.reason === "no eligible work"
-      ? renderWorkIdleReport({ result: { reason: admission.reason, eligible: taskCount }, capacity })
-      : renderWorkDeferredReport({ result: { reason: admission.reason, eligible: taskCount }, capacity });
+    const report = idle
+      ? renderWorkIdleReport({ result: { reason, eligible: taskCount }, capacity })
+      : renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity });
     return {
       admitted: false,
-      reason: admission.reason,
+      reason,
       capacity,
       eligible: taskCount,
       report,
@@ -254,7 +265,7 @@ export async function runWorkBackgroundOnce({
     }
     if (!preflight?.ok) {
       const reason = `execution environment blocked: ${text(preflight?.reason) || "preflight failed"}`;
-      await emitWorkEvent(onEvent, "deferred", {
+      await emitWorkEvent(onEvent, "technical-blocked", {
         reason,
         selected: selected.taskId,
         preflight
@@ -266,10 +277,10 @@ export async function runWorkBackgroundOnce({
         "execution preflight check": preflight?.check || "",
         "execution preflight reason": text(preflight?.reason) || reason,
         "execution preflight observed at": preflight?.observedAt || wake,
-        "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + 1)
+        "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + 1)
       });
       await appendWorkSchedulerEvent(worldRoot, {
-        type: "deferred",
+        type: "technical-blocked",
         reason,
         capacity,
         pacing: admission.pacing,
@@ -369,16 +380,16 @@ export async function runWorkBackgroundOnce({
       }, { now });
     } catch (error) {
       const reason = `automation baseline sync blocked: ${text(error?.message || error)}`;
-      await emitWorkEvent(onEvent, "deferred", { reason, selected: selected.taskId }, { now });
+      await emitWorkEvent(onEvent, "technical-blocked", { reason, selected: selected.taskId }, { now });
       await writeWorkSchedulerHealth(worldRoot, {
         ...baseHealth,
         "last decision": reason,
         "baseline status": "blocked",
         "baseline error": text(error?.message || error),
-        "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + 1)
+        "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + 1)
       });
       await appendWorkSchedulerEvent(worldRoot, {
-        type: "deferred",
+        type: "technical-blocked",
         reason,
         capacity,
         pacing: admission.pacing,

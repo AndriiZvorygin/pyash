@@ -313,7 +313,7 @@ export async function runWorkSupervisorOnce({
   integrateAccepted = false,
   pushIntegration = false,
   integrationRemotes = ["origin", "github"],
-  maxRevisions = 1,
+  maxRevisions = 3,
   pauseAfterImplementation = false,
   reviewAfterImplementationPasses = 2,
   pyashFirstPolicy = true,
@@ -368,7 +368,7 @@ export async function runWorkSupervisorOnce({
   };
 
   if (task.status === "accepted" || task.status === "blocked") {
-    await ackWorkTaskSuccess(worldRoot, { runtimePath: claimed.path });
+    if (task.status === "accepted") await ackWorkTaskSuccess(worldRoot, { runtimePath: claimed.path });
     await emit(task.status, {
       reason: task.checkpoint.blocker || task.message || task.result,
       explanation: task.checkpoint.review.explanation
@@ -877,7 +877,34 @@ export async function runWorkSupervisorOnce({
       if (review.decision === "ACCEPT") return await finish("accepted", review.explanation);
       if (review.decision === "BLOCK") return await finish("blocked", review.explanation);
       if (task.checkpoint.revisionCount >= maxRevisions) {
-        return await finish("blocked", "revision limit reached: " + review.explanation);
+        const continuationAt = isoText(nowValue(now));
+        const continuationCount = task.checkpoint.continuationCount + 1;
+        await save({
+          continuationCount,
+          interruption: {
+            phase: "reviewing",
+            at: continuationAt,
+            reason: "concrete Sol correction remains; continuing on a later eligible wake",
+            lastTurnId: task.checkpoint.turnHistory.at(-1)?.turnId || ""
+          },
+          lastAction: "technical revision checkpoint; continuing concrete Sol correction"
+        });
+        await move("revision", { message: "technical revision checkpoint; continuing concrete Sol correction" });
+        await emit("revision-requested", {
+          phase: "revision",
+          correction: review.revisionInstructions,
+          decision: review.decision,
+          continuation: true,
+          continuationCount,
+          reason: "revision bound reached for this wake; concrete correction remains technical work"
+        });
+        return {
+          claimed: true,
+          taskId: task.taskId,
+          status: "revision",
+          message: "technical revision checkpoint; continuing concrete Sol correction",
+          queue: await queueDepth(worldRoot)
+        };
       }
       await emit("revision-requested", {
         phase: "revision",
