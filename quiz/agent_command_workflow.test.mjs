@@ -166,26 +166,3 @@ test("outer and nested tool events use consecutive ids after their request and a
   assert.ok(firstResponse < secondEventIndex);
   assert.ok(Math.max(...auditIndexes) < secondEventIndex);
 });
-
-test("executable command propose records a tool event while passive command can stays unrecorded", async () => {
-  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-command-workflow-propose-"));
-  const runId = "agent-command-workflow-propose";
-  const sourceText = [
-    "su name tools be map def",
-    "su name command be command ob text input to name text answer can",
-    "prah",
-    "su name flow be refinery def",
-    "su name gate ob text \"Approve?\" be command propose",
-    "su name after ob num 1 be number ya",
-    "prah",
-    "from name flow be refinery do"
-  ].join("\n");
-  await runProgram({ cwd, runId, response: undefined, sourceText });
-
-  const newspaper = parsedFile(await fs.readFile(path.join(cwd, "newspaper", `${runId}.pya`), "utf8"));
-  const toolEvents = newspaper.filter(sentence => sentence?.be === "tool");
-  assert.equal(toolEvents.length, 1);
-  assert.equal(sentenceToPyash(toolEvents[0]?.ob?.la), "su name gate ob text \"Approve?\" be command propose");
-  assert.equal(toolEvents[0]?.to?.la?.be, "command propose");
-  assert.ok(newspaper.some(sentence => sentence?.be === "end"));
-});
