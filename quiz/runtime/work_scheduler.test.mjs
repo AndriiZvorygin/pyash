@@ -258,6 +258,6 @@ test("technical blocked wakes are not reported as idle and blocker rationale sta
   });
   assert.match(digest.report, /Technical continuation unavailable: 1/u);
   assert.match(digest.report, /Idle \/ no work: 0/u);
-  assert.match(digest.report, /correction required:/u);
+  assert.match(digest.report, /correction required: compiled streaming duplicates output and loses reply metadata/u);
   assert.doesNotMatch(digest.report, /Sol review:.*full rationale/iu);
 });

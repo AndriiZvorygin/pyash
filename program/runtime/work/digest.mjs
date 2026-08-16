@@ -109,6 +109,15 @@ function compactBlocker(value) {
     return "integration conflict against current automation baseline";
   }
   if (/revision limit|\bREVISE\b|correction/iu.test(body)) {
+    if (/compiled stream|streaming/iu.test(body) && /metadata|duplicates output|duplicate emission/iu.test(body)) {
+      return "correction required: compiled streaming duplicates output and loses reply metadata";
+    }
+    if (/transpileCeremony|generated guard|successful nested call/iu.test(body)) {
+      return "correction required: generated guard return truncates the successful compiled body";
+    }
+    if (/unconsumed tokens|duplicate singleton|stray/iu.test(body)) {
+      return "correction required: compile validation must reject stray and duplicate cases";
+    }
     const correction = body.match(/CORRECTION:\s*(.*?)(?:\s+-\s+|$)/iu)?.[1] || body;
     return `correction required: ${correction.slice(0, 220)}`;
   }
