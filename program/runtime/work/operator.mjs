@@ -55,6 +55,54 @@ export async function showWorkTask(worldRoot, taskId) {
   return task;
 }
 
+export async function archiveWorkTask(worldRoot, taskId, reason, {
+  supersededBy = "",
+  now = new Date()
+} = {}) {
+  const explanation = text(reason);
+  if (!explanation) throw new Error("archive reason is required");
+  return mutateTask(worldRoot, taskId, (current) => {
+    if (current.status === "accepted") {
+      return {
+        ...current,
+        workSpec: {
+          ...current.workSpec,
+          archived: true,
+          lifecycle: "superseded",
+          archiveReason: explanation,
+          archivedAt: iso(now),
+          supersededBy: text(supersededBy)
+        },
+        checkpoint: mergeWorkCheckpoint(current.checkpoint, {
+          lastAction: `archived: ${explanation}`
+        })
+      };
+    }
+    const next = current.status === "blocked" ? current : transitionWorkTask(current, "blocked", {
+      now,
+      message: `archived: ${explanation}`,
+      error: ""
+    });
+    return {
+      ...next,
+      message: `archived: ${explanation}`,
+      error: "",
+      workSpec: {
+        ...next.workSpec,
+        archived: true,
+        lifecycle: "superseded",
+        archiveReason: explanation,
+        archivedAt: iso(now),
+        supersededBy: text(supersededBy)
+      },
+      checkpoint: mergeWorkCheckpoint(next.checkpoint, {
+        blocker: "",
+        lastAction: `archived: ${explanation}`
+      })
+    };
+  });
+}
+
 export async function blockWorkTask(worldRoot, taskId, reason, { now = new Date() } = {}) {
   const message = text(reason);
   if (!message) throw new Error("block reason is required");

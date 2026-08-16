@@ -5,6 +5,7 @@ import process from "node:process";
 import { runWorkSupervisorOnce } from "../program/runtime/work/supervisor.mjs";
 import {
   addWorkTask,
+  archiveWorkTask,
   blockWorkTask,
   failWorkTask,
   listWorkTasks,
@@ -202,6 +203,7 @@ function usage() {
     "  node command/work_supervisor.mjs add --title <text> --prompt <text> --acceptance <text> [--priority <n>] [--json]",
     "  node command/work_supervisor.mjs list [--active] [--json]",
     "  node command/work_supervisor.mjs show <task-id> [--json]",
+    "  node command/work_supervisor.mjs archive <task-id> --reason <text> [--superseded-by <task-id>] [--json]",
     "  node command/work_supervisor.mjs run-next [--repository <path>] [--owner <name>] [--json]",
     "  node command/work_supervisor.mjs block <task-id> --reason <text> [--json]",
     "  node command/work_supervisor.mjs resume <task-id> --context <text> [--json]",
@@ -220,7 +222,7 @@ function usage() {
 }
 
 const args = process.argv.slice(2);
-const knownActions = new Set(["add", "list", "show", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report", "digest", "roadmap", "sandbox-smoke"]);
+const knownActions = new Set(["add", "list", "show", "archive", "run-next", "block", "resume", "fail", "cancel", "background", "health", "report", "digest", "roadmap", "sandbox-smoke"]);
 const action = knownActions.has(args[0]) ? args[0] : "run-next";
 const asJson = has(args, "--json");
 const watch = has(args, "--watch");
@@ -256,6 +258,10 @@ try {
     result = await listWorkTasks(worldRoot, { includeTerminal: !has(args, "--active") });
   } else if (action === "show") {
     result = await showWorkTask(worldRoot, args[1]);
+  } else if (action === "archive") {
+    result = await archiveWorkTask(worldRoot, args[1], value(args, "--reason"), {
+      supersededBy: value(args, "--superseded-by")
+    });
   } else if (action === "block") {
     result = await blockWorkTask(worldRoot, args[1], value(args, "--reason"));
   } else if (action === "resume") {

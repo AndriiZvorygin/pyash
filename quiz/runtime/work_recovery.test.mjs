@@ -11,7 +11,7 @@ import {
   isRecoverableOperationalWorkTask,
   recoverOperationalWorkTask
 } from "../../program/runtime/work/recovery.mjs";
-import { isRetryableWorkBlock } from "../../program/runtime/work/roadmap.mjs";
+import { isHumanDecisionBlock, isRetryableWorkBlock } from "../../program/runtime/work/roadmap.mjs";
 import { listWorkTasks } from "../../program/runtime/work/operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 
@@ -54,7 +54,7 @@ async function blockedTask(worldRoot, {
   });
 }
 
-test("stale operational timeout is recoverable but live or human blockers are not", async () => {
+test("technical blockers are recoverable while semantic decisions are not", async () => {
   const old = "2026-08-10T00:00:00.000Z";
   const now = "2026-08-12T12:00:00.000Z";
   const task = {
@@ -79,19 +79,55 @@ test("stale operational timeout is recoverable but live or human blockers are no
   assert.equal(isRecoverableOperationalWorkTask({
     ...task,
     checkpoint: { blocker: "automation branch integration blocked: merge conflict", activeTurn: {} }
-  }, { now }), false);
+  }, { now }), true);
   assert.equal(isRecoverableOperationalWorkTask({
     ...task,
     checkpoint: { blocker: "revision limit reached: Sol requested another pass", activeTurn: {} }
-  }, { now }), false);
+  }, { now }), true);
   assert.equal(isRetryableWorkBlock({
     ...task,
     checkpoint: { blocker: "revision limit reached: Sol requested another pass", activeTurn: {} }
+  }), true);
+  assert.equal(isHumanDecisionBlock({
+    ...task,
+    checkpoint: { blocker: "Sol review BLOCK: human decision required", activeTurn: {} }
+  }), true);
+  assert.equal(isHumanDecisionBlock({
+    ...task,
+    checkpoint: { blocker: "compiler bug: generated guard truncates body", activeTurn: {} }
   }), false);
   assert.equal(isRecoverableOperationalWorkTask({
     ...task,
     checkpoint: { blocker: "turn timeout", activeTurn: { state: "ambiguous", startedAt: "2026-08-12T11:45:00.000Z" } }
   }, { now }), false);
+});
+
+test("concrete Sol correction resumes in revision phase and preserves the review thread", async () => {
+  const worldRoot = await world("pyash-work-recovery-revision-");
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-concrete-correction",
+    blocker: "revision limit reached: Sol requested another pass",
+    activeTurn: {}
+  });
+  const current = await readWorkTaskStatus(worldRoot, "roadmap-concrete-correction");
+  await writeWorkTaskStatus(worldRoot, {
+    ...current,
+    checkpoint: {
+      ...current.checkpoint,
+      worker: { ...current.checkpoint.worker, threadId: "luna-existing" },
+      review: {
+        decision: "REVISE",
+        revisionInstructions: "Remove the false event and rerun the focused tests."
+      }
+    }
+  });
+  const recovered = await recoverOperationalWorkTask(worldRoot, "roadmap-concrete-correction", {
+    now: "2026-08-12T12:00:00.000Z"
+  });
+  assert.equal(recovered.task.status, "revision");
+  assert.equal(recovered.task.checkpoint.worker.threadId, "luna-existing");
+  assert.equal(recovered.task.checkpoint.review.revisionInstructions, "Remove the false event and rerun the focused tests.");
+  assert.equal(recovered.task.checkpoint.continuationCount, 1);
 });
 
 test("recovery preserves the blocker and cannot revive the same task twice", async () => {
@@ -190,4 +226,56 @@ test("healthy preflight recovers operational roadmap work before a new ready pac
   assert.equal(events.some((event) => event.type === "recovered"), true);
   const stored = await listWorkTasks(worldRoot, { includeTerminal: true });
   assert.equal(stored.find((task) => task.taskId === "roadmap-operational-first").checkpoint.recoveryCount, 1);
+});
+
+test("a concrete revision outranks a higher-priority timeout and a new candidate", async () => {
+  const worldRoot = await world("pyash-work-recovery-correction-priority-");
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-timeout-higher-priority",
+    priority: 130,
+    blocker: "turn timeout",
+    activeTurn: { state: "ambiguous", startedAt: "2026-08-10T00:00:00.000Z" }
+  });
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-concrete-correction-priority",
+    priority: 90,
+    blocker: "revision limit reached: concrete correction remains",
+    activeTurn: {}
+  });
+  const correction = await readWorkTaskStatus(worldRoot, "roadmap-concrete-correction-priority");
+  await writeWorkTaskStatus(worldRoot, {
+    ...correction,
+    checkpoint: {
+      ...correction.checkpoint,
+      review: { decision: "REVISE", revisionInstructions: "Remove the false event." }
+    }
+  });
+  await enqueueWorkTask(worldRoot, {
+    taskId: "roadmap-new-candidate-after-correction",
+    owner: "background",
+    kind: "roadmap",
+    title: "new candidate",
+    priority: 150,
+    promptText: "Implement the new package.",
+    acceptanceText: "Focused tests pass.",
+    workSpec: { granularity: "substantial" }
+  });
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => ({
+      state: "available",
+      weekly: { identified: true, usedPercent: 10, remainingPercent: 90, windowStartAt: "2026-08-10T00:00:00.000Z", resetAt: "2026-08-17T00:00:00.000Z", windowMinutes: 10080 }
+    }),
+    executionPreflight: async ({ selected }) => {
+      assert.equal(selected.taskId, "roadmap-concrete-correction-priority");
+      return { ok: true, status: "ready", check: "fake preflight" };
+    },
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "revision" }),
+    now: "2026-08-12T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "roadmap-concrete-correction-priority");
+  assert.equal(result.recovery.task.status, "revision");
 });

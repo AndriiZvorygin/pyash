@@ -288,6 +288,38 @@ const OPERATIONAL_BLOCK_PATTERNS = Object.freeze([
   /temporary/iu
 ]);
 
+const TECHNICAL_CONTINUATION_PATTERNS = Object.freeze([
+  /revision limit/iu,
+  /correction/iu,
+  /failing? tests?/iu,
+  /test(?:s| suite)? (?:failed|red|blocked)/iu,
+  /compiler/iu,
+  /runtime/iu,
+  /regression/iu,
+  /bug/iu,
+  /incomplete/iu,
+  /missing/iu,
+  /incorrect/iu,
+  /integration/iu,
+  /merge conflict/iu,
+  /cherry-pick/iu,
+  /rebase/iu,
+  /optional .* unavailable/iu,
+  /baseline/iu
+]);
+
+const HUMAN_DECISION_PATTERNS = Object.freeze([
+  /human (?:decision|input|direction)/iu,
+  /requires? (?:a )?(?:human|product|architectural|semantic|safety|policy) (?:decision|choice|direction)/iu,
+  /product (?:decision|choice)/iu,
+  /architectural (?:decision|choice)/iu,
+  /semantic (?:decision|choice)/iu,
+  /safety (?:decision|choice)/iu,
+  /policy (?:decision|choice)/iu,
+  /choose between/iu,
+  /incompatible intended semantics/iu
+]);
+
 function text(value) {
   return String(value ?? "").trim();
 }
@@ -363,6 +395,7 @@ function taskMatch(item, tasks) {
 
 function progressForTask(task) {
   if (!task) return "not started; candidate package";
+  if (isArchivedWorkTask(task)) return `superseded/archived: ${text(task.workSpec?.archiveReason) || "operator archived"}`;
   const checkpoint = task.checkpoint || {};
   const passes = Number(checkpoint.implementation?.passes || 0);
   const action = text(checkpoint.lastAction || checkpoint.interruption?.reason);
@@ -377,6 +410,7 @@ function progressForTask(task) {
 
 function statusForTask(task) {
   if (!task) return "CANDIDATE";
+  if (isArchivedWorkTask(task)) return "SUPERSEDED / ARCHIVED";
   if (task.status === "accepted") return "COMPLETE";
   if (task.status === "blocked" || task.status === "failed") {
     return isRetryableWorkBlock(task) ? "BLOCKED / OPERATIONAL" : "BLOCKED / NEEDS DECISION";
@@ -392,8 +426,10 @@ function normalizePackage(item, task) {
     dependencies: Array.isArray(item.dependencies) ? item.dependencies : text(item.dependencies).split(" | ").filter(Boolean),
     nonGoals: Array.isArray(item.nonGoals) ? item.nonGoals : text(item.nonGoals),
     status: statusForTask(task),
-    blockClass: task && (task.status === "blocked" || task.status === "failed")
-      ? (isRetryableWorkBlock(task) ? "operational" : "human-decision")
+    blockClass: isArchivedWorkTask(task)
+      ? "superseded"
+      : task && (task.status === "blocked" || task.status === "failed")
+        ? (isRetryableWorkBlock(task) ? "operational" : "human-decision")
       : "",
     progress: progressForTask(task),
     worktree: text(task?.checkpoint?.workspace?.worktreePath),
@@ -405,14 +441,35 @@ function taskBlockReason(task) {
   return text(task?.checkpoint?.blocker || task?.message || task?.error);
 }
 
+export function isArchivedWorkTask(task) {
+  return task?.workSpec?.archived === true
+    || task?.workSpec?.lifecycle === "superseded";
+}
+
+function hasHumanDecisionReason(reason) {
+  return HUMAN_DECISION_PATTERNS.some((pattern) => pattern.test(reason));
+}
+
+function hasTechnicalContinuationReason(reason) {
+  return OPERATIONAL_BLOCK_PATTERNS.some((pattern) => pattern.test(reason))
+    || TECHNICAL_CONTINUATION_PATTERNS.some((pattern) => pattern.test(reason));
+}
+
 export function isRetryableWorkBlock(task) {
-  if (!task || !["blocked", "failed"].includes(task.status)) return false;
+  if (!task || !["blocked", "failed"].includes(task.status) || isArchivedWorkTask(task)) return false;
   const reason = taskBlockReason(task);
-  return OPERATIONAL_BLOCK_PATTERNS.some((pattern) => pattern.test(reason));
+  if (hasHumanDecisionReason(reason)) return false;
+  return hasTechnicalContinuationReason(reason);
 }
 
 export function isHumanDecisionBlock(task) {
-  return Boolean(task && ["blocked", "failed"].includes(task.status) && !isRetryableWorkBlock(task));
+  if (!task || !["blocked", "failed"].includes(task.status) || isArchivedWorkTask(task)) return false;
+  const reason = taskBlockReason(task);
+  return hasHumanDecisionReason(reason) || !hasTechnicalContinuationReason(reason);
+}
+
+export function isTechnicalContinuationBlock(task) {
+  return isRetryableWorkBlock(task);
 }
 
 export function hasCredibleRoadmapWork(roadmap = {}) {
@@ -655,6 +712,7 @@ export async function buildAutonomousRoadmap({
     }));
   const needsDecision = allTasks
     .filter((task) => ["blocked", "failed"].includes(task.status))
+    .filter((task) => !isArchivedWorkTask(task))
     .filter((task) => !isRetryableWorkBlock(task))
     .filter((task) => !packages.some((item) => item.taskId === task.taskId))
     .map((task) => ({
