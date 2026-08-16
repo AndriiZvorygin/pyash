@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
+import { archiveWorkTask } from "../../program/runtime/work/operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import {
   autonomousRoadmapPackages,
@@ -146,4 +147,24 @@ test("schema change discards stale generated catalogs during reconciliation", as
   assert.equal(roadmap.packages.some((item) => item.taskId === "stale-generated-task"), false);
   assert.ok(roadmap.packages.some((item) => item.taskId === "roadmap-agent-research-tool-chain"));
   assert.equal(roadmap.reconciliation.source, "documentation/reference/roadmap-reconciliation-2026-08.md");
+});
+
+test("superseded maintenance remains durable but cannot become roadmap work", async () => {
+  const { worldRoot, repositoryRoot } = await world("pyash-roadmap-superseded-");
+  await enqueueWorkTask(worldRoot, {
+    taskId: "work-accepted-report",
+    owner: "background",
+    kind: "maintenance",
+    title: "historical report demonstration",
+    promptText: "Preserve the historical result.",
+    acceptanceText: "The historical report remains readable.",
+    workSpec: { granularity: "substantial" }
+  });
+  await archiveWorkTask(worldRoot, "work-accepted-report", "superseded by durable report coverage");
+  const roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot });
+  assert.equal(roadmap.needsDecision.some((item) => item.taskId === "work-accepted-report"), false);
+  assert.equal(roadmap.retryable.some((item) => item.taskId === "work-accepted-report"), false);
+  const stored = await readWorkTaskStatus(worldRoot, "work-accepted-report");
+  assert.equal(stored.workSpec.archived, true);
+  assert.equal(stored.workSpec.lifecycle, "superseded");
 });

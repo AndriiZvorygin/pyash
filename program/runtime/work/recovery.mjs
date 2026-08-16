@@ -27,6 +27,10 @@ function isSubstantialRoadmapTask(task) {
     && (task.workSpec?.granularity === "substantial" || task.taskId.startsWith("roadmap-"));
 }
 
+function hasConcreteRevision(task) {
+  return Boolean(String(task?.checkpoint?.review?.revisionInstructions || "").trim());
+}
+
 function activeTurnAge(task, now) {
   const active = task?.checkpoint?.activeTurn || {};
   const source = active.startedAt || task?.checkpoint?.interruption?.at || "";
@@ -62,10 +66,10 @@ export function isRecoverableOperationalWorkTask(task, {
   if (!isSubstantialRoadmapTask(task)) return false;
   if (!task || !["blocked", "failed"].includes(task.status)) return false;
   if (!isRetryableWorkBlock(task)) return false;
-  if (/revision limit|sol review block|merge conflict|human decision/iu.test(
+  if (/sol review block|human decision/iu.test(
     `${text(task.checkpoint?.blocker)} ${text(task.message)} ${text(task.error)}`
   )) return false;
-  if ((Number(task.checkpoint?.recoveryCount) || 0) >= maxRecoveryCount) return false;
+  if (!hasConcreteRevision(task) && (Number(task.checkpoint?.recoveryCount) || 0) >= maxRecoveryCount) return false;
   return !hasRecentOrLiveAmbiguousTurn(task, nowDate(now), Math.max(1, Number(staleTurnMs) || DEFAULT_STALE_OPERATIONAL_TURN_MS));
 }
 
@@ -99,7 +103,8 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
     ? `${oldWorktree}-replacement-${(Number(current.checkpoint?.recoveryCount) || 0)}`
     : "";
   const previousThreadId = current.checkpoint?.worker?.threadId || "";
-  const transitioned = transitionWorkTask(current, "ready", {
+  const continuation = hasConcreteRevision(current);
+  const transitioned = transitionWorkTask(current, continuation ? "revision" : "ready", {
     now: date,
     message: reason,
     error: ""
@@ -124,9 +129,14 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
         }
         : {},
       interruption: {},
-      recoveryCount: (current.checkpoint?.recoveryCount || 0) + 1,
+      recoveryCount: (current.checkpoint?.recoveryCount || 0) + (continuation ? 0 : 1),
       recoveryHistory: [...(current.checkpoint?.recoveryHistory || []), record],
-      lastAction: reason
+      lastAction: continuation
+        ? "recovered technical revision; continuing concrete Sol correction"
+        : reason,
+      continuationCount: continuation
+        ? (current.checkpoint?.continuationCount || 0) + 1
+        : current.checkpoint?.continuationCount || 0
     })
   });
   const envelope = await findWorkTaskEnvelope(worldRoot, taskId, { owner: current.owner });
@@ -154,6 +164,9 @@ export async function findRecoverableOperationalWorkTasks(worldRoot, {
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isRecoverableOperationalWorkTask(task, { now, staleTurnMs, maxRecoveryCount }))
     .sort((left, right) => {
+      const leftCorrection = hasConcreteRevision(left) ? 1 : 0;
+      const rightCorrection = hasConcreteRevision(right) ? 1 : 0;
+      if (leftCorrection !== rightCorrection) return rightCorrection - leftCorrection;
       const priority = Number(right.priority) - Number(left.priority);
       if (priority) return priority;
       const queued = Date.parse(left.queuedAt) - Date.parse(right.queuedAt);

@@ -123,6 +123,7 @@ export function buildWorkCheckpoint(input = {}) {
     lastAction: text(input.lastAction),
     selectionReason: text(input.selectionReason),
     revisionCount: Math.max(0, Math.trunc(Number(input.revisionCount) || 0)),
+    continuationCount: Math.max(0, Math.trunc(Number(input.continuationCount) || 0)),
     resumeCount: Math.max(0, Math.trunc(Number(input.resumeCount) || 0)),
     recoveryCount: Math.max(0, Math.trunc(Number(input.recoveryCount) || 0)),
     recoveryHistory: list(input.recoveryHistory).map((entry) => ({
@@ -171,6 +172,9 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
   };
   if (Object.prototype.hasOwnProperty.call(update, "revisionCount")) {
     merged.revisionCount = Math.max(0, Math.trunc(Number(update.revisionCount) || 0));
+  }
+  if (Object.prototype.hasOwnProperty.call(update, "continuationCount")) {
+    merged.continuationCount = Math.max(0, Math.trunc(Number(update.continuationCount) || 0));
   }
   if (Object.prototype.hasOwnProperty.call(update, "resumeCount")) {
     merged.resumeCount = Math.max(0, Math.trunc(Number(update.resumeCount) || 0));

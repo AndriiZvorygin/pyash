@@ -18,7 +18,7 @@ const WORK_TRANSITIONS = new Map([
   ["implementing", new Set(["reviewing", "revision", "blocked", "usage-limited", "failed"])],
   ["reviewing", new Set(["accepted", "revision", "blocked", "usage-limited", "failed"])],
   ["revision", new Set(["implementing", "blocked", "usage-limited", "failed"])],
-  ["blocked", new Set(["ready", "planning", "failed"])],
+  ["blocked", new Set(["ready", "planning", "revision", "failed"])],
   ["usage-limited", new Set([
     "ready",
     "planning",

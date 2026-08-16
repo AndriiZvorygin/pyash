@@ -219,3 +219,45 @@ test("timeout-blocked work is operationally blocked, not roadmap exhaustion", as
   assert.match(digest.report, /operational failures are not roadmap completion/iu);
   assert.doesNotMatch(digest.report, /backlog exhausted/iu);
 });
+
+test("technical blocked wakes are not reported as idle and blocker rationale stays compact", async () => {
+  const { root, worldRoot } = await world("pyash-work-digest-technical-block-");
+  const repositoryRoot = path.join(root, "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(path.join(repositoryRoot, "documentation", "todo.md"), "Mind: plus streaming path and richer reply envelopes\n");
+  await enqueueWorkTask(worldRoot, {
+    taskId: "roadmap-mind-reply-envelope-streaming",
+    owner: "background",
+    kind: "roadmap",
+    title: "Mind reply envelopes and streaming",
+    priority: 110,
+    queuedAt: "2026-08-09T06:00:00.000Z",
+    promptText: "Fix the concrete compiled streaming correction.",
+    acceptanceText: "Focused tests pass.",
+    workSpec: { granularity: "substantial" }
+  });
+  const task = await readWorkTaskStatus(worldRoot, "roadmap-mind-reply-envelope-streaming");
+  await writeWorkTaskStatus(worldRoot, {
+    ...task,
+    status: "blocked",
+    message: "revision limit reached: compiled stream duplicates output",
+    checkpoint: {
+      ...task.checkpoint,
+      blocker: "revision limit reached: compiled stream duplicates output. CORRECTION: fix the duplicate emission and rerun targeted tests."
+    }
+  });
+  const capacity = { weekly: { identified: true, remainingPercent: 85, usedPercent: 15, resetAt: "2026-08-10T00:00:00.000Z", windowStartAt: "2026-08-03T00:00:00.000Z" } };
+  await appendWorkSchedulerEvent(worldRoot, { type: "idle", reason: "no eligible work", capacity }, { now: "2026-08-09T06:45:00.000Z" });
+  const digest = await buildWorkDailyDigest({
+    worldRoot,
+    repositoryRoot,
+    since: "2026-08-09T00:00:00.000Z",
+    until: "2026-08-09T23:00:00.000Z",
+    capacitySource: async () => capacity,
+    now: "2026-08-09T23:00:00.000Z"
+  });
+  assert.match(digest.report, /Technical continuation unavailable: 1/u);
+  assert.match(digest.report, /Idle \/ no work: 0/u);
+  assert.match(digest.report, /correction required:/u);
+  assert.doesNotMatch(digest.report, /Sol review:.*full rationale/iu);
+});
