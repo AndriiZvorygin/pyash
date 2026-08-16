@@ -95,11 +95,30 @@ function compactReport(task) {
     `Sol plan: ${excerpt(checkpoint.plan?.summary || checkpoint.plan?.workOrder) || "(not recorded)"}`,
     `Luna implementation: ${excerpt(checkpoint.implementation?.summary) || "(not recorded)"}`,
     `Tests: ${(checkpoint.implementation?.tests || []).map((test) => excerpt(test, 280)).join("; ") || "(not recorded)"}`,
-    `Sol review: ${checkpoint.review?.decision || "(not recorded)"} ${excerpt(checkpoint.review?.explanation)}`,
+    `Sol review: ${checkpoint.review?.decision || "(not recorded)"} ${excerpt(checkpoint.review?.explanation, 280)}`,
     `Diff: ${renderWorkTaskReport(task).match(/^Diff: .*$/mu)?.[0]?.replace(/^Diff:\s*/u, "") || "not recorded"}`,
     checkpoint.workspace?.worktreePath ? `Worktree: ${checkpoint.workspace.worktreePath}` : "",
     checkpoint.implementation?.commit ? `Commit: ${checkpoint.implementation.commit}` : ""
   ].filter(Boolean).join("\n");
+}
+
+function compactBlocker(value) {
+  const body = text(value).replace(/\s+/gu, " ");
+  if (!body) return "technical continuation required";
+  if (/integration|cherry-pick|rebase|merge conflict/iu.test(body)) {
+    return "integration conflict against current automation baseline";
+  }
+  if (/revision limit|\bREVISE\b|correction/iu.test(body)) {
+    const correction = body.match(/CORRECTION:\s*(.*?)(?:\s+-\s+|$)/iu)?.[1] || body;
+    return `correction required: ${correction.slice(0, 220)}`;
+  }
+  if (/turn timeout|sandbox|execution environment|app-server/iu.test(body)) {
+    return `technical continuation unavailable: ${body.slice(0, 180)}`;
+  }
+  if (/human decision|product decision|architectural decision|semantic choice/iu.test(body)) {
+    return `human decision required: ${body.slice(0, 220)}`;
+  }
+  return `technical correction required: ${body.slice(0, 220)}`;
 }
 
 export function renderWorkDailyDigest({
@@ -122,15 +141,20 @@ export function renderWorkDailyDigest({
   });
   const completed = tasks.filter((task) => task.status === "accepted" && taskTouched(task, Date.parse(since), Date.parse(until)));
   const active = tasks.filter((task) => !["accepted", "failed", "blocked"].includes(task.status));
-  const wakes = events.filter((event) => event.action === "idle" || event.action === "deferred" || event.action === "admitted");
-  const admitted = events.filter((event) => event.action === "admitted");
-  const deferred = events.filter((event) => event.action === "deferred");
-  const idle = events.filter((event) => event.action === "idle");
-  const recovered = events.filter((event) => event.action === "recovered");
   const ready = tasks.some((task) => task.status === "ready");
   const retryable = roadmap?.retryable?.length
     ? roadmap.retryable
     : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
+  const wakes = events.filter((event) => ["idle", "deferred", "admitted", "technical-blocked"].includes(event.action));
+  const admitted = events.filter((event) => event.action === "admitted");
+  const executionBlocked = events.filter((event) => event.action === "technical-blocked" && /execution environment|preflight|sandbox/iu.test(event.reason || ""));
+  const technicalEvents = events.filter((event) => event.action === "technical-blocked" && !executionBlocked.includes(event));
+  const legacyTechnicalWakes = events.filter((event) => (event.action === "idle" || event.action === "deferred") && /no eligible work/iu.test(event.reason || "") && retryable.length > 0);
+  const deferred = events.filter((event) => event.action === "deferred" && !legacyTechnicalWakes.includes(event));
+  const pacingDeferred = deferred.filter((event) => /pacing|reserve|usage[- ]limited|capacity/iu.test(event.reason || ""));
+  const idle = events.filter((event) => event.action === "idle" && !legacyTechnicalWakes.includes(event));
+  const technicalUnavailable = [...technicalEvents, ...legacyTechnicalWakes];
+  const recovered = events.filter((event) => event.action === "recovered");
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
   const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
@@ -172,7 +196,10 @@ export function renderWorkDailyDigest({
     `Hourly wakes: ${wakes.length}`,
     `Admitted: ${admitted.length}`,
     `Deferred for pacing/conditions: ${deferred.length}`,
-    `Idle: ${idle.length}`,
+    `Pacing deferred: ${pacingDeferred.length}`,
+    `Execution-environment blocked: ${executionBlocked.length}`,
+    `Technical continuation unavailable: ${technicalUnavailable.length}`,
+    `Idle / no work: ${idle.length}`,
     `Operational recoveries: ${recovered.length}`,
     "",
     "Completed work",
@@ -204,7 +231,7 @@ export function renderWorkDailyDigest({
   if (exhausted) {
     lines.push("", "Needs direction", "---------------", "No active or ready substantial task remains, and current roadmap/TODO curation found no safe bounded next package.");
   } else if (temporarilyBlocked) {
-    lines.push("", "ROADMAP WORK TEMPORARILY BLOCKED", "--------------------------------", "Roadmap work remains; operational failures are not roadmap completion.", "No package completed today.", `Blocked packages: ${retryable.map((item) => `${item.taskId}: ${item.blocker || item.progress || "retryable operational failure"}`).join("; ")}`, "Next action: recover or retry the highest-value valid package.");
+    lines.push("", "ROADMAP WORK TEMPORARILY BLOCKED", "--------------------------------", "Roadmap work remains; operational failures are not roadmap completion.", "No package completed today.", `Blocked packages: ${retryable.map((item) => `${item.taskId}: ${compactBlocker(item.blocker || item.progress)}`).join("; ")}`, "Next action: recover or retry the highest-value valid package.");
   } else if (!active.length && !ready && !curation.proposed?.length && roadmapWork) {
     lines.push("", "READY QUEUE EMPTY - RECONCILIATION REQUIRED", "--------------------------------------------", "The generated queue is empty, but the authoritative roadmap still contains unfinished packages.");
   } else if (curation.proposed?.length) {
@@ -226,8 +253,8 @@ export function renderWorkDailyDigest({
     lines.push(...(activePackages.length ? activePackages.map((item) => `  ${item.title} — ${item.progress}`) : ["  (none)"]));
     lines.push("Next:", ...(queuedPackages.length ? queuedPackages.slice(0, 3).map((item) => `  ${item.title}`) : ["  (none)"]));
     lines.push("Later:", ...(candidatePackages.length ? candidatePackages.slice(0, 4).map((item) => `  ${item.title}`) : ["  (none)"]));
-    lines.push("Operational blocks:", ...(operationalPackages.length ? operationalPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${item.blocker || item.progress || "retryable"}`) : ["  (none)"]));
-    lines.push("Needs decision:", ...(blockedPackages.length ? blockedPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${item.blocker || item.progress || "blocked"}`) : ["  (none)"]));
+    lines.push("Operational blocks:", ...(operationalPackages.length ? operationalPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
+    lines.push("Needs decision:", ...(blockedPackages.length ? blockedPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
   }
   lines.push("", "Automation branch", "-----------------", automationBranch, `Commits integrated this window: ${completed.filter((task) => task.checkpoint?.integration?.status === "integrated").length}`);
   lines.push("", `Digest status: ${status.toUpperCase()}`, `Subject: ${subject}`, "");

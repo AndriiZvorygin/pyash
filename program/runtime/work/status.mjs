@@ -163,6 +163,7 @@ function checkpointBlocks(task) {
       { key: "last action", type: "text", value: quoteText(checkpoint.lastAction) },
       { key: "selection reason", type: "text", value: quoteText(checkpoint.selectionReason) },
       { key: "revision count", type: "num", value: checkpoint.revisionCount },
+      { key: "continuation count", type: "num", value: checkpoint.continuationCount },
       { key: "resume count", type: "num", value: checkpoint.resumeCount },
       { key: "recovery count", type: "num", value: checkpoint.recoveryCount },
       { key: "recovery history", type: "text", value: quoteText(encodeJson(checkpoint.recoveryHistory)) }
@@ -283,6 +284,7 @@ function statusFromText(text) {
       lastAction: checkpoint["last action"],
       selectionReason: checkpoint["selection reason"],
       revisionCount: checkpoint["revision count"],
+      continuationCount: checkpoint["continuation count"],
       resumeCount: checkpoint["resume count"],
       recoveryCount: checkpoint["recovery count"],
       recoveryHistory: decodeJson(checkpoint["recovery history"], [])

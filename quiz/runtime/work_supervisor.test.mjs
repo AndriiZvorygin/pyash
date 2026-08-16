@@ -232,6 +232,19 @@ test("supervisor permits one REVISE loop before accepting", async () => {
   assert.equal((await queueDepth(worldRoot)).total, 0);
 });
 
+test("the default revision bound checkpoints concrete work instead of creating a human block", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-revision-continuation-");
+  await enqueueWorkTask(worldRoot, task("revision-continuation-task"));
+  const result = await runFake(worldRoot, ["REVISE", "REVISE", "REVISE", "REVISE"]);
+  assert.equal(result.status, "revision");
+  const status = await readWorkTaskStatus(worldRoot, "revision-continuation-task");
+  assert.equal(status.status, "revision");
+  assert.equal(status.checkpoint.revisionCount, 3);
+  assert.equal(status.checkpoint.continuationCount, 1);
+  assert.match(status.checkpoint.lastAction, /technical revision checkpoint/iu);
+  assert.match(status.checkpoint.review.revisionInstructions, /missing assertion/iu);
+});
+
 test("supervisor preserves a BLOCK review as a durable terminal decision", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-block-");
   await enqueueWorkTask(worldRoot, task("block-task"));
