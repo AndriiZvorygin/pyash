@@ -10,8 +10,48 @@ import { QUOTED_PLACEHOLDER, QUOTED_TEXT_PREFIX } from "./constants.mjs";
 import { tokenize } from "./tokenize.mjs";
 import { UNIT_TYPE_ALIASES, parseAllEnumeration, parseClause } from "./parse_tokens_helpers.mjs";
 
-export function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) {
+export class StrictParseError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "StrictParseError";
+    Object.assign(this, details);
+  }
+}
+
+export function parseTokens(
+  tokens,
+  { allowMoodless = false, quotedText = null, strict = false, singletonCases = [] } = {}
+) {
   if (tokens.length === 0) return null;
+  const consumed = strict ? new Set() : null;
+  const consume = (start, end = start) => {
+    if (!consumed) return;
+    for (let index = start; index <= end; index += 1) consumed.add(index);
+  };
+  if (strict) {
+    const singletonKeys = new Set(singletonCases.map((token) => COMPOSITIONAL_ALIASES[token] ?? token));
+    const occurrences = new Map();
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = COMPOSITIONAL_ALIASES[tokens[index]] ?? tokens[index];
+      if (singletonKeys.has(token)) {
+        const indexes = occurrences.get(token) ?? [];
+        indexes.push(index);
+        occurrences.set(token, indexes);
+      }
+    }
+    const duplicates = [...occurrences.entries()]
+      .filter(([, indexes]) => indexes.length > 1)
+      .map(([token, indexes]) => ({ token, indexes }));
+    const moodIndexes = tokens
+      .map((token, index) => (MOODS.includes(token) ? index : -1))
+      .filter((index) => index >= 0);
+    if (moodIndexes.length > 1) {
+      duplicates.push({ token: "mood", indexes: moodIndexes });
+    }
+    if (duplicates.length > 0) {
+      throw new StrictParseError("duplicate singleton case", { duplicates });
+    }
+  }
   let mood = null;
   let words = tokens;
   let appendMoodToThen = true;
@@ -20,6 +60,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     if (MOODS.includes(maybeMood)) {
       mood = maybeMood;
       words = tokens.slice(0, -1);
+      consume(tokens.length - 1);
     }
   } else {
     const last = tokens.at(-1);
@@ -31,6 +72,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     } else {
       mood = last;
       words = tokens.slice(0, -1);
+      consume(tokens.length - 1);
     }
   }
 
@@ -113,6 +155,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     }
 
     if (isQuotedTextToken(t)) {
+      consume(i);
       const value = decodeQuotedTextToken(t);
       if (current) {
         s[current].text = value;
@@ -123,6 +166,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     }
 
     if (t === "exists") {
+      consume(i);
       s.exists = true;
       if (slot) slot.exists = true;
       continue;
@@ -131,12 +175,14 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     // --- topic sugar: "ta loop_head be topic ya" ---
     // sugar for: su name loop_head be topic ya
     if (t === "ta") {
+      consume(i, Math.min(i + 1, words.length - 1));
       const name = words[++i];
       s.su = { name };
       continue;
     }
 
     if (t === "then") {
+      consume(i, words.length - 1);
       // (currently unused because 'then' is the mood word,
       //  but we can keep this for future nested clauses)
       const subTokens = words.slice(i + 1);
@@ -150,6 +196,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     if (t === "la") {
       const parsed = parseClauseBound(i);
       if (parsed) {
+        consume(i, parsed.endIndex);
         const target = slot || (current ? s[current] : null);
         if (target) {
           target.la = parsed.clause;
@@ -164,6 +211,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     if (t === "all") {
       const parsed = parseAllEnumerationBound(i);
       if (parsed) {
+        consume(i, parsed.endIndex - 1);
         s.ob = { genitive: { chain: parsed.chain } };
         i = parsed.endIndex - 1;
         continue;
@@ -180,6 +228,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         t === "ta" ||
         t === "ret";
       if (!isBoundary) {
+        consume(i);
         const value = tokenValue(t);
         vyahValues = vyahValues ?? [];
         vyahValues.push(value);
@@ -190,6 +239,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
 
     // --- compositional context tokens, e.g., "from state draft" ---
     if (current && CONTEXT_KEYS.includes(t)) {
+      const contextStart = i;
       const origRole = current;
       const axis =
         current === "from" ? "source" :
@@ -243,10 +293,13 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         }
       }
 
+      consume(contextStart, i);
+
       continue;
     }
 
     if (ROLE_KEYS.includes(t)) {
+      consume(i);
       const normalized =
         t === "su" || t === "subj" ? "su" :
         t === "ob" || t === "obj" ? "ob" :
@@ -262,6 +315,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     }
 
     if (t === QUOTED_PLACEHOLDER && quotedText !== null) {
+      consume(i);
       if (current) {
         s[current].text = quotedText;
       } else {
@@ -273,12 +327,14 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     // --- interrogative pronoun sugar ---
     // "ob what que" ⇒ ob: { name: "what" }
     if (t === "what" && current === "ob") {
+      consume(i);
       s.ob = { name: "what" };
       continue;
     }
 
     // ret target, e.g., "this ob name acc ret"
     if (mood === "ret" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
+      consume(i, i + 1);
       current = "ret";
       s.ret = { role: words[i + 1] };
       slot = s.ret;
@@ -288,23 +344,30 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
 
     // this reference inside a role, e.g., "ob this ob ..."
     if (current === "ob" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
+      consume(i, i + 1);
       slot.thisRef = words[i + 1];
       i++; // consume role token
       continue;
     }
 
     if (t === "ve" || t === "vec") {
+      const vectorStart = i;
       const genitive = parseGenitiveChain(i);
       if (genitive) {
+        consume(i, genitive.endIndex);
         slot.genitive = { chain: genitive.chain };
         i = genitive.endIndex;
         continue;
       }
 
       const elemType = words[i + 1];
-      if (!elemType) continue;
+      if (!elemType) {
+        consume(i);
+        continue;
+      }
       const vector = { type: elemType, values: [] };
       if (elemType === "hollow") {
+        consume(i, i + 1);
         const target = slot || (current ? s[current] : null);
         if (target) {
           target.ve = vector;
@@ -339,23 +402,29 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       }
 
       i = j - 1;
+      consume(vectorStart, i);
       continue;
     }
 
     // --- type tokens: name / num / number / text / filename ---
     if (TYPE_TOKENS.includes(t)) {
+      const typeStart = i;
       // Genitive chains:
       //   backward: "num of ob of this"   => chain ["this","ob","num"]
       //   forward:  "num ti ob ti this"   => chain ["this","ob","num"]
       const genitive = parseGenitiveChain(i);
       if (genitive) {
+        consume(i, genitive.endIndex);
         slot.genitive = { chain: genitive.chain };
         i = genitive.endIndex;
         continue;
       }
 
       const target = slot || (current ? s[current] : null);
-      if (!target) continue;
+      if (!target) {
+        consume(i);
+        continue;
+      }
 
       if (t === "name") {
         const nameTypeTokens = [
@@ -495,6 +564,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         }
       }
 
+      consume(typeStart, i);
       continue;
     }
 
@@ -504,6 +574,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       if (forward) {
         slot = slot || (current ? s[current] : null);
         if (slot) {
+          consume(i, forward.endIndex);
           slot.genitive = { chain: forward.chain };
           i = forward.endIndex;
           continue;
@@ -517,6 +588,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       if (genitive) {
         slot = slot || (current ? s[current] : null);
         if (slot) {
+          consume(i, genitive.endIndex);
           slot.genitive = { chain: genitive.chain };
           i = genitive.endIndex;
           continue;
@@ -525,21 +597,25 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     }
 
     if (current && slot && t === "unspecified") {
+      consume(i);
       slot.unspecified = true;
       continue;
     }
 
     if (current && slot && t === "hollow") {
+      consume(i);
       slot.hollow = true;
       continue;
     }
 
     if (current && slot && Object.keys(slot).length === 0) {
+      consume(i);
       slot.name = t;
       continue;
     }
 
     if (t === "be") {
+      const beStart = i;
       const parts = [];
       let j = i + 1;
       while (j < words.length) {
@@ -557,14 +633,23 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       }
       s.be = parts.join(" ");
       i = j - 1; // skip consumed tokens
+      consume(beStart, i);
       continue;
     }
 
     // Track this-reference inside ob context, e.g., "ob this ob ..."
     if (current === "ob" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
+      consume(i, i + 1);
       slot.thisRef = words[i + 1];
       i++; // consume role token
       continue;
+    }
+  }
+
+  if (strict) {
+    const unconsumed = tokens.filter((_, index) => !consumed.has(index));
+    if (unconsumed.length > 0) {
+      throw new StrictParseError("unconsumed tokens", { unconsumed });
     }
   }
 
