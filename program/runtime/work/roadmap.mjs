@@ -443,7 +443,7 @@ function taskBlockReason(task) {
 
 export function isArchivedWorkTask(task) {
   return task?.workSpec?.archived === true
-    || task?.workSpec?.lifecycle === "superseded";
+    || ["superseded", "split-parent"].includes(task?.workSpec?.lifecycle);
 }
 
 function hasHumanDecisionReason(reason) {

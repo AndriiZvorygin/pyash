@@ -130,6 +130,32 @@ test("concrete Sol correction resumes in revision phase and preserves the review
   assert.equal(recovered.task.checkpoint.continuationCount, 1);
 });
 
+test("a focused Sol BLOCK for an unavailable required backend is not replayed as Luna work", async () => {
+  const worldRoot = await world("pyash-work-recovery-convergence-block-");
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-convergence-block",
+    blocker: "required Ollama service unavailable",
+    activeTurn: {}
+  });
+  const current = await readWorkTaskStatus(worldRoot, "roadmap-convergence-block");
+  await writeWorkTaskStatus(worldRoot, {
+    ...current,
+    checkpoint: {
+      ...current.checkpoint,
+      review: { decision: "REVISE", revisionInstructions: "run the required live backend evidence" },
+      convergence: {
+        status: "blocked",
+        decision: "BLOCK",
+        rationale: "required live backend is unavailable",
+        reviewedAt: "2026-08-12T12:00:00.000Z"
+      }
+    }
+  });
+  assert.equal(isRecoverableOperationalWorkTask(await readWorkTaskStatus(worldRoot, "roadmap-convergence-block"), {
+    now: "2026-08-12T13:00:00.000Z"
+  }), false);
+});
+
 test("recovery preserves the blocker and cannot revive the same task twice", async () => {
   const worldRoot = await world("pyash-work-recovery-history-");
   await blockedTask(worldRoot, {

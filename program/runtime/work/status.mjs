@@ -135,12 +135,31 @@ function checkpointBlocks(task) {
       { key: "diff", type: "text", value: quoteText(checkpoint.implementation.diff) },
       { key: "tests", type: "text", value: quoteText(encodeJson(checkpoint.implementation.tests)) },
       { key: "blockers", type: "text", value: quoteText(checkpoint.implementation.blockers) },
-      { key: "uncertainty", type: "text", value: quoteText(checkpoint.implementation.uncertainty) }
+      { key: "uncertainty", type: "text", value: quoteText(checkpoint.implementation.uncertainty) },
+      { key: "progress", type: "text", value: quoteText(encodeJson({
+        passHistory: checkpoint.implementation.passHistory,
+        materialProgressPasses: checkpoint.implementation.materialProgressPasses,
+        noProgressPasses: checkpoint.implementation.noProgressPasses,
+        consecutiveNoProgressPasses: checkpoint.implementation.consecutiveNoProgressPasses,
+        commitsProduced: checkpoint.implementation.commitsProduced,
+        acceptanceChecksClosed: checkpoint.implementation.acceptanceChecksClosed,
+        lastMaterialProgressAt: checkpoint.implementation.lastMaterialProgressAt
+      })) }
     ]),
     mapBlock("work task review", [
       { key: "decision", type: "text", value: quoteText(checkpoint.review.decision) },
       { key: "explanation", type: "text", value: quoteText(checkpoint.review.explanation) },
       { key: "revision instructions", type: "text", value: quoteText(checkpoint.review.revisionInstructions) }
+    ]),
+    mapBlock("work task convergence", [
+      { key: "state", type: "text", value: quoteText(checkpoint.convergence.status) },
+      { key: "review count", type: "num", value: checkpoint.convergence.reviewCount },
+      { key: "requested at", type: "text", value: quoteText(checkpoint.convergence.requestedAt) },
+      { key: "reviewed at", type: "text", value: quoteText(checkpoint.convergence.reviewedAt) },
+      { key: "decision", type: "text", value: quoteText(checkpoint.convergence.decision) },
+      { key: "rationale", type: "text", value: quoteText(checkpoint.convergence.rationale) },
+      { key: "correction", type: "text", value: quoteText(checkpoint.convergence.correction) },
+      { key: "split task ids", type: "text", value: quoteText(encodeJson(checkpoint.convergence.splitTaskIds)) }
     ]),
     mapBlock("work task integration", [
       { key: "branch", type: "text", value: quoteText(checkpoint.integration.branch) },
@@ -186,6 +205,7 @@ function statusFromText(text) {
   const plan = parseMap(text, "work task plan");
   const implementation = parseMap(text, "work task implementation");
   const review = parseMap(text, "work task review");
+  const convergence = parseMap(text, "work task convergence");
   const integration = parseMap(text, "work task integration");
   const checkpoint = parseMap(text, "work task checkpoint");
   let payloadSentence = null;
@@ -255,12 +275,23 @@ function statusFromText(text) {
         diff: implementation.diff,
         tests: decodeJson(implementation.tests, []),
         blockers: implementation.blockers,
-        uncertainty: implementation.uncertainty
+        uncertainty: implementation.uncertainty,
+        ...decodeJson(implementation.progress, {})
       },
       review: {
         decision: review.decision,
         explanation: review.explanation,
         revisionInstructions: review["revision instructions"]
+      },
+      convergence: {
+        status: convergence.state,
+        reviewCount: convergence["review count"],
+        requestedAt: convergence["requested at"],
+        reviewedAt: convergence["reviewed at"],
+        decision: convergence.decision,
+        rationale: convergence.rationale,
+        correction: convergence.correction,
+        splitTaskIds: decodeJson(convergence["split task ids"], [])
       },
       integration: {
         branch: integration.branch,

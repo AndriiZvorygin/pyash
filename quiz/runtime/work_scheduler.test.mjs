@@ -182,6 +182,67 @@ test("daily digest aggregates scheduler events and durable task progress", async
   assert.match(digest.report, /ROADMAP WORK REMAINS|READY QUEUE EMPTY|Current pacing floor/iu);
 });
 
+test("daily digest reports material progress and deduplicates duplicate recovery records", async () => {
+  const { root, worldRoot } = await world("pyash-work-digest-progress-");
+  const repositoryRoot = path.join(root, "repo");
+  await fs.mkdir(repositoryRoot, { recursive: true });
+  await enqueueWorkTask(worldRoot, {
+    taskId: "progress-task",
+    owner: "background",
+    kind: "roadmap",
+    title: "Progress task",
+    priority: 100,
+    queuedAt: "2026-08-17T01:00:00.000Z",
+    promptText: "Implement the task.",
+    acceptanceText: "The targeted test passes."
+  });
+  const task = await readWorkTaskStatus(worldRoot, "progress-task");
+  await writeWorkTaskStatus(worldRoot, {
+    ...task,
+    status: "implementing",
+    checkpoint: {
+      ...task.checkpoint,
+      implementation: {
+        ...task.checkpoint.implementation,
+        passHistory: [
+          { pass: 1, state: "completed", at: "2026-08-17T01:10:00.000Z", material: true, materialReasons: ["new commit"], newCommits: ["abc1234"] },
+          { pass: 2, state: "completed", at: "2026-08-17T02:10:00.000Z", material: false, materialReasons: [], noDeltaReason: "same evidence" }
+        ],
+        passes: 2,
+        materialProgressPasses: 1,
+        noProgressPasses: 1,
+        commitsProduced: 1,
+        lastMaterialProgressAt: "2026-08-17T01:10:00.000Z"
+      }
+    }
+  });
+  const capacity = { weekly: { identified: true, remainingPercent: 80, usedPercent: 20, resetAt: "2026-08-24T00:00:00.000Z" } };
+  for (const at of ["2026-08-17T03:00:00.000Z", "2026-08-17T03:00:01.000Z"]) {
+    await appendWorkSchedulerEvent(worldRoot, {
+      type: "recovered",
+      taskId: "progress-task",
+      recoveryCount: 2,
+      reason: "recovered after preflight",
+      previousBlocker: "turn timeout",
+      capacity
+    }, { now: at });
+  }
+  const digest = await buildWorkDailyDigest({
+    worldRoot,
+    repositoryRoot,
+    since: "2026-08-17T00:00:00.000Z",
+    until: "2026-08-17T23:00:00.000Z",
+    capacitySource: async () => capacity,
+    now: "2026-08-17T23:00:00.000Z"
+  });
+  assert.match(digest.report, /Implementation passes: 2/u);
+  assert.match(digest.report, /Material-progress passes: 1/u);
+  assert.match(digest.report, /No-delta passes: 1/u);
+  assert.match(digest.report, /Commits produced: 1/u);
+  assert.match(digest.report, /Operational recoveries: 1/u);
+  assert.equal((digest.report.match(/progress-task: recovered after preflight/gu) || []).length, 1);
+});
+
 test("timeout-blocked work is operationally blocked, not roadmap exhaustion", async () => {
   const { root, worldRoot } = await world("pyash-work-timeout-block-");
   const repositoryRoot = path.join(root, "repo");
