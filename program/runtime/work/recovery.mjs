@@ -28,6 +28,8 @@ function isSubstantialRoadmapTask(task) {
 }
 
 function hasConcreteRevision(task) {
+  if (task?.checkpoint?.convergence?.status === "blocked"
+    && task?.checkpoint?.convergence?.decision === "BLOCK") return false;
   return Boolean(String(task?.checkpoint?.review?.revisionInstructions || "").trim());
 }
 

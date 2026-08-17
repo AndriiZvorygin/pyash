@@ -1,4 +1,5 @@
 import { readWorkTaskStatus } from "./status.mjs";
+import { deriveImplementationProgress } from "./progress.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -65,6 +66,7 @@ export function renderWorkTaskReport(task) {
   const workspace = checkpoint.workspace || {};
   const manager = checkpoint.manager || {};
   const worker = checkpoint.worker || {};
+  const progress = deriveImplementationProgress(checkpoint);
   const changedFiles = list(implementation.changedFiles)
     .map(changedFile)
     .filter((file) => file && !/^commit\s*:/iu.test(file));
@@ -92,6 +94,13 @@ export function renderWorkTaskReport(task) {
     "",
     "Luna implementation:",
     indent(explicitText(implementation.summary), "  ", 1200),
+    "",
+    `Implementation passes: ${progress.implementationPasses}`,
+    `Material-progress passes: ${progress.materialProgressPasses}`,
+    `No-delta passes: ${progress.noProgressPasses}`,
+    `Commits produced: ${progress.commitsProduced}`,
+    `Acceptance checks closed: ${progress.acceptanceChecksClosed}`,
+    `Last material progress: ${progress.lastMaterialProgressAt || "not recorded"}`,
     "",
     "Changed files:"
   ];
