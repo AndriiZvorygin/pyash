@@ -64,7 +64,38 @@ function stateName(value) {
   return value?.name ?? value?.wo ?? value?.text ?? null;
 }
 
+function isNonEmptyArg(value) {
+  return typeof value === "string" && value.length > 0;
+}
+
+function hasCompileCaseShape(args) {
+  let index = 0;
+  if (args[index++] !== "from" || args[index++] !== "filename") return false;
+  if (!isNonEmptyArg(args[index++])) return false;
+
+  if (args[index] === "fromstate") {
+    index += 1;
+    if (!isNonEmptyArg(args[index++])) return false;
+  }
+
+  if (args[index++] !== "to" || args[index++] !== "filename") return false;
+  if (!isNonEmptyArg(args[index++])) return false;
+
+  if (args[index] === "tostate" || args[index] === "become") {
+    index += 1;
+    if (!isNonEmptyArg(args[index++])) return false;
+  }
+
+  if (args[index] === "be") {
+    index += 1;
+    if (args[index++] !== "compile" || args[index++] !== "do") return false;
+  }
+
+  return index === args.length;
+}
+
 function compileSentence(args) {
+  if (!hasCompileCaseShape(args)) return null;
   const parsed = parseCase(args);
   if (!parsed || !validFilenameCase(parsed)) return null;
   if (parsed.be !== undefined && parsed.be !== "compile") return null;

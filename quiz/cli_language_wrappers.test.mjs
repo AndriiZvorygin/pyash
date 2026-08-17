@@ -111,6 +111,25 @@ test("compile rejects missing source, destination, wrong verbs, and unsupported 
   }
 });
 
+test("compile rejects stray and duplicate case, verb, and mood tokens", async () => {
+  const fixture = await makeFixture();
+  const cases = [
+    ["stray token", ["from", "filename", fixture.source, "stray", "to", "filename", fixture.output]],
+    ["duplicate from", ["from", "filename", fixture.source, "from", "filename", fixture.source, "to", "filename", fixture.output]],
+    ["duplicate to", ["from", "filename", fixture.source, "to", "filename", fixture.output, "to", "filename", fixture.output]],
+    ["duplicate source state", ["from", "filename", fixture.source, "fromstate", "pyash", "fromstate", "pyash", "to", "filename", fixture.output]],
+    ["duplicate target state", ["from", "filename", fixture.source, "to", "filename", fixture.output, "become", "javascript", "tostate", "javascript"]],
+    ["duplicate verb", ["from", "filename", fixture.source, "to", "filename", fixture.output, "be", "compile", "do", "be", "compile", "do"]],
+    ["duplicate mood", ["from", "filename", fixture.source, "to", "filename", fixture.output, "be", "compile", "do", "do"]]
+  ];
+
+  for (const [label, args] of cases) {
+    const result = invoke(wrappers.compile, args, { cwd: fixture.cwd });
+    assert.equal(result.status, 1, `${label}: ${result.stdout}\n${result.stderr}`);
+    assert.match(result.stderr, /^usage: \.\/compile/m, `${label} should use compile usage`);
+  }
+});
+
 test("run accepts from filename outside the repository", async () => {
   const fixture = await makeFixture();
   const result = invoke(wrappers.run, ["from", "filename", fixture.source], { cwd: fixture.cwd });
