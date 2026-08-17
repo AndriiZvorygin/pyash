@@ -125,7 +125,8 @@ Git evidence, then resumes Sol for review. It maps decisions as follows:
 
 ```text
 ACCEPT -> accepted
-REVISE -> one revision loop, then implement/review again
+REVISE -> bounded revision rounds, then a focused convergence review when
+           implementation stops making material progress
 BLOCK  -> blocked
 ```
 
@@ -284,7 +285,7 @@ capacity state.
 - extracted shared App Server JSONL transport;
 - configurable manager/worker roles and reasoning effort;
 - one Sol plan -> Luna implementation -> Sol review cycle;
-- one revision loop with a revision cap;
+- bounded revision rounds plus material-progress/convergence review;
 - task-specific detached Git worktrees;
 - runtime recovery for persisted checkpoints and usage limits;
 - explicit supervisor and smoke commands.
@@ -378,6 +379,32 @@ Pyash retains task state, acceptance, retry, and evidence ownership. CAO-style
 MCP orchestration and CCB/tmux bridges remain useful prior art for visible
 sessions, handoff, callbacks, and human intervention, but they should wrap
 Pyash records rather than replace the holding spool.
+
+## Material Progress and Convergence
+
+Implementation turns now leave a durable evidence ledger in the task
+checkpoint. A pass is material only when it records a new task commit or
+diff, new evidence that closes a previously failing acceptance check, or a
+new concrete blocker diagnosis. Repeating the same clean-worktree inspection,
+test report, or Sol correction is recorded as no-delta work rather than useful
+progress. Reports expose implementation passes, material-progress passes,
+no-delta passes, commits produced, acceptance checks closed, and the last
+material-progress timestamp.
+
+After two consecutive no-delta implementation passes, the supervisor pauses
+Luna and resumes the existing Sol thread for one focused convergence review.
+Sol must choose `CONTINUE` with a narrower correction, `SPLIT` with dependent
+follow-up work, or `BLOCK` for a genuine external, human, product, semantic,
+architectural, safety, or policy decision. The weekly pacing policy remains
+the resource brake; revision count alone does not end technical work.
+
+A focused Sol `BLOCK` for a required unavailable backend is not automatically
+recovered on every hourly wake. It remains a durable operational block until
+the external condition changes or an operator explicitly resumes/waives it.
+This avoids replaying Luna against a task whose code boundary is already
+complete. Duplicate recovery event rows with the same task and recovery count
+are collapsed in the daily digest, while distinct recovery counts remain
+visible in chronological order.
 
 ## Deferred Work
 

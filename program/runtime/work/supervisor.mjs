@@ -7,6 +7,7 @@ import {
   claimWorkTaskById,
   claimOldestRuntimeWorkTask,
   claimOldestWorkTask,
+  enqueueWorkTask,
   queueDepth,
   writeWorkTaskRuntime
 } from "./queue.mjs";
@@ -19,6 +20,13 @@ import { emitWorkEvent } from "./observer.mjs";
 import { diffStat } from "./report.mjs";
 import { collectGitEvidence, prepareWorktree } from "./workspace.mjs";
 import { integrateAcceptedWork } from "./integration.mjs";
+import {
+  classifyImplementationPass,
+  deriveImplementationProgress,
+  implementationProgressFields,
+  summarizeImplementationProgress,
+  extractCommitIds
+} from "./progress.mjs";
 import {
   resumeCodexThread,
   runCodexTurn,
@@ -109,16 +117,29 @@ function lines(value) {
     .filter(Boolean);
 }
 
-function parseImplementation(output) {
+export function parseImplementation(output) {
   const sections = sectionMap(output);
   const fallback = text(output);
   return {
     summary: firstSection(sections, ["SUMMARY", "IMPLEMENTATION SUMMARY"]) || fallback.slice(0, 1000),
+    commit: extractCommitIds(fallback).at(-1) || "",
     reviewReady: /(?:REVIEW READY|READY FOR REVIEW):\s*(?:yes|true|truth|1)\b/iu.test(fallback),
     changedFiles: lines(firstSection(sections, ["CHANGED FILES", "FILES"])),
+    fileChanges: [],
     tests: lines(firstSection(sections, ["TESTS", "TEST EVIDENCE"])),
     blockers: firstSection(sections, ["BLOCKERS", "BLOCKER"]),
     uncertainty: firstSection(sections, ["UNCERTAINTY", "NOTES"])
+  };
+}
+
+export function parseConvergence(output) {
+  const sections = sectionMap(output);
+  const match = String(output ?? "").match(/DECISION:\s*(CONTINUE|SPLIT|BLOCK)\b/iu);
+  return {
+    decision: String(match?.[1] || "BLOCK").toUpperCase(),
+    rationale: firstSection(sections, ["RATIONALE", "EXPLANATION", "SUMMARY"]) || text(output),
+    correction: firstSection(sections, ["CORRECTION", "CORRECTIONS", "CONTINUE", "FOLLOW-UP", "FOLLOW UP"]),
+    splitScope: firstSection(sections, ["SPLIT", "FOLLOW-UP", "FOLLOW UP"])
   };
 }
 
@@ -187,6 +208,32 @@ function promptReview(task, checkpoint, workspace) {
   ].join("\n");
 }
 
+function promptConvergence(task, checkpoint, workspace) {
+  const history = (checkpoint.implementation.passHistory || []).slice(-12).map((pass) => [
+    `Pass ${pass.pass} at ${pass.at}: ${pass.material ? "MATERIAL" : "NO DELTA"}`,
+    `  Reasons: ${(pass.materialReasons || []).join(", ") || pass.noDeltaReason || "none"}`,
+    `  Summary: ${text(pass.summary).slice(0, 600)}`,
+    `  Tests: ${(pass.tests || []).slice(0, 5).join("; ") || "none"}`
+  ].join("\n")).join("\n");
+  return [
+    "You are Sol performing a focused convergence review for a technical Pyash task.",
+    "Do not repeat the original broad correction. Inspect the accumulated evidence and choose exactly one:",
+    "DECISION: CONTINUE, DECISION: SPLIT, or DECISION: BLOCK.",
+    "CONTINUE means give Luna one narrower concrete correction that can be verified.",
+    "SPLIT means preserve the completed portion and define substantial dependent follow-up work.",
+    "BLOCK is allowed only for a genuine product, semantic, architectural, safety, policy, credential, or unavailable-required-external-system decision.",
+    "A clean worktree, repeated tests, a revision count, or a client timeout alone is not a human decision.",
+    "Use exact headings: DECISION:, RATIONALE:, and CORRECTION: (or FOLLOW-UP: when splitting).",
+    `Task title: ${task.title}`,
+    `Objective: ${task.promptText}`,
+    `Acceptance criteria: ${task.acceptanceText}`,
+    `Worktree: ${workspace.worktreePath}`,
+    `Current Sol correction: ${checkpoint.review.revisionInstructions || "none"}`,
+    "Accumulated implementation evidence:",
+    history || "none recorded"
+  ].join("\n");
+}
+
 function resultText(result) {
   return text(result?.text || result?.message || result?.output);
 }
@@ -197,7 +244,11 @@ function isoText(value) {
 }
 
 function requestIdentity(task, phase) {
-  const pass = phase === "implementation" ? task.checkpoint.implementation.passes : 0;
+  const pass = phase === "implementation"
+    ? task.checkpoint.implementation.passes
+    : phase === "convergence-review"
+      ? task.checkpoint.convergence.reviewCount
+      : 0;
   return `pyash-${task.taskId}-${phase}-${task.checkpoint.revisionCount}-${task.checkpoint.resumeCount}-${pass}`;
 }
 
@@ -314,6 +365,8 @@ export async function runWorkSupervisorOnce({
   pushIntegration = false,
   integrationRemotes = ["origin", "github"],
   maxRevisions = 3,
+  maxNoProgressPasses = 2,
+  maxImplementationPassesBetweenConvergence = 12,
   pauseAfterImplementation = false,
   reviewAfterImplementationPasses = 2,
   pyashFirstPolicy = true,
@@ -342,6 +395,16 @@ export async function runWorkSupervisorOnce({
     checkpoint: persisted?.checkpoint || claimed.task.checkpoint,
     workSpec: persisted?.workSpec || claimed.task.workSpec
   });
+  const historicalProgress = deriveImplementationProgress(task.checkpoint);
+  if (!task.checkpoint.implementation.passHistory.length && historicalProgress.passHistory.length) {
+    task = await writeWorkTaskStatus(worldRoot, {
+      ...task,
+      checkpoint: mergeWorkCheckpoint(task.checkpoint, {
+        implementation: implementationProgressFields(historicalProgress)
+      })
+    });
+    await writeWorkTaskRuntime(claimed.path, task);
+  }
   const emit = (type, fields = {}) => emitWorkEvent(onEvent, type, {
     taskId: task.taskId,
     title: task.title,
@@ -708,6 +771,27 @@ export async function runWorkSupervisorOnce({
       ...changedFilesFromResult(result, workspace.worktreePath),
       ...(evidence?.changedFiles || [])
     ])];
+    const pass = task.checkpoint.implementation.passHistory.filter((entry) => entry.state === "completed").length + 1;
+    const progressEntry = classifyImplementationPass({
+      pass,
+      at: isoText(nowValue(now)),
+      turn: {
+        ...task.checkpoint.activeTurn,
+        result: {
+          text: resultText(result),
+          diff: result?.diff || "",
+          fileChanges: uniqueFileChanges(result?.fileChanges || [])
+        }
+      },
+      report,
+      evidence,
+      previousHistory: task.checkpoint.implementation.passHistory.filter((entry) => entry.state === "completed"),
+      baseRevision: workspace.baseRevision
+    });
+    const progress = summarizeImplementationProgress([
+      ...task.checkpoint.implementation.passHistory,
+      progressEntry
+    ]);
     await captureTurn("implementation", {
       implementation: {
         ...report,
@@ -718,7 +802,8 @@ export async function runWorkSupervisorOnce({
         reviewReady: report.reviewReady,
         changedFiles,
         fileChanges: uniqueFileChanges(result?.fileChanges || []),
-        diff: evidence?.diff || result?.diff || ""
+        diff: evidence?.diff || result?.diff || "",
+        ...implementationProgressFields(progress)
       },
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     }, { result: report.summary });
@@ -731,6 +816,17 @@ export async function runWorkSupervisorOnce({
       changedFiles,
       tests: report.tests,
       worktree: workspace.worktreePath
+    });
+    await emit("implementation-progress", {
+      role: "worker",
+      model: roleSettings.worker.model,
+      phase: "implementation",
+      pass: progressEntry.pass,
+      material: progressEntry.material,
+      materialReasons: progressEntry.materialReasons,
+      consecutiveNoProgressPasses: progress.consecutiveNoProgressPasses,
+      commitsProduced: progress.commitsProduced,
+      lastMaterialProgressAt: progress.lastMaterialProgressAt
     });
     await emit("tests-reported", {
       role: "worker",
@@ -781,6 +877,88 @@ export async function runWorkSupervisorOnce({
       correction: review.revisionInstructions
     });
     return review;
+  }
+
+  async function doConvergenceReview() {
+    const { client, threadId } = await getManager();
+    const requestedAt = isoText(nowValue(now));
+    await save({
+      convergence: { status: "reviewing", requestedAt },
+      lastAction: "focused Sol convergence review started"
+    });
+    await emit("convergence-review-started", {
+      role: "manager",
+      model: roleSettings.manager.model,
+      threadId,
+      phase: "convergence-review",
+      consecutiveNoProgressPasses: task.checkpoint.implementation.consecutiveNoProgressPasses
+    });
+    const result = await executeTurn("convergence-review", "manager", client, {
+      threadId,
+      cwd: workspace.worktreePath,
+      model: roleSettings.manager.model,
+      reasoningEffort: roleSettings.manager.reasoningEffort,
+      approvalPolicy,
+      sandboxPolicy: typeof turnSandboxPolicy === "function"
+        ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
+        : turnSandboxPolicy,
+      timeoutMs: turnTimeoutMs,
+      input: [{ type: "text", text: promptConvergence(task, task.checkpoint, workspace) }]
+    });
+    const convergence = parseConvergence(resultText(result));
+    const reviewCount = task.checkpoint.convergence.reviewCount + 1;
+    await captureTurn("convergence-review", {
+      convergence: {
+        status: convergence.decision === "BLOCK" ? "blocked" : convergence.decision === "SPLIT" ? "split" : "continued",
+        reviewCount,
+        requestedAt,
+        reviewedAt: isoText(nowValue(now)),
+        decision: convergence.decision,
+        rationale: convergence.rationale,
+        correction: convergence.correction
+      },
+      review: convergence.decision === "CONTINUE"
+        ? { revisionInstructions: convergence.correction }
+        : {},
+      interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
+    }, { message: convergence.rationale });
+    await emit("convergence-review-completed", {
+      role: "manager",
+      model: roleSettings.manager.model,
+      threadId,
+      phase: "convergence-review",
+      decision: convergence.decision,
+      explanation: convergence.rationale,
+      correction: convergence.correction
+    });
+    return convergence;
+  }
+
+  async function splitFollowUp(convergence) {
+    const suffix = `follow-up-${task.checkpoint.convergence.reviewCount}`;
+    const followUpTaskId = `${task.taskId}-${suffix}`;
+    if (await readWorkTaskStatus(worldRoot, followUpTaskId)) return followUpTaskId;
+    await enqueueWorkTask(worldRoot, {
+      taskId: followUpTaskId,
+      owner: task.owner,
+      kind: task.kind,
+      title: `${task.title}: follow-up`,
+      priority: task.priority,
+      promptText: convergence.correction || `Continue the remaining boundary from ${task.title}.`,
+      acceptanceText: task.acceptanceText,
+      contextText: [
+        task.contextText,
+        `Split from ${task.taskId}. Preserve the completed portion in ${workspace.worktreePath}.`,
+        `Sol rationale: ${convergence.rationale}`
+      ].filter(Boolean).join("\n"),
+      workSpec: {
+        ...task.workSpec,
+        granularity: "substantial",
+        followUpOf: task.taskId,
+        splitFromConvergence: task.checkpoint.convergence.reviewCount
+      }
+    });
+    return followUpTaskId;
   }
 
   async function finish(status, message) {
@@ -839,6 +1017,60 @@ export async function runWorkSupervisorOnce({
     }
     let correction = "";
     while (true) {
+      const implementation = task.checkpoint.implementation;
+      const convergence = task.checkpoint.convergence;
+      const lastConvergenceAt = Date.parse(convergence.reviewedAt || "");
+      const passesSinceConvergence = implementation.passHistory.filter((entry) => {
+        const at = Date.parse(entry.at || "");
+        return !Number.isFinite(lastConvergenceAt) || (Number.isFinite(at) && at > lastConvergenceAt);
+      }).length;
+      const convergenceRequired = task.status === "revision"
+        && (implementation.consecutiveNoProgressPasses >= Math.max(1, Number(maxNoProgressPasses) || 1)
+          || (passesSinceConvergence >= Math.max(1, Number(maxImplementationPassesBetweenConvergence) || 1)
+            && implementation.consecutiveNoProgressPasses > 0));
+      if (convergenceRequired) {
+        const reviewedAt = Date.parse(convergence.reviewedAt || "");
+        const lastPassAt = Date.parse(implementation.passHistory.at(-1)?.at || "");
+        const fresh = Number.isFinite(reviewedAt) && (!Number.isFinite(lastPassAt) || reviewedAt >= lastPassAt);
+        const focused = fresh
+          ? {
+            decision: convergence.decision,
+            rationale: convergence.rationale,
+            correction: convergence.correction
+          }
+          : await doConvergenceReview();
+        if (focused.decision === "CONTINUE") {
+          await save({
+            convergence: { status: "applied" },
+            implementation: { consecutiveNoProgressPasses: 0 },
+            lastAction: "focused Sol correction accepted; resuming Luna"
+          });
+          correction = focused.correction;
+          await move("implementing", { message: "focused Sol correction" });
+          continue;
+        }
+        if (focused.decision === "SPLIT") {
+          const followUpTaskId = convergence.splitTaskIds[0] || await splitFollowUp(focused);
+          await save({
+            convergence: { status: "split", splitTaskIds: [followUpTaskId] },
+            blocker: `technical scope split; follow-up task queued: ${followUpTaskId}`,
+            lastAction: "scope split after convergence review"
+          }, {
+            workSpec: { ...task.workSpec, lifecycle: "split-parent", splitFollowUpTaskId: followUpTaskId }
+          });
+          task = await move("blocked", {
+            message: `technical scope split; follow-up task queued: ${followUpTaskId}`,
+            error: ""
+          });
+          await emit("split", {
+            phase: "convergence-review",
+            reason: focused.rationale,
+            followUpTaskId
+          });
+          return { claimed: true, taskId: task.taskId, status: task.status, queue: await queueDepth(worldRoot) };
+        }
+        return await finish("blocked", focused.rationale || "Sol identified a genuine decision blocker");
+      }
       if (task.status === "revision") {
         correction = task.checkpoint.review.revisionInstructions;
         await move("implementing", { message: "applying Sol revision request" });
