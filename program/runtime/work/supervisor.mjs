@@ -37,7 +37,7 @@ import {
 
 export const DEFAULT_WORK_ROLE_CONFIG = Object.freeze({
   manager: Object.freeze({ model: "gpt-5.6-sol", reasoningEffort: "high" }),
-  worker: Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "high" })
+  worker: Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "xhigh" })
 });
 
 function text(value) {

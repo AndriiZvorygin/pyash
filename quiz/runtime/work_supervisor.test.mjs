@@ -13,7 +13,13 @@ import {
 } from "../../program/runtime/work/queue.mjs";
 import { readWorkTaskStatus, transitionWorkTaskStatus, updateWorkTaskCheckpoint } from "../../program/runtime/work/status.mjs";
 import { failWorkTask, resumeWorkTask } from "../../program/runtime/work/operator.mjs";
-import { runWorkSupervisorOnce } from "../../program/runtime/work/supervisor.mjs";
+import { DEFAULT_WORK_ROLE_CONFIG, resolveWorkRoleConfig, runWorkSupervisorOnce } from "../../program/runtime/work/supervisor.mjs";
+
+test("default Luna launches use xhigh reasoning", () => {
+  const roles = resolveWorkRoleConfig({}, {});
+  assert.equal(DEFAULT_WORK_ROLE_CONFIG.worker.model, "gpt-5.6-luna");
+  assert.equal(roles.worker.reasoningEffort, "xhigh");
+});
 
 async function makeWorldRoot(prefix) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
