@@ -78,7 +78,7 @@ class FakeClient {
   async close() {}
 }
 
-async function runFake(worldRoot, decisions, { onEvent = null, onClients = null, turnTimeoutMs } = {}) {
+async function runFake(worldRoot, decisions, { onEvent = null, onClients = null, turnTimeoutMs, maxNoProgressPasses } = {}) {
   const clients = new Map();
   const result = await runWorkSupervisorOnce({
     worldRoot,
@@ -105,6 +105,7 @@ async function runFake(worldRoot, decisions, { onEvent = null, onClients = null,
       revision: "task-revision"
     }),
     ...(turnTimeoutMs ? { turnTimeoutMs } : {}),
+    ...(maxNoProgressPasses ? { maxNoProgressPasses } : {}),
     onEvent,
     now: () => "2026-08-07T12:01:00.000Z"
   });
@@ -126,6 +127,7 @@ test("supervisor observer reports the useful lifecycle without token noise", asy
     "plan-completed",
     "implementation-started",
     "implementation-completed",
+    "implementation-progress",
     "tests-reported",
     "diff-collected",
     "review-started",
@@ -235,7 +237,9 @@ test("supervisor permits one REVISE loop before accepting", async () => {
 test("the default revision bound checkpoints concrete work instead of creating a human block", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-revision-continuation-");
   await enqueueWorkTask(worldRoot, task("revision-continuation-task"));
-  const result = await runFake(worldRoot, ["REVISE", "REVISE", "REVISE", "REVISE"]);
+  const result = await runFake(worldRoot, ["REVISE", "REVISE", "REVISE", "REVISE"], {
+    maxNoProgressPasses: 100
+  });
   assert.equal(result.status, "revision");
   const status = await readWorkTaskStatus(worldRoot, "revision-continuation-task");
   assert.equal(status.status, "revision");
@@ -243,6 +247,75 @@ test("the default revision bound checkpoints concrete work instead of creating a
   assert.equal(status.checkpoint.continuationCount, 1);
   assert.match(status.checkpoint.lastAction, /technical revision checkpoint/iu);
   assert.match(status.checkpoint.review.revisionInstructions, /missing assertion/iu);
+});
+
+test("two no-progress passes trigger focused Sol convergence before another Luna pass", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-convergence-");
+  await enqueueWorkTask(worldRoot, task("convergence-task"));
+  await claimOldestWorkTask(worldRoot, { workerTag: "test" });
+  await transitionWorkTaskStatus(worldRoot, "convergence-task", "planning");
+  await transitionWorkTaskStatus(worldRoot, "convergence-task", "implementing");
+  await transitionWorkTaskStatus(worldRoot, "convergence-task", "revision");
+  const stored = await readWorkTaskStatus(worldRoot, "convergence-task");
+  await updateWorkTaskCheckpoint(worldRoot, "convergence-task", {
+    workspace: {
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/task",
+      mode: "git-worktree"
+    },
+    manager: { threadId: "manager-thread" },
+    worker: { threadId: "worker-thread" },
+    plan: { workOrder: "make the correction" },
+    review: { decision: "REVISE", revisionInstructions: "make the correction" },
+    implementation: {
+      passes: 2,
+      passHistory: [
+        { pass: 1, state: "completed", at: "2026-08-07T12:00:00.000Z", material: false, materialReasons: [], noDeltaReason: "same evidence" },
+        { pass: 2, state: "completed", at: "2026-08-07T12:01:00.000Z", material: false, materialReasons: [], noDeltaReason: "same evidence" },
+        ],
+      consecutiveNoProgressPasses: 2,
+      noProgressPasses: 2
+    }
+  });
+  const calls = [];
+  const result = await runWorkSupervisorOnce({
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    maxNoProgressPasses: 2,
+    appServerFactory: async ({ role }) => ({
+      async resumeThread() {},
+      async runTurn(options) {
+        const input = options.input?.[0]?.text || "";
+        calls.push({ role, input });
+        if (role === "manager" && /focused convergence review/iu.test(input)) {
+          return { turnId: "convergence-review", text: "DECISION: CONTINUE\nRATIONALE: narrow correction is executable\nCORRECTION: fix the one remaining assertion" };
+        }
+        if (role === "manager") return { turnId: "final-review", text: "DECISION: ACCEPT\nRATIONALE: focused correction is verified" };
+        return { turnId: "worker-correction", text: "SUMMARY: fixed the remaining assertion\nCHANGED FILES: hello.txt\nTESTS: targeted assertion passes\nBLOCKERS: \nUNCERTAINTY: none\nCOMMIT: def5678", fileChanges: [{ path: "hello.txt" }] };
+      },
+      async close() {}
+    }),
+    workspaceFactory: async () => ({
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/task",
+      mode: "git-worktree"
+    }),
+    evidenceFactory: async () => ({ diff: "diff --git a/hello.txt b/hello.txt\n+fixed", changedFiles: ["hello.txt"], revision: "def5678" }),
+    now: () => "2026-08-07T12:02:00.000Z"
+  });
+  assert.equal(result.status, "accepted");
+  assert.equal(calls.filter((call) => call.role === "manager" && /focused convergence review/iu.test(call.input)).length, 1);
+  assert.equal(calls.filter((call) => call.role === "worker").length, 1);
+  const final = await readWorkTaskStatus(worldRoot, "convergence-task");
+  assert.equal(final.checkpoint.convergence.decision, "CONTINUE");
+  assert.equal(final.checkpoint.convergence.reviewCount, 1);
+  assert.equal(final.checkpoint.implementation.materialProgressPasses, 1);
+  assert.equal(final.checkpoint.turnHistory.filter((turn) => turn.phase === "convergence-review").length, 1);
 });
 
 test("supervisor preserves a BLOCK review as a durable terminal decision", async () => {

@@ -38,6 +38,31 @@ function turnRecord(value = {}) {
   };
 }
 
+function progressRecord(value = {}) {
+  const source = object(value);
+  return {
+    pass: Math.max(0, Math.trunc(Number(source.pass) || 0)),
+    at: text(source.at),
+    turnId: text(source.turnId),
+    requestIdentity: text(source.requestIdentity),
+    state: text(source.state),
+    summary: text(source.summary),
+    commits: list(source.commits),
+    newCommits: list(source.newCommits),
+    changedFiles: list(source.changedFiles),
+    changedFilesHash: text(source.changedFilesHash),
+    diffHash: text(source.diffHash),
+    tests: list(source.tests),
+    testsHash: text(source.testsHash),
+    blockers: text(source.blockers),
+    blockerHash: text(source.blockerHash),
+    reviewReady: source.reviewReady === true,
+    material: source.material === true,
+    materialReasons: list(source.materialReasons),
+    noDeltaReason: text(source.noDeltaReason)
+  };
+}
+
 export function buildWorkCheckpoint(input = {}) {
   const workspace = object(input.workspace);
   const manager = object(input.manager);
@@ -85,12 +110,29 @@ export function buildWorkCheckpoint(input = {}) {
       diff: text(implementation.diff),
       tests: list(implementation.tests),
       blockers: text(implementation.blockers),
-      uncertainty: text(implementation.uncertainty)
+      uncertainty: text(implementation.uncertainty),
+      passHistory: list(implementation.passHistory).map((entry) => progressRecord(entry)),
+      materialProgressPasses: Math.max(0, Math.trunc(Number(implementation.materialProgressPasses) || 0)),
+      noProgressPasses: Math.max(0, Math.trunc(Number(implementation.noProgressPasses) || 0)),
+      consecutiveNoProgressPasses: Math.max(0, Math.trunc(Number(implementation.consecutiveNoProgressPasses) || 0)),
+      commitsProduced: Math.max(0, Math.trunc(Number(implementation.commitsProduced) || 0)),
+      acceptanceChecksClosed: Math.max(0, Math.trunc(Number(implementation.acceptanceChecksClosed) || 0)),
+      lastMaterialProgressAt: text(implementation.lastMaterialProgressAt)
     },
     review: {
       decision: text(review.decision).toUpperCase(),
       explanation: text(review.explanation),
       revisionInstructions: text(review.revisionInstructions)
+    },
+    convergence: {
+      status: text(input.convergence?.status),
+      reviewCount: Math.max(0, Math.trunc(Number(input.convergence?.reviewCount) || 0)),
+      requestedAt: text(input.convergence?.requestedAt),
+      reviewedAt: text(input.convergence?.reviewedAt),
+      decision: text(input.convergence?.decision).toUpperCase(),
+      rationale: text(input.convergence?.rationale),
+      correction: text(input.convergence?.correction),
+      splitTaskIds: list(input.convergence?.splitTaskIds)
     },
     integration: {
       branch: text(integration.branch),
@@ -148,6 +190,7 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     plan: { ...current.plan, ...object(update.plan) },
     implementation: { ...current.implementation, ...object(update.implementation) },
     review: { ...current.review, ...object(update.review) },
+    convergence: { ...current.convergence, ...object(update.convergence) },
     integration: { ...current.integration, ...object(update.integration) },
     executionPreflight: { ...current.executionPreflight, ...object(update.executionPreflight) },
     interruption: { ...current.interruption, ...object(update.interruption) },

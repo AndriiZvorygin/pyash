@@ -6,6 +6,7 @@ import { curateWorkBacklog } from "./curator.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
 import { renderWorkTaskReport } from "./report.mjs";
+import { deriveImplementationProgress } from "./progress.mjs";
 import { buildAutonomousRoadmap, hasCredibleRoadmapWork, isRetryableWorkBlock } from "./roadmap.mjs";
 
 function text(value) {
@@ -84,6 +85,7 @@ function taskTouched(task, start, end) {
 
 function compactReport(task) {
   const checkpoint = task.checkpoint || {};
+  const progress = deriveImplementationProgress(checkpoint);
   const excerpt = (value, limit = 700) => {
     const body = text(value).replace(/\s+/gu, " ");
     return body.length <= limit ? body : `${body.slice(0, limit - 3)}...`;
@@ -94,6 +96,12 @@ function compactReport(task) {
     `Result: ${String(task.status).toUpperCase()}`,
     `Sol plan: ${excerpt(checkpoint.plan?.summary || checkpoint.plan?.workOrder) || "(not recorded)"}`,
     `Luna implementation: ${excerpt(checkpoint.implementation?.summary) || "(not recorded)"}`,
+    `Implementation passes: ${progress.implementationPasses}`,
+    `Material-progress passes: ${progress.materialProgressPasses}`,
+    `No-delta passes: ${progress.noProgressPasses}`,
+    `Commits produced: ${progress.commitsProduced}`,
+    `Acceptance checks closed: ${progress.acceptanceChecksClosed}`,
+    `Last material progress: ${progress.lastMaterialProgressAt || "not recorded"}`,
     `Tests: ${(checkpoint.implementation?.tests || []).map((test) => excerpt(test, 280)).join("; ") || "(not recorded)"}`,
     `Sol review: ${checkpoint.review?.decision || "(not recorded)"} ${excerpt(checkpoint.review?.explanation, 280)}`,
     `Diff: ${renderWorkTaskReport(task).match(/^Diff: .*$/mu)?.[0]?.replace(/^Diff:\s*/u, "") || "not recorded"}`,
@@ -102,9 +110,22 @@ function compactReport(task) {
   ].filter(Boolean).join("\n");
 }
 
+function uniqueRecoveryEvents(events) {
+  const seen = new Set();
+  return events.filter((event) => {
+    const key = `${event.taskId || event.selected || ""}:${event.recoveryCount || event.at || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function compactBlocker(value) {
   const body = text(value).replace(/\s+/gu, " ");
   if (!body) return "technical continuation required";
+  if (/Ollama|live backend|fixture-free live/iu.test(body) && /unavailable|evidence|required/iu.test(body)) {
+    return "external evidence required: fixture-free Ollama run unavailable";
+  }
   if (/integration|cherry-pick|rebase|merge conflict/iu.test(body)) {
     return "integration conflict against current automation baseline";
   }
@@ -163,7 +184,7 @@ export function renderWorkDailyDigest({
   const pacingDeferred = deferred.filter((event) => /pacing|reserve|usage[- ]limited|capacity/iu.test(event.reason || ""));
   const idle = events.filter((event) => event.action === "idle" && !legacyTechnicalWakes.includes(event));
   const technicalUnavailable = [...technicalEvents, ...legacyTechnicalWakes];
-  const recovered = events.filter((event) => event.action === "recovered");
+  const recovered = uniqueRecoveryEvents(events.filter((event) => event.action === "recovered"));
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
   const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
@@ -232,7 +253,18 @@ export function renderWorkDailyDigest({
   lines.push("", "Current work", "------------");
   if (active.length) {
     for (const task of active.slice(0, 3)) {
-      lines.push(`${task.title} [${task.taskId}]`, `Status: ${task.status}`, `Phase: ${task.checkpoint?.interruption?.phase || task.status}`, `Progress passes: ${task.checkpoint?.implementation?.passes || 0}`);
+      const progress = deriveImplementationProgress(task.checkpoint || {});
+      lines.push(
+        `${task.title} [${task.taskId}]`,
+        `Status: ${task.status}`,
+        `Phase: ${task.checkpoint?.interruption?.phase || task.status}`,
+        `Implementation passes: ${progress.implementationPasses}`,
+        `Material-progress passes: ${progress.materialProgressPasses}`,
+        `No-delta passes: ${progress.noProgressPasses}`,
+        `Commits produced: ${progress.commitsProduced}`,
+        `Acceptance checks closed: ${progress.acceptanceChecksClosed}`,
+        `Last material progress: ${progress.lastMaterialProgressAt || "not recorded"}`
+      );
     }
   } else {
     lines.push("(none)");
@@ -241,6 +273,13 @@ export function renderWorkDailyDigest({
     lines.push("", "Needs direction", "---------------", "No active or ready substantial task remains, and current roadmap/TODO curation found no safe bounded next package.");
   } else if (temporarilyBlocked) {
     lines.push("", "ROADMAP WORK TEMPORARILY BLOCKED", "--------------------------------", "Roadmap work remains; operational failures are not roadmap completion.", "No package completed today.", `Blocked packages: ${retryable.map((item) => `${item.taskId}: ${compactBlocker(item.blocker || item.progress)}`).join("; ")}`, "Next action: recover or retry the highest-value valid package.");
+    const evidence = retryable.slice(0, 5).map((item) => {
+      const task = tasks.find((candidate) => candidate.taskId === item.taskId);
+      if (!task) return `  ${item.taskId}: progress checkpoint unavailable`;
+      const progress = deriveImplementationProgress(task.checkpoint || {});
+      return `  ${task.title}: ${progress.implementationPasses} passes; ${progress.materialProgressPasses} material; ${progress.noProgressPasses} no-delta; ${progress.commitsProduced} commits; last material ${progress.lastMaterialProgressAt || "not recorded"}`;
+    });
+    lines.push("", "Progress evidence", "-----------------", ...evidence);
   } else if (!active.length && !ready && !curation.proposed?.length && roadmapWork) {
     lines.push("", "READY QUEUE EMPTY - RECONCILIATION REQUIRED", "--------------------------------------------", "The generated queue is empty, but the authoritative roadmap still contains unfinished packages.");
   } else if (curation.proposed?.length) {
