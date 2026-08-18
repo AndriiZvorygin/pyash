@@ -48,9 +48,19 @@ export async function rename(sentence, { remember: rememberFn = remember } = {})
       raw: { error: err?.message }
     });
   }
+  if (resolvedSource === resolvedDest) {
+    return { ob: { filename: resolvedDest }, be: "rename" };
+  }
   try {
+    const destinationStat = await fs.stat(resolvedDest).catch((err) => {
+      if (err?.code === "ENOENT") return null;
+      throw err;
+    });
+    if (destinationStat && !destinationStat.isFile()) {
+      throw new Error("destination is not a regular file");
+    }
     await fs.mkdir(path.dirname(resolvedDest), { recursive: true });
-    await fs.rm(resolvedDest, { recursive: true, force: true });
+    if (destinationStat) await fs.unlink(resolvedDest);
     await fs.rename(resolvedSource, resolvedDest);
   } catch (err) {
     throwErrorSentence({

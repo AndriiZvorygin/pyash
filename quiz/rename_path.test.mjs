@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
@@ -14,7 +15,7 @@ async function run(line) {
 
 test("rename moves file to new path", async () => {
   forget();
-  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "rename-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-rename-"));
   const src = path.join(dir, "note.txt");
   const dest = path.join(dir, "moved", "note.txt");
   await fs.writeFile(src, "alpha", "utf8");
@@ -28,7 +29,7 @@ test("rename moves file to new path", async () => {
 
 test("rename overwrites destination", async () => {
   forget();
-  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "rename-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-rename-"));
   const src = path.join(dir, "source.txt");
   const dest = path.join(dir, "dest.txt");
   await fs.writeFile(src, "alpha", "utf8");
@@ -42,7 +43,7 @@ test("rename overwrites destination", async () => {
 
 test("rename fails for missing source", async () => {
   forget();
-  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "rename-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-rename-"));
   const src = path.join(dir, "missing.txt");
   const dest = path.join(dir, "dest.txt");
   await assert.rejects(() => run(`be rename ob filename "${src}" to filename "${dest}" do`));

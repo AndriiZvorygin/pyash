@@ -32,9 +32,9 @@ export async function copy(sentence, { remember: rememberFn = remember } = {}) {
       raw: { sentence }
     });
   }
-  const resolvedSrc = path.resolve(src);
-  const { resolved: resolvedDest, outside, agentCwd } = resolveAgentPath(dest, { rememberFn });
-  if (outside) {
+  const { resolved: resolvedSrc, outside: sourceOutside, agentCwd } = resolveAgentPath(src, { rememberFn });
+  const { resolved: resolvedDest, outside: destOutside } = resolveAgentPath(dest, { rememberFn });
+  if (sourceOutside || destOutside) {
     throwErrorSentence({
       name: "copy defective",
       message: `copy defective: outside agent cwd (${agentCwd})`,
@@ -63,7 +63,7 @@ export async function copy(sentence, { remember: rememberFn = remember } = {}) {
       raw: { resolvedSrc }
     });
   }
-  if (resolvedSrc === resolvedDest) {
+  if (path.resolve(resolvedSrc) === path.resolve(resolvedDest)) {
     return { ob: { filename: resolvedDest }, be: "copy" };
   }
   await fs.mkdir(path.dirname(resolvedDest), { recursive: true });

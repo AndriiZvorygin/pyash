@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
@@ -14,7 +15,7 @@ async function run(line) {
 
 test("touch creates file and updates timestamp", async () => {
   forget();
-  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "touch-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-touch-"));
   const target = path.join(dir, "note.txt");
 
   await run(`be touch ob filename "${target}" do`);
@@ -29,7 +30,7 @@ test("touch creates file and updates timestamp", async () => {
 
 test("touch creates parent directories", async () => {
   forget();
-  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "touch-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-touch-"));
   const target = path.join(dir, "nested", "note.txt");
   await run(`be touch ob filename "${target}" do`);
   const stat = await fs.stat(target);
