@@ -296,6 +296,45 @@ test("daily digest reports completed work before additional temporary blockers",
   assert.match(digest.report, /Blocked before model: 1/u);
 });
 
+test("daily digest counts a recovery and its admitted outcome as one useful wake", async () => {
+  const { root, worldRoot } = await world("pyash-work-digest-useful-wake-");
+  const repositoryRoot = path.join(root, "repo");
+  await fs.mkdir(repositoryRoot, { recursive: true });
+  const capacity = { weekly: { identified: true, remainingPercent: 80, usedPercent: 20, resetAt: "2026-08-20T00:00:00.000Z", windowStartAt: "2026-08-13T00:00:00.000Z" } };
+  await appendWorkSchedulerEvent(worldRoot, {
+    type: "recovered",
+    taskId: "recovered-task",
+    recoveryCount: 2,
+    reason: "recovered after preflight",
+    capacity
+  }, { now: "2026-08-18T08:00:00.000Z" });
+  await appendWorkSchedulerEvent(worldRoot, {
+    type: "admitted",
+    taskId: "recovered-task",
+    capacity,
+    workStarted: true,
+    usefulWake: true,
+    materialProgress: true
+  }, { now: "2026-08-18T08:01:00.000Z" });
+  await appendWorkSchedulerEvent(worldRoot, {
+    type: "technical-blocked",
+    reason: "no runnable integration candidate",
+    capacity,
+    workStarted: false
+  }, { now: "2026-08-18T09:00:00.000Z" });
+  const digest = await buildWorkDailyDigest({
+    worldRoot,
+    repositoryRoot,
+    since: "2026-08-18T00:00:00.000Z",
+    until: "2026-08-18T23:00:00.000Z",
+    capacitySource: async () => capacity,
+    now: "2026-08-18T23:00:00.000Z"
+  });
+  assert.match(digest.report, /Hourly wakes: 2/u);
+  assert.match(digest.report, /Useful wakes: 1 \/ 2/u);
+  assert.doesNotMatch(digest.report, /Useful wakes: [3-9]/u);
+});
+
 test("timeout-blocked work is operationally blocked, not roadmap exhaustion", async () => {
   const { root, worldRoot } = await world("pyash-work-timeout-block-");
   const repositoryRoot = path.join(root, "repo");
