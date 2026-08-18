@@ -17,7 +17,7 @@ for (const ctxKey of COMPOSITIONAL_CONTEXT_ORDER) {
   }
 }
 
-const CASE_ORDER = ["su", "ob", "vyah", "fromindex", "atindex", "toindex", ...COMPOSITIONAL_PREPS];
+const CASE_ORDER = ["su", "ob", "vyah", "fromindex", "atindex", "toindex", "atmost", ...COMPOSITIONAL_PREPS];
 
 // Render a NP like { name: "collector" } or { num: 7 }
 export function npToPyash(np = {}) {
@@ -39,6 +39,10 @@ export function npToPyash(np = {}) {
   if (np.hour !== undefined) return `hour ${np.hour}`;
   if (np.day !== undefined) return `day ${np.day}`;
   if (np.week !== undefined) return `week ${np.week}`;
+  if (np.line !== undefined) return `line ${np.line}`;
+  if (np.lines !== undefined) return `lines ${np.lines}`;
+  if (np.byte !== undefined) return `byte ${np.byte}`;
+  if (np.bytes !== undefined) return `bytes ${np.bytes}`;
   if (np.num !== undefined) return `num ${np.num}`;
   if (np.date !== undefined) return `date ${np.date}`;
   if (np.text !== undefined) {

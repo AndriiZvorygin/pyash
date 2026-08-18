@@ -72,7 +72,15 @@ async function main() {
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    const sentence = parse(line);
+    let sentence;
+    try {
+      sentence = parse(line);
+    } catch {
+      // Newspaper text artifacts may contain raw continuation lines; only
+      // structured Pyash sentences participate in replay verification.
+      continue;
+    }
+    if (!sentence?.be) continue;
     if (isCommandResultIdentityProtocolMarker(sentence)) {
       identityContract = true;
       if (!isCommandResultIdentityProtocolSentence(sentence)) {
