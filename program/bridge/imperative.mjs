@@ -220,7 +220,7 @@ function guardSourceFilenames(sentence, { rememberFn } = {}) {
   if (sentence?.mood !== "do") return;
   const be = sentence?.be ?? "";
   if (be === "import") return;
-  if (be === "exists" || be === "touch" || be === "directory" || be === "text" || be === "filename") return;
+  if (be === "exists" || be === "touch" || be === "copy" || be === "rename" || be === "delete" || be === "directory" || be === "text" || be === "filename") return;
   if (be === "download") return;
   if (be === "read" && (sentence?.ob?.wo === "tail" || sentence?.ob?.text === "tail")) return;
   const slots = [
