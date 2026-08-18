@@ -19,8 +19,8 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   await run("this ob name target ret");
   await run("su name worker be ceremony prah");
 
-  await run("exists su name target ob num 1 fromindex num 3 toindex num 5 be number ya");
-  await run("to name target be worker do");
+  await run("exists su name target ob num 1 fromindex num 99 toindex num 99 by num 4 be number ya");
+  await run("to name target fromindex num 3 toindex num 5 be worker do");
 
   const mem = allRemember();
   const sandpit = dumpSandpits().at(-1);
@@ -41,8 +41,11 @@ test("sandpit first sentence is the source of truth for returned registers", asy
 
   assert.equal(invoke.ob?.num, latestTarget.ob?.num, "invoke ob mirrors sandpit source of truth");
   assert.equal(result.ob?.num, invoke.ob?.num, "result mirrors invoke ob");
-  assert.equal(sandpitInvoke.fromindex?.num ?? sandpitInvoke.fromindex, latestTarget.fromindex?.num ?? latestTarget.fromindex, "fromindex retained on evoke sentence");
-  assert.equal(sandpitInvoke.toindex?.num ?? sandpitInvoke.toindex, latestTarget.toindex?.num ?? latestTarget.toindex, "toindex retained on evoke sentence");
+  assert.equal(sandpitInvoke.fromindex?.num ?? sandpitInvoke.fromindex, 5, "fromindex comes from the final evoker");
+  assert.equal(sandpitInvoke.toindex?.num ?? sandpitInvoke.toindex, 5, "toindex comes from the final evoker");
+  assert.equal(latestTarget.by?.num, 4, "sandpit target seeding preserves by");
+  assert.equal(latestTarget.fromindex?.num ?? latestTarget.fromindex, 99, "target fromindex stays target data");
+  assert.equal(latestTarget.toindex?.num ?? latestTarget.toindex, 99, "target toindex stays target data");
 
   // No additional body leakage into main memory beyond definition-time plus
   const adds = mem.filter(s => s.be === "plus" && s.mood === "do");

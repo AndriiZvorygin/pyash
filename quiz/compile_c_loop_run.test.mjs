@@ -45,6 +45,33 @@ test("compile to C: fromindex/toindex loop invokes ceremony body (gcc + run)", a
   assert.equal(stdout.trim(), "3");
 });
 
+test("compile to C: named-return loop ignores stale target registers", async () => {
+  forget();
+
+  const pyash = [
+    "exists su name count ob num 0 fromindex num 99 toindex num 99 be number ya",
+    "su name plus count to name num input fromindex num 0 toindex num 0 be ceremony def",
+    "ob num 1 to name count be plus do",
+    "ob name count ret",
+    "su name plus count be ceremony prah",
+    "to name count fromindex num 3 toindex num 0 be plus count do",
+    "ob name count be write do"
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
+  const result = await interpret(sentence);
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
+  const cPath = path.join(tmpDir, "out.c");
+  const exePath = path.join(tmpDir, "out");
+  await fs.writeFile(cPath, c, "utf8");
+
+  await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, cPath, "-lm"], { timeout: 120000 });
+  const { stdout } = await execFileAsync(exePath, [], { timeout: 120000 });
+  assert.equal(stdout.trim(), "3");
+});
+
 test("compile to C: loop stops at toindex when ascending", async () => {
   forget();
 
