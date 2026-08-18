@@ -99,6 +99,16 @@ function cloneSentenceValue(value) {
   return cloned;
 }
 
+function updateTargetFact(existing, name, ob, be) {
+  return {
+    ...(existing ? cloneSentenceValue(existing) : {}),
+    su: { name },
+    ob,
+    be,
+    mood: "ya"
+  };
+}
+
 export async function invokeLoop({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
   const prevEvoke = state.currentEvoke;
   const prevEvokeRef = state.currentEvokeRef;
@@ -204,7 +214,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
     if (targetName) {
       const targetObj = updatedTarget?.ob ?? normalizedObj;
       const targetBe = updatedTarget?.be ?? mergedBe;
-      memory.doRemember({ su: { name: targetName }, ob: targetObj, be: targetBe, mood: "ya" });
+      memory.doRemember(updateTargetFact(updatedTarget, targetName, targetObj, targetBe));
       memory.doRemember({ su: { name: "result" }, ob: normalizedObj, be: mergedBe, mood: "ya" });
     }
 
@@ -310,7 +320,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     memory.doRemember(updatedEvoke);
 
     if (to?.name) {
-      memory.doRemember({ su: { name: to.name }, ob: normalizedObj, be: mergedBe, mood: "ya" });
+      memory.doRemember(updateTargetFact(updatedTarget ?? mainTarget, to.name, normalizedObj, mergedBe));
       memory.doRemember({ su: { name: "result" }, ob: normalizedObj, be: mergedBe, mood: "ya" });
     }
   } else {

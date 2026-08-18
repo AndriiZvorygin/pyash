@@ -88,6 +88,8 @@ Define ceremony definition/invocation, `this` access, and return behavior.
 - A ceremony is defined by `su name X be ceremony def` and closed by `su name X be ceremony prah`.
 - The evoker’s signature must match the ceremony’s signature (sequence registers are allowed on the evoker even if omitted in the definition).
 - `this` refers to the evoker sentence inside the ceremony body.
+- `fromindex`, `toindex`, `atindex`, and register-form `by` belong to the active evoking sentence. Target and returned facts do not seed or replace those call-frame registers.
+- A named `ret` returns the named fact's payload and value roles only; it does not implicitly import control registers from that fact. To change loop control, return the role explicitly, such as `this fromindex num 0 ret`.
 - If a ceremony is defined more than once, the later definition takes priority (emit a compile-time warning).
 
 ## 4. Error contracts
@@ -130,6 +132,8 @@ Define official conditionals and loop semantics.
 - Loop semantics:
   - `fromindex <start> [toindex <bound>] be <ceremony> do` runs the body and stops when `fromindex === toindex` (or `fromindex === 0` if `toindex` is absent).
   - When `toindex` is present, the supervisor steps `fromindex` toward `toindex` by +/- 1 each iteration.
+  - The supervisor reads progression state from the final evoker sentence. Target facts may retain payload/result data, but their `fromindex`, `toindex`, `atindex`, and register-form `by` fields are not loop state.
+  - A named `ret` cannot redirect or shorten a loop through stale target registers; explicit role returns remain the supported control update.
   - Indexing is 0-based.
 - Boolean composition:
   - Negation: `be not ob la <sentence> ko` inverts a boolean-producing sentence.

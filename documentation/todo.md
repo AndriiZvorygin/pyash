@@ -15,9 +15,9 @@
 ## Completed bounded tranches
 - Typed top-level ceremony translation parity: signature-derived JavaScript functions now validate typed calls, use fresh call frames, propagate `this`/`ret` payloads into caller targets, and have interpreter/JavaScript golden and regression coverage. Nested/dynamic, recursive, closure, imported, broader control-flow, and C paths remain deferred.
 - HNUC/compositional validation: the canonical 12×3 grid, parser/signature projections, deterministic injected-defect validator, operator-readable `be verify hnuc grammar do` workflow, and conformance documentation are complete. Remaining allocation gap: authoritative HNUCs and lexicon entries for `quantity.way`, `quantity.destination`, all three `limit` cells, and all three `sequence` cells, plus authoritative context codes for `quantity`, `limit`, and `sequence`; C/backend parity and broader translation coverage remain later work.
+- Separate register-fact reliance: direct ceremony/loop parity now keeps `fromindex`, `toindex`, `atindex`, and register-form `by` on the active evoking sentence; named returns preserve payloads without inheriting stale target control state, while explicit role returns remain supported. Mapper/refinery provenance and unsupported nested/imported/compiler mid-loop register mutation remain later work.
 
 ## Later
 - Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.
 - Revisit broader spec features (phonology, noun classes, control constructs from `pyac.txt`) when the interpreter foundations are stable.
 - Introduce result tracking with per-command IDs instead of generic `result`, to support richer history and debugging.
-- Remove reliance on separate register facts (e.g., `fromindex`/`toindex`); keep the evoking sentence as ground truth and derive any register lookups from it (in progress).

@@ -10,6 +10,8 @@ stay on the evoking sentence; no standalone loop facts are written.
 * The evoker (the `do` sentence that calls a ceremony) carries all control data.
 * `fromindex`, `toindex`, and `atindex` are **fields on that sentence**, not
   standalone facts in memory.
+* Register-form `by` is also owned by the active evoker. A target fact can have
+  stale fields with these names without changing the call frame.
 * The parser treats them like other roles:
   * `fromindex num 1 toindex num 10 be worker do`
   * `fromindex num 5 be countdown do` (implicit decrement toward zero)
@@ -33,6 +35,12 @@ When an evoker includes `fromindex`:
      loop.
 4. Write back the final evoker (with its `fromindex`/`toindex`) to main memory,
    plus any target/result facts. No register facts are emitted.
+
+Target seeding is payload-only with respect to loop state: target-fact
+`fromindex`, `toindex`, `atindex`, and register-form `by` fields are not copied
+into the active evoker. Likewise, a named `ret` returns its named payload but
+does not import those control fields. Use an explicit role return, for example
+`this fromindex num 0 ret`, when the body must mutate loop control.
 
 ## 3) How ceremonies interact
 

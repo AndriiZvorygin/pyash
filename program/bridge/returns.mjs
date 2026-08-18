@@ -32,8 +32,6 @@ export function handleReturn(sentence, state, remember) {
       ob: fact.ob ?? merged.ob,
       to: fact.to ?? merged.to,
       from: fact.from ?? merged.from,
-      fromindex: fact.fromindex ?? merged.fromindex,
-      toindex: fact.toindex ?? merged.toindex,
       as: fact.as ?? merged.as
     };
   } else if (sentence.ob !== undefined) {
