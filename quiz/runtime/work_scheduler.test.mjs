@@ -243,6 +243,59 @@ test("daily digest reports material progress and deduplicates duplicate recovery
   assert.equal((digest.report.match(/progress-task: recovered after preflight/gu) || []).length, 1);
 });
 
+test("daily digest reports completed work before additional temporary blockers", async () => {
+  const { root, worldRoot } = await world("pyash-work-digest-completed-blocked-");
+  const repositoryRoot = path.join(root, "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(path.join(repositoryRoot, "documentation", "todo.md"), "Add error-handling paths for ceremonies/sandpits\n");
+  await enqueueWorkTask(worldRoot, {
+    taskId: "completed-digest-task",
+    owner: "background",
+    kind: "roadmap",
+    title: "Strengthen CLI language UX",
+    priority: 100,
+    queuedAt: "2026-08-18T08:00:00.000Z",
+    promptText: "Improve the CLI.",
+    acceptanceText: "Focused tests pass."
+  });
+  const completed = await readWorkTaskStatus(worldRoot, "completed-digest-task");
+  await writeWorkTaskStatus(worldRoot, {
+    ...completed,
+    status: "accepted",
+    startedAt: "2026-08-18T08:10:00.000Z",
+    finishedAt: "2026-08-18T08:30:00.000Z",
+    checkpoint: { ...completed.checkpoint, review: { decision: "ACCEPT", explanation: "CLI evidence passes." } }
+  });
+  await enqueueWorkTask(worldRoot, {
+    taskId: "blocked-digest-task",
+    owner: "background",
+    kind: "roadmap",
+    title: "Ceremony error propagation",
+    priority: 120,
+    queuedAt: "2026-08-18T08:00:00.000Z",
+    promptText: "Reconcile the ceremony capability.",
+    acceptanceText: "Focused tests pass.",
+    checkpoint: { blocker: "automation branch integration blocked: merge conflict", integration: { status: "reconciliation" } }
+  });
+  const blockedDigestTask = await readWorkTaskStatus(worldRoot, "blocked-digest-task");
+  await writeWorkTaskStatus(worldRoot, { ...blockedDigestTask, status: "blocked" });
+  const capacity = { weekly: { identified: true, remainingPercent: 70, usedPercent: 30, resetAt: "2026-08-20T00:00:00.000Z", windowStartAt: "2026-08-13T00:00:00.000Z" } };
+  await appendWorkSchedulerEvent(worldRoot, { type: "admitted", taskId: "completed-digest-task", capacity, workStarted: true, usefulWake: true, materialProgress: true }, { now: "2026-08-18T08:20:00.000Z" });
+  await appendWorkSchedulerEvent(worldRoot, { type: "technical-blocked", reason: "no eligible work", capacity, workStarted: false }, { now: "2026-08-18T09:20:00.000Z" });
+  const digest = await buildWorkDailyDigest({
+    worldRoot,
+    repositoryRoot,
+    since: "2026-08-18T00:00:00.000Z",
+    until: "2026-08-18T23:00:00.000Z",
+    capacitySource: async () => capacity,
+    now: "2026-08-18T23:00:00.000Z"
+  });
+  assert.match(digest.report, /One substantial package completed today\. Additional roadmap work remains temporarily blocked\./u);
+  assert.doesNotMatch(digest.report, /No package completed today\./u);
+  assert.match(digest.report, /Useful wakes: 1 \/ 2/u);
+  assert.match(digest.report, /Blocked before model: 1/u);
+});
+
 test("timeout-blocked work is operationally blocked, not roadmap exhaustion", async () => {
   const { root, worldRoot } = await world("pyash-work-timeout-block-");
   const repositoryRoot = path.join(root, "repo");

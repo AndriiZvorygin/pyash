@@ -177,6 +177,13 @@ export function renderWorkDailyDigest({
     : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
   const wakes = events.filter((event) => ["idle", "deferred", "admitted", "technical-blocked"].includes(event.action));
   const admitted = events.filter((event) => event.action === "admitted");
+  const bool = (value) => value === true || /^(true|truth|yes|1)$/iu.test(text(value));
+  const workStarted = admitted;
+  const usefulWakes = events.filter((event) => bool(event.usefulWake)
+    || event.action === "recovered"
+    || event.action === "accepted"
+    || event.integration === "integrated");
+  const materialProgressWakes = events.filter((event) => bool(event.materialProgress));
   const executionBlocked = events.filter((event) => event.action === "technical-blocked" && /execution environment|preflight|sandbox/iu.test(event.reason || ""));
   const technicalEvents = events.filter((event) => event.action === "technical-blocked" && !executionBlocked.includes(event));
   const legacyTechnicalWakes = events.filter((event) => (event.action === "idle" || event.action === "deferred") && /no eligible work/iu.test(event.reason || "") && retryable.length > 0);
@@ -184,6 +191,9 @@ export function renderWorkDailyDigest({
   const pacingDeferred = deferred.filter((event) => /pacing|reserve|usage[- ]limited|capacity/iu.test(event.reason || ""));
   const idle = events.filter((event) => event.action === "idle" && !legacyTechnicalWakes.includes(event));
   const technicalUnavailable = [...technicalEvents, ...legacyTechnicalWakes];
+  const blockedBeforeModel = events.filter((event) => ["technical-blocked", "deferred"].includes(event.action)
+    && !bool(event.workStarted)
+    && !/pacing|reserve|usage[- ]limited|capacity/iu.test(event.reason || ""));
   const recovered = uniqueRecoveryEvents(events.filter((event) => event.action === "recovered"));
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
@@ -225,6 +235,12 @@ export function renderWorkDailyDigest({
     "--------------------",
     `Hourly wakes: ${wakes.length}`,
     `Admitted: ${admitted.length}`,
+    `Work started: ${workStarted.length}`,
+    `Useful wakes: ${usefulWakes.length} / ${wakes.length}`,
+    `Material-progress wakes: ${materialProgressWakes.length}`,
+    `Blocked before model: ${blockedBeforeModel.length}`,
+    `Autonomous accepts: ${completed.length}`,
+    `Automation commits integrated: ${completed.filter((task) => task.checkpoint?.integration?.status === "integrated").length}`,
     `Deferred for pacing/conditions: ${deferred.length}`,
     `Pacing deferred: ${pacingDeferred.length}`,
     `Execution-environment blocked: ${executionBlocked.length}`,
@@ -272,7 +288,9 @@ export function renderWorkDailyDigest({
   if (exhausted) {
     lines.push("", "Needs direction", "---------------", "No active or ready substantial task remains, and current roadmap/TODO curation found no safe bounded next package.");
   } else if (temporarilyBlocked) {
-    lines.push("", "ROADMAP WORK TEMPORARILY BLOCKED", "--------------------------------", "Roadmap work remains; operational failures are not roadmap completion.", "No package completed today.", `Blocked packages: ${retryable.map((item) => `${item.taskId}: ${compactBlocker(item.blocker || item.progress)}`).join("; ")}`, "Next action: recover or retry the highest-value valid package.");
+    lines.push("", "ROADMAP WORK TEMPORARILY BLOCKED", "--------------------------------", "Roadmap work remains; operational failures are not roadmap completion.", completed.length
+      ? `${completed.length === 1 ? "One substantial package completed today." : `${completed.length} substantial packages completed today.`} Additional roadmap work remains temporarily blocked.`
+      : "No package completed today.", `Blocked packages: ${retryable.map((item) => `${item.taskId}: ${compactBlocker(item.blocker || item.progress)}`).join("; ")}`, "Next action: recover or retry the highest-value valid package.");
     const evidence = retryable.slice(0, 5).map((item) => {
       const task = tasks.find((candidate) => candidate.taskId === item.taskId);
       if (!task) return `  ${item.taskId}: progress checkpoint unavailable`;
@@ -298,10 +316,15 @@ export function renderWorkDailyDigest({
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / OPERATIONAL"),
       ...(roadmap.retryable || []).filter((item) => !(roadmap.packages || []).some((candidate) => candidate.taskId === item.taskId))
     ];
+    const externalPackages = [
+      ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / EXTERNAL EVIDENCE"),
+      ...(roadmap.externalEvidence || []).filter((item) => !(roadmap.packages || []).some((candidate) => candidate.taskId === item.taskId))
+    ];
     lines.push(...(activePackages.length ? activePackages.map((item) => `  ${item.title} — ${item.progress}`) : ["  (none)"]));
     lines.push("Next:", ...(queuedPackages.length ? queuedPackages.slice(0, 3).map((item) => `  ${item.title}`) : ["  (none)"]));
     lines.push("Later:", ...(candidatePackages.length ? candidatePackages.slice(0, 4).map((item) => `  ${item.title}`) : ["  (none)"]));
     lines.push("Operational blocks:", ...(operationalPackages.length ? operationalPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
+    lines.push("Awaiting external evidence:", ...(externalPackages.length ? externalPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
     lines.push("Needs decision:", ...(blockedPackages.length ? blockedPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
   }
   lines.push("", "Automation branch", "-----------------", automationBranch, `Commits integrated this window: ${completed.filter((task) => task.checkpoint?.integration?.status === "integrated").length}`);
