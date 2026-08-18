@@ -54,6 +54,9 @@ const GRAMMAR_KEYWORDS = new Set(
     ...VYAH_ATTITUDINAL_MODIFIERS
   ].map(word => String(word).toLowerCase())
 );
+// Built-in structural verbs are runtime vocabulary, even when the external
+// dictionary marks their English gloss as a blocked synonym.
+const STRUCTURAL_VERB_TOKENS = new Set(["exists"]);
 
 function isGrammarKeyword(token) {
   return GRAMMAR_KEYWORDS.has(String(token ?? "").toLowerCase());
@@ -71,7 +74,7 @@ function collectTokensFromSentence(sentence, out) {
   if (!sentence || typeof sentence !== "object") return;
   if (typeof sentence.be === "string") {
     for (const token of sentence.be.split(/\s+/).filter(Boolean)) {
-      if (NAME_TOKEN_REGEX.test(token)) out.add(token);
+      if (NAME_TOKEN_REGEX.test(token) && !STRUCTURAL_VERB_TOKENS.has(token.toLowerCase())) out.add(token);
     }
   }
   const skipKeys = new Set(["raw", "text", "filename", "pyash"]);

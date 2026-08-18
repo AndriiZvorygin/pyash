@@ -29,7 +29,7 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   headers.push("#pragma GCC diagnostic ignored \"-Wformat-truncation\"");
   headers.push("#pragma GCC diagnostic ignored \"-Wformat-overflow\"");
   headers.push("#endif");
-  if (cHelpers.usesCommand || cHelpers.usesExchange) {
+  if (cHelpers.usesCommand || cHelpers.usesExchange || cHelpers.usesFilesystem) {
     headers.push("#define _POSIX_C_SOURCE 200809L");
   }
   if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
@@ -40,11 +40,12 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   if (cHelpers.usesExchange) headers.push("#include <unistd.h>");
   if (cHelpers.usesExchange) headers.push("#include <sys/stat.h>");
   if (cHelpers.usesExchange) headers.push("#include <errno.h>");
-  if (cHelpers.usesExchange || cHelpers.usesDateMath) headers.push("#include <time.h>");
+  if (cHelpers.usesExchange || cHelpers.usesDateMath || cHelpers.usesFilesystem) headers.push("#include <time.h>");
   if (needsDirentHeader) headers.push("#include <dirent.h>");
   if (cHelpers.usesSysStat) headers.push("#include <sys/stat.h>");
   if (cHelpers.usesErrno) headers.push("#include <errno.h>");
   if (cHelpers.usesFilesystem) headers.push("#include <unistd.h>");
+  if (cHelpers.usesFilesystem) headers.push("#include <fcntl.h>");
   if (needsRunRoot) headers.push("#include <unistd.h>");
   if (needsYamlRuntime) headers.push("#include <strings.h>");
   if (needsYamlRuntime) headers.push("#include <yaml.h>");
