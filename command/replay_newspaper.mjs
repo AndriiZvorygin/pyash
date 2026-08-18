@@ -22,10 +22,6 @@ function readFlagValue(args, name) {
   return args[idx + 1] ?? null;
 }
 
-function normalizeLines(text) {
-  return splitSentences(String(text), { includeThen: true });
-}
-
 function contentAddressPath(hash, locator) {
   if (!hash) return null;
   const ext = locator ? path.extname(locator) : "";
@@ -56,7 +52,9 @@ async function main() {
   const runRoot = runRootOverride ? path.resolve(runRootOverride) : process.cwd();
   const newspaperPath = path.resolve(runRoot, "newspaper", `${runId}.pya`);
   const text = await fs.readFile(newspaperPath, "utf8");
-  const lines = normalizeLines(text);
+  const records = splitSentences(text, { includeThen: true })
+    .map(record => record.trim())
+    .filter(Boolean);
   const errors = [];
   const requests = new Map();
   const results = new Map();
@@ -70,14 +68,21 @@ async function main() {
   setExchangeRecorder({ record: () => {}, runRoot });
   setExchangeRunRoot(runRoot);
 
-  for (const line of lines) {
-    if (!line.trim()) continue;
+  for (const record of records) {
     let sentence;
     try {
-      sentence = parse(line);
-    } catch {
-      // Newspaper text artifacts may contain raw continuation lines; only
-      // structured Pyash sentences participate in replay verification.
+      sentence = parse(record);
+    } catch (err) {
+      // Raw continuation text from a multiline artifact is not a record. A
+      // structured record that cannot parse is corruption and must fail.
+      if (/\bbe\s+\S+/u.test(record)) {
+        errors.push(buildErrorSentence({
+          name: "replay defective",
+          message: "replay defective: malformed structured newspaper record",
+          from: { name: "replay" },
+          raw: { record }
+        }));
+      }
       continue;
     }
     if (!sentence?.be) continue;
@@ -167,31 +172,38 @@ async function main() {
     if (sentence.be === "artifact") {
       const locator = sentence.to?.filename ?? sentence.ob?.text;
       const expectedHash = sentence.fromtext?.text;
-      if (locator && expectedHash) {
+      if (!locator || !expectedHash) {
+        errors.push(buildErrorSentence({
+          name: "replay defective",
+          message: "replay defective: malformed artifact event",
+          from: { name: "replay" },
+          raw: { record }
+        }));
+        continue;
+      }
+      try {
+        const caLocator = contentAddressPath(expectedHash, locator);
+        let info = null;
         try {
-          const caLocator = contentAddressPath(expectedHash, locator);
-          let info = null;
-          try {
-            info = hashLocator(caLocator);
-          } catch {
-            info = hashLocator(locator);
-          }
-          if (!info || info.hash !== expectedHash) {
-            errors.push(buildErrorSentence({
-              name: "hash inconsistency",
-              message: "hash inconsistency",
-              from: { name: "replay" },
-              raw: { locator }
-            }));
-          }
-        } catch (err) {
+          info = hashLocator(caLocator);
+        } catch {
+          info = hashLocator(locator);
+        }
+        if (!info || info.hash !== expectedHash) {
           errors.push(buildErrorSentence({
-            name: "replay defective",
-            message: err?.message ?? "replay defective",
+            name: "hash inconsistency",
+            message: "hash inconsistency",
             from: { name: "replay" },
             raw: { locator }
           }));
         }
+      } catch (err) {
+        errors.push(buildErrorSentence({
+          name: "replay defective",
+          message: err?.message ?? "replay defective",
+          from: { name: "replay" },
+          raw: { locator }
+        }));
       }
     }
   }
