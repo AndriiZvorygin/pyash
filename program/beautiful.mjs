@@ -17,7 +17,7 @@ for (const ctxKey of COMPOSITIONAL_CONTEXT_ORDER) {
   }
 }
 
-const CASE_ORDER = ["su", "ob", "vyah", "fromindex", "atindex", "toindex", "atmost", ...COMPOSITIONAL_PREPS];
+const CASE_ORDER = ["su", "ob", "vyah", "fromindex", "atindex", "toindex", ...COMPOSITIONAL_PREPS];
 
 // Render a NP like { name: "collector" } or { num: 7 }
 export function npToPyash(np = {}) {

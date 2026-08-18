@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { npToPyash, sentenceToPyash } from "../program/beautiful.mjs";
+import { parse } from "../program/understand/index.mjs";
 
 test("npToPyash renders {name: X}", () => {
   assert.equal(npToPyash({ name: "collector" }), "name collector");
@@ -77,4 +78,12 @@ test("sentenceToPyash ignores empty fields cleanly", () => {
   const out = sentenceToPyash(sentence);
 
   assert.equal(out, "su name x be number que");
+});
+
+test("sentenceToPyash round-trips bounded reads with one atmost byte", () => {
+  const source = "from filename \"retrieved.html\" fromstate wo html become wo markdown atmost byte 65536 be read do";
+  const rendered = sentenceToPyash(parse(source));
+
+  assert.equal((rendered.match(/atmost byte/g) ?? []).length, 1);
+  assert.equal(parse(rendered)?.atmost?.byte, 65536);
 });
