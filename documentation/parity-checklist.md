@@ -70,3 +70,24 @@ Status: done
 Gate:
 - This document exists and is updated with done/partial/missing style gates.
 - Each gate links to concrete verification commands.
+
+## 7) Filename Mutation Standard Verb Gate
+
+Status: done
+
+Gate:
+- The canonical filename mutation signature matrix is frozen in `07-io-and-scripts.md`.
+- Interpreter, compiled JavaScript, and compiled C agree on successful target results, same-path copy, touch preservation/timestamps, overwrite behavior, and stable guard categories.
+- The runnable example uses only `examples/out/file-mutation/` and leaves that subtree empty after completion.
+
+Verification:
+```sh
+node command/vocab_suggest.mjs examples/pyash/file-touch-copy-rename-delete.pya
+node command/vocab_check.mjs examples/pyash/file-touch-copy-rename-delete.pya
+node --test quiz/filename_mutation_contract.test.mjs quiz/touch_file.test.mjs quiz/copy_file.test.mjs quiz/rename_path.test.mjs quiz/delete_file.test.mjs quiz/directory_tools_flow.test.mjs quiz/compile_fs_bool_js.test.mjs quiz/compile_fs_bool_c.test.mjs quiz/filename_mutation_parity.test.mjs
+env -u PYA_MIND_RESPONSE -u PYA_HEAR_FIXTURE -u PYA_PIPER_FIXTURE -u PYA_COMMAND_RESPONSE ./run examples/pyash/file-touch-copy-rename-delete.pya
+env -u PYA_MIND_RESPONSE -u PYA_HEAR_FIXTURE -u PYA_PIPER_FIXTURE -u PYA_COMMAND_RESPONSE ./runjs examples/pyash/file-touch-copy-rename-delete.pya
+env -u PYA_MIND_RESPONSE -u PYA_HEAR_FIXTURE -u PYA_PIPER_FIXTURE -u PYA_COMMAND_RESPONSE ./runc examples/pyash/file-touch-copy-rename-delete.pya
+npm test
+git diff --check
+```

@@ -3,7 +3,6 @@ import path from "node:path";
 
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
-import { recordArtifact, recordExchange } from "../bridge/exchange.mjs";
 import { resolveAgentPath } from "../library/agent_cwd.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
@@ -53,13 +52,6 @@ export async function touch(sentence, { remember: rememberFn = remember } = {}) 
   const now = new Date();
   try {
     await fs.utimes(resolved, now, now);
-  } catch {}
-  try {
-    const bytes = await fs.readFile(resolved);
-    const artifact = recordArtifact({ locator: resolved, producer: "exchange", bytes });
-    if (artifact?.su?.name) {
-      recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
-    }
   } catch {}
   return { ob: { filename: resolved }, be: "touch" };
 }

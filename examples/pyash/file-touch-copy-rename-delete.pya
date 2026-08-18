@@ -1,0 +1,11 @@
+be touch ob filename "examples/out/file-mutation/source.txt" do
+ob text "pyash filename mutation" to filename "examples/out/file-mutation/source.txt" be write do
+be touch ob filename "examples/out/file-mutation/copy.txt" do
+be copy ob filename "examples/out/file-mutation/source.txt" to filename "examples/out/file-mutation/copy.txt" do
+be rename ob filename "examples/out/file-mutation/copy.txt" to filename "examples/out/file-mutation/renamed.txt" do
+su name contents be read from filename "examples/out/file-mutation/renamed.txt" do
+ob name contents be write do
+be delete as wo file ob filename "examples/out/file-mutation/source.txt" do
+be delete as wo file ob filename "examples/out/file-mutation/renamed.txt" do
+su name consequence be exists ob filename "examples/out/file-mutation/source.txt" do
+ob name consequence be write do
