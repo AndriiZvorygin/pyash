@@ -322,7 +322,7 @@ test("integration conflicts enter a durable reconciliation phase", async () => {
   assert.match(recovered.task.checkpoint.lastAction, /integration reconciliation/iu);
 });
 
-test("an integration conflict that failed reconciliation waits for a new operator baseline", async () => {
+test("an ordinary integration conflict becomes retryable reconciliation work", async () => {
   const worldRoot = await world("pyash-work-recovery-integration-blocked-");
   await blockedTask(worldRoot, {
     taskId: "roadmap-integration-reconciliation-blocked",
@@ -334,7 +334,8 @@ test("an integration conflict that failed reconciliation waits for a new operato
     ...current,
     checkpoint: { ...current.checkpoint, integration: { status: "blocked" } }
   });
-  assert.equal(await recoverOperationalWorkTask(worldRoot, "roadmap-integration-reconciliation-blocked", {
+  const recovered = await recoverOperationalWorkTask(worldRoot, "roadmap-integration-reconciliation-blocked", {
     now: "2026-08-12T12:00:00.000Z"
-  }), null);
+  });
+  assert.equal(recovered.task.checkpoint.integration.status, "reconciliation");
 });
