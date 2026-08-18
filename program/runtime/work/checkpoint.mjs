@@ -141,7 +141,29 @@ export function buildWorkCheckpoint(input = {}) {
       status: text(integration.status),
       integratedAt: text(integration.integratedAt),
       error: text(integration.error),
-      pushed: integration.pushed === true
+      pushed: integration.pushed === true,
+      reconciliation: {
+        worktreePath: text(integration.reconciliation?.worktreePath),
+        taskBaseRevision: text(integration.reconciliation?.taskBaseRevision),
+        taskCommit: text(integration.reconciliation?.taskCommit),
+        managerThreadId: text(integration.reconciliation?.managerThreadId),
+        workerThreadId: text(integration.reconciliation?.workerThreadId),
+        attempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.attempts) || 0)),
+        materialAttempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.materialAttempts) || 0)),
+        noProgressAttempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.noProgressAttempts) || 0)),
+        consecutiveNoProgressAttempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.consecutiveNoProgressAttempts) || 0)),
+        conflictsResolved: Math.max(0, Math.trunc(Number(integration.reconciliation?.conflictsResolved) || 0)),
+        summary: text(integration.reconciliation?.summary),
+        changedFiles: list(integration.reconciliation?.changedFiles),
+        tests: list(integration.reconciliation?.tests),
+        diff: text(integration.reconciliation?.diff),
+        revisionInstructions: text(integration.reconciliation?.revisionInstructions),
+        lastMaterialAt: text(integration.reconciliation?.lastMaterialAt),
+        lastReviewDecision: text(integration.reconciliation?.lastReviewDecision).toUpperCase(),
+        lastReviewExplanation: text(integration.reconciliation?.lastReviewExplanation),
+        reviewCount: Math.max(0, Math.trunc(Number(integration.reconciliation?.reviewCount) || 0)),
+        passHistory: list(integration.reconciliation?.passHistory)
+      }
     },
     executionPreflight: {
       status: text(executionPreflight.status),
@@ -191,7 +213,14 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     implementation: { ...current.implementation, ...object(update.implementation) },
     review: { ...current.review, ...object(update.review) },
     convergence: { ...current.convergence, ...object(update.convergence) },
-    integration: { ...current.integration, ...object(update.integration) },
+    integration: {
+      ...current.integration,
+      ...object(update.integration),
+      reconciliation: {
+        ...current.integration.reconciliation,
+        ...object(update.integration?.reconciliation)
+      }
+    },
     executionPreflight: { ...current.executionPreflight, ...object(update.executionPreflight) },
     interruption: { ...current.interruption, ...object(update.interruption) },
     activeTurn: Object.prototype.hasOwnProperty.call(update, "activeTurn")

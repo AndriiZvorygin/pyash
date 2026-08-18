@@ -320,6 +320,13 @@ const HUMAN_DECISION_PATTERNS = Object.freeze([
   /incompatible intended semantics/iu
 ]);
 
+const EXTERNAL_EVIDENCE_PATTERNS = Object.freeze([
+  /awaiting external evidence/iu,
+  /fixture-free .*?(?:run|evidence).*?(?:unavailable|required)/iu,
+  /live .*?(?:service|backend|Ollama).*?(?:unavailable|required)/iu,
+  /required service .*? unavailable/iu
+]);
+
 function text(value) {
   return String(value ?? "").trim();
 }
@@ -388,6 +395,14 @@ function operationalItems(roadmap) {
   ];
 }
 
+function externalEvidenceItems(roadmap) {
+  const packageIds = new Set((roadmap.packages || []).map((item) => item.taskId));
+  return [
+    ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / EXTERNAL EVIDENCE"),
+    ...(roadmap.externalEvidence || []).filter((item) => !packageIds.has(item.taskId))
+  ];
+}
+
 function taskMatch(item, tasks) {
   return tasks.find((task) => task.taskId === item.taskId)
     || tasks.find((task) => task.workSpec?.provenance?.key === `${item.sourcePath}:${item.sourceAnchor}`);
@@ -402,7 +417,11 @@ function progressForTask(task) {
   if (task.status === "accepted") return `accepted; Sol review ${text(checkpoint.review?.decision) || "complete"}`;
   if (task.status === "blocked" || task.status === "failed") {
     const reason = text(checkpoint.blocker || task.message || task.error) || task.status;
-    return `${isRetryableWorkBlock(task) ? "retryable operational block" : "human decision block"}: ${reason}`;
+    return `${isAwaitingExternalEvidence(task)
+      ? "awaiting external evidence"
+      : isRetryableWorkBlock(task)
+        ? "retryable operational block"
+        : "human decision block"}: ${reason}`;
   }
   if (task.status === "ready") return "queued for the next eligible background wake";
   return `${passes} implementation pass${passes === 1 ? "" : "es"}; ${action || `phase ${task.status}`}`;
@@ -413,7 +432,11 @@ function statusForTask(task) {
   if (isArchivedWorkTask(task)) return "SUPERSEDED / ARCHIVED";
   if (task.status === "accepted") return "COMPLETE";
   if (task.status === "blocked" || task.status === "failed") {
-    return isRetryableWorkBlock(task) ? "BLOCKED / OPERATIONAL" : "BLOCKED / NEEDS DECISION";
+    return isAwaitingExternalEvidence(task)
+      ? "BLOCKED / EXTERNAL EVIDENCE"
+      : isRetryableWorkBlock(task)
+        ? "BLOCKED / OPERATIONAL"
+        : "BLOCKED / NEEDS DECISION";
   }
   if (task.status === "ready") return "QUEUED";
   return "ACTIVE";
@@ -429,7 +452,9 @@ function normalizePackage(item, task) {
     blockClass: isArchivedWorkTask(task)
       ? "superseded"
       : task && (task.status === "blocked" || task.status === "failed")
-        ? (isRetryableWorkBlock(task) ? "operational" : "human-decision")
+        ? (isAwaitingExternalEvidence(task)
+          ? "external-evidence"
+          : isRetryableWorkBlock(task) ? "operational" : "human-decision")
       : "",
     progress: progressForTask(task),
     worktree: text(task?.checkpoint?.workspace?.worktreePath),
@@ -458,12 +483,22 @@ function hasTechnicalContinuationReason(reason) {
 export function isRetryableWorkBlock(task) {
   if (!task || !["blocked", "failed"].includes(task.status) || isArchivedWorkTask(task)) return false;
   const reason = taskBlockReason(task);
+  if (isAwaitingExternalEvidence(task)) return false;
+  if (["reconciliation", "revision"].includes(task.checkpoint?.integration?.status)) return true;
+  if (task.checkpoint?.integration?.status === "integration-blocked") return false;
   if (hasHumanDecisionReason(reason)) return false;
   return hasTechnicalContinuationReason(reason);
 }
 
+export function isAwaitingExternalEvidence(task) {
+  if (!task || !["blocked", "failed"].includes(task.status) || isArchivedWorkTask(task)) return false;
+  const reason = taskBlockReason(task);
+  return EXTERNAL_EVIDENCE_PATTERNS.some((pattern) => pattern.test(reason));
+}
+
 export function isHumanDecisionBlock(task) {
   if (!task || !["blocked", "failed"].includes(task.status) || isArchivedWorkTask(task)) return false;
+  if (isAwaitingExternalEvidence(task)) return false;
   const reason = taskBlockReason(task);
   return hasHumanDecisionReason(reason) || !hasTechnicalContinuationReason(reason);
 }
@@ -534,6 +569,7 @@ export function renderAutonomousRoadmapMarkdown(roadmap = {}) {
     ["Queued", (roadmap.packages || []).filter((item) => item.status === "QUEUED")],
     ["Candidate", (roadmap.packages || []).filter((item) => item.status === "CANDIDATE")],
     ["Blocked / Operational", operationalItems(roadmap)],
+    ["Blocked / External Evidence", externalEvidenceItems(roadmap)],
     ["Blocked / Needs Decision", [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...(roadmap.needsDecision || [])
@@ -573,6 +609,7 @@ export function renderAutonomousRoadmapReport(roadmap = {}) {
     ["QUEUED", (roadmap.packages || []).filter((item) => item.status === "QUEUED")],
     ["CANDIDATE", (roadmap.packages || []).filter((item) => item.status === "CANDIDATE")],
     ["BLOCKED / OPERATIONAL", operationalItems(roadmap)],
+    ["BLOCKED / EXTERNAL EVIDENCE", externalEvidenceItems(roadmap)],
     ["BLOCKED / NEEDS DECISION", [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...(roadmap.needsDecision || [])
@@ -663,6 +700,7 @@ export async function readAutonomousRoadmap(worldRoot) {
       completed: packageMaps.filter((item) => COMPLETED_PACKAGES.some((completed) => completed.taskId === item.taskId)),
       needsDecision: decisions,
       retryable: [],
+      externalEvidence: [],
       paths: { pya, markdown }
     };
   } catch (error) {
@@ -710,6 +748,17 @@ export async function buildAutonomousRoadmap({
       progress: progressForTask(task),
       worktree: text(task.checkpoint?.workspace?.worktreePath)
     }));
+  const externalEvidence = allTasks
+    .filter((task) => isAwaitingExternalEvidence(task))
+    .map((task) => ({
+      taskId: task.taskId,
+      title: task.title,
+      status: "BLOCKED / EXTERNAL EVIDENCE",
+      priority: task.priority,
+      blocker: taskBlockReason(task),
+      progress: progressForTask(task),
+      worktree: text(task.checkpoint?.workspace?.worktreePath)
+    }));
   const needsDecision = allTasks
     .filter((task) => ["blocked", "failed"].includes(task.status))
     .filter((task) => !isArchivedWorkTask(task))
@@ -733,6 +782,7 @@ export async function buildAutonomousRoadmap({
     completed,
     needsDecision,
     retryable: operationalBlocks,
+    externalEvidence,
     reconciliation: {
       source: "documentation/reference/roadmap-reconciliation-2026-08.md",
       status: "unfinished roadmap work remains; generated candidates are not exhaustion evidence"

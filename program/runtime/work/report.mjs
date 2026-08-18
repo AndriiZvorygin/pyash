@@ -66,6 +66,7 @@ export function renderWorkTaskReport(task) {
   const workspace = checkpoint.workspace || {};
   const manager = checkpoint.manager || {};
   const worker = checkpoint.worker || {};
+  const reconciliation = checkpoint.integration?.reconciliation || {};
   const progress = deriveImplementationProgress(checkpoint);
   const changedFiles = list(implementation.changedFiles)
     .map(changedFile)
@@ -119,6 +120,13 @@ export function renderWorkTaskReport(task) {
   if (text(checkpoint.integration?.branch)) {
     lines.push(`Automation branch: ${text(checkpoint.integration.branch)}`);
     lines.push(`Integration: ${text(checkpoint.integration.status) || "pending"}`);
+    if (Number(reconciliation.attempts) > 0) {
+      lines.push(`Reconciliation attempts: ${reconciliation.attempts}`);
+      lines.push(`Material reconciliation attempts: ${reconciliation.materialAttempts || 0}`);
+      lines.push(`No-progress reconciliation attempts: ${reconciliation.noProgressAttempts || 0}`);
+      lines.push(`Conflicts resolved: ${reconciliation.conflictsResolved || 0}`);
+      if (reconciliation.worktreePath) lines.push(`Reconciliation worktree: ${reconciliation.worktreePath}`);
+    }
   }
   lines.push(`Started: ${text(current.startedAt) || "(not started)"}`);
   lines.push(`Finished: ${text(current.finishedAt) || text(checkpoint.interruption?.at) || "(in progress)"}`);
