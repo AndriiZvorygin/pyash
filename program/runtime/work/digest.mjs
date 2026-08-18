@@ -179,10 +179,9 @@ export function renderWorkDailyDigest({
   const admitted = events.filter((event) => event.action === "admitted");
   const bool = (value) => value === true || /^(true|truth|yes|1)$/iu.test(text(value));
   const workStarted = admitted;
-  const usefulWakes = events.filter((event) => bool(event.usefulWake)
-    || event.action === "recovered"
-    || event.action === "accepted"
-    || event.integration === "integrated");
+  // Recovery and outcome records accompany a wake; count usefulness on the
+  // wake record itself so one scheduler opportunity cannot count twice.
+  const usefulWakes = wakes.filter((event) => bool(event.usefulWake));
   const materialProgressWakes = events.filter((event) => bool(event.materialProgress));
   const executionBlocked = events.filter((event) => event.action === "technical-blocked" && /execution environment|preflight|sandbox/iu.test(event.reason || ""));
   const technicalEvents = events.filter((event) => event.action === "technical-blocked" && !executionBlocked.includes(event));
