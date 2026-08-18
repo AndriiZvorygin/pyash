@@ -1,4 +1,5 @@
 import { runWorkSupervisorOnce } from "./supervisor.mjs";
+import { runWorkIntegrationReconciliationOnce } from "./integration_runner.mjs";
 import { listQueuedWorkTasks, listRuntimeWorkTasks, queueDepth } from "./queue.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { readCodexCapacity, admitBackgroundWork, DEFAULT_BACKGROUND_POLICY } from "./capacity.mjs";
@@ -14,6 +15,8 @@ import {
   recoverOperationalWorkTask
 } from "./recovery.mjs";
 import { isTechnicalContinuationBlock } from "./roadmap.mjs";
+import { isAwaitingExternalEvidence } from "./roadmap.mjs";
+import { deriveImplementationProgress } from "./progress.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -36,6 +39,10 @@ function selectWorkCandidate(eligible, recoverable) {
     || recoverable[0]
     || eligible[0]?.task
     || null;
+}
+
+function isIntegrationCandidate(task) {
+  return ["blocked", "reconciliation", "revision"].includes(task?.checkpoint?.integration?.status);
 }
 
 async function eligibleWork(worldRoot, owner) {
@@ -80,6 +87,9 @@ export async function inspectWorkBackground({
   const blocked = (await listWorkTasks(worldRoot, { includeTerminal: true }))
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isTechnicalContinuationBlock(task));
+  const externalEvidence = (await listWorkTasks(worldRoot, { includeTerminal: true }))
+    .filter((task) => !owner || task.owner === owner)
+    .filter((task) => isAwaitingExternalEvidence(task));
   const capacity = await capacitySource({ now: typeof now === "function" ? now() : now });
   const admission = admitBackgroundWork({
     capacity,
@@ -92,6 +102,7 @@ export async function inspectWorkBackground({
     eligible,
     recoverable,
     technicalBlocked: blocked,
+    externalEvidence,
     capacity,
     admission,
     selected: selectWorkCandidate(eligible, recoverable)
@@ -105,6 +116,7 @@ export async function runWorkBackgroundOnce({
   capacitySource = readCodexCapacity,
   foregroundActive = false,
   supervisor = runWorkSupervisorOnce,
+  integrationSupervisor = runWorkIntegrationReconciliationOnce,
   supervisorOptions = {},
   repositoryRoot = process.cwd(),
   curate = false,
@@ -124,7 +136,7 @@ export async function runWorkBackgroundOnce({
       now
     })
     : null;
-  const { eligible, recoverable, technicalBlocked, capacity, admission } = await inspectWorkBackground({
+  const { eligible, recoverable, technicalBlocked, externalEvidence, capacity, admission } = await inspectWorkBackground({
     worldRoot,
     owner,
     policy,
@@ -169,11 +181,14 @@ export async function runWorkBackgroundOnce({
     "curated tasks": curation?.created?.join(", ") || prior["curated tasks"] || ""
   };
   if (!admission.admit) {
+    const externalOnly = admission.reason === "no eligible work" && externalEvidence.length > 0;
     const technicalUnavailable = admission.reason === "no eligible work" && technicalBlocked.length > 0;
-    const reason = technicalUnavailable ? "technical continuation unavailable" : admission.reason;
+    const reason = externalOnly
+      ? "awaiting external evidence"
+      : technicalUnavailable ? "technical continuation unavailable" : admission.reason;
     const idle = reason === "no eligible work";
-    const action = technicalUnavailable ? "technical-blocked" : idle ? "idle" : "deferred";
-    await emitWorkEvent(onEvent, technicalUnavailable ? "technical-blocked" : "deferred", {
+    const action = externalOnly || technicalUnavailable ? "technical-blocked" : idle ? "idle" : "deferred";
+    await emitWorkEvent(onEvent, externalOnly || technicalUnavailable ? "technical-blocked" : "deferred", {
       reason,
       capacity,
       eligible: taskCount,
@@ -183,7 +198,9 @@ export async function runWorkBackgroundOnce({
       ...baseHealth,
       "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + (idle || technicalUnavailable ? 0 : 1)),
       "idle wakes": String((Number(prior["idle wakes"]) || 0) + (idle ? 1 : 0)),
-      "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + (technicalUnavailable ? 1 : 0))
+      "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + (technicalUnavailable ? 1 : 0)),
+      "external evidence wakes": String((Number(prior["external evidence wakes"]) || 0) + (externalOnly ? 1 : 0)),
+      "blocked before model wakes": String((Number(prior["blocked before model wakes"]) || 0) + (externalOnly || technicalUnavailable ? 1 : 0))
     };
     await writeWorkSchedulerHealth(worldRoot, health);
     await appendWorkSchedulerEvent(worldRoot, {
@@ -414,9 +431,13 @@ export async function runWorkBackgroundOnce({
     selectionReason: admission.reason,
     lastAction: "admitted by background runner"
   });
+  const selectedIntegration = isIntegrationCandidate(selected);
+  const beforeTask = await readWorkTaskStatus(worldRoot, selected.taskId);
+  const beforeProgress = deriveImplementationProgress(beforeTask?.checkpoint || selected.checkpoint || {});
   let result;
   try {
-    result = await supervisor({
+    const selectedSupervisor = selectedIntegration ? integrationSupervisor : supervisor;
+    result = await selectedSupervisor({
       ...supervisorOptions,
       worldRoot,
       owner,
@@ -432,6 +453,14 @@ export async function runWorkBackgroundOnce({
       error: text(error?.message || error)
     };
   }
+  const finalTaskBeforeHealth = await readWorkTaskStatus(worldRoot, selected.taskId);
+  const finalProgress = deriveImplementationProgress(finalTaskBeforeHealth?.checkpoint || selected.checkpoint || {});
+  const materialProgress = selectedIntegration
+    ? Number(finalTaskBeforeHealth?.checkpoint?.integration?.reconciliation?.materialAttempts || 0)
+      > Number(beforeTask?.checkpoint?.integration?.reconciliation?.materialAttempts || 0)
+      || finalProgress.materialProgressPasses > beforeProgress.materialProgressPasses
+    : finalProgress.materialProgressPasses > beforeProgress.materialProgressPasses;
+  const useful = Boolean(recovery || materialProgress || result.status === "accepted" || result.integration?.status === "integrated" || ["reviewing", "revision"].includes(result.status) && result.message);
   const health = {
     ...baseHealth,
     "execution preflight status": preflight.status || (preflight.ok ? "ready" : ""),
@@ -448,10 +477,15 @@ export async function runWorkBackgroundOnce({
     "last recovery reason": recovery?.reason || prior["last recovery reason"] || "",
     "admitted wakes": String((Number(prior["admitted wakes"]) || 0) + 1),
     "completed tasks": String((Number(prior["completed tasks"]) || 0)
-      + (["accepted", "blocked", "failed"].includes(result.status) ? 1 : 0))
+      + (["accepted", "blocked", "failed"].includes(result.status) ? 1 : 0)),
+    "work-started wakes": String((Number(prior["work-started wakes"]) || 0) + 1),
+    "useful wakes": String((Number(prior["useful wakes"]) || 0) + (useful ? 1 : 0)),
+    "material-progress wakes": String((Number(prior["material-progress wakes"]) || 0) + (materialProgress ? 1 : 0)),
+    "blocked before model wakes": String(Number(prior["blocked before model wakes"]) || 0),
+    "external evidence wakes": String(Number(prior["external evidence wakes"]) || 0)
   };
   await writeWorkSchedulerHealth(worldRoot, health);
-  const finalTask = await readWorkTaskStatus(worldRoot, selected.taskId);
+  const finalTask = finalTaskBeforeHealth || await readWorkTaskStatus(worldRoot, selected.taskId);
   await appendWorkOutcome(worldRoot, finalTask || { ...selected, ...(result.taskId ? { status: result.status } : {}) }, {
     reason: admission.reason,
     capacity,
@@ -466,7 +500,11 @@ export async function runWorkBackgroundOnce({
     pacing: admission.pacing,
     taskCount,
     selected: selected.taskId,
-    baseline: baseline.status
+    baseline: baseline.status,
+    workStarted: true,
+    usefulWake: useful,
+    materialProgress,
+    integration: selectedIntegration ? finalTask?.checkpoint?.integration?.status || "" : ""
   }, { now });
   return {
     admitted: true,

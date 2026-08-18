@@ -168,7 +168,8 @@ function checkpointBlocks(task) {
       { key: "status", type: "text", value: quoteText(checkpoint.integration.status) },
       { key: "integrated at", type: "text", value: quoteText(checkpoint.integration.integratedAt) },
       { key: "error", type: "text", value: quoteText(checkpoint.integration.error) },
-      { key: "pushed", type: "text", value: quoteText(checkpoint.integration.pushed ? "truth" : "lie") }
+      { key: "pushed", type: "text", value: quoteText(checkpoint.integration.pushed ? "truth" : "lie") },
+      { key: "reconciliation", type: "text", value: quoteText(encodeJson(checkpoint.integration.reconciliation)) }
     ]),
     mapBlock("work task checkpoint", [
       { key: "phase", type: "text", value: quoteText(checkpoint.interruption.phase) },
@@ -300,7 +301,8 @@ function statusFromText(text) {
         status: integration.status,
         integratedAt: integration["integrated at"],
         error: integration.error,
-        pushed: /^(truth|true|yes|1)$/iu.test(String(integration.pushed || ""))
+        pushed: /^(truth|true|yes|1)$/iu.test(String(integration.pushed || "")),
+        reconciliation: decodeJson(integration.reconciliation, {})
       },
       interruption: {
         phase: checkpoint.phase,

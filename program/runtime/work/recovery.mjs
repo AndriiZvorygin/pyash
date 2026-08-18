@@ -77,7 +77,7 @@ export function isRecoverableOperationalWorkTask(task, {
     `${text(task.checkpoint?.blocker)} ${text(task.message)} ${text(task.error)}`
   )) return false;
   const integration = hasIntegrationConflict(task);
-  if (task.checkpoint?.integration?.status === "blocked") return false;
+  if (task.checkpoint?.integration?.status === "integration-blocked") return false;
   if (!hasConcreteRevision(task) && !integration && (Number(task.checkpoint?.recoveryCount) || 0) >= maxRecoveryCount) return false;
   return !hasRecentOrLiveAmbiguousTurn(task, nowDate(now), Math.max(1, Number(staleTurnMs) || DEFAULT_STALE_OPERATIONAL_TURN_MS));
 }
@@ -140,7 +140,14 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
         : {},
       interruption: {},
       recoveryCount: (current.checkpoint?.recoveryCount || 0) + (continuation ? 0 : 1),
-      integration: integration ? { status: "reconciliation", error: previousBlocker } : {},
+      integration: integration ? {
+        status: "reconciliation",
+        error: previousBlocker,
+        reconciliation: {
+          taskBaseRevision: current.checkpoint?.workspace?.baseRevision || "",
+          taskCommit: current.checkpoint?.implementation?.commit || ""
+        }
+      } : {},
       recoveryHistory: [...(current.checkpoint?.recoveryHistory || []), record],
       lastAction: continuation
         ? "recovered technical revision; continuing concrete Sol correction"
@@ -180,6 +187,9 @@ export async function findRecoverableOperationalWorkTasks(worldRoot, {
       const leftCorrection = hasConcreteRevision(left) ? 1 : 0;
       const rightCorrection = hasConcreteRevision(right) ? 1 : 0;
       if (leftCorrection !== rightCorrection) return rightCorrection - leftCorrection;
+      const leftStalled = Number(left.checkpoint?.integration?.reconciliation?.consecutiveNoProgressAttempts || 0) > 0 ? 1 : 0;
+      const rightStalled = Number(right.checkpoint?.integration?.reconciliation?.consecutiveNoProgressAttempts || 0) > 0 ? 1 : 0;
+      if (leftStalled !== rightStalled) return leftStalled - rightStalled;
       const priority = Number(right.priority) - Number(left.priority);
       if (priority) return priority;
       const queued = Date.parse(left.queuedAt) - Date.parse(right.queuedAt);
