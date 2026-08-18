@@ -48,8 +48,9 @@ Evidence:
 - Download exists in `program/verbs/download.mjs` and related handlers, with cache and failure coverage in `quiz/download.test.mjs`.
 - HTML/PDF to Markdown reading exists in `program/verbs/exchange/read.mjs` with `quiz/read_html_markdown.test.mjs` and related tests.
 - Tool-calling mind paths, command policy, session state, newspaper evidence, and replay commands exist and have focused tests.
+- `examples/pyash/agent-research-workflow.pya` now proves the bounded Pyash-first research half: one search, one fixed-path download, bounded HTML-to-Markdown ingestion, typed session output, durable session/report/newspaper/result evidence, and replay coverage.
 - `examples/pyash/agent-command-workflow.pya` and `quiz/agent_command_workflow.test.mjs` prove a growing Pyash-native workflow, but the durable work result was not captured by the timed-out task and the complete roadmap loop is not yet an accepted fixture-free user workflow.
-- The roadmap still requires one runnable loop combining search, download, read-to-markdown, tool-calling minds, and project command execution. The individual primitives do not prove that end-to-end milestone.
+- The research half is proven, while builder/project-command execution remains incomplete. The complete agent-harness milestone therefore remains partial and is not marked complete.
 
 ### Product alpha launch
 

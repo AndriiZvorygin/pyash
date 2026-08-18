@@ -1,6 +1,6 @@
 import { remember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
-import { throwErrorSentence, surfaceErrorSentence } from "../../error.mjs";
+import { buildErrorSentence, throwErrorSentence, surfaceErrorSentence } from "../../error.mjs";
 import { resolveInterpret, callMindBackend } from "./backend.mjs";
 import { mapDefChainFromName } from "./map_helpers.mjs";
 import { mapSentenceToPyash } from "../exchange/json_map.mjs";
@@ -75,6 +75,7 @@ export async function runToolChat({
   ollamaHost,
   reasoningEffort,
   modelTuning,
+  maxToolCalls,
   mindDebug,
   debugMind,
   inputs,
@@ -137,6 +138,10 @@ export async function runToolChat({
 
   const interpret = await resolveInterpret();
   const maxToolTurns = 6;
+  const effectiveMaxToolCalls = Number.isFinite(Number(maxToolCalls))
+    ? Math.max(0, Math.trunc(Number(maxToolCalls)))
+    : 3;
+  let toolCallsUsed = 0;
   let turns = 0;
   let lastResponse = null;
   let lastToolText = "";
@@ -255,6 +260,40 @@ export async function runToolChat({
       const toolSignature = joinSignatureWords(toolSignatureWords);
       await emitToolCall({ stage: "call", toolName, toolSentence, toolCall: call });
       submitRunToolEvent({ stage: "call", toolName, toolSentence, toolCall: call });
+      if (toolCallsUsed >= effectiveMaxToolCalls) {
+        const limitError = buildErrorSentence({
+          name: "mind tool call limit exceeded",
+          message: `mind tool call limit exceeded: maximum ${effectiveMaxToolCalls} tool calls`,
+          from: { name: "mind" },
+          raw: {
+            maxToolCalls: effectiveMaxToolCalls,
+            attemptedToolCall: toolCallsUsed + 1,
+            toolName
+          }
+        });
+        const surfacedLimitError = surfaceErrorSentence(limitError);
+        const limitText = sentenceToPyash(surfacedLimitError);
+        await emitToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText: limitText });
+        submitRunToolEvent({
+          stage: "result",
+          toolName,
+          toolSentence,
+          toolCall: call,
+          resultSentence: surfacedLimitError,
+          toolText: limitText
+        });
+        throwErrorSentence({
+          name: "mind tool call limit exceeded",
+          message: `mind tool call limit exceeded: maximum ${effectiveMaxToolCalls} tool calls`,
+          from: { name: "mind" },
+          raw: {
+            maxToolCalls: effectiveMaxToolCalls,
+            attemptedToolCall: toolCallsUsed + 1,
+            toolName
+          }
+        });
+      }
+      toolCallsUsed += 1;
       if (capability?.be === "read" && !toolSentence.to) {
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
       }

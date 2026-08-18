@@ -157,6 +157,14 @@ function normalizeNumPredict(value) {
   return whole;
 }
 
+function normalizeMaxToolCalls(value) {
+  if (value === undefined || value === null) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const whole = Math.trunc(numeric);
+  return whole >= 0 ? whole : null;
+}
+
 function readMapText(map, keys = []) {
   for (const key of keys) {
     const text = entryText(map?.[key]);
@@ -313,6 +321,9 @@ export async function mind_to_name_text(sentence, {
   await ensureMindTuningLoaded(model);
   const modelTuning = resolveMindTuningForModel(model, { rememberFn: remember });
   const configuredThink = resolveConfigMapBool("mind configure", "think", { rememberFn: remember });
+  const configuredMaxToolCalls = normalizeMaxToolCalls(
+    resolveConfigMapNum("mind configure", "max tool calls", { rememberFn: remember })
+  ) ?? 3;
   const configuredNumPredict = normalizeNumPredict(
     resolveConfigMapNum("mind configure", "max tokens", { rememberFn: remember })
     ?? resolveConfigMapNum("mind configure", "max output tokens", { rememberFn: remember })
@@ -696,6 +707,7 @@ export async function mind_to_name_text(sentence, {
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
       modelTuning: effectiveModelTuning,
+      maxToolCalls: configuredMaxToolCalls,
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },

@@ -292,5 +292,8 @@ export const signatures = [
   { signatureWords: ["be", "read", "fromstate", "wo", "systemd", "ob", "text", "to", "name"], handler: read_fromstate_systemd },
   { signatureWords: ["be", "read", "fromstate", "wo", "systemd", "ob", "text", "to", "name", "num"], handler: read_fromstate_systemd },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "html", "become", "wo", "markdown"], handler: read_fromstate_html },
-  { signatureWords: ["be", "read", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html"], handler: read_fromstate_html }
+  { signatureWords: ["be", "read", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html"], handler: read_fromstate_html },
+  { signatureWords: ["be", "read", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html", "to", "name", "text"], handler: read_fromstate_html },
+  { signatureWords: ["be", "read", "atmost", "byte", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html"], handler: read_fromstate_html },
+  { signatureWords: ["be", "read", "atmost", "byte", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html", "to", "name", "text"], handler: read_fromstate_html }
 ];

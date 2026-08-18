@@ -1,0 +1,11 @@
+su name research tools as wo sandpit be map def
+su name agent ob bool truth ya
+su name search be search ob text input fromstate wo web by num 3 can
+su name download be download from filename input as wo web to filename "retrieved.html" can
+su name read markdown be read from filename "retrieved.html" fromstate wo html become wo markdown atmost byte 65536 can
+prah
+
+exists su name research tools be export ya
+exists su name search be export ya
+exists su name download be export ya
+exists su name read markdown be export ya

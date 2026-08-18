@@ -17,6 +17,11 @@ The sleep/gold evaluation surface is executable through the existing Pyash run, 
 
 Goal: runnable agent loop with search, download, read-to-markdown, tool-calling minds, and project command execution.
 
+Current bounded slice: the Pyash-first research half (search, download, bounded
+HTML-to-Markdown read, session response, and newspaper evidence) is proven by
+`examples/pyash/agent-research-workflow.pya`. Builder and project-command
+execution remain incomplete; this does not complete the agent-harness milestone.
+
 Nice-to-have:
 * “Agent mode” defaults (auto-enable newspaper when mind/tools appear).
 
