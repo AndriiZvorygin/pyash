@@ -8,8 +8,14 @@ import { sentenceToPyash } from "../beautiful.mjs";
 import { callMindBackend } from "../verbs/mind/backend.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy.mjs";
-
-const SESSION_ROLE_NAMES = new Set(["user", "assistant", "agent", "tool"]);
+import {
+  buildSessionCheckpointSentence,
+  buildSessionTurnSentence,
+  canonicalRequestHash,
+  deriveTurnIdentity,
+  nextSessionOrdinal,
+  projectSessionReplay
+} from "./session_replay.mjs";
 
 export function normalizeHistoryWindow(historyWindow, {
   defaultPairs = 50,
@@ -398,6 +404,19 @@ export async function appendSessionEntry({
 } = {}) {
   if (!sessionFile || !role) return;
   const meta = metadata && typeof metadata === "object" ? metadata : {};
+  if (meta.turnId) {
+    const sentence = buildSessionTurnSentence({
+      role,
+      content,
+      turnId: meta.turnId,
+      requestHash: meta.requestHash,
+      ordinal: meta.ordinal,
+      metadata: meta,
+      timestamp: meta.timestamp || nowIso()
+    });
+    await fs.appendFile(sessionFile, `${sentenceToPyash(sentence)}\n`, "utf8");
+    return;
+  }
   const sentence = {
     su: { name: role },
     ob: { text: String(content ?? "") },
@@ -418,44 +437,204 @@ export async function appendSessionEntry({
   await fs.appendFile(sessionFile, `${line}\n`, "utf8");
 }
 
-export async function readSessionMessages({ sessionFile, historyWindow = 50 } = {}) {
-  if (!sessionFile) return { messages: [], lastSystemModel: null };
+async function readSessionSentences({ sessionFile } = {}) {
+  if (!sessionFile) return [];
   let text;
   try {
     text = await fs.readFile(sessionFile, "utf8");
   } catch (err) {
-    if (err?.code === "ENOENT") return { messages: [], lastSystemModel: null };
+    if (err?.code === "ENOENT") return [];
     throw err;
   }
-  const sentences = splitSentences(text, { includeThen: true });
-  const messages = [];
-  let lastSystemModel = null;
-  for (const raw of sentences) {
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
-    const sentence = parse(trimmed);
-    const roleRaw = sentence?.su?.name;
-    if (roleRaw === "system") {
-      const model = sentence?.as?.name ?? sentence?.as?.text ?? null;
-      if (model) lastSystemModel = model;
-      continue;
-    }
-    const role = roleRaw === "agent" ? "assistant" : roleRaw;
-    if (!SESSION_ROLE_NAMES.has(role)) continue;
-    const content = sentence?.ob?.text ?? "";
-    messages.push({ role, content: String(content) });
+  return splitSentences(text, { includeThen: true })
+    .map((raw) => raw.trim())
+    .filter(Boolean)
+    .map((raw) => parse(raw));
+}
+
+export async function readSessionReplay({ sessionFile, historyWindow = 50 } = {}) {
+  const sentences = await readSessionSentences({ sessionFile });
+  return projectSessionReplay({ sentences, historyWindow });
+}
+
+async function appendReplaySentence(sessionFile, sentence) {
+  await fs.appendFile(sessionFile, `${sentenceToPyash(sentence)}\n`, "utf8");
+}
+
+export async function beginSessionTurn({
+  sessionFile,
+  userContent = "",
+  request = {},
+  metadata = {}
+} = {}) {
+  if (!sessionFile) return null;
+  const replay = await readSessionReplay({ sessionFile, historyWindow: 0 });
+  const requestValue = request && typeof request === "object" ? request : { value: request };
+  const meta = metadata && typeof metadata === "object" ? metadata : {};
+  const requestHash = canonicalRequestHash(requestValue);
+  const ordinal = nextSessionOrdinal(replay.turns);
+  const payloadId = meta.payloadId || requestValue.payloadId || requestValue.inboundPayloadId;
+  const exchangeSentenceId = meta.exchangeSentenceId || requestValue.exchangeSentenceId;
+  let identity = deriveTurnIdentity({
+    payloadId,
+    exchangeSentenceId,
+    sessionOrdinal: ordinal,
+    request: requestValue
+  });
+  const pendingMatches = !payloadId && !exchangeSentenceId
+    ? replay.pendingTurns.filter((turn) => turn.modern && turn.requestHash === requestHash)
+    : [];
+  if (pendingMatches.length > 1) {
+    throw new Error(`session replay defective: multiple pending turns for request hash ${requestHash}`);
   }
+  const pendingMatch = pendingMatches[0] ?? null;
+  if (pendingMatch) {
+    identity = {
+      ...identity,
+      turnId: pendingMatch.turnId,
+      ordinal: pendingMatch.records?.user?.metadata?.ordinal ?? pendingMatch.records?.assistant?.metadata?.ordinal ?? identity.ordinal,
+      source: "pending",
+      sourceId: ""
+    };
+  }
+  const existing = replay.turns.find((turn) => turn.turnId === identity.turnId);
+  if (existing) {
+    if (existing.requestHash && existing.requestHash !== requestHash) {
+      throw new Error(`session replay defective: conflicting request for ${identity.turnId}`);
+    }
+    if (existing.hasUser && existing.userContent !== String(userContent ?? "")) {
+      throw new Error(`session replay defective: conflicting user record for ${identity.turnId}`);
+    }
+    if (existing.complete) {
+      return {
+        status: "completed",
+        replayed: true,
+        turnId: identity.turnId,
+        requestHash,
+        responseText: existing.responseText,
+        sessionFile
+      };
+    }
+    return {
+      status: "pending",
+      replayed: true,
+      turnId: identity.turnId,
+      requestHash,
+      ordinal: identity.ordinal,
+      source: identity.source,
+      sourceId: identity.sourceId,
+      sessionFile,
+      metadata: meta
+    };
+  }
+
+  const recordMetadata = {
+    ...meta,
+    payloadId: payloadId ? String(payloadId) : meta.payloadId,
+    exchangeSentenceId: exchangeSentenceId ? String(exchangeSentenceId) : meta.exchangeSentenceId,
+    turnId: identity.turnId,
+    requestHash,
+    ordinal
+  };
+  const sentence = buildSessionTurnSentence({
+    role: "user",
+    content: userContent,
+    turnId: identity.turnId,
+    requestHash,
+    ordinal,
+    metadata: recordMetadata,
+    timestamp: meta.timestamp || nowIso()
+  });
+  await appendReplaySentence(sessionFile, sentence);
+  return {
+    status: "pending",
+    replayed: false,
+    turnId: identity.turnId,
+    requestHash,
+    ordinal,
+    source: identity.source,
+    sourceId: identity.sourceId,
+    sessionFile,
+    metadata: recordMetadata
+  };
+}
+
+export async function completeSessionTurn({
+  sessionFile,
+  turn,
+  responseText = "",
+  metadata = {}
+} = {}) {
+  if (!sessionFile || !turn?.turnId) return null;
+  const replay = await readSessionReplay({ sessionFile, historyWindow: 0 });
+  const current = replay.turns.find((entry) => entry.turnId === turn.turnId);
+  if (!current) throw new Error(`session replay defective: missing turn ${turn.turnId}`);
+  if (current.requestHash && turn.requestHash && current.requestHash !== turn.requestHash) {
+    throw new Error(`session replay defective: conflicting request for ${turn.turnId}`);
+  }
+  const response = String(responseText ?? "");
+  if (current.complete) {
+    if (current.responseText !== response) {
+      throw new Error(`session replay defective: conflicting response for ${turn.turnId}`);
+    }
+    return { ...turn, status: "completed", replayed: true, responseText: current.responseText, sessionFile };
+  }
+  if (current.records.assistant && current.records.assistant.content !== response) {
+    throw new Error(`session replay defective: conflicting response for ${turn.turnId}`);
+  }
+  const priorMetadata = current.records.user?.metadata ?? {};
+  const recordMetadata = {
+    ...priorMetadata,
+    ...(metadata && typeof metadata === "object" ? metadata : {}),
+    turnId: turn.turnId,
+    requestHash: turn.requestHash || current.requestHash,
+    ordinal: turn.ordinal || priorMetadata.ordinal
+  };
+  if (!current.records.assistant) {
+    await appendReplaySentence(sessionFile, buildSessionTurnSentence({
+      role: "assistant",
+      content: response,
+      turnId: turn.turnId,
+      requestHash: recordMetadata.requestHash,
+      ordinal: recordMetadata.ordinal,
+      metadata: recordMetadata,
+      timestamp: recordMetadata.timestamp || nowIso()
+    }));
+  }
+  const afterAssistant = await readSessionReplay({ sessionFile, historyWindow: 0 });
+  const afterTurn = afterAssistant.turns.find((entry) => entry.turnId === turn.turnId);
+  if (afterTurn?.hasCheckpoint) {
+    if (!afterTurn.complete || afterTurn.responseText !== response) {
+      throw new Error(`session replay defective: conflicting checkpoint for ${turn.turnId}`);
+    }
+    return { ...turn, status: "completed", replayed: true, responseText, sessionFile };
+  }
+  await appendReplaySentence(sessionFile, buildSessionCheckpointSentence({
+    turnId: turn.turnId,
+    requestHash: recordMetadata.requestHash,
+    responseText: response,
+    ordinal: recordMetadata.ordinal,
+    metadata: recordMetadata,
+    timestamp: recordMetadata.timestamp || nowIso()
+  }));
+  return { ...turn, status: "completed", replayed: false, responseText: response, sessionFile };
+}
+
+export async function readSessionMessages({ sessionFile, historyWindow = 50 } = {}) {
+  if (!sessionFile) return { messages: [], lastSystemModel: null };
+  const projected = await readSessionReplay({ sessionFile, historyWindow });
+  const messages = projected.messages.map(({ role, content }) => ({ role, content }));
   const maxMessages = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 }) * 2;
   if (maxMessages <= 0) {
-    return { messages: [], lastSystemModel };
+    return { messages: [], lastSystemModel: projected.lastSystemModel };
   }
   if (maxMessages > 0 && messages.length > maxMessages) {
     return {
       messages: messages.slice(-maxMessages),
-      lastSystemModel
+      lastSystemModel: projected.lastSystemModel
     };
   }
-  return { messages, lastSystemModel };
+  return { messages, lastSystemModel: projected.lastSystemModel };
 }
 
 export function buildSessionNamePrefix() {

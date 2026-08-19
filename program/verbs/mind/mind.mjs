@@ -12,7 +12,6 @@ import { buildAgentSystemPrompt, buildAgentNamingPrompt } from "../../agent/cont
 import {
   resolveAgentHouse,
   ensureAgentDirs,
-  generateSessionName,
   ensureSessionFile,
   ensureSessionFileAtPath,
   findSessionFileBySystemPrompt,
@@ -23,7 +22,9 @@ import {
   buildSessionNameForDate,
   readSessionMessagesWithFallback,
   updateSessionSummary,
-  normalizeHistoryWindow
+  normalizeHistoryWindow,
+  beginSessionTurn,
+  completeSessionTurn
 } from "../../agent/session.mjs";
 import { resolveConfigBool, resolveConfigMapBool, resolveConfigMapNum, resolveConfigText } from "../../configure/env.mjs";
 import { recordMindAnswer } from "./series.mjs";
@@ -523,6 +524,7 @@ export async function mind_to_name_text(sentence, {
 
   let responseText = "";
   let sessionFile = null;
+  let sessionTurn = null;
   let agentSystemPrompt = resolvedConfigPrompt;
   const systemLogPrompt = resolvedConfigPrompt ?? "";
   if (sessionAgentEnabled) {
@@ -536,7 +538,6 @@ export async function mind_to_name_text(sentence, {
     const namingPrompt = resolvedConfigPrompt ?? "";
     const sessionNameSeed = sessionNameHint ?? globalSessionNameHint ?? sessionNameFromFromtext;
     if (sessionFileOverride || sessionNameSeed || !historySeriesName) {
-      const promptText = namingPrompt || [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
       const datePrefix = buildSessionNamePrefix();
       if (sessionFileOverride) {
         const resolvedPath = path.isAbsolute(sessionFileOverride)
@@ -570,16 +571,7 @@ export async function mind_to_name_text(sentence, {
           sessionFile = await pickLatestSessionFile(sessionDir, { datePrefix });
         }
         if (!sessionFile) {
-          const generated = await generateSessionName({
-            promptText: namingPrompt || promptText,
-            model,
-            backendName,
-            ollamaHost,
-            mindDebug,
-            debugMind,
-            rememberFn: remember
-          });
-          const sessionName = `${datePrefix}${generated}`;
+          const sessionName = `${datePrefix}session`;
           sessionFile = await ensureSessionFile({
             sessionDir,
             sessionName,
@@ -616,6 +608,26 @@ export async function mind_to_name_text(sentence, {
       }
     }
   }
+  if (sessionAgentEnabled && sessionFile) {
+    const userContent = String(sessionUserContent || callPrompt || "");
+    const turnRequest = {
+      userContent,
+      callPrompt: String(callPrompt ?? ""),
+      inputText: String(inputText ?? ""),
+      model: String(model ?? ""),
+      toolMapName: String(toolMapName ?? "")
+    };
+    sessionTurn = await beginSessionTurn({
+      sessionFile,
+      userContent,
+      request: turnRequest,
+      metadata: sessionUserMetadata
+    });
+    if (sessionTurn?.status === "completed") {
+      responseText = sessionTurn.responseText || "";
+      return recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName });
+    }
+  }
   if (toolMapName) {
     if (aspect === "stream") {
       throwErrorSentence({
@@ -650,6 +662,35 @@ export async function mind_to_name_text(sentence, {
       checkInterrupted: assertNotInterrupted
     });
   } else {
+    const completeStreamSession = sessionAgentEnabled && sessionFile
+      ? async (streamResponseText) => {
+        let completedResponse = String(streamResponseText ?? "");
+        if (!completedResponse && String(outputName ?? "").trim().endsWith("_channel_out")) {
+          completedResponse = CHANNEL_EMPTY_REPLY_FALLBACK;
+        }
+        if (effectiveModelTuning?.stripThinkInHistory) {
+          completedResponse = stripThinkBlock(completedResponse);
+        }
+        await completeSessionTurn({
+          sessionFile,
+          turn: sessionTurn,
+          responseText: completedResponse,
+          metadata: sessionAssistantMetadata
+        });
+        await updateSessionSummary({
+          agentHouse: resolvedSessionAgentHouse,
+          mindName,
+          backendName,
+          model,
+          ollamaHost,
+          mindDebug,
+          debugMind,
+          rememberFn: remember,
+          callPrompt: callPrompt || "",
+          responseText: completedResponse
+        });
+      }
+      : null;
     const { responseText: text, stream } = await runGenerate({
       sentence,
       ob,
@@ -671,7 +712,8 @@ export async function mind_to_name_text(sentence, {
       aspect,
       inputText,
       inputs,
-      checkInterrupted: assertNotInterrupted
+      checkInterrupted: assertNotInterrupted,
+      onComplete: completeStreamSession
     });
     if (stream) return stream;
     responseText = text ?? "";
@@ -685,17 +727,10 @@ export async function mind_to_name_text(sentence, {
   }
 
   if (sessionAgentEnabled && sessionFile) {
-    const userContent = String(sessionUserContent || callPrompt || "");
-    await appendSessionEntry({
+    await completeSessionTurn({
       sessionFile,
-      role: "user",
-      content: userContent,
-      metadata: sessionUserMetadata
-    });
-    await appendSessionEntry({
-      sessionFile,
-      role: "agent",
-      content: responseText || "",
+      turn: sessionTurn,
+      responseText: responseText || "",
       metadata: sessionAssistantMetadata
     });
     const agentHouse = resolvedSessionAgentHouse;
