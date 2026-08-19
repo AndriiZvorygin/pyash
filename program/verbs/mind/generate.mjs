@@ -114,7 +114,8 @@ export async function runGenerate({
   aspect,
   inputText,
   inputs = [],
-  checkInterrupted
+  checkInterrupted,
+  onComplete
 } = {}) {
   const applySampling = (payload) => {
     if (!payload || typeof payload !== "object") return;
@@ -199,6 +200,7 @@ export async function runGenerate({
             console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: finalText.length })}`);
           }
           writeStreamEnd(streamOutputPath);
+          if (typeof onComplete === "function") await onComplete(finalText);
           recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName, historySeriesName });
         } else if (backendName) {
           const backendStream = await callMindBackendStream({ backendName, payload: requestPayload });
@@ -236,6 +238,7 @@ export async function runGenerate({
             console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: streamedText.length })}`);
           }
           writeStreamEnd(streamOutputPath);
+          if (typeof onComplete === "function") await onComplete(streamedText.trim());
           recordMindAnswer({ mindName, dialogue, callPrompt, responseText: streamedText.trim(), outputName, historySeriesName });
         } else {
           throwErrorSentence({

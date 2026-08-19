@@ -6,7 +6,15 @@ import fs from "node:fs/promises";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
-import { ensureSessionFile, appendSessionEntry, readSessionMessages, normalizeHistoryWindow } from "../program/agent/session.mjs";
+import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
+import {
+  ensureSessionFile,
+  appendSessionEntry,
+  readSessionMessages,
+  normalizeHistoryWindow,
+  beginSessionTurn,
+  completeSessionTurn
+} from "../program/agent/session.mjs";
 
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
@@ -135,4 +143,172 @@ test("readSessionMessages enforces stable truncation by pair window", async () =
   assert.equal(noPairs.messages.length, 0);
   const allPairs = await readSessionMessages({ sessionFile, historyWindow: 10 });
   assert.equal(allPairs.messages.length, 10);
+});
+
+test("session turn user record is durable before completion and pending tails stay out of history", async () => {
+  const tempRoot = path.resolve("/tmp/pyash-agent-session-turn-test");
+  await fs.rm(tempRoot, { recursive: true, force: true });
+  await fs.mkdir(tempRoot, { recursive: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: tempRoot,
+    sessionName: "turns",
+    systemPrompt: "system",
+    model: "model"
+  });
+
+  const request = { prompt: "pending request", timestamp: "2026-01-01T00:00:00.000Z" };
+  const started = await beginSessionTurn({
+    sessionFile,
+    userContent: "pending request",
+    request,
+    metadata: { payloadId: "payload-pending" }
+  });
+  assert.equal(started.status, "pending");
+  const before = await fs.readFile(sessionFile, "utf8");
+  assert.match(before, /su name user ob text "pending request"/);
+  assert.equal((before.match(/su name user/g) ?? []).length, 1);
+
+  const history = await readSessionMessages({ sessionFile, historyWindow: 10 });
+  assert.deepEqual(history.messages, []);
+
+  const resumed = await beginSessionTurn({
+    sessionFile,
+    userContent: "pending request",
+    request: { prompt: "pending request", timestamp: "2030-04-05T06:07:08.000Z" },
+    metadata: { payloadId: "payload-pending" }
+  });
+  assert.equal(resumed.status, "pending");
+  assert.equal(resumed.turnId, started.turnId);
+  const resumedText = await fs.readFile(sessionFile, "utf8");
+  assert.equal((resumedText.match(/su name user/g) ?? []).length, 1);
+});
+
+test("completed session turn replays without appending another turn", async () => {
+  const tempRoot = path.resolve("/tmp/pyash-agent-session-complete-test");
+  await fs.rm(tempRoot, { recursive: true, force: true });
+  await fs.mkdir(tempRoot, { recursive: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: tempRoot,
+    sessionName: "complete",
+    systemPrompt: "system",
+    model: "model"
+  });
+
+  const started = await beginSessionTurn({
+    sessionFile,
+    userContent: "same request",
+    request: { prompt: "same request" },
+    metadata: { payloadId: "payload-complete" }
+  });
+  await completeSessionTurn({ sessionFile, turn: started, responseText: "recorded response" });
+  const first = await fs.readFile(sessionFile, "utf8");
+  const replay = await beginSessionTurn({
+    sessionFile,
+    userContent: "same request",
+    request: { prompt: "same request", timestamp: "2030-04-05T06:07:08.000Z" },
+    metadata: { payloadId: "payload-complete" }
+  });
+  const second = await fs.readFile(sessionFile, "utf8");
+
+  assert.equal(replay.status, "completed");
+  assert.equal(replay.responseText, "recorded response");
+  assert.equal(second, first);
+  assert.equal((second.match(/su name user/g) ?? []).length, 1);
+  assert.equal((second.match(/be checkpoint ya/g) ?? []).length, 1);
+});
+
+test("ordinal fallback creates a new turn for a later identical request", async () => {
+  const tempRoot = path.resolve("/tmp/pyash-agent-session-ordinal-test");
+  await fs.rm(tempRoot, { recursive: true, force: true });
+  await fs.mkdir(tempRoot, { recursive: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: tempRoot,
+    sessionName: "ordinal",
+    systemPrompt: "system",
+    model: "model"
+  });
+
+  const first = await beginSessionTurn({
+    sessionFile,
+    userContent: "repeatable request",
+    request: { prompt: "repeatable request" }
+  });
+  await completeSessionTurn({ sessionFile, turn: first, responseText: "first response" });
+  const second = await beginSessionTurn({
+    sessionFile,
+    userContent: "repeatable request",
+    request: { prompt: "repeatable request" }
+  });
+
+  assert.equal(first.ordinal, 1);
+  assert.equal(second.ordinal, 2);
+  assert.notEqual(second.turnId, first.turnId);
+});
+
+test("completion resumes an assistant tail by adding only its missing checkpoint", async () => {
+  const tempRoot = path.resolve("/tmp/pyash-agent-session-assistant-tail-test");
+  await fs.rm(tempRoot, { recursive: true, force: true });
+  await fs.mkdir(tempRoot, { recursive: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: tempRoot,
+    sessionName: "assistant-tail",
+    systemPrompt: "system",
+    model: "model"
+  });
+  const started = await beginSessionTurn({
+    sessionFile,
+    userContent: "tail request",
+    request: { prompt: "tail request" }
+  });
+  await appendSessionEntry({
+    sessionFile,
+    role: "agent",
+    content: "tail response",
+    metadata: { turnId: started.turnId, requestHash: started.requestHash }
+  });
+  const history = await readSessionMessages({ sessionFile, historyWindow: 10 });
+  assert.deepEqual(history.messages, []);
+  await completeSessionTurn({ sessionFile, turn: started, responseText: "tail response" });
+  const content = await fs.readFile(sessionFile, "utf8");
+  assert.equal((content.match(/su name agent ob text/g) ?? []).length, 1);
+  assert.equal((content.match(/be checkpoint ya/g) ?? []).length, 1);
+});
+
+test("agent mind returns the durable response when a completed request is replayed", async () => {
+  forget();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "first durable response";
+  const tmpRoot = path.resolve("/tmp/pyash-agent-session-runtime-replay-test");
+  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await fs.mkdir(tmpRoot, { recursive: true });
+  doRemember({
+    mood: "ya",
+    be: "root",
+    su: { name: "world root" },
+    ob: { filename: tmpRoot }
+  });
+
+  const responseText = (result) => String(result?.ob?.text ?? result?.value?.text ?? result?.result?.text ?? "");
+  try {
+    await interpret(parse('exists su name helper be mind via state "qwen3-vl:8b-instruct" from discourse "You are concise." ya'));
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name agent ob bool truth ya"));
+    await interpret(parse('su name session name ob text "replay" ya'));
+    await interpret(parse("prah"));
+    const replaySentence = parse('su name prompt ob text "Replay me" for name helper to name text out with name tools be write do');
+    const first = await mind_to_name_text(replaySentence, {
+      sessionUserMetadata: { payloadId: "replay-payload" },
+      sessionAssistantMetadata: { payloadId: "replay-payload" }
+    });
+    process.env.PYA_MIND_RESPONSE = "should not be called";
+    const second = await mind_to_name_text(replaySentence, {
+      sessionUserMetadata: { payloadId: "replay-payload" },
+      sessionAssistantMetadata: { payloadId: "replay-payload" }
+    });
+    assert.equal(responseText(first), "first durable response");
+    assert.equal(responseText(second), "first durable response");
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
 });
