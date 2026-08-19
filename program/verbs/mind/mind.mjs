@@ -12,6 +12,7 @@ import { buildAgentSystemPrompt, buildAgentNamingPrompt } from "../../agent/cont
 import {
   resolveAgentHouse,
   ensureAgentDirs,
+  generateSessionName,
   ensureSessionFile,
   ensureSessionFileAtPath,
   findSessionFileBySystemPrompt,
@@ -26,7 +27,8 @@ import {
   beginSessionTurn,
   completeSessionTurn
 } from "../../agent/session.mjs";
-import { resolveConfigBool, resolveConfigMapBool, resolveConfigMapNum, resolveConfigText } from "../../configure/env.mjs";
+import { getExchangeSentenceId } from "../../bridge/exchange.mjs";
+import { resolveConfigBool, resolveConfigMapBool, resolveConfigMapNum, resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
 import { recordMindAnswer } from "./series.mjs";
 import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from "./resolve_prompt.mjs";
 import { resolveHistoryContext } from "./history_context.mjs";
@@ -282,6 +284,8 @@ export async function mind_to_name_text(sentence, {
   const dialogue = historyDialogueName({ callSentence: sentence, configSentence, targetName: mindName });
   const configSessionHistoryWindow =
     resolveConfigMapNum("session configure", "history window", { rememberFn: remember })
+    ?? resolveConfigNum("session window", { rememberFn: remember })
+    ?? resolveConfigNum("session history window", { rememberFn: remember })
     ?? resolveConfigMapNum("agent configure", "session history window", { rememberFn: remember });
   const historyWindow =
     normalizeHistoryWindow(
@@ -524,12 +528,14 @@ export async function mind_to_name_text(sentence, {
 
   let responseText = "";
   let sessionFile = null;
+  let sessionDir = null;
   let sessionTurn = null;
+  let sessionNeedsGeneratedName = false;
   let agentSystemPrompt = resolvedConfigPrompt;
   const systemLogPrompt = resolvedConfigPrompt ?? "";
   if (sessionAgentEnabled) {
     const agentHouse = resolvedSessionAgentHouse;
-    const { sessionDir } = await ensureAgentDirs(agentHouse);
+    ({ sessionDir } = await ensureAgentDirs(agentHouse));
     agentSystemPrompt = await buildAgentSystemPrompt({
       agentHouse,
       mindName,
@@ -578,6 +584,7 @@ export async function mind_to_name_text(sentence, {
             systemPrompt: systemLogPrompt,
             model
           });
+          sessionNeedsGeneratedName = true;
         }
       }
       if (sessionFile) {
@@ -617,12 +624,45 @@ export async function mind_to_name_text(sentence, {
       model: String(model ?? ""),
       toolMapName: String(toolMapName ?? "")
     };
+    const sessionTurnMetadata = {
+      ...(sessionUserMetadata && typeof sessionUserMetadata === "object" ? sessionUserMetadata : {})
+    };
+    if (!sessionTurnMetadata.payloadId && !sessionTurnMetadata.exchangeSentenceId) {
+      const exchangeSentenceId = getExchangeSentenceId();
+      if (exchangeSentenceId) sessionTurnMetadata.exchangeSentenceId = exchangeSentenceId;
+    }
     sessionTurn = await beginSessionTurn({
       sessionFile,
       userContent,
       request: turnRequest,
-      metadata: sessionUserMetadata
+      metadata: sessionTurnMetadata
     });
+    if (sessionNeedsGeneratedName && sessionTurn?.status === "pending") {
+      const datePrefix = buildSessionNamePrefix();
+      const generated = await generateSessionName({
+        promptText: resolvedConfigPrompt || [callPrompt, inputText.trim()].filter(Boolean).join("\n\n"),
+        model,
+        backendName,
+        ollamaHost,
+        mindDebug,
+        debugMind,
+        rememberFn: remember
+      });
+      const generatedName = `${datePrefix}${generated}`;
+      const generatedFile = path.join(sessionDir, `${generatedName}.pya`);
+      let generatedExists = true;
+      try {
+        await fs.access(generatedFile);
+      } catch {
+        generatedExists = false;
+      }
+      if (generatedFile !== sessionFile && !generatedExists) {
+        await fs.rename(sessionFile, generatedFile);
+        sessionFile = generatedFile;
+        sessionTurn.sessionFile = generatedFile;
+      }
+      sessionNeedsGeneratedName = false;
+    }
     if (sessionTurn?.status === "completed") {
       responseText = sessionTurn.responseText || "";
       return recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName });

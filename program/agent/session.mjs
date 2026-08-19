@@ -6,13 +6,17 @@ import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { parse } from "../understand/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { callMindBackend } from "../verbs/mind/backend.mjs";
-import { resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
+import { remember } from "../remember/index.mjs";
 import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy.mjs";
+import { emitExchangeSentence, getExchangeSentenceId, recordArtifact } from "../bridge/exchange.mjs";
 import {
   buildSessionCheckpointSentence,
+  buildCompactSessionSnapshot,
   buildSessionTurnSentence,
   canonicalRequestHash,
   deriveTurnIdentity,
+  hashText,
   nextSessionOrdinal,
   projectSessionReplay
 } from "./session_replay.mjs";
@@ -457,8 +461,76 @@ export async function readSessionReplay({ sessionFile, historyWindow = 50 } = {}
   return projectSessionReplay({ sentences, historyWindow });
 }
 
+export async function readSessionReplayWithFallback({
+  sessionDir,
+  baseName,
+  historyWindow = 50
+} = {}) {
+  if (!sessionDir || !baseName) return projectSessionReplay({ sentences: [], historyWindow });
+  const maxPairs = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 });
+  if (maxPairs <= 0) return projectSessionReplay({ sentences: [], historyWindow: 0 });
+  const todayKey = formatCompactDate(new Date());
+  const todayName = buildSessionNameForDate({ baseName, dateCompact: todayKey });
+  const todayFile = path.join(sessionDir, sessionFilename({ sessionName: todayName }));
+  const yesterdayKey = shiftCompactDate(todayKey, -1);
+  const yesterdayName = buildSessionNameForDate({ baseName, dateCompact: yesterdayKey });
+  const yesterdayFile = path.join(sessionDir, sessionFilename({ sessionName: yesterdayName }));
+  const [yesterdaySentences, todaySentences] = await Promise.all([
+    readSessionSentences({ sessionFile: yesterdayFile }),
+    readSessionSentences({ sessionFile: todayFile })
+  ]);
+  return projectSessionReplay({
+    sentences: [...yesterdaySentences, ...todaySentences],
+    historyWindow
+  });
+}
+
 async function appendReplaySentence(sessionFile, sentence) {
   await fs.appendFile(sessionFile, `${sentenceToPyash(sentence)}\n`, "utf8");
+}
+
+const persistedSnapshotLinks = new Set();
+
+function snapshotArtifactPart(value) {
+  return String(value ?? "")
+    .replace(/[^A-Za-z0-9_.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 160) || "session";
+}
+
+async function persistSessionSnapshot({ sessionFile, turnId, replay } = {}) {
+  if (resolveConfigBool("session snapshot enabled", { rememberFn: remember }) === false) return null;
+  const snapshotText = buildCompactSessionSnapshot(replay);
+  const snapshotHash = hashText(snapshotText);
+  const locator = `artifacts/session/${snapshotArtifactPart(turnId)}-${snapshotHash}.pya`;
+  const artifact = recordArtifact({
+    locator,
+    producer: "session",
+    bytes: Buffer.from(snapshotText, "utf8"),
+    kind: "snapshot"
+  });
+  if (!artifact) return null;
+  const artifactName = String(artifact?.su?.name ?? "").trim();
+  const linkKey = `${sessionFile}\n${turnId}\n${snapshotHash}`;
+  if (!persistedSnapshotLinks.has(linkKey)) {
+    emitExchangeSentence({
+      mood: "ya",
+      be: "checkpoint",
+      su: { name: "checkpoint" },
+      ob: { text: snapshotHash },
+      accordingto: { text: String(turnId ?? "") },
+      from: artifactName ? { name: artifactName } : undefined,
+      to: artifact?.to?.filename ? { filename: artifact.to.filename } : undefined,
+      vyah: { ve: { type: "name", values: ["success"] } }
+    });
+    persistedSnapshotLinks.add(linkKey);
+  }
+  return {
+    hash: snapshotHash,
+    locator,
+    artifactName,
+    text: snapshotText
+  };
 }
 
 export async function beginSessionTurn({
@@ -474,7 +546,9 @@ export async function beginSessionTurn({
   const requestHash = canonicalRequestHash(requestValue);
   const ordinal = nextSessionOrdinal(replay.turns);
   const payloadId = meta.payloadId || requestValue.payloadId || requestValue.inboundPayloadId;
-  const exchangeSentenceId = meta.exchangeSentenceId || requestValue.exchangeSentenceId;
+  const exchangeSentenceId = payloadId
+    ? ""
+    : (meta.exchangeSentenceId || requestValue.exchangeSentenceId || getExchangeSentenceId() || "");
   let identity = deriveTurnIdentity({
     payloadId,
     exchangeSentenceId,
@@ -577,7 +651,9 @@ export async function completeSessionTurn({
     if (current.responseText !== response) {
       throw new Error(`session replay defective: conflicting response for ${turn.turnId}`);
     }
-    return { ...turn, status: "completed", replayed: true, responseText: current.responseText, sessionFile };
+    const snapshotReplay = await readSessionReplay({ sessionFile, historyWindow: 0 });
+    const snapshotArtifact = await persistSessionSnapshot({ sessionFile, turnId: turn.turnId, replay: snapshotReplay });
+    return { ...turn, status: "completed", replayed: true, responseText: current.responseText, snapshotArtifact, sessionFile };
   }
   if (current.records.assistant && current.records.assistant.content !== response) {
     throw new Error(`session replay defective: conflicting response for ${turn.turnId}`);
@@ -607,7 +683,8 @@ export async function completeSessionTurn({
     if (!afterTurn.complete || afterTurn.responseText !== response) {
       throw new Error(`session replay defective: conflicting checkpoint for ${turn.turnId}`);
     }
-    return { ...turn, status: "completed", replayed: true, responseText, sessionFile };
+    const snapshotArtifact = await persistSessionSnapshot({ sessionFile, turnId: turn.turnId, replay: afterAssistant });
+    return { ...turn, status: "completed", replayed: true, responseText, snapshotArtifact, sessionFile };
   }
   await appendReplaySentence(sessionFile, buildSessionCheckpointSentence({
     turnId: turn.turnId,
@@ -617,7 +694,9 @@ export async function completeSessionTurn({
     metadata: recordMetadata,
     timestamp: recordMetadata.timestamp || nowIso()
   }));
-  return { ...turn, status: "completed", replayed: false, responseText: response, sessionFile };
+  const completedReplay = await readSessionReplay({ sessionFile, historyWindow: 0 });
+  const snapshotArtifact = await persistSessionSnapshot({ sessionFile, turnId: turn.turnId, replay: completedReplay });
+  return { ...turn, status: "completed", replayed: false, responseText: response, snapshotArtifact, sessionFile };
 }
 
 export async function readSessionMessages({ sessionFile, historyWindow = 50 } = {}) {
@@ -653,18 +732,11 @@ export async function readSessionMessagesWithFallback({
   historyWindow = 50
 } = {}) {
   if (!sessionDir || !baseName) return { messages: [], lastSystemModel: null };
+  const projected = await readSessionReplayWithFallback({ sessionDir, baseName, historyWindow });
   const maxMessages = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 }) * 2;
-  if (maxMessages <= 0) return { messages: [], lastSystemModel: null };
-  const todayKey = formatCompactDate(new Date());
-  const todayName = buildSessionNameForDate({ baseName, dateCompact: todayKey });
-  const todayFile = path.join(sessionDir, sessionFilename({ sessionName: todayName }));
-  const todayMessages = await readSessionMessages({ sessionFile: todayFile, historyWindow });
-  if (maxMessages > 0 && todayMessages.messages.length >= maxMessages) return todayMessages;
-  const yesterdayKey = shiftCompactDate(todayKey, -1);
-  const yesterdayName = buildSessionNameForDate({ baseName, dateCompact: yesterdayKey });
-  const yesterdayFile = path.join(sessionDir, sessionFilename({ sessionName: yesterdayName }));
-  const yesterdayMessages = await readSessionMessages({ sessionFile: yesterdayFile, historyWindow });
-  const merged = [...yesterdayMessages.messages, ...todayMessages.messages];
-  const sliced = maxMessages > 0 ? merged.slice(-maxMessages) : merged;
-  return { messages: sliced, lastSystemModel: todayMessages.lastSystemModel ?? yesterdayMessages.lastSystemModel };
+  const messages = projected.messages.map(({ role, content }) => ({ role, content }));
+  return {
+    messages: maxMessages > 0 ? messages.slice(-maxMessages) : [],
+    lastSystemModel: projected.lastSystemModel
+  };
 }

@@ -158,7 +158,7 @@ For internal history, the runtime derives context from `memory`. For each mind `
 
 ### History stitching
 
-**Status:** implemented for interpreter (prompts include last N turns) and compiled JS (per-mind history map). Window remains configurable-to-be in code (defaults ~8 turns).
+**Status:** implemented for interpreter (prompts include last N turns) and compiled JS (per-mind history map). Window remains configurable in Pyash defaults (`session window`, default 8 turns); the older `session history window` name remains a read-compatible fallback.
 
 Before each mind call, the runtime:
 
@@ -181,7 +181,12 @@ Before each mind call, the runtime:
    * default window: about 8 turns (16 messages).
    * mind configs may override this with a `historyWindow` field.
 
-When implemented, this `historyMessages[]` array feeds directly into `messages[]` for Ollama.
+When implemented, this `historyMessages[]` array feeds directly into `messages[]` for Ollama. Agent-house session files use a typed append-only user/agent/checkpoint ledger; pending tails are retained for audit but excluded from this array. If a turn has an explicit accepted generator/verifier checkpoint, the projected context is the original duty plus the latest accepted generator and verifier evidence. Ordinary completed replies are not semantic acceptance.
+
+Recorded runs persist the compact projection as an immutable hash-addressed Pyash
+snapshot through the artifact recorder. The run newspaper links the snapshot with
+a typed checkpoint sentence, and `command/replay_newspaper.mjs` verifies its
+content hash.
 
 ### Series entry shape
 

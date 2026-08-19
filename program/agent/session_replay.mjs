@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+import { sentenceToPyash } from "../beautiful.mjs";
+
 const TIMESTAMP_KEYS = new Set([
   "created",
   "createdAt",
@@ -11,9 +13,12 @@ const TIMESTAMP_KEYS = new Set([
   "updatedAt"
 ]);
 
-const MODERN_TURN_KIND = "session turn";
-const SESSION_CHECKPOINT_NAME = "session turn checkpoint";
+const MODERN_TURN_KIND = "write";
+const SESSION_CHECKPOINT_NAME = "checkpoint";
 const SESSION_CHECKPOINT_KIND = "checkpoint";
+const LEGACY_MODERN_TURN_KIND = "session turn";
+const LEGACY_SESSION_CHECKPOINT_NAME = "session turn checkpoint";
+const ACCEPTANCE_VALUES = new Set(["accept", "accepted", "pass", "passed", "satisfied"]);
 
 export class SessionReplayDefectiveError extends Error {
   constructor(message = "session replay defective") {
@@ -101,13 +106,25 @@ export function deriveTurnIdentity({
 
 function metadataFromSentence(sentence) {
   const raw = sentence?.fromtext?.text;
-  if (typeof raw !== "string" || !raw.trim()) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
+  const metadata = {};
+  if (typeof raw === "string" && /^[a-f0-9]{64}$/i.test(raw.trim())) {
+    metadata.requestHash = raw.trim().toLowerCase();
+  } else if (sentence?.be === LEGACY_MODERN_TURN_KIND || sentence?.su?.name === LEGACY_SESSION_CHECKPOINT_NAME) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch {
+      // Legacy malformed metadata remains typed by the sentence fields below.
+    }
   }
+  const ordinal = sentence?.by?.num ?? sentence?.by?.quantity?.num;
+  if (Number.isFinite(Number(ordinal))) metadata.ordinal = Math.trunc(Number(ordinal));
+  if (sentence?.from?.name) metadata.sender = String(sentence.from.name);
+  if (sentence?.to?.name) metadata.channelId = String(sentence.to.name);
+  if (sentence?.as?.name) metadata.channelType = String(sentence.as.name);
+  if (sentence?.fromstate?.text) metadata.channelType = String(sentence.fromstate.text);
+  if (sentence?.become?.text) metadata.channelType = String(sentence.become.text);
+  return metadata;
 }
 
 function textFrom(sentence, key) {
@@ -117,6 +134,19 @@ function textFrom(sentence, key) {
 function checkpointSucceeded(sentence) {
   const values = sentence?.vyah?.ve?.values;
   return Array.isArray(values) && values.map((value) => String(value).toLowerCase()).includes("success");
+}
+
+function checkpointAccepted(sentence) {
+  const values = sentence?.vyah?.ve?.values;
+  if (Array.isArray(values) && values.some((value) => ACCEPTANCE_VALUES.has(String(value).toLowerCase()))) return true;
+  return String(sentence?.as?.name ?? "").toLowerCase() === "accept";
+}
+
+function verifierTextFrom(sentence) {
+  const direct = textFrom(sentence, "totext");
+  if (direct) return direct;
+  const result = sentence?.to?.la;
+  return String(result?.ob?.text ?? result?.ob?.name ?? "");
 }
 
 function roleFor(sentence) {
@@ -141,12 +171,14 @@ function turnIdFor(sentence, metadata) {
 }
 
 function isModernTurn(sentence) {
-  return sentence?.be === MODERN_TURN_KIND;
+  return sentence?.be === MODERN_TURN_KIND || sentence?.be === LEGACY_MODERN_TURN_KIND;
 }
 
 function isSessionCheckpoint(sentence, metadata) {
   return sentence?.be === "checkpoint"
-    && (normalizeText(sentence?.su?.name) === SESSION_CHECKPOINT_NAME || metadata.record === SESSION_CHECKPOINT_KIND);
+    && (normalizeText(sentence?.su?.name) === SESSION_CHECKPOINT_NAME
+      || normalizeText(sentence?.su?.name) === LEGACY_SESSION_CHECKPOINT_NAME
+      || metadata.record === SESSION_CHECKPOINT_KIND);
 }
 
 function recordFromSentence(sentence, index) {
@@ -163,6 +195,10 @@ function recordFromSentence(sentence, index) {
       requestHash: normalizeText(metadata.requestHash),
       responseText: textFrom(sentence, "ob"),
       success: checkpointSucceeded(sentence),
+      accepted: checkpointAccepted(sentence),
+      generatorName: normalizeText(sentence?.from?.name),
+      verifierName: normalizeText(sentence?.to?.name),
+      verifierText: verifierTextFrom(sentence),
       metadata,
       sentence
     };
@@ -203,6 +239,10 @@ function compareModernRecord(turn, record) {
   const same = record.kind === "checkpoint"
     ? prior.responseText === record.responseText
       && prior.success === record.success
+      && prior.accepted === record.accepted
+      && prior.generatorName === record.generatorName
+      && prior.verifierName === record.verifierName
+      && prior.verifierText === record.verifierText
       && (!prior.requestHash || !record.requestHash || prior.requestHash === record.requestHash)
     : prior.content === record.content
       && (!prior.requestHash || !record.requestHash || prior.requestHash === record.requestHash);
@@ -314,6 +354,10 @@ function normalizeTurn(turn) {
     hasCheckpoint: Boolean(checkpoint),
     complete,
     pending: !complete,
+    accepted: Boolean(checkpoint?.accepted),
+    generatorName: checkpoint?.generatorName ?? "",
+    verifierName: checkpoint?.verifierName ?? "",
+    verifierText: checkpoint?.verifierText ?? "",
     checkpoint: checkpoint ?? null,
     records: turn.records
   };
@@ -331,14 +375,50 @@ function stableTurnSnapshot(turn) {
     hasAssistant: turn.hasAssistant,
     hasCheckpoint: turn.hasCheckpoint,
     complete: turn.complete,
+    accepted: turn.accepted,
+    generatorName: turn.generatorName,
+    verifierName: turn.verifierName,
+    verifierText: turn.verifierText,
     checkpoint: turn.checkpoint
       ? {
         responseText: turn.checkpoint.responseText,
         requestHash: turn.checkpoint.requestHash,
-        success: turn.checkpoint.success
+        success: turn.checkpoint.success,
+        accepted: turn.checkpoint.accepted,
+        generatorName: turn.checkpoint.generatorName,
+        verifierName: turn.checkpoint.verifierName,
+        verifierText: turn.checkpoint.verifierText
       }
       : null
   };
+}
+
+function originalTaskFromTurns(turns) {
+  return turns.find((turn) => turn.hasUser)?.userContent ?? "";
+}
+
+function buildGoldenMessages({ turns, acceptedEvidence, originalTask }) {
+  const latest = acceptedEvidence.at(-1);
+  if (!latest) return [];
+  const original = turns.find((turn) => turn.hasUser);
+  const messages = [{
+    role: "user",
+    content: originalTask,
+    turnId: original?.turnId ?? ""
+  }, {
+    role: "assistant",
+    content: latest.responseText,
+    turnId: latest.turnId
+  }];
+  if (latest.verifierText) {
+    messages.push({
+      role: "tool",
+      content: latest.verifierText,
+      turnId: latest.turnId,
+      name: latest.verifierName || "verifier"
+    });
+  }
+  return messages;
 }
 
 export function projectSessionReplay({ sentences = [], historyWindow = 50 } = {}) {
@@ -352,21 +432,43 @@ export function projectSessionReplay({ sentences = [], historyWindow = 50 } = {}
     { role: "assistant", content: turn.responseText, turnId: turn.turnId }
   ]);
   const acceptedEvidence = completeTurns
-    .filter((turn) => turn.checkpoint?.success)
+    .filter((turn) => turn.checkpoint?.success && turn.checkpoint?.accepted)
     .map((turn) => ({
       turnId: turn.turnId,
       requestHash: turn.requestHash,
       responseText: turn.responseText,
+      generatorName: turn.generatorName,
+      verifierName: turn.verifierName,
+      verifierText: turn.verifierText,
       checkpoint: turn.checkpoint?.sentence ? canonicalSnapshot(turn.checkpoint.sentence) : null
     }));
+  const originalTask = originalTaskFromTurns(turns);
+  const goldenMessages = buildGoldenMessages({ turns, acceptedEvidence, originalTask });
   const systemSentences = source.filter((sentence) => sentence?.su?.name === "system");
   const lastSystem = systemSentences.at(-1);
   const snapshotHash = sha256(canonicalSnapshotText({ turns: turns.map(stableTurnSnapshot), acceptedEvidence }));
   return {
     turns,
-    messages,
+    messages: goldenMessages.length ? goldenMessages : messages,
     pendingTurns: turns.filter((turn) => turn.pending),
     acceptedEvidence,
+    goldenProjection: {
+      originalTask,
+      latestAcceptedGenerator: acceptedEvidence.length
+        ? {
+          turnId: acceptedEvidence.at(-1).turnId,
+          content: acceptedEvidence.at(-1).responseText,
+          name: acceptedEvidence.at(-1).generatorName
+        }
+        : null,
+      latestAcceptedVerifier: acceptedEvidence.at(-1)?.verifierText
+        ? {
+          turnId: acceptedEvidence.at(-1).turnId,
+          content: acceptedEvidence.at(-1).verifierText,
+          name: acceptedEvidence.at(-1).verifierName
+        }
+        : null
+    },
     snapshotHash,
     lastSystemModel: lastSystem?.as?.name ?? lastSystem?.as?.text ?? null
   };
@@ -382,22 +484,15 @@ export function buildSessionTurnSentence({
   timestamp = ""
 } = {}) {
   const normalizedRole = role === "assistant" ? "agent" : String(role ?? "");
-  const replayMetadata = {
-    record: normalizedRole === "agent" ? "assistant" : normalizedRole,
-    turnId: String(turnId ?? ""),
-    requestHash: String(requestHash ?? ""),
-    ...(ordinal ? { ordinal } : {}),
-    ...(metadata.payloadId ? { payloadId: String(metadata.payloadId) } : {}),
-    ...(metadata.exchangeSentenceId ? { exchangeSentenceId: String(metadata.exchangeSentenceId) } : {})
-  };
   const sentence = {
     su: { name: normalizedRole },
     ob: { text: String(content ?? "") },
     accordingto: { text: String(turnId ?? "") },
-    fromtext: { text: JSON.stringify(replayMetadata) },
+    fromtext: { text: String(requestHash ?? "") },
     be: MODERN_TURN_KIND,
     mood: "ya"
   };
+  if (ordinal) sentence.by = { num: ordinal };
   if (timestamp || metadata.timestamp) sentence.during = { date: String(timestamp || metadata.timestamp) };
   if (metadata.sender) sentence.from = { name: String(metadata.sender) };
   if (metadata.channelId) sentence.to = { name: String(metadata.channelId) };
@@ -416,25 +511,57 @@ export function buildSessionCheckpointSentence({
   metadata = {},
   timestamp = ""
 } = {}) {
-  const replayMetadata = {
-    record: SESSION_CHECKPOINT_KIND,
-    turnId: String(turnId ?? ""),
-    requestHash: String(requestHash ?? ""),
-    ...(ordinal ? { ordinal } : {}),
-    ...(metadata.payloadId ? { payloadId: String(metadata.payloadId) } : {}),
-    ...(metadata.exchangeSentenceId ? { exchangeSentenceId: String(metadata.exchangeSentenceId) } : {})
-  };
   const sentence = {
     su: { name: SESSION_CHECKPOINT_NAME },
     ob: { text: String(responseText ?? "") },
     accordingto: { text: String(turnId ?? "") },
-    fromtext: { text: JSON.stringify(replayMetadata) },
+    fromtext: { text: String(requestHash ?? "") },
     vyah: { ve: { type: "name", values: ["success"] } },
     be: "checkpoint",
     mood: "ya"
   };
+  if (ordinal) sentence.by = { num: ordinal };
+  if (metadata.accepted === true || String(metadata.acceptance ?? metadata.disposition ?? "").toLowerCase() === "accept") {
+    sentence.vyah.ve.values.push("accept");
+  }
+  if (metadata.generatorName) sentence.from = { name: String(metadata.generatorName) };
+  if (metadata.verifierName) sentence.to = { name: String(metadata.verifierName) };
+  if (metadata.verifierText) sentence.totext = { text: String(metadata.verifierText) };
   if (timestamp || metadata.timestamp) sentence.during = { date: String(timestamp || metadata.timestamp) };
   return sentence;
+}
+
+export function buildCompactSessionSnapshot(projected) {
+  const projection = projected && typeof projected === "object" ? projected : {};
+  const golden = projection.goldenProjection ?? {};
+  const lines = [sentenceToPyash({ su: { name: "snapshot" }, be: "series", mood: "def" })];
+  lines.push(sentenceToPyash({ su: { name: "duty" }, ob: { text: golden.originalTask ?? "" }, be: "write", mood: "ya" }));
+  const generator = golden.latestAcceptedGenerator;
+  if (generator) {
+    lines.push(sentenceToPyash({
+      su: { name: "generator" },
+      ob: { text: generator.content ?? "" },
+      accordingto: { text: generator.turnId ?? "" },
+      be: "write",
+      mood: "ya"
+    }));
+  }
+  const verifier = golden.latestAcceptedVerifier;
+  if (verifier) {
+    lines.push(sentenceToPyash({
+      su: { name: "verifier" },
+      ob: { text: verifier.content ?? "" },
+      accordingto: { text: verifier.turnId ?? "" },
+      be: "write",
+      mood: "ya"
+    }));
+  }
+  lines.push("prah");
+  return `${lines.join("\n")}\n`;
+}
+
+export function hashText(value) {
+  return sha256(value);
 }
 
 export function nextSessionOrdinal(turns = []) {

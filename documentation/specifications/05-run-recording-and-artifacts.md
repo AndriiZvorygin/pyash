@@ -31,6 +31,13 @@ For multi-artifact producers (example: `photographs`):
 - newspaper hash verification MUST include this manifest artifact,
 - downstream stages should depend on the manifest handle instead of filename conventions.
 
+Session compaction snapshots follow the same rule. The snapshot is a canonical
+Pyash series containing the immutable duty and latest explicitly accepted
+generator/verifier evidence. It is recorded with an immutable content hash and a
+per-turn/hash locator. The run newspaper records a `be checkpoint ya` linkage
+with the turn id, snapshot hash, and artifact filename. Replay verifies the
+content-addressed bytes; changing them is a `hash inconsistency`.
+
 Default policy:
 - newspaper recording is enabled by default (`exists su name newspaper enabled ob bool truth be default ya`),
 - sentence-level APIs may remain typed/in-memory (for example `from name itinerary ...`),
