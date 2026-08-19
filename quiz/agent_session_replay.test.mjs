@@ -6,6 +6,10 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { sentenceToPyash } from "../program/beautiful.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { doRemember, forget } from "../program/remember/index.mjs";
+import { resolveConfigMapBool, resolveConfigMapNum } from "../program/configure/env.mjs";
 import {
   appendSessionEntry,
   beginSessionTurn,
@@ -38,6 +42,24 @@ async function makeSession(name) {
   });
   return { root, sessionFile };
 }
+
+test("session policy resolves from the canonical Pyash configure map", () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "session configure" },
+    be: "map",
+    ob: {
+      map: {
+        "history window": { su: { name: "history window" }, ob: { num: 3 } },
+        "snapshot enabled": { su: { name: "snapshot enabled" }, ob: { boolean: false } }
+      }
+    }
+  });
+  assert.equal(resolveConfigMapNum("session configure", "history window"), 3);
+  assert.equal(resolveConfigMapBool("session configure", "snapshot enabled"), false);
+  forget();
+});
 
 test("turn identity ignores timestamps and prefers inbound payload or exchange ids", () => {
   assert.equal(
@@ -206,6 +228,51 @@ test("golden projection keeps the original task and latest explicitly accepted g
   assert.doesNotMatch(buildCompactSessionSnapshot(projected), /ordinary answer/);
 });
 
+test("live projection keeps the original task beside the bounded latest pair without duplication", () => {
+  const sentences = [];
+  for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
+    const requestHash = canonicalRequestHash({ prompt: `task-${ordinal}` });
+    const turnId = `live-turn-${ordinal}`;
+    sentences.push(buildSessionTurnSentence({ role: "user", content: `task-${ordinal}`, turnId, requestHash, ordinal }));
+    sentences.push(buildSessionTurnSentence({ role: "agent", content: `answer-${ordinal}`, turnId, requestHash, ordinal }));
+    sentences.push(buildSessionCheckpointSentence({ turnId, requestHash, responseText: `answer-${ordinal}`, ordinal }));
+  }
+  const projected = projectSessionReplay({ sentences, historyWindow: 1 });
+  assert.deepEqual(projected.messages.map((entry) => entry.content), ["task-1", "task-3", "answer-3"]);
+  assert.equal(projected.messages.filter((entry) => entry.content === "task-1").length, 1);
+});
+
+test("verify loop promotes its successful verifier disposition into the generator session ledger", async () => {
+  forget();
+  const originalResponse = process.env.PYA_MIND_RESPONSE;
+  const root = path.resolve("/tmp/pyash-agent-session-verify-loop-acceptance");
+  await fs.rm(root, { recursive: true, force: true });
+  await fs.mkdir(root, { recursive: true });
+  doRemember({ mood: "ya", be: "root", su: { name: "world root" }, ob: { filename: root } });
+  process.env.PYA_MIND_RESPONSE = JSON.stringify(["draft answer", "Verifier evidence\nPASS"]);
+
+  try {
+    await interpret(parse('exists su name generator be mind as name "qwen3-vl:8b-instruct" ya'));
+    await interpret(parse('exists su name verifier be mind as name "qwen3-vl:8b-instruct" ya'));
+
+    await interpret(parse('ob text "Task." for name generator by name verifier with wo tools to name text result be verify loop do'));
+
+    const sessionDir = path.join(root, "house", "generator", "session");
+    const files = (await fs.readdir(sessionDir)).filter((name) => name.endsWith(".pya"));
+    assert.equal(files.length, 1);
+    const replay = await readSessionReplay({ sessionFile: path.join(sessionDir, files[0]), historyWindow: 1 });
+    assert.equal(replay.acceptedEvidence.length, 1);
+    assert.equal(replay.acceptedEvidence[0].generatorName, "generator");
+    assert.equal(replay.acceptedEvidence[0].verifierName, "verifier");
+    assert.equal(replay.acceptedEvidence[0].verifierText, "Verifier evidence\nPASS");
+    assert.match(await fs.readFile(path.join(sessionDir, files[0]), "utf8"), /vyah success accept/);
+  } finally {
+    if (originalResponse === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = originalResponse;
+    forget();
+  }
+});
+
 test("named-session fallback deduplicates stable turns before projecting the window", async () => {
   const root = path.resolve("/tmp/pyash-agent-session-replay-fallback");
   await fs.rm(root, { recursive: true, force: true });
@@ -239,9 +306,9 @@ test("long-run projection remains deterministic across the 200-turn boundary", (
   const first = projectSessionReplay({ sentences, historyWindow: 8 });
   const second = projectSessionReplay({ sentences, historyWindow: 8 });
   assert.equal(first.turns.length, 205);
-  assert.equal(first.messages.length, 16);
+  assert.equal(first.messages.length, 17);
   assert.equal(first.snapshotHash, second.snapshotHash);
-  assert.equal(first.messages[0].content, "task-198");
+  assert.equal(first.messages[0].content, "task-1");
   assert.equal(first.messages.at(-1).content, "answer-205");
 });
 

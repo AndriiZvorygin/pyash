@@ -28,7 +28,7 @@ import {
   completeSessionTurn
 } from "../../agent/session.mjs";
 import { getExchangeSentenceId } from "../../bridge/exchange.mjs";
-import { resolveConfigBool, resolveConfigMapBool, resolveConfigMapNum, resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
+import { resolveConfigBool, resolveConfigMapBool, resolveConfigMapNum, resolveConfigText } from "../../configure/env.mjs";
 import { recordMindAnswer } from "./series.mjs";
 import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from "./resolve_prompt.mjs";
 import { resolveHistoryContext } from "./history_context.mjs";
@@ -284,8 +284,6 @@ export async function mind_to_name_text(sentence, {
   const dialogue = historyDialogueName({ callSentence: sentence, configSentence, targetName: mindName });
   const configSessionHistoryWindow =
     resolveConfigMapNum("session configure", "history window", { rememberFn: remember })
-    ?? resolveConfigNum("session window", { rememberFn: remember })
-    ?? resolveConfigNum("session history window", { rememberFn: remember })
     ?? resolveConfigMapNum("agent configure", "session history window", { rememberFn: remember });
   const historyWindow =
     normalizeHistoryWindow(

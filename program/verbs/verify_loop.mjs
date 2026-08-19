@@ -2,6 +2,7 @@ import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveConfigMapNum, resolveConfigMapText } from "../configure/env.mjs";
 import { emitSessionGold } from "../agent/gold.mjs";
+import { appendAcceptedSessionCheckpointForMind } from "../agent/session.mjs";
 
 async function resolveInterpret() {
   const mod = await import("../bridge/index.mjs");
@@ -541,6 +542,16 @@ export async function verifyLoop(sentence) {
   }
 
   const resultText = finalDraft;
+  if (lastVerdict.pass && lastGuaranteePass && generatorIsMind && verifierName) {
+    await appendAcceptedSessionCheckpointForMind({
+      mindName: generatorName,
+      task,
+      responseText: resultText,
+      generatorName,
+      verifierName,
+      verifierText: lastReviewText
+    });
+  }
   if (outputName) {
     rememberText(outputName, resultText);
   }

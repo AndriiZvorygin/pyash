@@ -161,9 +161,10 @@ test("readSessionMessages enforces stable truncation by pair window", async () =
     await appendSessionEntry({ sessionFile, role: "assistant", content: `a${i}` });
   }
   const onePair = await readSessionMessages({ sessionFile, historyWindow: 1 });
-  assert.equal(onePair.messages.length, 2);
-  assert.equal(onePair.messages[0].content, "u5");
-  assert.equal(onePair.messages[1].content, "a5");
+  assert.equal(onePair.messages.length, 3);
+  assert.equal(onePair.messages[0].content, "u1");
+  assert.equal(onePair.messages[1].content, "u5");
+  assert.equal(onePair.messages[2].content, "a5");
   const noPairs = await readSessionMessages({ sessionFile, historyWindow: 0 });
   assert.equal(noPairs.messages.length, 0);
   const allPairs = await readSessionMessages({ sessionFile, historyWindow: 10 });
