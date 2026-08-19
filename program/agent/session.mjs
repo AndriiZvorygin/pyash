@@ -741,36 +741,6 @@ export async function appendAcceptedSessionCheckpoint({
   return { ...acceptedTurn, snapshotArtifact, sessionFile };
 }
 
-export async function appendAcceptedSessionCheckpointForMind({
-  mindName,
-  task,
-  responseText,
-  generatorName = mindName,
-  verifierName = "",
-  verifierText = ""
-} = {}) {
-  if (!mindName || !task || !responseText) return null;
-  const agentHouse = resolveAgentHouse({ mindName, rememberFn: remember });
-  const { sessionDir } = await ensureAgentDirs(agentHouse);
-  const files = await listSessionFiles(sessionDir);
-  for (const filename of files) {
-    const sessionFile = path.join(sessionDir, filename);
-    const replay = await readSessionReplay({ sessionFile, historyWindow: 0 });
-    const candidates = replay.turns
-      .filter((turn) => turn.complete && turn.userContent === String(task) && turn.responseText === String(responseText))
-      .sort((left, right) => right.firstIndex - left.firstIndex);
-    if (!candidates.length) continue;
-    return appendAcceptedSessionCheckpoint({
-      sessionFile,
-      turnId: candidates[0].turnId,
-      generatorName,
-      verifierName,
-      verifierText
-    });
-  }
-  return null;
-}
-
 export async function readSessionMessages({ sessionFile, historyWindow = 50 } = {}) {
   if (!sessionFile) return { messages: [], lastSystemModel: null };
   const projected = await readSessionReplay({ sessionFile, historyWindow });

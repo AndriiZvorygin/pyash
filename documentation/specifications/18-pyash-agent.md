@@ -46,6 +46,11 @@ pair. Conflicting evidence for one id is defective. Older adjacent user/agent
 pairs receive deterministic synthetic ids during read-only projection and are
 never rewritten.
 
+An agent-backed `mind` answer also surfaces its exact session locator as typed
+sentence fields: `accordingto text <turn id>` and `at filename <session file>`.
+Verifier flows carry those fields forward and promote only that exact passing
+turn; they do not search historical sessions by task or response text.
+
 ## 3. Prompt context assembly
 
 Include:
