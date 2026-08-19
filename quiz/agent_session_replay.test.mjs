@@ -273,6 +273,64 @@ test("verify loop promotes its successful verifier disposition into the generato
   }
 });
 
+test("verify loop accepts only the exact passing retry turn", async () => {
+  forget();
+  const originalResponse = process.env.PYA_MIND_RESPONSE;
+  const root = path.resolve("/tmp/pyash-agent-session-verify-loop-retry");
+  await fs.rm(root, { recursive: true, force: true });
+  await fs.mkdir(root, { recursive: true });
+  doRemember({ mood: "ya", be: "root", su: { name: "world root" }, ob: { filename: root } });
+  process.env.PYA_MIND_RESPONSE = JSON.stringify([
+    { message: { content: "same draft" } },
+    { message: { content: "evidence\nPASS" } }
+  ]);
+
+  try {
+    const oldSessionDir = path.join(root, "house", "generator", "session");
+    const oldSessionFile = await ensureSessionFile({
+      sessionDir: oldSessionDir,
+      sessionName: "000000-old",
+      systemPrompt: "system",
+      model: "model"
+    });
+    const oldTurn = await beginSessionTurn({
+      sessionFile: oldSessionFile,
+      userContent: "Task.",
+      request: { prompt: "Task." },
+      metadata: { payloadId: "old-session-payload" }
+    });
+    await completeSessionTurn({ sessionFile: oldSessionFile, turn: oldTurn, responseText: "same draft" });
+
+    await interpret(parse('exists su name generator be mind as name "qwen3-vl:8b-instruct" ya'));
+    await interpret(parse('exists su name verifier be mind as name "qwen3-vl:8b-instruct" ya'));
+
+    await interpret(parse('ob text "Task." for name generator by name verifier atleast num 0.8 atmost num 2 with wo tools to name text result be verify loop do'));
+
+    const files = (await fs.readdir(oldSessionDir)).filter((name) => name.endsWith(".pya")).sort();
+    assert.equal(files.length, 2);
+    const replays = await Promise.all(files.map((name) => readSessionReplay({
+      sessionFile: path.join(oldSessionDir, name),
+      historyWindow: 10
+    })));
+    const generatedReplay = replays.find((replay) => replay.turns.length === 2);
+    const oldReplay = replays.find((replay) => replay.turns.length === 1);
+    assert.ok(generatedReplay);
+    assert.ok(oldReplay);
+    assert.equal(oldReplay.acceptedEvidence.length, 0);
+    assert.equal(generatedReplay.acceptedEvidence.length, 1);
+    assert.equal(generatedReplay.turns[0].accepted, false);
+    assert.equal(generatedReplay.turns[1].accepted, true);
+    assert.equal(generatedReplay.acceptedEvidence[0].turnId, generatedReplay.turns[1].turnId);
+    assert.equal(generatedReplay.acceptedEvidence[0].generatorName, "generator");
+    assert.equal(generatedReplay.acceptedEvidence[0].verifierName, "verifier");
+    assert.equal(generatedReplay.acceptedEvidence[0].verifierText, "evidence\nPASS");
+  } finally {
+    if (originalResponse === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = originalResponse;
+    forget();
+  }
+});
+
 test("named-session fallback deduplicates stable turns before projecting the window", async () => {
   const root = path.resolve("/tmp/pyash-agent-session-replay-fallback");
   await fs.rm(root, { recursive: true, force: true });

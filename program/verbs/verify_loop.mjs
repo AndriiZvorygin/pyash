@@ -2,7 +2,7 @@ import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveConfigMapNum, resolveConfigMapText } from "../configure/env.mjs";
 import { emitSessionGold } from "../agent/gold.mjs";
-import { appendAcceptedSessionCheckpointForMind } from "../agent/session.mjs";
+import { appendAcceptedSessionCheckpoint } from "../agent/session.mjs";
 
 async function resolveInterpret() {
   const mod = await import("../bridge/index.mjs");
@@ -161,8 +161,18 @@ async function invokeMind({ mindName, prompt, outputName, toolMapName, numPredic
   if (Number.isFinite(Number(numPredict))) {
     call.atmost = { num: Number(numPredict) };
   }
-  await interpret(call);
-  return resolveFactText(outputName);
+  const result = await interpret(call);
+  const output = remember(outputName);
+  const turnId = result?.accordingto?.text ?? result?.accordingto?.name
+    ?? output?.accordingto?.text ?? output?.accordingto?.name;
+  const sessionFile = result?.at?.filename ?? result?.at?.text
+    ?? output?.at?.filename ?? output?.at?.text;
+  return {
+    text: resolveFactText(outputName),
+    sessionTurn: turnId && sessionFile
+      ? { turnId: String(turnId), sessionFile: String(sessionFile) }
+      : null
+  };
 }
 
 async function invokeRefinery({ refineryName, prompt, outputName }) {
@@ -376,6 +386,7 @@ export async function verifyLoop(sentence) {
   let previousFailedDraft = "";
   let lastFailureBundle = null;
   let lastSuccessBundle = null;
+  let lastGeneratorSessionTurn = null;
 
   rememberText("verify loop seed task", task);
 
@@ -385,13 +396,15 @@ export async function verifyLoop(sentence) {
     const flowSeriesName = generatorIsMind ? `${generatorName} story session` : "";
     const flowStart = seriesEntryCount(flowSeriesName);
     if (generatorIsMind) {
-      finalDraft = await invokeMind({
+      const generatorResult = await invokeMind({
         mindName: generatorName,
         prompt: latestPrompt,
         outputName: draftName,
         toolMapName,
         numPredict: targetWordsNumPredict
       });
+      finalDraft = generatorResult.text;
+      lastGeneratorSessionTurn = generatorResult.sessionTurn;
     } else if (generatorIsRefinery) {
       finalDraft = await invokeRefinery({
         refineryName: generatorRefineryName ?? generatorName,
@@ -475,11 +488,12 @@ export async function verifyLoop(sentence) {
 
       const reviewName = `verify loop feedback ${attempt}`;
       if (verifierIsMind) {
-        lastReviewText = await invokeMind({
+        const verifierResult = await invokeMind({
           mindName: verifierName,
           prompt: reviewPrompt,
           outputName: reviewName
         });
+        lastReviewText = verifierResult.text;
       } else if (verifierIsRefinery) {
         lastReviewText = await invokeRefinery({
           refineryName: verifierRefineryName ?? verifierName,
@@ -542,11 +556,10 @@ export async function verifyLoop(sentence) {
   }
 
   const resultText = finalDraft;
-  if (lastVerdict.pass && lastGuaranteePass && generatorIsMind && verifierName) {
-    await appendAcceptedSessionCheckpointForMind({
-      mindName: generatorName,
-      task,
-      responseText: resultText,
+  if (lastVerdict.pass && lastGuaranteePass && generatorIsMind && verifierName && lastGeneratorSessionTurn) {
+    await appendAcceptedSessionCheckpoint({
+      sessionFile: lastGeneratorSessionTurn.sessionFile,
+      turnId: lastGeneratorSessionTurn.turnId,
       generatorName,
       verifierName,
       verifierText: lastReviewText

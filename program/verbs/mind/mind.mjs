@@ -663,7 +663,7 @@ export async function mind_to_name_text(sentence, {
     }
     if (sessionTurn?.status === "completed") {
       responseText = sessionTurn.responseText || "";
-      return recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName });
+      return recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName, sessionTurn });
     }
   }
   if (toolMapName) {
@@ -787,7 +787,7 @@ export async function mind_to_name_text(sentence, {
   }
 
   // Record turn so future calls have context
-  const answerSentence = recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName });
+  const answerSentence = recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName, sessionTurn });
   return answerSentence;
 }
 

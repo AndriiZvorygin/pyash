@@ -72,7 +72,7 @@ function syncSessionFacts({ dialogue }) {
   });
 }
 
-function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName }) {
+function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName, sessionTurn = null }) {
   const { count, name: answerName } = nextAnswerName(mindName, dialogue);
   if (callPrompt) {
     doRemember({
@@ -91,6 +91,8 @@ function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, output
     from: { name: mindName },
     ob: { text: responseText }
   };
+  if (sessionTurn?.turnId) answerSentence.accordingto = { text: String(sessionTurn.turnId) };
+  if (sessionTurn?.sessionFile) answerSentence.at = { filename: String(sessionTurn.sessionFile) };
   doRemember(answerSentence);
   doRemember({
     ...answerSentence,
