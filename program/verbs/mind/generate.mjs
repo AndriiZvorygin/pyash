@@ -199,8 +199,8 @@ export async function runGenerate({
             // eslint-disable-next-line no-console
             console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: finalText.length })}`);
           }
-          writeStreamEnd(streamOutputPath);
           if (typeof onComplete === "function") await onComplete(finalText);
+          writeStreamEnd(streamOutputPath);
           recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName, historySeriesName });
         } else if (backendName) {
           const backendStream = await callMindBackendStream({ backendName, payload: requestPayload });
@@ -237,8 +237,8 @@ export async function runGenerate({
             // eslint-disable-next-line no-console
             console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: streamedText.length })}`);
           }
-          writeStreamEnd(streamOutputPath);
           if (typeof onComplete === "function") await onComplete(streamedText.trim());
+          writeStreamEnd(streamOutputPath);
           recordMindAnswer({ mindName, dialogue, callPrompt, responseText: streamedText.trim(), outputName, historySeriesName });
         } else {
           throwErrorSentence({

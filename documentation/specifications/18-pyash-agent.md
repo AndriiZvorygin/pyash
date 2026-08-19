@@ -27,6 +27,25 @@ Per-append line should include:
 - system prompt start record (`su name system ob text ...`)
 - model marker and model-change records when model changes
 
+Completed agent turns use an append-only typed ledger:
+
+```pyash
+su name user ob text "<request>" fromtext text "<request hash>" accordingto text "<turn id>" by num <ordinal> be write ya
+su name agent ob text "<response>" fromtext text "<request hash>" accordingto text "<turn id>" by num <ordinal> be write ya
+su name checkpoint ob text "<response>" fromtext text "<request hash>" accordingto text "<turn id>" by num <ordinal> vyah success be checkpoint ya
+```
+
+The same `accordingto` turn id identifies all three records. Payload ids and
+exchange sentence ids are preferred; otherwise the id combines a session-local
+ordinal with a canonical request hash. Timestamps are audit fields only and do
+not participate in identity or snapshot hashes. A user record is appended before
+mind invocation. Pending tails remain auditable but are omitted from resumed
+history; a successful checkpoint is required before a pair enters prompt history.
+Completed turns replay from their recorded response without appending a second
+pair. Conflicting evidence for one id is defective. Older adjacent user/agent
+pairs receive deterministic synthetic ids during read-only projection and are
+never rewritten.
+
 ## 3. Prompt context assembly
 
 Include:
@@ -35,7 +54,16 @@ Include:
 - bounded memory injection,
 - valid tool explainer/signatures.
 
-Avoid duplicating non-essential runtime metadata in prompt body.
+Avoid duplicating non-essential runtime metadata in prompt body. When explicit
+accepted generator/verifier evidence exists, compact context keeps the immutable
+original duty plus the latest accepted generator and verifier evidence. Ordinary
+completed answers are not treated as accepted evidence. Failed retries remain in
+the session/newspaper/artifact audit trail.
+
+For recorded runs, each completed turn also gets an immutable hash-addressed
+session snapshot through the artifact recorder. The newspaper carries a typed
+checkpoint linkage to that snapshot, so `command/replay_newspaper.mjs` can verify
+the bytes and surface tampering.
 
 ## 4. Memory (`be memory` / `be remember`)
 

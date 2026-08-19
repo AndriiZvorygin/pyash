@@ -112,6 +112,31 @@ test("agent session appends subsequent turns without rewriting header", async ()
   }
 });
 
+test("agent session restores generated naming after the user turn is durable", async () => {
+  forget();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "generated label";
+  const tmpRoot = path.resolve("/tmp/pyash-agent-session-generated-name-test");
+  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await fs.mkdir(tmpRoot, { recursive: true });
+  doRemember({ mood: "ya", be: "root", su: { name: "world root" }, ob: { filename: tmpRoot } });
+  try {
+    await interpret(parse('exists su name helper be mind via state "qwen3-vl:8b-instruct" from discourse "You are concise." ya'));
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name agent ob bool truth ya"));
+    await interpret(parse("prah"));
+    await interpret(parse('su name prompt ob text "Generated name" for name helper to name text out with name tools be write do'));
+    const generatedFile = path.join(tmpRoot, "house", "helper", "session", `${todayCompact()}-generated-label.pya`);
+    assert.ok(await exists(generatedFile));
+    const content = await fs.readFile(generatedFile, "utf8");
+    assert.match(content, /su name user ob text "Generated name"/);
+    assert.doesNotMatch(content, /fromtext text "\{"/);
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test("session history window normalization is deterministic", () => {
   assert.equal(normalizeHistoryWindow(undefined, { defaultPairs: 8 }), 8);
   assert.equal(normalizeHistoryWindow(0, { defaultPairs: 8 }), 0);
