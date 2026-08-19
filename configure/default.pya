@@ -83,8 +83,10 @@ exists su name provider auto discharge settle ms ob num 3000 be default ya
 exists su name newspaper enabled ob bool truth be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
-exists su name session window ob num 8 be default ya
-exists su name session snapshot enabled ob bool truth be default ya
+su name session configure be map def
+  su name history window ob num 8 ya
+  su name snapshot enabled ob bool truth ya
+prah
 exists su name keyboard bin ob text "xdotool" be default ya
 exists su name keyboard enabled ob bool truth be default ya
 exists su name search web default ob la be search fromstate wo web ko from filename "http://localhost:60490/" be default ya

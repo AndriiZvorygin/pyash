@@ -236,17 +236,29 @@ function compareModernRecord(turn, record) {
     turn.records[record.kind] = record;
     return;
   }
-  const same = record.kind === "checkpoint"
-    ? prior.responseText === record.responseText
-      && prior.success === record.success
-      && prior.accepted === record.accepted
-      && prior.generatorName === record.generatorName
-      && prior.verifierName === record.verifierName
-      && prior.verifierText === record.verifierText
-      && (!prior.requestHash || !record.requestHash || prior.requestHash === record.requestHash)
-    : prior.content === record.content
+  if (record.kind !== "checkpoint") {
+    const same = prior.content === record.content
       && (!prior.requestHash || !record.requestHash || prior.requestHash === record.requestHash);
-  if (!same) defective(`conflicting ${record.kind} records for ${record.turnId}`);
+    if (!same) defective(`conflicting ${record.kind} records for ${record.turnId}`);
+    return;
+  }
+  const sameCheckpoint = prior.responseText === record.responseText
+    && prior.success === record.success
+    && (!prior.requestHash || !record.requestHash || prior.requestHash === record.requestHash);
+  if (!sameCheckpoint) defective(`conflicting checkpoint records for ${record.turnId}`);
+  for (const field of ["generatorName", "verifierName", "verifierText"]) {
+    if (prior[field] && record[field] && prior[field] !== record[field]) {
+      defective(`conflicting checkpoint evidence for ${record.turnId}`);
+    }
+  }
+  turn.records.checkpoint = {
+    ...prior,
+    ...record,
+    accepted: prior.accepted || record.accepted,
+    generatorName: record.generatorName || prior.generatorName,
+    verifierName: record.verifierName || prior.verifierName,
+    verifierText: record.verifierText || prior.verifierText
+  };
 }
 
 function addModernRecord(turns, record) {
@@ -421,16 +433,28 @@ function buildGoldenMessages({ turns, acceptedEvidence, originalTask }) {
   return messages;
 }
 
+function buildLiveMessages({ turns, recentTurns, originalTask }) {
+  const original = turns.find((turn) => turn.hasUser && turn.complete);
+  const messages = [];
+  if (original) {
+    messages.push({ role: "user", content: originalTask, turnId: original.turnId });
+  }
+  for (const turn of recentTurns) {
+    if (!original || turn.turnId !== original.turnId) {
+      messages.push({ role: "user", content: turn.userContent, turnId: turn.turnId });
+    }
+    messages.push({ role: "assistant", content: turn.responseText, turnId: turn.turnId });
+  }
+  return messages;
+}
+
 export function projectSessionReplay({ sentences = [], historyWindow = 50 } = {}) {
   const source = Array.isArray(sentences) ? sentences : [];
   const turns = buildTurns(source).map(normalizeTurn);
   const completeTurns = turns.filter((turn) => turn.complete);
   const maxPairs = Math.max(0, Math.trunc(Number(historyWindow) || 0));
   const recentTurns = maxPairs > 0 ? completeTurns.slice(-maxPairs) : [];
-  const messages = recentTurns.flatMap((turn) => [
-    { role: "user", content: turn.userContent, turnId: turn.turnId },
-    { role: "assistant", content: turn.responseText, turnId: turn.turnId }
-  ]);
+  const messages = buildLiveMessages({ turns, recentTurns, originalTask: originalTaskFromTurns(turns) });
   const acceptedEvidence = completeTurns
     .filter((turn) => turn.checkpoint?.success && turn.checkpoint?.accepted)
     .map((turn) => ({

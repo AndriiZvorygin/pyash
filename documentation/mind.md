@@ -158,7 +158,7 @@ For internal history, the runtime derives context from `memory`. For each mind `
 
 ### History stitching
 
-**Status:** implemented for interpreter (prompts include last N turns) and compiled JS (per-mind history map). Window remains configurable in Pyash defaults (`session window`, default 8 turns); the older `session history window` name remains a read-compatible fallback.
+**Status:** implemented for interpreter (prompts include last N turns) and compiled JS (per-mind history map). Window and compact snapshot policy are configurable in the canonical Pyash `session configure` map (`history window`, default 8 turns; `snapshot enabled`, default truth).
 
 Before each mind call, the runtime:
 

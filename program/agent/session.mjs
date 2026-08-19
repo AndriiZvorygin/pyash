@@ -6,7 +6,7 @@ import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { parse } from "../understand/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { callMindBackend } from "../verbs/mind/backend.mjs";
-import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigMapBool, resolveConfigText } from "../configure/env.mjs";
 import { remember } from "../remember/index.mjs";
 import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy.mjs";
 import { emitExchangeSentence, getExchangeSentenceId, recordArtifact } from "../bridge/exchange.mjs";
@@ -499,7 +499,7 @@ function snapshotArtifactPart(value) {
 }
 
 async function persistSessionSnapshot({ sessionFile, turnId, replay } = {}) {
-  if (resolveConfigBool("session snapshot enabled", { rememberFn: remember }) === false) return null;
+  if (resolveConfigMapBool("session configure", "snapshot enabled", { rememberFn: remember }) === false) return null;
   const snapshotText = buildCompactSessionSnapshot(replay);
   const snapshotHash = hashText(snapshotText);
   const locator = `artifacts/session/${snapshotArtifactPart(turnId)}-${snapshotHash}.pya`;
@@ -699,6 +699,78 @@ export async function completeSessionTurn({
   return { ...turn, status: "completed", replayed: false, responseText: response, snapshotArtifact, sessionFile };
 }
 
+export async function appendAcceptedSessionCheckpoint({
+  sessionFile,
+  turnId,
+  generatorName = "",
+  verifierName = "",
+  verifierText = ""
+} = {}) {
+  if (!sessionFile || !turnId) return null;
+  const replay = await readSessionReplay({ sessionFile, historyWindow: 0 });
+  const turn = replay.turns.find((entry) => entry.turnId === turnId);
+  if (!turn?.complete || !turn.checkpoint?.success) {
+    throw new Error(`session replay defective: cannot accept incomplete turn ${turnId}`);
+  }
+  if (turn.accepted) {
+    const snapshotArtifact = await persistSessionSnapshot({ sessionFile, turnId, replay });
+    return { ...turn, snapshotArtifact, sessionFile };
+  }
+  await appendReplaySentence(sessionFile, buildSessionCheckpointSentence({
+    turnId,
+    requestHash: turn.requestHash,
+    responseText: turn.responseText,
+    ordinal: turn.records?.user?.metadata?.ordinal,
+    metadata: {
+      accepted: true,
+      generatorName,
+      verifierName,
+      verifierText
+    }
+  }));
+  const acceptedReplay = await readSessionReplay({ sessionFile, historyWindow: 0 });
+  const acceptedTurn = acceptedReplay.turns.find((entry) => entry.turnId === turnId);
+  if (!acceptedTurn?.accepted) {
+    throw new Error(`session replay defective: accepted checkpoint was not projected for ${turnId}`);
+  }
+  const snapshotArtifact = await persistSessionSnapshot({
+    sessionFile,
+    turnId,
+    replay: acceptedReplay
+  });
+  return { ...acceptedTurn, snapshotArtifact, sessionFile };
+}
+
+export async function appendAcceptedSessionCheckpointForMind({
+  mindName,
+  task,
+  responseText,
+  generatorName = mindName,
+  verifierName = "",
+  verifierText = ""
+} = {}) {
+  if (!mindName || !task || !responseText) return null;
+  const agentHouse = resolveAgentHouse({ mindName, rememberFn: remember });
+  const { sessionDir } = await ensureAgentDirs(agentHouse);
+  const files = await listSessionFiles(sessionDir);
+  for (const filename of files) {
+    const sessionFile = path.join(sessionDir, filename);
+    const replay = await readSessionReplay({ sessionFile, historyWindow: 0 });
+    const candidates = replay.turns
+      .filter((turn) => turn.complete && turn.userContent === String(task) && turn.responseText === String(responseText))
+      .sort((left, right) => right.firstIndex - left.firstIndex);
+    if (!candidates.length) continue;
+    return appendAcceptedSessionCheckpoint({
+      sessionFile,
+      turnId: candidates[0].turnId,
+      generatorName,
+      verifierName,
+      verifierText
+    });
+  }
+  return null;
+}
+
 export async function readSessionMessages({ sessionFile, historyWindow = 50 } = {}) {
   if (!sessionFile) return { messages: [], lastSystemModel: null };
   const projected = await readSessionReplay({ sessionFile, historyWindow });
@@ -706,12 +778,6 @@ export async function readSessionMessages({ sessionFile, historyWindow = 50 } = 
   const maxMessages = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 }) * 2;
   if (maxMessages <= 0) {
     return { messages: [], lastSystemModel: projected.lastSystemModel };
-  }
-  if (maxMessages > 0 && messages.length > maxMessages) {
-    return {
-      messages: messages.slice(-maxMessages),
-      lastSystemModel: projected.lastSystemModel
-    };
   }
   return { messages, lastSystemModel: projected.lastSystemModel };
 }
@@ -736,7 +802,7 @@ export async function readSessionMessagesWithFallback({
   const maxMessages = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 }) * 2;
   const messages = projected.messages.map(({ role, content }) => ({ role, content }));
   return {
-    messages: maxMessages > 0 ? messages.slice(-maxMessages) : [],
+    messages: maxMessages > 0 ? messages : [],
     lastSystemModel: projected.lastSystemModel
   };
 }

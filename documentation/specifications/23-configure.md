@@ -69,8 +69,10 @@ exists su name provider auto discharge ob bool truth be default ya
 exists su name gpu exclusive classes ob ve text "mind" "draw" ya
 exists su name provider auto discharge settle ms ob num 1200 be default ya
 exists su name newspaper enabled ob bool truth be default ya
-exists su name session window ob num 8 be default ya
-exists su name session snapshot enabled ob bool truth be default ya
+su name session configure be map def
+  su name history window ob num 8 ya
+  su name snapshot enabled ob bool truth ya
+prah
 exists su name draw workflow root ob filename "./draw/" be default ya
 exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow default ob la be draw fromstate wo text become wo photograph ko as text "teaching-text-to-photograph" be default ya
@@ -87,7 +89,7 @@ Semantics:
 - when switching between gpu-exclusive classes, runtime waits `provider auto discharge settle ms` before starting the next provider (set `0` to disable wait).
 - workflow files for backend `<b>` resolve under `./draw/<b>/` unless an explicit `with filename` override is supplied.
 - when `newspaper enabled` is `truth`, runtime should persist replayable artifacts in background even when stage surfaces use typed in-memory links such as `from name itinerary ...`.
-- session history is bounded to 8 user/agent pairs unless a Pyash `session configure` or `history window` override is supplied;
+- session history is bounded to 8 user/agent pairs unless the Pyash `session configure` map's `history window` entry is overridden;
 - immutable session compact snapshots are enabled by default and are hash-linked into recorded newspapers.
 
 ## 8. Output modes
