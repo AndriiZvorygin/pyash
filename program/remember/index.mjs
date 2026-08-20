@@ -402,6 +402,10 @@ export function popMemoryContext() {
   }
 }
 
+export function hasMemoryContext() {
+  return contextStack.length > 0;
+}
+
 export function recordSandpitTrace(trace) {
   sandpits.push(trace);
 }

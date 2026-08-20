@@ -1,0 +1,10 @@
+su name inner error to name text answer be ceremony def
+su name inner error ob text "inner failure" from name inner error be error ret
+su name inner error be ceremony prah
+
+su name plus two to name text answer be ceremony def
+to name text answer be inner error do
+ob text "after inner call" be write do
+su name plus two be ceremony prah
+
+to name text answer be plus two do

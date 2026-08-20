@@ -45,3 +45,14 @@ function pyaAssertCeremonySignature(sentence, expected) {
   throw error;
 }`;
 }
+
+export function ceremonyErrorHelperSource() {
+  return `function pyaSurfaceCeremonyError(result) {
+  if (!result || result.be !== "error") return result;
+  const surfaced = { ...result, mood: "ya" };
+  const canonicalName = surfaced.su?.name;
+  if (canonicalName) globalThis[canonicalName] = surfaced;
+  globalThis.result = { ...surfaced, su: { name: "result" } };
+  return surfaced;
+}`;
+}

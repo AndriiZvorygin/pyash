@@ -6,7 +6,7 @@ import { runAtAll } from "./map.mjs";
 import compileHandler from "../verbs/exchange/compile.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { resolveThisValue } from "../library/thisBinding.mjs";
-import { throwErrorSentence, surfaceErrorSentence } from "../error.mjs";
+import { throwErrorSentence, rememberSurfacedError } from "../error.mjs";
 import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir, registerModuleAlias, isModuleExecuting, pushModuleExecution, popModuleExecution } from "./modules.mjs";
 import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signature.mjs";
 import { handleLifecycleAspect } from "./runtime.mjs";
@@ -422,16 +422,10 @@ export async function handleImperative({
 
   const lifecycleResult = handleLifecycleAspect(sentence, { remember: memory.remember, doRemember: memory.doRemember });
   if (lifecycleResult) {
-    const surfaced = surfaceErrorSentence(lifecycleResult);
+    const surfaced = rememberSurfacedError(lifecycleResult, memory.doRemember);
     if (surfaced?.mood && surfaced?.be) {
-      if (surfaced.ob !== undefined) {
-        memory.doRemember({
-          su: { name: "result" },
-          ob: surfaced.ob,
-          be: surfaced.be,
-          mood: "ya"
-        });
-      }
+      // rememberSurfacedError retains the canonical error sentence and its
+      // complete compatibility result alias, including source context.
     }
     return surfaced;
   }
@@ -586,6 +580,7 @@ export async function handleImperative({
         interpret,
         recordSandpitTrace
       });
+      if (lastResult?.mood && lastResult?.be) return lastResult;
       return { invoked: be, result: lastResult };
     }
 
@@ -673,21 +668,23 @@ export async function handleImperative({
   const result = await fn(callSentence, { remember: memory.remember });
 
   if (result?.mood && result?.be && result?.su) {
-    const surfaced = surfaceErrorSentence(result);
+    const surfaced = rememberSurfacedError(result, memory.doRemember);
     if (surfaced.be !== "chip") {
-      memory.doRemember(surfaced);
+      if (!surfaced?.be || surfaced.be !== "error") memory.doRemember(surfaced);
     }
     if (surfaced.ob !== undefined) {
       const priorResult = memory.remember("result");
       if (surfaced.be === "stream" && priorResult?.be && priorResult.be !== "stream") {
         return surfaced;
       }
-      memory.doRemember({
-        su: { name: "result" },
-        ob: surfaced.ob,
-        be: surfaced.be,
-        mood: "ya"
-      });
+      if (surfaced.be !== "error") {
+        memory.doRemember({
+          su: { name: "result" },
+          ob: surfaced.ob,
+          be: surfaced.be,
+          mood: "ya"
+        });
+      }
     }
     return surfaced;
   }

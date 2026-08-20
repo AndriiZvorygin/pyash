@@ -11,6 +11,7 @@ import {
   getDefinitionBody,
   pushMemoryContext,
   popMemoryContext,
+  hasMemoryContext,
   recordSandpitTrace
 } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
@@ -428,6 +429,7 @@ export async function interpret(sentence) {
         allRemember,
         pushMemoryContext,
         popMemoryContext,
+        hasMemoryContext,
         getDefinition,
         getDefinitionEntries,
         getDefinitionEntryBySignature
@@ -451,6 +453,7 @@ export async function interpret(sentence) {
         allRemember,
         pushMemoryContext,
         popMemoryContext,
+        hasMemoryContext,
         getDefinition,
         getDefinitionEntries,
         getDefinitionEntryBySignature

@@ -31,15 +31,26 @@ function wrapRetValue(expr, kind, lang) {
   return `return pya_value_num(${expr});`;
 }
 
-function handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers } = {}) {
+function handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers, jsHelpers } = {}) {
   if (sentence.mood !== "ret") return null;
+  if (sentence.be === "error") {
+    if (lang === "c") {
+      // Structured error returns are intentionally deferred with the C ABI.
+      return null;
+    }
+    return `return ${JSON.stringify({ ...sentence, mood: "do" })};`;
+  }
   const sourceName = sentence?.ret?.name || sentence?.ob?.name || sentence?.su?.name;
   if (lang === "c" && cHelpers) cHelpers.usesCeremonyValue = true;
   if (sourceName) {
     const sourceVar = sanitizeName(sourceName);
+    const sourceRef = sourceName === "result" ? "globalThis.result" : sourceVar;
     const kind = inferRetKind({ name: sourceName }, { localsTypes, declaredTypes });
     if (lang !== "c") {
-      return `sentence.ob = ${sourceVar}?.ob ?? ${sourceVar};\nreturn sentence;`;
+      const errorGuard = jsHelpers?.usesCeremonyErrors
+        ? `if (${sourceRef}?.be === "error") return { ...${sourceRef}, mood: "do" };\n`
+        : "";
+      return `${errorGuard}sentence.ob = ${sourceRef}?.ob ?? ${sourceRef};\nreturn sentence;`;
     }
     return wrapRetValue(sourceVar, kind, lang);
   }

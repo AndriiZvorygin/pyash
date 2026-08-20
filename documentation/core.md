@@ -64,6 +64,7 @@ This document summarizes the current core language model used by the interpreter
 ## Ceremonies (Functions)
 - Defined with `su name X be ceremony def … su name X be ceremony prah`.
 - Bodies are `do` sentences; `ret`/`return` is implicit if a `return` statement is emitted, otherwise the incoming sentence is returned.
+- `ret` with `be error` returns a canonical `be error do` carrier. Nested ceremony and loop calls pass that carrier to their enclosing ceremony, which returns it immediately; later body sentences do not run on that error path.
 - Invocation uses `be X … do` (signature words derive the function name in compiled code).
 - Genitive `this` accesses the incoming sentence registers; `remember` inside a ceremony can load targets from `sentence.to`.
 - Signature compatibility is enforced at invocation time:
@@ -77,6 +78,8 @@ This document summarizes the current core language model used by the interpreter
 The current higher-level parity tranche supports top-level, statically defined ceremonies whose signature contains scalar `ob num` and/or typed `to name <type>` cases. Multi-word ceremony names are preserved in Pyash and become deterministic signature-derived JavaScript identifiers. The compiler uses the same signature words registered by the interpreter; it does not dispatch by surface name alone.
 
 For the supported subset, a generated ceremony receives a fresh sentence call frame. `this` genitives read that frame, body sentences run in source order, and `ret` copies only the returned payload into the frame's `ob`. The caller then applies that payload to its addressed target while preserving the target subject and existing value shape. Generated calls validate the same canonical signature and raise `signature inconsistency` when an argument shape differs.
+
+Error-capable generated ceremonies keep nested error guards conditional: a successful nested call continues with later source sentences. A nested `be error do` carrier is returned through enclosing ceremonies and loop helpers without being surfaced until the top-level observation boundary, where it becomes one truthful `be error ya` result. The canonical error sentence is retained separately from the compatibility `result` alias.
 
 This tranche does not cover nested or dynamically defined ceremonies, recursion, captured scopes, imported/cross-file ceremony bodies, additional control-flow lowering, or C parity. Those remain separate bounded work.
 
@@ -131,5 +134,6 @@ The thrown exception message mirrors `ob.text` when present.
     ob num 2 to name bucket be plus do
     su name plus two be ceremony prah
     ```
+- Error propagation: `examples/pyash/ceremony-error-propagation.pya`
 - FizzBuzz (compiled to JS): see `examples/pyash/compile-fizzbuzz.txt`.
 - Typed ceremony parity golden: see `examples/pyash/compile-ceremony-parity.pya` and `quiz/compile_ceremony_parity.test.mjs`.
