@@ -55,7 +55,7 @@ test("series map routes by name mind through write calls", async () => {
   try {
     forget();
 
-    await run("exists su name helper be mind via state \"qwen3-vl:8b-instruct\" ya");
+    await run("exists su name helper be mind via state \"qwen3.5:9b\" ya");
     await run("su name items be series def");
     await run('su name item 1 ob text "alpha" be text ya');
     await run('su name item 2 ob text "beta" be text ya');
