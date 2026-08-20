@@ -1,4 +1,6 @@
 // Sandpit helpers for bridge
+import { rememberSurfacedError, returnedErrorSentence } from "../error.mjs";
+
 export function resolveGenitiveValue(genitive, { state, memory } = {}) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
   if (chainArr.length === 0) return null;
@@ -110,6 +112,9 @@ function updateTargetFact(existing, name, ob, be) {
 }
 
 export async function invokeLoop({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
+  const callerSandpit = typeof memory.hasMemoryContext === "function"
+    ? memory.hasMemoryContext()
+    : state.executingBody;
   const prevEvoke = state.currentEvoke;
   const prevEvokeRef = state.currentEvokeRef;
   const prevExecutingBody = state.executingBody;
@@ -140,6 +145,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
 
   let sandpit = [];
   let updatedTarget = null;
+  let finalEvoke = sentence;
 
   try {
     let currentIndex = registerValue(state.currentEvokeRef.fromindex, { state, memory });
@@ -155,8 +161,11 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
       for (const step of baseBody) {
         // Never execute the canonical definition-body objects directly; verbs can mutate targets in-place.
         lastResult = await interpret(cloneSentence(step));
+        if (lastResult?.sentence?.be === "error" || lastResult?.be === "error") break;
         if (state.loopControl === "depart" || state.loopControl === "continue") break;
       }
+
+      if (lastResult?.sentence?.be === "error" || lastResult?.be === "error") break;
 
       if (state.loopControl === "depart") {
         state.currentEvokeRef.fromindex = currentIndex;
@@ -193,14 +202,21 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
     updatedTarget = sentence.to?.name ? rememberNonControl(memory, sentence.to.name) : null;
     sandpit = [state.currentEvokeRef, ...memory.allRemember()];
   } finally {
+    finalEvoke = state.currentEvokeRef || state.currentEvoke || sentence;
     recordSandpitTrace(sandpit);
     memory.popMemoryContext();
-    state.executingBody = false;
+    state.currentEvoke = prevEvoke;
+    state.currentEvokeRef = prevEvokeRef;
+    state.executingBody = prevExecutingBody;
     state.loopActive = prevLoopActive;
     state.loopControl = prevLoopControl;
   }
 
-  const finalEvoke = state.currentEvokeRef || state.currentEvoke || sentence;
+  const returnedError = returnedErrorSentence(lastResult);
+  if (returnedError) {
+    if (callerSandpit) return returnedError;
+    return rememberSurfacedError(returnedError, memory.doRemember);
+  }
   const returnVal = lastResult?.value ?? lastResult?.ob;
   const mergedObj = returnVal ?? finalEvoke.ob;
   const mergedBe = finalEvoke.be || "result";
@@ -218,20 +234,17 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
       memory.doRemember({ su: { name: "result" }, ob: normalizedObj, be: mergedBe, mood: "ya" });
     }
 
-    state.currentEvoke = prevEvoke;
-    state.currentEvokeRef = prevEvokeRef;
-    state.executingBody = prevExecutingBody;
     return { invoked: finalEvoke.be, result: normalizedObj };
   }
 
   memory.doRemember(finalEvoke);
-  state.currentEvoke = prevEvoke;
-  state.currentEvokeRef = prevEvokeRef;
-  state.executingBody = prevExecutingBody;
   return lastResult;
 }
 
 export async function runDefinitionBody({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
+  const callerSandpit = typeof memory.hasMemoryContext === "function"
+    ? memory.hasMemoryContext()
+    : state.executingBody;
   const prevEvoke = state.currentEvoke;
   const prevEvokeRef = state.currentEvokeRef;
   const prevExecutingBody = state.executingBody;
@@ -264,6 +277,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     for (const step of body) {
       // Avoid mutating definition body sentences across invocations.
       lastResult = await interpret(cloneSentence(step));
+      if (lastResult?.sentence?.be === "error" || lastResult?.be === "error") break;
     }
   } finally {
     const sandpit = [state.currentEvokeRef, ...memory.allRemember()];
@@ -276,6 +290,12 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     state.currentEvokeRef = prevEvokeRef;
     state.executingBody = prevExecutingBody;
     state.lastCondition = prevLastCondition;
+  }
+
+  const returnedError = returnedErrorSentence(lastResult);
+  if (returnedError) {
+    if (callerSandpit) return returnedError;
+    return rememberSurfacedError(returnedError, memory.doRemember);
   }
 
   // merge updates from sandpit

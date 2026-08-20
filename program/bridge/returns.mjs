@@ -1,5 +1,6 @@
 import { resolveThisValue } from "../library/thisBinding.mjs";
 import { resolveGenitiveValue } from "./sandpit.mjs";
+import { isErrorSentence, returnedErrorSentence } from "../error.mjs";
 
 export function handleThisBinding(sentence, state) {
   const { su, ob } = sentence;
@@ -19,6 +20,11 @@ export function handleThisBinding(sentence, state) {
 export function handleReturn(sentence, state, remember) {
   if (sentence.mood !== "ret" || !state.currentEvokeRef) return null;
 
+  if (sentence.be === "error") {
+    const errorSentence = returnedErrorSentence(sentence);
+    return { returned: "error", value: errorSentence?.ob, sentence: errorSentence };
+  }
+
   const sourceName = sentence?.ret?.name || sentence?.ob?.name || sentence?.su?.name;
   let merged = { ...state.currentEvokeRef };
   const retRole = sentence?.ret?.role;
@@ -26,6 +32,10 @@ export function handleReturn(sentence, state, remember) {
   if (sourceName) {
     const fact = remember(sourceName);
     if (!fact) throw new Error(`ret: unknown binding ${sourceName}`);
+    if (isErrorSentence(fact)) {
+      const errorSentence = returnedErrorSentence(fact);
+      return { returned: "error", value: errorSentence?.ob, sentence: errorSentence };
+    }
     merged = {
       ...merged,
       be: fact.be ?? merged.be,

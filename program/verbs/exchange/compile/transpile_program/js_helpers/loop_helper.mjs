@@ -1,3 +1,44 @@
-export function loopHelperSource() {
-  return `function runLoop(sentence, fn) {\n  const initialHasOb = Object.prototype.hasOwnProperty.call(sentence, "ob");\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    sentence.fromindex = currIdx;\n    if (hasUntil) sentence.toindex = currUntil;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const callFrame = initialHasOb ? sentence : new Proxy(sentence, {\n      ownKeys(target) { return Reflect.ownKeys(target).filter((key) => key !== "ob"); },\n      getOwnPropertyDescriptor(target, key) {\n        if (key === "ob") return undefined;\n        return Reflect.getOwnPropertyDescriptor(target, key);\n      }\n    });\n    const nextSentence = fn(callFrame);\n    const nextOb = nextSentence?.ob;\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (nextOb !== undefined) sentence.ob = nextOb;\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = nextIdx;\n  }\n  return sentence;\n}`;
+export function loopHelperSource({ propagateErrors = false } = {}) {
+  const nextSentence = propagateErrors
+    ? [
+      "const nextSentence = fn(callFrame);",
+      "    if (nextSentence?.be === \"error\") return nextSentence;"
+    ].join("\n")
+    : "const nextSentence = fn(callFrame);";
+  return [
+    "function runLoop(sentence, fn) {",
+    "  const initialHasOb = Object.prototype.hasOwnProperty.call(sentence, \"ob\");",
+    "  for (;;) {",
+    "    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;",
+    "    const hasUntil = sentence?.toindex !== undefined;",
+    "    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;",
+    "    sentence.fromindex = currIdx;",
+    "    if (hasUntil) sentence.toindex = currUntil;",
+    "    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;",
+    "    const prevIdx = sentence?.fromindex;",
+    "    const prevUntil = sentence?.toindex;",
+    "    const callFrame = initialHasOb ? sentence : new Proxy(sentence, {",
+    "      ownKeys(target) { return Reflect.ownKeys(target).filter((key) => key !== \"ob\"); },",
+    "      getOwnPropertyDescriptor(target, key) {",
+    "        if (key === \"ob\") return undefined;",
+    "        return Reflect.getOwnPropertyDescriptor(target, key);",
+    "      }",
+    "    });",
+    `    ${nextSentence}`,
+    "    const nextOb = nextSentence?.ob;",
+    "    sentence = { ...sentence, ...(nextSentence || {}) };",
+    "    if (nextOb !== undefined) sentence.ob = nextOb;",
+    "    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;",
+    "    if (sentence.toindex === undefined) sentence.toindex = prevUntil;",
+    "    let nextIdx;",
+    "    if (hasUntil) {",
+    "      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);",
+    "    } else {",
+    "      nextIdx = currIdx - 1;",
+    "    }",
+    "    sentence.fromindex = nextIdx;",
+    "  }",
+    "  return sentence;",
+    "}"
+  ].join("\n");
 }

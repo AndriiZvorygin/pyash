@@ -41,7 +41,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
   const effectiveBe = baseBe || sentence.mood;
   const literalBe = LANGUAGE_TYPES.has(effectiveBe) ? "text" : effectiveBe;
 
-  const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers });
+  const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers, jsHelpers });
   if (handledRet) return handledRet;
 
   const baseHandler = BASE_BE_HANDLERS.get(baseBe);
@@ -391,6 +391,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     ceremonyReturnTypes,
     loopShim,
     cHelpers,
+    jsHelpers,
     cState,
     declared,
     declaredTypes,

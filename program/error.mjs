@@ -31,10 +31,38 @@ export function buildErrorSentence({ name, message, from, pyash, raw, by }) {
 
 export function surfaceErrorSentence(errorLike) {
   if (!errorLike) return errorLike;
-  const sentence = errorLike.sentence ?? errorLike;
+  const sentence = errorLike.sentence ?? errorLike.canonical ?? errorLike;
   if (!sentence || typeof sentence !== "object") return sentence;
-  if (sentence.be !== "error" || sentence.mood !== "do") return sentence;
+  if (sentence.be !== "error" || !["do", "ret"].includes(sentence.mood)) return sentence;
   return { ...sentence, mood: "ya" };
+}
+
+export function isErrorSentence(errorLike) {
+  const sentence = errorLike?.sentence ?? errorLike?.canonical ?? errorLike;
+  return Boolean(sentence && typeof sentence === "object" && sentence.be === "error");
+}
+
+export function returnedErrorSentence(errorLike) {
+  const sentence = errorLike?.sentence ?? errorLike?.canonical ?? errorLike;
+  if (!isErrorSentence(sentence)) return null;
+  return { ...sentence, mood: "do" };
+}
+
+export function rememberSurfacedError(sentence, doRemember) {
+  const surfaced = surfaceErrorSentence(sentence);
+  if (!isErrorSentence(surfaced) || surfaced?.mood !== "ya" || typeof doRemember !== "function") {
+    return surfaced;
+  }
+  doRemember(surfaced);
+  if (surfaced.su?.name !== "result") {
+    const alias = { ...surfaced, su: { name: "result" } };
+    Object.defineProperty(alias, "canonical", {
+      value: surfaced,
+      enumerable: false
+    });
+    doRemember(alias);
+  }
+  return surfaced;
 }
 
 export function throwErrorSentence({ name, message, from, pyash, raw, by }) {

@@ -4,7 +4,7 @@ import { mindToolHelperSource } from "../js/mind_tool_helper.mjs";
 import { csvRuntimeHelper, exchangeRuntimeHelper, jsonRuntimeHelper, newspaperRuntimeHelper, yamlRuntimeHelper, yamlStringifyHelper } from "../js/runtime_helpers.mjs";
 import { CSV_PARSE_RUNTIME_URL, YAML_RUNTIME_URL } from "../constants.mjs";
 import { boolHelperSource } from "./js_helpers/bool_helper.mjs";
-import { ceremonyHelperSource } from "./js_helpers/ceremony_helper.mjs";
+import { ceremonyErrorHelperSource, ceremonyHelperSource } from "./js_helpers/ceremony_helper.mjs";
 import { commandHelperSource } from "./js_helpers/command_helper.mjs";
 import { csvMapHelperSource } from "./js_helpers/csv_map_helper.mjs";
 import { dateHelperSource } from "./js_helpers/date_helper.mjs";
@@ -52,6 +52,7 @@ export function applyJsPrelude(lines, {
   }
   if (jsHelpers.usesCeremony) {
     prelude.push(ceremonyHelperSource());
+    if (jsHelpers.usesCeremonyErrors) prelude.push(ceremonyErrorHelperSource());
   }
   if (jsHelpers.usesDateMath) {
     prelude.push(dateHelperSource());
@@ -105,7 +106,7 @@ export function applyJsPrelude(lines, {
     prelude.splice(1, 0, `import YAML from ${JSON.stringify(YAML_RUNTIME_URL)};`);
   }
   if (loopShim?.used) {
-    prelude.push(loopHelperSource());
+    prelude.push(loopHelperSource({ propagateErrors: jsHelpers.usesCeremonyErrors }));
   }
   let nextLines = prelude.concat(lines.slice(1));
   if (mindShim?.used) {

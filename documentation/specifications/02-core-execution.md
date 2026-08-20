@@ -95,9 +95,16 @@ Define ceremony definition/invocation, `this` access, and return behavior.
 ## 4. Error contracts
 - Signature inconsistency raises `be error do`.
 
+## 4.1 Return and error propagation
+- `ret` with `be error` returns the canonical error sentence as a `be error do` carrier.
+- A nested ceremony or loop call propagates that carrier to its enclosing ceremony. The enclosing ceremony returns it immediately, so later body sentences run only on the successful path.
+- A successful nested call remains an ordinary result even when the generated program also contains error-capable ceremonies; conditional error guards MUST NOT truncate later source statements.
+- Only the top-level observation boundary surfaces the carrier as `be error ya`, preserving the canonical sentence separately from the compatibility `result` alias.
+
 ## 5. Examples (existing files only)
 - Run: `examples/pyash/ceremony-invoke.pya`
 - Run: `examples/pyash/ceremony-plus-two.pya`
+- Run: `examples/pyash/ceremony-error-propagation.pya`
 - Run and compile: `examples/pyash/compile-ceremony-parity.pya`
 
 ## 6. Tests that define truth
@@ -223,7 +230,7 @@ Define the error sentence contract, error propagation rules, and official error 
 * When an error becomes observable, it MUST be surfaced as a **`be error ya`** sentence.
 * Observation boundaries include:
 
-  * returning an error as the result of an operation,
+  * returning an error as the final result at a top-level observation boundary (an error returned between nested ceremonies remains `be error do`),
   * storing an error outcome in memory or newspaper,
   * printing or emitting an error as the final outcome of evaluation.
 * Surfacing an error converts the sentence mood from `do` to `ya` and preserves all required and optional fields.
