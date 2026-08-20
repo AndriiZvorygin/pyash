@@ -161,7 +161,8 @@ export function renderWorkDailyDigest({
   tasks = [],
   curation = {},
   roadmap = null,
-  automationBranch = "automation/roadmap"
+  automationBranch = "automation/roadmap",
+  reportingGap = null
 } = {}) {
   const weekly = capacity.weekly || {};
   const pacing = calculateWeeklyPacing(capacity, {
@@ -219,6 +220,13 @@ export function renderWorkDailyDigest({
     "",
     `Date: ${text(date) || dateValue(until).toISOString().slice(0, 10)}`,
     `Window: ${since} to ${until}`,
+    ...(reportingGap?.hours >= 36 ? [
+      "",
+      "Reporting gap",
+      "--------------",
+      `No successful daily digest was recorded for ${reportingGap.hours} hours after ${reportingGap.previousAt}.`,
+      "The scheduled report interval should be checked for a skipped or failed run."
+    ] : []),
     "",
     "Weekly Codex budget",
     "-------------------",
@@ -346,7 +354,14 @@ export async function buildWorkDailyDigest({
   const current = dateValue(typeof now === "function" ? now() : now);
   const end = dateValue(until || current, current);
   const previous = await readWorkDailyDigestState(worldRoot);
-  const start = dateValue(since || previous["last report at"] || new Date(end.getFullYear(), end.getMonth(), end.getDate()), end);
+  const previousReportAt = text(previous["last report at"]);
+  const start = dateValue(since || previousReportAt || new Date(end.getFullYear(), end.getMonth(), end.getDate()), end);
+  const reportingGap = !since && previousReportAt && end.getTime() - start.getTime() >= 36 * 60 * 60 * 1000
+    ? {
+      hours: Math.round((end.getTime() - start.getTime()) / (60 * 60 * 100)) / 10,
+      previousAt: previousReportAt
+    }
+    : null;
   const [capacity, tasks, events, curation] = await Promise.all([
     capacitySource({ now: end }),
     listWorkTasks(worldRoot, { includeTerminal: true }),
@@ -370,7 +385,8 @@ export async function buildWorkDailyDigest({
     tasks,
     curation,
     roadmap,
-    automationBranch
+    automationBranch,
+    reportingGap
   });
   if (persist) {
     await writeWorkDailyDigestState(worldRoot, {
