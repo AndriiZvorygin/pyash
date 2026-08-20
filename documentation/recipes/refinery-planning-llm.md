@@ -39,9 +39,9 @@ exists su name planner prompt ob text "You are a planner. Return a short numbere
 exists su name worker prompt ob text "Execute the provided plan. Return concrete output only." be text ya
 exists su name checker prompt ob text "Check whether output satisfies task and plan. Return PASS or FAIL with one reason." be text ya
 
-exists su name planner be mind as name "qwen3-vl:8b-instruct" fromtext name planner prompt ya
-exists su name worker be mind as name "qwen3-vl:8b-instruct" fromtext name worker prompt ya
-exists su name checker be mind as name "qwen3-vl:8b-instruct" fromtext name checker prompt ya
+exists su name planner be mind as name "qwen3.5:9b" fromtext name planner prompt ya
+exists su name worker be mind as name "qwen3.5:9b" fromtext name worker prompt ya
+exists su name checker be mind as name "qwen3.5:9b" fromtext name checker prompt ya
 
 su name plan execute verify be refinery def
 su name plan stage ob name input for name planner to name text plan text be write do
