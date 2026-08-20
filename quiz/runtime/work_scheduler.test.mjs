@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
 import { integrateAcceptedWork, synchronizeAutomationBranch } from "../../program/runtime/work/integration.mjs";
 import { appendWorkSchedulerEvent } from "../../program/runtime/work/history.mjs";
-import { buildWorkDailyDigest } from "../../program/runtime/work/digest.mjs";
+import { buildWorkDailyDigest, writeWorkDailyDigestState } from "../../program/runtime/work/digest.mjs";
 import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { listWorkTasks } from "../../program/runtime/work/operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
@@ -333,6 +333,28 @@ test("daily digest counts a recovery and its admitted outcome as one useful wake
   assert.match(digest.report, /Hourly wakes: 2/u);
   assert.match(digest.report, /Useful wakes: 1 \/ 2/u);
   assert.doesNotMatch(digest.report, /Useful wakes: [3-9]/u);
+});
+
+test("daily digest surfaces a long gap since the previous successful report", async () => {
+  const { root, worldRoot } = await world("pyash-work-digest-gap-");
+  const repositoryRoot = path.join(root, "repo");
+  await fs.mkdir(repositoryRoot, { recursive: true });
+  await writeWorkDailyDigestState(worldRoot, {
+    "last report at": "2026-08-18T13:09:14.439Z",
+    "last subject": "Pyash daily: roadmap work temporarily blocked",
+    status: "roadmap-blocked"
+  });
+  const capacity = { weekly: { identified: true, remainingPercent: 100, usedPercent: 0, resetAt: "2026-08-27T11:30:02.000Z", windowStartAt: "2026-08-20T11:30:02.000Z" } };
+  const digest = await buildWorkDailyDigest({
+    worldRoot,
+    repositoryRoot,
+    capacitySource: async () => capacity,
+    now: "2026-08-20T11:30:01.595Z",
+    persist: false
+  });
+  assert.match(digest.report, /Reporting gap/u);
+  assert.match(digest.report, /No successful daily digest was recorded for 46\.3 hours/u);
+  assert.match(digest.report, /scheduled report interval should be checked/u);
 });
 
 test("timeout-blocked work is operationally blocked, not roadmap exhaustion", async () => {
