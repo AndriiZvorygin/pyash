@@ -26,7 +26,7 @@ async function setupGenerator() {
 
 async function setupMindFixture() {
   await run("exists su name provider auto discharge ob bool lie ya");
-  await run('exists su name mind be mind as name "qwen3-vl:8b-instruct" ya');
+  await run('exists su name mind be mind as name "qwen3.5:9b" ya');
 }
 
 test("better compare module registers clause-based signature", async () => {

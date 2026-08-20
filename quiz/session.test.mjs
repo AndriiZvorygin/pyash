@@ -13,7 +13,7 @@ test("session loops through scripted inputs", async () => {
   const original = process.env.PYA_MIND_RESPONSE;
   process.env.PYA_MIND_RESPONSE = "ok";
   try {
-    await interpret(parse('exists su name helper be mind via state "qwen3-vl:8b-instruct" ya'));
+    await interpret(parse('exists su name helper be mind via state "qwen3.5:9b" ya'));
     const sentence = parse("for name helper be session do");
     await session(sentence, { inputs: ["Hello", "/bye"] });
     const mem = allRemember();
@@ -32,7 +32,7 @@ test("session accepts default tools map with wo tools", async () => {
   const original = process.env.PYA_MIND_RESPONSE;
   process.env.PYA_MIND_RESPONSE = "ok";
   try {
-    await interpret(parse('exists su name helper be mind via state "qwen3-vl:8b-instruct" ya'));
+    await interpret(parse('exists su name helper be mind via state "qwen3.5:9b" ya'));
     await interpret(parse('ob text "Hello" for name helper with wo tools be session do'));
     const mem = allRemember();
     const answer = mem.find(s => s.su?.name === "helper answer 1");

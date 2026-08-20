@@ -18,7 +18,7 @@ test("channel run routes input through router, executes orchestrator+saddle path
     const agentHouse = path.join(root, "world", "house", "pyash-agent");
     await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
 
-    await interpret(parse('exists su name pyash-agent be mind as name "qwen3-vl:8b-instruct" ya'));
+    await interpret(parse('exists su name pyash-agent be mind as name "qwen3.5:9b" ya'));
 
     const sent = [];
     const adapter = {

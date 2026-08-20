@@ -81,7 +81,7 @@ test("verify loop forwards tools to mind generator", async () => {
 
   await run('exists su name mind response ob text "tool aware draft" be text ya');
   await run('exists su name generator prompter ob text "Generate with tools." be text ya');
-  await run('exists su name generator be mind as name "qwen3-vl:8b-instruct" fromtext name generator prompter ya');
+  await run('exists su name generator be mind as name "qwen3.5:9b" fromtext name generator prompter ya');
   await run('su name reviewer fixed ob text input to name text output be ceremony def');
   await run(`ob text quoted.text.looks good
 PASS

@@ -107,7 +107,7 @@ test("auto discharge qwen say unloads draw and warm ollama minds", async () => {
         ok: true,
         status: 200,
         statusText: "OK",
-        json: async () => ({ models: [{ model: "qwen3-vl:8b-instruct" }] })
+        json: async () => ({ models: [{ model: "qwen3.5:9b" }] })
       };
     }
     return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
@@ -150,7 +150,7 @@ test("auto discharge qwen say stays enabled when configured gpu classes omit qwe
         ok: true,
         status: 200,
         statusText: "OK",
-        json: async () => ({ models: [{ model: "qwen3-vl:8b-instruct" }] })
+        json: async () => ({ models: [{ model: "qwen3.5:9b" }] })
       };
     }
     return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
@@ -191,13 +191,13 @@ test("auto discharge mind keeps target ollama model warm", async () => {
         ok: true,
         status: 200,
         statusText: "OK",
-        json: async () => ({ models: [{ model: "qwen3-vl:8b-instruct" }, { model: "llama3.2:3b" }] })
+        json: async () => ({ models: [{ model: "qwen3.5:9b" }, { model: "llama3.2:3b" }] })
       };
     }
     return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
   };
   try {
-    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3-vl:8b-instruct" });
+    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3.5:9b" });
     assert.equal(result.changed, true);
     assert.ok(result.released.includes("mind"));
     const psCalls = calls.filter(call => call.url.endsWith("/api/ps"));
@@ -228,13 +228,13 @@ test("auto discharge mind keeps target ollama quantized variant warm", async () 
         ok: true,
         status: 200,
         statusText: "OK",
-        json: async () => ({ models: [{ model: "qwen3-vl:8b-instruct:Q4_K_M" }] })
+        json: async () => ({ models: [{ model: "qwen3.5:9b:Q4_K_M" }] })
       };
     }
     return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
   };
   try {
-    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3-vl:8b-instruct" });
+    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3.5:9b" });
     assert.equal(result.released.includes("mind"), false);
     const unloadCalls = calls.filter(call => call.url.endsWith("/api/generate"));
     assert.equal(unloadCalls.length, 0);
@@ -342,7 +342,7 @@ test("auto discharge waits after gpu class switch when settle ms is configured",
     return 0;
   });
   try {
-    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3-vl:8b-instruct" });
+    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3.5:9b" });
     assert.equal(waitedMs, 700);
     assert.equal(result.waitedMs, 700);
   } finally {
@@ -382,7 +382,7 @@ test("auto discharge skips settle wait when gpu class does not change", async ()
     return 0;
   });
   try {
-    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3-vl:8b-instruct" });
+    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3.5:9b" });
     assert.equal(waited, false);
     assert.equal(result.changed, false);
     assert.equal(result.waitedMs ?? 0, 0);
