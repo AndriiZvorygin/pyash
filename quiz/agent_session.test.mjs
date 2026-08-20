@@ -50,7 +50,7 @@ test("agent session writes append-only session file with system entry", async ()
   });
 
   try {
-    await interpret(parse('exists su name helper be mind via state "qwen3-vl:8b-instruct" from discourse "You are concise." ya'));
+    await interpret(parse('exists su name helper be mind via state "qwen3.5:9b" from discourse "You are concise." ya'));
     await interpret(parse("su name tools be map def"));
     await interpret(parse("su name agent ob bool truth ya"));
     await interpret(parse('su name session name ob text "draft review" ya'));
@@ -63,7 +63,7 @@ test("agent session writes append-only session file with system entry", async ()
     const content = await fs.readFile(sessionFile, "utf8");
     assert.match(content, new RegExp(`su name ${sessionName} since date ${todayDate()} be series def`));
     assert.match(content, /su name system ob text/);
-    assert.match(content, /as name qwen3-vl:8b-instruct/);
+    assert.match(content, /as name qwen3.5:9b/);
     assert.match(content, /su name user ob text/);
     assert.match(content, /su name agent ob text/);
   } finally {
@@ -89,7 +89,7 @@ test("agent session appends subsequent turns without rewriting header", async ()
   });
 
   try {
-    await interpret(parse('exists su name helper be mind via state "qwen3-vl:8b-instruct" from discourse "You are concise." ya'));
+    await interpret(parse('exists su name helper be mind via state "qwen3.5:9b" from discourse "You are concise." ya'));
     await interpret(parse("su name tools be map def"));
     await interpret(parse("su name agent ob bool truth ya"));
     await interpret(parse('su name session name ob text "draft review" ya'));
@@ -154,7 +154,7 @@ test("readSessionMessages enforces stable truncation by pair window", async () =
     sessionDir,
     sessionName: `${todayCompact()}-window_test`,
     systemPrompt: "system",
-    model: "qwen3-vl:8b-instruct"
+    model: "qwen3.5:9b"
   });
   for (let i = 1; i <= 5; i += 1) {
     await appendSessionEntry({ sessionFile, role: "user", content: `u${i}` });
