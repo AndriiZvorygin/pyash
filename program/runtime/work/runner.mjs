@@ -1,7 +1,7 @@
 import { runWorkSupervisorOnce } from "./supervisor.mjs";
 import { runWorkIntegrationReconciliationOnce } from "./integration_runner.mjs";
 import { listQueuedWorkTasks, listRuntimeWorkTasks, queueDepth } from "./queue.mjs";
-import { listWorkTasks } from "./operator.mjs";
+import { listWorkTasks, resumeExternalEvidenceTask } from "./operator.mjs";
 import { readCodexCapacity, admitBackgroundWork, DEFAULT_BACKGROUND_POLICY } from "./capacity.mjs";
 import { appendWorkOutcome } from "./outcome.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
@@ -41,6 +41,54 @@ function selectWorkCandidate(eligible, recoverable) {
     || null;
 }
 
+async function probeUrl(url, fetchImpl, timeoutMs = 3000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function probeExternalEvidenceTask(task, {
+  fetchImpl = globalThis.fetch,
+  env = process.env
+} = {}) {
+  const reason = text(task?.checkpoint?.blocker || task?.message || task?.error);
+  const checks = [];
+  if (/Ollama/iu.test(reason)) {
+    const ollamaHost = text(env.OLLAMA_HOST) || "http://localhost:11434";
+    let healthy = await probeUrl(`${ollamaHost.replace(/\/$/u, "")}/api/tags`, fetchImpl);
+    if (healthy && /Ollama/iu.test(reason)) {
+      try {
+        const response = await fetchImpl(`${ollamaHost.replace(/\/$/u, "")}/api/tags`);
+        const payload = await response.json();
+        const names = (payload.models || []).map((model) => String(model.name || model.model || ""));
+        healthy = names.includes(text(env.PYA_MIND_MODEL) || "qwen3.5:9b");
+      } catch {
+        healthy = false;
+      }
+    }
+    checks.push({ name: "Ollama", healthy, endpoint: ollamaHost });
+  }
+  if (/search|60490/iu.test(reason)) {
+    const searchUrl = text(env.PYA_WEB_SEARCH_MOTOR) || "http://localhost:60490/";
+    checks.push({ name: "web search", healthy: await probeUrl(searchUrl, fetchImpl), endpoint: searchUrl });
+  }
+  if (!checks.length) return { available: false, checked: false, reason: "no cheap external dependency probe configured" };
+  const failed = checks.filter((check) => !check.healthy);
+  return {
+    available: failed.length === 0,
+    checked: true,
+    reason: failed.length ? `external dependency still unavailable: ${failed.map((check) => check.name).join(", ")}` : "external dependencies available",
+    checks
+  };
+}
+
 function isIntegrationCandidate(task) {
   return ["blocked", "reconciliation", "revision"].includes(task?.checkpoint?.integration?.status);
 }
@@ -75,21 +123,48 @@ export async function inspectWorkBackground({
   policy = {},
   capacitySource = readCodexCapacity,
   foregroundActive = false,
+  externalEvidenceProbe = null,
   now = () => new Date()
 } = {}) {
-  const eligible = await eligibleWork(worldRoot, owner);
-  const recoverable = await findRecoverableOperationalWorkTasks(worldRoot, {
-    owner,
-    now,
-    staleTurnMs: policy.staleOperationalTurnMs,
-    maxRecoveryCount: policy.maxOperationalRecoveries
-  });
-  const blocked = (await listWorkTasks(worldRoot, { includeTerminal: true }))
+  let eligible = await eligibleWork(worldRoot, owner);
+  let recoverable = await findRecoverableOperationalWorkTasks(worldRoot, {
+      owner,
+      now,
+      staleTurnMs: policy.staleOperationalTurnMs,
+      maxRecoveryCount: policy.maxOperationalRecoveries
+    });
+  let allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+  let blocked = allTasks
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isTechnicalContinuationBlock(task));
-  const externalEvidence = (await listWorkTasks(worldRoot, { includeTerminal: true }))
+  let externalEvidence = allTasks
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isAwaitingExternalEvidence(task));
+  const resumedExternal = [];
+  if (externalEvidenceProbe) {
+    for (const task of externalEvidence) {
+      const probe = await externalEvidenceProbe(task);
+      if (!probe?.available) continue;
+      const resumed = await resumeExternalEvidenceTask(worldRoot, task.taskId, probe, { now });
+      if (resumed?.taskId) resumedExternal.push({ taskId: resumed.taskId, probe });
+    }
+    if (resumedExternal.length) {
+      eligible = await eligibleWork(worldRoot, owner);
+      recoverable = await findRecoverableOperationalWorkTasks(worldRoot, {
+        owner,
+        now,
+        staleTurnMs: policy.staleOperationalTurnMs,
+        maxRecoveryCount: policy.maxOperationalRecoveries
+      });
+      allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+      blocked = allTasks
+        .filter((task) => !owner || task.owner === owner)
+        .filter((task) => isTechnicalContinuationBlock(task));
+      externalEvidence = allTasks
+        .filter((task) => !owner || task.owner === owner)
+        .filter((task) => isAwaitingExternalEvidence(task));
+    }
+  }
   const capacity = await capacitySource({ now: typeof now === "function" ? now() : now });
   const admission = admitBackgroundWork({
     capacity,
@@ -103,6 +178,7 @@ export async function inspectWorkBackground({
     recoverable,
     technicalBlocked: blocked,
     externalEvidence,
+    resumedExternal,
     capacity,
     admission,
     selected: selectWorkCandidate(eligible, recoverable)
@@ -122,6 +198,7 @@ export async function runWorkBackgroundOnce({
   curate = false,
   baselineSync = null,
   executionPreflight = null,
+  externalEvidenceProbe = null,
   onEvent = null,
   now = () => new Date()
 } = {}) {
@@ -142,6 +219,7 @@ export async function runWorkBackgroundOnce({
     policy,
     capacitySource,
     foregroundActive,
+    externalEvidenceProbe,
     now
   });
   const taskCount = eligible.length + recoverable.length;

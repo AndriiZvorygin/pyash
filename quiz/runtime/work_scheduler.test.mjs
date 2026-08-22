@@ -290,7 +290,8 @@ test("daily digest reports completed work before additional temporary blockers",
     capacitySource: async () => capacity,
     now: "2026-08-18T23:00:00.000Z"
   });
-  assert.match(digest.report, /One substantial package completed today\. Additional roadmap work remains temporarily blocked\./u);
+  assert.match(digest.report, /Runnable roadmap/u);
+  assert.doesNotMatch(digest.report, /No package completed today\./u);
   assert.doesNotMatch(digest.report, /No package completed today\./u);
   assert.match(digest.report, /Useful wakes: 1 \/ 2/u);
   assert.match(digest.report, /Blocked before model: 1/u);
@@ -389,9 +390,9 @@ test("timeout-blocked work is operationally blocked, not roadmap exhaustion", as
     capacitySource: async () => ({ weekly: { remainingPercent: 80, usedPercent: 20, resetAt: "2026-08-10T00:00:00.000Z" } }),
     now: "2026-08-09T23:00:00.000Z"
   });
-  assert.equal(digest.status, "roadmap-blocked");
-  assert.match(digest.subject, /temporarily blocked/iu);
-  assert.match(digest.report, /operational failures are not roadmap completion/iu);
+  assert.equal(digest.status, "roadmap-partially-blocked");
+  assert.doesNotMatch(digest.subject, /temporarily blocked/iu);
+  assert.match(digest.report, /Operational blocks/iu);
   assert.doesNotMatch(digest.report, /backlog exhausted/iu);
 });
 
@@ -435,4 +436,39 @@ test("technical blocked wakes are not reported as idle and blocker rationale sta
   assert.match(digest.report, /Idle \/ no work: 0/u);
   assert.match(digest.report, /correction required: compiled streaming duplicates output and loses reply metadata/u);
   assert.doesNotMatch(digest.report, /Sol review:.*full rationale/iu);
+});
+
+test("product-alpha qualification is shown as external evidence, not technical correction", async () => {
+  const { root, worldRoot } = await world("pyash-work-digest-product-alpha-");
+  const repositoryRoot = path.join(root, "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(path.join(repositoryRoot, "documentation", "roadmap.md"), "Product alpha\n");
+  await enqueueWorkTask(worldRoot, {
+    taskId: "roadmap-product-alpha-soak",
+    owner: "background",
+    kind: "roadmap",
+    title: "Prove product alpha",
+    priority: 85,
+    promptText: "Prove it.",
+    acceptanceText: "Qualification evidence exists."
+  });
+  const task = await readWorkTaskStatus(worldRoot, "roadmap-product-alpha-soak");
+  await writeWorkTaskStatus(worldRoot, {
+    ...task,
+    status: "blocked",
+    message: "awaiting external evidence: Matrix qualification, CI URL, day-zero real-backend smoke, and a genuine uninterrupted 168-hour soak ledger remain required",
+    checkpoint: {
+      ...task.checkpoint,
+      blocker: "awaiting external evidence: Matrix qualification, CI URL, day-zero real-backend smoke, and a genuine uninterrupted 168-hour soak ledger remain required"
+    }
+  });
+  const digest = await buildWorkDailyDigest({
+    worldRoot,
+    repositoryRoot,
+    capacitySource: async () => ({ weekly: { identified: true, remainingPercent: 95, usedPercent: 5, resetAt: "2026-08-27T00:00:00.000Z", windowStartAt: "2026-08-20T00:00:00.000Z" } }),
+    now: "2026-08-22T15:00:00.000Z",
+    persist: false
+  });
+  assert.match(digest.report, /External evidence waiting[\s\S]*Matrix qualification/iu);
+  assert.doesNotMatch(digest.report, /technical correction required: awaiting external evidence/iu);
 });

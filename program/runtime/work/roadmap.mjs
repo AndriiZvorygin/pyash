@@ -155,6 +155,118 @@ const ROADMAP_PACKAGES = Object.freeze([
     whyNow: "The code and tests exist, but the roadmap exit criteria have not been demonstrated."
   },
   {
+    taskId: "hq-organization-and-work-contract",
+    title: "Define Headquarters organization and work contracts",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "hq-organization-and-work-contract",
+    whyMatters: "Gives the Headquarters vertical slice durable roles, delegation context, and domain-aware work without creating parallel registries or queues.",
+    dependencies: ["agent administration", "durable WorkTask contract", "Knowledge Core provenance direction"],
+    scope: "Extend existing agent administration and WorkTask records with role, supervisor, responsibilities, domain, source, deadline, dependencies, delegation, and escalation metadata; record delegation lifecycle events over existing statuses.",
+    nonGoals: "A second agent registry, work queue, permissions system, or provider-neutral organizational runtime.",
+    acceptance: "Chief of Staff and Correspondence Worker roles can be represented by existing agent houses, and one domain-aware delegated work record round-trips through existing checkpoint, retry, and newspaper paths.",
+    priority: 72,
+    prompt: "Implement the P0 Headquarters organization and work-contract extension over existing agent administration and WorkTask primitives; do not create replacement registries or queues.",
+    whyNow: "This is the smallest Headquarters foundation and must precede fixture-mail routing and approval resumption."
+  },
+  {
+    taskId: "hq-fixture-mail-vertical-slice",
+    title: "Prove the Headquarters fixture-mail vertical slice",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "hq-fixture-mail-vertical-slice",
+    whyMatters: "Exercises the real channel spool/router, Correspondence Worker routing, durable work, escalation, and replay guarantees in one useful application scenario.",
+    dependencies: ["hq-organization-and-work-contract", "channel_core input contract", "newspaper and replay"],
+    scope: "Fixture email adapter over channel_core, provider/event/message identity, information/work/draft/escalation classification, Chief of Staff escalation, idempotent duplicate delivery, restart recovery, and briefing input evidence.",
+    nonGoals: "A standalone inbox queue, competing message envelope, live provider integration, or Headquarters UI.",
+    acceptance: "A duplicate-safe fixture email becomes recoverable organizational work, escalates with provenance, and is visible to the briefing projection with a complete replayable newspaper record.",
+    priority: 71,
+    prompt: "Build the P0 Headquarters fixture-mail slice over existing channel_core and WorkTask paths, proving duplicate delivery and restart recovery without parallel queues.",
+    whyNow: "It is the first end-to-end application proof and depends on the organization/work metadata contract."
+  },
+  {
+    taskId: "hq-approval-and-resumption",
+    title: "Add Headquarters approval and checkpoint resumption",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "hq-approval-and-resumption",
+    whyMatters: "Connects existing ratification decisions to durable organizational work so sensitive actions pause safely and resume without replaying completed work.",
+    dependencies: ["hq-fixture-mail-vertical-slice", "ratify policy", "durable work checkpoints"],
+    scope: "Durable approval requests referencing work, proposed action, and checkpoint; approval/denial newspaper evidence; send, delete, purchase, publish, and calendar-mutation gates; checkpoint-based resumption.",
+    nonGoals: "A separate permissions engine, hidden approval state, or unrestricted external action path.",
+    acceptance: "Standing policy permits or denies configured actions, unapproved sensitive actions remain paused, and an approved task resumes from its durable checkpoint with replayable evidence.",
+    priority: 70,
+    prompt: "Extend ratify policy and durable WorkTask checkpoints for Headquarters approval and resumption; preserve existing conduct and newspaper contracts.",
+    whyNow: "Approval is the safety boundary required before the Correspondence Worker can become useful beyond read-only classification."
+  },
+  {
+    taskId: "hq-chief-briefing",
+    title: "Project the Chief of Staff daily briefing",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "hq-chief-briefing",
+    whyMatters: "Turns canonical Pyash work, approval, channel, deadline, and escalation state into a concise operator view without introducing another database.",
+    dependencies: ["hq-fixture-mail-vertical-slice", "hq-approval-and-resumption", "canonical newspaper/replay records"],
+    scope: "Deterministic maximum-five ranking of decisions, imminent deadlines, overdue commitments, conflicts, waiting responses, and escalations with source-record links.",
+    nonGoals: "An authoritative briefing database, opaque model-only ranking, or a full Headquarters UI.",
+    acceptance: "A briefing is derived from canonical Pyash state, stays replayable/auditable, and includes the golden fixture-mail escalation with its source evidence.",
+    priority: 69,
+    prompt: "Implement the P0 Chief of Staff briefing as a deterministic projection over existing agent, work, channel, approval, and newspaper state.",
+    whyNow: "This closes the P0 vertical slice and gives humans a useful, inspectable result."
+  },
+  {
+    taskId: "hq-email-and-capability-boundaries",
+    title: "Extend Headquarters email and capability boundaries",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "hq-email-and-capability-boundaries",
+    whyMatters: "Moves from fixture evidence toward safe real-world operation by reusing channel contracts and unifying existing conduct boundaries.",
+    dependencies: ["hq-chief-briefing", "channel/router contracts", "directory licences and ratification"],
+    scope: "Provider-neutral email adapter, concrete Gmail/IMAP boundary where available, and coherent capability checks across files, tools, channels, domains, and action classes.",
+    nonGoals: "A competing envelope abstraction, permissions system, or broad unattended email mutation.",
+    acceptance: "A real adapter can preserve channel identity and apply the existing capability/ratification policies, with Correspondence Worker mutation remaining narrowly scoped.",
+    priority: 58,
+    prompt: "Extend the existing channel and conduct policy contracts for safe Headquarters email operation; keep provider adapters thin and policy centralized.",
+    whyNow: "The P0 fixture proves routing; this package makes the same path ready for carefully bounded real providers."
+  },
+  {
+    taskId: "hq-contacts-commitments-knowledge-alignment",
+    title: "Align Headquarters contacts and commitments with Knowledge Core",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "hq-contacts-commitments-knowledge-alignment",
+    whyMatters: "Makes organizational relationships and commitments useful without fragmenting provenance or claim identity.",
+    dependencies: ["Knowledge Core claim identity and evidence shell", "hq-organization-and-work-contract"],
+    scope: "Contact, organization, relationship, and commitment records linked to work, dates, domains, and source evidence using Knowledge Core identity, confidence, and anchor concepts.",
+    nonGoals: "A competing CRM, relationship database, or provenance schema.",
+    acceptance: "Commitments can reference people, organizations, dates, work, and source evidence while remaining compatible with Knowledge Core replay and conflict views.",
+    priority: 57,
+    prompt: "Extend the Knowledge Core concepts for Headquarters contacts and commitments; do not invent a separate provenance model.",
+    whyNow: "This is the P1 data alignment needed before cross-domain coordination can be trusted."
+  },
+  {
+    taskId: "hq-state-api-and-2d-projection",
+    title: "Project Headquarters state through a read-only API",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "hq-state-api-and-2d-projection",
+    whyMatters: "Makes organizational state visible while keeping Pyash records authoritative and preventing a duplicate simulation.",
+    dependencies: ["hq-chief-briefing", "hq-contacts-commitments-knowledge-alignment", "Product alpha runtime"],
+    scope: "Read-only projection of agents, relationships, work, channel queues, approvals, domains, newspaper events, and initial mailroom/Chief of Staff/domain workspace activity states.",
+    nonGoals: "An authoritative UI database, speculative avatar simulation, or broad dashboard redesign.",
+    acceptance: "API and initial 2D projection reproduce canonical state transitions for waiting, claimed, active, handoff, escalation, approval wait, and completion.",
+    priority: 52,
+    prompt: "Build a read-only Headquarters state projection over canonical Pyash records, with no duplicate organizational state machine.",
+    whyNow: "Visualization should follow a proven P0/P1 state model and Product alpha channel/runtime contracts."
+  },
+  {
+    taskId: "hq-temporary-workers-and-workload-evaluation",
+    title: "Add bounded Headquarters temporary workers and evaluation",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "hq-temporary-workers-and-workload-evaluation",
+    whyMatters: "Lets sustained coordination demand inform safe organizational scaling without silently restructuring agent administration.",
+    dependencies: ["hq-state-api-and-2d-projection", "agent/session/work machinery", "scheduler telemetry"],
+    scope: "Bounded temporary assignments with context, domain, capabilities, resource budget, termination condition, workload recommendations, watchdog checks, and resource accounting by agent/task/project/domain.",
+    nonGoals: "Arbitrary parallel workers, automatic persistent-agent creation, or a second scheduler/telemetry system.",
+    acceptance: "Temporary work is bounded and auditable, evaluator findings use newspaper/work/provenance evidence, and recommendations remain explicit rather than automatic restructuring.",
+    priority: 51,
+    prompt: "Extend existing agent/session/work machinery for bounded Headquarters temporary workers and workload evaluation; reuse scheduler telemetry and preserve explicit human control.",
+    whyNow: "This is the final scaling package after the application state and safety projections are proven."
+  },
+  {
     taskId: "roadmap-session-replay-hardening",
     title: "Harden long-run session replay and context compaction",
     sourcePath: "documentation/roadmap.md",
@@ -269,7 +381,7 @@ const COMPLETED_PACKAGES = Object.freeze([
   }
 ]);
 
-const ROADMAP_SCHEMA = "3";
+const ROADMAP_SCHEMA = "4";
 
 const OPERATIONAL_BLOCK_PATTERNS = Object.freeze([
   /turn timeout/iu,
@@ -324,7 +436,9 @@ const EXTERNAL_EVIDENCE_PATTERNS = Object.freeze([
   /awaiting external evidence/iu,
   /fixture-free .*?(?:run|evidence).*?(?:unavailable|required)/iu,
   /live .*?(?:service|backend|Ollama).*?(?:unavailable|required)/iu,
-  /required service .*? unavailable/iu
+  /required service .*? unavailable/iu,
+  /required .*?(?:live )?(?:systems?|services?|backends?|environments?).*?(?:unavailable|refus(?:e|es|ed) connections?|not reachable|not available)/iu,
+  /\b(?:Ollama|search|Matrix|CI|real[- ]backend|soak)\b.*?(?:unavailable|refus(?:e|es|ed) connections?|not reachable|not available|pending|required)/iu
 ]);
 
 function text(value) {
@@ -391,7 +505,7 @@ function operationalItems(roadmap) {
   const packageIds = new Set((roadmap.packages || []).map((item) => item.taskId));
   return [
     ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / OPERATIONAL"),
-    ...(roadmap.retryable || []).filter((item) => !packageIds.has(item.taskId))
+    ...technicalRetryableItems(roadmap).filter((item) => !packageIds.has(item.taskId))
   ];
 }
 
@@ -408,6 +522,10 @@ function taskMatch(item, tasks) {
     || tasks.find((task) => task.workSpec?.provenance?.key === `${item.sourcePath}:${item.sourceAnchor}`);
 }
 
+function withoutExternalEvidencePrefix(value) {
+  return text(value).replace(/^(?:awaiting external evidence:\s*)+/iu, "");
+}
+
 function progressForTask(task) {
   if (!task) return "not started; candidate package";
   if (isArchivedWorkTask(task)) return `superseded/archived: ${text(task.workSpec?.archiveReason) || "operator archived"}`;
@@ -417,11 +535,12 @@ function progressForTask(task) {
   if (task.status === "accepted") return `accepted; Sol review ${text(checkpoint.review?.decision) || "complete"}`;
   if (task.status === "blocked" || task.status === "failed") {
     const reason = text(checkpoint.blocker || task.message || task.error) || task.status;
-    return `${isAwaitingExternalEvidence(task)
+    const classification = isAwaitingExternalEvidence(task)
       ? "awaiting external evidence"
       : isRetryableWorkBlock(task)
         ? "retryable operational block"
-        : "human decision block"}: ${reason}`;
+        : "human decision block";
+    return `${classification}: ${isAwaitingExternalEvidence(task) ? withoutExternalEvidencePrefix(reason) : reason}`;
   }
   if (task.status === "ready") return "queued for the next eligible background wake";
   return `${passes} implementation pass${passes === 1 ? "" : "es"}; ${action || `phase ${task.status}`}`;
@@ -509,7 +628,11 @@ export function isTechnicalContinuationBlock(task) {
 
 export function hasCredibleRoadmapWork(roadmap = {}) {
   return (roadmap.packages || []).some((item) => ["ACTIVE", "QUEUED", "CANDIDATE", "BLOCKED / OPERATIONAL"].includes(item.status))
-    || (roadmap.retryable || []).length > 0;
+    || technicalRetryableItems(roadmap).length > 0;
+}
+
+export function technicalRetryableItems(roadmap = {}) {
+  return roadmap.retryableTechnical || roadmap.retryable || [];
 }
 
 function mapValue(map, key) {
@@ -666,7 +789,7 @@ function renderAutonomousRoadmapPya(roadmap) {
     .map((item) => renderMap(`work autonomous roadmap package ${item.taskId}`, fieldEntries(item)))
     .join("\n");
   const decisions = renderMap("work autonomous roadmap decisions", (roadmap.needsDecision || []).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
-  const retryable = renderMap("work autonomous roadmap operational blocks", (roadmap.retryable || []).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
+  const retryable = renderMap("work autonomous roadmap operational blocks", technicalRetryableItems(roadmap).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
   return `${header}${packageText}${retryable}${decisions}`;
 }
 
@@ -699,6 +822,7 @@ export async function readAutonomousRoadmap(worldRoot) {
       packages: packageMaps.filter((item) => !COMPLETED_PACKAGES.some((completed) => completed.taskId === item.taskId)),
       completed: packageMaps.filter((item) => COMPLETED_PACKAGES.some((completed) => completed.taskId === item.taskId)),
       needsDecision: decisions,
+      retryableTechnical: [],
       retryable: [],
       externalEvidence: [],
       paths: { pya, markdown }
@@ -781,6 +905,7 @@ export async function buildAutonomousRoadmap({
     packages,
     completed,
     needsDecision,
+    retryableTechnical: operationalBlocks,
     retryable: operationalBlocks,
     externalEvidence,
     reconciliation: {

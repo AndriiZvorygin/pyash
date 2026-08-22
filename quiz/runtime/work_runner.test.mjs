@@ -11,8 +11,8 @@ import {
 } from "../../program/runtime/work/capacity.mjs";
 import { claimOldestWorkTask, enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { readWorkSchedulerHealth } from "../../program/runtime/work/health.mjs";
-import { readWorkTaskStatus, transitionWorkTaskStatus } from "../../program/runtime/work/status.mjs";
-import { runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
+import { readWorkTaskStatus, transitionWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
+import { inspectWorkBackground, probeExternalEvidenceTask, runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
 
 async function makeWorldRoot(prefix) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -302,4 +302,105 @@ test("background runner reports an empty backlog as idle", async () => {
   });
   assert.equal(result.reason, "no eligible work");
   assert.match(result.report, /Result: IDLE/);
+});
+
+test("external evidence does not starve candidate promotion", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-external-starvation-");
+  const repositoryRoot = path.join(path.dirname(worldRoot), "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(path.join(repositoryRoot, "documentation", "todo.md"), "Introduce result tracking with per-command IDs instead of generic result\n");
+  await enqueueWorkTask(worldRoot, {
+    ...task("roadmap-agent-research-tool-chain", 140),
+    title: "Agent research evidence",
+    workSpec: { granularity: "substantial" },
+    status: "ready"
+  });
+  await transitionWorkTaskStatus(worldRoot, "roadmap-agent-research-tool-chain", "blocked", {
+    message: "required live systems: configured search and Ollama both refuse connections",
+    error: "required live systems: configured search and Ollama both refuse connections"
+  });
+  const capacitySource = async () => ({
+    state: "available",
+    remainingPercent: 90,
+    usedPercent: 10,
+    weekly: {
+      identified: true,
+      state: "available",
+      remainingPercent: 90,
+      usedPercent: 10,
+      windowStartAt: "2026-08-17T12:00:00.000Z",
+      resetAt: "2026-08-24T12:00:00.000Z"
+    }
+  });
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    repositoryRoot,
+    curate: true,
+    policy: { enabled: true },
+    capacitySource,
+    externalEvidenceProbe: async () => ({ available: false, reason: "external dependency still unavailable: Ollama" }),
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "accepted" }),
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "roadmap-command-result-identity");
+  assert.deepEqual(result.curation.created, ["roadmap-command-result-identity"]);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["technical continuation unavailable wakes"] || "0", "0");
+  assert.equal(health["work-started wakes"], "1");
+});
+
+test("a healthy external dependency resumes its parked task without replanning", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-external-probe-");
+  await enqueueWorkTask(worldRoot, {
+    ...task("roadmap-mind-reply-envelope-streaming", 120),
+    title: "Mind streaming evidence",
+    workSpec: { granularity: "substantial" },
+    status: "ready"
+  });
+  await transitionWorkTaskStatus(worldRoot, "roadmap-mind-reply-envelope-streaming", "blocked", {
+    message: "fixture-free Ollama evidence unavailable",
+    error: "fixture-free Ollama evidence unavailable"
+  });
+  const current = await readWorkTaskStatus(worldRoot, "roadmap-mind-reply-envelope-streaming");
+  await writeWorkTaskStatus(worldRoot, {
+    ...current,
+    checkpoint: {
+      ...current.checkpoint,
+      review: { revisionInstructions: "Run the fixture-free smoke and preserve the existing plan." },
+      convergence: { status: "blocked", reviewedAt: "2026-08-18T11:00:00.000Z", decision: "BLOCK", rationale: "stale external evidence" }
+    }
+  });
+  const inspected = await inspectWorkBackground({
+    worldRoot,
+    owner: "background",
+    capacitySource: async () => ({ state: "available", weekly: { identified: true, remainingPercent: 90, usedPercent: 10, windowStartAt: "2026-08-17T12:00:00.000Z", resetAt: "2026-08-24T12:00:00.000Z" } }),
+    externalEvidenceProbe: async () => ({
+      available: true,
+      reason: "external dependencies available",
+      checks: [{ name: "Ollama", healthy: true, endpoint: "http://mriczo:11434" }]
+    }),
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.deepEqual(inspected.resumedExternal.map((item) => item.taskId), ["roadmap-mind-reply-envelope-streaming"]);
+  assert.equal(inspected.selected.taskId, "roadmap-mind-reply-envelope-streaming");
+  const resumed = await readWorkTaskStatus(worldRoot, "roadmap-mind-reply-envelope-streaming");
+  assert.equal(resumed.status, "ready");
+  assert.equal(resumed.checkpoint.resumeCount, 1);
+  assert.equal(resumed.checkpoint.convergence.decision, "");
+  assert.equal(resumed.checkpoint.convergence.reviewedAt, "");
+  assert.match(resumed.checkpoint.review.revisionInstructions, /http:\/\/mriczo:11434/u);
+});
+
+test("generic real-backend qualification is not falsely released by an Ollama probe", async () => {
+  const result = await probeExternalEvidenceTask({
+    status: "blocked",
+    checkpoint: { blocker: "awaiting external evidence: Matrix qualification, CI URL, and a real-backend smoke remain required" }
+  }, {
+    env: { OLLAMA_HOST: "http://mriczo:11434" },
+    fetchImpl: async () => ({ ok: true, async json() { return { models: [{ name: "qwen3.5:9b" }] }; } })
+  });
+  assert.equal(result.available, false);
+  assert.equal(result.checked, false);
 });
