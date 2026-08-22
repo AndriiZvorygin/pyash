@@ -161,6 +161,59 @@ export async function resumeWorkTask(worldRoot, taskId, humanResponse, { now = n
   });
 }
 
+export async function resumeExternalEvidenceTask(worldRoot, taskId, probeReason, { now = new Date() } = {}) {
+  const probe = probeReason && typeof probeReason === "object" ? probeReason : {};
+  const reason = text(probe.reason || probeReason) || "external dependency probe passed";
+  const envelope = await findWorkTaskEnvelope(worldRoot, taskId);
+  return mutateTask(worldRoot, taskId, (current) => {
+    if (current.status !== "blocked" && current.status !== "failed") return current;
+    const checks = Array.isArray(probe.checks)
+      ? probe.checks
+        .filter((check) => check?.name && check?.healthy)
+        .map((check) => `${check.name}=${check.endpoint || "available"}`)
+      : [];
+    const probeNote = checks.length
+      ? `Fresh external dependency probe passed: ${checks.join(", ")}. Run fixture-free evidence against these endpoints.`
+      : "Fresh external dependency probe passed; run the pending fixture-free evidence now.";
+    const revisionInstructions = [current.checkpoint.review.revisionInstructions, probeNote]
+      .filter(Boolean)
+      .join("\n");
+    const nextStatus = envelope?.runtime && (current.checkpoint?.review?.revisionInstructions
+      || Number(current.checkpoint?.implementation?.passes || 0) > 0
+      ) ? "revision" : "ready";
+    const next = transitionWorkTask(current, nextStatus, {
+      now,
+      message: reason,
+      error: ""
+    });
+    return {
+      ...next,
+      message: reason,
+      error: "",
+      checkpoint: mergeWorkCheckpoint(next.checkpoint, {
+        blocker: "",
+        activeTurn: {},
+        interruption: {
+          phase: current.status,
+          at: iso(now),
+          reason,
+          lastTurnId: current.checkpoint.activeTurn.turnId || current.checkpoint.interruption.lastTurnId
+        },
+        resumeCount: current.checkpoint.resumeCount + 1,
+        review: { revisionInstructions },
+        convergence: {
+          status: "pending",
+          requestedAt: "",
+          reviewedAt: "",
+          decision: "",
+          rationale: ""
+        },
+        lastAction: "external dependency became available; resuming without replanning"
+      })
+    };
+  });
+}
+
 export async function failWorkTask(worldRoot, taskId, reason, { now = new Date() } = {}) {
   const message = text(reason) || "cancelled by operator";
   const next = await mutateTask(worldRoot, taskId, (current) => {

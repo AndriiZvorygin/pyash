@@ -10,6 +10,9 @@ import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/w
 import {
   autonomousRoadmapPackages,
   buildAutonomousRoadmap,
+  isAwaitingExternalEvidence,
+  isHumanDecisionBlock,
+  isRetryableWorkBlock,
   readAutonomousRoadmap,
   refreshAutonomousRoadmap,
   renderAutonomousRoadmapReport
@@ -24,6 +27,39 @@ async function world(prefix) {
   await fs.writeFile(path.join(repositoryRoot, "documentation", "roadmap.md"), "Next milestone: Agent harness (research + builder)\n");
   return { root, worldRoot, repositoryRoot };
 }
+
+test("live system refusal is external evidence, not technical retry or human direction", () => {
+  const task = {
+    status: "blocked",
+    checkpoint: {
+      blocker: "The implementation corrections are complete and focused tests pass. Acceptance now depends solely on required live systems: configured search at localhost:60490 and Ollama at localhost:11434 both refuse connections. Further Luna turns cannot produce fixture-free evidence."
+    }
+  };
+  assert.equal(isAwaitingExternalEvidence(task), true);
+  assert.equal(isRetryableWorkBlock(task), false);
+  assert.equal(isHumanDecisionBlock(task), false);
+});
+
+test("external evidence progress removes duplicated classification prefixes", async () => {
+  const { worldRoot, repositoryRoot } = await world("pyash-roadmap-external-prefix-");
+  const roadmap = await buildAutonomousRoadmap({
+    worldRoot,
+    repositoryRoot,
+    persist: false,
+    tasks: [{
+      taskId: "roadmap-product-alpha-soak",
+      title: "Prove product alpha",
+      status: "blocked",
+      priority: 85,
+      checkpoint: {
+        blocker: "awaiting external evidence: awaiting external evidence: Matrix qualification remains required"
+      },
+      workSpec: {}
+    }]
+  });
+  const product = roadmap.packages.find((item) => item.taskId === "roadmap-product-alpha-soak");
+  assert.match(product.progress, /^awaiting external evidence: Matrix qualification remains required$/u);
+});
 
 test("autonomous roadmap derives substantial package status from durable work state", async () => {
   const { worldRoot, repositoryRoot } = await world("pyash-roadmap-state-");

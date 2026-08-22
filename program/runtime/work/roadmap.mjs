@@ -324,7 +324,9 @@ const EXTERNAL_EVIDENCE_PATTERNS = Object.freeze([
   /awaiting external evidence/iu,
   /fixture-free .*?(?:run|evidence).*?(?:unavailable|required)/iu,
   /live .*?(?:service|backend|Ollama).*?(?:unavailable|required)/iu,
-  /required service .*? unavailable/iu
+  /required service .*? unavailable/iu,
+  /required .*?(?:live )?(?:systems?|services?|backends?|environments?).*?(?:unavailable|refus(?:e|es|ed) connections?|not reachable|not available)/iu,
+  /\b(?:Ollama|search|Matrix|CI|real[- ]backend|soak)\b.*?(?:unavailable|refus(?:e|es|ed) connections?|not reachable|not available|pending|required)/iu
 ]);
 
 function text(value) {
@@ -391,7 +393,7 @@ function operationalItems(roadmap) {
   const packageIds = new Set((roadmap.packages || []).map((item) => item.taskId));
   return [
     ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / OPERATIONAL"),
-    ...(roadmap.retryable || []).filter((item) => !packageIds.has(item.taskId))
+    ...technicalRetryableItems(roadmap).filter((item) => !packageIds.has(item.taskId))
   ];
 }
 
@@ -408,6 +410,10 @@ function taskMatch(item, tasks) {
     || tasks.find((task) => task.workSpec?.provenance?.key === `${item.sourcePath}:${item.sourceAnchor}`);
 }
 
+function withoutExternalEvidencePrefix(value) {
+  return text(value).replace(/^(?:awaiting external evidence:\s*)+/iu, "");
+}
+
 function progressForTask(task) {
   if (!task) return "not started; candidate package";
   if (isArchivedWorkTask(task)) return `superseded/archived: ${text(task.workSpec?.archiveReason) || "operator archived"}`;
@@ -417,11 +423,12 @@ function progressForTask(task) {
   if (task.status === "accepted") return `accepted; Sol review ${text(checkpoint.review?.decision) || "complete"}`;
   if (task.status === "blocked" || task.status === "failed") {
     const reason = text(checkpoint.blocker || task.message || task.error) || task.status;
-    return `${isAwaitingExternalEvidence(task)
+    const classification = isAwaitingExternalEvidence(task)
       ? "awaiting external evidence"
       : isRetryableWorkBlock(task)
         ? "retryable operational block"
-        : "human decision block"}: ${reason}`;
+        : "human decision block";
+    return `${classification}: ${isAwaitingExternalEvidence(task) ? withoutExternalEvidencePrefix(reason) : reason}`;
   }
   if (task.status === "ready") return "queued for the next eligible background wake";
   return `${passes} implementation pass${passes === 1 ? "" : "es"}; ${action || `phase ${task.status}`}`;
@@ -509,7 +516,11 @@ export function isTechnicalContinuationBlock(task) {
 
 export function hasCredibleRoadmapWork(roadmap = {}) {
   return (roadmap.packages || []).some((item) => ["ACTIVE", "QUEUED", "CANDIDATE", "BLOCKED / OPERATIONAL"].includes(item.status))
-    || (roadmap.retryable || []).length > 0;
+    || technicalRetryableItems(roadmap).length > 0;
+}
+
+export function technicalRetryableItems(roadmap = {}) {
+  return roadmap.retryableTechnical || roadmap.retryable || [];
 }
 
 function mapValue(map, key) {
@@ -666,7 +677,7 @@ function renderAutonomousRoadmapPya(roadmap) {
     .map((item) => renderMap(`work autonomous roadmap package ${item.taskId}`, fieldEntries(item)))
     .join("\n");
   const decisions = renderMap("work autonomous roadmap decisions", (roadmap.needsDecision || []).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
-  const retryable = renderMap("work autonomous roadmap operational blocks", (roadmap.retryable || []).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
+  const retryable = renderMap("work autonomous roadmap operational blocks", technicalRetryableItems(roadmap).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
   return `${header}${packageText}${retryable}${decisions}`;
 }
 
@@ -699,6 +710,7 @@ export async function readAutonomousRoadmap(worldRoot) {
       packages: packageMaps.filter((item) => !COMPLETED_PACKAGES.some((completed) => completed.taskId === item.taskId)),
       completed: packageMaps.filter((item) => COMPLETED_PACKAGES.some((completed) => completed.taskId === item.taskId)),
       needsDecision: decisions,
+      retryableTechnical: [],
       retryable: [],
       externalEvidence: [],
       paths: { pya, markdown }
@@ -781,6 +793,7 @@ export async function buildAutonomousRoadmap({
     packages,
     completed,
     needsDecision,
+    retryableTechnical: operationalBlocks,
     retryable: operationalBlocks,
     externalEvidence,
     reconciliation: {

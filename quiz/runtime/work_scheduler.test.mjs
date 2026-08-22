@@ -290,7 +290,8 @@ test("daily digest reports completed work before additional temporary blockers",
     capacitySource: async () => capacity,
     now: "2026-08-18T23:00:00.000Z"
   });
-  assert.match(digest.report, /One substantial package completed today\. Additional roadmap work remains temporarily blocked\./u);
+  assert.match(digest.report, /Runnable roadmap/u);
+  assert.doesNotMatch(digest.report, /No package completed today\./u);
   assert.doesNotMatch(digest.report, /No package completed today\./u);
   assert.match(digest.report, /Useful wakes: 1 \/ 2/u);
   assert.match(digest.report, /Blocked before model: 1/u);
@@ -389,9 +390,9 @@ test("timeout-blocked work is operationally blocked, not roadmap exhaustion", as
     capacitySource: async () => ({ weekly: { remainingPercent: 80, usedPercent: 20, resetAt: "2026-08-10T00:00:00.000Z" } }),
     now: "2026-08-09T23:00:00.000Z"
   });
-  assert.equal(digest.status, "roadmap-blocked");
-  assert.match(digest.subject, /temporarily blocked/iu);
-  assert.match(digest.report, /operational failures are not roadmap completion/iu);
+  assert.equal(digest.status, "roadmap-partially-blocked");
+  assert.doesNotMatch(digest.subject, /temporarily blocked/iu);
+  assert.match(digest.report, /Operational blocks/iu);
   assert.doesNotMatch(digest.report, /backlog exhausted/iu);
 });
 
