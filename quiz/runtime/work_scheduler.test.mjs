@@ -437,3 +437,38 @@ test("technical blocked wakes are not reported as idle and blocker rationale sta
   assert.match(digest.report, /correction required: compiled streaming duplicates output and loses reply metadata/u);
   assert.doesNotMatch(digest.report, /Sol review:.*full rationale/iu);
 });
+
+test("product-alpha qualification is shown as external evidence, not technical correction", async () => {
+  const { root, worldRoot } = await world("pyash-work-digest-product-alpha-");
+  const repositoryRoot = path.join(root, "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(path.join(repositoryRoot, "documentation", "roadmap.md"), "Product alpha\n");
+  await enqueueWorkTask(worldRoot, {
+    taskId: "roadmap-product-alpha-soak",
+    owner: "background",
+    kind: "roadmap",
+    title: "Prove product alpha",
+    priority: 85,
+    promptText: "Prove it.",
+    acceptanceText: "Qualification evidence exists."
+  });
+  const task = await readWorkTaskStatus(worldRoot, "roadmap-product-alpha-soak");
+  await writeWorkTaskStatus(worldRoot, {
+    ...task,
+    status: "blocked",
+    message: "awaiting external evidence: Matrix qualification, CI URL, day-zero real-backend smoke, and a genuine uninterrupted 168-hour soak ledger remain required",
+    checkpoint: {
+      ...task.checkpoint,
+      blocker: "awaiting external evidence: Matrix qualification, CI URL, day-zero real-backend smoke, and a genuine uninterrupted 168-hour soak ledger remain required"
+    }
+  });
+  const digest = await buildWorkDailyDigest({
+    worldRoot,
+    repositoryRoot,
+    capacitySource: async () => ({ weekly: { identified: true, remainingPercent: 95, usedPercent: 5, resetAt: "2026-08-27T00:00:00.000Z", windowStartAt: "2026-08-20T00:00:00.000Z" } }),
+    now: "2026-08-22T15:00:00.000Z",
+    persist: false
+  });
+  assert.match(digest.report, /External evidence waiting[\s\S]*Matrix qualification/iu);
+  assert.doesNotMatch(digest.report, /technical correction required: awaiting external evidence/iu);
+});
