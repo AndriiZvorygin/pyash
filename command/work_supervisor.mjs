@@ -14,6 +14,7 @@ import {
 } from "../program/runtime/work/operator.mjs";
 import {
   inspectWorkBackground,
+  probeExternalEvidenceTask,
   runWorkBackgroundContinuous,
   runWorkBackgroundOnce
 } from "../program/runtime/work/runner.mjs";
@@ -387,6 +388,7 @@ try {
         repositoryRoot,
         curate: true,
         executionPreflight: ({ worktreePath }) => configuredExecutionPreflight({ repositoryRoot, worktreePath }),
+        externalEvidenceProbe: (task) => probeExternalEvidenceTask(task),
         baselineSync: async () => synchronizeAutomationBranch({
           repositoryRoot,
           branch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap",

@@ -10,6 +10,9 @@ import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/w
 import {
   autonomousRoadmapPackages,
   buildAutonomousRoadmap,
+  isAwaitingExternalEvidence,
+  isHumanDecisionBlock,
+  isRetryableWorkBlock,
   readAutonomousRoadmap,
   refreshAutonomousRoadmap,
   renderAutonomousRoadmapReport
@@ -24,6 +27,39 @@ async function world(prefix) {
   await fs.writeFile(path.join(repositoryRoot, "documentation", "roadmap.md"), "Next milestone: Agent harness (research + builder)\n");
   return { root, worldRoot, repositoryRoot };
 }
+
+test("live system refusal is external evidence, not technical retry or human direction", () => {
+  const task = {
+    status: "blocked",
+    checkpoint: {
+      blocker: "The implementation corrections are complete and focused tests pass. Acceptance now depends solely on required live systems: configured search at localhost:60490 and Ollama at localhost:11434 both refuse connections. Further Luna turns cannot produce fixture-free evidence."
+    }
+  };
+  assert.equal(isAwaitingExternalEvidence(task), true);
+  assert.equal(isRetryableWorkBlock(task), false);
+  assert.equal(isHumanDecisionBlock(task), false);
+});
+
+test("external evidence progress removes duplicated classification prefixes", async () => {
+  const { worldRoot, repositoryRoot } = await world("pyash-roadmap-external-prefix-");
+  const roadmap = await buildAutonomousRoadmap({
+    worldRoot,
+    repositoryRoot,
+    persist: false,
+    tasks: [{
+      taskId: "roadmap-product-alpha-soak",
+      title: "Prove product alpha",
+      status: "blocked",
+      priority: 85,
+      checkpoint: {
+        blocker: "awaiting external evidence: awaiting external evidence: Matrix qualification remains required"
+      },
+      workSpec: {}
+    }]
+  });
+  const product = roadmap.packages.find((item) => item.taskId === "roadmap-product-alpha-soak");
+  assert.match(product.progress, /^awaiting external evidence: Matrix qualification remains required$/u);
+});
 
 test("autonomous roadmap derives substantial package status from durable work state", async () => {
   const { worldRoot, repositoryRoot } = await world("pyash-roadmap-state-");
@@ -47,6 +83,43 @@ test("autonomous roadmap derives substantial package status from durable work st
   assert.match(await fs.readFile(roadmap.paths.markdown, "utf8"), /Complete the higher-level translation parity tranche/u);
   const reread = await readAutonomousRoadmap(worldRoot);
   assert.equal(reread.packages.find((item) => item.taskId === active.taskId).status, "QUEUED");
+});
+
+test("Personal Headquarters packages survive an older generated roadmap catalog", async () => {
+  const { worldRoot, repositoryRoot } = await world("pyash-roadmap-headquarters-");
+  await fs.mkdir(path.join(worldRoot, "holding", "work", "artifacts"), { recursive: true });
+  await fs.writeFile(path.join(worldRoot, "holding", "work", "artifacts", "autonomous-roadmap.pya"), [
+    "su name work autonomous roadmap state be map def",
+    "  su name schema ob text \"3\" ya",
+    "prah",
+    "su name work autonomous roadmap package old-generated-package be map def",
+    "  su name task id ob text \"old-generated-package\" ya",
+    "  su name title ob text \"Old package\" ya",
+    "  su name source path ob text \"documentation/roadmap.md\" ya",
+    "  su name source anchor ob text \"old package\" ya",
+    "prah",
+    ""
+  ].join("\n"));
+  const roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, persist: false });
+  const ids = roadmap.packages.map((item) => item.taskId);
+  assert.equal(roadmap.schema, "4");
+  assert.equal(ids.includes("old-generated-package"), false);
+  assert.deepEqual(
+    ids.filter((taskId) => taskId.startsWith("hq-")),
+    [
+      "hq-organization-and-work-contract",
+      "hq-fixture-mail-vertical-slice",
+      "hq-approval-and-resumption",
+      "hq-chief-briefing",
+      "hq-email-and-capability-boundaries",
+      "hq-contacts-commitments-knowledge-alignment",
+      "hq-state-api-and-2d-projection",
+      "hq-temporary-workers-and-workload-evaluation"
+    ]
+  );
+  assert.ok(roadmap.packages
+    .filter((item) => item.taskId.startsWith("hq-"))
+    .every((item) => item.nonGoals && item.whyMatters));
 });
 
 test("roadmap refresh uses an injected Sol client and persists a bounded proposal", async () => {

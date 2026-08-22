@@ -7,7 +7,7 @@ import { listWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
 import { renderWorkTaskReport } from "./report.mjs";
 import { deriveImplementationProgress } from "./progress.mjs";
-import { buildAutonomousRoadmap, hasCredibleRoadmapWork, isRetryableWorkBlock } from "./roadmap.mjs";
+import { buildAutonomousRoadmap, hasCredibleRoadmapWork, isRetryableWorkBlock, isAwaitingExternalEvidence, technicalRetryableItems } from "./roadmap.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -123,8 +123,10 @@ function uniqueRecoveryEvents(events) {
 function compactBlocker(value) {
   const body = text(value).replace(/\s+/gu, " ");
   if (!body) return "technical continuation required";
-  if (/Ollama|live backend|fixture-free live/iu.test(body) && /unavailable|evidence|required/iu.test(body)) {
-    return "external evidence required: fixture-free Ollama run unavailable";
+  if (/^awaiting external evidence:/iu.test(body)
+    || (/(Ollama|live backend|fixture-free live|Matrix|CI|soak|real[- ]backend)/iu.test(body)
+      && /unavailable|evidence|required|pending|remain/iu.test(body))) {
+    return `external evidence required: ${body.replace(/^(?:awaiting external evidence:\s*)+/iu, "")}`;
   }
   if (/integration|cherry-pick|rebase|merge conflict/iu.test(body)) {
     return "integration conflict against current automation baseline";
@@ -173,9 +175,12 @@ export function renderWorkDailyDigest({
   const completed = tasks.filter((task) => task.status === "accepted" && taskTouched(task, Date.parse(since), Date.parse(until)));
   const active = tasks.filter((task) => !["accepted", "failed", "blocked"].includes(task.status));
   const ready = tasks.some((task) => task.status === "ready");
-  const retryable = roadmap?.retryable?.length
-    ? roadmap.retryable
+  const retryable = technicalRetryableItems(roadmap || {}).length
+    ? technicalRetryableItems(roadmap || {})
     : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
+  const externalEvidence = roadmap?.externalEvidence?.length
+    ? roadmap.externalEvidence
+    : tasks.filter((task) => isAwaitingExternalEvidence(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
   const wakes = events.filter((event) => ["idle", "deferred", "admitted", "technical-blocked"].includes(event.action));
   const admitted = events.filter((event) => event.action === "admitted");
   const bool = (value) => value === true || /^(true|truth|yes|1)$/iu.test(text(value));
@@ -198,10 +203,19 @@ export function renderWorkDailyDigest({
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
   const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
-  const temporarilyBlocked = retryable.length > 0;
+  const runnableRoadmap = active.length > 0
+    || ready
+    || (roadmap?.packages || []).some((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status))
+    || (curation.proposed || []).length > 0;
+  const blockedRoadmap = retryable.length > 0 || externalEvidence.length > 0 || humanDecisions.length > 0;
+  const temporarilyBlocked = retryable.length > 0 && !runnableRoadmap;
   const status = exhausted
     ? "needs-direction"
-    : temporarilyBlocked
+    : runnableRoadmap
+      ? blockedRoadmap
+        ? "roadmap-partially-blocked"
+        : active.length || admitted.length || completed.length ? "roadmap-active" : "roadmap-ready"
+      : blockedRoadmap
       ? "roadmap-blocked"
       : completed.length
         ? "progress"
@@ -210,7 +224,7 @@ export function renderWorkDailyDigest({
           : "idle";
   const subject = exhausted
     ? "Pyash needs direction: roadmap backlog exhausted"
-    : temporarilyBlocked
+    : status === "roadmap-blocked"
       ? "Pyash daily: roadmap work temporarily blocked"
       : completed.length
       ? `Pyash daily: substantial progress on ${completed[0].title}`
@@ -305,6 +319,14 @@ export function renderWorkDailyDigest({
       return `  ${task.title}: ${progress.implementationPasses} passes; ${progress.materialProgressPasses} material; ${progress.noProgressPasses} no-delta; ${progress.commitsProduced} commits; last material ${progress.lastMaterialProgressAt || "not recorded"}`;
     });
     lines.push("", "Progress evidence", "-----------------", ...evidence);
+  } else if (blockedRoadmap) {
+    if (externalEvidence.length) {
+      lines.push("", "External evidence waiting", "-------------------------", ...externalEvidence.slice(0, 5).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`));
+    }
+    if (runnableRoadmap) {
+      const runnablePackages = (roadmap?.packages || []).filter((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status));
+      lines.push("", "Runnable roadmap", "-----------------", ...runnablePackages.slice(0, 4).map((item, index) => `${index === 0 ? "  Next: " : "  Later: "}${item.title}`));
+    }
   } else if (!active.length && !ready && !curation.proposed?.length && roadmapWork) {
     lines.push("", "READY QUEUE EMPTY - RECONCILIATION REQUIRED", "--------------------------------------------", "The generated queue is empty, but the authoritative roadmap still contains unfinished packages.");
   } else if (curation.proposed?.length) {
@@ -321,7 +343,7 @@ export function renderWorkDailyDigest({
     ];
     const operationalPackages = [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / OPERATIONAL"),
-      ...(roadmap.retryable || []).filter((item) => !(roadmap.packages || []).some((candidate) => candidate.taskId === item.taskId))
+      ...technicalRetryableItems(roadmap).filter((item) => !(roadmap.packages || []).some((candidate) => candidate.taskId === item.taskId))
     ];
     const externalPackages = [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / EXTERNAL EVIDENCE"),
