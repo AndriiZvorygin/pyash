@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { addWorkTask, listWorkTasks } from "./operator.mjs";
-import { autonomousRoadmapPackages, isRetryableWorkBlock } from "./roadmap.mjs";
+import { autonomousRoadmapPackages, isAwaitingExternalEvidence, isRetryableWorkBlock } from "./roadmap.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -50,18 +50,30 @@ export async function curateWorkBacklog({
 } = {}) {
   const tasks = await listWorkTasks(worldRoot, { includeTerminal: true });
   const active = tasks.filter((task) => !["accepted", "failed", "blocked"].includes(task.status));
-  const retryable = tasks.filter((task) => isRetryableWorkBlock(task));
+  const retryableTechnical = tasks.filter((task) => isRetryableWorkBlock(task));
+  const awaitingExternalEvidence = tasks.filter((task) => isAwaitingExternalEvidence(task));
   if (active.length >= Math.max(0, Number(threshold) || 0)) {
-    return { created: [], proposed: [], needsDirection: false, reason: "backlog threshold satisfied", active: active.length, retryable: retryable.map((task) => task.taskId) };
+    return {
+      created: [],
+      proposed: [],
+      needsDirection: false,
+      reason: "backlog threshold satisfied",
+      active: active.length,
+      retryableTechnical: retryableTechnical.map((task) => task.taskId),
+      retryable: retryableTechnical.map((task) => task.taskId),
+      awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
+    };
   }
-  if (retryable.length) {
+  if (retryableTechnical.length) {
     return {
       created: [],
       proposed: [],
       needsDirection: false,
       reason: "retryable operational work remains",
       active: active.length,
-      retryable: retryable.map((task) => task.taskId)
+      retryableTechnical: retryableTechnical.map((task) => task.taskId),
+      retryable: retryableTechnical.map((task) => task.taskId),
+      awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
     };
   }
   const candidates = autonomousRoadmapPackages();
@@ -88,7 +100,9 @@ export async function curateWorkBacklog({
       needsDirection: active.length === 0 && proposed.length === 0 && credibleCandidates.length === 0,
       reason: proposed.length ? "curated current TODO" : credibleCandidates.length ? "ready queue empty; roadmap candidates remain" : "fresh reconciliation found no credible roadmap work",
       active: active.length,
-      retryable: []
+      retryableTechnical: [],
+      retryable: [],
+      awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
     };
   }
   const created = [];
@@ -125,7 +139,9 @@ export async function curateWorkBacklog({
     needsDirection: active.length === 0 && created.length === 0 && credibleCandidates.length === 0,
     reason: created.length ? "curated current TODO" : credibleCandidates.length ? "ready queue empty; roadmap candidates remain" : "fresh reconciliation found no credible roadmap work",
     active: active.length,
-    retryable: []
+    retryableTechnical: [],
+    retryable: [],
+    awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
   };
 }
 

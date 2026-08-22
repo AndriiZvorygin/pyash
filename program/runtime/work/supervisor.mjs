@@ -229,6 +229,7 @@ function promptConvergence(task, checkpoint, workspace) {
     `Acceptance criteria: ${task.acceptanceText}`,
     `Worktree: ${workspace.worktreePath}`,
     `Current Sol correction: ${checkpoint.review.revisionInstructions || "none"}`,
+    `Fresh external dependency evidence: ${checkpoint.review.revisionInstructions.includes("Fresh external dependency probe passed") ? "available for the fixture-free run; use the endpoint recorded in the correction" : "not recorded"}`,
     "Accumulated implementation evidence:",
     history || "none recorded"
   ].join("\n");
