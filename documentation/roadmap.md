@@ -33,6 +33,163 @@ Exit criteria (alpha):
 * At least 3 real tasks completed end-to-end by confederation-priest (no fixtures).
 * All scheduler/channel/agent quizzes green in CI and one daily real-backend smoke run green.
 
+## Parallel application track: Personal Headquarters vertical slice
+
+Personal Headquarters is a real-world application and integration proving ground
+for the existing Pyash agent runtime. It extends existing agent administration,
+work tasks, channel routing, permissions, newspapers, checkpoints, and
+knowledge/provenance infrastructure; it is not a second agent framework.
+
+This track is subordinate to the Agent harness and Product alpha milestones. It
+may prove a narrow vertical slice while those foundations are still in flight,
+but it must not create a second work queue, agent registry, provider-neutral
+messaging layer, permissions system, replay/event log, lease/idempotency system,
+or provenance model competing with the Knowledge Core.
+
+### P0: Working Headquarters core
+
+The first release is one durable, replayable organizational workflow over the
+existing runtime:
+
+1. **Organizational relationships over agent administration**
+   * Extend existing agent houses, identity, conduct, calendars, and lifecycle
+     administration with role, supervisor, responsibilities, and domain
+     membership metadata.
+   * Start with the persistent roles **Chief of Staff** and
+     **Correspondence Worker**. This is an extension of the existing agent
+     model, not a new agent registry.
+
+2. **General-purpose organizational work contract**
+   * Extend the durable `WorkTask` contract with organizational metadata:
+     source, domain, deadline, dependencies, delegated-by, and escalation
+     information.
+   * Preserve existing priority, owner, status, result, checkpoint, retry, and
+     replay behavior.
+   * Add delegation events where needed: assigned, accepted, declined,
+     clarification requested, progress reported, completed, and escalated.
+     These should layer over the existing work state machine rather than
+     replace its statuses.
+
+3. **Fixture-mail channel adapter**
+   * Enter fixture messages through the existing `channel_core` input contract
+     and channel spool.
+   * Retain provider, event, and message identity; route to Correspondence
+     Worker through the normal channel/router path.
+   * Classify a message as information, work, draft response, or escalation.
+   * Preserve existing deduplication/idempotency and emit ordinary
+     newspaper/replay evidence. Do not create a standalone inbox queue.
+
+4. **First-class human approval and resumption**
+   * Bridge existing ratification policy to durable work checkpoints.
+   * Standing policy may permit or deny an action. A sensitive action without
+     standing authorization creates a durable approval request that references
+     the work item, proposed action, and checkpoint.
+   * Approval or denial is durable and replayable; approved work resumes from
+     its checkpoint rather than restarting.
+   * Initial approval-gated actions are send, delete, purchase, publish, and
+     calendar mutation.
+
+5. **Chief of Staff daily briefing projection**
+   * Derive a maximum-five-item briefing from canonical agents, work, channels,
+     approvals, and newspaper state rather than another database.
+   * Include decisions required, imminent deadlines, overdue commitments,
+     schedule/conflict issues, waiting responses, and significant escalations
+     where applicable.
+   * Keep ranking logic and source records deterministic, replayable, and
+     auditable.
+
+### P0 milestone: golden Headquarters vertical slice
+
+The first acceptance scenario is:
+
+> A fixture email enters the existing channel/mail adapter, is durably routed
+> to the Correspondence Worker, produces or updates organizational work,
+> triggers a justified escalation to the Chief of Staff, and appears in the
+> next Chief of Staff briefing with a complete replayable newspaper record.
+
+Acceptance also requires duplicate fixture delivery to be idempotent, process
+interruption/restart not to lose the item, ownership/state to be recoverable,
+escalation provenance to be retained, and no sensitive external action to occur
+without applicable permission or approval.
+
+### P1: Safe real-world operation
+
+P1 extends the same systems rather than introducing replacements:
+
+* **Email channel:** add a provider-neutral email/message adapter over the
+  existing channel/router contracts; Gmail and/or IMAP are concrete adapters.
+  Do not add a competing message-envelope abstraction unless the current
+  channel contract is proven to lack a required field.
+* **Unified capability policy:** extend directory licences, tool ratification,
+  agent-house boundaries, and channel policies into one capability model for
+  files/directories, tools, channels, domains, and action classes. Keep
+  Correspondence Worker narrowly scoped, especially for email mutation.
+* **Domain boundaries:** make domain a cross-cutting attribute usable by
+  agents, work, channels/lanes, contacts/commitments, approvals, artifacts,
+  resource accounting, and later Headquarters rooms. Start with family,
+  nursery/business, IT/communications, and campaign. Cross-domain conflicts
+  escalate to Chief of Staff; do not create mini-runtimes per domain.
+* **Contacts and commitments:** add contact, organization, relationship, and
+  commitment concepts aligned with the planned Knowledge Core. Reuse its
+  source identity, date/time, confidence, evidence/anchor, and claim identity
+  concepts rather than inventing a competing provenance schema. Commitments
+  reference work, people, organizations, dates, and source evidence.
+
+### P2: Visualization and organizational scaling
+
+P2 remains a projection and coordination layer over canonical Pyash state:
+
+* **Read-only Headquarters state API:** project agents, organizational
+  relationships, work, channel queues, approvals, domains, and recent
+  newspaper events. The API/UI is never authoritative.
+* **2D Headquarters:** begin with mailroom, Chief of Staff office, and domain
+  workspaces. Avatar/activity state derives from real state: waiting input,
+  claimed work, active work, handoff, escalation, approval wait, and completion.
+* **Temporary workers:** extend existing agent/session/work machinery with a
+  bounded assignment, permitted context, domain, tools/capabilities, resource
+  budget, and termination condition. Persistent agents still use normal agent
+  administration.
+* **Workload recommendations:** use durable workload/event telemetry to
+  recommend a persistent director/role when sustained coordination demand is
+  observed; do not automatically restructure the organization.
+* **Watchdog/evaluation:** check forgotten commitments, duplicate work,
+  stalled/escalation-worthy items, unsupported conclusions, unnecessary
+  activity, and divergence from stated goals using newspaper, work,
+  provenance, and verifier/review records.
+* **Resource accounting:** attribute available model-call, token/usage,
+  execution-time, and estimated-cost telemetry by agent, task, project, and
+  domain, reusing scheduler/model/channel telemetry.
+
+### Headquarters dependencies and inherited guarantees
+
+The track depends on unfinished foundations where noted: agent administration
+completion, house-root/capability security, concurrency and ready-queue
+behavior, and Knowledge Core provenance. It must inherit and test the existing
+newspaper/run records, `again` replay, durable `.pya` state, checkpoints and
+resumption, atomic spool claims, deduplication/idempotency, retries, agent-house
+boundaries, and scheduler/concurrency semantics. Headquarters adds adversarial
+fixtures for prompt injection in correspondence, false urgency, hidden or
+quoted instructions, spoofed authority, duplicate delivery, and conflicting
+domain requests; it does not duplicate those guarantees.
+
+### Headquarters package sequence
+
+The autonomous roadmap may promote these substantial packages when their
+dependencies permit, while existing retryable work retains precedence:
+
+1. `hq-organization-and-work-contract`
+2. `hq-fixture-mail-vertical-slice`
+3. `hq-approval-and-resumption`
+4. `hq-chief-briefing`
+5. `hq-email-and-capability-boundaries`
+6. `hq-contacts-commitments-knowledge-alignment`
+7. `hq-state-api-and-2d-projection`
+8. `hq-temporary-workers-and-workload-evaluation`
+
+The first four form the P0 release boundary. P1 and P2 packages remain
+dependent follow-on work and do not displace unfinished Agent harness, Product
+alpha, language/parity, or Knowledge Core milestones.
+
 ## Jan 29, 2026: Recent maintenance (not a roadmap milestone)
 
 * Mind backend payload handling hardened; curl fallback and debug toggles added.
