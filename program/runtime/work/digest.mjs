@@ -123,7 +123,9 @@ function uniqueRecoveryEvents(events) {
 function compactBlocker(value) {
   const body = text(value).replace(/\s+/gu, " ");
   if (!body) return "technical continuation required";
-  if (/Ollama|live backend|fixture-free live/iu.test(body) && /unavailable|evidence|required/iu.test(body)) {
+  if (/^awaiting external evidence:/iu.test(body)
+    || (/(Ollama|live backend|fixture-free live|Matrix|CI|soak|real[- ]backend)/iu.test(body)
+      && /unavailable|evidence|required|pending|remain/iu.test(body))) {
     return `external evidence required: ${body.replace(/^(?:awaiting external evidence:\s*)+/iu, "")}`;
   }
   if (/integration|cherry-pick|rebase|merge conflict/iu.test(body)) {
