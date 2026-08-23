@@ -32,6 +32,18 @@ const WORK_TRANSITIONS = new Map([
   ["failed", new Set()]
 ]);
 
+export const DELEGATION_EVENT_TYPES = Object.freeze([
+  "assigned",
+  "accepted",
+  "declined",
+  "clarification-requested",
+  "progress-reported",
+  "completed",
+  "escalated"
+]);
+
+const DELEGATION_EVENT_TYPE_SET = new Set(DELEGATION_EVENT_TYPES);
+
 function normalizeText(value) {
   return String(value ?? "").trim();
 }
@@ -69,6 +81,97 @@ function normalizeOptionalIso(value) {
   return normalizeIso(text, "");
 }
 
+function normalizeRequiredIso(value, fallback = new Date().toISOString(), label = "timestamp") {
+  const text = normalizeText(value) || normalizeText(fallback);
+  if (!text || !Number.isFinite(Date.parse(text))) {
+    throw new Error(`work task defective: invalid ${label}`);
+  }
+  return new Date(text).toISOString();
+}
+
+function normalizeDeadline(value) {
+  const text = normalizeText(value);
+  if (!text) return "";
+  return normalizeRequiredIso(text, "", "deadline");
+}
+
+function primitiveValue(value) {
+  if (value == null) return undefined;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (value.text !== undefined) return value.text;
+  if (value.num !== undefined) return value.num;
+  if (value.boolean !== undefined) return value.boolean;
+  if (value.ob?.text !== undefined) return value.ob.text;
+  if (value.ob?.num !== undefined) return value.ob.num;
+  if (value.ob?.boolean !== undefined) return value.ob.boolean;
+  return undefined;
+}
+
+function normalizeSource(value) {
+  const source = typeof value === "string"
+    ? { identity: value }
+    : value && typeof value === "object" && !Array.isArray(value)
+      ? value
+      : {};
+  return {
+    identity: normalizeText(primitiveValue(source.identity) ?? source.identity),
+    kind: normalizeText(primitiveValue(source.kind) ?? source.kind),
+    locator: normalizeText(primitiveValue(source.locator) ?? source.locator)
+  };
+}
+
+function normalizeDependencies(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const raw of value) {
+    const id = normalizeWorkTaskId(primitiveValue(raw) ?? raw);
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+function normalizeEscalation(value, sourceIdentity = "") {
+  const escalation = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const timestampText = normalizeText(primitiveValue(escalation.timestamp) ?? escalation.timestamp);
+  return {
+    state: normalizeText(primitiveValue(escalation.state ?? escalation.currentState) ?? escalation.state ?? escalation.currentState),
+    target: normalizeText(primitiveValue(escalation.target) ?? escalation.target),
+    reason: normalizeText(primitiveValue(escalation.reason) ?? escalation.reason),
+    timestamp: timestampText ? normalizeRequiredIso(timestampText, "", "escalation timestamp") : "",
+    sourceIdentity: normalizeText(
+      primitiveValue(escalation.sourceIdentity)
+        ?? escalation.sourceIdentity
+        ?? sourceIdentity
+    )
+  };
+}
+
+export function normalizeDelegationEvent(value, {
+  now = new Date(),
+  sourceIdentity = ""
+} = {}) {
+  const event = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const type = normalizeText(primitiveValue(event.type) ?? event.type).toLowerCase();
+  if (!DELEGATION_EVENT_TYPE_SET.has(type)) {
+    throw new Error(`work task defective: invalid delegation event type ${type || "(missing)"}`);
+  }
+  const fallback = normalizeRequiredIso(now, new Date().toISOString(), "event timestamp");
+  const eventTimestamp = normalizeText(primitiveValue(event.timestamp) ?? event.timestamp);
+  return {
+    type,
+    timestamp: normalizeRequiredIso(eventTimestamp, fallback, "event timestamp"),
+    actor: normalizeText(primitiveValue(event.actor) ?? event.actor),
+    recipient: normalizeText(primitiveValue(event.recipient) ?? event.recipient),
+    note: normalizeText(primitiveValue(event.note) ?? event.note),
+    sourceIdentity: normalizeText(
+      primitiveValue(event.sourceIdentity)
+        ?? event.sourceIdentity
+        ?? event.source?.identity
+        ?? sourceIdentity
+    )
+  };
+}
+
 export const WORK_STATUS_NAMES = Object.freeze([...WORK_STATUSES]);
 
 export function normalizeWorkTaskId(value) {
@@ -102,6 +205,17 @@ export function buildWorkTask(input = {}) {
     message: normalizeText(input.message),
     result: normalizeText(input.result),
     error: normalizeText(input.error),
+    source: normalizeSource(input.source),
+    domain: normalizeText(input.domain),
+    deadline: normalizeDeadline(input.deadline),
+    dependencies: normalizeDependencies(input.dependencies),
+    delegatedBy: normalizeText(input.delegatedBy),
+    escalation: normalizeEscalation(input.escalation, normalizeSource(input.source).identity),
+    delegationEvents: Array.isArray(input.delegationEvents)
+      ? input.delegationEvents.map((event) => normalizeDelegationEvent(event, {
+        sourceIdentity: normalizeSource(input.source).identity
+      }))
+      : [],
     payloadSentence: input.payloadSentence && typeof input.payloadSentence === "object"
       ? input.payloadSentence
       : null,
@@ -146,6 +260,14 @@ export function assertWorkTask(value = {}) {
       throw new Error(`work task defective: invalid ${key}`);
     }
   }
+  if (normalizeText(value.deadline)) {
+    if (!Number.isFinite(Date.parse(String(value.deadline)))) {
+      throw new Error("work task defective: invalid deadline");
+    }
+    if (new Date(String(value.deadline)).toISOString() !== String(value.deadline)) {
+      throw new Error("work task defective: deadline must be normalized ISO");
+    }
+  }
   for (const key of ["retryCount", "retryMax", "priority"]) {
     if (!Number.isFinite(Number(value[key])) || Math.trunc(Number(value[key])) !== Number(value[key])) {
       throw new Error(`work task defective: invalid ${key}`);
@@ -160,7 +282,66 @@ export function assertWorkTask(value = {}) {
   if (!value.workSpec || typeof value.workSpec !== "object" || Array.isArray(value.workSpec)) {
     throw new Error("work task defective: work spec must be a map");
   }
+  if (!value.source || typeof value.source !== "object" || Array.isArray(value.source)) {
+    throw new Error("work task defective: source must be a map");
+  }
+  for (const key of ["identity", "kind", "locator"]) {
+    if (typeof value.source[key] !== "string") throw new Error(`work task defective: invalid source ${key}`);
+  }
+  if (!Array.isArray(value.dependencies)) {
+    throw new Error("work task defective: dependencies must be ordered list");
+  }
+  const dependencyIds = value.dependencies.map((dependency) => normalizeWorkTaskId(dependency));
+  if (dependencyIds.some((dependency) => !dependency) || new Set(dependencyIds).size !== dependencyIds.length) {
+    throw new Error("work task defective: dependencies must be unique task ids");
+  }
+  if (typeof value.domain !== "string" || typeof value.delegatedBy !== "string") {
+    throw new Error("work task defective: invalid organization text");
+  }
+  if (!value.escalation || typeof value.escalation !== "object" || Array.isArray(value.escalation)) {
+    throw new Error("work task defective: escalation must be a map");
+  }
+  for (const key of ["state", "target", "reason", "timestamp", "sourceIdentity"]) {
+    if (typeof value.escalation[key] !== "string") throw new Error(`work task defective: invalid escalation ${key}`);
+  }
+  if (value.escalation.timestamp && !Number.isFinite(Date.parse(value.escalation.timestamp))) {
+    throw new Error("work task defective: invalid escalation timestamp");
+  }
+  if (!Array.isArray(value.delegationEvents)) {
+    throw new Error("work task defective: delegation events must be ordered list");
+  }
+  for (const event of value.delegationEvents) {
+    if (!event || typeof event !== "object" || Array.isArray(event)) {
+      throw new Error("work task defective: invalid delegation event");
+    }
+    if (!DELEGATION_EVENT_TYPE_SET.has(event.type)) {
+      throw new Error(`work task defective: invalid delegation event type ${event.type || "(missing)"}`);
+    }
+    for (const key of ["timestamp", "actor", "recipient", "note", "sourceIdentity"]) {
+      if (typeof event[key] !== "string") throw new Error(`work task defective: invalid delegation event ${key}`);
+    }
+    if (!Number.isFinite(Date.parse(event.timestamp))) {
+      throw new Error("work task defective: invalid event timestamp");
+    }
+  }
 }
+
+export function appendWorkTaskDelegationEvent(task, event, { now = new Date() } = {}) {
+  const current = buildWorkTask(task);
+  assertWorkTask(current);
+  const normalizedEvent = normalizeDelegationEvent(event, {
+    now,
+    sourceIdentity: current.source.identity
+  });
+  const next = buildWorkTask({
+    ...current,
+    delegationEvents: [...current.delegationEvents, normalizedEvent]
+  });
+  assertWorkTask(next);
+  return next;
+}
+
+export const appendDelegationEvent = appendWorkTaskDelegationEvent;
 
 export function canTransitionWorkStatus(from, to) {
   const source = normalizeWorkStatus(from, "");

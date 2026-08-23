@@ -127,6 +127,70 @@ Rules:
 - Outcome lines MUST be sentence-shaped (not JSON-only blobs).
 - Outcome lines MUST be written to `world/newspaper/YYYYMMDD-channel-<channel>-<agent>.pya`.
 
+## 7.2 Headquarters organization metadata
+
+An established agent house MAY carry its organization contract in the canonical
+house-local file `world/house/<agent>/conduct/organization.pya`. This is part of
+the house and is not an agent registry. The normalized map has these fields:
+
+* `role`: text, empty for a legacy house without organization metadata;
+* `supervisor`: text, empty when the house has no supervisor;
+* `responsibilities`: an ordered, duplicate-free text list;
+* `domains`: an ordered, duplicate-free text list.
+
+The administration surface MUST reconcile this file idempotently and include the
+normalized organization map in the managed desired-state hash. A missing file
+on a legacy house MUST read as the empty organization map. Re-establishment MAY
+materialize that empty map, but MUST NOT change directory licences, calendars,
+lifecycle controls, or the meaning of existing establishment calls.
+
+The organization-aware Pyash form retains the purpose text and supplies a map
+through the existing `with name map` case:
+
+```pyash
+su name chief of staff ob text "Coordinate Headquarters work." with name map chief of staff organization be establish do
+su name correspondence worker ob text "Handle correspondence." with name map correspondence worker organization be establish do
+```
+
+For example, the remembered map can contain ordered vector values:
+
+```pyash
+su name chief of staff organization be map def
+  su name role ob text "Chief of Staff" ya
+  su name supervisor ob text "" ya
+  su name responsibilities ob ve text "coordinate work" "review escalations" ya
+  su name domains ob ve text "headquarters" "operations" ya
+prah
+```
+
+## 7.3 Domain-aware delegated WorkTask metadata
+
+The existing WorkTask contract gains named, top-level metadata with empty
+backward-compatible defaults:
+
+* `source`: a small map with stable `identity` and optional `kind` and `locator`;
+* `domain`: text;
+* `deadline`: empty or a normalized ISO timestamp;
+* `dependencies`: an ordered, duplicate-free list of task ids;
+* `delegatedBy`: an agent-house name;
+* `escalation`: a map containing `state`, `target`, `reason`, `timestamp`, and
+  `sourceIdentity`;
+* `delegationEvents`: an ordered list of records containing `type`, `timestamp`,
+  `actor`, `recipient`, `note`, and `sourceIdentity`.
+
+Allowed delegation event types are `assigned`, `accepted`, `declined`,
+`clarification-requested`, `progress-reported`, `completed`, and `escalated`.
+Events are audit facts layered over the current WorkTask state machine:
+delegation `accepted` and `completed` MUST NOT transition a WorkTask to its
+terminal `accepted` status. Invalid deadlines and unknown event types are
+defects. Existing statuses and `WORK_TRANSITIONS` remain unchanged.
+
+The named organization/delegation map MUST survive WorkTask status artifacts,
+atomic input/runtime/retry envelopes, operator mutations, and ordinary work
+newspaper records. These projections remain Pyash `.pya` records; the host
+language is limited to validation, atomic filesystem reconciliation, codecs, and
+newspaper emission.
+
 ## 8. Conformance
 
 Implementation conforms when it provides deterministic session/memory behavior, valid tool exposure, scheduler-managed recurring runs, and channel routing via canonical contract.

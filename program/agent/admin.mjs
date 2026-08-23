@@ -10,6 +10,12 @@ import {
   listWorldDeclaredAgentHouses,
   resolveWorldAgentHouseDirectory
 } from "../library/agent_command_policy.mjs";
+import {
+  agentOrganizationHash,
+  normalizeAgentOrganization,
+  readAgentOrganization,
+  writeAgentOrganization
+} from "./organization.mjs";
 
 const REQUIRED_AGENT_DIRS = [
   "identity",
@@ -281,7 +287,8 @@ async function writeManagedState({ worldRoot, agentName, spec, hash }) {
     sentenceToPyash({ mood: "ya", su: { name: "managed spec hash" }, ob: { text: hash }, be: "text" }),
     sentenceToPyash({ mood: "ya", su: { name: "managed agent name" }, ob: { text: spec.agentName }, be: "text" }),
     sentenceToPyash({ mood: "ya", su: { name: "managed purpose" }, ob: { text: spec.purpose }, be: "text" }),
-    sentenceToPyash({ mood: "ya", su: { name: "managed interval minutes" }, ob: { num: spec.intervalMinutes }, be: "num" })
+    sentenceToPyash({ mood: "ya", su: { name: "managed interval minutes" }, ob: { num: spec.intervalMinutes }, be: "num" }),
+    sentenceToPyash({ mood: "ya", su: { name: "managed organization hash" }, ob: { text: agentOrganizationHash(spec.organization) }, be: "text" })
   ];
   const body = `${lines.join("\n")}\n`;
   const existing = await readTextIfExists(managedPath);
@@ -323,6 +330,7 @@ export async function establishAgent({
   worldRoot,
   agentName,
   purpose = "",
+  organization = {},
   intervalMinutes = 24,
   writePolicy = true,
   nowFn
@@ -338,7 +346,8 @@ export async function establishAgent({
   const desiredSpec = {
     agentName: normalized,
     purpose: String(purpose).trim(),
-    intervalMinutes: Number(intervalMinutes)
+    intervalMinutes: Number(intervalMinutes),
+    organization: normalizeAgentOrganization(organization)
   };
   const desiredHash = managedSpecHash(desiredSpec);
   const priorHash = await readManagedHash({ worldRoot, agentName: normalized });
@@ -354,6 +363,11 @@ export async function establishAgent({
   }
   let calendarResult = { calendarPath: null, changed: false };
   let purposeResult = { changed: false };
+  const organizationResult = await writeAgentOrganization({
+    agentRoot,
+    organization: desiredSpec.organization
+  });
+  if (organizationResult.changed) changes.push("organization");
   const importResult = await ensureImportConductFile({ worldRoot, agentName: normalized });
   if (importResult.changed) changes.push("import_conduct");
   if (priorHash !== desiredHash) {
@@ -385,12 +399,15 @@ export async function establishAgent({
     agentName: normalized,
     agentRoot,
     calendarPath: calendarResult.calendarPath,
+    organizationPath: organizationResult.organizationPath,
     calendarCreated: calendarResult.changed,
     purposeUpdated: purposeResult.changed,
     changed: changes.length > 0,
     changes
   };
 }
+
+export { readAgentOrganization };
 
 export async function improveAgent({
   worldRoot,

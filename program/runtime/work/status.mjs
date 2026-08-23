@@ -42,12 +42,21 @@ function parseMap(text, name) {
   const out = {};
   if (!block) return out;
   for (const line of String(block[1] ?? "").split("\n")) {
-    const match = line.trim().match(/^su name (.+?) ob (text|num) (.+?) ya$/i);
+    const match = line.trim().match(/^su name (.+?) ob (ve text|text|num) (.+) ya$/i);
     if (!match) continue;
     const key = String(match[1]).trim();
-    out[key] = match[2].toLowerCase() === "num"
-      ? Number(match[3])
-      : parseQuoted(match[3]);
+    if (match[2].toLowerCase() === "ve text") {
+      try {
+        const sentence = parse(`su name item ob ve text ${match[3]} ya`);
+        out[key] = Array.isArray(sentence?.ob?.ve?.values) ? [...sentence.ob.ve.values] : [];
+      } catch {
+        out[key] = [];
+      }
+    } else {
+      out[key] = match[2].toLowerCase() === "num"
+        ? Number(match[3])
+        : parseQuoted(match[3]);
+    }
   }
   return out;
 }
@@ -65,6 +74,31 @@ function decodeJson(value, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function vectorText(values = []) {
+  return values.map((value) => quoteText(value)).join(" ");
+}
+
+function organizationEntries(task) {
+  return [
+    { key: "source", type: "text", value: quoteText(encodeJson(task.source)) },
+    { key: "source identity", type: "text", value: quoteText(task.source.identity) },
+    { key: "source kind", type: "text", value: quoteText(task.source.kind) },
+    { key: "source locator", type: "text", value: quoteText(task.source.locator) },
+    { key: "domain", type: "text", value: quoteText(task.domain) },
+    { key: "deadline", type: "text", value: quoteText(task.deadline) },
+    { key: "dependencies", type: "ve text", value: vectorText(task.dependencies) },
+    { key: "delegated by", type: "text", value: quoteText(task.delegatedBy) },
+    { key: "escalation", type: "text", value: quoteText(encodeJson(task.escalation)) },
+    { key: "escalation state", type: "text", value: quoteText(task.escalation.state) },
+    { key: "escalation target", type: "text", value: quoteText(task.escalation.target) },
+    { key: "escalation reason", type: "text", value: quoteText(task.escalation.reason) },
+    { key: "escalation timestamp", type: "text", value: quoteText(task.escalation.timestamp) },
+    { key: "escalation source identity", type: "text", value: quoteText(task.escalation.sourceIdentity) },
+    { key: "delegation events", type: "text", value: quoteText(encodeJson(task.delegationEvents)) },
+    { key: "delegation event types", type: "ve text", value: vectorText(task.delegationEvents.map((event) => event.type)) }
+  ];
 }
 
 function statusEntries(task) {
@@ -195,6 +229,7 @@ function checkpointBlocks(task) {
 function statusToText(task) {
   return [
     mapBlock("work task status", statusEntries(task)),
+    mapBlock("work task organization", organizationEntries(task)),
     ...checkpointBlocks(task)
   ].join("\n") + "\n";
 }
@@ -210,6 +245,8 @@ function statusFromText(text) {
   const convergence = parseMap(text, "work task convergence");
   const integration = parseMap(text, "work task integration");
   const checkpoint = parseMap(text, "work task checkpoint");
+  const organization = parseMap(text, "work task organization");
+  const storedEscalation = decodeJson(organization.escalation);
   let payloadSentence = null;
   const payloadText = String(source.payload ?? "").trim();
   if (payloadText) {
@@ -240,6 +277,25 @@ function statusFromText(text) {
     message: values.message,
     result: values.result,
     error: values.error,
+    source: {
+      identity: organization["source identity"],
+      kind: organization["source kind"],
+      locator: organization["source locator"],
+      ...decodeJson(organization.source, {})
+    },
+    domain: organization.domain,
+    deadline: organization.deadline,
+    dependencies: organization.dependencies,
+    delegatedBy: organization["delegated by"],
+    escalation: {
+      ...storedEscalation,
+      state: organization["escalation state"] ?? storedEscalation.state,
+      target: organization["escalation target"] ?? storedEscalation.target,
+      reason: organization["escalation reason"] ?? storedEscalation.reason,
+      timestamp: organization["escalation timestamp"] ?? storedEscalation.timestamp,
+      sourceIdentity: organization["escalation source identity"] ?? storedEscalation.sourceIdentity
+    },
+    delegationEvents: decodeJson(organization["delegation events"], []),
     workSpec: decodeJson(source["work spec"]),
     payloadSentence,
     checkpoint: {
@@ -348,6 +404,24 @@ function checkpointHasData(checkpoint) {
   return JSON.stringify(buildWorkCheckpoint(checkpoint)) !== JSON.stringify(buildWorkCheckpoint());
 }
 
+function organizationHasData(task) {
+  return Boolean(
+    task?.source?.identity
+      || task?.source?.kind
+      || task?.source?.locator
+      || task?.domain
+      || task?.deadline
+      || task?.dependencies?.length
+      || task?.delegatedBy
+      || task?.escalation?.state
+      || task?.escalation?.target
+      || task?.escalation?.reason
+      || task?.escalation?.timestamp
+      || task?.escalation?.sourceIdentity
+      || task?.delegationEvents?.length
+  );
+}
+
 async function mergeStoredTask(worldRoot, task) {
   const candidate = buildWorkTask(task);
   const stored = await readWorkTaskStatus(worldRoot, candidate.taskId);
@@ -357,6 +431,13 @@ async function mergeStoredTask(worldRoot, task) {
     ...candidate,
     workSpec: Object.keys(candidate.workSpec).length ? candidate.workSpec : stored.workSpec,
     payloadSentence: candidate.payloadSentence || stored.payloadSentence,
+    source: organizationHasData(candidate) ? candidate.source : stored.source,
+    domain: organizationHasData(candidate) ? candidate.domain : stored.domain,
+    deadline: organizationHasData(candidate) ? candidate.deadline : stored.deadline,
+    dependencies: organizationHasData(candidate) ? candidate.dependencies : stored.dependencies,
+    delegatedBy: organizationHasData(candidate) ? candidate.delegatedBy : stored.delegatedBy,
+    escalation: organizationHasData(candidate) ? candidate.escalation : stored.escalation,
+    delegationEvents: organizationHasData(candidate) ? candidate.delegationEvents : stored.delegationEvents,
     checkpoint: checkpointHasData(candidate.checkpoint) ? candidate.checkpoint : stored.checkpoint
   });
 }
