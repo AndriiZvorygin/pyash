@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
 import { integrateAcceptedWork, synchronizeAutomationBranch } from "../../program/runtime/work/integration.mjs";
 import { appendWorkSchedulerEvent } from "../../program/runtime/work/history.mjs";
-import { buildWorkDailyDigest, writeWorkDailyDigestState } from "../../program/runtime/work/digest.mjs";
+import { buildWorkDailyDigest, renderWorkDailyDigest, writeWorkDailyDigestState } from "../../program/runtime/work/digest.mjs";
 import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { listWorkTasks } from "../../program/runtime/work/operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
@@ -436,6 +436,27 @@ test("technical blocked wakes are not reported as idle and blocker rationale sta
   assert.match(digest.report, /Idle \/ no work: 0/u);
   assert.match(digest.report, /correction required: compiled streaming duplicates output and loses reply metadata/u);
   assert.doesNotMatch(digest.report, /Sol review:.*full rationale/iu);
+});
+
+test("digest uses one canonical Next package for runnable and roadmap sections", () => {
+  const digest = renderWorkDailyDigest({
+    date: "2026-08-23",
+    since: "2026-08-23T00:00:00.000Z",
+    until: "2026-08-23T23:00:00.000Z",
+    capacity: { weekly: { identified: true, remainingPercent: 90, usedPercent: 10 } },
+    roadmap: {
+      packages: [
+        { taskId: "hq-organization-and-work-contract", title: "Define Headquarters organization and work contracts", status: "CANDIDATE" },
+        { taskId: "product-alpha", title: "Product alpha qualification", status: "BLOCKED / EXTERNAL EVIDENCE", progress: "external evidence required" }
+      ],
+      externalEvidence: [{ taskId: "product-alpha", title: "Product alpha qualification", blocker: "external evidence required" }],
+      needsDecision: [],
+      retryableTechnical: []
+    }
+  });
+  assert.match(digest.report, /Runnable roadmap[\s\S]*Next: Define Headquarters organization and work contracts/u);
+  assert.match(digest.report, /ROADMAP[\s\S]*Next:\n  Define Headquarters organization and work contracts/u);
+  assert.doesNotMatch(digest.report, /ROADMAP[\s\S]*Next:\n  \(none\)/u);
 });
 
 test("product-alpha qualification is shown as external evidence, not technical correction", async () => {

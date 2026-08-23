@@ -123,9 +123,14 @@ function uniqueRecoveryEvents(events) {
 function compactBlocker(value) {
   const body = text(value).replace(/\s+/gu, " ");
   if (!body) return "technical continuation required";
-  if (/^awaiting external evidence:/iu.test(body)
+  if (/^(?:awaiting )?external evidence required\b/iu.test(body)
+    || /^awaiting external evidence:/iu.test(body)
     || (/(Ollama|live backend|fixture-free live|Matrix|CI|soak|real[- ]backend)/iu.test(body)
       && /unavailable|evidence|required|pending|remain/iu.test(body))) {
+    return `external evidence required: ${body.replace(/^(?:awaiting external evidence:\s*)+/iu, "")}`;
+  }
+  if (/(?:fixture-free|live).*?(?:proof|evidence).*?(?:HTTP|status)\s+[45]\d\d\b/iu.test(body)
+    || /(?:search|Ollama|Matrix|CI) endpoint.*?(?:HTTP|status)\s+[45]\d\d\b/iu.test(body)) {
     return `external evidence required: ${body.replace(/^(?:awaiting external evidence:\s*)+/iu, "")}`;
   }
   if (/integration|cherry-pick|rebase|merge conflict/iu.test(body)) {
@@ -325,7 +330,10 @@ export function renderWorkDailyDigest({
     }
     if (runnableRoadmap) {
       const runnablePackages = (roadmap?.packages || []).filter((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status));
-      lines.push("", "Runnable roadmap", "-----------------", ...runnablePackages.slice(0, 4).map((item, index) => `${index === 0 ? "  Next: " : "  Later: "}${item.title}`));
+      const next = runnablePackages.find((item) => item.status === "QUEUED")
+        || runnablePackages.find((item) => item.status === "CANDIDATE");
+      const later = runnablePackages.filter((item) => item.taskId !== next?.taskId);
+      lines.push("", "Runnable roadmap", "-----------------", ...(next ? [`  Next: ${next.title}`] : ["  Next: (none)"]), ...later.slice(0, 3).map((item) => `  Later: ${item.title}`));
     }
   } else if (!active.length && !ready && !curation.proposed?.length && roadmapWork) {
     lines.push("", "READY QUEUE EMPTY - RECONCILIATION REQUIRED", "--------------------------------------------", "The generated queue is empty, but the authoritative roadmap still contains unfinished packages.");
@@ -349,9 +357,11 @@ export function renderWorkDailyDigest({
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / EXTERNAL EVIDENCE"),
       ...(roadmap.externalEvidence || []).filter((item) => !(roadmap.packages || []).some((candidate) => candidate.taskId === item.taskId))
     ];
+    const nextPackage = queuedPackages[0] || candidatePackages[0] || null;
+    const laterPackages = candidatePackages.filter((item) => item.taskId !== nextPackage?.taskId);
     lines.push(...(activePackages.length ? activePackages.map((item) => `  ${item.title} — ${item.progress}`) : ["  (none)"]));
-    lines.push("Next:", ...(queuedPackages.length ? queuedPackages.slice(0, 3).map((item) => `  ${item.title}`) : ["  (none)"]));
-    lines.push("Later:", ...(candidatePackages.length ? candidatePackages.slice(0, 4).map((item) => `  ${item.title}`) : ["  (none)"]));
+    lines.push("Next:", ...(nextPackage ? [`  ${nextPackage.title}`] : ["  (none)"]));
+    lines.push("Later:", ...(laterPackages.length ? laterPackages.slice(0, 4).map((item) => `  ${item.title}`) : ["  (none)"]));
     lines.push("Operational blocks:", ...(operationalPackages.length ? operationalPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
     lines.push("Awaiting external evidence:", ...(externalPackages.length ? externalPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
     lines.push("Needs decision:", ...(blockedPackages.length ? blockedPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));

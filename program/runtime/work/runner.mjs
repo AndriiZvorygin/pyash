@@ -76,7 +76,15 @@ export async function probeExternalEvidenceTask(task, {
     checks.push({ name: "Ollama", healthy, endpoint: ollamaHost });
   }
   if (/search|60490/iu.test(reason)) {
-    const searchUrl = text(env.PYA_WEB_SEARCH_MOTOR) || "http://localhost:60490/";
+    const searchMotor = text(env.PYA_WEB_SEARCH_MOTOR) || "http://localhost:60490/";
+    let searchUrl = searchMotor;
+    try {
+      const parsed = new URL(searchMotor.endsWith("/search") ? searchMotor : `${searchMotor.replace(/\/$/u, "")}/search`);
+      parsed.searchParams.set("q", "pyash");
+      parsed.searchParams.set("format", "json");
+      parsed.searchParams.set("count", "1");
+      searchUrl = parsed.toString();
+    } catch {}
     checks.push({ name: "web search", healthy: await probeUrl(searchUrl, fetchImpl), endpoint: searchUrl });
   }
   if (!checks.length) return { available: false, checked: false, reason: "no cheap external dependency probe configured" };
@@ -140,6 +148,8 @@ export async function inspectWorkBackground({
   let externalEvidence = allTasks
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isAwaitingExternalEvidence(task));
+  let temporarilyUnexecutableTechnical = blocked
+    .filter((task) => !recoverable.some((candidate) => candidate.taskId === task.taskId));
   const resumedExternal = [];
   if (externalEvidenceProbe) {
     for (const task of externalEvidence) {
@@ -163,6 +173,8 @@ export async function inspectWorkBackground({
       externalEvidence = allTasks
         .filter((task) => !owner || task.owner === owner)
         .filter((task) => isAwaitingExternalEvidence(task));
+      temporarilyUnexecutableTechnical = blocked
+        .filter((task) => !recoverable.some((candidate) => candidate.taskId === task.taskId));
     }
   }
   const capacity = await capacitySource({ now: typeof now === "function" ? now() : now });
@@ -177,6 +189,7 @@ export async function inspectWorkBackground({
     eligible,
     recoverable,
     technicalBlocked: blocked,
+    temporarilyUnexecutableTechnical,
     externalEvidence,
     resumedExternal,
     capacity,
@@ -210,10 +223,12 @@ export async function runWorkBackgroundOnce({
       owner,
       threshold: policy.curationThreshold ?? DEFAULT_BACKGROUND_POLICY.curationThreshold,
       maxTasks: policy.curationMaxTasks ?? DEFAULT_BACKGROUND_POLICY.curationMaxTasks,
+      staleTurnMs: policy.staleOperationalTurnMs,
+      maxRecoveryCount: policy.maxOperationalRecoveries,
       now
     })
     : null;
-  const { eligible, recoverable, technicalBlocked, externalEvidence, capacity, admission } = await inspectWorkBackground({
+  const { eligible, recoverable, temporarilyUnexecutableTechnical, externalEvidence, capacity, admission } = await inspectWorkBackground({
     worldRoot,
     owner,
     policy,
@@ -260,7 +275,7 @@ export async function runWorkBackgroundOnce({
   };
   if (!admission.admit) {
     const externalOnly = admission.reason === "no eligible work" && externalEvidence.length > 0;
-    const technicalUnavailable = admission.reason === "no eligible work" && technicalBlocked.length > 0;
+    const technicalUnavailable = admission.reason === "no eligible work" && temporarilyUnexecutableTechnical.length > 0;
     const reason = externalOnly
       ? "awaiting external evidence"
       : technicalUnavailable ? "technical continuation unavailable" : admission.reason;
@@ -270,7 +285,7 @@ export async function runWorkBackgroundOnce({
       reason,
       capacity,
       eligible: taskCount,
-      blocked: technicalBlocked.map((task) => task.taskId)
+      blocked: temporarilyUnexecutableTechnical.map((task) => task.taskId)
     }, { now });
     const health = {
       ...baseHealth,

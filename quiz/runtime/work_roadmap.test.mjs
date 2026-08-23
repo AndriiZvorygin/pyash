@@ -40,6 +40,25 @@ test("live system refusal is external evidence, not technical retry or human dir
   assert.equal(isHumanDecisionBlock(task), false);
 });
 
+test("HTTP 403 is not a human decision, and required fixture proof is external evidence", () => {
+  const statusOnly = {
+    status: "blocked",
+    checkpoint: { blocker: "search request returned HTTP 403" }
+  };
+  assert.equal(isHumanDecisionBlock(statusOnly), false);
+  assert.equal(isRetryableWorkBlock(statusOnly), true);
+
+  const requiredProof = {
+    status: "blocked",
+    checkpoint: {
+      blocker: "The required fixture-free proof cannot complete because the search endpoint returns HTTP 403; acceptance remains blocked."
+    }
+  };
+  assert.equal(isAwaitingExternalEvidence(requiredProof), true);
+  assert.equal(isRetryableWorkBlock(requiredProof), false);
+  assert.equal(isHumanDecisionBlock(requiredProof), false);
+});
+
 test("external evidence progress removes duplicated classification prefixes", async () => {
   const { worldRoot, repositoryRoot } = await world("pyash-roadmap-external-prefix-");
   const roadmap = await buildAutonomousRoadmap({
