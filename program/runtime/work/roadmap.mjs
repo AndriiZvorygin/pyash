@@ -49,6 +49,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "Add error-handling paths for ceremonies/sandpits",
     whyMatters: "Reliable autonomous work needs truthful errors to cross ceremony boundaries without losing source context or result shape.",
     dependencies: ["accepted ceremony translation boundary", "error sentence contract"],
+    dependsOnTaskIds: ["roadmap-translation-parity-tranche"],
     scope: "ret with be error, nested and returned ceremony errors, surfaced main-memory/results behavior, and supported parity coverage.",
     nonGoals: "A new exception system, undocumented error names, or broad compiler redesign.",
     acceptance: "Ceremony and sandpit errors become truthful Pyash error sentences, propagate through supported paths, and focused nested/returned error tests pass.",
@@ -63,6 +64,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "Remove reliance on separate register facts",
     whyMatters: "Keeps the evoking sentence as the source of truth and reduces stale fromindex/toindex state during loops and resumed work.",
     dependencies: ["loop semantics", "evoke sentence result contract"],
+    dependsOnTaskIds: ["roadmap-translation-parity-tranche"],
     scope: "Derive register lookups from the evoking sentence, preserve observable loop behavior, and add interpreter/JavaScript/C parity guards where supported.",
     nonGoals: "Removing legitimate result facts or changing the public loop vocabulary.",
     acceptance: "Loop and ceremony paths no longer depend on stale separate register facts; existing loop behavior and backend parity remain green.",
@@ -77,6 +79,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "Mind: plus streaming path and richer reply envelopes",
     whyMatters: "Makes mind calls useful as a durable language/runtime primitive by preserving assistant, thinking, timestamp, and streaming evidence.",
     dependencies: ["current mind contract", "translation/runtime parity baseline"],
+    dependsOnTaskIds: ["roadmap-translation-parity-tranche"],
     scope: "Richer reply envelope mapping, Ollama streaming path, supported interpreter/JavaScript surfaces, durable success/failure tests, and aligned documentation.",
     nonGoals: "New providers, multi-host scheduling, UI work, and fixture-only behavior.",
     acceptance: "Mind replies preserve text, metadata, and streaming behavior through supported runtime paths; focused success/failure tests pass without fixture-only backends.",
@@ -91,6 +94,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "Next milestone: Agent harness (research + builder)",
     whyMatters: "Exercises Pyash itself as the workflow language and improves the agent/runtime substrate that operates the roadmap.",
     dependencies: ["mind reply envelopes", "agent session and scheduler contracts", "tool/MCP lifecycle"],
+    dependsOnTaskIds: ["roadmap-mind-reply-envelope-streaming"],
     scope: "One end-to-end Pyash-defined agent workflow using existing session, tool, newspaper, and command primitives, with a durable example and tests.",
     nonGoals: "Replacing the supervisor, adding parallel workers, or inventing a second agent framework.",
     acceptance: "A bounded agent workflow is expressed in Pyash where reasonable, runs through supported runtime primitives, records durable evidence, and has zero-quota tests.",
@@ -133,6 +137,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "Goal: runnable agent loop with search, download, read-to-markdown, tool-calling minds, and project command execution.",
     whyMatters: "Turns the separate search, download, markdown, command, and mind primitives into one useful user-facing agent capability.",
     dependencies: ["native agent command workflow", "mind reply envelopes", "search/download/read tool contracts"],
+    dependsOnTaskIds: ["roadmap-pyash-native-agent-workflows", "roadmap-mind-reply-envelope-streaming"],
     scope: "A Pyash-defined research workflow that searches, downloads, reads to markdown, and records durable tool/session/newspaper evidence.",
     nonGoals: "Browser automation, arbitrary web crawling, new providers, and a second agent framework.",
     acceptance: "A fixture-free local end-to-end example exercises the supported tool chain with bounded policy and durable evidence; focused tests cover success and typed failure paths.",
@@ -147,6 +152,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "Goal: ship a narrow but reliable multi-agent runtime for real users (single workspace, scheduler + Matrix + file/tool workflows).",
     whyMatters: "Converts the existing scheduler/channel code into an evidence-backed product-alpha claim instead of relying on unit tests alone.",
     dependencies: ["agent research workflow", "Matrix channel contract", "scheduler health and dedup"],
+    dependsOnTaskIds: ["roadmap-agent-research-tool-chain"],
     scope: "A bounded real-environment alpha validation tranche: Matrix intake/produce, scheduler operation, dedup/checkpoint behavior, three real task traces, and a seven-day soak runbook/evidence summary.",
     nonGoals: "Multi-host deployment, arbitrary parallel workers, and UI/dashboard redesign.",
     acceptance: "The alpha exit evidence exists: seven-day soak without manual restart, three real end-to-end tasks, green scheduler/channel/agent tests, and a daily real-backend smoke record.",
@@ -161,6 +167,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "hq-organization-and-work-contract",
     whyMatters: "Gives the Headquarters vertical slice durable roles, delegation context, and domain-aware work without creating parallel registries or queues.",
     dependencies: ["agent administration", "durable WorkTask contract", "Knowledge Core provenance direction"],
+    dependsOnTaskIds: [],
     scope: "Extend existing agent administration and WorkTask records with role, supervisor, responsibilities, domain, source, deadline, dependencies, delegation, and escalation metadata; record delegation lifecycle events over existing statuses.",
     nonGoals: "A second agent registry, work queue, permissions system, or provider-neutral organizational runtime.",
     acceptance: "Chief of Staff and Correspondence Worker roles can be represented by existing agent houses, and one domain-aware delegated work record round-trips through existing checkpoint, retry, and newspaper paths.",
@@ -175,6 +182,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "hq-fixture-mail-vertical-slice",
     whyMatters: "Exercises the real channel spool/router, Correspondence Worker routing, durable work, escalation, and replay guarantees in one useful application scenario.",
     dependencies: ["hq-organization-and-work-contract", "channel_core input contract", "newspaper and replay"],
+    dependsOnTaskIds: ["hq-organization-and-work-contract"],
     scope: "Fixture email adapter over channel_core, provider/event/message identity, information/work/draft/escalation classification, Chief of Staff escalation, idempotent duplicate delivery, restart recovery, and briefing input evidence.",
     nonGoals: "A standalone inbox queue, competing message envelope, live provider integration, or Headquarters UI.",
     acceptance: "A duplicate-safe fixture email becomes recoverable organizational work, escalates with provenance, and is visible to the briefing projection with a complete replayable newspaper record.",
@@ -189,6 +197,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "hq-approval-and-resumption",
     whyMatters: "Connects existing ratification decisions to durable organizational work so sensitive actions pause safely and resume without replaying completed work.",
     dependencies: ["hq-fixture-mail-vertical-slice", "ratify policy", "durable work checkpoints"],
+    dependsOnTaskIds: ["hq-fixture-mail-vertical-slice"],
     scope: "Durable approval requests referencing work, proposed action, and checkpoint; approval/denial newspaper evidence; send, delete, purchase, publish, and calendar-mutation gates; checkpoint-based resumption.",
     nonGoals: "A separate permissions engine, hidden approval state, or unrestricted external action path.",
     acceptance: "Standing policy permits or denies configured actions, unapproved sensitive actions remain paused, and an approved task resumes from its durable checkpoint with replayable evidence.",
@@ -203,6 +212,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "hq-chief-briefing",
     whyMatters: "Turns canonical Pyash work, approval, channel, deadline, and escalation state into a concise operator view without introducing another database.",
     dependencies: ["hq-fixture-mail-vertical-slice", "hq-approval-and-resumption", "canonical newspaper/replay records"],
+    dependsOnTaskIds: ["hq-fixture-mail-vertical-slice", "hq-approval-and-resumption"],
     scope: "Deterministic maximum-five ranking of decisions, imminent deadlines, overdue commitments, conflicts, waiting responses, and escalations with source-record links.",
     nonGoals: "An authoritative briefing database, opaque model-only ranking, or a full Headquarters UI.",
     acceptance: "A briefing is derived from canonical Pyash state, stays replayable/auditable, and includes the golden fixture-mail escalation with its source evidence.",
@@ -217,6 +227,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "hq-email-and-capability-boundaries",
     whyMatters: "Moves from fixture evidence toward safe real-world operation by reusing channel contracts and unifying existing conduct boundaries.",
     dependencies: ["hq-chief-briefing", "channel/router contracts", "directory licences and ratification"],
+    dependsOnTaskIds: ["hq-chief-briefing"],
     scope: "Provider-neutral email adapter, concrete Gmail/IMAP boundary where available, and coherent capability checks across files, tools, channels, domains, and action classes.",
     nonGoals: "A competing envelope abstraction, permissions system, or broad unattended email mutation.",
     acceptance: "A real adapter can preserve channel identity and apply the existing capability/ratification policies, with Correspondence Worker mutation remaining narrowly scoped.",
@@ -231,6 +242,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "hq-contacts-commitments-knowledge-alignment",
     whyMatters: "Makes organizational relationships and commitments useful without fragmenting provenance or claim identity.",
     dependencies: ["Knowledge Core claim identity and evidence shell", "hq-organization-and-work-contract"],
+    dependsOnTaskIds: ["hq-organization-and-work-contract", "roadmap-knowledge-core"],
     scope: "Contact, organization, relationship, and commitment records linked to work, dates, domains, and source evidence using Knowledge Core identity, confidence, and anchor concepts.",
     nonGoals: "A competing CRM, relationship database, or provenance schema.",
     acceptance: "Commitments can reference people, organizations, dates, work, and source evidence while remaining compatible with Knowledge Core replay and conflict views.",
@@ -245,6 +257,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "hq-state-api-and-2d-projection",
     whyMatters: "Makes organizational state visible while keeping Pyash records authoritative and preventing a duplicate simulation.",
     dependencies: ["hq-chief-briefing", "hq-contacts-commitments-knowledge-alignment", "Product alpha runtime"],
+    dependsOnTaskIds: ["hq-chief-briefing", "hq-contacts-commitments-knowledge-alignment", "roadmap-product-alpha-soak"],
     scope: "Read-only projection of agents, relationships, work, channel queues, approvals, domains, newspaper events, and initial mailroom/Chief of Staff/domain workspace activity states.",
     nonGoals: "An authoritative UI database, speculative avatar simulation, or broad dashboard redesign.",
     acceptance: "API and initial 2D projection reproduce canonical state transitions for waiting, claimed, active, handoff, escalation, approval wait, and completion.",
@@ -259,6 +272,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "hq-temporary-workers-and-workload-evaluation",
     whyMatters: "Lets sustained coordination demand inform safe organizational scaling without silently restructuring agent administration.",
     dependencies: ["hq-state-api-and-2d-projection", "agent/session/work machinery", "scheduler telemetry"],
+    dependsOnTaskIds: ["hq-state-api-and-2d-projection"],
     scope: "Bounded temporary assignments with context, domain, capabilities, resource budget, termination condition, workload recommendations, watchdog checks, and resource accounting by agent/task/project/domain.",
     nonGoals: "Arbitrary parallel workers, automatic persistent-agent creation, or a second scheduler/telemetry system.",
     acceptance: "Temporary work is bounded and auditable, evaluator findings use newspaper/work/provenance evidence, and recommendations remain explicit rather than automatic restructuring.",
@@ -284,7 +298,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     taskId: "roadmap-command-result-identity",
     title: "Add durable per-command result identity",
     sourcePath: "documentation/todo.md",
-    sourceAnchor: "Introduce result tracking with per-command IDs instead of generic result",
+    sourceAnchor: "Introduce result tracking with per-command IDs instead of generic",
     whyMatters: "Improves debugging and replay when one Pyash program performs several external commands or tool calls.",
     dependencies: ["command audit IDs", "newspaper/tool event ordering", "result artifact contract"],
     scope: "A sentence-native result identity contract that links command/tool requests, surfaced results, artifacts, and replay evidence without breaking generic result compatibility.",
@@ -301,6 +315,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     sourceAnchor: "Review-loop context compaction (golden context)",
     whyMatters: "Keeps repeated implementation and review cycles bounded while preserving accepted evidence for replay.",
     dependencies: ["durable work checkpoints", "session replay records"],
+    dependsOnTaskIds: ["roadmap-session-replay-hardening"],
     scope: "Original objective plus latest accepted success pair in live prompts, failed retry chains retained in newspapers/artifacts, and deterministic compaction goldens.",
     nonGoals: "Provider-specific context heuristics, arbitrary memory retrieval, or multi-worker concurrency.",
     acceptance: "Repeated review loops produce bounded deterministic context, preserve accepted evidence, and replay without duplicating obsolete retry history.",
@@ -479,6 +494,7 @@ function fieldEntries(item) {
     ["source anchor", item.sourceAnchor],
     ["why matters", item.whyMatters],
     ["dependencies", listField(item.dependencies)],
+    ["depends on task ids", listField(item.dependsOnTaskIds)],
     ["intended scope", item.scope],
     ["non goals", listField(item.nonGoals)],
     ["acceptance", item.acceptance],
@@ -570,6 +586,7 @@ function normalizePackage(item, task) {
     ...item,
     source: sourceForPackage(item),
     dependencies: Array.isArray(item.dependencies) ? item.dependencies : text(item.dependencies).split(" | ").filter(Boolean),
+    dependsOnTaskIds: dependencyIds(item.dependsOnTaskIds),
     nonGoals: Array.isArray(item.nonGoals) ? item.nonGoals : text(item.nonGoals),
     status: statusForTask(task),
     blockClass: isArchivedWorkTask(task)
@@ -653,6 +670,101 @@ function splitList(value) {
   return text(value).split(" | ").filter(Boolean);
 }
 
+function dependencyIds(value) {
+  return [...new Set((Array.isArray(value) ? value : splitList(value)).map(text).filter(Boolean))];
+}
+
+export function validateRoadmapDependencies(packages = []) {
+  const items = [...(Array.isArray(packages) ? packages : [])]
+    .filter((item) => text(item?.taskId))
+    .sort((left, right) => text(left.taskId).localeCompare(text(right.taskId)));
+  const known = new Set(items.map((item) => text(item.taskId)));
+  const unknownDependencies = [];
+  for (const item of items) {
+    for (const dependency of dependencyIds(item.dependsOnTaskIds)) {
+      if (!known.has(dependency)) unknownDependencies.push({ taskId: text(item.taskId), dependency });
+    }
+  }
+  const state = new Map();
+  const stack = [];
+  const cycles = [];
+  const cycleKeys = new Set();
+  const byId = new Map(items.map((item) => [text(item.taskId), item]));
+  function visit(taskId) {
+    const current = state.get(taskId) || 0;
+    if (current === 2) return;
+    if (current === 1) {
+      const start = stack.indexOf(taskId);
+      const cycle = [...stack.slice(start), taskId];
+      const key = [...new Set(cycle)].sort().join("|");
+      if (!cycleKeys.has(key)) {
+        cycleKeys.add(key);
+        cycles.push(cycle);
+      }
+      return;
+    }
+    state.set(taskId, 1);
+    stack.push(taskId);
+    for (const dependency of dependencyIds(byId.get(taskId)?.dependsOnTaskIds).sort()) {
+      if (byId.has(dependency)) visit(dependency);
+    }
+    stack.pop();
+    state.set(taskId, 2);
+  }
+  for (const item of items) visit(text(item.taskId));
+  return {
+    unknownDependencies,
+    cycles,
+    defects: [
+      ...unknownDependencies.map((item) => ({ type: "unknown-dependency", ...item })),
+      ...cycles.map((taskIds) => ({ type: "cycle", taskIds }))
+    ]
+  };
+}
+
+export function roadmapDependencyStatus(item, {
+  tasks = [],
+  packages = [],
+  dependencyDefects = validateRoadmapDependencies(packages)
+} = {}) {
+  const taskId = text(item?.taskId);
+  const defects = Array.isArray(dependencyDefects)
+    ? {
+      unknownDependencies: dependencyDefects.filter((defect) => defect.type === "unknown-dependency"),
+      cycles: dependencyDefects.filter((defect) => defect.type === "cycle").map((defect) => defect.taskIds)
+    }
+    : dependencyDefects;
+  const ids = dependencyIds(item?.dependsOnTaskIds);
+  const packageIds = new Set(packages.map((candidate) => text(candidate?.taskId)).filter(Boolean));
+  const taskMap = new Map(tasks.map((task) => [text(task?.taskId), task]));
+  const unmet = [];
+  for (const dependency of ids) {
+    const unknown = !packageIds.has(dependency);
+    const cycle = defects.cycles?.find((taskIds) => taskIds.includes(taskId));
+    const prerequisite = taskMap.get(dependency);
+    if (unknown) {
+      unmet.push({ dependency, reason: "roadmap dependency defect: unknown package" });
+    } else if (cycle) {
+      unmet.push({ dependency, reason: `roadmap dependency defect: cycle ${cycle.join(" -> ")}` });
+    } else if (!prerequisite) {
+      unmet.push({ dependency, reason: "prerequisite has no durable task record" });
+    } else if (prerequisite.status !== "accepted") {
+      unmet.push({ dependency, reason: `prerequisite status is ${prerequisite.status}` });
+    } else if (prerequisite.checkpoint?.integration?.status !== "integrated"
+      || !text(prerequisite.checkpoint?.integration?.branchCommit || prerequisite.checkpoint?.integration?.commit)) {
+      unmet.push({ dependency, reason: "prerequisite is accepted but not integrated on automation/roadmap" });
+    }
+  }
+  const ownCycle = defects.cycles?.find((taskIds) => taskIds.includes(taskId));
+  return {
+    satisfied: unmet.length === 0 && !ownCycle,
+    dependsOnTaskIds: ids,
+    unmet,
+    defect: defects.unknownDependencies?.some((entry) => entry.taskId === taskId)
+      || Boolean(ownCycle)
+  };
+}
+
 function packageFromMap(map) {
   return {
     taskId: mapValue(map, "task id"),
@@ -662,6 +774,7 @@ function packageFromMap(map) {
     sourceAnchor: mapValue(map, "source anchor"),
     whyMatters: mapValue(map, "why matters"),
     dependencies: splitList(mapValue(map, "dependencies")),
+    dependsOnTaskIds: splitList(mapValue(map, "depends on task ids")),
     scope: mapValue(map, "intended scope"),
     nonGoals: mapValue(map, "non goals"),
     acceptance: mapValue(map, "acceptance"),
@@ -674,11 +787,19 @@ function packageFromMap(map) {
 }
 
 export function autonomousRoadmapPackages() {
-  return ROADMAP_PACKAGES.map((item) => ({ ...item, dependencies: [...item.dependencies] }));
+  return ROADMAP_PACKAGES.map((item) => ({
+    ...item,
+    dependencies: [...item.dependencies],
+    dependsOnTaskIds: dependencyIds(item.dependsOnTaskIds)
+  }));
 }
 
 export function autonomousCompletedPackages() {
-  return COMPLETED_PACKAGES.map((item) => ({ ...item, dependencies: [...item.dependencies] }));
+  return COMPLETED_PACKAGES.map((item) => ({
+    ...item,
+    dependencies: [...item.dependencies],
+    dependsOnTaskIds: dependencyIds(item.dependsOnTaskIds)
+  }));
 }
 
 export function autonomousRoadmapPaths(worldRoot) {
@@ -717,6 +838,8 @@ export function renderAutonomousRoadmapMarkdown(roadmap = {}) {
       output.push(`### ${item.title || item.taskId}`, "", `- Task: \`${item.taskId}\``, `- Source: ${item.source || "operator history"}`, `- Priority: ${item.priority ?? ""}`, `- Status: ${item.status || heading.toUpperCase()}`, `- Progress: ${item.progress || ""}`);
       if (item.whyMatters) output.push(`- Why it matters: ${item.whyMatters}`);
       if (item.dependencies?.length) output.push(`- Dependencies: ${listField(item.dependencies)}`);
+      if (item.dependsOnTaskIds?.length) output.push(`- Hard prerequisites: ${listField(item.dependsOnTaskIds)}`);
+      if (item.dependencyStatus?.unmet?.length) output.push(`- Dependency wait: ${item.dependencyStatus.unmet.map((entry) => `${entry.dependency} (${entry.reason})`).join("; ")}`);
       if (item.scope) output.push(`- Scope: ${item.scope}`);
       if (item.nonGoals) output.push(`- Non-goals: ${listField(item.nonGoals)}`);
       if (item.acceptance) output.push(`- Acceptance: ${item.acceptance}`);
@@ -763,6 +886,8 @@ export function renderAutonomousRoadmapReport(roadmap = {}) {
     for (const item of items) {
       lines.push(`${item.taskId} [priority ${item.priority}] ${item.title}`, `  progress: ${item.progress || ""}`);
       if (item.source) lines.push(`  source: ${item.source}`);
+      if (item.dependsOnTaskIds?.length) lines.push(`  hard prerequisites: ${item.dependsOnTaskIds.join(", ")}`);
+      if (item.dependencyStatus?.unmet?.length) lines.push(`  dependency wait: ${item.dependencyStatus.unmet.map((entry) => `${entry.dependency} (${entry.reason})`).join("; ")}`);
       if (item.worktree) lines.push(`  worktree: ${item.worktree}`);
       if (item.commit) lines.push(`  commit: ${item.commit}`);
     }
@@ -773,6 +898,9 @@ export function renderAutonomousRoadmapReport(roadmap = {}) {
   }
   if (roadmap.architect?.decisions?.length) {
     lines.push("SOL DECISIONS NEEDED", "--------------------", ...roadmap.architect.decisions.map((item) => `- ${item}`), "");
+  }
+  if (roadmap.dependencyDefects?.length) {
+    lines.push("ROADMAP DEPENDENCY DEFECTS", "--------------------------", ...roadmap.dependencyDefects.map((item) => `- ${item.type}: ${item.taskId || item.taskIds?.join(" -> ")}${item.dependency ? ` -> ${item.dependency}` : ""}`), "");
   }
   return lines.join("\n");
 }
@@ -785,6 +913,7 @@ function renderAutonomousRoadmapPya(roadmap) {
     ["refresh reason", roadmap.refreshReason],
     ["reconciliation source", roadmap.reconciliation?.source || ""],
     ["reconciliation status", roadmap.reconciliation?.status || ""],
+    ["dependency defects", JSON.stringify(roadmap.dependencyDefects || [])],
     ["last refresh at", roadmap.architect?.refreshedAt || ""],
     ["manager thread id", roadmap.architect?.threadId || ""],
     ["last sol summary", roadmap.architect?.summary || ""]
@@ -793,8 +922,9 @@ function renderAutonomousRoadmapPya(roadmap) {
     .map((item) => renderMap(`work autonomous roadmap package ${item.taskId}`, fieldEntries(item)))
     .join("\n");
   const decisions = renderMap("work autonomous roadmap decisions", (roadmap.needsDecision || []).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
+  const dependencyDefects = renderMap("work autonomous roadmap dependency defects", (roadmap.dependencyDefects || []).map((item, index) => [String(index + 1), JSON.stringify(item)]));
   const retryable = renderMap("work autonomous roadmap operational blocks", technicalRetryableItems(roadmap).map((item, index) => [String(index + 1), `${item.taskId}: ${item.blocker || item.progress || item.title}`]));
-  return `${header}${packageText}${retryable}${decisions}`;
+  return `${header}${packageText}${dependencyDefects}${retryable}${decisions}`;
 }
 
 export async function readAutonomousRoadmap(worldRoot) {
@@ -817,6 +947,9 @@ export async function readAutonomousRoadmap(worldRoot) {
         source: mapValue(stateMap, "reconciliation source"),
         status: mapValue(stateMap, "reconciliation status")
       },
+      dependencyDefects: (() => {
+        try { return JSON.parse(mapValue(stateMap, "dependency defects") || "[]"); } catch { return []; }
+      })(),
       architect: {
         refreshedAt: mapValue(stateMap, "last refresh at"),
         threadId: mapValue(stateMap, "manager thread id"),
@@ -862,8 +995,22 @@ export async function buildAutonomousRoadmap({
   const persistedCatalog = previous?.schema === ROADMAP_SCHEMA
     ? previous.packages?.filter((item) => item.taskId && item.sourcePath && item.sourceAnchor) || []
     : [];
-  const catalog = persistedCatalog.length >= 5 ? persistedCatalog : ROADMAP_PACKAGES;
-  const packages = catalog.map((item) => normalizePackage(item, taskMatch(item, allTasks)));
+  const canonicalById = new Map(ROADMAP_PACKAGES.map((item) => [item.taskId, item]));
+  const catalog = (persistedCatalog.length >= 5 ? persistedCatalog : ROADMAP_PACKAGES).map((item) => canonicalById.has(item.taskId)
+    ? { ...canonicalById.get(item.taskId), ...item, dependsOnTaskIds: dependencyIds(canonicalById.get(item.taskId).dependsOnTaskIds) }
+    : item);
+  const dependencyDefects = validateRoadmapDependencies(catalog);
+  const packages = catalog.map((item) => {
+    const normalized = normalizePackage(item, taskMatch(item, allTasks));
+    return {
+      ...normalized,
+      dependencyStatus: roadmapDependencyStatus(normalized, {
+        tasks: allTasks,
+        packages: catalog,
+        dependencyDefects
+      })
+    };
+  });
   const completed = COMPLETED_PACKAGES.map((item) => normalizePackage(item, taskMatch(item, allTasks)));
   const operationalBlocks = allTasks
     .filter((task) => isRetryableWorkBlock(task))
@@ -912,6 +1059,7 @@ export async function buildAutonomousRoadmap({
     retryableTechnical: operationalBlocks,
     retryable: operationalBlocks,
     externalEvidence,
+    dependencyDefects: dependencyDefects.defects,
     reconciliation: {
       source: "documentation/reference/roadmap-reconciliation-2026-08.md",
       status: "unfinished roadmap work remains; generated candidates are not exhaustion evidence"
@@ -946,6 +1094,7 @@ function normalizeArchitectPackage(item, index) {
     sourceAnchor: text(item.sourceAnchor),
     whyMatters: text(item.whyMatters || item.whyNow),
     dependencies: Array.isArray(item.dependencies) ? item.dependencies.map(text).filter(Boolean) : [],
+    dependsOnTaskIds: dependencyIds(item.dependsOnTaskIds),
     scope: text(item.scope),
     nonGoals: text(item.nonGoals),
     acceptance: text(item.acceptance),
@@ -959,7 +1108,7 @@ function roadmapRefreshPrompt(roadmap, repositoryRoot) {
   return [
     "You are Sol, the occasional Pyash roadmap architect.",
     "Inspect the repository, current specs, TODO, tests, and durable work state before proposing the next substantial packages.",
-    "Return JSON only with this shape: {summary, decisions, packages:[{taskId,title,source,whyMatters,dependencies,scope,nonGoals,acceptance,priority,prompt,whyNow}] }.",
+    "Return JSON only with this shape: {summary, decisions, packages:[{taskId,title,source,whyMatters,dependencies,dependsOnTaskIds,scope,nonGoals,acceptance,priority,prompt,whyNow}] }.",
     "Return 5 to 8 packages. Keep only the first 2 or 3 ready-worthy; the rest are candidates. Prefer coherent language/runtime/parity increments over micro-fixes.",
     "Respect Pyash-first policy: use Pyash for workflow logic when reasonably expressible and state the reason for host-language substrate.",
     `Repository: ${repositoryRoot}`,

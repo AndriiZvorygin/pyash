@@ -349,6 +349,7 @@ try {
         worldRoot,
         owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
         policy,
+        repositoryRoot,
         foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE)
       });
       const dryEligible = inspection.eligible.length

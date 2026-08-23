@@ -407,6 +407,16 @@ test("exhausted technical continuation does not starve a runnable candidate", as
 
 test("a healthy external dependency resumes its parked task without replanning", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-external-probe-");
+  await enqueueWorkTask(worldRoot, task("roadmap-translation-parity-tranche", 130));
+  const prerequisite = await readWorkTaskStatus(worldRoot, "roadmap-translation-parity-tranche");
+  await writeWorkTaskStatus(worldRoot, {
+    ...prerequisite,
+    status: "accepted",
+    checkpoint: {
+      ...prerequisite.checkpoint,
+      integration: { status: "integrated", commit: "translation-baseline" }
+    }
+  });
   await enqueueWorkTask(worldRoot, {
     ...task("roadmap-mind-reply-envelope-streaming", 120),
     title: "Mind streaming evidence",
