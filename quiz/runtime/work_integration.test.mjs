@@ -68,8 +68,31 @@ function blockedTask(taskId, title, priority, blocker, integrationStatus = "") {
   };
 }
 
+async function acceptedTranslationPrerequisite(worldRoot) {
+  await enqueueWorkTask(worldRoot, {
+    taskId: "roadmap-translation-parity-tranche",
+    owner: "background",
+    kind: "roadmap",
+    title: "Complete translation parity",
+    priority: 130,
+    queuedAt: "2026-08-17T00:00:00.000Z",
+    acceptanceText: "Interpreter and JavaScript parity pass.",
+    promptText: "Complete translation parity."
+  });
+  const task = await readWorkTaskStatus(worldRoot, "roadmap-translation-parity-tranche");
+  await writeWorkTaskStatus(worldRoot, {
+    ...task,
+    status: "accepted",
+    checkpoint: {
+      ...task.checkpoint,
+      integration: { status: "integrated", commit: "translation-task", branchCommit: "translation-baseline" }
+    }
+  });
+}
+
 test("external-evidence work is excluded while integration reconciliation is selected", async () => {
   const { worldRoot } = await world("pyash-integration-selection-");
+  await acceptedTranslationPrerequisite(worldRoot);
   await enqueueWorkTask(worldRoot, { ...blockedTask(
     "roadmap-mind-reply-envelope-streaming",
     "Mind reply envelopes and streaming",
@@ -101,6 +124,7 @@ test("external-evidence work is excluded while integration reconciliation is sel
 
 test("a live integration turn makes the next package the fallback candidate", async () => {
   const { worldRoot } = await world("pyash-integration-fallback-");
+  await acceptedTranslationPrerequisite(worldRoot);
   await enqueueWorkTask(worldRoot, {
     ...blockedTask("roadmap-ceremony-error-propagation", "Ceremony errors", 120, "integration reconciliation timed out", "reconciliation"),
     status: "ready",
