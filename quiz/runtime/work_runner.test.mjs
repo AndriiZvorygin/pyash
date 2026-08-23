@@ -351,6 +351,60 @@ test("external evidence does not starve candidate promotion", async () => {
   assert.equal(health["work-started wakes"], "1");
 });
 
+test("exhausted technical continuation does not starve a runnable candidate", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-technical-starvation-");
+  const repositoryRoot = path.join(path.dirname(worldRoot), "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(path.join(repositoryRoot, "documentation", "roadmap.md"), "hq-organization-and-work-contract\n");
+  await enqueueWorkTask(worldRoot, {
+    ...task("roadmap-mind-reply-envelope-streaming-follow-up-5", 120),
+    title: "Mind streaming continuation",
+    workSpec: { granularity: "substantial" },
+    status: "ready"
+  });
+  const blocked = await readWorkTaskStatus(worldRoot, "roadmap-mind-reply-envelope-streaming-follow-up-5");
+  await writeWorkTaskStatus(worldRoot, {
+    ...blocked,
+    status: "blocked",
+    message: "turn timeout",
+    checkpoint: {
+      ...blocked.checkpoint,
+      blocker: "turn timeout",
+      recoveryCount: 2,
+      activeTurn: {}
+    }
+  });
+  const capacitySource = async () => ({
+    state: "available",
+    remainingPercent: 90,
+    usedPercent: 10,
+    weekly: {
+      identified: true,
+      state: "available",
+      remainingPercent: 90,
+      usedPercent: 10,
+      windowStartAt: "2026-08-17T12:00:00.000Z",
+      resetAt: "2026-08-24T12:00:00.000Z"
+    }
+  });
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    repositoryRoot,
+    curate: true,
+    policy: { enabled: true },
+    capacitySource,
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "implementing" }),
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "hq-organization-and-work-contract");
+  assert.deepEqual(result.curation.created, ["hq-organization-and-work-contract"]);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["technical continuation unavailable wakes"] || "0", "0");
+  assert.equal(health["work-started wakes"], "1");
+});
+
 test("a healthy external dependency resumes its parked task without replanning", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-external-probe-");
   await enqueueWorkTask(worldRoot, {
@@ -403,4 +457,22 @@ test("generic real-backend qualification is not falsely released by an Ollama pr
   });
   assert.equal(result.available, false);
   assert.equal(result.checked, false);
+});
+
+test("search evidence probes the JSON search contract rather than the healthy landing page", async () => {
+  const urls = [];
+  const result = await probeExternalEvidenceTask({
+    status: "blocked",
+    checkpoint: { blocker: "fixture-free search proof is unavailable because the search endpoint returns HTTP 403" }
+  }, {
+    env: { PYA_WEB_SEARCH_MOTOR: "http://mriczo:60490/" },
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      return { ok: false, status: 403, async json() { return {}; } };
+    }
+  });
+  assert.equal(result.available, false);
+  assert.equal(result.checks[0].name, "web search");
+  assert.match(result.checks[0].endpoint, /\/search\?q=pyash&format=json&count=1/u);
+  assert.equal(urls.length, 1);
 });

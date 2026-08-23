@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { addWorkTask, listWorkTasks } from "./operator.mjs";
+import { findRecoverableOperationalWorkTasks } from "./recovery.mjs";
 import { autonomousRoadmapPackages, isAwaitingExternalEvidence, isRetryableWorkBlock } from "./roadmap.mjs";
 
 function text(value) {
@@ -46,12 +47,31 @@ export async function curateWorkBacklog({
   threshold = 1,
   maxTasks = 3,
   dryRun = false,
+  staleTurnMs,
+  maxRecoveryCount,
   now = () => new Date()
 } = {}) {
   const tasks = await listWorkTasks(worldRoot, { includeTerminal: true });
   const active = tasks.filter((task) => !["accepted", "failed", "blocked"].includes(task.status));
   const retryableTechnical = tasks.filter((task) => isRetryableWorkBlock(task));
+  const recoverableTechnical = await findRecoverableOperationalWorkTasks(worldRoot, {
+    owner,
+    now,
+    staleTurnMs,
+    maxRecoveryCount
+  });
+  const recoverableIds = new Set(recoverableTechnical.map((task) => task.taskId));
+  const temporarilyUnexecutableTechnical = retryableTechnical
+    .filter((task) => !recoverableIds.has(task.taskId))
+    .map((task) => task.taskId);
   const awaitingExternalEvidence = tasks.filter((task) => isAwaitingExternalEvidence(task));
+  const resultShape = {
+    retryableTechnical: retryableTechnical.map((task) => task.taskId),
+    retryable: retryableTechnical.map((task) => task.taskId),
+    recoverableTechnical: recoverableTechnical.map((task) => task.taskId),
+    temporarilyUnexecutableTechnical,
+    awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
+  };
   if (active.length >= Math.max(0, Number(threshold) || 0)) {
     return {
       created: [],
@@ -59,21 +79,17 @@ export async function curateWorkBacklog({
       needsDirection: false,
       reason: "backlog threshold satisfied",
       active: active.length,
-      retryableTechnical: retryableTechnical.map((task) => task.taskId),
-      retryable: retryableTechnical.map((task) => task.taskId),
-      awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
+      ...resultShape
     };
   }
-  if (retryableTechnical.length) {
+  if (recoverableTechnical.length) {
     return {
       created: [],
       proposed: [],
       needsDirection: false,
       reason: "retryable operational work remains",
       active: active.length,
-      retryableTechnical: retryableTechnical.map((task) => task.taskId),
-      retryable: retryableTechnical.map((task) => task.taskId),
-      awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
+      ...resultShape
     };
   }
   const candidates = autonomousRoadmapPackages();
@@ -97,12 +113,14 @@ export async function curateWorkBacklog({
     return {
       created: [],
       proposed,
-      needsDirection: active.length === 0 && proposed.length === 0 && credibleCandidates.length === 0,
+      needsDirection: active.length === 0
+        && proposed.length === 0
+        && credibleCandidates.length === 0
+        && retryableTechnical.length === 0
+        && awaitingExternalEvidence.length === 0,
       reason: proposed.length ? "curated current TODO" : credibleCandidates.length ? "ready queue empty; roadmap candidates remain" : "fresh reconciliation found no credible roadmap work",
       active: active.length,
-      retryableTechnical: [],
-      retryable: [],
-      awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
+      ...resultShape
     };
   }
   const created = [];
@@ -136,12 +154,14 @@ export async function curateWorkBacklog({
   return {
     created,
     proposed,
-    needsDirection: active.length === 0 && created.length === 0 && credibleCandidates.length === 0,
+    needsDirection: active.length === 0
+      && created.length === 0
+      && credibleCandidates.length === 0
+      && retryableTechnical.length === 0
+      && awaitingExternalEvidence.length === 0,
     reason: created.length ? "curated current TODO" : credibleCandidates.length ? "ready queue empty; roadmap candidates remain" : "fresh reconciliation found no credible roadmap work",
     active: active.length,
-    retryableTechnical: [],
-    retryable: [],
-    awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId)
+    ...resultShape
   };
 }
 

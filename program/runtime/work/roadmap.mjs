@@ -417,7 +417,8 @@ const TECHNICAL_CONTINUATION_PATTERNS = Object.freeze([
   /cherry-pick/iu,
   /rebase/iu,
   /optional .* unavailable/iu,
-  /baseline/iu
+  /baseline/iu,
+  /\b(?:HTTP|status)\s+[45]\d\d\b/iu
 ]);
 
 const HUMAN_DECISION_PATTERNS = Object.freeze([
@@ -438,7 +439,10 @@ const EXTERNAL_EVIDENCE_PATTERNS = Object.freeze([
   /live .*?(?:service|backend|Ollama).*?(?:unavailable|required)/iu,
   /required service .*? unavailable/iu,
   /required .*?(?:live )?(?:systems?|services?|backends?|environments?).*?(?:unavailable|refus(?:e|es|ed) connections?|not reachable|not available)/iu,
-  /\b(?:Ollama|search|Matrix|CI|real[- ]backend|soak)\b.*?(?:unavailable|refus(?:e|es|ed) connections?|not reachable|not available|pending|required)/iu
+  /\b(?:Ollama|search|Matrix|CI|real[- ]backend|soak)\b.*?(?:unavailable|refus(?:e|es|ed) connections?|not reachable|not available|pending|required)/iu,
+  /(?:fixture-free|live).*?(?:proof|evidence).*?(?:HTTP|status)\s+[45]\d\d\b/iu,
+  /(?:search|Ollama|Matrix|CI) endpoint.*?(?:HTTP|status)\s+[45]\d\d\b/iu,
+  /(?:HTTP|status)\s+[45]\d\d\b.*?(?:required|acceptance|evidence|proof|blocked)/iu
 ]);
 
 function text(value) {
