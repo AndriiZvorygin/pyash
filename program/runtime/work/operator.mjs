@@ -1,4 +1,8 @@
-import { buildWorkTask, transitionWorkTask } from "./contract.mjs";
+import {
+  appendWorkTaskDelegationEvent,
+  buildWorkTask,
+  transitionWorkTask
+} from "./contract.mjs";
 import {
   ackWorkTaskTerminalFailure,
   enqueueWorkTask,
@@ -53,6 +57,10 @@ export async function showWorkTask(worldRoot, taskId) {
   const task = await readWorkTaskStatus(worldRoot, taskId);
   if (!task) throw new Error(`work task not found: ${taskId}`);
   return task;
+}
+
+export async function recordWorkTaskDelegationEvent(worldRoot, taskId, event, { now = new Date() } = {}) {
+  return mutateTask(worldRoot, taskId, (current) => appendWorkTaskDelegationEvent(current, event, { now }));
 }
 
 export async function archiveWorkTask(worldRoot, taskId, reason, {

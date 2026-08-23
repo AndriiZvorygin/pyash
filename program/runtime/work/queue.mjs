@@ -41,17 +41,30 @@ function mapBlock(name, entries) {
   return lines.join("\n");
 }
 
-function parseEntries(text) {
-  const block = String(text ?? "").match(/su name work task be map def\n([\s\S]*?)\nprah/i);
+function parseEntries(text, name = "work task") {
+  const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const block = String(text ?? "").match(new RegExp(
+    `su name ${escaped} be map def\\n([\\s\\S]*?)\\nprah`,
+    "i"
+  ));
   const out = {};
   if (!block) return out;
   for (const line of String(block[1] ?? "").split("\n")) {
-    const match = line.trim().match(/^su name (.+?) ob (text|num) (.+?) ya$/i);
+    const match = line.trim().match(/^su name (.+?) ob (ve text|text|num) (.+) ya$/i);
     if (!match) continue;
     const key = String(match[1]).trim();
-    out[key] = match[2].toLowerCase() === "num"
-      ? Number(match[3])
-      : parseQuoted(match[3]);
+    if (match[2].toLowerCase() === "ve text") {
+      try {
+        const sentence = parse(`su name item ob ve text ${match[3]} ya`);
+        out[key] = Array.isArray(sentence?.ob?.ve?.values) ? [...sentence.ob.ve.values] : [];
+      } catch {
+        out[key] = [];
+      }
+    } else {
+      out[key] = match[2].toLowerCase() === "num"
+        ? Number(match[3])
+        : parseQuoted(match[3]);
+    }
   }
   return out;
 }
@@ -60,15 +73,40 @@ function encodeJson(value) {
   return JSON.stringify(value && typeof value === "object" ? value : {});
 }
 
-function decodeJson(value) {
+function decodeJson(value, fallback = {}) {
   const text = String(value ?? "").trim();
-  if (!text) return {};
+  if (!text) return fallback;
   try {
     const parsed = JSON.parse(text);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    return parsed && typeof parsed === "object" ? parsed : fallback;
   } catch {
-    return {};
+    return fallback;
   }
+}
+
+function vectorText(values = []) {
+  return values.map((value) => quoteText(value)).join(" ");
+}
+
+function organizationEntries(task) {
+  return [
+    { key: "source", type: "text", value: quoteText(encodeJson(task.source)) },
+    { key: "source identity", type: "text", value: quoteText(task.source.identity) },
+    { key: "source kind", type: "text", value: quoteText(task.source.kind) },
+    { key: "source locator", type: "text", value: quoteText(task.source.locator) },
+    { key: "domain", type: "text", value: quoteText(task.domain) },
+    { key: "deadline", type: "text", value: quoteText(task.deadline) },
+    { key: "dependencies", type: "ve text", value: vectorText(task.dependencies) },
+    { key: "delegated by", type: "text", value: quoteText(task.delegatedBy) },
+    { key: "escalation", type: "text", value: quoteText(encodeJson(task.escalation)) },
+    { key: "escalation state", type: "text", value: quoteText(task.escalation.state) },
+    { key: "escalation target", type: "text", value: quoteText(task.escalation.target) },
+    { key: "escalation reason", type: "text", value: quoteText(task.escalation.reason) },
+    { key: "escalation timestamp", type: "text", value: quoteText(task.escalation.timestamp) },
+    { key: "escalation source identity", type: "text", value: quoteText(task.escalation.sourceIdentity) },
+    { key: "delegation events", type: "text", value: quoteText(encodeJson(task.delegationEvents)) },
+    { key: "delegation event types", type: "ve text", value: vectorText(task.delegationEvents.map((event) => event.type)) }
+  ];
 }
 
 function taskToText(task) {
@@ -98,11 +136,13 @@ function taskToText(task) {
     { key: "checkpoint", type: "text", value: quoteText(encodeJson(task.checkpoint)) },
     { key: "payload", type: "text", value: quoteText(payload) }
   ];
-  return `${mapBlock("work task", entries)}\n`;
+  return `${mapBlock("work task", entries)}\n${mapBlock("work task organization", organizationEntries(task))}\n`;
 }
 
 function taskFromText(text) {
   const values = parseEntries(text);
+  const organization = parseEntries(text, "work task organization");
+  const storedEscalation = decodeJson(organization.escalation);
   let payloadSentence = null;
   const payloadText = String(values.payload ?? "").trim();
   if (payloadText) {
@@ -133,6 +173,25 @@ function taskFromText(text) {
     message: values.message,
     result: values.result,
     error: values.error,
+    source: {
+      identity: organization["source identity"],
+      kind: organization["source kind"],
+      locator: organization["source locator"],
+      ...decodeJson(organization.source, {})
+    },
+    domain: organization.domain,
+    deadline: organization.deadline,
+    dependencies: organization.dependencies,
+    delegatedBy: organization["delegated by"],
+    escalation: {
+      ...storedEscalation,
+      state: organization["escalation state"] ?? storedEscalation.state,
+      target: organization["escalation target"] ?? storedEscalation.target,
+      reason: organization["escalation reason"] ?? storedEscalation.reason,
+      timestamp: organization["escalation timestamp"] ?? storedEscalation.timestamp,
+      sourceIdentity: organization["escalation source identity"] ?? storedEscalation.sourceIdentity
+    },
+    delegationEvents: decodeJson(organization["delegation events"], []),
     workSpec: decodeJson(values["work spec"]),
     checkpoint: decodeJson(values.checkpoint),
     payloadSentence

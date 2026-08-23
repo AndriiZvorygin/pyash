@@ -27,6 +27,21 @@ function resolvePurpose(sentence) {
   return text.trim();
 }
 
+function resolveOrganization(sentence, { rememberFn }) {
+  const withName = String(sentence?.with?.name ?? "").trim();
+  if (!withName) return {};
+  const fact = rememberFn(withName);
+  if (!fact?.ob?.map || typeof fact.ob.map !== "object" || Array.isArray(fact.ob.map)) {
+    throwErrorSentence({
+      name: "establish organization defective",
+      message: "establish organization defective: with name map missing",
+      from: { name: "establish" },
+      raw: { withName }
+    });
+  }
+  return fact.ob.map;
+}
+
 export async function establish(sentence, { remember: rememberFn = remember } = {}) {
   if (!isHouseScope(sentence)) {
     throwErrorSentence({
@@ -54,8 +69,9 @@ export async function establish(sentence, { remember: rememberFn = remember } = 
       raw: { sentence }
     });
   }
+  const organization = resolveOrganization(sentence, { rememberFn });
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
-  await establishAgent({ worldRoot, agentName, purpose });
+  await establishAgent({ worldRoot, agentName, purpose, organization });
   return {
     mood: "ya",
     be: "establish",
@@ -68,6 +84,8 @@ export default establish;
 
 export const signatures = [
   { signatureWords: ["be", "establish", "ob", "text"], handler: establish },
+  { signatureWords: ["be", "establish", "ob", "text", "with", "name", "map"], handler: establish },
+  { signatureWords: ["be", "establish", "from", "wo", "house", "ob", "text", "with", "name", "map"], handler: establish },
   { signatureWords: ["be", "establish", "from", "wo", "house", "ob", "text"], handler: establish },
   { signatureWords: ["be", "establish", "from", "wo", "house"], handler: establish }
 ];
