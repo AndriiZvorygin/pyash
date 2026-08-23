@@ -105,4 +105,35 @@ test("house establish accepts a with name map organization declaration", async (
     responsibilities: ["coordinate work", "review escalations"],
     domains: ["headquarters", "operations"]
   });
+
+  doRemember({
+    mood: "ya",
+    su: { name: "correspondence worker organization" },
+    ob: {
+      map: {
+        role: { text: "Correspondence Worker" },
+        supervisor: { text: "chief of staff" },
+        responsibilities: { ve: { type: "text", values: ["classify correspondence"] } },
+        domains: { ve: { type: "text", values: ["correspondence"] } }
+      }
+    },
+    be: "map"
+  });
+  const workerEstablished = await interpret(parse(
+    'su name correspondence worker ob text "Handle correspondence." with name map correspondence worker organization be establish do'
+  ));
+  assert.equal(workerEstablished?.value?.boolean, true);
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "correspondence worker" })).role, "Correspondence Worker");
+
+  const reestablished = await interpret(parse(
+    'su name chief of staff ob text "Coordinate Headquarters work." be establish do'
+  ));
+  assert.equal(reestablished?.value?.boolean, true);
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "chief of staff" })).role, "Chief of Staff");
+  const workerReestablished = await interpret(parse(
+    'su name correspondence worker ob text "Handle correspondence." be establish do'
+  ));
+  assert.equal(workerReestablished?.value?.boolean, true);
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "correspondence worker" })).role, "Correspondence Worker");
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "correspondence worker" })).supervisor, "chief of staff");
 });

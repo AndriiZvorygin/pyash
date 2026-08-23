@@ -211,6 +211,29 @@ test("establish reconciles role-bearing house organization and reads it back", a
   assert.equal(unchanged.status, "unchanged");
   assert.equal(unchanged.changed, false);
   assert.equal(await fs.readFile(organizationPath, "utf8"), beforeUnchanged);
+
+  const chiefWithoutMap = await establishAgent({
+    worldRoot,
+    agentName: "chief of staff",
+    purpose: "Coordinate Headquarters work."
+  });
+  const workerWithoutMap = await establishAgent({
+    worldRoot,
+    agentName: "correspondence worker",
+    purpose: "Handle correspondence."
+  });
+  assert.equal(chiefWithoutMap.status, "unchanged");
+  assert.equal(workerWithoutMap.status, "unchanged");
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "chief of staff" })).role, "Chief of Staff");
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "correspondence worker" })).role, "Correspondence Worker");
+
+  await establishAgent({
+    worldRoot,
+    agentName: "correspondence worker",
+    purpose: "Handle correspondence.",
+    organization: {}
+  });
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "correspondence worker" })).role, "");
 });
 
 test("legacy house organization reads as empty defaults", async () => {
@@ -223,4 +246,21 @@ test("legacy house organization reads as empty defaults", async () => {
     responsibilities: [],
     domains: []
   });
+});
+
+test("present malformed organization state is a defect", async () => {
+  const worldRoot = await makeWorldRoot();
+  const agentRoot = path.join(worldRoot, "house", "malformed worker");
+  const organizationPath = path.join(agentRoot, "conduct", "organization.pya");
+  await fs.mkdir(path.dirname(organizationPath), { recursive: true });
+  await fs.writeFile(organizationPath, [
+    "su name organization be map def",
+    '  su name role ob text "Broken" ya',
+    "prah",
+    ""
+  ].join("\n"), "utf8");
+  await assert.rejects(
+    () => readAgentOrganization({ worldRoot, agentName: "malformed worker" }),
+    /agent organization defective: missing domains/
+  );
 });
