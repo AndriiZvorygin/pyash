@@ -138,6 +138,7 @@ export function buildWorkCheckpoint(input = {}) {
       branch: text(integration.branch),
       baseRevision: text(integration.baseRevision),
       commit: text(integration.commit),
+      branchCommit: text(integration.branchCommit),
       status: text(integration.status),
       integratedAt: text(integration.integratedAt),
       error: text(integration.error),

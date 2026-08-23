@@ -14,8 +14,12 @@ import {
   findRecoverableOperationalWorkTasks,
   recoverOperationalWorkTask
 } from "./recovery.mjs";
-import { isTechnicalContinuationBlock } from "./roadmap.mjs";
-import { isAwaitingExternalEvidence } from "./roadmap.mjs";
+import {
+  buildAutonomousRoadmap,
+  isTechnicalContinuationBlock,
+  isAwaitingExternalEvidence,
+  roadmapDependencyStatus
+} from "./roadmap.mjs";
 import { deriveImplementationProgress } from "./progress.mjs";
 
 function text(value) {
@@ -125,6 +129,30 @@ async function eligibleWork(worldRoot, owner) {
     });
 }
 
+function filterUnsatisfiedDependencies(entries, tasks, roadmap) {
+  const packages = [...(roadmap?.packages || []), ...(roadmap?.completed || [])];
+  const blocked = [];
+  const eligible = entries.filter((entry) => {
+    const item = packages.find((candidate) => candidate.taskId === entry.task.taskId);
+    if (!item) return true;
+    const dependency = roadmapDependencyStatus(item, {
+      tasks,
+      packages,
+      dependencyDefects: roadmap.dependencyDefects || []
+    });
+    if (dependency.satisfied) return true;
+    blocked.push({
+      taskId: entry.task.taskId,
+      title: entry.task.title,
+      priority: entry.task.priority,
+      unmet: dependency.unmet,
+      defect: dependency.defect
+    });
+    return false;
+  });
+  return { eligible, blocked };
+}
+
 export async function inspectWorkBackground({
   worldRoot,
   owner = "",
@@ -132,6 +160,7 @@ export async function inspectWorkBackground({
   capacitySource = readCodexCapacity,
   foregroundActive = false,
   externalEvidenceProbe = null,
+  repositoryRoot = process.cwd(),
   now = () => new Date()
 } = {}) {
   let eligible = await eligibleWork(worldRoot, owner);
@@ -142,6 +171,16 @@ export async function inspectWorkBackground({
       maxRecoveryCount: policy.maxOperationalRecoveries
     });
   let allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+  let roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
+  let dependencyFilter = filterUnsatisfiedDependencies(eligible, allTasks, roadmap);
+  let recoveryDependencyFilter = filterUnsatisfiedDependencies(
+    recoverable.map((task) => ({ task })),
+    allTasks,
+    roadmap
+  );
+  eligible = dependencyFilter.eligible;
+  recoverable = recoveryDependencyFilter.eligible.map((entry) => entry.task);
+  let dependencyBlocked = dependencyFilter.blocked.concat(recoveryDependencyFilter.blocked);
   let blocked = allTasks
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isTechnicalContinuationBlock(task));
@@ -167,6 +206,16 @@ export async function inspectWorkBackground({
         maxRecoveryCount: policy.maxOperationalRecoveries
       });
       allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+      roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
+      dependencyFilter = filterUnsatisfiedDependencies(eligible, allTasks, roadmap);
+      recoveryDependencyFilter = filterUnsatisfiedDependencies(
+        recoverable.map((task) => ({ task })),
+        allTasks,
+        roadmap
+      );
+      eligible = dependencyFilter.eligible;
+      recoverable = recoveryDependencyFilter.eligible.map((entry) => entry.task);
+      dependencyBlocked = dependencyFilter.blocked.concat(recoveryDependencyFilter.blocked);
       blocked = allTasks
         .filter((task) => !owner || task.owner === owner)
         .filter((task) => isTechnicalContinuationBlock(task));
@@ -190,6 +239,8 @@ export async function inspectWorkBackground({
     recoverable,
     technicalBlocked: blocked,
     temporarilyUnexecutableTechnical,
+    dependencyBlocked,
+    roadmap,
     externalEvidence,
     resumedExternal,
     capacity,
@@ -228,13 +279,14 @@ export async function runWorkBackgroundOnce({
       now
     })
     : null;
-  const { eligible, recoverable, temporarilyUnexecutableTechnical, externalEvidence, capacity, admission } = await inspectWorkBackground({
+  const { eligible, recoverable, temporarilyUnexecutableTechnical, dependencyBlocked, externalEvidence, capacity, admission } = await inspectWorkBackground({
     worldRoot,
     owner,
     policy,
     capacitySource,
     foregroundActive,
     externalEvidenceProbe,
+    repositoryRoot,
     now
   });
   const taskCount = eligible.length + recoverable.length;
@@ -276,9 +328,11 @@ export async function runWorkBackgroundOnce({
   if (!admission.admit) {
     const externalOnly = admission.reason === "no eligible work" && externalEvidence.length > 0;
     const technicalUnavailable = admission.reason === "no eligible work" && temporarilyUnexecutableTechnical.length > 0;
+    const dependencyWaiting = admission.reason === "no eligible work" && dependencyBlocked.length > 0;
     const reason = externalOnly
       ? "awaiting external evidence"
-      : technicalUnavailable ? "technical continuation unavailable" : admission.reason;
+      : technicalUnavailable ? "technical continuation unavailable"
+        : dependencyWaiting ? "roadmap dependency waiting" : admission.reason;
     const idle = reason === "no eligible work";
     const action = externalOnly || technicalUnavailable ? "technical-blocked" : idle ? "idle" : "deferred";
     await emitWorkEvent(onEvent, externalOnly || technicalUnavailable ? "technical-blocked" : "deferred", {
@@ -286,6 +340,7 @@ export async function runWorkBackgroundOnce({
       capacity,
       eligible: taskCount,
       blocked: temporarilyUnexecutableTechnical.map((task) => task.taskId)
+        .concat(dependencyBlocked.map((task) => task.taskId))
     }, { now });
     const health = {
       ...baseHealth,

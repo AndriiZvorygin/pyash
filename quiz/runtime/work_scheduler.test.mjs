@@ -36,6 +36,25 @@ test("backlog curation creates bounded TODO-sourced substantial packages without
     "Mind: plus streaming path and richer reply envelopes per mind.md.",
     "Add error-handling paths for ceremonies/sandpits using ret with be error."
   ].join("\n"));
+  await enqueueWorkTask(worldRoot, {
+    taskId: "roadmap-translation-parity-tranche",
+    owner: "background",
+    kind: "roadmap",
+    title: "Complete translation parity",
+    priority: 130,
+    queuedAt: "2026-08-09T03:00:00.000Z",
+    promptText: "Complete translation parity.",
+    acceptanceText: "The translation parity tests pass."
+  });
+  const prerequisite = await readWorkTaskStatus(worldRoot, "roadmap-translation-parity-tranche");
+  await writeWorkTaskStatus(worldRoot, {
+    ...prerequisite,
+    status: "accepted",
+    checkpoint: {
+      ...prerequisite.checkpoint,
+      integration: { status: "integrated", commit: "translation-baseline" }
+    }
+  });
   const preview = await curateWorkBacklog({ worldRoot, repositoryRoot, dryRun: true, maxTasks: 2 });
   assert.equal(preview.proposed.length, 2);
   assert.equal(preview.proposed[0].provenance.kind, "todo");
@@ -43,8 +62,9 @@ test("backlog curation creates bounded TODO-sourced substantial packages without
   assert.equal(created.created.length, 2);
   assert.equal((await curateWorkBacklog({ worldRoot, repositoryRoot, dryRun: true })).proposed.length, 0);
   const stored = await listWorkTasks(worldRoot, { includeTerminal: true });
-  assert.equal(stored[0].workSpec.granularity, "substantial");
-  assert.match(stored[0].contextText, /Why now/u);
+  const curated = stored.find((task) => task.taskId !== "roadmap-translation-parity-tranche");
+  assert.equal(curated.workSpec.granularity, "substantial");
+  assert.match(curated.contextText, /Why now/u);
 });
 
 test("accepted work integrates onto a synchronized automation baseline", async () => {
