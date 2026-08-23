@@ -330,7 +330,7 @@ export async function establishAgent({
   worldRoot,
   agentName,
   purpose = "",
-  organization = {},
+  organization,
   intervalMinutes = 24,
   writePolicy = true,
   nowFn
@@ -343,11 +343,15 @@ export async function establishAgent({
   const existedBefore = await pathExists(agentRoot);
   await ensureDirectoryTree(agentRoot, REQUIRED_AGENT_DIRS);
   await copyBaseIdentityFiles(worldRoot, normalized);
+  const storedOrganization = await readAgentOrganization({ agentRoot });
+  const desiredOrganization = organization === undefined
+    ? storedOrganization
+    : normalizeAgentOrganization(organization);
   const desiredSpec = {
     agentName: normalized,
     purpose: String(purpose).trim(),
     intervalMinutes: Number(intervalMinutes),
-    organization: normalizeAgentOrganization(organization)
+    organization: desiredOrganization
   };
   const desiredHash = managedSpecHash(desiredSpec);
   const priorHash = await readManagedHash({ worldRoot, agentName: normalized });

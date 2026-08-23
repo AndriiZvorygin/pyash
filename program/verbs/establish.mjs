@@ -29,7 +29,7 @@ function resolvePurpose(sentence) {
 
 function resolveOrganization(sentence, { rememberFn }) {
   const withName = String(sentence?.with?.name ?? "").trim();
-  if (!withName) return {};
+  if (!withName) return undefined;
   const fact = rememberFn(withName);
   if (!fact?.ob?.map || typeof fact.ob.map !== "object" || Array.isArray(fact.ob.map)) {
     throwErrorSentence({

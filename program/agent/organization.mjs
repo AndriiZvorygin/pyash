@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 
+import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { parse } from "../understand/index.mjs";
 import { mapSentenceToPyash } from "../verbs/exchange/json_map.mjs";
 import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy.mjs";
@@ -118,22 +119,57 @@ export function agentOrganizationToPyash(input = {}) {
 }
 
 function organizationFromText(source) {
-  const block = String(source ?? "").match(
-    /su name organization be map def\n([\s\S]*?)\nprah/i
-  );
-  if (!block) return emptyAgentOrganization();
-  const map = {};
-  for (const rawLine of String(block[1] ?? "").split("\n")) {
-    const line = rawLine.trim();
-    if (!line) continue;
+  const sentences = splitSentences(String(source ?? ""), { includeThen: true });
+  if (!sentences.length) {
+    throw new Error("agent organization defective: organization map is empty");
+  }
+  const parsed = sentences.map((line) => {
     try {
-      const sentence = parse(line);
-      if (sentence?.su?.name) map[sentence.su.name] = sentence.ob;
-    } catch {
-      // A malformed optional organization line does not make a legacy house unreadable.
+      return parse(line);
+    } catch (err) {
+      throw new Error(`agent organization defective: ${err.message}`, { cause: err });
+    }
+  });
+  const definition = parsed[0];
+  const closing = parsed.at(-1);
+  if (definition?.mood !== "def" || definition?.su?.name !== ORGANIZATION_MAP_NAME || definition?.be !== "map") {
+    throw new Error("agent organization defective: expected organization map definition");
+  }
+  if (closing?.mood !== "prah") {
+    throw new Error("agent organization defective: organization map is not closed");
+  }
+  const map = {};
+  for (const sentence of parsed.slice(1, -1)) {
+    const name = sentence?.su?.name;
+    if (sentence?.mood !== "ya" || !name || !sentence.ob) {
+      throw new Error("agent organization defective: malformed organization entry");
+    }
+    if (Object.hasOwn(map, name)) {
+      throw new Error(`agent organization defective: duplicate organization entry ${name}`);
+    }
+    map[name] = sentence.ob;
+  }
+  const expectedNames = ["domains", "responsibilities", "role", "spec hash", "supervisor"];
+  for (const name of expectedNames) {
+    if (!Object.hasOwn(map, name)) {
+      throw new Error(`agent organization defective: missing ${name}`);
     }
   }
-  return normalizeAgentOrganization(map);
+  for (const name of ["role", "supervisor", "spec hash"]) {
+    if (typeof map[name]?.text !== "string") {
+      throw new Error(`agent organization defective: ${name} must be text`);
+    }
+  }
+  for (const name of ["responsibilities", "domains"]) {
+    if (map[name]?.ve?.type !== "text" || !Array.isArray(map[name].ve.values)) {
+      throw new Error(`agent organization defective: ${name} must be text vector`);
+    }
+  }
+  const normalized = normalizeAgentOrganization(map);
+  if (map["spec hash"].text !== agentOrganizationHash(normalized)) {
+    throw new Error("agent organization defective: organization hash mismatch");
+  }
+  return normalized;
 }
 
 export async function readAgentOrganization({ worldRoot, agentName, agentRoot } = {}) {
