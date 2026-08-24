@@ -281,6 +281,13 @@ function statusFromText(text) {
       identity: organization["source identity"],
       kind: organization["source kind"],
       locator: organization["source locator"],
+      provider: organization["source provider"],
+      eventId: organization["source event id"],
+      messageId: organization["source message id"],
+      sender: organization["source sender"],
+      subject: organization["source subject"],
+      receivedAt: organization["source received at"],
+      routerPayloadId: organization["source router payload id"],
       ...decodeJson(organization.source, {})
     },
     domain: organization.domain,

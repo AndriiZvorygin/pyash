@@ -63,6 +63,42 @@ export async function recordWorkTaskDelegationEvent(worldRoot, taskId, event, { 
   return mutateTask(worldRoot, taskId, (current) => appendWorkTaskDelegationEvent(current, event, { now }));
 }
 
+export async function ensureWorkTaskDelegationEvent(worldRoot, taskId, event, {
+  escalation = null,
+  now = new Date()
+} = {}) {
+  return mutateTask(worldRoot, taskId, (current) => {
+    let next = current;
+    const sourceIdentity = current.source.identity;
+    const eventType = text(event?.type).toLowerCase();
+    const alreadyRecorded = current.delegationEvents.some((candidate) => (
+      candidate.type === eventType
+      && candidate.sourceIdentity === (text(event?.sourceIdentity) || sourceIdentity)
+      && candidate.recipient === text(event?.recipient)
+    ));
+    if (!alreadyRecorded) {
+      next = appendWorkTaskDelegationEvent(next, {
+        ...event,
+        sourceIdentity: text(event?.sourceIdentity) || sourceIdentity
+      }, { now });
+    }
+    if (escalation && typeof escalation === "object") {
+      const nextEscalation = {
+        state: text(escalation.state),
+        target: text(escalation.target),
+        reason: text(escalation.reason),
+        timestamp: text(escalation.timestamp) || iso(now),
+        sourceIdentity: text(escalation.sourceIdentity) || sourceIdentity
+      };
+      const sameEscalation = Object.keys(nextEscalation).every((key) => (
+        next.escalation[key] === nextEscalation[key]
+      ));
+      if (!sameEscalation) next = { ...next, escalation: nextEscalation };
+    }
+    return next;
+  });
+}
+
 export async function archiveWorkTask(worldRoot, taskId, reason, {
   supersededBy = "",
   now = new Date()

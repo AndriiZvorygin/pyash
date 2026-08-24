@@ -27,6 +27,7 @@ Purpose: normative spec set for Pyash. This folder is intentionally compact: <=2
 18. `23-configure.md` — configure routes and managed write contract.
 19. `24-channel-contract.md` — channel/router input-produce-health contract.
 20. `25-teaching-video.md` — teaching-video refinery pipeline contract.
+21. `26-headquarters-fixture-mail.md` — Headquarters fixture-mail vertical slice.
 
 ## Reference docs (non-normative)
 

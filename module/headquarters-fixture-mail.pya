@@ -1,0 +1,41 @@
+su name headquarters fixture mail classify from name map input to name text classification be ceremony def
+  ob text of classification facts of map of from of this to name text headquarters fixture mail facts be text do
+  ob name headquarters fixture mail facts be equally from text "lie lie lie lie" then ob text "information" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "lie truth lie lie" then ob text "work" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "lie lie truth lie" then ob text "draft-response" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "truth truth lie lie" then ob text "escalation" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "lie lie lie truth" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "lie truth lie truth" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "truth lie lie lie" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "truth lie truth lie" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "truth truth truth lie" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "truth lie lie truth" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "lie truth truth lie" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "lie lie truth truth" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "truth truth lie truth" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "truth lie truth truth" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "lie truth truth truth" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  ob name headquarters fixture mail facts be equally from text "truth truth truth truth" then ob text "rejected" to name text headquarters fixture mail classification be text do
+  su name headquarters fixture mail classification ret
+prah
+
+su name headquarters fixture mail policy be map def
+  su name information ob text "lie lie lie lie" ya
+  su name work ob text "lie truth lie lie" ya
+  su name draft-response ob text "lie lie truth lie" ya
+  su name escalation ob text "truth truth lie lie" ya
+  su name owner ob text "correspondence worker" ya
+  su name delegated by ob text "chief of staff" ya
+  su name escalation target ob text "chief of staff" ya
+  su name escalation reason ob text "decision requirement plus deadline" ya
+  su name escalation classification ob text "escalation" ya
+  su name work kind ob text "correspondence" ya
+  su name acceptance ob text "Preserve source evidence; propose no external send or mutation." ya
+  su name prompt prefix ob text "Review" ya
+  su name default priority ob num 50 ya
+  su name escalation priority ob num 10 ya
+  su name external action ob text "none" ya
+  su name stage order ob text "received routed classified work-created escalated briefing-visible channel-completed" ya
+prah
+
+exists su name headquarters fixture mail classify be export ya

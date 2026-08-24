@@ -78,8 +78,30 @@ export function npToPyash(np = {}) {
   return ""; // can refine later
 }
 
+function mapSentenceToPyash(s) {
+  const name = s?.su?.name ?? "map";
+  const header = [`su name ${name}`];
+  if (s?.ob?.filename) header.push(`ob ${npToPyash({ filename: s.ob.filename })}`);
+  if (s?.ob?.text) header.push(`ob ${npToPyash({ text: s.ob.text })}`);
+  header.push("be map def");
+  const lines = [header.join(" ")];
+  for (const key of Object.keys(s?.ob?.map ?? {}).sort()) {
+    const value = s.ob.map[key];
+    if (value?.mood) {
+      lines.push(sentenceToPyash(value));
+    } else {
+      lines.push(`su name ${key} ob ${npToPyash(value)} ya`);
+    }
+  }
+  lines.push("prah");
+  return lines.join("\n");
+}
+
 // Render a full sentence object into surface Pyash
 export function sentenceToPyash(s = {}) {
+  if (s.be === "map" && s.ob?.map && typeof s.ob.map === "object") {
+    return mapSentenceToPyash(s);
+  }
   const parts = [];
 
   if (s.exists) {
