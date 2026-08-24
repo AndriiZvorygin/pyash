@@ -19,6 +19,7 @@ import {
   enqueueInputEnvelope,
   enqueueProduceEnvelope,
   claimOldestInputEnvelope,
+  claimOldestRuntimeInputEnvelope,
   claimOldestProduceEnvelope,
   ackRuntimeEnvelopeSuccess,
   ackRuntimeEnvelopeFail,
@@ -799,6 +800,7 @@ async function dispatchChannelEvents({
 
   for (const event of events) {
     received += 1;
+    const dedupKey = channelEventDedupKey(event, channelType);
     const listenerAgents = roomListenerAgents(channelConfig, event.channelId, agentName);
     const eventIsDmRoom = isDmEvent(event, dmRooms);
     const targetedByMention = resolveMentionTargets({
@@ -814,7 +816,7 @@ async function dispatchChannelEvents({
       ? (repliedToSelf ? listenerAgents : targetedByMention)
       : (targetedByMention.length ? targetedByMention : listenerAgents);
 
-    if (dedupIds.has(event.eventId)) {
+    if (dedupIds.has(dedupKey) || dedupIds.has(event.eventId)) {
       skippedDedup += 1;
       if (debug) {
         await appendTelemetry(agentHouse, {
@@ -833,8 +835,8 @@ async function dispatchChannelEvents({
       }
       continue;
     }
-    dedupIds.add(event.eventId);
-    dedupState.order.push(event.eventId);
+    dedupIds.add(dedupKey);
+    dedupState.order.push(dedupKey);
     while (dedupState.order.length > dedupLimit) {
       const removed = dedupState.order.shift();
       if (!removed) break;
@@ -1382,6 +1384,12 @@ function eventFromQueueSentence(sentence) {
   }
 }
 
+function channelEventDedupKey(event, channelType) {
+  return [channelType, event?.channelId, event?.eventId]
+    .map(value => String(value ?? "").trim())
+    .join("\u001f");
+}
+
 function parseChannelIdFromEndpoint(endpoint) {
   const text = String(endpoint ?? "").trim();
   const match = text.match(/^channel\s+\S+\s+room\s+(.+)$/i);
@@ -1546,6 +1554,21 @@ export async function runChannelInputOnce({
   if (typeof interpretFn !== "function") throw new Error("runChannelInputOnce requires interpretFn");
   if (!agentHouse) throw new Error("runChannelInputOnce requires agentHouse");
   const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const lock = await acquireChannelInputLock({ worldRoot, agentName, channelType });
+  if (!lock) {
+    return {
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0,
+      durationMs: 0,
+      queueDepth: 0,
+      locked: true
+    };
+  }
+  try {
   const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
   const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
     ? runtimeState.checkpoint
@@ -1556,7 +1579,14 @@ export async function runChannelInputOnce({
   const selfEventIds = new Set(selfState.order);
   const claims = [];
   const limit = Math.max(1, Math.trunc(Number(maxItems) || 10));
+  const recovered = await claimOldestRuntimeInputEnvelope(worldRoot, {
+    channelType,
+    agentName,
+    lane
+  });
+  if (recovered) claims.push(recovered);
   for (let i = 0; i < limit; i += 1) {
+    if (claims.length >= limit) break;
     const claimed = await claimOldestInputEnvelope(worldRoot, {
       workerTag: `${agentName}-input`,
       channelType,
@@ -1670,6 +1700,9 @@ export async function runChannelInputOnce({
     durationMs,
     queueDepth: depth.total
   };
+  } finally {
+    await releaseChannelInputLock(lock);
+  }
 }
 
 export async function runChannelProduceOnce({
