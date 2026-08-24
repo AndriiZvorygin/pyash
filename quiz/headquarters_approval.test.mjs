@@ -3,9 +3,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execFile as execFileCallback } from "node:child_process";
+import { promisify } from "node:util";
 
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { doRemember, forget, remember } from "../program/remember/index.mjs";
 import {
   HEADQUARTERS_ACTIONS,
   resolveRatifyDecision
@@ -29,6 +33,7 @@ import {
 
 const OWNER = "correspondence worker";
 const POLICY_PATH = (worldRoot) => path.join(worldRoot, "house", OWNER, "conduct", "ratify.pya");
+const execFile = promisify(execFileCallback);
 
 async function world(prefix = "pyash-headquarters-approval-") {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -195,8 +200,9 @@ test("standing allow and deny record durable terminal approval states for all fi
     now: "2026-08-24T12:03:00.000Z"
   });
   assert.equal(denied.state, "denied");
-  assert.equal(denied.status, "implementing");
+  assert.equal(denied.status, "blocked");
   assert.equal(denied.policy.mode, "deny");
+  assert.equal((await readWorkTaskStatus(worldRoot, "standing-deny")).status, "blocked");
   assert.deepEqual((await readWorkTaskStatus(worldRoot, "standing-deny")).checkpoint.approval.history.map(entry => entry.state), [
     "requested", "denied"
   ]);
@@ -252,6 +258,7 @@ test("ask persists the pending request in both the envelope and canonical status
   assert.equal(approved.resumeCount, 1);
   const resumed = await readWorkTaskStatus(worldRoot, "pending-round-trip");
   assert.equal(resumed.status, "implementing");
+  assert.equal(resumed.checkpoint.resumeCount, 1);
   assert.equal(resumed.checkpoint.approval.resumedStatus, "implementing");
   assert.equal(resumed.checkpoint.approval.decisionActor, "Sol");
   assert.equal(resumed.checkpoint.approval.rationale, "The checkpoint is reviewable.");
@@ -264,6 +271,7 @@ test("ask persists the pending request in both the envelope and canonical status
   const envelopeAfter = await findWorkTaskEnvelope(worldRoot, "pending-round-trip");
   assert.equal(envelopeAfter.task.status, "implementing");
   assert.equal(envelopeAfter.task.checkpoint.approval.resumeCount, 1);
+  assert.equal(envelopeAfter.task.checkpoint.resumeCount, 1);
   await assert.rejects(
     () => decideHeadquartersApproval(worldRoot, {
       taskId: "pending-round-trip",
@@ -275,6 +283,45 @@ test("ask persists the pending request in both the envelope and canonical status
     }),
     /conflicting decision/
   );
+});
+
+test("a later checkpoint receives a new request identity and preserves prior approval history", async () => {
+  const worldRoot = await world();
+  await policy(worldRoot, [["action send", "ask"]]);
+  await task(worldRoot, "approval-repeat");
+  const first = await requestHeadquartersApproval(worldRoot, {
+    taskId: "approval-repeat",
+    action: "send",
+    proposal: { text: "repeat after resume" },
+    now: "2026-08-24T12:14:00.000Z"
+  });
+  await decideHeadquartersApproval(worldRoot, {
+    taskId: "approval-repeat",
+    action: "send",
+    requestId: first.requestId,
+    resumeToken: first.resumeToken,
+    decision: "approve",
+    actor: "Sol",
+    rationale: "Resume the next checkpoint.",
+    now: "2026-08-24T12:15:00.000Z"
+  });
+  const afterApproval = await readWorkTaskStatus(worldRoot, "approval-repeat");
+  const second = await requestHeadquartersApproval(worldRoot, {
+    taskId: "approval-repeat",
+    action: "send",
+    proposal: { text: "repeat after resume" },
+    now: "2026-08-24T12:16:00.000Z"
+  });
+  assert.equal(second.noop, false);
+  assert.notEqual(second.checkpointIdentity, first.checkpointIdentity);
+  assert.notEqual(second.requestId, first.requestId);
+  assert.equal(second.state, "pending");
+  assert.equal(second.status, "blocked");
+  assert.equal((await readWorkTaskStatus(worldRoot, "approval-repeat")).checkpoint.resumeCount, 1);
+  assert.deepEqual((await readWorkTaskStatus(worldRoot, "approval-repeat")).checkpoint.approval.history.map(entry => entry.state), [
+    "requested", "pending", "approved", "resumed", "requested", "pending"
+  ]);
+  assert.equal(afterApproval.checkpoint.approval.resumeCount, 1);
 });
 
 test("approval restores every supported nonterminal phase without generic ready resumption", async () => {
@@ -427,10 +474,93 @@ test("unsupported actions are defective and approval evidence is ordered and bou
   assert.match(evidence, new RegExp(pending.requestId));
   assert.match(evidence, new RegExp(pending.checkpointIdentity));
   assert.match(evidence, /policy mode/);
+  assert.match(evidence, new RegExp(pending.resumeToken));
   assert.match(evidence, /decision source/);
   assert.match(evidence, /resumption phase/);
   const parsedEvents = splitSentences(evidence).map(sentence => parse(sentence)).filter(sentence => (
     sentence?.mood === "def" && sentence?.be === "map" && sentence?.su?.name === "work task approval"
   ));
   assert.equal(parsedEvents.length, 4);
+});
+
+test("fresh-world Pyash ratify returns typed decisions, records actor and rationale, and replays bound evidence", async () => {
+  const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-headquarters-ratify-interpreter-"));
+  const worldRoot = path.join(runRoot, "world");
+  await fs.mkdir(worldRoot, { recursive: true });
+  await policy(worldRoot, [["action send", "ask"]]);
+  await task(worldRoot, "interpreter-ratify", { status: "implementing" });
+  const repoRoot = path.resolve(".");
+  const programPath = path.join(runRoot, "approval.pya");
+  await fs.writeFile(programPath, [
+    `exists su name world root ob filename ${JSON.stringify(worldRoot)} be default ya`,
+    `from filename ${JSON.stringify(path.join(repoRoot, "module", "headquarters-approval.pya"))} ob name headquarters approval policy to name headquarters approval policy be import do`,
+    "be ratify for name interpreter-ratify ob text send with text \"typed proposal\" to name map approval request do",
+    "be ratify for name interpreter-ratify ob text send accordingto text of request id of map of approval request fromtext text of resume token of map of approval request with text approve as text \"Sol\" totext text \"The checkpoint is reviewable.\" to name map approval decision do"
+  ].join("\n") + "\n", "utf8");
+
+  const cleanEnv = { ...process.env };
+  delete cleanEnv.PYA_MIND_RESPONSE;
+  delete cleanEnv.PYA_HEAR_FIXTURE;
+  delete cleanEnv.PYA_PIPER_FIXTURE;
+  await execFile(
+    process.execPath,
+    [path.join(repoRoot, "command", "run_pya_program.mjs"), "--newspaper", "--run-id", "hq-interpreter-ratify", programPath],
+    { cwd: runRoot, env: cleanEnv }
+  );
+
+  const resultPath = path.join(runRoot, "artifacts", "hq-interpreter-ratify", "result.pya");
+  const resultJson = JSON.parse((await execFile(
+    process.execPath,
+    [path.join(repoRoot, "command", "pya_to_json.mjs"), resultPath, "--pretty"],
+    { cwd: repoRoot, env: cleanEnv }
+  )).stdout);
+  const resultFact = resultJson.memory.find(entry => entry?.su?.name === "result");
+  const resultMap = resultFact?.ob?.map ?? {};
+  const value = key => resultMap[key]?.ob?.text
+    ?? resultMap[key]?.ob?.name
+    ?? resultMap[key]?.ob?.boolean
+    ?? resultMap[key]?.ob?.num;
+  assert.equal(value("state"), "approved");
+  assert.equal(value("action"), "send");
+  assert.equal(value("decision actor"), "Sol");
+  assert.equal(value("rationale"), "The checkpoint is reviewable.");
+  assert.ok(value("resume token"));
+
+  const status = await readWorkTaskStatus(worldRoot, "interpreter-ratify");
+  assert.equal(status.checkpoint.approval.decisionActor, "Sol");
+  assert.equal(status.checkpoint.approval.rationale, "The checkpoint is reviewable.");
+  assert.equal(status.checkpoint.resumeCount, 1);
+  const evidence = await readApprovalEvidence(worldRoot, "interpreter-ratify");
+  const events = [...evidence.matchAll(/su name event ob text "(requested|pending|approved|resumed)"/g)].map(match => match[1]);
+  assert.deepEqual(events, ["requested", "pending", "approved", "resumed"]);
+  assert.match(evidence, new RegExp(value("resume token")));
+
+  const artifactLinks = JSON.parse(value("artifact links"));
+  const replayArgs = [
+    path.join(repoRoot, "command", "replay_newspaper.mjs"),
+    "--run-id", "hq-interpreter-ratify",
+    "--run-root", runRoot
+  ];
+  const replayed = await execFile(process.execPath, replayArgs, { cwd: repoRoot, env: cleanEnv });
+  assert.match(replayed.stdout, /replay ya/);
+
+  forget();
+  doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+  await interpret(parse(`from filename ${JSON.stringify(path.join(repoRoot, "module", "headquarters-approval.pya"))} ob name headquarters approval policy to name headquarters approval policy be import do`));
+  await interpret(parse(
+    `be ratify for name interpreter-ratify ob text send accordingto text ${JSON.stringify(status.checkpoint.approval.requestId)} fromtext text ${JSON.stringify(status.checkpoint.approval.resumeToken)} with text approve as text "Sol" totext text "The checkpoint is reviewable." to name map approval decision do`
+  ));
+  const ratifyFact = remember("work task interpreter-ratify");
+  assert.equal(ratifyFact?.mood, "ya");
+  assert.equal(ratifyFact?.be, "ratify");
+  assert.equal(ratifyFact?.ob?.boolean, true);
+  assert.equal(ratifyFact?.totext?.text, "approved");
+  assert.equal(ratifyFact?.accordingto?.name, "send");
+
+  const evidenceLink = artifactLinks.find(link => link.locator.includes("work-interpreter-ratify"));
+  assert.ok(evidenceLink);
+  const hash = evidenceLink.hash;
+  const contentAddressed = path.join(runRoot, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.pya`);
+  await fs.appendFile(contentAddressed, "tampered\n", "utf8");
+  await assert.rejects(execFile(process.execPath, replayArgs, { cwd: repoRoot, env: cleanEnv }), /hash inconsistency/);
 });

@@ -90,6 +90,18 @@ resumption once and restores the recorded nonterminal status and phase
 Pending and denied approval blocks cannot be reopened by generic human resume
 or operational recovery.
 
+The authoritative supported-action and sensitivity declaration is the exported
+`module/headquarters-approval.pya` map. The built-in surface keeps the
+interaction typed and sentence-native:
+
+```pyash
+be ratify for name <task> ob text <action> with text <proposal> to name map request do
+be ratify for name <task> ob text <action> accordingto text <request-id> fromtext text <resume-token> with text approve as text <actor> totext text <rationale> to name map decision do
+```
+
+`as text` records the decision actor and `totext text` records its rationale;
+the resulting audit fact remains `be ratify ya`.
+
 The approval record is part of the existing WorkTask checkpoint and is
 round-tripped through both the canonical `.pya` status and work envelope. It
 contains the state, request id, canonical action, normalized proposal, resume

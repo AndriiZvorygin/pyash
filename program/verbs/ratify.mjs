@@ -53,6 +53,9 @@ function resultMap(result) {
     "checkpoint identity": result.checkpointIdentity,
     "resume status": result.resumeStatus,
     "resume phase": result.resumePhase,
+    "decision actor": result.decisionActor,
+    actor: result.decisionActor,
+    rationale: result.rationale,
     status: result.status,
     policy: JSON.stringify(result.policy ?? {}),
     "evidence path": result.evidencePath,
@@ -96,7 +99,10 @@ export async function ratify(sentence, { remember: rememberFn = remember } = {})
       resumeToken: caseText(sentence.fromtext, { resolveName: false }),
       decision: caseText(sentence.with, { resolveName: true }),
       actor: caseText(sentence?.as, { resolveName: false }) || "Headquarters",
-      rationale: caseText(sentence?.rationale, { resolveName: true })
+      rationale: caseText(
+        sentence?.totext ?? sentence?.rationale ?? sentence?.via ?? sentence?.by,
+        { resolveName: true }
+      )
     });
   } else {
     result = await requestHeadquartersApproval(worldRoot, {
@@ -121,16 +127,34 @@ const requestSignatures = [
   ["for", "text", "ob", "text", "with", "text"]
 ];
 
-const decisionSignatures = [
-  ["accordingto", "text", "for", "name", "num", "ob", "text", "to", "name", "num", "with", "text"],
-  ["accordingto", "name", "num", "for", "name", "num", "ob", "text", "to", "name", "num", "with", "text"],
-  ["accordingto", "text", "for", "name", "num", "ob", "text", "with", "text"],
-  ["accordingto", "text", "for", "name", "num", "fromtext", "text", "ob", "text", "to", "name", "num", "with", "text"],
-  ["accordingto", "text", "for", "name", "num", "fromtext", "text", "ob", "text", "to", "name", "num", "with", "text"],
-  ["accordingto", "text", "for", "name", "num", "fromtext", "text", "ob", "text", "with", "text"],
-  ["accordingto", "text", "for", "name", "num", "fromtext", "text", "ob", "text", "to", "name", "map", "with", "text"],
-  ["accordingto", "text", "for", "text", "ob", "text", "with", "text"]
+const decisionSignatures = [];
+const decisionBases = [
+  { accordingto: ["text"], for: ["name", "num"], ob: ["text"] },
+  { accordingto: ["name", "num"], for: ["name", "num"], ob: ["text"] },
+  { accordingto: ["text"], for: ["text"], ob: ["text"] },
+  { accordingto: ["text"], for: ["name", "num"], fromtext: ["text"], ob: ["text"] }
 ];
+const decisionTails = [
+  {},
+  { as: ["text"] },
+  { totext: ["text"] },
+  { as: ["text"], totext: ["text"] }
+];
+for (const base of decisionBases) {
+  for (const destination of [null, ["name", "num"], ["name", "map"]]) {
+    for (const tail of decisionTails) {
+      const cases = {
+        ...base,
+        ...tail,
+        with: ["text"]
+      };
+      if (destination) cases.to = destination;
+      decisionSignatures.push([
+        ...Object.keys(cases).sort().flatMap(key => [key, ...cases[key]])
+      ]);
+    }
+  }
+}
 
 export const signatures = [
   ...requestSignatures.map((tail) => ({ signatureWords: ["be", "ratify", ...tail], handler: ratify })),
