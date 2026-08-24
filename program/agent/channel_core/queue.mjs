@@ -255,6 +255,23 @@ export async function claimOldestInputEnvelope(
   return null;
 }
 
+export async function claimOldestRuntimeInputEnvelope(
+  worldRoot,
+  { channelType = "", agentName = "", lane = "" } = {}
+) {
+  const paths = await ensureChannelQueueDirs(worldRoot);
+  const runtime = await listSpoolItemsOldestFirst(paths.runtimeDir);
+  for (const filename of runtime) {
+    if (!filenameMatchesScope(filename, { channelType, agentName })) continue;
+    const targetPath = `${paths.runtimeDir}/${filename}`;
+    const envelope = await readEnvelopeFile(targetPath);
+    if (envelope.phase !== "input") continue;
+    if (!envelopeMatchesScope(envelope, { channelType, agentName }) || !laneMatches(envelope, lane)) continue;
+    return { path: targetPath, filename, envelope };
+  }
+  return null;
+}
+
 export async function claimOldestProduceEnvelope(
   worldRoot,
   { workerTag = "", channelType = "", agentName = "", lane = "" } = {}
