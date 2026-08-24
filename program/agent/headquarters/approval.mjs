@@ -1,8 +1,11 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { recordArtifact } from "../../bridge/exchange.mjs";
+import { splitSentences } from "../../library/sentenceSplitter.mjs";
+import { parse } from "../../understand/index.mjs";
 import { worldNewspaperLogPath } from "../newspaper_log.mjs";
 import {
   HEADQUARTERS_ACTIONS,
@@ -24,6 +27,10 @@ const RESUMABLE_STATUSES = new Set([
   "revision"
 ]);
 const ARTIFACT_PATHS_RECORDED = new Set();
+const DEFAULT_APPROVAL_MODULE_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../module/headquarters-approval.pya"
+);
 
 function text(value) {
   return String(value ?? "").trim();
@@ -68,6 +75,43 @@ function approvalDefect(message) {
   throw new Error(`headquarters approval defective: ${message}`);
 }
 
+async function readApprovalModule(modulePath = DEFAULT_APPROVAL_MODULE_PATH) {
+  let source;
+  try {
+    source = await fs.readFile(modulePath, "utf8");
+  } catch (error) {
+    approvalDefect(`approval module unavailable: ${modulePath}`);
+  }
+  const entries = [];
+  for (const raw of splitSentences(source, { includeThen: true })) {
+    try {
+      const sentence = parse(raw.trim());
+      if (sentence?.mood !== "ya" || !sentence?.su?.name) continue;
+      entries.push(sentence);
+    } catch {
+      approvalDefect(`approval module is not parseable: ${modulePath}`);
+    }
+  }
+  const supportedSentence = entries.find(entry => entry.su.name === "supported actions");
+  const supportedActions = (supportedSentence?.ob?.ve?.values ?? [])
+    .map(value => String(value ?? "").trim().toLowerCase())
+    .filter(Boolean);
+  const sensitivity = new Map(
+    entries
+      .filter(entry => String(entry.su.name).startsWith("action "))
+      .map(entry => [
+        String(entry.su.name).slice("action ".length).trim().toLowerCase(),
+        String(entry.ob?.text ?? entry.ob?.name ?? "").trim().toLowerCase()
+      ])
+  );
+  if (supportedActions.length !== HEADQUARTERS_ACTIONS.length
+    || supportedActions.some((action, index) => action !== HEADQUARTERS_ACTIONS[index])
+    || supportedActions.some(action => sensitivity.get(action) !== "sensitive")) {
+    approvalDefect(`approval module does not declare the exact sensitive action vocabulary: ${modulePath}`);
+  }
+  return { path: modulePath, supportedActions, sensitivity };
+}
+
 function resolveProposalValue(proposal) {
   if (proposal && typeof proposal === "object" && proposal.ob && typeof proposal.ob === "object") {
     return proposal.ob.map ?? proposal.ob.text ?? proposal.ob.name ?? proposal.ob;
@@ -76,8 +120,6 @@ function resolveProposalValue(proposal) {
 }
 
 function checkpointIdentity(task) {
-  const approval = task.checkpoint?.approval;
-  if (approval?.checkpointIdentity) return approval.checkpointIdentity;
   const checkpoint = buildWorkTask(task).checkpoint;
   return `checkpoint-${digest({ ...checkpoint, approval: {} })}`;
 }
@@ -177,6 +219,7 @@ function restoreApprovedTask(task, approval, at) {
     checkpoint: mergeWorkCheckpoint(task.checkpoint, {
       blocker: "",
       lastAction: "Headquarters approval resumed task",
+      resumeCount: task.checkpoint.resumeCount + 1,
       approval: buildWorkApproval({
         ...approval,
         state: "approved",
@@ -229,6 +272,7 @@ async function appendApprovalEvent(worldRoot, task, approval, {
     `  su name policy source ob text ${JSON.stringify(approval.policyPath)} ya`,
     `  su name policy key ob text ${JSON.stringify(approval.policyKey)} ya`,
     `  su name policy mode ob text ${JSON.stringify(approval.policyMode)} ya`,
+    `  su name resume token ob text ${JSON.stringify(approval.resumeToken)} ya`,
     `  su name decision source ob text ${JSON.stringify(decisionSource)} ya`,
     `  su name decision value ob text ${JSON.stringify(decisionValue)} ya`,
     `  su name actor ob text ${JSON.stringify(actor)} ya`,
@@ -292,6 +336,8 @@ function resultFor({ task, approval, policy, evidencePath = "", artifactLinks = 
     checkpointIdentity: approval.checkpointIdentity,
     resumeStatus: approval.resumeStatus,
     resumePhase: approval.resumePhase,
+    decisionActor: approval.decisionActor,
+    rationale: approval.rationale,
     resumedAt: approval.resumedAt,
     resumeCount: approval.resumeCount,
     status: task.status,
@@ -313,17 +359,23 @@ export async function requestHeadquartersApproval(worldRoot, {
   action,
   proposal = {},
   policyContext: suppliedPolicyContext = {},
+  approvalModulePath = DEFAULT_APPROVAL_MODULE_PATH,
   now = new Date()
 } = {}) {
+  const authority = await readApprovalModule(approvalModulePath);
   const canonicalAction = normalizeRatifyAction(action);
-  if (!canonicalAction || !ACTION_SET.has(canonicalAction)) {
+  if (!canonicalAction || !authority.supportedActions.includes(canonicalAction)
+    || !authority.sensitivity.has(canonicalAction)) {
     approvalDefect(`unsupported action ${text(action) || "(missing)"}`);
   }
   const normalized = normalizedProposal(resolveProposalValue(proposal));
   const stored = await readWorkTaskStatus(worldRoot, taskId);
   if (!stored) approvalDefect(`work task not found: ${taskId}`);
   const initial = buildWorkTask(stored);
-  const identity = checkpointIdentity(initial);
+  const priorApproval = initial.checkpoint.approval;
+  const identity = priorApproval.state === "pending"
+    ? priorApproval.checkpointIdentity
+    : checkpointIdentity(initial);
   const binding = bindingFor({ taskId: initial.taskId, action: canonicalAction, proposal: normalized, checkpoint: identity });
   const requestId = requestIdFor(binding);
   const resumeToken = resumeTokenFor(binding, requestId);
@@ -344,18 +396,19 @@ export async function requestHeadquartersApproval(worldRoot, {
   const task = await mutateWorkTask(worldRoot, initial.taskId, (current) => {
     const existing = current.checkpoint.approval;
     if (existing.state) {
-      if (!sameBinding(existing, {
+      const identical = sameBinding(existing, {
         taskId: current.taskId,
         action: canonicalAction,
         proposal: normalized,
-        checkpointIdentity: existing.checkpointIdentity || identity,
+        checkpointIdentity: identity,
         requestId,
         resumeToken
-      })) {
-        approvalDefect("conflicting approval request for the current task checkpoint");
+      });
+      if (existing.state === "pending" || existing.checkpointIdentity === identity) {
+        if (!identical) approvalDefect("conflicting approval request for the current task checkpoint");
+        operation = { approval: existing, noop: true };
+        return current;
       }
-      operation = { approval: existing, noop: true };
-      return current;
     }
     if (!RESUMABLE_STATUSES.has(current.status)) {
       approvalDefect(`task status ${current.status} cannot be approval-blocked`);
@@ -379,7 +432,7 @@ export async function requestHeadquartersApproval(worldRoot, {
       decisionSource: mode === "ask" ? "" : "standing-policy",
       decisionActor: mode === "ask" ? "" : "policy",
       rationale: policy.raw,
-      history: []
+      history: priorApproval.state ? priorApproval.history : []
     });
     const requested = historyEntry({
       state: "requested",
@@ -401,24 +454,30 @@ export async function requestHeadquartersApproval(worldRoot, {
     let next = current;
     let approval = buildWorkApproval({
       ...baseApproval,
-      history: mode === "ask" ? [requested, historyEntry({
-        state: "pending",
-        at,
-        approval: baseApproval,
-        decisionSource: "policy",
-        decisionValue: "ask",
-        rationale: policy.raw
-      })] : [requested, finalEntry]
+      history: mode === "ask"
+        ? [
+          ...baseApproval.history,
+          requested,
+          historyEntry({
+            state: "pending",
+            at,
+            approval: baseApproval,
+            decisionSource: "policy",
+            decisionValue: "ask",
+            rationale: policy.raw
+          })
+        ]
+        : [...baseApproval.history, requested, finalEntry]
     });
-    if (mode === "ask") {
+    if (mode === "ask" || mode === "deny") {
       next = {
         ...current,
         status: "blocked",
         previousStatus: current.status,
-        message: "Headquarters approval pending",
-        error: "Headquarters approval pending",
+        message: mode === "ask" ? "Headquarters approval pending" : "Headquarters approval denied",
+        error: mode === "ask" ? "Headquarters approval pending" : "Headquarters approval denied",
         checkpoint: mergeWorkCheckpoint(current.checkpoint, {
-          blocker: "Headquarters approval pending",
+          blocker: mode === "ask" ? "Headquarters approval pending" : "Headquarters approval denied",
           interruption: {
             phase: current.status,
             at,
@@ -426,7 +485,9 @@ export async function requestHeadquartersApproval(worldRoot, {
             lastTurnId: current.checkpoint.activeTurn.turnId || current.checkpoint.interruption.lastTurnId
           },
           approval,
-          lastAction: "Headquarters approval requested"
+          lastAction: mode === "ask"
+            ? "Headquarters approval requested"
+            : "Headquarters approval denied task action"
         })
       };
       next = buildWorkTask(next);
