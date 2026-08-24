@@ -91,6 +91,7 @@ import android, { signatures as androidSignatures } from "./android.mjs";
 import gpu, { signatures as gpuSignatures } from "./gpu.mjs";
 import extract, { signatures as extractSignatures } from "./extract.mjs";
 import speakerIdentity, { signatures as speakerIdentitySignatures } from "./speaker_identity.mjs";
+import headquarters, { signatures as headquartersSignatures } from "./headquarters.mjs";
 
 export {
   plus,
@@ -172,7 +173,8 @@ export {
   android,
   gpu,
   extract,
-  speakerIdentity
+  speakerIdentity,
+  headquarters
 };
 
 export const builtInSignatures = [
@@ -269,4 +271,5 @@ export const builtInSignatures = [
   ...gpuSignatures,
   ...extractSignatures,
   ...speakerIdentitySignatures,
+  ...headquartersSignatures,
 ];

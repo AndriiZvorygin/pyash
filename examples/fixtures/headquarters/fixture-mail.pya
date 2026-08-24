@@ -1,0 +1,14 @@
+su name fixture mail be map def
+  su name provider ob text "fixture-mail" ya
+  su name event id ob text "fixture-event-golden-001" ya
+  su name message id ob text "golden-message-001" ya
+  su name sender ob text "decider@example.test" ya
+  su name subject ob text "Decision packet for the headquarters" ya
+  su name body ob text "Please preserve the source and prepare the decision packet for review by the stated deadline." ya
+  su name received time ob text "2026-08-23T18:00:00.000Z" ya
+  su name domain ob text "correspondence" ya
+  su name deadline ob text "2026-08-24T17:00:00.000Z" ya
+  su name decision required ob text "truth" ya
+  su name draft response requested ob text "lie" ya
+  su name mutation requested ob text "lie" ya
+prah

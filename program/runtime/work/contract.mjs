@@ -113,11 +113,16 @@ function normalizeSource(value) {
     : value && typeof value === "object" && !Array.isArray(value)
       ? value
       : {};
-  return {
+  const normalized = {
     identity: normalizeText(primitiveValue(source.identity) ?? source.identity),
     kind: normalizeText(primitiveValue(source.kind) ?? source.kind),
     locator: normalizeText(primitiveValue(source.locator) ?? source.locator)
   };
+  for (const key of ["provider", "eventId", "messageId", "sender", "subject", "receivedAt", "routerPayloadId"]) {
+    const normalizedValue = normalizeText(primitiveValue(source[key]) ?? source[key]);
+    if (normalizedValue) normalized[key] = normalizedValue;
+  }
+  return normalized;
 }
 
 function normalizeDependencies(value) {
@@ -287,6 +292,11 @@ export function assertWorkTask(value = {}) {
   }
   for (const key of ["identity", "kind", "locator"]) {
     if (typeof value.source[key] !== "string") throw new Error(`work task defective: invalid source ${key}`);
+  }
+  for (const key of ["provider", "eventId", "messageId", "sender", "subject", "receivedAt", "routerPayloadId"]) {
+    if (value.source[key] !== undefined && typeof value.source[key] !== "string") {
+      throw new Error(`work task defective: invalid source ${key}`);
+    }
   }
   if (!Array.isArray(value.dependencies)) {
     throw new Error("work task defective: dependencies must be ordered list");
