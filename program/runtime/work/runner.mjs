@@ -582,6 +582,20 @@ export async function runWorkBackgroundOnce({
   const selectedIntegration = isIntegrationCandidate(selected);
   const beforeTask = await readWorkTaskStatus(worldRoot, selected.taskId);
   const beforeProgress = deriveImplementationProgress(beforeTask?.checkpoint || selected.checkpoint || {});
+  let executionStarted = false;
+  const executionStartEvents = new Set([
+    "planning-started",
+    "implementation-started",
+    "review-started",
+    "convergence-review-started",
+    "integration-started",
+    "integration-implementation-started",
+    "integration-review-started"
+  ]);
+  const observeExecution = async (event) => {
+    if (executionStartEvents.has(event?.type)) executionStarted = true;
+    if (typeof onEvent === "function") await onEvent(event);
+  };
   let result;
   try {
     const selectedSupervisor = selectedIntegration ? integrationSupervisor : supervisor;
@@ -591,7 +605,7 @@ export async function runWorkBackgroundOnce({
       owner,
       taskId: selected.taskId,
       now,
-      onEvent
+      onEvent: observeExecution
     });
   } catch (error) {
     result = {
@@ -608,6 +622,7 @@ export async function runWorkBackgroundOnce({
       > Number(beforeTask?.checkpoint?.integration?.reconciliation?.materialAttempts || 0)
       || finalProgress.materialProgressPasses > beforeProgress.materialProgressPasses
     : finalProgress.materialProgressPasses > beforeProgress.materialProgressPasses;
+  const workStarted = executionStarted || result.workStarted === true;
   const useful = Boolean(recovery || materialProgress || result.status === "accepted" || result.integration?.status === "integrated" || ["reviewing", "revision"].includes(result.status) && result.message);
   const health = {
     ...baseHealth,
@@ -626,7 +641,7 @@ export async function runWorkBackgroundOnce({
     "admitted wakes": String((Number(prior["admitted wakes"]) || 0) + 1),
     "completed tasks": String((Number(prior["completed tasks"]) || 0)
       + (["accepted", "blocked", "failed"].includes(result.status) ? 1 : 0)),
-    "work-started wakes": String((Number(prior["work-started wakes"]) || 0) + 1),
+    "work-started wakes": String((Number(prior["work-started wakes"]) || 0) + (workStarted ? 1 : 0)),
     "useful wakes": String((Number(prior["useful wakes"]) || 0) + (useful ? 1 : 0)),
     "material-progress wakes": String((Number(prior["material-progress wakes"]) || 0) + (materialProgress ? 1 : 0)),
     "blocked before model wakes": String(Number(prior["blocked before model wakes"]) || 0),
@@ -649,7 +664,7 @@ export async function runWorkBackgroundOnce({
     taskCount,
     selected: selected.taskId,
     baseline: baseline.status,
-    workStarted: true,
+    workStarted,
     usefulWake: useful,
     materialProgress,
     integration: selectedIntegration ? finalTask?.checkpoint?.integration?.status || "" : ""
@@ -664,7 +679,8 @@ export async function runWorkBackgroundOnce({
     baseline,
     preflight,
     recovery,
-    ...result
+    ...result,
+    workStarted
   };
 }
 

@@ -479,6 +479,48 @@ test("digest uses one canonical Next package for runnable and roadmap sections",
   assert.doesNotMatch(digest.report, /ROADMAP[\s\S]*Next:\n  \(none\)/u);
 });
 
+test("digest separates active work from dependency-waiting work", () => {
+  const digest = renderWorkDailyDigest({
+    date: "2026-08-23",
+    since: "2026-08-23T00:00:00.000Z",
+    until: "2026-08-23T23:00:00.000Z",
+    capacity: { weekly: { identified: true, remainingPercent: 90, usedPercent: 10 } },
+    tasks: [
+      { taskId: "hq-fixture-mail-vertical-slice", title: "Prove Headquarters fixture mail", status: "ready" },
+      { taskId: "hq-approval-and-resumption", title: "Add Headquarters approval", status: "ready" }
+    ],
+    roadmap: {
+      packages: [
+        {
+          taskId: "hq-fixture-mail-vertical-slice",
+          title: "Prove Headquarters fixture mail",
+          status: "QUEUED",
+          dependencyStatus: { satisfied: false, unmet: [{ dependency: "hq-organization-and-work-contract", reason: "status is blocked" }] }
+        },
+        {
+          taskId: "hq-approval-and-resumption",
+          title: "Add Headquarters approval",
+          status: "QUEUED",
+          dependencyStatus: { satisfied: false, unmet: [{ dependency: "hq-fixture-mail-vertical-slice", reason: "not integrated" }] }
+        },
+        {
+          taskId: "roadmap-command-result-identity",
+          title: "Add durable per-command result identity",
+          status: "CANDIDATE",
+          dependencyStatus: { satisfied: true, unmet: [] }
+        }
+      ],
+      externalEvidence: [],
+      needsDecision: [],
+      retryableTechnical: []
+    }
+  });
+  assert.match(digest.report, /Current work\n------------\n\(none\)/u);
+  assert.match(digest.report, /Waiting on dependencies[\s\S]*Prove Headquarters fixture mail/u);
+  assert.match(digest.report, /ROADMAP[\s\S]*Next:\n  Add durable per-command result identity/u);
+  assert.match(digest.report, /Current work\n------------\n\(none\)\n\nWaiting on dependencies/u);
+});
+
 test("product-alpha qualification is shown as external evidence, not technical correction", async () => {
   const { root, worldRoot } = await world("pyash-work-digest-product-alpha-");
   const repositoryRoot = path.join(root, "repo");

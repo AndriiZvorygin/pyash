@@ -340,7 +340,7 @@ test("external evidence does not starve candidate promotion", async () => {
     policy: { enabled: true },
     capacitySource,
     externalEvidenceProbe: async () => ({ available: false, reason: "external dependency still unavailable: Ollama" }),
-    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "accepted" }),
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "accepted", workStarted: true }),
     now: "2026-08-18T12:00:00.000Z"
   });
   assert.equal(result.admitted, true);
@@ -394,7 +394,7 @@ test("exhausted technical continuation does not starve a runnable candidate", as
     curate: true,
     policy: { enabled: true },
     capacitySource,
-    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "implementing" }),
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "implementing", workStarted: true }),
     now: "2026-08-18T12:00:00.000Z"
   });
   assert.equal(result.admitted, true);
