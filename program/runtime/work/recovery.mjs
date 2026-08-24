@@ -72,6 +72,7 @@ export function isRecoverableOperationalWorkTask(task, {
 } = {}) {
   if (!isSubstantialRoadmapTask(task)) return false;
   if (!task || !["blocked", "failed"].includes(task.status)) return false;
+  if (["pending", "denied"].includes(task.checkpoint?.approval?.state)) return false;
   if (!isRetryableWorkBlock(task)) return false;
   if (/sol review block|human decision/iu.test(
     `${text(task.checkpoint?.blocker)} ${text(task.message)} ${text(task.error)}`

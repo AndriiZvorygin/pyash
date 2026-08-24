@@ -48,6 +48,58 @@ Rules:
 - unresolved decision defaults deny,
 - all restricted actions append auditable records.
 
+### Headquarters action policy
+
+The initial Headquarters action vocabulary is exactly:
+
+`send`, `delete`, `purchase`, `publish`, and `calendar-mutation`.
+
+An agent-local `conduct/ratify.pya` may add action entries without replacing
+the existing subject/tool/signature entries:
+
+```pyash
+su name action send ob text allow ya
+su name action delete ob text ask ya
+su name default ob text deny ya
+```
+
+The action value is one of `allow`, `deny`, or `ask`. Existing boolean
+`truth` entries continue to resolve to `allow`, and existing boolean `lie`
+entries continue to resolve to `deny`. `ask` is a distinct mode and is never
+encoded as `lie`.
+
+Resolution order is deterministic: an explicit `action <canonical-action>`
+entry first, then the existing subject, tool, and signature keys, then
+`default`. A supported Headquarters action with no matching entry resolves
+to `ask`. Existing non-Headquarters callers retain their safe-deny behavior
+when no entry matches.
+
+The durable approval states are `allowed`, `pending`, `approved`, and
+`denied`. A standing `allow` records `requested -> allowed`; a standing
+`deny` records `requested -> denied`; an unresolved or explicit `ask` records
+`requested -> pending`; a human approval records `pending -> approved ->
+resumed`; and a human denial records `pending -> denied`.
+
+Each pending request has a stable request id and a resume token bound to the
+task id, canonical action, normalized proposal, and checkpoint identity. A
+decision is valid only when it names the current pending request and exactly
+matches that binding. Repeating an identical request or decision is a no-op;
+conflicting, stale, or tampered requests are defective. Approval increments
+resumption once and restores the recorded nonterminal status and phase
+(`planning`, `implementing`, `reviewing`, or `revision`), never `ready`.
+Pending and denied approval blocks cannot be reopened by generic human resume
+or operational recovery.
+
+The approval record is part of the existing WorkTask checkpoint and is
+round-tripped through both the canonical `.pya` status and work envelope. It
+contains the state, request id, canonical action, normalized proposal, resume
+token, checkpoint identity, resume status/phase, policy mode/key/path,
+request/decision timestamps, decision actor, rationale, resumed timestamp,
+resume status, and ordered history. Every transition appends a `work task
+approval` record to the existing `world/newspaper/YYYYMMDD-work-<task>.pya`
+stream with task/source, action/proposal, request/checkpoint identity, policy
+evidence, decision source/value, actor/rationale, and resumption phase.
+
 ## 5. Coding saddle baseline
 
 Minimum tool set:

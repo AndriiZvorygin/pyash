@@ -18,7 +18,11 @@ import {
   normalizeWorkTaskId,
   transitionWorkTask
 } from "./contract.mjs";
-import { writeWorkTaskStatus } from "./status.mjs";
+import {
+  workTaskStatusPath,
+  workTaskStatusText,
+  writeWorkTaskStatus
+} from "./status.mjs";
 
 function quoteText(value) {
   return JSON.stringify(String(value ?? ""));
@@ -423,10 +427,14 @@ export async function updateWorkTaskEnvelope(worldRoot, envelope, task) {
   if (!envelope?.path) throw new Error("work envelope path missing");
   const current = buildWorkTask(task);
   assertWorkTask(current);
-  const tmp = `${envelope.path}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmp, taskToText(current), "utf8");
-  await fs.rename(tmp, envelope.path);
-  await writeWorkTaskStatus(worldRoot, current);
+  const statusPath = await workTaskStatusPath(worldRoot, current.taskId);
+  const stamp = `${process.pid}-${Date.now()}`;
+  const envelopeTmp = `${envelope.path}.tmp-${stamp}`;
+  const statusTmp = `${statusPath}.tmp-${stamp}`;
+  await fs.writeFile(envelopeTmp, taskToText(current), "utf8");
+  await fs.writeFile(statusTmp, workTaskStatusText(current), "utf8");
+  await fs.rename(envelopeTmp, envelope.path);
+  await fs.rename(statusTmp, statusPath);
   return current;
 }
 
