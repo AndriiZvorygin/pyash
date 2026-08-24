@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
 import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
+import { readWorkSchedulerHealth } from "../../program/runtime/work/health.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import { curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
 import {
@@ -167,6 +168,17 @@ test("accepted but unintegrated prerequisites defer dependents without an operat
   assert.equal(fixture.status, "ready");
 });
 
+test("dependency filtering does not count a deferred candidate as started work", async () => {
+  const { worldRoot, repositoryRoot } = await world("pyash-deps-no-start-");
+  await queueTask(worldRoot, "hq-organization-and-work-contract", 72);
+  await markAccepted(worldRoot, "hq-organization-and-work-contract");
+  await queueTask(worldRoot, "hq-fixture-mail-vertical-slice", 71);
+  const { result } = await runSelection(worldRoot, repositoryRoot);
+  assert.equal(result.admitted, false);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["work-started wakes"] || "0", "0");
+});
+
 test("an integrated prerequisite releases its dependent package automatically", async () => {
   const { worldRoot, repositoryRoot } = await world("pyash-deps-integrated-");
   await queueTask(worldRoot, "hq-organization-and-work-contract", 72);
@@ -193,4 +205,16 @@ test("dependency cycles are deterministic roadmap defects", () => {
   assert.equal(status.satisfied, false);
   assert.equal(status.defect, true);
   assert.match(status.unmet[0].reason, /cycle/u);
+});
+
+test("missing and self dependencies are deterministic roadmap defects", () => {
+  const missing = validateRoadmapDependencies([
+    { taskId: "package-b", dependsOnTaskIds: ["missing-package"] }
+  ]);
+  assert.deepEqual(missing.unknownDependencies, [{ taskId: "package-b", dependency: "missing-package" }]);
+
+  const self = validateRoadmapDependencies([
+    { taskId: "package-self", dependsOnTaskIds: ["package-self"] }
+  ]);
+  assert.deepEqual(self.cycles, [["package-self", "package-self"]]);
 });

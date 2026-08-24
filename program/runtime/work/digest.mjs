@@ -158,6 +158,24 @@ function compactBlocker(value) {
   return `technical correction required: ${body.slice(0, 220)}`;
 }
 
+const ACTIVE_TASK_STATUSES = new Set(["planning", "implementing", "reviewing", "revision"]);
+
+function roadmapItemForTask(task, roadmap) {
+  return [...(roadmap?.packages || []), ...(roadmap?.completed || [])]
+    .find((item) => item.taskId === task.taskId);
+}
+
+function dependencyWaitingForTask(task, roadmap) {
+  if (!task || !(task.status === "ready" || ACTIVE_TASK_STATUSES.has(task.status))) return null;
+  const item = roadmapItemForTask(task, roadmap);
+  if (!item || item.dependencyStatus?.satisfied !== false) return null;
+  return {
+    task,
+    item,
+    unmet: item.dependencyStatus.unmet || []
+  };
+}
+
 export function renderWorkDailyDigest({
   date,
   since,
@@ -178,8 +196,14 @@ export function renderWorkDailyDigest({
     now: until
   });
   const completed = tasks.filter((task) => task.status === "accepted" && taskTouched(task, Date.parse(since), Date.parse(until)));
-  const active = tasks.filter((task) => !["accepted", "failed", "blocked"].includes(task.status));
-  const ready = tasks.some((task) => task.status === "ready");
+  const dependencyWaiting = tasks
+    .map((task) => dependencyWaitingForTask(task, roadmap))
+    .filter(Boolean);
+  const active = tasks.filter((task) => ACTIVE_TASK_STATUSES.has(task.status))
+    .filter((task) => !dependencyWaiting.some((item) => item.task.taskId === task.taskId));
+  const readyTasks = tasks.filter((task) => task.status === "ready");
+  const runnableReady = readyTasks.filter((task) => !dependencyWaiting.some((item) => item.task.taskId === task.taskId));
+  const ready = runnableReady.length > 0;
   const retryable = technicalRetryableItems(roadmap || {}).length
     ? technicalRetryableItems(roadmap || {})
     : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
@@ -189,7 +213,7 @@ export function renderWorkDailyDigest({
   const wakes = events.filter((event) => ["idle", "deferred", "admitted", "technical-blocked"].includes(event.action));
   const admitted = events.filter((event) => event.action === "admitted");
   const bool = (value) => value === true || /^(true|truth|yes|1)$/iu.test(text(value));
-  const workStarted = admitted;
+  const workStarted = admitted.filter((event) => bool(event.workStarted));
   // Recovery and outcome records accompany a wake; count usefulness on the
   // wake record itself so one scheduler opportunity cannot count twice.
   const usefulWakes = wakes.filter((event) => bool(event.usefulWake));
@@ -204,13 +228,16 @@ export function renderWorkDailyDigest({
   const blockedBeforeModel = events.filter((event) => ["technical-blocked", "deferred"].includes(event.action)
     && !bool(event.workStarted)
     && !/pacing|reserve|usage[- ]limited|capacity/iu.test(event.reason || ""));
+  blockedBeforeModel.push(...admitted.filter((event) => !bool(event.workStarted)));
   const recovered = uniqueRecoveryEvents(events.filter((event) => event.action === "recovered"));
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
   const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
+  const runnablePackages = (roadmap?.packages || []).filter((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status)
+    && item.dependencyStatus?.satisfied !== false);
   const runnableRoadmap = active.length > 0
-    || ready
-    || (roadmap?.packages || []).some((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status))
+    || runnableReady.length > 0
+    || runnablePackages.length > 0
     || (curation.proposed || []).length > 0;
   const blockedRoadmap = retryable.length > 0 || externalEvidence.length > 0 || humanDecisions.length > 0;
   const temporarilyBlocked = retryable.length > 0 && !runnableRoadmap;
@@ -311,6 +338,13 @@ export function renderWorkDailyDigest({
   } else {
     lines.push("(none)");
   }
+  if (dependencyWaiting.length) {
+    lines.push("", "Waiting on dependencies", "-----------------------");
+    for (const entry of dependencyWaiting.slice(0, 5)) {
+      const prerequisites = entry.unmet.map((item) => item.dependency).join(", ") || "hard roadmap prerequisites";
+      lines.push(`${entry.task.title} [${entry.task.taskId}]`, `Status: ${entry.task.status}`, `Waiting for: ${prerequisites}`);
+    }
+  }
   if (exhausted) {
     lines.push("", "Needs direction", "---------------", "No active or ready substantial task remains, and current roadmap/TODO curation found no safe bounded next package.");
   } else if (temporarilyBlocked) {
@@ -329,22 +363,21 @@ export function renderWorkDailyDigest({
       lines.push("", "External evidence waiting", "-------------------------", ...externalEvidence.slice(0, 5).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`));
     }
     if (runnableRoadmap) {
-      const runnablePackages = (roadmap?.packages || []).filter((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status));
       const next = runnablePackages.find((item) => item.status === "QUEUED")
         || runnablePackages.find((item) => item.status === "CANDIDATE");
       const later = runnablePackages.filter((item) => item.taskId !== next?.taskId);
       lines.push("", "Runnable roadmap", "-----------------", ...(next ? [`  Next: ${next.title}`] : ["  Next: (none)"]), ...later.slice(0, 3).map((item) => `  Later: ${item.title}`));
     }
-  } else if (!active.length && !ready && !curation.proposed?.length && roadmapWork) {
+  } else if (!active.length && !ready && !runnableRoadmap && !curation.proposed?.length && roadmapWork) {
     lines.push("", "READY QUEUE EMPTY - RECONCILIATION REQUIRED", "--------------------------------------------", "The generated queue is empty, but the authoritative roadmap still contains unfinished packages.");
   } else if (curation.proposed?.length) {
     lines.push("", "Next likely work", "----------------", ...curation.proposed.slice(0, 3).map((item) => `${item.taskId}: ${item.title}`));
   }
   if (roadmap) {
     lines.push("", "ROADMAP", "-------", "Active:");
-    const activePackages = (roadmap.packages || []).filter((item) => item.status === "ACTIVE");
-    const queuedPackages = (roadmap.packages || []).filter((item) => item.status === "QUEUED");
-    const candidatePackages = (roadmap.packages || []).filter((item) => item.status === "CANDIDATE");
+    const activePackages = runnablePackages.filter((item) => item.status === "ACTIVE");
+    const queuedPackages = runnablePackages.filter((item) => item.status === "QUEUED");
+    const candidatePackages = runnablePackages.filter((item) => item.status === "CANDIDATE");
     const blockedPackages = [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...humanDecisions
