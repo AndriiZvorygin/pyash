@@ -25,7 +25,8 @@ import {
   writeWorkTaskStatus
 } from "../program/runtime/work/status.mjs";
 import { buildWorkTask } from "../program/runtime/work/contract.mjs";
-import { resumeWorkTask } from "../program/runtime/work/operator.mjs";
+import { mergeWorkCheckpoint } from "../program/runtime/work/checkpoint.mjs";
+import { mutateWorkTask, resumeWorkTask } from "../program/runtime/work/operator.mjs";
 import {
   isRecoverableOperationalWorkTask,
   recoverOperationalWorkTask
@@ -202,8 +203,10 @@ test("standing allow and deny record durable terminal approval states for all fi
   assert.equal(denied.state, "denied");
   assert.equal(denied.status, "blocked");
   assert.equal(denied.policy.mode, "deny");
-  assert.equal((await readWorkTaskStatus(worldRoot, "standing-deny")).status, "blocked");
-  assert.deepEqual((await readWorkTaskStatus(worldRoot, "standing-deny")).checkpoint.approval.history.map(entry => entry.state), [
+  const standingDenied = await readWorkTaskStatus(worldRoot, "standing-deny");
+  assert.equal(standingDenied.status, "blocked");
+  assert.equal(standingDenied.checkpoint.interruption.reason, "approval denied");
+  assert.deepEqual(standingDenied.checkpoint.approval.history.map(entry => entry.state), [
     "requested", "denied"
   ]);
 });
@@ -306,6 +309,26 @@ test("a later checkpoint receives a new request identity and preserves prior app
     now: "2026-08-24T12:15:00.000Z"
   });
   const afterApproval = await readWorkTaskStatus(worldRoot, "approval-repeat");
+  const immediate = await requestHeadquartersApproval(worldRoot, {
+    taskId: "approval-repeat",
+    action: "send",
+    proposal: { text: "repeat after resume" },
+    now: "2026-08-24T12:15:30.000Z"
+  });
+  assert.equal(immediate.noop, true);
+  assert.equal(immediate.checkpointIdentity, first.checkpointIdentity);
+  assert.equal(immediate.requestId, first.requestId);
+
+  await mutateWorkTask(worldRoot, "approval-repeat", current => ({
+    ...current,
+    checkpoint: mergeWorkCheckpoint(current.checkpoint, {
+      implementation: {
+        ...current.checkpoint.implementation,
+        passes: current.checkpoint.implementation.passes + 1,
+        summary: "deliberately advanced workflow checkpoint"
+      }
+    })
+  }));
   const second = await requestHeadquartersApproval(worldRoot, {
     taskId: "approval-repeat",
     action: "send",
@@ -318,6 +341,10 @@ test("a later checkpoint receives a new request identity and preserves prior app
   assert.equal(second.state, "pending");
   assert.equal(second.status, "blocked");
   assert.equal((await readWorkTaskStatus(worldRoot, "approval-repeat")).checkpoint.resumeCount, 1);
+  assert.equal(
+    (await readWorkTaskStatus(worldRoot, "approval-repeat")).checkpoint.implementation.summary,
+    "deliberately advanced workflow checkpoint"
+  );
   assert.deepEqual((await readWorkTaskStatus(worldRoot, "approval-repeat")).checkpoint.approval.history.map(entry => entry.state), [
     "requested", "pending", "approved", "resumed", "requested", "pending"
   ]);
@@ -534,6 +561,22 @@ test("fresh-world Pyash ratify returns typed decisions, records actor and ration
   const events = [...evidence.matchAll(/su name event ob text "(requested|pending|approved|resumed)"/g)].map(match => match[1]);
   assert.deepEqual(events, ["requested", "pending", "approved", "resumed"]);
   assert.match(evidence, new RegExp(value("resume token")));
+
+  const runNewspaper = await fs.readFile(
+    path.join(runRoot, "newspaper", "hq-interpreter-ratify.pya"),
+    "utf8"
+  );
+  const ratifyAudit = splitSentences(runNewspaper)
+    .map(sentence => parse(sentence))
+    .find(sentence => sentence?.mood === "ya"
+      && sentence?.be === "ratify"
+      && sentence?.totext?.text === "approved");
+  assert.ok(ratifyAudit);
+  assert.equal(ratifyAudit.su?.name, "work task interpreter-ratify");
+  assert.equal(ratifyAudit.ob?.boolean, true);
+  assert.equal(ratifyAudit.totext?.text, "approved");
+  assert.equal(ratifyAudit.accordingto?.name, "send");
+  assert.equal(ratifyAudit.fromtext?.text, status.checkpoint.approval.resumeToken);
 
   const artifactLinks = JSON.parse(value("artifact links"));
   const replayArgs = [

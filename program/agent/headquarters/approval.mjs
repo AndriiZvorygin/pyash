@@ -120,8 +120,23 @@ function resolveProposalValue(proposal) {
 }
 
 function checkpointIdentity(task) {
-  const checkpoint = buildWorkTask(task).checkpoint;
-  return `checkpoint-${digest({ ...checkpoint, approval: {} })}`;
+  const normalized = buildWorkTask(task);
+  const checkpoint = normalized.checkpoint;
+  const {
+    approval: _approval,
+    blocker: _blocker,
+    interruption: _interruption,
+    lastAction: _lastAction,
+    resumeCount: _resumeCount,
+    ...workflowCheckpoint
+  } = checkpoint;
+  const workflowStatus = normalized.status === "blocked" && checkpoint.approval.state
+    ? checkpoint.approval.resumeStatus
+    : normalized.status;
+  return `checkpoint-${digest({
+    status: workflowStatus,
+    checkpoint: workflowCheckpoint
+  })}`;
 }
 
 function bindingFor({ taskId, action, proposal, checkpoint }) {
@@ -481,7 +496,7 @@ export async function requestHeadquartersApproval(worldRoot, {
           interruption: {
             phase: current.status,
             at,
-            reason: "Headquarters approval pending",
+            reason: mode === "ask" ? "Headquarters approval pending" : "approval denied",
             lastTurnId: current.checkpoint.activeTurn.turnId || current.checkpoint.interruption.lastTurnId
           },
           approval,

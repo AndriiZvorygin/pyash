@@ -1,5 +1,6 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
+import { emitExchangeSentence } from "../bridge/exchange.mjs";
 import {
   decideHeadquartersApproval,
   requestHeadquartersApproval
@@ -77,10 +78,11 @@ function recordRatifyFact(result) {
     ob: pending ? { text: "pending" } : { boolean: allowed },
     mode: pending ? "ask" : (allowed ? "allow" : "deny"),
     totext: { text: result.state },
-    fromtext: { text: result.policy?.key ? `policy ${result.policy.key}` : "Headquarters approval" },
+    fromtext: { text: result.resumeToken },
     accordingto: { name: result.action }
   };
   doRemember(fact);
+  emitExchangeSentence(fact);
   return fact;
 }
 
