@@ -221,7 +221,8 @@ function checkpointBlocks(task) {
       { key: "continuation count", type: "num", value: checkpoint.continuationCount },
       { key: "resume count", type: "num", value: checkpoint.resumeCount },
       { key: "recovery count", type: "num", value: checkpoint.recoveryCount },
-      { key: "recovery history", type: "text", value: quoteText(encodeJson(checkpoint.recoveryHistory)) }
+      { key: "recovery history", type: "text", value: quoteText(encodeJson(checkpoint.recoveryHistory)) },
+      { key: "approval", type: "text", value: quoteText(encodeJson(checkpoint.approval)) }
     ])
   ];
 }
@@ -232,6 +233,10 @@ function statusToText(task) {
     mapBlock("work task organization", organizationEntries(task)),
     ...checkpointBlocks(task)
   ].join("\n") + "\n";
+}
+
+export function workTaskStatusText(task) {
+  return statusToText(buildWorkTask(task));
 }
 
 function statusFromText(text) {
@@ -385,7 +390,8 @@ function statusFromText(text) {
       continuationCount: checkpoint["continuation count"],
       resumeCount: checkpoint["resume count"],
       recoveryCount: checkpoint["recovery count"],
-      recoveryHistory: decodeJson(checkpoint["recovery history"], [])
+      recoveryHistory: decodeJson(checkpoint["recovery history"], []),
+      approval: decodeJson(checkpoint.approval, {})
     }
   });
 }
@@ -405,6 +411,10 @@ async function statusPath(worldRoot, taskId) {
   const id = normalizeWorkTaskId(taskId);
   if (!id) return "";
   return path.join(await statusDir(worldRoot), `${id}.pya`);
+}
+
+export async function workTaskStatusPath(worldRoot, taskId) {
+  return statusPath(worldRoot, taskId);
 }
 
 function checkpointHasData(checkpoint) {

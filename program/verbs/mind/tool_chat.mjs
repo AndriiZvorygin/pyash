@@ -141,11 +141,12 @@ export async function runToolChat({
   let lastResponse = null;
   let lastToolText = "";
 
-  const buildRatifySentence = ({ capability, toolName, decision, raw, matchedKey }) => ({
+  const buildRatifySentence = ({ capability, toolName, decision, mode, raw, matchedKey }) => ({
     mood: "ya",
     be: "ratify",
     su: { name: capability?.su?.name ?? toolName ?? "tool approval" },
-    ob: { boolean: decision === "truth" },
+    ob: mode === "ask" ? { text: "ask" } : { boolean: decision === "truth" },
+    mode: mode ?? (decision === "truth" ? "allow" : "deny"),
     totext: { text: raw ?? decision },
     fromtext: { text: matchedKey ? `policy ${matchedKey}` : "policy unanswered" }
   });
@@ -267,12 +268,14 @@ export async function runToolChat({
           rememberFn: remember
         });
         const decision = ratify?.decision ?? "lie";
+        const mode = ratify?.mode ?? (decision === "truth" ? "allow" : "deny");
         const raw = ratify?.raw ?? "unanswered";
         const matchedKey = ratify?.matchedKey ?? "default";
         const ratifySentence = buildRatifySentence({
           capability,
           toolName,
           decision,
+          mode,
           raw,
           matchedKey
         });

@@ -58,6 +58,40 @@ Each candidate exposes task id, owner, domain, deadline, escalation reason,
 escalation target, and source locator. Ranking, approvals, scheduling, and a
 briefing database are outside this slice.
 
+## Approval and checkpoint resumption
+
+Headquarters approval is a Pyash-first extension over the same canonical
+WorkTask record. The supported action vocabulary is exactly `send`, `delete`,
+`purchase`, `publish`, and `calendar-mutation`; unsupported actions are
+defective. The owner’s existing `house/<owner>/conduct/ratify.pya` may contain
+additive entries such as:
+
+```pyash
+su name action send ob text allow ya
+su name action delete ob text ask ya
+```
+
+Action resolution prefers `action <action>`, then the existing subject/tool/
+signature keys, then `default`. `truth` remains allow and `lie` remains deny.
+For Headquarters work, no matching authorization is `ask`, so sensitive work
+is durably paused rather than silently denied. Non-Headquarters callers keep
+their existing safe-deny fallback.
+
+The checkpoint approval record is written to both the work envelope and the
+canonical status copy. A pending request records the pre-block status and
+phase, checkpoint identity, normalized proposal, request id, policy evidence,
+and an exact task/action/checkpoint-bound resume token. Human approval restores
+that recorded status (`planning`, `implementing`, `reviewing`, or `revision`)
+and resumes once while preserving progress, retry, result, and delegation
+data. Human denial remains blocked. Generic resume and operational recovery
+must not bypass pending or denied approval blocks.
+
+Approval evidence remains in the existing work newspaper stream, with the
+ordered chains `requested -> allowed`, `requested -> denied`,
+`requested -> pending -> approved -> resumed`, and
+`requested -> pending -> denied`. The standard run newspaper links the durable
+status, envelope, and work-approval evidence artifacts for replay.
+
 ## Recovery and duplicate behavior
 
 Channel input is single-writer for the agent/channel scope. A stranded input

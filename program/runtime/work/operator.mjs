@@ -41,6 +41,11 @@ async function mutateTask(worldRoot, taskId, mutate) {
   return next;
 }
 
+export async function mutateWorkTask(worldRoot, taskId, mutate) {
+  if (typeof mutate !== "function") throw new Error("work task mutation requires a function");
+  return mutateTask(worldRoot, taskId, mutate);
+}
+
 export async function addWorkTask(worldRoot, input = {}) {
   return enqueueWorkTask(worldRoot, {
     ...input,
@@ -178,6 +183,9 @@ export async function resumeWorkTask(worldRoot, taskId, humanResponse, { now = n
   if (!response) throw new Error("resume context is required");
   return mutateTask(worldRoot, taskId, (current) => {
     if (current.status === "accepted") throw new Error("accepted work tasks are terminal");
+    if (["pending", "denied"].includes(current.checkpoint.approval.state)) {
+      throw new Error("approval bypass defective: use the Headquarters approval decision path");
+    }
     if (current.status !== "blocked" && current.status !== "usage-limited") {
       throw new Error(`work task is not resumable from ${current.status}`);
     }
@@ -210,6 +218,9 @@ export async function resumeExternalEvidenceTask(worldRoot, taskId, probeReason,
   const reason = text(probe.reason || probeReason) || "external dependency probe passed";
   const envelope = await findWorkTaskEnvelope(worldRoot, taskId);
   return mutateTask(worldRoot, taskId, (current) => {
+    if (["pending", "denied"].includes(current.checkpoint.approval.state)) {
+      throw new Error("approval bypass defective: use the Headquarters approval decision path");
+    }
     if (current.status !== "blocked" && current.status !== "failed") return current;
     const checks = Array.isArray(probe.checks)
       ? probe.checks
