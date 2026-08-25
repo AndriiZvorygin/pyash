@@ -16,6 +16,7 @@ import { splitSentencesWithLines } from "../program/library/sentenceSplitter.mjs
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { surfaceErrorSentence, throwErrorSentence } from "../program/error.mjs";
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
+import { resetCommandIdentity } from "../program/bridge/command_identity.mjs";
 import { state } from "../program/bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../program/bridge/exchange.mjs";
 import { recordArtifact } from "../program/bridge/exchange.mjs";
@@ -398,6 +399,7 @@ async function main() {
   }
 
   forget();
+  resetCommandIdentity();
   clearExchangeRecorder();
   setExchangeStrict(false);
   if (useAgain) {

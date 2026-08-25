@@ -158,6 +158,40 @@ On successful imperative execution, the runtime stores a **`ya`** result sentenc
 The value always lives in `ob`, so it can be retrieved with genitives such as
 `ob num of <id>`.
 
+### 3.1.1 Command result identity (normative)
+
+Every synchronous `be command do` invocation allocates one run-scoped command
+identity at runtime. The allocator starts at `000001` for a fresh interpreter
+run and formats the identity as `command request <six-digit ordinal>`. The
+ordinal is allocated at invocation time, not from source lines, hashes,
+filenames, timestamps, or compiler counters; loops, ceremonies, nested calls,
+and repeated commands therefore receive distinct deterministic identities.
+
+Before command policy/audit records, the runtime records the request as an
+evoke sentence whose subject is the canonical request identity:
+
+```text
+exists su name command request 000001 ob la <command sentence> ko be evoke ya
+```
+
+The successful surfaced result is a sentence-shaped command fact with the same
+subject and `be command ya`:
+
+```text
+su name command request 000001 ob text "<stdout>" be command ya
+```
+
+The fact is addressable through `remember("command request 000001")` and
+genitives such as `ob text of command request 000001`. The runtime continues to
+update the explicit `su name ...` and `to name ...` destination facts, and
+continues to update `remember("result")` as the latest compatibility alias.
+Declared command output files are correlated with this same identity through
+the run artifact/exchange recorder.
+
+The runnable example `examples/pyash/command-result-identity.pya` intentionally
+uses the established generic `result` compatibility alias rather than adding a
+new vocabulary word for the latest command result.
+
 Implementations MAY also record a fully-resolved copy of the evoker sentence
 (with `to` bound to its resolved target) when that is useful for reuse, but the
 primary result fact is the `su name <id> … ya` sentence above.

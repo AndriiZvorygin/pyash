@@ -18,7 +18,8 @@ import {
 } from "../configure/env.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
-import { emitExchangeSentence } from "../bridge/exchange.mjs";
+import { emitExchangeSentence, recordArtifact, recordExchange } from "../bridge/exchange.mjs";
+import { allocateCommandIdentity, restoreCommandIdentity } from "../bridge/command_identity.mjs";
 import {
   collectLicensedRoots,
   listWorldDeclaredAgentHouses,
@@ -216,7 +217,6 @@ export function resolveCommandPolicy({ sentence, cmdClass, rememberFn = remember
 
 const commandStreamProcesses = new Map();
 const STREAM_END_TOKEN = "[PYA_STREAM_END]";
-let commandAuditCounter = 0;
 const DEFAULT_ENV_ALLOWLIST = [
   "HOME",
   "LANG",
@@ -229,13 +229,8 @@ const DEFAULT_ENV_ALLOWLIST = [
   "USER"
 ];
 
-function nextAuditId() {
-  commandAuditCounter += 1;
-  return String(commandAuditCounter).padStart(6, "0");
-}
-
 function buildCommandAudit({
-  requestId,
+  requestIdentity,
   stage,
   commandClass,
   policy,
@@ -245,14 +240,15 @@ function buildCommandAudit({
   rememberFn = remember
 } = {}) {
   const lane = resolveConfigMapText("command configure", "audit security lane", { rememberFn });
-  const id = requestId ?? nextAuditId();
+  const identity = requestIdentity?.name ?? String(requestIdentity ?? "").trim();
+  const ordinal = identity.match(/^command request (\d{6})$/u)?.[1] ?? "000000";
   const normalizedClass = String(commandClass ?? "").trim().toLowerCase();
   const audit = {
     mood: "ya",
     exists: true,
     be: "command audit",
-    su: { name: `command audit ${id}` },
-    to: { name: `command request ${id}` },
+    su: { name: `command audit ${ordinal}` },
+    to: { name: identity },
     as: { name: stage || "policy" },
     from: { name: policy?.source ?? "command configure" },
     accordingto: { name: decision ?? policy?.mode ?? "allow" },
@@ -269,6 +265,83 @@ function buildCommandAudit({
 
 function emitCommandAudit(payload) {
   emitExchangeSentence(buildCommandAudit(payload));
+}
+
+function commandRequestSentence({ requestIdentity, sentence } = {}) {
+  return {
+    mood: "ya",
+    exists: true,
+    be: "evoke",
+    su: { name: requestIdentity.name },
+    ob: { la: sentence }
+  };
+}
+
+function resolveCommandIdentity({ sentence } = {}) {
+  const isResume = sentence?.accordingto?.name === "ratify decision" && sentence?.totext?.text === "truth";
+  if (!isResume) return { identity: allocateCommandIdentity(), resumed: false };
+  try {
+    const token = JSON.parse(String(sentence?.fromtext?.text ?? ""));
+    const restored = restoreCommandIdentity(token?.requestIdentity);
+    if (restored) return { identity: restored, resumed: true };
+  } catch {}
+  return { identity: allocateCommandIdentity(), resumed: false };
+}
+
+function commandResultSentence({ requestIdentity, output } = {}) {
+  return {
+    mood: "ya",
+    exists: true,
+    be: "command",
+    su: { name: requestIdentity.name },
+    ob: { text: String(output ?? "") }
+  };
+}
+
+function rememberCommandResult({ sentence, resultSentence } = {}) {
+  const output = resultSentence.ob ?? { text: "" };
+  if (sentence?.su?.name) {
+    doRemember({
+      ...resultSentence,
+      su: { name: sentence.su.name },
+      be: "text"
+    });
+  }
+  if (sentence?.to?.name) {
+    doRemember({
+      ...resultSentence,
+      su: { name: sentence.to.name },
+      be: "text"
+    });
+  }
+  doRemember(resultSentence);
+  doRemember({
+    mood: "ya",
+    su: { name: "result" },
+    be: "command",
+    ob: output
+  });
+}
+
+async function recordCommandOutput({ filename, output, requestIdentity } = {}) {
+  if (!filename) return null;
+  const bytes = Buffer.from(String(output ?? ""), "utf8");
+  const artifact = recordArtifact({
+    locator: filename,
+    producer: requestIdentity.name,
+    bytes,
+    kind: "command output",
+    requestIdentity: requestIdentity.name
+  });
+  if (artifact) {
+    recordExchange({
+      artifactName: artifact.su?.name,
+      op: "write",
+      producer: requestIdentity.name,
+      requestIdentity: requestIdentity.name
+    });
+  }
+  return artifact;
 }
 
 function normalizeRoots(roots = []) {
@@ -570,12 +643,13 @@ function isNetworkDenied() {
   return false;
 }
 
-function buildCommandResumeToken({ sentence, commandClass, commandText }) {
+function buildCommandResumeToken({ sentence, commandClass, commandText, requestIdentity }) {
   return JSON.stringify({
     kind: "command",
     issuedAt: new Date().toISOString(),
     class: commandClass ?? "unknown",
     text: String(commandText ?? ""),
+    requestIdentity: requestIdentity?.name ?? null,
     sentence: sentence && typeof sentence === "object" ? sentence : {}
   });
 }
@@ -725,6 +799,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     });
   }
 
+  const { identity: requestIdentity, resumed } = resolveCommandIdentity({ sentence });
   const commandResponse = resolveConfigText("command response", { rememberFn });
   if (commandResponse !== undefined) {
     const output = String(commandResponse);
@@ -745,11 +820,15 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
         ob: { ve: { values }, kind: "command", final: true }
       });
     }
-    if (sentence?.to?.name) {
-      const fact = { mood: "ya", be: "text", su: { name: sentence.to.name }, ob: { text: output } };
-      doRemember(fact);
+    if (!resumed) emitExchangeSentence(commandRequestSentence({ requestIdentity, sentence }));
+    if (sentence?.to?.filename) {
+      await fs.mkdir(path.dirname(sentence.to.filename), { recursive: true });
+      await fs.writeFile(sentence.to.filename, output, "utf8");
     }
-    return { ob: { text: output }, be: "command" };
+    const resultSentence = commandResultSentence({ requestIdentity, output });
+    await recordCommandOutput({ filename: sentence?.to?.filename, output, requestIdentity });
+    rememberCommandResult({ sentence, resultSentence });
+    return resultSentence;
   }
   const rawCmd = resolveCommandText(sentence.ob ?? {}, { rememberFn });
   if (!rawCmd) {
@@ -765,9 +844,9 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   const commandClass = classifyCommandText(cmd);
   const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
   const commandEnv = buildAllowedEnv({ allowlist: sandbox.envAllowlist, cwd: sandbox.cwd, runRoot: sandbox.runRoot });
-  const requestId = nextAuditId();
+  if (!resumed) emitExchangeSentence(commandRequestSentence({ requestIdentity, sentence }));
   if (shouldDeny({ sentence, policy, commandClass })) {
-    emitCommandAudit({ requestId, stage: "policy", commandClass, policy, decision: "deny", sentence, rememberFn });
+    emitCommandAudit({ requestIdentity, stage: "policy", commandClass, policy, decision: "deny", sentence, rememberFn });
     throwErrorSentence({
       name: "command policy defective",
       message: `command policy defective: denied class=${commandClass}`,
@@ -776,7 +855,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     });
   }
   if (shouldRequireRatify({ sentence, policy, commandClass })) {
-    const resumeToken = buildCommandResumeToken({ sentence, commandClass, commandText: cmd });
+    const resumeToken = buildCommandResumeToken({ sentence, commandClass, commandText: cmd, requestIdentity });
     const ratifySentence = {
       mood: "do",
       be: "ratify",
@@ -787,7 +866,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       fromtext: { text: resumeToken }
     };
     emitCommandAudit({
-      requestId,
+      requestIdentity,
       stage: "policy",
       commandClass,
       policy,
@@ -799,7 +878,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return ratifySentence;
   }
   if (isNetworkDenied({ commandClass, sandbox })) {
-    emitCommandAudit({ requestId, stage: "sandbox", commandClass, policy, decision: "deny", sentence, rememberFn });
+    emitCommandAudit({ requestIdentity, stage: "sandbox", commandClass, policy, decision: "deny", sentence, rememberFn });
     throwErrorSentence({
       name: "command sandbox defective",
       message: "command sandbox defective: network disabled",
@@ -808,7 +887,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     });
   }
   validateSandboxWritePolicy({ sentence, commandText: cmd, commandClass, sandbox });
-  emitCommandAudit({ requestId, stage: "policy", commandClass, policy, decision: "allow", sentence, rememberFn });
+  emitCommandAudit({ requestIdentity, stage: "policy", commandClass, policy, decision: "allow", sentence, rememberFn });
 
   let input = null;
   if (sentence.from?.filename) {
@@ -923,13 +1002,13 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       await fs.writeFile(outPath, outputText, "utf8");
     }
     if (sentence?.to?.filename) {
+      await fs.mkdir(path.dirname(sentence.to.filename), { recursive: true });
       await fs.writeFile(sentence.to.filename, outputText, "utf8");
     }
-    if (sentence?.to?.name) {
-      const fact = { mood: "ya", be: "text", su: { name: sentence.to.name }, ob: { text: outputText } };
-      doRemember(fact);
-    }
-    return { ob: { text: outputText }, be: "command" };
+    const resultSentence = commandResultSentence({ requestIdentity, output: outputText });
+    await recordCommandOutput({ filename: sentence?.to?.filename, output: outputText, requestIdentity });
+    rememberCommandResult({ sentence, resultSentence });
+    return resultSentence;
   }
 
   const inlineTimeoutMs = parseCommandTimeoutOverride(cmd);
@@ -977,7 +1056,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   const failed = Boolean(res.status) || Boolean(res.signal) || res.timedOut === true || res.exceededOutputLimit === true;
   if (failed) {
     emitCommandAudit({
-      requestId,
+      requestIdentity,
       stage: "result",
       commandClass,
       policy,
@@ -1002,23 +1081,23 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   }
   const output = String(res.stdout ?? "");
   if (sentence?.to?.filename) {
+    await fs.mkdir(path.dirname(sentence.to.filename), { recursive: true });
     await fs.writeFile(sentence.to.filename, output, "utf8");
   }
-  if (sentence?.to?.name) {
-    const fact = { mood: "ya", be: "text", su: { name: sentence.to.name }, ob: { text: output } };
-    doRemember(fact);
-  }
+  const resultSentence = commandResultSentence({ requestIdentity, output });
+  await recordCommandOutput({ filename: sentence?.to?.filename, output, requestIdentity });
+  rememberCommandResult({ sentence, resultSentence });
   emitCommandAudit({
-    requestId,
+    requestIdentity,
     stage: "result",
     commandClass,
     policy,
     decision: "allow",
     sentence,
-    resultSentence: { mood: "ya", be: "command", ob: { text: output } },
+    resultSentence,
     rememberFn
   });
-  return { ob: { text: output }, be: "command" };
+  return resultSentence;
 }
 
 export default command;
