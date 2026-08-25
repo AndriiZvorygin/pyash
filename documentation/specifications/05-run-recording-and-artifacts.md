@@ -26,6 +26,37 @@ Each artifact record should include:
 - relation to producer action,
 - hash metadata when available.
 
+### 3.1 Command identity graph (normative)
+
+For each synchronous command invocation, the newspaper may contain the
+following linked graph. The canonical request name is
+`command request <six-digit ordinal>` and is allocated once at runtime.
+
+| Record | Required link |
+| --- | --- |
+| command request/evoke | `su name <request>` and `ob la <original command sentence>` |
+| command result | `su name <request> ... be command ya` |
+| command audit | `to name <request>`; audit subjects are `command audit <ordinal>` |
+| declared artifact | `ob name <request>` and its declared `to filename` locator; the first declaration also names the request as its producer when available |
+| artifact exchange | `ob name <request>`, with `as name read|write|...` |
+| compiled tool event | its `to la` result resolves to the same canonical command result |
+
+The request evoke record precedes policy audits. A declared `to filename`
+output is written first and then recorded as an artifact and exchange
+operation. If a later command reuses an artifact locator, content addressing,
+aliasing, and hash-consistency rules remain unchanged: no duplicate artifact
+declaration is required, but that command's exchange operation still carries
+its own request identity.
+
+Replay validates the graph in addition to artifact hashes: every canonical
+command result resolves to exactly one known command request; every
+identity-bearing artifact, exchange, and audit link resolves to a known
+request; and one request identity cannot carry conflicting request or result
+payloads. A newspaper with no command identity records is a legacy newspaper
+and remains replayable. Once the new identity contract is present, malformed,
+orphaned, partially linked, or internally inconsistent identity records are
+defective and replay emits a sentence-shaped identity error.
+
 For multi-artifact producers (example: `photographs`):
 - producer should emit one manifest series artifact that lists produced child artifacts,
 - newspaper hash verification MUST include this manifest artifact,

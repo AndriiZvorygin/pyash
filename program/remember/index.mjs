@@ -3,6 +3,7 @@ import { clearSignatureDefinitions, joinSignatureWords } from "../bridge/signatu
 import { state } from "../bridge/state.mjs";
 import { clearModuleCache } from "../bridge/modules.mjs";
 import { clearRefineries } from "../bridge/refinery.mjs";
+import { resetCommandIdentity } from "../bridge/command_identity.mjs";
 
 let memory = [];
 let history = []; // optional, for debugging / REPL
@@ -377,6 +378,7 @@ export function forget() {
   state.currentEvokeRef = null;
   state.executingBody = false;
   state.refineryScopeStack.length = 0;
+  resetCommandIdentity();
 }
 
 export function setDefault(name, sentence) {
