@@ -37,6 +37,7 @@ following linked graph. The canonical request name is
 | command request/evoke | `su name <request>` and `ob la <original command sentence>` |
 | command result | `su name <request> ... be command ya` |
 | command audit | `to name <request>`; audit subjects are `command audit <ordinal>` |
+| approval request/decision | `to name <request>`; a truthful approval must be followed by the resumed result, while a denied approval is terminal |
 | declared artifact | `ob name <request>` and its declared `to filename` locator; the first declaration also names the request as its producer when available |
 | artifact exchange | `ob name <request>`, with `as name read|write|...` |
 | compiled tool event | its `to la` result resolves to the same canonical command result |
@@ -50,12 +51,16 @@ its own request identity.
 
 Replay validates the graph in addition to artifact hashes: every canonical
 command result resolves to exactly one known command request; every
-identity-bearing artifact, exchange, and audit link resolves to a known
-request; and one request identity cannot carry conflicting request or result
-payloads. A newspaper with no command identity records is a legacy newspaper
-and remains replayable. Once the new identity contract is present, malformed,
-orphaned, partially linked, or internally inconsistent identity records are
-defective and replay emits a sentence-shaped identity error.
+identity-bearing artifact, exchange, audit, and approval link resolves to a
+known request; and one request identity cannot carry conflicting request or
+result payloads. A successful request must have its canonical result. A denied
+request or failed request may terminate at its explicit deny/error audit (and
+a denied approval is terminal); an approval request, request-only record, or
+truthful approval without its resumed result is incomplete. A newspaper with
+no command identity records is a legacy newspaper and remains replayable.
+Once the new identity contract is present, malformed, orphaned, partially
+linked, split-resume, or internally inconsistent identity records are defective
+and replay emits a sentence-shaped identity error.
 
 For multi-artifact producers (example: `photographs`):
 - producer should emit one manifest series artifact that lists produced child artifacts,

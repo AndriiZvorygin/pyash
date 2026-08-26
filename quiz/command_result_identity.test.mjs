@@ -7,6 +7,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, remember } from "../program/remember/index.mjs";
 import { command } from "../program/verbs/command.mjs";
+import { withCommandResumeIdentity } from "../program/bridge/command_identity.mjs";
 import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
 
 test.afterEach(() => {
@@ -101,14 +102,28 @@ test("ratify resume preserves the request identity through the result audit", as
   const token = JSON.parse(approval.fromtext.text);
   assert.equal(token.requestIdentity, "command request 000001");
 
-  const resumed = await command({
-    ...sentence,
-    accordingto: { name: "ratify decision" },
-    totext: { text: "truth" },
-    fromtext: { text: approval.fromtext.text }
-  });
+  const resumed = await withCommandResumeIdentity(
+    token.requestIdentity,
+    () => command({
+      ...sentence,
+      accordingto: { name: "ratify decision" },
+      totext: { text: "truth" },
+      fromtext: { text: "stdin payload" }
+    })
+  );
   assert.equal(resumed?.su?.name, "command request 000001");
   const audits = records.filter(record => record?.be === "command audit");
   assert.ok(audits.length >= 2);
   assert.ok(audits.every(record => record.to?.name === resumed.su.name));
+});
+
+test("malformed resume identity context is rejected instead of allocating a new request", async () => {
+  forget();
+  await assert.rejects(
+    withCommandResumeIdentity("", () => command({
+      be: "command",
+      ob: { text: "printf malformed" }
+    })),
+    error => error?.sentence?.su?.name === "command resume defective"
+  );
 });

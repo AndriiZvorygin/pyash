@@ -19,7 +19,7 @@ import {
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
 import { emitExchangeSentence, recordArtifact, recordExchange } from "../bridge/exchange.mjs";
-import { allocateCommandIdentity, restoreCommandIdentity } from "../bridge/command_identity.mjs";
+import { allocateCommandIdentity, consumeCommandResumeIdentity, restoreCommandIdentity } from "../bridge/command_identity.mjs";
 import {
   collectLicensedRoots,
   listWorldDeclaredAgentHouses,
@@ -278,14 +278,16 @@ function commandRequestSentence({ requestIdentity, sentence } = {}) {
 }
 
 function resolveCommandIdentity({ sentence } = {}) {
-  const isResume = sentence?.accordingto?.name === "ratify decision" && sentence?.totext?.text === "truth";
-  if (!isResume) return { identity: allocateCommandIdentity(), resumed: false };
-  try {
-    const token = JSON.parse(String(sentence?.fromtext?.text ?? ""));
-    const restored = restoreCommandIdentity(token?.requestIdentity);
-    if (restored) return { identity: restored, resumed: true };
-  } catch {}
-  return { identity: allocateCommandIdentity(), resumed: false };
+  const resumeIdentity = consumeCommandResumeIdentity();
+  if (resumeIdentity === undefined) return { identity: allocateCommandIdentity(), resumed: false };
+  const restored = restoreCommandIdentity(resumeIdentity);
+  if (restored) return { identity: restored, resumed: true };
+  throwErrorSentence({
+    name: "command resume defective",
+    message: "command resume defective: request identity context malformed",
+    from: { name: "command" },
+    raw: { sentence, requestIdentity: resumeIdentity }
+  });
 }
 
 function commandResultSentence({ requestIdentity, output } = {}) {
@@ -626,8 +628,8 @@ function validateSandboxWritePolicy({ sentence, commandText, commandClass, sandb
   });
 }
 
-function shouldRequireRatify({ sentence, policy, commandClass } = {}) {
-  if (sentence?.accordingto?.name === "ratify decision" && sentence?.totext?.text === "truth") return false;
+function shouldRequireRatify({ sentence, policy, commandClass, resumed = false } = {}) {
+  if (resumed) return false;
   if (policy?.mode !== "ask") return false;
   if (sentence?.mood === "propose") return true;
   return commandClass === "destructive";
@@ -854,7 +856,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       raw: { class: commandClass, mode: policy.mode }
     });
   }
-  if (shouldRequireRatify({ sentence, policy, commandClass })) {
+  if (shouldRequireRatify({ sentence, policy, commandClass, resumed })) {
     const resumeToken = buildCommandResumeToken({ sentence, commandClass, commandText: cmd, requestIdentity });
     const ratifySentence = {
       mood: "do",
@@ -862,6 +864,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       su: { name: sentence?.su?.name ?? "command approval" },
       ob: { text: `approve command (${commandClass}): ${cmd}` },
       from: { name: "command" },
+      to: { name: requestIdentity.name },
       accordingto: { name: "resume token" },
       fromtext: { text: resumeToken }
     };

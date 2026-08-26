@@ -58,6 +58,9 @@ async function main() {
   const requests = new Map();
   const results = new Map();
   const toolResults = new Map();
+  const auditDecisions = new Map();
+  const approvalRequests = new Set();
+  const approvalDecisions = new Map();
   const linked = [];
   let identityBearing = false;
   setExchangeRecorder({ record: () => {}, runRoot });
@@ -113,7 +116,33 @@ async function main() {
     }
     if (sentence?.be === "command audit" && sentence?.to?.name) {
       identityBearing = true;
-      linked.push({ kind: "audit", value: String(sentence.to.name).trim() });
+      const value = String(sentence.to.name).trim();
+      linked.push({ kind: "audit", value });
+      if (isCommandRequestIdentity(value)) {
+        const decisions = auditDecisions.get(value) ?? [];
+        decisions.push({
+          stage: String(sentence.as?.name ?? "").trim(),
+          decision: String(sentence.accordingto?.name ?? "").trim(),
+          hasResult: Boolean(sentence.totext?.text)
+        });
+        auditDecisions.set(value, decisions);
+      }
+    }
+    if (sentence?.be === "ratify" && sentence?.to?.name) {
+      const value = String(sentence.to.name).trim();
+      if (isCommandRequestIdentityLike(value)) {
+        identityBearing = true;
+        linked.push({ kind: "approval", value });
+        if (sentence.mood === "do") approvalRequests.add(value);
+        if (sentence.mood === "ya" && typeof sentence.ob?.boolean === "boolean") {
+          approvalDecisions.set(value, sentence.ob.boolean);
+        }
+      }
+    }
+    if (sentence?.be === "bool" && sentence?.mood === "ya" && isCommandRequestIdentity(requestName)
+      && typeof sentence.ob?.boolean === "boolean") {
+      identityBearing = true;
+      approvalDecisions.set(requestName, sentence.ob.boolean);
     }
     if (sentence?.be === "artifact" || sentence?.be === "exchange") {
       for (const [field, value] of identityFields(sentence)) {
@@ -173,6 +202,25 @@ async function main() {
     for (const link of linked) {
       if (!requests.has(link.value)) {
         errors.push(identityDefect(`${link.kind} has no command request: ${link.value}`));
+      }
+    }
+    for (const [requestName] of requests) {
+      const hasResult = results.has(requestName);
+      const decisions = auditDecisions.get(requestName) ?? [];
+      const deniedByAudit = decisions.some(entry => entry.decision === "deny");
+      const failedByAudit = decisions.some(entry => entry.decision === "error");
+      const approvalDecision = approvalDecisions.get(requestName);
+      const deniedByApproval = approvalDecision === false;
+      const terminalFailure = deniedByAudit || failedByAudit || deniedByApproval;
+      if (hasResult && terminalFailure) {
+        errors.push(identityDefect(`command request has both terminal failure and result: ${requestName}`));
+      } else if (!hasResult && !terminalFailure) {
+        const pendingApproval = approvalRequests.has(requestName) || decisions.some(entry => entry.decision === "ask");
+        errors.push(identityDefect(
+          pendingApproval
+            ? `command request resume is incomplete: ${requestName}`
+            : `command request graph is incomplete: ${requestName}`
+        ));
       }
     }
   }

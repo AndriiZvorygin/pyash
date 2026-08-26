@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { command, classifyCommandText, resolveCommandPolicy } from "../program/verbs/command.mjs";
+import { withCommandResumeIdentity } from "../program/bridge/command_identity.mjs";
 import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
 
 test("command classifier assigns stable classes", () => {
@@ -117,11 +118,14 @@ test("command approved resume bypasses ask gate once", async () => {
   const first = await command(sentence);
   assert.equal(first?.be, "ratify");
 
-  const resumed = await command({
-    ...sentence,
-    accordingto: { name: "ratify decision" },
-    totext: { text: "truth" }
-  });
+  const resumed = await withCommandResumeIdentity(
+    "command request 000001",
+    () => command({
+      ...sentence,
+      accordingto: { name: "ratify decision" },
+      totext: { text: "truth" }
+    })
+  );
   assert.equal(resumed?.be, "command");
   assert.match(String(resumed?.ob?.text ?? ""), /hi/);
 });

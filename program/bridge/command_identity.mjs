@@ -1,7 +1,9 @@
 let commandOrdinal = 0;
+let pendingResumeIdentity;
 
 export function resetCommandIdentity() {
   commandOrdinal = 0;
+  pendingResumeIdentity = undefined;
 }
 
 export function allocateCommandIdentity() {
@@ -19,6 +21,26 @@ export function restoreCommandIdentity(name) {
   if (!match) return null;
   commandOrdinal = Math.max(commandOrdinal, Number(match[1]));
   return { ordinal: match[1], name: normalized };
+}
+
+export function setCommandResumeIdentity(name) {
+  pendingResumeIdentity = String(name ?? "").trim();
+}
+
+export function consumeCommandResumeIdentity() {
+  const identity = pendingResumeIdentity;
+  pendingResumeIdentity = undefined;
+  return identity;
+}
+
+export async function withCommandResumeIdentity(name, callback) {
+  const prior = pendingResumeIdentity;
+  setCommandResumeIdentity(name);
+  try {
+    return await callback();
+  } finally {
+    pendingResumeIdentity = prior;
+  }
 }
 
 export function isCommandRequestIdentity(value) {

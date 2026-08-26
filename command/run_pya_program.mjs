@@ -16,7 +16,7 @@ import { splitSentencesWithLines } from "../program/library/sentenceSplitter.mjs
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { surfaceErrorSentence, throwErrorSentence } from "../program/error.mjs";
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
-import { resetCommandIdentity } from "../program/bridge/command_identity.mjs";
+import { resetCommandIdentity, withCommandResumeIdentity } from "../program/bridge/command_identity.mjs";
 import { state } from "../program/bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../program/bridge/exchange.mjs";
 import { recordArtifact } from "../program/bridge/exchange.mjs";
@@ -725,10 +725,11 @@ async function main() {
             runError = { sentence: badToken };
             break;
           }
-          resumeSentence.accordingto = { name: "ratify decision" };
-          resumeSentence.totext = { text: "truth" };
           try {
-            const resumed = await interpret(resumeSentence);
+            const resumed = await withCommandResumeIdentity(
+              resumeToken?.requestIdentity,
+              () => interpret(resumeSentence)
+            );
             const resumedSentence = toResultSentence(resumed, resumeSentence);
             if (resumedSentence?.mood) {
               const resumedSurfaced = surfaceErrorSentence(resumedSentence);
