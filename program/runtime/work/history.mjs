@@ -44,6 +44,8 @@ export async function appendWorkSchedulerEvent(worldRoot, event = {}, { now = ()
     taskId: event.taskId,
     status: event.status,
     reason: event.reason,
+    capacityState: event.capacity?.state,
+    weeklyIdentified: event.capacity?.weekly?.identified === true,
     usedPercent: event.capacity?.weekly?.usedPercent ?? event.capacity?.usedPercent,
     remainingPercent: event.capacity?.weekly?.remainingPercent ?? event.capacity?.remainingPercent,
     pacingFloor: event.pacing?.minimumRemainingPercent,

@@ -221,11 +221,16 @@ failed state.
 `account/rateLimits/read` response, including its nested `rateLimits.primary`
 window, to `available`, `usage-limited`, or `unknown`, with remaining/used
 percentage, reset time, window, observed time, and the raw provider payload.
-On this host the primary bucket is confidently weekly because
-`windowDurationMins` is `10080`; the normalized record persists that raw
-bucket, window start, reset, and observation diagnostics in scheduler health.
-If a seven-day bucket cannot be identified, background work defers rather than
-guessing.
+The parser identifies the weekly bucket by its declared seven-day duration
+(`10080` minutes or `604800` seconds), independently of provider bucket name,
+ordering, or nesting. On this host `primary` is the five-hour bucket and
+`secondary` is the weekly bucket. The normalized record persists the selected
+raw bucket, bucket path, window start, reset, and observation diagnostics in
+scheduler health. If a seven-day bucket cannot be identified or validated,
+background work records `capacity telemetry unavailable` and defers rather than
+guessing; a provider hard limit remains a separate `provider usage-limited`
+reason. A last-good weekly sample is retained for diagnosis only and is never
+used to authorize new work after telemetry fails.
 
 Background admission uses one weekly budget with a default 15 percent final
 reserve. At elapsed fraction `E` of the weekly window, the normal usage limit

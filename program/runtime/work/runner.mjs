@@ -298,6 +298,11 @@ export async function runWorkBackgroundOnce({
     recoverable: recoverable.length
   }, { now });
   const prior = await readWorkSchedulerHealth(worldRoot);
+  const weeklyObservationIsGood = capacity.weekly?.identified === true
+    && Number.isFinite(Number(capacity.weekly.usedPercent))
+    && Number.isFinite(Number(capacity.weekly.remainingPercent))
+    && Boolean(capacity.weekly.resetAt)
+    && Boolean(capacity.weekly.windowStartAt);
   const baseHealth = {
     ...prior,
     "last wake": wake,
@@ -309,6 +314,18 @@ export async function runWorkBackgroundOnce({
     "weekly window start": capacity.weekly?.windowStartAt || "",
     "weekly window minutes": capacity.weekly?.windowMinutes == null ? "" : String(capacity.weekly.windowMinutes),
     "weekly raw": JSON.stringify(capacity.weekly?.raw || {}),
+    "weekly last good observed at": weeklyObservationIsGood
+      ? capacity.weekly.observedAt || capacity.observedAt || ""
+      : prior["weekly last good observed at"] || "",
+    "weekly last good reset at": weeklyObservationIsGood
+      ? capacity.weekly.resetAt || ""
+      : prior["weekly last good reset at"] || "",
+    "weekly last good used percent": weeklyObservationIsGood
+      ? String(capacity.weekly.usedPercent)
+      : prior["weekly last good used percent"] || "",
+    "weekly last good remaining percent": weeklyObservationIsGood
+      ? String(capacity.weekly.remainingPercent)
+      : prior["weekly last good remaining percent"] || "",
     "capacity raw": JSON.stringify(capacity.raw || {}),
     "capacity observed at": capacity.observedAt || "",
     "weekly pacing floor": admission.pacing?.minimumRemainingPercent == null
@@ -332,7 +349,7 @@ export async function runWorkBackgroundOnce({
     const reason = externalOnly
       ? "awaiting external evidence"
       : technicalUnavailable ? "technical continuation unavailable"
-        : dependencyWaiting ? "roadmap dependency waiting" : admission.reason;
+      : dependencyWaiting ? "roadmap dependency waiting" : admission.reason;
     const idle = reason === "no eligible work";
     const action = externalOnly || technicalUnavailable ? "technical-blocked" : idle ? "idle" : "deferred";
     await emitWorkEvent(onEvent, externalOnly || technicalUnavailable ? "technical-blocked" : "deferred", {
@@ -348,7 +365,12 @@ export async function runWorkBackgroundOnce({
       "idle wakes": String((Number(prior["idle wakes"]) || 0) + (idle ? 1 : 0)),
       "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + (technicalUnavailable ? 1 : 0)),
       "external evidence wakes": String((Number(prior["external evidence wakes"]) || 0) + (externalOnly ? 1 : 0)),
-      "blocked before model wakes": String((Number(prior["blocked before model wakes"]) || 0) + (externalOnly || technicalUnavailable ? 1 : 0))
+      "capacity telemetry unavailable wakes": String((Number(prior["capacity telemetry unavailable wakes"]) || 0)
+        + (admission.reason === "capacity telemetry unavailable" ? 1 : 0)),
+      "provider usage-limited wakes": String((Number(prior["provider usage-limited wakes"]) || 0)
+        + (admission.reason === "provider usage-limited" ? 1 : 0)),
+      "blocked before model wakes": String((Number(prior["blocked before model wakes"]) || 0)
+        + (externalOnly || technicalUnavailable || admission.reason === "capacity telemetry unavailable" ? 1 : 0))
     };
     await writeWorkSchedulerHealth(worldRoot, health);
     await appendWorkSchedulerEvent(worldRoot, {
