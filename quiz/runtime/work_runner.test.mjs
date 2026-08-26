@@ -56,6 +56,18 @@ test("capacity normalization is conservative and preserves provider diagnostics"
   assert.equal(accountShape.windowMinutes, 10080);
   assert.equal(accountShape.weekly.identified, true);
   assert.equal(accountShape.weekly.windowStartAt, "2026-08-06T00:05:07.000Z");
+  const currentAccountShape = normalizeCodexCapacity({
+    rateLimits: {
+      primary: { usedPercent: 13, windowDurationMins: 300, resetsAt: 1787786955 },
+      secondary: { usedPercent: 5, windowDurationMins: 10080, resetsAt: 1788272109 }
+    }
+  }, { now: "2026-08-26T20:00:00.000Z" });
+  assert.equal(currentAccountShape.usedPercent, 13);
+  assert.equal(currentAccountShape.weekly.identified, true);
+  assert.equal(currentAccountShape.weekly.usedPercent, 5);
+  assert.equal(currentAccountShape.weekly.remainingPercent, 95);
+  assert.equal(currentAccountShape.weekly.windowMinutes, 10080);
+  assert.equal(currentAccountShape.weekly.windowStartAt, "2026-08-25T14:15:09.000Z");
   assert.equal(normalizeCodexCapacity({}, { now: "2026-08-07T12:30:00.000Z" }).state, "unknown");
 });
 
