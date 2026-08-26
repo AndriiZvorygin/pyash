@@ -411,7 +411,7 @@ export async function interpret(sentence) {
   }
 
   // --- Imperative ---
-  if (mood === "do") {
+  if (mood === "do" || (mood === "propose" && be === "command")) {
     if (sentence.exists) {
       throwErrorSentence({
         name: "exists defective",

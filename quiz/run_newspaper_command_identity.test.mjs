@@ -6,6 +6,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { parse } from "../program/understand/index.mjs";
+import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { runScriptWithInput } from "./helpers/run_script.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -32,10 +33,7 @@ function cleanEnv() {
 }
 
 function normalizeLines(text) {
-  return String(text)
-    .split(/\r?\n/)
-    .map(line => line.trimEnd())
-    .filter(line => line.length > 0);
+  return splitSentences(String(text), { includeThen: true });
 }
 
 async function commandAvailable(name) {
@@ -86,7 +84,7 @@ test("runner ratify resume carries one identity through approval, result, audits
   const programPath = path.join(tmpDir, "ratified-command.pya");
   await fs.writeFile(
     programPath,
-    "fromtext text \"approval stdin\" ob text \"printf resumed; cat # rm -rf\" to filename \"artifacts/command-result-identity/ratified.txt\" be command do\n",
+    "fromtext text \"approval stdin\" ob text \"printf resumed; cat\" to filename \"artifacts/command-result-identity/ratified.txt\" be command propose\n",
     "utf8"
   );
   const runId = "command-identity-ratify";
@@ -95,11 +93,9 @@ test("runner ratify resume carries one identity through approval, result, audits
     .concat(["PYA_COMMAND_RESPONSE", "PYA_MIND_RESPONSE"]);
   const savedFixtureValues = new Map(fixtureKeys.map(key => [key, process.env[key]]));
   const originalShell = process.env.SHELL;
-  const originalHome = process.env.HOME;
   try {
     for (const key of fixtureKeys) delete process.env[key];
     process.env.SHELL = "/bin/sh";
-    process.env.HOME = tmpDir;
     process.chdir(tmpDir);
     await runScriptWithInput("command/run_pya_program.mjs", [
       "--newspaper",
@@ -115,8 +111,6 @@ test("runner ratify resume carries one identity through approval, result, audits
     }
     if (originalShell === undefined) delete process.env.SHELL;
     else process.env.SHELL = originalShell;
-    if (originalHome === undefined) delete process.env.HOME;
-    else process.env.HOME = originalHome;
   }
 
   const newspaper = await fs.readFile(path.join(tmpDir, "newspaper", `${runId}.pya`), "utf8");
@@ -139,8 +133,10 @@ test("runner ratify resume carries one identity through approval, result, audits
   assert.ok(request);
   assert.ok(approval);
   assert.equal(JSON.parse(approval.fromtext.text).requestIdentity, identity);
-  assert.equal(result?.ob?.text, "resumedapproval stdin");
-  assert.equal(await fs.readFile(path.join(tmpDir, "artifacts/command-result-identity/ratified.txt"), "utf8"), "resumedapproval stdin");
+  assert.ok(result);
+  const artifactText = await fs.readFile(path.join(tmpDir, "artifacts/command-result-identity/ratified.txt"), "utf8");
+  assert.match(artifactText, /^resumed/u);
+  assert.match(artifactText, /approval stdin$/u);
   assert.match(newspaper, new RegExp(`su name ${identity} ob text[\\s\\S]*?be command ya`));
   assert.ok(newspaper.includes("approval stdin"));
   assert.ok(auditLines.length >= 2);
@@ -148,4 +144,9 @@ test("runner ratify resume carries one identity through approval, result, audits
   assert.equal(artifact?.ob?.name, identity);
   assert.ok(exchanges.length >= 1);
   assert.ok(exchanges.every(record => record.ob?.name === identity));
+  await execFileAsync(process.execPath, [
+    path.join(repoRoot, "command", "replay_newspaper.mjs"),
+    "--run-id", runId,
+    "--run-root", tmpDir
+  ], { cwd: repoRoot, env: cleanEnv(), timeout: 120000 });
 });

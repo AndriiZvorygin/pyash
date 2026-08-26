@@ -269,7 +269,8 @@ export async function handleImperative({
   }
 
   const { mood } = sentence;
-  if (mood !== "do") return null;
+  const isCommandProposal = mood === "propose" && sentence?.be === "command";
+  if (mood !== "do" && !isCommandProposal) return null;
 
   resolveIoGenitives(sentence, { state, memory });
   resolveTypedGenitives(sentence, { state, memory });
