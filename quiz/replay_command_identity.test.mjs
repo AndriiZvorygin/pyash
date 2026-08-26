@@ -35,6 +35,7 @@ test("replay accepts legacy newspapers without command identity records", async 
 test("replay rejects an orphaned command identity link", async () => {
   const runRoot = await writeNewspaper([
     "exists su name identity from time 2025-01-01T00:00:00Z be run ya",
+    "exists su name command result identity protocol ob text \"v1\" be text ya",
     "exists su name command request 000001 ob la ob text \"printf ok\" be command do ko be evoke ya",
     "su name command request 000001 ob text \"ok\" be command ya",
     "exists su name artifact-001 ob name command request 000999 to filename \"out.txt\" from name command request 000999 be artifact ya",
@@ -46,6 +47,7 @@ test("replay rejects an orphaned command identity link", async () => {
 test("replay rejects an orphaned compiled tool result identity", async () => {
   const runRoot = await writeNewspaper([
     "exists su name identity from time 2025-01-01T00:00:00Z be run ya",
+    "exists su name command result identity protocol ob text \"v1\" be text ya",
     "su name tool event 000001 ob la ob text \"printf ok\" be command do ko to la su name command request 000001 ob text \"ok\" be command ya ko be tool ya",
     "exists su name identity be end ya"
   ]);
@@ -55,6 +57,7 @@ test("replay rejects an orphaned compiled tool result identity", async () => {
 test("replay rejects a request-only identity graph", async () => {
   const runRoot = await writeNewspaper([
     "exists su name identity from time 2025-01-01T00:00:00Z be run ya",
+    "exists su name command result identity protocol ob text \"v1\" be text ya",
     "exists su name command request 000001 ob la ob text \"printf incomplete\" be command do ko be evoke ya",
     "exists su name identity be end ya"
   ]);
@@ -64,6 +67,7 @@ test("replay rejects a request-only identity graph", async () => {
 test("replay rejects a split resume without a resumed result", async () => {
   const runRoot = await writeNewspaper([
     "exists su name identity from time 2025-01-01T00:00:00Z be run ya",
+    "exists su name command result identity protocol ob text \"v1\" be text ya",
     "exists su name command request 000001 ob la ob text \"rm -rf incomplete\" be command do ko be evoke ya",
     "exists su name command audit 000001 ob text \"rm -rf incomplete\" from name command configure to name command request 000001 as name policy accordingto name ask be command audit ya",
     "su name command approval ob text \"approve\" from name command to name command request 000001 fromtext text \"{}\" accordingto name resume token be ratify do",
@@ -76,6 +80,7 @@ test("replay rejects a split resume without a resumed result", async () => {
 test("replay accepts explicitly denied and failed command identities as terminal", async () => {
   const deniedRoot = await writeNewspaper([
     "exists su name identity from time 2025-01-01T00:00:00Z be run ya",
+    "exists su name command result identity protocol ob text \"v1\" be text ya",
     "exists su name command request 000001 ob la ob text \"rm -rf denied\" be command do ko be evoke ya",
     "exists su name command audit 000001 ob text \"rm -rf denied\" from name command configure to name command request 000001 as name policy accordingto name deny be command audit ya",
     "exists su name identity be end ya"
@@ -84,6 +89,7 @@ test("replay accepts explicitly denied and failed command identities as terminal
 
   const failedRoot = await writeNewspaper([
     "exists su name identity from time 2025-01-01T00:00:00Z be run ya",
+    "exists su name command result identity protocol ob text \"v1\" be text ya",
     "exists su name command request 000001 ob la ob text \"printf failed\" be command do ko be evoke ya",
     "exists su name command audit 000001 ob text \"printf failed\" from name command configure to name command request 000001 as name result accordingto name error totext text \"command failed\" be command audit ya",
     "exists su name identity be end ya"

@@ -57,6 +57,7 @@ async function runRunner(name, tmpDir) {
   ], { cwd: tmpDir, env: cleanEnv(), timeout: 120000 });
   const newspaperPath = path.join(tmpDir, "newspaper", `${runId}.pya`);
   const newspaper = await fs.readFile(newspaperPath, "utf8");
+  assert.match(newspaper, /su name command result identity protocol ob text "v1" be text ya/u);
   assert.match(newspaper, /su name command request 000001/u);
   assert.match(newspaper, /su name command request 000002/u);
   assert.match(newspaper, /be command ya/u);

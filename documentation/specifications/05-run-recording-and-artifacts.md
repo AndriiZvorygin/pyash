@@ -7,6 +7,7 @@ Purpose: define append-only run newspaper, event ordering, artifact records, and
 | Event type | Meaning |
 | --- | --- |
 | run start | run boundary start marker |
+| identity protocol | `command result identity protocol` version marker for strict command graph replay |
 | evoke/step | action invocation record |
 | result/state | surfaced sentence outcome |
 | tool | tool call + produce record |
@@ -31,6 +32,9 @@ Each artifact record should include:
 For each synchronous command invocation, the newspaper may contain the
 following linked graph. The canonical request name is
 `command request <six-digit ordinal>` and is allocated once at runtime.
+An identity-bearing newspaper MUST record the exact capability marker before
+its command identity graph:
+`exists su name command result identity protocol ob text "v1" be text ya`.
 
 | Record | Required link |
 | --- | --- |
@@ -53,7 +57,9 @@ Replay validates the graph in addition to artifact hashes: every canonical
 command result resolves to exactly one known command request; every
 identity-bearing artifact, exchange, audit, and approval link resolves to a
 known request; and one request identity cannot carry conflicting request or
-result payloads. A successful request must have its canonical result. A denied
+result payloads. Strict graph completeness is active only after the exact
+identity protocol marker. Without that marker, pre-identity audit-only
+newspapers remain replayable. A successful request must have its canonical result. A denied
 request or failed request may terminate at its explicit deny/error audit (and
 a denied approval is terminal); an approval request, request-only record, or
 truthful approval without its resumed result is incomplete. A newspaper with

@@ -1,0 +1,3 @@
+exists su name legacy-audit from time 2025-01-01T00:00:00Z be run ya
+exists su name command audit 000001 ob text "ob text \"printf legacy\" be command do" from name command configure to name command request 000001 as name policy accordingto name allow by name read_only fromtext text "2025-01-01T00:00:00Z" be command audit ya
+exists su name legacy-audit be end ya

@@ -5,7 +5,12 @@ import { parse } from "../program/understand/index.mjs";
 import { buildErrorSentence, surfaceErrorSentence } from "../program/error.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { hashLocator, setExchangeRecorder, clearExchangeRecorder, setExchangeRunRoot } from "../program/bridge/exchange.mjs";
-import { isCommandRequestIdentity, isCommandRequestIdentityLike } from "../program/bridge/command_identity.mjs";
+import {
+  isCommandRequestIdentity,
+  isCommandRequestIdentityLike,
+  isCommandResultIdentityProtocolMarker,
+  isCommandResultIdentityProtocolSentence
+} from "../program/bridge/command_identity.mjs";
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;
@@ -62,38 +67,42 @@ async function main() {
   const approvalRequests = new Set();
   const approvalDecisions = new Map();
   const linked = [];
-  let identityBearing = false;
+  const identityErrors = [];
+  let identityContract = false;
   setExchangeRecorder({ record: () => {}, runRoot });
   setExchangeRunRoot(runRoot);
 
   for (const line of lines) {
     if (!line.trim()) continue;
     const sentence = parse(line);
+    if (isCommandResultIdentityProtocolMarker(sentence)) {
+      identityContract = true;
+      if (!isCommandResultIdentityProtocolSentence(sentence)) {
+        identityErrors.push(identityDefect("unsupported command result identity protocol version"));
+      }
+    }
     for (const [field, rawValue] of identityFields(sentence)) {
       const value = String(rawValue).trim();
       if (!isCommandRequestIdentityLike(value)) continue;
-      identityBearing = true;
       if (!isCommandRequestIdentity(value)) {
-        errors.push(identityDefect(`malformed command request identity in ${field}: ${value}`));
+        identityErrors.push(identityDefect(`malformed command request identity in ${field}: ${value}`));
       }
     }
     const requestName = String(sentence?.su?.name ?? "").trim();
     if (sentence?.be === "evoke" && isCommandRequestIdentity(requestName)) {
-      identityBearing = true;
       const requestShape = sentenceToPyash(sentence?.ob?.la ?? {});
       const prior = requests.get(requestName);
       if (prior && prior !== requestShape) {
-        errors.push(identityDefect(`conflicting command request for ${requestName}`));
+        identityErrors.push(identityDefect(`conflicting command request for ${requestName}`));
       } else {
         requests.set(requestName, requestShape);
       }
     }
     if (sentence?.be === "command" && sentence?.mood === "ya" && isCommandRequestIdentity(requestName)) {
-      identityBearing = true;
       const resultShape = sentenceToPyash(sentence?.ob ?? {});
       const prior = results.get(requestName);
       if (prior && prior !== resultShape) {
-        errors.push(identityDefect(`conflicting command result for ${requestName}`));
+        identityErrors.push(identityDefect(`conflicting command result for ${requestName}`));
       } else {
         results.set(requestName, resultShape);
       }
@@ -101,21 +110,19 @@ async function main() {
     const toolResult = sentence?.be === "tool" ? sentence?.to?.la : null;
     const toolResultName = String(toolResult?.su?.name ?? "").trim();
     if (toolResult?.be === "command" && toolResult?.mood === "ya" && isCommandRequestIdentityLike(toolResultName)) {
-      identityBearing = true;
       if (!isCommandRequestIdentity(toolResultName)) {
-        errors.push(identityDefect(`malformed command request identity in tool result: ${toolResultName}`));
+        identityErrors.push(identityDefect(`malformed command request identity in tool result: ${toolResultName}`));
       } else {
         const resultShape = sentenceToPyash(toolResult?.ob ?? {});
         const prior = toolResults.get(toolResultName);
         if (prior && prior !== resultShape) {
-          errors.push(identityDefect(`conflicting tool result for ${toolResultName}`));
+          identityErrors.push(identityDefect(`conflicting tool result for ${toolResultName}`));
         } else {
           toolResults.set(toolResultName, resultShape);
         }
       }
     }
     if (sentence?.be === "command audit" && sentence?.to?.name) {
-      identityBearing = true;
       const value = String(sentence.to.name).trim();
       linked.push({ kind: "audit", value });
       if (isCommandRequestIdentity(value)) {
@@ -131,7 +138,6 @@ async function main() {
     if (sentence?.be === "ratify" && sentence?.to?.name) {
       const value = String(sentence.to.name).trim();
       if (isCommandRequestIdentityLike(value)) {
-        identityBearing = true;
         linked.push({ kind: "approval", value });
         if (sentence.mood === "do") approvalRequests.add(value);
         if (sentence.mood === "ya" && typeof sentence.ob?.boolean === "boolean") {
@@ -141,14 +147,12 @@ async function main() {
     }
     if (sentence?.be === "bool" && sentence?.mood === "ya" && isCommandRequestIdentity(requestName)
       && typeof sentence.ob?.boolean === "boolean") {
-      identityBearing = true;
       approvalDecisions.set(requestName, sentence.ob.boolean);
     }
     if (sentence?.be === "artifact" || sentence?.be === "exchange") {
       for (const [field, value] of identityFields(sentence)) {
         if (field === "object" || field === "producer") {
           if (isCommandRequestIdentity(value)) {
-            identityBearing = true;
             linked.push({ kind: sentence.be, value: String(value).trim() });
           }
         }
@@ -186,7 +190,8 @@ async function main() {
     }
   }
 
-  if (identityBearing) {
+  if (identityContract) {
+    errors.push(...identityErrors);
     for (const [requestName] of results) {
       if (!requests.has(requestName)) {
         errors.push(identityDefect(`command result has no command request: ${requestName}`));
