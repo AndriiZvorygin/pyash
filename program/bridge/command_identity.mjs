@@ -1,6 +1,29 @@
 let commandOrdinal = 0;
 let pendingResumeIdentity;
 
+export const COMMAND_RESULT_IDENTITY_PROTOCOL_NAME = "command result identity protocol";
+export const COMMAND_RESULT_IDENTITY_PROTOCOL_VERSION = "v1";
+
+export function commandResultIdentityProtocolSentence() {
+  return {
+    mood: "ya",
+    exists: true,
+    su: { name: COMMAND_RESULT_IDENTITY_PROTOCOL_NAME },
+    ob: { text: COMMAND_RESULT_IDENTITY_PROTOCOL_VERSION },
+    be: "text"
+  };
+}
+
+export function isCommandResultIdentityProtocolSentence(sentence) {
+  return sentence?.be === "text"
+    && sentence?.su?.name === COMMAND_RESULT_IDENTITY_PROTOCOL_NAME
+    && sentence?.ob?.text === COMMAND_RESULT_IDENTITY_PROTOCOL_VERSION;
+}
+
+export function isCommandResultIdentityProtocolMarker(sentence) {
+  return sentence?.be === "text" && sentence?.su?.name === COMMAND_RESULT_IDENTITY_PROTOCOL_NAME;
+}
+
 export function resetCommandIdentity() {
   commandOrdinal = 0;
   pendingResumeIdentity = undefined;

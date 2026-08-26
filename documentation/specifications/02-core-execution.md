@@ -166,6 +166,10 @@ run and formats the identity as `command request <six-digit ordinal>`. The
 ordinal is allocated at invocation time, not from source lines, hashes,
 filenames, timestamps, or compiler counters; loops, ceremonies, nested calls,
 and repeated commands therefore receive distinct deterministic identities.
+When newspaper recording is enabled, the run emits the sentence-native
+capability marker `exists su name command result identity protocol ob text
+"v1" be text ya`; replay applies the strict identity graph contract only when
+this exact marker is present.
 
 Before command policy/audit records, the runtime records the request as an
 evoke sentence whose subject is the canonical request identity:
