@@ -95,7 +95,7 @@ test("ratify resume preserves the request identity through the result audit", as
     mood: "propose",
     be: "command",
     su: { name: "approval target" },
-    ob: { text: "printf resumed" }
+    ob: { text: "printf resumed; cat" }
   };
   const approval = await command(sentence);
   assert.equal(approval?.be, "ratify");
@@ -112,6 +112,8 @@ test("ratify resume preserves the request identity through the result audit", as
     })
   );
   assert.equal(resumed?.su?.name, "command request 000001");
+  assert.match(String(resumed?.ob?.text ?? ""), /^resumed/u);
+  assert.match(String(resumed?.ob?.text ?? ""), /stdin payload$/u);
   const audits = records.filter(record => record?.be === "command audit");
   assert.ok(audits.length >= 2);
   assert.ok(audits.every(record => record.to?.name === resumed.su.name));

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
+import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { buildErrorSentence, surfaceErrorSentence } from "../program/error.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { hashLocator, setExchangeRecorder, clearExchangeRecorder, setExchangeRunRoot } from "../program/bridge/exchange.mjs";
@@ -22,10 +23,7 @@ function readFlagValue(args, name) {
 }
 
 function normalizeLines(text) {
-  return String(text)
-    .split(/\r?\n/)
-    .map(line => line.trimEnd())
-    .filter(line => line.length > 0);
+  return splitSentences(String(text), { includeThen: true });
 }
 
 function contentAddressPath(hash, locator) {
