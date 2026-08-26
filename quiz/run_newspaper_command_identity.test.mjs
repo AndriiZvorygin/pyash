@@ -86,7 +86,7 @@ test("runner ratify resume carries one identity through approval, result, audits
   const programPath = path.join(tmpDir, "ratified-command.pya");
   await fs.writeFile(
     programPath,
-    "fromtext text \"approval stdin\" ob text \"rm -rf artifacts/command-result-identity/ratified.txt; cat\" to filename \"artifacts/command-result-identity/ratified.txt\" be command do\n",
+    "fromtext text \"approval stdin\" ob text \"printf resumed; cat # rm -rf\" to filename \"artifacts/command-result-identity/ratified.txt\" be command do\n",
     "utf8"
   );
   const runId = "command-identity-ratify";
@@ -95,9 +95,11 @@ test("runner ratify resume carries one identity through approval, result, audits
     .concat(["PYA_COMMAND_RESPONSE", "PYA_MIND_RESPONSE"]);
   const savedFixtureValues = new Map(fixtureKeys.map(key => [key, process.env[key]]));
   const originalShell = process.env.SHELL;
+  const originalHome = process.env.HOME;
   try {
     for (const key of fixtureKeys) delete process.env[key];
     process.env.SHELL = "/bin/sh";
+    process.env.HOME = tmpDir;
     process.chdir(tmpDir);
     await runScriptWithInput("command/run_pya_program.mjs", [
       "--newspaper",
@@ -113,6 +115,8 @@ test("runner ratify resume carries one identity through approval, result, audits
     }
     if (originalShell === undefined) delete process.env.SHELL;
     else process.env.SHELL = originalShell;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
   }
 
   const newspaper = await fs.readFile(path.join(tmpDir, "newspaper", `${runId}.pya`), "utf8");
@@ -127,6 +131,7 @@ test("runner ratify resume carries one identity through approval, result, audits
   const identity = "command request 000001";
   const request = records.find(record => record?.be === "evoke" && record?.su?.name === identity);
   const approval = records.find(record => record?.be === "ratify" && record?.mood === "do" && record?.to?.name === identity);
+  const result = records.find(record => record?.be === "command" && record?.mood === "ya" && record?.su?.name === identity);
   const auditLines = lines.filter(line => line.includes("su name command audit"));
   const artifact = records.find(record => record?.be === "artifact");
   const exchanges = records.filter(record => record?.be === "exchange");
@@ -134,6 +139,8 @@ test("runner ratify resume carries one identity through approval, result, audits
   assert.ok(request);
   assert.ok(approval);
   assert.equal(JSON.parse(approval.fromtext.text).requestIdentity, identity);
+  assert.equal(result?.ob?.text, "resumedapproval stdin");
+  assert.equal(await fs.readFile(path.join(tmpDir, "artifacts/command-result-identity/ratified.txt"), "utf8"), "resumedapproval stdin");
   assert.match(newspaper, new RegExp(`su name ${identity} ob text[\\s\\S]*?be command ya`));
   assert.ok(newspaper.includes("approval stdin"));
   assert.ok(auditLines.length >= 2);
