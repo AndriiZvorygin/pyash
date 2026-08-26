@@ -87,7 +87,7 @@ test("admission preserves a foreground reserve and treats unknown capacity as un
   };
   assert.equal(admitBackgroundWork({ ...base, hasEligibleWork: true }).admit, true);
   assert.equal(admitBackgroundWork({ ...base, capacity: { weekly: weekly(90, 10) } }).reason, "weekly reserve");
-  assert.equal(admitBackgroundWork({ ...base, capacity: { weekly: { identified: false, state: "unknown" } } }).reason, "capacity unknown");
+  assert.equal(admitBackgroundWork({ ...base, capacity: { weekly: { identified: false, state: "unknown" } } }).reason, "capacity telemetry unavailable");
   assert.equal(admitBackgroundWork({ ...base, foregroundActive: true }).reason, "active task conflict");
 });
 
@@ -140,7 +140,7 @@ test("weekly pacing defers when reset timing is unknown", () => {
     hasEligibleWork: true,
     now: "2026-08-09T00:00:00.000Z"
   });
-  assert.equal(decision.reason, "capacity unknown");
+  assert.equal(decision.reason, "capacity telemetry unavailable");
 });
 
 test("background one-shot records admission and scheduler health", async () => {
@@ -181,6 +181,42 @@ test("background one-shot records admission and scheduler health", async () => {
   assert.equal(health["capacity state"], "available");
   assert.equal(health["last decision"], "weekly pacing headroom");
   assert.deepEqual(events.map((event) => event.type), ["capacity"]);
+});
+
+test("a valid weekly sample is retained for diagnosis but never used after telemetry fails", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-capacity-health-");
+  const validCapacity = {
+    state: "available",
+    weekly: {
+      identified: true,
+      state: "available",
+      usedPercent: 20,
+      remainingPercent: 80,
+      observedAt: "2026-08-07T12:00:00.000Z",
+      windowStartAt: "2026-08-03T12:00:00.000Z",
+      resetAt: "2026-08-10T12:00:00.000Z"
+    }
+  };
+  await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => validCapacity,
+    now: () => "2026-08-07T12:00:00.000Z"
+  });
+  const failed = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => ({ state: "unknown", weekly: { identified: false, state: "unknown" } }),
+    now: () => "2026-08-07T13:00:00.000Z"
+  });
+  assert.equal(failed.reason, "no eligible work");
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["weekly last good observed at"], "2026-08-07T12:00:00.000Z");
+  assert.equal(health["weekly last good remaining percent"], "80");
+  assert.equal(health["weekly last good reset at"], "2026-08-10T12:00:00.000Z");
+  assert.equal(health["capacity telemetry unavailable wakes"] || "0", "0");
 });
 
 test("background baseline sync skips active work and runs before a new task", async () => {
@@ -297,7 +333,7 @@ test("continuous runner sleeps between bounded wakes and can defer safely", asyn
     sleep: async (ms) => sleeps.push(ms)
   });
   assert.equal(results.length, 2);
-  assert.deepEqual(results.map((item) => item.reason), ["capacity unknown", "capacity unknown"]);
+  assert.deepEqual(results.map((item) => item.reason), ["capacity telemetry unavailable", "capacity telemetry unavailable"]);
   assert.match(results[0].report, /Result: DEFERRED/);
   assert.deepEqual(events.map((event) => event.type), ["capacity", "deferred", "capacity", "deferred"]);
   assert.deepEqual(sleeps, [17, 17]);
