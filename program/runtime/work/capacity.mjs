@@ -13,6 +13,23 @@ function firstObject(...values) {
   return values.find((value) => value && typeof value === "object" && !Array.isArray(value)) || {};
 }
 
+function usageShape(source = {}, fallback = {}) {
+  const usedPercent = number(source.usedPercent ?? source.used_percentage ?? fallback.usedPercent);
+  const explicitRemainingPercent = number(
+    source.remainingPercent ?? source.remaining_percentage ?? fallback.remainingPercent
+  );
+  const limit = number(source.limit ?? source.max ?? fallback.limit);
+  const remaining = number(source.remaining ?? source.remainingTokens ?? fallback.remaining);
+  const remainingPercent = explicitRemainingPercent != null
+    ? explicitRemainingPercent
+    : usedPercent != null
+      ? Math.max(0, 100 - usedPercent)
+      : limit != null && remaining != null && limit > 0
+        ? Math.max(0, Math.min(100, (remaining / limit) * 100))
+        : null;
+  return { usedPercent, remainingPercent, limit, remaining };
+}
+
 const WEEK_MINUTES = 7 * 24 * 60;
 
 function resetAt(source) {
@@ -29,19 +46,8 @@ export function normalizeCodexCapacity(payload, { now = new Date() } = {}) {
   const outer = payload?.limits && typeof payload.limits === "object" ? payload.limits : payload;
   const raw = outer?.rateLimits && typeof outer.rateLimits === "object" ? outer.rateLimits : outer;
   const primary = firstObject(raw?.primary, raw?.hourly, raw?.current, raw?.rateLimit, raw);
-  const usedPercent = number(primary.usedPercent ?? primary.used_percentage ?? raw?.usedPercent);
-  const explicitRemainingPercent = number(
-    primary.remainingPercent ?? primary.remaining_percentage ?? raw?.remainingPercent
-  );
-  const limit = number(primary.limit ?? primary.max ?? raw?.limit);
-  const remaining = number(primary.remaining ?? primary.remainingTokens ?? raw?.remaining);
-  const remainingPercent = explicitRemainingPercent != null
-    ? explicitRemainingPercent
-    : usedPercent != null
-      ? Math.max(0, 100 - usedPercent)
-      : limit != null && remaining != null && limit > 0
-        ? Math.max(0, Math.min(100, (remaining / limit) * 100))
-        : null;
+  const primaryUsage = usageShape(primary, raw);
+  const { usedPercent, remainingPercent, limit, remaining } = primaryUsage;
   const reset = resetAt(primary) || resetAt(raw);
   const windowMinutes = number(
     primary.windowMinutes ?? primary.window_minutes ?? primary.windowDurationMins
@@ -64,23 +70,32 @@ export function normalizeCodexCapacity(payload, { now = new Date() } = {}) {
     observedAt,
     raw: raw && typeof raw === "object" ? raw : {}
   };
-  const weeklySource = firstObject(raw?.weekly, raw?.week, raw?.primary);
+  // Codex currently exposes the shorter primary window and the weekly
+  // allowance as `secondary`; older payloads used `weekly` or `primary`.
+  const weeklySource = firstObject(raw?.weekly, raw?.week, raw?.secondary, raw?.primary, raw);
+  const weeklyUsage = usageShape(weeklySource, raw);
   const weeklyWindowMinutes = number(
     weeklySource.windowMinutes ?? weeklySource.window_minutes ?? weeklySource.windowDurationMins
   );
   const weeklyIdentified = weeklySource === raw?.weekly
     || weeklySource === raw?.week
+    || weeklySource === raw?.secondary
     || weeklyWindowMinutes === WEEK_MINUTES;
   const weeklyResetAt = resetAt(weeklySource);
   const weeklyStartAt = weeklyResetAt && weeklyWindowMinutes
     ? new Date(Date.parse(weeklyResetAt) - weeklyWindowMinutes * 60000).toISOString()
     : "";
+  const weeklyLimited = limited || weeklyUsage.remainingPercent === 0;
   const weekly = {
     identified: weeklyIdentified,
-    state: weeklyIdentified ? generic.state : "unknown",
-    available: weeklyIdentified ? generic.available : null,
-    usedPercent: weeklyIdentified ? usedPercent : null,
-    remainingPercent: weeklyIdentified ? remainingPercent : null,
+    state: weeklyIdentified
+      ? weeklyLimited ? "usage-limited" : weeklyUsage.remainingPercent != null ? "available" : "unknown"
+      : "unknown",
+    available: weeklyIdentified
+      ? weeklyLimited ? false : weeklyUsage.remainingPercent != null ? weeklyUsage.remainingPercent > 0 : null
+      : null,
+    usedPercent: weeklyIdentified ? weeklyUsage.usedPercent : null,
+    remainingPercent: weeklyIdentified ? weeklyUsage.remainingPercent : null,
     resetAt: weeklyIdentified ? weeklyResetAt : "",
     observedAt,
     windowMinutes: weeklyIdentified ? weeklyWindowMinutes : null,
