@@ -200,6 +200,21 @@ Implementations MAY also record a fully-resolved copy of the evoker sentence
 (with `to` bound to its resolved target) when that is useful for reuse, but the
 primary result fact is the `su name <id> … ya` sentence above.
 
+### 3.1.2 Compiled command policy timing (normative)
+
+Compiled JavaScript and C command emitters MUST resolve policy immediately
+before process creation using the policy state effective at that execution
+point. Policy maps and supported legacy policy facts lower into runtime updates
+in source order; a later declaration MUST NOT authorize an earlier command,
+and a mid-program change applies only to subsequent commands. The compiled
+backends MUST preserve the interpreter's scope precedence: `session command
+configure`, then `agent command configure`, then `command configure`.
+
+An unresolved compiled `ask`/`propose` decision MUST fail closed before process
+creation. The generated audit MUST retain the command request identity and a
+parseable resume token, even though compiled runners do not provide an approval
+resume loop.
+
 ## 3.2 Nickname bindings (normative)
 
 `nickname` creates a live alias binding.

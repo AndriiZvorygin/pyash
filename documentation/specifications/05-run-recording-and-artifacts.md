@@ -53,6 +53,14 @@ aliasing, and hash-consistency rules remain unchanged: no duplicate artifact
 declaration is required, but that command's exchange operation still carries
 its own request identity.
 
+Command policy audits from the interpreter and compiled JavaScript/C backends
+are sentence-native records with `fromtext text <ISO-8601 timestamp>`. Their
+`to name` field MUST name the canonical command request. A compiled approval
+record MUST keep its `fromtext text` payload as a JSON resume token; parsing it
+with `JSON.parse` MUST recover the matching `requestIdentity`. Audit and
+approval records are validated structurally during replay rather than by
+substring matching.
+
 Replay validates the graph in addition to artifact hashes: every canonical
 command result resolves to exactly one known command request; every
 identity-bearing artifact, exchange, audit, and approval link resolves to a

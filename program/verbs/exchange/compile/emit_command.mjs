@@ -43,14 +43,14 @@ export function handleCommandSentence({
     lines.push("pyaEmitNewspaper(`exists su name ${__pyaRequestName} ob la ${__pyaToolEvoked} ko be evoke ya`);");
     lines.push(`const __pyaCmd = ${cmdExpr ?? '""'};`);
     lines.push(`if (!__pyaCmd) { pyaEmitNewspaper(\`su name command defective ob text "command defective: empty command" from la \${__pyaToolEvoked} ko be error ya\`); throw new Error("command defective"); }`);
-    lines.push(`pyaCommandPolicyGate({ requestName: __pyaRequestName, evoked: __pyaToolEvoked, commandText: __pyaCmd, mood: ${JSON.stringify(sentence.mood ?? "do")} });`);
+    lines.push(`const __pyaCommandDecision = pyaCommandPolicyGate({ requestName: __pyaRequestName, evoked: __pyaToolEvoked, commandText: __pyaCmd, mood: ${JSON.stringify(sentence.mood ?? "do")} });`);
     lines.push("let __pyaOut;");
     lines.push("try {");
     lines.push(`  __pyaOut = pyaCommand(__pyaCmd, ${inputExpr});`);
     lines.push("} catch (err) {");
     lines.push("  const __pyaMsg = `command defective: ${String(err?.message ?? \"command defective\")}`;");
     lines.push("  const __pyaErrorResult = `su name command defective ob text ${JSON.stringify(__pyaMsg)} from la ${__pyaToolEvoked} ko be error ya`;");
-    lines.push("  pyaCommandResultAudit({ requestName: __pyaRequestName, commandText: __pyaCmd, evoked: __pyaToolEvoked, decision: \"error\", result: __pyaErrorResult });");
+    lines.push("  pyaCommandResultAudit({ requestName: __pyaRequestName, commandText: __pyaCmd, evoked: __pyaToolEvoked, decision: \"error\", result: __pyaErrorResult, policy: __pyaCommandDecision?.policy });");
     lines.push("  pyaEmitNewspaper(`su name command defective ob text ${JSON.stringify(__pyaMsg)} from la ${__pyaToolEvoked} ko be error ya`);");
     lines.push("  throw err;");
     lines.push("}");
@@ -79,7 +79,7 @@ export function handleCommandSentence({
     lines.push("globalThis.result = { su: { name: \"result\" }, ob: result.ob, be: \"command\", mood: \"ya\" };");
     lines.push(`pyaEmitNewspaper("su name " + __pyaRequestName + " ob text " + JSON.stringify(String(__pyaOut ?? "")) + " be command ya");`);
     lines.push("const __pyaToolResult = \"su name \" + __pyaRequestName + \" ob text \" + JSON.stringify(String(__pyaOut ?? \"\")) + \" be command ya\";");
-    lines.push("pyaCommandResultAudit({ requestName: __pyaRequestName, commandText: __pyaCmd, evoked: __pyaToolEvoked, decision: \"allow\", result: __pyaToolResult });");
+    lines.push("pyaCommandResultAudit({ requestName: __pyaRequestName, commandText: __pyaCmd, evoked: __pyaToolEvoked, decision: \"allow\", result: __pyaToolResult, policy: __pyaCommandDecision?.policy });");
     lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
     lines.push("}");
     return lines.join("\n");
@@ -174,9 +174,13 @@ export function handleCommandSentence({
         if (localsTypes) localsTypes.set(subject, "text");
         lines.push(`snprintf(${subject}, sizeof(${subject}), "%s", ${outVar} ? ${outVar} : "");`);
       }
-      if (!locals?.has("result") && !declared?.has("result")) {
+      const resultAlreadyDeclared = locals
+        ? locals.has("result") || declared?.has("result")
+        : declared?.has("result");
+      if (!resultAlreadyDeclared) {
         lines.push("char result[PYA_TEXT_CAP] = \"\";");
-        locals?.add("result");
+        if (locals) locals.add("result");
+        else markDeclared(declared, "result");
         if (localsTypes) localsTypes.set("result", "text");
       }
     }
