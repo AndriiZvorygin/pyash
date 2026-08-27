@@ -24,6 +24,7 @@ export function handleCommandSentence({
   if (lang !== "c") {
     if (jsHelpers) {
       jsHelpers.usesCommand = true;
+      jsHelpers.usesCommandPolicy = true;
       jsHelpers.usesExchange = true;
       if (inputFilename || sentence?.to?.filename) jsHelpers.usesFs = true;
     }
@@ -87,6 +88,7 @@ export function handleCommandSentence({
   if (lang === "c") {
     if (cHelpers) {
       cHelpers.usesCommand = true;
+      cHelpers.usesCommandPolicy = true;
       cHelpers.usesTextHelper = true;
       cHelpers.usesString = true;
       cHelpers.usesStdlib = true;

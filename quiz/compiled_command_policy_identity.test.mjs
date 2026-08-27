@@ -6,7 +6,9 @@ import path from "node:path";
 import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
 import { parse } from "../program/understand/index.mjs";
+import { buildProgram } from "../program/program.mjs";
 import { resolveCompiledCommandPolicy } from "../program/library/command_policy.mjs";
+import { transpileProgram } from "../program/verbs/exchange/compile.mjs";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(".");
@@ -292,6 +294,26 @@ test("compiled runners apply session, agent, then command policy precedence", as
     assert.equal(result.exitCode, 0, runner);
     await assert.rejects(fs.access(path.join(result.tmpDir, "precedence-sentinel")), undefined, runner);
     assert.match(result.newspaper, /command audit 000001[\s\S]*?from name session command configure[\s\S]*?accordingto name allow/u, runner);
+  });
+});
+
+test("compiled policy-only programs include policy helpers without process execution support", async t => {
+  const policyOnlySource = `${policySource({ mode: "allow" })}\n`;
+  const policyOnlySentences = buildProgram(policyOnlySource).sentences;
+  const initialPolicy = { mode: "ask", classifierEnabled: true, source: "command configure" };
+  const compiledJs = transpileProgram(policyOnlySentences, { lang: "javascript", commandPolicy: initialPolicy });
+  const compiledC = transpileProgram(policyOnlySentences, { lang: "c", commandPolicy: initialPolicy });
+  assert.match(compiledJs, /pyaCommandPolicyApplyMap/u);
+  assert.doesNotMatch(compiledJs, /child_process|function pyaCommand\(/u);
+  assert.match(compiledC, /pya_command_policy_apply_map/u);
+  assert.doesNotMatch(compiledC, /popen\(|static char \*pya_command\(/u);
+
+  await forEachRunner(t, async runner => {
+    const result = await runScenario(runner, policyOnlySource);
+
+    assert.equal(result.exitCode, 0, runner);
+    assert.match(result.newspaper, /command result identity protocol ob text "v1"/u, runner);
+    assert.doesNotMatch(result.newspaper, /be command audit ya/u, runner);
   });
 });
 
