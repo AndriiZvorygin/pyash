@@ -5,6 +5,7 @@ import { readCodexCapacity, calculateWeeklyPacing, DEFAULT_BACKGROUND_POLICY } f
 import { curateWorkBacklog } from "./curator.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
+import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
 import { renderWorkTaskReport } from "./report.mjs";
 import { deriveImplementationProgress } from "./progress.mjs";
 import { buildAutonomousRoadmap, hasCredibleRoadmapWork, isRetryableWorkBlock, isAwaitingExternalEvidence, technicalRetryableItems } from "./roadmap.mjs";
@@ -158,6 +159,18 @@ function compactBlocker(value) {
   return `technical correction required: ${body.slice(0, 220)}`;
 }
 
+function isCapacityTelemetryUnavailable(reason) {
+  return /^(?:capacity unknown|capacity telemetry unavailable)$/iu.test(text(reason));
+}
+
+function isProviderUsageLimited(reason) {
+  return /^(?:provider )?usage[- ]limited$/iu.test(text(reason));
+}
+
+function isPacingDeferral(reason) {
+  return /^(?:weekly pacing limit|weekly reserve)$/iu.test(text(reason));
+}
+
 const ACTIVE_TASK_STATUSES = new Set(["planning", "implementing", "reviewing", "revision"]);
 
 function roadmapItemForTask(task, roadmap) {
@@ -187,9 +200,15 @@ export function renderWorkDailyDigest({
   curation = {},
   roadmap = null,
   automationBranch = "automation/roadmap",
-  reportingGap = null
+  reportingGap = null,
+  health = {}
 } = {}) {
   const weekly = capacity.weekly || {};
+  const weeklyAvailable = weekly.identified === true
+    && Number.isFinite(Number(weekly.usedPercent))
+    && Number.isFinite(Number(weekly.remainingPercent))
+    && Boolean(weekly.resetAt)
+    && Boolean(weekly.windowStartAt);
   const pacing = calculateWeeklyPacing(capacity, {
     reservePercent: policy.reservePercent,
     deadbandPercent: policy.pacingDeadbandPercent,
@@ -222,12 +241,15 @@ export function renderWorkDailyDigest({
   const technicalEvents = events.filter((event) => event.action === "technical-blocked" && !executionBlocked.includes(event));
   const legacyTechnicalWakes = events.filter((event) => (event.action === "idle" || event.action === "deferred") && /no eligible work/iu.test(event.reason || "") && retryable.length > 0);
   const deferred = events.filter((event) => event.action === "deferred" && !legacyTechnicalWakes.includes(event));
-  const pacingDeferred = deferred.filter((event) => /pacing|reserve|usage[- ]limited|capacity/iu.test(event.reason || ""));
+  const pacingDeferred = deferred.filter((event) => isPacingDeferral(event.reason));
+  const capacityTelemetryUnavailable = deferred.filter((event) => isCapacityTelemetryUnavailable(event.reason));
+  const providerUsageLimited = deferred.filter((event) => isProviderUsageLimited(event.reason));
   const idle = events.filter((event) => event.action === "idle" && !legacyTechnicalWakes.includes(event));
   const technicalUnavailable = [...technicalEvents, ...legacyTechnicalWakes];
   const blockedBeforeModel = events.filter((event) => ["technical-blocked", "deferred"].includes(event.action)
     && !bool(event.workStarted)
-    && !/pacing|reserve|usage[- ]limited|capacity/iu.test(event.reason || ""));
+    && !isPacingDeferral(event.reason)
+    && !isProviderUsageLimited(event.reason));
   blockedBeforeModel.push(...admitted.filter((event) => !bool(event.workStarted)));
   const recovered = uniqueRecoveryEvents(events.filter((event) => event.action === "recovered"));
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
@@ -276,13 +298,18 @@ export function renderWorkDailyDigest({
     "",
     "Weekly Codex budget",
     "-------------------",
-    `Reset: ${text(weekly.resetAt) || "unknown"}`,
-    `Start of window: ${text(weekly.windowStartAt) || "unknown"}`,
-    `Current remaining: ${percent(weekly.remainingPercent)}`,
-    `Current used: ${percent(weekly.usedPercent)}`,
+    `Reset: ${weeklyAvailable ? weekly.resetAt : "unavailable"}`,
+    `Start of window: ${weeklyAvailable ? weekly.windowStartAt : "unavailable"}`,
+    `Current remaining: ${weeklyAvailable ? percent(weekly.remainingPercent) : "unavailable"}`,
+    `Current used: ${weeklyAvailable ? percent(weekly.usedPercent) : "unavailable"}`,
     `Current pacing floor: ${percent(pacing.minimumRemainingPercent)}`,
     `Pacing headroom: ${percent(pacing.headroomPercent)}`,
     `Final reserve: ${percent(policy.reservePercent)}`,
+    ...(!weeklyAvailable && text(health["weekly last good observed at"]) ? [
+      `Last good observation: ${health["weekly last good observed at"]}`,
+      `Last good remaining: ${percent(health["weekly last good remaining percent"])}`,
+      `Last good reset: ${health["weekly last good reset at"] || "unknown"}`
+    ] : []),
     "",
     "Background scheduler",
     "--------------------",
@@ -296,6 +323,8 @@ export function renderWorkDailyDigest({
     `Automation commits integrated: ${completed.filter((task) => task.checkpoint?.integration?.status === "integrated").length}`,
     `Deferred for pacing/conditions: ${deferred.length}`,
     `Pacing deferred: ${pacingDeferred.length}`,
+    `Capacity telemetry unavailable: ${capacityTelemetryUnavailable.length}`,
+    `Provider usage-limited: ${providerUsageLimited.length}`,
     `Execution-environment blocked: ${executionBlocked.length}`,
     `Technical continuation unavailable: ${technicalUnavailable.length}`,
     `Idle / no work: ${idle.length}`,
@@ -427,12 +456,25 @@ export async function buildWorkDailyDigest({
       previousAt: previousReportAt
     }
     : null;
-  const [capacity, tasks, events, curation] = await Promise.all([
+  const [capacity, tasks, events, curation, storedHealth] = await Promise.all([
     capacitySource({ now: end }),
     listWorkTasks(worldRoot, { includeTerminal: true }),
     readWorkSchedulerEvents(worldRoot, { since: start.toISOString(), until: end.toISOString() }),
-    curateWorkBacklog({ worldRoot, repositoryRoot, owner, threshold: policy.curationThreshold, maxTasks: policy.curationMaxTasks, dryRun: true, now: end })
+    curateWorkBacklog({ worldRoot, repositoryRoot, owner, threshold: policy.curationThreshold, maxTasks: policy.curationMaxTasks, dryRun: true, now: end }),
+    readWorkSchedulerHealth(worldRoot)
   ]);
+  const effectiveHealth = capacity.weekly?.identified === true
+    && Number.isFinite(Number(capacity.weekly.usedPercent))
+    && Number.isFinite(Number(capacity.weekly.remainingPercent))
+    ? {
+      ...storedHealth,
+      "weekly last good observed at": capacity.weekly.observedAt || capacity.observedAt || end.toISOString(),
+      "weekly last good reset at": capacity.weekly.resetAt || "",
+      "weekly last good used percent": String(capacity.weekly.usedPercent),
+      "weekly last good remaining percent": String(capacity.weekly.remainingPercent)
+    }
+    : storedHealth;
+  if (persist && effectiveHealth !== storedHealth) await writeWorkSchedulerHealth(worldRoot, effectiveHealth);
   const roadmap = await buildAutonomousRoadmap({
     worldRoot,
     repositoryRoot,
@@ -451,7 +493,8 @@ export async function buildWorkDailyDigest({
     curation,
     roadmap,
     automationBranch,
-    reportingGap
+    reportingGap,
+    health: effectiveHealth
   });
   if (persist) {
     await writeWorkDailyDigestState(worldRoot, {
