@@ -17,6 +17,8 @@ test("command classifier assigns stable classes", () => {
   assert.equal(classifyCommandText("curl -s https://example.com"), "network");
   assert.equal(classifyCommandText("kill -9 123"), "process_control");
   assert.equal(classifyCommandText("rm -rf /tmp/demo"), "destructive");
+  assert.equal(classifyCommandText("noop :()"), "unknown");
+  assert.equal(classifyCommandText("noop x:(){ :|:& };:"), "destructive");
   assert.equal(classifyCommandText(""), "unknown");
 });
 

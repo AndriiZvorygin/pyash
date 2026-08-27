@@ -1,7 +1,7 @@
 import { CJSON_HEADER, CJSON_SOURCE } from "../constants.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, TOOL_CAPTURE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER, DATE_MATH_HELPER } from "../c/helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, TOOL_CAPTURE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, commandPolicyCSource, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER, DATE_MATH_HELPER } from "../c/helpers_c.mjs";
 
-export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
+export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolicy } = {}) {
   if (!cHelpers) return lines;
   if (cHelpers.usesExchange) {
     cHelpers.usesTextHelper = true;
@@ -98,7 +98,10 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
   if (cHelpers.usesToolCapture) cPrelude.push(TOOL_CAPTURE_HELPER);
   if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);
-  if (cHelpers.usesCommand) cPrelude.push(COMMAND_HELPER);
+  if (cHelpers.usesCommand) {
+    cPrelude.push(COMMAND_HELPER);
+    cPrelude.push(commandPolicyCSource({ policy: commandPolicy }));
+  }
   if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);
   if (needsYamlStringify) cPrelude.push(YAML_STRINGIFY_HELPER);
   if (needsCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);

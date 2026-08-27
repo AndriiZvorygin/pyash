@@ -18,6 +18,7 @@ import {
 } from "../configure/env.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
+import { classifyCommandText, normalizeCommandPolicyMode } from "../library/command_policy.mjs";
 import { emitExchangeSentence, recordArtifact, recordExchange } from "../bridge/exchange.mjs";
 import { allocateCommandIdentity, consumeCommandResumeIdentity, restoreCommandIdentity } from "../bridge/command_identity.mjs";
 import {
@@ -93,89 +94,7 @@ function resolveShellCommand() {
   return null;
 }
 
-const POLICY_MODES = new Set(["deny", "ask", "allow"]);
-const DESTRUCTIVE_PATTERNS = [
-  /\brm\s+-rf\b/i,
-  /\brm\s+-fr\b/i,
-  /\bmkfs\b/i,
-  /\bdd\b/i,
-  /\bshred\b/i,
-  /\b:\(\)\s*\{\s*:\|:\s*&\s*\};:/,
-  /\bformat\b/i
-];
-const NETWORK_PATTERNS = [
-  /\bcurl\b/i,
-  /\bwget\b/i,
-  /\bhttp(s)?:\/\//i,
-  /\bssh\b/i,
-  /\bnc\b/i,
-  /\bscp\b/i,
-  /\brsync\b/i,
-  /\bping\b/i
-];
-const PROCESS_CONTROL_PATTERNS = [
-  /\bkill(all)?\b/i,
-  /\bpkill\b/i,
-  /\bsystemctl\b/i,
-  /\bservice\b/i,
-  /\bnohup\b/i,
-  /\bdocker\b/i,
-  /\bkubectl\b/i
-];
-const WRITE_LOCAL_PATTERNS = [
-  /\btee\b/i,
-  /\btouch\b/i,
-  /\bmkdir\b/i,
-  /\bmv\b/i,
-  /\bcp\b/i,
-  /\bchmod\b/i,
-  /\bchown\b/i,
-  /\btruncate\b/i,
-  /\binstall\b/i,
-  />>?/,
-  /\bcat\b.*?>/
-];
-const READ_ONLY_PATTERNS = [
-  /\bcat\b/i,
-  /\bls\b/i,
-  /\bfind\b/i,
-  /\bhead\b/i,
-  /\btail\b/i,
-  /\bgrep\b/i,
-  /\brg\b/i,
-  /\bwc\b/i,
-  /\bsed\b/i,
-  /\bawk\b/i,
-  /\becho\b/i,
-  /\bprintf\b/i,
-  /\bnode\s+--version\b/i,
-  /\buname\b/i,
-  /\bpwd\b/i,
-  /\bwhoami\b/i
-];
-
-function normalizePolicyMode(value, fallback = "ask") {
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (POLICY_MODES.has(raw)) return raw;
-  return fallback;
-}
-
-function hasPattern(patterns, text) {
-  return patterns.some((pattern) => pattern.test(text));
-}
-
-export function classifyCommandText(commandText) {
-  const cmd = String(commandText ?? "").trim();
-  if (!cmd) return "unknown";
-  // Vision helper is a first-party runner used by `be see`.
-  if (/^node\s+(\.\/)?command\/see_vl_runner\.mjs\b/i.test(cmd)) return "read_only";
-  if (hasPattern(DESTRUCTIVE_PATTERNS, cmd)) return "destructive";
-  if (hasPattern(NETWORK_PATTERNS, cmd)) return "network";
-  if (hasPattern(PROCESS_CONTROL_PATTERNS, cmd)) return "process_control";
-  if (hasPattern(WRITE_LOCAL_PATTERNS, cmd)) return "write_local";
-  if (hasPattern(READ_ONLY_PATTERNS, cmd)) return "read_only";
-  return "unknown";
-}
+export { classifyCommandText };
 
 export function resolveCommandPolicy({ sentence, cmdClass, rememberFn = remember } = {}) {
   const sessionMode = resolveConfigMapText("session command configure", "policy mode", { rememberFn })
@@ -184,7 +103,7 @@ export function resolveCommandPolicy({ sentence, cmdClass, rememberFn = remember
     ?? resolveConfigText("agent command policy mode", { rememberFn });
   const globalMode = resolveConfigMapText("command configure", "policy mode", { rememberFn })
     ?? resolveConfigText("command policy mode", { rememberFn });
-  const baseMode = normalizePolicyMode(sessionMode ?? agentMode ?? globalMode, "ask");
+  const baseMode = normalizeCommandPolicyMode(sessionMode ?? agentMode ?? globalMode, "ask");
 
   const sessionClassifier = resolveConfigMapBool("session command configure", "classifier enabled", { rememberFn });
   const agentClassifier = resolveConfigMapBool("agent command configure", "classifier enabled", { rememberFn });
@@ -845,10 +764,11 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   const cmd = rewriteRunRootCommandPath(rawCmd, { cwd: sandbox.cwd, rememberFn });
   const commandClass = classifyCommandText(cmd);
   const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
+  const auditedCommandClass = policy.classifierEnabled ? commandClass : "unknown";
   const commandEnv = buildAllowedEnv({ allowlist: sandbox.envAllowlist, cwd: sandbox.cwd, runRoot: sandbox.runRoot });
   if (!resumed) emitExchangeSentence(commandRequestSentence({ requestIdentity, sentence }));
   if (shouldDeny({ sentence, policy, commandClass })) {
-    emitCommandAudit({ requestIdentity, stage: "policy", commandClass, policy, decision: "deny", sentence, rememberFn });
+    emitCommandAudit({ requestIdentity, stage: "policy", commandClass: auditedCommandClass, policy, decision: "deny", sentence, rememberFn });
     throwErrorSentence({
       name: "command policy defective",
       message: `command policy defective: denied class=${commandClass}`,
@@ -871,7 +791,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     emitCommandAudit({
       requestIdentity,
       stage: "policy",
-      commandClass,
+      commandClass: auditedCommandClass,
       policy,
       decision: "ask",
       sentence,
@@ -881,7 +801,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return ratifySentence;
   }
   if (isNetworkDenied({ commandClass, sandbox })) {
-    emitCommandAudit({ requestIdentity, stage: "sandbox", commandClass, policy, decision: "deny", sentence, rememberFn });
+    emitCommandAudit({ requestIdentity, stage: "sandbox", commandClass: auditedCommandClass, policy, decision: "deny", sentence, rememberFn });
     throwErrorSentence({
       name: "command sandbox defective",
       message: "command sandbox defective: network disabled",
@@ -890,7 +810,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     });
   }
   validateSandboxWritePolicy({ sentence, commandText: cmd, commandClass, sandbox });
-  emitCommandAudit({ requestIdentity, stage: "policy", commandClass, policy, decision: "allow", sentence, rememberFn });
+  emitCommandAudit({ requestIdentity, stage: "policy", commandClass: auditedCommandClass, policy, decision: "allow", sentence, rememberFn });
 
   let input = null;
   if (sentence.from?.filename) {
@@ -1061,7 +981,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     emitCommandAudit({
       requestIdentity,
       stage: "result",
-      commandClass,
+      commandClass: auditedCommandClass,
       policy,
       decision: "error",
       sentence,
@@ -1093,7 +1013,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   emitCommandAudit({
     requestIdentity,
     stage: "result",
-    commandClass,
+    commandClass: auditedCommandClass,
     policy,
     decision: "allow",
     sentence,
