@@ -3,10 +3,11 @@ import {
   commandPolicyRuntimeData
 } from "../../../../../library/command_policy.mjs";
 
-export function commandHelperSource({ policy } = {}) {
+export function commandHelperSource({ policy, includeCommand = true, includePolicy = false } = {}) {
   const contract = JSON.stringify(COMMAND_POLICY_CONTRACT);
   const policyData = JSON.stringify(commandPolicyRuntimeData(policy));
-  return [
+  const lines = [];
+  if (includeCommand) lines.push(
     "function pyaCommand(cmd, input) {",
     "  if (typeof process !== \"undefined\" && process.env?.PYA_COMMAND_RESPONSE !== undefined) {",
     "    return String(process.env.PYA_COMMAND_RESPONSE ?? \"\");",
@@ -22,6 +23,8 @@ export function commandHelperSource({ policy } = {}) {
     "  }",
     "  return String(res.stdout ?? \"\");",
     "}",
+  );
+  if (includePolicy) lines.push(
     `const PYA_COMMAND_POLICY_CONTRACT = ${contract};`,
     `const PYA_COMMAND_POLICY = ${policyData};`,
     "function pyaCommandHasWord(text, word) {",
@@ -114,5 +117,10 @@ export function commandHelperSource({ policy } = {}) {
     "  const policy = priorPolicy ?? pyaCommandPolicyFor(\"do\", commandClass);",
     "  pyaEmitCommandAudit({ requestName, stage: \"result\", commandClass: policy.class, policy, decision, evoked, result });",
     "}"
-  ].join("\n");
+  );
+  return lines.join("\n");
+}
+
+export function commandPolicyHelperSource({ policy } = {}) {
+  return commandHelperSource({ policy, includeCommand: false, includePolicy: true });
 }

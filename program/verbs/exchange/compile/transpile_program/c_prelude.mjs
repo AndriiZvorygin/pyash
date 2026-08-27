@@ -3,6 +3,13 @@ import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_
 
 export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolicy } = {}) {
   if (!cHelpers) return lines;
+  if (cHelpers.usesCommandPolicy) {
+    cHelpers.usesTextHelper = true;
+    cHelpers.usesString = true;
+    cHelpers.usesStdlib = true;
+    cHelpers.usesPrintf = true;
+    cHelpers.usesExchange = true;
+  }
   if (cHelpers.usesExchange) {
     cHelpers.usesTextHelper = true;
     cHelpers.usesString = true;
@@ -100,6 +107,8 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolic
   if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);
   if (cHelpers.usesCommand) {
     cPrelude.push(COMMAND_HELPER);
+  }
+  if (cHelpers.usesCommandPolicy) {
     cPrelude.push(commandPolicyCSource({ policy: commandPolicy }));
   }
   if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);
