@@ -48,6 +48,18 @@ Rules:
 - unresolved decision defaults deny,
 - all restricted actions append auditable records.
 
+Compiled command runners apply the same policy contract as the interpreter
+before creating a process. They resolve `session command configure`, then
+`agent command configure`, then `command configure` at each command's
+execution point. A declaration that appears later in a source program cannot
+authorize an earlier command. Compiled `ask` and `propose` paths fail closed
+when no approval/resume loop is available, and emit an identity-linked,
+sentence-shaped ratify request with a JSON-parseable resume token.
+
+Every command policy audit includes its request identity, policy source,
+decision, classifier class when enabled, and an ISO-8601 `fromtext` timestamp.
+Disabling the classifier records class `unknown` and omits the `by` class.
+
 ### Headquarters action policy
 
 The initial Headquarters action vocabulary is exactly:

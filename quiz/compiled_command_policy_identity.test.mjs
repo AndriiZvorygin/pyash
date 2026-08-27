@@ -71,7 +71,12 @@ async function runScenario(runner, sourceText, { sentinel = false } = {}) {
   const sourcePath = path.join(tmpDir, "scenario.pya");
   const runId = `compiled-command-policy-${runner}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   await fs.writeFile(sourcePath, sourceText, "utf8");
-  if (sentinel) await fs.writeFile(path.join(tmpDir, "blocked-sentinel"), "keep\n", "utf8");
+  const sentinelNames = Array.isArray(sentinel)
+    ? sentinel
+    : [typeof sentinel === "string" ? sentinel : (sentinel ? "blocked-sentinel" : null)].filter(Boolean);
+  for (const sentinelName of sentinelNames) {
+    await fs.writeFile(path.join(tmpDir, sentinelName), "keep\n", "utf8");
+  }
 
   let exitCode = 0;
   try {
@@ -97,6 +102,18 @@ async function replayScenario({ tmpDir, runId }) {
     "--run-id", runId,
     "--run-root", tmpDir
   ], { cwd: repoRoot, env: cleanEnv(), timeout: 120000 });
+}
+
+function parsePolicyRecords(newspaper) {
+  return newspaper
+    .split(/\r?\n/u)
+    .filter(line => /(?:be command audit ya|be ratify do)$/u.test(line.trim()))
+    .map(line => {
+      const sentence = parse(line);
+      assert.ok(sentence, `policy record should parse: ${line}`);
+      assert.ok(sentence.fromtext?.text, `policy record should carry timestamp: ${line}`);
+      return sentence;
+    });
 }
 
 async function forEachRunner(t, callback) {
@@ -132,6 +149,7 @@ test("compiled allow emits request/policy/result audits and deterministic artifa
     assert.match(result.newspaper, /be exchange ya/u, runner);
     assert.equal(await fs.readFile(path.join(result.tmpDir, "artifacts/first.txt"), "utf8"), "first");
     assert.equal(await fs.readFile(path.join(result.tmpDir, "artifacts/second.txt"), "utf8"), "second");
+    assert.equal(parsePolicyRecords(result.newspaper).filter(sentence => sentence.be === "command audit").length, 4, runner);
     await replayScenario(result);
   });
 });
@@ -151,6 +169,7 @@ test("compiled deny blocks restricted commands before spawn and preserves the se
     assert.match(result.newspaper, /command audit 000001[\s\S]*?to name command request 000001[\s\S]*?accordingto name deny/u, runner);
     assert.doesNotMatch(result.newspaper, /su name command request 000001 ob text[\s\S]*?be command ya/u, runner);
     assert.doesNotMatch(result.newspaper, /be artifact ya/u, runner);
+    assert.equal(parsePolicyRecords(result.newspaper).filter(sentence => sentence.be === "command audit").length, 1, runner);
     await replayScenario(result);
   });
 });
@@ -159,7 +178,7 @@ test("compiled ask/propose fails closed with an identity-linked ratify request",
   await forEachRunner(t, async runner => {
     const result = await runScenario(runner, [
       policySource({ mode: "ask" }),
-      'ob text "touch ask-sentinel" be command propose',
+      `ob text ${JSON.stringify(`printf 'ask "quoted"'`)} be command propose`,
       ""
     ].join("\n"));
 
@@ -168,10 +187,47 @@ test("compiled ask/propose fails closed with an identity-linked ratify request",
     await assert.rejects(fs.access(path.join(result.tmpDir, "ask-sentinel")), undefined, runner);
     assert.match(result.newspaper, /exists su name command request 000001 ob la/u, runner);
     assert.match(result.newspaper, /command audit 000001[\s\S]*?to name command request 000001[\s\S]*?accordingto name ask/u, runner);
-    assert.match(result.newspaper, /be ratify do/u, runner);
-    assert.match(result.newspaper, /to name command request 000001/u, runner);
-    assert.match(result.newspaper, /accordingto name resume token/u, runner);
+    const records = parsePolicyRecords(result.newspaper);
+    const audit = records.find(sentence => sentence.be === "command audit");
+    const ratify = records.find(sentence => sentence.be === "ratify");
+    assert.equal(audit?.to?.name, "command request 000001", runner);
+    assert.equal(audit?.accordingto?.name, "ask", runner);
+    assert.equal(ratify?.to?.name, "command request 000001", runner);
+    assert.equal(ratify?.accordingto?.name, "resume token", runner);
+    assert.equal(JSON.parse(ratify?.fromtext?.text ?? "{}").requestIdentity, "command request 000001", runner);
     assert.doesNotMatch(result.newspaper, /be artifact ya/u, runner);
+  });
+});
+
+test("compiled policy is resolved at the execution point", async t => {
+  await forEachRunner(t, async runner => {
+    const earlier = await runScenario(runner, [
+      'ob text "rm -rf early-sentinel" be command do',
+      policySource({ mode: "allow" }),
+      ""
+    ].join("\n"), { sentinel: "early-sentinel" });
+
+    if (runner === "run") assert.equal(earlier.exitCode, 0, runner);
+    else assert.notEqual(earlier.exitCode, 0, runner);
+    assert.equal(await fs.readFile(path.join(earlier.tmpDir, "early-sentinel"), "utf8"), "keep\n", runner);
+    const earlierRecords = parsePolicyRecords(earlier.newspaper);
+    assert.equal(earlierRecords.find(sentence => sentence.be === "command audit")?.accordingto?.name, "ask", runner);
+
+    const midProgram = await runScenario(runner, [
+      policySource({ mode: "allow" }),
+      'ob text "rm -rf before-policy-change" be command do',
+      policySource({ mode: "deny" }),
+      'ob text "rm -rf after-policy-change" be command do',
+      ""
+    ].join("\n"), { sentinel: ["before-policy-change", "after-policy-change"] });
+
+    assert.notEqual(midProgram.exitCode, 0, runner);
+    await assert.rejects(fs.access(path.join(midProgram.tmpDir, "before-policy-change")), undefined, runner);
+    assert.equal(await fs.readFile(path.join(midProgram.tmpDir, "after-policy-change"), "utf8"), "keep\n", runner);
+    const midRecords = parsePolicyRecords(midProgram.newspaper);
+    const audits = midRecords.filter(sentence => sentence.be === "command audit");
+    assert.equal(audits.find(sentence => sentence.to?.name === "command request 000001")?.accordingto?.name, "allow", runner);
+    assert.equal(audits.find(sentence => sentence.to?.name === "command request 000002")?.accordingto?.name, "deny", runner);
   });
 });
 
@@ -187,6 +243,7 @@ test("compiled allowed command failures retain the request identity in the error
     assert.match(result.newspaper, /exists su name command request 000001 ob la/u, runner);
     assert.match(result.newspaper, /command audit 000001[\s\S]*?to name command request 000001[\s\S]*?as name result[\s\S]*?accordingto name error/u, runner);
     assert.doesNotMatch(result.newspaper, /su name command request 000001 ob text[\s\S]*?be command ya/u, runner);
+    assert.equal(parsePolicyRecords(result.newspaper).filter(sentence => sentence.be === "command audit").length, 2, runner);
     await replayScenario(result);
   });
 });
@@ -204,6 +261,7 @@ test("compiled classifier-disabled commands use unknown and omit the by class", 
     assert.equal(audits.length, 2, runner);
     assert.ok(audits.every(line => line.includes("to name command request 000001")), runner);
     assert.ok(audits.every(line => !line.includes(" by name ")), runner);
+    assert.equal(parsePolicyRecords(result.newspaper).filter(sentence => sentence.be === "command audit").length, 2, runner);
   });
 });
 

@@ -201,41 +201,124 @@ export function isCommandPolicyConfigurationSentence(sentence) {
   return sentence?.mood === "ya" && LEGACY_POLICY_NAMES.has(sentence?.su?.name);
 }
 
-function resolvedScopeValue(scope, maps, legacy) {
-  const map = maps.get(MAP_NAMES[scope]);
-  const mapMode = configText(map?.["policy mode"]);
-  if (mapMode !== undefined) return mapMode;
-  return configText(legacy.get(LEGACY_MODE_NAMES[scope]));
+function policyScopeForMapName(name) {
+  for (const [scope, mapName] of Object.entries(MAP_NAMES)) {
+    if (name === mapName) return scope;
+  }
+  return null;
 }
 
-export function resolveCompiledCommandPolicy(sentences = []) {
-  const maps = collectConfiguredMaps(sentences);
-  const legacy = legacyValues(sentences);
-  const sessionMode = resolvedScopeValue("session", maps, legacy);
-  const agentMode = resolvedScopeValue("agent", maps, legacy);
-  const commandMode = resolvedScopeValue("command", maps, legacy);
-  const mode = normalizeCommandPolicyMode(sessionMode ?? agentMode ?? commandMode, "ask");
-  const source = sessionMode !== undefined ? MAP_NAMES.session
-    : agentMode !== undefined ? MAP_NAMES.agent
-      : MAP_NAMES.command;
-
-  const sessionClassifier = configBool(maps.get(MAP_NAMES.session)?.["classifier enabled"]);
-  const agentClassifier = configBool(maps.get(MAP_NAMES.agent)?.["classifier enabled"]);
-  const commandClassifier = configBool(maps.get(MAP_NAMES.command)?.["classifier enabled"]);
-  const legacyClassifier = configBool(legacy.get("command classifier enabled"));
+function policyMapState(map) {
   return {
-    mode,
-    classifierEnabled: sessionClassifier ?? agentClassifier ?? commandClassifier ?? legacyClassifier ?? true,
-    source
+    mode: configText(map?.["policy mode"]) ?? null,
+    classifierEnabled: configBool(map?.["classifier enabled"]) ?? null
   };
 }
 
-export function commandPolicyRuntimeData(policy = {}) {
+function policyLegacyState(legacy) {
   return {
+    sessionMode: configText(legacy.get(LEGACY_MODE_NAMES.session)) ?? null,
+    agentMode: configText(legacy.get(LEGACY_MODE_NAMES.agent)) ?? null,
+    commandMode: configText(legacy.get(LEGACY_MODE_NAMES.command)) ?? null,
+    classifierEnabled: configBool(legacy.get("command classifier enabled")) ?? null
+  };
+}
+
+function effectivePolicyFromState({ maps, legacy } = {}) {
+  const scopes = {
+    session: policyMapState(maps.get(MAP_NAMES.session)),
+    agent: policyMapState(maps.get(MAP_NAMES.agent)),
+    command: policyMapState(maps.get(MAP_NAMES.command))
+  };
+  const legacyState = policyLegacyState(legacy);
+  const modes = {
+    session: scopes.session.mode ?? legacyState.sessionMode,
+    agent: scopes.agent.mode ?? legacyState.agentMode,
+    command: scopes.command.mode ?? legacyState.commandMode
+  };
+  const mode = normalizeCommandPolicyMode(
+    modes.session ?? modes.agent ?? modes.command,
+    "ask"
+  );
+  const source = modes.session !== null && modes.session !== undefined ? MAP_NAMES.session
+    : modes.agent !== null && modes.agent !== undefined ? MAP_NAMES.agent
+      : MAP_NAMES.command;
+  return {
+    mode,
+    classifierEnabled:
+      scopes.session.classifierEnabled
+      ?? scopes.agent.classifierEnabled
+      ?? scopes.command.classifierEnabled
+      ?? legacyState.classifierEnabled
+      ?? true,
+    source,
+    scopes,
+    legacy: legacyState
+  };
+}
+
+export function resolveCompiledCommandPolicy(sentences = [], { detailed = false } = {}) {
+  const maps = collectConfiguredMaps(sentences);
+  const legacy = legacyValues(sentences);
+  const resolved = effectivePolicyFromState({ maps, legacy });
+  if (!detailed) {
+    return {
+      mode: resolved.mode,
+      classifierEnabled: resolved.classifierEnabled,
+      source: resolved.source
+    };
+  }
+  return resolved;
+}
+
+export function commandPolicyRuntimeData(policy = {}) {
+  const runtime = {
     mode: normalizeCommandPolicyMode(policy.mode, "ask"),
     classifierEnabled: policy.classifierEnabled !== false,
     source: String(policy.source || MAP_NAMES.command)
   };
+  if (policy.scopes && typeof policy.scopes === "object") {
+    runtime.scopes = Object.fromEntries(Object.entries(MAP_NAMES).map(([scope]) => {
+      const current = policy.scopes[scope] ?? {};
+      return [scope, {
+        mode: current.mode == null ? null : normalizeCommandPolicyMode(current.mode, "ask"),
+        classifierEnabled: current.classifierEnabled == null ? null : current.classifierEnabled !== false
+      }];
+    }));
+  }
+  if (policy.legacy && typeof policy.legacy === "object") {
+    runtime.legacy = {
+      sessionMode: policy.legacy.sessionMode == null ? null : normalizeCommandPolicyMode(policy.legacy.sessionMode, "ask"),
+      agentMode: policy.legacy.agentMode == null ? null : normalizeCommandPolicyMode(policy.legacy.agentMode, "ask"),
+      commandMode: policy.legacy.commandMode == null ? null : normalizeCommandPolicyMode(policy.legacy.commandMode, "ask"),
+      classifierEnabled: policy.legacy.classifierEnabled == null ? null : policy.legacy.classifierEnabled !== false
+    };
+  }
+  return runtime;
+}
+
+export function commandPolicyMapUpdate(name, map = {}) {
+  const scope = policyScopeForMapName(name);
+  if (!scope) return null;
+  const values = policyMapState(map);
+  return {
+    type: "map",
+    scope,
+    mode: values.mode === null ? null : normalizeCommandPolicyMode(values.mode, "ask"),
+    classifierEnabled: values.classifierEnabled
+  };
+}
+
+export function commandPolicyLegacyUpdate(sentence) {
+  const name = sentence?.su?.name;
+  const value = configText(sentence);
+  if (name === "command classifier enabled") {
+    return { type: "legacy classifier", classifierEnabled: configBool(sentence) ?? false };
+  }
+  for (const [scope, legacyName] of Object.entries(LEGACY_MODE_NAMES)) {
+    if (name === legacyName) return { type: "legacy mode", scope, mode: normalizeCommandPolicyMode(value, "ask") };
+  }
+  return null;
 }
 
 export { MAP_NAMES };

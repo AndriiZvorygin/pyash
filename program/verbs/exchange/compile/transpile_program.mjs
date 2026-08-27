@@ -12,7 +12,38 @@ import { emitRefineryC } from "./transpile_program/refinery_emit_c.mjs";
 import { emitRefineryJs } from "./transpile_program/refinery_emit_js.mjs";
 import { applyJsPrelude } from "./transpile_program/js_prelude.mjs";
 import { applyCPrelude } from "./transpile_program/c_prelude.mjs";
-import { isCommandPolicyConfigurationSentence } from "../../../library/command_policy.mjs";
+import {
+  commandPolicyLegacyUpdate,
+  isCommandPolicyConfigurationSentence
+} from "../../../library/command_policy.mjs";
+
+function commandPolicyUpdateLine(update, lang) {
+  if (!update) return null;
+  if (lang === "c") {
+    if (update.type === "map") {
+      const mode = update.mode == null ? "NULL" : JSON.stringify(update.mode);
+      const classifier = update.classifierEnabled == null ? "0" : (update.classifierEnabled ? "1" : "0");
+      return `pya_command_policy_apply_map(${JSON.stringify(update.scope)}, ${mode}, ${update.mode == null ? 0 : 1}, ${classifier}, ${update.classifierEnabled == null ? 0 : 1});`;
+    }
+    if (update.type === "legacy mode") {
+      return `pya_command_policy_apply_legacy_mode(${JSON.stringify(update.scope)}, ${JSON.stringify(update.mode)});`;
+    }
+    if (update.type === "legacy classifier") {
+      return `pya_command_policy_apply_legacy_classifier(${update.classifierEnabled ? 1 : 0});`;
+    }
+    return null;
+  }
+  if (update.type === "map") {
+    return `pyaCommandPolicyApplyMap(${JSON.stringify(update.scope)}, ${JSON.stringify(update.mode)}, ${JSON.stringify(update.classifierEnabled)});`;
+  }
+  if (update.type === "legacy mode") {
+    return `pyaCommandPolicyApplyLegacyMode(${JSON.stringify(update.scope)}, ${JSON.stringify(update.mode)});`;
+  }
+  if (update.type === "legacy classifier") {
+    return `pyaCommandPolicyApplyLegacyClassifier(${JSON.stringify(update.classifierEnabled)});`;
+  }
+  return null;
+}
 
 export function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, collectSourceMap, retryConfig, commandPolicy } = {}) {
   const header =
@@ -122,11 +153,17 @@ export function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFil
       markDeclared
     });
     if (mapDef) {
+      const policyLine = commandPolicyUpdateLine(mapDef.commandPolicyUpdate, lang);
+      if (policyLine) (lang === "c" ? mainLines : lines).push(policyLine);
       i = mapDef.endIndex;
       continue;
     }
 
-    if (isCommandPolicyConfigurationSentence(sentence)) continue;
+    if (isCommandPolicyConfigurationSentence(sentence)) {
+      const policyLine = commandPolicyUpdateLine(commandPolicyLegacyUpdate(sentence), lang);
+      if (policyLine) (lang === "c" ? mainLines : lines).push(policyLine);
+      continue;
+    }
 
     if (sentence.mood === "ya" && name && !sentence.exists && !declared.has(name) && sentence.be !== "export") {
       const pyash = sentenceToPyash(sentence);

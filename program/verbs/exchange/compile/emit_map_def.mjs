@@ -1,4 +1,5 @@
 import YAML from "yaml";
+import { commandPolicyMapUpdate } from "../../../library/command_policy.mjs";
 
 export function handleMapDefinition(context, helpers) {
   const {
@@ -203,5 +204,8 @@ export function handleMapDefinition(context, helpers) {
     declaredTypes.set(name, sentence.be);
   }
 
-  return { endIndex: j };
+  return {
+    endIndex: j,
+    commandPolicyUpdate: sentence.be === "map" ? commandPolicyMapUpdate(name, map) : null
+  };
 }

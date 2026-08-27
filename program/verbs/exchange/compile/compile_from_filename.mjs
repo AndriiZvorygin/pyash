@@ -216,7 +216,7 @@ export async function compile_from_filename_to_filename(sentence) {
     ? applyDefaultSayMapping(program.sentences, defaultMapping)
     : program.sentences;
   const expanded = await expandModulesForCompile(sentence?.from?.filename, entrySentences);
-  const commandPolicy = resolveCompiledCommandPolicy([...configSentences, ...expanded]);
+  const commandPolicy = resolveCompiledCommandPolicy(configSentences, { detailed: true });
   const sourceLines = sentenceLineNumbersFromText(sourceText);
   const sourceName = sourceFilename ? path.basename(sourceFilename) : "<pyash>";
   const canMap = sourceLines.length === expanded.length;
