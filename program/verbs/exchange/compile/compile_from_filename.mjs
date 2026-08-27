@@ -9,6 +9,7 @@ import { applyDefaultSayMapping, findDefaultSayMapping, findRetryConfig, loadDef
 import { sentenceLineNumbersFromText, inlineSourceMap } from "./source_map.mjs";
 import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
+import { resolveCompiledCommandPolicy } from "../../../library/command_policy.mjs";
 
 function resolveStateValue(value) {
   if (!value) return "";
@@ -215,6 +216,7 @@ export async function compile_from_filename_to_filename(sentence) {
     ? applyDefaultSayMapping(program.sentences, defaultMapping)
     : program.sentences;
   const expanded = await expandModulesForCompile(sentence?.from?.filename, entrySentences);
+  const commandPolicy = resolveCompiledCommandPolicy([...configSentences, ...expanded]);
   const sourceLines = sentenceLineNumbersFromText(sourceText);
   const sourceName = sourceFilename ? path.basename(sourceFilename) : "<pyash>";
   const canMap = sourceLines.length === expanded.length;
@@ -241,7 +243,8 @@ export async function compile_from_filename_to_filename(sentence) {
     sourceLineNumbers: canMap ? sourceLines : null,
     sourceFilename: canMap ? (sourceFilename ?? "<pyash>") : null,
     collectSourceMap: wantsJsMap,
-    retryConfig
+    retryConfig,
+    commandPolicy
   });
   const body = wantsJsMap ? inlineSourceMap(bodyRaw, { sourceName, sourceText }) : bodyRaw;
   const wrappedText = `quoted.${targetLang}.\n${body}.${targetLang}.quoted`;

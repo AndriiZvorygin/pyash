@@ -20,7 +20,8 @@ export function applyJsPrelude(lines, {
   usesRememberShim,
   usesMapShim,
   mindShim,
-  loopShim
+  loopShim,
+  commandPolicy
 } = {}) {
   const prelude = [lines[0]];
   if (jsHelpers.usesYamlRuntime) jsHelpers.usesJsonRuntime = true;
@@ -36,7 +37,7 @@ export function applyJsPrelude(lines, {
     }
   }
   if (jsHelpers.usesCommand) {
-    prelude.push(commandHelperSource());
+    prelude.push(commandHelperSource({ policy: commandPolicy }));
   }
   if (jsHelpers.usesInterpret) {
     prelude.push(interpretHelperSource());

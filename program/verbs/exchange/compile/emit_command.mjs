@@ -43,11 +43,14 @@ export function handleCommandSentence({
     lines.push("pyaEmitNewspaper(`exists su name ${__pyaRequestName} ob la ${__pyaToolEvoked} ko be evoke ya`);");
     lines.push(`const __pyaCmd = ${cmdExpr ?? '""'};`);
     lines.push(`if (!__pyaCmd) { pyaEmitNewspaper(\`su name command defective ob text "command defective: empty command" from la \${__pyaToolEvoked} ko be error ya\`); throw new Error("command defective"); }`);
+    lines.push(`pyaCommandPolicyGate({ requestName: __pyaRequestName, evoked: __pyaToolEvoked, commandText: __pyaCmd, mood: ${JSON.stringify(sentence.mood ?? "do")} });`);
     lines.push("let __pyaOut;");
     lines.push("try {");
     lines.push(`  __pyaOut = pyaCommand(__pyaCmd, ${inputExpr});`);
     lines.push("} catch (err) {");
     lines.push("  const __pyaMsg = `command defective: ${String(err?.message ?? \"command defective\")}`;");
+    lines.push("  const __pyaErrorResult = `su name command defective ob text ${JSON.stringify(__pyaMsg)} from la ${__pyaToolEvoked} ko be error ya`;");
+    lines.push("  pyaCommandResultAudit({ requestName: __pyaRequestName, commandText: __pyaCmd, evoked: __pyaToolEvoked, decision: \"error\", result: __pyaErrorResult });");
     lines.push("  pyaEmitNewspaper(`su name command defective ob text ${JSON.stringify(__pyaMsg)} from la ${__pyaToolEvoked} ko be error ya`);");
     lines.push("  throw err;");
     lines.push("}");
@@ -76,6 +79,7 @@ export function handleCommandSentence({
     lines.push("globalThis.result = { su: { name: \"result\" }, ob: result.ob, be: \"command\", mood: \"ya\" };");
     lines.push(`pyaEmitNewspaper("su name " + __pyaRequestName + " ob text " + JSON.stringify(String(__pyaOut ?? "")) + " be command ya");`);
     lines.push("const __pyaToolResult = \"su name \" + __pyaRequestName + \" ob text \" + JSON.stringify(String(__pyaOut ?? \"\")) + \" be command ya\";");
+    lines.push("pyaCommandResultAudit({ requestName: __pyaRequestName, commandText: __pyaCmd, evoked: __pyaToolEvoked, decision: \"allow\", result: __pyaToolResult });");
     lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
     lines.push("}");
     return lines.join("\n");
@@ -109,6 +113,7 @@ export function handleCommandSentence({
     lines.push(`{ char __pyaRequestLine[PYA_TEXT_CAP]; snprintf(__pyaRequestLine, sizeof(__pyaRequestLine), "exists su name %s ob la %s ko be evoke ya", ${requestVar}, ${evoked}); pya_emit_exchange(__pyaRequestLine); }`);
     lines.push(`const char *${cmdVar} = ${cmdCExpr ?? '""'};`);
     lines.push(`if (!${cmdVar} || !strlen(${cmdVar})) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective: empty command\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
+    lines.push(`pya_command_policy_gate(${requestVar}, ${evoked}, ${cmdVar}, ${JSON.stringify(sentence.mood ?? "do")});`);
     let runCmdExpr = cmdVar;
     let cleanupStdinLine = null;
     if (inputFilename) {
@@ -134,7 +139,7 @@ export function handleCommandSentence({
     }
     lines.push(`char *${outVar} = pya_command(${runCmdExpr});`);
     if (cleanupStdinLine) lines.push(cleanupStdinLine);
-    lines.push(`if (!${outVar}) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
+    lines.push(`if (!${outVar}) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective\\\" from la %s ko be error ya", ${evoked}); pya_command_emit_audit(${requestVar}, "result", pya_command_classify(${cmdVar}), "error", ${evoked}, __pyaErr); pya_emit_exchange(__pyaErr); exit(1); }`);
     if (sentence?.to?.filename) {
       const safePath = JSON.stringify(sentence.to.filename);
       const fileVar = `out_${cState?.fileCounter ?? 0}`;
@@ -179,6 +184,7 @@ export function handleCommandSentence({
       lines.push(`snprintf(result, sizeof(result), "%s", ${outVar} ? ${outVar} : "");`);
     }
     lines.push(`{ char __pyaEscResult[PYA_TEXT_CAP]; pya_escape_text(${outVar} ? ${outVar} : "", __pyaEscResult, sizeof(__pyaEscResult)); char __pyaResultLine[PYA_TEXT_CAP]; snprintf(__pyaResultLine, sizeof(__pyaResultLine), "su name %s ob text \\\"%s\\\" be command ya", ${requestVar}, __pyaEscResult); pya_emit_exchange(__pyaResultLine); }`);
+    lines.push(`{ char __pyaEscResult[PYA_TEXT_CAP]; pya_escape_text(${outVar} ? ${outVar} : "", __pyaEscResult, sizeof(__pyaEscResult)); char __pyaResultLine[PYA_TEXT_CAP]; snprintf(__pyaResultLine, sizeof(__pyaResultLine), "su name %s ob text \\\"%s\\\" be command ya", ${requestVar}, __pyaEscResult); pya_command_emit_audit(${requestVar}, "result", pya_command_classify(${cmdVar}), "allow", ${evoked}, __pyaResultLine); }`);
     lines.push(`{ char __pyaEsc[PYA_TEXT_CAP]; pya_escape_text(${outVar} ? ${outVar} : "", __pyaEsc, sizeof(__pyaEsc)); char __pyaEvent[PYA_TEXT_CAP]; snprintf(__pyaEvent, sizeof(__pyaEvent), "su name tool event %06d ob la %s ko to la su name %s ob text \\\"%s\\\" be command ya ko be tool ya", pya_next_tool_event_id(), ${evoked}, ${requestVar}, __pyaEsc); pya_emit_exchange(__pyaEvent); }`);
     lines.push(`if (${outVar}) free(${outVar});`);
     return lines.join("\n");
