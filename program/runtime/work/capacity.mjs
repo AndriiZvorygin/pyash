@@ -14,7 +14,7 @@ function firstObject(...values) {
 }
 
 function usageShape(source = {}, fallback = {}) {
-  const usedPercent = number(source.usedPercent ?? source.used_percentage ?? fallback.usedPercent);
+  let usedPercent = number(source.usedPercent ?? source.used_percentage ?? fallback.usedPercent);
   const explicitRemainingPercent = number(
     source.remainingPercent ?? source.remaining_percentage ?? fallback.remainingPercent
   );
@@ -27,16 +27,82 @@ function usageShape(source = {}, fallback = {}) {
       : limit != null && remaining != null && limit > 0
         ? Math.max(0, Math.min(100, (remaining / limit) * 100))
         : null;
+  if (usedPercent == null && remainingPercent != null) usedPercent = 100 - remainingPercent;
   return { usedPercent, remainingPercent, limit, remaining };
 }
 
 const WEEK_MINUTES = 7 * 24 * 60;
+const WEEK_SECONDS = WEEK_MINUTES * 60;
+
+function durationMinutes(source = {}) {
+  const minutes = number(
+    source.windowMinutes
+      ?? source.window_minutes
+      ?? source.windowDurationMins
+      ?? source.window_duration_mins
+  );
+  if (minutes != null) return minutes;
+  const seconds = number(
+    source.windowDurationSeconds
+      ?? source.window_duration_seconds
+      ?? source.windowSeconds
+      ?? source.window_seconds
+  );
+  return seconds == null ? null : seconds / 60;
+}
+
+function collectRateLimitBuckets(value, pathName = "", buckets = [], seen = new Set()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return buckets;
+  seen.add(value);
+  if (!Array.isArray(value)) {
+    const duration = durationMinutes(value);
+    if (duration != null) buckets.push({ value, path: pathName, duration });
+    for (const [key, child] of Object.entries(value)) {
+      collectRateLimitBuckets(child, pathName ? `${pathName}.${key}` : key, buckets, seen);
+    }
+  } else {
+    value.forEach((child, index) => collectRateLimitBuckets(child, `${pathName}[${index}]`, buckets, seen));
+  }
+  return buckets;
+}
+
+function isWeeklyDuration(minutes) {
+  return Math.abs(Number(minutes) - WEEK_MINUTES) < 0.0001
+    || Math.abs(Number(minutes) * 60 - WEEK_SECONDS) < 0.1;
+}
+
+function validPercentage(value) {
+  return value == null || (Number.isFinite(value) && value >= 0 && value <= 100);
+}
+
+function validateWeeklyBucket(duration, usage, reset) {
+  if (!isWeeklyDuration(duration)) return "weekly duration is not seven days";
+  const resetMillis = Date.parse(reset);
+  const startMillis = resetMillis - WEEK_MINUTES * 60000;
+  if (!Number.isFinite(resetMillis) || resetMillis <= 0 || !Number.isFinite(startMillis) || startMillis >= resetMillis) {
+    return "weekly reset timestamp is malformed";
+  }
+  if (usage.usedPercent == null && usage.remainingPercent == null) return "weekly usage percentages are missing";
+  if (!validPercentage(usage.usedPercent) || !validPercentage(usage.remainingPercent)) {
+    return "weekly usage percentages are malformed";
+  }
+  if (usage.usedPercent != null && usage.remainingPercent != null
+    && Math.abs(usage.usedPercent + usage.remainingPercent - 100) > 1.0) {
+    return "weekly usage percentages are inconsistent";
+  }
+  return "";
+}
 
 function resetAt(source) {
   const value = source.resetAt ?? source.resetsAt ?? source.reset_at ?? source.resetTime ?? source.reset_time;
-  if (typeof value === "number") {
-    const millis = value < 10_000_000_000 ? value * 1000 : value;
-    return new Date(millis).toISOString();
+  const numericValue = typeof value === "number"
+    || (typeof value === "string" && /^\d+(?:\.\d+)?$/u.test(value.trim()));
+  if (numericValue) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return "";
+    const millis = parsed < 10_000_000_000 ? parsed * 1000 : parsed;
+    const date = new Date(millis);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : "";
   }
   const parsed = Date.parse(String(value ?? ""));
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : "";
@@ -50,8 +116,7 @@ export function normalizeCodexCapacity(payload, { now = new Date() } = {}) {
   const { usedPercent, remainingPercent, limit, remaining } = primaryUsage;
   const reset = resetAt(primary) || resetAt(raw);
   const windowMinutes = number(
-    primary.windowMinutes ?? primary.window_minutes ?? primary.windowDurationMins
-      ?? raw?.windowMinutes ?? raw?.window_duration_mins
+    durationMinutes(primary) ?? durationMinutes(raw)
   );
   const limited = Boolean(
     raw?.usageLimited || raw?.usage_limited || raw?.limited || primary?.usageLimited
@@ -70,27 +135,31 @@ export function normalizeCodexCapacity(payload, { now = new Date() } = {}) {
     observedAt,
     raw: raw && typeof raw === "object" ? raw : {}
   };
-  // Codex currently exposes the shorter primary window and the weekly
-  // allowance as `secondary`; older payloads used `weekly` or `primary`.
-  const weeklySource = firstObject(raw?.weekly, raw?.week, raw?.secondary, raw?.primary, raw);
-  const weeklyUsage = usageShape(weeklySource, raw);
-  const weeklyWindowMinutes = number(
-    weeklySource.windowMinutes ?? weeklySource.window_minutes ?? weeklySource.windowDurationMins
-  );
-  const weeklyIdentified = weeklySource === raw?.weekly
-    || weeklySource === raw?.week
-    || weeklySource === raw?.secondary
-    || weeklyWindowMinutes === WEEK_MINUTES;
+  // Identify the weekly allowance by its declared duration, independent of
+  // provider bucket names or ordering.
+  const weeklyCandidates = collectRateLimitBuckets(raw)
+    .filter((candidate) => isWeeklyDuration(candidate.duration));
+  const weeklyCandidate = weeklyCandidates.find((candidate) => {
+    const candidateUsage = usageShape(candidate.value, {});
+    return !validateWeeklyBucket(candidate.duration, candidateUsage, resetAt(candidate.value));
+  }) || weeklyCandidates[0];
+  const weeklySource = weeklyCandidate?.value || {};
+  const weeklyWindowMinutes = weeklyCandidate?.duration ?? null;
+  const weeklyUsage = usageShape(weeklySource, {});
   const weeklyResetAt = resetAt(weeklySource);
-  const weeklyStartAt = weeklyResetAt && weeklyWindowMinutes
-    ? new Date(Date.parse(weeklyResetAt) - weeklyWindowMinutes * 60000).toISOString()
+  const weeklyValidation = weeklyCandidate
+    ? validateWeeklyBucket(weeklyWindowMinutes, weeklyUsage, weeklyResetAt)
+    : "weekly bucket unavailable";
+  const weeklyIdentified = Boolean(weeklyCandidate) && !weeklyValidation;
+  const weeklyStartAt = weeklyIdentified
+    ? new Date(Date.parse(weeklyResetAt) - WEEK_MINUTES * 60000).toISOString()
     : "";
   const weeklyLimited = limited || weeklyUsage.remainingPercent === 0;
   const weekly = {
     identified: weeklyIdentified,
     state: weeklyIdentified
       ? weeklyLimited ? "usage-limited" : weeklyUsage.remainingPercent != null ? "available" : "unknown"
-      : "unknown",
+      : weeklyLimited ? "usage-limited" : "unknown",
     available: weeklyIdentified
       ? weeklyLimited ? false : weeklyUsage.remainingPercent != null ? weeklyUsage.remainingPercent > 0 : null
       : null,
@@ -98,17 +167,18 @@ export function normalizeCodexCapacity(payload, { now = new Date() } = {}) {
     remainingPercent: weeklyIdentified ? weeklyUsage.remainingPercent : null,
     resetAt: weeklyIdentified ? weeklyResetAt : "",
     observedAt,
-    windowMinutes: weeklyIdentified ? weeklyWindowMinutes : null,
+    windowMinutes: weeklyIdentified ? WEEK_MINUTES : null,
     windowStartAt: weeklyIdentified ? weeklyStartAt : "",
     raw: weeklyIdentified ? weeklySource : {},
-    reason: weeklyIdentified ? "weekly bucket identified" : "weekly bucket unavailable"
+    bucketPath: weeklyIdentified ? weeklyCandidate.path : "",
+    reason: weeklyIdentified ? "weekly bucket identified" : weeklyValidation
   };
   return { ...generic, weekly };
 }
 
 export function weeklyCapacity(capacity = {}) {
   const weekly = capacity?.weekly;
-  return weekly && weekly.identified === true
+  return weekly && (weekly.identified === true || weekly.state === "usage-limited")
     ? weekly
     : {
       identified: false,
@@ -137,8 +207,9 @@ export function calculateWeeklyPacing(capacity, {
   const start = Date.parse(weekly.windowStartAt);
   const reset = Date.parse(weekly.resetAt);
   if (!weekly.identified || !Number.isFinite(start) || !Number.isFinite(reset) || reset <= start) {
+    const state = weekly.state === "usage-limited" ? "usage-limited" : "unknown";
     return {
-      state: "unknown",
+      state,
       reason: weekly.reason || "weekly window unknown",
       reservePercent: reserve,
       deadbandPercent: deadband,
@@ -230,8 +301,8 @@ export function admitBackgroundWork({
   if (settings.enabled !== true) return { admit: false, reason: "background disabled", pacing };
   if (foregroundActive) return { admit: false, reason: "active task conflict", pacing };
   if (!hasEligibleWork) return { admit: false, reason: "no eligible work", pacing };
-  if (pacing.state === "usage-limited") return { admit: false, reason: "usage limited", pacing };
-  if (pacing.state !== "available") return { admit: false, reason: "capacity unknown", pacing };
+  if (pacing.state === "usage-limited") return { admit: false, reason: "provider usage-limited", pacing };
+  if (pacing.state !== "available") return { admit: false, reason: "capacity telemetry unavailable", pacing };
   if (pacing.actualRemainingPercent <= pacing.reservePercent) {
     return { admit: false, reason: "weekly reserve", pacing };
   }
