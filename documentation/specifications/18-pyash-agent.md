@@ -84,7 +84,11 @@ The evidence bundle is bounded and carries summary, commit, changed files, tests
 blockers, diff hash/stat, and source ids. Raw turn history, recovery history,
 obsolete retry prose, and raw diffs are durable audit evidence only and MUST NOT
 be injected into a live compact prompt. Timestamps are audit fields and do not
-participate in the prompt bytes or context hash.
+participate in the prompt bytes or context hash. The projector allocates the
+16,000-byte UTF-8 prompt budget before assembly. Required duty, latest-pair,
+decision/correction, hash, and source-id fields retain their allocated lines;
+lower-priority prose is truncated inside its own field, so an assembled tail
+cannot discard required evidence.
 
 Because an opaque Codex thread cannot have old turns removed, the supervisor MUST
 start a fresh manager or worker thread before each new review, pre-acceptance
