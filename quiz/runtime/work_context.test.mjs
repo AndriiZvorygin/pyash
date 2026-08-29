@@ -79,6 +79,80 @@ function reviewTurn(number, decision = "REVISE") {
   };
 }
 
+function hugeField(start, end, unit) {
+  return `${start}${unit.repeat(24000)}${end}`;
+}
+
+function adversarialTask(unit, decision = "REVISE", queuedAt = "2026-08-28T12:00:00.000Z") {
+  const diff = `RAW-DIFF-SENTINEL-${unit.repeat(60000)}`;
+  const implementation = {
+    phase: "implementation",
+    role: "worker",
+    turnId: "LUNA-TURN-REQUIRED",
+    requestIdentity: "LUNA-REQUEST-REQUIRED",
+    state: "completed",
+    resultCaptured: true,
+    result: {
+      text: [
+        `SUMMARY: ${hugeField("LUNA-SUMMARY-START", "LUNA-SUMMARY-END", unit)}`,
+        "CHANGED FILES: LUNA-FILE-REQUIRED",
+        "TESTS: LUNA-TEST-REQUIRED",
+        `BLOCKERS: ${hugeField("LUNA-BLOCKER-START", "LUNA-BLOCKER-END", unit)}`,
+        "COMMIT: LUNA-COMMIT-REQUIRED"
+      ].join("\n"),
+      diff
+    }
+  };
+  const review = {
+    phase: "review",
+    role: "manager",
+    turnId: "SOL-TURN-REQUIRED",
+    requestIdentity: "SOL-REQUEST-REQUIRED",
+    state: "completed",
+    resultCaptured: true,
+    result: {
+      text: [
+        `DECISION: ${decision}`,
+        `RATIONALE: ${hugeField("SOL-RATIONALE-START", "SOL-RATIONALE-END", unit)}`,
+        `CORRECTION: ${hugeField("SOL-CORRECTION-START", "SOL-CORRECTION-END", unit)}`
+      ].join("\n")
+    }
+  };
+  const convergence = {
+    phase: "convergence-review",
+    role: "manager",
+    turnId: "CONVERGENCE-TURN-REQUIRED",
+    requestIdentity: "CONVERGENCE-REQUEST-REQUIRED",
+    state: "completed",
+    resultCaptured: true,
+    result: {
+      text: [
+        "DECISION: CONTINUE",
+        `RATIONALE: ${hugeField("CONVERGENCE-RATIONALE-START", "CONVERGENCE-RATIONALE-END", unit)}`,
+        `CORRECTION: ${hugeField("CONVERGENCE-CORRECTION-START", "CONVERGENCE-CORRECTION-END", unit)}`
+      ].join("\n")
+    }
+  };
+  return makeTask({
+    queuedAt,
+    title: hugeField("DUTY-TITLE-START", "DUTY-TITLE-END", unit),
+    promptText: hugeField("DUTY-OBJECTIVE-START", "DUTY-OBJECTIVE-END", unit),
+    acceptanceText: hugeField("DUTY-ACCEPTANCE-START", "DUTY-ACCEPTANCE-END", unit),
+    contextText: hugeField("DUTY-CONTEXT-START", "DUTY-CONTEXT-END", unit),
+    checkpoint: {
+      workspace: { repository: "/repo", worktreePath: "/worktree" },
+      plan: {
+        workOrder: hugeField("DUTY-WORK-ORDER-START", "DUTY-WORK-ORDER-END", unit),
+        risks: hugeField("DUTY-RISKS-START", "DUTY-RISKS-END", unit)
+      },
+      implementation: { passes: 20, diff },
+      review: { decision, revisionInstructions: "SOL-CORRECTION-REQUIRED" },
+      convergence: { reviewCount: 20 },
+      turnHistory: [implementation, review, convergence]
+    }
+  });
+}
+
 function parseNewspaperRecords(source) {
   const records = [];
   let current = null;
@@ -209,6 +283,49 @@ test("identical projections have identical bytes and SHA-256 despite changed aud
   assert.equal(left.prompt, right.prompt);
   assert.equal(left.contextHash, right.contextHash);
   assert.equal(left.contextHash, crypto.createHash("sha256").update(left.prompt).digest("hex"));
+});
+
+test("adversarial ASCII and multibyte fields keep required evidence within the allocated byte budget", () => {
+  const phases = [
+    { phase: "revision", role: "worker", required: ["SOL-CORRECTION-END", "SOL-TURN-REQUIRED", "SOL-REQUEST-REQUIRED"] },
+    { phase: "accepted", role: "manager", required: ["SOL-TURN-REQUIRED", "SOL-REQUEST-REQUIRED"] },
+    { phase: "convergence-review", role: "manager", required: ["CONVERGENCE-CORRECTION-END", "CONVERGENCE-TURN-REQUIRED", "CONVERGENCE-REQUEST-REQUIRED"] }
+  ];
+  const dutyMarkers = [
+    "DUTY-TITLE-END",
+    "DUTY-OBJECTIVE-END",
+    "DUTY-ACCEPTANCE-END",
+    "DUTY-CONTEXT-END",
+    "DUTY-WORK-ORDER-END",
+    "DUTY-RISKS-END"
+  ];
+  const evidenceMarkers = [
+    "LUNA-SUMMARY-END",
+    "LUNA-COMMIT-REQUIRED",
+    "LUNA-FILE-REQUIRED",
+    "LUNA-TEST-REQUIRED",
+    "LUNA-BLOCKER-END",
+    "LUNA-TURN-REQUIRED",
+    "LUNA-REQUEST-REQUIRED"
+  ];
+  for (const unit of ["a", "界"]) {
+    for (const { phase, role, required } of phases) {
+      const firstTask = adversarialTask(unit, phase === "accepted" ? "ACCEPT" : "REVISE");
+      const secondTask = adversarialTask(unit, phase === "accepted" ? "ACCEPT" : "REVISE", "2026-08-29T23:59:59.000Z");
+      const options = { phase, role };
+      const first = projectWorkContext(firstTask, options);
+      const second = projectWorkContext(secondTask, options);
+      const diffHash = crypto.createHash("sha256").update(`RAW-DIFF-SENTINEL-${unit.repeat(60000)}`).digest("hex");
+      assert.ok(Buffer.byteLength(first.prompt, "utf8") <= WORK_CONTEXT_MAX_PROMPT_BYTES);
+      assert.equal(first.prompt, second.prompt, `${unit} ${phase} bytes must be timestamp-independent`);
+      assert.equal(first.contextHash, second.contextHash, `${unit} ${phase} hash must be timestamp-independent`);
+      for (const marker of [...dutyMarkers, ...evidenceMarkers, ...required, diffHash]) {
+        assert.match(first.prompt, new RegExp(marker), `${unit} ${phase} must preserve ${marker}`);
+      }
+      assert.match(first.prompt, /Diff hash: [0-9a-f]{64}/u);
+      assert.doesNotMatch(first.prompt, /RAW-DIFF-SENTINEL/u, `${unit} ${phase} must not inject the raw diff`);
+    }
+  }
 });
 
 test("compact context and all newspaper attempt identities round-trip through Pyash records", async () => {

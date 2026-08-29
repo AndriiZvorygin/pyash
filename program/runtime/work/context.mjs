@@ -5,26 +5,6 @@ import { deriveImplementationProgress } from "./progress.mjs";
 export const WORK_CONTEXT_VERSION = 1;
 export const WORK_CONTEXT_MAX_PROMPT_BYTES = 16000;
 
-const LIMITS = Object.freeze({
-  title: 600,
-  objective: 1800,
-  acceptance: 1800,
-  context: 1800,
-  workOrder: 2400,
-  risks: 1600,
-  summary: 1800,
-  commit: 160,
-  files: 1200,
-  tests: 1800,
-  blockers: 1200,
-  correction: 1800,
-  explanation: 1600,
-  diffStat: 180,
-  hash: 128,
-  id: 180,
-  counters: 700
-});
-
 function text(value) {
   return String(value ?? "").trim();
 }
@@ -37,17 +17,43 @@ function unique(values) {
   return [...new Set(list(values))];
 }
 
-function bounded(value, limit) {
-  const body = text(value);
-  if (body.length <= limit) return body;
-  const suffix = "\n... [truncated]";
-  return `${body.slice(0, Math.max(0, limit - suffix.length)).trimEnd()}${suffix}`;
+function byteLength(value) {
+  return Buffer.byteLength(String(value ?? ""), "utf8");
 }
 
-function boundedList(value, limit) {
-  const values = unique(value);
-  if (!values.length) return "(none)";
-  return bounded(values.join(", "), limit);
+function utf8Prefix(value, limit) {
+  let output = "";
+  let bytes = 0;
+  for (const character of String(value ?? "")) {
+    const size = byteLength(character);
+    if (bytes + size > limit) break;
+    output += character;
+    bytes += size;
+  }
+  return output;
+}
+
+function utf8Suffix(value, limit) {
+  let output = "";
+  let bytes = 0;
+  for (const character of [...String(value ?? "")].reverse()) {
+    const size = byteLength(character);
+    if (bytes + size > limit) break;
+    output = `${character}${output}`;
+    bytes += size;
+  }
+  return output;
+}
+
+function bounded(value, limit) {
+  const body = text(value);
+  if (byteLength(body) <= limit) return body;
+  const marker = "\n... [truncated]";
+  if (byteLength(marker) >= limit) return utf8Prefix(body, limit);
+  const available = limit - byteLength(marker);
+  const prefixBytes = Math.ceil(available / 2);
+  const suffixBytes = Math.floor(available / 2);
+  return `${utf8Prefix(body, prefixBytes)}${marker}${utf8Suffix(body, suffixBytes)}`;
 }
 
 function sha256(value) {
@@ -196,59 +202,78 @@ function convergenceEvidence(task) {
   };
 }
 
-function dutyLines(task, checkpoint) {
+function promptField(label, value, {
+  priority = 50,
+  preferredBytes = 800,
+  minimumBytes = 64
+} = {}) {
+  return {
+    kind: "field",
+    label,
+    value: text(value) || "(none)",
+    priority,
+    preferredBytes,
+    minimumBytes
+  };
+}
+
+function listValue(value) {
+  const values = unique(value);
+  return values.length ? values.join(", ") : "(none)";
+}
+
+function dutyFields(task, checkpoint) {
   return [
-    "Original duty:",
-    `Task title: ${bounded(task?.title, LIMITS.title) || "(untitled)"}`,
-    `Objective: ${bounded(task?.promptText, LIMITS.objective) || "(none)"}`,
-    `Acceptance criteria: ${bounded(task?.acceptanceText, LIMITS.acceptance) || "(none)"}`,
-    `Context: ${bounded(task?.contextText, LIMITS.context) || "(none)"}`,
-    `Sol work order: ${bounded(checkpoint?.plan?.workOrder, LIMITS.workOrder) || "(none)"}`,
-    `Sol risks: ${bounded(checkpoint?.plan?.risks, LIMITS.risks) || "(none)"}`,
-    `Repository: ${bounded(checkpoint?.workspace?.repository, 500) || "(none)"}`,
-    `Worktree: ${bounded(checkpoint?.workspace?.worktreePath, 900) || "(none)"}`
+    promptField("Task title", task?.title, { priority: 90, preferredBytes: 700, minimumBytes: 64 }),
+    promptField("Objective", task?.promptText, { priority: 80, preferredBytes: 1200, minimumBytes: 96 }),
+    promptField("Acceptance criteria", task?.acceptanceText, { priority: 80, preferredBytes: 1200, minimumBytes: 96 }),
+    promptField("Context", task?.contextText, { priority: 70, preferredBytes: 1000, minimumBytes: 96 }),
+    promptField("Sol work order", checkpoint?.plan?.workOrder, { priority: 90, preferredBytes: 1400, minimumBytes: 96 }),
+    promptField("Sol risks", checkpoint?.plan?.risks, { priority: 60, preferredBytes: 900, minimumBytes: 64 }),
+    promptField("Repository", checkpoint?.workspace?.repository, { priority: 30, preferredBytes: 500, minimumBytes: 32 }),
+    promptField("Worktree", checkpoint?.workspace?.worktreePath, { priority: 30, preferredBytes: 700, minimumBytes: 32 })
   ];
 }
 
-function evidenceLines(label, evidence) {
+function evidenceFields(label, evidence) {
   return [
     `${label}:`,
-    `  Summary: ${bounded(evidence.summary, LIMITS.summary) || "(none)"}`,
-    `  Commit: ${bounded(evidence.commit, LIMITS.commit) || "(none)"}`,
-    `  Changed files: ${boundedList(evidence.changedFiles, LIMITS.files)}`,
-    `  Tests: ${boundedList(evidence.tests, LIMITS.tests)}`,
-    `  Blockers: ${bounded(evidence.blockers, LIMITS.blockers) || "(none)"}`,
-    `  Diff hash: ${bounded(evidence.diffHash, LIMITS.hash) || "(none)"}`,
-    `  Diff stat: ${bounded(evidence.diffStat, LIMITS.diffStat)}`,
-    `  Source turn IDs: ${boundedList(evidence.sourceTurnIds, LIMITS.id)}`,
-    `  Source request IDs: ${boundedList(evidence.sourceRequestIds, LIMITS.id)}`
+    promptField("  Summary", evidence.summary, { priority: 30, preferredBytes: 1400, minimumBytes: 96 }),
+    promptField("  Commit", evidence.commit, { priority: 100, preferredBytes: 256, minimumBytes: 32 }),
+    promptField("  Changed files", listValue(evidence.changedFiles), { priority: 80, preferredBytes: 900, minimumBytes: 64 }),
+    promptField("  Tests", listValue(evidence.tests), { priority: 60, preferredBytes: 1000, minimumBytes: 64 }),
+    promptField("  Blockers", evidence.blockers, { priority: 20, preferredBytes: 700, minimumBytes: 64 }),
+    promptField("  Diff hash", evidence.diffHash, { priority: 100, preferredBytes: 128, minimumBytes: 64 }),
+    promptField("  Diff stat", evidence.diffStat, { priority: 80, preferredBytes: 200, minimumBytes: 64 }),
+    promptField("  Source turn IDs", listValue(evidence.sourceTurnIds), { priority: 100, preferredBytes: 800, minimumBytes: 64 }),
+    promptField("  Source request IDs", listValue(evidence.sourceRequestIds), { priority: 100, preferredBytes: 800, minimumBytes: 64 })
   ];
 }
 
-function reviewLines(label, review) {
+function reviewFields(label, review) {
   return [
     `${label}:`,
-    `  Decision: ${bounded(review.decision, 40) || "(none)"}`,
-    `  Explanation: ${bounded(review.explanation, LIMITS.explanation) || "(none)"}`,
-    `  Correction: ${bounded(review.correction, LIMITS.correction) || "(none)"}`,
-    `  Source turn IDs: ${boundedList(review.sourceTurnIds, LIMITS.id)}`,
-    `  Source request IDs: ${boundedList(review.sourceRequestIds, LIMITS.id)}`
+    promptField("  Decision", review.decision, { priority: 100, preferredBytes: 64, minimumBytes: 16 }),
+    promptField("  Explanation", review.explanation, { priority: 30, preferredBytes: 1000, minimumBytes: 96 }),
+    promptField("  Correction", review.correction, { priority: 100, preferredBytes: 1400, minimumBytes: 96 }),
+    promptField("  Source turn IDs", listValue(review.sourceTurnIds), { priority: 100, preferredBytes: 800, minimumBytes: 64 }),
+    promptField("  Source request IDs", listValue(review.sourceRequestIds), { priority: 100, preferredBytes: 800, minimumBytes: 64 })
   ];
 }
 
-function compactCounters(checkpoint) {
+function compactCounterFields(checkpoint) {
   const implementation = checkpoint?.implementation || {};
   const progress = deriveImplementationProgress(checkpoint);
   return [
     "Convergence counters:",
-    `  Implementation passes: ${Number(implementation.passes || progress.implementationPasses || 0)}`,
-    `  Material-progress passes: ${Number(implementation.materialProgressPasses || progress.materialProgressPasses || 0)}`,
-    `  No-delta passes: ${Number(implementation.noProgressPasses || progress.noProgressPasses || 0)}`,
-    `  Consecutive no-progress passes: ${Number(implementation.consecutiveNoProgressPasses || progress.consecutiveNoProgressPasses || 0)}`,
-    `  Commits produced: ${Number(implementation.commitsProduced || progress.commitsProduced || 0)}`,
-    `  Acceptance checks closed: ${Number(implementation.acceptanceChecksClosed || progress.acceptanceChecksClosed || 0)}`,
-    `  Sol review count: ${Number(checkpoint?.convergence?.reviewCount || 0)}`
-  ].map((line) => bounded(line, LIMITS.counters));
+    promptField("  Implementation passes", Number(implementation.passes || progress.implementationPasses || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
+    promptField("  Material-progress passes", Number(implementation.materialProgressPasses || progress.materialProgressPasses || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
+    promptField("  No-delta passes", Number(implementation.noProgressPasses || progress.noProgressPasses || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
+    promptField("  Consecutive no-progress passes", Number(implementation.consecutiveNoProgressPasses || progress.consecutiveNoProgressPasses || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
+    promptField("  Commits produced", Number(implementation.commitsProduced || progress.commitsProduced || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
+    promptField("  Acceptance checks closed", Number(implementation.acceptanceChecksClosed || progress.acceptanceChecksClosed || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
+    promptField("  Sol review count", Number(checkpoint?.convergence?.reviewCount || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 })
+  ];
 }
 
 function promptForPhase(task, { phase, correction = "" } = {}) {
@@ -256,7 +281,7 @@ function promptForPhase(task, { phase, correction = "" } = {}) {
   const luna = implementationEvidence(task);
   const review = reviewEvidence(task);
   const convergence = convergenceEvidence(task);
-  const lines = [
+  const segments = [
     phase === "review"
       ? "You are Sol reviewing Luna's latest completed implementation in the Pyash worktree."
       : phase === "convergence-review"
@@ -268,63 +293,90 @@ function promptForPhase(task, { phase, correction = "" } = {}) {
             : phase === "planning"
               ? "You are Sol, the Pyash manager and architect, preparing a bounded implementation work order."
               : "You are Luna, the Pyash implementation worker, continuing the bounded work order.",
-    ...dutyLines(task, checkpoint)
+    "Original duty:",
+    ...dutyFields(task, checkpoint)
   ];
   if (phase === "planning") {
-    lines.push(
+    segments.push(
       "Produce a bounded implementation work order. Do not edit files.",
       "Use exact headings: SUMMARY:, WORK ORDER:, RISKS:."
     );
   } else if (phase === "implementation" || phase === "revision") {
-    lines.push(
+    segments.push(
       "Implement the bounded work order and run relevant tests.",
       "Use exact headings: SUMMARY:, CHANGED FILES:, TESTS:, BLOCKERS:, UNCERTAINTY:.",
       "Include REVIEW READY: yes only when the acceptance criteria are sufficiently implemented for Sol to review."
     );
   } else if (phase === "review") {
-    lines.push(
+    segments.push(
       "Return exactly one decision: DECISION: ACCEPT, DECISION: REVISE, or DECISION: BLOCK.",
       "Also provide RATIONALE: and, when revising, CORRECTION:."
     );
   } else if (phase === "convergence-review") {
-    lines.push(
+    segments.push(
       "Choose exactly one: DECISION: CONTINUE, DECISION: SPLIT, or DECISION: BLOCK.",
       "Use exact headings: DECISION:, RATIONALE:, and CORRECTION: (or FOLLOW-UP: when splitting).",
       "A clean worktree, repeated tests, a revision count, or a client timeout alone is not a human decision."
     );
   }
   if (phase === "review") {
-    lines.push(...evidenceLines("Latest completed Luna implementation evidence", luna));
+    segments.push(...evidenceFields("Latest completed Luna implementation evidence", luna));
   } else if (phase === "revision") {
-    lines.push(...evidenceLines("Immediately preceding Luna result", luna));
-    lines.push(...reviewLines("Sol's corresponding decision and correction", review));
-    if (correction && correction !== review.correction) lines.push(`Requested correction: ${bounded(correction, LIMITS.correction)}`);
+    segments.push(...evidenceFields("Immediately preceding Luna result", luna));
+    segments.push(...reviewFields("Sol's corresponding decision and correction", review));
+    if (correction && correction !== review.correction) {
+      segments.push(promptField("Requested correction", correction, { priority: 90, preferredBytes: 1400, minimumBytes: 96 }));
+    }
   } else if (phase === "accepted") {
-    lines.push(...evidenceLines("Accepted Luna implementation evidence", luna));
-    lines.push(...reviewLines("Accepted Sol review evidence", review));
+    segments.push(...evidenceFields("Accepted Luna implementation evidence", luna));
+    segments.push(...reviewFields("Accepted Sol review evidence", review));
   } else if (phase === "convergence-review") {
-    lines.push(...compactCounters(checkpoint));
-    lines.push(...evidenceLines("Latest relevant Luna implementation evidence", luna));
-    lines.push(...reviewLines("Latest relevant Sol review evidence", review));
+    segments.push(...compactCounterFields(checkpoint));
+    segments.push(...evidenceFields("Latest relevant Luna implementation evidence", luna));
+    segments.push(...reviewFields("Latest relevant Sol review evidence", review));
     if (convergence.sourceTurnIds.length || convergence.decision) {
-      lines.push(...reviewLines("Latest convergence decision", convergence));
+      segments.push(...reviewFields("Latest convergence decision", convergence));
     }
   } else if (phase === "implementation" && correction) {
-    lines.push(...evidenceLines("Immediately preceding Luna result", luna));
-    lines.push(...reviewLines("Sol's corresponding decision and correction", review));
+    segments.push(...evidenceFields("Immediately preceding Luna result", luna));
+    segments.push(...reviewFields("Sol's corresponding decision and correction", review));
   }
-  return lines.filter(Boolean).join("\n");
+  return segments;
 }
 
-function byteBounded(value, maxBytes = WORK_CONTEXT_MAX_PROMPT_BYTES) {
-  const body = String(value ?? "");
-  if (Buffer.byteLength(body, "utf8") <= maxBytes) return body;
-  const suffix = "\n... [truncated]";
-  let output = body;
-  while (Buffer.byteLength(`${output}${suffix}`, "utf8") > maxBytes && output.length) {
-    output = output.slice(0, Math.max(0, output.length - 64));
+function allocateFieldBudgets(segments, maxBytes = WORK_CONTEXT_MAX_PROMPT_BYTES) {
+  const fields = segments.filter((segment) => segment?.kind === "field");
+  const fixedBytes = segments.reduce((total, segment) => {
+    if (segment?.kind === "field") return total + byteLength(`${segment.label}: `);
+    return total + byteLength(segment);
+  }, Math.max(0, segments.length - 1));
+  const availableBytes = Math.max(0, maxBytes - fixedBytes);
+  const targets = fields.map((field) => Math.min(byteLength(field.value), Math.max(0, field.preferredBytes)));
+  const minimums = fields.map((field, index) => Math.min(targets[index], Math.max(0, field.minimumBytes)));
+  const budgets = minimums.map((value) => value);
+  let remaining = Math.max(0, availableBytes - budgets.reduce((total, value) => total + value, 0));
+  const order = fields.map((field, index) => ({ field, index }))
+    .sort((left, right) => right.field.priority - left.field.priority || left.index - right.index);
+  for (const { index } of order) {
+    if (!remaining) break;
+    const extra = Math.min(targets[index] - budgets[index], remaining);
+    budgets[index] += extra;
+    remaining -= extra;
   }
-  return `${output.trimEnd()}${suffix}`;
+  return budgets;
+}
+
+function assemblePrompt(segments, maxBytes = WORK_CONTEXT_MAX_PROMPT_BYTES) {
+  const fields = segments.filter((segment) => segment?.kind === "field");
+  const budgets = allocateFieldBudgets(segments, maxBytes);
+  let fieldIndex = 0;
+  const prompt = segments.map((segment) => {
+    if (segment?.kind !== "field") return segment;
+    const budget = budgets[fieldIndex++];
+    return `${segment.label}: ${bounded(segment.value, budget)}`;
+  }).join("\n");
+  if (byteLength(prompt) > maxBytes) throw new RangeError("work context prompt exceeded its byte budget");
+  return prompt;
 }
 
 export function projectWorkContext(task, {
@@ -335,7 +387,7 @@ export function projectWorkContext(task, {
   activeThreadId = "",
   priorThreadIds = []
 } = {}) {
-  const prompt = byteBounded(promptForPhase(task, { phase, correction }));
+  const prompt = assemblePrompt(promptForPhase(task, { phase, correction }));
   const contextHash = sha256(prompt);
   return {
     version: WORK_CONTEXT_VERSION,

@@ -109,7 +109,10 @@ prah
 The task id, phase, role, context hash, source ids, and active thread id link the
 record to its WorkTask checkpoint. Context checkpoint prompt bytes are bounded
 and content-addressed by the context hash; timestamps are not part of that
-identity. Every attempt, including a failed attempt, remains in the append-only
+identity. The live prompt has a 16,000-byte UTF-8 budget allocated before
+assembly; lower-priority prose is truncated within its field while duty,
+latest-pair, decision/correction, hash, and source-id fields remain represented.
+Every attempt, including a failed attempt, remains in the append-only
 newspaper, while later prompts contain only the phase-appropriate compact
 projection. Replay reads the Pyash records and must not reconstruct live context
 from raw turn or recovery history.
