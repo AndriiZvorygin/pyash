@@ -10,6 +10,11 @@ function list(value) {
   return Array.isArray(value) ? [...value] : [];
 }
 
+function uniqueTextList(value) {
+  const values = list(value).map((entry) => text(entry)).filter(Boolean);
+  return [...new Set(values)];
+}
+
 function normalizedValue(value) {
   if (Array.isArray(value)) return value.map((entry) => normalizedValue(entry));
   if (!value || typeof value !== "object") return value;
@@ -127,6 +132,23 @@ function progressRecord(value = {}) {
   };
 }
 
+function compactContextRecord(value = {}) {
+  const source = object(value);
+  const version = Number(source.version);
+  return {
+    version: Number.isFinite(version) ? Math.max(0, Math.trunc(version)) : 0,
+    phase: text(source.phase),
+    role: text(source.role),
+    contextHash: text(source.contextHash || source.hash),
+    prompt: text(source.prompt || source.exactPrompt),
+    sourceRequestIds: uniqueTextList(source.sourceRequestIds || source.sourceRequestIDs),
+    sourceTurnIds: uniqueTextList(source.sourceTurnIds || source.sourceTurnIDs),
+    requestIdentity: text(source.requestIdentity),
+    activeThreadId: text(source.activeThreadId || source.threadId),
+    priorThreadIds: uniqueTextList(source.priorThreadIds || source.previousThreadIds)
+  };
+}
+
 export function buildWorkCheckpoint(input = {}) {
   const workspace = object(input.workspace);
   const manager = object(input.manager);
@@ -151,13 +173,14 @@ export function buildWorkCheckpoint(input = {}) {
     manager: {
       model: text(manager.model),
       reasoningEffort: text(manager.reasoningEffort),
-      threadId: text(manager.threadId)
+      threadId: text(manager.threadId),
+      previousThreadIds: uniqueTextList(manager.previousThreadIds)
     },
     worker: {
       model: text(worker.model),
       reasoningEffort: text(worker.reasoningEffort),
       threadId: text(worker.threadId),
-      previousThreadIds: list(worker.previousThreadIds)
+      previousThreadIds: uniqueTextList(worker.previousThreadIds)
     },
     plan: {
       summary: text(plan.summary),
@@ -245,6 +268,7 @@ export function buildWorkCheckpoint(input = {}) {
       reason: text(interruption.reason),
       lastTurnId: text(interruption.lastTurnId)
     },
+    compactContext: compactContextRecord(input.compactContext || input.contextCheckpoint),
     activeTurn,
     turnHistory,
     blocker: text(input.blocker),
@@ -289,6 +313,9 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     },
     executionPreflight: { ...current.executionPreflight, ...object(update.executionPreflight) },
     interruption: { ...current.interruption, ...object(update.interruption) },
+    compactContext: Object.prototype.hasOwnProperty.call(update, "compactContext")
+      ? compactContextRecord(update.compactContext)
+      : current.compactContext,
     activeTurn: Object.prototype.hasOwnProperty.call(update, "activeTurn")
       ? turnRecord(update.activeTurn)
       : current.activeTurn,

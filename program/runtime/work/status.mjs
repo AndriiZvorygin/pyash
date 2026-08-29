@@ -149,6 +149,7 @@ function checkpointBlocks(task) {
       { key: "manager model", type: "text", value: quoteText(checkpoint.manager.model) },
       { key: "manager reasoning effort", type: "text", value: quoteText(checkpoint.manager.reasoningEffort) },
       { key: "manager thread id", type: "text", value: quoteText(checkpoint.manager.threadId) },
+      { key: "manager previous thread ids", type: "text", value: quoteText(encodeJson(checkpoint.manager.previousThreadIds)) },
       { key: "worker model", type: "text", value: quoteText(checkpoint.worker.model) },
       { key: "worker reasoning effort", type: "text", value: quoteText(checkpoint.worker.reasoningEffort) },
       { key: "worker thread id", type: "text", value: quoteText(checkpoint.worker.threadId) },
@@ -223,6 +224,18 @@ function checkpointBlocks(task) {
       { key: "recovery count", type: "num", value: checkpoint.recoveryCount },
       { key: "recovery history", type: "text", value: quoteText(encodeJson(checkpoint.recoveryHistory)) },
       { key: "approval", type: "text", value: quoteText(encodeJson(checkpoint.approval)) }
+    ]),
+    mapBlock("work task compact context", [
+      { key: "version", type: "num", value: checkpoint.compactContext.version },
+      { key: "phase", type: "text", value: quoteText(checkpoint.compactContext.phase) },
+      { key: "role", type: "text", value: quoteText(checkpoint.compactContext.role) },
+      { key: "context hash", type: "text", value: quoteText(checkpoint.compactContext.contextHash) },
+      { key: "prompt", type: "text", value: quoteText(checkpoint.compactContext.prompt) },
+      { key: "source request ids", type: "text", value: quoteText(encodeJson(checkpoint.compactContext.sourceRequestIds)) },
+      { key: "source turn ids", type: "text", value: quoteText(encodeJson(checkpoint.compactContext.sourceTurnIds)) },
+      { key: "request identity", type: "text", value: quoteText(checkpoint.compactContext.requestIdentity) },
+      { key: "active thread id", type: "text", value: quoteText(checkpoint.compactContext.activeThreadId) },
+      { key: "prior thread ids", type: "text", value: quoteText(encodeJson(checkpoint.compactContext.priorThreadIds)) }
     ])
   ];
 }
@@ -250,6 +263,7 @@ function statusFromText(text) {
   const convergence = parseMap(text, "work task convergence");
   const integration = parseMap(text, "work task integration");
   const checkpoint = parseMap(text, "work task checkpoint");
+  const compactContext = parseMap(text, "work task compact context");
   const organization = parseMap(text, "work task organization");
   const storedEscalation = decodeJson(organization.escalation);
   let payloadSentence = null;
@@ -322,7 +336,8 @@ function statusFromText(text) {
       manager: {
         model: roles["manager model"],
         reasoningEffort: roles["manager reasoning effort"],
-        threadId: roles["manager thread id"]
+        threadId: roles["manager thread id"],
+        previousThreadIds: decodeJson(roles["manager previous thread ids"], [])
       },
       worker: {
         model: roles["worker model"],
@@ -379,6 +394,18 @@ function statusFromText(text) {
         at: checkpoint.at,
         reason: checkpoint.reason,
         lastTurnId: checkpoint["last turn id"]
+      },
+      compactContext: {
+        version: compactContext.version,
+        phase: compactContext.phase,
+        role: compactContext.role,
+        contextHash: compactContext["context hash"],
+        prompt: compactContext.prompt,
+        sourceRequestIds: decodeJson(compactContext["source request ids"], []),
+        sourceTurnIds: decodeJson(compactContext["source turn ids"], []),
+        requestIdentity: compactContext["request identity"],
+        activeThreadId: compactContext["active thread id"],
+        priorThreadIds: decodeJson(compactContext["prior thread ids"], [])
       },
       activeTurn: decodeJson(checkpoint["active turn"]),
       turnHistory: decodeJson(checkpoint["turn history"], []),

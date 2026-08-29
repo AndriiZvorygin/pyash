@@ -16,8 +16,10 @@ import {
   writeWorkTaskStatus
 } from "./status.mjs";
 import { mergeWorkCheckpoint } from "./checkpoint.mjs";
+import { projectWorkContext } from "./context.mjs";
 import { emitWorkEvent } from "./observer.mjs";
 import { diffStat } from "./report.mjs";
+import { appendWorkOutcome } from "./outcome.mjs";
 import { collectGitEvidence, prepareWorktree } from "./workspace.mjs";
 import { integrateAcceptedWork } from "./integration.mjs";
 import {
@@ -154,85 +156,23 @@ export function parseReview(output) {
 }
 
 function promptPlan(task, workspace, roles) {
-  return [
-    "You are Sol, the Pyash manager and architect.",
-    "Produce a bounded implementation work order for Luna. Do not edit files.",
-    "Use these exact headings: SUMMARY:, WORK ORDER:, RISKS:.",
-    `Task title: ${task.title}`,
-    `Objective: ${task.promptText}`,
-    `Context: ${task.contextText || "none"}`,
-    `Acceptance criteria: ${task.acceptanceText}`,
-    `Repository: ${workspace.repository}`,
-    `Assigned worktree: ${workspace.worktreePath}`,
-    `Worker role model: ${roles.worker.model}`,
-    "Prefer one substantial coherent roadmap increment or parity tranche over a micro-fix.",
-    "Pyash-first policy: prefer implementing workflow logic, reusable verbs, modules, configuration, and tests in Pyash when Pyash can express them reasonably.",
-    "Use JavaScript, C, shell, or another host language for interpreter/compiler/runtime substrate, backend parity, operating-system integration, or capabilities Pyash cannot yet express cleanly. State the architectural reason whenever host-language implementation is chosen.",
-    "The work order must tell Luna what to change, how to test it, what evidence to report, and what remains for a later bounded wake."
-  ].join("\n");
+  return projectWorkContext(task, { phase: "planning", role: "manager" }).prompt;
 }
 
 function promptImplementation(task, checkpoint, workspace, correction = "") {
-  return [
-    "You are Luna, the Pyash implementation worker.",
-    "Implement the bounded work order in the assigned worktree. Run the relevant tests.",
-    "Use these exact headings in your final report: SUMMARY:, CHANGED FILES:, TESTS:, BLOCKERS:, UNCERTAINTY:.",
-    `Task title: ${task.title}`,
-    `Objective: ${task.promptText}`,
-    `Acceptance criteria: ${task.acceptanceText}`,
-    `Context: ${task.contextText || "none"}`,
-    `Sol work order: ${checkpoint.plan.workOrder}`,
-    `Sol risks: ${checkpoint.plan.risks || "none reported"}`,
-    correction ? `Sol correction request: ${correction}` : "",
-    `Implementation pass: ${Number(checkpoint.implementation.passes || 0) + 1}`,
-    "Continue from the existing worktree and persistent Luna thread. Do not redo completed work. Prefer Pyash workflow logic and modules when the language can express the change; explain any host-language choice in the final report.",
-    `Repository: ${workspace.repository}`,
-    `Worktree: ${workspace.worktreePath}`,
-    "Do not push or merge. Report actual changed files and test commands/results. Include REVIEW READY: yes only when the acceptance criteria are sufficiently implemented for Sol to review; otherwise use REVIEW READY: no and state the next concrete checkpoint."
-  ].filter(Boolean).join("\n");
+  return projectWorkContext(task, {
+    phase: correction ? "revision" : "implementation",
+    role: "worker",
+    correction
+  }).prompt;
 }
 
 function promptReview(task, checkpoint, workspace) {
-  return [
-    "You are Sol reviewing Luna's implementation in the Pyash worktree.",
-    "Return exactly one decision using the heading DECISION: ACCEPT, DECISION: REVISE, or DECISION: BLOCK.",
-    "Also provide RATIONALE: and, when revising, CORRECTION:.",
-    `Original objective: ${task.promptText}`,
-    `Acceptance criteria: ${task.acceptanceText}`,
-    `Work order you approved: ${checkpoint.plan.workOrder}`,
-    `Luna summary: ${checkpoint.implementation.summary}`,
-    `Changed files: ${checkpoint.implementation.changedFiles.join(", ") || "none reported"}`,
-    `Tests: ${checkpoint.implementation.tests.join("; ") || "none reported"}`,
-    `Diff evidence:\n${checkpoint.implementation.diff.slice(0, 60000)}`,
-    `Worktree: ${workspace.worktreePath}`
-  ].join("\n");
+  return projectWorkContext(task, { phase: "review", role: "manager" }).prompt;
 }
 
 function promptConvergence(task, checkpoint, workspace) {
-  const history = (checkpoint.implementation.passHistory || []).slice(-12).map((pass) => [
-    `Pass ${pass.pass} at ${pass.at}: ${pass.material ? "MATERIAL" : "NO DELTA"}`,
-    `  Reasons: ${(pass.materialReasons || []).join(", ") || pass.noDeltaReason || "none"}`,
-    `  Summary: ${text(pass.summary).slice(0, 600)}`,
-    `  Tests: ${(pass.tests || []).slice(0, 5).join("; ") || "none"}`
-  ].join("\n")).join("\n");
-  return [
-    "You are Sol performing a focused convergence review for a technical Pyash task.",
-    "Do not repeat the original broad correction. Inspect the accumulated evidence and choose exactly one:",
-    "DECISION: CONTINUE, DECISION: SPLIT, or DECISION: BLOCK.",
-    "CONTINUE means give Luna one narrower concrete correction that can be verified.",
-    "SPLIT means preserve the completed portion and define substantial dependent follow-up work.",
-    "BLOCK is allowed only for a genuine product, semantic, architectural, safety, policy, credential, or unavailable-required-external-system decision.",
-    "A clean worktree, repeated tests, a revision count, or a client timeout alone is not a human decision.",
-    "Use exact headings: DECISION:, RATIONALE:, and CORRECTION: (or FOLLOW-UP: when splitting).",
-    `Task title: ${task.title}`,
-    `Objective: ${task.promptText}`,
-    `Acceptance criteria: ${task.acceptanceText}`,
-    `Worktree: ${workspace.worktreePath}`,
-    `Current Sol correction: ${checkpoint.review.revisionInstructions || "none"}`,
-    `Fresh external dependency evidence: ${checkpoint.review.revisionInstructions.includes("Fresh external dependency probe passed") ? "available for the fixture-free run; use the endpoint recorded in the correction" : "not recorded"}`,
-    "Accumulated implementation evidence:",
-    history || "none recorded"
-  ].join("\n");
+  return projectWorkContext(task, { phase: "convergence-review", role: "manager" }).prompt;
 }
 
 function resultText(result) {
@@ -589,36 +529,88 @@ export async function runWorkSupervisorOnce({
     return client;
   }
 
-  async function getManager() {
-    if (!managerClient) managerClient = await getClient("manager", roleSettings.manager, task.checkpoint.manager.threadId);
-    const threadId = await openRoleThread(managerClient, {
-      role: "manager",
-      threadId: task.checkpoint.manager.threadId,
-      workspace,
-      roleConfig: roleSettings.manager,
-      approvalPolicy,
-      threadSandbox
-    });
-    if (threadId !== task.checkpoint.manager.threadId) {
-      await save({ manager: { threadId }, interruption: { phase: "", at: "", reason: "", lastTurnId: "" } }, { solThreadId: threadId });
-    }
-    return { client: managerClient, threadId };
+  function roleState(role) {
+    return task.checkpoint[role] || {};
   }
 
-  async function getWorker() {
-    if (!workerClient) workerClient = await getClient("worker", roleSettings.worker, task.checkpoint.worker.threadId);
-    const threadId = await openRoleThread(workerClient, {
-      role: "worker",
-      threadId: task.checkpoint.worker.threadId,
+  function preparedContextMatches(context, role, identity, { strictRequest = false } = {}) {
+    const prepared = task.checkpoint.compactContext || {};
+    if (prepared.version < 1
+      || prepared.phase !== context.phase
+      || prepared.role !== role
+      || prepared.contextHash !== context.contextHash
+      || prepared.prompt !== context.prompt
+      || prepared.activeThreadId !== roleState(role).threadId) return false;
+    return !strictRequest || prepared.requestIdentity === identity;
+  }
+
+  async function getRole(role, {
+    phase,
+    context,
+    rotate = false
+  } = {}) {
+    const config = roleSettings[role];
+    const state = roleState(role);
+    const identity = requestIdentity(task, phase === "revision" ? "implementation" : phase);
+    const active = task.checkpoint.activeTurn || {};
+    const activeRequest = active.requestIdentity === identity && active.role === role;
+    const strictRequest = rotate || phase === "planning" || phase === "review" || phase === "convergence-review" || phase === "revision";
+    const prepared = preparedContextMatches(context, role, identity, { strictRequest });
+    const rotationCandidate = rotate && !prepared && !activeRequest && Boolean(state.threadId);
+    let client = role === "manager" ? managerClient : workerClient;
+    if (!client) {
+      client = await getClient(role, config, rotationCandidate ? "" : state.threadId);
+      if (role === "manager") managerClient = client;
+      else workerClient = client;
+    }
+    const adapterCanStart = typeof client?.startThread === "function" || typeof client?.request === "function";
+    const boundaryRotation = rotationCandidate && adapterCanStart;
+    const existingThreadId = boundaryRotation ? "" : state.threadId;
+    const threadId = await openRoleThread(client, {
+      role,
+      threadId: existingThreadId,
       workspace,
-      roleConfig: roleSettings.worker,
+      roleConfig: config,
       approvalPolicy,
       threadSandbox
     });
-    if (threadId !== task.checkpoint.worker.threadId) {
-      await save({ worker: { threadId }, interruption: { phase: "", at: "", reason: "", lastTurnId: "" } }, { lunaThreadId: threadId });
+    const displaced = state.threadId && threadId !== state.threadId ? [state.threadId] : [];
+    const priorThreadIds = [...new Set([
+      ...(state.previousThreadIds || []),
+      ...displaced
+    ].filter(Boolean))];
+    const currentContext = {
+      ...context,
+      requestIdentity: identity,
+      activeThreadId: threadId,
+      priorThreadIds
+    };
+    const persistedContextMatches = task.checkpoint.compactContext?.contextHash === currentContext.contextHash
+      && task.checkpoint.compactContext?.phase === currentContext.phase
+      && task.checkpoint.compactContext?.role === currentContext.role
+      && task.checkpoint.compactContext?.activeThreadId === threadId
+      && task.checkpoint.compactContext?.requestIdentity === identity;
+    if (!persistedContextMatches || threadId !== state.threadId || priorThreadIds.length !== (state.previousThreadIds || []).length) {
+      const patch = {
+        [role]: { threadId, previousThreadIds: priorThreadIds },
+        compactContext: currentContext,
+        interruption: { phase: "", at: "", reason: "", lastTurnId: "" }
+      };
+      await save(patch, role === "manager" ? { solThreadId: threadId } : { lunaThreadId: threadId });
+      await appendWorkOutcome(worldRoot, task, {
+        action: `context compacted before ${phase}`,
+        contextCheckpoint: currentContext
+      });
     }
-    return { client: workerClient, threadId };
+    return { client, threadId };
+  }
+
+  async function getManager(options = {}) {
+    return getRole("manager", options);
+  }
+
+  async function getWorker(options = {}) {
+    return getRole("worker", options);
   }
 
   async function executeTurn(phase, role, client, options) {
@@ -709,7 +701,8 @@ export async function runWorkSupervisorOnce({
   }
 
   async function doPlanning() {
-    const { client, threadId } = await getManager();
+    const context = projectWorkContext(task, { phase: "planning", role: "manager" });
+    const { client, threadId } = await getManager({ phase: "planning", context });
     await emit("planning-started", {
       role: "manager",
       model: roleSettings.manager.model,
@@ -726,7 +719,7 @@ export async function runWorkSupervisorOnce({
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
-      input: [{ type: "text", text: promptPlan(task, workspace, roleSettings) }]
+      input: [{ type: "text", text: context.prompt }]
     });
     const plan = parsePlan(resultText(result));
     await captureTurn("planning", {
@@ -745,7 +738,17 @@ export async function runWorkSupervisorOnce({
   }
 
   async function doImplementation(correction = "") {
-    const { client, threadId } = await getWorker();
+    const phase = correction ? "revision" : "implementation";
+    const context = projectWorkContext(task, {
+      phase,
+      role: "worker",
+      correction
+    });
+    const { client, threadId } = await getWorker({
+      phase,
+      context,
+      rotate: phase === "revision"
+    });
     await emit("implementation-started", {
       role: "worker",
       model: roleSettings.worker.model,
@@ -763,7 +766,7 @@ export async function runWorkSupervisorOnce({
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
-      input: [{ type: "text", text: promptImplementation(task, task.checkpoint, workspace, correction) }]
+      input: [{ type: "text", text: context.prompt }]
     });
     const report = parseImplementation(resultText(result));
     const evidence = await evidenceFactory({ worktreePath: workspace.worktreePath });
@@ -844,7 +847,8 @@ export async function runWorkSupervisorOnce({
   }
 
   async function doReview() {
-    const { client, threadId } = await getManager();
+    const context = projectWorkContext(task, { phase: "review", role: "manager" });
+    const { client, threadId } = await getManager({ phase: "review", context, rotate: true });
     await emit("review-started", {
       role: "manager",
       model: roleSettings.manager.model,
@@ -861,7 +865,7 @@ export async function runWorkSupervisorOnce({
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
-      input: [{ type: "text", text: promptReview(task, task.checkpoint, workspace) }]
+      input: [{ type: "text", text: context.prompt }]
     });
     const review = parseReview(resultText(result));
     await captureTurn("review", {
@@ -881,11 +885,16 @@ export async function runWorkSupervisorOnce({
   }
 
   async function doConvergenceReview() {
-    const { client, threadId } = await getManager();
     const requestedAt = isoText(nowValue(now));
     await save({
       convergence: { status: "reviewing", requestedAt },
       lastAction: "focused Sol convergence review started"
+    });
+    const context = projectWorkContext(task, { phase: "convergence-review", role: "manager" });
+    const { client, threadId } = await getManager({
+      phase: "convergence-review",
+      context,
+      rotate: true
     });
     await emit("convergence-review-started", {
       role: "manager",
@@ -904,7 +913,7 @@ export async function runWorkSupervisorOnce({
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
-      input: [{ type: "text", text: promptConvergence(task, task.checkpoint, workspace) }]
+      input: [{ type: "text", text: context.prompt }]
     });
     const convergence = parseConvergence(resultText(result));
     const reviewCount = task.checkpoint.convergence.reviewCount + 1;
@@ -985,6 +994,30 @@ export async function runWorkSupervisorOnce({
         });
         await emit("blocked", { reason, phase: "integration", worktree: workspace.worktreePath });
         return { claimed: true, taskId: task.taskId, status: task.status, message: reason, queue: await queueDepth(worldRoot) };
+      }
+    }
+    if (status === "accepted") {
+      const context = projectWorkContext(task, { phase: "accepted", role: "manager" });
+      const manager = task.checkpoint.manager || {};
+      const acceptedContext = {
+        ...context,
+        requestIdentity: task.checkpoint.turnHistory.at(-1)?.requestIdentity || "",
+        activeThreadId: manager.threadId,
+        priorThreadIds: manager.previousThreadIds || []
+      };
+      const previous = task.checkpoint.compactContext || {};
+      const unchanged = previous.phase === acceptedContext.phase
+        && previous.role === acceptedContext.role
+        && previous.contextHash === acceptedContext.contextHash
+        && previous.prompt === acceptedContext.prompt
+        && previous.requestIdentity === acceptedContext.requestIdentity
+        && previous.activeThreadId === acceptedContext.activeThreadId;
+      if (!unchanged) {
+        task = await save({ compactContext: acceptedContext });
+        await appendWorkOutcome(worldRoot, task, {
+          action: "context compacted after ACCEPT",
+          contextCheckpoint: acceptedContext
+        });
       }
     }
     task = await move(status, { message, result: status });

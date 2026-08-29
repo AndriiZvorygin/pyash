@@ -429,13 +429,14 @@ None (Week 3 complete).
 
 Status markers:
 * `[partial]` implemented in part (spec and/or runtime), prioritize next.
+* `[complete]` acceptance checks pass for the bounded package.
 
 ### Ship
 
 Execution order (dependency-first):
 
 1. **Priority queue (partial items first, highest value + prerequisites)**
-  * **Review-loop context compaction (golden context)** `[partial]`
+  * **Review-loop context compaction (golden context)** `[complete]`
     * next-attempt prompt keeps only original task + latest accepted success pair
     * failed retry chains stay in newspaper/artifacts, not in live prompt context
   * **Session behavior hardening for long runs** `[partial]`
@@ -496,7 +497,7 @@ Ordered integration path:
 
 1. **Loop behavior parity**
   * Session behavior hardening for long runs (compact context + stable session records) `[partial]`
-  * Review-loop context compaction + stable retry context policies `[partial]`
+  * Review-loop context compaction + stable retry context policies `[complete]`
 
 2. **Agent administration and boundaries**
   * Agent administration utilities:
