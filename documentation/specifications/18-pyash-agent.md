@@ -65,6 +65,37 @@ original duty plus the latest accepted generator and verifier evidence. Ordinary
 completed answers are not treated as accepted evidence. Failed retries remain in
 the session/newspaper/artifact audit trail.
 
+The manager/worker WorkTask review loop uses a sentence-native `work task compact
+context` checkpoint. Its versioned record contains the phase, role, SHA-256
+context hash, exact bounded prompt, source request and turn ids, active thread id,
+and prior thread ids. The prompt is projected from the immutable duty (title,
+objective, acceptance criteria, context, work order, and risks) plus only the
+evidence permitted by the phase:
+
+- a review receives the latest completed Luna implementation evidence;
+- a pre-acceptance revision receives the immediately preceding Luna result and
+  Sol's corresponding decision/correction;
+- an accepted checkpoint receives the original duty and the accepted Luna/Sol
+  pair; and
+- a convergence review receives compact progress counters and the latest
+  applicable pair.
+
+The evidence bundle is bounded and carries summary, commit, changed files, tests,
+blockers, diff hash/stat, and source ids. Raw turn history, recovery history,
+obsolete retry prose, and raw diffs are durable audit evidence only and MUST NOT
+be injected into a live compact prompt. Timestamps are audit fields and do not
+participate in the prompt bytes or context hash.
+
+Because an opaque Codex thread cannot have old turns removed, the supervisor MUST
+start a fresh manager or worker thread before each new review, pre-acceptance
+revision implementation, or convergence review. The displaced thread id is
+appended to that role's prior thread ids. The compact context and new thread id
+are durably checkpointed before the turn starts. A restart reuses a matching
+prepared checkpoint, consumes a completed-but-uncaptured result locally, and
+never creates a second turn for one request identity. Failed attempts remain
+visible in WorkTask artifacts and the newspaper even when omitted from later
+prompts.
+
 For recorded runs, each completed turn also gets an immutable hash-addressed
 session snapshot through the artifact recorder. The newspaper carries a typed
 checkpoint linkage to that snapshot, so `command/replay_newspaper.mjs` can verify

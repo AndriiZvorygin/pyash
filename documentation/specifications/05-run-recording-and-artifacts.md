@@ -88,6 +88,32 @@ per-turn/hash locator. The run newspaper records a `be checkpoint ya` linkage
 with the turn id, snapshot hash, and artifact filename. Replay verifies the
 content-addressed bytes; changing them is a `hash inconsistency`.
 
+WorkTask review-loop compaction uses the existing work outcome newspaper path and
+appends one sentence-native context checkpoint at every live-context boundary:
+
+```pyash
+su name work task context checkpoint be map def
+  su name task id ob text "<task id>" ya
+  su name phase ob text "<phase>" ya
+  su name role ob text "<manager|worker>" ya
+  su name context hash ob text "<sha256>" ya
+  su name prompt ob text "<exact bounded prompt>" ya
+  su name source request ids ob text "[<request ids>]" ya
+  su name source turn ids ob text "[<turn ids>]" ya
+  su name request identity ob text "<request identity>" ya
+  su name active thread id ob text "<new thread id>" ya
+  su name prior thread ids ob text "[<displaced thread ids>]" ya
+prah
+```
+
+The task id, phase, role, context hash, source ids, and active thread id link the
+record to its WorkTask checkpoint. Context checkpoint prompt bytes are bounded
+and content-addressed by the context hash; timestamps are not part of that
+identity. Every attempt, including a failed attempt, remains in the append-only
+newspaper, while later prompts contain only the phase-appropriate compact
+projection. Replay reads the Pyash records and must not reconstruct live context
+from raw turn or recovery history.
+
 Default policy:
 - newspaper recording is enabled by default (`exists su name newspaper enabled ob bool truth be default ya`),
 - sentence-level APIs may remain typed/in-memory (for example `from name itinerary ...`),

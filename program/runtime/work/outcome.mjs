@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { worldNewspaperLogPath } from "../../agent/newspaper_log.mjs";
 import { buildWorkTask } from "./contract.mjs";
+import { buildCompactContextCheckpoint } from "./context.mjs";
 
 function quote(value) {
   return JSON.stringify(String(value ?? ""));
@@ -12,10 +13,43 @@ function safe(value) {
   return String(value ?? "").replace(/[^a-z0-9-]+/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase();
 }
 
+function json(value) {
+  return JSON.stringify(Array.isArray(value) ? value : []);
+}
+
+function contextCheckpointBlock(task, value, action = "") {
+  const checkpoint = buildCompactContextCheckpoint(value);
+  return [
+    "su name work task context checkpoint be map def",
+    `  su name task id ob text ${quote(task.taskId)} ya`,
+    `  su name phase ob text ${quote(checkpoint.phase)} ya`,
+    `  su name role ob text ${quote(checkpoint.role)} ya`,
+    `  su name context hash ob text ${quote(checkpoint.contextHash)} ya`,
+    `  su name prompt ob text ${quote(checkpoint.prompt)} ya`,
+    `  su name source request ids ob text ${quote(json(checkpoint.sourceRequestIds))} ya`,
+    `  su name source turn ids ob text ${quote(json(checkpoint.sourceTurnIds))} ya`,
+    `  su name request identity ob text ${quote(checkpoint.requestIdentity)} ya`,
+    `  su name active thread id ob text ${quote(checkpoint.activeThreadId)} ya`,
+    `  su name prior thread ids ob text ${quote(json(checkpoint.priorThreadIds))} ya`,
+    `  su name action ob text ${quote(action)} ya`,
+    "prah",
+    ""
+  ];
+}
+
+export async function appendWorkContextCheckpoint(worldRoot, task, value, { action = "context compacted" } = {}) {
+  const current = buildWorkTask(task);
+  const file = worldNewspaperLogPath({ worldRoot, name: `work-${safe(current.taskId || "scheduler")}` });
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.appendFile(file, contextCheckpointBlock(current, value, action).join("\n"), "utf8");
+  return file;
+}
+
 export async function appendWorkOutcome(worldRoot, task, {
   reason = "",
   capacity = null,
-  action = ""
+  action = "",
+  contextCheckpoint = null
 } = {}) {
   const current = buildWorkTask(task);
   const file = worldNewspaperLogPath({ worldRoot, name: `work-${safe(task?.taskId || "scheduler")}` });
@@ -56,7 +90,8 @@ export async function appendWorkOutcome(worldRoot, task, {
     `  su name capacity ob text ${quote(capacity?.state || "unknown")} ya`,
     "prah",
     ""
-  ].join("\n");
-  await fs.appendFile(file, lines, "utf8");
+  ];
+  if (contextCheckpoint) lines.push(...contextCheckpointBlock(current, contextCheckpoint, action));
+  await fs.appendFile(file, lines.join("\n"), "utf8");
   return file;
 }
