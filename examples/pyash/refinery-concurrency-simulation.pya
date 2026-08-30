@@ -1,0 +1,20 @@
+su name simulation conduct be map def
+su name artificial ob bool truth ya
+su name seed ob num 2025 ya
+su name start tick ob num 0 ya
+su name parallel capacity ob num 2 ya
+su name waiting capacity ob num 1 ya
+su name schedule newspaper ob bool truth ya
+prah
+
+su name deterministic flow be refinery def
+su name slow branch from ve name ob text "slow" during num 5 atmost num 2 be write do
+su name independent branch from ve name ob text "independent" during num 4 be write do
+su name ready alpha from ve name ob text "alpha" during num 1 be write do
+su name ready beta from ve name ob text "beta" during num 1 be write do
+su name ready gamma from ve name ob text "gamma" during num 1 be write do
+su name slow child from name slow branch ob text "child" during num 1 be write do
+su name slow grandchild from name slow child ob text "grandchild" during num 1 be write do
+prah
+
+from name deterministic flow to name text result under name simulation conduct be refinery do

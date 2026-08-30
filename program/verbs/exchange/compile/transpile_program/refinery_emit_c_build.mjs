@@ -1,6 +1,37 @@
 import { sentenceToPyash } from "../../../../beautiful.mjs";
 import { sanitizeName } from "../util.mjs";
 
+function cNumberLiteral(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "0";
+  return Number.isInteger(value) ? String(value) : JSON.stringify(value);
+}
+
+function cConductField(conduct, key, type) {
+  if (!conduct || !Object.prototype.hasOwnProperty.call(conduct, key)) {
+    return type === "boolean" ? [0, 0] : [0, "0"];
+  }
+  const value = conduct[key];
+  if (type === "boolean" && typeof value === "boolean") return [1, value ? 1 : 0];
+  if (type === "number" && typeof value === "number" && Number.isFinite(value)) return [1, cNumberLiteral(value)];
+  return [2, 0];
+}
+
+function cConductLiteral(conduct) {
+  const [artificialKind, artificialValue] = cConductField(conduct, "artificial", "boolean");
+  const [seedKind, seed] = cConductField(conduct, "seed", "number");
+  const [startTickKind, startTick] = cConductField(conduct, "startTick", "number");
+  const [parallelCapacityKind, parallelCapacity] = cConductField(conduct, "parallelCapacity", "number");
+  const [waitingCapacityKind, waitingCapacity] = cConductField(conduct, "waitingCapacity", "number");
+  const [scheduleNewspaperKind, scheduleNewspaperValue] = cConductField(conduct, "scheduleNewspaper", "boolean");
+  return `{ ${artificialKind}, ${artificialValue}, ${seedKind}, ${seed}, ${startTickKind}, ${startTick}, ${parallelCapacityKind}, ${parallelCapacity}, ${waitingCapacityKind}, ${waitingCapacity}, ${scheduleNewspaperKind}, ${scheduleNewspaperValue} }`;
+}
+
+function cTimingField(value, { missingKind = 0 } = {}) {
+  if (value === undefined) return [missingKind, "0"];
+  if (typeof value === "number" && Number.isFinite(value)) return [1, cNumberLiteral(value)];
+  return [2, "0"];
+}
+
 export function buildRefineryCForDefinition({
   refineryName,
   refinery,
@@ -17,6 +48,7 @@ export function buildRefineryCForDefinition({
   cState,
   mapDefs,
   effectiveRetryConfig,
+  sourceRefineryInvocations,
   transpileSentence,
   usesRememberShim,
   usesMapShim
@@ -36,6 +68,10 @@ export function buildRefineryCForDefinition({
   const runFns = [];
   const names = [];
   const actions = [];
+  const durationValues = [];
+  const durationKinds = [];
+  const timeboxValues = [];
+  const timeboxKinds = [];
   const sharedTextTargets = new Set();
   refinery.platforms.forEach((platform) => {
     const targetName = platform?.action?.to?.name;
@@ -73,6 +109,12 @@ export function buildRefineryCForDefinition({
     runFns.push(fnName);
     names.push(platform.name);
     actions.push({ evoke: actionEvoke, result: actionLine });
+    const [durationKind, durationValue] = cTimingField(platform.action?.during?.num);
+    const [timeboxKind, timeboxValue] = cTimingField(platform.action?.atmost?.num);
+    durationKinds.push(durationKind);
+    durationValues.push(durationValue);
+    timeboxKinds.push(timeboxKind);
+    timeboxValues.push(timeboxValue);
     const depName = sanitizeName(`${prefix}_${platform.name}_deps`);
     const deps = platform.deps.map(dep => JSON.stringify(dep)).join(", ");
     depArrays.push(`static const char *${depName}[] = { ${deps}${deps ? ", " : ""}NULL };`);
@@ -82,14 +124,30 @@ export function buildRefineryCForDefinition({
   lines.push(`static void (*${runVar}[])(void) = { ${runFns.join(", ")} };`);
   lines.push(`static const char **${depsVar}[] = { ${refinery.platforms.map(p => sanitizeName(`${prefix}_${p.name}_deps`)).join(", ")} };`);
   lines.push(`static const int ${depCountVar}[] = { ${refinery.platforms.map(p => p.deps.length).join(", ")} };`);
+  lines.push(`static const double ${prefix}_durations[] = { ${durationValues.join(", ")} };`);
+  lines.push(`static const int ${prefix}_duration_kinds[] = { ${durationKinds.join(", ")} };`);
+  lines.push(`static const double ${prefix}_timeboxes[] = { ${timeboxValues.join(", ")} };`);
+  lines.push(`static const int ${prefix}_timebox_kinds[] = { ${timeboxKinds.join(", ")} };`);
   lines.push(`static const char *${actionVar}[] = { ${actions.map(action => JSON.stringify(action.result)).join(", ")} };`);
   lines.push(`static const char *${actionVar}_evoke[] = { ${actions.map(action => JSON.stringify(action.evoke)).join(", ")} };`);
   lines.push(`static int ${depLookup}(const char *name) {`);
   lines.push(`  for (int i = 0; i < ${count}; i++) { if (strcmp(${nameVar}[i], name) == 0) return i; }`);
   lines.push("  return -1;");
   lines.push("}");
-  lines.push(`static int ${runFn}(void) {`);
+  const sourceCalls = (sourceRefineryInvocations ?? []).filter(call => call.refineryName === refineryName);
+  const callArguments = [];
+  sourceCalls.forEach((call, index) => {
+    if (call.conductName && call.conduct && Object.prototype.hasOwnProperty.call(call.conduct, "artificial")) {
+      const conductVar = `${prefix}_conduct_${index}`;
+      callArguments.push(`&${conductVar}`);
+      lines.push(`static const pya_sim_conduct ${conductVar} = ${cConductLiteral(call.conduct)};`);
+    } else {
+      callArguments.push("NULL");
+    }
+  });
+  lines.push(`static int ${runFn}(const pya_sim_conduct *simulation) {`);
   lines.push(`  const char *refineryName = ${JSON.stringify(refineryName)};`);
+  lines.push(`  if (simulation) { int simulationResult = pya_simulation_run(refineryName, ${nameVar}, ${depsVar}, ${depCountVar}, ${prefix}_durations, ${prefix}_duration_kinds, ${prefix}_timeboxes, ${prefix}_timebox_kinds, ${count}, simulation); if (simulationResult < 0) return 1; if (simulationResult > 0) return 0; }`);
   lines.push(`  const int retry_max_attempts = ${Math.max(1, Math.floor(effectiveRetryConfig.maxAttempts || 1))};`);
   lines.push(`  const int retry_initial_delay_ms = ${Math.max(0, Math.trunc(effectiveRetryConfig.initialDelayMs || 0))};`);
   lines.push(`  const int retry_max_delay_ms = ${Math.max(0, Math.trunc(effectiveRetryConfig.maxDelayMs || 0))};`);
@@ -171,6 +229,11 @@ export function buildRefineryCForDefinition({
   lines.push("  }");
   lines.push("  return 0;");
   lines.push("}");
-  mainLines.push(`if (getenv(\"PYA_REFINERY\") && strcmp(getenv(\"PYA_REFINERY\"), ${JSON.stringify(refineryName)}) == 0) { if (${runFn}() != 0) return 1; }`);
+  for (const callArgument of callArguments) {
+    mainLines.push(`if (${runFn}(${callArgument}) != 0) return 1;`);
+  }
+  if (callArguments.length === 0) {
+    mainLines.push(`if (getenv(\"PYA_REFINERY\") && strcmp(getenv(\"PYA_REFINERY\"), ${JSON.stringify(refineryName)}) == 0) { if (${runFn}(NULL) != 0) return 1; }`);
+  }
   return { lines, mainLines, usesRememberShim, usesMapShim };
 }

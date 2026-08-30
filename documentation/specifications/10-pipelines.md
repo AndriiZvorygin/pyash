@@ -17,6 +17,7 @@ Purpose: define refinery declarations, stage execution semantics, and determinis
 | `be chirp do` | chirp manuscript refinery | source-grounded problem/cause/insight compression |
 | `be reiterate ya` | retry marker | bounded retry reporting |
 | `be checkpoint ya` | checkpoint marker | deterministic reuse/trace |
+| `under name <conduct>` | refinery conduct association | select a source-local run contract |
 
 ## 2. Canonical refinery pattern
 
@@ -48,6 +49,72 @@ Native sub-refinery invocation rule:
 Dependency encoding rule:
 - use `from name <dep>` when exactly one dependency is referenced,
 - use `from ve name <dep1> name <dep2> ...` when multiple dependencies are referenced.
+- an explicit empty `from ve name` is a root with no dependencies,
+- when `from` is omitted, the platform retains the implicit dependency on the preceding platform.
+
+## 3.1 Deterministic concurrency simulation v0.1
+
+Simulation is activated only by an existing refinery invocation with a conduct
+association:
+
+```pyash
+from name <refinery> to name text <result> under name <conduct> be refinery do
+```
+
+The conduct is a source-local Pyash map. Its bounded contract is:
+
+```pyash
+su name <conduct> be map def
+su name artificial ob bool truth ya
+su name seed ob num <0..4294967295> ya
+su name start tick ob num <nonnegative integer> ya
+su name parallel capacity ob num <positive integer> ya
+su name waiting capacity ob num <nonnegative integer> ya
+su name schedule newspaper ob bool <truth|lie> ya
+prah
+```
+
+`artificial`, `seed`, `start tick`, `parallel capacity`, and `waiting capacity`
+are required when artificial mode is truth. `schedule newspaper` is optional and
+defaults to lie. Any missing, non-boolean, non-integer, negative, out-of-range,
+or zero parallel capacity value is one canonical
+`artificial conduct defective` error; values are never coerced.
+
+On a platform, `during num N` is its positive unsigned-32-bit simulated duration
+in ticks. Optional `atmost num N` is a positive unsigned-32-bit platform-relative
+simulated timebox. A completion at exactly
+the deadline succeeds; only a completion after the deadline times out.
+
+Artificial platform bodies are never invoked. Real refinery execution remains
+sequential and simulation metadata does not alter real platform semantics.
+
+The simulation uses unsigned 32-bit FNV-1a over the UTF-8 platform name, XORs
+the result with the unsigned seed, and applies one xorshift32 round (`13`, `17`,
+`5`). Scheduling ties sort by that rank and then by UTF-8 platform name. At each
+virtual tick the kernel processes successful completions, expirations, dependent
+cancellation, waiting promotion, new admission, and starts, in that order. It
+jumps directly to the next completion or deadline and never sleeps. Idle active
+slots are filled before the bounded waiting queue. Excess eligible platforms
+remain pending and receive one denied-admission record.
+
+The exact ordered concurrency records are:
+
+```pyash
+su name <platform> from name <refinery> during num <tick> by num <ordinal> be schedule admission ya
+su name <platform> from name <refinery> during num <tick> by num <ordinal> be schedule start ya
+su name <platform> from name <refinery> during num <tick> by num <ordinal> be schedule finish ya
+su name <platform> ob text "schedule crowded" from name <refinery> during num <tick> by num <ordinal> be schedule crowded ya
+su name <platform> ob text "platform timebox" from name <refinery> during num <tick> by num <ordinal> be error ya
+su name <platform> ob text "platform cancel" from name <refinery> during num <tick> by num <ordinal> be error ya
+```
+
+The `during` field is the virtual tick, and `by num` is a monotonically
+increasing decision ordinal. Schedule records (admission, start, finish, and
+crowded) are emitted only when `schedule newspaper` is truth. Timebox and
+dependent-cancellation fault sentences are always surfaced. Cancellation faults
+at one tick are ordered by UTF-8 platform name. Zero-capacity and no-progress
+states use the same canonical `artificial conduct defective` error instead of
+looping.
 
 ## 4. Re-entry loop requirements
 
