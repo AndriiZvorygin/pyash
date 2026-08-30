@@ -1,5 +1,6 @@
 import { CJSON_HEADER, CJSON_SOURCE } from "../constants.mjs";
 import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, TOOL_CAPTURE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, commandPolicyCSource, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER, DATE_MATH_HELPER } from "../c/helpers_c.mjs";
+import { KNOWLEDGE_CORE_HELPER } from "./c_helpers_knowledge_core.mjs";
 
 export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolicy } = {}) {
   if (!cHelpers) return lines;
@@ -101,6 +102,7 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolic
   if (cHelpers.usesListPrinter) cPrelude.push(LIST_PRINT_HELPER);
   if (cHelpers.usesFilesystem) cPrelude.push(FILESYSTEM_HELPER);
   if (cHelpers.usesDateMath) cPrelude.push(DATE_MATH_HELPER);
+  if (cHelpers.usesKnowledgeCore) cPrelude.push(KNOWLEDGE_CORE_HELPER);
   if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
   if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
   if (cHelpers.usesToolCapture) cPrelude.push(TOOL_CAPTURE_HELPER);

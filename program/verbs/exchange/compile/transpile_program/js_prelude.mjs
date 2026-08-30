@@ -14,6 +14,7 @@ import { loopHelperSource } from "./js_helpers/loop_helper.mjs";
 import { mapHelperSource } from "./js_helpers/map_helper.mjs";
 import { rememberHelperSource } from "./js_helpers/remember_helper.mjs";
 import { resolveHelperSource } from "./js_helpers/resolve_helper.mjs";
+import { knowledgeCoreHelperSource } from "./js_helpers/knowledge_core.mjs";
 
 export function applyJsPrelude(lines, {
   jsHelpers,
@@ -60,6 +61,9 @@ export function applyJsPrelude(lines, {
   }
   if (jsHelpers.usesDateMath) {
     prelude.push(dateHelperSource());
+  }
+  if (jsHelpers.usesKnowledgeCore) {
+    prelude.push(knowledgeCoreHelperSource());
   }
   if (usesMapShim) {
     prelude.push(mapHelperSource());

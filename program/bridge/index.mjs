@@ -24,6 +24,7 @@ import { deriveSignatureFromDefinition, registerSignature, registerSignatureHand
 import { builtInSignatures } from "../verbs/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { applyEnvDefaults } from "../configure/env.mjs";
+import { isEvidenceSentence, normalizeClaimSentence, normalizeEvidence } from "../library/knowledge_core.mjs";
 
 function resolveFillCount(by, remember) {
   if (!by) return null;
@@ -366,6 +367,11 @@ export async function interpret(sentence) {
 
   if (mood === "ya" || mood === "def") {
     if (mood === "ya") {
+      if (isEvidenceSentence(sentence)) {
+        const normalized = normalizeClaimSentence(sentence);
+        normalizeEvidence(normalized);
+        Object.assign(sentence, normalized);
+      }
       const name = su?.name;
       if (name && !sentence.exists && sentence.be !== "export" && !remember(name)) {
         const pyash = sentenceToPyash(sentence);
