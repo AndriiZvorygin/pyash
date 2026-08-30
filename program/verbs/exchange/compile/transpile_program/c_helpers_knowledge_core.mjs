@@ -11,29 +11,37 @@ typedef struct {
 } pya_knowledge_record;
 static pya_knowledge_record pya_knowledge_records[PYA_KNOWLEDGE_MAX];
 static size_t pya_knowledge_record_count = 0;
+static void pya_knowledge_fail(const char *field) {
+  fprintf(stderr, "knowledge core defective: %s exceeds supported capacity\\n", field ? field : "value");
+  exit(1);
+}
+static void pya_knowledge_copy(char *destination, size_t capacity, const char *source, const char *field) {
+  if (!destination || capacity == 0) pya_knowledge_fail(field);
+  int written = snprintf(destination, capacity, "%s", source ? source : "");
+  if (written < 0 || (size_t)written >= capacity) pya_knowledge_fail(field);
+}
 static void pya_knowledge_add(const char *key, const char *payload_json, const char *evidential, double confidence, const char *anchor_id, const char *sentence) {
-  if (pya_knowledge_record_count >= PYA_KNOWLEDGE_MAX) return;
+  if (pya_knowledge_record_count >= PYA_KNOWLEDGE_MAX) pya_knowledge_fail("record count");
   pya_knowledge_record *record = &pya_knowledge_records[pya_knowledge_record_count++];
-  snprintf(record->key, sizeof(record->key), "%s", key ? key : "");
-  snprintf(record->payload_json, sizeof(record->payload_json), "%s", payload_json ? payload_json : "{\\"hollow\\":true}");
-  snprintf(record->evidential, sizeof(record->evidential), "%s", evidential ? evidential : "");
+  pya_knowledge_copy(record->key, sizeof(record->key), key, "claim key");
+  pya_knowledge_copy(record->payload_json, sizeof(record->payload_json), payload_json ? payload_json : "{\\"hollow\\":true}", "payload");
+  pya_knowledge_copy(record->evidential, sizeof(record->evidential), evidential, "evidential");
   record->confidence = confidence;
-  snprintf(record->anchor_id, sizeof(record->anchor_id), "%s", anchor_id ? anchor_id : "");
-  snprintf(record->sentence, sizeof(record->sentence), "%s", sentence ? sentence : "");
+  pya_knowledge_copy(record->anchor_id, sizeof(record->anchor_id), anchor_id, "source anchor");
+  pya_knowledge_copy(record->sentence, sizeof(record->sentence), sentence, "evidence sentence");
 }
 static void pya_knowledge_clear(void) {
   pya_knowledge_record_count = 0;
 }
 static void pya_knowledge_append(char *out, size_t cap, size_t *used, const char *format, ...) {
-  if (!out || !used || *used >= cap) return;
+  if (!out || !used || *used >= cap) pya_knowledge_fail("resolver output");
   va_list args;
   va_start(args, format);
   int written = vsnprintf(out + *used, cap - *used, format, args);
   va_end(args);
-  if (written < 0) return;
+  if (written < 0) pya_knowledge_fail("resolver output");
   if ((size_t)written >= cap - *used) {
-    *used = cap - 1;
-    out[*used] = '\\0';
+    pya_knowledge_fail("resolver output");
   } else {
     *used += (size_t)written;
   }
@@ -56,14 +64,14 @@ static void pya_knowledge_append_json(char *out, size_t cap, size_t *used, const
 static void pya_knowledge_anchor_parts(const pya_knowledge_record *record, char *source, size_t source_cap, char *anchor, size_t anchor_cap) {
   if (source && source_cap) source[0] = '\\0';
   if (anchor && anchor_cap) anchor[0] = '\\0';
-  if (!record || !record->anchor_id[0] || !source || !anchor || !source_cap || !anchor_cap) return;
+  if (!record || !record->anchor_id[0] || !source || !anchor || !source_cap || !anchor_cap) pya_knowledge_fail("source anchor");
   const char *separator = strchr(record->anchor_id, '#');
-  if (!separator || separator == record->anchor_id || !separator[1]) return;
+  if (!separator || separator == record->anchor_id || !separator[1]) pya_knowledge_fail("source anchor");
   size_t source_length = (size_t)(separator - record->anchor_id);
-  if (source_length >= source_cap) source_length = source_cap - 1;
+  if (source_length >= source_cap) pya_knowledge_fail("source anchor");
   memcpy(source, record->anchor_id, source_length);
   source[source_length] = '\\0';
-  snprintf(anchor, anchor_cap, "%s", separator + 1);
+  pya_knowledge_copy(anchor, anchor_cap, separator + 1, "source anchor");
 }
 static int pya_knowledge_provenance_compare(const pya_knowledge_record *left, const pya_knowledge_record *right) {
   int anchor = strcmp(left->anchor_id, right->anchor_id);
@@ -152,7 +160,7 @@ static const char *pya_knowledge_render_current(const char *key) {
   pya_knowledge_append(output, sizeof(output), &used, "{\\\"view\\\":\\\"current\\\",\\\"key\\\":");
   pya_knowledge_append_json(output, sizeof(output), &used, key ? key : "");
   pya_knowledge_append(output, sizeof(output), &used, ",\\\"status\\\":\\\"");
-  pya_knowledge_append(output, sizeof(output), &used, selected_count > 1 ? "contested" : "current");
+  pya_knowledge_append(output, sizeof(output), &used, selected_count == 0 ? "unrelated" : (selected_count > 1 ? "contested" : "current"));
   pya_knowledge_append(output, sizeof(output), &used, "\\\",\\\"record\\\":");
   if (selected_count == 1) pya_knowledge_append_record(output, sizeof(output), &used, &pya_knowledge_records[selected[0]]);
   else pya_knowledge_append(output, sizeof(output), &used, "null");

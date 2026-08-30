@@ -113,6 +113,43 @@ Retention semantics:
 
 Retrieval should filter validity and return deterministic top-k.
 
+## 4.1 Bounded sentence-native claim core
+
+The claim core identifies a claim by its canonical sentence identity:
+`su`, optional exact `since`/`until` date pair, optional `as`, canonical `be`,
+and `ya`. The payload (`ob`), evidential basis, confidence, and source anchor
+are not identity fields. A claim is either timeless or uses both
+`since date YYYY-MM-DD` and `until date YYYY-MM-DD`; partial windows,
+`during`-started windows, and timestamp-shaped values are defective.
+
+Evidence is a claim sentence with all three required provenance fields:
+
+```pyash
+exists su name weather ob text "clear" since date 2026-01-01 until date 2026-01-31 fromtext la su name weather-report-1 ob text paragraph-2 be text ya ko accordingto name direct-evidential by num 0.75 be text ya
+```
+
+The supported evidential names are `direct-evidential`, `reported-evidential`,
+and `inferential-evidential`. The `fromtext la` clause contains the stable source
+name in its subject and the stable anchor in its object; the normalized anchor
+is `source#anchor`. `by num` is a finite confidence in the inclusive range
+`0..1`. Missing or malformed evidential names, anchors, or confidence values
+are defects in the interpreter and compiled backends.
+
+Public identity and resolver calls use embedded claim sentences directly:
+
+```pyash
+su name claim ob la su name weather as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim identify do
+su name claim ob la su name weather as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim choose do
+```
+
+`claim identify` returns the canonical claim key as text. `claim choose` returns
+a canonical JSON resolver view as text so the same public call can be written by
+the interpreter, JavaScript compiler, or C compiler. The current view selects
+the highest-confidence record for each duplicate payload. It reports
+`status: "contested"` and retains every conflicting payload; it does not
+adjudicate. No matching evidence reports `status: "unrelated"`. This slice
+does not define hashing or entity aliases.
+
 ## 5. Loop behavior
 
 Session loop cycle:

@@ -1,0 +1,11 @@
+exists su name weather ob text "clear" as name public since date 2026-01-01 until date 2026-01-31 fromtext la su name weather-report-a ob text "paragraph-1" be text ya ko accordingto name reported-evidential by num 0.4 be text ya
+su name weather ob text "clear" as name public since date 2026-01-01 until date 2026-01-31 fromtext la su name weather-report-b ob text "paragraph-1" be text ya ko accordingto name direct-evidential by num 0.9 be text ya
+su name claim ob la su name weather as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim identify do
+ob name result be write do
+su name claim ob la su name weather as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim choose do
+ob name result be write do
+su name weather ob text "storm" as name public since date 2026-01-01 until date 2026-01-31 fromtext la su name weather-report-c ob text "paragraph-1" be text ya ko accordingto name inferential-evidential by num 0.8 be text ya
+su name claim ob la su name weather as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim choose do
+ob name result be write do
+su name claim ob la su name temperature as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim choose do
+ob name result be write do

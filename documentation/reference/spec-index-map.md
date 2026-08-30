@@ -15,6 +15,7 @@ Use this when the cheat sheet is not enough.
 - **Maps / JSON / YAML / CSV formats** → `06-data-formats.md`
 - **IO verbs (read/write/download/command/etc.)** → `07-io-and-scripts.md`
 - **Mind + tool calling + MCP** → `08-tools-and-mcp.md`
+- **Claim identity, evidential fixtures, and resolver views** → `18-pyash-agent.md`
 - **Say / hear / speech artifacts / whisper** → `09-speech-and-hear.md`
 - **Refinery / re-entry** → `10-pipelines.md`
 - **Translation** → `11-translation.md`

@@ -29,7 +29,7 @@ const claimLine = ({ payload, confidence, evidence, sourceAnchor, window = true,
     `ob text ${JSON.stringify(payload ?? "clear")}`,
     "as name public"
   ];
-  if (window) cases.push("during date 2026-01-01 until date 2026-01-31");
+  if (window) cases.push("since date 2026-01-01 until date 2026-01-31");
   if (sourceAnchor) cases.push(`fromtext text ${JSON.stringify(sourceAnchor)}`);
   if (evidence) cases.push(`accordingto name ${evidence}`);
   if (confidence !== undefined) cases.push(`by num ${confidence}`);
@@ -44,14 +44,14 @@ test("claim key is canonical across predicate aliases and case order", () => {
     "until date 2026-01-31",
     "ob text \"clear\"",
     "su name weather",
-    "during date 2026-01-01",
+    "since date 2026-01-01",
     "be add ya"
   ].join(" "));
 
   assert.equal(deriveClaimKey(canonical), deriveClaimKey(alias));
   assert.equal(
     deriveClaimKey(canonical),
-    "su name weather during date 2026-01-01 until date 2026-01-31 as name public be plus ya"
+    "su name weather since date 2026-01-01 until date 2026-01-31 as name public be plus ya"
   );
   assert.notEqual(
     deriveClaimKey(canonical),
@@ -67,11 +67,11 @@ test("claim keys support timeless claims and reject partial or timestamp windows
   );
 
   assert.throws(
-    () => deriveClaimKey(parse("su name weather ob text clear during date 2026-01-01 as name public be plus ya")),
+    () => deriveClaimKey(parse("su name weather ob text clear since date 2026-01-01 as name public be plus ya")),
     /time window defective/u
   );
   assert.throws(
-    () => deriveClaimKey(parse("su name weather ob text clear during date 2026-01-01T12:00:00Z until date 2026-01-31 as name public be plus ya")),
+    () => deriveClaimKey(parse("su name weather ob text clear since date 2026-01-01T12:00:00Z until date 2026-01-31 as name public be plus ya")),
     /time window defective/u
   );
 });
@@ -96,7 +96,7 @@ test("evidence fixture uses accordingto evidential names and stable source ancho
   });
   assert.equal(
     sentenceToPyash(sentence),
-    "su name weather ob text \"clear\" during date 2026-01-01 until date 2026-01-31 as name public fromtext text \"weather-report-1 paragraph-2\" accordingto name direct-evidential by num 0.75 be plus ya"
+    "su name weather ob text \"clear\" since date 2026-01-01 until date 2026-01-31 as name public fromtext text \"weather-report-1 paragraph-2\" accordingto name direct-evidential by num 0.75 be plus ya"
   );
 
   const mixedCase = claimLine({
@@ -110,7 +110,7 @@ test("evidence fixture uses accordingto evidential names and stable source ancho
     /source anchor defective/u
   );
   assert.throws(
-    () => normalizeEvidence(claimLine({ evidence: "direct-evidential", confidence: 1.1 })),
+    () => normalizeEvidence(claimLine({ evidence: "direct-evidential", confidence: 1.1, sourceAnchor: "weather-report-1 paragraph-2" })),
     /confidence defective/u
   );
 });
@@ -165,8 +165,8 @@ test("interpreter preserves repeated evidence sentences for one subject", async 
 
 test("compiled JavaScript keeps evidence records live for runtime resolution", () => {
   const source = [
-    "exists su name weather ob text clear as name public during date 2026-01-01 until date 2026-01-31 fromtext text \"a-low p-1\" accordingto name reported-evidential by num 0.4 be text ya",
-    "su name weather ob text clear as name public during date 2026-01-01 until date 2026-01-31 fromtext text \"z-high p-1\" accordingto name direct-evidential by num 0.9 be text ya"
+    "exists su name weather ob text clear as name public since date 2026-01-01 until date 2026-01-31 fromtext text \"a-low p-1\" accordingto name reported-evidential by num 0.4 be text ya",
+    "su name weather ob text clear as name public since date 2026-01-01 until date 2026-01-31 fromtext text \"z-high p-1\" accordingto name direct-evidential by num 0.9 be text ya"
   ].join("\n");
   const js = transpileProgram(buildProgram(source).sentences, { lang: "javascript" });
   const sandbox = { globalThis: null };
@@ -183,8 +183,8 @@ test("compiled JavaScript keeps evidence records live for runtime resolution", (
 
 test("compiled C renders the canonical resolver view and observes runtime mutation", async () => {
   const source = [
-    "exists su name weather ob text clear as name public during date 2026-01-01 until date 2026-01-31 fromtext text \"a-low p-1\" accordingto name reported-evidential by num 0.4 be text ya",
-    "su name weather ob text clear as name public during date 2026-01-01 until date 2026-01-31 fromtext text \"z-high p-1\" accordingto name direct-evidential by num 0.9 be text ya"
+    "exists su name weather ob text clear as name public since date 2026-01-01 until date 2026-01-31 fromtext text \"a-low p-1\" accordingto name reported-evidential by num 0.4 be text ya",
+    "su name weather ob text clear as name public since date 2026-01-01 until date 2026-01-31 fromtext text \"z-high p-1\" accordingto name direct-evidential by num 0.9 be text ya"
   ].join("\n");
   const sentences = buildProgram(source).sentences;
   const js = transpileProgram(sentences, { lang: "javascript" });
