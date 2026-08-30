@@ -25,6 +25,7 @@ import { handleVectorElementRead } from "./transpile_sentence/vector_element_rea
 import { handleVectorMapAll } from "./transpile_sentence/vector_map_all.mjs";
 import { handleVectorLiteral } from "./transpile_sentence/vector_literal.mjs";
 import { handleDateLiteral, handleNumberLiteral, handleTextLiteral, handleFilenameLiteral, handleSentenceLiteral } from "./transpile_sentence/scalar_literals.mjs";
+import { handleKnowledgeSentence } from "./emit_knowledge.mjs";
 
 const LANGUAGE_TYPES = new Set([
   "english"
@@ -43,6 +44,18 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
 
   const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers, jsHelpers });
   if (handledRet) return handledRet;
+
+  const knowledgeResult = handleKnowledgeSentence({
+    sentence,
+    lang,
+    locals,
+    localsTypes,
+    declared,
+    declaredTypes,
+    cHelpers,
+    jsHelpers
+  }, { markDeclared, sanitizeName });
+  if (knowledgeResult) return knowledgeResult;
 
   const baseHandler = BASE_BE_HANDLERS.get(baseBe);
   if (baseHandler) {
