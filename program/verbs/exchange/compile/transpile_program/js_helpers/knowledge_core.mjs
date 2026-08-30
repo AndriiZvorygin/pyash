@@ -2,6 +2,7 @@ export function knowledgeCoreHelperSource() {
   return `const __pyaKnowledgeRecords = [];
 function __pyaKnowledgeNp(value) {
   if (!value || typeof value !== "object") return "";
+  if (value.la) return "la " + __pyaKnowledgeSentence(value.la) + " ko";
   if (value.name !== undefined) return "name " + (Array.isArray(value.nameTypeWords) && value.nameTypeWords.length ? value.nameTypeWords.join(" ") + " " : "") + value.name;
   if (value.text !== undefined) return "text " + JSON.stringify(String(value.text));
   if (value.wo !== undefined) return "wo " + String(value.wo);
@@ -29,7 +30,7 @@ function __pyaKnowledgeSentence(sentence) {
 }
 function __pyaKnowledgeClaimKey(sentence) {
   const parts = ["su", __pyaKnowledgeNp(sentence?.su)];
-  if (sentence?.during && sentence?.until) parts.push("during", __pyaKnowledgeNp(sentence.during), "until", __pyaKnowledgeNp(sentence.until));
+  if (sentence?.since && sentence?.until) parts.push("since", __pyaKnowledgeNp(sentence.since), "until", __pyaKnowledgeNp(sentence.until));
   if (sentence?.as !== undefined) parts.push("as", __pyaKnowledgeNp(sentence.as));
   parts.push("be", String(sentence?.be ?? ""), "ya");
   return parts.join(" ");
@@ -43,6 +44,12 @@ function __pyaKnowledgePayloadKey(value) {
   return JSON.stringify(__pyaKnowledgeJson(value));
 }
 function __pyaKnowledgeAnchor(sentence) {
+  const embedded = sentence?.fromtext?.la;
+  if (embedded) {
+    const source = embedded?.su?.name ?? embedded?.source?.name ?? embedded?.source?.text ?? "";
+    const anchor = embedded?.ob?.text ?? embedded?.ob?.name ?? embedded?.ob?.wo ?? embedded?.anchor?.text ?? "";
+    if (source || anchor) return { source: String(source), anchor: String(anchor), anchorId: String(source) + "#" + String(anchor) };
+  }
   const raw = sentence?.fromtext?.text ?? sentence?.fromtext?.name ?? sentence?.fromtext?.wo ?? "";
   const parts = String(raw).includes("#") ? String(raw).split("#") : String(raw).trim().split(/\\s+/u);
   if (parts.length !== 2 || !parts[0] || !parts[1]) return { source: null, anchor: null, anchorId: null };
@@ -62,6 +69,11 @@ function __pyaKnowledgeRecord(sentence) {
   };
 }
 function __pyaKnowledgeAdd(sentence) {
+  const evidential = String(sentence?.accordingto?.name ?? "").toLowerCase();
+  if (!/^(direct|reported|inferential)-evidential$/u.test(evidential)) throw new Error("evidential defective");
+  if (sentence?.by?.num === undefined || !Number.isFinite(Number(sentence.by.num)) || Number(sentence.by.num) < 0 || Number(sentence.by.num) > 1) throw new Error("confidence defective");
+  const anchor = __pyaKnowledgeAnchor(sentence);
+  if (!anchor.anchorId || !/^[A-Za-z0-9][A-Za-z0-9._:-]*#[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(anchor.anchorId)) throw new Error("source anchor defective");
   __pyaKnowledgeRecords.push(sentence);
   return sentence;
 }
@@ -96,7 +108,7 @@ function __pyaKnowledgeSelected(records) {
 function __pyaKnowledgeCurrent(key) {
   const selected = __pyaKnowledgeSelected(__pyaKnowledgeEvidence(__pyaKnowledgeRecords, key));
   const contested = selected.length > 1;
-  return { view: "current", key, status: contested ? "contested" : "current", record: contested ? null : (selected[0] ?? null), records: selected };
+  return { view: "current", key, status: selected.length === 0 ? "unrelated" : (contested ? "contested" : "current"), record: contested ? null : (selected[0] ?? null), records: selected };
 }
 function __pyaKnowledgeContested(key) {
   const selected = __pyaKnowledgeSelected(__pyaKnowledgeEvidence(__pyaKnowledgeRecords, key));
@@ -106,10 +118,15 @@ function __pyaKnowledgeProvenance(key) {
   const records = __pyaKnowledgeEvidence(__pyaKnowledgeRecords, key).sort(__pyaKnowledgeCompare);
   return { view: "provenance", key, status: "provenance", records };
 }
+function __pyaKnowledgeClaimChoose(key) {
+  return JSON.stringify(__pyaKnowledgeCurrent(key));
+}
 globalThis.__pyaKnowledgeRecords = __pyaKnowledgeRecords;
 globalThis.__pyaKnowledge = {
   records: __pyaKnowledgeRecords,
   claimKey: __pyaKnowledgeClaimKey,
+  claimIdentify: __pyaKnowledgeClaimKey,
+  claimChoose: __pyaKnowledgeClaimChoose,
   resolveCurrent: __pyaKnowledgeCurrent,
   resolveContested: __pyaKnowledgeContested,
   resolveProvenance: __pyaKnowledgeProvenance

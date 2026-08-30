@@ -1,11 +1,9 @@
-import crypto from "node:crypto";
-
 import { sentenceToPyash } from "../beautiful.mjs";
 import { resolveVerbAlias } from "./verbAliases.mjs";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const EVIDENTIAL_PATTERN = /^(direct|reported|inferential)-evidential$/u;
-const SOURCE_PART_PATTERN = /^[^\s#]+$/u;
+const SOURCE_PART_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const ANCHOR_PART_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 
 const EVIDENTIAL_NAMES = Object.freeze({
@@ -16,7 +14,7 @@ const EVIDENTIAL_NAMES = Object.freeze({
 
 export function isEvidenceSentence(sentence = {}) {
   const name = String(sentence?.accordingto?.name ?? "").trim().toLowerCase();
-  return EVIDENTIAL_PATTERN.test(name);
+  return name.endsWith("-evidential");
 }
 
 function cloneValue(value) {
@@ -39,21 +37,15 @@ function valueKey(value) {
   return JSON.stringify(canonicalJson(value));
 }
 
-function aliasName(value, aliases = {}) {
-  const text = String(value ?? "").trim().replace(/\s+/gu, " ");
-  if (!text) return text;
-  return String(aliases[text] ?? aliases[text.toLowerCase()] ?? text).trim().replace(/\s+/gu, " ");
-}
-
-function canonicalNp(value, { aliases = {} } = {}) {
+function canonicalNp(value) {
   if (!value || typeof value !== "object") return value;
   const normalized = cloneValue(value);
-  if (normalized.name !== undefined) normalized.name = aliasName(normalized.name, aliases);
+  if (normalized.name !== undefined) normalized.name = String(normalized.name).trim().replace(/\s+/gu, " ");
   if (normalized.text !== undefined) normalized.text = String(normalized.text);
   if (normalized.wo !== undefined) normalized.wo = String(normalized.wo);
   if (normalized.filename !== undefined) normalized.filename = String(normalized.filename);
   if (normalized.genitive?.chain) {
-    normalized.genitive.chain = normalized.genitive.chain.map(part => aliasName(part, aliases));
+    normalized.genitive.chain = normalized.genitive.chain.map(part => String(part).trim().replace(/\s+/gu, " "));
   }
   return normalized;
 }
@@ -71,21 +63,21 @@ function canonicalDate(value, field) {
 }
 
 export function normalizeTimeWindow(sentence = {}) {
-  const during = sentence.during;
+  const since = sentence.since;
   const until = sentence.until;
-  const hasDuring = during !== undefined;
+  const hasSince = since !== undefined;
   const hasUntil = until !== undefined;
-  const hasUnsupportedStart = sentence.since !== undefined;
+  const hasUnsupportedStart = sentence.during !== undefined;
 
-  if (hasUnsupportedStart || hasDuring !== hasUntil) {
-    throw new Error("time window defective: use both during and until dates or neither");
+  if (hasUnsupportedStart || hasSince !== hasUntil) {
+    throw new Error("time window defective: use both since and until dates or neither");
   }
-  if (!hasDuring) return { kind: "timeless", bucket: "timeless" };
+  if (!hasSince) return { kind: "timeless", bucket: "timeless" };
 
-  const start = canonicalDate(during, "during");
+  const start = canonicalDate(since, "since");
   const end = canonicalDate(until, "until");
   if (start > end) {
-    throw new Error("time window defective: during date must not follow until date");
+    throw new Error("time window defective: since date must not follow until date");
   }
   return { kind: "date", start, end, bucket: `${start}..${end}` };
 }
@@ -96,22 +88,22 @@ function normalizedPredicate(value) {
   return resolveVerbAlias(raw);
 }
 
-function subjectFor(sentence, options) {
-  const subject = canonicalNp(sentence.su, options);
+function subjectFor(sentence) {
+  const subject = canonicalNp(sentence.su);
   if (!subject || typeof subject !== "object" || (subject.name === undefined && subject.text === undefined && subject.wo === undefined)) {
     throw new Error("claim identity defective: su subject is required");
   }
   return subject;
 }
 
-export function normalizeClaimSentence(sentence = {}, { aliases = {} } = {}) {
+export function normalizeClaimSentence(sentence = {}) {
   if (!sentence || typeof sentence !== "object") {
     throw new Error("claim identity defective: sentence is required");
   }
   const normalized = cloneValue(sentence);
-  normalized.su = subjectFor(sentence, { aliases });
+  normalized.su = subjectFor(sentence);
   normalized.be = normalizedPredicate(sentence.be);
-  if (sentence.as !== undefined) normalized.as = canonicalNp(sentence.as, { aliases });
+  if (sentence.as !== undefined) normalized.as = canonicalNp(sentence.as);
   if (normalized.accordingto?.name !== undefined) {
     const evidential = String(normalized.accordingto.name).trim().toLowerCase();
     if (EVIDENTIAL_PATTERN.test(evidential)) normalized.accordingto.name = evidential;
@@ -119,20 +111,21 @@ export function normalizeClaimSentence(sentence = {}, { aliases = {} } = {}) {
 
   const window = normalizeTimeWindow(sentence);
   if (window.kind === "timeless") {
-    delete normalized.during;
+    delete normalized.since;
     delete normalized.until;
   } else {
-    normalized.during = { date: window.start };
+    delete normalized.during;
+    normalized.since = { date: window.start };
     normalized.until = { date: window.end };
   }
   return normalized;
 }
 
-export function deriveClaimKey(sentence = {}, options = {}) {
-  const normalized = normalizeClaimSentence(sentence, options);
+export function deriveClaimKey(sentence = {}) {
+  const normalized = normalizeClaimSentence(sentence);
   const identity = {
     su: normalized.su,
-    ...(normalized.during ? { during: normalized.during, until: normalized.until } : {}),
+    ...(normalized.since ? { since: normalized.since, until: normalized.until } : {}),
     ...(normalized.as !== undefined ? { as: normalized.as } : {}),
     be: normalized.be,
     mood: "ya"
@@ -142,10 +135,6 @@ export function deriveClaimKey(sentence = {}, options = {}) {
 
 export const claimKey = deriveClaimKey;
 export const deriveClaimIdentity = deriveClaimKey;
-
-export function claimKeyHash(sentence, options = {}) {
-  return crypto.createHash("sha256").update(deriveClaimKey(sentence, options), "utf8").digest("hex");
-}
 
 function evidenceName(sentence) {
   const raw = String(sentence?.accordingto?.name ?? "").trim().toLowerCase();
@@ -157,12 +146,21 @@ function evidenceName(sentence) {
 
 function sourceAnchor(sentence) {
   const sourceValue = sentence?.fromtext;
-  if (sourceValue === undefined) return { source: null, anchor: null, anchorId: null };
+  if (sourceValue === undefined) {
+    throw new Error("source anchor defective: fromtext embedded source anchor is required");
+  }
 
   if (sourceValue && typeof sourceValue === "object" && sourceValue.source !== undefined) {
     const source = String(sourceValue.source ?? "").trim();
     const anchor = String(sourceValue.anchor ?? "").trim();
     return validateSourceAnchor(source, anchor);
+  }
+
+  if (sourceValue?.la) {
+    const embedded = sourceValue.la;
+    const source = String(embedded?.su?.name ?? embedded?.source?.name ?? embedded?.source?.text ?? "").trim();
+    const anchor = String(embedded?.ob?.text ?? embedded?.ob?.name ?? embedded?.ob?.wo ?? embedded?.anchor?.text ?? "").trim();
+    if (source || anchor) return validateSourceAnchor(source, anchor);
   }
 
   const raw = String(sourceValue?.text ?? sourceValue?.name ?? sourceValue?.wo ?? "").trim();
@@ -182,7 +180,9 @@ function validateSourceAnchor(source, anchor) {
 }
 
 function confidenceFor(sentence) {
-  if (sentence?.by === undefined) return null;
+  if (sentence?.by === undefined || sentence.by?.num === undefined) {
+    throw new Error("confidence defective: by num is required");
+  }
   const confidence = Number(sentence.by?.num);
   if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
     throw new Error("confidence defective: by num must be between 0 and 1");
@@ -190,13 +190,13 @@ function confidenceFor(sentence) {
   return confidence;
 }
 
-export function normalizeEvidence(sentence = {}, options = {}) {
-  const normalized = normalizeClaimSentence(sentence, options);
+export function normalizeEvidence(sentence = {}) {
+  const normalized = normalizeClaimSentence(sentence);
   const evidentialName = evidenceName(normalized);
   const provenance = sourceAnchor(normalized);
   const confidence = confidenceFor(normalized);
   return {
-    key: deriveClaimKey(normalized, options),
+    key: deriveClaimKey(normalized),
     payload: cloneValue(normalized.ob ?? { hollow: true }),
     evidential: evidentialName.replace(/-evidential$/u, ""),
     confidence,
@@ -214,13 +214,14 @@ export function evidentialName(kind) {
 
 function asEvidenceRecord(record) {
   if (record?.key && record?.payload !== undefined && record?.sentence) return cloneValue(record);
+  if (!isEvidenceSentence(record)) return null;
   return normalizeEvidence(record);
 }
 
 function recordsForKey(records, key) {
   return (Array.isArray(records) ? records : [])
     .map(asEvidenceRecord)
-    .filter(record => record.key === key);
+    .filter(record => record && record.key === key);
 }
 
 function compareText(left, right) {
@@ -259,7 +260,7 @@ export function resolveCurrentView(records, key) {
   return {
     view: "current",
     key,
-    status: contested ? "contested" : "current",
+    status: selected.length === 0 ? "unrelated" : (contested ? "contested" : "current"),
     record: contested ? null : (selected[0] ?? null),
     records: selected
   };

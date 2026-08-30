@@ -48,6 +48,7 @@ Archived long-form drafts:
 - case ordering/grammar issue -> `01-sentence-and-grammar.md`
 - tool/MCP routing issue -> `08-tools-and-mcp.md`
 - scheduler/agent/session/memory issue -> `18-pyash-agent.md`
+- claim identity/evidence/resolver issue -> `18-pyash-agent.md` (bounded claim core)
 - command approval/sandbox issue -> `19-ops-safety.md`
 - channel routing issue -> `24-channel-contract.md`
 - android orchestration lane and executive lifecycle issue -> `documentation/reference/android-executive-lifecycle.md`

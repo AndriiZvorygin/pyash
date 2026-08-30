@@ -39,6 +39,7 @@ export function handleKnowledgeSentence({
   cHelpers.usesTextHelper = true;
   cHelpers.usesString = true;
   cHelpers.usesPrintf = true;
+  cHelpers.usesStdlib = true;
   const payload = JSON.stringify(JSON.stringify(normalized.ob ?? { hollow: true }));
   return `pya_knowledge_add(${JSON.stringify(evidence.key)}, ${payload}, ${JSON.stringify(evidence.evidential)}, ${evidence.confidence ?? -1}, ${JSON.stringify(evidence.anchorId ?? "")}, ${JSON.stringify(evidence.sentence)});`;
 }

@@ -103,7 +103,7 @@ Canonical evidential categories in active specs:
 | --- | --- | --- |
 | `direct` | primary/authoritative or directly observed source | `see`/`hear` direct capture; primary documents |
 | `reported` | secondary reporting/retelling source | news, quoted retellings |
-| `factive` | corroborated across independent sources | promotion step after corroboration |
+| `inferential` | derived or model-supported source | inference from observed/reporting material |
 
 Carriage rules:
 - evidential data should be carried with the `accordingto` case,
@@ -118,6 +118,15 @@ su name finding ob text "result summary" accordingto name direct-evidential from
 
 ```pyash
 su name finding ob la su name source ob text "wire report" ya ko accordingto name reported-evidential fromtext text "wire-1 paragraph-1" be text ya
+```
+
+The bounded claim core uses either a timeless identity or an exact date window:
+`since date YYYY-MM-DD until date YYYY-MM-DD`. Partial windows, `during` as a
+window start, and timestamp-shaped values are defective. Evidence claims also
+require `by num <0..1>` confidence and an embedded source anchor, for example:
+
+```pyash
+exists su name weather ob text "clear" since date 2026-01-01 until date 2026-01-31 fromtext la su name weather-report-1 ob text paragraph-2 be text ya ko accordingto name direct-evidential by num 0.75 be text ya
 ```
 
 Normative linkage:

@@ -666,7 +666,11 @@ export async function handleImperative({
     by: sentence.by
   };
 
-  const result = await fn(callSentence, { remember: memory.remember });
+  const result = await fn(callSentence, {
+    remember: memory.remember,
+    allRemember: memory.allRemember,
+    doRemember: memory.doRemember
+  });
 
   if (result?.mood && result?.be && result?.su) {
     const surfaced = rememberSurfacedError(result, memory.doRemember);

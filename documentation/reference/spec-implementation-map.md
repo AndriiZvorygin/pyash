@@ -12,6 +12,8 @@ Short map from spec contracts → implementation locations.
 | Ceremonies + this | `program/bridge/sandpit.mjs`, `program/library/thisBinding.mjs`, `program/verbs/ceremony/*.mjs` |
 | Control flow (then/giant/equally/loops) | `program/bridge/conditions.mjs`, `program/bridge/imperative.mjs`, `program/bridge/sandpit.mjs` |
 | Runtime primitives (duty/stream/chip) | `program/library/runtimePrimitives.mjs`, `program/bridge/index.mjs` |
+| Claim identity, evidence normalization, resolver views | `program/library/knowledge_core.mjs`, `program/verbs/claim.mjs`, `program/verbs/exchange/compile/emit_claim.mjs`, `program/verbs/exchange/compile/emit_knowledge.mjs` |
+| Compiled knowledge resolver runtime | `program/verbs/exchange/compile/transpile_program/js_helpers/knowledge_core.mjs`, `program/verbs/exchange/compile/transpile_program/c_helpers_knowledge_core.mjs` |
 | Run newspaper | `command/run_pya_program.mjs` (`pushNewspaper`, `emitToolEvent`), `command/run_with_newspaper.mjs` |
 | Tool envelope (tool events) | `command/run_pya_program.mjs` (`emitToolEvent`), `program/verbs/exchange/compile/emit_mind.mjs`, `program/verbs/exchange/compile/emit_command.mjs`, `program/verbs/exchange/compile/emit_write.mjs` (tool event emits), `program/verbs/exchange/compile/c/helpers_c.mjs` (`pya_emit_exchange`) |
 | Exchange + artifacts | `program/bridge/exchange.mjs` (`recordArtifact`, `recordExchange`), `program/verbs/exchange/read.mjs`, `program/verbs/exchange/write.mjs` |
