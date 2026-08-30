@@ -86,7 +86,9 @@ simulated timebox. A completion at exactly
 the deadline succeeds; only a completion after the deadline times out.
 
 Artificial platform bodies are never invoked. Real refinery execution remains
-sequential and simulation metadata does not alter real platform semantics.
+sequential and simulation metadata does not alter real platform semantics. When
+`artificial` is lie, the conduct association selects that ordinary sequential
+refinery path rather than the simulation kernel.
 
 The simulation uses unsigned 32-bit FNV-1a over the UTF-8 platform name, XORs
 the result with the unsigned seed, and applies one xorshift32 round (`13`, `17`,

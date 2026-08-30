@@ -273,7 +273,8 @@ export function simulateRefinery({ name, refinery, contract } = {}) {
       emitFault(platformName, "platform cancel");
     }
 
-    const promoted = sortByRank(states, [...waiting]).filter(() => active.size < normalized.parallelCapacity);
+    const promotionSlots = normalized.parallelCapacity - active.size;
+    const promoted = sortByRank(states, [...waiting]).slice(0, promotionSlots);
     for (const platformName of promoted) {
       waiting.delete(platformName);
       active.add(platformName);
