@@ -11,6 +11,17 @@ typedef struct {
 } pya_knowledge_record;
 static pya_knowledge_record pya_knowledge_records[PYA_KNOWLEDGE_MAX];
 static size_t pya_knowledge_record_count = 0;
+static int pya_knowledge_compare_utf8(const char *left, const char *right) {
+  const unsigned char *left_bytes = (const unsigned char *)(left ? left : "");
+  const unsigned char *right_bytes = (const unsigned char *)(right ? right : "");
+  while (*left_bytes && *right_bytes) {
+    if (*left_bytes < *right_bytes) return -1;
+    if (*left_bytes > *right_bytes) return 1;
+    left_bytes++;
+    right_bytes++;
+  }
+  return *left_bytes == *right_bytes ? 0 : (*left_bytes ? 1 : -1);
+}
 static void pya_knowledge_fail(const char *field) {
   fprintf(stderr, "knowledge core defective: %s exceeds supported capacity\\n", field ? field : "value");
   exit(1);
@@ -74,10 +85,10 @@ static void pya_knowledge_anchor_parts(const pya_knowledge_record *record, char 
   pya_knowledge_copy(anchor, anchor_cap, separator + 1, "source anchor");
 }
 static int pya_knowledge_provenance_compare(const pya_knowledge_record *left, const pya_knowledge_record *right) {
-  int anchor = strcmp(left->anchor_id, right->anchor_id);
+  int anchor = pya_knowledge_compare_utf8(left->anchor_id, right->anchor_id);
   if (anchor != 0) return anchor;
   if (left->confidence != right->confidence) return left->confidence > right->confidence ? -1 : 1;
-  return strcmp(left->sentence, right->sentence);
+  return pya_knowledge_compare_utf8(left->sentence, right->sentence);
 }
 static int pya_knowledge_duplicate_compare(const pya_knowledge_record *left, const pya_knowledge_record *right) {
   double left_confidence = left->confidence < 0 ? -1 : left->confidence;
@@ -113,10 +124,10 @@ static size_t pya_knowledge_select(const char *key, size_t selected[]) {
   size_t selected_count = 0;
   for (size_t index = 0; index < pya_knowledge_record_count; index++) {
     pya_knowledge_record *record = &pya_knowledge_records[index];
-    if (strcmp(record->key, key ? key : "") != 0) continue;
+    if (pya_knowledge_compare_utf8(record->key, key ? key : "") != 0) continue;
     size_t duplicate = selected_count;
     for (size_t selected_index = 0; selected_index < selected_count; selected_index++) {
-      if (strcmp(pya_knowledge_records[selected[selected_index]].payload_json, record->payload_json) == 0) {
+      if (pya_knowledge_compare_utf8(pya_knowledge_records[selected[selected_index]].payload_json, record->payload_json) == 0) {
         duplicate = selected_index;
         break;
       }
@@ -126,7 +137,7 @@ static size_t pya_knowledge_select(const char *key, size_t selected[]) {
   }
   for (size_t left = 0; left < selected_count; left++) {
     for (size_t right = left + 1; right < selected_count; right++) {
-      if (strcmp(pya_knowledge_records[selected[right]].payload_json, pya_knowledge_records[selected[left]].payload_json) < 0) {
+      if (pya_knowledge_compare_utf8(pya_knowledge_records[selected[right]].payload_json, pya_knowledge_records[selected[left]].payload_json) < 0) {
         size_t swap = selected[left];
         selected[left] = selected[right];
         selected[right] = swap;
@@ -138,7 +149,7 @@ static size_t pya_knowledge_select(const char *key, size_t selected[]) {
 static size_t pya_knowledge_match(const char *key, size_t matching[]) {
   size_t matching_count = 0;
   for (size_t index = 0; index < pya_knowledge_record_count; index++) {
-    if (strcmp(pya_knowledge_records[index].key, key ? key : "") == 0) matching[matching_count++] = index;
+    if (pya_knowledge_compare_utf8(pya_knowledge_records[index].key, key ? key : "") == 0) matching[matching_count++] = index;
   }
   for (size_t left = 0; left < matching_count; left++) {
     for (size_t right = left + 1; right < matching_count; right++) {

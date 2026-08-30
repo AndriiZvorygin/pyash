@@ -9,3 +9,12 @@ su name claim ob la su name weather as name public since date 2026-01-01 until d
 ob name result be write do
 su name claim ob la su name temperature as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim choose do
 ob name result be write do
+exists su name palette ob text "Zebra" as name public since date 2026-01-01 until date 2026-01-31 fromtext la su name palette-source-z ob text "anchor-A" be text ya ko accordingto name direct-evidential by num 0.5 be text ya
+su name palette ob text "apple" as name public since date 2026-01-01 until date 2026-01-31 fromtext la su name palette-source-a ob text "anchor-a" be text ya ko accordingto name reported-evidential by num 0.5 be text ya
+su name palette ob text "Éclair" as name public since date 2026-01-01 until date 2026-01-31 fromtext la su name palette-source-e ob text "anchor-e" be text ya ko accordingto name inferential-evidential by num 0.5 be text ya
+su name claim ob la su name palette as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim choose do
+ob name result be write do
+exists su name tie ob text "same" as name public since date 2026-01-01 until date 2026-01-31 fromtext la su name tie-source ob text "tie-anchor" be text ya ko accordingto name reported-evidential by num 0.5 be text ya
+su name tie ob text "same" as name public since date 2026-01-01 until date 2026-01-31 fromtext la su name tie-source ob text "tie-anchor" be text ya ko accordingto name direct-evidential by num 0.5 be text ya
+su name claim ob la su name tie as name public since date 2026-01-01 until date 2026-01-31 be text ya ko be claim choose do
+ob name result be write do
