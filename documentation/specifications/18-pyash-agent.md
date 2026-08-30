@@ -148,7 +148,9 @@ the interpreter, JavaScript compiler, or C compiler. The current view selects
 the highest-confidence record for each duplicate payload. It reports
 `status: "contested"` and retains every conflicting payload; it does not
 adjudicate. No matching evidence reports `status: "unrelated"`. This slice
-does not define hashing or entity aliases.
+does not define hashing or entity aliases. Every canonical JSON key, payload
+ordering, anchor ordering, and final evidence-sentence tie-break uses one
+locale-independent lexicographic comparison of UTF-8 bytes.
 
 ## 5. Loop behavior
 

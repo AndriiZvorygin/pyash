@@ -12,6 +12,41 @@ const EVIDENTIAL_NAMES = Object.freeze({
   inferential: "inferential-evidential"
 });
 
+function utf8Bytes(value) {
+  const text = String(value ?? "");
+  const bytes = [];
+  for (let index = 0; index < text.length; index++) {
+    let code = text.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const low = text.charCodeAt(index + 1);
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00);
+        index++;
+      } else {
+        code = 0xfffd;
+      }
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      code = 0xfffd;
+    }
+    if (code <= 0x7f) bytes.push(code);
+    else if (code <= 0x7ff) bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+    else if (code <= 0xffff) bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+    else bytes.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 0x3f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+  }
+  return bytes;
+}
+
+export function compareUtf8Bytes(left, right) {
+  const leftBytes = utf8Bytes(left);
+  const rightBytes = utf8Bytes(right);
+  const length = Math.min(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index++) {
+    if (leftBytes[index] < rightBytes[index]) return -1;
+    if (leftBytes[index] > rightBytes[index]) return 1;
+  }
+  return leftBytes.length === rightBytes.length ? 0 : (leftBytes.length < rightBytes.length ? -1 : 1);
+}
+
 export function isEvidenceSentence(sentence = {}) {
   const name = String(sentence?.accordingto?.name ?? "").trim().toLowerCase();
   return name.endsWith("-evidential");
@@ -23,12 +58,12 @@ function cloneValue(value) {
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cloneValue(entry)]));
 }
 
-function canonicalJson(value) {
+export function canonicalJson(value) {
   if (Array.isArray(value)) return value.map(canonicalJson);
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareUtf8Bytes(left, right))
       .map(([key, entry]) => [key, canonicalJson(entry)])
   );
 }
@@ -197,7 +232,7 @@ export function normalizeEvidence(sentence = {}) {
   const confidence = confidenceFor(normalized);
   return {
     key: deriveClaimKey(normalized),
-    payload: cloneValue(normalized.ob ?? { hollow: true }),
+    payload: canonicalJson(normalized.ob ?? { hollow: true }),
     evidential: evidentialName.replace(/-evidential$/u, ""),
     confidence,
     source: provenance.source,
@@ -225,7 +260,7 @@ function recordsForKey(records, key) {
 }
 
 function compareText(left, right) {
-  return String(left ?? "").localeCompare(String(right ?? ""), "en", { numeric: false });
+  return compareUtf8Bytes(left, right);
 }
 
 function compareRecords(left, right) {
@@ -251,7 +286,7 @@ function selectedPayloadRecords(records) {
     const prior = selected.get(payloadKey);
     if (!prior || compareDuplicateRecords(record, prior) < 0) selected.set(payloadKey, record);
   }
-  return [...selected.values()].sort((left, right) => valueKey(left.payload).localeCompare(valueKey(right.payload)));
+  return [...selected.values()].sort((left, right) => compareUtf8Bytes(valueKey(left.payload), valueKey(right.payload)));
 }
 
 export function resolveCurrentView(records, key) {

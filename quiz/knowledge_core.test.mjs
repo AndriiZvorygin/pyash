@@ -15,6 +15,8 @@ import { transpileProgram } from "../program/verbs/exchange/compile/transpile_pr
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import {
   deriveClaimKey,
+  canonicalJson,
+  compareUtf8Bytes,
   normalizeEvidence,
   resolveCurrentView,
   resolveContestedView,
@@ -73,6 +75,32 @@ test("claim keys support timeless claims and reject partial or timestamp windows
   assert.throws(
     () => deriveClaimKey(parse("su name weather ob text clear since date 2026-01-01T12:00:00Z until date 2026-01-31 as name public be plus ya")),
     /time window defective/u
+  );
+});
+
+test("knowledge ordering uses locale-independent UTF-8 bytes", () => {
+  assert.equal(compareUtf8Bytes("Zebra", "apple"), -1);
+  assert.equal(compareUtf8Bytes("apple", "Éclair"), -1);
+  assert.deepEqual(
+    Object.keys(canonicalJson({ "é": 1, apple: 2, Zebra: 3, "Å": 4, zebra: 5 })),
+    ["Zebra", "apple", "zebra", "Å", "é"]
+  );
+
+  const duplicateReported = normalizeEvidence(claimLine({
+    payload: "same",
+    confidence: 0.5,
+    evidence: "reported-evidential",
+    sourceAnchor: "tie-source tie-anchor"
+  }));
+  const duplicateDirect = normalizeEvidence(claimLine({
+    payload: "same",
+    confidence: 0.5,
+    evidence: "direct-evidential",
+    sourceAnchor: "tie-source tie-anchor"
+  }));
+  assert.equal(
+    resolveCurrentView([duplicateReported, duplicateDirect], duplicateReported.key).record.evidential,
+    "direct"
   );
 });
 

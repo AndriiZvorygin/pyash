@@ -35,10 +35,43 @@ function __pyaKnowledgeClaimKey(sentence) {
   parts.push("be", String(sentence?.be ?? ""), "ya");
   return parts.join(" ");
 }
+function __pyaKnowledgeUtf8Bytes(value) {
+  const text = String(value ?? "");
+  const bytes = [];
+  for (let index = 0; index < text.length; index++) {
+    let code = text.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const low = text.charCodeAt(index + 1);
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00);
+        index++;
+      } else {
+        code = 0xfffd;
+      }
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      code = 0xfffd;
+    }
+    if (code <= 0x7f) bytes.push(code);
+    else if (code <= 0x7ff) bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+    else if (code <= 0xffff) bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+    else bytes.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 0x3f), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+  }
+  return bytes;
+}
+function __pyaKnowledgeCompareUtf8(left, right) {
+  const leftBytes = __pyaKnowledgeUtf8Bytes(left);
+  const rightBytes = __pyaKnowledgeUtf8Bytes(right);
+  const length = Math.min(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index++) {
+    if (leftBytes[index] < rightBytes[index]) return -1;
+    if (leftBytes[index] > rightBytes[index]) return 1;
+  }
+  return leftBytes.length === rightBytes.length ? 0 : (leftBytes.length < rightBytes.length ? -1 : 1);
+}
 function __pyaKnowledgeJson(value) {
   if (Array.isArray(value)) return value.map(__pyaKnowledgeJson);
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => [key, __pyaKnowledgeJson(entry)]));
+  return Object.fromEntries(Object.entries(value).sort(([a], [b]) => __pyaKnowledgeCompareUtf8(a, b)).map(([key, entry]) => [key, __pyaKnowledgeJson(entry)]));
 }
 function __pyaKnowledgePayloadKey(value) {
   return JSON.stringify(__pyaKnowledgeJson(value));
@@ -59,7 +92,7 @@ function __pyaKnowledgeRecord(sentence) {
   const anchor = __pyaKnowledgeAnchor(sentence);
   return {
     key: __pyaKnowledgeClaimKey(sentence),
-    payload: sentence?.ob ?? { hollow: true },
+    payload: __pyaKnowledgeJson(sentence?.ob ?? { hollow: true }),
     evidential: String(sentence?.accordingto?.name ?? "").replace(/-evidential$/u, ""),
     confidence: sentence?.by?.num ?? null,
     source: anchor.source,
@@ -83,12 +116,12 @@ function __pyaKnowledgeEvidence(records, key) {
 function __pyaKnowledgeCompare(left, right) {
   const leftAnchor = String(left.anchorId ?? "");
   const rightAnchor = String(right.anchorId ?? "");
-  if (leftAnchor < rightAnchor) return -1;
-  if (leftAnchor > rightAnchor) return 1;
+  const anchor = __pyaKnowledgeCompareUtf8(leftAnchor, rightAnchor);
+  if (anchor !== 0) return anchor;
   const leftConfidence = left.confidence ?? -1;
   const rightConfidence = right.confidence ?? -1;
   if (leftConfidence !== rightConfidence) return rightConfidence - leftConfidence;
-  return String(left.sentence) < String(right.sentence) ? -1 : (String(left.sentence) > String(right.sentence) ? 1 : 0);
+  return __pyaKnowledgeCompareUtf8(left.sentence, right.sentence);
 }
 function __pyaKnowledgeCompareDuplicate(left, right) {
   const leftConfidence = left.confidence ?? -1;
@@ -103,7 +136,7 @@ function __pyaKnowledgeSelected(records) {
     const prior = selected.get(payloadKey);
     if (!prior || __pyaKnowledgeCompareDuplicate(record, prior) < 0) selected.set(payloadKey, record);
   }
-  return [...selected.values()].sort((left, right) => __pyaKnowledgePayloadKey(left.payload).localeCompare(__pyaKnowledgePayloadKey(right.payload)));
+  return [...selected.values()].sort((left, right) => __pyaKnowledgeCompareUtf8(__pyaKnowledgePayloadKey(left.payload), __pyaKnowledgePayloadKey(right.payload)));
 }
 function __pyaKnowledgeCurrent(key) {
   const selected = __pyaKnowledgeSelected(__pyaKnowledgeEvidence(__pyaKnowledgeRecords, key));
