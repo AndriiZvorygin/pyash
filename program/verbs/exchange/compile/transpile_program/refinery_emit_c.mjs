@@ -16,6 +16,7 @@ export function emitRefineryC({
   cState,
   mapDefs,
   effectiveRetryConfig,
+  sourceRefineryInvocations,
   transpileSentence,
   usesRememberShim,
   usesMapShim
@@ -46,6 +47,7 @@ export function emitRefineryC({
       cState,
       mapDefs,
       effectiveRetryConfig,
+      sourceRefineryInvocations,
       transpileSentence,
       usesRememberShim,
       usesMapShim

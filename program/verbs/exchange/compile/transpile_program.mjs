@@ -10,6 +10,7 @@ import { transpileSentence } from "./transpile_sentence.mjs";
 import { handleRefineryDefinition } from "./transpile_program/refinery_defs.mjs";
 import { emitRefineryC } from "./transpile_program/refinery_emit_c.mjs";
 import { emitRefineryJs } from "./transpile_program/refinery_emit_js.mjs";
+import { extractSimulationConduct } from "../../../bridge/refinery_simulation.mjs";
 import { applyJsPrelude } from "./transpile_program/js_prelude.mjs";
 import { applyCPrelude } from "./transpile_program/c_prelude.mjs";
 import {
@@ -43,6 +44,27 @@ function commandPolicyUpdateLine(update, lang) {
     return `pyaCommandPolicyApplyLegacyClassifier(${JSON.stringify(update.classifierEnabled)});`;
   }
   return null;
+}
+
+function refineryInvocations(sentences, refineryDefs, mapDefs) {
+  const calls = [];
+  for (const sentence of sentences ?? []) {
+    if (sentence?.mood !== "do" || sentence?.be !== "refinery") continue;
+    const refineryName = sentence?.from?.name
+      ?? sentence?.as?.name
+      ?? sentence?.for?.name
+      ?? null;
+    if (!refineryName || !refineryDefs.has(refineryName)) continue;
+    const conductName = sentence?.under?.name
+      ?? sentence?.beneath?.name
+      ?? sentence?.fromunder?.name
+      ?? null;
+    const conduct = conductName && mapDefs.has(conductName)
+      ? extractSimulationConduct(mapDefs.get(conductName))
+      : null;
+    calls.push({ refineryName, conductName, conduct });
+  }
+  return calls;
 }
 
 export function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, collectSourceMap, retryConfig, commandPolicy } = {}) {
@@ -248,6 +270,7 @@ export function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFil
     maxDelayMs: 8000,
     ...(retryConfig || {})
   };
+  const sourceRefineryInvocations = refineryInvocations(sentences, refineryDefs, mapDefs);
 
   if (refineryDefs.size > 0) {
     if (lang === "c") {
@@ -266,6 +289,7 @@ export function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFil
         cState,
         mapDefs,
         effectiveRetryConfig,
+        sourceRefineryInvocations,
         transpileSentence,
         usesRememberShim,
         usesMapShim
@@ -290,6 +314,7 @@ export function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFil
         cState,
         mapDefs,
         effectiveRetryConfig,
+        sourceRefineryInvocations,
         transpileSentence,
         usesRememberShim,
         usesMapShim

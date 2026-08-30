@@ -21,7 +21,7 @@ export function buildRefineryJsDefinitions({
   usesMapShim
 } = {}) {
   const lines = [];
-  lines.push(`__pyaRefineries[${JSON.stringify(refineryName)}] = { platforms: {} };`);
+  lines.push(`__pyaRefineries[${JSON.stringify(refineryName)}] = { order: ${JSON.stringify(refinery.platforms.map(platform => platform.name))}, platforms: {} };`);
   refinery.platforms.forEach((platform) => {
     const fnName = sanitizeName(`pya_refinery_${refineryName}_${platform.name}`);
     const actionLine = sentenceToPyash(platform.action);
@@ -42,7 +42,9 @@ export function buildRefineryJsDefinitions({
     lines.push(`function ${fnName}() {`);
     lines.push(...bodyLines);
     lines.push("}");
-    lines.push(`__pyaRefineries[${JSON.stringify(refineryName)}].platforms[${JSON.stringify(platform.name)}] = { deps: ${JSON.stringify(platform.deps)}, run: ${fnName}, evoke: ${JSON.stringify(evokeLine)}, result: ${JSON.stringify(actionLine)} };`);
+    const duration = platform.action?.during?.num ?? null;
+    const timebox = platform.action?.atmost?.num ?? null;
+    lines.push(`__pyaRefineries[${JSON.stringify(refineryName)}].platforms[${JSON.stringify(platform.name)}] = { deps: ${JSON.stringify(platform.deps)}, duration: ${JSON.stringify(duration)}, timebox: ${JSON.stringify(timebox)}, run: ${fnName}, evoke: ${JSON.stringify(evokeLine)}, result: ${JSON.stringify(actionLine)} };`);
   });
   return { lines, usesRememberShim, usesMapShim };
 }

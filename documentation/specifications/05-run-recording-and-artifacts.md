@@ -20,6 +20,22 @@ Purpose: define append-only run newspaper, event ordering, artifact records, and
 - identical input/profile must produce stable event sequence,
 - replay/again verification depends on this deterministic order.
 
+### 2.1 Refinery concurrency trace
+
+When a refinery is invoked under an artificial conduct map, its ordered
+concurrency-trace subset uses the sentence-native records defined by
+`10-pipelines.md` §3.1. Each record carries the refinery name, platform name,
+virtual tick, and monotonic decision ordinal. The complete trace is deterministic
+for a fixed workload and seed and is the normative parity target across the
+interpreter, generated JavaScript, and generated C.
+
+The schedule portion (admission, start, finish, and `schedule crowded`) is
+recorded only when the conduct field `schedule newspaper` is truth. Platform
+timebox and platform-cancel fault sentences remain surfaced even when schedule
+records are disabled. A single denied stage produces at most one
+`schedule crowded` record, and a timeout cancels all still-pending descendants
+while unrelated branches continue to completion.
+
 ## 3. Artifact contract
 
 Each artifact record should include:

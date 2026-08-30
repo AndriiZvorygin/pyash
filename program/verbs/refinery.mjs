@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { remember, doRemember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { runRefinery, getRefinery } from "../bridge/refinery.mjs";
+import { normalizeSimulationContract } from "../bridge/refinery_simulation.mjs";
 import { emitExchangeSentence } from "../bridge/exchange.mjs";
 import { parse } from "../understand/index.mjs";
 import { splitSentencesWithLines } from "../library/sentenceSplitter.mjs";
@@ -300,7 +301,10 @@ function buildRetryConfigFromConduct({ sentence, namedTarget, refineryName }) {
     const refineryConduct = remember(refineryConductName);
     if (refineryConduct?.be === "map") sources.push(refineryConduct);
   }
-  const explicitConductName = sentence?.under?.name ?? null;
+  const explicitConductName = sentence?.under?.name
+    ?? sentence?.beneath?.name
+    ?? sentence?.fromunder?.name
+    ?? null;
   if (explicitConductName) {
     const explicitConduct = remember(explicitConductName);
     if (explicitConduct?.be === "map") sources.push(explicitConduct);
@@ -322,6 +326,13 @@ function buildRetryConfigFromConduct({ sentence, namedTarget, refineryName }) {
   return Object.keys(config).length ? config : null;
 }
 
+function refineryConductName(sentence) {
+  return sentence?.under?.name
+    ?? sentence?.beneath?.name
+    ?? sentence?.fromunder?.name
+    ?? null;
+}
+
 async function refinery(sentence) {
   if (sentence?.from?.filename) {
     return runFileBackedRefinery(sentence);
@@ -339,6 +350,9 @@ async function refinery(sentence) {
     null;
   const inputOb = resolveInputOb(sentence?.ob);
   const retryConfig = buildRetryConfigFromConduct({ sentence, namedTarget, refineryName });
+  const conductName = refineryConductName(sentence);
+  const conductFact = conductName ? remember(conductName) : null;
+  const simulation = conductName ? normalizeSimulationContract(conductFact) : null;
   const priorInput = remember("input");
 
   if (inputOb) {
@@ -351,6 +365,7 @@ async function refinery(sentence) {
       name: refineryName,
       interpret,
       retryConfig,
+      simulation,
       runId: null,
       onEvoke: (actionSentence) => {
         emitExchangeSentence({ mood: "ya", be: "evoke", ob: { la: actionSentence } });
@@ -432,6 +447,9 @@ export const signatures = [
   { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery },
+  { signatureWords: ["be", "refinery", "beneath", "name", "map", "from", "name", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "fromunder", "name", "map", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "fromunder", "name", "map"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "text", "ob", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "text", "ob", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "text", "ob", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery }

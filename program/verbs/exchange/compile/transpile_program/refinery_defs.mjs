@@ -80,11 +80,16 @@ export function handleRefineryDefinition({
     seen.add(platformName);
     let deps = [];
     let action = null;
+    let hasExplicitDependency = false;
     if (entry.from?.ve?.type === "name" && Array.isArray(entry.from.ve.values)) {
+      hasExplicitDependency = true;
       deps = normalizeDependencyVector(entry.from.ve.values);
     } else if (typeof entry.from?.name === "string" && entry.from.name) {
       const fromName = String(entry.from.name);
-      if (seen.has(fromName)) deps = [fromName];
+      if (seen.has(fromName)) {
+        hasExplicitDependency = true;
+        deps = [fromName];
+      }
     } else if (entry.from && (entry.from.filename || entry.from.text || entry.from.name || entry.from.genitive)) {
       // allow non-depend "from" cases (e.g. from filename) to pass through as part of the action
     } else if (entry.from) {
@@ -95,7 +100,7 @@ export function handleRefineryDefinition({
         raw: entry.from
       });
     }
-    if (priorName && !deps.includes(priorName)) deps = [...deps, priorName];
+    if (!hasExplicitDependency && priorName && !deps.includes(priorName)) deps = [...deps, priorName];
     action = { ...entry };
     if (action.from?.ve?.type === "name" || (typeof action.from?.name === "string" && action.from.name)) {
       const { ve, ...fromRest } = action.from;
