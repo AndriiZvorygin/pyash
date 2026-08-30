@@ -100,6 +100,26 @@ test("wide roots deny each excess admission once with stable schedule crowded ev
   assert.deepEqual(crowded.map(record => record.by.num), [crowded[0].by.num]);
 });
 
+test("parallel capacity bounds multi-item waiting promotion", () => {
+  const records = recordsFor([
+    { name: "alpha", duration: 2 },
+    { name: "beta", duration: 2 },
+    { name: "gamma", duration: 2 },
+    { name: "delta", duration: 2 }
+  ], { parallelCapacity: 1, waitingCapacity: 3 });
+  const active = new Set();
+  const starts = [];
+  for (const record of records) {
+    if (record.be === "schedule finish") active.delete(record.su.name);
+    if (record.be !== "schedule start") continue;
+    assert.equal(active.size, 0);
+    active.add(record.su.name);
+    starts.push(record.during.num);
+  }
+  assert.equal(starts.length, 4);
+  assert.deepEqual(starts, [0, 2, 4, 6]);
+});
+
 test("schedule records are gated while simulation faults remain visible", () => {
   const records = recordsFor([
     { name: "slow", duration: 3, timebox: 1 },

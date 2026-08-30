@@ -140,10 +140,11 @@ export function buildRefineryJsPreludeLines(effectiveRetryConfig) {
   lines.push("  if (!__pyaSimulationUint32(raw.seed) || !__pyaSimulationUint32(raw.startTick) || !__pyaSimulationUint32(raw.parallelCapacity, true) || !__pyaSimulationUint32(raw.waitingCapacity) || (raw.scheduleNewspaper !== undefined && typeof raw.scheduleNewspaper !== \"boolean\")) return __pyaSimulationDefect();");
   lines.push("  return { artificial: true, seed: raw.seed, startTick: raw.startTick, parallelCapacity: raw.parallelCapacity, waitingCapacity: raw.waitingCapacity, scheduleNewspaper: raw.scheduleNewspaper ?? false };");
   lines.push("};");
-  lines.push("const __pyaSimulationRecord = ({ refinery, platform, tick, ordinal, be, errorText }) => errorText === undefined ? `su name ${platform} from name ${refinery} during num ${tick} by num ${ordinal} be ${be} ya` : `su name ${platform} ob text ${JSON.stringify(errorText)} from name ${refinery} during num ${tick} by num ${ordinal} be ${be === \"schedule crowded\" ? \"schedule crowded\" : \"error\"} ya`; ");
+  lines.push("const __pyaSimulationRecord = ({ refinery, platform, tick, ordinal, be, errorText }) => errorText === undefined ? `su name ${platform} from name ${refinery} during num ${tick} by num ${ordinal} be ${be} ya` : `su name ${platform} ob text ${JSON.stringify(errorText)} from name ${refinery} during num ${tick} by num ${ordinal} be ${be === \"schedule crowded\" ? \"schedule crowded\" : \"error\"} ya`;");
   lines.push("const __pyaSimulationRun = (name, refinery, raw) => {");
   lines.push("  const contract = __pyaSimulationNormalize(raw);");
-  lines.push("  if (!contract || contract.be === \"error\") return contract;");
+  lines.push("  if (contract?.be === \"error\") return contract;");
+  lines.push("  if (!contract) return undefined;");
   lines.push("  const order = Array.isArray(refinery.order) ? refinery.order : Object.keys(refinery.platforms || {});");
   lines.push("  const names = new Set(order);");
   lines.push("  if (names.size !== order.length || names.size !== Object.keys(refinery.platforms || {}).length) return __pyaSimulationDefect();");
@@ -167,7 +168,7 @@ export function buildRefineryJsPreludeLines(effectiveRetryConfig) {
   lines.push("    for (const platformName of sortRank([...active].filter(candidate => states.get(candidate).status === \"running\" && states.get(candidate).deadline !== null && states.get(candidate).deadline <= tick))) { const state = states.get(platformName); state.status = \"failed\"; active.delete(platformName); failed.add(platformName); emitFault(platformName, \"platform timebox\"); }");
   lines.push("    const cancelNames = new Set(); let changed = true; while (changed) { changed = false; for (const platformName of [...pending, ...waiting]) { const state = states.get(platformName); if (state.deps.some(dep => failed.has(dep) || cancelled.has(dep)) && !cancelNames.has(platformName)) { cancelNames.add(platformName); cancelled.add(platformName); changed = true; } } }");
   lines.push("    for (const platformName of [...cancelNames].sort(__pyaCompareUtf8)) { pending.delete(platformName); waiting.delete(platformName); states.get(platformName).status = \"cancelled\"; emitFault(platformName, \"platform cancel\"); }");
-  lines.push("    for (const platformName of sortRank([...waiting]).filter(() => active.size < contract.parallelCapacity)) { waiting.delete(platformName); active.add(platformName); states.get(platformName).status = \"admitted\"; }");
+  lines.push("    const promotionSlots = contract.parallelCapacity - active.size; for (const platformName of sortRank([...waiting]).slice(0, promotionSlots)) { waiting.delete(platformName); active.add(platformName); states.get(platformName).status = \"admitted\"; }");
   lines.push("    for (const platformName of sortRank([...pending].filter(candidate => ready(states.get(candidate)))) ) { const state = states.get(platformName); if (active.size < contract.parallelCapacity) { pending.delete(platformName); active.add(platformName); state.status = \"admitted\"; emitSchedule(platformName, \"schedule admission\"); } else if (waiting.size < contract.waitingCapacity) { pending.delete(platformName); waiting.add(platformName); state.status = \"waiting\"; emitSchedule(platformName, \"schedule admission\"); } else if (!state.denied) { state.denied = true; emitCrowded(platformName); } }");
   lines.push("    for (const platformName of sortRank([...active].filter(candidate => states.get(candidate).status === \"admitted\"))) { const state = states.get(platformName); state.status = \"running\"; state.startTick = tick; state.finishTick = tick + state.duration; state.deadline = state.timebox === null ? null : tick + state.timebox; emitSchedule(platformName, \"schedule start\"); }");
   lines.push("    if (pending.size === 0 && waiting.size === 0 && active.size === 0) break;");
@@ -190,7 +191,7 @@ export function buildRefineryJsPreludeLines(effectiveRetryConfig) {
   lines.push("function __pyaRunRefinery(name, simulationRaw = null) {");
   lines.push("  const refinery = __pyaRefineries[name];");
   lines.push("  if (!refinery) return null;");
-  lines.push("  if (simulationRaw !== null) return __pyaSimulationRun(name, refinery, simulationRaw);");
+  lines.push("  if (simulationRaw !== null) { const simulationResult = __pyaSimulationRun(name, refinery, simulationRaw); if (simulationResult !== undefined) return simulationResult; }");
   lines.push("  __pyaCheckpointLoad();");
   lines.push("  const completed = new Set();");
   lines.push("  const results = new Map();");
