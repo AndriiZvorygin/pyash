@@ -195,12 +195,12 @@ function validateReferences({ entry, resolved, entities, taskIds, schema }) {
     const personNames = referenceNames(resolved, "person", "person");
     const companyNames = referenceNames(resolved, "company", "company");
     validateDeadline(resolved, schema);
-    const workerNames = referenceNames(resolved, "worker", "canonical worker");
+    const dutyNames = referenceNames(resolved, "duty", "canonical duty");
     for (const personName of personNames) requireEntity(entities, "person", personName);
     for (const companyName of companyNames) requireEntity(entities, "company", companyName);
-    for (const workerName of workerNames) {
-      if (!entities.get("worker")?.has(workerName) || !taskIds.has(workerName)) {
-        defect(`missing canonical worker reference: ${workerName}`);
+    for (const dutyName of dutyNames) {
+      if (!entities.get("duty")?.has(dutyName) || !taskIds.has(dutyName)) {
+        defect(`missing canonical duty reference: ${dutyName}`);
       }
     }
     return;
@@ -237,7 +237,7 @@ export async function projectHeadquartersKnowledge({
   const entities = new Map([
     ["person", new Map()],
     ["company", new Map()],
-    ["worker", new Map()]
+    ["duty", new Map()]
   ]);
   const seen = new Set();
 

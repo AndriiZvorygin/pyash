@@ -71,7 +71,7 @@ one value. The initial profile is:
 | organization | `be company`; memberships and counterparties are separate claims |
 | contact method | `be contacting`, plus `be person` or `be company` reference and an address/value facet |
 | relationship | `be relations`, plus separate `be person` and `be company` references |
-| commitment | `be bet`, plus `be person`, `be company`, `be deadline`, and `be worker` references |
+| commitment | `be bet`, plus `be person`, `be company`, `be deadline`, and `be duty` references |
 
 For example, the commitment facets can reference `person-ada`,
 `organization-analytical-engine`, and `work-fixture-mail-001` with `ob name`,
@@ -89,8 +89,8 @@ The Pyash schema for this profile is `module/headquarters-knowledge.pya`.
 `program/agent/headquarters/knowledge.mjs` provides the read-only
 `projectHeadquartersKnowledge` projection driven by that schema. It requires
 the schema-declared facets, checks that a deadline is an `ob date` without
-`since` or `until`, verifies person and organization references, and requires a
-work reference equal to an exact canonical `WorkTask.taskId`, backed by both
+`since` or `until`, verifies person and company references, and requires a
+duty reference equal to an exact canonical `WorkTask.taskId`, backed by both
 that WorkTask and a canonical work bundle. WorkTask identity is checked without
 changing the shared WorkTask contract. Projected bundle and facet ordering uses
 `compareUtf8Bytes`; the generic linked-claim layer remains responsible only for
