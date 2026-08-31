@@ -88,7 +88,7 @@ export function readHeadquartersLayoutPolicy(modulePath = DEFAULT_LAYOUT_MODULE_
   if (!entries.some(entry => (
     entry?.mood === "def"
       && entry?.be === "map"
-      && entry?.su?.name === "headquarters layout policy"
+      && entry?.su?.name === "headquarter template conduct"
   ))) {
     layoutDefect(`module header missing: ${resolvedPath}`);
   }
@@ -100,7 +100,7 @@ export function readHeadquartersLayoutPolicy(modulePath = DEFAULT_LAYOUT_MODULE_
   }
   const fixedRooms = {};
   for (const name of ["mailroom", "chief-of-staff"]) {
-    const bounds = layoutPolicyJson(fields, `fixed room ${name}`);
+    const bounds = layoutPolicyJson(fields, `frozen rooms ${name}`);
     for (const key of ["x", "y", "width", "height"]) {
       if (!Number.isFinite(Number(bounds[key]))) layoutDefect(`fixed room ${name} has invalid ${key}`);
       bounds[key] = Number(bounds[key]);
@@ -108,25 +108,38 @@ export function readHeadquartersLayoutPolicy(modulePath = DEFAULT_LAYOUT_MODULE_
     fixedRooms[name] = bounds;
   }
   const statusActivity = {};
-  for (const status of ["planning", "implementing", "reviewing", "revision", "ready", "blocked", "usage-limited", "accepted", "failed"]) {
-    statusActivity[status] = layoutPolicyText(fields, `status activity ${status}`);
+  const statusFields = {
+    planning: "planned",
+    implementing: "practical",
+    reviewing: "reviewing",
+    revision: "reform",
+    ready: "already",
+    blocked: "occluded",
+    "usage-limited": "usage-limited",
+    accepted: "accept",
+    failed: "fail"
+  };
+  for (const [status, field] of Object.entries(statusFields)) {
+    statusActivity[status] = layoutPolicyText(fields, `status activity ${field}`);
   }
   const channelLifecycle = {};
   for (const location of ["input", "runtime", "produce-waiting", "produce-success", "produce-fail"]) {
     channelLifecycle[location] = layoutPolicyText(fields, `channel lifecycle ${location}`);
   }
-  const handoffEvents = ["assigned", "accepted"]
-    .filter(eventType => layoutPolicyText(fields, `handoff event ${eventType}`) === "truth")
+  const handoffFields = { assigned: "assigned", accepted: "accept" };
+  const handoffEvents = Object.entries(handoffFields)
+    .filter(([, field]) => layoutPolicyText(fields, `handoff eventive-mood ${field}`) === "truth")
+    .map(([eventType]) => eventType)
     .sort(compareUtf8Bytes);
   return freeze({
-    roomWidth: layoutPolicyNumber(fields, "room width"),
-    roomMinimumHeight: layoutPolicyNumber(fields, "room minimum height"),
-    roomGap: layoutPolicyNumber(fields, "room gap"),
-    roomMargin: layoutPolicyNumber(fields, "room margin"),
-    placementSize: layoutPolicyNumber(fields, "placement size"),
-    placementGap: layoutPolicyNumber(fields, "placement gap"),
-    placementsPerRow: layoutPolicyNumber(fields, "placement row count"),
-    dynamicRoomColumns: layoutPolicyNumber(fields, "dynamic room columns"),
+    roomWidth: layoutPolicyNumber(fields, "rooms widest"),
+    roomMinimumHeight: layoutPolicyNumber(fields, "rooms least high"),
+    roomGap: layoutPolicyNumber(fields, "rooms distance"),
+    roomMargin: layoutPolicyNumber(fields, "rooms margin"),
+    placementSize: layoutPolicyNumber(fields, "occupancy magnitude"),
+    placementGap: layoutPolicyNumber(fields, "occupancy distance"),
+    placementsPerRow: layoutPolicyNumber(fields, "occupancy rower count"),
+    dynamicRoomColumns: layoutPolicyNumber(fields, "dynamical rooms cluster"),
     fixedRooms,
     statusActivity,
     channelLifecycle,

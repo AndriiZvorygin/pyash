@@ -631,13 +631,19 @@ function pageMeta(page) {
   };
 }
 
-function spaceActivityPagination(spaces, activityLimit) {
-  return spaces
+function spaceActivityPagination(sourceSpaces, returnedSpaces, activityLimit) {
+  const sourceByName = new Map(
+    sourceSpaces
+      .map(space => [text(space?.name), space])
+      .filter(([name]) => name)
+  );
+  return returnedSpaces
     .map(space => {
       const name = text(space?.name);
       if (!name) return null;
-      const activity = Array.isArray(space?.activity) ? space.activity : [];
-      const sourceTotal = Number(space?.activityTotal);
+      const source = sourceByName.get(name);
+      const activity = Array.isArray(source?.activity) ? source.activity : [];
+      const sourceTotal = Number(source?.activityTotal);
       const total = Number.isInteger(sourceTotal) && sourceTotal >= activity.length
         ? sourceTotal
         : activity.length;
@@ -770,7 +776,7 @@ export async function projectHeadquartersState(options = {}) {
     attachActivityMarkers(projectedSpaces, activityPage.items),
     limits.spaces
   );
-  const spaceActivityPages = spaceActivityPagination(spaces, activityLimit);
+  const spaceActivityPages = spaceActivityPagination(spaces, spacePage.items, activityLimit);
   const snapshot = {
     asOf,
     commitments: commitmentPage.items,

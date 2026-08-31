@@ -447,6 +447,7 @@ test("Headquarters state preserves contested Knowledge Core commitments and chec
       limited.pagination[name].truncated,
       limited.pagination[name].returned < limited.pagination[name].total
     );
+    assert.equal(limited[name].length <= expectedLimits[name], true);
   }
   assert.equal(limited.pagination.commitments.total, 2);
   assert.equal(limited.pagination.work.total, 3);
@@ -455,8 +456,11 @@ test("Headquarters state preserves contested Knowledge Core commitments and chec
   assert.equal(limited.pagination.newspaper.total, 2);
   assert.equal(limited.pagination.spaces.total, 1);
   assert.equal(limited.pagination.activityMarkers.total > 1, true);
+  assert.equal(limited.pagination.spaceActivity.length, limited.spaces.length);
   assert.equal(limited.pagination.spaceActivity[0].limit, 1);
   assert.equal(limited.pagination.spaceActivity[0].total, 2);
+  assert.equal(limited.spaces.every(space => space.activity.length <= 1), true);
+  assert.equal(limited.spaces.every(space => space.activityMarkers.length <= 1), true);
 
   const duplicateSpaces = [
     spaces[0],
