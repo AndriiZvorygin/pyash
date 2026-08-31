@@ -159,7 +159,7 @@ Every sentence shares one stable named `su` identifier, while its canonical
 `be` predicate names one facet and its own `ob` carries that facet's value:
 
 ```pyash
-su name commitment-001 ob text "Prepare the decision packet" fromtext text "hq-mail-001 paragraph-1" accordingto name direct-evidential by num 0.9 be commitment ya
+su name commitment-001 ob text "Prepare the decision packet" fromtext text "hq-mail-001 paragraph-1" accordingto name direct-evidential by num 0.9 be bet ya
 su name commitment-001 ob name ada-lovelace fromtext text "hq-mail-001 paragraph-2" accordingto name direct-evidential by num 0.9 be person ya
 su name commitment-001 ob name analytical-engine fromtext text "hq-mail-001 paragraph-3" accordingto name direct-evidential by num 0.9 be organization ya
 su name commitment-001 ob date 2026-08-24 fromtext text "hq-mail-001 paragraph-4" accordingto name direct-evidential by num 0.9 be due-date ya
@@ -174,7 +174,13 @@ provenance view to each facet. A conflict is retained on its facet and is not
 silently resolved or allowed to rewrite another facet. A commitment deadline
 is an `ob date` value under `be due-date`; `since`/`until` remain claim
 validity identity and are not deadline fields. Every authoritative facet MUST
-carry the complete `fromtext`/`accordingto`/`by` evidence shell.
+carry the complete `fromtext`/`accordingto`/`by` evidence shell. Facet names,
+multiple canonical claim keys, records within a facet, and emitted bundle
+projections MUST be ordered with `compareUtf8Bytes`; reordering input sentences
+MUST therefore produce byte-identical canonical views. The generic bundle
+contract does not enforce domain-specific required facets, deadline shape,
+entity existence, or work-task identity; a read-only domain projector MAY apply
+those rules from a Pyash schema without changing linked-claim grouping.
 
 ## 5. Loop behavior
 
