@@ -1,18 +1,18 @@
 from filename "../../module/headquarters-knowledge.pya" to name headquarter know planned be import do
 exists su name person-ada ob text "Ada Lovelace" fromtext text "hq-mail-001 person" accordingto name direct-evidential by num 0.9 be person ya
 exists su name organization-analytical-engine ob text "Analytical Engine" fromtext text "hq-mail-001 organization" accordingto name direct-evidential by num 0.9 be company ya
-exists su name work-fixture-mail-001 ob text "Decision packet" fromtext text "hq-mail-001 work" accordingto name direct-evidential by num 0.9 be worker ya
+exists su name work-fixture-mail-001 ob text "Decision packet" fromtext text "hq-mail-001 work" accordingto name direct-evidential by num 0.9 be duty ya
 exists su name commitment-001 ob text "Prepare the decision packet" fromtext text "hq-mail-001 commitment" accordingto name direct-evidential by num 0.9 be bet ya
 su name commitment-001 ob name person-ada fromtext text "hq-mail-001 person-ref" accordingto name direct-evidential by num 0.9 be person ya
 su name commitment-001 ob name organization-analytical-engine fromtext text "hq-mail-001 organization-ref" accordingto name direct-evidential by num 0.9 be company ya
 su name commitment-001 ob date 2026-08-24 fromtext text "hq-mail-001 deadline" accordingto name direct-evidential by num 0.9 be deadline ya
-su name commitment-001 ob name work-fixture-mail-001 fromtext text "hq-mail-001 work-ref" accordingto name direct-evidential by num 0.9 be worker ya
-su name claim-key ob la su name commitment-001 ob name person-ada be person ya ko be claim identify do
-su name claim-view ob la su name commitment-001 ob name person-ada be person ya ko be claim choose do
+su name commitment-001 ob name work-fixture-mail-001 fromtext text "hq-mail-001 work-ref" accordingto name direct-evidential by num 0.9 be duty ya
+su name claim ob la su name commitment-001 ob name person-ada be person ya ko be claim identify do
+su name conflict ob la su name commitment-001 ob name person-ada be person ya ko be claim choose do
 ob text quoted.pyash.
 exists su name commitment-001 ob text "Prepare the decision packet" fromtext text "hq-mail-001 commitment" accordingto name direct-evidential by num 0.9 be bet ya
 su name commitment-001 ob name person-ada fromtext text "hq-mail-001 person-ref" accordingto name direct-evidential by num 0.9 be person ya
 su name commitment-001 ob name organization-analytical-engine fromtext text "hq-mail-001 organization-ref" accordingto name direct-evidential by num 0.9 be company ya
 su name commitment-001 ob date 2026-08-24 fromtext text "hq-mail-001 deadline" accordingto name direct-evidential by num 0.9 be deadline ya
-su name commitment-001 ob name work-fixture-mail-001 fromtext text "hq-mail-001 work-ref" accordingto name direct-evidential by num 0.9 be worker ya
+su name commitment-001 ob name work-fixture-mail-001 fromtext text "hq-mail-001 work-ref" accordingto name direct-evidential by num 0.9 be duty ya
 .pyash.quoted to filename "headquarters-contacts-commitments.pya" be write do
