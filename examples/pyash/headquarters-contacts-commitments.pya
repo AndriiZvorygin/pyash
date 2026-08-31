@@ -7,4 +7,12 @@ su name commitment-001 ob name person-ada fromtext text "hq-mail-001 person-ref"
 su name commitment-001 ob name organization-analytical-engine fromtext text "hq-mail-001 organization-ref" accordingto name direct-evidential by num 0.9 be organization ya
 su name commitment-001 ob date 2026-08-24 fromtext text "hq-mail-001 deadline" accordingto name direct-evidential by num 0.9 be due-date ya
 su name commitment-001 ob name work-fixture-mail-001 fromtext text "hq-mail-001 work-ref" accordingto name direct-evidential by num 0.9 be work ya
-ob text "su name commitment-001 ob text Prepare the decision packet fromtext text hq-mail-001 commitment accordingto name direct-evidential by num 0.9 be bet ya\\nsu name commitment-001 ob name person-ada fromtext text hq-mail-001 person-ref accordingto name direct-evidential by num 0.9 be person ya\\nsu name commitment-001 ob name organization-analytical-engine fromtext text hq-mail-001 organization-ref accordingto name direct-evidential by num 0.9 be organization ya\\nsu name commitment-001 ob date 2026-08-24 fromtext text hq-mail-001 deadline accordingto name direct-evidential by num 0.9 be due-date ya\\nsu name commitment-001 ob name work-fixture-mail-001 fromtext text hq-mail-001 work-ref accordingto name direct-evidential by num 0.9 be work ya" to filename "headquarters-contacts-commitments.pya" be write do
+su name claim-key ob la su name commitment-001 ob name person-ada be person ya ko be claim identify do
+su name claim-view ob la su name commitment-001 ob name person-ada be person ya ko be claim choose do
+ob text quoted.pyash.
+su name commitment-001 ob text "Prepare the decision packet" fromtext text "hq-mail-001 commitment" accordingto name direct-evidential by num 0.9 be bet ya
+su name commitment-001 ob name person-ada fromtext text "hq-mail-001 person-ref" accordingto name direct-evidential by num 0.9 be person ya
+su name commitment-001 ob name organization-analytical-engine fromtext text "hq-mail-001 organization-ref" accordingto name direct-evidential by num 0.9 be organization ya
+su name commitment-001 ob date 2026-08-24 fromtext text "hq-mail-001 deadline" accordingto name direct-evidential by num 0.9 be due-date ya
+su name commitment-001 ob name work-fixture-mail-001 fromtext text "hq-mail-001 work-ref" accordingto name direct-evidential by num 0.9 be work ya
+.pyash.quoted to filename "headquarters-contacts-commitments.pya" be write do

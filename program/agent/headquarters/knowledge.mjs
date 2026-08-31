@@ -84,19 +84,22 @@ export async function readHeadquartersKnowledgeSchema(modulePath = DEFAULT_SCHEM
     fields.find(entry => entry?.su?.name === "deadline form")?.ob?.name
       ?? fields.find(entry => entry?.su?.name === "deadline form")?.ob?.text
   );
-  const workPrefix = text(fields.find(entry => entry?.su?.name === "worker identity")?.ob?.text);
-  if (!deadlineField || !workPrefix) defect(`schema deadline or work identity missing: ${resolvedPath}`);
+  if (!deadlineField) defect(`schema deadline field missing: ${resolvedPath}`);
 
   return {
     modulePath: resolvedPath,
     profiles: profiles.sort((left, right) => compareUtf8Bytes(left.name, right.name)),
-    deadlineField,
-    workPrefix
+    deadlineField
   };
 }
 
 function normalizeBundle(value) {
-  if (Array.isArray(value)) return normalizeLinkedClaimBundle(value);
+  if (Array.isArray(value)) {
+    if (value.every(record => record?.key && record?.payload !== undefined && record?.sentence)) {
+      return normalizeLinkedClaimBundle(value.map(record => parse(record.sentence)));
+    }
+    return normalizeLinkedClaimBundle(value);
+  }
   if (value?.records && Array.isArray(value.records)) {
     return normalizeLinkedClaimBundle(value.records.map(record => parse(record.sentence)));
   }
@@ -118,13 +121,14 @@ function profileFor(schema, kind) {
   return profile;
 }
 
-function currentFacet(resolved, facet, label = facet) {
+function candidateRecords(resolved, facet, label = facet) {
   const projection = resolved.facets?.[facet];
   if (!projection) defect(`missing ${label} facet`);
-  if (projection.status !== "current" || !projection.record) {
-    defect(`${label} facet is ${projection.status}`);
+  if (projection.status === "current" && projection.record) return [projection.record];
+  if (projection.status === "contested" && Array.isArray(projection.records) && projection.records.length > 0) {
+    return projection.records;
   }
-  return projection.record;
+  defect(`${label} facet is ${projection.status}`);
 }
 
 function validateDate(value) {
@@ -135,26 +139,29 @@ function validateDate(value) {
 }
 
 function validateDeadline(resolved, schema) {
-  const record = currentFacet(resolved, "due-date", "deadline");
-  const sentence = parse(record.sentence);
-  const payload = record.payload;
-  const payloadKeys = payload && typeof payload === "object" ? Object.keys(payload) : [];
-  if (schema.deadlineField !== "date"
-    || sentence.since !== undefined
-    || sentence.until !== undefined
-    || payloadKeys.length !== 1
-    || payload?.date === undefined
-    || !validateDate(payload.date)) {
-    defect("deadline facet must use an ob date without since or until");
+  const records = candidateRecords(resolved, "due-date", "deadline");
+  for (const record of records) {
+    const sentence = parse(record.sentence);
+    const payload = record.payload;
+    const payloadKeys = payload && typeof payload === "object" ? Object.keys(payload) : [];
+    if (schema.deadlineField !== "date"
+      || sentence.since !== undefined
+      || sentence.until !== undefined
+      || payloadKeys.length !== 1
+      || payload?.date === undefined
+      || !validateDate(payload.date)) {
+      defect("deadline facet must use an ob date without since or until");
+    }
   }
-  return record;
+  return records;
 }
 
-function referenceName(resolved, facet, label) {
-  const record = currentFacet(resolved, facet, label);
-  const name = text(record.payload?.name);
-  if (!name) defect(`${label} reference must use ob name`);
-  return name;
+function referenceNames(resolved, facet, label) {
+  return candidateRecords(resolved, facet, label).map(record => {
+    const name = text(record.payload?.name);
+    if (!name) defect(`${label} reference must use ob name`);
+    return name;
+  });
 }
 
 function requireEntity(entities, type, name) {
@@ -185,28 +192,36 @@ function validateTaskIds(workTasks) {
 function validateReferences({ entry, resolved, entities, taskIds, schema }) {
   const kind = entry.kind;
   if (kind === "bet") {
-    referenceName(resolved, "person", "person");
-    referenceName(resolved, "organization", "organization");
+    const personNames = referenceNames(resolved, "person", "person");
+    const organizationNames = referenceNames(resolved, "organization", "organization");
     validateDeadline(resolved, schema);
-    const workName = referenceName(resolved, "work", "canonical work");
-    requireEntity(entities, "person", text(resolved.facets.person.record.payload.name));
-    requireEntity(entities, "organization", text(resolved.facets.organization.record.payload.name));
-    if (!workName.startsWith(schema.workPrefix)
-      || !entities.get("work")?.has(workName)
-      || !taskIds.has(workName)) {
-      defect(`missing canonical work reference: ${workName}`);
+    const workNames = referenceNames(resolved, "work", "canonical work");
+    for (const personName of personNames) requireEntity(entities, "person", personName);
+    for (const organizationName of organizationNames) requireEntity(entities, "organization", organizationName);
+    for (const workName of workNames) {
+      if (!entities.get("work")?.has(workName) || !taskIds.has(workName)) {
+        defect(`missing canonical work reference: ${workName}`);
+      }
     }
     return;
   }
   if (kind === "relationship") {
-    requireEntity(entities, "person", referenceName(resolved, "person", "person"));
-    requireEntity(entities, "organization", referenceName(resolved, "organization", "organization"));
+    for (const personName of referenceNames(resolved, "person", "person")) {
+      requireEntity(entities, "person", personName);
+    }
+    for (const organizationName of referenceNames(resolved, "organization", "organization")) {
+      requireEntity(entities, "organization", organizationName);
+    }
     return;
   }
   if (kind === "contact-method") {
-    const referenceFacet = resolved.facets.person ? "person" : "organization";
-    if (!resolved.facets[referenceFacet]) defect("contact method must reference a person or organization");
-    requireEntity(entities, referenceFacet, referenceName(resolved, referenceFacet, referenceFacet));
+    const referenceFacets = ["person", "organization"].filter(facet => resolved.facets[facet]);
+    if (referenceFacets.length === 0) defect("contact method must reference a person or organization");
+    for (const referenceFacet of referenceFacets) {
+      for (const name of referenceNames(resolved, referenceFacet, referenceFacet)) {
+        requireEntity(entities, referenceFacet, name);
+      }
+    }
   }
 }
 
@@ -226,7 +241,7 @@ export async function projectHeadquartersKnowledge({
   ]);
   const seen = new Set();
 
-  for (const entry of bundles) {
+  const prepared = bundles.map(entry => {
     const kind = text(entry?.kind ?? entry?.profile);
     const profile = profileFor(schema, kind);
     const bundle = normalizeBundle(entry?.bundle ?? entry?.claims ?? entry);
@@ -237,23 +252,24 @@ export async function projectHeadquartersKnowledge({
     seen.add(identity);
     const resolved = resolveLinkedClaimBundle(bundle);
     for (const facet of profile.requiredFacets) {
-      currentFacet(resolved, facet, facet === "due-date" ? "deadline" : facet);
+      candidateRecords(resolved, facet, facet === "due-date" ? "deadline" : facet);
     }
-    const projection = { kind, subjectKey, facets: resolved.facets };
+    const provenance = resolveLinkedClaimBundle(bundle, "provenance");
+    const status = Object.values(resolved.facets).some(facet => facet.status === "contested")
+      ? "contested"
+      : "current";
+    const projection = { kind, subjectKey, status, facets: resolved.facets, provenance: provenance.facets };
     projected.push(projection);
     if (entities.has(kind)) {
       entities.get(kind).set(subject, projection);
     }
-  }
+    return { entry, kind, bundle, subjectKey, resolved };
+  });
 
-  for (const entry of bundles) {
-    const kind = text(entry?.kind ?? entry?.profile);
-    const projection = projected.find(candidate => candidate.kind === kind
-      && candidate.subjectKey === text((entry?.bundle ?? entry?.claims ?? entry)?.subjectKey));
-    if (!projection) defect(`projection missing for ${kind}`);
+  for (const { kind, resolved } of prepared) {
     validateReferences({
       entry: { kind },
-      resolved: { facets: projection.facets },
+      resolved,
       entities,
       taskIds,
       schema

@@ -80,24 +80,29 @@ sentence carries the Knowledge Core `fromtext`, `accordingto`, and `by`
 fields. Source identity and anchor, confidence, claim identity, replay, and
 current/contested/provenance views therefore remain the existing Knowledge
 Core contract. Unknown references remain unknown, and contested facets are
-surfaced rather than adjudicated.
+surfaced rather than adjudicated. The Headquarters projection reports an
+aggregate `current` or `contested` status, retains the resolver's contested
+candidate records and provenance view, and validates every candidate reference
+without selecting a winner.
 
 The Pyash schema for this profile is `module/headquarters-knowledge.pya`.
 `program/agent/headquarters/knowledge.mjs` provides the read-only
 `projectHeadquartersKnowledge` projection driven by that schema. It requires
 the schema-declared facets, checks that a deadline is an `ob date` without
 `since` or `until`, verifies person and organization references, and requires a
-canonical `work-` reference backed by both a WorkTask and a canonical work
-bundle. WorkTask identity is checked without changing the shared WorkTask
-contract. Projected bundle and facet ordering uses `compareUtf8Bytes`; the
-generic linked-claim layer remains responsible only for grouping, replay, and
-conflict views.
+work reference equal to an exact canonical `WorkTask.taskId`, backed by both
+that WorkTask and a canonical work bundle. WorkTask identity is checked without
+changing the shared WorkTask contract. Projected bundle and facet ordering uses
+`compareUtf8Bytes`; the generic linked-claim layer remains responsible only for
+grouping, replay, and conflict views.
 
 `examples/pyash/headquarters-contacts-commitments.pya` is the runnable
-Pyash-first proof. The standard newspaper runner records its linked artifact;
-`command/replay_newspaper.mjs` replays it and rejects content-addressed
-artifact tampering. No Headquarters-specific provenance, confidence, or source
-model is added beside the Knowledge Core evidence shell.
+Pyash-first proof. The standard newspaper runner records its linked artifact,
+executes both `claim identify` and `claim choose`, and emits the artifact as
+newline-separated canonical claim sentences. `command/replay_newspaper.mjs`
+replays it and rejects content-addressed artifact tampering. No
+Headquarters-specific provenance, confidence, or source model is added beside
+the Knowledge Core evidence shell.
 
 ## Approval and checkpoint resumption
 

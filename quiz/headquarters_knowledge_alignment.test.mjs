@@ -198,21 +198,21 @@ test("ordinary Knowledge Core claim identity remains the facet contract", () => 
   assert.equal(deriveClaimKey(dueDate), "su name commitment-001 be due-date ya");
 });
 
-function personBundle() {
+function personBundle({ subject = "person-ada", label = "Ada Lovelace", source = "hq-mail-001 person" } = {}) {
   return normalizeLinkedClaimBundle([
-    evidenceLine({ subject: "person-ada", facet: "person", value: `ob text ${JSON.stringify("Ada Lovelace")}`, source: "hq-mail-001 person" })
+    evidenceLine({ subject, facet: "person", value: `ob text ${JSON.stringify(label)}`, source })
   ]);
 }
 
-function organizationBundle() {
+function organizationBundle({ subject = "organization-analytical-engine", label = "Analytical Engine", source = "hq-mail-001 organization" } = {}) {
   return normalizeLinkedClaimBundle([
-    evidenceLine({ subject: "organization-analytical-engine", facet: "organization", value: `ob text ${JSON.stringify("Analytical Engine")}`, source: "hq-mail-001 organization" })
+    evidenceLine({ subject, facet: "organization", value: `ob text ${JSON.stringify(label)}`, source })
   ]);
 }
 
-function workBundle() {
+function workBundle(subject = "work-fixture-mail-001") {
   return normalizeLinkedClaimBundle([
-    evidenceLine({ subject: "work-fixture-mail-001", facet: "work", value: `ob text ${JSON.stringify("Decision packet")}`, source: "hq-mail-001 work" })
+    evidenceLine({ subject, facet: "work", value: `ob text ${JSON.stringify("Decision packet")}`, source: "hq-mail-001 work" })
   ]);
 }
 
@@ -231,15 +231,18 @@ function relationshipBundle() {
   ]);
 }
 
-function commitmentBundle({ dueDate = "2026-08-24", person = "person-ada", organization = "organization-analytical-engine", work = "work-fixture-mail-001" } = {}) {
-  const sentences = [
+function commitmentClaims({ dueDate = "2026-08-24", person = "person-ada", organization = "organization-analytical-engine", work = "work-fixture-mail-001" } = {}) {
+  return [
     evidenceLine({ facet: "bet", value: `ob text ${JSON.stringify("Prepare the decision packet")}`, source: "hq-mail-001 commitment" }),
     person && evidenceLine({ facet: "person", value: `ob name ${person}`, source: "hq-mail-001 person-ref" }),
     organization && evidenceLine({ facet: "organization", value: `ob name ${organization}`, source: "hq-mail-001 organization-ref" }),
     dueDate && evidenceLine({ facet: "due-date", value: `ob date ${dueDate}`, source: "hq-mail-001 deadline" }),
     work && evidenceLine({ facet: "work", value: `ob name ${work}`, source: "hq-mail-001 work-ref" })
-  ];
-  return normalizeLinkedClaimBundle(sentences.filter(Boolean));
+  ].filter(Boolean);
+}
+
+function commitmentBundle(options = {}) {
+  return normalizeLinkedClaimBundle(commitmentClaims(options));
 }
 
 function workTask(taskId = "work-fixture-mail-001") {
@@ -313,11 +316,75 @@ test("linked bundle facets and projections are canonical under reordered inputs"
 test("Headquarters projector applies Pyash schema and validates references read-only", async () => {
   const projected = await projectHeadquartersKnowledge(headquartersInput());
   const commitment = projected.bundles.find(bundle => bundle.kind === "bet");
+  assert.equal(commitment.status, "current");
   assert.equal(commitment.facets["due-date"].record.payload.date, "2026-08-24");
   assert.equal(commitment.facets.person.record.payload.name, "person-ada");
   assert.equal(commitment.facets.organization.record.payload.name, "organization-analytical-engine");
   assert.equal(commitment.facets.work.record.payload.name, "work-fixture-mail-001");
   assert.equal(commitment.facets.person.record.sentence.includes("fromtext"), true);
+});
+
+test("Headquarters projector retains normalized subject keys for raw claim arrays", async () => {
+  const base = headquartersInput();
+  for (const claims of [commitmentClaims(), commitmentClaims().map(normalizeEvidence)]) {
+    const projected = await projectHeadquartersKnowledge({
+      ...base,
+      bundles: base.bundles.map(entry => entry.kind === "bet"
+        ? { kind: entry.kind, claims }
+        : entry)
+    });
+    const commitment = projected.bundles.find(bundle => bundle.kind === "bet");
+    assert.equal(commitment.subjectKey, "su name commitment-001");
+  }
+});
+
+test("Headquarters projector preserves contested candidates and aggregate status", async () => {
+  const base = headquartersInput();
+  const contested = normalizeLinkedClaimBundle([
+    ...commitmentClaims({ person: "person-ada" }),
+    evidenceLine({
+      facet: "person",
+      value: "ob name person-charles",
+      source: "hq-mail-002 person-ref",
+      confidence: 0.8
+    })
+  ]);
+  const projected = await projectHeadquartersKnowledge({
+    ...base,
+    bundles: [
+      { kind: "bet", bundle: contested },
+      { kind: "person", bundle: personBundle() },
+      { kind: "person", bundle: personBundle({ subject: "person-charles", label: "Charles Babbage", source: "hq-mail-002 person" }) },
+      { kind: "organization", bundle: organizationBundle() },
+      { kind: "work", bundle: workBundle() }
+    ]
+  });
+  const commitment = projected.bundles.find(bundle => bundle.kind === "bet");
+  assert.equal(commitment.status, "contested");
+  assert.equal(commitment.facets.person.status, "contested");
+  assert.equal(commitment.facets.person.record, null);
+  assert.deepEqual(commitment.facets.person.records.map(record => record.payload.name), [
+    "person-ada",
+    "person-charles"
+  ]);
+  assert.equal(commitment.facets.person.records.every(record => record.sentence.includes("fromtext")), true);
+  assert.equal(commitment.provenance.person.status, "provenance");
+  assert.equal(commitment.provenance.person.records.length, 2);
+});
+
+test("Headquarters projector validates exact canonical work task ids without a prefix rule", async () => {
+  const taskId = "fixture-mail-001";
+  const projected = await projectHeadquartersKnowledge({
+    bundles: [
+      { kind: "bet", bundle: commitmentBundle({ work: taskId }) },
+      { kind: "person", bundle: personBundle() },
+      { kind: "organization", bundle: organizationBundle() },
+      { kind: "work", bundle: workBundle(taskId) }
+    ],
+    workTasks: [workTask(taskId)]
+  });
+  const commitment = projected.bundles.find(bundle => bundle.kind === "bet");
+  assert.equal(commitment.facets.work.record.payload.name, taskId);
 });
 
 test("Headquarters projector keeps contact and relationship references in the shared profile", async () => {
@@ -413,7 +480,7 @@ test("headquarters knowledge example records and replays its linked artifact", a
     const runId = "hq-contacts-commitments";
     const runCommand = path.join(repoRoot, "command", "run_pya_program.mjs");
     const example = path.join(runRoot, "examples", "pyash", "headquarters-contacts-commitments.pya");
-    await execFileAsync(process.execPath, [runCommand, "--newspaper", "--run-id", runId, example], {
+    const runResult = await execFileAsync(process.execPath, [runCommand, "--newspaper", "--run-id", runId, example], {
       cwd: runRoot,
       env: cleanEnv,
       timeout: 120000
@@ -428,11 +495,41 @@ test("headquarters knowledge example records and replays its linked artifact", a
     assert.match(replayed.stdout, /be replay ya/u);
 
     const newspaper = await fs.readFile(path.join(runRoot, "newspaper", `${runId}.pya`), "utf8");
-    const artifact = splitSentences(newspaper, { includeThen: true })
+    const newspaperSentences = splitSentences(newspaper, { includeThen: true })
       .filter(line => line.trim())
-      .map(line => parse(line.trim()))
-      .find(sentence => sentence?.be === "artifact" && sentence?.to?.filename?.endsWith("headquarters-contacts-commitments.pya"));
+      .map(line => parse(line.trim()));
+    const claimEvokes = newspaperSentences.filter(sentence => sentence?.be === "evoke" && sentence?.ob?.la?.be?.startsWith("claim "));
+    assert.deepEqual(claimEvokes.map(sentence => sentence.ob.la.be), ["claim identify", "claim choose"]);
+    const resultTexts = newspaperSentences
+      .filter(sentence => sentence?.su?.name === "result" && sentence?.be === "text")
+      .map(sentence => sentence.ob?.text);
+    assert.ok(resultTexts.includes("su name commitment-001 be person ya"));
+    const chosenView = resultTexts.map(value => {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return null;
+      }
+    }).find(value => value?.key === "su name commitment-001 be person ya");
+    assert.equal(chosenView?.status, "current");
+    assert.match(runResult.stderr, /artifacts folder/u);
+
+    const artifact = newspaperSentences.find(sentence => (
+      sentence?.be === "artifact"
+        && sentence?.to?.filename?.endsWith("headquarters-contacts-commitments.pya")
+    ));
     assert.ok(artifact);
+    const artifactPath = path.resolve(runRoot, artifact.to.filename);
+    const artifactSource = await fs.readFile(artifactPath, "utf8");
+    const artifactSentences = splitSentences(artifactSource, { includeThen: true })
+      .filter(line => line.trim())
+      .map(line => parse(line.trim()));
+    assert.equal(artifactSentences.length, 5);
+    const artifactBundle = normalizeLinkedClaimBundle(artifactSentences);
+    assert.deepEqual(
+      resolveLinkedClaimBundle(artifactBundle),
+      resolveLinkedClaimBundle(commitmentBundle())
+    );
     const hash = artifact.fromtext.text;
     const contentAddressed = path.join(runRoot, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.pya`);
     await fs.appendFile(contentAddressed, "tampered\n", "utf8");
