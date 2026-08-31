@@ -152,6 +152,30 @@ does not define hashing or entity aliases. Every canonical JSON key, payload
 ordering, anchor ordering, and final evidence-sentence tie-break uses one
 locale-independent lexicographic comparison of UTF-8 bytes.
 
+## 4.2 Linked claim bundles
+
+A linked claim bundle is a derived group of independent evidence sentences.
+Every sentence shares one stable named `su` identifier, while its canonical
+`be` predicate names one facet and its own `ob` carries that facet's value:
+
+```pyash
+su name commitment-001 ob text "Prepare the decision packet" fromtext text "hq-mail-001 paragraph-1" accordingto name direct-evidential by num 0.9 be commitment ya
+su name commitment-001 ob name ada-lovelace fromtext text "hq-mail-001 paragraph-2" accordingto name direct-evidential by num 0.9 be person ya
+su name commitment-001 ob name analytical-engine fromtext text "hq-mail-001 paragraph-3" accordingto name direct-evidential by num 0.9 be organization ya
+su name commitment-001 ob date 2026-08-24 fromtext text "hq-mail-001 paragraph-4" accordingto name direct-evidential by num 0.9 be due-date ya
+su name commitment-001 ob name work-fixture-mail-001 fromtext text "hq-mail-001 paragraph-5" accordingto name direct-evidential by num 0.9 be work ya
+```
+
+The bundle is not stored as an `ob map`: each facet remains independently
+replayable and conflict-resolvable. `normalizeLinkedClaimBundle` groups the
+existing Knowledge Core evidence records by stable subject and `be` facet;
+`resolveLinkedClaimBundle` applies the existing current, contested, or
+provenance view to each facet. A conflict is retained on its facet and is not
+silently resolved or allowed to rewrite another facet. A commitment deadline
+is an `ob date` value under `be due-date`; `since`/`until` remain claim
+validity identity and are not deadline fields. Every authoritative facet MUST
+carry the complete `fromtext`/`accordingto`/`by` evidence shell.
+
 ## 5. Loop behavior
 
 Session loop cycle:

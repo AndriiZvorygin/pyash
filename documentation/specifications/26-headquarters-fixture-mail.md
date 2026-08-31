@@ -58,6 +58,30 @@ Each candidate exposes task id, owner, domain, deadline, escalation reason,
 escalation target, and source locator. Ranking, approvals, scheduling, and a
 briefing database are outside this slice.
 
+## Headquarters knowledge profile
+
+Headquarters contact and commitment data uses the linked claim bundle in
+`18-pyash-agent.md`; it does not add a CRM, entity store, or provenance model.
+The stable `su` names the record and each separately keyed `be` facet carries
+one value. The initial profile is:
+
+| Record | Canonical facets and references |
+| --- | --- |
+| person | `be person`; contact details use separate `be contact-method` facets |
+| organization | `be organization`; memberships and counterparties are separate claims |
+| contact method | `be contact-method`, plus `be person` or `be organization` reference and an address/value facet |
+| relationship | `be relationship`, plus separate `be person` and `be organization` references |
+| commitment | `be commitment`, plus `be person`, `be organization`, `be due-date`, and `be work` references |
+
+For example, the commitment facets can reference `person-ada`,
+`organization-analytical-engine`, and `work-fixture-mail-001` with `ob name`,
+and carry the deadline as `ob date YYYY-MM-DD` under `be due-date`. Each
+sentence carries the Knowledge Core `fromtext`, `accordingto`, and `by`
+fields. Source identity and anchor, confidence, claim identity, replay, and
+current/contested/provenance views therefore remain the existing Knowledge
+Core contract. Unknown references remain unknown, and contested facets are
+surfaced rather than adjudicated.
+
 ## Approval and checkpoint resumption
 
 Headquarters approval is a Pyash-first extension over the same canonical
