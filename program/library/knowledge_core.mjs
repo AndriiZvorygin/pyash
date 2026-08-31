@@ -257,12 +257,6 @@ export function deriveLinkedClaimSubjectKey(sentence = {}) {
 
 function linkedClaimEntry(sentence) {
   const normalized = normalizeClaimSentence(sentence);
-  if (normalized.be === "due-date") {
-    if (normalized.since !== undefined || normalized.until !== undefined) {
-      throw new Error("linked claim bundle defective: due-date belongs in ob date, not since or until");
-    }
-    normalized.ob = { ...normalized.ob, date: canonicalDate(normalized.ob, "due-date") };
-  }
   if (normalized.ob?.map && typeof normalized.ob.map === "object" && !Array.isArray(normalized.ob.map)) {
     throw new Error("linked claim bundle defective: use one separately keyed facet per claim");
   }
@@ -275,6 +269,14 @@ function linkedClaimEntry(sentence) {
   };
 }
 
+function compareLinkedEntries(left, right) {
+  const facet = compareUtf8Bytes(left.facet, right.facet);
+  if (facet !== 0) return facet;
+  const key = compareUtf8Bytes(left.record.key, right.record.key);
+  if (key !== 0) return key;
+  return compareRecords(left.record, right.record);
+}
+
 function makeLinkedClaimBundle(entries) {
   if (!entries.length) throw new Error("linked claim bundle defective: at least one claim is required");
   const subjectKey = entries[0].subjectKey;
@@ -282,8 +284,9 @@ function makeLinkedClaimBundle(entries) {
     throw new Error("linked claim bundle defective: all claims must share one stable su identifier");
   }
 
+  const orderedEntries = [...entries].sort(compareLinkedEntries);
   const facets = {};
-  for (const entry of entries) {
+  for (const entry of orderedEntries) {
     const facet = facets[entry.facet] ?? { records: [] };
     facet.records.push(entry.record);
     facets[entry.facet] = facet;
@@ -291,7 +294,7 @@ function makeLinkedClaimBundle(entries) {
   return {
     subjectKey,
     facets,
-    records: entries.map(entry => entry.record)
+    records: orderedEntries.map(entry => entry.record)
   };
 }
 
@@ -327,17 +330,26 @@ function bundleFromInput(input) {
 export function resolveLinkedClaimBundle(input, view = "current") {
   const bundle = bundleFromInput(input);
   const facets = {};
-  for (const [facet, entry] of Object.entries(bundle.facets ?? {})) {
-    const keys = [...new Set((entry.records ?? []).map(record => record.key))];
+  const facetNames = Object.keys(bundle.facets ?? {}).sort(compareUtf8Bytes);
+  for (const facet of facetNames) {
+    const entry = bundle.facets[facet];
+    const facetRecords = [...(entry.records ?? [])].sort((left, right) => (
+      compareUtf8Bytes(left.key, right.key) || compareRecords(left, right)
+    ));
+    const keys = [...new Set(facetRecords.map(record => record.key))].sort(compareUtf8Bytes);
     if (keys.length <= 1) {
-      facets[facet] = resolveKnowledgeView(entry.records ?? [], keys[0] ?? "", view);
+      facets[facet] = resolveKnowledgeView(facetRecords, keys[0] ?? "", view);
       continue;
+    }
+    const claims = {};
+    for (const key of keys) {
+      claims[key] = resolveKnowledgeView(facetRecords, key, view);
     }
     facets[facet] = {
       view: "claims",
       key: null,
       status: "multiple",
-      claims: Object.fromEntries(keys.map(key => [key, resolveKnowledgeView(entry.records, key, view)]))
+      claims
     };
   }
   return {
