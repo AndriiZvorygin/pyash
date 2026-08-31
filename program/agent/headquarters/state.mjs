@@ -10,12 +10,16 @@ import {
 import { splitSentences } from "../../library/sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
 import { listChannelEnvelopes } from "../channel_core/queue.mjs";
-import { projectHeadquartersLayout } from "./layout.mjs";
+import {
+  HEADQUARTERS_ACTIVITY_POLICY,
+  projectHeadquartersLayout
+} from "./layout.mjs";
 import { projectHeadquartersKnowledge } from "./knowledge.mjs";
 import { listWorkTasks } from "../../runtime/work/operator.mjs";
 
 const DEFAULT_NEWSPAPER_LIMIT = 50;
 const DEFAULT_ACTIVITY_LIMIT = 20;
+const DEFAULT_COLLECTION_LIMIT = 100;
 const SKIPPED_ACTIVITY_ROOTS = new Set(["archived", "holding", "newspaper"]);
 const KNOWN_KINDS = new Set(["bet", "company", "contacting", "duty", "person", "relations"]);
 
@@ -108,6 +112,10 @@ function recordSourceCompare(left, right) {
     || compareUtf8Bytes(
       JSON.stringify(canonicalJson(left?.sentence)),
       JSON.stringify(canonicalJson(right?.sentence))
+    )
+    || compareUtf8Bytes(
+      JSON.stringify(canonicalJson(left)),
+      JSON.stringify(canonicalJson(right))
     );
 }
 
@@ -131,6 +139,11 @@ function recentRecordCompare(left, right) {
 function recordBeforeAsOf(record, asOfMs) {
   const timestamp = recordTimestamp(record);
   return !Number.isFinite(timestamp) || timestamp <= asOfMs;
+}
+
+function taskBeforeAsOf(task, asOfMs) {
+  const queuedAt = Date.parse(text(task?.queuedAt));
+  return !Number.isFinite(queuedAt) || queuedAt <= asOfMs;
 }
 
 async function listPyaFiles(root, current = root, output = []) {
@@ -214,14 +227,14 @@ async function readActivityState(worldRoot, asOf, activityLimit) {
     const firstPart = relativeFile.split("/")[0];
     if (path.basename(filePath) !== ".activity.pya" || SKIPPED_ACTIVITY_ROOTS.has(firstPart)) continue;
     const name = path.posix.dirname(relativeFile) || "world";
-    const records = (await parsePyaRecords(filePath, worldRoot))
+    const visible = (await parsePyaRecords(filePath, worldRoot))
       .filter(record => recordBeforeAsOf(record, asOfMs))
-      .sort(recentRecordCompare)
-      .slice(0, activityLimit);
+      .sort(recentRecordCompare);
     grouped.set(name, {
       name,
       source: { filename: relativeFile },
-      activity: records
+      activity: visible.slice(0, activityLimit),
+      activityTotal: visible.length
     });
   }
   return [...grouped.values()].sort((left, right) => compareUtf8Bytes(left.name, right.name));
@@ -350,7 +363,11 @@ function projectCommitments(knowledge) {
 function projectWork(workTasks) {
   return workTasks
     .map(clone)
-    .sort((left, right) => compareUtf8Bytes(left.taskId, right.taskId));
+    .sort((left, right) => compareUtf8Bytes(left.taskId, right.taskId)
+      || compareUtf8Bytes(
+        JSON.stringify(canonicalJson(left)),
+        JSON.stringify(canonicalJson(right))
+      ));
 }
 
 function projectApprovals(workTasks) {
@@ -364,6 +381,10 @@ function projectApprovals(workTasks) {
       compareUtf8Bytes(left.taskId, right.taskId)
         || compareUtf8Bytes(left.requestId, right.requestId)
         || compareUtf8Bytes(left.state, right.state)
+        || compareUtf8Bytes(
+          JSON.stringify(canonicalJson(left)),
+          JSON.stringify(canonicalJson(right))
+        )
     ));
 }
 
@@ -395,39 +416,44 @@ function projectChannels(channels, asOf) {
         || compareUtf8Bytes(left.payloadId, right.payloadId)
         || compareUtf8Bytes(left.eventId, right.eventId)
         || compareUtf8Bytes(left.path, right.path)
+        || compareUtf8Bytes(
+          JSON.stringify(canonicalJson(left)),
+          JSON.stringify(canonicalJson(right))
+        )
     ));
 }
 
-function projectNewspaper(records, asOf, limit) {
+function projectNewspaper(records, asOf) {
   const asOfMs = asOfMilliseconds(asOf);
   return records
     .map(clone)
     .filter(record => recordBeforeAsOf(record, asOfMs))
-    .sort(recentRecordCompare)
-    .slice(0, limit);
+    .sort(recentRecordCompare);
 }
 
-function projectSpaces(spaces) {
-  return spaces
-    .map(space => ({
-      name: text(space?.name),
+function projectSpaces(spaces, activityLimit) {
+  const seen = new Set();
+  const projected = [];
+  for (const space of spaces) {
+    const name = text(space?.name);
+    if (!name) continue;
+    if (seen.has(name)) defect(`duplicate space name: ${name}`);
+    seen.add(name);
+    const activity = Array.isArray(space?.activity) ? space.activity : [];
+    projected.push({
+      name,
       source: clone(space?.source ?? {}),
-      activity: (space?.activity ?? [])
+      activity: activity
         .map(clone)
         .sort(recentRecordCompare)
-    }))
-    .filter(space => space.name)
-    .sort((left, right) => compareUtf8Bytes(left.name, right.name));
+        .slice(0, activityLimit)
+    });
+  }
+  return projected.sort((left, right) => compareUtf8Bytes(left.name, right.name));
 }
 
 function statusActivityMarker(status) {
-  if (["planning", "implementing", "reviewing", "revision"].includes(status)) return "active";
-  if (status === "accepted") return "completion";
-  if (status === "failed") return "failure";
-  if (status === "ready") return "waiting-input";
-  if (status === "blocked") return "blocked";
-  if (status === "usage-limited") return "usage-limited";
-  return status;
+  return HEADQUARTERS_ACTIVITY_POLICY.statusActivity[status] ?? status;
 }
 
 function workMarker(task, marker, extra = {}) {
@@ -471,7 +497,10 @@ function activityMarkersForTask(task) {
   for (const event of task?.delegationEvents ?? []) {
     const eventType = text(event?.type);
     const timestamp = text(event?.timestamp);
-    markers.push(workMarker(task, "handoff", {
+    const marker = HEADQUARTERS_ACTIVITY_POLICY.handoffEvents.includes(eventType)
+      ? "handoff"
+      : "delegation";
+    markers.push(workMarker(task, marker, {
       signal: "delegation",
       eventType,
       identity: `${text(task.taskId)}:${eventType}:${timestamp}`,
@@ -482,13 +511,7 @@ function activityMarkersForTask(task) {
 }
 
 function channelActivityMarker(location) {
-  return {
-    input: "waiting-input",
-    runtime: "claimed",
-    "produce-waiting": "handoff",
-    "produce-success": "completion",
-    "produce-fail": "failure"
-  }[location] ?? "";
+  return HEADQUARTERS_ACTIVITY_POLICY.channelLifecycle[location] ?? "";
 }
 
 function activityMarkerCompare(left, right) {
@@ -569,6 +592,67 @@ function attachActivityMarkers(spaces, markers) {
     });
 }
 
+function collectionLimit(options, name, fallback) {
+  const configuredGroups = [options.collectionLimits, options.limits]
+    .filter(value => value !== undefined);
+  for (const group of configuredGroups) {
+    if (!group || typeof group !== "object" || Array.isArray(group)) {
+      defect("collection limits must be maps");
+    }
+  }
+  const directName = name === "spaceActivity" ? "activityLimit" : `${name}Limit`;
+  const configured = configuredGroups
+    .map(group => group[name])
+    .find(value => value !== undefined)
+    ?? options[directName];
+  return boundedLimit(configured, `${name} limit`, fallback);
+}
+
+function pageCollection(values, limit, total = values.length) {
+  const reportedTotal = Number.isInteger(Number(total)) && Number(total) >= values.length
+    ? Number(total)
+    : values.length;
+  const items = values.slice(0, limit);
+  return {
+    items,
+    limit,
+    total: reportedTotal,
+    returned: items.length,
+    truncated: items.length < reportedTotal
+  };
+}
+
+function pageMeta(page) {
+  return {
+    limit: page.limit,
+    total: page.total,
+    returned: page.returned,
+    truncated: page.truncated
+  };
+}
+
+function spaceActivityPagination(spaces, activityLimit) {
+  return spaces
+    .map(space => {
+      const name = text(space?.name);
+      if (!name) return null;
+      const activity = Array.isArray(space?.activity) ? space.activity : [];
+      const sourceTotal = Number(space?.activityTotal);
+      const total = Number.isInteger(sourceTotal) && sourceTotal >= activity.length
+        ? sourceTotal
+        : activity.length;
+      return {
+        name,
+        limit: activityLimit,
+        total,
+        returned: Math.min(activity.length, activityLimit),
+        truncated: activity.length > activityLimit || total > activityLimit
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => compareUtf8Bytes(left.name, right.name));
+}
+
 /**
  * Read only the canonical filesystem inputs used by the Headquarters state
  * snapshot. This function deliberately does not prepare queues or write any
@@ -579,6 +663,8 @@ export async function readHeadquartersStateSources({
   asOf,
   newspaperLimit = DEFAULT_NEWSPAPER_LIMIT,
   activityLimit = DEFAULT_ACTIVITY_LIMIT,
+  collectionLimits,
+  limits,
   bundles,
   knowledgeBundles
 } = {}) {
@@ -586,10 +672,20 @@ export async function readHeadquartersStateSources({
   if (!root) defect("worldRoot is required");
   const resolvedRoot = path.resolve(root);
   const normalizedAsOf = asOfIso(asOf);
-  const boundedNewspaperLimit = boundedLimit(newspaperLimit, "newspaperLimit", DEFAULT_NEWSPAPER_LIMIT);
-  const boundedActivityLimit = boundedLimit(activityLimit, "activityLimit", DEFAULT_ACTIVITY_LIMIT);
+  const asOfMs = asOfMilliseconds(normalizedAsOf);
+  const boundedNewspaperLimit = collectionLimit(
+    { collectionLimits, limits, newspaperLimit },
+    "newspaper",
+    DEFAULT_NEWSPAPER_LIMIT
+  );
+  const boundedActivityLimit = collectionLimit(
+    { collectionLimits, limits, activityLimit },
+    "spaceActivity",
+    DEFAULT_ACTIVITY_LIMIT
+  );
   const [workTasks, channels, newspaperState, spaces] = await Promise.all([
-    listWorkTasks(resolvedRoot, { includeTerminal: true, readOnly: true }),
+    listWorkTasks(resolvedRoot, { includeTerminal: true, readOnly: true })
+      .then(tasks => tasks.filter(task => taskBeforeAsOf(task, asOfMs))),
     listChannelEnvelopes(resolvedRoot),
     readNewspaperState(resolvedRoot, normalizedAsOf, boundedNewspaperLimit),
     readActivityState(resolvedRoot, normalizedAsOf, boundedActivityLimit)
@@ -604,6 +700,9 @@ export async function readHeadquartersStateSources({
     workTasks,
     channels,
     newspaper: newspaperState.recent,
+    newspaperLimit: boundedNewspaperLimit,
+    newspaperTotal: newspaperState.all.length,
+    activityLimit: boundedActivityLimit,
     spaces
   };
 }
@@ -615,7 +714,20 @@ export async function readHeadquartersStateSources({
 export async function projectHeadquartersState(options = {}) {
   const source = options.sources ?? {};
   const asOf = asOfIso(options.asOf ?? source.asOf);
-  const newspaperLimit = boundedLimit(options.newspaperLimit, "newspaperLimit", DEFAULT_NEWSPAPER_LIMIT);
+  const limits = {
+    commitments: collectionLimit(options, "commitments", DEFAULT_COLLECTION_LIMIT),
+    work: collectionLimit(options, "work", DEFAULT_COLLECTION_LIMIT),
+    approvals: collectionLimit(options, "approvals", DEFAULT_COLLECTION_LIMIT),
+    channels: collectionLimit(options, "channels", DEFAULT_COLLECTION_LIMIT),
+    newspaper: collectionLimit(options, "newspaper", options.newspaperLimit ?? DEFAULT_NEWSPAPER_LIMIT),
+    spaces: collectionLimit(options, "spaces", DEFAULT_COLLECTION_LIMIT),
+    activityMarkers: collectionLimit(options, "activityMarkers", DEFAULT_COLLECTION_LIMIT)
+  };
+  const activityLimit = collectionLimit(
+    options,
+    "spaceActivity",
+    options.activityLimit ?? source.activityLimit ?? DEFAULT_ACTIVITY_LIMIT
+  );
   const bundles = suppliedBundles(options, source);
   const workTasks = options.workTasks ?? source.workTasks ?? [];
   const channels = options.channels ?? source.channels ?? [];
@@ -626,36 +738,64 @@ export async function projectHeadquartersState(options = {}) {
   if (!Array.isArray(newspaper)) defect("newspaper must be an array");
   if (!Array.isArray(spaces)) defect("spaces must be an array");
 
+  const asOfMs = asOfMilliseconds(asOf);
+  const visibleWorkTasks = workTasks.filter(task => taskBeforeAsOf(task, asOfMs));
   const knowledge = await projectHeadquartersKnowledge({
     bundles,
-    workTasks,
+    workTasks: visibleWorkTasks,
     modulePath: options.modulePath
   });
-  const projectedWork = projectWork(workTasks);
-  const projectedApprovals = projectApprovals(workTasks);
+  const projectedWork = projectWork(visibleWorkTasks);
+  const projectedApprovals = projectApprovals(visibleWorkTasks);
   const projectedChannels = projectChannels(channels, asOf);
-  const projectedSpaces = projectSpaces(spaces);
-  const activityMarkers = projectActivityMarkers({
+  const projectedSpaces = projectSpaces(spaces, activityLimit);
+  const allActivityMarkers = projectActivityMarkers({
     work: projectedWork,
     channels: projectedChannels,
     spaces: projectedSpaces
   });
-  const commitments = projectCommitments(knowledge);
+  const allCommitments = projectCommitments(knowledge);
+  const allNewspaper = projectNewspaper(newspaper, asOf);
+  const commitmentPage = pageCollection(allCommitments, limits.commitments);
+  const workPage = pageCollection(projectedWork, limits.work);
+  const approvalPage = pageCollection(projectedApprovals, limits.approvals);
+  const channelPage = pageCollection(projectedChannels, limits.channels);
+  const newspaperPage = pageCollection(
+    allNewspaper,
+    limits.newspaper,
+    options.newspaperTotal ?? source.newspaperTotal ?? allNewspaper.length
+  );
+  const activityPage = pageCollection(allActivityMarkers, limits.activityMarkers);
+  const spacePage = pageCollection(
+    attachActivityMarkers(projectedSpaces, activityPage.items),
+    limits.spaces
+  );
+  const spaceActivityPages = spaceActivityPagination(spaces, activityLimit);
   const snapshot = {
     asOf,
-    commitments,
-    work: projectedWork,
-    approvals: projectedApprovals,
-    channels: projectedChannels,
-    newspaper: projectNewspaper(newspaper, asOf, newspaperLimit),
-    spaces: attachActivityMarkers(projectedSpaces, activityMarkers),
-    activityMarkers,
+    commitments: commitmentPage.items,
+    work: workPage.items,
+    approvals: approvalPage.items,
+    channels: channelPage.items,
+    newspaper: newspaperPage.items,
+    spaces: spacePage.items,
+    activityMarkers: activityPage.items,
+    pagination: {
+      commitments: pageMeta(commitmentPage),
+      work: pageMeta(workPage),
+      approvals: pageMeta(approvalPage),
+      channels: pageMeta(channelPage),
+      newspaper: pageMeta(newspaperPage),
+      spaces: pageMeta(spacePage),
+      activityMarkers: pageMeta(activityPage),
+      spaceActivity: spaceActivityPages
+    },
     layout: projectHeadquartersLayout({
-      commitments,
-      work: projectedWork,
-      approvals: projectedApprovals,
-      channels: projectedChannels,
-      spaces: projectedSpaces
+      commitments: commitmentPage.items,
+      work: workPage.items,
+      approvals: approvalPage.items,
+      channels: channelPage.items,
+      spaces: spacePage.items
     })
   };
   return freeze(snapshot);

@@ -163,6 +163,17 @@ test("Headquarters state preserves contested Knowledge Core commitments and chec
     }
   });
   const work = workTask("work-fixture-mail-001", { status: "implementing" });
+  const futureTask = workTask("future-task-001", {
+    domain: "future",
+    queuedAt: "2026-08-26T00:00:00.000Z",
+    status: "accepted",
+    checkpoint: {
+      approval: {
+        state: "pending",
+        requestId: "future-request-001"
+      }
+    }
+  });
   const contested = normalizeLinkedClaimBundle([
     ...commitmentBundle().records.map(record => parse(record.sentence)),
     evidenceLine({
@@ -192,7 +203,7 @@ test("Headquarters state preserves contested Knowledge Core commitments and chec
     { kind: "duty", bundle: dutyBundle() },
     { kind: "duty", bundle: dutyBundle("work-fixture-mail-002") }
   ];
-  const workTasks = [work, workTask("work-fixture-mail-002"), approvalTask];
+  const workTasks = [work, workTask("work-fixture-mail-002"), approvalTask, futureTask];
   const channels = [
     {
       location: "input",
@@ -296,6 +307,11 @@ test("Headquarters state preserves contested Knowledge Core commitments and chec
     "work-fixture-mail-001",
     "work-fixture-mail-002"
   ]);
+  assert.equal(snapshot.work.some(task => task.taskId === "future-task-001"), false);
+  assert.equal(snapshot.approvals.some(approval => approval.taskId === "future-task-001"), false);
+  assert.equal(snapshot.activityMarkers.some(marker => marker.source.taskId === "future-task-001"), false);
+  assert.equal(snapshot.layout.rooms.some(room => room.name === "workplace/future"), false);
+  assert.equal(snapshot.layout.placements.some(placement => placement.id === "future-task-001"), false);
   assert.equal(snapshot.approvals.length, 1);
   assert.equal(snapshot.approvals[0].taskId, "approval-task-001");
   assert.equal(snapshot.approvals[0].state, "pending");
@@ -369,7 +385,10 @@ test("Headquarters state preserves contested Knowledge Core commitments and chec
   assert.equal(approvalTaskMarkers.some(marker => marker.marker === "blocked"), true);
   assert.equal(approvalTaskMarkers.some(marker => marker.marker === "approval-wait"), true);
   assert.equal(approvalTaskMarkers.some(marker => marker.marker === "escalation"), true);
-  assert.equal(approvalTaskMarkers.filter(marker => marker.marker === "handoff").length, 2);
+  assert.equal(approvalTaskMarkers.filter(marker => marker.marker === "handoff").length, 1);
+  assert.equal(approvalTaskMarkers.some(marker => (
+    marker.marker === "delegation" && marker.eventType === "escalated"
+  )), true);
   assert.equal(approvalTaskMarkers.some(marker => marker.marker === "waiting-input"), false);
   assert.deepEqual(snapshot.layout.rooms.map(room => room.name), [
     "chief-of-staff",
@@ -386,6 +405,72 @@ test("Headquarters state preserves contested Knowledge Core commitments and chec
   assert.equal(workPlacement.y + workPlacement.height <= workRoom.bounds.y + workRoom.bounds.height, true);
   assert.equal(Object.isFrozen(snapshot.layout), true);
 
+  const limited = await projectHeadquartersState({
+    asOf: "2026-08-25T00:00:00.000Z",
+    bundles,
+    workTasks,
+    channels,
+    newspaper,
+    spaces,
+    collectionLimits: {
+      commitments: 1,
+      work: 1,
+      approvals: 0,
+      channels: 1,
+      newspaper: 1,
+      spaces: 1,
+      activityMarkers: 1,
+      spaceActivity: 1
+    }
+  });
+  const expectedLimits = {
+    commitments: 1,
+    work: 1,
+    approvals: 0,
+    channels: 1,
+    newspaper: 1,
+    spaces: 1,
+    activityMarkers: 1
+  };
+  for (const name of [
+    "commitments",
+    "work",
+    "approvals",
+    "channels",
+    "newspaper",
+    "spaces",
+    "activityMarkers"
+  ]) {
+    assert.equal(limited.pagination[name].limit, expectedLimits[name]);
+    assert.equal(limited.pagination[name].total >= limited.pagination[name].returned, true);
+    assert.equal(
+      limited.pagination[name].truncated,
+      limited.pagination[name].returned < limited.pagination[name].total
+    );
+  }
+  assert.equal(limited.pagination.commitments.total, 2);
+  assert.equal(limited.pagination.work.total, 3);
+  assert.equal(limited.pagination.approvals.total, 1);
+  assert.equal(limited.pagination.channels.total, 5);
+  assert.equal(limited.pagination.newspaper.total, 2);
+  assert.equal(limited.pagination.spaces.total, 1);
+  assert.equal(limited.pagination.activityMarkers.total > 1, true);
+  assert.equal(limited.pagination.spaceActivity[0].limit, 1);
+  assert.equal(limited.pagination.spaceActivity[0].total, 2);
+
+  const duplicateSpaces = [
+    spaces[0],
+    { ...spaces[0], source: { filename: "mailroom/duplicate.activity.pya" } }
+  ];
+  await assert.rejects(
+    () => projectHeadquartersState({ asOf: snapshot.asOf, bundles, workTasks, channels, newspaper, spaces: duplicateSpaces }),
+    /duplicate space name: mailroom/
+  );
+  await assert.rejects(
+    () => projectHeadquartersState({ asOf: snapshot.asOf, bundles, workTasks, channels, newspaper, spaces: [...duplicateSpaces].reverse() }),
+    /duplicate space name: mailroom/
+  );
+
   const reordered = await projectHeadquartersState({
     asOf: "2026-08-25T00:00:00.000Z",
     bundles: [...bundles].reverse(),
@@ -398,7 +483,12 @@ test("Headquarters state preserves contested Knowledge Core commitments and chec
     })),
     newspaperLimit: 1
   });
-  assert.equal(JSON.stringify(reordered), JSON.stringify(snapshot));
+  assert.equal(
+    Buffer.from(JSON.stringify(reordered), "utf8").equals(
+      Buffer.from(JSON.stringify(snapshot), "utf8")
+    ),
+    true
+  );
 });
 
 test("Headquarters filesystem reading is deterministic and does not prepare empty queues", async () => {
