@@ -3,7 +3,8 @@ import path from "node:path";
 
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { parse } from "../../understand/index.mjs";
-import { ensureHoldingLaneDirs } from "../../agent/holding_lane/layout.mjs";
+import { compareUtf8Bytes } from "../../library/knowledge_core.mjs";
+import { ensureHoldingLaneDirs, holdingLanePaths } from "../../agent/holding_lane/layout.mjs";
 import {
   assertWorkTask,
   buildWorkTask,
@@ -423,10 +424,12 @@ function statusFromText(text) {
   });
 }
 
-async function statusDir(worldRoot) {
-  const paths = await ensureHoldingLaneDirs(worldRoot, { lane: "work", migrateLegacyProduce: true });
+async function statusDir(worldRoot, { create = true } = {}) {
+  const paths = create
+    ? await ensureHoldingLaneDirs(worldRoot, { lane: "work", migrateLegacyProduce: true })
+    : holdingLanePaths(worldRoot, { lane: "work" });
   const dir = path.join(paths.artifactsDir, "task");
-  await fs.mkdir(dir, { recursive: true });
+  if (create) await fs.mkdir(dir, { recursive: true });
   return dir;
 }
 
@@ -497,8 +500,11 @@ export async function readWorkTaskStatus(worldRoot, taskId) {
   }
 }
 
-export async function listWorkTaskStatuses(worldRoot, { includeTerminal = true } = {}) {
-  const dir = await statusDir(worldRoot);
+export async function listWorkTaskStatuses(worldRoot, {
+  includeTerminal = true,
+  readOnly = false
+} = {}) {
+  const dir = await statusDir(worldRoot, { create: !readOnly });
   let entries = [];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
@@ -523,7 +529,7 @@ export async function listWorkTaskStatuses(worldRoot, { includeTerminal = true }
     if (priority) return priority;
     const queued = Date.parse(left.queuedAt) - Date.parse(right.queuedAt);
     if (queued) return queued;
-    return left.taskId.localeCompare(right.taskId);
+    return compareUtf8Bytes(left.taskId, right.taskId);
   });
 }
 

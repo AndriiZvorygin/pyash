@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { parse } from "../../understand/index.mjs";
@@ -10,6 +11,7 @@ import {
   completeSpoolItem,
   failSpoolItem
 } from "../../library/spool.mjs";
+import { compareUtf8Bytes } from "../../library/knowledge_core.mjs";
 import { holdingLanePaths, ensureHoldingLaneDirs } from "../holding_lane/layout.mjs";
 
 function quotePyashText(value) {
@@ -228,6 +230,72 @@ export async function enqueueProduceEnvelope(worldRoot, envelope = {}) {
 async function readEnvelopeFile(targetPath) {
   const text = await fs.readFile(targetPath, "utf8");
   return envelopeFromText(text);
+}
+
+export async function readChannelEnvelope(targetPath) {
+  return readEnvelopeFile(targetPath);
+}
+
+async function readOnlyEnvelopeFiles(directory, location) {
+  let entries = [];
+  try {
+    entries = await fs.readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const filenames = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".pya"))
+    .map((entry) => entry.name)
+    .sort(compareUtf8Bytes);
+  const envelopes = [];
+  for (const filename of filenames) {
+    const targetPath = path.join(directory, filename);
+    try {
+      const envelope = await readEnvelopeFile(targetPath);
+      envelopes.push({
+        location,
+        filename,
+        path: targetPath,
+        envelope
+      });
+    } catch {
+      continue;
+    }
+  }
+  return envelopes;
+}
+
+/**
+ * List channel envelopes without preparing or changing the channel spool.
+ * Queue lifecycle helpers intentionally remain separate because they ensure
+ * directories and may claim, acknowledge, migrate, or requeue files.
+ */
+export async function listChannelEnvelopes(worldRoot, {
+  includeCompleted = true,
+  includeFailed = true
+} = {}) {
+  const paths = channelQueuePaths(worldRoot);
+  const locations = [
+    ["input", paths.inputDir],
+    ["runtime", paths.runtimeDir],
+    ["produce-waiting", paths.produceDir]
+  ];
+  if (includeCompleted) locations.push(["produce-success", paths.produceSuccessDir]);
+  if (includeFailed) locations.push(["produce-fail", paths.produceFailDir]);
+  const listed = [];
+  for (const [location, directory] of locations) {
+    listed.push(...await readOnlyEnvelopeFiles(directory, location));
+  }
+  return listed.sort((left, right) => (
+    compareUtf8Bytes(left.envelope?.queuedAt, right.envelope?.queuedAt)
+      || compareUtf8Bytes(left.location, right.location)
+      || compareUtf8Bytes(left.envelope?.channelType, right.envelope?.channelType)
+      || compareUtf8Bytes(left.envelope?.agentName, right.envelope?.agentName)
+      || compareUtf8Bytes(left.envelope?.identity, right.envelope?.identity)
+      || compareUtf8Bytes(left.filename, right.filename)
+      || compareUtf8Bytes(left.path, right.path)
+  ));
 }
 
 export async function claimOldestInputEnvelope(
