@@ -1,10 +1,10 @@
 su name headquarter know planned be map def
-  su name bet fields ob ve text "bet" "person" "organization" "due-date" "work" ya
+  su name bet fields ob ve text "bet" "person" "company" "deadline" "worker" ya
   su name person fields ob ve text "person" ya
-  su name company fields ob ve text "organization" ya
-  su name contacting fields ob ve text "contact-method" ya
-  su name relations fields ob ve text "relationship" "person" "organization" ya
-  su name worker fields ob ve text "work" ya
+  su name company fields ob ve text "company" ya
+  su name contacting fields ob ve text "contacting" ya
+  su name relations fields ob ve text "relations" "person" "company" ya
+  su name worker fields ob ve text "worker" ya
   su name deadline form ob name date ya
 prah
 exists su name headquarter know planned be export ya
