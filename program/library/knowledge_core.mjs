@@ -1,4 +1,5 @@
 import { sentenceToPyash } from "../beautiful.mjs";
+import { parse } from "../understand/index.mjs";
 import { resolveVerbAlias } from "./verbAliases.mjs";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
@@ -239,6 +240,110 @@ export function normalizeEvidence(sentence = {}) {
     anchor: provenance.anchor,
     anchorId: provenance.anchorId,
     sentence: sentenceToPyash(normalized)
+  };
+}
+
+function linkedClaimSubjectKey(sentence) {
+  const subject = sentence?.su;
+  if (!subject?.name) {
+    throw new Error("linked claim bundle defective: every claim requires a stable su name");
+  }
+  return sentenceToPyash({ su: subject });
+}
+
+export function deriveLinkedClaimSubjectKey(sentence = {}) {
+  return linkedClaimSubjectKey(normalizeClaimSentence(sentence));
+}
+
+function linkedClaimEntry(sentence) {
+  const normalized = normalizeClaimSentence(sentence);
+  if (normalized.be === "due-date") {
+    if (normalized.since !== undefined || normalized.until !== undefined) {
+      throw new Error("linked claim bundle defective: due-date belongs in ob date, not since or until");
+    }
+    normalized.ob = { ...normalized.ob, date: canonicalDate(normalized.ob, "due-date") };
+  }
+  if (normalized.ob?.map && typeof normalized.ob.map === "object" && !Array.isArray(normalized.ob.map)) {
+    throw new Error("linked claim bundle defective: use one separately keyed facet per claim");
+  }
+  const evidence = normalizeEvidence(normalized);
+  return {
+    subjectKey: linkedClaimSubjectKey(normalized),
+    facet: normalized.be,
+    sentence: normalized,
+    record: evidence
+  };
+}
+
+function makeLinkedClaimBundle(entries) {
+  if (!entries.length) throw new Error("linked claim bundle defective: at least one claim is required");
+  const subjectKey = entries[0].subjectKey;
+  if (entries.some(entry => entry.subjectKey !== subjectKey)) {
+    throw new Error("linked claim bundle defective: all claims must share one stable su identifier");
+  }
+
+  const facets = {};
+  for (const entry of entries) {
+    const facet = facets[entry.facet] ?? { records: [] };
+    facet.records.push(entry.record);
+    facets[entry.facet] = facet;
+  }
+  return {
+    subjectKey,
+    facets,
+    records: entries.map(entry => entry.record)
+  };
+}
+
+/**
+ * Normalize a linked entity bundle without changing the individual claim
+ * records. Each sentence remains independently keyed by its canonical `be`
+ * predicate, so replay and conflict resolution can operate at facet level.
+ */
+export function normalizeLinkedClaimBundle(sentences = []) {
+  if (!Array.isArray(sentences)) {
+    throw new Error("linked claim bundle defective: claims must be an array");
+  }
+  return makeLinkedClaimBundle(sentences.map(linkedClaimEntry));
+}
+
+function bundleFromInput(input) {
+  if (input && typeof input === "object" && !Array.isArray(input) && input.facets) return input;
+  if (!Array.isArray(input)) {
+    throw new Error("linked claim bundle defective: claims must be an array or normalized bundle");
+  }
+  if (input.length === 0) return normalizeLinkedClaimBundle(input);
+  if (input.every(record => record?.key && record?.payload !== undefined && record?.sentence)) {
+    return normalizeLinkedClaimBundle(input.map(record => parse(record.sentence)));
+  }
+  return normalizeLinkedClaimBundle(input);
+}
+
+/**
+ * Resolve every linked facet with the existing Knowledge Core view. A facet
+ * with more than one canonical claim key exposes a small `claims` projection;
+ * no keys are merged or silently adjudicated.
+ */
+export function resolveLinkedClaimBundle(input, view = "current") {
+  const bundle = bundleFromInput(input);
+  const facets = {};
+  for (const [facet, entry] of Object.entries(bundle.facets ?? {})) {
+    const keys = [...new Set((entry.records ?? []).map(record => record.key))];
+    if (keys.length <= 1) {
+      facets[facet] = resolveKnowledgeView(entry.records ?? [], keys[0] ?? "", view);
+      continue;
+    }
+    facets[facet] = {
+      view: "claims",
+      key: null,
+      status: "multiple",
+      claims: Object.fromEntries(keys.map(key => [key, resolveKnowledgeView(entry.records, key, view)]))
+    };
+  }
+  return {
+    view,
+    subjectKey: bundle.subjectKey,
+    facets
   };
 }
 

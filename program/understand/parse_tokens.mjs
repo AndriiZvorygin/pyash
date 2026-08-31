@@ -622,7 +622,6 @@ export function parseTokens(
         const look = words[j];
         const isBoundary =
           ROLE_KEYS.includes(look) ||
-          CONTEXT_KEYS.includes(look) ||
           look === "then" ||
           look === "else" ||
           look === "ta" ||
