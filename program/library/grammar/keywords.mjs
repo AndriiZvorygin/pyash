@@ -4,7 +4,7 @@ import {
   compositionalGrid
 } from "../compositionalCases.mjs";
 
-export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can", "pe"];
+export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can", "pe", "pi7"];
 
 export const COMPOSITIONAL_ALIASES = {
   inside: "in",

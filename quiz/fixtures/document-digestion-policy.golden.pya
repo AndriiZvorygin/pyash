@@ -1,0 +1,16 @@
+exists su name src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28 ob text quoted.text.# Data Handling Policy
+
+Personal data must be encrypted at rest.
+
+Teams must report incidents within 24 hours.
+
+## Retention
+
+Records are retained for 30 days.
+.text.quoted fromtext text "7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28" accordingto name sha256 by num 160 be source ya
+su name section-0001-paragraph-0001-lines-3-3-bytes-24-64 ob text "Personal data must be encrypted at rest." fromtext la su name src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28 ob text "section-0001-paragraph-0001-lines-3-3-bytes-24-64" be text ko be anchor ya
+su name candidate-0001 ob text "Personal data must be encrypted at rest." fromtext la su name src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28 ob text "section-0001-paragraph-0001-lines-3-3-bytes-24-64" be text ko accordingto name reported-evidential by num 1 be text pi7
+su name section-0001-paragraph-0002-lines-5-5-bytes-66-110 ob text "Teams must report incidents within 24 hours." fromtext la su name src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28 ob text "section-0001-paragraph-0002-lines-5-5-bytes-66-110" be text ko be anchor ya
+su name candidate-0002 ob text "Teams must report incidents within 24 hours." fromtext la su name src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28 ob text "section-0001-paragraph-0002-lines-5-5-bytes-66-110" be text ko accordingto name reported-evidential by num 1 be text pi7
+su name section-0002-paragraph-0001-lines-9-9-bytes-126-159 ob text "Records are retained for 30 days." fromtext la su name src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28 ob text "section-0002-paragraph-0001-lines-9-9-bytes-126-159" be text ko be anchor ya
+su name candidate-0003 ob text "Records are retained for 30 days." fromtext la su name src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28 ob text "section-0002-paragraph-0001-lines-9-9-bytes-126-159" be text ko accordingto name reported-evidential by num 1 be text pi7

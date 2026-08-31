@@ -94,6 +94,7 @@ import speakerIdentity, { signatures as speakerIdentitySignatures } from "./spea
 import headquarters, { signatures as headquartersSignatures } from "./headquarters.mjs";
 import ratify, { signatures as ratifySignatures } from "./ratify.mjs";
 import { claimIdentify, claimChoose, signatures as claimSignatures } from "./claim.mjs";
+import documentDigestion, { signatures as documentDigestionSignatures } from "./document_digest.mjs";
 
 export {
   plus,
@@ -179,7 +180,8 @@ export {
   headquarters,
   ratify,
   claimIdentify,
-  claimChoose
+  claimChoose,
+  documentDigestion
 };
 
 export const builtInSignatures = [
@@ -279,4 +281,5 @@ export const builtInSignatures = [
   ...headquartersSignatures,
   ...ratifySignatures,
   ...claimSignatures,
+  ...documentDigestionSignatures,
 ];
