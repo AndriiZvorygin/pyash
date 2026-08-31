@@ -1,0 +1,29 @@
+su name headquarters layout policy be map def
+  su name room width ob num 320 ya
+  su name room minimum height ob num 240 ya
+  su name room gap ob num 20 ya
+  su name room margin ob num 16 ya
+  su name placement size ob num 48 ya
+  su name placement gap ob num 16 ya
+  su name placement row count ob num 4 ya
+  su name dynamic room columns ob num 3 ya
+  su name fixed room mailroom ob text "{\"x\":0,\"y\":0,\"width\":320,\"height\":240}" ya
+  su name fixed room chief-of-staff ob text "{\"x\":340,\"y\":0,\"width\":320,\"height\":240}" ya
+  su name status activity planning ob text "active" ya
+  su name status activity implementing ob text "active" ya
+  su name status activity reviewing ob text "active" ya
+  su name status activity revision ob text "active" ya
+  su name status activity ready ob text "waiting-input" ya
+  su name status activity blocked ob text "blocked" ya
+  su name status activity usage-limited ob text "usage-limited" ya
+  su name status activity accepted ob text "completion" ya
+  su name status activity failed ob text "failure" ya
+  su name channel lifecycle input ob text "waiting-input" ya
+  su name channel lifecycle runtime ob text "claimed" ya
+  su name channel lifecycle produce-waiting ob text "handoff" ya
+  su name channel lifecycle produce-success ob text "completion" ya
+  su name channel lifecycle produce-fail ob text "failure" ya
+  su name handoff event assigned ob text "truth" ya
+  su name handoff event accepted ob text "truth" ya
+prah
+su name headquarters layout policy be export ya

@@ -1,17 +1,18 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { canonicalJson, compareUtf8Bytes } from "../../library/knowledge_core.mjs";
+import { splitSentences } from "../../library/sentenceSplitter.mjs";
+import { parse } from "../../understand/index.mjs";
 
-const ROOM_WIDTH = 320;
-const ROOM_MIN_HEIGHT = 240;
-const ROOM_GAP = 20;
-const ROOM_MARGIN = 16;
-const PLACEMENT_SIZE = 48;
-const PLACEMENT_GAP = 16;
-const PLACEMENTS_PER_ROW = 4;
+const DEFAULT_LAYOUT_MODULE_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../module/headquarters-layout.pya"
+);
 
-const FIXED_ROOM_BOUNDS = Object.freeze({
-  mailroom: Object.freeze({ x: 0, y: 0, width: ROOM_WIDTH, height: ROOM_MIN_HEIGHT }),
-  "chief-of-staff": Object.freeze({ x: ROOM_WIDTH + ROOM_GAP, y: 0, width: ROOM_WIDTH, height: ROOM_MIN_HEIGHT })
-});
+// Geometry and activity policy are authored as Pyash facts. JavaScript only
+// reads and validates that module, then assembles transient coordinates.
 
 function text(value) {
   return String(value ?? "").trim();
@@ -28,6 +29,128 @@ function freeze(value) {
   for (const entry of Object.values(value)) freeze(entry);
   return Object.freeze(value);
 }
+
+function layoutDefect(message) {
+  throw new Error(`headquarters layout defective: ${message}`);
+}
+
+function readLayoutEntries(source, modulePath) {
+  const entries = [];
+  for (const raw of splitSentences(source, { includeThen: true })) {
+    if (!raw.trim()) continue;
+    try {
+      entries.push(parse(raw.trim()));
+    } catch (error) {
+      layoutDefect(`module is not parseable: ${modulePath} (${error?.message ?? "parse error"})`);
+    }
+  }
+  return entries;
+}
+
+function layoutPolicyField(fields, name) {
+  const value = fields.get(name);
+  if (!value) layoutDefect(`module field missing: ${name}`);
+  return value;
+}
+
+function layoutPolicyNumber(fields, name) {
+  const value = layoutPolicyField(fields, name)?.ob?.num;
+  if (!Number.isFinite(Number(value))) layoutDefect(`module field is not numeric: ${name}`);
+  return Number(value);
+}
+
+function layoutPolicyText(fields, name) {
+  const value = layoutPolicyField(fields, name)?.ob?.text;
+  const result = text(value);
+  if (!result) layoutDefect(`module field is empty: ${name}`);
+  return result;
+}
+
+function layoutPolicyJson(fields, name) {
+  try {
+    const value = JSON.parse(layoutPolicyText(fields, name));
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("not a map");
+    return value;
+  } catch {
+    layoutDefect(`module field is not a JSON map: ${name}`);
+  }
+}
+
+export function readHeadquartersLayoutPolicy(modulePath = DEFAULT_LAYOUT_MODULE_PATH) {
+  const resolvedPath = path.resolve(String(modulePath));
+  let source;
+  try {
+    source = fs.readFileSync(resolvedPath, "utf8");
+  } catch {
+    layoutDefect(`module unavailable: ${resolvedPath}`);
+  }
+  const entries = readLayoutEntries(source, resolvedPath);
+  if (!entries.some(entry => (
+    entry?.mood === "def"
+      && entry?.be === "map"
+      && entry?.su?.name === "headquarters layout policy"
+  ))) {
+    layoutDefect(`module header missing: ${resolvedPath}`);
+  }
+  const fields = new Map();
+  for (const entry of entries) {
+    if (entry?.mood !== "ya" || !entry?.su?.name) continue;
+    if (fields.has(entry.su.name)) layoutDefect(`module field repeats: ${entry.su.name}`);
+    fields.set(entry.su.name, entry);
+  }
+  const fixedRooms = {};
+  for (const name of ["mailroom", "chief-of-staff"]) {
+    const bounds = layoutPolicyJson(fields, `fixed room ${name}`);
+    for (const key of ["x", "y", "width", "height"]) {
+      if (!Number.isFinite(Number(bounds[key]))) layoutDefect(`fixed room ${name} has invalid ${key}`);
+      bounds[key] = Number(bounds[key]);
+    }
+    fixedRooms[name] = bounds;
+  }
+  const statusActivity = {};
+  for (const status of ["planning", "implementing", "reviewing", "revision", "ready", "blocked", "usage-limited", "accepted", "failed"]) {
+    statusActivity[status] = layoutPolicyText(fields, `status activity ${status}`);
+  }
+  const channelLifecycle = {};
+  for (const location of ["input", "runtime", "produce-waiting", "produce-success", "produce-fail"]) {
+    channelLifecycle[location] = layoutPolicyText(fields, `channel lifecycle ${location}`);
+  }
+  const handoffEvents = ["assigned", "accepted"]
+    .filter(eventType => layoutPolicyText(fields, `handoff event ${eventType}`) === "truth")
+    .sort(compareUtf8Bytes);
+  return freeze({
+    roomWidth: layoutPolicyNumber(fields, "room width"),
+    roomMinimumHeight: layoutPolicyNumber(fields, "room minimum height"),
+    roomGap: layoutPolicyNumber(fields, "room gap"),
+    roomMargin: layoutPolicyNumber(fields, "room margin"),
+    placementSize: layoutPolicyNumber(fields, "placement size"),
+    placementGap: layoutPolicyNumber(fields, "placement gap"),
+    placementsPerRow: layoutPolicyNumber(fields, "placement row count"),
+    dynamicRoomColumns: layoutPolicyNumber(fields, "dynamic room columns"),
+    fixedRooms,
+    statusActivity,
+    channelLifecycle,
+    handoffEvents
+  });
+}
+
+const DEFAULT_LAYOUT_POLICY = readHeadquartersLayoutPolicy();
+const ROOM_WIDTH = DEFAULT_LAYOUT_POLICY.roomWidth;
+const ROOM_MIN_HEIGHT = DEFAULT_LAYOUT_POLICY.roomMinimumHeight;
+const ROOM_GAP = DEFAULT_LAYOUT_POLICY.roomGap;
+const ROOM_MARGIN = DEFAULT_LAYOUT_POLICY.roomMargin;
+const PLACEMENT_SIZE = DEFAULT_LAYOUT_POLICY.placementSize;
+const PLACEMENT_GAP = DEFAULT_LAYOUT_POLICY.placementGap;
+const PLACEMENTS_PER_ROW = DEFAULT_LAYOUT_POLICY.placementsPerRow;
+const DYNAMIC_ROOM_COLUMNS = DEFAULT_LAYOUT_POLICY.dynamicRoomColumns;
+const FIXED_ROOM_BOUNDS = DEFAULT_LAYOUT_POLICY.fixedRooms;
+
+export const HEADQUARTERS_LAYOUT_POLICY = DEFAULT_LAYOUT_POLICY;
+export const HEADQUARTERS_ACTIVITY_POLICY = Object.freeze({
+  statusActivity: DEFAULT_LAYOUT_POLICY.statusActivity,
+  channelLifecycle: DEFAULT_LAYOUT_POLICY.channelLifecycle,
+  handoffEvents: DEFAULT_LAYOUT_POLICY.handoffEvents
+});
 
 function canonicalTie(left, right) {
   return compareUtf8Bytes(
@@ -126,7 +249,7 @@ function roomBounds(name, index, recordCount) {
       height: Math.max(fixed.height, ROOM_MARGIN * 2 + rows * PLACEMENT_SIZE + Math.max(0, rows - 1) * PLACEMENT_GAP)
     };
   }
-  const columns = 3;
+  const columns = DYNAMIC_ROOM_COLUMNS;
   const column = index % columns;
   const row = Math.floor(index / columns);
   const rows = Math.max(1, Math.ceil(recordCount / PLACEMENTS_PER_ROW));
