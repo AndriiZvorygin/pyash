@@ -1,0 +1,3 @@
+su name principle from filename "quiz/fixtures/document-digestion-policy.md" to name principle be digestion do
+su name technical from filename "quiz/fixtures/document-digestion-technical.md" to name technical be digestion do
+su name table from filename "quiz/fixtures/document-digestion-table.csv" to name table be digestion do

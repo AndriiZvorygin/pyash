@@ -85,6 +85,7 @@ Common non-compositional/high-frequency cases:
 | --- | --- | --- |
 | `do` | execute | `ob num 1 by num 2 be plus do` |
 | `ya` | surfaced fact/value | `su name total ob num 3 be plus ya` |
+| `pi7` | propositive candidate | `su name candidate ob text "draft" be text pi7` |
 | `def ... prah` | definition block | `su name flow be refinery def ... prah` |
 | `ko` | embedded clause boundary | `ob la ... ko` |
 
