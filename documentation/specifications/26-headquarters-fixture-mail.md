@@ -67,15 +67,15 @@ one value. The initial profile is:
 
 | Record | Canonical facets and references |
 | --- | --- |
-| person | `be person`; contact details use separate `be contact-method` facets |
-| organization | `be organization`; memberships and counterparties are separate claims |
-| contact method | `be contact-method`, plus `be person` or `be organization` reference and an address/value facet |
-| relationship | `be relationship`, plus separate `be person` and `be organization` references |
-| commitment | `be bet`, plus `be person`, `be organization`, `be due-date`, and `be work` references |
+| person | `be person`; contact details use separate `be contacting` facets |
+| organization | `be company`; memberships and counterparties are separate claims |
+| contact method | `be contacting`, plus `be person` or `be company` reference and an address/value facet |
+| relationship | `be relations`, plus separate `be person` and `be company` references |
+| commitment | `be bet`, plus `be person`, `be company`, `be deadline`, and `be worker` references |
 
 For example, the commitment facets can reference `person-ada`,
 `organization-analytical-engine`, and `work-fixture-mail-001` with `ob name`,
-and carry the deadline as `ob date YYYY-MM-DD` under `be due-date`. Each
+and carry the deadline as `ob date YYYY-MM-DD` under `be deadline`. Each
 sentence carries the Knowledge Core `fromtext`, `accordingto`, and `by`
 fields. Source identity and anchor, confidence, claim identity, replay, and
 current/contested/provenance views therefore remain the existing Knowledge

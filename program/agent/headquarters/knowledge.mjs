@@ -139,7 +139,7 @@ function validateDate(value) {
 }
 
 function validateDeadline(resolved, schema) {
-  const records = candidateRecords(resolved, "due-date", "deadline");
+  const records = candidateRecords(resolved, "deadline", "deadline");
   for (const record of records) {
     const sentence = parse(record.sentence);
     const payload = record.payload;
@@ -193,30 +193,30 @@ function validateReferences({ entry, resolved, entities, taskIds, schema }) {
   const kind = entry.kind;
   if (kind === "bet") {
     const personNames = referenceNames(resolved, "person", "person");
-    const organizationNames = referenceNames(resolved, "organization", "organization");
+    const companyNames = referenceNames(resolved, "company", "company");
     validateDeadline(resolved, schema);
-    const workNames = referenceNames(resolved, "work", "canonical work");
+    const workerNames = referenceNames(resolved, "worker", "canonical worker");
     for (const personName of personNames) requireEntity(entities, "person", personName);
-    for (const organizationName of organizationNames) requireEntity(entities, "organization", organizationName);
-    for (const workName of workNames) {
-      if (!entities.get("work")?.has(workName) || !taskIds.has(workName)) {
-        defect(`missing canonical work reference: ${workName}`);
+    for (const companyName of companyNames) requireEntity(entities, "company", companyName);
+    for (const workerName of workerNames) {
+      if (!entities.get("worker")?.has(workerName) || !taskIds.has(workerName)) {
+        defect(`missing canonical worker reference: ${workerName}`);
       }
     }
     return;
   }
-  if (kind === "relationship") {
+  if (kind === "relations") {
     for (const personName of referenceNames(resolved, "person", "person")) {
       requireEntity(entities, "person", personName);
     }
-    for (const organizationName of referenceNames(resolved, "organization", "organization")) {
-      requireEntity(entities, "organization", organizationName);
+    for (const companyName of referenceNames(resolved, "company", "company")) {
+      requireEntity(entities, "company", companyName);
     }
     return;
   }
-  if (kind === "contact-method") {
-    const referenceFacets = ["person", "organization"].filter(facet => resolved.facets[facet]);
-    if (referenceFacets.length === 0) defect("contact method must reference a person or organization");
+  if (kind === "contacting") {
+    const referenceFacets = ["person", "company"].filter(facet => resolved.facets[facet]);
+    if (referenceFacets.length === 0) defect("contacting must reference a person or company");
     for (const referenceFacet of referenceFacets) {
       for (const name of referenceNames(resolved, referenceFacet, referenceFacet)) {
         requireEntity(entities, referenceFacet, name);
@@ -236,8 +236,8 @@ export async function projectHeadquartersKnowledge({
   const projected = [];
   const entities = new Map([
     ["person", new Map()],
-    ["organization", new Map()],
-    ["work", new Map()]
+    ["company", new Map()],
+    ["worker", new Map()]
   ]);
   const seen = new Set();
 
@@ -252,7 +252,7 @@ export async function projectHeadquartersKnowledge({
     seen.add(identity);
     const resolved = resolveLinkedClaimBundle(bundle);
     for (const facet of profile.requiredFacets) {
-      candidateRecords(resolved, facet, facet === "due-date" ? "deadline" : facet);
+      candidateRecords(resolved, facet, facet === "deadline" ? "deadline" : facet);
     }
     const provenance = resolveLinkedClaimBundle(bundle, "provenance");
     const status = Object.values(resolved.facets).some(facet => facet.status === "contested")

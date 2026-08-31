@@ -42,9 +42,9 @@ test("headquarters commitments use separately keyed Knowledge Core facets", () =
   const sentences = [
     evidenceLine({ facet: "bet", value: `ob text ${JSON.stringify("Prepare the decision packet")}`, exists: true }),
     evidenceLine({ facet: "person", value: "ob name ada-lovelace" }),
-    evidenceLine({ facet: "organization", value: "ob name analytical-engine" }),
-    evidenceLine({ facet: "due-date", value: "ob date 2026-08-24" }),
-    evidenceLine({ facet: "work", value: "ob name work-fixture-mail-001" })
+    evidenceLine({ facet: "company", value: "ob name analytical-engine" }),
+    evidenceLine({ facet: "deadline", value: "ob date 2026-08-24" }),
+    evidenceLine({ facet: "worker", value: "ob name work-fixture-mail-001" })
   ];
 
   const bundle = normalizeLinkedClaimBundle(sentences);
@@ -52,49 +52,49 @@ test("headquarters commitments use separately keyed Knowledge Core facets", () =
   assert.equal(bundle.subjectKey, "su name commitment-001");
   assert.deepEqual(Object.keys(bundle.facets), [
     "bet",
-    "due-date",
-    "organization",
+    "company",
+    "deadline",
     "person",
-    "work"
+    "worker"
   ]);
-  assert.equal(bundle.facets["due-date"].records[0].payload.date, "2026-08-24");
-  assert.equal(bundle.facets["due-date"].records[0].key, "su name commitment-001 be due-date ya");
-  assert.equal(bundle.facets["due-date"].records[0].anchorId, "hq-mail-001#paragraph-1");
+  assert.equal(bundle.facets["deadline"].records[0].payload.date, "2026-08-24");
+  assert.equal(bundle.facets["deadline"].records[0].key, "su name commitment-001 be deadline ya");
+  assert.equal(bundle.facets["deadline"].records[0].anchorId, "hq-mail-001#paragraph-1");
   assert.ok(sentences.every(sentence => !sentence.ob.map));
 
   const genericWindowedDate = normalizeLinkedClaimBundle([
     evidenceLine({
-      facet: "due-date",
+      facet: "deadline",
       value: "ob date 2026-08-24 since date 2026-08-01 until date 2026-08-31"
     })
   ]);
-  assert.match(genericWindowedDate.facets["due-date"].records[0].key, /since date 2026-08-01/u);
+  assert.match(genericWindowedDate.facets["deadline"].records[0].key, /since date 2026-08-01/u);
 });
 
 test("headquarters contacts and relationships use the same linked-claim contract", () => {
   const contact = normalizeLinkedClaimBundle([
     evidenceLine({ subject: "person-ada", facet: "person", value: `ob text ${JSON.stringify("Ada Lovelace")}` }),
-    evidenceLine({ subject: "person-ada", facet: "contact-method", value: `ob text ${JSON.stringify("ada@example.test")}` })
+    evidenceLine({ subject: "person-ada", facet: "contacting", value: `ob text ${JSON.stringify("ada@example.test")}` })
   ]);
   const relationship = normalizeLinkedClaimBundle([
-    evidenceLine({ subject: "relationship-ada-analytical", facet: "relationship", value: `ob text ${JSON.stringify("works with")}` }),
+    evidenceLine({ subject: "relationship-ada-analytical", facet: "relations", value: `ob text ${JSON.stringify("works with")}` }),
     evidenceLine({ subject: "relationship-ada-analytical", facet: "person", value: "ob name person-ada" }),
-    evidenceLine({ subject: "relationship-ada-analytical", facet: "organization", value: "ob name analytical-engine" })
+    evidenceLine({ subject: "relationship-ada-analytical", facet: "company", value: "ob name analytical-engine" })
   ]);
 
   assert.equal(contact.subjectKey, "su name person-ada");
-  assert.deepEqual(Object.keys(contact.facets), ["contact-method", "person"]);
+  assert.deepEqual(Object.keys(contact.facets), ["contacting", "person"]);
   assert.equal(relationship.subjectKey, "su name relationship-ada-analytical");
-  assert.deepEqual(Object.keys(relationship.facets), ["organization", "person", "relationship"]);
+  assert.deepEqual(Object.keys(relationship.facets), ["company", "person", "relations"]);
 });
 
 test("headquarters bundle conflicts stay facet-local and preserve source evidence", () => {
   const current = [
     evidenceLine({ facet: "bet", value: `ob text ${JSON.stringify("Prepare the decision packet")}`, source: "hq-mail-001 paragraph-1" }),
     evidenceLine({ facet: "person", value: "ob name ada-lovelace", source: "hq-mail-001 paragraph-2" }),
-    evidenceLine({ facet: "organization", value: "ob name analytical-engine", source: "hq-mail-001 paragraph-3" }),
-    evidenceLine({ facet: "due-date", value: "ob date 2026-08-24", source: "hq-mail-001 paragraph-4" }),
-    evidenceLine({ facet: "work", value: "ob name work-fixture-mail-001", source: "hq-mail-001 paragraph-5" })
+    evidenceLine({ facet: "company", value: "ob name analytical-engine", source: "hq-mail-001 paragraph-3" }),
+    evidenceLine({ facet: "deadline", value: "ob date 2026-08-24", source: "hq-mail-001 paragraph-4" }),
+    evidenceLine({ facet: "worker", value: "ob name work-fixture-mail-001", source: "hq-mail-001 paragraph-5" })
   ];
   const conflictingPerson = evidenceLine({
     facet: "person",
@@ -109,9 +109,9 @@ test("headquarters bundle conflicts stay facet-local and preserve source evidenc
   assert.equal(view.subjectKey, "su name commitment-001");
   assert.equal(view.facets.person.status, "contested");
   assert.equal(view.facets.person.records.length, 2);
-  assert.equal(view.facets.organization.status, "current");
-  assert.equal(view.facets["due-date"].status, "current");
-  assert.equal(view.facets.work.status, "current");
+  assert.equal(view.facets.company.status, "current");
+  assert.equal(view.facets["deadline"].status, "current");
+  assert.equal(view.facets.worker.status, "current");
   assert.deepEqual(view.facets.person.records.map(record => record.anchorId), [
     "hq-mail-001#paragraph-2",
     "hq-mail-002#paragraph-2"
@@ -127,9 +127,9 @@ test("linked headquarters claims replay through the existing interpreter resolve
   const sentences = [
     evidenceLine({ facet: "bet", value: `ob text ${JSON.stringify("Prepare the decision packet")}`, exists: true }),
     evidenceLine({ facet: "person", value: "ob name ada-lovelace" }),
-    evidenceLine({ facet: "organization", value: "ob name analytical-engine" }),
-    evidenceLine({ facet: "due-date", value: "ob date 2026-08-24" }),
-    evidenceLine({ facet: "work", value: "ob name work-fixture-mail-001" })
+    evidenceLine({ facet: "company", value: "ob name analytical-engine" }),
+    evidenceLine({ facet: "deadline", value: "ob date 2026-08-24" }),
+    evidenceLine({ facet: "worker", value: "ob name work-fixture-mail-001" })
   ];
   for (const sentence of sentences) await interpret(sentence);
 
@@ -147,9 +147,9 @@ test("compiled JavaScript and C retain independent headquarters facet keys", asy
   const sentences = [
     evidenceLine({ facet: "bet", value: `ob text ${JSON.stringify("Prepare the decision packet")}`, exists: true }),
     evidenceLine({ facet: "person", value: "ob name ada-lovelace" }),
-    evidenceLine({ facet: "organization", value: "ob name analytical-engine" }),
-    evidenceLine({ facet: "due-date", value: "ob date 2026-08-24" }),
-    evidenceLine({ facet: "work", value: "ob name work-fixture-mail-001" })
+    evidenceLine({ facet: "company", value: "ob name analytical-engine" }),
+    evidenceLine({ facet: "deadline", value: "ob date 2026-08-24" }),
+    evidenceLine({ facet: "worker", value: "ob name work-fixture-mail-001" })
   ];
   const source = sentences.map(sentenceToPyash).join("\n");
   const program = buildProgram(source);
@@ -179,23 +179,23 @@ test("compiled JavaScript and C retain independent headquarters facet keys", asy
 test("every authoritative headquarters facet uses the Knowledge Core evidence shell", () => {
   assert.throws(
     () => normalizeLinkedClaimBundle([
-      parse("exists su name commitment-001 ob date 2026-08-24 accordingto name direct-evidential by num 0.9 be due-date ya")
+      parse("exists su name commitment-001 ob date 2026-08-24 accordingto name direct-evidential by num 0.9 be deadline ya")
     ]),
     /source anchor defective/u
   );
 
   assert.throws(
     () => normalizeLinkedClaimBundle([
-      evidenceLine({ facet: "due-date", value: "ob date 2026-08-24" }),
-      evidenceLine({ subject: "other-commitment-001", facet: "work", value: "ob name work-fixture-mail-001", source: "other-subject paragraph-1" })
+      evidenceLine({ facet: "deadline", value: "ob date 2026-08-24" }),
+      evidenceLine({ subject: "other-commitment-001", facet: "worker", value: "ob name work-fixture-mail-001", source: "other-subject paragraph-1" })
     ]),
     /stable su identifier/u
   );
 });
 
 test("ordinary Knowledge Core claim identity remains the facet contract", () => {
-  const dueDate = evidenceLine({ facet: "due-date", value: "ob date 2026-08-24" });
-  assert.equal(deriveClaimKey(dueDate), "su name commitment-001 be due-date ya");
+  const dueDate = evidenceLine({ facet: "deadline", value: "ob date 2026-08-24" });
+  assert.equal(deriveClaimKey(dueDate), "su name commitment-001 be deadline ya");
 });
 
 function personBundle({ subject = "person-ada", label = "Ada Lovelace", source = "hq-mail-001 person" } = {}) {
@@ -206,38 +206,38 @@ function personBundle({ subject = "person-ada", label = "Ada Lovelace", source =
 
 function organizationBundle({ subject = "organization-analytical-engine", label = "Analytical Engine", source = "hq-mail-001 organization" } = {}) {
   return normalizeLinkedClaimBundle([
-    evidenceLine({ subject, facet: "organization", value: `ob text ${JSON.stringify(label)}`, source })
+    evidenceLine({ subject, facet: "company", value: `ob text ${JSON.stringify(label)}`, source })
   ]);
 }
 
 function workBundle(subject = "work-fixture-mail-001") {
   return normalizeLinkedClaimBundle([
-    evidenceLine({ subject, facet: "work", value: `ob text ${JSON.stringify("Decision packet")}`, source: "hq-mail-001 work" })
+    evidenceLine({ subject, facet: "worker", value: `ob text ${JSON.stringify("Decision packet")}`, source: "hq-mail-001 work" })
   ]);
 }
 
 function contactMethodBundle() {
   return normalizeLinkedClaimBundle([
-    evidenceLine({ subject: "contact-ada-email", facet: "contact-method", value: `ob text ${JSON.stringify("ada@example.test")}`, source: "hq-mail-001 contact" }),
+    evidenceLine({ subject: "contact-ada-email", facet: "contacting", value: `ob text ${JSON.stringify("ada@example.test")}`, source: "hq-mail-001 contact" }),
     evidenceLine({ subject: "contact-ada-email", facet: "person", value: "ob name person-ada", source: "hq-mail-001 contact-owner" })
   ]);
 }
 
 function relationshipBundle() {
   return normalizeLinkedClaimBundle([
-    evidenceLine({ subject: "relationship-ada-analytical", facet: "relationship", value: `ob text ${JSON.stringify("works with")}`, source: "hq-mail-001 relationship" }),
+    evidenceLine({ subject: "relationship-ada-analytical", facet: "relations", value: `ob text ${JSON.stringify("works with")}`, source: "hq-mail-001 relationship" }),
     evidenceLine({ subject: "relationship-ada-analytical", facet: "person", value: "ob name person-ada", source: "hq-mail-001 relationship-person" }),
-    evidenceLine({ subject: "relationship-ada-analytical", facet: "organization", value: "ob name organization-analytical-engine", source: "hq-mail-001 relationship-organization" })
+    evidenceLine({ subject: "relationship-ada-analytical", facet: "company", value: "ob name organization-analytical-engine", source: "hq-mail-001 relationship-organization" })
   ]);
 }
 
-function commitmentClaims({ dueDate = "2026-08-24", person = "person-ada", organization = "organization-analytical-engine", work = "work-fixture-mail-001" } = {}) {
+function commitmentClaims({ dueDate = "2026-08-24", person = "person-ada", organization = "organization-analytical-engine", work = "work-fixture-mail-001", firstExists = false } = {}) {
   return [
-    evidenceLine({ facet: "bet", value: `ob text ${JSON.stringify("Prepare the decision packet")}`, source: "hq-mail-001 commitment" }),
+    evidenceLine({ facet: "bet", value: `ob text ${JSON.stringify("Prepare the decision packet")}`, source: "hq-mail-001 commitment", exists: firstExists }),
     person && evidenceLine({ facet: "person", value: `ob name ${person}`, source: "hq-mail-001 person-ref" }),
-    organization && evidenceLine({ facet: "organization", value: `ob name ${organization}`, source: "hq-mail-001 organization-ref" }),
-    dueDate && evidenceLine({ facet: "due-date", value: `ob date ${dueDate}`, source: "hq-mail-001 deadline" }),
-    work && evidenceLine({ facet: "work", value: `ob name ${work}`, source: "hq-mail-001 work-ref" })
+    organization && evidenceLine({ facet: "company", value: `ob name ${organization}`, source: "hq-mail-001 organization-ref" }),
+    dueDate && evidenceLine({ facet: "deadline", value: `ob date ${dueDate}`, source: "hq-mail-001 deadline" }),
+    work && evidenceLine({ facet: "worker", value: `ob name ${work}`, source: "hq-mail-001 work-ref" })
   ].filter(Boolean);
 }
 
@@ -265,8 +265,8 @@ function headquartersInput(overrides = {}) {
     bundles: [
       { kind: "bet", bundle: commitmentBundle() },
       { kind: "person", bundle: personBundle() },
-      { kind: "organization", bundle: organizationBundle() },
-      { kind: "work", bundle: workBundle() }
+      { kind: "company", bundle: organizationBundle() },
+      { kind: "worker", bundle: workBundle() }
     ],
     workTasks: [workTask()],
     ...overrides
@@ -275,10 +275,10 @@ function headquartersInput(overrides = {}) {
 
 test("linked bundle facets and projections are canonical under reordered inputs", async () => {
   const lines = [
-    evidenceLine({ facet: "work", value: "ob name work-fixture-mail-001", source: "hq-mail-001 work" }),
+    evidenceLine({ facet: "worker", value: "ob name work-fixture-mail-001", source: "hq-mail-001 work" }),
     evidenceLine({ facet: "person", value: "ob name ada-lovelace", source: "hq-mail-001 person" }),
-    evidenceLine({ facet: "due-date", value: "ob date 2026-08-24", source: "hq-mail-001 deadline" }),
-    evidenceLine({ facet: "organization", value: "ob name analytical-engine", source: "hq-mail-001 organization" }),
+    evidenceLine({ facet: "deadline", value: "ob date 2026-08-24", source: "hq-mail-001 deadline" }),
+    evidenceLine({ facet: "company", value: "ob name analytical-engine", source: "hq-mail-001 organization" }),
     evidenceLine({ facet: "bet", value: `ob text ${JSON.stringify("Prepare the decision packet")}`, source: "hq-mail-001 commitment" }),
     evidenceLine({ facet: "person", value: "ob name charles-babbage", source: "hq-mail-002 person", confidence: 0.8 }),
     evidenceLine({
@@ -289,8 +289,8 @@ test("linked bundle facets and projections are canonical under reordered inputs"
   ];
   const forward = normalizeLinkedClaimBundle(lines);
   const reverse = normalizeLinkedClaimBundle([...lines].reverse());
-  assert.deepEqual(Object.keys(forward.facets), ["bet", "due-date", "organization", "person", "work"]);
-  assert.equal(compareUtf8Bytes("organization", "person") < 0, true);
+  assert.deepEqual(Object.keys(forward.facets), ["bet", "company", "deadline", "person", "worker"]);
+  assert.equal(compareUtf8Bytes("company", "person") < 0, true);
   const forwardView = resolveLinkedClaimBundle(forward);
   const reverseView = resolveLinkedClaimBundle(reverse);
   assert.equal(JSON.stringify(forwardView), JSON.stringify(reverseView));
@@ -310,17 +310,17 @@ test("linked bundle facets and projections are canonical under reordered inputs"
     "su name person-ada",
     "su name work-fixture-mail-001"
   ]);
-  assert.deepEqual(Object.keys(projected.bundles[0].facets), ["bet", "due-date", "organization", "person", "work"]);
+  assert.deepEqual(Object.keys(projected.bundles[0].facets), ["bet", "company", "deadline", "person", "worker"]);
 });
 
 test("Headquarters projector applies Pyash schema and validates references read-only", async () => {
   const projected = await projectHeadquartersKnowledge(headquartersInput());
   const commitment = projected.bundles.find(bundle => bundle.kind === "bet");
   assert.equal(commitment.status, "current");
-  assert.equal(commitment.facets["due-date"].record.payload.date, "2026-08-24");
+  assert.equal(commitment.facets["deadline"].record.payload.date, "2026-08-24");
   assert.equal(commitment.facets.person.record.payload.name, "person-ada");
-  assert.equal(commitment.facets.organization.record.payload.name, "organization-analytical-engine");
-  assert.equal(commitment.facets.work.record.payload.name, "work-fixture-mail-001");
+  assert.equal(commitment.facets.company.record.payload.name, "organization-analytical-engine");
+  assert.equal(commitment.facets.worker.record.payload.name, "work-fixture-mail-001");
   assert.equal(commitment.facets.person.record.sentence.includes("fromtext"), true);
 });
 
@@ -355,8 +355,8 @@ test("Headquarters projector preserves contested candidates and aggregate status
       { kind: "bet", bundle: contested },
       { kind: "person", bundle: personBundle() },
       { kind: "person", bundle: personBundle({ subject: "person-charles", label: "Charles Babbage", source: "hq-mail-002 person" }) },
-      { kind: "organization", bundle: organizationBundle() },
-      { kind: "work", bundle: workBundle() }
+      { kind: "company", bundle: organizationBundle() },
+      { kind: "worker", bundle: workBundle() }
     ]
   });
   const commitment = projected.bundles.find(bundle => bundle.kind === "bet");
@@ -378,13 +378,13 @@ test("Headquarters projector validates exact canonical work task ids without a p
     bundles: [
       { kind: "bet", bundle: commitmentBundle({ work: taskId }) },
       { kind: "person", bundle: personBundle() },
-      { kind: "organization", bundle: organizationBundle() },
-      { kind: "work", bundle: workBundle(taskId) }
+      { kind: "company", bundle: organizationBundle() },
+      { kind: "worker", bundle: workBundle(taskId) }
     ],
     workTasks: [workTask(taskId)]
   });
   const commitment = projected.bundles.find(bundle => bundle.kind === "bet");
-  assert.equal(commitment.facets.work.record.payload.name, taskId);
+  assert.equal(commitment.facets.worker.record.payload.name, taskId);
 });
 
 test("Headquarters projector keeps contact and relationship references in the shared profile", async () => {
@@ -393,16 +393,16 @@ test("Headquarters projector keeps contact and relationship references in the sh
     ...base,
     bundles: [
       ...base.bundles,
-      { kind: "contact-method", bundle: contactMethodBundle() },
-      { kind: "relationship", bundle: relationshipBundle() }
+      { kind: "contacting", bundle: contactMethodBundle() },
+      { kind: "relations", bundle: relationshipBundle() }
     ]
   });
-  const contact = projected.bundles.find(bundle => bundle.kind === "contact-method");
-  const relationship = projected.bundles.find(bundle => bundle.kind === "relationship");
+  const contact = projected.bundles.find(bundle => bundle.kind === "contacting");
+  const relationship = projected.bundles.find(bundle => bundle.kind === "relations");
   assert.equal(contact.facets.person.record.payload.name, "person-ada");
-  assert.equal(contact.facets["contact-method"].record.payload.text, "ada@example.test");
+  assert.equal(contact.facets["contacting"].record.payload.text, "ada@example.test");
   assert.equal(relationship.facets.person.record.payload.name, "person-ada");
-  assert.equal(relationship.facets.organization.record.payload.name, "organization-analytical-engine");
+  assert.equal(relationship.facets.company.record.payload.name, "organization-analytical-engine");
 });
 
 test("Headquarters projector guards missing references, deadline shape, and WorkTask identity", async () => {
@@ -416,9 +416,9 @@ test("Headquarters projector guards missing references, deadline shape, and Work
       error: /missing person reference/u
     },
     {
-      name: "organization",
-      input: { ...base, bundles: base.bundles.filter(entry => entry.kind !== "organization") },
-      error: /missing organization reference/u
+      name: "company",
+      input: { ...base, bundles: base.bundles.filter(entry => entry.kind !== "company") },
+      error: /missing company reference/u
     },
     {
       name: "deadline",
@@ -426,9 +426,9 @@ test("Headquarters projector guards missing references, deadline shape, and Work
       error: /missing deadline facet/u
     },
     {
-      name: "work",
-      input: { ...base, bundles: base.bundles.filter(entry => entry.kind !== "work"), workTasks: [] },
-      error: /missing canonical work reference/u
+      name: "worker",
+      input: { ...base, bundles: base.bundles.filter(entry => entry.kind !== "worker"), workTasks: [] },
+      error: /missing canonical worker reference/u
     },
     {
       name: "task id",
@@ -528,8 +528,30 @@ test("headquarters knowledge example records and replays its linked artifact", a
     const artifactBundle = normalizeLinkedClaimBundle(artifactSentences);
     assert.deepEqual(
       resolveLinkedClaimBundle(artifactBundle),
-      resolveLinkedClaimBundle(commitmentBundle())
+      resolveLinkedClaimBundle(commitmentBundle({ firstExists: true }))
     );
+    forget();
+    for (const sentence of artifactSentences) await interpret(sentence);
+    const replayedCurrent = await interpret(parse(
+      "su name replayed-current ob la su name commitment-001 ob name person-ada be person ya ko be claim choose do"
+    ));
+    const currentView = JSON.parse(replayedCurrent.value.text);
+    assert.equal(currentView.status, "current");
+    assert.equal(currentView.record.payload.name, "person-ada");
+
+    await interpret(evidenceLine({
+      facet: "person",
+      value: "ob name person-charles",
+      source: "hq-mail-002 person-ref",
+      confidence: 0.8
+    }));
+    const replayedConflict = await interpret(parse(
+      "su name replayed-conflict ob la su name commitment-001 ob name person-ada be person ya ko be claim choose do"
+    ));
+    const conflictView = JSON.parse(replayedConflict.value.text);
+    assert.equal(conflictView.status, "contested");
+    assert.equal(conflictView.record, null);
+    assert.equal(conflictView.records.length, 2);
     const hash = artifact.fromtext.text;
     const contentAddressed = path.join(runRoot, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.pya`);
     await fs.appendFile(contentAddressed, "tampered\n", "utf8");
