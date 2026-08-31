@@ -10,6 +10,7 @@ import {
 import { splitSentences } from "../../library/sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
 import { listChannelEnvelopes } from "../channel_core/queue.mjs";
+import { projectHeadquartersLayout } from "./layout.mjs";
 import { projectHeadquartersKnowledge } from "./knowledge.mjs";
 import { listWorkTasks } from "../../runtime/work/operator.mjs";
 
@@ -101,13 +102,18 @@ function recordTimestamp(record) {
 
 function recordSourceCompare(left, right) {
   return compareUtf8Bytes(left?.source?.filename ?? left?.filename, right?.source?.filename ?? right?.filename)
-    || Number(left?.source?.sentenceOrdinal ?? left?.sentenceOrdinal ?? 0)
-      - Number(right?.source?.sentenceOrdinal ?? right?.sentenceOrdinal ?? 0)
+    || finiteNumber(left?.source?.sentenceOrdinal ?? left?.sentenceOrdinal)
+      - finiteNumber(right?.source?.sentenceOrdinal ?? right?.sentenceOrdinal)
     || compareUtf8Bytes(left?.sentenceText, right?.sentenceText)
     || compareUtf8Bytes(
       JSON.stringify(canonicalJson(left?.sentence)),
       JSON.stringify(canonicalJson(right?.sentence))
     );
+}
+
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function recentRecordCompare(left, right) {
@@ -283,12 +289,41 @@ function commitmentEvidence(bundle) {
       || compareUtf8Bytes(left.key, right.key)
       || compareUtf8Bytes(left.anchorId, right.anchorId)
       || compareUtf8Bytes(left.sentence, right.sentence)
+      || compareUtf8Bytes(
+        JSON.stringify(canonicalJson(left)),
+        JSON.stringify(canonicalJson(right))
+      )
   ));
 }
 
 function recordPayloadText(view) {
   const record = view?.record ?? view?.records?.[0];
   return text(record?.payload?.text ?? record?.payload?.name ?? record?.payload?.date);
+}
+
+function commitmentDescription(bundle) {
+  const bet = bundle.facets?.bet;
+  if (bet?.status === "current") {
+    return {
+      description: recordPayloadText(bet),
+      descriptionCandidates: []
+    };
+  }
+  const candidates = (bet?.records ?? [])
+    .map(clone)
+    .sort((left, right) => (
+      compareUtf8Bytes(left.key, right.key)
+        || compareUtf8Bytes(left.anchorId, right.anchorId)
+        || compareUtf8Bytes(left.sentence, right.sentence)
+        || compareUtf8Bytes(
+          JSON.stringify(canonicalJson(left)),
+          JSON.stringify(canonicalJson(right))
+        )
+    ));
+  return {
+    description: null,
+    descriptionCandidates: candidates
+  };
 }
 
 function projectCommitments(knowledge) {
@@ -298,7 +333,7 @@ function projectCommitments(knowledge) {
       id: subjectName(bundle.subjectKey),
       subjectKey: bundle.subjectKey,
       status: bundle.status,
-      description: recordPayloadText(bundle.facets?.bet),
+      ...commitmentDescription(bundle),
       person: facetView(bundle, "person"),
       company: facetView(bundle, "company"),
       deadline: facetView(bundle, "deadline"),
@@ -377,39 +412,113 @@ function projectSpaces(spaces) {
     .map(space => ({
       name: text(space?.name),
       source: clone(space?.source ?? {}),
-      activity: clone(space?.activity ?? [])
+      activity: (space?.activity ?? [])
+        .map(clone)
+        .sort(recentRecordCompare)
     }))
     .filter(space => space.name)
     .sort((left, right) => compareUtf8Bytes(left.name, right.name));
 }
 
-function activityMarkerForTask(task) {
-  const approvalState = text(task?.checkpoint?.approval?.state);
-  if (approvalState === "pending") return "approval-wait";
-  if (text(task?.escalation?.state)) return "escalation";
-  if (task?.status === "accepted") return "completion";
-  if (task?.status === "failed") return "failure";
-  if (["planning", "implementing", "reviewing", "revision"].includes(task?.status)) return "active";
-  if (task?.status === "ready") return "waiting-input";
-  if (task?.status === "blocked" || task?.status === "usage-limited") return "waiting-input";
-  return text(task?.status);
+function statusActivityMarker(status) {
+  if (["planning", "implementing", "reviewing", "revision"].includes(status)) return "active";
+  if (status === "accepted") return "completion";
+  if (status === "failed") return "failure";
+  if (status === "ready") return "waiting-input";
+  if (status === "blocked") return "blocked";
+  if (status === "usage-limited") return "usage-limited";
+  return status;
+}
+
+function workMarker(task, marker, extra = {}) {
+  const taskId = text(task?.taskId);
+  const space = text(task?.domain) ? `workplace/${text(task.domain)}` : "workplace";
+  return {
+    space,
+    marker,
+    source: { kind: "work", taskId },
+    identity: taskId,
+    ...extra
+  };
+}
+
+function activityMarkersForTask(task) {
+  const status = text(task?.status);
+  const markers = [workMarker(task, "status", {
+    signal: "work-status",
+    status
+  })];
+  const statusMarker = statusActivityMarker(status);
+  if (statusMarker) {
+    markers.push(workMarker(task, statusMarker, {
+      signal: "work-status",
+      status
+    }));
+  }
+  const approval = task?.checkpoint?.approval;
+  if (text(approval?.state) === "pending") {
+    markers.push(workMarker(task, "approval-wait", {
+      signal: "approval",
+      approvalState: text(approval.state)
+    }));
+  }
+  if (text(task?.escalation?.state)) {
+    markers.push(workMarker(task, "escalation", {
+      signal: "escalation",
+      escalation: clone(task.escalation)
+    }));
+  }
+  for (const event of task?.delegationEvents ?? []) {
+    const eventType = text(event?.type);
+    const timestamp = text(event?.timestamp);
+    markers.push(workMarker(task, "handoff", {
+      signal: "delegation",
+      eventType,
+      identity: `${text(task.taskId)}:${eventType}:${timestamp}`,
+      delegation: clone(event)
+    }));
+  }
+  return markers;
+}
+
+function channelActivityMarker(location) {
+  return {
+    input: "waiting-input",
+    runtime: "claimed",
+    "produce-waiting": "handoff",
+    "produce-success": "completion",
+    "produce-fail": "failure"
+  }[location] ?? "";
+}
+
+function activityMarkerCompare(left, right) {
+  return compareUtf8Bytes(left.space, right.space)
+    || compareUtf8Bytes(left.marker, right.marker)
+    || compareUtf8Bytes(left.signal, right.signal)
+    || compareUtf8Bytes(left.status, right.status)
+    || compareUtf8Bytes(left.eventType, right.eventType)
+    || compareUtf8Bytes(left.identity, right.identity)
+    || compareUtf8Bytes(left.source?.kind, right.source?.kind)
+    || compareUtf8Bytes(left.source?.filename, right.source?.filename)
+    || compareUtf8Bytes(left.source?.location, right.source?.location)
+    || compareUtf8Bytes(left.source?.path, right.source?.path)
+    || compareUtf8Bytes(left.source?.taskId, right.source?.taskId)
+    || finiteNumber(left.source?.sentenceOrdinal) - finiteNumber(right.source?.sentenceOrdinal)
+    || compareUtf8Bytes(
+      JSON.stringify(canonicalJson(left)),
+      JSON.stringify(canonicalJson(right))
+    );
 }
 
 function projectActivityMarkers({ work, channels, spaces }) {
   const markers = [];
   for (const channel of channels) {
-    const marker = channel.location === "input"
-      ? "waiting-input"
-      : channel.location === "runtime"
-        ? "claimed"
-        : channel.location === "produce-success"
-          ? "completion"
-          : channel.location === "produce-fail"
-            ? "escalation"
-            : "handoff";
+    const marker = channelActivityMarker(channel.location);
+    if (!marker) continue;
     markers.push({
       space: "mailroom",
       marker,
+      signal: "channel-lifecycle",
       source: {
         kind: "channel",
         filename: channel.filename,
@@ -420,21 +529,14 @@ function projectActivityMarkers({ work, channels, spaces }) {
     });
   }
   for (const task of work) {
-    const marker = activityMarkerForTask(task);
-    if (!marker) continue;
-    const space = text(task.domain) ? `workplace/${text(task.domain)}` : "workplace";
-    markers.push({
-      space,
-      marker,
-      source: { kind: "work", taskId: text(task.taskId) },
-      identity: text(task.taskId)
-    });
+    markers.push(...activityMarkersForTask(task));
   }
   for (const space of spaces) {
     for (const entry of space.activity ?? []) {
       markers.push({
         space: space.name,
         marker: text(entry?.sentence?.be),
+        signal: "space-activity",
         source: clone(entry?.source ?? {}),
         identity: text(entry?.sentence?.su?.name ?? entry?.sentence?.su?.text)
       });
@@ -442,13 +544,7 @@ function projectActivityMarkers({ work, channels, spaces }) {
   }
   return markers
     .filter(marker => marker.space && marker.marker)
-    .sort((left, right) => (
-      compareUtf8Bytes(left.space, right.space)
-        || compareUtf8Bytes(left.marker, right.marker)
-        || compareUtf8Bytes(left.identity, right.identity)
-        || compareUtf8Bytes(left.source?.filename, right.source?.filename)
-        || Number(left.source?.sentenceOrdinal ?? 0) - Number(right.source?.sentenceOrdinal ?? 0)
-    ));
+    .sort(activityMarkerCompare);
 }
 
 function attachActivityMarkers(spaces, markers) {
@@ -468,7 +564,7 @@ function attachActivityMarkers(spaces, markers) {
         name,
         source: clone(source?.source ?? {}),
         activity: clone(source?.activity ?? []),
-        activityMarkers: bySpace.get(name) ?? []
+        activityMarkers: (bySpace.get(name) ?? []).sort(activityMarkerCompare)
       };
     });
 }
@@ -536,6 +632,7 @@ export async function projectHeadquartersState(options = {}) {
     modulePath: options.modulePath
   });
   const projectedWork = projectWork(workTasks);
+  const projectedApprovals = projectApprovals(workTasks);
   const projectedChannels = projectChannels(channels, asOf);
   const projectedSpaces = projectSpaces(spaces);
   const activityMarkers = projectActivityMarkers({
@@ -543,15 +640,23 @@ export async function projectHeadquartersState(options = {}) {
     channels: projectedChannels,
     spaces: projectedSpaces
   });
+  const commitments = projectCommitments(knowledge);
   const snapshot = {
     asOf,
-    commitments: projectCommitments(knowledge),
+    commitments,
     work: projectedWork,
-    approvals: projectApprovals(workTasks),
+    approvals: projectedApprovals,
     channels: projectedChannels,
     newspaper: projectNewspaper(newspaper, asOf, newspaperLimit),
     spaces: attachActivityMarkers(projectedSpaces, activityMarkers),
-    activityMarkers
+    activityMarkers,
+    layout: projectHeadquartersLayout({
+      commitments,
+      work: projectedWork,
+      approvals: projectedApprovals,
+      channels: projectedChannels,
+      spaces: projectedSpaces
+    })
   };
   return freeze(snapshot);
 }
