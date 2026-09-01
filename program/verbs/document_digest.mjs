@@ -36,15 +36,13 @@ export default documentDigestion;
 
 export const signatures = [
   { signatureWords: ["be", "digestion", "from", "filename"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "from", "filename", "to", "name"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "from", "filename", "to", "name", "num"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "from", "filename", "to", "text"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "from", "filename", "to", "name", "series"], handler: documentDigestion },
   { signatureWords: ["be", "digestion", "from", "name", "text"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "from", "name", "text", "to", "name", "num"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "from", "name", "text", "to", "name", "series"], handler: documentDigestion },
   { signatureWords: ["be", "digestion", "from", "text"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "from", "text", "to", "name"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "from", "text", "to", "name", "num"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "from", "text", "to", "text"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "as", "name", "num", "from", "filename", "to", "name", "num"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "as", "name", "num", "from", "text", "to", "name", "num"], handler: documentDigestion }
+  { signatureWords: ["be", "digestion", "from", "text", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "as", "name", "csv", "from", "filename", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "as", "name", "csv", "from", "text", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "as", "name", "markdown", "from", "filename", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "as", "name", "markdown", "from", "text", "to", "name", "series"], handler: documentDigestion }
 ];
