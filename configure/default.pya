@@ -18,6 +18,7 @@ from filename "./module/read_pdf_html.pya" ob name read to name read be import d
 from filename "./module/read_pdf_markdown.pya" ob name read to name read be import do
 from filename "./module/read_pdf_markdown_plain.pya" ob name read to name read be import do
 from filename "./module/read_auto.pya" ob name read to name read be import do
+from filename "./module/documentation_digestion.pya" ob name documentation digestion to name documentation digestion be import do
 from filename "./module/read_html.pya" ob name read to name read html be import do
 from filename "./module/read_pdf.pya" ob name read to name read pdf be import do
 from filename "./module/read_html_markdown.pya" ob name read to name read html markdown be import do

@@ -79,7 +79,7 @@ export function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFil
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesCommand: false, usesCommandPolicy: false, usesCeremonyValue: false, usesDateMath: false, usesKnowledgeCore: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesCommand: false, usesCommandPolicy: false, usesCeremonyValue: false, usesDateMath: false, usesKnowledgeCore: false, usesDocumentDigestion: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
   const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesCommand: false, usesCommandPolicy: false, usesDateMath: false, usesInterpret: false, usesOs: false, usesPath: false, usesCeremony: false, usesCeremonyErrors: false, usesKnowledgeCore: false, readCounter: 0 };

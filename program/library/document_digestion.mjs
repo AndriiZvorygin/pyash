@@ -345,12 +345,17 @@ function sourceAnchorClause(sourceId, anchorId) {
   };
 }
 
-function sourceSentence(sourceId, text, hash, size) {
+function sourceArtifactLocator(sourceId, format) {
+  return `artifacts/document-digestion/${sourceId}.${format}.source`;
+}
+
+function sourceSentence(sourceId, text, hash, size, locator) {
   return {
     mood: "ya",
     exists: true,
     su: { name: sourceId },
     ob: { text },
+    to: { filename: locator },
     accordingto: { name: "sha256" },
     fromtext: { text: hash },
     by: { num: size },
@@ -398,10 +403,11 @@ function assertSpanRoundTrip(bytes, span) {
 function buildDigest({ bytes, text, format }) {
   const hash = sha256(bytes);
   const sourceId = validateIdentifier(`src-${hash}`, "source");
+  const sourceLocator = sourceArtifactLocator(sourceId, format);
   const spans = format === "csv" ? csvSpans(bytes, text) : markdownSpans(text);
   if (spans.length === 0) defect("no anchored content");
 
-  const source = sourceSentence(sourceId, text, hash, bytes.length);
+  const source = sourceSentence(sourceId, text, hash, bytes.length, sourceLocator);
   const records = [source];
   const anchors = [];
   const candidates = [];
@@ -441,6 +447,7 @@ function buildDigest({ bytes, text, format }) {
     format,
     sourceId,
     artifactHash: hash,
+    sourceLocator,
     source,
     anchors,
     candidates,
@@ -476,7 +483,7 @@ export async function digestFilename(filename, { format } = {}) {
   for (const record of result.records) emitExchangeSentence(record);
 
   const artifact = recordArtifact({
-    locator,
+    locator: result.sourceLocator,
     producer: "document digest",
     bytes,
     kind: "source"

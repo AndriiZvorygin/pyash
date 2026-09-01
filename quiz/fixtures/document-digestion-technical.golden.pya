@@ -9,7 +9,7 @@ Set PORT to 8080 before starting the service.
 ```sh
 widget --port 8080
 ```
-.text.quoted as name source fromtext text "c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b" accordingto name sha256 by num 160 be artifact ya
+.text.quoted to filename artifacts/document-digestion/src-c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b.markdown.source as name source fromtext text "c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b" accordingto name sha256 by num 160 be artifact ya
 su name src-c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b:section-0001-paragraph-0001-lines-3-3-bytes-14-64 ob text "The widget service exposes a stable HTTP endpoint." fromtext la su name src-c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b ob text "section-0001-paragraph-0001-lines-3-3-bytes-14-64" be text ya ko be anchor ya
 su name src-c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b:candidate-0001 ob text "The widget service exposes a stable HTTP endpoint." fromtext la su name src-c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b ob text "section-0001-paragraph-0001-lines-3-3-bytes-14-64" be text ya ko accordingto name reported-evidential by num 1 be text pi7
 su name src-c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b:section-0002-paragraph-0001-lines-7-7-bytes-84-129 ob text "Set PORT to 8080 before starting the service." fromtext la su name src-c8c76d37aed405f7d6ad6392f2724da0d58f73e79c45486148e579129370b73b ob text "section-0002-paragraph-0001-lines-7-7-bytes-84-129" be text ya ko be anchor ya
