@@ -4,6 +4,9 @@ import { KNOWLEDGE_CORE_HELPER } from "./c_helpers_knowledge_core.mjs";
 
 export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolicy } = {}) {
   if (!cHelpers) return lines;
+  if (cHelpers.usesDocumentDigestion) {
+    lines.unshift("typedef struct { const char *stream; const char *const *records; unsigned long count; } pya_digest_series;");
+  }
   if (cHelpers.usesCommandPolicy) {
     cHelpers.usesTextHelper = true;
     cHelpers.usesString = true;

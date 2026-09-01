@@ -2,9 +2,9 @@ import { digestDocument, digestFilename } from "../library/document_digestion.mj
 import { remember as defaultRemember } from "../remember/index.mjs";
 
 function requestedFormat(sentence) {
-  return sentence?.as?.name
+  return sentence?.as?.wo
+    ?? sentence?.fromstate?.wo
     ?? sentence?.become?.wo
-    ?? sentence?.become?.name
     ?? undefined;
 }
 
@@ -24,9 +24,15 @@ export async function documentDigestion(sentence = {}, { remember: rememberFn = 
   const result = sentence?.from?.filename
     ? await digestFilename(sentence.from.filename, { format })
     : digestDocument({ text: sourceText, format });
-  const targetName = sentence?.to?.name ?? sentence?.su?.name ?? result.series.su.name;
+  const series = result.series ?? {
+    mood: "ya",
+    su: { name: "document digestion" },
+    be: "series",
+    ob: { series: result.records }
+  };
+  const targetName = sentence?.to?.name ?? sentence?.su?.name ?? series.su.name;
   return {
-    ...result.series,
+    ...series,
     su: { name: targetName },
     ob: { series: result.records }
   };
@@ -41,8 +47,12 @@ export const signatures = [
   { signatureWords: ["be", "digestion", "from", "name", "text", "to", "name", "series"], handler: documentDigestion },
   { signatureWords: ["be", "digestion", "from", "text"], handler: documentDigestion },
   { signatureWords: ["be", "digestion", "from", "text", "to", "name", "series"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "as", "name", "csv", "from", "filename", "to", "name", "series"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "as", "name", "csv", "from", "text", "to", "name", "series"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "as", "name", "markdown", "from", "filename", "to", "name", "series"], handler: documentDigestion },
-  { signatureWords: ["be", "digestion", "as", "name", "markdown", "from", "text", "to", "name", "series"], handler: documentDigestion }
+  { signatureWords: ["be", "digestion", "as", "wo", "csv", "from", "filename", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "as", "wo", "csv", "from", "text", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "as", "wo", "markdown", "from", "filename", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "as", "wo", "markdown", "from", "text", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "from", "filename", "fromstate", "wo", "csv", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "from", "text", "fromstate", "wo", "csv", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "from", "filename", "fromstate", "wo", "markdown", "to", "name", "series"], handler: documentDigestion },
+  { signatureWords: ["be", "digestion", "from", "text", "fromstate", "wo", "markdown", "to", "name", "series"], handler: documentDigestion }
 ];

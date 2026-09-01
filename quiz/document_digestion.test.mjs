@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { execFile } from "node:child_process";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -19,6 +20,7 @@ import {
   digestFilename,
   replayDigest,
   sourceIdForBytes,
+  canonicalDigestStream,
   verifyArtifactHash,
   validateSourceSpan
 } from "../program/library/document_digestion.mjs";
@@ -27,6 +29,14 @@ import { signatures as digestionSignatures } from "../program/verbs/document_dig
 const execFileAsync = promisify(execFile);
 
 const fixture = name => path.resolve("quiz/fixtures", name);
+const contentAddressedPath = (runRoot, hash, locator) => path.join(
+  runRoot,
+  "artifacts",
+  "sha256",
+  hash.slice(0, 2),
+  hash.slice(2, 4),
+  `${hash}${path.extname(locator)}`
+);
 
 async function readFixture(name) {
   return fs.readFile(fixture(name));
@@ -50,6 +60,8 @@ test("policy, technical, and tabular goldens emit stable anchored pi7 candidates
     assert.equal(first.records[0].su.name, first.sourceId);
     assert.equal(first.source.be, "artifact");
     assert.equal(first.source.as.name, "source");
+    assert.equal(first.source.to.filename, first.sourceLocator);
+    assert.match(first.sourceLocator, new RegExp(`^artifacts/document-digestion/${first.sourceId}\\.${format}\\.source$`, "u"));
     assert.ok(first.anchors[0].id.startsWith(firstAnchor));
     assert.ok(first.anchors.at(-1).id.startsWith(lastAnchor));
     assert.equal(first.stream, second.stream);
@@ -169,6 +181,7 @@ test("filename digestion records the source artifact hash and returns a Pyash se
   const result = await digestFilename(fixture("document-digestion-policy.md"));
   assert.equal(result.source.be, "artifact");
   assert.equal(result.source.as.name, "source");
+  assert.equal(result.source.to.filename, result.sourceLocator);
   assert.equal(result.series.be, "series");
   assert.equal(result.series.ob.series, result.records);
   assert.equal(result.artifactHash, result.sourceId.slice(4));
@@ -183,8 +196,10 @@ test("filename digestion emits the canonical projection before artifact events",
     const artifacts = exchange.filter(sentence => sentence.be === "artifact");
     assert.equal(artifacts.length, 3);
     assert.equal(artifacts[0].as.name, "source");
+    assert.equal(artifacts[0].to.filename, result.sourceLocator);
     assert.equal(artifacts[1].accordingto.name, "sha256");
     assert.equal(artifacts[1].fromtext.text, result.artifactHash);
+    assert.equal(artifacts[1].to.filename, result.sourceLocator);
     assert.equal(artifacts[2].as.name, "digest");
     assert.equal(artifacts[2].fromtext.text, result.streamHash);
     assert.equal(exchange.at(-1).be, "artifact");
@@ -210,32 +225,101 @@ test("be digestion exposes the same records through a Pyash series target", asyn
 test("document digestion exposes a truthful series signature", () => {
   assert.ok(digestionSignatures.some(({ signatureWords }) => signatureWords.join(" ") === "be digestion from filename to name series"));
   assert.ok(digestionSignatures.some(({ signatureWords }) => signatureWords.join(" ") === "be digestion from text to name series"));
+  assert.ok(digestionSignatures.some(({ signatureWords }) => signatureWords.join(" ") === "be digestion as wo csv from filename to name series"));
+  assert.ok(digestionSignatures.some(({ signatureWords }) => signatureWords.join(" ") === "be digestion from filename fromstate wo markdown to name series"));
   assert.equal(digestionSignatures.some(({ signatureWords }) => signatureWords.includes("num") && signatureWords.includes("digestion")), false);
+  assert.equal(digestionSignatures.some(({ signatureWords }) => signatureWords.join(" ").includes("as name csv") || signatureWords.join(" ").includes("as name markdown")), false);
 });
 
 test("the Pyash orchestration module delegates to the digestion series contract", async () => {
   forget();
-  const modulePath = path.resolve("module/document_digestion.pya");
+  const modulePath = path.resolve("module/documentation_digestion.pya");
   const sourcePath = fixture("document-digestion-policy.md");
-  await interpret(parse(`from filename "${modulePath}" ob name document digestion to name digest be import do`));
-  await interpret(parse(`su name policy from filename "${sourcePath}" to name series policy be digest do`));
+  await interpret(parse(`from filename "${modulePath}" ob name documentation digestion to name documentation digestion be import do`));
+  await interpret(parse(`su name policy from filename "${sourcePath}" to name series policy be documentation digestion do`));
   const output = remember("policy");
   assert.equal(output.be, "series");
   assert.equal(output.ob.series[0].as.name, "source");
   assert.equal(output.ob.series[2].mood, "pi7");
 });
 
-test("literal digestion has a supported JavaScript and C compile boundary", async () => {
-  const sourcePath = path.resolve("examples/pyash/document-digestion.pya");
-  for (const targetState of ["javascript", "c"]) {
+test("typed format forms dispatch for filename and text inputs", async () => {
+  const markdown = await readFixture("document-digestion-policy.md");
+  const csv = await readFixture("document-digestion-table.csv");
+  const calls = [
+    [`be digestion as wo csv from filename "${fixture("document-digestion-table.csv")}" to name series rows do`, "csv", csv],
+    [`be digestion as wo csv from text quoted.text.${csv.toString("utf8")}.text.quoted to name series rows do`, "csv", csv],
+    [`be digestion from filename "${fixture("document-digestion-policy.md")}" fromstate wo markdown to name series policy do`, "markdown", markdown],
+    [`be digestion from text quoted.text.${markdown.toString("utf8")}.text.quoted fromstate wo markdown to name series policy do`, "markdown", markdown]
+  ];
+  for (const [call, format, bytes] of calls) {
     forget();
-    await interpret(parse(`from filename "${sourcePath}" to name output become name ${targetState} be compile do`));
-    const output = remember("output");
-    assert.equal(output.be, targetState);
-    assert.doesNotMatch(output.ob.text, /TODO:.*digestion/u);
-    assert.match(output.ob.text, /src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28/u);
+    await interpret(parse(call));
+    const target = remember(call.includes("rows") ? "rows" : "policy");
+    const expected = digestDocument({ bytes, format });
+    assert.equal(target.be, "series");
+    assert.equal(target.ob.series[0].su.name, expected.sourceId);
+    assert.deepEqual(target.ob.series, expected.records);
   }
 });
+
+test("literal digestion has an executable JavaScript and C series boundary", async () => {
+  const sourcePath = path.resolve("examples/pyash/document-digestion.pya");
+  const expected = [
+    ["principle", "document-digestion-policy.md"],
+    ["technical", "document-digestion-technical.md"],
+    ["table", "document-digestion-table.csv"]
+  ].map(([name, filename]) => [name, digestDocument({ bytes: fsSync.readFileSync(fixture(filename)), filename }).stream]);
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-document-compile-"));
+  try {
+    for (const targetState of ["javascript", "c"]) {
+      forget();
+      await interpret(parse(`from filename "${sourcePath}" to name output become name ${targetState} be compile do`));
+      const output = remember("output");
+      assert.equal(output.be, targetState);
+      const body = unwrapCompiled(output.ob.text, targetState);
+      assert.doesNotMatch(body, /TODO:.*digestion/u);
+      assert.match(body, /src-7b5d10bc20a86cb16d320a9310afe3c751b5e21483a4c72a99ce08104d5eaa28/u);
+
+      if (targetState === "javascript") {
+        const scriptPath = path.join(tempDir, "digest.mjs");
+        await fs.writeFile(scriptPath, `${body}\nconsole.log(JSON.stringify({ principle: globalThis["principle"], technical: globalThis["technical"], table: globalThis["table"] }));\n`, "utf8");
+        const { stdout } = await execFileAsync(process.execPath, [scriptPath], { cwd: process.cwd(), maxBuffer: 8 * 1024 * 1024 });
+        const values = JSON.parse(stdout.trim());
+        for (const [name, stream] of expected) {
+          assert.equal(canonicalDigestStream(values[name].ob.series), stream);
+        }
+      } else {
+        const cPath = path.join(tempDir, "digest.c");
+        const objectPath = path.join(tempDir, "digest.o");
+        const wrapperPath = path.join(tempDir, "wrapper.c");
+        const executablePath = path.join(tempDir, "digest");
+        await fs.writeFile(cPath, body, "utf8");
+        await fs.writeFile(wrapperPath, [
+          "#include <stdio.h>",
+          "extern const char *principle_digest_stream;",
+          "extern const char *technical_digest_stream;",
+          "extern const char *table_digest_stream;",
+          "int main(void) { fputs(principle_digest_stream, stdout); fputs(technical_digest_stream, stdout); fputs(table_digest_stream, stdout); return 0; }"
+        ].join("\n"), "utf8");
+        await execFileAsync("gcc", ["-std=c11", "-O0", "-Dmain=pyash_generated_main", "-c", cPath, "-o", objectPath], { cwd: process.cwd(), maxBuffer: 2 * 1024 * 1024 });
+        await execFileAsync("gcc", ["-std=c11", "-O0", objectPath, wrapperPath, "-o", executablePath], { cwd: process.cwd(), maxBuffer: 2 * 1024 * 1024 });
+        const { stdout } = await execFileAsync(executablePath, [], { cwd: process.cwd(), maxBuffer: 8 * 1024 * 1024 });
+        assert.equal(crypto.createHash("sha256").update(stdout, "utf8").digest("hex"), crypto.createHash("sha256").update(expected.map(([, stream]) => stream).join(""), "utf8").digest("hex"));
+      }
+    }
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+function unwrapCompiled(text, lang) {
+  const prefix = `quoted.${lang}.\n`;
+  const suffix = `.${lang}.quoted`;
+  assert.ok(text.startsWith(prefix));
+  assert.ok(text.endsWith(suffix));
+  return text.slice(prefix.length, -suffix.length);
+}
 
 function sentenceToPyashForTest(sentence) {
   return sentenceToPyash(sentence);
@@ -254,6 +338,7 @@ test("newspaper replay verifies two identical digest artifacts and rejects tampe
   const replay = path.resolve("command/replay_newspaper.mjs");
   const runs = ["digest-replay-one", "digest-replay-two"];
   const digestArtifacts = [];
+  const sourceArtifacts = [];
 
   try {
     for (const runId of runs) {
@@ -263,6 +348,9 @@ test("newspaper replay verifies two identical digest artifacts and rejects tampe
       });
       const newspaper = await fs.readFile(path.join(runRoot, "newspaper", `${runId}.pya`), "utf8");
       const records = splitSentences(newspaper).map(line => parse(line));
+      const sourceArtifact = records.find(sentence => sentence?.be === "artifact" && sentence?.as?.name === "source");
+      assert.ok(sourceArtifact);
+      sourceArtifacts.push(sourceArtifact);
       const digestArtifact = records.find(sentence => sentence?.be === "artifact" && sentence?.as?.name === "digest");
       assert.ok(digestArtifact);
       assert.equal(digestArtifact.fromtext.text.length, 64);
@@ -280,16 +368,23 @@ test("newspaper replay verifies two identical digest artifacts and rejects tampe
     assert.equal(digestArtifacts[0].stream, digestArtifacts[1].stream);
     assert.equal(digestArtifacts[0].digestArtifact.fromtext.text, digestArtifacts[1].digestArtifact.fromtext.text);
 
-    const expectedHash = digestArtifacts[0].digestArtifact.fromtext.text;
-    const contentAddressedPath = path.join(
-      runRoot,
-      "artifacts",
-      "sha256",
-      expectedHash.slice(0, 2),
-      expectedHash.slice(2, 4),
-      `${expectedHash}.pya`
+    const sourceHash = sourceArtifacts[0].fromtext.text;
+    const sourceLocator = sourceArtifacts[0].to.filename;
+    const sourcePath = contentAddressedPath(runRoot, sourceHash, sourceLocator);
+    const sourceBytes = await fs.readFile(sourcePath);
+    await fs.writeFile(sourcePath, Buffer.concat([sourceBytes, Buffer.from("tampered", "utf8")]));
+    await assert.rejects(
+      execFileAsync(process.execPath, [replay, "--run-id", runs[0], "--run-root", runRoot], {
+        cwd: runRoot,
+        maxBuffer: 2 * 1024 * 1024
+      }),
+      error => error?.code === 1 && /hash inconsistency/u.test(String(error.stderr))
     );
-    await fs.writeFile(contentAddressedPath, `${digestArtifacts[0].stream}tampered`, "utf8");
+    await fs.writeFile(sourcePath, sourceBytes);
+
+    const expectedHash = digestArtifacts[0].digestArtifact.fromtext.text;
+    const digestPath = contentAddressedPath(runRoot, expectedHash, digestArtifacts[0].digestArtifact.to.filename);
+    await fs.writeFile(digestPath, `${digestArtifacts[0].stream}tampered`, "utf8");
     await assert.rejects(
       execFileAsync(process.execPath, [replay, "--run-id", runs[0], "--run-root", runRoot], {
         cwd: runRoot,

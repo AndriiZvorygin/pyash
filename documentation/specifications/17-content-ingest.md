@@ -144,11 +144,14 @@ before hashing or calculating offsets. The source registration is the first
 record in the canonical digestion stream and has this shape:
 
 ```text
-exists su name src-<sha256> ob text "<decoded source>" as name source accordingto name sha256 fromtext text "<sha256>" by num <byte length> be artifact ya
+exists su name src-<sha256> ob text "<decoded source>" to filename "artifacts/document-digestion/src-<sha256>.<format>.source" as name source accordingto name sha256 fromtext text "<sha256>" by num <byte length> be artifact ya
 ```
 
-In the canonical stream the approved source-registration predicate is
-`be artifact` with `as name source`; `be source` is not part of this contract.
+The approved source-registration predicate is a fully materialized `be
+artifact` record with `as name source` and a deterministic source-derived
+locator. `be source` is not part of this contract. Replay validates this
+record through the normal artifact path; there is no source-registration
+replay exception.
 
 The source file and the canonical digest stream are also persisted through the
 existing artifact path when digestion is run from a filename. The digest
@@ -238,15 +241,28 @@ The Pyash entrypoint is an imperative sentence such as:
 su name principle from filename "policy.md" to name series principle be digestion do
 ```
 
-The Pyash orchestration module `module/document_digestion.pya` exposes the
-same operation as a typed `to name series` ceremony. Strict byte decoding,
-hashing, physical line/byte accounting, and CSV parsing remain in the host
-substrate because those operations must preserve exact bytes. The orchestration
-surface remains Pyash-native.
+The callable format forms use typed `wo` roles rather than an untyped name
+workaround. Filename and text inputs are both supported, for example:
+
+```text
+be digestion as wo csv from filename "table.csv" to name series rows do
+be digestion as wo csv from text "name,age\nAda,36\n" to name series rows do
+be digestion from filename "policy.md" fromstate wo markdown to name series policy do
+be digestion from text "A paragraph.\n" fromstate wo markdown to name series policy do
+```
+
+The Pyash orchestration module `module/documentation_digestion.pya` exposes the
+filename operation as a typed `to name series produce` ceremony. Strict byte
+decoding, hashing, physical line/byte accounting, and CSV parsing remain in
+the host substrate because those operations must preserve exact bytes. The
+orchestration surface remains Pyash-native and composes the existing artifact
+recorder.
 
 For the supported literal-input compile boundary, JavaScript materializes the
-same `series` value and C materializes the same canonical stream as a typed
-digest string. Dynamic digestion compilation is outside this bounded contract.
+same `series` value and C materializes a `pya_digest_series` containing the
+canonical stream, canonical record strings, and record count. Executed
+JavaScript and C outputs MUST hash to the same canonical stream. Dynamic
+digestion compilation is outside this bounded contract.
 
 ### 10.4 Replay and rejection contract
 

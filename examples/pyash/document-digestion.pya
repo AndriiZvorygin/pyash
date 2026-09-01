@@ -1,3 +1,4 @@
-su name principle from filename "quiz/fixtures/document-digestion-policy.md" to name series principle be digestion do
-su name technical from filename "quiz/fixtures/document-digestion-technical.md" to name series technical be digestion do
+from filename "../../module/documentation_digestion.pya" ob name documentation digestion to name documentation digestion be import do
+su name principle from filename "quiz/fixtures/document-digestion-policy.md" to name series principle be documentation digestion do
+su name technical from filename "quiz/fixtures/document-digestion-technical.md" to name series technical be documentation digestion do
 su name table from filename "quiz/fixtures/document-digestion-table.csv" to name series table be digestion do

@@ -34,8 +34,8 @@ const LANGUAGE_TYPES = new Set([
   "english"
 ]);
 
-function compileDocumentDigestion(sentence, { lang, declared, declaredTypes } = {}) {
-  if (sentence?.mood !== "do" || sentence?.be !== "digestion") return null;
+function compileDocumentDigestion(sentence, { lang, declared, declaredTypes, cHelpers, cState } = {}) {
+  if (sentence?.mood !== "do" || !["digestion", "documentation digestion"].includes(sentence?.be)) return null;
   if (lang !== "javascript" && lang !== "c") return null;
   const targetName = sentence?.to?.name ?? sentence?.su?.name;
   if (!targetName) return null;
@@ -60,8 +60,16 @@ function compileDocumentDigestion(sentence, { lang, declared, declaredTypes } = 
   markDeclared(declared, targetName);
   declaredTypes?.set(targetName, "series");
   if (lang === "c") {
+    if (cHelpers) cHelpers.usesDocumentDigestion = true;
     const safeName = sanitizeName(targetName);
-    return `const char ${safeName}_digest_stream[] = ${JSON.stringify(result.stream)};\nconst char *${safeName} = ${safeName}_digest_stream;`;
+    const recordLiterals = result.canonicalRecords.map(record => JSON.stringify(record)).join(", ");
+    const declarations = [
+      `const char *${safeName}_digest_stream = ${JSON.stringify(result.stream)};`,
+      `const char *const ${safeName}_digest_records[] = { ${recordLiterals} };`,
+      `const pya_digest_series ${safeName} = { ${JSON.stringify(result.stream)}, ${safeName}_digest_records, ${result.records.length} };`
+    ];
+    if (cState?.preMain) cState.preMain.push(...declarations);
+    return "/* document digestion series materialized above */";
   }
   const safeName = sanitizeName(targetName);
   return `const ${safeName} = ${JSON.stringify(value)};\nglobalThis[${JSON.stringify(targetName)}] = ${safeName};`;
@@ -78,7 +86,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
   const effectiveBe = baseBe || sentence.mood;
   const literalBe = LANGUAGE_TYPES.has(effectiveBe) ? "text" : effectiveBe;
 
-  const documentDigestionResult = compileDocumentDigestion(sentence, { lang, declared, declaredTypes });
+  const documentDigestionResult = compileDocumentDigestion(sentence, { lang, declared, declaredTypes, cHelpers, cState });
   if (documentDigestionResult) return documentDigestionResult;
 
   const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers, jsHelpers });
