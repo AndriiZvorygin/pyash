@@ -156,7 +156,10 @@ async function main() {
         }
       }
     }
-    if (sentence.be === "artifact") {
+    const sourceRegistration = sentence.be === "artifact"
+      && sentence.as?.name === "source"
+      && !sentence.to?.filename;
+    if (sentence.be === "artifact" && !sourceRegistration) {
       const locator = sentence.to?.filename ?? sentence.ob?.text;
       const expectedHash = sentence.fromtext?.text;
       if (locator && expectedHash) {

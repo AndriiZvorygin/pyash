@@ -27,10 +27,45 @@ import { handleVectorLiteral } from "./transpile_sentence/vector_literal.mjs";
 import { handleDateLiteral, handleNumberLiteral, handleTextLiteral, handleFilenameLiteral, handleSentenceLiteral } from "./transpile_sentence/scalar_literals.mjs";
 import { handleKnowledgeSentence } from "./emit_knowledge.mjs";
 import { handleClaimSentence } from "./emit_claim.mjs";
+import fsSync from "node:fs";
+import { digestDocument } from "../../../library/document_digestion.mjs";
 
 const LANGUAGE_TYPES = new Set([
   "english"
 ]);
+
+function compileDocumentDigestion(sentence, { lang, declared, declaredTypes } = {}) {
+  if (sentence?.mood !== "do" || sentence?.be !== "digestion") return null;
+  if (lang !== "javascript" && lang !== "c") return null;
+  const targetName = sentence?.to?.name ?? sentence?.su?.name;
+  if (!targetName) return null;
+  const filename = sentence?.from?.filename;
+  const inlineText = sentence?.from?.text;
+  let bytes;
+  if (filename) {
+    bytes = fsSync.readFileSync(filename);
+  } else if (typeof inlineText === "string") {
+    bytes = Buffer.from(inlineText, "utf8");
+  } else {
+    return null;
+  }
+  const format = sentence?.as?.name;
+  const result = digestDocument({ bytes, format, filename });
+  const value = {
+    mood: "ya",
+    su: { name: targetName },
+    be: "series",
+    ob: { series: result.records }
+  };
+  markDeclared(declared, targetName);
+  declaredTypes?.set(targetName, "series");
+  if (lang === "c") {
+    const safeName = sanitizeName(targetName);
+    return `const char ${safeName}_digest_stream[] = ${JSON.stringify(result.stream)};\nconst char *${safeName} = ${safeName}_digest_stream;`;
+  }
+  const safeName = sanitizeName(targetName);
+  return `const ${safeName} = ${JSON.stringify(value)};\nglobalThis[${JSON.stringify(targetName)}] = ${safeName};`;
+}
 
 export function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs } = {}) {
   const ob = sentence.ob ?? {};
@@ -42,6 +77,9 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
   const baseBe = aliasBe !== baseBeRaw && !ceremonyFns?.has(baseBeRaw) ? aliasBe : baseBeRaw;
   const effectiveBe = baseBe || sentence.mood;
   const literalBe = LANGUAGE_TYPES.has(effectiveBe) ? "text" : effectiveBe;
+
+  const documentDigestionResult = compileDocumentDigestion(sentence, { lang, declared, declaredTypes });
+  if (documentDigestionResult) return documentDigestionResult;
 
   const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers, jsHelpers });
   if (handledRet) return handledRet;

@@ -144,12 +144,17 @@ before hashing or calculating offsets. The source registration is the first
 record in the canonical digestion stream and has this shape:
 
 ```text
-exists su name src-<sha256> ob text "<decoded source>" accordingto name sha256 fromtext text "<sha256>" by num <byte length> be source ya
+exists su name src-<sha256> ob text "<decoded source>" as name source accordingto name sha256 fromtext text "<sha256>" by num <byte length> be artifact ya
 ```
 
-The source artifact may additionally be recorded through the existing artifact
-path. Artifact aliases and ordinal artifact names are operational records, not
-source identity.
+In the canonical stream the approved source-registration predicate is
+`be artifact` with `as name source`; `be source` is not part of this contract.
+
+The source file and the canonical digest stream are also persisted through the
+existing artifact path when digestion is run from a filename. The digest
+artifact is stored under a source-derived locator and carries the stream hash.
+Artifact aliases and ordinal artifact names are operational records, not source
+identity.
 
 ### 10.2 Anchor identity and spans
 
@@ -171,7 +176,8 @@ For example, `section-0002-paragraph-0001-lines-4-5-bytes-62-104` means that
 physical lines 4 through 5 inclusive. The span excludes the line terminator
 after the final line.
 
-CSV candidates include the header and each data row. CSV logical rows may span
+CSV anchors include the header and each data row, but only data rows produce
+candidates. CSV logical rows may span
 multiple physical lines when a quoted field contains a line break. The header
 anchor is:
 
@@ -195,15 +201,22 @@ The canonical digestion stream is ordered in source order:
 
 1. source registration;
 2. for each anchor in source order, its anchor marker;
-3. the candidate sentence for that anchor.
+3. the candidate sentence for that anchor, when the anchor is a candidate.
 
-An anchor marker records the exact span and uses `be anchor`. A candidate uses
+An anchor marker records the exact span and uses `be anchor`. Marker subjects
+are source-qualified as `<source-id>:<anchor-id>`. Candidate subjects are
+source-qualified as `<source-id>:candidate-<4-digit ordinal>`; their anchor is
+carried by the embedded clause. A candidate uses
 the propositive mood `pi7`, an embedded `fromtext` source/anchor clause,
 `accordingto name reported-evidential`, and `by num 1`:
 
 ```text
-su name <candidate-id> ob text "<exact span text>" fromtext la su name src-<sha256> ob text <anchor-id> be text ko accordingto name reported-evidential by num 1 be text pi7
+su name src-<sha256>:candidate-<4-digit ordinal> ob text "<candidate text>" fromtext la su name src-<sha256> ob text <anchor-id> be text ya ko accordingto name reported-evidential by num 1 be text pi7
 ```
+
+The embedded `fromtext` clause itself has `mood: "ya"` (rendered as `be text
+ya` in canonical Pyash). This makes the source/anchor relation a complete
+record rather than an unqualified payload.
 
 `pi7` marks a high-recall extraction candidate; it does not assert that the
 candidate's claim is true. In this package, confidence (`by num`) means
@@ -211,24 +224,38 @@ extraction and anchor fidelity, not claim truth. The initial bounded extractor
 therefore uses `1` only after the exact span round-trip succeeds.
 
 The candidate and marker IDs are derived from format and source order, never
-from an artifact ordinal or wall-clock value. Candidate object text is the
-decoded exact span text; no line-ending or whitespace normalization is allowed
-inside the anchored span.
+from an artifact ordinal or wall-clock value. Markdown candidate object text is
+the decoded exact span text; no line-ending or whitespace normalization is
+allowed inside the anchored span. A CSV marker object is the exact original
+row bytes. A CSV data-row candidate is the deterministic header-labelled
+narrative formed by pairing each header with its decoded field in order and
+joining pairs as `header: value; header: value`; the header itself never becomes
+a candidate.
 
 The Pyash entrypoint is an imperative sentence such as:
 
 ```text
-su name principle from filename "policy.md" to name principle be digestion do
+su name principle from filename "policy.md" to name series principle be digestion do
 ```
+
+The Pyash orchestration module `module/document_digestion.pya` exposes the
+same operation as a typed `to name series` ceremony. Strict byte decoding,
+hashing, physical line/byte accounting, and CSV parsing remain in the host
+substrate because those operations must preserve exact bytes. The orchestration
+surface remains Pyash-native.
+
+For the supported literal-input compile boundary, JavaScript materializes the
+same `series` value and C materializes the same canonical stream as a typed
+digest string. Dynamic digestion compilation is outside this bounded contract.
 
 ### 10.4 Replay and rejection contract
 
 Identical bytes and format MUST produce byte-identical canonical record streams,
-including their canonical Pyash sentence rendering. A replay check MAY use the
-existing artifact hash verification path and MUST compare the canonical
-digestion stream (not timestamps, run folder aliases, or deprecated `--again`
-execution behavior). General `again` execution restoration remains outside this
-bounded package.
+including their canonical Pyash sentence rendering. A replay check uses the
+existing artifact hash verification path for the persisted stream and compares
+the canonical digestion stream (not timestamps, run folder aliases, or
+deprecated `--again` execution behavior). General `again` execution restoration
+remains outside this bounded package.
 
 The package MUST reject empty input, invalid UTF-8, malformed CSV, and any span
 that does not map back to the source bytes. It MUST fail before emitting a

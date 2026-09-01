@@ -275,9 +275,15 @@ function csvSpans(bytes, text) {
   return rows.map((row, index) => ({
     kind: index === 0 ? "table-header" : "table-row",
     ordinal: index === 0 ? null : index,
+    fields: records[index].map(value => String(value ?? "")),
+    headers: records[0].map(value => String(value ?? "")),
     ...row,
     text: decodeUtf8(bytes.subarray(row.byteStart, row.byteEnd))
   }));
+}
+
+function csvNarrative(headers, fields) {
+  return headers.map((header, index) => `${header}: ${fields[index] ?? ""}`).join("; ");
 }
 
 function validateIdentifier(value, label) {
@@ -331,6 +337,7 @@ function makeAnchor(span, format) {
 function sourceAnchorClause(sourceId, anchorId) {
   return {
     la: {
+      mood: "ya",
       su: { name: sourceId },
       ob: { text: anchorId },
       be: "text"
@@ -347,14 +354,15 @@ function sourceSentence(sourceId, text, hash, size) {
     accordingto: { name: "sha256" },
     fromtext: { text: hash },
     by: { num: size },
-    be: "source"
+    as: { name: "source" },
+    be: "artifact"
   };
 }
 
 function anchorSentence(sourceId, anchorId, text) {
   return {
     mood: "ya",
-    su: { name: anchorId },
+    su: { name: `${sourceId}:${anchorId}` },
     ob: { text },
     fromtext: sourceAnchorClause(sourceId, anchorId),
     be: "anchor"
@@ -364,7 +372,7 @@ function anchorSentence(sourceId, anchorId, text) {
 function candidateSentence(sourceId, anchorId, ordinal, text) {
   return {
     mood: "pi7",
-    su: { name: `candidate-${padOrdinal(ordinal)}` },
+    su: { name: `${sourceId}:candidate-${padOrdinal(ordinal)}` },
     ob: { text },
     fromtext: sourceAnchorClause(sourceId, anchorId),
     accordingto: { name: "reported-evidential" },
@@ -402,7 +410,14 @@ function buildDigest({ bytes, text, format }) {
     assertSpanRoundTrip(bytes, span);
     const id = makeAnchor(span, format);
     const marker = anchorSentence(sourceId, id, span.text);
-    const candidate = candidateSentence(sourceId, id, index + 1, span.text);
+    const candidate = span.kind === "table-header"
+      ? null
+      : candidateSentence(
+        sourceId,
+        id,
+        candidates.length + 1,
+        format === "csv" ? csvNarrative(span.headers, span.fields) : span.text
+      );
     const anchor = {
       id,
       kind: span.kind,
@@ -415,8 +430,9 @@ function buildDigest({ bytes, text, format }) {
       candidate
     };
     anchors.push(anchor);
-    candidates.push(candidate);
-    records.push(marker, candidate);
+    if (candidate) candidates.push(candidate);
+    records.push(marker);
+    if (candidate) records.push(candidate);
   });
 
   const canonicalRecords = records.map(sentenceToPyash);
@@ -472,7 +488,13 @@ export async function digestFilename(filename, { format } = {}) {
       producer: "document digest"
     });
   }
-  return { ...result, artifact, series: {
+  const digestArtifact = recordArtifact({
+    locator: `artifacts/document-digestion/${result.sourceId}.${result.format}.pya`,
+    producer: "document digest",
+    bytes: Buffer.from(result.stream, "utf8"),
+    kind: "digest"
+  });
+  return { ...result, artifact, digestArtifact, series: {
     mood: "ya",
     su: { name: "document digestion" },
     be: "series",
@@ -489,6 +511,8 @@ export function replayDigest(first, second) {
   if (!SHA256_PATTERN.test(String(right.artifactHash ?? "")) || right.sourceId !== `src-${right.artifactHash}`) {
     defect("second replay record has an invalid artifact hash");
   }
+  verifyArtifactHash(Buffer.from(String(left.stream ?? ""), "utf8"), left.streamHash);
+  verifyArtifactHash(Buffer.from(String(right.stream ?? ""), "utf8"), right.streamHash);
   const identical = left.format === right.format
     && left.sourceId === right.sourceId
     && left.artifactHash === right.artifactHash
