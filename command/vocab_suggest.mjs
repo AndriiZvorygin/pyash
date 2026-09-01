@@ -56,7 +56,20 @@ const GRAMMAR_KEYWORDS = new Set(
 );
 // Built-in structural verbs are runtime vocabulary, even when the external
 // dictionary marks their English gloss as a blocked synonym.
-const STRUCTURAL_VERB_TOKENS = new Set(["exists"]);
+const STRUCTURAL_VERB_TOKENS = new Set(["exists", "export"]);
+// These names are stable Pyash contract identifiers rather than prose names.
+// Keep them available to artifact/provenance records even when the external
+// dictionary has no exact technical entry for them.
+const APPROVED_CONTRACT_NAME_TOKENS = new Set(["source", "sha256"]);
+const APPROVED_CONTRACT_NAME_PATTERNS = [
+  /^src-[0-9a-f]{64}(?::[A-Za-z0-9._:-]+)?$/u
+];
+
+function isApprovedContractNameToken(token) {
+  const lower = String(token ?? "").toLowerCase();
+  return APPROVED_CONTRACT_NAME_TOKENS.has(lower)
+    || APPROVED_CONTRACT_NAME_PATTERNS.some(pattern => pattern.test(lower));
+}
 
 function isGrammarKeyword(token) {
   return GRAMMAR_KEYWORDS.has(String(token ?? "").toLowerCase());
@@ -87,7 +100,9 @@ function collectTokensFromSentence(sentence, out) {
       continue;
     }
     if (typeof node.name === "string") {
-      for (const token of tokenizeName(node.name)) out.add(token);
+      for (const token of tokenizeName(node.name)) {
+        if (!isApprovedContractNameToken(token)) out.add(token);
+      }
     }
     for (const [key, value] of Object.entries(node)) {
       if (skipKeys.has(key)) continue;

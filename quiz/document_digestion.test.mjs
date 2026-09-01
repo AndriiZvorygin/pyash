@@ -15,6 +15,7 @@ import { normalizeEvidence } from "../program/library/knowledge_core.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
+import { runVocabSuggest } from "../command/vocab_suggest.mjs";
 import {
   digestDocument,
   digestFilename,
@@ -236,11 +237,47 @@ test("the Pyash orchestration module delegates to the digestion series contract"
   const modulePath = path.resolve("module/documentation_digestion.pya");
   const sourcePath = fixture("document-digestion-policy.md");
   await interpret(parse(`from filename "${modulePath}" ob name documentation digestion to name documentation digestion be import do`));
-  await interpret(parse(`su name policy from filename "${sourcePath}" to name series policy be documentation digestion do`));
+  await interpret(parse(`su name policy from filename "${sourcePath}" fromstate wo markdown to name series policy be documentation digestion do`));
   const output = remember("policy");
   assert.equal(output.be, "series");
   assert.equal(output.ob.series[0].as.name, "source");
   assert.equal(output.ob.series[2].mood, "pi7");
+});
+
+test("repository-root digestion example routes Markdown and CSV through the module", async () => {
+  const examplePath = path.resolve("examples/pyash/document-digestion.pya");
+  const runner = path.resolve("command/run_pya_program.mjs");
+  const { stdout } = await execFileAsync(process.execPath, [
+    runner,
+    examplePath,
+    "--no-newspaper",
+    "--verbose",
+    "--run-id",
+    "document-digestion-example-test",
+    "--run-time",
+    "2026-09-01T12:00:00Z"
+  ], {
+    cwd: process.cwd(),
+    maxBuffer: 16 * 1024 * 1024
+  });
+  for (const filename of [
+    "document-digestion-policy.md",
+    "document-digestion-technical.md",
+    "document-digestion-table.csv"
+  ]) {
+    assert.match(stdout, new RegExp(filename.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
+  }
+});
+
+test("digestion module and golden streams pass vocabulary validation", async () => {
+  const lines = [];
+  const result = await runVocabSuggest([
+    "module/documentation_digestion.pya",
+    "quiz/fixtures/document-digestion-policy.golden.pya",
+    "quiz/fixtures/document-digestion-technical.golden.pya",
+    "quiz/fixtures/document-digestion-table.golden.pya"
+  ], { report: line => lines.push(String(line)) });
+  assert.equal(result.exitCode, 0, lines.join("\n"));
 });
 
 test("typed format forms dispatch for filename and text inputs", async () => {
@@ -329,9 +366,13 @@ test("newspaper replay verifies two identical digest artifacts and rejects tampe
   const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-document-digest-"));
   const source = await readFixture("document-digestion-policy.md");
   await fs.writeFile(path.join(runRoot, "source.md"), source);
+  const modulePath = path.resolve("module/documentation_digestion.pya");
   await fs.writeFile(
     path.join(runRoot, "program.pya"),
-    'su name principle from filename "source.md" to name series principle be digestion do\n',
+    [
+      `from filename "${modulePath}" ob name documentation digestion to name documentation digestion be import do`,
+      'su name principle from filename "source.md" fromstate wo markdown to name series principle be documentation digestion do'
+    ].join("\n") + "\n",
     "utf8"
   );
   const runner = path.resolve("command/run_pya_program.mjs");

@@ -49,7 +49,7 @@ function compileDocumentDigestion(sentence, { lang, declared, declaredTypes, cHe
   } else {
     return null;
   }
-  const format = sentence?.as?.name;
+  const format = sentence?.as?.wo ?? sentence?.fromstate?.wo;
   const result = digestDocument({ bytes, format, filename });
   const value = {
     mood: "ya",
