@@ -1,5 +1,12 @@
-su name documentation digestion from filename source to name series produce be ceremony def
-  from filename of from of this to name series produce be digestion do
+su name documentation digestion from filename source fromstate wo markdown to name series produce be ceremony def
+  from filename of from of this be read do
+  from filename of from of this fromstate wo markdown to name series produce be digestion do
+  su name produce ret
+prah
+
+su name documentation digestion from filename source fromstate wo csv to name series produce be ceremony def
+  from filename of from of this be read do
+  from filename of from of this as wo csv to name series produce be digestion do
   su name produce ret
 prah
 

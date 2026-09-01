@@ -252,11 +252,13 @@ be digestion from text "A paragraph.\n" fromstate wo markdown to name series pol
 ```
 
 The Pyash orchestration module `module/documentation_digestion.pya` exposes the
-filename operation as a typed `to name series produce` ceremony. Strict byte
-decoding, hashing, physical line/byte accounting, and CSV parsing remain in
-the host substrate because those operations must preserve exact bytes. The
-orchestration surface remains Pyash-native and composes the existing artifact
-recorder.
+filename operation as typed `to name series produce` ceremonies for Markdown
+and CSV. Each ceremony first invokes the existing `be read` path, then passes
+the same filename through the typed digestion operation so the existing read
+and artifact paths remain in the orchestration. Strict byte decoding, hashing,
+physical line/byte accounting, and CSV parsing remain in the host substrate
+because those operations must preserve exact bytes. The orchestration surface
+remains Pyash-native.
 
 For the supported literal-input compile boundary, JavaScript materializes the
 same `series` value and C materializes a `pya_digest_series` containing the
