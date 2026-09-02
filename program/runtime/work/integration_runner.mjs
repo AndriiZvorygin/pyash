@@ -26,6 +26,7 @@ import {
   startCodexThread,
   threadIdFromResponse
 } from "../codex/app_server.mjs";
+import { currentTimeoutPolicy } from "./timeout_policy.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -188,6 +189,11 @@ export async function runWorkIntegrationReconciliationOnce({
   now = () => new Date()
 } = {}) {
   const roleSettings = resolveWorkRoleConfig(roleConfig);
+  const timeoutPolicy = currentTimeoutPolicy({
+    fallbackTimeoutMs: turnTimeoutMs,
+    inactivityTimeoutMs: turnInactivityTimeoutMs,
+    hardTimeoutMs: turnHardTimeoutMs
+  });
   const claimed = await claimWorkTaskById(worldRoot, taskId, { owner, workerTag: "integration-reconciliation" });
   if (!claimed) return { claimed: false, status: "idle", queue: await queueDepth(worldRoot) };
   const persisted = await readWorkTaskStatus(worldRoot, claimed.task.taskId);
@@ -236,6 +242,7 @@ export async function runWorkIntegrationReconciliationOnce({
     };
     if (task.status !== "blocked") task = await move("blocked", { message: `integration reconciliation blocked: ${message}`, error: message });
     task = await save({
+      timeoutPolicy,
       blocker: `integration reconciliation blocked: ${message}`,
       interruption: { phase: "integration-reconciliation", at, reason: message, lastTurnId: active.turnId || "" },
       activeTurn: ambiguous ? { ...active, state: "ambiguous", ambiguity: message } : {},
@@ -268,6 +275,7 @@ export async function runWorkIntegrationReconciliationOnce({
       attempts: prior.attempts + 1
     };
     await save({
+      timeoutPolicy,
       integration: {
         branch,
         baseRevision: workspace.baseRevision,

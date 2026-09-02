@@ -27,6 +27,7 @@ import {
   summarizeImplementationProgress,
   extractCommitIds
 } from "./progress.mjs";
+import { currentTimeoutPolicy } from "./timeout_policy.mjs";
 import {
   resumeCodexThread,
   runCodexTurn,
@@ -393,6 +394,11 @@ export async function runWorkSupervisorOnce({
   now = () => new Date()
 } = {}) {
   const roleSettings = resolveWorkRoleConfig(roleConfig);
+  const timeoutPolicy = currentTimeoutPolicy({
+    fallbackTimeoutMs: turnTimeoutMs,
+    inactivityTimeoutMs: turnInactivityTimeoutMs,
+    hardTimeoutMs: turnHardTimeoutMs
+  });
   const claimed = taskId
     ? await claimWorkTaskById(worldRoot, taskId, { workerTag, owner })
     : await claimOldestWorkTask(worldRoot, { workerTag, owner })
@@ -531,6 +537,7 @@ export async function runWorkSupervisorOnce({
       }
       : task.checkpoint.activeTurn;
     const checkpoint = {
+      timeoutPolicy,
       interruption: {
         phase: task.status,
         at,
@@ -619,6 +626,7 @@ export async function runWorkSupervisorOnce({
     }
     await save({
       workspace,
+      timeoutPolicy,
       manager: {
         model: roleSettings.manager.model,
         reasoningEffort: roleSettings.manager.reasoningEffort,
