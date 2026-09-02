@@ -8,12 +8,20 @@ import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
 import {
   findRecoverableOperationalWorkTasks,
+  findPolicyRevalidationWorkTasks,
+  isEligibleForTimeoutPolicyRevalidation,
   isRecoverableOperationalWorkTask,
-  recoverOperationalWorkTask
+  recoverOperationalWorkTask,
+  revalidateTimeoutExhaustedWorkTask
 } from "../../program/runtime/work/recovery.mjs";
 import { isHumanDecisionBlock, isRetryableWorkBlock } from "../../program/runtime/work/roadmap.mjs";
 import { listWorkTasks } from "../../program/runtime/work/operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
+import {
+  currentTimeoutPolicy,
+  LEGACY_TIMEOUT_POLICY,
+  TIMEOUT_POLICY_MIGRATION_ID
+} from "../../program/runtime/work/timeout_policy.mjs";
 
 async function world(prefix) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -384,4 +392,149 @@ test("an ordinary integration conflict becomes retryable reconciliation work", a
     now: "2026-08-12T12:00:00.000Z"
   });
   assert.equal(recovered.task.checkpoint.integration.status, "reconciliation");
+});
+
+test("an exhausted legacy timeout receives exactly one policy revalidation", async () => {
+  const worldRoot = await world("pyash-work-policy-revalidation-");
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-legacy-timeout-revalidation",
+    blocker: "turn timeout",
+    activeTurn: {
+      phase: "implementation",
+      role: "worker",
+      threadId: "luna-thread",
+      requestIdentity: "legacy-timeout-request",
+      state: "ambiguous",
+      startedAt: "2026-08-10T00:00:00.000Z"
+    }
+  });
+  const current = await readWorkTaskStatus(worldRoot, "roadmap-legacy-timeout-revalidation");
+  await writeWorkTaskStatus(worldRoot, {
+    ...current,
+    checkpoint: {
+      ...current.checkpoint,
+      recoveryCount: 2,
+      worker: { ...current.checkpoint.worker, threadId: "luna-thread" },
+      workspace: { ...current.checkpoint.workspace, worktreePath: "/tmp/legacy-timeout-revalidation" },
+      interruption: {
+        ...current.checkpoint.interruption,
+        workspaceEvidence: { revision: "preserved-commit", changedFiles: ["src/example.mjs"] }
+      }
+    }
+  });
+  const policy = currentTimeoutPolicy({
+    fallbackTimeoutMs: 900000,
+    inactivityTimeoutMs: 900000,
+    hardTimeoutMs: 1800000
+  });
+  const candidate = await readWorkTaskStatus(worldRoot, "roadmap-legacy-timeout-revalidation");
+  assert.equal(candidate.checkpoint.timeoutPolicy.policyVersion, "");
+  assert.equal(isEligibleForTimeoutPolicyRevalidation(candidate, {
+    currentPolicy: policy,
+    now: "2026-08-12T12:00:00.000Z"
+  }), true);
+  assert.equal(await revalidateTimeoutExhaustedWorkTask(worldRoot, candidate.taskId, {
+    currentPolicy: policy,
+    preflightPassed: false,
+    now: "2026-08-12T12:00:00.000Z"
+  }), null);
+  const revalidated = await revalidateTimeoutExhaustedWorkTask(worldRoot, candidate.taskId, {
+    currentPolicy: policy,
+    preflightPassed: true,
+    resumePhase: "reviewing",
+    now: "2026-08-12T12:00:00.000Z"
+  });
+  assert.equal(revalidated.task.status, "reviewing");
+  assert.equal(revalidated.task.checkpoint.recoveryCount, 2);
+  assert.equal(revalidated.task.checkpoint.policyRevalidation.migrationId, TIMEOUT_POLICY_MIGRATION_ID);
+  assert.equal(revalidated.task.checkpoint.policyRevalidation.attempts, 1);
+  assert.equal(revalidated.task.checkpoint.policyRevalidation.fromPolicy.hardTimeoutMs, 900000);
+  assert.equal(revalidated.task.checkpoint.policyRevalidation.toPolicy.hardTimeoutMs, 1800000);
+  assert.equal(revalidated.task.checkpoint.activeTurn.state, "");
+  assert.equal(revalidated.task.checkpoint.turnHistory.at(-1).state, "abandoned");
+  assert.equal(revalidated.task.checkpoint.worker.threadId, "luna-thread");
+  assert.equal(await revalidateTimeoutExhaustedWorkTask(worldRoot, candidate.taskId, {
+    currentPolicy: policy,
+    preflightPassed: true,
+    now: "2026-08-12T13:00:00.000Z"
+  }), null);
+});
+
+test("policy revalidation excludes current-policy, external, human, ambiguous, and evidence-free tasks", async () => {
+  const currentPolicy = currentTimeoutPolicy({ inactivityTimeoutMs: 900000, hardTimeoutMs: 1800000 });
+  const base = {
+    taskId: "roadmap-policy-check",
+    status: "blocked",
+    kind: "roadmap",
+    workSpec: { granularity: "substantial" },
+    checkpoint: {
+      blocker: "turn timeout",
+      workspace: { worktreePath: "/tmp/policy-check" },
+      interruption: { workspaceEvidence: { changedFiles: ["src/example.mjs"] } },
+      activeTurn: { state: "ambiguous", startedAt: "2026-08-10T00:00:00.000Z" },
+      recoveryCount: 2
+    }
+  };
+  assert.equal(isEligibleForTimeoutPolicyRevalidation({
+    ...base,
+    checkpoint: { ...base.checkpoint, timeoutPolicy: currentPolicy }
+  }, { currentPolicy }), false);
+  assert.equal(isEligibleForTimeoutPolicyRevalidation({
+    ...base,
+    checkpoint: { ...base.checkpoint, blocker: "fixture-free Ollama evidence unavailable" }
+  }, { currentPolicy }), false);
+  assert.equal(isEligibleForTimeoutPolicyRevalidation({
+    ...base,
+    checkpoint: { ...base.checkpoint, blocker: "Sol review BLOCK: human decision required" }
+  }, { currentPolicy }), false);
+  assert.equal(isEligibleForTimeoutPolicyRevalidation({
+    ...base,
+    checkpoint: {
+      ...base.checkpoint,
+      activeTurn: { ...base.checkpoint.activeTurn, turnId: "remote-turn" }
+    }
+  }, { currentPolicy }), false);
+  assert.equal(isEligibleForTimeoutPolicyRevalidation({
+    ...base,
+    checkpoint: {
+      ...base.checkpoint,
+      interruption: { workspaceEvidence: {} }
+    }
+  }, { currentPolicy }), false);
+  assert.equal(LEGACY_TIMEOUT_POLICY.activityAware, false);
+});
+
+test("policy revalidation candidates retain priority and survive status serialization", async () => {
+  const worldRoot = await world("pyash-work-policy-revalidation-list-");
+  for (const [taskId, priority] of [["roadmap-policy-low", 60], ["roadmap-policy-high", 80]]) {
+    await blockedTask(worldRoot, {
+      taskId,
+      priority,
+      activeTurn: { phase: "implementation", state: "ambiguous", startedAt: "2026-08-10T00:00:00.000Z" }
+    });
+    const current = await readWorkTaskStatus(worldRoot, taskId);
+    await writeWorkTaskStatus(worldRoot, {
+      ...current,
+      checkpoint: {
+        ...current.checkpoint,
+        recoveryCount: 2,
+        workspace: { ...current.checkpoint.workspace, worktreePath: `/tmp/${taskId}` },
+        interruption: { workspaceEvidence: { changedFiles: ["src/example.mjs"] } }
+      }
+    });
+  }
+  const candidates = await findPolicyRevalidationWorkTasks(worldRoot, {
+    currentPolicy: currentTimeoutPolicy({ inactivityTimeoutMs: 900000, hardTimeoutMs: 1800000 }),
+    now: "2026-08-12T12:00:00.000Z"
+  });
+  assert.deepEqual(candidates.map((task) => task.taskId), ["roadmap-policy-high", "roadmap-policy-low"]);
+  const first = await revalidateTimeoutExhaustedWorkTask(worldRoot, "roadmap-policy-high", {
+    currentPolicy: currentTimeoutPolicy({ inactivityTimeoutMs: 900000, hardTimeoutMs: 1800000 }),
+    preflightPassed: true,
+    now: "2026-08-12T12:00:00.000Z"
+  });
+  const stored = await readWorkTaskStatus(worldRoot, first.task.taskId);
+  assert.equal(stored.checkpoint.policyRevalidation.attempts, 1);
+  assert.equal(stored.checkpoint.policyRevalidation.toPolicy.activityAware, true);
+  assert.equal(stored.checkpoint.recoveryCount, 2);
 });

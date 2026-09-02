@@ -434,6 +434,23 @@ scheduled report. Generation failures are persisted before being re-raised;
 mail delivery failures are recorded separately and never alter work-task
 state.
 
+### Timeout-policy migration revalidation
+
+Tasks blocked by the old fixed 900-second wall-clock timeout are not silently
+given a new recovery budget. When the activity-aware policy is deployed, a
+substantial task may receive one explicit `fixed-wall-v1-to-activity-aware-v1`
+policy-revalidation opportunity if its current preflight passes and its
+worktree/checkpoint contains usable evidence. The checkpoint records both
+policy identities, the grant time, and the single migration attempt while
+leaving `recoveryCount`, pass history, commits, and blocker history unchanged.
+
+Revalidation is limited to old `turn timeout` operational blockers. It does
+not release external-evidence or human-decision blocks, integration conflicts,
+convergence failures, known remote turns with ambiguous mutation outcome, or
+tasks without preserved worktree evidence. A task-local commit may proceed
+directly to Sol review; a preserved uncommitted diff may resume Luna from the
+existing worktree. A second request for the same migration is denied.
+
 ## Deferred Work
 
 - distributed stale-runtime ownership, heartbeats, and two-supervisor fencing;

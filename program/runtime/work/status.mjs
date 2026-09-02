@@ -188,7 +188,9 @@ function checkpointBlocks(task) {
       { key: "continuation count", type: "num", value: checkpoint.continuationCount },
       { key: "resume count", type: "num", value: checkpoint.resumeCount },
       { key: "recovery count", type: "num", value: checkpoint.recoveryCount },
-      { key: "recovery history", type: "text", value: quoteText(encodeJson(checkpoint.recoveryHistory)) }
+      { key: "recovery history", type: "text", value: quoteText(encodeJson(checkpoint.recoveryHistory)) },
+      { key: "timeout policy", type: "text", value: quoteText(encodeJson(checkpoint.timeoutPolicy)) },
+      { key: "policy revalidation", type: "text", value: quoteText(encodeJson(checkpoint.policyRevalidation)) }
     ])
   ];
 }
@@ -324,7 +326,9 @@ function statusFromText(text) {
       continuationCount: checkpoint["continuation count"],
       resumeCount: checkpoint["resume count"],
       recoveryCount: checkpoint["recovery count"],
-      recoveryHistory: decodeJson(checkpoint["recovery history"], [])
+      recoveryHistory: decodeJson(checkpoint["recovery history"], []),
+      timeoutPolicy: decodeJson(checkpoint["timeout policy"]),
+      policyRevalidation: decodeJson(checkpoint["policy revalidation"])
     }
   });
 }

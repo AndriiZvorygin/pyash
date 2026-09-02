@@ -36,6 +36,7 @@ import {
 import { synchronizeAutomationBranch } from "../program/runtime/work/integration.mjs";
 import { inspectWorkExecutionPreflight } from "../program/runtime/work/preflight.mjs";
 import { runSandboxSmoke } from "../program/runtime/work/sandbox_smoke.mjs";
+import { currentTimeoutPolicy } from "../program/runtime/work/timeout_policy.mjs";
 import {
   defaultWorkEmailFrom,
   sendWorkReportNotification
@@ -76,7 +77,13 @@ function codexSandboxOptions(env = process.env) {
   const timeoutMs = Number(env.PYA_CODEX_TURN_TIMEOUT_MS || "");
   const inactivityTimeoutMs = Number(env.PYA_CODEX_TURN_INACTIVITY_TIMEOUT_MS || timeoutMs || "");
   const hardTimeoutMs = Number(env.PYA_CODEX_TURN_HARD_TIMEOUT_MS || (timeoutMs > 0 ? timeoutMs * 2 : ""));
+  const timeoutPolicy = currentTimeoutPolicy({
+    fallbackTimeoutMs: timeoutMs || 900000,
+    inactivityTimeoutMs,
+    hardTimeoutMs
+  });
   return {
+    timeoutPolicy,
     ...(threadSandbox ? { threadSandbox } : {}),
     ...(turnSandbox ? { turnSandboxPolicy: { type: turnSandbox } } : {}),
     ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { turnTimeoutMs: Math.floor(timeoutMs) } : {}),
@@ -347,12 +354,14 @@ try {
       }
     }
   } else if (action === "background") {
+    const timeoutOptions = codexSandboxOptions();
     const policy = {
       enabled: true,
       reservePercent: Number(value(args, "--reserve-percent", process.env.PYA_BACKGROUND_RESERVE_PERCENT || "15")),
       pacingDeadbandPercent: Number(process.env.PYA_BACKGROUND_PACING_DEADBAND_PERCENT || "1"),
       curationThreshold: Number(process.env.PYA_BACKGROUND_CURATION_THRESHOLD || "1"),
-      curationMaxTasks: Number(process.env.PYA_BACKGROUND_CURATION_MAX_TASKS || "3")
+      curationMaxTasks: Number(process.env.PYA_BACKGROUND_CURATION_MAX_TASKS || "3"),
+      timeoutPolicy: timeoutOptions.timeoutPolicy
     };
     if (has(args, "--dry-run")) {
       const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
@@ -375,6 +384,8 @@ try {
         ? inspection.eligible
         : inspection.recoverable.length
           ? inspection.recoverable.map((task) => ({ task }))
+          : inspection.policyRevalidation?.length
+            ? inspection.policyRevalidation.map((task) => ({ task }))
         : curation.proposed.map((candidate) => ({ task: {
           taskId: candidate.taskId,
           title: candidate.title,
@@ -428,7 +439,7 @@ try {
           reviewAfterImplementationPasses: 2,
           pyashFirstPolicy: true,
           executionPreflight: ({ worktreePath }) => configuredExecutionPreflight({ repositoryRoot, worktreePath }),
-          ...codexSandboxOptions()
+          ...timeoutOptions
         }
       };
       result = has(args, "--continuous")

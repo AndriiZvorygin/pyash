@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { addWorkTask, listWorkTasks } from "./operator.mjs";
-import { findRecoverableOperationalWorkTasks } from "./recovery.mjs";
+import { findPolicyRevalidationWorkTasks, findRecoverableOperationalWorkTasks } from "./recovery.mjs";
 import {
   autonomousRoadmapPackages,
   isAwaitingExternalEvidence,
@@ -78,6 +78,12 @@ export async function curateWorkBacklog({
     staleTurnMs,
     maxRecoveryCount
   });
+  const policyRevalidation = await findPolicyRevalidationWorkTasks(worldRoot, {
+    owner,
+    now,
+    staleTurnMs,
+    maxRecoveryCount
+  });
   const recoverableTechnical = recoverableTechnicalAll.filter(taskDependencySatisfied);
   const recoverableIds = new Set(recoverableTechnical.map((task) => task.taskId));
   const temporarilyUnexecutableTechnical = retryableTechnical
@@ -89,6 +95,7 @@ export async function curateWorkBacklog({
     retryableTechnical: retryableTechnical.map((task) => task.taskId),
     retryable: retryableTechnical.map((task) => task.taskId),
     recoverableTechnical: recoverableTechnical.map((task) => task.taskId),
+    policyRevalidation: policyRevalidation.map((task) => task.taskId),
     temporarilyUnexecutableTechnical,
     awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId),
     runnableActive: runnableActive.length
@@ -112,6 +119,19 @@ export async function curateWorkBacklog({
       proposed: [],
       needsDirection: false,
       reason: "retryable operational work remains",
+      active: active.length,
+      runnableActive: runnableActive.length,
+      ...resultShape,
+      dependencyBlocked: [],
+      dependencyDefects: []
+    };
+  }
+  if (policyRevalidation.length) {
+    return {
+      created: [],
+      proposed: [],
+      needsDirection: false,
+      reason: "timeout policy revalidation remains",
       active: active.length,
       runnableActive: runnableActive.length,
       ...resultShape,

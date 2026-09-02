@@ -6,6 +6,31 @@ function object(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function policy(value = {}) {
+  const source = object(value);
+  return {
+    policyVersion: text(source.policyVersion),
+    activityAware: source.activityAware === true,
+    inactivityTimeoutMs: Math.max(0, Math.trunc(Number(source.inactivityTimeoutMs) || 0)),
+    hardTimeoutMs: Math.max(0, Math.trunc(Number(source.hardTimeoutMs) || 0))
+  };
+}
+
+function policyRevalidation(value = {}) {
+  const source = object(value);
+  return {
+    migrationId: text(source.migrationId),
+    reason: text(source.reason),
+    fromPolicy: policy(source.fromPolicy),
+    toPolicy: policy(source.toPolicy),
+    grantedAt: text(source.grantedAt),
+    attempts: Math.max(0, Math.trunc(Number(source.attempts) || 0)),
+    lastAttemptAt: text(source.lastAttemptAt),
+    outcome: text(source.outcome),
+    blocker: text(source.blocker)
+  };
+}
+
 function list(value) {
   return Array.isArray(value) ? [...value] : [];
 }
@@ -194,6 +219,8 @@ export function buildWorkCheckpoint(input = {}) {
       threadSandbox: text(executionPreflight.threadSandbox),
       turnSandbox: text(executionPreflight.turnSandbox)
     },
+    timeoutPolicy: policy(input.timeoutPolicy),
+    policyRevalidation: policyRevalidation(input.policyRevalidation),
     interruption: {
       phase: text(interruption.phase),
       at: text(interruption.at),
@@ -243,6 +270,12 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
       }
     },
     executionPreflight: { ...current.executionPreflight, ...object(update.executionPreflight) },
+    timeoutPolicy: Object.prototype.hasOwnProperty.call(update, "timeoutPolicy")
+      ? policy(update.timeoutPolicy)
+      : current.timeoutPolicy,
+    policyRevalidation: Object.prototype.hasOwnProperty.call(update, "policyRevalidation")
+      ? policyRevalidation(update.policyRevalidation)
+      : current.policyRevalidation,
     interruption: { ...current.interruption, ...object(update.interruption) },
     activeTurn: Object.prototype.hasOwnProperty.call(update, "activeTurn")
       ? turnRecord(update.activeTurn)

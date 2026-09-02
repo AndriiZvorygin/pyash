@@ -13,6 +13,7 @@ import { claimOldestWorkTask, enqueueWorkTask } from "../../program/runtime/work
 import { readWorkSchedulerHealth } from "../../program/runtime/work/health.mjs";
 import { readWorkTaskStatus, transitionWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import { inspectWorkBackground, probeExternalEvidenceTask, runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
+import { currentTimeoutPolicy } from "../../program/runtime/work/timeout_policy.mjs";
 
 async function makeWorldRoot(prefix) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -533,4 +534,60 @@ test("search evidence probes the JSON search contract rather than the healthy la
   assert.equal(result.checks[0].name, "web search");
   assert.match(result.checks[0].endpoint, /\/search\?q=pyash&format=json&count=1/u);
   assert.equal(urls.length, 1);
+});
+
+test("healthy preflight admits one bounded revalidation of an exhausted legacy timeout", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-policy-runner-");
+  await enqueueWorkTask(worldRoot, {
+    ...task("roadmap-legacy-timeout-runner", 140),
+    workSpec: { granularity: "substantial" }
+  });
+  const queued = await readWorkTaskStatus(worldRoot, "roadmap-legacy-timeout-runner");
+  await writeWorkTaskStatus(worldRoot, {
+    ...queued,
+    status: "blocked",
+    message: "turn timeout",
+    error: "turn timeout",
+    checkpoint: {
+      ...queued.checkpoint,
+      blocker: "turn timeout",
+      recoveryCount: 2,
+      workspace: { ...queued.checkpoint.workspace, worktreePath: "/tmp/roadmap-legacy-timeout-runner" },
+      activeTurn: { phase: "implementation", role: "worker", state: "ambiguous", startedAt: "2026-08-10T00:00:00.000Z" },
+      interruption: { workspaceEvidence: { changedFiles: ["src/example.mjs"] } }
+    }
+  });
+  let supervisorCalls = 0;
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: {
+      enabled: true,
+      timeoutPolicy: currentTimeoutPolicy({ inactivityTimeoutMs: 900000, hardTimeoutMs: 1800000 })
+    },
+    capacitySource: async () => ({
+      state: "available",
+      weekly: {
+        identified: true,
+        usedPercent: 10,
+        remainingPercent: 90,
+        windowStartAt: "2026-08-10T00:00:00.000Z",
+        resetAt: "2026-08-17T00:00:00.000Z"
+      }
+    }),
+    executionPreflight: async () => ({ ok: true, status: "ready", check: "fake preflight" }),
+    supervisor: async ({ taskId }) => {
+      supervisorCalls += 1;
+      return { claimed: true, taskId, status: "reviewing", workStarted: true };
+    },
+    now: "2026-08-12T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "roadmap-legacy-timeout-runner");
+  assert.equal(result.policyRevalidation.migrationId, "fixed-wall-v1-to-activity-aware-v1");
+  assert.equal(result.policyRevalidation.task.status, "ready");
+  assert.equal(result.workStarted, true);
+  assert.equal(supervisorCalls, 1);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["useful wakes"], "1");
 });
