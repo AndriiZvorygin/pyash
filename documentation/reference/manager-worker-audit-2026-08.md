@@ -411,6 +411,29 @@ complete. Duplicate recovery event rows with the same task and recovery count
 are collapsed in the daily digest, while distinct recovery counts remain
 visible in chronological order.
 
+### Turn timeout and digest reliability
+
+The supervisor records App Server activity and partial turn output when a
+manager or worker turn reaches a timeout. It also captures the assigned
+worktree's revision, changed files, status, and bounded diff before recording
+the interruption. A turn with a known remote turn identity remains ambiguous
+and is not replayed automatically; a later operator recovery must resolve that
+identity first. This preserves possible mutations without treating a lost
+response as proof that no work happened.
+
+The deployed background policy keeps a 15-minute inactivity ceiling and uses a
+30-minute hard ceiling (`PYA_CODEX_TURN_INACTIVITY_TIMEOUT_MS=900000`,
+`PYA_CODEX_TURN_HARD_TIMEOUT_MS=1800000`). App Server turn/item/command/exec
+notifications reset the inactivity clock. These values are bounded policy,
+not a guarantee that a turn will finish within the hard ceiling.
+
+Daily digest generation and delivery are tracked separately in the durable
+`daily-digest-health.pya` artifact. The digest uses its own lock rather than
+the hourly worker lock, so a long-running roadmap turn cannot silently skip a
+scheduled report. Generation failures are persisted before being re-raised;
+mail delivery failures are recorded separately and never alter work-task
+state.
+
 ## Deferred Work
 
 - distributed stale-runtime ownership, heartbeats, and two-supervisor fencing;

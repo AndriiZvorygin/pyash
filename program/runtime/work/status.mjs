@@ -177,6 +177,7 @@ function checkpointBlocks(task) {
       { key: "at", type: "text", value: quoteText(checkpoint.interruption.at) },
       { key: "reason", type: "text", value: quoteText(checkpoint.interruption.reason) },
       { key: "last turn id", type: "text", value: quoteText(checkpoint.interruption.lastTurnId) },
+      { key: "workspace evidence", type: "text", value: quoteText(encodeJson(checkpoint.interruption.workspaceEvidence)) },
       { key: "active turn", type: "text", value: quoteText(encodeJson(checkpoint.activeTurn)) },
       { key: "turn history", type: "text", value: quoteText(encodeJson(checkpoint.turnHistory)) },
       { key: "blocker", type: "text", value: quoteText(checkpoint.blocker) },
@@ -310,7 +311,8 @@ function statusFromText(text) {
         phase: checkpoint.phase,
         at: checkpoint.at,
         reason: checkpoint.reason,
-        lastTurnId: checkpoint["last turn id"]
+        lastTurnId: checkpoint["last turn id"],
+        workspaceEvidence: decodeJson(checkpoint["workspace evidence"])
       },
       activeTurn: decodeJson(checkpoint["active turn"]),
       turnHistory: decodeJson(checkpoint["turn history"], []),

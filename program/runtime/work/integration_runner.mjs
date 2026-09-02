@@ -178,6 +178,8 @@ export async function runWorkIntegrationReconciliationOnce({
   integrationRemotes = ["origin", "github"],
   executionPreflight = null,
   turnTimeoutMs = 900000,
+  turnInactivityTimeoutMs = turnTimeoutMs,
+  turnHardTimeoutMs = turnTimeoutMs * 2,
   approvalPolicy = "never",
   threadSandbox = "workspace-write",
   turnSandboxPolicy = ({ worktreePath }) => ({ type: "workspaceWrite", writableRoots: [worktreePath] }),
@@ -333,6 +335,8 @@ export async function runWorkIntegrationReconciliationOnce({
         approvalPolicy,
         sandboxPolicy: typeof turnSandboxPolicy === "function" ? turnSandboxPolicy({ worktreePath: workspace.worktreePath }) : turnSandboxPolicy,
         timeoutMs: turnTimeoutMs,
+        inactivityTimeoutMs: turnInactivityTimeoutMs,
+        hardTimeoutMs: turnHardTimeoutMs,
         requestIdentity: identity,
         input: [{ type: "text", text: promptIntegrationConvergence(task, task.checkpoint, reconciliation) }]
       });
@@ -399,6 +403,8 @@ export async function runWorkIntegrationReconciliationOnce({
       approvalPolicy,
       sandboxPolicy: typeof turnSandboxPolicy === "function" ? turnSandboxPolicy({ worktreePath: workspace.worktreePath }) : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       requestIdentity: identity,
       input: [{ type: "text", text: promptIntegration(task, task.checkpoint, workspace, branch, reconciliation) }]
     });
@@ -512,6 +518,8 @@ export async function runWorkIntegrationReconciliationOnce({
       approvalPolicy,
       sandboxPolicy: typeof turnSandboxPolicy === "function" ? turnSandboxPolicy({ worktreePath: workspace.worktreePath }) : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       requestIdentity: reviewIdentity,
       input: [{ type: "text", text: promptIntegrationReview(task, task.checkpoint, workspace, branch, nextReconciliation) }]
     })));

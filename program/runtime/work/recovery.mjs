@@ -112,6 +112,21 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
     ? `${oldWorktree}-replacement-${(Number(current.checkpoint?.recoveryCount) || 0)}`
     : "";
   const previousThreadId = current.checkpoint?.worker?.threadId || "";
+  const abandonedTurn = current.checkpoint?.activeTurn?.state
+    ? {
+      ...current.checkpoint.activeTurn,
+      state: "abandoned",
+      ambiguity: current.checkpoint.activeTurn.ambiguity || previousBlocker
+    }
+    : null;
+  const turnHistory = abandonedTurn
+    && !current.checkpoint.turnHistory.some((entry) => (
+      entry.requestIdentity
+      && entry.requestIdentity === abandonedTurn.requestIdentity
+      && entry.state === "abandoned"
+    ))
+    ? [...current.checkpoint.turnHistory, abandonedTurn]
+    : current.checkpoint.turnHistory;
   const continuation = hasConcreteRevision(current);
   const integration = hasIntegrationConflict(current);
   const transitioned = transitionWorkTask(current, continuation || integration ? "revision" : "ready", {
@@ -138,7 +153,10 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
           ]
         }
         : {},
-      interruption: {},
+      interruption: {
+        workspaceEvidence: current.checkpoint?.interruption?.workspaceEvidence || {}
+      },
+      turnHistory,
       recoveryCount: (current.checkpoint?.recoveryCount || 0) + (continuation ? 0 : 1),
       integration: integration ? {
         status: "reconciliation",

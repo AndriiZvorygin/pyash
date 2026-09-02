@@ -31,21 +31,26 @@ function digestPath(worldRoot) {
   return path.join(worldRoot, "holding", "work", "artifacts", "daily-digest.pya");
 }
 
+function digestHealthPath(worldRoot) {
+  return path.join(worldRoot, "holding", "work", "artifacts", "daily-digest-health.pya");
+}
+
 function quote(value) {
   return JSON.stringify(String(value ?? ""));
 }
 
-function mapBlock(entries) {
+function mapBlock(name, entries) {
   return [
-    "su name work daily digest state be map def",
+    `su name ${name} be map def`,
     ...entries.map(([key, value]) => `  su name ${key} ob text ${quote(value)} ya`),
     "prah",
     ""
   ].join("\n");
 }
 
-function parseState(source) {
-  const match = String(source ?? "").match(/su name work daily digest state be map def\n([\s\S]*?)\nprah/iu);
+function parseState(source, name = "work daily digest state") {
+  const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(source ?? "").match(new RegExp(`su name ${escaped} be map def\\n([\\s\\S]*?)\\nprah`, "iu"));
   const state = {};
   for (const line of String(match?.[1] || "").split("\n")) {
     const found = line.trim().match(/^su name (.+?) ob text (.+?) ya$/iu);
@@ -72,9 +77,92 @@ export async function writeWorkDailyDigestState(worldRoot, state = {}) {
   const target = digestPath(worldRoot);
   await fs.mkdir(path.dirname(target), { recursive: true });
   const temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(temporary, mapBlock(Object.entries(state)), "utf8");
+  await fs.writeFile(temporary, mapBlock("work daily digest state", Object.entries(state)), "utf8");
   await fs.rename(temporary, target);
   return state;
+}
+
+function jsonList(value) {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function boundedHistory(value) {
+  return jsonList(value)
+    .filter((entry) => entry && Number.isFinite(Date.parse(entry.at)))
+    .slice(-100);
+}
+
+export async function readWorkDailyDigestHealth(worldRoot) {
+  try {
+    return parseState(await fs.readFile(digestHealthPath(worldRoot), "utf8"), "work daily digest health");
+  } catch (error) {
+    if (error?.code === "ENOENT") return {};
+    throw error;
+  }
+}
+
+export async function writeWorkDailyDigestHealth(worldRoot, state = {}) {
+  const target = digestHealthPath(worldRoot);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const normalized = {
+    ...state,
+    "success history": JSON.stringify(boundedHistory(state["success history"])),
+    "failure history": JSON.stringify(boundedHistory(state["failure history"]))
+  };
+  const temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
+  await fs.writeFile(temporary, mapBlock("work daily digest health", Object.entries(normalized)), "utf8");
+  await fs.rename(temporary, target);
+  return normalized;
+}
+
+function increment(value) {
+  return (Number(value) || 0) + 1;
+}
+
+export async function recordWorkDailyDigestSuccess(worldRoot, {
+  at = new Date(),
+  subject = ""
+} = {}) {
+  const stamp = iso(at);
+  const current = await readWorkDailyDigestHealth(worldRoot);
+  return writeWorkDailyDigestHealth(worldRoot, {
+    ...current,
+    "last attempted at": stamp,
+    "last successful at": stamp,
+    "successful reports": String(increment(current["successful reports"])),
+    "success history": JSON.stringify([
+      ...boundedHistory(current["success history"]),
+      { at: stamp, subject: text(subject) }
+    ])
+  });
+}
+
+export async function recordWorkDailyDigestFailure(worldRoot, {
+  kind = "generation",
+  reason = "digest failed",
+  at = new Date()
+} = {}) {
+  const stamp = iso(at);
+  const current = await readWorkDailyDigestHealth(worldRoot);
+  const failureKind = text(kind) || "generation";
+  return writeWorkDailyDigestHealth(worldRoot, {
+    ...current,
+    "last attempted at": stamp,
+    "last failure at": stamp,
+    "last failure kind": failureKind,
+    "last failure reason": text(reason),
+    "generation failures": String((Number(current["generation failures"]) || 0) + (failureKind === "generation" ? 1 : 0)),
+    "delivery failures": String((Number(current["delivery failures"]) || 0) + (failureKind === "delivery" ? 1 : 0)),
+    "failure history": JSON.stringify([
+      ...boundedHistory(current["failure history"]),
+      { at: stamp, kind: failureKind, reason: text(reason) }
+    ])
+  });
 }
 
 function taskTouched(task, start, end) {
@@ -189,6 +277,34 @@ function dependencyWaitingForTask(task, roadmap) {
   };
 }
 
+function digestHealthWindow(health = {}, start = "", end = "", currentSuccess = null) {
+  const lower = Date.parse(start || "1970-01-01T00:00:00.000Z");
+  const upper = Date.parse(end || "2999-12-31T23:59:59.999Z");
+  const inWindow = (entry) => {
+    const at = Date.parse(entry?.at || "");
+    return Number.isFinite(at) && at >= lower && at <= upper;
+  };
+  const successes = boundedHistory(health["success history"]).filter(inWindow);
+  const failures = boundedHistory(health["failure history"]).filter(inWindow);
+  if (currentSuccess && inWindow(currentSuccess)) successes.push(currentSuccess);
+  const expectedRuns = Math.max(1, Math.round((upper - lower) / (24 * 60 * 60 * 1000)));
+  const lastFailure = failures.at(-1) || (
+    health["last failure at"]
+      ? { at: health["last failure at"], kind: health["last failure kind"], reason: health["last failure reason"] }
+      : null
+  );
+  return {
+    expectedRuns,
+    successfulReports: successes.length,
+    generationFailures: failures.filter((entry) => entry.kind === "generation").length,
+    deliveryFailures: failures.filter((entry) => entry.kind === "delivery").length,
+    lastSuccessfulAt: successes.at(-1)?.at || health["last successful at"] || "",
+    lastFailure: lastFailure
+      ? `${lastFailure.at}: ${lastFailure.kind || "failure"}: ${lastFailure.reason || "unknown reason"}`
+      : "not recorded"
+  };
+}
+
 export function renderWorkDailyDigest({
   date,
   since,
@@ -201,7 +317,8 @@ export function renderWorkDailyDigest({
   roadmap = null,
   automationBranch = "automation/roadmap",
   reportingGap = null,
-  health = {}
+  health = {},
+  digestHealth = {}
 } = {}) {
   const weekly = capacity.weekly || {};
   const weeklyAvailable = weekly.identified === true
@@ -283,6 +400,9 @@ export function renderWorkDailyDigest({
       : completed.length
       ? `Pyash daily: substantial progress on ${completed[0].title}`
       : "Pyash daily: background development status";
+  const showDigestHealth = Boolean(reportingGap)
+    || Number(digestHealth.generationFailures) > 0
+    || Number(digestHealth.deliveryFailures) > 0;
   const lines = [
     "PYASH DAILY IMPROVEMENT REPORT",
     "",
@@ -294,6 +414,17 @@ export function renderWorkDailyDigest({
       "--------------",
       `No successful daily digest was recorded for ${reportingGap.hours} hours after ${reportingGap.previousAt}.`,
       "The scheduled report interval should be checked for a skipped or failed run."
+    ] : []),
+    ...(showDigestHealth ? [
+      "",
+      "Daily digest health",
+      "-------------------",
+      `Expected runs: ${digestHealth.expectedRuns ?? "unknown"}`,
+      `Successful reports: ${digestHealth.successfulReports ?? "unknown"}`,
+      `Generation failures: ${digestHealth.generationFailures ?? "unknown"}`,
+      `Delivery failures: ${digestHealth.deliveryFailures ?? "unknown"}`,
+      `Last successful digest: ${digestHealth.lastSuccessfulAt || "not recorded"}`,
+      `Last failure: ${digestHealth.lastFailure || "not recorded"}`
     ] : []),
     "",
     "Weekly Codex budget",
@@ -433,7 +564,7 @@ export function renderWorkDailyDigest({
   return { subject, status, report: lines.join("\n") };
 }
 
-export async function buildWorkDailyDigest({
+async function buildWorkDailyDigestInternal({
   worldRoot,
   repositoryRoot = process.cwd(),
   since = "",
@@ -456,12 +587,13 @@ export async function buildWorkDailyDigest({
       previousAt: previousReportAt
     }
     : null;
-  const [capacity, tasks, events, curation, storedHealth] = await Promise.all([
+  const [capacity, tasks, events, curation, storedHealth, storedDigestHealth] = await Promise.all([
     capacitySource({ now: end }),
     listWorkTasks(worldRoot, { includeTerminal: true }),
     readWorkSchedulerEvents(worldRoot, { since: start.toISOString(), until: end.toISOString() }),
     curateWorkBacklog({ worldRoot, repositoryRoot, owner, threshold: policy.curationThreshold, maxTasks: policy.curationMaxTasks, dryRun: true, now: end }),
-    readWorkSchedulerHealth(worldRoot)
+    readWorkSchedulerHealth(worldRoot),
+    readWorkDailyDigestHealth(worldRoot)
   ]);
   const effectiveHealth = capacity.weekly?.identified === true
     && Number.isFinite(Number(capacity.weekly.usedPercent))
@@ -494,7 +626,11 @@ export async function buildWorkDailyDigest({
     roadmap,
     automationBranch,
     reportingGap,
-    health: effectiveHealth
+    health: effectiveHealth,
+    digestHealth: digestHealthWindow(storedDigestHealth, start.toISOString(), end.toISOString(), {
+      at: end.toISOString(),
+      subject: "current report"
+    })
   });
   if (persist) {
     await writeWorkDailyDigestState(worldRoot, {
@@ -502,6 +638,27 @@ export async function buildWorkDailyDigest({
       "last subject": rendered.subject,
       status: rendered.status
     });
+    await recordWorkDailyDigestSuccess(worldRoot, {
+      at: end,
+      subject: rendered.subject
+    });
   }
   return { ...rendered, since: start.toISOString(), until: end.toISOString(), capacity, tasks, events, curation, roadmap };
+}
+
+export async function buildWorkDailyDigest(options = {}) {
+  try {
+    return await buildWorkDailyDigestInternal(options);
+  } catch (error) {
+    if (options.persist !== false) {
+      try {
+        await recordWorkDailyDigestFailure(options.worldRoot, {
+          kind: "generation",
+          reason: text(error?.message || error),
+          at: options.until || options.now || new Date()
+        });
+      } catch {}
+    }
+    throw error;
+  }
 }

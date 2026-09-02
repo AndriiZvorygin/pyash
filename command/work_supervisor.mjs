@@ -24,7 +24,10 @@ import { readAndRenderWorkTaskReport, renderWorkDryRunReport } from "../program/
 import { createWorkWatchRenderer } from "../program/runtime/work/watch.mjs";
 import { readWorkTaskStatus } from "../program/runtime/work/status.mjs";
 import { curateWorkBacklog } from "../program/runtime/work/curator.mjs";
-import { buildWorkDailyDigest } from "../program/runtime/work/digest.mjs";
+import {
+  buildWorkDailyDigest,
+  recordWorkDailyDigestFailure
+} from "../program/runtime/work/digest.mjs";
 import {
   buildAutonomousRoadmap,
   refreshAutonomousRoadmap,
@@ -71,10 +74,18 @@ function codexSandboxOptions(env = process.env) {
   const threadSandbox = String(env.PYA_CODEX_THREAD_SANDBOX || "").trim();
   const turnSandbox = String(env.PYA_CODEX_TURN_SANDBOX || "").trim();
   const timeoutMs = Number(env.PYA_CODEX_TURN_TIMEOUT_MS || "");
+  const inactivityTimeoutMs = Number(env.PYA_CODEX_TURN_INACTIVITY_TIMEOUT_MS || timeoutMs || "");
+  const hardTimeoutMs = Number(env.PYA_CODEX_TURN_HARD_TIMEOUT_MS || (timeoutMs > 0 ? timeoutMs * 2 : ""));
   return {
     ...(threadSandbox ? { threadSandbox } : {}),
     ...(turnSandbox ? { turnSandboxPolicy: { type: turnSandbox } } : {}),
-    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { turnTimeoutMs: Math.floor(timeoutMs) } : {})
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { turnTimeoutMs: Math.floor(timeoutMs) } : {}),
+    ...(Number.isFinite(inactivityTimeoutMs) && inactivityTimeoutMs > 0
+      ? { turnInactivityTimeoutMs: Math.floor(inactivityTimeoutMs) }
+      : {}),
+    ...(Number.isFinite(hardTimeoutMs) && hardTimeoutMs > 0
+      ? { turnHardTimeoutMs: Math.floor(hardTimeoutMs) }
+      : {})
   };
 }
 
@@ -326,7 +337,15 @@ try {
       automationBranch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap"
     });
     const email = emailOptions(args);
-    if (email) result = await notifyResult(result, { worldRoot, email });
+    if (email) {
+      result = await notifyResult(result, { worldRoot, email });
+      if (notificationFailed(result)) {
+        await recordWorkDailyDigestFailure(worldRoot, {
+          kind: "delivery",
+          reason: result.notification?.error || "daily digest notification failed"
+        });
+      }
+    }
   } else if (action === "background") {
     const policy = {
       enabled: true,
