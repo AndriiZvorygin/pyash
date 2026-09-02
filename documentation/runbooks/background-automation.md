@@ -111,9 +111,17 @@ The normal `workspace-write`/`workspaceWrite` mode currently cannot execute shel
 
 Set `PYA_BACKGROUND_EXECUTION_BLOCKED=truth` to keep hourly implementation wakes globally deferred while preserving daily digest operation. Remove that gate only after the smoke passes.
 
-Long-running manager or worker turns can use a larger bounded client timeout through
-`PYA_CODEX_TURN_TIMEOUT_MS`. The deployed host uses `900000` (15 minutes); this changes only how
-long Pyash waits for a turn and does not remove the worktree or task-scope controls.
+Long-running manager or worker turns use bounded progress-aware timeouts. The deployed host keeps
+`PYA_CODEX_TURN_INACTIVITY_TIMEOUT_MS=900000` (15 minutes without meaningful App Server activity)
+and `PYA_CODEX_TURN_HARD_TIMEOUT_MS=1800000` (30 minutes maximum). The legacy
+`PYA_CODEX_TURN_TIMEOUT_MS=900000` remains the fallback inactivity value. These settings change only
+how long Pyash waits for a turn and do not remove the worktree or task-scope controls. A timeout
+records partial App Server output and a fresh worktree evidence snapshot; known remote turn IDs
+remain ambiguous and are not replayed automatically.
+
+The daily digest has an independent lock and durable health artifact. A digest generation failure is
+recorded as generation health, while a mail submission failure is recorded as delivery health. Neither
+failure changes the state of a roadmap task or prevents the hourly worker from running.
 
 ## Verify and disable
 

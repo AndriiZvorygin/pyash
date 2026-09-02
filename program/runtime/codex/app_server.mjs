@@ -240,6 +240,14 @@ function classifyTurnFailure(turn, fallback = "turn failed") {
   return new CodexTurnError(message, { kind: "failed", details: turn });
 }
 
+function meaningfulTurnEvent(method) {
+  return /^(?:turn\/|item\/|command\/|exec\/)/u.test(String(method || ""));
+}
+
+function isoNow(value = Date.now()) {
+  return new Date(value).toISOString();
+}
+
 export async function runCodexTurn(client, {
   threadId,
   input,
@@ -249,7 +257,9 @@ export async function runCodexTurn(client, {
   sandboxPolicy = null,
   approvalPolicy = null,
   requestIdentity = "",
-  timeoutMs = 300000
+  timeoutMs = 300000,
+  inactivityTimeoutMs = 0,
+  hardTimeoutMs = 0
 } = {}) {
   const events = [];
   const deltas = [];
@@ -258,6 +268,42 @@ export async function runCodexTurn(client, {
   let diff = "";
   let turnId = "";
   let completedTurn = null;
+  const startedAtMs = Date.now();
+  let lastActivityAtMs = startedAtMs;
+  let eventCount = 0;
+  let meaningfulEventCount = 0;
+  const hardLimit = Number.isFinite(Number(hardTimeoutMs)) && Number(hardTimeoutMs) > 0
+    ? Number(hardTimeoutMs)
+    : Number(timeoutMs);
+  const inactivityLimit = Number.isFinite(Number(inactivityTimeoutMs)) && Number(inactivityTimeoutMs) > 0
+    ? Number(inactivityTimeoutMs)
+    : 0;
+
+  const partialResult = () => ({
+    status: "in-progress",
+    text: deltas.length ? deltas.join("") : completedMessages.join(""),
+    diff,
+    fileChanges,
+    turn: completedTurn || {}
+  });
+  const timeoutError = (timeoutType) => new CodexTurnError(
+    `turn timeout (${timeoutType})`,
+    {
+      kind: "timeout",
+      details: {
+      timeoutType,
+        timeoutMs: timeoutType === "inactivity" ? inactivityLimit : hardLimit,
+        hardTimeoutMs: hardLimit,
+        inactivityTimeoutMs: inactivityLimit,
+        turnId,
+        startedAt: isoNow(startedAtMs),
+        lastActivityAt: isoNow(lastActivityAtMs),
+        eventCount,
+        meaningfulEventCount,
+        partialResult: partialResult()
+      }
+    }
+  );
   let resolveCompletion;
   let rejectCompletion;
   const completion = new Promise((resolve, reject) => {
@@ -265,14 +311,26 @@ export async function runCodexTurn(client, {
     rejectCompletion = reject;
   });
   const timer = setTimeout(() => {
-    rejectCompletion(new CodexTurnError("turn timeout", { kind: "timeout" }));
-  }, Math.max(1, timeoutMs));
+    rejectCompletion(timeoutError("hard"));
+  }, Math.max(1, hardLimit));
+  const inactivityTimer = inactivityLimit > 0
+    ? setInterval(() => {
+      if (Date.now() - lastActivityAtMs >= inactivityLimit) {
+        rejectCompletion(timeoutError("inactivity"));
+      }
+    }, Math.min(1000, Math.max(10, Math.floor(inactivityLimit / 10))))
+    : null;
   const unsubscribe = client.onNotification((method, params) => {
     const eventThreadId = String(params?.threadId || "");
     const eventTurnId = String(params?.turnId || params?.turn?.id || "");
     if (eventThreadId && eventThreadId !== String(threadId)) return;
     if (turnId && eventTurnId && eventTurnId !== turnId) return;
     events.push({ method, params });
+    eventCount += 1;
+    if (meaningfulTurnEvent(method)) {
+      meaningfulEventCount += 1;
+      lastActivityAtMs = Date.now();
+    }
     if (method === "item/agentMessage/delta") {
       if (typeof params?.delta === "string") deltas.push(params.delta);
     } else if (method === "item/completed") {
@@ -302,8 +360,10 @@ export async function runCodexTurn(client, {
       ...(approvalPolicy ? { approvalPolicy } : {})
     });
     turnId = turnIdFromResponse(started);
+    lastActivityAtMs = Date.now();
     const turn = await completion;
     clearTimeout(timer);
+    if (inactivityTimer) clearInterval(inactivityTimer);
     const status = turnStatus(turn?.status);
     if (!/(completed|success|succeeded)/.test(status)) throw classifyTurnFailure(turn);
     return {
@@ -314,12 +374,20 @@ export async function runCodexTurn(client, {
       diff,
       fileChanges,
       events,
-      turn
+      turn,
+      activity: {
+        startedAt: isoNow(startedAtMs),
+        lastActivityAt: isoNow(lastActivityAtMs),
+        eventCount,
+        meaningfulEventCount
+      }
     };
   } catch (err) {
     clearTimeout(timer);
+    if (inactivityTimer) clearInterval(inactivityTimer);
     throw err;
   } finally {
+    if (inactivityTimer) clearInterval(inactivityTimer);
     unsubscribe?.();
     unsubscribeError?.();
   }

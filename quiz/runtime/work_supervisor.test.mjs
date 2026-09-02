@@ -163,6 +163,74 @@ test("supervisor passes the configured Codex turn timeout to every role", async 
   assert.deepEqual(timeouts, [900000, 900000, 900000]);
 });
 
+test("a timed-out worker preserves turn activity and worktree evidence", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-timeout-evidence-");
+  await enqueueWorkTask(worldRoot, task("timeout-evidence-task"));
+  const clients = new Map();
+  const result = await runWorkSupervisorOnce({
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    appServerFactory: async ({ role }) => {
+      if (clients.has(role)) return clients.get(role);
+      const client = {
+        async startThread() { return { thread: { id: `${role}-thread` } }; },
+        async runTurn(options) {
+          if (role === "manager") return { turnId: "manager-plan", text: "SUMMARY: plan\nWORK ORDER: edit hello.txt\nRISKS: none" };
+          const error = new Error("turn timeout (hard)");
+          error.kind = "timeout";
+          error.details = {
+            timeoutType: "hard",
+            timeoutMs: 1800000,
+            hardTimeoutMs: 1800000,
+            inactivityTimeoutMs: 900000,
+            turnId: "worker-turn-1",
+            lastActivityAt: "2026-08-07T12:15:00.000Z",
+            eventCount: 7,
+            meaningfulEventCount: 6,
+            partialResult: {
+              status: "in-progress",
+              text: "SUMMARY: editing hello.txt",
+              diff: "+hello",
+              fileChanges: [{ path: "hello.txt", kind: "update" }]
+            }
+          };
+          throw error;
+        },
+        async close() {}
+      };
+      clients.set(role, client);
+      return client;
+    },
+    workspaceFactory: async () => ({
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/timeout-evidence",
+      mode: "git-worktree"
+    }),
+    evidenceFactory: async () => ({
+      status: " M hello.txt",
+      diff: "diff --git a/hello.txt b/hello.txt\n+hello",
+      changedFiles: ["hello.txt"],
+      revision: "task-commit"
+    }),
+    turnTimeoutMs: 900000,
+    turnInactivityTimeoutMs: 900000,
+    turnHardTimeoutMs: 1800000,
+    now: () => "2026-08-07T12:16:00.000Z"
+  });
+  assert.equal(result.status, "blocked");
+  const stored = await readWorkTaskStatus(worldRoot, "timeout-evidence-task");
+  assert.equal(stored.checkpoint.activeTurn.turnId, "worker-turn-1");
+  assert.equal(stored.checkpoint.activeTurn.timeoutType, "hard");
+  assert.equal(stored.checkpoint.activeTurn.hardTimeoutMs, 1800000);
+  assert.equal(stored.checkpoint.activeTurn.meaningfulActivityCount, 6);
+  assert.equal(stored.checkpoint.activeTurn.result.fileChanges[0].path, "hello.txt");
+  assert.equal(stored.checkpoint.interruption.workspaceEvidence.revision, "task-commit");
+  assert.deepEqual(stored.checkpoint.interruption.workspaceEvidence.changedFiles, ["hello.txt"]);
+});
+
 test("background supervisor checkpoints Luna and reuses the same thread before review", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-multiwake-");
   await enqueueWorkTask(worldRoot, task("multiwake-task"));

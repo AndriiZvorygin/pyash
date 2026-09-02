@@ -261,7 +261,8 @@ function storedTurnResult(turn) {
     fileChanges: Array.isArray(turn?.result?.fileChanges) ? turn.result.fileChanges : [],
     turn: turn?.result?.turn || {},
     turnId: turn?.turnId || "",
-    requestIdentity: turn?.requestIdentity || ""
+    requestIdentity: turn?.requestIdentity || "",
+    activity: turn?.activity || {}
   };
 }
 
@@ -277,6 +278,13 @@ function emptyTurn() {
     completedAt: "",
     resultCaptured: false,
     ambiguity: "",
+    lastActivityAt: "",
+    activityCount: 0,
+    meaningfulActivityCount: 0,
+    timeoutType: "",
+    timeoutMs: 0,
+    hardTimeoutMs: 0,
+    inactivityTimeoutMs: 0,
     result: { status: "", text: "", diff: "", fileChanges: [], turn: {} }
   };
 }
@@ -379,6 +387,8 @@ export async function runWorkSupervisorOnce({
     type: "workspaceWrite",
     writableRoots: [worktreePath]
   }),
+  turnInactivityTimeoutMs = 0,
+  turnHardTimeoutMs = 0,
   onEvent = null,
   now = () => new Date()
 } = {}) {
@@ -479,18 +489,60 @@ export async function runWorkSupervisorOnce({
     const message = text(err?.message || err) || "supervisor failed";
     const atValue = nowValue(now);
     const at = typeof atValue?.toISOString === "function" ? atValue.toISOString() : String(atValue);
+    const timeoutDetails = err?.details && typeof err.details === "object" ? err.details : {};
+    const timeoutLike = kind === "timeout" || /turn timeout/iu.test(message);
+    let workspaceEvidence = null;
+    if (timeoutLike && task.checkpoint.workspace.worktreePath) {
+      try {
+        workspaceEvidence = {
+          ...(await evidenceFactory({ worktreePath: task.checkpoint.workspace.worktreePath })),
+          capturedAt: at
+        };
+      } catch (evidenceError) {
+        workspaceEvidence = {
+          capturedAt: at,
+          error: text(evidenceError?.message || evidenceError)
+        };
+      }
+    }
+    const partialResult = timeoutDetails.partialResult && typeof timeoutDetails.partialResult === "object"
+      ? timeoutDetails.partialResult
+      : null;
+    const preservedTurn = turnPending || turnUncaptured
+      ? {
+        ...activeTurn,
+        turnId: text(timeoutDetails.turnId) || activeTurn.turnId,
+        lastActivityAt: text(timeoutDetails.lastActivityAt) || activeTurn.lastActivityAt,
+        activityCount: Number(timeoutDetails.eventCount) || activeTurn.activityCount || 0,
+        meaningfulActivityCount: Number(timeoutDetails.meaningfulEventCount) || activeTurn.meaningfulActivityCount || 0,
+        timeoutType: text(timeoutDetails.timeoutType) || activeTurn.timeoutType,
+        timeoutMs: Number(timeoutDetails.timeoutMs) || activeTurn.timeoutMs || 0,
+        hardTimeoutMs: Number(timeoutDetails.hardTimeoutMs) || activeTurn.hardTimeoutMs || 0,
+        inactivityTimeoutMs: Number(timeoutDetails.inactivityTimeoutMs) || activeTurn.inactivityTimeoutMs || 0,
+        result: partialResult
+          ? {
+            status: partialResult.status || "in-progress",
+            text: partialResult.text || "",
+            diff: partialResult.diff || "",
+            fileChanges: uniqueFileChanges(partialResult.fileChanges || []),
+            turn: partialResult.turn || {}
+          }
+          : activeTurn.result
+      }
+      : task.checkpoint.activeTurn;
     const checkpoint = {
       interruption: {
         phase: task.status,
         at,
         reason: message,
-        lastTurnId: activeTurn.turnId || ""
+        lastTurnId: text(timeoutDetails.turnId) || activeTurn.turnId || "",
+        ...(workspaceEvidence ? { workspaceEvidence } : {})
       },
       blocker: status === "blocked" ? message : task.checkpoint.blocker,
       activeTurn: status === "usage-limited"
         ? emptyTurn()
         : turnPending || turnUncaptured
-          ? { ...activeTurn, state: turnUncaptured ? "completed" : "ambiguous", ambiguity: message }
+          ? { ...preservedTurn, state: turnUncaptured ? "completed" : "ambiguous", ambiguity: message }
           : task.checkpoint.activeTurn
     };
     if (err?.preflight) checkpoint.executionPreflight = {
@@ -503,7 +555,13 @@ export async function runWorkSupervisorOnce({
       turnSandbox: err.preflight.details?.turnSandbox || ""
     };
     if (task.status !== status) task = transitionWorkTask(task, status, { now: atValue, message, error: message });
-    await save(checkpoint, { error: message, message });
+    await save(checkpoint, {
+      error: message,
+      message,
+      ...(workspaceEvidence ? {
+        lastAction: `${task.checkpoint.lastAction || "turn interrupted"}; workspace evidence captured`
+      } : {})
+    });
     if (status === "failed") {
       await ackWorkTaskFail(worldRoot, {
         runtimePath: claimed.path,
@@ -677,7 +735,15 @@ export async function runWorkSupervisorOnce({
           diff: result?.diff || "",
           fileChanges: uniqueFileChanges(result?.fileChanges || []),
           turn: result?.turn || {}
-        }
+        },
+        ...(result?.activity ? {
+          lastActivityAt: result.activity.lastActivityAt || "",
+          activityCount: result.activity.eventCount || 0,
+          meaningfulActivityCount: result.activity.meaningfulEventCount || 0,
+          timeoutMs: Number(options.hardTimeoutMs || options.timeoutMs) || 0,
+          hardTimeoutMs: Number(options.hardTimeoutMs || options.timeoutMs) || 0,
+          inactivityTimeoutMs: Number(options.inactivityTimeoutMs) || 0
+        } : {})
       },
       lastAction: `${phase} turn completed; result checkpointed`
     });
@@ -726,6 +792,8 @@ export async function runWorkSupervisorOnce({
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       input: [{ type: "text", text: promptPlan(task, workspace, roleSettings) }]
     });
     const plan = parsePlan(resultText(result));
@@ -763,6 +831,8 @@ export async function runWorkSupervisorOnce({
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       input: [{ type: "text", text: promptImplementation(task, task.checkpoint, workspace, correction) }]
     });
     const report = parseImplementation(resultText(result));
@@ -861,6 +931,8 @@ export async function runWorkSupervisorOnce({
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       input: [{ type: "text", text: promptReview(task, task.checkpoint, workspace) }]
     });
     const review = parseReview(resultText(result));
@@ -904,6 +976,8 @@ export async function runWorkSupervisorOnce({
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       input: [{ type: "text", text: promptConvergence(task, task.checkpoint, workspace) }]
     });
     const convergence = parseConvergence(resultText(result));

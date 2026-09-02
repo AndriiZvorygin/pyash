@@ -21,6 +21,18 @@ function turnResult(value) {
   };
 }
 
+function workspaceEvidence(value) {
+  const source = object(value);
+  return {
+    capturedAt: text(source.capturedAt),
+    revision: text(source.revision),
+    changedFiles: list(source.changedFiles),
+    status: text(source.status),
+    diff: text(source.diff),
+    error: text(source.error)
+  };
+}
+
 function turnRecord(value = {}) {
   const source = object(value);
   return {
@@ -34,6 +46,13 @@ function turnRecord(value = {}) {
     completedAt: text(source.completedAt),
     resultCaptured: source.resultCaptured === true,
     ambiguity: text(source.ambiguity),
+    lastActivityAt: text(source.lastActivityAt),
+    activityCount: Math.max(0, Math.trunc(Number(source.activityCount) || 0)),
+    meaningfulActivityCount: Math.max(0, Math.trunc(Number(source.meaningfulActivityCount) || 0)),
+    timeoutType: text(source.timeoutType),
+    timeoutMs: Math.max(0, Math.trunc(Number(source.timeoutMs) || 0)),
+    hardTimeoutMs: Math.max(0, Math.trunc(Number(source.hardTimeoutMs) || 0)),
+    inactivityTimeoutMs: Math.max(0, Math.trunc(Number(source.inactivityTimeoutMs) || 0)),
     result: turnResult(source.result)
   };
 }
@@ -179,7 +198,8 @@ export function buildWorkCheckpoint(input = {}) {
       phase: text(interruption.phase),
       at: text(interruption.at),
       reason: text(interruption.reason),
-      lastTurnId: text(interruption.lastTurnId)
+      lastTurnId: text(interruption.lastTurnId),
+      workspaceEvidence: workspaceEvidence(interruption.workspaceEvidence)
     },
     activeTurn,
     turnHistory,

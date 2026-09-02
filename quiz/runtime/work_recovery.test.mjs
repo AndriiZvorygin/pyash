@@ -176,6 +176,52 @@ test("recovery preserves the blocker and cannot revive the same task twice", asy
   assert.deepEqual((await findRecoverableOperationalWorkTasks(worldRoot)).map((task) => task.taskId), []);
 });
 
+test("known timed-out turns remain ambiguous and preserve workspace evidence", async () => {
+  const worldRoot = await world("pyash-work-recovery-evidence-");
+  await blockedTask(worldRoot, {
+    taskId: "roadmap-timeout-evidence",
+    blocker: "turn timeout (hard)",
+    activeTurn: {
+      phase: "implementation",
+      role: "worker",
+      threadId: "luna-thread",
+      turnId: "luna-turn",
+      requestIdentity: "timeout-evidence-request",
+      state: "ambiguous",
+      startedAt: "2026-08-10T00:00:00.000Z",
+      timeoutType: "hard",
+      lastActivityAt: "2026-08-10T00:14:00.000Z",
+      meaningfulActivityCount: 4
+    }
+  });
+  const current = await readWorkTaskStatus(worldRoot, "roadmap-timeout-evidence");
+  await writeWorkTaskStatus(worldRoot, {
+    ...current,
+    checkpoint: {
+      ...current.checkpoint,
+      workspace: { ...current.checkpoint.workspace, worktreePath: "/tmp/timeout-evidence" },
+      interruption: {
+        ...current.checkpoint.interruption,
+        workspaceEvidence: {
+          capturedAt: "2026-08-10T00:15:00.000Z",
+          revision: "luna-commit",
+          changedFiles: ["hello.txt"],
+          diff: "+hello"
+        }
+      }
+    }
+  });
+  const recovered = await recoverOperationalWorkTask(worldRoot, "roadmap-timeout-evidence", {
+    now: "2026-08-10T01:00:00.000Z"
+  });
+  assert.equal(recovered, null);
+  const unchanged = await readWorkTaskStatus(worldRoot, "roadmap-timeout-evidence");
+  assert.equal(unchanged.checkpoint.activeTurn.state, "ambiguous");
+  assert.equal(unchanged.checkpoint.activeTurn.turnId, "luna-turn");
+  assert.equal(unchanged.checkpoint.interruption.workspaceEvidence.revision, "luna-commit");
+  assert.deepEqual(unchanged.checkpoint.interruption.workspaceEvidence.changedFiles, ["hello.txt"]);
+});
+
 test("active-writer recovery preserves the old thread and isolates the replacement worktree", async () => {
   const worldRoot = await world("pyash-work-recovery-replacement-");
   await blockedTask(worldRoot, {

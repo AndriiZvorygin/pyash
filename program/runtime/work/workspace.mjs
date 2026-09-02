@@ -82,7 +82,7 @@ export async function collectGitEvidence({ worktreePath, gitRunner = null } = {}
     git({ cwd: worktreePath, args: ["status", "--short"], gitRunner }),
     git({ cwd: worktreePath, args: ["rev-parse", "HEAD"], gitRunner })
   ]);
-  const status = stdout(statusResult);
+  const status = String(statusResult?.stdout ?? "").trimEnd();
   const trackedNames = stdout(namesResult).split("\n").map((value) => value.trim()).filter(Boolean);
   const statusNames = status.split("\n")
     .map((line) => line.slice(3).trim())

@@ -9,7 +9,13 @@ import { promisify } from "node:util";
 import { curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
 import { integrateAcceptedWork, synchronizeAutomationBranch } from "../../program/runtime/work/integration.mjs";
 import { appendWorkSchedulerEvent } from "../../program/runtime/work/history.mjs";
-import { buildWorkDailyDigest, renderWorkDailyDigest, writeWorkDailyDigestState } from "../../program/runtime/work/digest.mjs";
+import {
+  buildWorkDailyDigest,
+  readWorkDailyDigestHealth,
+  recordWorkDailyDigestFailure,
+  renderWorkDailyDigest,
+  writeWorkDailyDigestState
+} from "../../program/runtime/work/digest.mjs";
 import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { listWorkTasks } from "../../program/runtime/work/operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
@@ -376,6 +382,42 @@ test("daily digest surfaces a long gap since the previous successful report", as
   assert.match(digest.report, /Reporting gap/u);
   assert.match(digest.report, /No successful daily digest was recorded for 46\.3 hours/u);
   assert.match(digest.report, /scheduled report interval should be checked/u);
+});
+
+test("daily digest health records generation and delivery failures separately", async () => {
+  const { worldRoot } = await world("pyash-work-digest-health-");
+  await recordWorkDailyDigestFailure(worldRoot, {
+    kind: "generation",
+    reason: "report generation failed",
+    at: "2026-08-20T07:30:00.000Z"
+  });
+  await recordWorkDailyDigestFailure(worldRoot, {
+    kind: "delivery",
+    reason: "mail submission failed",
+    at: "2026-08-20T07:31:00.000Z"
+  });
+  const health = await readWorkDailyDigestHealth(worldRoot);
+  assert.equal(health["generation failures"], "1");
+  assert.equal(health["delivery failures"], "1");
+  const report = renderWorkDailyDigest({
+    date: "2026-08-20",
+    since: "2026-08-19T07:30:00.000Z",
+    until: "2026-08-20T07:30:00.000Z",
+    capacity: { weekly: { identified: true, remainingPercent: 90, usedPercent: 10, resetAt: "2026-08-24T00:00:00.000Z", windowStartAt: "2026-08-17T00:00:00.000Z" } },
+    reportingGap: { hours: 48, previousAt: "2026-08-18T07:30:00.000Z" },
+    digestHealth: {
+      expectedRuns: 2,
+      successfulReports: 1,
+      generationFailures: 1,
+      deliveryFailures: 1,
+      lastSuccessfulAt: "2026-08-20T07:30:00.000Z",
+      lastFailure: "2026-08-20T07:31:00.000Z: delivery: mail submission failed"
+    }
+  }).report;
+  assert.match(report, /Daily digest health[\s\S]*Expected runs: 2/u);
+  assert.match(report, /Generation failures: 1/u);
+  assert.match(report, /Delivery failures: 1/u);
+  assert.match(report, /mail submission failed/u);
 });
 
 test("timeout-blocked work is operationally blocked, not roadmap exhaustion", async () => {
