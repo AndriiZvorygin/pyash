@@ -1,4 +1,4 @@
-import { runWorkSupervisorOnce } from "./supervisor.mjs";
+import { probeWorkTaskAvailability, runWorkSupervisorOnce } from "./supervisor.mjs";
 import { runWorkIntegrationReconciliationOnce } from "./integration_runner.mjs";
 import { listQueuedWorkTasks, listRuntimeWorkTasks, queueDepth } from "./queue.mjs";
 import { listWorkTasks, resumeExternalEvidenceTask } from "./operator.mjs";
@@ -41,12 +41,52 @@ function nowIso(now) {
 
 const ACTIVE_WORK_STATUSES = new Set(["planning", "implementing", "reviewing", "revision", "usage-limited"]);
 
+function orderedWorkCandidates(eligible, recoverable, policyRevalidation = []) {
+  const ordered = [
+    ...eligible.filter((entry) => ACTIVE_WORK_STATUSES.has(entry.task.status)).map((entry) => entry.task),
+    ...policyRevalidation,
+    ...recoverable,
+    ...eligible.filter((entry) => !ACTIVE_WORK_STATUSES.has(entry.task.status)).map((entry) => entry.task)
+  ];
+  const seen = new Set();
+  return ordered.filter((task) => {
+    if (!task?.taskId || seen.has(task.taskId)) return false;
+    seen.add(task.taskId);
+    return true;
+  });
+}
+
 function selectWorkCandidate(eligible, recoverable, policyRevalidation = []) {
-  return eligible.find((entry) => ACTIVE_WORK_STATUSES.has(entry.task.status))?.task
-    || policyRevalidation[0]
-    || recoverable[0]
-    || eligible[0]?.task
-    || null;
+  return orderedWorkCandidates(eligible, recoverable, policyRevalidation)[0] || null;
+}
+
+async function availableCandidates(candidates, candidateAvailability, context = {}) {
+  if (typeof candidateAvailability !== "function") {
+    return { candidates, skipped: [] };
+  }
+  const executable = [];
+  const skipped = [];
+  for (const task of candidates) {
+    let availability;
+    try {
+      availability = await candidateAvailability({ ...context, task });
+    } catch (error) {
+      availability = { available: true, reason: "availability probe failed open", error: text(error?.message || error) };
+    }
+    if (availability?.available === false) {
+      skipped.push({
+        taskId: task.taskId,
+        title: task.title,
+        priority: task.priority,
+        reason: text(availability.reason) || "temporarily unavailable",
+        detail: text(availability.error)
+      });
+      continue;
+    }
+    executable.push(task);
+    break;
+  }
+  return { candidates: executable, skipped };
 }
 
 async function probeUrl(url, fetchImpl, timeoutMs = 3000) {
@@ -274,6 +314,7 @@ export async function inspectWorkBackground({
     hasEligibleWork: eligible.length > 0 || recoverable.length > 0 || policyRevalidation.length > 0,
     now: typeof now === "function" ? now() : now
   });
+  const candidateOrder = orderedWorkCandidates(eligible, recoverable, policyRevalidation);
   return {
     eligible,
     recoverable,
@@ -286,7 +327,8 @@ export async function inspectWorkBackground({
     resumedExternal,
     capacity,
     admission,
-    selected: selectWorkCandidate(eligible, recoverable, policyRevalidation)
+    candidateOrder,
+    selected: candidateOrder[0] || null
   };
 }
 
@@ -303,6 +345,7 @@ export async function runWorkBackgroundOnce({
   curate = false,
   baselineSync = null,
   executionPreflight = null,
+  candidateAvailability = null,
   externalEvidenceProbe = null,
   onEvent = null,
   now = () => new Date()
@@ -320,7 +363,7 @@ export async function runWorkBackgroundOnce({
       now
     })
     : null;
-  const { eligible, recoverable, policyRevalidation, temporarilyUnexecutableTechnical, dependencyBlocked, externalEvidence, capacity, admission } = await inspectWorkBackground({
+  const { eligible, recoverable, policyRevalidation, candidateOrder: inspectedCandidates, temporarilyUnexecutableTechnical, dependencyBlocked, externalEvidence, capacity, admission } = await inspectWorkBackground({
     worldRoot,
     owner,
     policy,
@@ -453,25 +496,43 @@ export async function runWorkBackgroundOnce({
       curation
     };
   }
-  let selected = selectWorkCandidate(eligible, recoverable, policyRevalidation);
+  const candidateScan = await availableCandidates(inspectedCandidates, candidateAvailability, {
+    repositoryRoot,
+    owner,
+    now
+  });
+  const temporarilySkipped = candidateScan.skipped;
+  for (const skipped of temporarilySkipped) {
+    await emitWorkEvent(onEvent, "candidate-skipped", skipped, { now });
+  }
+  let selected = candidateScan.candidates[0] || null;
   if (!selected) {
+    const reason = "technical continuation unavailable";
     await writeWorkSchedulerHealth(worldRoot, {
       ...baseHealth,
-      "idle wakes": String((Number(prior["idle wakes"]) || 0) + 1)
+      "last decision": reason,
+      "temporarily skipped candidates": String((Number(prior["temporarily skipped candidates"]) || 0) + temporarilySkipped.length),
+      "last temporarily skipped candidates": temporarilySkipped.map((entry) => `${entry.taskId}: ${entry.reason}`).join("; "),
+      "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + 1),
+      "blocked before model wakes": String((Number(prior["blocked before model wakes"]) || 0) + 1)
     });
     await appendWorkSchedulerEvent(worldRoot, {
-      type: "idle",
-      reason: "no eligible work",
+      type: "technical-blocked",
+      reason,
       capacity,
       pacing: admission.pacing,
-      taskCount
+      taskCount,
+      selected: "",
+      skippedCandidates: temporarilySkipped
     }, { now });
     return {
       admitted: false,
-      reason: "no eligible work",
+      reason,
       capacity,
       eligible: taskCount,
-      report: renderWorkIdleReport({ result: { reason: "no eligible work", eligible: taskCount }, capacity }),
+      temporarilySkipped,
+      report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
+      queue: await queueDepth(worldRoot),
       curation
     };
   }
@@ -759,6 +820,8 @@ export async function runWorkBackgroundOnce({
     "work-started wakes": String((Number(prior["work-started wakes"]) || 0) + (workStarted ? 1 : 0)),
     "useful wakes": String((Number(prior["useful wakes"]) || 0) + (useful ? 1 : 0)),
     "material-progress wakes": String((Number(prior["material-progress wakes"]) || 0) + (materialProgress ? 1 : 0)),
+    "temporarily skipped candidates": String((Number(prior["temporarily skipped candidates"]) || 0) + temporarilySkipped.length),
+    "last temporarily skipped candidates": temporarilySkipped.map((entry) => `${entry.taskId}: ${entry.reason}`).join("; "),
     "blocked before model wakes": String(Number(prior["blocked before model wakes"]) || 0),
     "external evidence wakes": String(Number(prior["external evidence wakes"]) || 0)
   };
@@ -782,7 +845,8 @@ export async function runWorkBackgroundOnce({
     workStarted,
     usefulWake: useful,
     materialProgress,
-    integration: selectedIntegration ? finalTask?.checkpoint?.integration?.status || "" : ""
+    integration: selectedIntegration ? finalTask?.checkpoint?.integration?.status || "" : "",
+    skippedCandidates: temporarilySkipped
   }, { now });
   return {
     admitted: true,
@@ -795,6 +859,7 @@ export async function runWorkBackgroundOnce({
     preflight,
     recovery,
     policyRevalidation: policyRevalidationResult,
+    temporarilySkipped,
     ...result,
     workStarted
   };

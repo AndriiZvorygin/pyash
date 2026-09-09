@@ -342,6 +342,85 @@ async function openRoleThread(client, {
   return id;
 }
 
+function temporaryExecutionConflict(error) {
+  return /active writer|thread .* writer|already .* writer|local lock|lease .* held/iu.test(
+    text(error?.message || error)
+  );
+}
+
+function taskExecutionRole(task) {
+  const checkpoint = task?.checkpoint || {};
+  const phase = text(checkpoint.interruption?.phase || task?.status).toLowerCase();
+  const planning = phase === "planning" || (task?.status === "ready" && !checkpoint.plan?.workOrder);
+  return planning || phase === "reviewing" ? "manager" : "worker";
+}
+
+/**
+ * Probe an existing role thread without starting a model turn. A thread
+ * ownership conflict is a candidate-local skip; other probe failures remain
+ * available for the normal global preflight and supervisor error handling.
+ */
+export async function probeWorkTaskAvailability({
+  task,
+  appServerFactory = ({}) => spawnCodexAppServer({}),
+  repositoryRoot = process.cwd(),
+  roleConfig = {},
+  approvalPolicy = "never",
+  threadSandbox = "workspace-write"
+} = {}) {
+  const role = taskExecutionRole(task);
+  const settings = resolveWorkRoleConfig(roleConfig);
+  const threadId = text(role === "manager"
+    ? task?.checkpoint?.manager?.threadId || task?.solThreadId
+    : task?.checkpoint?.worker?.threadId || task?.lunaThreadId);
+  const knownConflict = text(task?.checkpoint?.activeTurn?.ambiguity || task?.checkpoint?.blocker || task?.message);
+  if (temporaryExecutionConflict({ message: knownConflict })) {
+    return {
+      available: false,
+      reason: "active-writer",
+      role,
+      threadId,
+      error: knownConflict
+    };
+  }
+  if (!threadId) return { available: true, reason: "no existing role thread" };
+  const worktreePath = text(task?.checkpoint?.workspace?.worktreePath) || repositoryRoot;
+  let client = null;
+  try {
+    client = await appServerFactory({
+      role,
+      model: settings[role].model,
+      reasoningEffort: settings[role].reasoningEffort,
+      cwd: worktreePath,
+      threadId,
+      approvalPolicy
+    });
+    await openRoleThread(client, {
+      role,
+      threadId,
+      workspace: { worktreePath },
+      roleConfig: settings[role],
+      approvalPolicy,
+      threadSandbox
+    });
+    return { available: true, reason: "role thread available", role, threadId };
+  } catch (error) {
+    const message = text(error?.message || error);
+    if (temporaryExecutionConflict(error)) {
+      return {
+        available: false,
+        reason: "active-writer",
+        role,
+        threadId,
+        error: message
+      };
+    }
+    return { available: true, reason: "availability probe inconclusive", role, threadId, error: message };
+  } finally {
+    await closeClient(client);
+  }
+}
+
 function changedFilesFromResult(result, worktreePath) {
   return (result?.fileChanges || [])
     .map((entry) => text(entry?.path || entry?.file || entry?.filename))

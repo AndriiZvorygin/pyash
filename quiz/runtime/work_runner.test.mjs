@@ -454,6 +454,138 @@ test("exhausted technical continuation does not starve a runnable candidate", as
   assert.equal(health["work-started wakes"], "1");
 });
 
+test("an active-writer candidate is skipped in the same wake for the next runnable task", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-active-writer-fallback-");
+  await enqueueWorkTask(worldRoot, task("high-active-writer", 200));
+  await enqueueWorkTask(worldRoot, task("low-runnable", 100));
+  const probes = [];
+  const started = [];
+  const capacitySource = async () => ({
+    state: "available",
+    remainingPercent: 100,
+    usedPercent: 0,
+    weekly: {
+      identified: true,
+      state: "available",
+      remainingPercent: 100,
+      usedPercent: 0,
+      windowStartAt: "2026-08-17T12:00:00.000Z",
+      resetAt: "2026-08-24T12:00:00.000Z"
+    }
+  });
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource,
+    candidateAvailability: async ({ task: candidate }) => {
+      probes.push(candidate.taskId);
+      return candidate.taskId === "high-active-writer"
+        ? { available: false, reason: "active-writer", error: "thread already has an active writer" }
+        : { available: true, reason: "role thread available" };
+    },
+    supervisor: async ({ taskId }) => {
+      started.push(taskId);
+      return { claimed: true, taskId, status: "implementing", workStarted: true };
+    },
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "low-runnable");
+  assert.deepEqual(probes, ["high-active-writer", "low-runnable"]);
+  assert.deepEqual(started, ["low-runnable"]);
+  assert.deepEqual(result.temporarilySkipped.map((entry) => entry.taskId), ["high-active-writer"]);
+  const high = await readWorkTaskStatus(worldRoot, "high-active-writer");
+  assert.equal(high.status, "ready");
+  assert.equal(high.checkpoint.recoveryCount, 0);
+  assert.equal(high.checkpoint.implementation.noProgressPasses, 0);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["technical continuation unavailable wakes"] || "0", "0");
+  assert.equal(health["temporarily skipped candidates"], "1");
+  assert.equal(health["work-started wakes"], "1");
+});
+
+test("temporary candidate skips do not consume a model turn when no executable candidate remains", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-active-writer-only-");
+  await enqueueWorkTask(worldRoot, task("high-active-writer", 200));
+  let supervisorCalls = 0;
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => ({
+      state: "available",
+      remainingPercent: 100,
+      usedPercent: 0,
+      weekly: {
+        identified: true,
+        state: "available",
+        remainingPercent: 100,
+        usedPercent: 0,
+        windowStartAt: "2026-08-17T12:00:00.000Z",
+        resetAt: "2026-08-24T12:00:00.000Z"
+      }
+    }),
+    candidateAvailability: async () => ({ available: false, reason: "active-writer" }),
+    supervisor: async () => {
+      supervisorCalls += 1;
+      return { claimed: true, taskId: "high-active-writer", status: "implementing", workStarted: true };
+    },
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, false);
+  assert.equal(result.reason, "technical continuation unavailable");
+  assert.equal(supervisorCalls, 0);
+  const taskState = await readWorkTaskStatus(worldRoot, "high-active-writer");
+  assert.equal(taskState.status, "ready");
+  assert.equal(taskState.checkpoint.recoveryCount, 0);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["technical continuation unavailable wakes"], "1");
+  assert.equal(health["work-started wakes"] || "0", "0");
+});
+
+test("an active-writer skip leaves priority intact for the next wake", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-active-writer-returns-");
+  await enqueueWorkTask(worldRoot, task("high-active-writer", 200));
+  await enqueueWorkTask(worldRoot, task("low-runnable", 100));
+  let writerAvailable = false;
+  const capacitySource = async () => ({
+    state: "available",
+    remainingPercent: 100,
+    usedPercent: 0,
+    weekly: {
+      identified: true,
+      state: "available",
+      remainingPercent: 100,
+      usedPercent: 0,
+      windowStartAt: "2026-08-17T12:00:00.000Z",
+      resetAt: "2026-08-24T12:00:00.000Z"
+    }
+  });
+  const run = () => runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource,
+    candidateAvailability: async ({ task: candidate }) => candidate.taskId === "high-active-writer"
+      ? { available: writerAvailable, reason: writerAvailable ? "role thread available" : "active-writer" }
+      : { available: true },
+    supervisor: async ({ taskId }) => {
+      if (taskId === "low-runnable") {
+        const current = await readWorkTaskStatus(worldRoot, taskId);
+        await writeWorkTaskStatus(worldRoot, { ...current, status: "accepted" });
+      }
+      return { claimed: true, taskId, status: "accepted", workStarted: true };
+    },
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  const first = await run();
+  assert.equal(first.selected, "low-runnable");
+  writerAvailable = true;
+  const second = await run();
+  assert.equal(second.selected, "high-active-writer");
+});
+
 test("a healthy external dependency resumes its parked task without replanning", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-external-probe-");
   await enqueueWorkTask(worldRoot, task("roadmap-translation-parity-tranche", 130));

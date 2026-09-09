@@ -348,6 +348,9 @@ export function renderWorkDailyDigest({
     : tasks.filter((task) => isAwaitingExternalEvidence(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
   const wakes = events.filter((event) => ["idle", "deferred", "admitted", "technical-blocked"].includes(event.action));
   const admitted = events.filter((event) => event.action === "admitted");
+  const temporarilySkipped = events.flatMap((event) => Array.isArray(event.skippedCandidates)
+    ? event.skippedCandidates
+    : []);
   const bool = (value) => value === true || /^(true|truth|yes|1)$/iu.test(text(value));
   const workStarted = admitted.filter((event) => bool(event.workStarted));
   // Recovery and outcome records accompany a wake; count usefulness on the
@@ -458,6 +461,7 @@ export function renderWorkDailyDigest({
     `Provider usage-limited: ${providerUsageLimited.length}`,
     `Execution-environment blocked: ${executionBlocked.length}`,
     `Technical continuation unavailable: ${technicalUnavailable.length}`,
+    `Temporarily skipped candidates: ${temporarilySkipped.length}`,
     `Idle / no work: ${idle.length}`,
     `Operational recoveries: ${recovered.length}`,
     "",
