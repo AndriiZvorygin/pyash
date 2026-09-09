@@ -521,6 +521,26 @@ test("digest uses one canonical Next package for runnable and roadmap sections",
   assert.doesNotMatch(digest.report, /ROADMAP[\s\S]*Next:\n  \(none\)/u);
 });
 
+test("digest counts an active-writer skip as skipped work, not technical starvation", () => {
+  const digest = renderWorkDailyDigest({
+    date: "2026-09-09",
+    since: "2026-09-09T00:00:00.000Z",
+    until: "2026-09-09T23:00:00.000Z",
+    capacity: { weekly: { identified: true, remainingPercent: 100, usedPercent: 0 } },
+    events: [{
+      action: "admitted",
+      workStarted: true,
+      usefulWake: true,
+      materialProgress: true,
+      skippedCandidates: [{ taskId: "hq-chief-briefing", reason: "active-writer" }]
+    }],
+    roadmap: { packages: [], externalEvidence: [], needsDecision: [], retryableTechnical: [] }
+  });
+  assert.match(digest.report, /Temporarily skipped candidates: 1/u);
+  assert.match(digest.report, /Technical continuation unavailable: 0/u);
+  assert.match(digest.report, /Work started: 1/u);
+});
+
 test("digest separates active work from dependency-waiting work", () => {
   const digest = renderWorkDailyDigest({
     date: "2026-08-23",

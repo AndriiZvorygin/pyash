@@ -2,7 +2,7 @@
 import path from "node:path";
 import process from "node:process";
 
-import { runWorkSupervisorOnce } from "../program/runtime/work/supervisor.mjs";
+import { probeWorkTaskAvailability, runWorkSupervisorOnce } from "../program/runtime/work/supervisor.mjs";
 import {
   addWorkTask,
   archiveWorkTask,
@@ -380,13 +380,15 @@ try {
         repositoryRoot,
         foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE)
       });
-      const dryEligible = inspection.eligible.length
-        ? inspection.eligible
-        : inspection.recoverable.length
-          ? inspection.recoverable.map((task) => ({ task }))
-          : inspection.policyRevalidation?.length
-            ? inspection.policyRevalidation.map((task) => ({ task }))
-        : curation.proposed.map((candidate) => ({ task: {
+      const dryEligible = inspection.candidateOrder?.length
+        ? inspection.candidateOrder.map((task) => ({ task }))
+        : inspection.eligible.length
+          ? inspection.eligible
+          : inspection.recoverable.length
+            ? inspection.recoverable.map((task) => ({ task }))
+            : inspection.policyRevalidation?.length
+              ? inspection.policyRevalidation.map((task) => ({ task }))
+              : curation.proposed.map((candidate) => ({ task: {
           taskId: candidate.taskId,
           title: candidate.title,
           priority: candidate.priority,
@@ -419,6 +421,11 @@ try {
         repositoryRoot,
         curate: true,
         executionPreflight: ({ worktreePath }) => configuredExecutionPreflight({ repositoryRoot, worktreePath }),
+        candidateAvailability: ({ task }) => probeWorkTaskAvailability({
+          task,
+          repositoryRoot,
+          threadSandbox: timeoutOptions.threadSandbox || "workspace-write"
+        }),
         externalEvidenceProbe: (task) => probeExternalEvidenceTask(task),
         baselineSync: async () => synchronizeAutomationBranch({
           repositoryRoot,

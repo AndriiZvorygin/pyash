@@ -13,12 +13,46 @@ import {
 } from "../../program/runtime/work/queue.mjs";
 import { readWorkTaskStatus, transitionWorkTaskStatus, updateWorkTaskCheckpoint } from "../../program/runtime/work/status.mjs";
 import { failWorkTask, resumeWorkTask } from "../../program/runtime/work/operator.mjs";
-import { DEFAULT_WORK_ROLE_CONFIG, resolveWorkRoleConfig, runWorkSupervisorOnce } from "../../program/runtime/work/supervisor.mjs";
+import {
+  DEFAULT_WORK_ROLE_CONFIG,
+  probeWorkTaskAvailability,
+  resolveWorkRoleConfig,
+  runWorkSupervisorOnce
+} from "../../program/runtime/work/supervisor.mjs";
 
 test("default Luna launches use xhigh reasoning", () => {
   const roles = resolveWorkRoleConfig({}, {});
   assert.equal(DEFAULT_WORK_ROLE_CONFIG.worker.model, "gpt-5.6-luna");
   assert.equal(roles.worker.reasoningEffort, "xhigh");
+});
+
+test("availability probe classifies an existing active writer without starting a turn", async () => {
+  let runTurnCalls = 0;
+  let closeCalls = 0;
+  const result = await probeWorkTaskAvailability({
+    task: {
+      status: "reviewing",
+      checkpoint: {
+        manager: { threadId: "sol-thread" },
+        workspace: { worktreePath: "/worktree/task" }
+      }
+    },
+    appServerFactory: async () => ({
+      async resumeThread() {
+        throw new Error("thread sol-thread already has an active writer");
+      },
+      async runTurn() {
+        runTurnCalls += 1;
+      },
+      async close() {
+        closeCalls += 1;
+      }
+    })
+  });
+  assert.equal(result.available, false);
+  assert.equal(result.reason, "active-writer");
+  assert.equal(runTurnCalls, 0);
+  assert.equal(closeCalls, 1);
 });
 
 async function makeWorldRoot(prefix) {
