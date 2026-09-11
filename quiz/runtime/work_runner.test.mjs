@@ -11,6 +11,7 @@ import {
 } from "../../program/runtime/work/capacity.mjs";
 import { claimOldestWorkTask, enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { readWorkSchedulerHealth } from "../../program/runtime/work/health.mjs";
+import { readWorkSchedulerEvents } from "../../program/runtime/work/history.mjs";
 import { readWorkTaskStatus, transitionWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import { inspectWorkBackground, probeExternalEvidenceTask, runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
 import { currentTimeoutPolicy } from "../../program/runtime/work/timeout_policy.mjs";
@@ -182,6 +183,44 @@ test("background one-shot records admission and scheduler health", async () => {
   assert.equal(health["capacity state"], "available");
   assert.equal(health["last decision"], "weekly pacing headroom");
   assert.deepEqual(events.map((event) => event.type), ["capacity"]);
+});
+
+test("turn reconciliation is observable and durable without starting a model turn", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-turn-history-");
+  const events = [];
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => ({ state: "unknown", weekly: { identified: false, state: "unknown" } }),
+    turnReconciliation: async () => [{
+      taskId: "stale-task",
+      classification: "STALE",
+      role: "worker",
+      threadId: "old-thread",
+      turnId: "old-turn",
+      remoteState: "idle",
+      remoteTurnState: "interrupted",
+      localOwnerAlive: false,
+      appServerAlive: false,
+      safeToResume: true,
+      worktreeState: "evidence captured",
+      reason: "no live writer evidence remains"
+    }],
+    onEvent: async (event) => events.push(event),
+    now: "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(result.admitted, false);
+  assert.equal(events[0].type, "turn-reconciled");
+  assert.equal(events[0].classification, "STALE");
+  const history = await readWorkSchedulerEvents(worldRoot);
+  const reconciliation = history.find((event) => event.action === "turn-reconciled");
+  assert.equal(reconciliation.taskId, "stale-task");
+  assert.equal(reconciliation.classification, "STALE");
+  assert.equal(reconciliation.threadId, "old-thread");
+  assert.equal(reconciliation.remoteTurnState, "interrupted");
+  assert.equal(reconciliation.safeToResume, "true");
+  assert.equal(reconciliation.worktreeState, "evidence captured");
 });
 
 test("a valid weekly sample is retained for diagnosis but never used after telemetry fails", async () => {

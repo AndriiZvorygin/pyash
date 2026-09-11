@@ -555,6 +555,19 @@ function progressForTask(task) {
   if (task.status === "accepted") return `accepted; Sol review ${text(checkpoint.review?.decision) || "complete"}`;
   if (task.status === "blocked" || task.status === "failed") {
     const reason = text(checkpoint.blocker || task.message || task.error) || task.status;
+    const liveness = text(checkpoint.turnReconciliation?.classification).toUpperCase();
+    if (liveness === "STALE") {
+      return `stale Codex ownership: ${text(checkpoint.turnReconciliation?.reason) || "no live writer evidence remains"}`;
+    }
+    if (liveness === "LIVE") {
+      return `writer live: ${text(checkpoint.turnReconciliation?.reason) || "recent liveness evidence remains"}`;
+    }
+    if (liveness === "AMBIGUOUS") {
+      return `writer liveness ambiguous: ${text(checkpoint.turnReconciliation?.reason) || "evidence is incomplete"}`;
+    }
+    if (liveness === "COMPLETED_UNRECONCILED") {
+      return "completed Codex outcome awaiting state reconciliation";
+    }
     const classification = isAwaitingExternalEvidence(task)
       ? "awaiting external evidence"
       : isRetryableWorkBlock(task)

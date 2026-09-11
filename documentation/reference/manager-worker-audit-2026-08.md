@@ -451,6 +451,30 @@ tasks without preserved worktree evidence. A task-local commit may proceed
 directly to Sol review; a preserved uncommitted diff may resume Luna from the
 existing worktree. A second request for the same migration is denied.
 
+### Codex turn ownership reconciliation
+
+The background runner performs a cheap pre-model reconciliation for blocked
+tasks with a persisted turn or writer conflict. It records `LIVE`, `STALE`,
+`COMPLETED_UNRECONCILED`, or `AMBIGUOUS` in the task checkpoint and scheduler
+newspaper. The decision combines the persisted manager/worker PID, App Server
+child PID, recent App Server thread/turn state, last activity, and current
+worktree evidence; an old writer error is not treated as proof that a turn is
+still alive.
+
+`LIVE` keeps duplicate-turn protection and changes no recovery or convergence
+counters. `STALE` may clear the old role thread for a safe continuation while
+retaining the old thread in `previousThreadIds`, the abandoned turn history,
+the same task/worktree, and all recovery/pass evidence. A preserved commit can
+move directly to read-only Sol review; a preserved Luna diff can resume
+implementation. `COMPLETED_UNRECONCILED` is captured from the durable result
+without rerunning the turn. `AMBIGUOUS` remains blocked and cannot be replayed
+automatically.
+
+Reconciliation itself starts no model turn. Its scheduler-history event and
+the task's parser-backed `.pya` checkpoint make the liveness decision and its
+evidence visible after restart. This local reconciliation does not yet provide
+distributed fencing between independent supervisors; that remains deferred.
+
 ## Deferred Work
 
 - distributed stale-runtime ownership, heartbeats, and two-supervisor fencing;
@@ -476,6 +500,8 @@ existing worktree. A second request for the same migration is denied.
 - `program/runtime/work/queue.mjs`
 - `program/runtime/work/checkpoint.mjs`
 - `program/runtime/work/supervisor.mjs`
+- `program/runtime/work/turn_reconciliation.mjs`
+- `program/runtime/work/history.mjs`
 - `program/runtime/codex/app_server.mjs`
 - `documentation/specifications/04-runtime-primitives.md`
 - `documentation/specifications/18-pyash-agent.md`

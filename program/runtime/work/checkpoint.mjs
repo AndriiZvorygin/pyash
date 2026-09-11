@@ -78,7 +78,33 @@ function turnRecord(value = {}) {
     timeoutMs: Math.max(0, Math.trunc(Number(source.timeoutMs) || 0)),
     hardTimeoutMs: Math.max(0, Math.trunc(Number(source.hardTimeoutMs) || 0)),
     inactivityTimeoutMs: Math.max(0, Math.trunc(Number(source.inactivityTimeoutMs) || 0)),
+    localOwnerPid: Math.max(0, Math.trunc(Number(source.localOwnerPid) || 0)),
+    appServerPid: Math.max(0, Math.trunc(Number(source.appServerPid) || 0)),
+    localOwnerStartedAt: text(source.localOwnerStartedAt),
     result: turnResult(source.result)
+  };
+}
+
+function turnReconciliation(value = {}) {
+  const source = object(value);
+  const localOwnerAlive = source.localOwnerAlive == null
+    ? null
+    : source.localOwnerAlive === true;
+  return {
+    checkedAt: text(source.checkedAt),
+    threadId: text(source.threadId),
+    turnId: text(source.turnId),
+    classification: text(source.classification).toUpperCase(),
+    lastActivityAt: text(source.lastActivityAt),
+    localOwnerPid: Math.max(0, Math.trunc(Number(source.localOwnerPid) || 0)),
+    localOwnerAlive,
+    appServerPid: Math.max(0, Math.trunc(Number(source.appServerPid) || 0)),
+    appServerAlive: source.appServerAlive == null ? null : source.appServerAlive === true,
+    remoteState: text(source.remoteState),
+    remoteTurnState: text(source.remoteTurnState),
+    remoteSessionId: text(source.remoteSessionId),
+    worktreeState: text(source.worktreeState),
+    reason: text(source.reason)
   };
 }
 
@@ -131,7 +157,8 @@ export function buildWorkCheckpoint(input = {}) {
     manager: {
       model: text(manager.model),
       reasoningEffort: text(manager.reasoningEffort),
-      threadId: text(manager.threadId)
+      threadId: text(manager.threadId),
+      previousThreadIds: list(manager.previousThreadIds)
     },
     worker: {
       model: text(worker.model),
@@ -221,6 +248,7 @@ export function buildWorkCheckpoint(input = {}) {
     },
     timeoutPolicy: policy(input.timeoutPolicy),
     policyRevalidation: policyRevalidation(input.policyRevalidation),
+    turnReconciliation: turnReconciliation(input.turnReconciliation),
     interruption: {
       phase: text(interruption.phase),
       at: text(interruption.at),
@@ -276,6 +304,9 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     policyRevalidation: Object.prototype.hasOwnProperty.call(update, "policyRevalidation")
       ? policyRevalidation(update.policyRevalidation)
       : current.policyRevalidation,
+    turnReconciliation: Object.prototype.hasOwnProperty.call(update, "turnReconciliation")
+      ? turnReconciliation(update.turnReconciliation)
+      : current.turnReconciliation,
     interruption: { ...current.interruption, ...object(update.interruption) },
     activeTurn: Object.prototype.hasOwnProperty.call(update, "activeTurn")
       ? turnRecord(update.activeTurn)

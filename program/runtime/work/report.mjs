@@ -128,6 +128,19 @@ export function renderWorkTaskReport(task) {
       if (reconciliation.worktreePath) lines.push(`Reconciliation worktree: ${reconciliation.worktreePath}`);
     }
   }
+  const turnReconciliation = checkpoint.turnReconciliation || {};
+  if (turnReconciliation.classification) {
+    lines.push("", "Turn liveness:");
+    lines.push(`  ${turnReconciliation.classification}`);
+    if (turnReconciliation.remoteState) {
+      lines.push(`  Remote state: ${turnReconciliation.remoteState}${turnReconciliation.remoteTurnState ? ` / ${turnReconciliation.remoteTurnState}` : ""}`);
+    }
+    if (turnReconciliation.localOwnerAlive != null || turnReconciliation.appServerAlive != null) {
+      lines.push(`  Local owner: ${turnReconciliation.localOwnerAlive === true ? "alive" : turnReconciliation.localOwnerAlive === false ? "dead" : "unknown"}; App Server: ${turnReconciliation.appServerAlive === true ? "alive" : turnReconciliation.appServerAlive === false ? "dead" : "unknown"}`);
+    }
+    if (turnReconciliation.checkedAt) lines.push(`  Checked: ${turnReconciliation.checkedAt}`);
+    if (turnReconciliation.reason) lines.push(indent(turnReconciliation.reason, "  ", 600));
+  }
   lines.push(`Started: ${text(current.startedAt) || "(not started)"}`);
   lines.push(`Finished: ${text(current.finishedAt) || text(checkpoint.interruption?.at) || "(in progress)"}`);
   const operatorNote = current.error
