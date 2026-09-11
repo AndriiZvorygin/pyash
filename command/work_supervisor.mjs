@@ -2,7 +2,11 @@
 import path from "node:path";
 import process from "node:process";
 
-import { probeWorkTaskAvailability, runWorkSupervisorOnce } from "../program/runtime/work/supervisor.mjs";
+import {
+  probeWorkTaskAvailability,
+  resolveWorkRoleConfig,
+  runWorkSupervisorOnce
+} from "../program/runtime/work/supervisor.mjs";
 import {
   addWorkTask,
   archiveWorkTask,
@@ -36,6 +40,7 @@ import {
 import { synchronizeAutomationBranch } from "../program/runtime/work/integration.mjs";
 import { inspectWorkExecutionPreflight } from "../program/runtime/work/preflight.mjs";
 import { runSandboxSmoke } from "../program/runtime/work/sandbox_smoke.mjs";
+import { reconcileOperationalWorkTasks } from "../program/runtime/work/turn_reconciliation.mjs";
 import { currentTimeoutPolicy } from "../program/runtime/work/timeout_policy.mjs";
 import {
   defaultWorkEmailFrom,
@@ -426,6 +431,14 @@ try {
           repositoryRoot,
           threadSandbox: timeoutOptions.threadSandbox || "workspace-write"
         }),
+        turnReconciliation: ({ worldRoot: reconciliationWorld, owner, repositoryRoot: reconciliationRepository, now }) =>
+          reconcileOperationalWorkTasks(reconciliationWorld, {
+            owner,
+            repositoryRoot: reconciliationRepository,
+            roleConfig: resolveWorkRoleConfig({}, process.env),
+            threadSandbox: timeoutOptions.threadSandbox || "workspace-write",
+            now
+          }),
         externalEvidenceProbe: (task) => probeExternalEvidenceTask(task),
         baselineSync: async () => synchronizeAutomationBranch({
           repositoryRoot,

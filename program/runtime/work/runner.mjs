@@ -24,6 +24,7 @@ import {
 } from "./roadmap.mjs";
 import { deriveImplementationProgress } from "./progress.mjs";
 import { currentTimeoutPolicy } from "./timeout_policy.mjs";
+import { reconcileOperationalWorkTasks } from "./turn_reconciliation.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -346,11 +347,53 @@ export async function runWorkBackgroundOnce({
   baselineSync = null,
   executionPreflight = null,
   candidateAvailability = null,
+  turnReconciliation = null,
   externalEvidenceProbe = null,
   onEvent = null,
   now = () => new Date()
 } = {}) {
   const wake = nowIso(now);
+  let reconciliations = [];
+  if (typeof turnReconciliation === "function") {
+    try {
+      reconciliations = await turnReconciliation({ worldRoot, owner, repositoryRoot, now });
+    } catch (error) {
+      reconciliations = [{
+        classification: "ERROR",
+        reason: `turn reconciliation failed: ${text(error?.message || error)}`
+      }];
+    }
+    for (const reconciliation of reconciliations) {
+      await emitWorkEvent(onEvent, "turn-reconciled", {
+        taskId: reconciliation.task?.taskId || reconciliation.taskId || "",
+        classification: reconciliation.classification,
+        role: reconciliation.role,
+        threadId: reconciliation.threadId,
+        turnId: reconciliation.turnId,
+        remoteState: reconciliation.remoteState,
+        remoteTurnState: reconciliation.remoteTurnState,
+        localOwnerAlive: reconciliation.localOwnerAlive,
+        appServerAlive: reconciliation.appServerAlive,
+        safeToResume: reconciliation.safeToResume === true,
+        reason: reconciliation.reason
+      }, { now });
+      await appendWorkSchedulerEvent(worldRoot, {
+        type: "turn-reconciled",
+        taskId: reconciliation.task?.taskId || reconciliation.taskId || "",
+        classification: reconciliation.classification,
+        role: reconciliation.role,
+        threadId: reconciliation.threadId,
+        turnId: reconciliation.turnId,
+        remoteState: reconciliation.remoteState,
+        remoteTurnState: reconciliation.remoteTurnState,
+        localOwnerAlive: reconciliation.localOwnerAlive,
+        appServerAlive: reconciliation.appServerAlive,
+        safeToResume: reconciliation.safeToResume === true,
+        worktreeState: reconciliation.worktreeState,
+        reason: reconciliation.reason
+      }, { now });
+    }
+  }
   const curation = curate
     ? await curateWorkBacklog({
       worldRoot,
@@ -493,7 +536,8 @@ export async function runWorkBackgroundOnce({
       eligible: taskCount,
       report,
       queue: await queueDepth(worldRoot),
-      curation
+      curation,
+      reconciliations
     };
   }
   const candidateScan = await availableCandidates(inspectedCandidates, candidateAvailability, {
@@ -533,7 +577,8 @@ export async function runWorkBackgroundOnce({
       temporarilySkipped,
       report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
       queue: await queueDepth(worldRoot),
-      curation
+      curation,
+      reconciliations
     };
   }
   let preflight = { status: executionPreflight ? "pending" : "not-configured" };
@@ -587,7 +632,8 @@ export async function runWorkBackgroundOnce({
         preflight,
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
-        curation
+        curation,
+        reconciliations
       };
     }
   }
@@ -620,7 +666,8 @@ export async function runWorkBackgroundOnce({
         preflight,
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
-        curation
+        curation,
+        reconciliations
       };
     }
     selected = policyRevalidationResult.task;
@@ -679,7 +726,8 @@ export async function runWorkBackgroundOnce({
         preflight,
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
-        curation
+        curation,
+        reconciliations
       };
     }
     selected = recovery.task;
@@ -747,7 +795,8 @@ export async function runWorkBackgroundOnce({
         baseline: { status: "blocked", error: text(error?.message || error) },
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
-        curation
+        curation,
+        reconciliations
       };
     }
   }
@@ -860,6 +909,7 @@ export async function runWorkBackgroundOnce({
     recovery,
     policyRevalidation: policyRevalidationResult,
     temporarilySkipped,
+    reconciliations,
     ...result,
     workStarted
   };

@@ -247,6 +247,23 @@ function compactBlocker(value) {
   return `technical correction required: ${body.slice(0, 220)}`;
 }
 
+function compactTaskBlocker(task) {
+  const reconciliation = task?.checkpoint?.turnReconciliation || {};
+  if (reconciliation.classification === "STALE") {
+    return `stale writer reconciled: ${reconciliation.reason || "no live writer evidence remains"}`;
+  }
+  if (reconciliation.classification === "LIVE") {
+    return `writer live: ${reconciliation.reason || "recent liveness evidence remains"}`;
+  }
+  if (reconciliation.classification === "AMBIGUOUS") {
+    return `writer liveness ambiguous: ${reconciliation.reason || "evidence is incomplete"}`;
+  }
+  if (reconciliation.classification === "COMPLETED_UNRECONCILED") {
+    return "completed Codex result awaiting task-state reconciliation";
+  }
+  return compactBlocker(task?.checkpoint?.blocker || task?.message || task?.error);
+}
+
 function isCapacityTelemetryUnavailable(reason) {
   return /^(?:capacity unknown|capacity telemetry unavailable)$/iu.test(text(reason));
 }
@@ -342,7 +359,7 @@ export function renderWorkDailyDigest({
   const ready = runnableReady.length > 0;
   const retryable = technicalRetryableItems(roadmap || {}).length
     ? technicalRetryableItems(roadmap || {})
-    : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
+    : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: compactTaskBlocker(task) }));
   const externalEvidence = roadmap?.externalEvidence?.length
     ? roadmap.externalEvidence
     : tasks.filter((task) => isAwaitingExternalEvidence(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));

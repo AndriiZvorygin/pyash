@@ -436,7 +436,8 @@ export async function resumeCodexThread(client, threadId, {
   model,
   reasoningEffort = null,
   approvalPolicy = null,
-  sandbox = "workspace-write"
+  sandbox = "workspace-write",
+  excludeTurns = false
 } = {}) {
   return client.request("thread/resume", {
     threadId,
@@ -444,7 +445,15 @@ export async function resumeCodexThread(client, threadId, {
     ...(model ? { model } : {}),
     ...(reasoningEffort ? { config: { reasoningEffort } } : {}),
     ...(approvalPolicy ? { approvalPolicy } : {}),
-    ...(sandbox ? { sandbox } : {})
+    ...(sandbox ? { sandbox } : {}),
+    ...(excludeTurns ? { excludeTurns: true } : {})
+  });
+}
+
+export async function readCodexThread(client, threadId, { includeTurns = true } = {}) {
+  return client.request("thread/read", {
+    threadId,
+    ...(includeTurns ? { includeTurns: true } : {})
   });
 }
 

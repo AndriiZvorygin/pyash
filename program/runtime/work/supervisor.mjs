@@ -793,7 +793,10 @@ export async function runWorkSupervisorOnce({
         threadId: options.threadId,
         requestIdentity: identity,
         state: "started",
-        startedAt
+        startedAt,
+        localOwnerPid: process.pid,
+        appServerPid: Number(client?.child?.pid) || 0,
+        localOwnerStartedAt: startedAt
       },
       lastAction: `${phase} turn started`
     });
@@ -823,6 +826,9 @@ export async function runWorkSupervisorOnce({
           fileChanges: uniqueFileChanges(result?.fileChanges || []),
           turn: result?.turn || {}
         },
+        localOwnerPid: active.localOwnerPid || process.pid,
+        appServerPid: active.appServerPid || Number(client?.child?.pid) || 0,
+        localOwnerStartedAt: active.localOwnerStartedAt || startedAt,
         ...(result?.activity ? {
           lastActivityAt: result.activity.lastActivityAt || "",
           activityCount: result.activity.eventCount || 0,

@@ -115,6 +115,7 @@ function checkpointBlocks(task) {
       { key: "manager model", type: "text", value: quoteText(checkpoint.manager.model) },
       { key: "manager reasoning effort", type: "text", value: quoteText(checkpoint.manager.reasoningEffort) },
       { key: "manager thread id", type: "text", value: quoteText(checkpoint.manager.threadId) },
+      { key: "manager previous thread ids", type: "text", value: quoteText(encodeJson(checkpoint.manager.previousThreadIds)) },
       { key: "worker model", type: "text", value: quoteText(checkpoint.worker.model) },
       { key: "worker reasoning effort", type: "text", value: quoteText(checkpoint.worker.reasoningEffort) },
       { key: "worker thread id", type: "text", value: quoteText(checkpoint.worker.threadId) },
@@ -180,6 +181,7 @@ function checkpointBlocks(task) {
       { key: "workspace evidence", type: "text", value: quoteText(encodeJson(checkpoint.interruption.workspaceEvidence)) },
       { key: "active turn", type: "text", value: quoteText(encodeJson(checkpoint.activeTurn)) },
       { key: "turn history", type: "text", value: quoteText(encodeJson(checkpoint.turnHistory)) },
+      { key: "turn reconciliation", type: "text", value: quoteText(encodeJson(checkpoint.turnReconciliation)) },
       { key: "blocker", type: "text", value: quoteText(checkpoint.blocker) },
       { key: "human response", type: "text", value: quoteText(checkpoint.humanResponse) },
       { key: "last action", type: "text", value: quoteText(checkpoint.lastAction) },
@@ -257,7 +259,8 @@ function statusFromText(text) {
       manager: {
         model: roles["manager model"],
         reasoningEffort: roles["manager reasoning effort"],
-        threadId: roles["manager thread id"]
+        threadId: roles["manager thread id"],
+        previousThreadIds: decodeJson(roles["manager previous thread ids"], [])
       },
       worker: {
         model: roles["worker model"],
@@ -318,6 +321,7 @@ function statusFromText(text) {
       },
       activeTurn: decodeJson(checkpoint["active turn"]),
       turnHistory: decodeJson(checkpoint["turn history"], []),
+      turnReconciliation: decodeJson(checkpoint["turn reconciliation"]),
       blocker: checkpoint.blocker,
       humanResponse: checkpoint["human response"],
       lastAction: checkpoint["last action"],
