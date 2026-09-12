@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { pyaFileToJson } from "../../library/pya_to_json.mjs";
 import { listWorkTasks } from "./operator.mjs";
+import { isStaleTurnResumable } from "./checkpoint.mjs";
 import { resolveWorkRoleConfig } from "./supervisor.mjs";
 import {
   resumeCodexThread,
@@ -556,8 +557,13 @@ function progressForTask(task) {
   if (task.status === "blocked" || task.status === "failed") {
     const reason = text(checkpoint.blocker || task.message || task.error) || task.status;
     const liveness = text(checkpoint.turnReconciliation?.classification).toUpperCase();
-    if (liveness === "STALE") {
+    const staleResumable = isStaleTurnResumable(checkpoint);
+    const hasCurrentIntegrationState = Boolean(text(checkpoint.integration?.status));
+    if (liveness === "STALE" && !staleResumable) {
       return `stale Codex ownership: ${text(checkpoint.turnReconciliation?.reason) || "no live writer evidence remains"}`;
+    }
+    if (liveness === "STALE" && staleResumable && !hasCurrentIntegrationState) {
+      return "stale writer reconciled; safe continuation available";
     }
     if (liveness === "LIVE") {
       return `writer live: ${text(checkpoint.turnReconciliation?.reason) || "recent liveness evidence remains"}`;

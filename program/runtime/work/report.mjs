@@ -132,6 +132,9 @@ export function renderWorkTaskReport(task) {
   if (turnReconciliation.classification) {
     lines.push("", "Turn liveness:");
     lines.push(`  ${turnReconciliation.classification}`);
+    if (turnReconciliation.classification === "STALE") {
+      lines.push(`  Safe continuation: ${turnReconciliation.safeToResume === true ? "yes" : "no"}`);
+    }
     if (turnReconciliation.remoteState) {
       lines.push(`  Remote state: ${turnReconciliation.remoteState}${turnReconciliation.remoteTurnState ? ` / ${turnReconciliation.remoteTurnState}` : ""}`);
     }

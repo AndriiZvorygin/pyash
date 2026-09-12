@@ -249,8 +249,13 @@ function compactBlocker(value) {
 
 function compactTaskBlocker(task) {
   const reconciliation = task?.checkpoint?.turnReconciliation || {};
-  if (reconciliation.classification === "STALE") {
+  const safeToResume = reconciliation.classification === "STALE"
+    && reconciliation.safeToResume === true;
+  if (reconciliation.classification === "STALE" && !safeToResume) {
     return `stale writer reconciled: ${reconciliation.reason || "no live writer evidence remains"}`;
+  }
+  if (safeToResume && !text(task?.checkpoint?.integration?.status)) {
+    return "stale writer reconciled; safe continuation available";
   }
   if (reconciliation.classification === "LIVE") {
     return `writer live: ${reconciliation.reason || "recent liveness evidence remains"}`;
