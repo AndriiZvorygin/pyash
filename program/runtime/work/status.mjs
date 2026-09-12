@@ -119,7 +119,17 @@ function checkpointBlocks(task) {
       { key: "worker model", type: "text", value: quoteText(checkpoint.worker.model) },
       { key: "worker reasoning effort", type: "text", value: quoteText(checkpoint.worker.reasoningEffort) },
       { key: "worker thread id", type: "text", value: quoteText(checkpoint.worker.threadId) },
-      { key: "worker previous thread ids", type: "text", value: quoteText(encodeJson(checkpoint.worker.previousThreadIds)) }
+      { key: "worker previous thread ids", type: "text", value: quoteText(encodeJson(checkpoint.worker.previousThreadIds)) },
+      { key: "reviewer role", type: "text", value: quoteText(checkpoint.reviewer.role) },
+      { key: "reviewer model", type: "text", value: quoteText(checkpoint.reviewer.model) },
+      { key: "reviewer reasoning effort", type: "text", value: quoteText(checkpoint.reviewer.reasoningEffort) },
+      { key: "reviewer thread id", type: "text", value: quoteText(checkpoint.reviewer.threadId) },
+      { key: "reviewer previous thread ids", type: "text", value: quoteText(encodeJson(checkpoint.reviewer.previousThreadIds)) },
+      { key: "escalation reviewer role", type: "text", value: quoteText(checkpoint.escalationReviewer.role) },
+      { key: "escalation reviewer model", type: "text", value: quoteText(checkpoint.escalationReviewer.model) },
+      { key: "escalation reviewer reasoning effort", type: "text", value: quoteText(checkpoint.escalationReviewer.reasoningEffort) },
+      { key: "escalation reviewer thread id", type: "text", value: quoteText(checkpoint.escalationReviewer.threadId) },
+      { key: "escalation reviewer previous thread ids", type: "text", value: quoteText(encodeJson(checkpoint.escalationReviewer.previousThreadIds)) }
     ]),
     mapBlock("work task plan", [
       { key: "summary", type: "text", value: quoteText(checkpoint.plan.summary) },
@@ -148,9 +158,22 @@ function checkpointBlocks(task) {
       })) }
     ]),
     mapBlock("work task review", [
+      { key: "role", type: "text", value: quoteText(checkpoint.review.role) },
+      { key: "model", type: "text", value: quoteText(checkpoint.review.model) },
+      { key: "reasoning effort", type: "text", value: quoteText(checkpoint.review.reasoningEffort) },
+      { key: "thread id", type: "text", value: quoteText(checkpoint.review.threadId) },
+      { key: "pass", type: "num", value: checkpoint.review.pass },
+      { key: "reviewed commit", type: "text", value: quoteText(checkpoint.review.reviewedCommit) },
+      { key: "reviewed revision", type: "text", value: quoteText(checkpoint.review.reviewedRevision) },
       { key: "decision", type: "text", value: quoteText(checkpoint.review.decision) },
       { key: "explanation", type: "text", value: quoteText(checkpoint.review.explanation) },
-      { key: "revision instructions", type: "text", value: quoteText(checkpoint.review.revisionInstructions) }
+      { key: "revision instructions", type: "text", value: quoteText(checkpoint.review.revisionInstructions) },
+      { key: "escalation reason", type: "text", value: quoteText(checkpoint.review.escalationReason) },
+      { key: "work order", type: "text", value: quoteText(checkpoint.review.workOrder) },
+      { key: "tests", type: "text", value: quoteText(encodeJson(checkpoint.review.tests)) },
+      { key: "evidence", type: "text", value: quoteText(checkpoint.review.evidence) },
+      { key: "routine review", type: "text", value: quoteText(encodeJson(checkpoint.routineReview)) },
+      { key: "escalation review", type: "text", value: quoteText(encodeJson(checkpoint.escalationReview)) }
     ]),
     mapBlock("work task convergence", [
       { key: "state", type: "text", value: quoteText(checkpoint.convergence.status) },
@@ -268,6 +291,20 @@ function statusFromText(text) {
         threadId: roles["worker thread id"],
         previousThreadIds: decodeJson(roles["worker previous thread ids"], [])
       },
+      reviewer: {
+        role: roles["reviewer role"] || (roles["reviewer model"] || roles["reviewer thread id"] ? "reviewer" : ""),
+        model: roles["reviewer model"],
+        reasoningEffort: roles["reviewer reasoning effort"],
+        threadId: roles["reviewer thread id"],
+        previousThreadIds: decodeJson(roles["reviewer previous thread ids"], [])
+      },
+      escalationReviewer: {
+        role: roles["escalation reviewer role"] || (roles["escalation reviewer model"] || roles["escalation reviewer thread id"] ? "escalationReviewer" : ""),
+        model: roles["escalation reviewer model"],
+        reasoningEffort: roles["escalation reviewer reasoning effort"],
+        threadId: roles["escalation reviewer thread id"],
+        previousThreadIds: decodeJson(roles["escalation reviewer previous thread ids"], [])
+      },
       plan: {
         summary: plan.summary,
         workOrder: plan["work order"],
@@ -287,10 +324,23 @@ function statusFromText(text) {
         ...decodeJson(implementation.progress, {})
       },
       review: {
+        role: review.role,
+        model: review.model,
+        reasoningEffort: review["reasoning effort"],
+        threadId: review["thread id"],
+        pass: review.pass,
+        reviewedCommit: review["reviewed commit"],
+        reviewedRevision: review["reviewed revision"],
         decision: review.decision,
         explanation: review.explanation,
-        revisionInstructions: review["revision instructions"]
+        revisionInstructions: review["revision instructions"],
+        escalationReason: review["escalation reason"],
+        workOrder: review["work order"],
+        tests: decodeJson(review.tests, []),
+        evidence: review.evidence
       },
+      routineReview: decodeJson(review["routine review"]),
+      escalationReview: decodeJson(review["escalation review"]),
       convergence: {
         status: convergence.state,
         reviewCount: convergence["review count"],

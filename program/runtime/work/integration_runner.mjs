@@ -16,7 +16,8 @@ import { classifyImplementationPass, summarizeImplementationProgress } from "./p
 import {
   parseConvergence,
   parseImplementation,
-  parseReview,
+  parseEscalationReview,
+  parseRoutineReview,
   resolveWorkRoleConfig
 } from "./supervisor.mjs";
 import {
@@ -70,7 +71,7 @@ function promptIntegration(task, checkpoint, workspace, branch, reconciliation) 
     "Reapply the semantic intent of the already reviewed task on top of this current baseline.",
     "Inspect the original task worktree, its commits, the current baseline, and the conflicting files before editing.",
     "Do not resurrect code that the current automation branch has intentionally superseded.",
-    "Run the task's focused acceptance tests and relevant regression/parity tests, then create a task-local reconciliation commit when the result is ready for Sol review.",
+    "Run the task's focused acceptance tests and relevant regression/parity tests, then create a task-local reconciliation commit when the result is ready for independent Luna review.",
     "Use these exact headings: SUMMARY:, CHANGED FILES:, TESTS:, BLOCKERS:, UNCERTAINTY:.",
     "Include REVIEW READY: yes only when the semantic capability and acceptance evidence are ready for review.",
     `Task title: ${task.title}`,
@@ -93,11 +94,12 @@ function promptIntegration(task, checkpoint, workspace, branch, reconciliation) 
 
 function promptIntegrationReview(task, checkpoint, workspace, branch, reconciliation) {
   return [
-    "You are Sol reviewing a reconciled Pyash roadmap task.",
+    "You are Luna, the independent Pyash reviewer for a reconciled roadmap task.",
+    "You did not implement this reconciliation and must not modify files.",
     "This is an integration review, not a new planning turn.",
-    "Return exactly one decision using DECISION: ACCEPT, DECISION: REVISE, or DECISION: BLOCK.",
+    "Return exactly one decision using DECISION: ACCEPT, DECISION: REVISE, or DECISION: ESCALATE.",
     "Also provide RATIONALE: and, when revising, CORRECTION:.",
-    "BLOCK is allowed only for a genuine semantic incompatibility, product/architecture/safety/policy choice, or required external condition. A Git conflict alone is not a blocker.",
+    "Use ESCALATE only for a genuine semantic, product, architecture, safety, policy, or unresolved acceptance question that requires Sol judgment. A Git conflict alone is not an escalation.",
     `Original objective: ${task.promptText}`,
     `Acceptance criteria: ${task.acceptanceText}`,
     `Original Sol work order: ${checkpoint.plan.workOrder || "not recorded"}`,
@@ -111,6 +113,28 @@ function promptIntegrationReview(task, checkpoint, workspace, branch, reconcilia
     `Reconciliation diff evidence:\n${reconciliation.diff.slice(0, 60000)}`,
     `Conflicts resolved: ${reconciliation.conflictsResolved}`,
     "Review whether the intended capability is preserved on the current baseline, whether superseded code was correctly omitted, and whether the focused and regression evidence is sufficient."
+  ].join("\n");
+}
+
+function promptIntegrationEscalation(task, checkpoint, workspace, branch, reconciliation, routineReview) {
+  return [
+    "You are Sol, the escalation reviewer for a Pyash integration reconciliation.",
+    "Routine independent Luna review could not safely resolve the question below.",
+    "Return exactly one decision: DECISION: ACCEPT, DECISION: REVISE, DECISION: REPLAN, or DECISION: BLOCK.",
+    "BLOCK / NEEDS_DECISION is only for a genuine product, semantic, architectural, safety, policy, or required external decision.",
+    `Original objective: ${task.promptText}`,
+    `Acceptance criteria: ${task.acceptanceText}`,
+    `Original Sol work order: ${checkpoint.plan.workOrder || "not recorded"}`,
+    `Current automation branch: ${branch}`,
+    `Reconciliation worktree: ${workspace.worktreePath}`,
+    `Reconciled files: ${reconciliation.changedFiles.join(", ") || "none reported"}`,
+    `Reconciled tests: ${reconciliation.tests.join("; ") || "none reported"}`,
+    `Reconciliation summary: ${reconciliation.summary || "not recorded"}`,
+    `Routine Luna decision: ${routineReview.decision}`,
+    `Routine Luna rationale: ${routineReview.explanation || "not recorded"}`,
+    `Routine Luna escalation reason: ${routineReview.escalationReason || routineReview.revisionInstructions || "not recorded"}`,
+    `Diff evidence:\n${reconciliation.diff.slice(0, 60000)}`,
+    "Preserve the accepted semantic intent where possible. If revising, provide one bounded correction; if replanning, provide a corrected work order."
   ].join("\n");
 }
 
@@ -205,7 +229,8 @@ export async function runWorkIntegrationReconciliationOnce({
   });
   const startedClients = [];
   let workerClient = null;
-  let managerClient = null;
+  let escalationReviewerClient = null;
+  let reviewerClient = null;
   let workspace;
 
   const emit = (type, fields = {}) => emitWorkEvent(onEvent, type, {
@@ -213,7 +238,7 @@ export async function runWorkIntegrationReconciliationOnce({
     title: task.title,
     priority: task.priority,
     ...fields
-  }, { now });
+    }, { now });
   const save = async (checkpointPatch = {}, fields = {}) => {
     task = await writeWorkTaskStatus(worldRoot, {
       ...task,
@@ -222,6 +247,88 @@ export async function runWorkIntegrationReconciliationOnce({
     });
     await writeWorkTaskRuntime(claimed.path, task);
     return task;
+  };
+  const runReviewTurn = async ({ phase, role, client, threadId, config, requestIdentity, input }) => {
+    const startedAt = iso(nowValue(now));
+    await save({
+      activeTurn: {
+        phase,
+        role,
+        threadId,
+        turnId: "",
+        requestIdentity,
+        state: "started",
+        startedAt,
+        completedAt: "",
+        resultCaptured: false,
+        ambiguity: "",
+        localOwnerPid: process.pid,
+        appServerPid: Number(client?.child?.pid) || 0,
+        localOwnerStartedAt: startedAt,
+        result: { status: "", text: "", diff: "", fileChanges: [], turn: {} }
+      },
+      lastAction: `${phase} turn started`
+    });
+    const result = await runTurn(client, {
+      threadId,
+      cwd: workspace.worktreePath,
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
+      approvalPolicy,
+      sandboxPolicy: typeof turnSandboxPolicy === "function" ? turnSandboxPolicy({ worktreePath: workspace.worktreePath }) : turnSandboxPolicy,
+      timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
+      requestIdentity,
+      input
+    });
+    const completedAt = iso(nowValue(now));
+    await save({
+      activeTurn: {
+        phase,
+        role,
+        threadId,
+        turnId: result?.turnId || "",
+        requestIdentity,
+        state: "completed",
+        startedAt,
+        completedAt,
+        resultCaptured: false,
+        ambiguity: "",
+        localOwnerPid: process.pid,
+        appServerPid: Number(client?.child?.pid) || 0,
+        localOwnerStartedAt: startedAt,
+        ...(result?.activity ? {
+          lastActivityAt: result.activity.lastActivityAt || "",
+          activityCount: result.activity.eventCount || 0,
+          meaningfulActivityCount: result.activity.meaningfulEventCount || 0,
+          timeoutMs: Number(turnHardTimeoutMs || turnTimeoutMs) || 0,
+          hardTimeoutMs: Number(turnHardTimeoutMs || turnTimeoutMs) || 0,
+          inactivityTimeoutMs: Number(turnInactivityTimeoutMs) || 0
+        } : {}),
+        result: {
+          status: result?.status || "completed",
+          text: resultText(result),
+          diff: result?.diff || "",
+          fileChanges: uniqueChanges(result?.fileChanges || []),
+          turn: result?.turn || {}
+        }
+      },
+      lastAction: `${phase} turn completed; result checkpointed`
+    });
+    return result;
+  };
+  const captureReviewTurn = async (phase, patch = {}, fields = {}) => {
+    const active = task.checkpoint.activeTurn;
+    if (!active || active.phase !== phase || active.state !== "completed") {
+      throw new Error(`missing completed ${phase} turn checkpoint`);
+    }
+    await save({
+      ...patch,
+      activeTurn: {},
+      turnHistory: [...task.checkpoint.turnHistory, { ...active, resultCaptured: true }],
+      lastAction: `${phase} result captured`
+    }, fields);
   };
   const move = async (status, options = {}) => {
     task = transitionWorkTask(task, status, { ...options, now: nowValue(now) });
@@ -321,25 +428,36 @@ export async function runWorkIntegrationReconciliationOnce({
     }
 
     if (reconciliation.consecutiveNoProgressAttempts >= Math.max(1, Number(maxNoProgressAttempts) || 1)) {
-      if (!managerClient) {
-        managerClient = await appServerFactory({ role: "manager", model: roleSettings.manager.model, reasoningEffort: roleSettings.manager.reasoningEffort, cwd: workspace.worktreePath, approvalPolicy });
-        startedClients.push(managerClient);
+      if (!escalationReviewerClient) {
+        escalationReviewerClient = await appServerFactory({ role: "escalationReviewer", model: roleSettings.escalationReviewer.model, reasoningEffort: roleSettings.escalationReviewer.reasoningEffort, cwd: workspace.worktreePath, approvalPolicy });
+        startedClients.push(escalationReviewerClient);
       }
-      const managerThreadId = await openThread(managerClient, {
-        role: "manager",
-        threadId: reconciliation.managerThreadId || task.checkpoint.manager.threadId,
+      const escalationThreadId = await openThread(escalationReviewerClient, {
+        role: "escalationReviewer",
+        threadId: reconciliation.escalationReviewerThreadId
+          || reconciliation.managerThreadId
+          || task.checkpoint.escalationReviewer.threadId
+          || task.checkpoint.manager.threadId,
         cwd: workspace.worktreePath,
-        config: roleSettings.manager,
+        config: roleSettings.escalationReviewer,
         approvalPolicy,
         sandbox: threadSandbox
       });
-      await save({ integration: { reconciliation: { managerThreadId } } });
+      await save({
+        escalationReviewer: {
+          role: "escalationReviewer",
+          model: roleSettings.escalationReviewer.model,
+          reasoningEffort: roleSettings.escalationReviewer.reasoningEffort,
+          threadId: escalationThreadId
+        },
+        integration: { reconciliation: { escalationReviewerThreadId: escalationThreadId } }
+      });
       const identity = `pyash-${task.taskId}-integration-convergence-${reconciliation.attempts}`;
-      const result = await runCodexTurn(managerClient, {
-        threadId: managerThreadId,
+      const result = await runCodexTurn(escalationReviewerClient, {
+        threadId: escalationThreadId,
         cwd: workspace.worktreePath,
-        model: roleSettings.manager.model,
-        reasoningEffort: roleSettings.manager.reasoningEffort,
+        model: roleSettings.escalationReviewer.model,
+        reasoningEffort: roleSettings.escalationReviewer.reasoningEffort,
         approvalPolicy,
         sandboxPolicy: typeof turnSandboxPolicy === "function" ? turnSandboxPolicy({ worktreePath: workspace.worktreePath }) : turnSandboxPolicy,
         timeoutMs: turnTimeoutMs,
@@ -376,23 +494,23 @@ export async function runWorkIntegrationReconciliationOnce({
     if (task.status === "ready") task = await move("planning", { message: "integration reconciliation starting without new Sol planning" });
     if (task.status !== "implementing") task = await move("implementing", { message: "integration reconciliation Luna implementation" });
     const workerThreadId = reconciliation.workerThreadId || "";
-    workerClient = await appServerFactory({ role: "worker", model: roleSettings.worker.model, reasoningEffort: roleSettings.worker.reasoningEffort, cwd: workspace.worktreePath, approvalPolicy });
+    workerClient = await appServerFactory({ role: "implementer", model: roleSettings.implementer.model, reasoningEffort: roleSettings.implementer.reasoningEffort, cwd: workspace.worktreePath, approvalPolicy });
     startedClients.push(workerClient);
     const openedWorkerThread = await openThread(workerClient, {
-      role: "worker",
+      role: "implementer",
       threadId: workerThreadId,
       cwd: workspace.worktreePath,
-      config: roleSettings.worker,
+      config: roleSettings.implementer,
       approvalPolicy,
       sandbox: threadSandbox
     });
     await save({ integration: { reconciliation: { workerThreadId: openedWorkerThread } } });
-    await emit("integration-implementation-started", { role: "worker", model: roleSettings.worker.model, threadId: openedWorkerThread, phase: "integration-reconciliation", worktree: workspace.worktreePath });
+    await emit("integration-implementation-started", { role: "implementer", model: roleSettings.implementer.model, threadId: openedWorkerThread, phase: "integration-reconciliation", worktree: workspace.worktreePath });
     const identity = `pyash-${task.taskId}-integration-implementation-${attempt}`;
     const startedAt = iso(nowValue(now));
     await save({ activeTurn: {
       phase: "integration-reconciliation",
-      role: "worker",
+      role: "implementer",
       threadId: openedWorkerThread,
       turnId: "",
       requestIdentity: identity,
@@ -406,8 +524,8 @@ export async function runWorkIntegrationReconciliationOnce({
     const result = await runTurn(workerClient, {
       threadId: openedWorkerThread,
       cwd: workspace.worktreePath,
-      model: roleSettings.worker.model,
-      reasoningEffort: roleSettings.worker.reasoningEffort,
+      model: roleSettings.implementer.model,
+      reasoningEffort: roleSettings.implementer.reasoningEffort,
       approvalPolicy,
       sandboxPolicy: typeof turnSandboxPolicy === "function" ? turnSandboxPolicy({ worktreePath: workspace.worktreePath }) : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
@@ -419,7 +537,7 @@ export async function runWorkIntegrationReconciliationOnce({
     const completedAt = iso(nowValue(now));
     await save({ activeTurn: {
       phase: "integration-reconciliation",
-      role: "worker",
+      role: "implementer",
       threadId: openedWorkerThread,
       turnId: result?.turnId || "",
       requestIdentity: identity,
@@ -480,8 +598,8 @@ export async function runWorkIntegrationReconciliationOnce({
       lastAction: "integration reconciliation evidence captured"
     }, { message: report.summary, error: "" });
     await emit("integration-implementation-completed", {
-      role: "worker",
-      model: roleSettings.worker.model,
+      role: "implementer",
+      model: roleSettings.implementer.model,
       threadId: openedWorkerThread,
       summary: report.summary,
       changedFiles,
@@ -503,35 +621,125 @@ export async function runWorkIntegrationReconciliationOnce({
       return { claimed: true, taskId: task.taskId, status: task.status, message: blocker, queue: await queueDepth(worldRoot) };
     }
 
-    if (task.status !== "reviewing") task = await move("reviewing", { message: "reconciled result ready for Sol review", error: "" });
-    managerClient = await appServerFactory({ role: "manager", model: roleSettings.manager.model, reasoningEffort: roleSettings.manager.reasoningEffort, cwd: workspace.worktreePath, approvalPolicy });
-    startedClients.push(managerClient);
-    const managerThreadId = await openThread(managerClient, {
-      role: "manager",
-      threadId: nextReconciliation.managerThreadId || task.checkpoint.manager.threadId,
+    if (task.status !== "reviewing") task = await move("reviewing", { message: "reconciled result ready for independent Luna review", error: "" });
+    reviewerClient = await appServerFactory({ role: "reviewer", model: roleSettings.reviewer.model, reasoningEffort: roleSettings.reviewer.reasoningEffort, cwd: workspace.worktreePath, approvalPolicy });
+    startedClients.push(reviewerClient);
+    const reviewerThreadId = await openThread(reviewerClient, {
+      role: "reviewer",
+      threadId: nextReconciliation.reviewerThreadId || task.checkpoint.reviewer.threadId,
       cwd: workspace.worktreePath,
-      config: roleSettings.manager,
+      config: roleSettings.reviewer,
       approvalPolicy,
       sandbox: threadSandbox
     });
     const reviewCount = nextReconciliation.reviewCount + 1;
-    await save({ integration: { reconciliation: { managerThreadId, reviewCount } }, lastAction: "integration reconciliation Sol review started" });
-    await emit("integration-review-started", { role: "manager", model: roleSettings.manager.model, threadId: managerThreadId, phase: "integration-review" });
+    await save({
+      reviewer: {
+        role: "reviewer",
+        model: roleSettings.reviewer.model,
+        reasoningEffort: roleSettings.reviewer.reasoningEffort,
+        threadId: reviewerThreadId
+      },
+      integration: { reconciliation: { reviewerThreadId, reviewCount } },
+      lastAction: "integration reconciliation Luna review started"
+    });
+    await emit("integration-review-started", { role: "reviewer", model: roleSettings.reviewer.model, threadId: reviewerThreadId, phase: "integration-review" });
     const reviewIdentity = `pyash-${task.taskId}-integration-review-${reviewCount}`;
-    const review = parseReview(resultText(await runTurn(managerClient, {
-      threadId: managerThreadId,
-      cwd: workspace.worktreePath,
-      model: roleSettings.manager.model,
-      reasoningEffort: roleSettings.manager.reasoningEffort,
-      approvalPolicy,
-      sandboxPolicy: typeof turnSandboxPolicy === "function" ? turnSandboxPolicy({ worktreePath: workspace.worktreePath }) : turnSandboxPolicy,
-      timeoutMs: turnTimeoutMs,
-      inactivityTimeoutMs: turnInactivityTimeoutMs,
-      hardTimeoutMs: turnHardTimeoutMs,
+    const reviewEvidenceBefore = await evidenceFactory({ worktreePath: workspace.worktreePath });
+    const reviewedRevision = text(reviewEvidenceBefore?.revision || nextReconciliation.taskCommit);
+    const reviewResult = await runReviewTurn({
+      phase: "integration-review",
+      role: "reviewer",
+      client: reviewerClient,
+      threadId: reviewerThreadId,
+      config: roleSettings.reviewer,
       requestIdentity: reviewIdentity,
       input: [{ type: "text", text: promptIntegrationReview(task, task.checkpoint, workspace, branch, nextReconciliation) }]
-    })));
-    await emit("integration-review-completed", { role: "manager", model: roleSettings.manager.model, threadId: managerThreadId, decision: review.decision, explanation: review.explanation, correction: review.revisionInstructions });
+    });
+    const reviewEvidenceAfter = await evidenceFactory({ worktreePath: workspace.worktreePath });
+    const currentReviewRevision = text(reviewEvidenceAfter?.revision || nextReconciliation.taskCommit);
+    if (reviewedRevision && currentReviewRevision && reviewedRevision !== currentReviewRevision) {
+      const error = new Error("integration review result is stale because implementation evidence changed during review");
+      error.kind = "ambiguous";
+      throw error;
+    }
+    const routineReview = {
+      ...parseRoutineReview(resultText(reviewResult)),
+      role: "reviewer",
+      model: roleSettings.reviewer.model,
+      reasoningEffort: roleSettings.reviewer.reasoningEffort,
+      threadId: reviewerThreadId,
+      pass: reviewCount,
+      reviewedCommit: text(reviewEvidenceBefore?.revision || nextReconciliation.taskCommit),
+      reviewedRevision,
+      tests: nextReconciliation.tests,
+      evidence: currentReviewRevision || nextReconciliation.diff
+    };
+    await captureReviewTurn("integration-review", {
+      review: routineReview,
+      routineReview
+    }, { message: routineReview.explanation, result: routineReview.decision });
+    await emit("integration-review-completed", { role: "reviewer", model: roleSettings.reviewer.model, threadId: reviewerThreadId, decision: routineReview.decision, explanation: routineReview.explanation, correction: routineReview.revisionInstructions });
+
+    let review = routineReview;
+    if (routineReview.decision === "ESCALATE") {
+      escalationReviewerClient = await appServerFactory({ role: "escalationReviewer", model: roleSettings.escalationReviewer.model, reasoningEffort: roleSettings.escalationReviewer.reasoningEffort, cwd: workspace.worktreePath, approvalPolicy });
+      startedClients.push(escalationReviewerClient);
+      const escalationThreadId = await openThread(escalationReviewerClient, {
+        role: "escalationReviewer",
+        threadId: nextReconciliation.escalationReviewerThreadId || task.checkpoint.escalationReviewer.threadId,
+        cwd: workspace.worktreePath,
+        config: roleSettings.escalationReviewer,
+        approvalPolicy,
+        sandbox: threadSandbox
+      });
+      await save({
+        escalationReviewer: {
+          role: "escalationReviewer",
+          model: roleSettings.escalationReviewer.model,
+          reasoningEffort: roleSettings.escalationReviewer.reasoningEffort,
+          threadId: escalationThreadId
+        },
+        integration: { reconciliation: { escalationReviewerThreadId: escalationThreadId } },
+        lastAction: "integration reconciliation Sol escalation review started"
+      });
+      await emit("integration-escalation-review-started", { role: "escalationReviewer", model: roleSettings.escalationReviewer.model, threadId: escalationThreadId, phase: "integration-escalation-review", reason: routineReview.escalationReason || routineReview.explanation });
+      const escalationReviewIdentity = `${reviewIdentity}-escalation`;
+      const escalationEvidenceBefore = await evidenceFactory({ worktreePath: workspace.worktreePath });
+      const escalationReviewedRevision = text(escalationEvidenceBefore?.revision || nextReconciliation.taskCommit);
+      const escalationResult = await runReviewTurn({
+        phase: "integration-escalation-review",
+        role: "escalationReviewer",
+        client: escalationReviewerClient,
+        threadId: escalationThreadId,
+        config: roleSettings.escalationReviewer,
+        requestIdentity: escalationReviewIdentity,
+        input: [{ type: "text", text: promptIntegrationEscalation(task, task.checkpoint, workspace, branch, nextReconciliation, routineReview) }]
+      });
+      const escalationEvidenceAfter = await evidenceFactory({ worktreePath: workspace.worktreePath });
+      const currentEscalationRevision = text(escalationEvidenceAfter?.revision || nextReconciliation.taskCommit);
+      if (escalationReviewedRevision && currentEscalationRevision && escalationReviewedRevision !== currentEscalationRevision) {
+        const error = new Error("integration escalation review result is stale because implementation evidence changed during review");
+        error.kind = "ambiguous";
+        throw error;
+      }
+      const escalation = {
+        ...parseEscalationReview(resultText(escalationResult)),
+        role: "escalationReviewer",
+        model: roleSettings.escalationReviewer.model,
+        reasoningEffort: roleSettings.escalationReviewer.reasoningEffort,
+        threadId: escalationThreadId,
+        pass: reviewCount,
+        reviewedCommit: text(escalationEvidenceBefore?.revision || nextReconciliation.taskCommit),
+        reviewedRevision: escalationReviewedRevision,
+        tests: nextReconciliation.tests,
+        evidence: currentEscalationRevision || nextReconciliation.diff
+      };
+      await captureReviewTurn("integration-escalation-review", { review: escalation, escalationReview: escalation }, { message: escalation.explanation, result: escalation.decision });
+      review = escalation;
+      await emit("integration-review-completed", { role: "escalationReviewer", model: roleSettings.escalationReviewer.model, threadId: escalationThreadId, decision: escalation.decision, explanation: escalation.explanation, correction: escalation.revisionInstructions });
+    }
+
     const reviewBlocker = review.decision === "BLOCK"
       ? `human decision required: integration reconciliation semantic blocker: ${review.explanation}`
       : `integration reconciliation requires correction: ${review.revisionInstructions || review.explanation}`;
@@ -539,7 +747,6 @@ export async function runWorkIntegrationReconciliationOnce({
       if (task.status !== "blocked") task = await move("blocked", { message: reviewBlocker, error: "" });
       await save({
         blocker: reviewBlocker,
-        review: { decision: review.decision, explanation: review.explanation, revisionInstructions: review.revisionInstructions },
         integration: {
           status: review.decision === "BLOCK" ? "integration-blocked" : "revision",
           error: reviewBlocker,
@@ -560,7 +767,7 @@ export async function runWorkIntegrationReconciliationOnce({
       now
     });
     task = await save({
-      review: { decision: "ACCEPT", explanation: review.explanation, revisionInstructions: "" },
+      review: { ...review, decision: "ACCEPT", revisionInstructions: "" },
       integration: { ...integrated, reconciliation: { lastReviewDecision: "ACCEPT", lastReviewExplanation: review.explanation } },
       blocker: "",
       interruption: {},

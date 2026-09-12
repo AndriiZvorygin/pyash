@@ -179,6 +179,23 @@ function compactReport(task) {
     const body = text(value).replace(/\s+/gu, " ");
     return body.length <= limit ? body : `${body.slice(0, limit - 3)}...`;
   };
+  const review = checkpoint.review || {};
+  const reviewer = review.role === "reviewer"
+    ? checkpoint.reviewer || {}
+    : review.role === "escalationReviewer"
+      ? checkpoint.escalationReviewer || {}
+      : checkpoint.manager || {};
+  const reviewLabel = review.role === "reviewer"
+    ? "Luna review"
+    : review.role === "escalationReviewer"
+      ? "Sol escalation review"
+      : "Sol review";
+  const roleLines = review.role === "escalationReviewer"
+    ? [
+      `Reviewer: ${(checkpoint.reviewer?.model || "(unknown)")} (Luna routine reviewer)`,
+      `Escalation reviewer: ${(checkpoint.escalationReviewer?.model || reviewer.model || "(unknown)")} (Sol escalation reviewer)`
+    ]
+    : [`Reviewer: ${reviewer.model || "(unknown)"} (${reviewLabel})`];
   return [
     `Task: ${task.title}`,
     `Task ID: ${task.taskId}`,
@@ -192,7 +209,10 @@ function compactReport(task) {
     `Acceptance checks closed: ${progress.acceptanceChecksClosed}`,
     `Last material progress: ${progress.lastMaterialProgressAt || "not recorded"}`,
     `Tests: ${(checkpoint.implementation?.tests || []).map((test) => excerpt(test, 280)).join("; ") || "(not recorded)"}`,
-    `Sol review: ${checkpoint.review?.decision || "(not recorded)"} ${excerpt(checkpoint.review?.explanation, 280)}`,
+    `Planner: ${checkpoint.manager?.model || "(unknown)"}`,
+    `Implementer: ${checkpoint.worker?.model || "(unknown)"}`,
+    ...roleLines,
+    `${reviewLabel}: ${review.decision || "(not recorded)"} ${excerpt(review.explanation, 280)}`,
     `Diff: ${renderWorkTaskReport(task).match(/^Diff: .*$/mu)?.[0]?.replace(/^Diff:\s*/u, "") || "not recorded"}`,
     checkpoint.workspace?.worktreePath ? `Worktree: ${checkpoint.workspace.worktreePath}` : "",
     checkpoint.implementation?.commit ? `Commit: ${checkpoint.implementation.commit}` : ""
@@ -394,6 +414,9 @@ export function renderWorkDailyDigest({
     && !isProviderUsageLimited(event.reason));
   blockedBeforeModel.push(...admitted.filter((event) => !bool(event.workStarted)));
   const recovered = uniqueRecoveryEvents(events.filter((event) => event.action === "recovered"));
+  const routineReviews = events.filter((event) => event.action === "review-completed" && event.role === "reviewer");
+  const solEscalations = events.filter((event) => event.action === "escalation-review-completed"
+    && event.role === "escalationReviewer");
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
   const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
@@ -486,6 +509,8 @@ export function renderWorkDailyDigest({
     `Temporarily skipped candidates: ${temporarilySkipped.length}`,
     `Idle / no work: ${idle.length}`,
     `Operational recoveries: ${recovered.length}`,
+    `Routine Luna reviews: ${routineReviews.length}`,
+    `Sol review escalations: ${new Set(solEscalations.map((event) => `${event.taskId}:${event.reviewPass || event.at || ""}`)).size}`,
     "",
     "Completed work",
     "--------------"

@@ -15,6 +15,8 @@ import { readWorkTaskStatus, transitionWorkTaskStatus, updateWorkTaskCheckpoint 
 import { failWorkTask, resumeWorkTask } from "../../program/runtime/work/operator.mjs";
 import {
   DEFAULT_WORK_ROLE_CONFIG,
+  parseEscalationReview,
+  parseRoutineReview,
   probeWorkTaskAvailability,
   resolveWorkRoleConfig,
   runWorkSupervisorOnce
@@ -24,6 +26,41 @@ test("default Luna launches use xhigh reasoning", () => {
   const roles = resolveWorkRoleConfig({}, {});
   assert.equal(DEFAULT_WORK_ROLE_CONFIG.worker.model, "gpt-5.6-luna");
   assert.equal(roles.worker.reasoningEffort, "xhigh");
+  assert.equal(roles.planner.model, "gpt-5.6-sol");
+  assert.equal(roles.implementer.model, "gpt-5.6-luna");
+  assert.equal(roles.reviewer.model, "gpt-5.6-luna");
+  assert.equal(roles.escalationReviewer.model, "gpt-5.6-sol");
+  const overridden = resolveWorkRoleConfig({}, {
+    PYA_CODEX_REVIEWER_MODEL: "reviewer-override",
+    PYA_CODEX_REVIEWER_REASONING: "medium",
+    PYA_CODEX_ESCALATION_REVIEWER_MODEL: "escalation-override",
+    PYA_CODEX_ESCALATION_REVIEWER_REASONING: "low"
+  });
+  assert.deepEqual(overridden.reviewer, { model: "reviewer-override", reasoningEffort: "medium" });
+  assert.deepEqual(overridden.escalationReviewer, { model: "escalation-override", reasoningEffort: "low" });
+});
+
+test("routine and escalation review parsers keep their decision contracts", () => {
+  assert.deepEqual(parseRoutineReview("DECISION: REVISE\nRATIONALE: a concrete bug\nCORRECTION: fix the guard"), {
+    decision: "REVISE",
+    explanation: "a concrete bug",
+    revisionInstructions: "fix the guard",
+    escalationReason: ""
+  });
+  assert.deepEqual(parseRoutineReview("DECISION: BLOCK\nRATIONALE: semantic choice required"), {
+    decision: "ESCALATE",
+    explanation: "semantic choice required",
+    revisionInstructions: "",
+    escalationReason: ""
+  });
+  assert.equal(parseRoutineReview("The review is MAYBE; ACCEPT only when the criteria are satisfied.").decision, "ESCALATE");
+  assert.deepEqual(parseEscalationReview("DECISION: REPLAN\nRATIONALE: work order is incomplete\nWORK ORDER: narrow the boundary"), {
+    decision: "REPLAN",
+    explanation: "work order is incomplete",
+    revisionInstructions: "",
+    workOrder: "narrow the boundary",
+    escalationReason: ""
+  });
 });
 
 test("availability probe classifies an existing active writer without starting a turn", async () => {
@@ -34,6 +71,7 @@ test("availability probe classifies an existing active writer without starting a
       status: "reviewing",
       checkpoint: {
         manager: { threadId: "sol-thread" },
+        activeTurn: { role: "manager", phase: "review", threadId: "sol-thread" },
         workspace: { worktreePath: "/worktree/task" }
       }
     },
@@ -53,6 +91,56 @@ test("availability probe classifies an existing active writer without starting a
   assert.equal(result.reason, "active-writer");
   assert.equal(runTurnCalls, 0);
   assert.equal(closeCalls, 1);
+});
+
+test("an in-flight legacy Sol review remains resumable during reviewer migration", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-legacy-review-");
+  await enqueueWorkTask(worldRoot, task("legacy-review-task"));
+  await claimOldestWorkTask(worldRoot, { workerTag: "supervisor" });
+  await transitionWorkTaskStatus(worldRoot, "legacy-review-task", "planning");
+  await transitionWorkTaskStatus(worldRoot, "legacy-review-task", "implementing");
+  await transitionWorkTaskStatus(worldRoot, "legacy-review-task", "reviewing");
+  await updateWorkTaskCheckpoint(worldRoot, "legacy-review-task", {
+    workspace: {
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/legacy-review",
+      mode: "git-worktree"
+    },
+    manager: { threadId: "legacy-sol-thread" },
+    plan: { workOrder: "review the preserved implementation" },
+    implementation: { commit: "legacy-task-commit", reviewReady: true },
+    review: { decision: "REVISE", explanation: "legacy review requested a correction", revisionInstructions: "verify the preserved result" }
+  });
+  const calls = [];
+  const result = await runWorkSupervisorOnce({
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    appServerFactory: async ({ role }) => ({
+      async resumeThread() {},
+      async runTurn(options) {
+        calls.push({ role, options });
+        return { turnId: "legacy-review-result", text: "DECISION: ACCEPT\nRATIONALE: preserved implementation is acceptable" };
+      },
+      async close() {}
+    }),
+    workspaceFactory: async () => ({
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/legacy-review",
+      mode: "git-worktree"
+    }),
+    evidenceFactory: async () => ({ revision: "legacy-task-commit", diff: "+preserved", changedFiles: ["hello.txt"] }),
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(result.status, "accepted");
+  assert.deepEqual(calls.map((call) => call.role), ["planner"]);
+  const status = await readWorkTaskStatus(worldRoot, "legacy-review-task");
+  assert.equal(status.checkpoint.review.role, "manager");
+  assert.equal(status.checkpoint.reviewer.threadId, "");
 });
 
 async function makeWorldRoot(prefix) {
@@ -98,13 +186,13 @@ class FakeClient {
   async runTurn(options) {
     this.calls.push({ method: "runTurn", options });
     this.turns += 1;
-    if (this.role === "manager" && this.turns === 1) {
+    if (["manager", "planner"].includes(this.role) && this.turns === 1) {
       return { turnId: "manager-plan", text: "SUMMARY: small plan\nWORK ORDER: edit hello.txt and run node test.mjs\nRISKS: none" };
     }
-    if (this.role === "manager") {
+    if (["manager", "planner", "reviewer", "escalationReviewer"].includes(this.role)) {
       const decision = this.decisions.shift() || "ACCEPT";
       return {
-        turnId: `manager-review-${this.turns}`,
+        turnId: `${this.role}-review-${this.turns}`,
         text: `DECISION: ${decision}\nRATIONALE: review rationale\nCORRECTION: add the missing assertion`
       };
     }
@@ -118,18 +206,20 @@ class FakeClient {
   async close() {}
 }
 
-async function runFake(worldRoot, decisions, { onEvent = null, onClients = null, turnTimeoutMs, maxNoProgressPasses } = {}) {
+async function runFake(worldRoot, decisions, { onEvent = null, onClients = null, turnTimeoutMs, maxNoProgressPasses, roleDecisions = {} } = {}) {
   const clients = new Map();
   const result = await runWorkSupervisorOnce({
     worldRoot,
     repositoryRoot: "/repo",
     owner: "background",
     roleConfig: {
-      manager: { model: "manager-test", reasoningEffort: "low" },
-      worker: { model: "worker-test", reasoningEffort: "medium" }
+      planner: { model: "manager-test", reasoningEffort: "low" },
+      implementer: { model: "worker-test", reasoningEffort: "medium" },
+      reviewer: { model: "reviewer-test", reasoningEffort: "medium" },
+      escalationReviewer: { model: "escalation-test", reasoningEffort: "low" }
     },
     appServerFactory: async ({ role }) => {
-      if (!clients.has(role)) clients.set(role, new FakeClient(role, [...decisions]));
+      if (!clients.has(role)) clients.set(role, new FakeClient(role, [...(roleDecisions[role] || decisions)]));
       return clients.get(role);
     },
     workspaceFactory: async () => ({
@@ -179,6 +269,117 @@ test("supervisor observer reports the useful lifecycle without token noise", asy
   assert.equal(events.find((event) => event.type === "review-completed").decision, "ACCEPT");
 });
 
+test("routine review uses an independent Luna thread and accepts without Sol escalation", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-independent-review-");
+  await enqueueWorkTask(worldRoot, task("independent-review-task"));
+  const events = [];
+  const clients = new Map();
+  const result = await runFake(worldRoot, ["ACCEPT"], {
+    onEvent: async (event) => events.push(event),
+    onClients: (value) => {
+      for (const [role, client] of value) clients.set(role, client);
+    }
+  });
+  assert.equal(result.status, "accepted");
+  const status = await readWorkTaskStatus(worldRoot, "independent-review-task");
+  assert.equal(status.checkpoint.manager.model, "manager-test");
+  assert.equal(status.checkpoint.manager.reasoningEffort, "low");
+  assert.equal(status.checkpoint.worker.model, "worker-test");
+  assert.equal(status.checkpoint.worker.reasoningEffort, "medium");
+  assert.equal(status.checkpoint.reviewer.model, "reviewer-test");
+  assert.equal(status.checkpoint.reviewer.reasoningEffort, "medium");
+  assert.equal(status.checkpoint.escalationReviewer.model, "escalation-test");
+  assert.equal(status.checkpoint.review.role, "reviewer");
+  assert.notEqual(status.checkpoint.reviewer.threadId, status.checkpoint.worker.threadId);
+  assert.equal(status.checkpoint.escalationReviewer.threadId, "");
+  assert.deepEqual(events.filter((event) => event.type === "review-completed").map((event) => event.role), ["reviewer"]);
+  assert.equal(clients.has("escalationReviewer"), false);
+});
+
+test("routine Luna REVISE reuses independent reviewer and implementer without invoking Sol escalation", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-luna-revise-");
+  await enqueueWorkTask(worldRoot, task("luna-revise-task"));
+  const clients = new Map();
+  const first = await runFake(worldRoot, ["REVISE", "ACCEPT"], {
+    onClients: (value) => {
+      for (const [role, client] of value) clients.set(role, client);
+    }
+  });
+  assert.equal(first.status, "accepted");
+  const status = await readWorkTaskStatus(worldRoot, "luna-revise-task");
+  assert.equal(status.checkpoint.revisionCount, 1);
+  assert.equal(clients.get("reviewer").turns, 2);
+  assert.equal(clients.get("implementer").turns, 2);
+  assert.equal(clients.has("escalationReviewer"), false);
+  assert.equal(status.checkpoint.reviewer.threadId, "reviewer-thread");
+  assert.equal(status.checkpoint.worker.threadId, "implementer-thread");
+  assert.notEqual(status.checkpoint.reviewer.threadId, status.checkpoint.worker.threadId);
+});
+
+test("routine Luna ESCALATE invokes a distinct Sol escalation reviewer", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-escalation-");
+  await enqueueWorkTask(worldRoot, task("escalation-task"));
+  const events = [];
+  const result = await runFake(worldRoot, ["ESCALATE"], {
+    roleDecisions: { escalationReviewer: ["ACCEPT"] },
+    onEvent: async (event) => events.push(event)
+  });
+  assert.equal(result.status, "accepted");
+  const status = await readWorkTaskStatus(worldRoot, "escalation-task");
+  assert.equal(status.checkpoint.routineReview.decision, "ESCALATE");
+  assert.equal(status.checkpoint.escalationReview.decision, "ACCEPT");
+  assert.equal(status.checkpoint.review.role, "escalationReviewer");
+  assert.equal(status.checkpoint.reviewer.threadId, "reviewer-thread");
+  assert.equal(status.checkpoint.escalationReviewer.threadId, "escalationReviewer-thread");
+  assert.notEqual(status.checkpoint.reviewer.threadId, status.checkpoint.escalationReviewer.threadId);
+  assert.deepEqual(events
+    .filter((event) => ["review-completed", "escalation-review-completed"].includes(event.type))
+    .map((event) => [event.role, event.decision]), [
+      ["reviewer", "ESCALATE"],
+      ["escalationReviewer", "ACCEPT"]
+    ]);
+});
+
+test("reviewer ACCEPT is rejected when implementation evidence changes during review", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-stale-review-");
+  await enqueueWorkTask(worldRoot, task("stale-review-task"));
+  let evidenceCalls = 0;
+  const result = await runWorkSupervisorOnce({
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    roleConfig: {
+      planner: { model: "manager-test", reasoningEffort: "low" },
+      implementer: { model: "worker-test", reasoningEffort: "medium" },
+      reviewer: { model: "reviewer-test", reasoningEffort: "medium" },
+      escalationReviewer: { model: "escalation-test", reasoningEffort: "low" }
+    },
+    appServerFactory: async ({ role }) => new FakeClient(role, ["ACCEPT"]),
+    workspaceFactory: async () => ({
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/stale-review",
+      mode: "git-worktree"
+    }),
+    evidenceFactory: async () => {
+      evidenceCalls += 1;
+      return {
+        diff: "diff --git a/hello.txt b/hello.txt\n+hello",
+        changedFiles: ["hello.txt"],
+        revision: evidenceCalls >= 3 ? "task-revision-after-review" : "task-revision"
+      };
+    },
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(result.status, "blocked");
+  const status = await readWorkTaskStatus(worldRoot, "stale-review-task");
+  assert.equal(status.checkpoint.review.decision, "");
+  assert.equal(status.checkpoint.activeTurn.state, "completed");
+  assert.equal(status.checkpoint.activeTurn.resultCaptured, false);
+  assert.match(status.checkpoint.activeTurn.ambiguity, /stale because implementation evidence changed/iu);
+});
+
 test("supervisor passes the configured Codex turn timeout to every role", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-timeout-");
   await enqueueWorkTask(worldRoot, task("timeout-task"));
@@ -210,7 +411,7 @@ test("a timed-out worker preserves turn activity and worktree evidence", async (
       const client = {
         async startThread() { return { thread: { id: `${role}-thread` } }; },
         async runTurn(options) {
-          if (role === "manager") return { turnId: "manager-plan", text: "SUMMARY: plan\nWORK ORDER: edit hello.txt\nRISKS: none" };
+          if (role === "planner") return { turnId: "manager-plan", text: "SUMMARY: plan\nWORK ORDER: edit hello.txt\nRISKS: none" };
           const error = new Error("turn timeout (hard)");
           error.kind = "timeout";
           error.details = {
@@ -299,10 +500,11 @@ test("background supervisor checkpoints Luna and reuses the same thread before r
   assert.equal(second.status, "accepted");
   const status = await readWorkTaskStatus(worldRoot, "multiwake-task");
   assert.equal(status.checkpoint.implementation.passes, 2);
-  assert.equal(status.checkpoint.manager.threadId, "manager-thread");
-  assert.equal(status.checkpoint.worker.threadId, "worker-thread");
-  assert.equal(clients.get("manager").turns, 2, "Sol plans once and reviews after implementation is ready");
-  assert.equal(clients.get("worker").turns, 2, "Luna continues across wakes");
+  assert.equal(status.checkpoint.manager.threadId, "planner-thread");
+  assert.equal(status.checkpoint.worker.threadId, "implementer-thread");
+  assert.equal(clients.get("planner").turns, 1, "Sol plans once");
+  assert.equal(clients.get("reviewer").turns, 1, "independent Luna reviews after implementation is ready");
+  assert.equal(clients.get("implementer").turns, 2, "Luna continues across wakes");
 });
 
 test("supervisor persists Sol plan, Luna evidence, and ACCEPT review", async () => {
@@ -327,7 +529,8 @@ test("supervisor persists Sol plan, Luna evidence, and ACCEPT review", async () 
   const paths = await ensureWorkQueueDirs(worldRoot);
   const successFiles = await fs.readdir(paths.produceSuccessDir);
   const success = taskFromText(await fs.readFile(path.join(paths.produceSuccessDir, successFiles[0]), "utf8"));
-  assert.equal(success.checkpoint.manager.threadId, "manager-thread");
+  assert.equal(success.checkpoint.manager.threadId, "planner-thread");
+  assert.equal(success.checkpoint.reviewer.threadId, "reviewer-thread");
   assert.equal(success.checkpoint.review.decision, "ACCEPT");
 });
 
@@ -394,14 +597,16 @@ test("two no-progress passes trigger focused Sol convergence before another Luna
     owner: "background",
     maxNoProgressPasses: 2,
     appServerFactory: async ({ role }) => ({
+      async startThread({ role }) { return { thread: { id: `${role}-thread` } }; },
       async resumeThread() {},
       async runTurn(options) {
         const input = options.input?.[0]?.text || "";
         calls.push({ role, input });
-        if (role === "manager" && /focused convergence review/iu.test(input)) {
+        if (role === "escalationReviewer" && /focused convergence review/iu.test(input)) {
           return { turnId: "convergence-review", text: "DECISION: CONTINUE\nRATIONALE: narrow correction is executable\nCORRECTION: fix the one remaining assertion" };
         }
-        if (role === "manager") return { turnId: "final-review", text: "DECISION: ACCEPT\nRATIONALE: focused correction is verified" };
+        if (role === "planner") return { turnId: "legacy-final-review", text: "DECISION: ACCEPT\nRATIONALE: focused correction is verified" };
+        if (role === "reviewer") return { turnId: "final-review", text: "DECISION: ACCEPT\nRATIONALE: focused correction is verified" };
         return { turnId: "worker-correction", text: "SUMMARY: fixed the remaining assertion\nCHANGED FILES: hello.txt\nTESTS: targeted assertion passes\nBLOCKERS: \nUNCERTAINTY: none\nCOMMIT: def5678", fileChanges: [{ path: "hello.txt" }] };
       },
       async close() {}
@@ -417,8 +622,8 @@ test("two no-progress passes trigger focused Sol convergence before another Luna
     now: () => "2026-08-07T12:02:00.000Z"
   });
   assert.equal(result.status, "accepted");
-  assert.equal(calls.filter((call) => call.role === "manager" && /focused convergence review/iu.test(call.input)).length, 1);
-  assert.equal(calls.filter((call) => call.role === "worker").length, 1);
+  assert.equal(calls.filter((call) => call.role === "escalationReviewer" && /focused convergence review/iu.test(call.input)).length, 1);
+  assert.equal(calls.filter((call) => call.role === "implementer").length, 1);
   const final = await readWorkTaskStatus(worldRoot, "convergence-task");
   assert.equal(final.checkpoint.convergence.decision, "CONTINUE");
   assert.equal(final.checkpoint.convergence.reviewCount, 1);
@@ -510,16 +715,17 @@ test("supervisor consumes a durable completed turn result after a checkpoint bou
       }
     }
   });
-  const calls = { manager: 0, worker: 0 };
+  const calls = { planner: 0, implementer: 0, reviewer: 0 };
   const result = await runWorkSupervisorOnce({
     worldRoot,
     repositoryRoot: "/repo",
     owner: "background",
     appServerFactory: async ({ role }) => ({
+      async startThread() { return { thread: { id: `${role}-thread` } }; },
       async resumeThread() {},
       async runTurn() {
         calls[role] += 1;
-        if (role === "worker") throw new Error("worker turn must not be replayed");
+        if (role === "implementer") throw new Error("implementer turn must not be replayed");
         return { turnId: "review-turn-1", text: "DECISION: ACCEPT\nRATIONALE: recovered result is sufficient" };
       },
       async close() {}
@@ -535,8 +741,9 @@ test("supervisor consumes a durable completed turn result after a checkpoint bou
     now: () => "2026-08-07T12:01:00.000Z"
   });
   assert.equal(result.status, "accepted");
-  assert.equal(calls.worker, 0);
-  assert.equal(calls.manager, 1);
+  assert.equal(calls.implementer, 0);
+  assert.equal(calls.planner, 0);
+  assert.equal(calls.reviewer, 1);
   const status = await readWorkTaskStatus(worldRoot, "captured-task");
   assert.equal(status.checkpoint.activeTurn.state, "");
   assert.equal(status.checkpoint.turnHistory.find((turn) => turn.turnId === "worker-turn-1").resultCaptured, true);

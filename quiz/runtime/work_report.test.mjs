@@ -47,6 +47,29 @@ test("work report renders durable plan, evidence, review, and diff stat", () => 
   assert.match(report, /Worktree: \/tmp\/worktrees\/report-task/);
 });
 
+test("work report identifies the independent Luna reviewer", () => {
+  const reviewed = task();
+  reviewed.checkpoint.reviewer = {
+    role: "reviewer",
+    model: "gpt-5.6-luna",
+    reasoningEffort: "xhigh",
+    threadId: "reviewer-thread"
+  };
+  reviewed.checkpoint.review = {
+    role: "reviewer",
+    model: "gpt-5.6-luna",
+    reasoningEffort: "xhigh",
+    threadId: "reviewer-thread",
+    reviewedCommit: "task-commit",
+    decision: "ACCEPT",
+    explanation: "Independent verification passed."
+  };
+  const report = renderWorkTaskReport(reviewed);
+  assert.match(report, /Reviewer:\n  gpt-5\.6-luna \(Luna routine reviewer\)/u);
+  assert.match(report, /Luna routine reviewer:\n  ACCEPT/u);
+  assert.match(report, /Reviewed implementation: task-commit/u);
+});
+
 test("work report clips long explicit output at a readable boundary", () => {
   const long = `${"first line\n".repeat(200)}WORK ORDER:\nshould not be mixed into the summary`;
   const report = renderWorkTaskReport({

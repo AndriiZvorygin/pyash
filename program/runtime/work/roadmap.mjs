@@ -1149,30 +1149,30 @@ export async function refreshAutonomousRoadmap({
   if (ifNeeded && !roadmapNeedsRefresh(current)) {
     return { status: "not-needed", roadmap: await writeAutonomousRoadmap(worldRoot, current) };
   }
-  const roles = resolveWorkRoleConfig({ manager: roleConfig.manager });
+  const roles = resolveWorkRoleConfig(roleConfig);
   const existingThread = current.architect?.threadId || "";
   const client = await appServerFactory({
-    role: "manager",
-    model: roles.manager.model,
-    reasoningEffort: roles.manager.reasoningEffort,
+    role: "planner",
+    model: roles.planner.model,
+    reasoningEffort: roles.planner.reasoningEffort,
     cwd: repositoryRoot,
     threadId: existingThread
   });
   try {
     let threadId = existingThread;
     if (threadId) {
-      if (typeof client.resumeThread === "function") await client.resumeThread({ threadId, cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, sandbox: threadSandbox });
-      else await resumeCodexThread(client, threadId, { cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, sandbox: threadSandbox });
+      if (typeof client.resumeThread === "function") await client.resumeThread({ threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox });
+      else await resumeCodexThread(client, threadId, { cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox });
     } else {
       const started = typeof client.startThread === "function"
-        ? await client.startThread({ role: "manager", cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, sandbox: threadSandbox })
-        : await startCodexThread(client, { cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, sandbox: threadSandbox });
+        ? await client.startThread({ role: "planner", cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox })
+        : await startCodexThread(client, { cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox });
       threadId = threadIdFromResponse(started);
     }
-    if (!threadId) throw new Error("Sol roadmap refresh returned no manager thread id");
+    if (!threadId) throw new Error("Sol roadmap refresh returned no planner thread id");
     const result = typeof client.runTurn === "function"
-      ? await client.runTurn({ threadId, cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] })
-      : await runCodexTurn(client, { threadId, cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] });
+      ? await client.runTurn({ threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] })
+      : await runCodexTurn(client, { threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] });
     const proposal = parseArchitectResponse(result?.text || result?.output || "");
     const packages = proposal.packages.map(normalizeArchitectPackage);
     const refreshedTasks = await listWorkTasks(worldRoot, { includeTerminal: true });

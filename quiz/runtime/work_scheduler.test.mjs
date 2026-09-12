@@ -208,6 +208,22 @@ test("daily digest aggregates scheduler events and durable task progress", async
   assert.match(digest.report, /ROADMAP WORK REMAINS|READY QUEUE EMPTY|Current pacing floor/iu);
 });
 
+test("daily digest counts routine Luna reviews separately from Sol escalations", () => {
+  const report = renderWorkDailyDigest({
+    date: "2026-09-12",
+    since: "2026-09-12T00:00:00.000Z",
+    until: "2026-09-12T23:59:59.000Z",
+    capacity: { weekly: { identified: true, remainingPercent: 80, usedPercent: 20, resetAt: "2026-09-15T00:00:00.000Z", windowStartAt: "2026-09-08T00:00:00.000Z" } },
+    events: [
+      { action: "review-completed", role: "reviewer", taskId: "task-a", at: "2026-09-12T10:00:00.000Z" },
+      { action: "escalation-review-started", role: "escalationReviewer", taskId: "task-b", at: "2026-09-12T11:00:00.000Z" },
+      { action: "escalation-review-completed", role: "escalationReviewer", taskId: "task-b", at: "2026-09-12T11:05:00.000Z" }
+    ]
+  }).report;
+  assert.match(report, /Routine Luna reviews: 1/u);
+  assert.match(report, /Sol review escalations: 1/u);
+});
+
 test("daily digest reports material progress and deduplicates duplicate recovery records", async () => {
   const { root, worldRoot } = await world("pyash-work-digest-progress-");
   const repositoryRoot = path.join(root, "repo");
