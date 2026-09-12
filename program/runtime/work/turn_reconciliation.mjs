@@ -393,6 +393,8 @@ export async function reconcileWorkTaskTurn(worldRoot, taskId, {
     now,
     staleEvidenceMs
   });
+  const safeToResume = classification === TURN_LIVENESS.STALE
+    && safeContinuation(current, worktreeEvidence);
   const at = iso(typeof now === "function" ? now() : now) || new Date().toISOString();
   const reconciliation = {
     checkedAt: at,
@@ -411,6 +413,7 @@ export async function reconcileWorkTaskTurn(worldRoot, taskId, {
     remoteState: remote.remoteState,
     remoteTurnState: remoteTurnState(latestTurn),
     remoteSessionId: text(remote.thread?.sessionId),
+    safeToResume,
     worktreeState: text(
       worktreeEvidence.status || worktreeEvidence.diff || worktreeEvidence.changedFiles?.length
         ? "evidence captured"
@@ -436,10 +439,8 @@ export async function reconcileWorkTaskTurn(worldRoot, taskId, {
       }
     })
   });
-  let safeToResume = false;
   let replacementThread = false;
   if (classification === TURN_LIVENESS.STALE) {
-    safeToResume = safeContinuation(current, worktreeEvidence);
     if (safeToResume) {
       const phase = phaseForTask(current);
       const oldThreadId = threadId;

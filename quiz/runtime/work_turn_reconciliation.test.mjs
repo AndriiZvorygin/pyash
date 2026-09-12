@@ -160,11 +160,14 @@ test("stale Sol writer with a preserved commit becomes a read-only review contin
   assert.equal(result.task.checkpoint.recoveryCount, 2);
   assert.equal(result.task.checkpoint.resumeCount, 5);
   assert.equal(result.task.checkpoint.turnReconciliation.classification, "STALE");
+  assert.equal(result.task.checkpoint.turnReconciliation.safeToResume, true);
   assert.equal(result.task.checkpoint.turnReconciliation.lastActivityAt, "2026-09-01T00:00:00.000Z");
   assert.equal(result.task.checkpoint.turnReconciliation.remoteSessionId, `session-${oldThreadId}`);
   assert.equal(result.task.checkpoint.turnHistory.at(-1).state, "abandoned");
   assert.deepEqual(fake.requests, ["thread/read", "thread/resume"]);
-  assert.equal((await readWorkTaskStatus(worldRoot, task.taskId)).checkpoint.turnReconciliation.classification, "STALE");
+  const persisted = await readWorkTaskStatus(worldRoot, task.taskId);
+  assert.equal(persisted.checkpoint.turnReconciliation.classification, "STALE");
+  assert.equal(persisted.checkpoint.turnReconciliation.safeToResume, true);
 });
 
 test("stale Luna ownership preserves an uncommitted worktree diff for continuation", async () => {
@@ -208,6 +211,7 @@ test("stale Luna ownership preserves an uncommitted worktree diff for continuati
   assert.deepEqual(result.task.checkpoint.worker.previousThreadIds, ["luna-stale-thread"]);
   assert.deepEqual(result.task.checkpoint.interruption.workspaceEvidence.changedFiles, ["program/library/refinement_cache.mjs"]);
   assert.equal(result.task.checkpoint.recoveryCount, 2);
+  assert.equal(result.task.checkpoint.turnReconciliation.safeToResume, true);
 });
 
 test("stale evidence-free mind turn remains blocked without replay permission", async () => {
@@ -235,6 +239,7 @@ test("stale evidence-free mind turn remains blocked without replay permission", 
   assert.equal(result.task.status, "blocked");
   assert.equal(result.task.checkpoint.worker.threadId, "mind-stale-thread");
   assert.equal(result.task.checkpoint.recoveryCount, 2);
+  assert.equal(result.task.checkpoint.turnReconciliation.safeToResume, false);
   assert.match(result.task.checkpoint.lastAction, /evidence is insufficient/iu);
 });
 

@@ -104,8 +104,15 @@ function turnReconciliation(value = {}) {
     remoteTurnState: text(source.remoteTurnState),
     remoteSessionId: text(source.remoteSessionId),
     worktreeState: text(source.worktreeState),
+    safeToResume: source.safeToResume === true,
     reason: text(source.reason)
   };
+}
+
+export function isStaleTurnResumable(checkpoint = {}) {
+  const reconciliation = object(checkpoint?.turnReconciliation);
+  return text(reconciliation.classification).toUpperCase() === "STALE"
+    && reconciliation.safeToResume === true;
 }
 
 function progressRecord(value = {}) {
