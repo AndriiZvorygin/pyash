@@ -92,6 +92,7 @@ function turnReconciliation(value = {}) {
     : source.localOwnerAlive === true;
   return {
     checkedAt: text(source.checkedAt),
+    role: text(source.role),
     threadId: text(source.threadId),
     turnId: text(source.turnId),
     classification: text(source.classification).toUpperCase(),
@@ -140,10 +141,44 @@ function progressRecord(value = {}) {
   };
 }
 
+function roleRecord(value = {}) {
+  const source = object(value);
+  return {
+    role: text(source.role),
+    model: text(source.model),
+    reasoningEffort: text(source.reasoningEffort),
+    threadId: text(source.threadId),
+    previousThreadIds: list(source.previousThreadIds)
+  };
+}
+
+function reviewRecord(value = {}) {
+  const source = object(value);
+  return {
+    role: text(source.role),
+    model: text(source.model),
+    reasoningEffort: text(source.reasoningEffort),
+    threadId: text(source.threadId),
+    previousThreadIds: list(source.previousThreadIds),
+    pass: Math.max(0, Math.trunc(Number(source.pass) || 0)),
+    reviewedCommit: text(source.reviewedCommit),
+    reviewedRevision: text(source.reviewedRevision),
+    decision: text(source.decision).toUpperCase(),
+    explanation: text(source.explanation),
+    revisionInstructions: text(source.revisionInstructions),
+    escalationReason: text(source.escalationReason),
+    workOrder: text(source.workOrder),
+    tests: list(source.tests),
+    evidence: text(source.evidence)
+  };
+}
+
 export function buildWorkCheckpoint(input = {}) {
   const workspace = object(input.workspace);
   const manager = object(input.manager);
   const worker = object(input.worker);
+  const reviewer = object(input.reviewer);
+  const escalationReviewer = object(input.escalationReviewer);
   const plan = object(input.plan);
   const implementation = object(input.implementation);
   const review = object(input.review);
@@ -173,6 +208,8 @@ export function buildWorkCheckpoint(input = {}) {
       threadId: text(worker.threadId),
       previousThreadIds: list(worker.previousThreadIds)
     },
+    reviewer: roleRecord(reviewer),
+    escalationReviewer: roleRecord(escalationReviewer),
     plan: {
       summary: text(plan.summary),
       workOrder: text(plan.workOrder),
@@ -198,10 +235,24 @@ export function buildWorkCheckpoint(input = {}) {
       lastMaterialProgressAt: text(implementation.lastMaterialProgressAt)
     },
     review: {
+      role: text(review.role),
+      model: text(review.model),
+      reasoningEffort: text(review.reasoningEffort),
+      threadId: text(review.threadId),
+      previousThreadIds: list(review.previousThreadIds),
+      pass: Math.max(0, Math.trunc(Number(review.pass) || 0)),
+      reviewedCommit: text(review.reviewedCommit),
+      reviewedRevision: text(review.reviewedRevision),
       decision: text(review.decision).toUpperCase(),
       explanation: text(review.explanation),
-      revisionInstructions: text(review.revisionInstructions)
+      revisionInstructions: text(review.revisionInstructions),
+      escalationReason: text(review.escalationReason),
+      workOrder: text(review.workOrder),
+      tests: list(review.tests),
+      evidence: text(review.evidence)
     },
+    routineReview: reviewRecord(input.routineReview),
+    escalationReview: reviewRecord(input.escalationReview),
     convergence: {
       status: text(input.convergence?.status),
       reviewCount: Math.max(0, Math.trunc(Number(input.convergence?.reviewCount) || 0)),
@@ -227,6 +278,8 @@ export function buildWorkCheckpoint(input = {}) {
         taskCommit: text(integration.reconciliation?.taskCommit),
         managerThreadId: text(integration.reconciliation?.managerThreadId),
         workerThreadId: text(integration.reconciliation?.workerThreadId),
+        reviewerThreadId: text(integration.reconciliation?.reviewerThreadId),
+        escalationReviewerThreadId: text(integration.reconciliation?.escalationReviewerThreadId),
         attempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.attempts) || 0)),
         materialAttempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.materialAttempts) || 0)),
         noProgressAttempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.noProgressAttempts) || 0)),
@@ -292,9 +345,13 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     workspace: { ...current.workspace, ...object(update.workspace) },
     manager: { ...current.manager, ...object(update.manager) },
     worker: { ...current.worker, ...object(update.worker) },
+    reviewer: { ...current.reviewer, ...object(update.reviewer) },
+    escalationReviewer: { ...current.escalationReviewer, ...object(update.escalationReviewer) },
     plan: { ...current.plan, ...object(update.plan) },
     implementation: { ...current.implementation, ...object(update.implementation) },
     review: { ...current.review, ...object(update.review) },
+    routineReview: { ...current.routineReview, ...object(update.routineReview) },
+    escalationReview: { ...current.escalationReview, ...object(update.escalationReview) },
     convergence: { ...current.convergence, ...object(update.convergence) },
     integration: {
       ...current.integration,

@@ -97,6 +97,17 @@ The hourly runner skips baseline synchronization while a substantial task is alr
 
 The daily digest includes a compact roadmap section showing active work, the next queued packages, later candidates, and decisions requiring human input.
 
+## Codex role topology
+
+The default execution path uses Sol-high for architecture and planning, Luna-xhigh
+for implementation and testing, and a separate Luna-xhigh thread for routine
+verification. Routine review returns `ACCEPT`, `REVISE`, or `ESCALATE`; only the
+last outcome invokes the Sol-high escalation reviewer. The reviewer never shares
+the implementer's conversational thread, even though both are Luna roles. The
+role models and reasoning levels can be overridden privately with
+`PYA_CODEX_PLANNER_*`, `PYA_CODEX_IMPLEMENTER_*`,
+`PYA_CODEX_REVIEWER_*`, and `PYA_CODEX_ESCALATION_REVIEWER_*` settings.
+
 ## Codex execution preflight
 
 Before a background task is claimed, Pyash checks the selected repository/worktree, writable access, Git, Node, Codex App Server initialization, and the configured thread sandbox. The supervisor repeats the check against the task worktree before opening manager or worker turns. A failed check is recorded as an infrastructure deferral in scheduler health and newspaper history; it does not make a roadmap task defective or claim the next task.

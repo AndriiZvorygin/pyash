@@ -21,8 +21,11 @@ world/holding/work/*.pya
         v
 Pyash supervisor claims one task
         |
-        +--> Sol App Server thread: plan and review
-        +--> Luna App Server thread: implementation and tests
+        +--> Sol planner App Server thread: plan and work order
+        +--> Luna implementer App Server thread: implementation and tests
+        +--> independent Luna reviewer App Server thread: verification
+                    |
+                    +--> Sol escalation reviewer only for higher-level ambiguity
         |
         v
 Pyash .pya checkpoint, queue ack, and final decision
@@ -33,11 +36,14 @@ retry policy, status, and work specification. The status projection now
 preserves named `.pya` sections for:
 
 - workspace: repository, base revision, detached worktree, and mode;
-- roles: manager/worker models, reasoning effort, and App Server thread ids;
+- roles: planner, implementer, reviewer, and escalation-reviewer models,
+  reasoning effort, and App Server thread ids (with manager/worker aliases for
+  legacy checkpoints);
 - plan: Sol summary, work order, and risks;
 - implementation: summary, changed files, file-change events, diff, tests,
   blockers, and uncertainty;
-- review: `ACCEPT`, `REVISE`, or `BLOCK`, rationale, and correction request;
+- review: role, model, reviewed revision, `ACCEPT`, `REVISE`, or `ESCALATE`,
+  rationale, correction request, and escalation evidence;
 - interruption: phase, timestamp, reason, and last turn;
 - active turn identity: phase, role, thread id, turn id, deterministic request
   identity, state, timestamps, result capture, and ambiguity;
@@ -109,30 +115,45 @@ the installed binary rather than copied into Pyash.
 Roles are configurable through supervisor options or environment variables:
 
 ```text
-manager model: gpt-5.6-sol
-manager effort: high
-worker model: gpt-5.6-luna
-worker effort: high
+planner model: gpt-5.6-sol
+planner effort: high
+implementer model: gpt-5.6-luna
+implementer effort: xhigh
+reviewer model: gpt-5.6-luna
+reviewer effort: xhigh
+escalation reviewer model: gpt-5.6-sol
+escalation reviewer effort: high
 ```
 
 The role names are architectural. Model names are configuration defaults, not
-provider assumptions.
+provider assumptions. `manager` and `worker` configuration aliases remain
+accepted for existing callers and durable checkpoints.
 
 `runWorkSupervisorOnce` claims one ready task, prepares a task-specific
-detached Git worktree, transitions `ready -> planning`, starts or resumes Sol,
-persists the work order, starts or resumes Luna, persists implementation and
-Git evidence, then resumes Sol for review. It maps decisions as follows:
+detached Git worktree, transitions `ready -> planning`, starts or resumes the
+Sol planner, persists the work order, starts or resumes the Luna implementer,
+persists implementation and Git evidence, then gives the evidence to a separate
+Luna reviewer. It maps decisions as follows:
 
 ```text
-ACCEPT -> accepted
-REVISE -> bounded revision rounds, then a focused convergence review when
-           implementation stops making material progress
-BLOCK  -> blocked
+routine ACCEPT   -> accepted
+routine REVISE   -> bounded Luna implementation correction, then independent
+                    Luna review again
+routine ESCALATE -> distinct Sol escalation review
+Sol ACCEPT       -> accepted
+Sol REVISE       -> bounded Luna correction
+Sol REPLAN       -> corrected work order on the same task where appropriate
+Sol BLOCK        -> blocked only for a genuine higher-level decision
 ```
 
-`accepted` means Sol judged the bounded implementation satisfactory. It does
-not mean Pyash automatically merged or pushed it. The worktree and diff remain
-available for human inspection.
+The routine reviewer is always a different App Server thread from the
+implementer. It receives the task, work order, acceptance criteria, current
+diff/commit, changed files, tests, and relevant prior evidence, but does not
+edit the worktree. Sol remains the planner and is invoked for review only when
+the independent Luna reviewer reports a material architectural, semantic,
+product, safety, policy, or convergence question. `accepted` means the final
+reviewer judged the bounded implementation satisfactory; it does not mean
+Pyash automatically merged or pushed it.
 
 ### Recovery
 
@@ -288,8 +309,10 @@ capacity state.
 - weekly pacing with a protected reserve, substantial-task curation, resumable
   implementation passes, automation-branch integration, and daily digest;
 - extracted shared App Server JSONL transport;
-- configurable manager/worker roles and reasoning effort;
-- one Sol plan -> Luna implementation -> Sol review cycle;
+- configurable planner, implementer, reviewer, and escalation-reviewer roles
+  and reasoning effort;
+- Sol plan -> Luna implementation -> independent Luna review, with Sol only
+  as an explicit escalation reviewer;
 - bounded revision rounds plus material-progress/convergence review;
 - task-specific detached Git worktrees;
 - runtime recovery for persisted checkpoints and usage limits;
@@ -465,10 +488,11 @@ still alive.
 counters. `STALE` may clear the old role thread for a safe continuation while
 retaining the old thread in `previousThreadIds`, the abandoned turn history,
 the same task/worktree, and all recovery/pass evidence. A preserved commit can
-move directly to read-only Sol review; a preserved Luna diff can resume
-implementation. `COMPLETED_UNRECONCILED` is captured from the durable result
-without rerunning the turn. `AMBIGUOUS` remains blocked and cannot be replayed
-automatically.
+move directly to read-only review (independent Luna review for new tasks, with
+a legacy Sol review thread retained when required); a preserved Luna diff can
+resume implementation. `COMPLETED_UNRECONCILED` is captured from the durable
+result without rerunning the turn. `AMBIGUOUS` remains blocked and cannot be
+replayed automatically.
 
 Reconciliation itself starts no model turn. Its scheduler-history event and
 the task's parser-backed `.pya` checkpoint make the liveness decision and its

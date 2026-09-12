@@ -182,16 +182,32 @@ function livenessReason(classification, {
 
 function roleForTask(task) {
   const active = task?.checkpoint?.activeTurn || {};
-  if (active.role) return text(active.role).toLowerCase();
+  if (active.role) {
+    const role = text(active.role).toLowerCase();
+    if (role === "manager" || role === "planner") return "manager";
+    if (role === "worker" || role === "implementer") return "worker";
+    if (role === "escalationreviewer" || role === "escalation-reviewer") return "escalationReviewer";
+    if (role === "reviewer") return "reviewer";
+    return role;
+  }
   const phase = text(active.phase || task?.checkpoint?.interruption?.phase || task?.status).toLowerCase();
-  return phase === "planning" || phase === "reviewing" ? "manager" : "worker";
+  if (phase === "planning") return "manager";
+  if (phase === "reviewing") {
+    return task?.checkpoint?.review?.decision === "ESCALATE" && task?.checkpoint?.escalationReviewer?.threadId
+      ? "escalationReviewer"
+      : task?.checkpoint?.reviewer?.threadId
+        ? "reviewer"
+        : "manager";
+  }
+  return "worker";
 }
 
 function threadForTask(task, role) {
   const checkpoint = task?.checkpoint || {};
-  return text(role === "manager"
-    ? checkpoint.manager?.threadId || task?.solThreadId || checkpoint.activeTurn?.threadId
-    : checkpoint.worker?.threadId || task?.lunaThreadId || checkpoint.activeTurn?.threadId);
+  if (role === "manager" || role === "planner") return text(checkpoint.manager?.threadId || task?.solThreadId || checkpoint.activeTurn?.threadId);
+  if (role === "reviewer") return text(checkpoint.reviewer?.threadId || checkpoint.activeTurn?.threadId);
+  if (role === "escalationReviewer") return text(checkpoint.escalationReviewer?.threadId || checkpoint.activeTurn?.threadId);
+  return text(checkpoint.worker?.threadId || task?.lunaThreadId || checkpoint.activeTurn?.threadId);
 }
 
 function phaseForTask(task) {
@@ -398,6 +414,7 @@ export async function reconcileWorkTaskTurn(worldRoot, taskId, {
   const at = iso(typeof now === "function" ? now() : now) || new Date().toISOString();
   const reconciliation = {
     checkedAt: at,
+    role,
     threadId,
     turnId: text(activeTurn.turnId || latestTurn?.id),
     classification,
@@ -463,6 +480,12 @@ export async function reconcileWorkTaskTurn(worldRoot, taskId, {
         resumeCount: current.checkpoint.resumeCount + 1,
         lastAction: `stale ${role} writer reconciled; safe continuation available`
       };
+      const message = `stale ${role} writer reconciled; safe continuation available`;
+      const nextTask = transitionWorkTask(current, phase, {
+        now: typeof now === "function" ? now() : now,
+        message,
+        error: ""
+      });
       if (role === "manager") {
         nextCheckpoint.manager = {
           threadId: "",
@@ -471,18 +494,8 @@ export async function reconcileWorkTaskTurn(worldRoot, taskId, {
             oldThreadId
           ])
         };
-        next = buildWorkTask({
-          ...transitionWorkTask(current, phase, {
-            now: typeof now === "function" ? now() : now,
-            message: `stale ${role} writer reconciled; safe continuation available`,
-            error: ""
-          }),
-          solThreadId: "",
-          message: `stale ${role} writer reconciled; safe continuation available`,
-          error: "",
-          checkpoint: mergeWorkCheckpoint(current.checkpoint, nextCheckpoint)
-        });
-      } else {
+        next = buildWorkTask({ ...nextTask, solThreadId: "", message, error: "", checkpoint: mergeWorkCheckpoint(current.checkpoint, nextCheckpoint) });
+      } else if (role === "worker") {
         nextCheckpoint.worker = {
           threadId: "",
           previousThreadIds: unique([
@@ -490,17 +503,20 @@ export async function reconcileWorkTaskTurn(worldRoot, taskId, {
             oldThreadId
           ])
         };
-        next = buildWorkTask({
-          ...transitionWorkTask(current, phase, {
-            now: typeof now === "function" ? now() : now,
-            message: `stale ${role} writer reconciled; safe continuation available`,
-            error: ""
-          }),
-          lunaThreadId: "",
-          message: `stale ${role} writer reconciled; safe continuation available`,
-          error: "",
-          checkpoint: mergeWorkCheckpoint(current.checkpoint, nextCheckpoint)
-        });
+        next = buildWorkTask({ ...nextTask, lunaThreadId: "", message, error: "", checkpoint: mergeWorkCheckpoint(current.checkpoint, nextCheckpoint) });
+      } else if (["reviewer", "escalationReviewer"].includes(role)) {
+        const roleCheckpoint = current.checkpoint[role] || {};
+        nextCheckpoint[role] = {
+          role: roleCheckpoint.role || role,
+          threadId: "",
+          previousThreadIds: unique([
+            ...(roleCheckpoint.previousThreadIds || []),
+            oldThreadId
+          ])
+        };
+        next = buildWorkTask({ ...nextTask, message, error: "", checkpoint: mergeWorkCheckpoint(current.checkpoint, nextCheckpoint) });
+      } else {
+        next = buildWorkTask({ ...nextTask, message, error: "", checkpoint: mergeWorkCheckpoint(current.checkpoint, nextCheckpoint) });
       }
       replacementThread = Boolean(oldThreadId);
     } else {

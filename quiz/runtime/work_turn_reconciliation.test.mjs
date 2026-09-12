@@ -170,6 +170,44 @@ test("stale Sol writer with a preserved commit becomes a read-only review contin
   assert.equal(persisted.checkpoint.turnReconciliation.safeToResume, true);
 });
 
+test("stale routine reviewer preserves its history and permits a fresh review thread", async () => {
+  const worldRoot = await world("pyash-turn-reconcile-reviewer-");
+  const oldThreadId = "luna-reviewer-stale-thread";
+  const task = await blockedTask(worldRoot, {
+    taskId: "stale-reviewer-task",
+    blocker: "thread luna-reviewer-stale-thread already has an active writer",
+    activeTurn: {
+      phase: "reviewing",
+      role: "reviewer",
+      threadId: oldThreadId,
+      turnId: "review-turn",
+      requestIdentity: "review-stale-reviewer-task",
+      state: "ambiguous",
+      startedAt: "2026-09-02T15:14:08.890Z"
+    },
+    checkpoint: {
+      reviewer: { role: "reviewer", model: "gpt-5.6-luna", threadId: oldThreadId },
+      implementation: { commit: "preserved-implementation" },
+      recoveryCount: 3,
+      convergence: { reviewCount: 2 }
+    }
+  });
+  const fake = fakeAppServer({ threadId: oldThreadId, turnId: "review-turn" });
+  const result = await reconcileWorkTaskTurn(worldRoot, task.taskId, reconcileOptions(fake));
+  assert.equal(result.classification, TURN_LIVENESS.STALE);
+  assert.equal(result.safeToResume, true);
+  assert.equal(result.task.status, "reviewing");
+  assert.equal(result.task.checkpoint.turnReconciliation.role, "reviewer");
+  assert.equal(result.task.checkpoint.reviewer.threadId, "");
+  assert.deepEqual(result.task.checkpoint.reviewer.previousThreadIds, [oldThreadId]);
+  assert.equal(result.task.checkpoint.manager.threadId, "");
+  assert.equal(result.task.checkpoint.worker.threadId, "");
+  assert.equal(result.task.checkpoint.recoveryCount, 3);
+  assert.equal(result.task.checkpoint.convergence.reviewCount, 2);
+  assert.equal(result.task.checkpoint.turnHistory.at(-1).threadId, oldThreadId);
+  assert.equal(result.task.checkpoint.turnHistory.at(-1).state, "abandoned");
+});
+
 test("stale Luna ownership preserves an uncommitted worktree diff for continuation", async () => {
   const worldRoot = await world("pyash-turn-reconcile-library-");
   const task = await blockedTask(worldRoot, {

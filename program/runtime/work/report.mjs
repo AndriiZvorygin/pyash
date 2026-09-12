@@ -66,6 +66,19 @@ export function renderWorkTaskReport(task) {
   const workspace = checkpoint.workspace || {};
   const manager = checkpoint.manager || {};
   const worker = checkpoint.worker || {};
+  const routineReviewer = checkpoint.reviewer || {};
+  const escalationReviewer = checkpoint.escalationReviewer || {};
+  const reviewerRole = text(checkpoint.review?.role) || (checkpoint.reviewer?.threadId ? "reviewer" : "manager");
+  const reviewer = reviewerRole === "reviewer"
+    ? checkpoint.reviewer || {}
+    : reviewerRole === "escalationReviewer"
+      ? checkpoint.escalationReviewer || {}
+      : manager;
+  const reviewerLabel = reviewerRole === "reviewer"
+    ? "Luna routine reviewer"
+    : reviewerRole === "escalationReviewer"
+      ? "Sol escalation reviewer"
+      : "Sol review";
   const reconciliation = checkpoint.integration?.reconciliation || {};
   const progress = deriveImplementationProgress(checkpoint);
   const changedFiles = list(implementation.changedFiles)
@@ -81,11 +94,19 @@ export function renderWorkTaskReport(task) {
     `Priority: ${current.priority}`,
     `Result: ${text(current.status).toUpperCase()}`,
     "",
-    "Manager:",
+    "Planner:",
     `  ${text(manager.model) || "(unknown)"}`,
     "",
-    "Worker:",
+    "Implementer:",
     `  ${text(worker.model) || "(unknown)"}`,
+    "",
+    "Reviewer:",
+    `  ${text((reviewerRole === "escalationReviewer" ? routineReviewer : reviewer).model) || "(unknown)"} (${reviewerRole === "manager" ? "Sol review" : "Luna routine reviewer"})`,
+    ...(reviewerRole === "escalationReviewer" ? [
+      "",
+      "Escalation reviewer:",
+      `  ${text(escalationReviewer.model || reviewer.model) || "(unknown)"} (Sol escalation reviewer)`
+    ] : []),
     "",
     "Sol plan:",
     indent(explicitText(checkpoint.plan?.summary || checkpoint.plan?.workOrder), "  ", 1200),
@@ -108,7 +129,12 @@ export function renderWorkTaskReport(task) {
   lines.push(changedFiles.length ? changedFiles.map((file) => `  ${file}`).join("\n") : "  (none recorded)");
   lines.push("", "Tests:");
   lines.push(tests.length ? tests.map((test) => `  ${test}`).join("\n") : "  (none recorded)");
-  lines.push("", "Sol review:");
+  if (reviewerRole === "escalationReviewer" && checkpoint.routineReview?.decision) {
+    lines.push("", "Luna routine review:");
+    lines.push(`  ${checkpoint.routineReview.decision}`);
+    lines.push(indent(checkpoint.routineReview.explanation, "  ", 1200));
+  }
+  lines.push("", `${reviewerLabel}:`);
   lines.push(`  ${decision || "(not completed)"}`);
   lines.push(indent(review.explanation, "  ", 1800));
   if (review.revisionInstructions) {
@@ -117,6 +143,9 @@ export function renderWorkTaskReport(task) {
   lines.push("", `Diff: ${diffStat(implementation.diff, changedFiles)}`);
   lines.push(`Worktree: ${text(workspace.worktreePath) || "(not created)"}`);
   if (text(implementation.commit)) lines.push(`Commit: ${text(implementation.commit)}`);
+  if (text(review.reviewedCommit || review.reviewedRevision)) {
+    lines.push(`Reviewed implementation: ${text(review.reviewedCommit || review.reviewedRevision)}`);
+  }
   if (text(checkpoint.integration?.branch)) {
     lines.push(`Automation branch: ${text(checkpoint.integration.branch)}`);
     lines.push(`Integration: ${text(checkpoint.integration.status) || "pending"}`);
