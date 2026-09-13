@@ -457,6 +457,49 @@ test("projection does not create holding lanes when the canonical world is empty
   assert.equal(await pathExists(holdingRoot), false);
 });
 
+test("explicit asOf excludes future queued state and future newspaper signals", async () => {
+  const worldRoot = await makeWorld();
+  const futureTask = await addTask(worldRoot, "future-task", { deadline: AS_OF });
+  await writeWorkTaskStatus(worldRoot, buildWorkTask({
+    ...futureTask,
+    queuedAt: "2026-08-25T12:00:00.000Z"
+  }));
+  await enqueueInputEnvelope(worldRoot, {
+    channelType: "fixture-mail",
+    identity: "hq-inbox",
+    agentName: OWNER,
+    roomName: "hq-inbox",
+    eventId: "future-channel-event",
+    queuedAt: "2026-08-25T12:00:00.000Z",
+    payloadSentence: {
+      mood: "ya",
+      su: { name: "future-channel-event" },
+      be: "channel queued event",
+      ob: { text: JSON.stringify({
+        provider: "fixture-mail",
+        messageId: "future-message",
+        eventId: "future-channel-event",
+        sourceLocator: "fixture://future-message"
+      }) }
+    }
+  });
+  await addTask(worldRoot, "future-evidence", { deadline: "" });
+  await appendNewspaper(worldRoot, "future-evidence.pya", [{
+    name: "future escalation",
+    fields: {
+      stage: "escalated",
+      at: "2026-08-25T12:00:00.000Z",
+      "source identity": "fixture-mail:future-evidence",
+      "message id": "future-evidence",
+      "task id": "future-evidence"
+    }
+  }]);
+
+  const projection = await projectHeadquartersBriefing(worldRoot, { asOf: AS_OF });
+  assert.equal(projection.candidateCount, 0);
+  assert.deepEqual(projection.items, []);
+});
+
 test("recording creates a derived artifact and standard replay detects a tampered linked source", async () => {
   const worldRoot = await makeWorld("pyash-headquarters-recording-");
   const sourcePath = path.join(worldRoot, "source.pya");

@@ -7,6 +7,7 @@ import { getExchangeRunRoot, recordArtifact } from "../../bridge/exchange.mjs";
 import { mapSentenceToPyash } from "../../verbs/exchange/json_map.mjs";
 import { splitSentences } from "../../library/sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
+import { compareUtf8Bytes } from "../../library/knowledge_core.mjs";
 import { listAgents, readAgentOrganization } from "../admin.mjs";
 import { resolveAgentOrganizationPath } from "../organization.mjs";
 import { listChannelQueueEnvelopes } from "../channel_core/queue.mjs";
@@ -27,10 +28,7 @@ function text(value) {
 }
 
 function lexicalCompare(left, right) {
-  const a = String(left ?? "");
-  const b = String(right ?? "");
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
+  return compareUtf8Bytes(left, right);
 }
 
 function sortedKeys(value) {
@@ -180,6 +178,9 @@ export async function readHeadquartersBriefingPolicy(policyPath = DEFAULT_POLICY
     defect("category precedence must declare the canonical categories exactly once");
   }
   const terminalStatuses = requiredVector(fields, "terminal statuses excluded");
+  if (canonical(terminalStatuses) !== canonical(["accepted", "failed"])) {
+    defect("terminal statuses must declare the canonical terminal statuses exactly once");
+  }
   const evidenceRequired = requiredVector(fields, "source evidence required");
   if (canonical(evidenceRequired) !== canonical(["source identity", "source locator"])) {
     defect("source evidence requirement is not canonical");
@@ -276,7 +277,15 @@ function valueFromRecordSentence(sentence) {
   return value;
 }
 
-async function readNewspaperState(worldRoot) {
+function recordFieldName(sentence) {
+  if (sentence?.su?.name) return text(sentence.su.name);
+  for (const name of ["at", "during", "since", "until", "from", "to", "as", "with", "for", "by", "via"]) {
+    if (Object.hasOwn(sentence ?? {}, name)) return name;
+  }
+  return "";
+}
+
+async function readNewspaperState(worldRoot, asOfDate) {
   const directory = path.join(worldRoot, "newspaper");
   let names;
   try {
@@ -328,13 +337,19 @@ async function readNewspaperState(worldRoot) {
         continue;
       }
       if (!current) continue;
-      if (sentence?.mood !== "ya" || !sentence?.su?.name || !sentence?.ob) continue;
+      if (sentence?.mood !== "ya" || !sentence?.ob) continue;
+      const fieldName = recordFieldName(sentence);
+      if (!fieldName) continue;
       const value = valueFromRecordSentence(sentence);
-      if (value !== undefined) current.fields[text(sentence.su.name)] = value;
+      if (value !== undefined) current.fields[fieldName] = value;
     }
     if (current) throw new Error(`headquarters briefing defective: newspaper map is not closed: ${filename}`);
   }
-  return { records, snapshots };
+  const visibleRecords = records.filter(record => {
+    const timestamp = Date.parse(record.timestamp);
+    return !Number.isFinite(timestamp) || timestamp <= asOfDate.getTime();
+  });
+  return { records: visibleRecords, snapshots };
 }
 
 function matchNewspaper(record, {
@@ -415,17 +430,24 @@ function validDeadline(value) {
   return new Date(raw);
 }
 
+function visibleAtAsOf(value, asOfDate) {
+  const timestamp = Date.parse(text(value));
+  return !Number.isFinite(timestamp) || timestamp <= asOfDate.getTime();
+}
+
 function taskSignals(task, policy, asOfDate, workEnvelopePhase = "") {
   const signals = [];
   const approval = task.checkpoint?.approval ?? {};
-  if (text(approval.state).toLowerCase() === "pending") {
+  if (text(approval.state).toLowerCase() === "pending"
+    && visibleAtAsOf(approval.requestedAt, asOfDate)) {
     signals.push(signal("pending approval/decision", {
       requestId: approval.requestId,
       checkpointIdentity: approval.checkpointIdentity,
       action: approval.action
     }));
   }
-  if (text(task.escalation?.state).toLowerCase() === "escalated") {
+  if (text(task.escalation?.state).toLowerCase() === "escalated"
+    && visibleAtAsOf(task.escalation.timestamp, asOfDate)) {
     signals.push(signal("explicit escalation", {
       target: task.escalation.target,
       reason: task.escalation.reason,
@@ -521,6 +543,7 @@ function initialCandidate({
   ].map(value => text(value)).filter(value => Number.isFinite(Date.parse(value)));
   const evidenceTimestamp = evidenceTimes
     .map(value => new Date(value).toISOString())
+    .filter(value => visibleAtAsOf(value, organization.asOfDate))
     .sort(lexicalCompare)
     .at(-1) || "";
   const statusLocators = [statusPath, envelopePath].filter(Boolean);
@@ -707,7 +730,7 @@ export async function projectHeadquartersBriefing(worldRoot, {
     listAgents({ worldRoot }),
     listWorkTasks(worldRoot, { includeTerminal: true, readOnly: true }),
     listChannelQueueEnvelopes(worldRoot),
-    readNewspaperState(worldRoot)
+    readNewspaperState(worldRoot, asOfDate)
   ]);
   const organizations = new Map();
   const sourceSnapshots = [await snapshotFor({
@@ -762,7 +785,8 @@ export async function projectHeadquartersBriefing(worldRoot, {
   };
   const rawCandidates = [];
   for (const task of tasks) {
-    if (policy.terminalStatuses.includes(text(task.status))) continue;
+    if (!visibleAtAsOf(task.queuedAt, asOfDate)) continue;
+    if (policy.terminalStatuses.includes(text(task.status).toLowerCase())) continue;
     if (!text(task.taskId) || !text(task.source?.identity) || !text(task.source?.locator)) continue;
     const candidate = initialCandidate({
       task,
@@ -776,6 +800,7 @@ export async function projectHeadquartersBriefing(worldRoot, {
     if (candidate.signals.length > 0) rawCandidates.push(candidate);
   }
   for (const entry of channelEntries) {
+    if (!visibleAtAsOf(entry.envelope.queuedAt, asOfDate)) continue;
     const event = eventFromEnvelope(entry.envelope);
     const sourceIdentity = sourceIdentityForEvent(event, entry.envelope);
     const sourceLocator = text(event.sourceLocator) || entry.path;
