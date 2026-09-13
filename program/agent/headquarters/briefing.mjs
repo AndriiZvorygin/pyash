@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { getExchangeRunRoot, recordArtifact } from "../../bridge/exchange.mjs";
+import { emitExchangeSentence, getExchangeRunRoot, recordArtifact } from "../../bridge/exchange.mjs";
 import { mapSentenceToPyash } from "../../verbs/exchange/json_map.mjs";
 import { splitSentences } from "../../library/sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
@@ -961,6 +961,13 @@ function portableLocator(filename, runRoot) {
   return relative.replace(/[\\]+/g, "/");
 }
 
+function externalArtifactLocator({ hash, locator, name } = {}) {
+  if (!hash) return "";
+  const extension = path.extname(filePart(locator));
+  const safeExtension = /^[.][A-Za-z0-9]+$/u.test(extension) ? extension : "";
+  return `artifacts/external-world/${name}-${hash}${safeExtension}`;
+}
+
 function eventSentence(projection, recording) {
   return mapSentenceToPyash({
     mood: "def",
@@ -971,6 +978,7 @@ function eventSentence(projection, recording) {
         "as-of": nonEmptyText(projection.asOf),
         "artifact hash": nonEmptyText(recording.artifact.hash),
         "artifact locator": nonEmptyText(recording.artifact.locator),
+        "world artifact locator": nonEmptyText(recording.artifact.worldLocator),
         "input links": nonEmptyText(canonical(recording.inputs)),
         "item identities": { ve: { type: "text", values: projection.items.map(item => item.subjectIdentity) } },
         "policy hash": nonEmptyText(projection.policy.hash),
@@ -1021,29 +1029,47 @@ export async function recordHeadquartersBriefing(worldRoot, projection) {
       }
     }
     const portable = portableLocator(snapshot.locator, runRoot);
-    if (bytes && portable) {
+    const inputHash = link.hash || (bytes ? hashBytes(bytes) : "");
+    const exchangeLocator = portable || externalArtifactLocator({
+      hash: inputHash,
+      locator: snapshot.locator,
+      name: "briefing-input"
+    });
+    if (bytes && exchangeLocator) {
       const artifact = recordArtifact({
-        locator: portable,
+        locator: exchangeLocator,
         producer: "headquarters briefing",
         bytes,
         kind: "briefing input"
       });
       if (artifact?.fromtext?.text) link.hash = artifact.fromtext.text;
       if (artifact?.su?.name) link.artifact = artifact.su.name;
+      if (artifact?.to?.filename) {
+        link.artifactLocator = artifact.to.filename;
+        link.externalRoot = !portable;
+      }
     }
     inputs.push(link);
   }
-  const artifactLocator = portableLocator(artifactPath, runRoot) || artifactPath;
+  const exchangeArtifactLocator = portableLocator(artifactPath, runRoot) || externalArtifactLocator({
+    hash: projectionHash,
+    locator: artifactPath,
+    name: "headquarters-briefing"
+  });
   const artifactSentence = recordArtifact({
-    locator: artifactLocator,
+    locator: exchangeArtifactLocator || artifactPath,
     producer: "headquarters briefing",
     bytes: Buffer.from(serialized, "utf8"),
     kind: "derived headquarters briefing"
   });
+  const artifactLocator = artifactSentence?.to?.filename
+    || portableLocator(artifactPath, runRoot)
+    || artifactPath;
   const artifact = {
     locator: artifactLocator,
     hash: artifactSentence?.fromtext?.text || projectionHash,
-    name: artifactSentence?.su?.name || ""
+    name: artifactSentence?.su?.name || "",
+    worldLocator: artifactPath
   };
   const orderedInputs = inputs.sort((left, right) => (
     lexicalCompare(`${left.kind}\u0000${left.locator}`, `${right.kind}\u0000${right.locator}`)
@@ -1060,8 +1086,13 @@ export async function recordHeadquartersBriefing(worldRoot, projection) {
     projectionHash
   };
   const eventText = `${eventSentence(projection, recording)}\n`;
+  const events = splitSentences(eventText, { includeThen: true })
+    .map(raw => parse(raw.trim()))
+    .filter(Boolean);
+  if (!events.length) throw new Error("headquarters briefing defective: derived event is not parseable");
   await fs.mkdir(path.dirname(newspaperPath), { recursive: true });
   await fs.writeFile(newspaperPath, eventText, "utf8");
+  for (const event of events) emitExchangeSentence(event);
   recording.newspaper.hash = hashBytes(Buffer.from(eventText, "utf8"));
   return recording;
 }
