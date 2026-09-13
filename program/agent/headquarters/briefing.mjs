@@ -355,6 +355,7 @@ async function readNewspaperState(worldRoot, asOfDate) {
 function matchNewspaper(record, {
   taskId,
   sourceIdentity,
+  sourceLocator,
   messageId,
   eventId,
   requestId,
@@ -364,6 +365,7 @@ function matchNewspaper(record, {
   const identifiers = [
     { expected: taskId, fields: ["task id"] },
     { expected: sourceIdentity, fields: ["source identity", "escalation source identity"] },
+    { expected: sourceLocator, fields: ["source locator", "escalation source locator"] },
     { expected: messageId, fields: ["message id", "source message id"] },
     { expected: eventId, fields: ["event id", "source event id"] },
     { expected: requestId, fields: ["request id"] },
@@ -467,7 +469,9 @@ function taskSignals(task, policy, asOfDate, workEnvelopePhase = "") {
   if (policy.integrationStates.includes(integrationStatus)) {
     signals.push(signal("explicit reconciliation/conflict", { integrationStatus }));
   }
-  if (text(task.status).toLowerCase() === "blocked" || ["input", "runtime"].includes(workEnvelopePhase)) {
+  if (text(task.status).toLowerCase() === "blocked"
+    || text(task.status).toLowerCase() === "ready"
+    || ["input", "runtime"].includes(workEnvelopePhase)) {
     signals.push(signal("blocked or queued response work", {
       status: task.status,
       workEnvelopePhase
@@ -505,6 +509,7 @@ function initialCandidate({
   const newspaperEvidence = recordsForSubject(newspaperRecords, {
     taskId,
     sourceIdentity,
+    sourceLocator,
     messageId,
     eventId,
     requestId: text(task?.checkpoint?.approval?.requestId),
@@ -818,13 +823,24 @@ export async function projectHeadquartersBriefing(worldRoot, {
       snapshotByLocator
     }));
   }
-  const merged = new Map();
+  const merged = [];
   for (const candidate of rawCandidates) {
     if (!candidate.subjectIdentity) continue;
-    const existing = merged.get(candidate.subjectIdentity);
-    merged.set(candidate.subjectIdentity, existing ? mergeCandidate(existing, candidate) : candidate);
+    const matches = merged.filter(existing => (
+      (candidate.taskId && existing.taskId === candidate.taskId)
+      || (candidate.sourceIdentity && existing.sourceIdentity === candidate.sourceIdentity)
+    ));
+    if (matches.length > 1) {
+      throw new Error(`headquarters briefing defective: ambiguous subject correlation for ${candidate.subjectIdentity}`);
+    }
+    if (matches.length === 1) {
+      const index = merged.indexOf(matches[0]);
+      merged[index] = mergeCandidate(matches[0], candidate);
+    } else {
+      merged.push(candidate);
+    }
   }
-  const items = [...merged.values()]
+  const items = merged
     .map(candidate => finalizeCandidate(itemWithHashes(candidate, snapshotByLocator), policy))
     .sort((left, right) => compareRank(left, right, policy));
   const limited = items.slice(0, policy.maximumItems);
