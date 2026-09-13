@@ -448,6 +448,34 @@ test("projection ignores newspaper prose and unrelated typed fields during corre
   assert.deepEqual(item.newspaperLocators, []);
 });
 
+test("ready work is a canonical queued signal and conflicting newspaper locators are defective", async () => {
+  const worldRoot = await makeWorld();
+  const source = sourceFor("ready-work", { locator: "fixture://ready-work" });
+  await addTask(worldRoot, "ready-work", { status: "ready", source });
+  const readyProjection = await projectHeadquartersBriefing(worldRoot, { asOf: AS_OF });
+  assert.equal(readyProjection.items.length, 1);
+  assert.deepEqual(readyProjection.items[0].reasons, ["blocked or queued response work"]);
+  assert.equal(
+    readyProjection.items[0].signals[0].evidence.workEnvelopePhase,
+    ""
+  );
+
+  await appendNewspaper(worldRoot, "conflicting-source-locator.pya", [{
+    name: "conflicting evidence",
+    fields: {
+      stage: "escalated",
+      at: "2026-08-24T10:00:00.000Z",
+      "task id": "ready-work",
+      "source identity": source.identity,
+      "source locator": "fixture://different-source"
+    }
+  }]);
+  await assert.rejects(
+    projectHeadquartersBriefing(worldRoot, { asOf: AS_OF }),
+    /conflicting newspaper evidence for source locator/
+  );
+});
+
 test("projection does not create holding lanes when the canonical world is empty", async () => {
   const worldRoot = await makeWorld();
   const holdingRoot = path.join(worldRoot, "holding");
