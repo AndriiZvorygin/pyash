@@ -169,8 +169,26 @@ test("the canonical briefing policy loads and malformed, missing, or duplicate e
     readHeadquartersBriefingPolicy(malformed),
     /headquarters briefing policy defective/
   );
-  const duplicate = path.join(root, "duplicate.pya");
   const source = await fs.readFile(path.resolve("module/headquarters-briefing.pya"), "utf8");
+  const wrongType = path.join(root, "wrong-type.pya");
+  await fs.writeFile(wrongType, source.replace(
+    'su name audience identity ob text "chief of staff" ya',
+    'su name audience identity ob num 7 ya'
+  ), "utf8");
+  await assert.rejects(
+    readHeadquartersBriefingPolicy(wrongType),
+    /audience identity must be text/
+  );
+  const wrongAudience = path.join(root, "wrong-audience.pya");
+  await fs.writeFile(wrongAudience, source.replace(
+    'su name audience identity ob text "chief of staff" ya',
+    'su name audience identity ob text "operator" ya'
+  ), "utf8");
+  await assert.rejects(
+    readHeadquartersBriefingPolicy(wrongAudience),
+    /audience identity must be chief of staff/
+  );
+  const duplicate = path.join(root, "duplicate.pya");
   await fs.writeFile(duplicate, source.replace(
     'su name maximum items ob num 5 ya',
     'su name maximum items ob num 5 ya\n  su name maximum items ob num 5 ya'

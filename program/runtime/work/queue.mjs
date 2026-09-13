@@ -11,6 +11,7 @@ import {
   completeSpoolItem,
   failSpoolItem
 } from "../../library/spool.mjs";
+import { compareUtf8Bytes } from "../../library/knowledge_core.mjs";
 import { holdingLanePaths, ensureHoldingLaneDirs } from "../../agent/holding_lane/layout.mjs";
 import {
   assertWorkTask,
@@ -402,7 +403,7 @@ async function listWorkFiles(worldRoot, directory, {
     if (priority) return priority;
     const queued = Date.parse(left.task.queuedAt) - Date.parse(right.task.queuedAt);
     if (queued) return queued;
-    return left.filename.localeCompare(right.filename);
+    return compareUtf8Bytes(left.filename, right.filename);
   });
 }
 
