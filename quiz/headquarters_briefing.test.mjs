@@ -346,6 +346,51 @@ test("explicit queued channel work and reconciliation are projected, while dupli
   assert.ok(golden.taskId);
 });
 
+test("channel candidates require canonical source evidence and do not use queue paths as sources", async () => {
+  const worldRoot = await makeWorld();
+  const sourceLocator = path.join(worldRoot, "channel-source.pya");
+  await fs.writeFile(sourceLocator, newspaperMap("channel source", { identity: "channel-source-001" }), "utf8");
+  const payload = (eventId, source = {}) => ({
+    provider: "fixture-mail",
+    messageId: eventId,
+    eventId,
+    sourceLocator: source.locator,
+    timestamp: AS_OF,
+    receivedAt: AS_OF
+  });
+  for (const [eventId, source] of [
+    ["channel-with-source", { locator: sourceLocator }],
+    ["channel-without-source", {}]
+  ]) {
+    await enqueueInputEnvelope(worldRoot, {
+      channelType: "fixture-mail",
+      identity: "hq-inbox",
+      agentName: OWNER,
+      roomName: "hq-inbox",
+      eventId,
+      payloadSentence: {
+        mood: "ya",
+        su: { name: eventId },
+        be: "channel queued event",
+        ob: { text: JSON.stringify(payload(eventId, source)) }
+      },
+      queuedAt: AS_OF
+    });
+  }
+
+  const projection = await projectHeadquartersBriefing(worldRoot, { asOf: AS_OF });
+  const sourced = projection.items.find(item => item.messageId === "channel-with-source");
+  assert.ok(sourced);
+  assert.equal(sourced.sourceLocator, sourceLocator);
+  assert.ok(sourced.evidence.some(evidence => (
+    evidence.kind === "channel source" && evidence.locator === sourceLocator
+  )));
+  assert.equal(
+    projection.items.some(item => item.messageId === "channel-without-source"),
+    false
+  );
+});
+
 test("golden fixture evidence is correlated and identical projections serialize byte-identically", async () => {
   const worldRoot = await makeWorld();
   await addTask(worldRoot, "fixture-mail-golden-message-001", {
@@ -530,6 +575,7 @@ test("projection does not create holding lanes when the canonical world is empty
 
 test("explicit asOf excludes future queued state and future newspaper signals", async () => {
   const worldRoot = await makeWorld();
+  const beforeFutureState = await projectHeadquartersBriefing(worldRoot, { asOf: AS_OF });
   const futureTask = await addTask(worldRoot, "future-task", { deadline: AS_OF });
   await writeWorkTaskStatus(worldRoot, buildWorkTask({
     ...futureTask,
@@ -554,7 +600,11 @@ test("explicit asOf excludes future queued state and future newspaper signals", 
       }) }
     }
   });
-  await addTask(worldRoot, "future-evidence", { deadline: "" });
+  const futureEvidenceTask = await addTask(worldRoot, "future-evidence", { deadline: "" });
+  await writeWorkTaskStatus(worldRoot, buildWorkTask({
+    ...futureEvidenceTask,
+    queuedAt: "2026-08-25T12:00:00.000Z"
+  }));
   await appendNewspaper(worldRoot, "future-evidence.pya", [{
     name: "future escalation",
     fields: {
@@ -569,6 +619,7 @@ test("explicit asOf excludes future queued state and future newspaper signals", 
   const projection = await projectHeadquartersBriefing(worldRoot, { asOf: AS_OF });
   assert.equal(projection.candidateCount, 0);
   assert.deepEqual(projection.items, []);
+  assert.deepEqual(projection.sourceSnapshot, beforeFutureState.sourceSnapshot);
 });
 
 test("recording creates a derived artifact and standard replay detects a tampered linked source", async () => {

@@ -363,7 +363,11 @@ async function readNewspaperState(worldRoot, asOfDate) {
     const timestamp = Date.parse(record.timestamp);
     return !Number.isFinite(timestamp) || timestamp <= asOfDate.getTime();
   });
-  return { records: visibleRecords, snapshots };
+  const visibleFiles = new Set(visibleRecords.map(record => record.file));
+  return {
+    records: visibleRecords,
+    snapshots: snapshots.filter(snapshot => visibleFiles.has(snapshot.locator))
+  };
 }
 
 function matchNewspaper(record, {
@@ -516,7 +520,7 @@ function initialCandidate({
   const channelSourceIdentity = sourceIdentityForEvent(event, channel?.envelope);
   const sourceIdentity = text(source.identity) || channelSourceIdentity;
   const canonicalSourceLocator = text(source.locator) || text(event.sourceLocator);
-  const sourceLocator = canonicalSourceLocator || text(channel?.path);
+  const sourceLocator = canonicalSourceLocator;
   const taskId = text(task?.taskId || event.taskId);
   const messageId = text(source.messageId) || text(event.messageId);
   const eventId = text(source.eventId) || text(event.eventId) || text(channel?.envelope?.eventId);
@@ -625,7 +629,6 @@ function initialCandidate({
     evidenceTimestamp,
     hasTask: Boolean(task),
     title: text(task?.title) || text(event.subject),
-    sourceLocatorIsQueue: Boolean(channel && !canonicalSourceLocator)
   };
 }
 
@@ -640,7 +643,6 @@ function mergeList(left, right) {
 function mergeCandidate(existing, incoming) {
   for (const key of ["taskId", "messageId", "sourceIdentity", "sourceLocator"]) {
     if (existing[key] && incoming[key] && existing[key] !== incoming[key]) {
-      if (key === "sourceLocator" && (existing.sourceLocatorIsQueue || incoming.sourceLocatorIsQueue)) continue;
       throw new Error(`headquarters briefing defective: conflicting ${key} for ${existing.subjectIdentity}`);
     }
   }
@@ -673,10 +675,7 @@ function mergeCandidate(existing, incoming) {
       .sort(lexicalCompare)
       .at(-1) || "",
     hasTask: existing.hasTask || incoming.hasTask,
-    title: existing.title || incoming.title,
-    sourceLocatorIsQueue: existing.hasTask
-      ? existing.sourceLocatorIsQueue
-      : incoming.sourceLocatorIsQueue
+    title: existing.title || incoming.title
   };
   merged.reasons = [...new Set(merged.signals.map(entry => entry.name))];
   return merged;
@@ -751,6 +750,10 @@ export async function projectHeadquartersBriefing(worldRoot, {
     listChannelQueueEnvelopes(worldRoot),
     readNewspaperState(worldRoot, asOfDate)
   ]);
+  const visibleTasks = tasks.filter(task => visibleAtAsOf(task.queuedAt, asOfDate));
+  const visibleChannelEntries = channelEntries.filter(entry => (
+    visibleAtAsOf(entry.envelope.queuedAt, asOfDate)
+  ));
   const organizations = new Map();
   const sourceSnapshots = [await snapshotFor({
     kind: "policy",
@@ -770,7 +773,7 @@ export async function projectHeadquartersBriefing(worldRoot, {
   const statusPaths = new Map();
   const envelopePaths = new Map();
   const envelopePhases = new Map();
-  for (const task of tasks) {
+  for (const task of visibleTasks) {
     const statusPath = await workTaskStatusPath(worldRoot, task.taskId, { readOnly: true });
     const envelope = await findWorkTaskEnvelope(worldRoot, task.taskId, {
       owner: task.owner,
@@ -787,12 +790,22 @@ export async function projectHeadquartersBriefing(worldRoot, {
       locator: task.source?.locator
     }));
   }
-  for (const entry of channelEntries) {
+  for (const entry of visibleChannelEntries) {
     sourceSnapshots.push(await snapshotFor({
       kind: "channel queue",
       identity: entry.envelope.eventId || entry.filename,
       locator: entry.path
     }));
+    const event = eventFromEnvelope(entry.envelope);
+    const sourceIdentity = sourceIdentityForEvent(event, entry.envelope);
+    const sourceLocator = text(event.sourceLocator);
+    if (sourceIdentity && sourceLocator) {
+      sourceSnapshots.push(await snapshotFor({
+        kind: "channel source",
+        identity: sourceIdentity,
+        locator: sourceLocator
+      }));
+    }
   }
   const sourceSnapshot = uniqueSnapshots(sourceSnapshots);
   const snapshotByLocator = new Map(sourceSnapshot.map(entry => [entry.locator, entry]));
@@ -803,8 +816,7 @@ export async function projectHeadquartersBriefing(worldRoot, {
     domains: []
   };
   const rawCandidates = [];
-  for (const task of tasks) {
-    if (!visibleAtAsOf(task.queuedAt, asOfDate)) continue;
+  for (const task of visibleTasks) {
     if (policy.terminalStatuses.includes(text(task.status).toLowerCase())) continue;
     if (!text(task.taskId) || !text(task.source?.identity) || !text(task.source?.locator)) continue;
     const candidate = initialCandidate({
@@ -818,11 +830,10 @@ export async function projectHeadquartersBriefing(worldRoot, {
     });
     if (candidate.signals.length > 0) rawCandidates.push(candidate);
   }
-  for (const entry of channelEntries) {
-    if (!visibleAtAsOf(entry.envelope.queuedAt, asOfDate)) continue;
+  for (const entry of visibleChannelEntries) {
     const event = eventFromEnvelope(entry.envelope);
     const sourceIdentity = sourceIdentityForEvent(event, entry.envelope);
-    const sourceLocator = text(event.sourceLocator) || entry.path;
+    const sourceLocator = text(event.sourceLocator);
     if (!sourceIdentity || !sourceLocator) continue;
     const organization = organizations.get(entry.envelope.agentName) ?? {
       role: "",
