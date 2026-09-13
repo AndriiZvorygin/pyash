@@ -88,6 +88,7 @@ function mapPolicyFields(parsed, policyName) {
   if (matching.length > 1) defect(`duplicate policy map ${policyName}`);
   const start = parsed.indexOf(matching[0]);
   const fields = {};
+  const types = {};
   let closed = false;
   for (const sentence of parsed.slice(start + 1)) {
     if (sentence?.mood === "prah") {
@@ -99,21 +100,28 @@ function mapPolicyFields(parsed, policyName) {
     }
     const name = text(sentence.su.name);
     if (Object.hasOwn(fields, name)) defect(`duplicate policy entry ${name}`);
+    const objectKeys = Object.keys(sentence.ob);
+    if (objectKeys.length !== 1) defect(`malformed policy entry ${name}`);
     const value = primitive(sentence);
     if (value === undefined) defect(`malformed policy entry ${name}`);
     fields[name] = value;
+    types[name] = objectKeys[0] === "ve"
+      ? `ve ${text(sentence.ob.ve?.type)}`
+      : objectKeys[0];
   }
   if (!closed) defect("policy map is not closed");
-  return fields;
+  return { fields, types };
 }
 
-function requiredText(fields, key) {
+function requiredText(fields, types, key) {
+  if (types[key] !== "text") defect(`${key} must be text`);
   const value = text(fields[key]);
   if (!value) defect(`missing ${key}`);
   return value;
 }
 
-function requiredNumber(fields, key) {
+function requiredNumber(fields, types, key) {
+  if (types[key] !== "num") defect(`${key} must be num`);
   const value = Number(fields[key]);
   if (!Number.isFinite(value) || Math.trunc(value) !== value || value < 0) {
     defect(`invalid ${key}`);
@@ -121,7 +129,8 @@ function requiredNumber(fields, key) {
   return value;
 }
 
-function requiredVector(fields, key) {
+function requiredVector(fields, types, key) {
+  if (types[key] !== "ve text") defect(`${key} must be text vector`);
   const values = fields[key];
   if (!Array.isArray(values) || values.length === 0 || values.some(value => !text(value))) {
     defect(`invalid ${key}`);
@@ -148,7 +157,7 @@ export async function readHeadquartersBriefingPolicy(policyPath = DEFAULT_POLICY
       defect(`module is not parseable: ${filename}`);
     }
   }
-  const fields = mapPolicyFields(parsed, "headquarters briefing policy");
+  const { fields, types } = mapPolicyFields(parsed, "headquarters briefing policy");
   const expected = new Set([
     "identity",
     "maximum items",
@@ -166,7 +175,7 @@ export async function readHeadquartersBriefingPolicy(policyPath = DEFAULT_POLICY
   for (const name of expected) {
     if (!Object.hasOwn(fields, name)) defect(`missing ${name}`);
   }
-  const categoryPrecedence = requiredVector(fields, "category precedence");
+  const categoryPrecedence = requiredVector(fields, types, "category precedence");
   const canonicalCategories = [
     "pending approval/decision",
     "explicit escalation",
@@ -178,26 +187,26 @@ export async function readHeadquartersBriefingPolicy(policyPath = DEFAULT_POLICY
   if (canonical(categoryPrecedence) !== canonical(canonicalCategories)) {
     defect("category precedence must declare the canonical categories exactly once");
   }
-  const terminalStatuses = requiredVector(fields, "terminal statuses excluded");
+  const terminalStatuses = requiredVector(fields, types, "terminal statuses excluded");
   if (canonical(terminalStatuses) !== canonical(["accepted", "failed"])) {
     defect("terminal statuses must declare the canonical terminal statuses exactly once");
   }
-  const evidenceRequired = requiredVector(fields, "source evidence required");
+  const evidenceRequired = requiredVector(fields, types, "source evidence required");
   if (canonical(evidenceRequired) !== canonical(["source identity", "source locator"])) {
     defect("source evidence requirement is not canonical");
   }
-  const integrationStates = requiredVector(fields, "integration states");
+  const integrationStates = requiredVector(fields, types, "integration states");
   if (canonical(integrationStates) !== canonical(["reconciliation", "conflict"])) {
     defect("integration states are not canonical");
   }
   const policy = {
-    identity: requiredText(fields, "identity"),
-    maximumItems: requiredNumber(fields, "maximum items"),
-    imminentHorizonHours: requiredNumber(fields, "imminent horizon hours"),
+    identity: requiredText(fields, types, "identity"),
+    maximumItems: requiredNumber(fields, types, "maximum items"),
+    imminentHorizonHours: requiredNumber(fields, types, "imminent horizon hours"),
     categoryPrecedence,
     terminalStatuses,
-    audienceIdentity: requiredText(fields, "audience identity"),
-    tieBreakFields: requiredVector(fields, "tie-break fields"),
+    audienceIdentity: requiredText(fields, types, "audience identity"),
+    tieBreakFields: requiredVector(fields, types, "tie-break fields"),
     sourceEvidenceRequired: evidenceRequired,
     integrationStates,
     sourcePath: filename
@@ -211,6 +220,10 @@ export async function readHeadquartersBriefingPolicy(policyPath = DEFAULT_POLICY
   ];
   if (canonical(policy.tieBreakFields) !== canonical(canonicalTieBreakFields)) {
     defect("tie-break fields are not canonical");
+  }
+  if (policy.identity !== "headquarters-briefing-v1") defect("identity is not canonical");
+  if (policy.audienceIdentity !== "chief of staff") {
+    defect("audience identity must be chief of staff");
   }
   if (policy.maximumItems !== 5) defect("maximum items must be 5");
   if (policy.imminentHorizonHours !== 24) defect("imminent horizon must be 24 hours");
