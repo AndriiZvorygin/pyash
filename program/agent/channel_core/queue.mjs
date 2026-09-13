@@ -299,10 +299,7 @@ export async function listChannelEnvelopes(worldRoot, {
 }
 
 function queueLexicalCompare(left, right) {
-  const a = String(left ?? "");
-  const b = String(right ?? "");
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
+  return compareUtf8Bytes(left, right);
 }
 
 /**
