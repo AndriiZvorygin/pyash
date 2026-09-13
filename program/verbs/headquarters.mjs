@@ -19,7 +19,10 @@ import {
   runChannelPollOnce,
   runChannelInputOnce
 } from "../agent/channels/index.mjs";
-import { projectHeadquartersBriefingInput } from "../agent/headquarters/briefing.mjs";
+import {
+  projectHeadquartersBriefing,
+  recordHeadquartersBriefing
+} from "../agent/headquarters/briefing.mjs";
 import { readWorkTaskStatus } from "../runtime/work/status.mjs";
 import { findWorkTaskEnvelope } from "../runtime/work/queue.mjs";
 import { workTaskStatusDir } from "../runtime/work/status.mjs";
@@ -58,7 +61,7 @@ function resultMap(workflow, poll, input, briefing, artifactLinks = []) {
     "work reused": workflow?.reused ? "truth" : "lie",
     "poll enqueued": poll?.enqueued,
     "input handled": input?.handled,
-    "briefing visible": briefing.some(candidate => candidate.taskId === workflow?.taskId) ? "truth" : "lie",
+    "briefing visible": briefing.items.some(candidate => candidate.taskId === workflow?.taskId) ? "truth" : "lie",
     "briefing source locator": workflow?.briefing?.sourceLocator,
     "channel input path": poll?.queuedPaths?.[0],
     "channel success path": input?.completedPaths?.[0],
@@ -75,6 +78,34 @@ function resultMap(workflow, poll, input, briefing, artifactLinks = []) {
 export async function headquarters(sentence, { remember: rememberFn = remember } = {}) {
   const worldRoot = resolveWorldRoot({ rememberFn });
   if (!worldRoot) throw new Error("headquarters fixture mail requires world root");
+  if (!sentence?.from && sentence?.during?.date) {
+    const projection = await projectHeadquartersBriefing(worldRoot, {
+      asOf: valueText(sentence.during.date)
+    });
+    const recording = await recordHeadquartersBriefing(worldRoot, projection);
+    const fields = {
+      "as-of": projection.asOf,
+      audience: projection.metadata.audienceIdentity,
+      "policy identity": projection.policy.identity,
+      "policy hash": projection.policy.hash,
+      "candidate count": projection.candidateCount,
+      "returned count": projection.items.length,
+      "item identities": JSON.stringify(projection.items.map(item => item.subjectIdentity)),
+      "briefing artifact locator": recording.artifact.locator,
+      "briefing artifact hash": recording.artifact.hash,
+      "briefing newspaper locator": recording.newspaper.locator,
+      "briefing newspaper hash": recording.newspaper.hash,
+      "input evidence links": JSON.stringify(recording.inputs)
+    };
+    return {
+      ob: {
+        map: Object.fromEntries(
+          Object.entries(fields).map(([key, value]) => [key, { text: String(value ?? "") }])
+        )
+      },
+      be: "map"
+    };
+  }
   const fixturePath = resolveManagedPath(sentence?.from, worldRoot);
   const policyPath = resolveManagedPath(sentence?.with, worldRoot);
   const owner = valueText(sentence?.for) || DEFAULT_OWNER;
@@ -128,7 +159,9 @@ export async function headquarters(sentence, { remember: rememberFn = remember }
     },
     routerInterpretFn: routerSentence => router(routerSentence, { remember: rememberFn })
   });
-  const briefing = await projectHeadquartersBriefingInput(worldRoot);
+  const briefingAsOf = workflow?.task?.source?.receivedAt
+    || (await readFixtureMailRecord({ fixturePath, inboxIdentity })).receivedAt;
+  const briefing = await projectHeadquartersBriefing(worldRoot, { asOf: briefingAsOf });
   if (!workflow) {
     const record = await readFixtureMailRecord({ fixturePath, inboxIdentity });
     const taskId = fixtureMailTaskId(record);
@@ -143,7 +176,7 @@ export async function headquarters(sentence, { remember: rememberFn = remember }
       routerPayloadId: task.source.routerPayloadId,
       reused: true,
       task,
-      briefing: briefing.find(candidate => candidate.taskId === taskId),
+      briefing: briefing.items.find(candidate => candidate.taskId === taskId),
       workEnvelopePath,
       taskStatusPath,
       artifactPaths: [
@@ -174,6 +207,10 @@ export async function headquarters(sentence, { remember: rememberFn = remember }
 export default headquarters;
 
 export const signatures = [
+  {
+    signatureWords: ["be", "headquarters", "during", "date", "to", "name", "map"],
+    handler: headquarters
+  },
   {
     signatureWords: [
       "be", "headquarters", "as", "text", "for", "text", "from", "filename",

@@ -1,0 +1,6 @@
+exists su name world tools ob bool truth ya
+exists su name world root ob filename "world" be default ya
+
+from filename "../../module/headquarters-briefing.pya" ob name headquarters briefing policy to name headquarters briefing policy be import do
+be headquarters from filename "../examples/fixtures/headquarters/fixture-mail.pya" with filename "../module/headquarters-fixture-mail.pya" for text "correspondence worker" as text "hq-inbox" to name map fixture result do
+be headquarters during date 2026-08-24T12:00:00.000Z to name map briefing result do

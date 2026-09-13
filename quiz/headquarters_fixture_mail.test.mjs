@@ -31,7 +31,7 @@ import {
   readFixtureMailRecord,
   runFixtureMailWorkflow
 } from "../program/agent/channels/fixture_mail.mjs";
-import { projectHeadquartersBriefingInput } from "../program/agent/headquarters/briefing.mjs";
+import { projectHeadquartersBriefing } from "../program/agent/headquarters/briefing.mjs";
 import { readWorkTaskStatus, updateWorkTaskCheckpoint } from "../program/runtime/work/status.mjs";
 import { listWorkTasks } from "../program/runtime/work/operator.mjs";
 
@@ -250,16 +250,23 @@ test("headquarters golden fixture becomes one assigned escalated briefing candid
   assert.deepEqual(task.delegationEvents.map(event => event.type), ["assigned", "escalated"]);
   assert.deepEqual(task.delegationEvents.map(event => event.sourceIdentity), [task.source.identity, task.source.identity]);
 
-  const briefing = await projectHeadquartersBriefingInput(worldRoot);
-  assert.deepEqual(briefing, [{
+  const briefing = await projectHeadquartersBriefing(worldRoot, {
+    asOf: "2026-08-24T12:00:00.000Z"
+  });
+  assert.equal(briefing.items.length, 1);
+  assert.deepEqual(briefing.items[0], {
+    ...briefing.items[0],
     taskId,
     owner: "correspondence worker",
     domain: "correspondence",
     deadline: "2026-08-24T17:00:00.000Z",
-    escalationReason: "decision requirement plus deadline",
-    escalationTarget: "chief of staff",
     sourceLocator: task.source.locator
-  }]);
+  });
+  assert.deepEqual(briefing.items[0].reasons, [
+    "explicit escalation",
+    "deadline within horizon",
+    "blocked or queued response work"
+  ]);
 
   const duplicatePoll = await runChannelPollOnce({
     agentName: "correspondence worker",

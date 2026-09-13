@@ -372,8 +372,12 @@ export async function writeWorkTaskRuntime(runtimePath, task) {
   return current;
 }
 
-async function listWorkFiles(worldRoot, directory, { owner = "", readyOnly = false } = {}) {
-  await ensureWorkQueueDirs(worldRoot);
+async function listWorkFiles(worldRoot, directory, {
+  owner = "",
+  readyOnly = false,
+  readOnly = false
+} = {}) {
+  if (!readOnly) await ensureWorkQueueDirs(worldRoot);
   let filenames = [];
   try {
     filenames = await listSpoolItemsOldestFirst(directory);
@@ -412,11 +416,14 @@ export async function listRuntimeWorkTasks(worldRoot, { owner = "" } = {}) {
   return listWorkFiles(worldRoot, paths.runtimeDir, { owner });
 }
 
-export async function findWorkTaskEnvelope(worldRoot, taskId, { owner = "" } = {}) {
-  const paths = await ensureWorkQueueDirs(worldRoot);
+export async function findWorkTaskEnvelope(worldRoot, taskId, {
+  owner = "",
+  readOnly = false
+} = {}) {
+  const paths = readOnly ? workQueuePaths(worldRoot) : await ensureWorkQueueDirs(worldRoot);
   const id = normalizeWorkTaskId(taskId);
   for (const directory of [paths.runtimeDir, paths.inputDir]) {
-    const candidates = await listWorkFiles(worldRoot, directory, { owner });
+    const candidates = await listWorkFiles(worldRoot, directory, { owner, readOnly });
     const found = candidates.find((entry) => entry.task.taskId === id);
     if (found) return { ...found, path: path.join(directory, found.filename), runtime: directory === paths.runtimeDir };
   }

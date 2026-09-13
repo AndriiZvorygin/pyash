@@ -298,6 +298,63 @@ export async function listChannelEnvelopes(worldRoot, {
   ));
 }
 
+function queueLexicalCompare(left, right) {
+  const a = String(left ?? "");
+  const b = String(right ?? "");
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/**
+ * List only the active channel backlog without creating lanes or migrating
+ * legacy files. Queue lifecycle helpers remain responsible for those writes.
+ */
+export async function listChannelQueueEnvelopes(worldRoot, {
+  includeRuntime = true
+} = {}) {
+  const paths = channelQueuePaths(worldRoot);
+  const locations = [
+    { phase: "input", directory: paths.inputDir },
+    ...(includeRuntime ? [{ phase: "runtime", directory: paths.runtimeDir }] : []),
+    { phase: "produce", directory: paths.produceDir }
+  ];
+  const legacyProduceDir = path.join(paths.root, "produce");
+  if (legacyProduceDir !== paths.produceDir) {
+    locations.push({ phase: "produce", directory: legacyProduceDir });
+  }
+  const entries = [];
+  for (const location of locations) {
+    let filenames = [];
+    try {
+      filenames = (await fs.readdir(location.directory, { withFileTypes: true }))
+        .filter(entry => entry.isFile() && entry.name.endsWith(".pya"))
+        .map(entry => entry.name)
+        .sort(queueLexicalCompare);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const filename of filenames) {
+      const targetPath = path.join(location.directory, filename);
+      try {
+        const envelope = await readEnvelopeFile(targetPath);
+        if (!["input", "produce"].includes(envelope.phase)) continue;
+        entries.push({
+          phase: location.phase,
+          filename,
+          path: targetPath,
+          envelope
+        });
+      } catch {
+        // Malformed spool items remain the channel runtime's responsibility.
+      }
+    }
+  }
+  return entries.sort((left, right) => (
+    queueLexicalCompare(`${left.envelope.queuedAt}\u0000${left.path}`, `${right.envelope.queuedAt}\u0000${right.path}`)
+  ));
+}
+
 export async function claimOldestInputEnvelope(
   worldRoot,
   { workerTag = "", channelType = "", agentName = "", lane = "" } = {}

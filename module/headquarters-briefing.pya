@@ -1,0 +1,13 @@
+su name headquarters briefing policy be map def
+  su name identity ob text "headquarters-briefing-v1" ya
+  su name maximum items ob num 5 ya
+  su name imminent horizon hours ob num 24 ya
+  su name category precedence ob ve text "pending approval/decision" "explicit escalation" "overdue deadline" "deadline within horizon" "explicit reconciliation/conflict" "blocked or queued response work" ya
+  su name terminal statuses excluded ob ve text "accepted" "failed" ya
+  su name audience identity ob text "chief of staff" ya
+  su name tie-break fields ob ve text "category precedence" "normalized deadline (missing last)" "existing numeric work priority (descending)" "evidence timestamp (missing last)" "stable identity (locale-independent lexical)" ya
+  su name source evidence required ob ve text "source identity" "source locator" ya
+  su name integration states ob ve text "reconciliation" "conflict" ya
+prah
+
+exists su name headquarters briefing policy be export ya
