@@ -60,7 +60,11 @@ export function npToPyash(np = {}) {
     }
     return `text ${JSON.stringify(np.text)}`;
   }
-  if (np.filename !== undefined) return `filename ${np.filename}`;
+  if (np.filename !== undefined) {
+    const filename = String(np.filename);
+    const alreadyQuoted = filename.startsWith("\"") && filename.endsWith("\"");
+    return `filename ${alreadyQuoted || !/\s/u.test(filename) ? filename : JSON.stringify(filename)}`;
+  }
   if (np.ve) {
     const type = np.ve.type || "num";
     const values = Array.isArray(np.ve.values) ? np.ve.values : [];

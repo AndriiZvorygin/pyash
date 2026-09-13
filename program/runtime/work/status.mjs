@@ -433,18 +433,18 @@ async function statusDir(worldRoot, { create = true } = {}) {
   return dir;
 }
 
-export async function workTaskStatusDir(worldRoot) {
-  return statusDir(worldRoot);
+export async function workTaskStatusDir(worldRoot, { readOnly = false } = {}) {
+  return statusDir(worldRoot, { create: !readOnly });
 }
 
-async function statusPath(worldRoot, taskId) {
+async function statusPath(worldRoot, taskId, { readOnly = false } = {}) {
   const id = normalizeWorkTaskId(taskId);
   if (!id) return "";
-  return path.join(await statusDir(worldRoot), `${id}.pya`);
+  return path.join(await statusDir(worldRoot, { create: !readOnly }), `${id}.pya`);
 }
 
-export async function workTaskStatusPath(worldRoot, taskId) {
-  return statusPath(worldRoot, taskId);
+export async function workTaskStatusPath(worldRoot, taskId, { readOnly = false } = {}) {
+  return statusPath(worldRoot, taskId, { readOnly });
 }
 
 function checkpointHasData(checkpoint) {
@@ -490,7 +490,7 @@ async function mergeStoredTask(worldRoot, task) {
 }
 
 export async function readWorkTaskStatus(worldRoot, taskId) {
-  const target = await statusPath(worldRoot, taskId);
+  const target = await statusPath(worldRoot, taskId, { readOnly: true });
   if (!target) return null;
   try {
     return statusFromText(await fs.readFile(target, "utf8"));

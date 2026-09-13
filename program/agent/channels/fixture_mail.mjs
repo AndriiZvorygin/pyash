@@ -7,7 +7,7 @@ import { interpret as interpretPyash } from "../../bridge/index.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import { worldNewspaperLogPath } from "../newspaper_log.mjs";
 import { recordArtifact } from "../../bridge/exchange.mjs";
-import { projectHeadquartersBriefingInput } from "../headquarters/briefing.mjs";
+import { projectHeadquartersBriefing } from "../headquarters/briefing.mjs";
 import {
   addWorkTask,
   ensureWorkTaskDelegationEvent
@@ -380,8 +380,8 @@ export async function runFixtureMailWorkflow({
       at: record.receivedAt
     });
   }
-  const briefing = await projectHeadquartersBriefingInput(worldRoot);
-  const briefingCandidate = briefing.find(candidate => candidate.taskId === taskId);
+  const briefing = await projectHeadquartersBriefing(worldRoot, { asOf: record.receivedAt });
+  const briefingCandidate = briefing.items.find(candidate => candidate.taskId === taskId);
   if (!briefingCandidate) throw new Error(`fixture mail briefing missing task: ${taskId}`);
   advanceStage("briefing-visible");
   await appendFixtureMailEvidence(worldRoot, {
