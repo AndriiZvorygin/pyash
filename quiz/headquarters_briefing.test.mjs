@@ -681,3 +681,59 @@ test("recording creates a derived artifact and standard replay detects a tampere
   );
   assert.equal(crypto.createHash("sha256").update(serializeHeadquartersBriefing(projection)).digest("hex").length, 64);
 });
+
+test("recording external world roots uses exchange-relative artifacts and replays", async () => {
+  const parent = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-headquarters-external-recording-"));
+  const worldRoot = path.join(parent, "world");
+  const runRoot = path.join(parent, "run");
+  await fs.mkdir(worldRoot, { recursive: true });
+  await fs.mkdir(runRoot, { recursive: true });
+  await establishAgent({
+    worldRoot,
+    agentName: "chief of staff",
+    purpose: "Coordinate Headquarters work.",
+    organization: { role: "Chief of Staff", supervisor: "", domains: ["headquarters"] }
+  });
+  const sourcePath = path.join(worldRoot, "external-source.pya");
+  await fs.writeFile(sourcePath, newspaperMap("external source", { identity: "external-001" }), "utf8");
+  await addTask(worldRoot, "external-recorded", {
+    source: sourceFor("external-recorded", { locator: sourcePath }),
+    deadline: AS_OF
+  });
+  const projection = await projectHeadquartersBriefing(worldRoot, { asOf: AS_OF });
+  const recorded = [];
+  setExchangeRecorder({ runRoot, record: sentence => recorded.push(sentence) });
+  try {
+    const result = await recordHeadquartersBriefing(worldRoot, projection);
+    assert.ok(result.artifact.locator.startsWith("artifacts/external-world/"));
+    assert.equal(result.artifact.worldLocator.startsWith(worldRoot), true);
+    const sourceLink = result.inputs.find(link => link.identity === "fixture-mail:external-recorded");
+    assert.ok(sourceLink);
+    assert.equal(sourceLink.externalRoot, true);
+    assert.ok(sourceLink.artifactLocator.startsWith("artifacts/external-world/"));
+  } finally {
+    clearExchangeRecorder();
+  }
+  assert.ok(recorded.some(sentence => sentence?.be === "artifact"));
+  assert.ok(recorded.some(sentence => sentence?.su?.name === "headquarters briefing projection"));
+  const runId = "external-briefing-replay";
+  await fs.mkdir(path.join(runRoot, "newspaper"), { recursive: true });
+  await fs.writeFile(
+    path.join(runRoot, "newspaper", `${runId}.pya`),
+    recorded.map(sentence => `${sentenceToPyash(sentence)}\n`).join(""),
+    "utf8"
+  );
+  const replayed = await execFile(
+    process.execPath,
+    [
+      path.resolve("command/replay_newspaper.mjs"),
+      "--run-id",
+      runId,
+      "--run-root",
+      runRoot
+    ],
+    { cwd: path.resolve(".") }
+  );
+  assert.match(replayed.stdout, /replay ya/);
+  await fs.rm(parent, { recursive: true, force: true });
+});
