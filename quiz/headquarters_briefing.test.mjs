@@ -448,6 +448,31 @@ test("projection ignores newspaper prose and unrelated typed fields during corre
   assert.deepEqual(item.newspaperLocators, []);
 });
 
+test("canonical newspaper names containing the derived prefix remain readable", async () => {
+  const worldRoot = await makeWorld();
+  const source = sourceFor("canonical-newspaper", { locator: "fixture://canonical-newspaper" });
+  await addTask(worldRoot, "canonical-newspaper", { source });
+  await appendNewspaper(worldRoot, "20260824-headquarters-briefing-canonical.pya", [{
+    name: "canonical escalation evidence",
+    fields: {
+      stage: "escalated",
+      at: "2026-08-24T10:00:00.000Z",
+      "task id": "canonical-newspaper",
+      "source identity": source.identity,
+      "source locator": source.locator,
+      "escalation reason": "canonical evidence",
+      "escalation target": "chief of staff"
+    }
+  }]);
+
+  const projection = await projectHeadquartersBriefing(worldRoot, { asOf: AS_OF });
+  const item = projection.items.find(candidate => candidate.taskId === "canonical-newspaper");
+  assert.ok(item);
+  assert.equal(item.category, "explicit escalation");
+  assert.equal(item.escalation.reason, "canonical evidence");
+  assert.equal(item.newspaperEvidence[0].stage, "escalated");
+});
+
 test("ready work is a canonical queued signal and conflicting newspaper locators are defective", async () => {
   const worldRoot = await makeWorld();
   const source = sourceFor("ready-work", { locator: "fixture://ready-work" });
@@ -579,6 +604,11 @@ test("recording creates a derived artifact and standard replay detects a tampere
   await assert.rejects(
     execFile(process.execPath, replayArgs, { cwd: path.resolve(".") }),
     /hash inconsistency/
+  );
+  await fs.appendFile(sourcePath, "changed after projection\n", "utf8");
+  await assert.rejects(
+    recordHeadquartersBriefing(worldRoot, projection),
+    /linked source changed after projection/
   );
   assert.equal(crypto.createHash("sha256").update(serializeHeadquartersBriefing(projection)).digest("hex").length, 64);
 });

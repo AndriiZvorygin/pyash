@@ -22,6 +22,7 @@ const DEFAULT_POLICY_PATH = path.resolve(
 );
 const TERMINAL_STATUS_FALLBACK = new Set(["accepted", "failed"]);
 const URI_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//u;
+const DERIVED_BRIEFING_NEWSPAPER_PATTERN = /^\d{8}-headquarters-briefing-[0-9a-f]{16}\.pya$/u;
 
 function text(value) {
   return String(value ?? "").trim();
@@ -295,7 +296,7 @@ async function readNewspaperState(worldRoot, asOfDate) {
     throw error;
   }
   const files = names
-    .filter(name => name.endsWith(".pya") && !name.includes("-headquarters-briefing-"))
+    .filter(name => name.endsWith(".pya") && !DERIVED_BRIEFING_NEWSPAPER_PATTERN.test(name))
     .sort(lexicalCompare);
   const records = [];
   const snapshots = [];
@@ -986,6 +987,15 @@ export async function recordHeadquartersBriefing(worldRoot, projection) {
       locator: snapshot.locator,
       hash: snapshot.hash
     };
+    if (snapshot.hash && filename && !isUri(filename) && !bytes) {
+      throw new Error(`headquarters briefing defective: linked source disappeared after projection: ${snapshot.locator}`);
+    }
+    if (snapshot.hash && bytes) {
+      const currentHash = hashBytes(bytes);
+      if (currentHash !== snapshot.hash) {
+        throw new Error(`headquarters briefing defective: linked source changed after projection: ${snapshot.locator}`);
+      }
+    }
     const portable = portableLocator(snapshot.locator, runRoot);
     if (bytes && portable) {
       const artifact = recordArtifact({
