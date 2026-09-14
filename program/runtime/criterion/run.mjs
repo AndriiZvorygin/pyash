@@ -110,7 +110,21 @@ async function loadResumedRows(filepath) {
   }
 }
 
-function rowKey(row) { return `${row.model}\u0000${row.sampleId}\u0000${row.profile}\u0000${row.contextLength}`; }
+function contextLengthKey(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const numeric = Number(value);
+  return numeric === 0 ? "" : String(value);
+}
+
+function rowKey(row) { return `${row.model}\u0000${row.sampleId}\u0000${row.profile}\u0000${contextLengthKey(row.contextLength)}`; }
+
+function completedRows(prior) {
+  const rows = new Map();
+  for (const row of prior) {
+    if (row.status === "ok" || row.status === "skipped") rows.set(rowKey(row), row);
+  }
+  return [...rows.values()];
+}
 
 function groupedAggregates(results, models, groupKey) {
   return models.flatMap(model => {
@@ -202,8 +216,9 @@ export async function runCriterion({
   const runStartedAt = now().toISOString();
   const outputJsonl = path.resolve(root, "criterion", "results", `${id}.jsonl`);
   const prior = resume ? await loadResumedRows(outputJsonl) : [];
-  const completed = new Map(prior.filter(row => row.status === "ok" || row.status === "skipped").map(row => [rowKey(row), row]));
-  const results = prior.filter(row => completed.has(rowKey(row)));
+  const resumed = completedRows(prior);
+  const completed = new Map(resumed.map(row => [rowKey(row), row]));
+  const results = resumed;
   const emit = (event, fields = {}) => { if (typeof onEvent === "function") onEvent({ event, runId: id, benchmark: suiteKey, ...fields }); };
   const persistRows = async () => {
     await fs.mkdir(path.dirname(outputJsonl), { recursive: true });
