@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { loadSuiteSamples } from "./datasets.mjs";
 import { collectMachineMetadata } from "./machine.mjs";
-import { aggregateSampleResults, compareExpectedFacts, parseJsonOutput, rougeScores, sha256, stripThinking, tokenize } from "./metrics.mjs";
+import { aggregateSampleResults, compareExpectedFacts, contextLengthBucket, parseJsonOutput, rougeScores, sha256, stripThinking, tokenize } from "./metrics.mjs";
 import { DEFAULT_PROFILES, readOllamaMetadata, runOllamaChat, resolveProfile } from "./ollama.mjs";
 import { loadRun, writeRunArtifacts } from "./report.mjs";
 
@@ -32,13 +32,17 @@ function structuredHelpOSScore(sample, output) {
     ? required.filter(field => parsed.value[field] !== undefined && parsed.value[field] !== null && parsed.value[field] !== "").length / Math.max(1, required.length)
     : (wantsStructured ? 0 : null);
   return {
-    ...rougeScores(sample.reference ?? "", output),
+    ...(sample.reference ? rougeScores(sample.reference, output) : { rouge1: null, rouge2: null, rougeL: null }),
     ...facts,
     schemaValidity: wantsStructured ? (parsed.valid ? 1 : 0) : 1,
     provenanceValidity: provenance,
     unsupportedClaimCount: Number(expected?.unsupportedClaimCount ?? 0),
     malformedOutput: wantsStructured && !parsed.valid
   };
+}
+
+function referenceRougeScores(reference, output) {
+  return reference ? rougeScores(reference, output) : { rouge1: null, rouge2: null, rougeL: null };
 }
 
 function queryRelevanceScore(query, output) {
@@ -55,13 +59,13 @@ export function scoreSample({ suiteKey, sample, output }) {
   if (suiteKey === "helpos-local") return structuredHelpOSScore(sample, output);
   if (suiteKey === "qmsum") {
     return {
-      ...rougeScores(sample.reference ?? "", output),
+      ...referenceRougeScores(sample.reference, output),
       queryRelevance: queryRelevanceScore(sample.query, output),
       answerLength: tokenize(output).length,
       schemaValidity: output ? 1 : 0
     };
   }
-  return { ...rougeScores(sample.reference ?? "", output), schemaValidity: output ? 1 : 0 };
+  return { ...referenceRougeScores(sample.reference, output), schemaValidity: output ? 1 : 0 };
 }
 
 function scoreInstructionSample(sample, output) {
@@ -107,11 +111,51 @@ async function loadResumedRows(filepath) {
 
 function rowKey(row) { return `${row.model}\u0000${row.sampleId}\u0000${row.profile}\u0000${row.contextLength}`; }
 
+function groupedAggregates(results, models, groupKey) {
+  return models.flatMap(model => {
+    const groups = new Map();
+    for (const row of results.filter(candidate => candidate.model === model)) {
+      const value = row.metadata?.[groupKey] ?? "unspecified";
+      if (!groups.has(value)) groups.set(value, []);
+      groups.get(value).push(row);
+    }
+    return [...groups.entries()].sort(([left], [right]) => String(left).localeCompare(String(right))).map(([group, rows]) => ({ model, [groupKey]: group, aggregate: aggregateSampleResults(rows) }));
+  });
+}
+
+function macroAggregates(groups, models, groupKey) {
+  return models.map(model => {
+    const rows = groups.filter(row => row.model === model);
+    const average = key => {
+      const values = rows.map(row => Number(row.aggregate?.[key])).filter(Number.isFinite);
+      return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+    };
+    return {
+      model,
+      [groupKey]: "macro-average",
+      aggregate: {
+        groupCount: rows.length,
+        rouge1: average("rouge1"),
+        rouge2: average("rouge2"),
+        rougeL: average("rougeL"),
+        averageLatencyMs: average("averageLatencyMs"),
+        qualityPerSecond: average("qualityPerSecond"),
+        failureCount: rows.reduce((sum, row) => sum + row.aggregate.failureCount, 0)
+      }
+    };
+  });
+}
+
+function replaySource({ datasetPath, fixtureRoot }) {
+  return datasetPath ? `--dataset ${datasetPath}` : `--fixtures ${fixtureRoot ?? "<fixtures>"}`;
+}
+
 function buildSuiteMetadata(key, catalog) {
   return {
     name: catalog.name,
     version: catalog.version,
-    sourceUrls: [catalog.sourceUrl, catalog.utilityUrl, catalog.v2SourceUrl].filter(Boolean),
+    sourceUrls: [catalog.sourceUrl, catalog.utilityUrl, catalog.mirrorUrl, catalog.taskSourceUrl, catalog.v2SourceUrl].filter(Boolean),
+    licenseUrls: [catalog.licenseUrl].filter(Boolean),
     key
   };
 }
@@ -142,6 +186,7 @@ export async function runCriterion({
   mode = "criterion",
   scenario = null,
   nightmare = null,
+  smoke = false,
   onEvent = null,
   now = () => new Date()
 } = {}) {
@@ -152,11 +197,16 @@ export async function runCriterion({
   const resolvedContextLength = Number(resolvedProfile.contextLength);
   const resolvedModels = normalizeModels(models);
   const id = String(runId ?? `${suiteKey}-${now().toISOString().replace(/[-:.TZ]/gu, "").slice(0, 14)}-${sha256(`${suiteKey}:${now().toISOString()}`).slice(0, 8)}`);
+  const runStartedAt = now().toISOString();
   const outputJsonl = path.resolve(root, "criterion", "results", `${id}.jsonl`);
   const prior = resume ? await loadResumedRows(outputJsonl) : [];
   const completed = new Map(prior.filter(row => row.status === "ok" || row.status === "skipped").map(row => [rowKey(row), row]));
   const results = prior.filter(row => completed.has(rowKey(row)));
   const emit = (event, fields = {}) => { if (typeof onEvent === "function") onEvent({ event, runId: id, benchmark: suiteKey, ...fields }); };
+  const persistRows = async () => {
+    await fs.mkdir(path.dirname(outputJsonl), { recursive: true });
+    await fs.writeFile(outputJsonl, `${results.map(row => JSON.stringify(row)).join("\n")}\n`, "utf8");
+  };
   emit("started", { models: resolvedModels, sampleCount: selectedSamples.length, profile, contextLength: resolvedContextLength });
 
   const machineInfo = typeof machine === "string"
@@ -184,17 +234,36 @@ export async function runCriterion({
         quantization: modelMetadata[model]?.quantization ?? null,
         profile,
         contextLength: resolvedContextLength,
+        effectiveThink: Boolean(resolvedProfile.think),
+        reasoningMode: resolvedProfile.reasoningMode ?? null,
         sampleId: sample.id,
         reference: sample.reference ?? "",
         relevantTextSpan: sample.metadata?.relevantTextSpan ?? null,
         inputHash: sha256(sample.input ?? sample.prompt ?? ""),
         promptHash: sha256(sample.prompt ?? ""),
+        inputTokens: tokenize(sample.input ?? sample.prompt ?? "").length,
+        contextLengthBucket: contextLengthBucket(contextTokens),
         startedAt,
-        metadata: sample.metadata ?? {}
+        metadata: { ...(sample.metadata ?? {}), referenceAvailable: sample.metadata?.referenceAvailable ?? Boolean(sample.reference) },
+        provenance: {
+          benchmark: suiteKey,
+          datasetHash: loaded.datasetHash ?? null,
+          datasetRevision,
+          split: loaded.actualSplit,
+          sampleId: sample.id,
+          source: sample.metadata?.source ?? null,
+          reference: sample.metadata?.referenceProvenance ?? null
+        }
       };
-      if (suiteKey === "longbench" && contextTokens > resolvedContextLength) {
+      if ((suiteKey === "longbench" || suiteKey === "longbench-summary") && contextTokens > resolvedContextLength) {
         const skipped = { ...base, status: "skipped", skipReason: `context length ${contextTokens} exceeds configured ${resolvedContextLength}`, contextTokens, finishedAt: now().toISOString() };
-        results.push(skipped); completed.set(key, skipped); emit("skipped", { model, sampleId: sample.id, reason: skipped.skipReason }); continue;
+        results.push(skipped); completed.set(key, skipped); emit("skipped", { model, sampleId: sample.id, reason: skipped.skipReason }); await persistRows(); continue;
+      }
+      if (!sample.prompt || !sample.input) {
+        const malformed = { ...base, status: "error", output: "", outputHash: sha256(""), scores: {}, metrics: {}, error: "malformed benchmark row: transcript/input or prompt is missing", finishedAt: now().toISOString() };
+        results.push(malformed); completed.set(key, malformed); emit("sample-failed", { model, sampleId: sample.id, error: malformed.error });
+        await persistRows();
+        continue;
       }
       emit("sample-started", { model, sampleId: sample.id });
       try {
@@ -211,6 +280,8 @@ export async function runCriterion({
           output,
           outputHash: sha256(output),
           reasoningTokens: response?.timing?.reasoningTokens ?? null,
+          effectiveThink: response?.effectiveThink ?? Boolean(resolvedProfile.think),
+          reasoningMode: response?.reasoningMode ?? resolvedProfile.reasoningMode ?? null,
           timingRaw: {
             prompt_eval_count: response?.payload?.prompt_eval_count ?? null,
             prompt_eval_duration: response?.payload?.prompt_eval_duration ?? null,
@@ -230,8 +301,7 @@ export async function runCriterion({
         results.push(row); completed.set(key, row); emit("sample-failed", { model, sampleId: sample.id, error: row.error });
       }
       // Keep a restart-safe partial record after every model/sample boundary.
-      await fs.mkdir(path.dirname(outputJsonl), { recursive: true });
-      await fs.writeFile(outputJsonl, `${results.map(row => JSON.stringify(row)).join("\n")}\n`, "utf8");
+      await persistRows();
     }
   }
 
@@ -240,27 +310,43 @@ export async function runCriterion({
     modelMetadata: modelMetadata[model],
     aggregate: aggregateSampleResults(results.filter(row => row.model === model))
   }));
+  const evaluationAggregates = ["meetingbank", "qmsum"].includes(suiteKey)
+    ? groupedAggregates(results, resolvedModels, "evaluationMode")
+    : [];
+  const taskAggregates = suiteKey === "longbench-summary" ? groupedAggregates(results, resolvedModels, "task") : [];
+  const finishedAt = now().toISOString();
   const finalRun = await writeRunArtifacts({
     runId: id,
     criterion: suiteKey,
     suite: buildSuiteMetadata(suiteKey, loaded.catalog),
     status: results.some(row => row.status === "error") ? "partial" : "completed",
     split,
+    actualSplit: loaded.actualSplit,
+    availableSplits: loaded.availableSplits,
     datasetRevision,
+    datasetHash: loaded.datasetHash ?? null,
     models: resolvedModels,
     profile,
     sampling: { ...resolvedProfile, ...sampling },
     contextLength: resolvedContextLength,
     machine: machineInfo,
     mode,
+    smoke,
+    runScope: smoke ? "smoke" : "full",
     scenario,
     nightmare,
-    createdAt: now().toISOString(),
+    createdAt: runStartedAt,
+    startedAt: runStartedAt,
+    finishedAt,
+    totalWallClockMs: Math.max(0, new Date(finishedAt).getTime() - new Date(runStartedAt).getTime()),
     datasetPath: datasetPath ?? null,
     fixtureRoot: fixtureRoot ?? null,
-    replayCommand: `node command/criterion.mjs run --benchmark ${suiteKey} --dataset ${datasetPath ?? fixtureRoot ?? "<dataset>"} --run-id ${id} --resume`,
+    replayCommand: `node command/criterion.mjs run --benchmark ${suiteKey} ${replaySource({ datasetPath, fixtureRoot })} --run-id ${id} --resume`,
     results,
     aggregates,
+    evaluationAggregates,
+    taskAggregates,
+    taskMacroAggregates: taskAggregates.length ? macroAggregates(taskAggregates, resolvedModels, "task") : [],
     modelMetadata
   }, { root });
   emit("finished", { status: finalRun.status, aggregates });
@@ -274,8 +360,16 @@ export async function rerunCriterion(runId, options = {}) {
     benchmark: options.benchmark ?? prior.criterion,
     datasetPath: options.datasetPath ?? prior.datasetPath,
     fixtureRoot: options.fixtureRoot ?? prior.fixtureRoot,
+    models: options.models ?? prior.models,
+    profile: options.profile ?? prior.profile ?? "summary_direct",
+    split: options.split ?? prior.split ?? "test",
+    datasetRevision: options.datasetRevision ?? prior.datasetRevision,
+    contextLength: options.contextLength ?? prior.contextLength,
+    sampling: options.sampling ?? prior.sampling,
+    limit: options.limit ?? ((options.smoke ?? prior.smoke) ? 1 : null),
     runId,
-    resume: true
+    resume: true,
+    smoke: options.smoke ?? prior.smoke ?? false
   });
 }
 
