@@ -547,7 +547,7 @@ function planChildChapterSpans({
   parentUnit,
   chunks,
   rows,
-  maxSourceChars = 12000,
+  maxSourceChars = 8000,
   targetSeconds = 900,
 }) {
   const duration = Number(parentUnit?.["duration seconds"] || 0);
@@ -556,7 +556,7 @@ function planChildChapterSpans({
   if (!Number.isInteger(unitStart) || !Number.isInteger(unitEnd) || unitEnd <= unitStart) return [];
 
   const minChapterSeconds = Math.min(600, Math.max(120, Number(targetSeconds || 900) * 0.75));
-  const maxChapterSourceChars = Math.max(2000, Number(maxSourceChars || 12000));
+  const maxChapterSourceChars = Math.max(2000, Number(maxSourceChars || 8000));
   const chapterSplitTargetChars = Math.max(1800, Math.floor(maxChapterSourceChars * 0.9));
   const maxSegmentFor = (durationSeconds) => {
     if (durationSeconds > 2400) return 600;
@@ -674,7 +674,7 @@ function planChildChapterSpans({
 
 function attachChildChaptersByTransition({ units, chunks, rows, thresholdSeconds = 900 }) {
   const out = [];
-  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 12000));
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 8000));
 
   for (const unit of units) {
     const parentUnit = {
@@ -1139,7 +1139,7 @@ function rebindChildChapterParents(units = []) {
 
 function ensureCoverageChaptersForLongUnits(units = [], rows = [], chunks = []) {
   const maxChapterSeconds = Math.max(600, Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900));
-  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 12000));
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 8000));
   const chapterSplitTargetChars = Math.max(1800, Math.floor(maxChapterSourceChars * 0.9));
   const out = [];
   for (const unit of (Array.isArray(units) ? units : [])) {

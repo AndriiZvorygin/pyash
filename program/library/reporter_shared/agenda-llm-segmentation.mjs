@@ -405,6 +405,21 @@ function structuredTitleHasLiteralSupport(title, transcriptSpan) {
   return titleTerms.some((term) => spanTerms.has(term));
 }
 
+// A substantive attachment boundary should not be retained merely because a
+// later discussion repeats one generic word such as "review". Require an
+// exact phrase or at least two meaningful title terms for this stronger
+// ownership check; the permissive helper remains useful for ordinary audits.
+function structuredTitleHasStrongLiteralSupport(title, transcriptSpan) {
+  const titleKey = evidenceKey(title);
+  const spanKey = evidenceKey(transcriptSpan);
+  if (!titleKey || !spanKey) return false;
+  if (spanKey.includes(titleKey) || (titleKey.includes(spanKey) && spanKey.length >= 16)) return true;
+  const ignored = new Set(["agenda", "business", "committee", "correspondence", "discussion", "item", "meeting", "minutes", "presentation", "report", "reports", "staff"]);
+  const terms = titleKey.split(" ").filter((term) => term.length >= 4 && !ignored.has(term));
+  const spanTerms = new Set(spanKey.split(" "));
+  return terms.filter((term) => spanTerms.has(term)).length >= Math.min(2, terms.length);
+}
+
 function focusedRecoveryBoundaryHasDirectSupport(entry, unit) {
   if (!entry || !unit) return false;
   if (structuredTitleHasLiteralSupport(entry.title, unit.text)) return true;
@@ -1145,7 +1160,7 @@ export async function auditWholeChronologyCandidates({
     const context = units.slice(Math.max(0, index - 2), Math.min(units.length, index + 7))
       .map((unit) => unit.text)
       .join(" ");
-    return structuredTitleHasLiteralSupport(entry.title, context);
+    return structuredTitleHasStrongLiteralSupport(entry.title, context);
   });
   if (retainedDirect.length) {
     log(`[agenda-boundaries] retained ${retainedDirect.length} chronology boundaries with direct structured-title evidence after blind audit`);
@@ -1347,6 +1362,21 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
     }
     const candidateIndex = indexById.get(candidate["atomic unit id"]);
     const candidateUnit = Number.isInteger(candidateIndex) ? units[candidateIndex] : null;
+    const canonicalEntry = canonical.items.find((entry) => entry.item === candidate["agenda item"]);
+    // A direct-attachment item whose boundary unit literally names the
+    // structured report is already the strongest available identity evidence.
+    // Do not let a later, generic refinement response move it into the report
+    // body (or turn it into an unrelated heading). This applies to every
+    // attachment-backed agenda, not to a meeting-specific code or title.
+    const directAttachmentBoundary = Boolean(
+      canonicalEntry?.substantive
+      && candidateUnit
+      && structuredTitleHasStrongLiteralSupport(canonicalEntry.title, `${candidate["evidence quote"] || ""} ${candidateUnit.text || ""}`),
+    );
+    if (directAttachmentBoundary) {
+      refined.push(candidate);
+      continue;
+    }
     if (candidate["sole child promotion"] === true && Number.isInteger(candidateIndex)) {
       let contextStart = candidateIndex;
       let contextWords = 0;
@@ -2173,10 +2203,16 @@ async function collectCandidates({ canonical, units, windows, llmModel, ollamaUr
     const next = candidates
       .filter((candidate) => Number(canonicalIndex.get(candidate["agenda item"])) > missingIndex)
       .sort((a, b) => candidateAtomicIndex(a) - candidateAtomicIndex(b))[0];
-    // Without candidates on both sides there is no bounded recovery range;
-    // reconciliation can correctly classify leading/trailing items as
-    // skipped, empty, or containers without forcing a boundary.
-    if (!prior || !next) continue;
+    // A substantive item with a direct attachment still needs recovery when
+    // it is the final executed item and therefore has no later candidate. Its
+    // bounded range is the verified neighbour through the recording tail;
+    // likewise a leading substantive item can be recovered from the meeting
+    // scope start through its first verified neighbour. Procedural headings
+    // remain eligible for skipped/empty reconciliation without forcing a
+    // boundary when they have no evidence.
+    const attachmentBacked = Array.isArray(entry.attachments) && entry.attachments.length > 0;
+    const recoverable = Boolean(entry.substantive || entry.long_source || attachmentBacked);
+    if ((!prior && !next) || !recoverable) continue;
     const startAtomic = prior ? candidateAtomicIndex(prior) : 0;
     const endAtomic = next ? candidateAtomicIndex(next) : units.length - 1;
     if (!(endAtomic > startAtomic)) continue;
@@ -2469,7 +2505,13 @@ export function resolveCanonicalHierarchyOwnership(dispositions) {
 }
 
 function chapterUnitsForSpan(span, unitId) {
-  const maxChars = Math.max(2500, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 18000));
+  // Keep each prose-generation context bounded by source characters.  The
+  // previous 18k default let a 16k report pass through as one chapter, which
+  // made the article repeat one broad paragraph instead of exposing the
+  // report's distinct topics.  A moderate default works for short meetings
+  // and scales to longer reports without depending on a meeting's format or
+  // a requested number of summaries; operators can still override it.
+  const maxChars = Math.max(2500, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 8000));
   // Character windows are the primary context bound. A very high default
   // duration cap prevents short ASR rows from creating extra chapters merely
   // because a report was presented slowly; operators can still set the
@@ -2866,6 +2908,9 @@ export async function runLlmAgendaSegmentation({
   if (invalidCandidateCount) {
     candidates = candidates.filter((candidate) => !validateBoundaryCandidate(candidate, canonical, units));
     log(`[agenda-boundaries] dropped ${invalidCandidateCount} refined candidates that failed literal evidence validation`);
+  }
+  if (/^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_DEBUG || ""))) {
+    log(`[agenda-boundaries][debug] final candidates=${candidates.map((candidate) => `${candidate["agenda item"]}@${candidate["atomic unit id"]}`).join(",")}`);
   }
   if (!candidates.length) throw new Error("agenda segmentation retryable: LLM found no validated boundary candidates");
   const candidateCheckpointTime = new Date().toISOString();
