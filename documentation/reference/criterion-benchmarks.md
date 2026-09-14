@@ -57,3 +57,17 @@ node command/criterion.mjs reverie run --benchmark helpos-local --fixtures ./fix
 ```
 
 Reports appear under `criterion/results/<run-id>.*` and review samples under `criterion/review/<run-id>.html`. The `.pya` result is the canonical sentence-shaped manifest; JSONL is the per-sample evidence/checkpoint. `criterion report`, `criterion compare` and `criterion golden` read those persisted records after the original process exits.
+
+## Baseline and open-model lanes
+
+The deterministic MeetingBank baseline uses the same loader, reference extraction, ROUGE scorer and artifact writer as model runs:
+
+```bash
+node command/criterion.mjs baseline --benchmark meetingbank --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" --split test --baseline lead-3 --run-id meetingbank-lead3-full --resume --json
+```
+
+`baseline:lead-3` selects the first three actual sentences from the transcript. It records CPU processing latency and leaves generation token speed unavailable because it does not call Ollama. Published MeetingBank Lead-3 figures (ROUGE-1 28.15%, ROUGE-2 19.53%, ROUGE-L 25.75%) are validation references, not forced targets; differences must be explained by split, transcript, reference or scorer differences.
+
+For fine-tuned open summarizers, Criterion supports `--engine huggingface`. The Node runner submits inference through Pyash's existing durable GPU duty lane and `gpu-housekeeper`; it does not create a second GPU manager or require a host virtual environment. Start `container/criterion-huggingface/command/begin.sh` on the CUDA host and point `PYA_GPU_HOUSEKEEPER_URL` at its housekeeper. The first supported MeetingBank candidates are `ahmeddeldalyyy/meeting-summarizer-meetingbank` and `Shaelois/MeetingScript`. These are fine-tuned on MeetingBank, while Qwen runs are general-purpose zero-shot Ollama prompts, so published model-card scores are not directly comparable until the same local data, references, scorer and generation configuration are used.
+
+The Ahmed model defaults to 1,024 input tokens, 56-142 output tokens, four beams and length penalty 2.0. MeetingScript defaults to 4,096 input tokens and four beams. Truncation is explicit in per-sample evidence. Model loading and warm inference are separated; unavailable metrics remain null. Weights and datasets stay in the private Hugging Face cache on the execution host. Lead-3 is a CPU-only deterministic baseline and never enters the GPU lane.

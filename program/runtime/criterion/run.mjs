@@ -188,6 +188,7 @@ export async function runCriterion({
   scenario = null,
   nightmare = null,
   smoke = false,
+  engine = "ollama",
   onEvent = null,
   now = () => new Date()
 } = {}) {
@@ -195,7 +196,7 @@ export async function runCriterion({
   const suiteKey = loaded.key;
   const selectedSamples = limit === null || limit === undefined ? loaded.samples : loaded.samples.slice(0, Math.max(0, Number(limit)));
   const resolvedProfile = resolveProfile(profile, { ...sampling, contextLength });
-  const resolvedContextLength = Number(resolvedProfile.contextLength);
+  const resolvedContextLength = resolvedProfile.contextLength === null ? null : Number(resolvedProfile.contextLength);
   const resolvedModels = normalizeModels(models);
   const id = String(runId ?? `${suiteKey}-${now().toISOString().replace(/[-:.TZ]/gu, "").slice(0, 14)}-${sha256(`${suiteKey}:${now().toISOString()}`).slice(0, 8)}`);
   const runStartedAt = now().toISOString();
@@ -231,6 +232,7 @@ export async function runCriterion({
         runId: id,
         benchmark: suiteKey,
         model,
+        engine,
         modelDigest: modelMetadata[model]?.modelDigest ?? null,
         quantization: modelMetadata[model]?.quantization ?? null,
         profile,
@@ -270,6 +272,8 @@ export async function runCriterion({
       try {
         const response = await executor({ model, prompt: sample.prompt, profile, contextLength: resolvedContextLength, sampling, baseUrl, fetchImpl, sample, signal });
         const output = String(response?.text ?? "");
+        const responseMetadata = response?.metadata?.modelMetadata ?? response?.metadata ?? {};
+        modelMetadata[model] = { ...modelMetadata[model], ...responseMetadata };
         let scores = scoreBenchmarkSample({ suiteKey, sample, output });
         if (suiteKey === "ifeval" && ifevalVerifierCommand) {
           scores = { ...scores, ...(await runIfevalVerifier({ command: ifevalVerifierCommand, args: ifevalVerifierArgs, sample, output })) };
@@ -280,6 +284,8 @@ export async function runCriterion({
           status: "ok",
           output,
           outputHash: sha256(output),
+          modelMetadata: modelMetadata[model],
+          metadata: { ...base.metadata, ...Object.fromEntries(Object.entries(response?.metadata ?? {}).filter(([key]) => key !== "modelMetadata")) },
           reasoningTokens: response?.timing?.reasoningTokens ?? null,
           effectiveThink: response?.effectiveThink ?? Boolean(resolvedProfile.think),
           reasoningMode: response?.reasoningMode ?? resolvedProfile.reasoningMode ?? null,
@@ -293,7 +299,7 @@ export async function runCriterion({
           pass,
           scores,
           metrics: response?.timing ?? {},
-          provider: { ollamaVersion: modelMetadata[model]?.ollamaVersion ?? null },
+          provider: { engine, ...(modelMetadata[model] ?? {}), ...(response?.provider ?? {}) },
           finishedAt: response?.finishedAt ?? now().toISOString()
         };
         results.push(row); completed.set(key, row); emit("sample-completed", { model, sampleId: sample.id, scores, metrics: row.metrics });
@@ -317,6 +323,9 @@ export async function runCriterion({
   const taskAggregates = suiteKey === "longbench-summary" ? groupedAggregates(results, resolvedModels, "task") : [];
   const categoryAggregates = suiteKey === "mmlu-pro" ? groupedAggregates(results, resolvedModels, "category") : [];
   const finishedAt = now().toISOString();
+  const replayCommand = engine === "baseline"
+    ? `node command/criterion.mjs baseline --benchmark ${suiteKey} ${replaySource({ datasetPath, fixtureRoot })} --baseline ${String(resolvedModels[0] ?? "baseline:lead-3").replace(/^baseline:/u, "")} --run-id ${id} --resume`
+    : `node command/criterion.mjs run --benchmark ${suiteKey} ${replaySource({ datasetPath, fixtureRoot })} --engine ${engine} --profile ${profile} --model ${resolvedModels.join(",")} --run-id ${id} --resume`;
   const finalRun = await writeRunArtifacts({
     runId: id,
     criterion: suiteKey,
@@ -328,6 +337,7 @@ export async function runCriterion({
     datasetRevision,
     datasetHash: loaded.datasetHash ?? null,
     models: resolvedModels,
+    engine,
     profile,
     sampling: { ...resolvedProfile, ...sampling },
     contextLength: resolvedContextLength,
@@ -343,7 +353,7 @@ export async function runCriterion({
     totalWallClockMs: Math.max(0, new Date(finishedAt).getTime() - new Date(runStartedAt).getTime()),
     datasetPath: datasetPath ?? null,
     fixtureRoot: fixtureRoot ?? null,
-    replayCommand: `node command/criterion.mjs run --benchmark ${suiteKey} ${replaySource({ datasetPath, fixtureRoot })} --run-id ${id} --resume`,
+    replayCommand,
     results,
     aggregates,
     evaluationAggregates,

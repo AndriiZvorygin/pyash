@@ -53,6 +53,7 @@ function renderPya(run) {
     ["dataset hash", run.datasetHash],
     ["split", run.actualSplit ?? run.split],
     ["run scope", run.runScope ?? (run.smoke ? "smoke" : "full")],
+    ["engine", run.engine],
     ["profile", run.profile],
     ["effective think", run.sampling?.think],
     ["total wall clock ms", run.totalWallClockMs],
@@ -104,6 +105,7 @@ export function renderRunMarkdown(run) {
     `- Dataset hash: ${run.datasetHash ?? "unknown"}`,
     `- Split: ${run.actualSplit ?? run.split ?? "unknown"}`,
     `- Run scope: ${run.runScope ?? (run.smoke ? "smoke" : "full")}`,
+    `- Engine: ${run.engine ?? "ollama"}`,
     `- Context length: ${run.contextLength}`,
     `- Inference profile: ${run.profile}`,
     `- Effective think: ${run.sampling?.think ?? "unknown"}`,
@@ -156,22 +158,22 @@ export function renderRunMarkdown(run) {
     "",
     "## Notes",
     "",
-    "Per-sample outputs are explicit benchmark evidence. Thinking blocks are excluded from scoring; raw provider timing remains in JSONL. Missing datasets, unavailable models, and skipped context windows are reported rather than converted into scores.",
+    `Per-sample outputs are explicit benchmark evidence. ${run.engine === "baseline" ? "This is a deterministic baseline and makes no Ollama request; generation speed is not applicable." : "Thinking blocks are excluded from scoring; raw provider timing remains in JSONL."} Missing datasets, unavailable models, and skipped context windows are reported rather than converted into scores.`,
     ""
   ];
   return lines.join("\n");
 }
 
 export function renderRunCsv(run) {
-  const headers = ["run_id", "run_scope", "benchmark", "task", "model", "sample_id", "status", "accuracy", "rouge1", "rouge2", "rougeL", "schema_validity", "factual_accuracy", "unsupported_claim_count", "input_tokens", "output_tokens", "prompt_tokens_per_second", "generation_tokens_per_second", "latency_ms", "quality_per_second", "effective_think", "reasoning_mode", "failure", "skip_reason", "input_hash", "prompt_hash", "output_hash"];
+  const headers = ["run_id", "run_scope", "engine", "benchmark", "task", "model", "sample_id", "status", "accuracy", "rouge1", "rouge2", "rougeL", "schema_validity", "factual_accuracy", "unsupported_claim_count", "input_tokens", "output_tokens", "prompt_tokens_per_second", "generation_tokens_per_second", "latency_ms", "processing_latency_ms", "quality_per_second", "effective_think", "reasoning_mode", "failure", "skip_reason", "input_hash", "prompt_hash", "output_hash"];
   const rows = [headers.join(",")];
   for (const row of run.results ?? []) {
     rows.push([
-      run.runId, run.runScope ?? (run.smoke ? "smoke" : "full"), run.criterion, row.metadata?.task, row.model, row.sampleId, row.status,
+      run.runId, run.runScope ?? (run.smoke ? "smoke" : "full"), run.engine ?? "ollama", run.criterion, row.metadata?.task, row.model, row.sampleId, row.status,
       row.scores?.accuracy, row.scores?.rouge1, row.scores?.rouge2, row.scores?.rougeL,
       row.scores?.schemaValidity, row.scores?.factualAccuracy, row.scores?.unsupportedClaimCount,
       row.inputTokens, row.metrics?.outputTokens, row.metrics?.promptTokensPerSecond, row.metrics?.generationTokensPerSecond,
-      row.metrics?.totalElapsedMs, (() => { const quality = Number(row.scores?.rougeL ?? row.scores?.accuracy ?? row.scores?.factualAccuracy ?? row.scores?.instructionAccuracy); const elapsed = Number(row.metrics?.totalElapsedMs); return Number.isFinite(quality) && elapsed > 0 ? quality / (elapsed / 1000) : null; })(),
+      row.metrics?.totalElapsedMs, row.metrics?.processingLatencyMs, (() => { const quality = Number(row.scores?.rougeL ?? row.scores?.accuracy ?? row.scores?.factualAccuracy ?? row.scores?.instructionAccuracy); const elapsed = Number(row.metrics?.totalElapsedMs); return Number.isFinite(quality) && elapsed > 0 ? quality / (elapsed / 1000) : null; })(),
       row.effectiveThink, row.reasoningMode, row.error, row.skipReason, row.inputHash, row.promptHash, row.outputHash
     ].map(csvEscape).join(","));
   }
@@ -221,11 +223,11 @@ export function renderComparison(runs) {
   const lines = [
     "# Criterion comparison",
     "",
-    "| Run | Scope | Benchmark | Model | Samples | Accuracy | ROUGE-L | Schema | p50 latency ms | p95 latency ms |",
-    "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"
+    "| Run | Scope | Engine | Benchmark | Model | Samples | Accuracy | ROUGE-L | Schema | p50 latency ms | p95 latency ms |",
+    "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"
   ];
   for (const run of runs) for (const row of run.aggregates ?? []) {
-    lines.push(`| ${run.runId} | ${run.runScope ?? (run.smoke ? "smoke" : "full")} | ${run.suite?.name ?? run.criterion} | ${row.model} | ${row.aggregate.sampleCount} | ${formatNumber(row.aggregate.accuracy)} | ${formatNumber(row.aggregate.rougeL)} | ${formatNumber(row.aggregate.schemaValidity)} | ${formatNumber(row.aggregate.p50LatencyMs, 1)} | ${formatNumber(row.aggregate.p95LatencyMs, 1)} |`);
+    lines.push(`| ${run.runId} | ${run.runScope ?? (run.smoke ? "smoke" : "full")} | ${run.engine ?? "ollama"} | ${run.suite?.name ?? run.criterion} | ${row.model} | ${row.aggregate.sampleCount} | ${formatNumber(row.aggregate.accuracy)} | ${formatNumber(row.aggregate.rougeL)} | ${formatNumber(row.aggregate.schemaValidity)} | ${formatNumber(row.aggregate.p50LatencyMs, 1)} | ${formatNumber(row.aggregate.p95LatencyMs, 1)} |`);
   }
   return `${lines.join("\n")}\n`;
 }
