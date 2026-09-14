@@ -207,6 +207,18 @@ test("criterion resume reuses completed sample rows without calling the model", 
   assert.equal(resumed.results.length, 1);
 });
 
+test("criterion resume normalizes legacy null context identity and removes duplicate rows", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "data.json", [{ id: "m1", transcript: "A", summary: "A" }]);
+  await runBaseline({ benchmark: "meetingbank", datasetPath: dataset, runId: "legacy-context", root });
+  const jsonl = path.join(root, "criterion", "results", "legacy-context.jsonl");
+  const [row] = (await fs.readFile(jsonl, "utf8")).trim().split("\n").map(JSON.parse);
+  await fs.writeFile(jsonl, `${JSON.stringify({ ...row, contextLength: 0 })}\n${JSON.stringify(row)}\n`, "utf8");
+  const resumed = await runBaseline({ benchmark: "meetingbank", datasetPath: dataset, runId: "legacy-context", root, resume: true });
+  assert.equal(resumed.results.length, 1);
+  assert.equal(resumed.results[0].sampleId, "m1");
+});
+
 test("dataset adapters preserve QMSum spans and skip oversized LongBench context", async () => {
   const root = await tempRoot();
   const qmsumPath = await writeJson(root, "qmsum.json", [{ id: "q1", query: "Who spoke?", meeting: "Alice spoke.", answer: "Alice spoke.", relevant_text_span: [[0, 1]] }]);
