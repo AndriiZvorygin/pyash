@@ -2,7 +2,7 @@ from filename "../../module/brief_video.pya" ob name teaching video to name teac
 
 exists su name style_prompt ob text "" be default ya
 ob ve filename text manuscript text text style_prompt be input ya
-exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name mind model ob text "qwen3.5:9b" be default ya
 
 su name teaching demo from filename of ob of manuscript with text of ob of style_prompt be teaching video do
 

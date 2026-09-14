@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
+import { isiMeetingVideoIsReachable } from '../program/library/reporter_shared/video-source-availability.mjs';
+
 const DEFAULTS = {
   timezone: process.env.TZ || 'America/Toronto',
   base_prefix: 'meeting-qwen-auto',
@@ -206,6 +208,20 @@ function resolveMeetingDir(row, meetingsDir) {
     return { folder, meetingDir: path.join(meetingsDir, folder) };
   }
 
+  // Some sources publish timestamps in UTC while their meeting workspace is
+  // named from the source's local calendar date. The stable meeting id is a
+  // stronger identity than the derived day, so accept a unique cross-day id
+  // match instead of writing results into a nonexistent inferred directory.
+  const idMatches = fs.readdirSync(meetingsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .filter((name) => name.endsWith(suffix))
+    .sort();
+  if (idMatches.length === 1) {
+    const folder = idMatches[0];
+    return { folder, meetingDir: path.join(meetingsDir, folder) };
+  }
+
   return { folder: inferredFolder, meetingDir: inferredDir };
 }
 
@@ -366,6 +382,38 @@ function findAgendaPublishResponsePath(transcriptDir, basePrefix) {
   return path.join(transcriptDir, files[files.length - 1]);
 }
 
+function retainedSupportingDocumentCount(meetingDir) {
+  const indexPath = path.join(String(meetingDir || ""), "converted", "subreports.index.json");
+  if (!fs.existsSync(indexPath)) return 0;
+  try {
+    const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+    const attachmentDir = path.join(path.dirname(indexPath), "subreports", "_attachments");
+    const items = Array.isArray(index?.items) ? index.items : [];
+    let count = 0;
+    for (const item of items) {
+      const attachments = Array.isArray(item?.attachments) ? item.attachments : [];
+      const diagnostics = Array.isArray(item?.attachment_diagnostics) ? item.attachment_diagnostics : [];
+      for (let index = 0; index < attachments.length; index += 1) {
+        if (!String(attachments[index]?.url || "").trim()) continue;
+        const explicit = String(
+          diagnostics[index]?.local_file || diagnostics[index]?.local_path || "",
+        ).trim();
+        if (explicit && fs.existsSync(path.resolve(explicit))) {
+          count += 1;
+          continue;
+        }
+        const prefix = `${String(item?.item || "").replace(/\./gu, "-")}-${index + 1}-`;
+        if (fs.existsSync(attachmentDir) && fs.readdirSync(attachmentDir).some((name) => (
+          name.startsWith(prefix) && !name.endsWith(".txt")
+        ))) count += 1;
+      }
+    }
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
 function meetingState(row, meetingsDir, basePrefix) {
   const { folder, meetingDir } = resolveMeetingDir(row, meetingsDir);
   const transcriptDir = path.join(meetingDir, 'transcript');
@@ -391,6 +439,7 @@ function meetingState(row, meetingsDir, basePrefix) {
   // Typical eScribe upcoming meetings expose one agenda PDF plus one agenda HTML link.
   // Treat only *additional* agenda docs (beyond that pair) and minutes as supporting docs.
   const supportDocCount = Math.max(0, agendaCount - 2) + minutesCount;
+  const retainedSupportDocCount = retainedSupportingDocumentCount(meetingDir);
 
   return {
     row,
@@ -420,7 +469,8 @@ function meetingState(row, meetingsDir, basePrefix) {
     agenda_cover_count: agendaCoverCount,
     minutes_count: minutesCount,
     support_doc_count: supportDocCount,
-    has_supporting_docs: supportDocCount > 0,
+    has_supporting_docs: supportDocCount > 0 || retainedSupportDocCount > 0,
+    retained_support_doc_count: retainedSupportDocCount,
     since_date: parseLocalDate(row.since),
   };
 }
@@ -633,6 +683,10 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
       if (requireSupportingDocs && !candidate.state.has_supporting_docs) continue;
     }
     if (candidate.mode === 'past_video' && !candidate.state.has_video) continue;
+    if (candidate.mode === 'past_video' && !await isiMeetingVideoIsReachable(candidate.state?.row?.payload || {})) {
+      log(`[next-story] skipping unavailable ISI recording: ${candidate.state?.row?.payload?.meeting_id || candidate.state?.row?.suName || "unknown"}`);
+      continue;
+    }
     return candidate;
   }
   return null;
@@ -686,6 +740,12 @@ function mergeRemotePosted(states, remotePostedKeys, cfg = {}) {
       ...s,
       posted_remote: true,
       posted_remote_any: true,
+      posted_remote_transcript: true,
+      // The archive key is a successful transcript publication for this
+      // jurisdiction/body/date. Treat it as posted for every local picker so
+      // an interrupted or manually published run cannot be selected again.
+      posted_transcript: true,
+      posted: true,
     };
   });
 }

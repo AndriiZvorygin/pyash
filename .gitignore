@@ -20,6 +20,7 @@ know/**
 !know/produce/
 !know/produce/.gitkeep
 node_modules/
+log/
 world/
 !world/
 world/*
@@ -30,6 +31,10 @@ world/conduct/*
 world/house/*
 !world/house/base/
 !world/house/base/**
+!world/house/refinery-watchdog/
+!world/house/refinery-watchdog/**
+world/house/refinery-watchdog/artifacts/**
+!world/house/refinery-watchdog/artifacts/.gitkeep
 !world/holding/
 world/holding/**
 !world/holding/**/
@@ -42,6 +47,7 @@ world/holding/**
 !world/holding/channel/produce/fail/.gitkeep
 !world/holding/channel/artifacts/.gitkeep
 !world/holding/channel/tmp/.gitkeep
+world/holding/work/
 .config/
 *.log
 newspaper/
@@ -89,5 +95,6 @@ caterer/nanobot/
 container/whisperx/service/__pycache__/
 container/whisperx/service/*.pyc
 container/speaker/cache/
+container/criterion-huggingface/cache/
 __pycache__/
 *.pyc

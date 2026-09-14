@@ -1,0 +1,5 @@
+results/*
+artifacts/*
+review/*
+goldens/*
+!.gitkeep

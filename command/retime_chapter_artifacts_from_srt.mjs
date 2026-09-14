@@ -76,6 +76,10 @@ retimePya(
 );
 
 const ordered = [...ranges.entries()].filter(([id]) => id.startsWith("chapter_")).sort((a, b) => a[1].since - b[1].since);
+// YouTube chapter lists must begin at 00:00:00. Retiming can expose a
+// one-second leading silence in the first transcript cue; keep the cue's end
+// time but publish the first chapter from the video start.
+if (ordered.length) ordered[0][1].since = 0;
 fs.writeFileSync(path.join(dir, `${prefix}.chapters.txt`), ordered.map(([, r]) => `${formatTime(r.since, ":").slice(0, 8)} ${r.title}`).join("\n") + "\n");
 fs.writeFileSync(path.join(dir, `${prefix}.chapter-wise.series.pya`), [
   "su name chapter wise series artifact be series def",

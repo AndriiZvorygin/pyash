@@ -55,6 +55,9 @@ export function buildRunNextConfig(adapter, {
     timezone: timezone || d.timezone,
     transcript_archive_url: `${String(siteUrl || d.site_url || "").replace(/\/+$/u, "")}/transcripts/${String(d.transcript_jurisdiction_slug || artifactsSlug)}`,
     transcript_jurisdiction_slug: String(d.transcript_jurisdiction_slug || artifactsSlug),
+    ...(d.require_upcoming_supporting_docs !== undefined
+      ? { require_upcoming_supporting_docs: d.require_upcoming_supporting_docs }
+      : {}),
     ...extra,
   };
   return cfg;

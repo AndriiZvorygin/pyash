@@ -1,0 +1,6 @@
+# The system crontab is the active scheduler; install it with program/install-cron.mjs.
+exists su name andrii nightly clock ob text "02:00 America/Toronto daily" be text ya
+exists su name owen sound nightly clock ob text "03:00 America/Toronto daily" be text ya
+exists su name grey county nightly clock ob text "04:00 America/Toronto daily" be text ya
+exists su name refinery watchdog first clock ob text "05:00 America/Toronto daily" be text ya
+exists su name refinery watchdog second clock ob text "06:00 America/Toronto daily" be text ya

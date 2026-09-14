@@ -1,0 +1,538 @@
+# Pyash Manager and Worker Audit
+
+Audit date: 2026-08-07
+
+This document records the repository state and the bounded Sol/Luna execution
+slice implemented after the durable work queue foundation. Historical roadmaps
+are evidence, not current commitments.
+
+## Current State
+
+The repository was fetched and fast-forwarded before implementation. The
+starting branch was clean at `f539ae5d`, `master` tracked both configured
+remotes, and no additional worktree or local WIP was found.
+
+The durable work lane is under `program/runtime/work/` and reuses the existing
+holding spool:
+
+```text
+world/holding/work/*.pya
+        |
+        v
+Pyash supervisor claims one task
+        |
+        +--> Sol planner App Server thread: plan and work order
+        +--> Luna implementer App Server thread: implementation and tests
+        +--> independent Luna reviewer App Server thread: verification
+                    |
+                    +--> Sol escalation reviewer only for higher-level ambiguity
+        |
+        v
+Pyash .pya checkpoint, queue ack, and final decision
+```
+
+A task envelope carries its bounded prompt, context, acceptance criteria,
+retry policy, status, and work specification. The status projection now
+preserves named `.pya` sections for:
+
+- workspace: repository, base revision, detached worktree, and mode;
+- roles: planner, implementer, reviewer, and escalation-reviewer models,
+  reasoning effort, and App Server thread ids (with manager/worker aliases for
+  legacy checkpoints);
+- plan: Sol summary, work order, and risks;
+- implementation: summary, changed files, file-change events, diff, tests,
+  blockers, and uncertainty;
+- review: role, model, reviewed revision, `ACCEPT`, `REVISE`, or `ESCALATE`,
+  rationale, correction request, and escalation evidence;
+- interruption: phase, timestamp, reason, and last turn;
+- active turn identity: phase, role, thread id, turn id, deterministic request
+  identity, state, timestamps, result capture, and ambiguity;
+- completed/abandoned turn history, blocker, human response, last action,
+  selection reason, revision count, original `workSpec`, and original payload
+  sentence.
+
+This is one canonical Pyash checkpoint artifact, not a second JSON state store.
+Structured values are encoded inside named Pyash map fields using the existing
+artifact convention.
+
+Task claiming remains atomic through spool rename. Selection is deterministic:
+higher numeric `priority` wins, then the oldest `queuedAt`, then the filename.
+Equal-priority work is therefore FIFO. A larger number means more urgent; this
+simple rule is intentionally not a fair-share scoring engine.
+
+## Reporter and Roadmap Reality
+
+Reporter work is shared in `program/library/reporter_shared/`; Grey County and
+Owen Sound houses are deployment-specific and are not present in this checkout.
+Shared Stage 2/3 contracts cover canonical `.pya` artifacts, source anchors,
+child/parent lineage, contiguous ranges, timing, monotonicity, motion grounding,
+and quality verification. JSON and `meeting.json` paths remain boundary
+compatibility debt. Live publishing, cover upload, external house imports, and
+some reporter quizzes still require credentials or ignored house assets.
+
+| Historical goal | Status | Current evidence |
+| --- | --- | --- |
+| Parity-first interpreter, JavaScript, and C | ACTIVE | Cross-backend examples and compiler goldens exist; higher-level parity remains incomplete. |
+| Feature gates for lagging backends | PARTIAL | Targeted gates and parity quizzes exist, but no complete current status artifact exists. |
+| Frozen specifications before promotion | ACTIVE | Numbered specifications remain the design source of truth. |
+| Golden and replay corpus | ACTIVE | Examples, artifacts, newspapers, checkpoints, and `again` support exist. |
+| Sentence-shaped, human-speakable Pyash | ACTIVE | It remains an interpreter and `.pya` design constraint. |
+| Media IO and listen -> mind -> TTS | PARTIAL | `hear`, streaming, Piper, Whisper, and refinery paths exist; one default loop is unfinished. |
+| MCP bridge | DONE | MCP stdio/HTTP, policy, replay, timeouts, restart, and discharge are implemented. |
+| Minimal agent loop | ACTIVE | Houses, sessions, memory, channels, MCP, Codex projection, and one durable Sol/Luna cycle exist. |
+| General concurrency | PARTIAL | Schedulers, leases, channels, and runtime handles exist; fair-share work scheduling remains open. |
+| Newspaper-style replayable history | ACTIVE | Newspaper, artifacts, checkpoints, and Pyash-first Codex projection exist. |
+| Knowledge core and adjudication | HIGH-VALUE UNSTARTED | Useful old roadmap work with no current implementation to assume. |
+| Genetic/speculative packaging branches | STALE | Not the highest-value use of the current architecture. |
+
+## Manager and Worker Foundation
+
+### App Server adapter
+
+`program/runtime/codex/app_server.mjs` extracts the JSONL transport that was
+previously private to `command/codex_account.mjs`. It launches and initializes
+`codex app-server`, supports request/notification subscriptions, persists
+stderr, validates malformed JSON, and detects server errors or process exit.
+
+The first-cycle operations are:
+
+- `initialize` and `initialized`;
+- `thread/start` with model, working directory, approval policy, and sandbox;
+- `thread/resume`;
+- `turn/start` with model, working directory, reasoning effort, input, and
+  sandbox policy plus a deterministic `clientUserMessageId` request identity;
+- streamed `item/agentMessage/delta`, `item/fileChange/patchUpdated`, and
+  `turn/diff/updated` events;
+- `turn/completed` success/failure classification;
+- `turn/interrupt` and clean process termination.
+
+The installed Codex was `0.146.1` during this audit. The adapter is injectable,
+so ordinary tests never launch Codex. Its protocol schema was generated from
+the installed binary rather than copied into Pyash.
+
+### Roles and supervisor
+
+Roles are configurable through supervisor options or environment variables:
+
+```text
+planner model: gpt-5.6-sol
+planner effort: high
+implementer model: gpt-5.6-luna
+implementer effort: xhigh
+reviewer model: gpt-5.6-luna
+reviewer effort: xhigh
+escalation reviewer model: gpt-5.6-sol
+escalation reviewer effort: high
+```
+
+The role names are architectural. Model names are configuration defaults, not
+provider assumptions. `manager` and `worker` configuration aliases remain
+accepted for existing callers and durable checkpoints.
+
+`runWorkSupervisorOnce` claims one ready task, prepares a task-specific
+detached Git worktree, transitions `ready -> planning`, starts or resumes the
+Sol planner, persists the work order, starts or resumes the Luna implementer,
+persists implementation and Git evidence, then gives the evidence to a separate
+Luna reviewer. It maps decisions as follows:
+
+```text
+routine ACCEPT   -> accepted
+routine REVISE   -> bounded Luna implementation correction, then independent
+                    Luna review again
+routine ESCALATE -> distinct Sol escalation review
+Sol ACCEPT       -> accepted
+Sol REVISE       -> bounded Luna correction
+Sol REPLAN       -> corrected work order on the same task where appropriate
+Sol BLOCK        -> blocked only for a genuine higher-level decision
+```
+
+The routine reviewer is always a different App Server thread from the
+implementer. It receives the task, work order, acceptance criteria, current
+diff/commit, changed files, tests, and relevant prior evidence, but does not
+edit the worktree. Sol remains the planner and is invoked for review only when
+the independent Luna reviewer reports a material architectural, semantic,
+product, safety, policy, or convergence question. `accepted` means the final
+reviewer judged the bounded implementation satisfactory; it does not mean
+Pyash automatically merged or pushed it.
+
+### Recovery
+
+The claimed spool file stays in `world/holding/work/runtime/` until the
+supervisor reaches `accepted` and acknowledges success. A `blocked` task stays
+in the runtime spool (or input spool when blocked before claiming), so it is
+visible and cannot be mistaken for successful work. `work resume <task-id>
+--context ...` records the human response, preserves all prior threads,
+worktree, plans, evidence, and history, abandons an ambiguous active turn
+explicitly, and returns the task to `ready`.
+
+Before each external Codex turn, the supervisor persists a deterministic
+request identity and `started` state. After the adapter returns, it persists
+the turn id and complete bounded result before applying the phase checkpoint.
+On restart, a captured-but-not-applied result is consumed locally rather than
+replaying Codex. If a turn is still `started` or otherwise ambiguous, the task
+becomes `blocked` with the request identity and reason recorded. This is the
+safe recovery boundary because the current App Server does not provide a
+reliable Pyash-visible lookup that can prove an unknown turn completed.
+
+`usage-limited` is distinct from `failed`: quota rejection clears the active
+attempt for a later retry, while a remote operation whose outcome is unknown
+remains human-resumable. Accepted work is terminal and is never silently
+reopened.
+
+Ordinary failures before a remote operation use the existing retry policy.
+Filesystem evidence is collected after the worker turn, but the completed
+turn result is already durable, so a restart can collect evidence and finish
+without another worker turn. There is still no distributed lease/heartbeat
+for two independently started supervisors; operationally run one background
+coding worker per world until stale-runtime ownership is added.
+
+## Unattended Operation
+
+The operator surface is intentionally small:
+
+```text
+work_supervisor.mjs add --title ... --prompt ... --acceptance ...
+work_supervisor.mjs list [--active]
+work_supervisor.mjs show <task-id>
+work_supervisor.mjs run-next
+work_supervisor.mjs block <task-id> --reason ...
+work_supervisor.mjs resume <task-id> --context ...
+work_supervisor.mjs fail|cancel <task-id> [--reason ...]
+work_supervisor.mjs background [--continuous] [--watch]
+work_supervisor.mjs report <task-id>
+work_supervisor.mjs health
+work_supervisor.mjs digest [--since <ISO>] [--email-report <address>]
+```
+
+Human output is compact; `--json` exposes the complete durable task or
+snapshot. The status includes priority, phase, role models, worktree,
+blocker, last action, and revision count. Accepted task worktrees remain
+available for inspection; background integration advances only
+`automation/roadmap`, never `master`.
+
+`--watch` attaches an optional observer to the same supervisor events used by
+the runner. It renders capacity admission, selection, Sol planning, Luna
+implementation, tests and diff evidence, review decisions, revisions, and
+terminal outcomes without exposing JSONL protocol traffic or token deltas.
+The reusable report renderer reads the persisted task/checkpoint/evidence
+artifacts, so `report <task-id>` produces the same report body after the
+original process has exited. This body is intentionally suitable for a later
+email or other notifier.
+
+Report notification is an explicit thin sink over that renderer:
+
+```text
+PYA_WORK_EMAIL_FROM=pyash@example.com node command/work_supervisor.mjs report <task-id> --email-report recipient@example.com
+```
+
+`--email-report` is also accepted by `background`; `PYA_WORK_EMAIL_REPORT`
+may provide the recipient for unattended operation. The default `auto` mail
+transport uses `/usr/sbin/sendmail` when present, otherwise the local Docker
+Mailserver-compatible path `docker exec --interactive mailserver
+/usr/sbin/sendmail -i -t`. Override the transport/container with
+`PYA_WORK_MAIL_TRANSPORT`, `PYA_WORK_MAIL_CONTAINER`, and
+`PYA_WORK_SENDMAIL_PATH`. The sender remains external configuration through
+`PYA_WORK_EMAIL_FROM`; no address or credential is stored in the repository.
+Each attempt is persisted separately under
+`world/holding/work/artifacts/notification/`. A failed notification sets the
+command result nonzero but never changes the task's accepted, blocked, or
+failed state.
+
+`program/runtime/work/capacity.mjs` normalizes the installed Codex
+`account/rateLimits/read` response, including its nested `rateLimits.primary`
+window, to `available`, `usage-limited`, or `unknown`, with remaining/used
+percentage, reset time, window, observed time, and the raw provider payload.
+The parser identifies the weekly bucket by its declared seven-day duration
+(`10080` minutes or `604800` seconds), independently of provider bucket name,
+ordering, or nesting. On this host `primary` is the five-hour bucket and
+`secondary` is the weekly bucket. The normalized record persists the selected
+raw bucket, bucket path, window start, reset, and observation diagnostics in
+scheduler health. If a seven-day bucket cannot be identified or validated,
+background work records `capacity telemetry unavailable` and defers rather than
+guessing; a provider hard limit remains a separate `provider usage-limited`
+reason. A last-good weekly sample is retained for diagnosis only and is never
+used to authorize new work after telemetry fails.
+
+Background admission uses one weekly budget with a default 15 percent final
+reserve. At elapsed fraction `E` of the weekly window, the normal usage limit
+is `(100 - reserve) * E`; actual total observed usage includes interactive
+Codex activity, so foreground use automatically reduces background headroom.
+A one-percent deadband avoids hourly oscillation around the line. The policy
+also defers for foreground activity, no eligible task, usage limiting, and the
+weekly reserve. It is disabled by default; the explicit `background` command
+enables it for that invocation. Continuous mode polls rather than busy-waits
+and processes one coding task at a time.
+
+Normal background work is curated as substantial packages, not micro-fixes.
+When active work falls below the threshold, `curator.mjs` inspects current
+TODO anchors and proposes at most three bounded packages with source and
+`why now` provenance. Existing task IDs and provenance keys prevent duplicate
+generation. When no active, ready, or credible curated task remains, the
+digest reports `needs-direction` instead of inventing work.
+
+Luna can pause after an implementation pass and resume the same durable task,
+Sol thread, Luna thread, and worktree on a later wake. The initial Sol plan is
+not repeated while its work order is present; review normally waits until the
+configured implementation pass threshold or Luna explicitly reports review
+readiness. Weekly pacing pauses are recorded as implementation checkpoints,
+not failures.
+
+Accepted work is integrated only into the separate `automation/roadmap`
+branch. Each task worktree starts from that branch's current tip. Integration
+requires the branch tip to equal the task base and advances it with a
+fast-forward ref update; a stale branch or push conflict blocks the task for
+human attention. `master` is never changed by the background runner.
+
+Hourly wakes append compact outcomes to the daily `work-scheduler` newspaper.
+`digest` renders one durable daily report from those events, task checkpoints,
+capacity, curation, and automation-branch integration records. It can send
+that exact body through the existing local Docker Mailserver notification
+sink. Hourly background runs should not send individual email; cron should
+invoke `background` without a mail flag and invoke `digest --email-report`
+once daily.
+
+Scheduler health is a named `.pya` artifact under
+`world/holding/work/artifacts/scheduler-health.pya`. Task decisions and
+outcomes are also appended to the world newspaper, including selection
+reason, plan, implementation, tests, review, revision count, blocker, and
+capacity state.
+
+## Proof
+
+### Implemented
+
+- durable named `.pya` checkpoint sections;
+- deterministic priority selection and durable turn idempotency checkpoints;
+- explicit blocked/resume lifecycle and operator commands;
+- normalized capacity observation, conservative background admission, and
+  scheduler health/newspaper outcomes;
+- weekly pacing with a protected reserve, substantial-task curation, resumable
+  implementation passes, automation-branch integration, and daily digest;
+- extracted shared App Server JSONL transport;
+- configurable planner, implementer, reviewer, and escalation-reviewer roles
+  and reasoning effort;
+- Sol plan -> Luna implementation -> independent Luna review, with Sol only
+  as an explicit escalation reviewer;
+- bounded revision rounds plus material-progress/convergence review;
+- task-specific detached Git worktrees;
+- runtime recovery for persisted checkpoints and usage limits;
+- explicit supervisor and smoke commands.
+
+### Proven by fake tests
+
+`quiz/runtime/codex_app_server.test.mjs` covers initialization, thread start,
+thread resume, streamed assistant output, diff/file-change events, server
+errors, malformed responses, and process exit. `quiz/runtime/work_queue.test.mjs`,
+`quiz/runtime/work_supervisor.test.mjs`, and `quiz/runtime/work_runner.test.mjs`
+cover checkpoint round trips, priority ordering, ACCEPT, REVISE, BLOCK,
+blocked/resume, ambiguous-turn recovery, usage-limited recovery, capacity
+admission, queue acknowledgement, scheduler health, and role/workspace
+evidence. `quiz/runtime/work_scheduler.test.mjs` covers TODO curation and
+deduplication, fast-forward automation integration, stale-base conflict
+blocking, and daily digest aggregation.
+
+### Proven by real Codex smoke
+
+`npm run work:smoke` created a temporary Git repository and ran the complete
+real cycle with the installed App Server models. The successful run produced a
+real Sol work order, a real Luna file and test result in the isolated worktree,
+real Git evidence, a real Sol `ACCEPT`, and an acknowledged empty queue.
+
+The smoke command uses `danger-full-access` only for its disposable fixture
+because this host's nested workspace-write sandbox failed with
+`bwrap: loopback: Failed RTM_NEWADDR`. The normal supervisor default remains
+`workspace-write` with the task worktree as its writable root.
+
+### Proven by real Pyash language task
+
+The watched background command was run against the genuine Pyash task
+`language-ret-register-live` (priority 131), which closed a specific ceremony
+`ret` register-parity gap. The terminal showed capacity admission, task
+selection, a Sol plan, Luna implementation, tests and diff evidence, a Sol
+`REVISE` request, a second Luna implementation, and a final Sol `ACCEPT`.
+The accepted task is retained in its isolated worktree with one revision and
+was not merged or pushed into `master`:
+
+```text
+/home/htaf/pyash/world/holding/work/worktrees/language-ret-register-live
+```
+
+The live run also exposed and fixed a real runner boundary: after selecting a
+task, the runner now passes that task id into the supervisor for an exact
+claim, so an older ready task cannot be substituted between selection and
+execution. The host's nested Codex sandbox also required the explicitly
+opt-in `PYA_CODEX_THREAD_SANDBOX=danger-full-access` and
+`PYA_CODEX_TURN_SANDBOX=dangerFullAccess` settings for this demonstration;
+the default remains unchanged.
+
+### Proven by real report email
+
+The completed `language-ret-register-live` report was regenerated and
+submitted without starting another Codex task:
+
+```text
+PYA_WORK_EMAIL_FROM=andrii@zvorygin.ca node command/work_supervisor.mjs report language-ret-register-live --email-report andrii@zvorygin.ca
+```
+
+The command returned `Notification: submitted`. The local Docker Mailserver
+accepted the message through Postfix, stored it in the recipient's INBOX, and
+reported `status=sent`. The notification record is separate from the work
+task record, so a future mail failure will not rewrite an accepted task.
+
+### Weekly pacing demonstration
+
+The live `account/rateLimits/read` query on 2026-08-09 returned a `primary`
+bucket with `usedPercent: 4`, `windowDurationMins: 10080`, and reset
+`2026-08-16T01:22:59.000Z`. The corresponding weekly window started at
+`2026-08-09T01:22:59.000Z`. At the observation time, the 15-percent reserve
+curve allowed only about one percent cumulative use, so actual four-percent
+use correctly deferred background work for weekly pacing. No real task was
+started merely to test the policy.
+
+The dry-run command is quota-safe apart from the minimal capacity query:
+
+```text
+node command/work_supervisor.mjs background --repository /home/htaf/pyash --dry-run --watch
+```
+
+It displays weekly reset/window start, actual usage, elapsed-week allowance,
+minimum remaining floor, pacing headroom, reserve, curated next work, and the
+admit/defer reason. Cron has deliberately not been installed.
+
+## Options and Trade-offs
+
+Codex App Server is the execution adapter because it supplies persistent
+threads, streamed turns, model selection, interruption, and resumption while
+Pyash retains task state, acceptance, retry, and evidence ownership. CAO-style
+MCP orchestration and CCB/tmux bridges remain useful prior art for visible
+sessions, handoff, callbacks, and human intervention, but they should wrap
+Pyash records rather than replace the holding spool.
+
+## Material Progress and Convergence
+
+Implementation turns now leave a durable evidence ledger in the task
+checkpoint. A pass is material only when it records a new task commit or
+diff, new evidence that closes a previously failing acceptance check, or a
+new concrete blocker diagnosis. Repeating the same clean-worktree inspection,
+test report, or Sol correction is recorded as no-delta work rather than useful
+progress. Reports expose implementation passes, material-progress passes,
+no-delta passes, commits produced, acceptance checks closed, and the last
+material-progress timestamp.
+
+After two consecutive no-delta implementation passes, the supervisor pauses
+Luna and resumes the existing Sol thread for one focused convergence review.
+Sol must choose `CONTINUE` with a narrower correction, `SPLIT` with dependent
+follow-up work, or `BLOCK` for a genuine external, human, product, semantic,
+architectural, safety, or policy decision. The weekly pacing policy remains
+the resource brake; revision count alone does not end technical work.
+
+A focused Sol `BLOCK` for a required unavailable backend is not automatically
+recovered on every hourly wake. It remains a durable operational block until
+the external condition changes or an operator explicitly resumes/waives it.
+This avoids replaying Luna against a task whose code boundary is already
+complete. Duplicate recovery event rows with the same task and recovery count
+are collapsed in the daily digest, while distinct recovery counts remain
+visible in chronological order.
+
+### Turn timeout and digest reliability
+
+The supervisor records App Server activity and partial turn output when a
+manager or worker turn reaches a timeout. It also captures the assigned
+worktree's revision, changed files, status, and bounded diff before recording
+the interruption. A turn with a known remote turn identity remains ambiguous
+and is not replayed automatically; a later operator recovery must resolve that
+identity first. This preserves possible mutations without treating a lost
+response as proof that no work happened.
+
+The deployed background policy keeps a 15-minute inactivity ceiling and uses a
+30-minute hard ceiling (`PYA_CODEX_TURN_INACTIVITY_TIMEOUT_MS=900000`,
+`PYA_CODEX_TURN_HARD_TIMEOUT_MS=1800000`). App Server turn/item/command/exec
+notifications reset the inactivity clock. These values are bounded policy,
+not a guarantee that a turn will finish within the hard ceiling.
+
+Daily digest generation and delivery are tracked separately in the durable
+`daily-digest-health.pya` artifact. The digest uses its own lock rather than
+the hourly worker lock, so a long-running roadmap turn cannot silently skip a
+scheduled report. Generation failures are persisted before being re-raised;
+mail delivery failures are recorded separately and never alter work-task
+state.
+
+### Timeout-policy migration revalidation
+
+Tasks blocked by the old fixed 900-second wall-clock timeout are not silently
+given a new recovery budget. When the activity-aware policy is deployed, a
+substantial task may receive one explicit `fixed-wall-v1-to-activity-aware-v1`
+policy-revalidation opportunity if its current preflight passes and its
+worktree/checkpoint contains usable evidence. The checkpoint records both
+policy identities, the grant time, and the single migration attempt while
+leaving `recoveryCount`, pass history, commits, and blocker history unchanged.
+
+Revalidation is limited to old `turn timeout` operational blockers. It does
+not release external-evidence or human-decision blocks, integration conflicts,
+convergence failures, known remote turns with ambiguous mutation outcome, or
+tasks without preserved worktree evidence. A task-local commit may proceed
+directly to Sol review; a preserved uncommitted diff may resume Luna from the
+existing worktree. A second request for the same migration is denied.
+
+### Codex turn ownership reconciliation
+
+The background runner performs a cheap pre-model reconciliation for blocked
+tasks with a persisted turn or writer conflict. It records `LIVE`, `STALE`,
+`COMPLETED_UNRECONCILED`, or `AMBIGUOUS` in the task checkpoint and scheduler
+newspaper. The decision combines the persisted manager/worker PID, App Server
+child PID, recent App Server thread/turn state, last activity, and current
+worktree evidence; an old writer error is not treated as proof that a turn is
+still alive.
+
+`LIVE` keeps duplicate-turn protection and changes no recovery or convergence
+counters. `STALE` may clear the old role thread for a safe continuation while
+retaining the old thread in `previousThreadIds`, the abandoned turn history,
+the same task/worktree, and all recovery/pass evidence. A preserved commit can
+move directly to read-only review (independent Luna review for new tasks, with
+a legacy Sol review thread retained when required); a preserved Luna diff can
+resume implementation. `COMPLETED_UNRECONCILED` is captured from the durable
+result without rerunning the turn. `AMBIGUOUS` remains blocked and cannot be
+replayed automatically.
+
+Reconciliation itself starts no model turn. Its scheduler-history event and
+the task's parser-backed `.pya` checkpoint make the liveness decision and its
+evidence visible after restart. This local reconciliation does not yet provide
+distributed fencing between independent supervisors; that remains deferred.
+
+## Deferred Work
+
+- distributed stale-runtime ownership, heartbeats, and two-supervisor fencing;
+- formal machine-readable Sol plan/review schema beyond bounded headings;
+- automatic merge into `master` or cleanup of accepted worktrees;
+- multi-host Codex execution, CAO/CCB replacement, and tmux dashboard work;
+- generalized multi-worker concurrency;
+- unrelated reporter parity and external house repairs;
+- GPU peer routing and residency-aware forwarding.
+
+## Next Highest-Value Slice
+
+1. Add a durable accepted-worktree report and human merge/cleanup workflow for
+   promoting `automation/roadmap` into `master`.
+2. Add stale-runtime ownership/heartbeat fencing before allowing two workers
+   against one world.
+3. Operate the seeded bounded backlog, then tune capacity reserve values from
+   observed Codex rate-limit payloads rather than guesses.
+
+## Sources
+
+- `program/runtime/work/contract.mjs`
+- `program/runtime/work/queue.mjs`
+- `program/runtime/work/checkpoint.mjs`
+- `program/runtime/work/supervisor.mjs`
+- `program/runtime/work/turn_reconciliation.mjs`
+- `program/runtime/work/history.mjs`
+- `program/runtime/codex/app_server.mjs`
+- `documentation/specifications/04-runtime-primitives.md`
+- `documentation/specifications/18-pyash-agent.md`
+- `documentation/reference/gpu-housekeeper-architecture.md`
+- `documentation/runbooks/reporter-refinery-recovery.md`
+- `documentation/roadmap.md`
+- `documentation/todo.md`
+- [Codex App Server manual](https://learn.chatgpt.com/docs/app-server.md)
+- [AWS CLI Agent Orchestrator](https://github.com/awslabs/cli-agent-orchestrator)
+- [Claude Codex Bridge](https://github.com/SeemSeam/claude_codex_bridge)
