@@ -13,6 +13,6 @@ exists su name world place ob text "commons" be text ya
 to name text "commons" be go do
 be list do
 
-exists su name world agent be mind as name "qwen3-vl:8b-instruct" ya
+exists su name world agent be mind as name "qwen3.5:9b" ya
 ob text "use the go tool to go to commons" for name world agent to name text out with name world tool map at filename "world" be write do
 ob name out be write do

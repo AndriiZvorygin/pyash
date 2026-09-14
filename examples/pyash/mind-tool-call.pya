@@ -6,5 +6,5 @@ su name tools be map def
 su name say be say ob text "" can
 prah
 
-exists su name helper be mind via state "qwen3-vl:8b-instruct" ya
+exists su name helper be mind via state "qwen3.5:9b" ya
 ob text "use the say tool to say hello world" for name helper to name text helper-out with name tools be write do

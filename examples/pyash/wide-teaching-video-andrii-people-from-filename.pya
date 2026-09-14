@@ -3,7 +3,7 @@ from filename "../../module/brief_video.pya" ob name teaching video to name teac
 exists su name style_prompt ob text "Québec bande dessinée illustration, precise linework, flat colours with soft shading, muted natural palette, balanced composition, mature francophone comic storytelling, matte printed surface." be default ya
 ob ve filename text manuscript text text style_prompt text text thumbnail_mode be input ya
 
-exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name mind model ob text "qwen3.5:9b" be default ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name hear whisperx fallback qwen ob bool truth be default ya
 exists su name subtitle_mode ob text "karaoke" be default ya

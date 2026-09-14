@@ -16,7 +16,7 @@ test("verify module routes text input through verify mind brief", async () => {
     forget();
     await run("from name ./module/verify.pya to name verify be import do");
     await run('exists su name verify brief prompter ob text "Verify." be text ya');
-    await run('exists su name verify mind brief be mind as name "qwen3-vl:8b-instruct" fromtext name verify brief prompter ya');
+    await run('exists su name verify mind brief be mind as name "qwen3.5:9b" fromtext name verify brief prompter ya');
     await run('su name check ob text "Task." to name text verify-out be verify do');
     assert.equal(remember("verify-out")?.ob?.text, "PASS");
   } finally {
@@ -32,7 +32,7 @@ test("verify module supports with wo tools for text input", async () => {
     forget();
     await run("from name ./module/verify.pya to name verify be import do");
     await run('exists su name verify brief prompter ob text "Verify." be text ya');
-    await run('exists su name verify mind brief be mind as name "qwen3-vl:8b-instruct" fromtext name verify brief prompter ya');
+    await run('exists su name verify mind brief be mind as name "qwen3.5:9b" fromtext name verify brief prompter ya');
     await run('ob text "Task." to name text verify-out with wo tools be verify do');
     assert.equal(remember("verify-out")?.ob?.text, "PASS");
   } finally {
@@ -47,7 +47,7 @@ test("verify module supports explicit for name mind target", async () => {
   try {
     forget();
     await run("from name ./module/verify.pya to name verify be import do");
-    await run('exists su name helper be mind as name "qwen3-vl:8b-instruct" fromtext text "Verify." ya');
+    await run('exists su name helper be mind as name "qwen3.5:9b" fromtext text "Verify." ya');
     await run('su name check ob text "Task." for name mind helper to name text verify-out be verify do');
     assert.equal(remember("verify-out")?.ob?.text, "PASS");
   } finally {
@@ -62,7 +62,7 @@ test("verify module supports explicit for name mind target with wo tools", async
   try {
     forget();
     await run("from name ./module/verify.pya to name verify be import do");
-    await run('exists su name helper be mind as name "qwen3-vl:8b-instruct" fromtext text "Verify." ya');
+    await run('exists su name helper be mind as name "qwen3.5:9b" fromtext text "Verify." ya');
     await run('su name check ob text "Task." for name mind helper to name text verify-out with wo tools be verify do');
     assert.equal(remember("verify-out")?.ob?.text, "PASS");
   } finally {

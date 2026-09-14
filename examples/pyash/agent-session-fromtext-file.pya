@@ -1,4 +1,4 @@
-exists su name agent-helper be mind via state "qwen3-vl:8b-instruct" from discourse "You are concise." ya
+exists su name agent-helper be mind via state "qwen3.5:9b" from discourse "You are concise." ya
 
 from filename "../../module/agent_tools.pya" ob name agent tools to name agent tools be import do
 

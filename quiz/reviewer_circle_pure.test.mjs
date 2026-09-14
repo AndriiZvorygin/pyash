@@ -11,22 +11,22 @@ async function run(line) {
 
 async function setupRetryFixtures() {
   await run("exists su name mind response ob text quoted.text.approved\nPASS\n.text.quoted be text ya");
-  await run('exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext text "draft" ya');
-  await run('exists su name verifier be mind as name "qwen3-vl:8b-instruct" fromtext text "verify" ya');
+  await run('exists su name author be mind as name "qwen3.5:9b" fromtext text "draft" ya');
+  await run('exists su name verifier be mind as name "qwen3.5:9b" fromtext text "verify" ya');
 }
 
 async function setupScoreRetryCeremonies() {
   await run('exists su name mind response ob text "analysis\\n0.9" be text ya');
-  await run('exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext text "draft" ya');
-  await run('exists su name verifier be mind as name "qwen3-vl:8b-instruct" fromtext text "verify" ya');
+  await run('exists su name author be mind as name "qwen3.5:9b" fromtext text "draft" ya');
+  await run('exists su name verifier be mind as name "qwen3.5:9b" fromtext text "verify" ya');
 }
 
 async function setupLastLineCeremonies() {
   await run(`exists su name mind response ob text quoted.text.Reasoning says FAIL in discussion but final verdict is pass
 PASS
 .text.quoted be text ya`);
-  await run('exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext text "draft" ya');
-  await run('exists su name verifier be mind as name "qwen3-vl:8b-instruct" fromtext text "verify" ya');
+  await run('exists su name author be mind as name "qwen3.5:9b" fromtext text "draft" ya');
+  await run('exists su name verifier be mind as name "qwen3.5:9b" fromtext text "verify" ya');
 }
 
 test("pure verifier module matches builtin output shape", async () => {

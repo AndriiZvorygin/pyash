@@ -88,8 +88,8 @@ test("quoted text after role stays text", () => {
 });
 
 test("quoted text after via state becomes name without marker", () => {
-  const s = parse('exists su name helper be mind via state "qwen3-vl:8b-instruct" ya');
-  assert.equal(s.as?.name, "qwen3-vl:8b-instruct");
+  const s = parse('exists su name helper be mind via state "qwen3.5:9b" ya');
+  assert.equal(s.as?.name, "qwen3.5:9b");
 });
 
 test("date tokens parse as date payloads", () => {
