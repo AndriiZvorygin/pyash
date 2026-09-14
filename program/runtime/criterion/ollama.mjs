@@ -5,8 +5,11 @@ export function resolveOllamaBaseUrl(baseUrl = null, env = process.env) {
 }
 
 export const DEFAULT_PROFILES = Object.freeze({
-  summary_direct: Object.freeze({ think: false, temperature: 0.2, top_p: 0.8, top_k: 20, contextLength: 32768 }),
-  reasoning: Object.freeze({ think: true, temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 })
+  summary_direct: Object.freeze({ think: false, reasoningMode: "direct", temperature: 0.2, top_p: 0.8, top_k: 20, contextLength: 32768 }),
+  summary_reasoned: Object.freeze({ think: true, reasoningMode: "reasoned", temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 }),
+  summary_reasoned_hidden: Object.freeze({ think: true, reasoningMode: "reasoned-hidden", temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 }),
+  // Keep the original name readable for existing runs and callers.
+  reasoning: Object.freeze({ think: true, reasoningMode: "reasoned", temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 })
 });
 
 export function resolveProfile(name = "summary_direct", overrides = {}) {
@@ -70,6 +73,8 @@ export async function runOllamaChat({
     thinking: payload.message?.thinking ?? payload.thinking ?? "",
     payload,
     timing: ollamaTiming(payload, startedAt, finishedAt),
+    effectiveThink: settings.think,
+    reasoningMode: settings.reasoningMode,
     startedAt,
     finishedAt
   };
