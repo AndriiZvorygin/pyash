@@ -36,6 +36,7 @@ function baseOptions(args, root) {
     fixtureRoot: flag(args, "--fixtures"),
     fixtureId: flag(args, "--fixture"),
     split: flag(args, "--split", "test"),
+    datasetRevision: flag(args, "--dataset-revision", process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned"),
     limit: hasFlag(args, "--smoke") ? 1 : numericFlag(args, "--limit"),
     models: models.length ? models : undefined,
     profile: flag(args, "--profile", "summary_direct"),
@@ -51,7 +52,8 @@ function baseOptions(args, root) {
     ifevalVerifierArgs: String(flag(args, "--ifeval-verifier-args", "") ?? "").split(" ").filter(Boolean),
     runId: flag(args, "--run-id"),
     root,
-    resume: hasFlag(args, "--resume")
+    resume: hasFlag(args, "--resume"),
+    smoke: hasFlag(args, "--smoke")
   };
 }
 
@@ -63,7 +65,7 @@ function usage() {
   return [
     "criterion list",
     "criterion inspect --benchmark <name>",
-    "criterion run --benchmark <name> --dataset <local.jsonl> [--model <a,b>] [--profile summary_direct|reasoning] [--smoke] [--resume]",
+    "criterion run --benchmark <name> --dataset <local.jsonl> [--model <a,b>] [--profile summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
     "criterion report <run-id>",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",

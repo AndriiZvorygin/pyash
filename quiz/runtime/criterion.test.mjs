@@ -6,13 +6,13 @@ import path from "node:path";
 
 import { parse } from "../../program/understand/index.mjs";
 import { deriveSignatureFromCall } from "../../program/bridge/signature.mjs";
-import { runCriterion } from "../../program/runtime/criterion/run.mjs";
+import { runCriterion, rerunCriterion } from "../../program/runtime/criterion/run.mjs";
 import { loadSuiteSamples } from "../../program/runtime/criterion/datasets.mjs";
-import { ollamaTiming, percentile, rougeScores } from "../../program/runtime/criterion/metrics.mjs";
+import { contextLengthBucket, ollamaTiming, percentile, rougeScores } from "../../program/runtime/criterion/metrics.mjs";
 import { runNightmare, runReverie } from "../../program/runtime/criterion/suites.mjs";
 import { runCriterionRefinery } from "../../program/runtime/criterion/refinery.mjs";
 import { runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
-import { loadRun } from "../../program/runtime/criterion/report.mjs";
+import { loadRun, renderRunCsv, renderRunMarkdown } from "../../program/runtime/criterion/report.mjs";
 
 async function tempRoot() { return fs.mkdtemp(path.join(os.tmpdir(), "pyash-criterion-test-")); }
 
@@ -99,6 +99,30 @@ test("criterion run compares models and writes replayable artifacts", async () =
   for (const line of pya.split(/\r?\n/u).filter(line => line && !line.startsWith("#"))) assert.doesNotThrow(() => parse(line));
   assert.match(run.replayCommand, /--resume/);
   assert.equal(run.results[0].pass, null);
+  assert.equal(run.runScope, "full");
+});
+
+test("criterion smoke runs are labelled separately from full aggregates", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "smoke.json", [{ id: "m1", transcript: "A", summary: "A" }]);
+  const run = await runCriterion({ benchmark: "meetingbank", datasetPath: dataset, models: ["model"], limit: 1, smoke: true, runId: "smoke-scope", root, executor: fakeExecutor, metadataProvider });
+  assert.equal(run.runScope, "smoke");
+  assert.match(renderRunMarkdown(run), /Run scope: smoke/);
+  assert.match(renderRunCsv(run).split("\n", 1)[0], /run_scope/);
+});
+
+test("criterion replay preserves a smoke run's bounded sample scope", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "replay.json", [
+    { id: "m1", transcript: "A", summary: "A" },
+    { id: "m2", transcript: "B", summary: "B" }
+  ]);
+  await runCriterion({ benchmark: "meetingbank", datasetPath: dataset, models: ["model"], limit: 1, smoke: true, runId: "smoke-replay", root, executor: fakeExecutor, metadataProvider });
+  let calls = 0;
+  const replayed = await rerunCriterion("smoke-replay", { root, executor: async () => { calls += 1; throw new Error("smoke replay expanded unexpectedly"); }, metadataProvider });
+  assert.equal(calls, 0);
+  assert.equal(replayed.results.length, 1);
+  assert.equal(replayed.runScope, "smoke");
 });
 
 test("criterion resume reuses completed sample rows without calling the model", async () => {
@@ -164,4 +188,127 @@ test("criterion refinery adapter uses existing ordered platform execution", asyn
   });
   assert.deepEqual(calls, ["dataset", "score"]);
   assert.equal(result.be, "criterion result");
+});
+
+test("meeting and query adapters preserve official split and meeting evidence metadata", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "meeting.json", {
+    train: [{ id: "train-meeting", transcript: "A: training", summary: "training" }],
+    validation: [{ meeting_id: "validation-meeting", city: "Toronto", date: "2026-01-02", turns: [{ speaker: "A", start: 0, end: 1, text: "The council approved the grant." }], summary: { text: "The council approved the grant.", provenance: "meetingbank annotation" }, segment_start: 0, segment_end: 1 }],
+    test: [{ id: "test-meeting", transcript: "A: test", summary: "test" }]
+  });
+  const meeting = await loadSuiteSamples({ benchmark: "meetingbank", datasetPath: dataset, split: "validation" });
+  assert.equal(meeting.actualSplit, "validation");
+  assert.equal(meeting.samples[0].metadata.meetingId, "validation-meeting");
+  assert.equal(meeting.samples[0].metadata.city, "Toronto");
+  assert.equal(meeting.samples[0].metadata.evaluationMode, "segment");
+  assert.deepEqual(meeting.samples[0].metadata.segmentBoundary, { start: 0, end: 1 });
+  assert.deepEqual(meeting.samples[0].metadata.turnBoundaries, [{ index: 0, speaker: "A", start: 0, end: 1 }]);
+  assert.ok(meeting.datasetHash);
+
+  const qmsumDataset = await writeJson(root, "qmsum.json", {
+    validation: [{ meeting_id: "q-meeting", query: "What was approved?", meeting: "Chair: The grant was approved.", answer: "The grant was approved.", relevant_text_span: [[0, 1]], topic: "grant" }]
+  });
+  const qmsum = await loadSuiteSamples({ benchmark: "qmsum", datasetPath: qmsumDataset, split: "validation" });
+  assert.equal(qmsum.actualSplit, "validation");
+  assert.equal(qmsum.samples[0].metadata.evaluationMode, "query-focused");
+  assert.deepEqual(qmsum.samples[0].metadata.relevantTextSpan, [[0, 1]]);
+  assert.equal(qmsum.samples[0].metadata.sourceTokenCount, 5);
+});
+
+test("official QMSum meeting rows expand general and specific queries", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "test.jsonl", {
+    meeting_transcripts: [
+      { speaker: "Chair", content: "The grant was approved." },
+      { speaker: "Clerk", content: "The decision is recorded." }
+    ],
+    general_query_list: [{ query: "Summarize the whole meeting.", answer: "The grant was approved." }],
+    specific_query_list: [{ query: "What was approved?", answer: "The grant was approved.", relevant_text_span: [[0, 1]] }]
+  });
+  const qmsum = await loadSuiteSamples({ benchmark: "qmsum", datasetPath: dataset });
+  assert.equal(qmsum.actualSplit, "test");
+  assert.equal(qmsum.samples.length, 2);
+  assert.deepEqual(qmsum.samples.map(sample => sample.metadata.evaluationMode), ["full-meeting", "query-focused"]);
+  assert.deepEqual(qmsum.samples[1].metadata.relevantTextSpan, [[0, 1]]);
+  assert.deepEqual(qmsum.samples[0].metadata.speakerLabels, ["Chair", "Clerk"]);
+  assert.match(qmsum.samples[0].input, /Chair: The grant/);
+  assert.notEqual(qmsum.samples[0].id, qmsum.samples[1].id);
+});
+
+test("DialogSum accepts the official mirror CSV shape", async () => {
+  const root = await tempRoot();
+  const dataset = path.join(root, "dialogsum.csv");
+  await fs.writeFile(dataset, "id,dialogue,summary,topic\nd1,\"#Person1#: Hello. #Person2#: Hi.\",\"People greet.\",greeting\n", "utf8");
+  const dialogsum = await loadSuiteSamples({ benchmark: "dialogsum", datasetPath: dataset });
+  assert.equal(dialogsum.samples[0].metadata.topic, "greeting");
+  assert.deepEqual(dialogsum.samples[0].metadata.speakerLabels, ["Person1", "Person2"]);
+});
+
+test("AMI and ICSI fixture adapters preserve speakers, turns, access and missing references", async () => {
+  const ami = await loadSuiteSamples({ benchmark: "ami", fixtureRoot: path.resolve("criterion/fixtures/ami") });
+  assert.equal(ami.samples.length, 1);
+  assert.deepEqual(ami.samples[0].metadata.speakerLabels, ["A", "B", "C"]);
+  assert.equal(ami.samples[0].metadata.turnCount, 4);
+  assert.equal(ami.samples[0].metadata.turnBoundaries[0].start, 0);
+  assert.equal(ami.samples[0].metadata.accessStatus, "synthetic test fixture");
+
+  const root = await tempRoot();
+  const icsiRoot = path.join(root, "icsi");
+  const fixture = path.join(icsiRoot, "icsi-001");
+  await fs.mkdir(fixture, { recursive: true });
+  await fs.writeFile(path.join(fixture, "transcript.txt"), "Speaker1: A discussion with no published summary.", "utf8");
+  await fs.writeFile(path.join(fixture, "metadata.json"), JSON.stringify({ meetingId: "icsi-001", accessStatus: "user-supplied", preparation: "local conversion" }), "utf8");
+  const icsi = await loadSuiteSamples({ benchmark: "icsi", fixtureRoot: icsiRoot });
+  assert.equal(icsi.samples[0].metadata.meetingId, "icsi-001");
+  assert.equal(icsi.samples[0].metadata.referenceAvailable, false);
+  assert.deepEqual(icsi.samples[0].metadata.speakerLabels, ["Speaker1"]);
+});
+
+test("DialogSum and LongBench summary adapters preserve topic/task and macro reports", async () => {
+  const root = await tempRoot();
+  const dialog = await writeJson(root, "dialogsum.json", { test: [{ id: "d1", dialogue: "#Person1#: We need a plan.\n#Person2#: The plan is approved.", summary: "The plan is approved.", topic: "planning" }] });
+  const dialogLoaded = await loadSuiteSamples({ benchmark: "dialogsum", datasetPath: dialog });
+  assert.equal(dialogLoaded.samples[0].metadata.topic, "planning");
+  assert.deepEqual(dialogLoaded.samples[0].metadata.speakerLabels, ["Person1", "Person2"]);
+
+  const long = await writeJson(root, "long-summary.json", { test: [
+    { id: "g1", task: "GovReport", input: "The government report describes a program.", answer: "The report describes a program." },
+    { id: "q1", dataset: "QMSum", input: "The chair approved a motion.", answer: "The chair approved a motion." }
+  ] });
+  const run = await runCriterion({ benchmark: "longbench-summary", datasetPath: long, models: ["model"], runId: "long-summary", root, executor: async ({ sample }) => ({ text: sample.reference, timing: { promptTokens: 10, outputTokens: 5, totalElapsedMs: 20, promptTokensPerSecond: 500, generationTokensPerSecond: 250 } }), metadataProvider });
+  assert.equal(run.actualSplit, "test");
+  assert.equal(run.taskAggregates.length, 2);
+  assert.equal(run.taskMacroAggregates[0].task, "macro-average");
+  assert.match(renderRunMarkdown(run), /Task breakdown/);
+  assert.match(renderRunMarkdown(run), /macro-average/);
+  assert.match(renderRunCsv(run), /input_tokens/);
+});
+
+test("malformed and reference-missing rows are explicit and resumable", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "malformed.json", [{ id: "missing", transcript: "" }, { id: "no-reference", transcript: "A factual source." }]);
+  let calls = 0;
+  const run = await runCriterion({ benchmark: "meetingbank", datasetPath: dataset, models: ["model"], runId: "malformed", root, executor: async () => { calls += 1; return { text: "A factual source.", timing: {} }; }, metadataProvider });
+  assert.equal(calls, 1);
+  assert.equal(run.results[0].status, "error");
+  assert.match(run.results[0].error, /malformed benchmark row/);
+  assert.equal(run.results[1].metadata.referenceAvailable, false);
+  assert.equal(run.results[1].scores.rougeL, null);
+  const checkpoint = (await fs.readFile(path.join(root, "criterion", "results", "malformed.jsonl"), "utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(checkpoint.length, 2);
+  assert.ok(run.results[1].provenance.datasetHash);
+});
+
+test("summary reasoning profiles record effective thinking and context buckets", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "profile.json", [{ id: "p1", transcript: "one two three", summary: "one two three" }]);
+  const run = await runCriterion({ benchmark: "meetingbank", datasetPath: dataset, models: ["model"], profile: "summary_reasoned_hidden", runId: "reasoned-hidden", root, executor: async () => ({ text: "one two three", effectiveThink: true, reasoningMode: "reasoned-hidden", timing: { promptTokens: 3, outputTokens: 3, totalElapsedMs: 40 } }), metadataProvider });
+  assert.equal(run.sampling.think, true);
+  assert.equal(run.results[0].effectiveThink, true);
+  assert.equal(run.results[0].reasoningMode, "reasoned-hidden");
+  assert.equal(run.results[0].contextLengthBucket, "0-8K");
+  assert.equal(contextLengthBucket(32768), "16K-32K");
+  assert.ok(run.aggregates[0].aggregate.averageLatencyMs);
+  assert.ok(run.aggregates[0].aggregate.qualityPerSecond);
 });
