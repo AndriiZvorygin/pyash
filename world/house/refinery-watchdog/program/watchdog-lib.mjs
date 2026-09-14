@@ -49,7 +49,7 @@ export const REPORTERS = Object.freeze({
     envPrefix: "GREY",
     communityName: "grey-county-council",
     recoveryEnv: Object.freeze({
-      GREY_PIPELINE_FORCE_WHOLE_SUMMARY: "1",
+      GREY_AGENDA_REUSE_STAGE3: "1",
     }),
   }),
 });

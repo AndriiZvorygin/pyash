@@ -69,3 +69,51 @@ test("duplicate or reconnected streams select the longest official recording", (
   assert.equal(selected.id, "long");
   assert.equal(selected.duration, 8178);
 });
+
+test("live official broadcasts are not selected as completed recordings", () => {
+  const selected = selectLongestOfficialYoutubeRecording([
+    "https://www.youtube.com/watch?v=live",
+    "https://www.youtube.com/watch?v=recording",
+  ], {
+    execFileSyncImpl: (_command, args) => {
+      const id = String(args.at(-1)).split("=").at(-1);
+      return JSON.stringify({
+        id,
+        webpage_url: args.at(-1),
+        channel_id: "UCw_WmatPnvP6MqyUBlCAYpw",
+        duration: id === "live" ? 99999 : 8178,
+        is_live: id === "live",
+        live_status: id === "live" ? "is_live" : "was_live",
+      });
+    },
+  });
+  assert.equal(selected.id, "recording");
+});
+
+test("metadata probing falls back when the preferred YouTube client rejects a recording", () => {
+  const clients = [];
+  const selected = selectLongestOfficialYoutubeRecording([
+    "https://www.youtube.com/watch?v=short",
+    "https://www.youtube.com/watch?v=full",
+  ], {
+    execFileSyncImpl: (_command, args) => {
+      const client = String(args[args.indexOf("--extractor-args") + 1]);
+      const id = String(args.at(-1)).split("=").at(-1);
+      clients.push(`${client}:${id}`);
+      if (id === "full" && client.endsWith("android_vr")) throw new Error("client rejected");
+      return JSON.stringify({
+        id,
+        webpage_url: args.at(-1),
+        channel_id: "UCw_WmatPnvP6MqyUBlCAYpw",
+        duration: id === "full" ? 15603 : 85,
+        live_status: "was_live",
+      });
+    },
+  });
+  assert.equal(selected.id, "full");
+  assert.deepEqual(clients, [
+    "youtube:player_client=android_vr:short",
+    "youtube:player_client=android_vr:full",
+    "youtube:player_client=android:full",
+  ]);
+});

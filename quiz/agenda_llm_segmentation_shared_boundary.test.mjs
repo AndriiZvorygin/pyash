@@ -520,6 +520,16 @@ test("named meeting scope accepts literal call-to-order evidence spanning adjace
   assert.equal(scope["prefix atomic units"], 1);
 });
 
+test("timeline call-to-order evidence stays literal to its first atomic unit", () => {
+  const source = fs.readFileSync(
+    new URL("../program/library/reporter_shared/agenda-llm-segmentation.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /const scopeStartEvidence = meetingScopeAudit\["evidence quote"\] \|\| scopeStartUnit\?\.text/u);
+  assert.match(source, /"evidence quote": scopeStartEvidence/u);
+  assert.match(source, /validatedCandidateByBoundary = new Map/u);
+});
+
 test("meeting scope prompt recognizes an unnamed canonical opening before another meeting handoff", () => {
   const prompt = buildMeetingScopeStartPrompt({
     canonical: {
@@ -543,6 +553,7 @@ test("meeting scope prompt recognizes an unnamed canonical opening before anothe
   assert.match(prompt, /sequence of the target canonical opening items/u);
   assert.match(prompt, /later explicitly hands off to a different named meeting/u);
   assert.match(prompt, /multiple distinct canonical items/u);
+  assert.match(prompt, /Do not anchor a direct recording start to the first unit that literally names a canonical agenda item/u);
 });
 
 test("meeting scope retry prompt explicitly adjudicates a direct unnamed opening", () => {
@@ -555,6 +566,50 @@ test("meeting scope retry prompt explicitly adjudicates a direct unnamed opening
   assert.match(prompt, /bounded retry with a different adjudication instruction/u);
   assert.match(prompt, /Do not require the formal meeting name to be spoken/u);
   assert.match(prompt, /quote the literal text from the proposed anchor unit/u);
+});
+
+test("meeting scope retry keeps complete bounded chronology for an opening without call-to-order wording", () => {
+  const prompt = buildMeetingScopeStartPrompt({
+    canonical: {
+      items: [
+        { item: "1", title: "Opening remarks" },
+        { item: "2", title: "Declaration of Interest" },
+        { item: "3", title: "Delegations" },
+      ],
+    },
+    meetingLabel: "Agricultural Advisory Committee",
+    retryReason: "the first pass required an explicit call to order",
+    window: {
+      "window id": "window_0001",
+      text: Array.from({ length: 40 }, (_, index) => `[atomic_${String(index + 1).padStart(6, "0")}] Chair: opening chronology unit ${index + 1}`).join("\n"),
+    },
+  });
+  assert.match(prompt, /opening may omit the spoken words 'call to order'/u);
+  assert.match(prompt, /return found=true for the earliest unit that begins that sequence/u);
+  assert.match(prompt, /complete bounded transcript window is supplied below/u);
+  assert.match(prompt, /atomic_000040/u);
+});
+
+test("meeting scope prompt allows a directly named no-quorum meeting to end before agenda discussion", () => {
+  const prompt = buildMeetingScopeStartPrompt({
+    canonical: {
+      items: [
+        { item: "1", title: "Call to Order" },
+        { item: "2", title: "Declarations of Interest" },
+      ],
+    },
+    meetingLabel: "Arts Advisory Committee",
+    window: {
+      "window id": "window_0001",
+      text: [
+        "[atomic_000001] Chair: We are waiting to make quorum for the arts advisory committee.",
+        "[atomic_000002] Chair: Quorum has not been reached, so this meeting is adjourned.",
+      ].join("\\n"),
+    },
+  });
+  assert.match(prompt, /interrupted or aborted meeting/u);
+  assert.match(prompt, /quorum or no-quorum announcement/u);
+  assert.match(prompt, /do not require agenda discussion/u);
 });
 
 test("named meeting scope retries an initially rejected unnamed canonical opening", async () => {

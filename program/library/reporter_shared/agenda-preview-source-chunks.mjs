@@ -18,12 +18,35 @@ function splitOversizedBlock(block = "", targetChars = 8000) {
   return pieces.filter(Boolean);
 }
 
+// PDF-to-text extraction can turn a drawing, survey plan, or scanned table
+// into hundreds of thousands of whitespace-padded coordinate fragments. Such
+// OCR is retained in the original attachment and remains linkable, but it is
+// not useful prose context and causes character-window summaries to repeat
+// the same administrative claim. Keep the attachment heading plus a short
+// provenance note in the LLM source bundle while retaining ordinary narrative
+// and table text unchanged.
+export function prepareAgendaPreviewSource(source = "") {
+  const value = String(source || "").trim();
+  if (!value) return "";
+  const blocks = value.split(/(?=---\n\nAttachment:\s*)/u);
+  return blocks.map((block) => {
+    const text = String(block || "").trim();
+    if (!/^---\n\nAttachment:/u.test(text) || text.length < 20000) return text;
+    const alphanumeric = (text.match(/[A-Za-z0-9]/gu) || []).length;
+    const density = alphanumeric / Math.max(1, text.length);
+    if (density >= 0.08) return text;
+    const headerEnd = text.indexOf("\n\n", 16);
+    const header = headerEnd > 0 ? text.slice(0, headerEnd).trim() : text.slice(0, 1000).trim();
+    return `${header}\n\n[Attachment text omitted from the prose window because PDF extraction is dominated by image/map OCR; the original attachment remains available.]`;
+  }).filter(Boolean).join("\n\n");
+}
+
 export function chunkAgendaPreviewSource(source = "", {
-  maxChars = 9000,
-  targetChars = 8000,
+  maxChars = 16000,
+  targetChars = 14000,
 } = {}) {
-  const maximum = Math.max(2000, Number(maxChars || 9000));
-  const target = Math.min(maximum, Math.max(1000, Number(targetChars || 8000)));
+  const maximum = Math.max(2000, Number(maxChars || 16000));
+  const target = Math.min(maximum, Math.max(1000, Number(targetChars || 14000)));
   const blocks = String(source || "")
     .split(/\n{2,}/u)
     .map((value) => value.trim())
@@ -50,8 +73,8 @@ export function buildAgendaPreviewChunkSpans(source = "", {
   sourceRows = 1,
   since = 0,
   durationSeconds = 0,
-  maxChars = 9000,
-  targetChars = 8000,
+  maxChars = 16000,
+  targetChars = 14000,
 } = {}) {
   const chunks = chunkAgendaPreviewSource(source, { maxChars, targetChars });
   if (!chunks.length) return [];

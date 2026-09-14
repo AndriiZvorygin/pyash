@@ -47,15 +47,28 @@ function readEnvFileIfExists(filePath) {
   return parseDotEnvText(fs.readFileSync(filePath, "utf8"));
 }
 
-function loadEnvFallbacks(cwdDir) {
+function loadEnvFallbacks(cwdDir, payloadPath = "") {
   const merged = {};
-  let cur = path.resolve(cwdDir);
-  while (true) {
-    Object.assign(merged, readEnvFileIfExists(path.join(cur, ".env")));
-    const parent = path.dirname(cur);
-    if (parent === cur) break;
-    cur = parent;
+  const starts = [path.resolve(cwdDir)];
+  if (String(payloadPath || "").trim()) starts.push(path.dirname(path.resolve(payloadPath)));
+  const dirs = [];
+  const seen = new Set();
+  for (const start of starts) {
+    const chain = [];
+    let cur = start;
+    while (true) {
+      chain.unshift(cur);
+      const parent = path.dirname(cur);
+      if (parent === cur) break;
+      cur = parent;
+    }
+    for (const dir of chain) {
+      if (seen.has(dir)) continue;
+      seen.add(dir);
+      dirs.push(dir);
+    }
   }
+  for (const dir of dirs) Object.assign(merged, readEnvFileIfExists(path.join(dir, ".env")));
   return merged;
 }
 
@@ -205,7 +218,9 @@ async function main() {
     process.exit(2);
   }
 
-  const envFallback = loadEnvFallbacks(process.cwd());
+  const payloadPath = path.resolve(process.cwd(), payloadArg);
+  const payloadDir = path.dirname(payloadPath);
+  const envFallback = loadEnvFallbacks(process.cwd(), payloadPath);
   const secret = readSecretValues(process.cwd());
   const endpoint = String(process.env.AGENDA_PUBLISH_ENDPOINT || DEFAULT_ENDPOINT).trim();
   const token = String(
@@ -219,8 +234,6 @@ async function main() {
   ).trim();
   const dryRun = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_PUBLISH_DRY_RUN || dryRunArg || "0"));
 
-  const payloadPath = path.resolve(process.cwd(), payloadArg);
-  const payloadDir = path.dirname(payloadPath);
   const payload = JSON.parse(fs.readFileSync(payloadPath, "utf8"));
 
   const jurisdiction = String(payload?.jurisdiction || "").trim();

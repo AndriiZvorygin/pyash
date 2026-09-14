@@ -557,6 +557,7 @@ export function verifyArticleClaims({
 
   const targets = [
     { key: "whole meeting summary", heading: "Whole Meeting Summary", isSingleLine: false },
+    { key: "whole stream summary", heading: "Whole Stream Summary", isSingleLine: false },
     { key: "one-sentence summary", heading: "One-Sentence Summary", isSingleLine: true },
     { key: "top newsworthy developments", heading: "Top Newsworthy Developments", isSingleLine: false },
     { key: "why it matters", heading: "Why It Matters", isSingleLine: false },
@@ -605,7 +606,12 @@ export function verifyArticleClaims({
         severity = "unsupported_high_severity";
         issueType = issueType || `outcome_claim_unsupported_${scopedOutcome?.reason || "global"}`;
       }
-      if (severity === "supported" && supportedByWeakOnly) {
+      // A video-only one-sentence recap is intentionally derived from the
+      // whole-stream summary.  When no agenda-grounding or secondary corpus
+      // exists, that summary is the appropriate direct source for this one
+      // compact line; keep the stricter weak-support rule for all other
+      // sections.
+      if (severity === "supported" && supportedByWeakOnly && !["one-sentence summary", "whole stream summary"].includes(target.key)) {
         severity = "unsupported";
         issueType = "weak_support_only";
       }

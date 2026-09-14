@@ -45,3 +45,71 @@ test("transcript normalization falls back to source chunks when LLM fetch fails"
   assert.equal(meta.fallback_chunk_count, 1);
   assert.equal(meta.fallback_chunks[0].index, 1);
 });
+
+test("oversized transcript paragraphs are chunked and coverage is recorded", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "normalize-long-"));
+  const transcriptDir = path.join(dir, "transcript");
+  fs.mkdirSync(transcriptDir, { recursive: true });
+  const source = "A complete sentence remains in the normalized transcript. ".repeat(300);
+  fs.writeFileSync(path.join(transcriptDir, "meeting-qwen-auto.plain.txt"), `${source}\n`, "utf8");
+
+  execFileSync("node", [
+    path.join(ROOT, "command/normalize_transcript_from_transcript_folder_shared.mjs"),
+    "andrii",
+    transcriptDir,
+    "meeting-qwen-auto",
+  ], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      OLLAMA_HOST: "http://127.0.0.1:9",
+      PYA_NORMALIZE_FETCH_ATTEMPTS: "1",
+      PYA_NORMALIZE_FETCH_TIMEOUT_MS: "6000",
+      PYA_NORMALIZE_REQUIRE_LLM: "0",
+      ANDRII_NORMALIZE_MAX_CHARS: "3000",
+    },
+    stdio: "pipe",
+  });
+
+  const outputPath = path.join(transcriptDir, "meeting-qwen-auto-normalized.plain.txt");
+  const output = fs.readFileSync(outputPath, "utf8");
+  const meta = JSON.parse(fs.readFileSync(path.join(transcriptDir, "meeting-qwen-auto-normalized.normalize.metadata.json"), "utf8"));
+  assert.ok(meta.chunks_total > 1);
+  assert.equal(meta.chunks_processed, meta.chunks_total);
+  assert.equal(meta.coverage_pass, true);
+  assert.equal(meta.coverage_ratio, 1);
+  assert.equal(output.trim().split(/\s+/u).length, source.trim().split(/\s+/u).length);
+});
+
+test("partial normalization cannot leave a checkpoint output", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "normalize-partial-"));
+  const transcriptDir = path.join(dir, "transcript");
+  fs.mkdirSync(transcriptDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(transcriptDir, "meeting-qwen-auto.plain.txt"),
+    "This source is deliberately long enough to require more than one normalization chunk. ".repeat(180),
+    "utf8",
+  );
+
+  assert.throws(() => execFileSync("node", [
+    path.join(ROOT, "command/normalize_transcript_from_transcript_folder_shared.mjs"),
+    "andrii",
+    transcriptDir,
+    "meeting-qwen-auto",
+  ], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      OLLAMA_HOST: "http://127.0.0.1:9",
+      PYA_NORMALIZE_FETCH_ATTEMPTS: "1",
+      PYA_NORMALIZE_FETCH_TIMEOUT_MS: "6000",
+      PYA_NORMALIZE_REQUIRE_LLM: "0",
+      ANDRII_NORMALIZE_MAX_CHARS: "3000",
+      ANDRII_NORMALIZE_MAX_CHUNKS: "1",
+    },
+    stdio: "pipe",
+  }));
+  assert.equal(fs.existsSync(path.join(transcriptDir, "meeting-qwen-auto-normalized.plain.txt")), false);
+  const meta = JSON.parse(fs.readFileSync(path.join(transcriptDir, "meeting-qwen-auto-normalized.normalize.metadata.json"), "utf8"));
+  assert.equal(meta.coverage_pass, false);
+});

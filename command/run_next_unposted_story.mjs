@@ -382,6 +382,38 @@ function findAgendaPublishResponsePath(transcriptDir, basePrefix) {
   return path.join(transcriptDir, files[files.length - 1]);
 }
 
+function retainedSupportingDocumentCount(meetingDir) {
+  const indexPath = path.join(String(meetingDir || ""), "converted", "subreports.index.json");
+  if (!fs.existsSync(indexPath)) return 0;
+  try {
+    const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+    const attachmentDir = path.join(path.dirname(indexPath), "subreports", "_attachments");
+    const items = Array.isArray(index?.items) ? index.items : [];
+    let count = 0;
+    for (const item of items) {
+      const attachments = Array.isArray(item?.attachments) ? item.attachments : [];
+      const diagnostics = Array.isArray(item?.attachment_diagnostics) ? item.attachment_diagnostics : [];
+      for (let index = 0; index < attachments.length; index += 1) {
+        if (!String(attachments[index]?.url || "").trim()) continue;
+        const explicit = String(
+          diagnostics[index]?.local_file || diagnostics[index]?.local_path || "",
+        ).trim();
+        if (explicit && fs.existsSync(path.resolve(explicit))) {
+          count += 1;
+          continue;
+        }
+        const prefix = `${String(item?.item || "").replace(/\./gu, "-")}-${index + 1}-`;
+        if (fs.existsSync(attachmentDir) && fs.readdirSync(attachmentDir).some((name) => (
+          name.startsWith(prefix) && !name.endsWith(".txt")
+        ))) count += 1;
+      }
+    }
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
 function meetingState(row, meetingsDir, basePrefix) {
   const { folder, meetingDir } = resolveMeetingDir(row, meetingsDir);
   const transcriptDir = path.join(meetingDir, 'transcript');
@@ -407,6 +439,7 @@ function meetingState(row, meetingsDir, basePrefix) {
   // Typical eScribe upcoming meetings expose one agenda PDF plus one agenda HTML link.
   // Treat only *additional* agenda docs (beyond that pair) and minutes as supporting docs.
   const supportDocCount = Math.max(0, agendaCount - 2) + minutesCount;
+  const retainedSupportDocCount = retainedSupportingDocumentCount(meetingDir);
 
   return {
     row,
@@ -436,7 +469,8 @@ function meetingState(row, meetingsDir, basePrefix) {
     agenda_cover_count: agendaCoverCount,
     minutes_count: minutesCount,
     support_doc_count: supportDocCount,
-    has_supporting_docs: supportDocCount > 0,
+    has_supporting_docs: supportDocCount > 0 || retainedSupportDocCount > 0,
+    retained_support_doc_count: retainedSupportDocCount,
     since_date: parseLocalDate(row.since),
   };
 }
@@ -706,6 +740,12 @@ function mergeRemotePosted(states, remotePostedKeys, cfg = {}) {
       ...s,
       posted_remote: true,
       posted_remote_any: true,
+      posted_remote_transcript: true,
+      // The archive key is a successful transcript publication for this
+      // jurisdiction/body/date. Treat it as posted for every local picker so
+      // an interrupted or manually published run cannot be selected again.
+      posted_transcript: true,
+      posted: true,
     };
   });
 }

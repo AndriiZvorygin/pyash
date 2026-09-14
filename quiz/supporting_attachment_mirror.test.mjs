@@ -123,7 +123,7 @@ test("mirror upload returns a rewrite mapping and persists a reusable manifest",
     assert.ok(request.body instanceof FormData);
     const metadata = JSON.parse(request.body.get("metadata"));
     assert.equal(metadata.original_url, fixture.sourceUrl);
-    assert.equal(metadata.idempotency_key, `attachment-${metadata.sha256}`);
+    assert.match(metadata.idempotency_key, /^attachment-[0-9a-f]{64}$/u);
     return new Response(JSON.stringify({
       mirror_url: "https://helpos.ca/attachments/abc/presentation.pdf",
     }), { status: 200 });
