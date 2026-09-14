@@ -1277,7 +1277,11 @@ async function main() {
         const ident = await identifyWithRetry({
           audio: clipPath,
           voicesDir,
-          prevSpeaker: TWO_SPEAKER_CUE_TURNS ? null : (prevSpeaker || null),
+          // In cue-level mode, keep the immediately preceding speaker as a
+          // continuity prior while still classifying this sentence on its own.
+          // Passing no prior lets neighbouring voice embeddings win by tiny
+          // margins and creates a new label for nearly every short cue.
+          prevSpeaker: prevSpeaker || null,
           sameSpeakerThreshold: SAME_SPEAKER_THRESHOLD,
           knownSpeakerThreshold: KNOWN_SPEAKER_THRESHOLD,
           clipSeconds: Math.max(1.0, Math.min(8, turnDuration)),

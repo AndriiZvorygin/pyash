@@ -118,14 +118,28 @@ async function main() {
     label: "prune-agenda",
   });
 
-  const extractSubreportsPya = path.join(PYASH_ROOT, "program/extract-subreports-fromstate-wo-escribe-full.pya");
-  await runWithStreaming({
-    cmd: RUN_BIN,
-    args: [extractSubreportsPya, prunedPath, subreportDir, subreportIndexPath, agendaHtmlPath, meetingUrl, agendaMdPath],
-    cwd: PYASH_ROOT,
-    timeoutMs: 10 * 60 * 1000,
-    label: "extract-subreports",
-  });
+  const canonicalExtractor = String(
+    process.env.AGENDA_CANONICAL_EXTRACTOR
+    || path.join(path.dirname(pruneScript), "extract-escribe-agenda-items.mjs"),
+  );
+  if (agendaHtmlPath && fs.existsSync(agendaHtmlPath) && fs.existsSync(canonicalExtractor)) {
+    await runWithStreaming({
+      cmd: "node",
+      args: [canonicalExtractor, prunedPath, subreportDir, subreportIndexPath, agendaHtmlPath, meetingUrl, agendaMdPath],
+      cwd: PYASH_ROOT,
+      timeoutMs: 20 * 60 * 1000,
+      label: "extract-canonical-escribe-items",
+    });
+  } else {
+    const extractSubreportsPya = path.join(PYASH_ROOT, "program/extract-subreports-fromstate-wo-escribe-full.pya");
+    await runWithStreaming({
+      cmd: RUN_BIN,
+      args: [extractSubreportsPya, prunedPath, subreportDir, subreportIndexPath, agendaHtmlPath, meetingUrl, agendaMdPath],
+      cwd: PYASH_ROOT,
+      timeoutMs: 10 * 60 * 1000,
+      label: "extract-subreports",
+    });
+  }
 }
 
 main().catch((err) => {

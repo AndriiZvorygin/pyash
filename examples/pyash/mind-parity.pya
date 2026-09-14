@@ -2,6 +2,6 @@ su name example meta be map def
 su name required ob ve text "OLLAMA_HOST" ya
 prah
 
-exists su name helper be mind via state "qwen3-vl:8b-instruct" ya
+exists su name helper be mind via state "qwen3.5:9b" ya
 su name answer ob text "Hello" for name helper to name text helper-out be write do
 ob name helper-out be write do

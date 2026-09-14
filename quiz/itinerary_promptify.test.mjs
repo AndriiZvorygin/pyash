@@ -38,7 +38,7 @@ test("itinerary_promptify rewrites cut text via mind responses", async () => {
       "--host",
       "http://localhost:11434",
       "--model",
-      "qwen3-vl:8b-instruct"
+      "qwen3.5:9b"
     ]);
   } finally {
     globalThis.fetch = priorFetch;
@@ -94,7 +94,7 @@ test("itinerary_promptify neighbor context skips duplicate adjacent cuts", async
       "--host",
       "http://localhost:11434",
       "--model",
-      "qwen3-vl:8b-instruct"
+      "qwen3.5:9b"
     ]);
   } finally {
     globalThis.fetch = priorFetch;
@@ -144,7 +144,7 @@ test("itinerary_promptify carries raw cut fields for each request", async () => 
       "--host",
       "http://localhost:11434",
       "--model",
-      "qwen3-vl:8b-instruct"
+      "qwen3.5:9b"
     ]);
   } finally {
     globalThis.fetch = priorFetch;

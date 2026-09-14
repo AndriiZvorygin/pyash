@@ -44,6 +44,14 @@ DEFAULT_RUNTIME_REGISTRY = {
     "beginAction": ["start", "katago"],
     "stopAction": ["stop", "katago"],
     "restartAction": ["restart", "katago"]
+  },
+  "huggingface": {
+    "runtimeName": "huggingface",
+    "containerName": "criterion-huggingface",
+    "gpuExpected": True,
+    "beginAction": ["start", "criterion-huggingface"],
+    "stopAction": ["stop", "criterion-huggingface"],
+    "restartAction": ["restart", "criterion-huggingface"]
   }
 }
 
@@ -242,6 +250,24 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
       return {
         "accepted": False,
         "error": "katago jobSpec.query must be map"
+      }
+
+  if runtime_lower == "huggingface":
+    if not isinstance(job_spec, dict):
+      return {
+        "accepted": False,
+        "error": "huggingface jobSpec must be map"
+      }
+    kind = normalize_text(job_spec.get("kind")).lower()
+    if kind != "huggingface-generate":
+      return {
+        "accepted": False,
+        "error": "huggingface jobSpec.kind must be huggingface-generate"
+      }
+    if not isinstance(job_spec.get("payload"), dict):
+      return {
+        "accepted": False,
+        "error": "huggingface jobSpec.payload must be map"
       }
 
   remote_job_id = f"job-{uuid.uuid4().hex[:12]}"
@@ -548,6 +574,39 @@ def request_ollama_json(pathname: str, payload: Optional[Dict[str, Any]] = None,
   return {"value": parsed}
 
 
+def huggingface_runtime_url() -> str:
+  return normalize_text(os.environ.get("HUGGINGFACE_RUNTIME_URL")) or "http://host.docker.internal:8020"
+
+
+def request_huggingface_json(pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_sec: int = 1800) -> Dict[str, Any]:
+  base = huggingface_runtime_url().rstrip("/")
+  url = f"{base}/{pathname.lstrip('/')}"
+  data = None if payload is None else json.dumps(payload).encode("utf-8")
+  req = Request(url, data=data, headers={"Content-Type": "application/json"})
+  if payload is None:
+    req.get_method = lambda: "GET"
+  try:
+    with urlopen(req, timeout=max(1, timeout_sec)) as response:
+      raw = response.read().decode("utf-8")
+  except HTTPError as err:
+    detail = ""
+    try:
+      detail = err.read().decode("utf-8")
+    except Exception:
+      detail = str(err)
+    raise RuntimeError(f"huggingface request failed {err.code}: {detail}")
+  except URLError as err:
+    raise RuntimeError(f"huggingface request failed: {err.reason}")
+
+  try:
+    parsed = json.loads(raw or "{}")
+  except Exception:
+    parsed = {}
+  if isinstance(parsed, dict):
+    return parsed
+  return {"value": parsed}
+
+
 def runtime_is_stopped(status: Dict[str, Any]) -> bool:
   value = normalize_text(status.get("status")).lower()
   return value in {"", "created", "dead", "exited", "not running", "paused", "restarting", "stopped"}
@@ -640,6 +699,36 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   with _LOCK:
     _PROFILES[target_model] = {
       "profileName": target_model,
+      "runtimeName": runtime_name,
+      "loaded": True
+    }
+  return result
+
+
+def execute_huggingface_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  profile_name = normalize_text(job.get("profileName"))
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    raise RuntimeError("huggingface jobSpec must be a map")
+  kind = normalize_text(job_spec.get("kind")).lower()
+  if kind != "huggingface-generate":
+    raise RuntimeError(f"unsupported huggingface job kind: {kind or 'missing'}")
+  payload = job_spec.get("payload")
+  if not isinstance(payload, dict):
+    raise RuntimeError("huggingface payload must be a map")
+
+  ensure_runtime_ready(runtime_registry, runtime_name)
+  result = request_huggingface_json(
+    "/generate",
+    payload,
+    timeout_sec=int(payload.get("timeoutSec") or os.environ.get("HUGGINGFACE_RUNTIME_TIMEOUT_SEC", "1800"))
+  )
+  if result.get("error"):
+    raise RuntimeError(normalize_text(result.get("error")))
+  with _LOCK:
+    _PROFILES[profile_name] = {
+      "profileName": profile_name,
       "runtimeName": runtime_name,
       "loaded": True
     }
@@ -824,6 +913,8 @@ def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]
     return execute_comfyui_job(job, runtime_registry)
   if runtime_name == "katago":
     return execute_katago_job(job, runtime_registry)
+  if runtime_name == "huggingface":
+    return execute_huggingface_job(job, runtime_registry)
 
   sleep_ms = 200
   if isinstance(job.get("jobSpec"), dict):

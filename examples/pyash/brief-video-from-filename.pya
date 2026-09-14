@@ -1,5 +1,5 @@
 ob filename text manuscript be input ya
-exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name mind model ob text "qwen3.5:9b" be default ya
 
 su name brief demo from filename of ob of manuscript be brief video do
 

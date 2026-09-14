@@ -59,7 +59,7 @@ function parseArgs(argv) {
 
 async function runPiper({ text, bin, voicePath, outputPath }) {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const proc = spawn(String(bin), ["--model", String(voicePath), "--output_file", String(outputPath)], {
       stdio: ["pipe", "pipe", "pipe"]
     });
@@ -77,6 +77,10 @@ async function runPiper({ text, bin, voicePath, outputPath }) {
     proc.stdin.write(text);
     proc.stdin.end();
   });
+  const stat = await fs.stat(outputPath);
+  if (!stat.isFile() || stat.size === 0) {
+    throw new Error(`piper did not produce audio: ${outputPath}`);
+  }
 }
 
 async function playAudio(outputPath, player) {
@@ -160,7 +164,7 @@ async function main() {
       if (process.env.PYA_SAY_SILENT !== "1" && process.env.PYA_SAY_SILENT !== "true") {
         await playAudio(outputPath, player);
       }
-    }).catch(() => {});
+    });
   };
   const flushBuffer = (force = false) => {
     const { chunks, remaining } = extractChunks(buffer, { force });
@@ -188,21 +192,27 @@ async function main() {
     scheduleFlush();
   });
   rl.on("close", async () => {
-    if (timer) clearTimeout(timer);
-    if (fixture !== undefined) {
-      await fs.mkdir(path.dirname(outputPath), { recursive: true });
-      await fs.writeFile(outputPath, String(fixture), "utf8");
-      if (fixture) process.stdout.write(`${fixture}\n`);
-    } else {
-      flushBuffer(true);
-      await chain;
-    }
-    if (!opts.output) {
-      try {
-        if (fsSync.existsSync(outputPath)) await fs.unlink(outputPath);
-      } catch {
-        // best-effort cleanup
+    try {
+      if (timer) clearTimeout(timer);
+      if (fixture !== undefined) {
+        await fs.mkdir(path.dirname(outputPath), { recursive: true });
+        await fs.writeFile(outputPath, String(fixture), "utf8");
+        if (fixture) process.stdout.write(`${fixture}\n`);
+      } else {
+        flushBuffer(true);
+        await chain;
       }
+      if (!opts.output) {
+        try {
+          if (fsSync.existsSync(outputPath)) await fs.unlink(outputPath);
+        } catch {
+          // best-effort cleanup
+        }
+      }
+    } catch (err) {
+      const message = err?.message ?? String(err ?? "unknown error");
+      process.stderr.write(`${message}\n`);
+      process.exitCode = 1;
     }
   });
 }

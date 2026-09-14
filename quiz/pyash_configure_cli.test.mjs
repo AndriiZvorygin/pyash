@@ -1425,7 +1425,7 @@ maybeTest("configure mind test-now verifies selected ollama model is available",
       res.end(JSON.stringify({
         models: [
           { name: "gpt-oss:latest" },
-          { name: "qwen3-vl:8b-instruct" }
+          { name: "qwen3.5:9b" }
         ]
       }));
       return;
@@ -1571,7 +1571,7 @@ maybeTest("configure mind source switch ignores prior ollama host/model defaults
     "--set-default", "truth",
     "--backend", "ollama",
     "--host", "http://mriczo:11434",
-    "--model", "qwen3-vl:8b-instruct",
+    "--model", "qwen3.5:9b",
     "--test-now", "lie"
   ]);
   assert.equal(first.status, 0, first.stderr);

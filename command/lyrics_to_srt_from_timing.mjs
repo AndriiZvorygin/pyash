@@ -549,6 +549,116 @@ function flattenTimingWords(cuts) {
   return out;
 }
 
+function uniqueNgramPositions(words, size) {
+  const positions = new Map();
+  for (let i = 0; i <= words.length - size; i += 1) {
+    const key = words.slice(i, i + size).join("\u0001");
+    if (!positions.has(key)) positions.set(key, i);
+    else positions.set(key, -1);
+  }
+  return positions;
+}
+
+function longestIncreasingAnchorChain(candidates) {
+  const source = Array.isArray(candidates) ? candidates : [];
+  if (!source.length) return [];
+  const tails = [];
+  const tailsAt = [];
+  const previous = new Array(source.length).fill(-1);
+  for (let i = 0; i < source.length; i += 1) {
+    const value = Number(source[i].asrWordIndex);
+    let lo = 0;
+    let hi = tails.length;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (tails[mid] < value) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) previous[i] = tailsAt[lo - 1];
+    tails[lo] = value;
+    tailsAt[lo] = i;
+  }
+  const out = [];
+  let cursor = tailsAt[tails.length - 1];
+  while (cursor >= 0) {
+    out.push(source[cursor]);
+    cursor = previous[cursor];
+  }
+  return out.reverse();
+}
+
+function buildDocumentWordAnchors(lines, flatWords, ngramSize = 4) {
+  const lyricWords = [];
+  const lineWordStarts = [];
+  const lineWordEnds = [];
+  for (const line of lines) {
+    lineWordStarts.push(lyricWords.length);
+    lyricWords.push(...splitNormalizedWords(line));
+    lineWordEnds.push(lyricWords.length);
+  }
+  const asrWords = flatWords.map((entry) => entry.word);
+  if (lyricWords.length < ngramSize || asrWords.length < ngramSize) {
+    return { anchors: [], lineWordStarts, lineWordEnds, lyricWordCount: lyricWords.length, anchoredLyricWords: 0, coverageRatio: 0 };
+  }
+  const lyricPositions = uniqueNgramPositions(lyricWords, ngramSize);
+  const asrPositions = uniqueNgramPositions(asrWords, ngramSize);
+  const candidates = [];
+  for (const [key, lyricWordIndex] of lyricPositions) {
+    const asrWordIndex = asrPositions.get(key);
+    if (lyricWordIndex < 0 || !Number.isInteger(asrWordIndex) || asrWordIndex < 0) continue;
+    candidates.push({ lyricWordIndex, asrWordIndex });
+  }
+  candidates.sort((a, b) => a.lyricWordIndex - b.lyricWordIndex || a.asrWordIndex - b.asrWordIndex);
+  const anchors = longestIncreasingAnchorChain(candidates);
+  const covered = new Uint8Array(lyricWords.length);
+  for (const anchor of anchors) {
+    for (let offset = 0; offset < ngramSize && anchor.lyricWordIndex + offset < covered.length; offset += 1) {
+      covered[anchor.lyricWordIndex + offset] = 1;
+    }
+  }
+  const anchoredLyricWords = covered.reduce((sum, value) => sum + value, 0);
+  return {
+    anchors,
+    lineWordStarts,
+    lineWordEnds,
+    lyricWordCount: lyricWords.length,
+    anchoredLyricWords,
+    coverageRatio: anchoredLyricWords / Math.max(1, lyricWords.length)
+  };
+}
+
+function lowerBoundAnchor(anchors, lyricWordIndex) {
+  let lo = 0;
+  let hi = anchors.length;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (anchors[mid].lyricWordIndex < lyricWordIndex) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function estimateAsrWordIndexForLine(documentAnchors, lineIndex) {
+  const { anchors, lineWordStarts, lineWordEnds } = documentAnchors;
+  if (!anchors.length) return null;
+  const lineStart = Number(lineWordStarts[lineIndex] ?? 0);
+  const lineEnd = Number(lineWordEnds[lineIndex] ?? lineStart);
+  const nextIndex = lowerBoundAnchor(anchors, lineStart);
+  const next = anchors[nextIndex] ?? null;
+  const previous = anchors[nextIndex - 1] ?? null;
+
+  if (next && next.lyricWordIndex < lineEnd) {
+    return next.asrWordIndex - (next.lyricWordIndex - lineStart);
+  }
+  if (previous && next && next.lyricWordIndex > previous.lyricWordIndex) {
+    const ratio = (lineStart - previous.lyricWordIndex) / (next.lyricWordIndex - previous.lyricWordIndex);
+    return previous.asrWordIndex + ratio * (next.asrWordIndex - previous.asrWordIndex);
+  }
+  if (previous) return previous.asrWordIndex + (lineStart - previous.lyricWordIndex);
+  if (next) return next.asrWordIndex - (next.lyricWordIndex - lineStart);
+  return null;
+}
+
 function lineStartAnchorScore(lyricWords, asrWords, wordIndex) {
   const lyrics = Array.isArray(lyricWords) ? lyricWords.filter(Boolean) : [];
   if (!lyrics.length || !Array.isArray(asrWords) || wordIndex >= asrWords.length) return 0;
@@ -583,21 +693,30 @@ function chooseLineStartCueIndex(line, cuts, flatWords, startCueIndex, remaining
   const minWordIndex = Math.max(0, flatWords.findIndex((entry) => entry.cueIndex >= startCueIndex));
   if (minWordIndex < 0) return startCueIndex;
   const maxCueIndex = Math.max(startCueIndex, cuts.length - Math.max(1, remainingLines + 1));
-  const maxLookaheadSeconds = Number(process.env.PYA_SRT_LINE_START_MAX_LOOKAHEAD_SECONDS || 7.5);
-  let timeCueLimit = startCueIndex;
-  while (timeCueLimit + 1 < cuts.length && Number(cuts[timeCueLimit + 1]?.since ?? 0) - Number(cuts[startCueIndex]?.since ?? 0) <= maxLookaheadSeconds) {
-    timeCueLimit += 1;
+  const configuredLookahead = Number(process.env.PYA_SRT_LINE_START_MAX_LOOKAHEAD_SECONDS || 0);
+  const mayRecoverGlobally = lyricWords.length >= 4 && !(configuredLookahead > 0);
+  const maxLookaheadSeconds = configuredLookahead > 0 ? configuredLookahead : 7.5;
+  let searchCueLimit = maxCueIndex;
+  if (!mayRecoverGlobally) {
+    let timeCueLimit = startCueIndex;
+    while (timeCueLimit + 1 < cuts.length && Number(cuts[timeCueLimit + 1]?.since ?? 0) - Number(cuts[startCueIndex]?.since ?? 0) <= maxLookaheadSeconds) {
+      timeCueLimit += 1;
+    }
+    searchCueLimit = Math.min(cuts.length - 1, maxCueIndex, timeCueLimit);
   }
-  const searchCueLimit = Math.min(cuts.length - 1, maxCueIndex, timeCueLimit);
   let best = null;
 
   for (let wordIndex = minWordIndex; wordIndex < flatWords.length; wordIndex += 1) {
     const cueIndex = Number(flatWords[wordIndex]?.cueIndex ?? 0);
     if (cueIndex < startCueIndex) continue;
     if (cueIndex > searchCueLimit) break;
+    if (!wordsRoughlyMatch(lyricWords[0], flatWords[wordIndex]?.word)) continue;
     const score = lineStartAnchorScore(lyricWords, flatWords, wordIndex);
-    const progressPenalty = (cueIndex - startCueIndex) * 0.004;
+    const elapsed = Math.max(0, Number(cuts[cueIndex]?.since ?? 0) - Number(cuts[startCueIndex]?.since ?? 0));
+    const progressPenalty = Math.min(0.08, Math.log1p(elapsed) * 0.008);
     const value = score - progressPenalty;
+    const strongScore = Number(process.env.PYA_SRT_LINE_START_STRONG_SCORE || 0.72);
+    if (score >= strongScore) return Math.max(startCueIndex, cueIndex);
     if (!best || value > best.value || (value === best.value && cueIndex < best.cueIndex)) {
       best = { cueIndex, value, score };
     }
@@ -605,28 +724,31 @@ function chooseLineStartCueIndex(line, cuts, flatWords, startCueIndex, remaining
 
   const minScore = Number(process.env.PYA_SRT_LINE_START_MIN_SCORE || 0.42);
   if (best && best.score >= minScore) return Math.max(startCueIndex, best.cueIndex);
-  const lyricCount = Math.max(1, lyricWords.length);
-  let words = 0;
-  for (let cueIndex = startCueIndex; cueIndex < Math.min(cuts.length, maxCueIndex + 1); cueIndex += 1) {
-    words += Math.max(1, countWords(cuts[cueIndex]?.obText ?? ""));
-    if (words >= lyricCount) return Math.min(cuts.length - 1, cueIndex + 1);
-  }
+  // startCueIndex is already the end predicted for the previous sentence. If
+  // this sentence has been corrected enough that no literal start anchor can
+  // be found, it must begin there. Advancing by its word count here would make
+  // chooseSentenceCueEnd consume the same sentence a second time, creating
+  // severe cumulative drift after editorial normalization.
   return startCueIndex;
 }
 
-function buildLineStartAnchors(lines, cuts) {
+function buildLineStartAnchors(lines, cuts, suppliedDocumentAnchors = null) {
   const flatWords = flattenTimingWords(cuts);
+  const documentAnchors = suppliedDocumentAnchors ?? buildDocumentWordAnchors(lines, flatWords);
   const anchors = [];
   let cursorCue = 0;
   for (let i = 0; i < lines.length && cursorCue < cuts.length; i += 1) {
     const remainingLines = Math.max(0, lines.length - i - 1);
-    const anchor = i === 0
-      ? 0
-      : chooseLineStartCueIndex(lines[i], cuts, flatWords, cursorCue, remainingLines);
+    const estimatedWordIndex = estimateAsrWordIndexForLine(documentAnchors, i);
+    const estimatedCueIndex = Number.isFinite(estimatedWordIndex)
+      ? Number(flatWords[Math.max(0, Math.min(flatWords.length - 1, Math.round(estimatedWordIndex)))]?.cueIndex)
+      : null;
+    const anchor = Number.isInteger(estimatedCueIndex)
+      ? estimatedCueIndex
+      : (i === 0 ? 0 : chooseLineStartCueIndex(lines[i], cuts, flatWords, cursorCue, remainingLines));
     const safeAnchor = Math.max(cursorCue, Math.min(cuts.length - 1, anchor));
     anchors.push(safeAnchor);
-    const lineEnd = chooseSentenceCueEnd(lines[i], cuts, safeAnchor, remainingLines);
-    cursorCue = Math.max(safeAnchor + 1, Math.min(cuts.length, lineEnd));
+    cursorCue = safeAnchor + 1;
   }
   return anchors;
 }
@@ -637,8 +759,18 @@ function buildSentenceCueTimingRows(lyricsCuts, timingCuts) {
   if (!lines.length) throw new Error("lyrics to srt defective: no lyric lines");
   if (!cuts.length) throw new Error("lyrics to srt defective: no timing cuts");
 
-  const score = alignmentScore(lines, cuts);
-  const anchors = buildLineStartAnchors(lines, cuts);
+  const documentAnchors = buildDocumentWordAnchors(lines, flattenTimingWords(cuts));
+  const minCoverage = Number(process.env.PYA_SRT_MIN_DOCUMENT_ANCHOR_COVERAGE || 0.35);
+  const minWordsForCoverageGate = Number(process.env.PYA_SRT_MIN_WORDS_FOR_ALIGNMENT_GATE || 200);
+  if (
+    documentAnchors.lyricWordCount >= minWordsForCoverageGate
+    && documentAnchors.coverageRatio < minCoverage
+  ) {
+    throw new Error(
+      `lyrics to srt defective: monotonic document anchor coverage ${documentAnchors.coverageRatio.toFixed(3)} is below ${minCoverage.toFixed(3)}`
+    );
+  }
+  const anchors = buildLineStartAnchors(lines, cuts, documentAnchors);
   const rows = [];
   for (let i = 0; i < anchors.length; i += 1) {
     const startCueIndex = anchors[i];
@@ -678,10 +810,13 @@ function buildSentenceCueTimingRows(lyricsCuts, timingCuts) {
       lines: lines.length,
       asrCues: cuts.length,
       asrGroups: rows.length,
-      acceptedMatchLines: score.matched,
-      lyricWords: score.lyricWords,
-      asrWords: score.asrWords,
-      matchRatio: score.ratio,
+      acceptedMatchLines: documentAnchors.anchoredLyricWords,
+      lyricWords: documentAnchors.lyricWordCount,
+      asrWords: flattenTimingWords(cuts).length,
+      matchRatio: documentAnchors.coverageRatio,
+      documentAnchorCount: documentAnchors.anchors.length,
+      documentAnchoredLyricWords: documentAnchors.anchoredLyricWords,
+      documentAnchorCoverageRatio: documentAnchors.coverageRatio,
       repeatedTailGroups: 0,
       firstAsrSeconds: Number(cuts[0].since),
       lastAsrSeconds: Number(cuts[cuts.length - 1].until),
@@ -692,7 +827,7 @@ function buildSentenceCueTimingRows(lyricsCuts, timingCuts) {
         if (i === 0) return max;
         return Math.max(max, Math.max(0, Number(row.since) - Number(rows[i - 1].until)));
       }, 0),
-      boundaryPolicy: "asr_line_start_anchors",
+      boundaryPolicy: "asr_monotonic_unique_ngram_anchors",
       mismatchPolicy: "lyric_text_with_asr_time"
     }
   };

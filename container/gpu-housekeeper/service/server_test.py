@@ -374,5 +374,71 @@ class HousekeeperKatagoTests(unittest.TestCase):
     self.assertEqual(actions, [("katago", "stopAction"), ("katago", "restartAction")])
 
 
+class HousekeeperHuggingFaceTests(unittest.TestCase):
+  def setUp(self):
+    self.orig_parse_runtime_status = server.parse_runtime_status
+    self.orig_request_huggingface_json = server.request_huggingface_json
+    server._PROFILES.clear()
+    server._JOBS.clear()
+
+  def tearDown(self):
+    server.parse_runtime_status = self.orig_parse_runtime_status
+    server.request_huggingface_json = self.orig_request_huggingface_json
+    server._PROFILES.clear()
+    server._JOBS.clear()
+
+  def test_submit_accepts_only_huggingface_generation_payloads(self):
+    accepted = server.submit_job({
+      "handleId": "criterion-one",
+      "runtimeName": "huggingface",
+      "profileName": "model-one",
+      "jobSpec": {
+        "kind": "huggingface-generate",
+        "payload": {"model": "model-one", "input": "hello"}
+      }
+    })
+    rejected = server.submit_job({
+      "handleId": "criterion-two",
+      "runtimeName": "huggingface",
+      "profileName": "model-one",
+      "jobSpec": {"kind": "huggingface-generate"}
+    })
+    self.assertTrue(accepted["accepted"])
+    self.assertFalse(rejected["accepted"])
+
+  def test_huggingface_execution_uses_managed_runtime_and_returns_worker_result(self):
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      calls.append((pathname, payload, timeout_sec))
+      return {
+        "text": "summary",
+        "timing": {"outputTokens": 4},
+        "metadata": {"device": "cuda"}
+      }
+
+    server.request_huggingface_json = fake_request
+    result = server.execute_huggingface_job({
+      "runtimeName": "huggingface",
+      "profileName": "model-one",
+      "jobSpec": {
+        "kind": "huggingface-generate",
+        "payload": {"model": "model-one", "input": "hello", "timeoutSec": 44}
+      }
+    }, {"huggingface": {"runtimeName": "huggingface", "containerName": "criterion-huggingface", "gpuExpected": True}})
+
+    self.assertEqual(result["text"], "summary")
+    self.assertEqual(calls[0][0], "/generate")
+    self.assertEqual(calls[0][1]["model"], "model-one")
+    self.assertEqual(calls[0][2], 44)
+    self.assertTrue(server._PROFILES["model-one"]["loaded"])
+
+
 if __name__ == "__main__":
   unittest.main()

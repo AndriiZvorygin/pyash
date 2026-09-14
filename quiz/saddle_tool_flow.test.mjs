@@ -63,7 +63,7 @@ test("coding saddle can execute command then repair via tool calls", async () =>
 
   try {
     await interpret(parse('from filename "./module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do'));
-    await interpret(parse('exists su name coding saddle be mind as name "qwen3-vl:8b-instruct" ya'));
+    await interpret(parse('exists su name coding saddle be mind as name "qwen3.5:9b" ya'));
     await interpret(parse('ob text "write hello program" for name coding saddle to name text coding output with name saddle tools be write do'));
 
     const output = remember("coding output");

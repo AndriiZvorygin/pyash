@@ -7,7 +7,7 @@ ob filename text outputdir be input ya
 ob name agenda to name text agenda path be text do
 ob name outputdir to name text output path be text do
 
-ob text "node /home/htaf/pyac/pyash/command/extract_escribe_subreports.mjs \"" to name text cmd be text do
+ob text "node /home/htaf/pyash/world/house/grey-county-reporter/program/extract-escribe-agenda-items.mjs \"" to name text cmd be text do
 ob name text agenda path to name cmd be plus do
 ob text "\" \"" to name cmd be plus do
 ob name text output path to name cmd be plus do

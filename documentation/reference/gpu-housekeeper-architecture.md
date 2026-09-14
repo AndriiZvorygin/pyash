@@ -94,6 +94,7 @@ The default managed runtimes are:
 - `ollama`
 - `comfyui`
 - `katago`
+- `huggingface` (the Criterion sequence-to-sequence service)
 
 Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
 
@@ -117,7 +118,16 @@ Before execution, the housekeeper:
 
 This is the first real GPU-managed mind path for non-streaming Pyash Ollama calls.
 
-### 3.2 ComfyUI
+### 3.2 Hugging Face Criterion
+
+Criterion's fine-tuned sequence-to-sequence lane uses the same durable GPU duty
+queue and housekeeper lock. `huggingface-generate` jobs are sent to the
+`criterion-huggingface` container, which keeps one requested Transformers model
+warm and exposes a small `/generate` endpoint. Criterion remains responsible
+for sample checkpoints, scoring and reports; the container only performs model
+inference. Lead-3 is deterministic CPU work and does not use this runtime.
+
+### 3.3 ComfyUI
 
 ComfyUI jobs use:
 
@@ -128,7 +138,7 @@ ComfyUI jobs use:
 
 The housekeeper submits a prompt to ComfyUI, polls history, and returns the prompt history result.
 
-### 3.3 KataGo
+### 3.4 KataGo
 
 KataGo jobs use:
 

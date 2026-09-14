@@ -1,0 +1,8 @@
+/home/htaf/pyash/log/background-roadmap.log /home/htaf/pyash/log/background-digest.log {
+  weekly
+  rotate 8
+  compress
+  missingok
+  notifempty
+  copytruncate
+}

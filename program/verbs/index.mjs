@@ -90,6 +90,9 @@ import android, { signatures as androidSignatures } from "./android.mjs";
 import gpu, { signatures as gpuSignatures } from "./gpu.mjs";
 import extract, { signatures as extractSignatures } from "./extract.mjs";
 import speakerIdentity, { signatures as speakerIdentitySignatures } from "./speaker_identity.mjs";
+import criterion, { signatures as criterionSignatures } from "./criterion.mjs";
+import nightmare, { signatures as nightmareSignatures } from "./nightmare.mjs";
+import reverie, { signatures as reverieSignatures } from "./reverie.mjs";
 
 export {
   plus,
@@ -170,7 +173,10 @@ export {
   android,
   gpu,
   extract,
-  speakerIdentity
+  speakerIdentity,
+  criterion,
+  nightmare,
+  reverie
 };
 
 export const builtInSignatures = [
@@ -266,4 +272,7 @@ export const builtInSignatures = [
   ...gpuSignatures,
   ...extractSignatures,
   ...speakerIdentitySignatures,
+  ...criterionSignatures,
+  ...nightmareSignatures,
+  ...reverieSignatures,
 ];

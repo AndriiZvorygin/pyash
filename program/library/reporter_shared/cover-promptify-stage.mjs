@@ -207,7 +207,7 @@ export async function runCoverPromptifyStage({
   reportPath = "",
 } = {}) {
   const host = process.env.OLLAMA_HOST || "http://mriczo:11434";
-  const model = String(process.env.COVER_PROMPTIFY_MODEL || process.env.PYA_MIND_MODEL || "qwen3.5:9b").trim();
+  const model = "qwen3.5:9b";
   const req = buildPromptRequest({ hookText, oneSentenceSummary, topNews, jurisdiction, meetingType });
 
   let positivePrompt = "";

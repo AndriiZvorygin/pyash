@@ -3,6 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readPyaTextValues } from "./pya_lookup.mjs";
+import {
+  CANADIAN_ENGLISH_SPELLING_PAIRS,
+  normalizeCanadianEnglish,
+} from "../program/library/reporter_shared/canadian-english.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -55,6 +59,7 @@ const PROFILES = {
       let out = String(text || "");
       out = out.replace(/\bOceansound\b/giu, "Owen Sound");
       out = out.replace(/\bOnsound\b/giu, "Owen Sound");
+      out = out.replace(/\bOnondaga\b/giu, "Owen Sound");
       out = out.replace(/\bCity of Oceansound\b/giu, "City of Owen Sound");
       out = out.replace(/\bDeputy Mayor Greg\b/gu, "Deputy Mayor Greig");
       out = out.replace(/\bDeputy Mayor Gregg\b/gu, "Deputy Mayor Greig");
@@ -71,11 +76,13 @@ const PROFILES = {
       out = out.replace(/\bAndrii Zvorov\b/gu, "Andrii Zvorygin");
       out = out.replace(/\bAndre Zvorogin\b/gu, "Andrii Zvorygin");
       out = out.replace(/\bGrey Sable\b/giu, "Grey Sauble");
+      out = out.replace(/\b(?:Moquehadong|Malwiquadong)\b/giu, "M'Wikwedong");
       return out;
     },
     literalReplacements: [
       ["Oceansound", "Owen Sound"],
       ["Onsound", "Owen Sound"],
+      ["Onondaga", "Owen Sound"],
       ["City of Oceansound", "City of Owen Sound"],
       ["Deputy Mayor Greg", "Deputy Mayor Greig"],
       ["Deputy Mayor Gregg", "Deputy Mayor Greig"],
@@ -89,6 +96,8 @@ const PROFILES = {
       ["Andrii Zvorov", "Andrii Zvorygin"],
       ["Andre Zvorogin", "Andrii Zvorygin"],
       ["Grey Sable", "Grey Sauble"],
+      ["Moquehadong", "M'Wikwedong"],
+      ["Malwiquadong", "M'Wikwedong"],
     ],
     rosterCandidates(transcriptDir) {
       const meetingDir = path.dirname(transcriptDir);
@@ -310,16 +319,54 @@ function buildStringReplacementMap(profile, normalizationTerms) {
       addReplacement(map, titleCaseWords(alias), titleCaseWords(canonical));
     }
   }
+  for (const [american, canadian] of CANADIAN_ENGLISH_SPELLING_PAIRS) {
+    addReplacement(map, american, canadian);
+    addReplacement(map, american.toUpperCase(), canadian.toUpperCase());
+    addReplacement(map, titleCaseWords(american), titleCaseWords(canadian));
+  }
   return map;
+}
+
+function splitOversizedParagraph(paragraph, maxChars) {
+  const chunks = [];
+  let rest = String(paragraph || "").trim();
+  while (rest.length > maxChars) {
+    const window = rest.slice(0, maxChars);
+    // Prefer a sentence boundary, but do not allow an unusually long sentence
+    // to defeat the output bound. Falling back to whitespace keeps words intact.
+    let cut = 0;
+    const sentenceRe = /[.!?](?=\s|$)/gu;
+    let match;
+    while ((match = sentenceRe.exec(window)) !== null) {
+      if (match.index + 1 >= Math.floor(maxChars * 0.55)) cut = match.index + 1;
+    }
+    if (!cut) {
+      const whitespace = /\s+/gu;
+      while ((match = whitespace.exec(window)) !== null) {
+        if (match.index >= Math.floor(maxChars * 0.55)) cut = match.index;
+      }
+    }
+    if (!cut) cut = maxChars;
+    const piece = rest.slice(0, cut).trim();
+    if (!piece) {
+      // Defensive progress guarantee for unusual whitespace/control input.
+      cut = maxChars;
+    }
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks;
 }
 
 function splitIntoChunks(text, maxChars) {
   const paras = String(text || "").split(/\n\s*\n+/u).map((p) => p.trim()).filter(Boolean);
   if (!paras.length) return [];
+  const boundedParas = paras.flatMap((p) => splitOversizedParagraph(p, maxChars));
   const chunks = [];
   let buf = [];
   let chars = 0;
-  for (const p of paras) {
+  for (const p of boundedParas) {
     const add = p.length + (buf.length ? 2 : 0);
     if (buf.length && chars + add > maxChars) {
       chunks.push(buf.join("\n\n"));
@@ -332,6 +379,10 @@ function splitIntoChunks(text, maxChars) {
   }
   if (buf.length) chunks.push(buf.join("\n\n"));
   return chunks;
+}
+
+function transcriptWordCount(text) {
+  return String(text || "").trim().split(/\s+/u).filter(Boolean).length;
 }
 
 function termsForPrompt(terms) {
@@ -361,6 +412,7 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
     "Allowed edits only:",
     "- Fix obvious ASR spelling mistakes.",
     "- Normalize person/place names to canonical roster/place spellings when clear from context.",
+    "- Use Canadian English spelling without changing meaning.",
     "- Split/merge accidental word boundaries caused by ASR.",
     "",
     "Forbidden edits:",
@@ -489,6 +541,7 @@ export async function runNormalizeShared(writer, argv = []) {
   const runChunks = maxChunks > 0 ? chunks.slice(0, maxChunks) : chunks;
   const out = [];
   const fallbackChunks = [];
+  const chunkCoverage = [];
   for (let i = 0; i < runChunks.length; i += 1) {
     process.stdout.write(`[normalize-transcript] atindex num ${i + 1} toindex num ${runChunks.length}\n`);
     let cleaned = "";
@@ -517,12 +570,36 @@ export async function runNormalizeShared(writer, argv = []) {
       }
     }
     const canon = profile.canonicalCleanup(cleaned || runChunks[i]);
-    out.push(applyNormalizationTerms(canon, normalizationTerms));
+    const termsNormalized = applyNormalizationTerms(canon, normalizationTerms);
+    const finalChunk = normalizeCanadianEnglish(termsNormalized);
+    out.push(finalChunk);
+    const sourceWords = transcriptWordCount(runChunks[i]);
+    const outputWords = transcriptWordCount(finalChunk);
+    chunkCoverage.push({
+      index: i + 1,
+      source_words: sourceWords,
+      output_words: outputWords,
+      ratio: sourceWords ? Number((outputWords / sourceWords).toFixed(4)) : 1,
+      fallback: fallbackChunks.some((entry) => entry.index === i + 1),
+    });
   }
 
   const normalized = out.join("\n\n").replace(/\n{3,}/gu, "\n\n").trim();
-  fs.writeFileSync(outputPath, `${normalized}\n`, "utf8");
-  fs.writeFileSync(metadataPath, JSON.stringify({
+  const sourceWords = transcriptWordCount(sourceText);
+  const normalizedWords = transcriptWordCount(normalized);
+  const coverageRatio = sourceWords ? normalizedWords / sourceWords : 1;
+  const minCoverageRaw = Number(process.env.PYA_NORMALIZE_MIN_COVERAGE_RATIO || 0.8);
+  const minCoverage = Number.isFinite(minCoverageRaw) && minCoverageRaw > 0 && minCoverageRaw <= 1
+    ? minCoverageRaw
+    : 0.8;
+  const minChunkCoverageRaw = Number(process.env.PYA_NORMALIZE_MIN_CHUNK_COVERAGE_RATIO || 0.7);
+  const minChunkCoverage = Number.isFinite(minChunkCoverageRaw) && minChunkCoverageRaw > 0 && minChunkCoverageRaw <= 1
+    ? minChunkCoverageRaw
+    : 0.7;
+  const incompleteRun = runChunks.length !== chunks.length;
+  const incompleteChunk = chunkCoverage.some((entry) => entry.ratio < minChunkCoverage);
+  const coveragePass = !incompleteRun && !incompleteChunk && coverageRatio >= minCoverage;
+  const metadata = {
     source: plainPath,
     output: outputPath,
     model,
@@ -538,7 +615,28 @@ export async function runNormalizeShared(writer, argv = []) {
     max_failed_chunks_before_circuit: maxFailedChunks,
     fallback_chunk_count: fallbackChunks.length,
     fallback_chunks: fallbackChunks,
-  }, null, 2), "utf8");
+    source_chars: sourceText.length,
+    normalized_chars: normalized.length,
+    source_words: sourceWords,
+    normalized_words: normalizedWords,
+    coverage_ratio: Number(coverageRatio.toFixed(4)),
+    minimum_coverage_ratio: minCoverage,
+    minimum_chunk_coverage_ratio: minChunkCoverage,
+    chunk_coverage: chunkCoverage,
+    coverage_pass: coveragePass,
+  };
+  fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), "utf8");
+  if (!coveragePass) {
+    // Do not leave a stale or partial output that a later checkpoint run could
+    // mistake for a completed normalization stage.
+    try { fs.unlinkSync(outputPath); } catch {}
+    const reasons = [];
+    if (incompleteRun) reasons.push(`only ${runChunks.length}/${chunks.length} chunks processed`);
+    if (incompleteChunk) reasons.push(`a chunk fell below ${minChunkCoverage} word coverage`);
+    if (coverageRatio < minCoverage) reasons.push(`overall word coverage ${coverageRatio.toFixed(3)} < ${minCoverage}`);
+    throw new Error(`normalized transcript coverage check failed: ${reasons.join("; ")}`);
+  }
+  fs.writeFileSync(outputPath, `${normalized}\n`, "utf8");
   process.stdout.write(`[normalize-transcript] wrote: ${outputPath}\n`);
   process.stdout.write(`[normalize-transcript] wrote: ${metadataPath}\n`);
 }

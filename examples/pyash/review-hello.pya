@@ -5,7 +5,7 @@ su name required ob ve text "OLLAMA_HOST" ya
 prah
 
 exists su name author prompter ob text "Draft one short answer for TASK. Keep it factual and concise." be text ya
-exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext name author prompter ya
+exists su name author be mind as name "qwen3.5:9b" fromtext name author prompter ya
 exists su name verifier be mind as name "bespoke-minicheck:latest" ya
 
 exists su name input ob text "Say hello in one line." be text ya

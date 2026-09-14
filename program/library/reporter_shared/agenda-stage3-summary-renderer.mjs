@@ -5,6 +5,11 @@ import {
   writePyaMapArtifact,
   validateAgendaSummaryStrict,
 } from "./agenda-stage-contracts.mjs";
+import {
+  normalizeUnambiguousSpokenNumbers,
+  unsupportedNumericTokens,
+} from "./grounded-numeric-fidelity.mjs";
+import { unsupportedNamedMotionAttributions } from "./motion-attribution-verifier.mjs";
 
 const STAGE2_GROUNDING_ROOT = "agenda section grounding artifact";
 const STAGE3_SUMMARY_ROOT = "agenda summary artifact";
@@ -12,6 +17,21 @@ const STAGE3_SUMMARY_ROOT = "agenda summary artifact";
 function normalizeText(value = "") {
   return String(value || "").replace(/\s+/gu, " ").trim();
 }
+
+function abridgeUtf8(text = "", maxBytes = 6000) {
+  const value = String(text || "");
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.length <= maxBytes) return value;
+  const limit = Math.max(0, Number(maxBytes) || 0);
+  const headBytes = Math.floor(limit * 0.6);
+  const tailBytes = Math.max(0, limit - headBytes);
+  let headEnd = headBytes;
+  while (headEnd > 0 && (bytes[headEnd] & 0xc0) === 0x80) headEnd -= 1;
+  let tailStart = Math.max(headEnd, bytes.length - tailBytes);
+  while (tailStart < bytes.length && (bytes[tailStart] & 0xc0) === 0x80) tailStart += 1;
+  return `${bytes.subarray(0, headEnd).toString("utf8")} […] ${bytes.subarray(tailStart).toString("utf8")}`;
+}
+
 
 function stripLeadingAgendaNumber(text = "") {
   return normalizeText(String(text || "").replace(/^\d+(?:\.[a-z0-9]+)*\s*/iu, ""));
@@ -28,9 +48,14 @@ function countWords(text = "") {
 function splitSentences(text = "") {
   const clean = normalizeText(text);
   if (!clean) return [];
-  const parts = clean
+  const abbreviationMarker = "\uE000";
+  const protectedText = clean.replace(
+    /\b(No|Mr|Mrs|Ms|Dr|St|Mt|Jr|Sr|vs|etc)\./giu,
+    (_, abbreviation) => `${abbreviation}${abbreviationMarker}`,
+  );
+  const parts = protectedText
     .split(/(?<=[.!?])\s+/u)
-    .map((x) => normalizeText(x))
+    .map((x) => normalizeText(x).replaceAll(abbreviationMarker, "."))
     .filter(Boolean);
   if (parts.length) return parts;
   return [clean];
@@ -127,30 +152,282 @@ function assertCleanStage3Text(text = "", where = "stage3 text") {
   if (hasEmbeddedArtifactJson(s)) {
     throw new Error(`${where} defective: embedded artifact json`);
   }
+  if (/\[(?:number|amount|date|address|unknown)\]/iu.test(s)) {
+    throw new Error(`${where} defective: unresolved generation placeholder`);
+  }
 }
 
-function toStandaloneOutcomeSentence(text = "") {
-  let s = normalizeText(text).replace(/SPEAKER_[0-9A-Z]+:\s*/gu, "");
-  if (!s) return "";
-  const first = splitSentences(s)[0] || "";
-  s = normalizeText(first).replace(/[.,;:]+$/u, "");
-  let words = s.split(/\s+/u).filter(Boolean);
-  if (words.length > 18) words = trimStopwordTail(words.slice(0, 18));
-  while (words.length >= 6 && isLikelyFragmentEnding(words)) words = trimStopwordTail(words.slice(0, words.length - 1));
-  if (words.length < 6) return "";
-  const out = normalizeText(words.join(" "));
-  return /[.!?]$/u.test(out) ? out : (out + ".");
-}
+const NUMBER_WORD = "(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)";
+const ORDINAL_WORD = "(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|twenty-first|twenty-second|twenty-third|twenty-fourth|twenty-fifth|twenty-sixth|twenty-seventh|twenty-eighth|twenty-ninth|thirtieth)";
+const HYPHENATED_NUMBER_WORDS = new RegExp(`\\b${NUMBER_WORD}(?:-${NUMBER_WORD})+\\b`, "giu");
+const SPELLED_STREET_ORDINAL = new RegExp(`\\b${ORDINAL_WORD}\\s+(?:Avenue|Street|Road|Highway|Boulevard|Drive|Lane|Line|Concession)\\b`, "giu");
+const NUMERIC_WORD_TOKEN = "(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth)";
+const SPELLED_NUMBER_PHRASE = new RegExp(`\\b${NUMERIC_WORD_TOKEN}(?:[ -]+(?:and[ -]+)?${NUMERIC_WORD_TOKEN})*\\b`, "giu");
+const MIXED_MAGNITUDE_NUMBER = new RegExp(`\\b\\d+\\s+(?:hundred|thousand)(?:\\s+and\\s+(?:\\d+|${NUMERIC_WORD_TOKEN}))?\\b`, "giu");
 
-function buildLongTierSupportSentence({ unit, summary = "", rawSummary = "", chapterText = "" }) {
-  const merged = [
-    ...splitSentences(String(rawSummary || "")),
-    ...splitSentences(String(unit["source excerpt"] || "").replace(/SPEAKER_[0-9A-Z]+:\s*/gu, "")),
+function numericFidelityDefects(text = "") {
+  const value = String(text || "");
+  const malformedHyphenatedNumbers = Array.from(value.matchAll(HYPHENATED_NUMBER_WORDS), (match) => match[0])
+    // Repeated idioms such as "fifty-fifty" are ordinary prose, not a
+    // speech-to-text rendering of a multi-digit number such as "twelve-eight".
+    .filter((candidate) => {
+      const parts = candidate.toLowerCase().split("-");
+      return new Set(parts).size > 1;
+    });
+  const spelledNumberPhrases = Array.from(value.matchAll(SPELLED_NUMBER_PHRASE))
+    // A standalone cardinal such as "twelve members" is valid prose. Reserve
+    // hard notation repair for compound forms and numbered street ordinals;
+    // factual support for every Arabic numeric token is enforced separately.
+    .filter((match) => /[ -]/u.test(match[0]))
+    .filter((match) => {
+      if (!/^(?:hundred|thousand|million|billion)$/iu.test(match[0])) return true;
+      return !/\d\s*$/u.test(value.slice(0, Number(match.index || 0)));
+    })
+    .filter((match) => {
+      if (!/^one$/iu.test(match[0])) return true;
+      const following = value.slice(Number(match.index || 0) + match[0].length);
+      // "one of" selects a member and "one-time" is a lexical modifier.
+      // Neither is malformed numeric notation, and forcing them through the
+      // quantity mapper can turn valid civic prose into "1 of" or "1-time".
+      return !/^(?:\s+of\b|-time\b)/iu.test(following);
+    })
+    .map((match) => match[0]);
+  return [
+    ...malformedHyphenatedNumbers,
+    ...Array.from(value.matchAll(SPELLED_STREET_ORDINAL), (match) => match[0]),
+    ...Array.from(value.matchAll(MIXED_MAGNITUDE_NUMBER), (match) => match[0]),
+    ...spelledNumberPhrases,
   ];
-  const outcome = merged.find((x) => isOutcomeSentence(x));
-  const support = toStandaloneOutcomeSentence(outcome || "");
-  if (support && !wordsKey(summary).includes(wordsKey(support))) return support;
-  return "";
+}
+
+function hasNumericClaim(text = "") {
+  return /\d/u.test(String(text || "")) || numericFidelityDefects(text).length > 0;
+}
+
+export function numericAuditSourceExcerpt(sourceExcerpt = "") {
+  const source = String(sourceExcerpt || "");
+  const rows = source.includes("\n") ? source.split(/\n+/u) : splitSentences(source);
+  const numericToken = new RegExp(`(?:\\d|\\b${NUMERIC_WORD_TOKEN}\\b)`, "iu");
+  const selected = new Set();
+  rows.forEach((row, index) => {
+    const spokenText = row.replace(/^SPEAKER_[0-9A-Z]+:\s*/u, "");
+    if (!numericToken.test(spokenText)) return;
+    for (let contextIndex = Math.max(0, index - 1); contextIndex <= Math.min(rows.length - 1, index + 1); contextIndex += 1) {
+      selected.add(contextIndex);
+    }
+  });
+  return [...selected].sort((a, b) => a - b).map((index) => rows[index]).join("\n");
+}
+
+export async function repairNumericFidelityLlm({
+  summary = "",
+  chapterText = "",
+  sourceExcerpt = "",
+  ollamaUrl = OLLAMA_URL,
+} = {}) {
+  let currentSummary = normalizeText(summary);
+  let currentChapterText = normalizeText(chapterText);
+  if (!hasNumericClaim(`${currentSummary} ${currentChapterText}`)) {
+    return { summary: currentSummary, chapterText: currentChapterText };
+  }
+  const numericSourceExcerpt = numericAuditSourceExcerpt(sourceExcerpt);
+  let lastAuditValid = false;
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    const defects = [
+      ...numericFidelityDefects(currentSummary),
+      ...numericFidelityDefects(currentChapterText),
+    ];
+    if (attempt > 1 && lastAuditValid && !defects.length) break;
+    const parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel: "qwen3.5:9b",
+      system: "You correct numeric notation in generated civic summaries. Return strict JSON only.",
+      prompt: [
+        "Audit and correct only numeric notation in the generated fields using the grounded source.",
+        "Return JSON with exactly: summary, chapter text, numeric valid.",
+        "numeric valid must be true only when every number, year, date, quantity, percentage, currency amount, and numbered street in both generated fields is supported by the grounded source and uses Arabic digits.",
+        "Keep all non-numeric wording and sentence structure unchanged.",
+        "Use Arabic digits for every listed quantity and numbered street ordinal, even when the grounded source spells it in words.",
+        "Also repair unlisted numeric discrepancies such as shortened years (225 instead of 2025), mixed digit-word years (two thousand and 27), dropped digits, or a number that disagrees with the grounded source.",
+        `The output must not contain any of these exact malformed forms: ${defects.map((value) => JSON.stringify(value)).join(", ")}.`,
+        "Examples: Sixth Street becomes 6th Street; Ninth Avenue becomes 9th Avenue; seventy-seven becomes 77.",
+        "Do not invent, calculate, omit, or change any fact.",
+        `GENERATED_SUMMARY: ${currentSummary}`,
+        `GENERATED_CHAPTER_TEXT: ${currentChapterText}`,
+        `GROUNDED_SOURCE: ${numericSourceExcerpt}`,
+      ].join("\n\n"),
+    });
+    currentSummary = normalizeText(parsed?.summary || currentSummary);
+    currentChapterText = normalizeText(parsed?.["chapter text"] || currentChapterText);
+    lastAuditValid = parsed?.["numeric valid"] === true;
+  }
+  for (let mappingAttempt = 1; mappingAttempt <= 3; mappingAttempt += 1) {
+    const remaining = [...new Set([
+      ...numericFidelityDefects(currentSummary),
+      ...numericFidelityDefects(currentChapterText),
+    ])];
+    if (!remaining.length) break;
+    for (const defect of remaining) {
+      // Ask for one exact mapping at a time. In a batch, the model can
+      // repeatedly omit short valid quantities while repairing a more complex
+      // phrase, leaving an otherwise grounded substantive item unpublished.
+      const parsed = await callOllamaJson({
+        ollamaUrl,
+        llmModel: "qwen3.5:9b",
+        system: "You convert exact English numeric phrases to Arabic numeric notation. Return strict JSON only.",
+        prompt: [
+          "Return one replacement for the listed exact phrase as JSON: {\"replacements\":[{\"from\":\"Sixth Street\",\"to\":\"6th Street\"}]}",
+          "The from value must be copied exactly from the list. The to value must contain an Arabic digit and preserve any non-numeric noun such as Street or Avenue.",
+          "Return only the numeric equivalent, not surrounding words or prose, and do not omit the listed phrase.",
+          `PHRASES: ${JSON.stringify([defect])}`,
+          `GROUNDED_SOURCE: ${numericSourceExcerpt}`,
+        ].join("\n\n"),
+      });
+      const replacements = Array.isArray(parsed?.replacements) ? parsed.replacements : [];
+      const replacement = replacements.find((entry) => String(entry?.from || "").toLowerCase() === defect.toLowerCase());
+      const to = normalizeText(replacement?.to || "");
+      if (!to || !/\d/u.test(to) || numericFidelityDefects(to).length) continue;
+      currentSummary = currentSummary.replaceAll(defect, to);
+      currentChapterText = currentChapterText.replaceAll(defect, to);
+    }
+  }
+  for (let rewriteAttempt = 1; rewriteAttempt <= 3; rewriteAttempt += 1) {
+    const remaining = [...new Set([
+      ...numericFidelityDefects(currentSummary),
+      ...numericFidelityDefects(currentChapterText),
+    ])];
+    if (!remaining.length) break;
+    const parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel: "qwen3.5:9b",
+      system: "You resolve malformed numeric notation in grounded civic summaries. Return strict JSON only.",
+      prompt: [
+        "Rewrite both generated fields so none of the listed malformed numeric phrases remain.",
+        "Return exactly: {\"summary\":\"...\",\"chapter text\":\"...\"}.",
+        "If the grounded source unambiguously supplies the numeric value, render it with Arabic digits.",
+        "If the spoken form is ambiguous, omit only the numeric claim while preserving the complete supported civic action or outcome as grammatical prose.",
+        "Do not add, calculate, or substitute any quantity, date, time, address, percentage, currency amount, or other fact.",
+        `MALFORMED_PHRASES: ${JSON.stringify(remaining)}`,
+        `GENERATED_SUMMARY: ${currentSummary}`,
+        `GENERATED_CHAPTER_TEXT: ${currentChapterText}`,
+        `GROUNDED_SOURCE: ${numericSourceExcerpt}`,
+      ].join("\n\n"),
+    });
+    currentSummary = normalizeText(parsed?.summary || currentSummary);
+    currentChapterText = normalizeText(parsed?.["chapter text"] || currentChapterText);
+  }
+  return {
+    summary: normalizeText(normalizeUnambiguousSpokenNumbers(currentSummary)),
+    chapterText: normalizeText(normalizeUnambiguousSpokenNumbers(currentChapterText)),
+  };
+}
+
+export async function rewriteWithoutNumericClaimsLlm({
+  summary = "",
+  chapterText = "",
+  sourceExcerpt = "",
+  ollamaUrl = OLLAMA_URL,
+} = {}) {
+  let currentSummary = normalizeText(summary);
+  let currentChapterText = normalizeText(chapterText);
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    const freshFromSource = attempt >= 3;
+    const rejectedNumericPhrases = [...new Set([
+      ...numericFidelityDefects(currentSummary),
+      ...numericFidelityDefects(currentChapterText),
+    ])];
+    const parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel: "qwen3.5:9b",
+      system: "You write grounded civic summaries without numeric claims. Return strict JSON only.",
+      prompt: [
+        `Correction attempt ${attempt} of 6.`,
+        "Rewrite the prior generated summary and chapter text qualitatively.",
+        "Return exactly: {\"summary\":\"...\",\"chapter text\":\"...\"}.",
+        "Preserve the supported civic action, discussion, decision, and outcome as complete grammatical prose.",
+        "Do not write any digits, clock times, dates, quantities, percentages, currency amounts, numbered addresses, or spelled-out number phrases.",
+        rejectedNumericPhrases.length
+          ? `The previous draft contained these exact rejected numeric phrases; do not repeat them or any close variant: ${JSON.stringify(rejectedNumericPhrases)}.`
+          : "",
+        "When a sentence cannot be written without a numeric claim, replace that sentence with a qualitative description of the supported policy, financing approach, decision, or outcome.",
+        attempt >= 3
+          ? "Previous corrections still contained numeric language. Start both fields over as fresh qualitative civic prose; do not preserve comparisons, totals, dates, or amounts."
+          : "",
+        attempt >= 5
+          ? "Focus only on the supported civic action and outcome. Omit every financial comparison and quantitative detail."
+          : "",
+        "Do not add facts. Do not mention processing, source text, or these instructions.",
+        freshFromSource ? "Write fresh prose from the grounded source below. The rejected numeric draft is intentionally omitted so its malformed number phrases cannot be recopied." : `PRIOR_SUMMARY: ${currentSummary}`,
+        freshFromSource ? "Omit contact information, roll-call details, addresses, dates, times, totals, amounts, and every other quantitative detail." : `PRIOR_CHAPTER_TEXT: ${currentChapterText}`,
+        freshFromSource ? `GROUNDED_SOURCE: ${String(sourceExcerpt || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}` : "The grounded source is intentionally omitted during revision. Preserve only non-numeric facts already present in the prior generated fields.",
+      ].join("\n\n"),
+    });
+    currentSummary = normalizeText(normalizeUnambiguousSpokenNumbers(parsed?.summary || ""));
+    currentChapterText = normalizeText(normalizeUnambiguousSpokenNumbers(parsed?.["chapter text"] || ""));
+    if (currentSummary
+      && !/\d/u.test(`${currentSummary} ${currentChapterText}`)
+      && !numericFidelityDefects(`${currentSummary} ${currentChapterText}`).length) {
+      break;
+    }
+  }
+  if (!currentSummary) {
+    throw new Error("stage3 retryable: qwen3.5:9b returned an empty qualitative summary");
+  }
+  return { summary: currentSummary, chapterText: currentChapterText };
+}
+
+export async function repairUnsupportedNumericClaimsLlm({
+  summary = "",
+  chapterText = "",
+  sourceExcerpt = "",
+  unsupportedTokens = [],
+  ollamaUrl = OLLAMA_URL,
+} = {}) {
+  let currentSummary = normalizeText(summary);
+  let currentChapterText = normalizeText(chapterText);
+  const repairGroundingSource = String(sourceExcerpt || "")
+    .split(/\n/u)
+    .map((line) => line.replace(/^\s*SPEAKER_[0-9A-Z]+:\s*/u, ""))
+    .join("\n");
+  let unsupported = [...new Set(unsupportedTokens.map((value) => normalizeText(value)).filter(Boolean))];
+  for (let attempt = 1; attempt <= 4 && unsupported.length; attempt += 1) {
+    const parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel: "qwen3.5:9b",
+      // Numeric repair only returns two bounded prose fields. A large output
+      // allowance lets qwen continue explaining the repair until its JSON is
+      // truncated or malformed on long source excerpts; keep the response
+      // inside the downstream summary budget instead.
+      maxOutputTokens: 720,
+      system: "Remove unsupported numeric claims from generated civic summaries. Return strict JSON only.",
+      prompt: [
+        "Correct the generated summary and chapter text using only the grounded source.",
+        "Return exactly: {\"summary\":\"...\",\"chapter text\":\"...\"}.",
+        "Keep each field concise: at most two complete sentences and 120 words. Return no explanation outside the JSON object.",
+        `These numeric tokens are unsupported and must not remain unless the grounded source supplies their exact value: ${unsupported.join(", ")}.`,
+        "If the grounded source gives the correct value, use it. Otherwise omit the unsupported quantity while preserving a complete factual sentence.",
+        "Transcript speaker identifiers are internal metadata, not people or facts. Never mention labels such as SPEAKER_072 or Speaker 072 in either generated field.",
+        "Do not introduce a replacement number, date, address, percentage, or currency amount that is absent from the grounded source.",
+        attempt >= 2
+          ? "The prior correction introduced another unsupported number. Rewrite both fields without any numeric claims or spelled-out quantities; state the supported substance qualitatively."
+          : "",
+        `GENERATED_SUMMARY: ${currentSummary}`,
+        `GENERATED_CHAPTER_TEXT: ${currentChapterText}`,
+        `GROUNDED_SOURCE: ${repairGroundingSource.slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+      ].join("\n\n"),
+    });
+    currentSummary = normalizeText(parsed?.summary || "");
+    currentChapterText = normalizeText(parsed?.["chapter text"] || "");
+    unsupported = unsupportedNumericTokens(
+      `${currentSummary} ${currentChapterText}`,
+      sourceExcerpt,
+    );
+  }
+  return {
+    summary: currentSummary,
+    chapterText: currentChapterText,
+    unsupportedTokens: unsupported,
+  };
 }
 
 function looksProceduralLabel(label = "") {
@@ -257,6 +534,11 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
   const maxSentences = Number.isFinite(Number(budget.maxSentences)) ? Number(budget.maxSentences) : 0;
   const maxWords = Number.isFinite(Number(budget.maxWords)) ? Number(budget.maxWords) : 0;
   const minSentences = Math.max(1, Number.isFinite(Number(budget.minSentences)) ? Number(budget.minSentences) : 1);
+  // A long span can inherit a procedural agenda label while containing
+  // substantive material (for example, call to order followed immediately by
+  // an audit presentation). Only compact genuinely short procedural spans.
+  const compactProcedural = Boolean(budget.procedural)
+    && ["tiny_procedural", "short"].includes(String(budget.tier || ""));
 
   let sentences = splitSentences(before);
   sentences = cleanupTranscriptScrapSentences(sentences);
@@ -265,7 +547,7 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
   const fullSentences = sentences.slice();
 
   // 1) Sentence-first clamp
-  if (budget.procedural) {
+  if (compactProcedural) {
     sentences = sentences.slice(0, 1);
   } else if (maxSentences > 0 && sentences.length > maxSentences) {
     sentences = sentences.slice(0, maxSentences);
@@ -281,7 +563,7 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
     // If one sentence is still over budget, keep it as-is to avoid fragmenting.
   }
 
-  if (!budget.procedural && sentences.length < minSentences && fullSentences.length >= minSentences) {
+  if (!compactProcedural && sentences.length < minSentences && fullSentences.length >= minSentences) {
     sentences = fullSentences.slice(0, minSentences);
     const hasOutcome = sentences.some((x) => isOutcomeSentence(x));
     if (!hasOutcome) {
@@ -300,7 +582,7 @@ function enforceSummaryBudget(rawSummary = "", budget = {}) {
     if (strictSentences.length > Math.max(1, minSentences) && !summaryHasMinimalCompleteness(strictSentences.join(" "))) {
       strictSentences = strictSentences.slice(0, strictSentences.length - 1);
     }
-    if (!budget.procedural && strictSentences.length < minSentences && fullSentences.length >= minSentences) {
+    if (!compactProcedural && strictSentences.length < minSentences && fullSentences.length >= minSentences) {
       strictSentences = fullSentences.slice(0, minSentences);
     }
     summary = normalizeText(strictSentences.join(" "));
@@ -361,22 +643,6 @@ function chapterFromSummary(summary = "") {
   return normalizeText(out);
 }
 
-function fallbackUnitSummaryFromGrounding(unit = {}) {
-  const excerpt = normalizeText(String(unit?.["source excerpt"] || ""));
-  if (!excerpt) return "";
-  const sentence = excerpt.split(/(?<=[.!?])\s+/u).map((x) => normalizeText(x)).find(Boolean) || "";
-  if (!sentence) return "";
-  const budget = buildSummaryBudget(unit);
-  return enforceSummaryBudget(sentence, budget);
-}
-
-function fallbackUnitSummaryFromLabel(unit = {}) {
-  const label = normalizeText(String(unit?.label || ""));
-  const agendaItem = normalizeText(String(unit?.["agenda item"] || ""));
-  const base = label || agendaItem || "Agenda section";
-  return `${base} was listed on the agenda.`;
-}
-
 const SPLIT_GENERIC_PREFIXES = [
   "adjournment",
   "next meeting",
@@ -398,7 +664,7 @@ function isLikelyFragmentEnding(words = []) {
   if (!Array.isArray(words) || !words.length) return false;
   const last = String(words[words.length - 1] || "").toLowerCase();
   const prev = String(words[words.length - 2] || "").toLowerCase();
-  const fragmentLast = new Set(["other", "live", "following", "regarding", "including", "against", "lack", "prompting", "citing", "requiring", "mandating", "using", "based", "through", "disproportionate", "due", "relied", "submitted", "physical", "which", "unverified", "request", "procedural", "definition", "bug", "bed", "and", "or", "with", "despite"]);
+  const fragmentLast = new Set(["other", "live", "following", "regarding", "including", "against", "lack", "prompting", "citing", "requiring", "mandating", "using", "based", "through", "disproportionate", "due", "relied", "submitted", "physical", "which", "unverified", "request", "procedural", "definition", "bug", "bed", "calling", "rising", "while", "will", "and", "or", "with", "despite", "arguing", "claiming", "proposing", "seeking", "requesting", "discussing", "considering", "reviewing", "raising", "explaining", "supporting", "opposing", "urging", "questioning", "noting", "warning", "targeting", "highlighting"]);
   const danglingPrev = new Set(["of", "for", "from", "with", "to", "by", "in", "on", "at", "under", "over", "despite", "including", "regarding", "due"]);
   if (fragmentLast.has(last)) return true;
   if (danglingPrev.has(last)) return true;
@@ -467,6 +733,7 @@ function leadingPhraseKey(text = "", size = 3) {
 function pickSplitChapterText({ llmText = "", summary = "", heading = "", seenLeadPhrases = new Set() }) {
   const candidates = buildSplitChapterCandidates({ llmText, summary, heading });
   const hasForbidden = (cand) => SPLIT_GENERIC_PREFIXES.some((p) => wordsKey(cand).startsWith(wordsKey(p)));
+  const parentWords = new Set(wordsKey(stripLeadingAgendaNumber(heading)).split(" ").filter(Boolean));
   for (const c of candidates) {
     if (hasForbidden(c)) continue;
     if (/^(the\s+discussion\s+addresses|the\s+presentation\s+addresses|the\s+section\s+addresses)\b/iu.test(c)) continue;
@@ -474,6 +741,12 @@ function pickSplitChapterText({ llmText = "", summary = "", heading = "", seenLe
     const words = c.split(/\s+/u).filter(Boolean);
     if (words.length < 6 || words.length > 12) continue;
     if (isLikelyFragmentEnding(words)) continue;
+    // A child heading that is almost entirely the parent agenda title is not
+    // an additional topic and creates noisy duplicate TOC entries. Reject it
+    // generically so the bounded title-repair prompt can choose a distinct
+    // source-grounded subject instead.
+    const parentOverlap = words.filter((word) => parentWords.has(String(word || "").toLowerCase())).length / Math.max(1, words.length);
+    if (parentOverlap >= 0.75) continue;
     const lead = leadingPhraseKey(c);
     if (lead && seenLeadPhrases.has(lead)) continue;
     return c.replace(/[.,;:!?]+$/u, "");
@@ -519,7 +792,27 @@ function assertExactGroundingRoot(filePath) {
 }
 
 function assertExactGroundingSchema(grounding = {}) {
-  const allowed = new Set(["schema version", "generated time", "transcript rows total", "grounded units"]);
+  const version = String(grounding["schema version"] || "");
+  const v1 = new Set(["schema version", "generated time", "transcript rows total", "grounded units"]);
+  const v2 = new Set([
+    "schema version",
+    "generated time",
+    "canonical source path",
+    "canonical source type",
+    "canonical fingerprint",
+    "transcript rows total",
+    "atomic units total",
+    "grounded units",
+  ]);
+  const v3 = new Set([
+    ...v2,
+    "recording atomic units total",
+    "meeting scope audit",
+    "prefix scope audit",
+  ]);
+  const allowed = version === "agenda_section_grounding_v3"
+    ? v3
+    : (version === "agenda_section_grounding_v2" ? v2 : v1);
   const keys = Object.keys(grounding || {});
   for (const k of keys) {
     if (!allowed.has(k)) throw new Error(`stage3 defective: unexpected grounding top-level field "${k}"`);
@@ -530,27 +823,65 @@ function assertExactGroundingSchema(grounding = {}) {
       throw new Error(`stage3 defective: missing grounding field "${req}"`);
     }
   }
-  if (String(grounding["schema version"] || "") !== "agenda_section_grounding_v1") {
+  if (!["agenda_section_grounding_v1", "agenda_section_grounding_v2", "agenda_section_grounding_v3"].includes(version)) {
     throw new Error("stage3 defective: invalid grounding schema version");
+  }
+  if (version === "agenda_section_grounding_v3") {
+    const recordingTotal = Number(grounding["recording atomic units total"] || 0);
+    const scopedTotal = Number(grounding["atomic units total"] || 0);
+    const meetingScope = grounding["meeting scope audit"];
+    const prefixScope = grounding["prefix scope audit"];
+    if (!Number.isInteger(recordingTotal) || recordingTotal < scopedTotal || scopedTotal < 1) {
+      throw new Error("stage3 defective: invalid recording/scoped atomic-unit totals");
+    }
+    if (!meetingScope || typeof meetingScope !== "object" || !String(meetingScope["scope atomic start"] || "")) {
+      throw new Error("stage3 defective: missing named-meeting scope audit");
+    }
+    if (!prefixScope || typeof prefixScope !== "object") {
+      throw new Error("stage3 defective: missing in-scope prefix audit");
+    }
   }
 }
 
-async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
-  const maxAttempts = Math.max(1, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_ATTEMPTS || "5"), 10) || 5);
-  const timeoutMs = Math.max(5_000, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS || "120000"), 10) || 120_000);
-  const baseDelayMs = Math.max(250, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS || "1500"), 10) || 1500);
+async function callOllamaJson({ ollamaUrl, llmModel, system, prompt, maxOutputTokens = 0, temperature = 0, seed = 0 }) {
+  // A scheduled report may briefly lose the LAN model while another request
+  // unloads or reloads. Keep the substantive item retryable through a bounded
+  // outage instead of abandoning all previously completed section work after
+  // the former ~15-second retry window.
+  const maxAttempts = Math.max(1, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_ATTEMPTS || "9"), 10) || 9);
+  // Grounded whole-item audits can include several thousand transcript words.
+  // Give the local model enough time to finish them instead of repeatedly
+  // aborting healthy in-flight generations at the short-request threshold.
+  const timeoutMs = Math.max(5_000, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS || "300000"), 10) || 300_000);
+  const baseDelayMs = Math.max(1, Number.parseInt(String(process.env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS || "1500"), 10) || 1500);
 
   let lastErr = null;
+  let lastMalformedContent = "";
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const retryJsonLine = attempt > 1
-        ? "\nRetry instruction: return one valid JSON object only. No markdown. Do not leave words unquoted. notes must be a string, not an array."
+        ? [
+          "\nRetry instruction: return one valid JSON object only. No markdown. Do not leave words unquoted. notes must be a string, not an array.",
+          attempt % 2 === 0
+            ? "Rebuild the object from scratch and quote every string value, including em-dash phrases. Do not copy malformed syntax."
+            : "Repair the rejected shape while preserving the grounded content; use JSON escaping for punctuation and newlines.",
+          lastMalformedContent ? `Previous rejected response (do not repeat its syntax): ${lastMalformedContent.slice(-5000)}` : "",
+        ].filter(Boolean).join("\n")
         : "";
       const body = {
         model: llmModel,
         stream: false,
         think: false,
-        options: { temperature: attempt > 1 ? 0 : 0.12 },
+        // Ask Ollama to enforce JSON syntax at the transport boundary. The
+        // prompt still defines the required fields and grounding rules, but
+        // this prevents an otherwise valid Qwen response with an unescaped
+        // quote/newline from aborting a whole meeting after many sections.
+        format: "json",
+        options: {
+          temperature: Math.max(0, Math.min(1, Number(temperature) || 0)),
+          ...(Number(seed) > 0 ? { seed: Number(seed) } : {}),
+          ...(Number(maxOutputTokens) > 0 ? { num_predict: Number(maxOutputTokens) } : {}),
+        },
         messages: [
           { role: "system", content: system },
           { role: "user", content: `${prompt}${retryJsonLine}` },
@@ -575,8 +906,16 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
       const content = String(payload?.message?.content || "").trim();
       try { return JSON.parse(content); } catch {}
       const m = content.match(/\{[\s\S]*\}/u);
-      if (!m) throw new Error("unparseable-json");
-      return JSON.parse(m[0]);
+      if (!m) {
+        lastMalformedContent = content;
+        throw new Error("unparseable-json");
+      }
+      lastMalformedContent = m[0];
+      try {
+        return JSON.parse(m[0]);
+      } catch (error) {
+        throw new Error(`malformed-json: ${String(error?.message || error)}`);
+      }
     } catch (err) {
       lastErr = err;
       const msg = String(err?.message || err).toLowerCase();
@@ -589,16 +928,88 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
   throw lastErr || new Error("ollama fetch failed");
 }
 
-async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
+export async function repairChapterTitleLlm({
+  heading,
+  summary,
+  sourceExcerpt,
+  auditNote,
+  llmModel,
+  ollamaUrl,
+  seed = 0,
+}) {
+  let rejected = "";
+  let rejection = normalizeText(auditNote);
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    const parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel,
+      maxOutputTokens: 96,
+      temperature: attempt === 1 ? 0.2 : 0.35,
+      seed: seed > 0 ? seed + attempt - 1 : 0,
+      system: "Return one strict JSON object containing a grounded civic chapter headline.",
+      prompt: [
+        `Headline repair attempt ${attempt} of 6.`,
+        "Create exactly one complete headline of 6 to 12 words for this bounded transcript source chunk. Count the words before returning it; prefer 8 to 10 words when the evidence allows.",
+        "Use only a distinct fact, action, finding, request, or outcome stated in the source excerpt.",
+        "Every substantive claim in the headline must also be stated or clearly supported by CURRENT SUMMARY; never add a named agency, warning, location, number, or outcome that the summary does not contain.",
+        "Headline the central subject of CURRENT SUMMARY, not a minor detail from the source excerpt; if the summary covers consultation broadly, use that broad subject rather than one isolated comment.",
+        "Do not copy the parent agenda heading or another chapter's framing.",
+        "Do not end with a comma, conjunction, preposition, or an unfinished -ing participle such as arguing, proposing, discussing, or considering.",
+        "If the rejected headline was too long, rewrite it; never truncate it mid-phrase.",
+        attempt >= 2 ? "Start a fresh headline from the source evidence and avoid the rejected shape." : "",
+        attempt >= 4 ? "Use a short, direct subject-action-outcome headline. Do not explain the repair or repeat the parent heading." : "",
+        "Return exactly {\"title\":\"...\"} and no other keys.",
+        `PARENT HEADING: ${normalizeText(heading)}`,
+        `AUDIT FEEDBACK: ${rejection}`,
+        rejected ? `REJECTED HEADLINE (do not repeat): ${rejected}` : "",
+        `CURRENT SUMMARY: ${normalizeText(summary)}`,
+        `SOURCE EXCERPT: ${normalizeText(sourceExcerpt).slice(0, 9000)}`,
+      ].filter(Boolean).join("\n\n"),
+    });
+    const raw = normalizeText(parsed?.title || parsed?.["chapter text"] || "");
+    const title = normalizeSplitChapterCandidate(raw, heading);
+    const wordCount = title.split(/\s+/u).filter(Boolean).length;
+    if (title && wordCount >= 6 && wordCount <= 12) return title;
+    rejected = raw || title;
+    rejection = `Rejected headline was not a complete 6-12 word civic headline (received ${wordCount} words). Rewrite it from the source.`;
+  }
+  throw new Error("stage3 retryable: qwen3.5:9b returned an invalid repaired child title after bounded varied retries");
+}
+
+export async function summarizeGroundedUnit({
+  unit,
+  focus,
+  llmModel,
+  ollamaUrl,
+  isChild = false,
+  siblingSummaries = [],
+  temperature = 0,
+  seed = 0,
+}) {
   const budget = buildSummaryBudget(unit);
+  const numericGroundingSource = [
+    String(unit?.label || ""),
+    String(unit?.["agenda item"] || ""),
+    String(unit?.["source excerpt"] || ""),
+  ].join("\n");
+  const hasChildChapters = Array.isArray(unit?.["child chapters"]) && unit["child chapters"].length > 0;
+  const requiresExpandedOverview = !isChild
+    && !hasChildChapters
+    && (budget.tier === "long" || budget.tier === "very_long");
+  const largeBoundedChild = isChild && String(unit?.["source excerpt"] || "").length >= 4000;
   const longOrderLine =
-    budget.tier === "long" || budget.tier === "very_long"
+    requiresExpandedOverview
       ? "For long sections, prefer this order when applicable: item under discussion; main substance; decision/direction/outcome."
       : "";
   const longCoverageLine =
-    budget.tier === "long" || budget.tier === "very_long"
+    requiresExpandedOverview
       ? "Long-tier requirement: produce at least 3 complete sentences covering item, substance, and outcome (if outcome exists in source)."
       : "";
+  const siblingContext = (Array.isArray(siblingSummaries) ? siblingSummaries : [])
+    .map((value, index) => `Sibling ${index + 1}: ${normalizeText(value)}`)
+    .filter((value) => !value.endsWith(":"))
+    .join("\n")
+    .slice(-6000);
   const prompt = [
     "You are stage3 of a strict agenda summary pipeline.",
     "Grounding is authoritative. Do not invent boundaries or facts.",
@@ -606,26 +1017,48 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
     "Required keys: summary, chapter text, confidence, notes.",
     "notes must be a short string, not an array.",
     "Example: {\"summary\":\"...\",\"chapter text\":\"...\",\"confidence\":0.9,\"notes\":\"\"}",
-    "summary: factual, source-aligned, and proportional to section size.",
-    "chapter text: short chapter-ready line. If not split, still provide a useful line.",
+    "summary: factual, source-aligned, proportional to section size, and written as complete grammatical sentences with an explicit subject and finite verb.",
+    "Never copy a punctuation-free transcript fragment into summary; synthesize it into reporting prose.",
+    "chapter text: a 6-12 word chapter-ready headline. If not split, still provide a useful headline.",
+    "chapter text must accurately name the distinct main point stated in summary.",
+    "chapter text must be a complete, self-contained headline; do not end with a dangling conjunction, comma, preposition, or participle such as 'while', 'and', 'including', 'utilizing', or 'arguing'. Rewrite a long headline to 6-12 complete words; never truncate it mid-phrase.",
     "Use transcript-specific nouns, actions, concerns, and outcomes from the source excerpt. Do not use agenda-label prose as a substitute for what was said.",
+    "When the source is a resolution, correspondence, or recommendation, state the concrete requested actions or policy changes; do not reduce it to adoption, receipt, background costs, or a request for review.",
     "chapter text must use concrete keywords from the source. Do not start it with 'the discussion addresses', 'the presentation addresses', or an agenda label ending in 'Re'.",
     "Do not write filler such as 'the section also covers' or 'the section also details'.",
+    isChild
+      ? "This excerpt is one character-bounded source chunk. Summarize the substantive information in this chunk, not the parent agenda label or a generic introduction."
+      : "",
+    isChild
+      ? "Partition guidance: lead with concrete actions, names, regions, figures, or list/table rows unique to this source chunk. For an appendix or membership table, summarize its entries instead of repeating the parent document's announcement."
+      : "",
+    isChild && siblingContext
+      ? "Treat sibling summaries only as a do-not-repeat exclusion list. Use this source excerpt as the sole evidence, and report a more specific distinct detail from it rather than repeating a sibling's facts or framing."
+      : "",
+    isChild && siblingContext
+      ? `FORBIDDEN ALREADY-COVERED CLAIMS: do not mention or paraphrase the substantive claims, outcomes, conditions, figures, locations, or framing in these sibling summaries. Select a distinct supported detail from this source window instead: ${siblingContext}`
+      : "",
+    siblingContext ? "Existing sibling summaries:" : "",
+    siblingContext,
     `Summary budget tier: ${budget.tier}`,
     `Budget max sentences: ${budget.maxSentences}`,
     `Budget max words: ${budget.maxWords}`,
     `Procedural section: ${budget.procedural ? "yes" : "no"}`,
     longOrderLine,
     longCoverageLine,
+    largeBoundedChild
+      ? "Bounded-chunk guidance: use 1 to 4 complete sentences as needed to cover the distinct evidence, findings, or requests in this source chunk without padding."
+      : "",
     "Do not mention names, figures, or decisions not present in the grounded source excerpt.",
+    "Do not name a motion mover or seconder unless one source line explicitly pairs that person's name with moving or seconding the motion. A nearby name callout, speaker change, or conflict declaration is not mover evidence. When identity is unclear, describe what Council considered or approved without naming the mover.",
+    "Preserve numeric fidelity: write quantities and numbered street ordinals with Arabic digits exactly as shown in the source (for example, 24 and 15th Avenue), never spelled or hyphenated number words.",
     "",
     `Focus: ${focus || "newsworthy factual civic reporting"}`,
     `Label: ${unit.label}`,
     `Agenda item: ${unit["agenda item"] || ""}`,
-    `Rows: ${unit["row start"]}..${unit["row end"]}`,
-    `Duration seconds: ${Number(unit["duration seconds"] || 0).toFixed(1)}`,
+    "Do not mention internal row numbers, source-chunk timing, or processing metadata.",
     "Grounded source excerpt:",
-    String(unit["source excerpt"] || "").slice(0, 12000),
+    String(unit["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000)),
   ].join("\n");
 
   const queryParsed = async (extraLine = "") => {
@@ -635,6 +1068,8 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
       llmModel,
       system: "Produce strict JSON only for grounded section summaries.",
       prompt: q,
+      temperature,
+      seed,
     });
   };
 
@@ -642,47 +1077,351 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
   try {
     parsed = await queryParsed();
   } catch (err) {
-    const allowFallback = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_STAGE3_ALLOW_FALLBACK || "0"));
-    if (!allowFallback) {
-      throw new Error(
-        `stage3 llm unavailable at ${ollamaUrl} (${normalizeText(String(err?.message || err)).slice(0, 200)}); set AGENDA_STAGE3_ALLOW_FALLBACK=1 to allow grounded fallback summaries`,
-      );
-    }
-    const fallbackSummary = fallbackUnitSummaryFromGrounding(unit);
-    const fallbackChapter = normalizeText(chapterFromSummary(fallbackSummary || String(unit.label || "")));
-    return {
-      summary: fallbackSummary,
-      chapterText: fallbackChapter,
-      confidence: 0,
-      notes: `llm_unavailable:${normalizeText(String(err?.message || err)).slice(0, 200)}`,
-      budget,
-      clampChanged: false,
-      rawSummary: fallbackSummary,
-    };
+    throw new Error(
+      `stage3 retryable: qwen3.5:9b unavailable at ${ollamaUrl} (${normalizeText(String(err?.message || err)).slice(0, 200)})`,
+    );
   }
   let rawSummary = normalizeText(parsed?.summary || "");
   assertCleanStage3Text(rawSummary, "stage3 summary");
   let summary = enforceSummaryBudget(rawSummary, budget);
+  if (!summary) {
+    parsed = await queryParsed(
+      "Retry requirement: summary must contain at least one complete, factual sentence grounded in the source excerpt and ending with sentence punctuation. Do not return a fragment or an empty summary.",
+    );
+    rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 complete-sentence retry");
+    summary = enforceSummaryBudget(rawSummary, budget);
+  }
+  if (!summary && rawSummary) {
+    parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel: "qwen3.5:9b",
+      system: "You rewrite generated civic-report fragments as complete factual sentences. Return strict JSON only.",
+      prompt: [
+        "Rewrite the generated fragment into one or two complete grammatical sentences ending with sentence punctuation.",
+        "Use an explicit civic subject and finite reporting verb. Do not copy the fragment unchanged or return a list of noun phrases.",
+        "Preserve its facts and numeric values, and do not add facts.",
+        "Return exactly: {\"summary\":\"...\",\"chapter text\":\"...\",\"confidence\":0.9,\"notes\":\"\"}.",
+        `GENERATED_FRAGMENT: ${rawSummary}`,
+      ].join("\n\n"),
+    });
+    rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 fragment rewrite");
+    summary = enforceSummaryBudget(rawSummary, budget);
+  }
 
-  const longTier = budget.tier === "long" || budget.tier === "very_long";
-  const summarySentences = splitSentences(summary);
-  if (longTier && summarySentences.length < 2) {
-    parsed = await queryParsed("Long-tier requirement: return 3 to 5 complete sentences covering item, substance, and outcome from this grounded span only.");
+  // Parent overviews and large bounded source chunks must carry enough of
+  // their available context to avoid reducing a report to its opening line.
+  const longTier = requiresExpandedOverview;
+  for (let expansionAttempt = 1; longTier && splitSentences(summary).length < 2 && expansionAttempt <= 3; expansionAttempt += 1) {
+    parsed = await queryParsed(
+      `Long-tier retry ${expansionAttempt}: return 3 to 5 separate complete sentences covering item, substance, and outcome from this grounded span only. Use a period between sentences.`,
+    );
     rawSummary = normalizeText(parsed?.summary || "");
     assertCleanStage3Text(rawSummary, "stage3 summary retry");
     summary = enforceSummaryBudget(rawSummary, budget);
   }
-  if (longTier) {
-    const postSentences = splitSentences(summary);
-    if (postSentences.length < 2) {
-      const supportSentence = buildLongTierSupportSentence({
-        unit,
-        summary,
-        rawSummary,
-        chapterText: normalizeText(parsed?.["chapter text"] || ""),
-      });
-      summary = normalizeText(summary + " " + supportSentence);
+  if (longTier && splitSentences(summary).length < 2 && summary) {
+    parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel: "qwen3.5:9b",
+      system: "Rewrite one grounded civic-report sentence as multiple complete sentences. Return strict JSON only.",
+      prompt: [
+        "Rewrite the generated summary as 2 or 3 separate complete sentences with periods between them.",
+        "Preserve every supported fact and numeric value. Do not add facts, conclusions, or quantities.",
+        "Return exactly: {\"summary\":\"...\",\"chapter text\":\"...\",\"confidence\":0.9,\"notes\":\"\"}.",
+        `GENERATED_SUMMARY: ${summary}`,
+        `GENERATED_CHAPTER_TEXT: ${normalizeText(parsed?.["chapter text"] || "")}`,
+        `GROUNDED_SOURCE: ${String(unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+      ].join("\n\n"),
+    });
+    rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 multi-sentence rewrite");
+    summary = enforceSummaryBudget(rawSummary, budget);
+  }
+  const attributionSource = String(unit?.["attribution source excerpt"] || unit?.["source excerpt"] || "");
+  for (let attributionAttempt = 1; attributionAttempt <= 3; attributionAttempt += 1) {
+    const defects = unsupportedNamedMotionAttributions({
+      text: `${summary} ${String(parsed?.["chapter text"] || "")}`,
+      sourceExcerpt: attributionSource,
+    });
+    if (!defects.length) break;
+    const rejectedJson = JSON.stringify({
+      summary: normalizeText(parsed?.summary || ""),
+      "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+    });
+    const repairInstruction = attributionAttempt === 1
+      ? "Regenerate without naming that actor; describe the motion or Council's action generically."
+      : attributionAttempt === 2
+        ? `Rejected JSON: ${rejectedJson}. Start both fields over and do not repeat any named mover or seconder from the rejected JSON.`
+        : `Rejected JSON: ${rejectedJson}. Delete the unsupported actor name and the move/second role from both fields. Begin directly with the substantive recommendation, discussion, or Council action.`;
+    parsed = await queryParsed(
+      `Motion-attribution retry ${attributionAttempt}: ${defects.map((defect) => `"${defect.claim}"`).join(", ")} names a mover or seconder without an explicit same-line source attribution. ${repairInstruction}`,
+    );
+    rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 motion-attribution retry");
+    summary = enforceSummaryBudget(rawSummary, budget);
+  }
+  let repeatedAttributionDefects = unsupportedNamedMotionAttributions({
+    text: `${summary} ${String(parsed?.["chapter text"] || "")}`,
+    sourceExcerpt: attributionSource,
+  });
+  const forbiddenMotionActors = new Set(repeatedAttributionDefects.map((defect) => defect.actor).filter(Boolean));
+  for (let freshAttempt = 1; repeatedAttributionDefects.length && freshAttempt <= 3; freshAttempt += 1) {
+    parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel: "qwen3.5:9b",
+      system: "Write a fresh source-grounded civic summary with no personal names. Return strict JSON only.",
+      prompt: [
+        "Start over from the grounded source. Do not revise or repeat the rejected draft.",
+        "Use only generic institutional subjects such as Council, the committee, staff, or the report.",
+        "Do not write any personal name anywhere in summary or chapter text, even when the source contains names.",
+        "Do not attribute moving or seconding to any person. State the substantive recommendation, discussion, and supported outcome generically.",
+        forbiddenMotionActors.size ? `Forbidden actor names from prior failed generations: ${[...forbiddenMotionActors].join(", ")}.` : "",
+        `Summary budget: at most ${budget.maxSentences} sentences and ${budget.maxWords} words.`,
+        "Return exactly: {\"summary\":\"...\",\"chapter text\":\"...\",\"confidence\":0.9,\"notes\":\"\"}.",
+        `Label: ${unit.label}`,
+        `Agenda item: ${unit["agenda item"] || ""}`,
+        "Grounded source excerpt:",
+        String(unit["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000)),
+      ].filter(Boolean).join("\n\n"),
+    });
+    rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 fresh no-name motion-attribution retry");
+    summary = enforceSummaryBudget(rawSummary, budget);
+    repeatedAttributionDefects = unsupportedNamedMotionAttributions({
+      text: `${summary} ${String(parsed?.["chapter text"] || "")}`,
+      sourceExcerpt: attributionSource,
+    });
+    for (const defect of repeatedAttributionDefects) {
+      if (defect.actor) forbiddenMotionActors.add(defect.actor);
     }
+  }
+  for (let numericAttempt = 1; numericAttempt <= 2; numericAttempt += 1) {
+    const defects = [
+      ...numericFidelityDefects(summary),
+      ...numericFidelityDefects(parsed?.["chapter text"] || ""),
+    ];
+    if (!defects.length) break;
+    parsed = await queryParsed(
+      `Numeric-fidelity retry: the prior response contained ${defects.map((value) => `"${value}"`).join(", ")}. Regenerate from the grounded source and use Arabic digits for every such quantity or street ordinal.`,
+    );
+    rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 numeric-fidelity retry");
+    summary = enforceSummaryBudget(rawSummary, budget);
+  }
+  const remainingNumericDefects = [
+    ...numericFidelityDefects(summary),
+    ...numericFidelityDefects(parsed?.["chapter text"] || ""),
+  ];
+  const repaired = await repairNumericFidelityLlm({
+    summary,
+    chapterText: parsed?.["chapter text"] || "",
+    sourceExcerpt: unit["source excerpt"] || "",
+    ollamaUrl,
+  });
+  if (repaired.summary) {
+    rawSummary = repaired.summary;
+    summary = enforceSummaryBudget(rawSummary, budget);
+  }
+  if (repaired.chapterText) parsed["chapter text"] = repaired.chapterText;
+  for (let groundingAttempt = 1; groundingAttempt <= 2; groundingAttempt += 1) {
+    const unsupported = unsupportedNumericTokens(
+      `${summary} ${String(parsed?.["chapter text"] || "")}`,
+      numericGroundingSource,
+    );
+    if (!unsupported.length) break;
+    parsed = await queryParsed(
+      `Numeric-grounding retry: these numeric tokens are absent from the grounded source: ${unsupported.join(", ")}. Regenerate both fields using only exact numeric values present in the source.`,
+    );
+    rawSummary = normalizeText(parsed?.summary || "");
+    summary = enforceSummaryBudget(rawSummary, budget);
+  }
+  let unsupportedAfterRegeneration = unsupportedNumericTokens(
+    `${summary} ${String(parsed?.["chapter text"] || "")}`,
+    numericGroundingSource,
+  );
+  if (unsupportedAfterRegeneration.length) {
+    const groundedRepair = await repairUnsupportedNumericClaimsLlm({
+      summary,
+      chapterText: parsed?.["chapter text"] || "",
+      sourceExcerpt: numericGroundingSource,
+      unsupportedTokens: unsupportedAfterRegeneration,
+      ollamaUrl,
+    });
+    rawSummary = groundedRepair.summary;
+    summary = enforceSummaryBudget(rawSummary, budget);
+    parsed["chapter text"] = groundedRepair.chapterText;
+    unsupportedAfterRegeneration = groundedRepair.unsupportedTokens;
+  }
+  // Grounding regeneration can repair an unsupported Arabic token by spelling
+  // it out again, while notation repair can turn an ambiguous spoken form into
+  // a new unsupported Arabic token. Reapply both downstream contracts as one
+  // bounded loop so neither repair can invalidate the other unnoticed.
+  for (let contractAttempt = 1; contractAttempt <= 3; contractAttempt += 1) {
+    const notationDefects = [
+      ...numericFidelityDefects(summary),
+      ...numericFidelityDefects(parsed?.["chapter text"] || ""),
+    ];
+    if (notationDefects.length) {
+      const notationRepair = await repairNumericFidelityLlm({
+        summary,
+        chapterText: parsed?.["chapter text"] || "",
+        sourceExcerpt: numericGroundingSource,
+        ollamaUrl,
+      });
+      rawSummary = notationRepair.summary;
+      summary = enforceSummaryBudget(rawSummary, budget);
+      parsed["chapter text"] = notationRepair.chapterText;
+    }
+    const unsupported = unsupportedNumericTokens(
+      `${summary} ${String(parsed?.["chapter text"] || "")}`,
+      numericGroundingSource,
+    );
+    if (unsupported.length) {
+      const groundingRepair = await repairUnsupportedNumericClaimsLlm({
+        summary,
+        chapterText: parsed?.["chapter text"] || "",
+        sourceExcerpt: numericGroundingSource,
+        unsupportedTokens: unsupported,
+        ollamaUrl,
+      });
+      rawSummary = groundingRepair.summary;
+      summary = enforceSummaryBudget(rawSummary, budget);
+      parsed["chapter text"] = groundingRepair.chapterText;
+      unsupportedAfterRegeneration = groundingRepair.unsupportedTokens;
+    } else {
+      unsupportedAfterRegeneration = [];
+    }
+    if (!numericFidelityDefects(`${summary} ${String(parsed?.["chapter text"] || "")}`).length
+      && !unsupportedAfterRegeneration.length) break;
+  }
+  let unrepairedNumericDefects = [
+    ...numericFidelityDefects(summary),
+    ...numericFidelityDefects(parsed?.["chapter text"] || ""),
+  ];
+  if (unrepairedNumericDefects.length) {
+    const qualitativeRepair = await rewriteWithoutNumericClaimsLlm({
+      summary,
+      chapterText: parsed?.["chapter text"] || "",
+      sourceExcerpt: numericGroundingSource,
+      ollamaUrl,
+    });
+    rawSummary = qualitativeRepair.summary;
+    summary = enforceSummaryBudget(rawSummary, budget);
+    parsed["chapter text"] = qualitativeRepair.chapterText;
+    unrepairedNumericDefects = [
+      ...numericFidelityDefects(summary),
+      ...numericFidelityDefects(parsed?.["chapter text"] || ""),
+    ];
+  }
+  if (unrepairedNumericDefects.length) {
+    throw new Error(`stage3 retryable: qwen3.5:9b failed numeric fidelity for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}: ${unrepairedNumericDefects.join(", ")}`);
+  }
+  let unsupportedNumericClaims = unsupportedNumericTokens(
+    `${summary} ${String(parsed?.["chapter text"] || "")}`,
+    numericGroundingSource,
+  );
+  if (unsupportedAfterRegeneration.length || unsupportedNumericClaims.length) {
+    // A bounded source window can contain a dense map/table where Qwen keeps
+    // reintroducing a nearby number that is not present in this exact child
+    // window. Give the model one qualitative rewrite opportunity before the
+    // strict gate rejects the item; this preserves the substantive action or
+    // outcome without inventing a replacement quantity.
+    const qualitativeRepair = await rewriteWithoutNumericClaimsLlm({
+      summary,
+      chapterText: parsed?.["chapter text"] || "",
+      sourceExcerpt: numericGroundingSource,
+      ollamaUrl,
+    });
+    rawSummary = qualitativeRepair.summary;
+    summary = enforceSummaryBudget(rawSummary, budget);
+    parsed["chapter text"] = qualitativeRepair.chapterText;
+    unsupportedAfterRegeneration = [];
+    unsupportedNumericClaims = unsupportedNumericTokens(
+      `${summary} ${String(parsed?.["chapter text"] || "")}`,
+      numericGroundingSource,
+    );
+    if (unsupportedNumericClaims.length || numericFidelityDefects(`${summary} ${String(parsed?.["chapter text"] || "")}`).length) {
+      const unsupported = [...new Set([...unsupportedAfterRegeneration, ...unsupportedNumericClaims])];
+      throw new Error(`stage3 retryable: unsupported numeric claims for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}: ${unsupported.join(", ")}`);
+    }
+  }
+  let unsupportedMotionAttributions = unsupportedNamedMotionAttributions({
+    text: `${summary} ${String(parsed?.["chapter text"] || "")}`,
+    sourceExcerpt: attributionSource,
+  });
+  for (let finalAttributionAttempt = 1; unsupportedMotionAttributions.length && finalAttributionAttempt <= 3; finalAttributionAttempt += 1) {
+    const forbiddenActors = [...new Set(unsupportedMotionAttributions.map((defect) => defect.actor).filter(Boolean))];
+    const forbiddenNumericPhrases = [...new Set([
+      ...numericFidelityDefects(summary),
+      ...numericFidelityDefects(parsed?.["chapter text"] || ""),
+    ])];
+    const qualitativeAttributionSource = forbiddenNumericPhrases.reduce(
+      (source, phrase) => source.replaceAll(phrase, ""),
+      String(unit["source excerpt"] || ""),
+    );
+    parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel: "qwen3.5:9b",
+      system: "Write fresh qualitative civic prose with no personal names or numeric claims. Return strict JSON only.",
+      prompt: [
+        "A downstream repair reintroduced unsupported named movers or seconders. Start over from the grounded source; do not revise the contaminated draft.",
+        "Use only generic institutional subjects such as Council, the committee, staff, or the report.",
+        "Do not write any personal name, mover, seconder, digit, date, time, amount, address, percentage, or spelled-out number phrase.",
+        forbiddenNumericPhrases.length
+          ? `Do not repeat these exact rejected numeric or address phrases: ${JSON.stringify(forbiddenNumericPhrases)}.`
+          : "",
+        "Preserve the supported civic recommendation, discussion, decision, and outcome qualitatively. Do not add facts.",
+        forbiddenActors.length ? `Forbidden actor names: ${forbiddenActors.join(", ")}.` : "",
+        `Summary budget: at most ${budget.maxSentences} sentences and ${budget.maxWords} words.`,
+        "Return exactly: {\"summary\":\"...\",\"chapter text\":\"...\",\"confidence\":0.9,\"notes\":\"\"}.",
+        `Label: ${unit.label}`,
+        `Agenda item: ${unit["agenda item"] || ""}`,
+        "Grounded source excerpt:",
+        qualitativeAttributionSource.slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000)),
+      ].filter(Boolean).join("\n\n"),
+    });
+    rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 final no-name qualitative retry");
+    summary = enforceSummaryBudget(rawSummary, budget);
+    unsupportedMotionAttributions = unsupportedNamedMotionAttributions({
+      text: `${summary} ${String(parsed?.["chapter text"] || "")}`,
+      sourceExcerpt: attributionSource,
+    });
+    if (!unsupportedMotionAttributions.length
+      && !numericFidelityDefects(`${summary} ${String(parsed?.["chapter text"] || "")}`).length
+      && !unsupportedNumericTokens(`${summary} ${String(parsed?.["chapter text"] || "")}`, numericGroundingSource).length) {
+      break;
+    }
+  }
+  let finalNumericDefects = numericFidelityDefects(`${summary} ${String(parsed?.["chapter text"] || "")}`);
+  if (finalNumericDefects.length) {
+    const freshQualitativeSource = finalNumericDefects.reduce(
+      (source, phrase) => source.replaceAll(phrase, ""),
+      attributionSource,
+    );
+    const freshQualitative = await rewriteWithoutNumericClaimsLlm({
+      summary,
+      chapterText: parsed?.["chapter text"] || "",
+      sourceExcerpt: freshQualitativeSource,
+      ollamaUrl,
+    });
+    summary = enforceSummaryBudget(freshQualitative.summary, budget);
+    parsed["chapter text"] = freshQualitative.chapterText;
+    finalNumericDefects = numericFidelityDefects(`${summary} ${String(parsed?.["chapter text"] || "")}`);
+  }
+  const finalUnsupportedNumericClaims = unsupportedNumericTokens(
+    `${summary} ${String(parsed?.["chapter text"] || "")}`,
+    numericGroundingSource,
+  );
+  if (finalNumericDefects.length || finalUnsupportedNumericClaims.length) {
+    throw new Error(`stage3 retryable: final attribution repair violated numeric grounding for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}: ${[...new Set([...finalNumericDefects, ...finalUnsupportedNumericClaims])].join(", ")}`);
+  }
+  if (unsupportedMotionAttributions.length) {
+    throw new Error(
+      `stage3 retryable: unsupported named motion attribution for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}: ${unsupportedMotionAttributions.map((defect) => defect.claim).join(", ")}`,
+    );
   }
   summary = cleanupTranscriptScrapText(summary);
   assertCleanStage3Text(summary, "stage3 final summary");
@@ -699,7 +1438,7 @@ async function summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl }) {
   };
 }
 
-function toMarkdown(summaryArtifact = {}) {
+export function agendaSummaryToMarkdown(summaryArtifact = {}) {
   const lines = [];
   lines.push(`# Agenda Section Summaries`);
   lines.push("");
@@ -727,6 +1466,199 @@ function toMarkdown(summaryArtifact = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+export function stage3ChapterTitleFromGenerated({
+  llmText = "",
+  summary = "",
+  heading = "",
+} = {}) {
+  return pickSplitChapterText({
+    llmText,
+    summary,
+    heading,
+    seenLeadPhrases: new Set(),
+  });
+}
+
+function exactDuplicateChapterIndices(chapters = []) {
+  const seenTitles = new Set();
+  const seenSummaries = new Set();
+  const duplicates = [];
+  for (let index = 0; index < chapters.length; index += 1) {
+    const title = wordsKey(chapters[index]?.title || "");
+    const summary = wordsKey(chapters[index]?.text || "");
+    if ((title && seenTitles.has(title)) || (summary && seenSummaries.has(summary))) {
+      duplicates.push(index);
+    }
+    if (title) seenTitles.add(title);
+    if (summary) seenSummaries.add(summary);
+  }
+  return duplicates;
+}
+
+function chapterSiblingContext(chapters = [], excludedIndex = -1, includeSummaries = false) {
+  return chapters
+    .filter((_, index) => index !== excludedIndex)
+    .map((chapter) => {
+      const title = normalizeText(chapter?.title || "");
+      if (!title) return "";
+      if (includeSummaries) return `${title}: ${normalizeText(chapter?.text || "")}`;
+      return /\d/u.test(title) ? "" : title;
+    })
+    .filter(Boolean);
+}
+
+async function auditChapterOrthogonality({
+  heading,
+  chapters,
+  llmModel,
+  ollamaUrl,
+}) {
+  if (!Array.isArray(chapters) || chapters.length < 2) {
+    return { orthogonal: true, duplicateIndices: [], notes: "" };
+  }
+  const rendered = chapters
+    .map((chapter, index) => [
+      `CHAPTER ${index + 1}`,
+      `TITLE: ${normalizeText(chapter?.title || "")}`,
+      `SUMMARY: ${normalizeText(chapter?.text || "")}`,
+      // Keep enough of each bounded source window for the audit to see facts
+      // that may sit just beyond the head/tail split (for example a finding
+      // in the middle of a long attachment). The audit must judge the literal
+      // source, not an abridgement that silently hides the supporting line.
+      `SOURCE WINDOW: ${abridgeUtf8(String(chapter?.["source excerpt"] || ""), 12000)}`,
+    ].join("\n"))
+    .join("\n\n");
+  const parsed = await callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    system: "Audit civic agenda child summaries for semantic duplication and headline accuracy. Return strict JSON only.",
+    prompt: [
+      "Determine whether these character-bounded child summaries are meaningfully distinct and each title accurately describes its own summary.",
+      "Shared subject names and necessary repetition of the same overall report outcome or approval conditions are allowed. Flag a chapter only when it substantially repeats another chapter's claim without adding any distinct source-supported detail from its own window, or when it omits that window's unique material.",
+      "Compare the unique evidence in each source window before deciding. Do not call chapters duplicates merely because both must mention the same recommendation, approval, legal framework, or conditions to remain accurate.",
+      "Treat different source facets as distinct coverage even when they concern the same application: property description, policy analysis, approval conditions, agency comments, correspondence, implementation requirements, and fees are not duplicates when the chapter reports details unique to its own window.",
+      "Only flag a chapter as redundant when its summary contains no meaningful source-supported detail beyond another chapter's summary. If its title is wrong but its summary has distinct evidence, flag the title defect for title repair without classifying the chapter as semantically duplicate.",
+      "Character-bounded windows from the same report may share an announcement or document heading. For appendices and tables, different names, regions, rows, memberships, or other details in disjoint source windows are distinct coverage, not duplication; do not reject them merely because the parent announcement is the same.",
+      "Also flag a chapter when its title claims a topic absent from its own summary, omits the summary's actual main point, or ends as a truncated/dangling phrase.",
+      "Return exactly: {\"orthogonal\":true,\"duplicate chapter indices\":[],\"notes\":\"\"}.",
+      "When duplication or a title-summary defect exists, orthogonal must be false and duplicate chapter indices must contain the 1-based indices that should be regenerated.",
+      `PARENT: ${normalizeText(heading)}`,
+      rendered,
+    ].join("\n\n"),
+  });
+  const duplicateIndices = [...new Set(
+    (Array.isArray(parsed?.["duplicate chapter indices"]) ? parsed["duplicate chapter indices"] : [])
+      .map((value) => Number(value) - 1)
+      .filter((value) => Number.isInteger(value) && value >= 0 && value < chapters.length),
+  )];
+  return {
+    orthogonal: parsed?.orthogonal === true && duplicateIndices.length === 0,
+    duplicateIndices,
+    notes: normalizeText(parsed?.notes || ""),
+  };
+}
+
+export async function adjudicateChapterOrthogonality({ heading, chapters, audit, llmModel, ollamaUrl }) {
+  const alleged = Array.isArray(audit?.duplicateIndices) ? audit.duplicateIndices : [];
+  if (!alleged.length) return audit;
+  const rendered = chapters.map((chapter, index) => [
+    `CHAPTER ${index + 1}`,
+    `TITLE: ${normalizeText(chapter?.title || "")}`,
+    `SUMMARY: ${normalizeText(chapter?.text || "")}`,
+    `SOURCE WINDOW: ${abridgeUtf8(String(chapter?.["source excerpt"] || ""), 12000)}`,
+  ].join("\n")).join("\n\n");
+  const parsed = await callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    system: "Adjudicate a semantic duplication allegation in grounded civic summaries. Return strict JSON only.",
+    prompt: [
+      "The first audit alleged duplication. Recheck that allegation against the literal source windows.",
+      "Different source-supported facets of the same proceeding are distinct coverage, including different findings, requests, incidents, locations, parties, conditions, or outcomes.",
+      "Accept the chapters when every alleged duplicate adds any meaningful source-supported detail absent from its sibling. Do not reject merely because both describe the same proceeding or decision.",
+      "Return exactly: {\"distinct\":true} or {\"distinct\":false}.",
+      `PARENT: ${normalizeText(heading)}`,
+      `ALLEGED_DUPLICATE_INDICES: ${JSON.stringify(alleged.map((index) => index + 1))}`,
+      `FIRST_AUDIT_NOTE: ${normalizeText(audit?.notes || "")}`,
+      rendered,
+    ].join("\n\n"),
+  });
+  if (parsed?.distinct === true) return { orthogonal: true, duplicateIndices: [], notes: "" };
+  return audit;
+}
+
+async function synthesizeParentFromChapters({
+  unit,
+  heading,
+  chapters,
+  focus,
+  llmModel,
+  ollamaUrl,
+}) {
+  let sourceParts = chapters.map((chapter, index) => (
+    `Chunk ${index + 1}: ${normalizeText(chapter?.title || "")}\n${normalizeText(chapter?.text || "")}`
+  ));
+  let reductionPass = 0;
+  while (sourceParts.join("\n\n").length > 9000) {
+    reductionPass += 1;
+    const batches = [];
+    let batch = "";
+    for (const part of sourceParts) {
+      const combined = batch ? `${batch}\n\n${part}` : part;
+      if (batch && combined.length > 9000) {
+        batches.push(batch);
+        batch = part;
+      } else {
+        batch = combined;
+      }
+    }
+    if (batch) batches.push(batch);
+    const reduced = [];
+    for (let index = 0; index < batches.length; index += 1) {
+      const excerpt = batches[index];
+      const reduction = await summarizeGroundedUnit({
+        unit: {
+          ...unit,
+          "attribution source excerpt": String(unit?.["attribution source excerpt"] || unit?.["source excerpt"] || ""),
+          "unit id": `${String(unit?.["unit id"] || "unit")}_overview_${reductionPass}_${index + 1}`,
+          label: heading,
+          "source excerpt": excerpt,
+          "source rows": Math.max(1, excerpt.split(/\n{2,}/u).filter(Boolean).length),
+          "duration seconds": Math.min(780, Math.max(90, excerpt.length / 8)),
+          "child chapters": [],
+        },
+        focus: `${focus || "newsworthy factual civic reporting"}; condense all supplied chunk summaries without dropping later chunks`,
+        llmModel,
+        ollamaUrl,
+        isChild: true,
+      });
+      reduced.push(`Reduction ${index + 1}: ${reduction.summary}`);
+    }
+    if (reduced.length >= sourceParts.length) {
+      throw new Error(`stage3 retryable: parent overview reduction did not shrink unit ${String(unit?.["unit id"] || "")}`);
+    }
+    sourceParts = reduced;
+  }
+  return summarizeGroundedUnit({
+    unit: {
+      ...unit,
+      "attribution source excerpt": String(unit?.["attribution source excerpt"] || unit?.["source excerpt"] || ""),
+      label: heading,
+      "source excerpt": sourceParts.join("\n\n"),
+      "child chapters": [],
+    },
+    focus: `${focus || "newsworthy factual civic reporting"}; synthesize a balanced parent overview from every supplied chunk summary`,
+    llmModel,
+    ollamaUrl,
+  });
+}
+
+export function stage3GenerationOrder(units = []) {
+  return units.map((unit, index) => ({
+    index,
+    sourceChars: Number(unit["source chars"] || String(unit["source excerpt"] || "").length || 0),
+  })).sort((a, b) => a.sourceChars - b.sourceChars || a.index - b.index);
+}
+
 export async function runAgendaStage3SummaryRenderer({
   transcriptDir,
   prefix,
@@ -738,7 +1670,7 @@ export async function runAgendaStage3SummaryRenderer({
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {
-  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 12000));
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 8000));
   assertExactGroundingRoot(sectionGroundingPyaPath);
   const grounding = await readPyaMapArtifact(sectionGroundingPyaPath, STAGE2_GROUNDING_ROOT);
   assertExactGroundingSchema(grounding);
@@ -747,27 +1679,34 @@ export async function runAgendaStage3SummaryRenderer({
 
   const sections = [];
   let longDiagnosticCount = 0;
-  for (let i = 0; i < units.length; i += 1) {
+  // A failed semantic audit must be retryable with a genuinely different
+  // generation.  Keep the audit gate strict, but vary repair seeds between
+  // runs so one unlucky Qwen response cannot repeat the same duplicated pair
+  // forever.
+  const stage3RetryNonce = Number.parseInt(
+    String(process.env.AGENDA_STAGE3_RETRY_NONCE || ""),
+    10,
+  ) || (Date.now() % 100000);
+  // Independent summaries need not be generated chronologically. Process
+  // compact contexts first so a sequence of very-long prompts cannot starve
+  // the short meeting tail; restore canonical order before validation/write.
+  const generationOrder = stage3GenerationOrder(units);
+  for (const generationEntry of generationOrder) {
+    const i = generationEntry.index;
     const unit = units[i];
     const unitId = String(unit["unit id"] || "");
     const heading = unit.label || `${unit["agenda item"] || ""}`;
 
-    const llm = await summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl });
-    let unitSummary = normalizeText(llm.summary || "");
-    if (!unitSummary) {
-      unitSummary = fallbackUnitSummaryFromGrounding(unit);
-      if (unitSummary) {
-        log(`[agenda-stage3][fallback] unit=${unitId} empty llm summary recovered from source excerpt`);
-      } else {
-        unitSummary = fallbackUnitSummaryFromLabel(unit);
-        log(`[agenda-stage3][fallback] unit=${unitId} empty source excerpt; using label-derived summary`);
-      }
-    }
-
     const sourceChapters = Array.isArray(unit["child chapters"]) ? unit["child chapters"] : [];
     const chapters = [];
     const seenLeadPhrases = new Set();
-    for (let ci = 0; ci < sourceChapters.length; ci += 1) {
+    const generateChapter = async (
+      ci,
+      existingChapters = [],
+      auditNote = "",
+      retrySeed = 0,
+      { freshSourceOnly = false } = {},
+    ) => {
       const chapterUnit = sourceChapters[ci] || {};
       const chapterSourceChars = Number(chapterUnit["source chars"] || String(chapterUnit["source excerpt"] || "").length || 0);
       if (chapterSourceChars > maxChapterSourceChars) {
@@ -775,7 +1714,7 @@ export async function runAgendaStage3SummaryRenderer({
           `stage3 defective: oversized child chapter source text unit=${unitId} chapter=${ci + 1} source_chars=${chapterSourceChars} max_allowed=${maxChapterSourceChars}`,
         );
       }
-      const chapterLlm = await summarizeGroundedUnit({
+      let chapterLlm = await summarizeGroundedUnit({
         unit: {
           ...unit,
           ...chapterUnit,
@@ -783,10 +1722,43 @@ export async function runAgendaStage3SummaryRenderer({
           "part total": 2,
           "part index": ci + 1,
         },
-        focus,
+        focus: auditNote
+          ? `${focus}; duplication audit feedback: ${auditNote}${freshSourceOnly ? "; write fresh prose from this source chunk only; do not use sibling drafts as content" : ""}`
+          : focus,
         llmModel,
         ollamaUrl,
+        isChild: true,
+        siblingSummaries: chapterSiblingContext(existingChapters, ci, Boolean(auditNote)),
+        temperature: auditNote
+          ? (/\b(?:duplicate|redundan|overlap|same claim)/iu.test(auditNote) ? 0.65 : 0.25)
+          : 0,
+        seed: retrySeed,
       });
+      if (!normalizeText(chapterLlm.summary || "")) {
+        chapterLlm = await summarizeGroundedUnit({
+          unit: {
+            ...unit,
+            ...chapterUnit,
+            label: heading,
+            "part total": 2,
+            "part index": ci + 1,
+          },
+          focus: auditNote
+          ? `${focus}; duplication audit feedback: ${auditNote}${freshSourceOnly ? "; write fresh prose from this source chunk only; use sibling summaries only to avoid repeating their facts, never as source evidence" : ""}`
+            : focus,
+          llmModel,
+          ollamaUrl,
+          isChild: true,
+          siblingSummaries: chapterSiblingContext(existingChapters, ci, Boolean(auditNote)),
+          temperature: auditNote
+            ? (/\b(?:duplicate|redundan|overlap|same claim)/iu.test(auditNote) ? 0.75 : 0.35)
+            : 0,
+          seed: retrySeed + 1,
+        });
+      }
+      if (!normalizeText(chapterLlm.summary || "")) {
+        throw new Error(`stage3 retryable: empty LLM child summary for unit ${unitId} chapter ${ci + 1}`);
+      }
 
       let title = pickSplitChapterText({
         llmText: chapterLlm.chapterText,
@@ -794,6 +1766,18 @@ export async function runAgendaStage3SummaryRenderer({
         heading,
         seenLeadPhrases,
       });
+      const titleAudit = /\b(?:title|headline|truncated|dangling|unfinished)\b/iu.test(auditNote);
+      if (!title || titleAudit) {
+        title = await repairChapterTitleLlm({
+          heading,
+          summary: chapterLlm.summary,
+          sourceExcerpt: String(chapterUnit["source excerpt"] || unit["source excerpt"] || ""),
+          auditNote: auditNote || "The generated chapter headline was not structurally complete.",
+          llmModel,
+          ollamaUrl,
+          seed: retrySeed + 2,
+        });
+      }
       if (!title) title = normalizeSplitChapterCandidate(chapterFromSummary(chapterLlm.summary), heading);
       if (!title) title = normalizeSplitChapterCandidate(chapterFromSummary(String(chapterUnit["source excerpt"] || "")), heading);
       if (!title) {
@@ -804,7 +1788,7 @@ export async function runAgendaStage3SummaryRenderer({
       const lead = leadingPhraseKey(title);
       if (lead) seenLeadPhrases.add(lead);
 
-      chapters.push({
+      return {
         "chapter id": String(chapterUnit["chapter id"] || `${unitId}_chapter_${String(ci + 1).padStart(2, "0")}`),
         "parent unit id": unitId,
         "ordering index": Number(chapterUnit["ordering index"] || ci + 1),
@@ -814,8 +1798,144 @@ export async function runAgendaStage3SummaryRenderer({
         until: Number(chapterUnit.until || Number(chapterUnit.since || 0)),
         title,
         text: chapterLlm.summary,
-      });
+        "source excerpt": String(chapterUnit["source excerpt"] || ""),
+      };
+    };
+    for (let ci = 0; ci < sourceChapters.length; ci += 1) {
+      chapters.push(await generateChapter(ci, chapters));
     }
+
+    if (chapters.length >= 2) {
+      const auditBatchSize = chapters.length > 12 ? 8 : chapters.length;
+      for (let batchStart = 0; batchStart < chapters.length; batchStart += auditBatchSize) {
+        const batchEnd = Math.min(chapters.length, batchStart + auditBatchSize);
+        let audit = await auditChapterOrthogonality({
+          heading,
+          chapters: chapters.slice(batchStart, batchEnd),
+          llmModel,
+          ollamaUrl,
+        });
+        audit = await adjudicateChapterOrthogonality({
+          heading,
+          chapters: chapters.slice(batchStart, batchEnd),
+          audit,
+          llmModel,
+          ollamaUrl,
+        });
+        for (let auditAttempt = 1; !audit.orthogonal && auditAttempt <= 5; auditAttempt += 1) {
+          const repairIndices = audit.duplicateIndices.length
+            ? audit.duplicateIndices.map((index) => batchStart + index)
+            : Array.from({ length: batchEnd - batchStart }, (_, index) => batchStart + index);
+          for (const ci of repairIndices) {
+            const rejected = chapters[ci] || {};
+            chapters[ci] = await generateChapter(
+              ci,
+              chapters,
+              [
+                `Orthogonality repair ${auditAttempt}: regenerate this chapter from its own source chunk only.`,
+                audit.notes || "Report distinct facts from this chunk and do not repeat a sibling's main claim.",
+                "The prior chapter draft was rejected by the semantic audit; do not preserve its title or wording when it omits this chunk's main point.",
+                "Prefer a distinct named decision, request, number, agency, location, or implementation detail that appears in this source chunk. Do not restate a sibling's broad debate framing unless this chunk adds a different fact.",
+                `REJECTED_CHAPTER_TITLE: ${normalizeText(rejected.title || "")}`,
+                `REJECTED_CHAPTER_SUMMARY: ${normalizeText(rejected.text || "")}`,
+              ].join(" "),
+              4100 + stage3RetryNonce + auditAttempt * 100 + ci,
+            );
+          }
+          audit = await auditChapterOrthogonality({
+            heading,
+            chapters: chapters.slice(batchStart, batchEnd),
+            llmModel,
+            ollamaUrl,
+          });
+          audit = await adjudicateChapterOrthogonality({
+            heading,
+            chapters: chapters.slice(batchStart, batchEnd),
+            audit,
+            llmModel,
+            ollamaUrl,
+          });
+        }
+        if (!audit.orthogonal) {
+          // A repeated semantic rejection can become self-reinforcing when the
+          // rejected sibling drafts are repeatedly shown as context. Give the
+          // affected chapters one bounded, source-only regeneration pass before
+          // leaving the item retryable. This preserves the audit gate while
+          // allowing Qwen to escape contaminated sibling wording.
+          const freshIndices = audit.duplicateIndices.length
+            ? audit.duplicateIndices.map((index) => batchStart + index)
+            : Array.from({ length: batchEnd - batchStart }, (_, index) => batchStart + index);
+          for (const ci of freshIndices) {
+            const rejected = chapters[ci] || {};
+            chapters[ci] = await generateChapter(
+              ci,
+              [],
+              [
+                "Fresh source-only orthogonality repair after repeated semantic rejection.",
+                audit.notes || "The prior draft repeated a sibling's main claim.",
+                "Use only this chapter's source excerpt. Do not preserve the rejected wording, title, or framing, and do not infer facts from other chapters.",
+              ].join(" "),
+              5100 + stage3RetryNonce + batchStart + ci,
+              { freshSourceOnly: true },
+            );
+          }
+          audit = await auditChapterOrthogonality({
+            heading,
+            chapters: chapters.slice(batchStart, batchEnd),
+            llmModel,
+            ollamaUrl,
+          });
+          audit = await adjudicateChapterOrthogonality({
+            heading,
+            chapters: chapters.slice(batchStart, batchEnd),
+            audit,
+            llmModel,
+            ollamaUrl,
+          });
+        }
+        if (!audit.orthogonal) {
+          throw new Error(
+            `stage3 retryable: child summaries remain semantically duplicative for unit ${unitId} batch ${batchStart + 1}-${batchEnd}${audit.notes ? ` (${audit.notes})` : ""}`,
+          );
+        }
+      }
+      for (let duplicateAttempt = 1; duplicateAttempt <= 3; duplicateAttempt += 1) {
+        const duplicateIndices = exactDuplicateChapterIndices(chapters);
+        if (!duplicateIndices.length) break;
+        for (const ci of duplicateIndices) {
+          const rejected = chapters[ci] || {};
+          chapters[ci] = await generateChapter(
+            ci,
+            chapters,
+            [
+              "This output exactly duplicated another source window.",
+              "Start the chapter again from this chapter's grounded source excerpt and report only evidence, table ranges, findings, requests, or outcomes that are present in that excerpt.",
+              "Do not repeat the rejected chapter's wording or main claim; the replacement must contain a distinct source-grounded fact.",
+              `REJECTED_CHAPTER_TITLE: ${normalizeText(rejected.title || "")}`,
+              `REJECTED_CHAPTER_SUMMARY: ${normalizeText(rejected.text || "")}`,
+            ].join(" "),
+            4200 + duplicateAttempt * 10 + ci,
+          );
+        }
+      }
+      if (exactDuplicateChapterIndices(chapters).length) {
+        throw new Error(`stage3 retryable: exact duplicate child summaries remain for unit ${unitId}`);
+      }
+    }
+
+    let llm = chapters.length
+      ? await synthesizeParentFromChapters({ unit, heading, chapters, focus, llmModel, ollamaUrl })
+      : await summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl });
+    if (!normalizeText(llm.summary || "") && Boolean(unit.substantive)) {
+      llm = chapters.length
+        ? await synthesizeParentFromChapters({ unit, heading, chapters, focus, llmModel, ollamaUrl })
+        : await summarizeGroundedUnit({ unit, focus, llmModel, ollamaUrl });
+    }
+    let unitSummary = normalizeText(llm.summary || "");
+    if (!unitSummary && Boolean(unit.substantive)) {
+      throw new Error(`stage3 retryable: empty LLM summary for substantive unit ${unitId}`);
+    }
+    if (!unitSummary) throw new Error(`stage3 retryable: empty LLM summary for non-substantive unit ${unitId}`);
 
     sections.push({
       index: i + 1,
@@ -832,7 +1952,7 @@ export async function runAgendaStage3SummaryRenderer({
       "source rows": Number(unit["source rows"] || 0),
       "start row": Number(unit["row start"] || 0),
       "end row": Number(unit["row end"] || 0),
-      "max section seconds": Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900),
+      "max section seconds": Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 100000),
       "grounding status": unit["grounding status"] || "",
       "budget tier": llm.budget?.tier || "",
       "budget max sentences": Number(llm.budget?.maxSentences || 0),
@@ -859,6 +1979,8 @@ export async function runAgendaStage3SummaryRenderer({
     );
   }
 
+  sections.sort((a, b) => Number(a.index || 0) - Number(b.index || 0));
+
   const summaryArtifact = {
     "schema version": "agenda_summary_v1",
     "source section grounding": sectionGroundingPyaPath,
@@ -871,7 +1993,7 @@ export async function runAgendaStage3SummaryRenderer({
 
   validateAgendaSummaryStrict(grounding, summaryArtifact);
   writePyaMapArtifact(outSummaryPyaPath, STAGE3_SUMMARY_ROOT, summaryArtifact);
-  fs.writeFileSync(outSummaryMdPath, toMarkdown(summaryArtifact), "utf8");
+  fs.writeFileSync(outSummaryMdPath, agendaSummaryToMarkdown(summaryArtifact), "utf8");
 
   log(`[agenda-stage3] sections: ${sections.length}`);
   log(`[agenda-stage3] wrote: ${outSummaryPyaPath}`);
