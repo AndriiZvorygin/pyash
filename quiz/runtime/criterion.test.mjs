@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { parse } from "../../program/understand/index.mjs";
 import { deriveSignatureFromCall } from "../../program/bridge/signature.mjs";
-import { runCriterion, rerunCriterion } from "../../program/runtime/criterion/run.mjs";
+import { runCriterion, rerunCriterion, scoreSample } from "../../program/runtime/criterion/run.mjs";
 import { loadSuiteSamples } from "../../program/runtime/criterion/datasets.mjs";
 import { contextLengthBucket, ollamaTiming, percentile, rougeScores } from "../../program/runtime/criterion/metrics.mjs";
 import { runNightmare, runReverie } from "../../program/runtime/criterion/suites.mjs";
@@ -311,4 +311,16 @@ test("summary reasoning profiles record effective thinking and context buckets",
   assert.equal(contextLengthBucket(32768), "16K-32K");
   assert.ok(run.aggregates[0].aggregate.averageLatencyMs);
   assert.ok(run.aggregates[0].aggregate.qualityPerSecond);
+});
+
+test("MMLU-Pro accepts ten-choice answers and preserves category aggregates", async () => {
+  assert.equal(scoreSample({ suiteKey: "mmlu-pro", sample: { expectedAnswer: "J" }, output: "J" }).accuracy, 1);
+  assert.equal(scoreSample({ suiteKey: "mmlu-pro", sample: { expectedAnswer: "J" }, output: "D" }).accuracy, 0);
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "mmlu-pro.json", [{ question: "Pick one", options: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"], answer: "J", category: "business" }]);
+  const run = await runCriterion({ benchmark: "mmlu-pro", datasetPath: dataset, models: ["model"], profile: "summary_direct", runId: "mmlu-pro-category", root, executor: async () => ({ text: "J", timing: { totalElapsedMs: 1, outputTokens: 1 } }), metadataProvider });
+  assert.equal(run.aggregates[0].aggregate.accuracy, 1);
+  assert.equal(run.categoryAggregates[0].category, "business");
+  assert.equal(run.categoryAggregates[0].aggregate.accuracy, 1);
+  assert.match(renderRunMarkdown(run), /Category breakdown/);
 });

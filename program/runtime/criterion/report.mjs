@@ -130,6 +130,12 @@ export function renderRunMarkdown(run) {
       ? ["| Task | Model | Samples | ROUGE-L | Avg latency ms | Quality/sec | Failures |", "| --- | --- | ---: | ---: | ---: | ---: | ---: |", ...run.taskAggregates.map(row => `| ${row.task} | ${row.model} | ${row.aggregate.sampleCount} | ${formatNumber(row.aggregate.rougeL)} | ${formatNumber(row.aggregate.averageLatencyMs, 1)} | ${formatNumber(row.aggregate.qualityPerSecond, 4)} | ${row.aggregate.failureCount} |`), ...(run.taskMacroAggregates ?? []).map(row => `| ${row.task} | ${row.model} | ${row.aggregate.groupCount} tasks | ${formatNumber(row.aggregate.rougeL)} | ${formatNumber(row.aggregate.averageLatencyMs, 1)} | ${formatNumber(row.aggregate.qualityPerSecond, 4)} | ${row.aggregate.failureCount} |`)]
       : ["No task-level aggregation for this suite."]),
     "",
+    "## Category breakdown",
+    "",
+    ...(run.categoryAggregates?.length
+      ? ["| Category | Model | Samples | Accuracy | Avg latency ms | Quality/sec | Failures |", "| --- | --- | ---: | ---: | ---: | ---: | ---: |", ...run.categoryAggregates.map(row => `| ${row.category} | ${row.model} | ${row.aggregate.sampleCount} | ${formatNumber(row.aggregate.accuracy)} | ${formatNumber(row.aggregate.averageLatencyMs, 1)} | ${formatNumber(row.aggregate.qualityPerSecond, 4)} | ${row.aggregate.failureCount} |`)]
+      : ["No category-level aggregation for this suite."]),
+    "",
     "## Context buckets",
     "",
     ...rows.flatMap(row => Object.entries(row.aggregate.contextBuckets ?? {}).map(([bucket, aggregate]) => `- ${row.model} / ${bucket}: ${aggregate.sampleCount} samples, ROUGE-L ${formatNumber(aggregate.rougeL)}, p50 ${formatNumber(aggregate.p50LatencyMs, 1)} ms`)),
