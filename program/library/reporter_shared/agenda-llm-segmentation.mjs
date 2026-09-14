@@ -506,6 +506,7 @@ function wholeChronologyPrompt(canonical, units) {
     "Keep consecutive canonical sibling items separate even when the same presenter continues. An explicit next item code, second part, next matter, or changed named subject begins the sibling at that transition.",
     "Ignore headings explicitly empty or skipped. Parent category headings do not own discussion when a named child item does.",
     "Each boundary must be the earliest exact atomic unit where the item starts, including the chair's transition.",
+    "If the chronology shows a target-named quorum wait followed by a target-named no-quorum adjournment before any agenda discussion, treat this as an aborted meeting: return procedural boundaries for the opening/quorum item and the adjournment item when directly evidenced, and mark all intervening agenda items skipped during reconciliation. Do not collapse the whole recording into one boundary.",
     "Use only canonical agenda identities. Copy the complete literal text of the named atomic unit as evidence.",
     "Return JSON {\"transitions\":[{\"agenda item\":\"5.a\",\"atomic unit id\":\"atomic_000017\",\"evidence quote\":\"literal complete unit text\",\"role\":\"deputation\",\"confidence\":0.95}]}",
     "Canonical agenda:",
@@ -522,27 +523,37 @@ export function buildMeetingScopeStartPrompt({
   retryReason = "",
 } = {}) {
   const label = clean(meetingLabel);
-  const transcriptWindowText = retryReason
-    ? String(window?.text || "").split(/\r?\n/u).slice(0, 32).join("\n")
-    : window?.text || "";
+  // Scope windows are already bounded by buildOverlappingWindows. Keep the
+  // complete bounded chronology on retry so an opening that omits formal
+  // call-to-order wording can still be corroborated by later canonical items.
+  const transcriptWindowText = window?.text || "";
   return [
     `Locate where the ${label} meeting begins in this transcript window.`,
     "The recording may begin with a different council or committee meeting. Do not treat shared agenda vocabulary as proof that the target meeting has begun.",
-    "Use direct meeting-identity evidence: its named call to order, an explicit handoff from the preceding meeting, or a sequence of the target canonical opening items beginning at an unnamed call to order.",
+    "Use direct meeting-identity evidence: its named call to order, an explicit handoff from the preceding meeting, or a sequence of the target canonical opening items beginning at an unnamed opening. The opening may omit the spoken words 'call to order'.",
     "The recording may also start directly with the target meeting and contain no preceding or following meeting.",
-    "When the recording starts with an unnamed opening followed by several target opening items in canonical order, target-specific named minutes or reports can corroborate the meeting identity even when the chair never says the formal meeting name or the exact words 'call to order'.",
+    "When the recording starts with an unnamed opening followed by several target opening items in canonical order, target-specific named minutes or reports can corroborate the meeting identity even when the chair never says the formal meeting name or the exact words 'call to order'. Use this unnamed-opening rule only when there is no earlier separate meeting and no later explicit call to order for the named target.",
     "In that case, choose the earliest welcome, time announcement, quorum statement, or other opening unit that begins the corroborated target sequence.",
-    "When that unnamed canonical opening later explicitly hands off to a different named meeting, the target still starts at the earliest opening unit.",
+    "If the first transcript window begins at the recording's first atomic unit and its unnamed welcome, introductions, or opening housekeeping is followed by multiple distinct canonical opening items in order, return found=true for the earliest unit that begins that sequence. Do not return found=false solely because the formal meeting name or a spoken 'call to order' phrase is absent.",
+    "Do not anchor a direct recording start to the first unit that literally names a canonical agenda item. Introductions, welcome remarks, quorum/opening housekeeping, and the chair's transition before that label belong to the target meeting when no different meeting is named; choose the earliest coherent unit of that opening chronology.",
+    "If a later unit explicitly names the target meeting and calls it to order after an earlier meeting's boilerplate, that later named call-to-order is authoritative; do not move the target start backward to the earlier generic opening.",
+    "When an unnamed canonical opening later explicitly hands off to a different named meeting, adjudicate which named body owns the opening; a later explicit target call-to-order remains authoritative over an earlier separate meeting.",
     "Opening-sequence evidence must include multiple distinct canonical items such as attendance, land acknowledgement, declarations, minutes, bylaws, or news; one generic phrase is insufficient.",
+    "When the first in-scope units contain a call to order followed in order by recognizable canonical opening matters such as O Canada, roll call, land acknowledgement, declarations, and minutes, treat that earliest call-to-order unit as the target start unless those units explicitly name a different live meeting. Do not skip it merely because a later Committee of the Whole handoff appears in the same window.",
+    "An interrupted or aborted meeting is an exception to the multi-item opening-sequence requirement only when the transcript directly names the target body in a quorum or no-quorum announcement and then records that meeting's adjournment. The earliest target-specific quorum-wait or no-quorum unit is the recording scope start even if no formal call to order or agenda item occurred; return found=true for that unit and do not require agenda discussion that never occurred.",
     "Choose the exact call-to-order atomic unit when it is present. Copy a literal substring from that same unit.",
+    "If a call-to-order phrase is split across short atomic units or followed immediately by declarations, minutes, or other opening matters, bind the meeting start to the first unit of the validated opening sequence rather than the later phrase or declaration unit.",
     "Return only {\"found\":true,\"atomic unit id\":\"atomic_000123\",\"evidence quote\":\"call to order this committee\",\"reason\":\"named target meeting begins\",\"confidence\":0.95}.",
     "Return {\"found\":false,\"atomic unit id\":\"\",\"evidence quote\":\"\",\"reason\":\"\",\"confidence\":0} when this window does not contain the target meeting start.",
     retryReason ? [
       "This is a bounded retry with a different adjudication instruction.",
-      "If the first window begins with an unnamed welcome, time announcement, quorum/opening remark, or call-to-order phrase and the next distinct units match the target's canonical opening items, accept the earliest unit of that corroborated sequence.",
-      "Do not require the formal meeting name to be spoken. Do not return found=false merely because the call-to-order phrase is split across adjacent atomic units; quote the literal text from the proposed anchor unit.",
+      "If the first window begins with an unnamed welcome, time announcement, quorum/opening remark, or call-to-order phrase and the next distinct units match the target's canonical opening items, accept the earliest unit only when no later explicit named call-to-order for the target follows an earlier meeting.",
+      "A direct recording start may have no call-to-order phrase at all. When the complete bounded chronology below begins with an unnamed opening and then corroborates multiple distinct target canonical items in order, return found=true for the earliest opening unit. Do not require the formal meeting name to be spoken or require a spoken 'call to order'.",
+      "Do not return found=false merely because the call-to-order phrase is split across adjacent atomic units; quote the literal text from the proposed anchor unit.",
       `The first opening units that must be adjudicated before any later declaration or agenda transition are:\n${String(window?.text || "").split(/\r?\n/u).slice(0, 8).join("\n")}`,
+      "The complete bounded transcript window is supplied below; use later opening-item evidence in that window when the first few atomic units are only introductions or housekeeping.",
       "A later declaration, report introduction, or presenter handoff cannot be the meeting start when an earlier opening sequence is present.",
+      "If the supplied chronology contains a target-named quorum wait followed by a target-named no-quorum adjournment, accept the earliest target-named quorum unit as the scope start even though the meeting never reached its agenda.",
       `Previous rejection reason: ${retryReason}`,
     ].join("\n") : "",
     "Target canonical agenda:",
@@ -573,8 +584,8 @@ export async function locateCanonicalMeetingScopeStart({
     };
   }
   const windows = buildOverlappingWindows(units, {
-    maxWords: Number(process.env.AGENDA_SCOPE_WINDOW_WORDS || 2800),
-    overlapWords: Number(process.env.AGENDA_SCOPE_WINDOW_OVERLAP_WORDS || 500),
+    maxWords: Number(process.env.AGENDA_SCOPE_WINDOW_WORDS || 1200),
+    overlapWords: Number(process.env.AGENDA_SCOPE_WINDOW_OVERLAP_WORDS || 250),
   });
   const unitIndex = new Map(units.map((unit, index) => [unit["atomic unit id"], index]));
   const canonicalAtomicId = (candidateId) => {
@@ -659,6 +670,8 @@ export async function locateCanonicalMeetingScopeStart({
               `Proposed opening: ${atomicId}`,
               "Accept only if this unit begins the target meeting. Reject when the opening explicitly names a different live council or committee meeting, even if that other meeting uses overlapping item numbers or civic vocabulary.",
               "The target need not be named aloud: accept an unnamed opening when the immediate following units corroborate the target's canonical opening sequence. Do not reject a direct recording start merely because the formal meeting name is absent.",
+              "For a direct recording start, reject a proposed later first-agenda-item unit when earlier units are coherent welcome, introductions, quorum, or opening housekeeping for the same target and no different meeting is named; the scope anchor is the earliest coherent opening chronology, not the first literal agenda label.",
+              "For an interrupted meeting, accept a target-specific shortened body reference such as an art-gallery committee when the same chronology contains the target's quorum wait and no-quorum adjournment; the structured meeting identity remains authoritative.",
               "A later reference to, report from, or minutes of the target body does not make an earlier different meeting the target meeting.",
               `Target opening agenda items: ${agendaText(canonical?.items?.slice(0, 8) || [])}`,
               "Return only {\"accepted\":true,\"confidence\":0.95,\"reason\":\"target identity is direct or corroborated by the opening sequence\"} or {\"accepted\":false,\"confidence\":0.95,\"reason\":\"different named meeting begins here\"}.",
@@ -1111,10 +1124,36 @@ export async function auditWholeChronologyCandidates({
     ollamaUrl,
     log,
   });
+  // Keep an independently generated chronology boundary when the transcript
+  // itself contains distinctive terms from a substantive structured-agenda
+  // title.  The blind audit is still authoritative for unrelated/ambiguous
+  // mentions (and therefore preserves the NONE rejection contract), but a
+  // terse chair transition can otherwise be discarded simply because the
+  // verifier's small context window does not include the later presenter
+  // name.  Requiring literal title support keeps this recovery evidence-based
+  // rather than acting as a deterministic agenda assignment.
+  const auditedKeys = new Set(audited.map((candidate) =>
+    `${candidate["agenda item"]}|${candidate["atomic unit id"]}`,
+  ));
+  const retainedDirect = chronologyCandidates.filter((candidate) => {
+    const key = `${candidate["agenda item"]}|${candidate["atomic unit id"]}`;
+    if (auditedKeys.has(key)) return false;
+    const entry = canonical.items.find((item) => item.item === candidate["agenda item"]);
+    if (!entry?.substantive) return false;
+    const index = units.findIndex((unit) => unit["atomic unit id"] === candidate["atomic unit id"]);
+    if (index < 0) return false;
+    const context = units.slice(Math.max(0, index - 2), Math.min(units.length, index + 7))
+      .map((unit) => unit.text)
+      .join(" ");
+    return structuredTitleHasLiteralSupport(entry.title, context);
+  });
+  if (retainedDirect.length) {
+    log(`[agenda-boundaries] retained ${retainedDirect.length} chronology boundaries with direct structured-title evidence after blind audit`);
+  }
   const chronologySet = new Set(chronologyCandidates);
   const retained = source.filter((candidate) => !chronologySet.has(candidate));
   log(`[agenda-boundaries] independent blind audit retained ${audited.length}/${chronologyCandidates.length} complete-chronology candidates`);
-  return [...retained, ...audited]
+  return [...retained, ...audited, ...retainedDirect]
     .sort((a, b) => Number(a["atomic unit id"]?.slice(7) || 0) - Number(b["atomic unit id"]?.slice(7) || 0));
 }
 
@@ -1672,9 +1711,31 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
   // items. Procedural/category headings may legitimately be silent, empty, or
   // containers; repeatedly asking the model to manufacture a boundary for
   // each missing heading creates agreement bias and false ownership.
-  const hasOwnedCandidate = (entry) => out.some((candidate) => candidate["agenda item"] === entry.item
-    || candidate["agenda item"].startsWith(`${entry.item}.`)
-    || canonicalIdentityOwnsTarget(candidate["agenda item"], entry.item, canonical));
+  // A candidate with the right *label* is not necessarily a usable boundary.
+  // In particular, a whole-chronology pass can misclassify a late mention of a
+  // report as that report's start.  Counting such a candidate as ownership
+  // suppresses the targeted recovery pass and can leave the real report
+  // absorbed into the preceding section.  Substantive ownership therefore
+  // requires literal support in a small forward neighbourhood (the chair's
+  // transition is often one unit and the report title the next); this remains
+  // evidence-based and works for arbitrary agenda numbering and meeting
+  // formats.
+  const candidateHasDirectSupport = (entry, candidate) => {
+    if (!entry?.substantive) return true;
+    const index = units.findIndex((unit) => unit["atomic unit id"] === candidate?.["atomic unit id"]);
+    if (index < 0) return false;
+    const context = units.slice(index, Math.min(units.length, index + 7))
+      .map((unit) => unit.text)
+      .join(" ");
+    return structuredTitleHasLiteralSupport(entry.title, context)
+      || focusedRecoveryBoundaryHasDirectSupport(entry, units[index]);
+  };
+  const hasOwnedCandidate = (entry) => out.some((candidate) => {
+    const owns = candidate["agenda item"] === entry.item
+      || candidate["agenda item"].startsWith(`${entry.item}.`)
+      || canonicalIdentityOwnsTarget(candidate["agenda item"], entry.item, canonical);
+    return owns && candidateHasDirectSupport(entry, candidate);
+  });
   const requiredChronologyHeading = (entry) => entry.level === 1 && (
     /^(?:public forum|by-?laws?|adjournment)$/iu.test(clean(entry.title))
   );
@@ -1706,10 +1767,56 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
   // compact; recovery uses wider overlapping windows without omitting any part
   // of the meeting.
   const recoveryWindows = buildOverlappingWindows(units, {
-    maxWords: Number(process.env.AGENDA_BOUNDARY_RECOVERY_WINDOW_WORDS || 1200),
-    overlapWords: Number(process.env.AGENDA_BOUNDARY_RECOVERY_WINDOW_OVERLAP_WORDS || 200),
+    maxWords: Number(process.env.AGENDA_BOUNDARY_RECOVERY_WINDOW_WORDS || 5000),
+    overlapWords: Number(process.env.AGENDA_BOUNDARY_RECOVERY_WINDOW_OVERLAP_WORDS || 600),
   });
+  // Two independent passes substantially reduce misses from a long report
+  // overshadowing a short chair transition, while keeping the model and
+  // evidence contract unchanged.
+  const recoveryAttempts = Math.max(1, Number(process.env.AGENDA_BOUNDARY_RECOVERY_ATTEMPTS || 2));
+
+  // Search broad chronology windows for all currently unowned canonical
+  // items together. This lets Qwen see neighbouring transitions and avoids a
+  // serial request for every attachment-backed item. Each returned boundary
+  // still passes the same literal-evidence and targeted-start audits below.
+  const broadMissing = missing.filter((entry) => !hasOwnedCandidate(entry));
+  const broadRecovered = [];
+  for (const window of recoveryWindows) {
+    if (!broadMissing.some((entry) => !broadRecovered.some((candidate) => candidate["agenda item"] === entry.item))) break;
+    const parsed = await callOllamaJson({
+      ollamaUrl,
+      llmModel,
+      system: "You recover multiple exact municipal agenda boundaries. Return strict JSON only.",
+      prompt: [
+        "Locate every listed missing canonical agenda item that begins in this transcript window.",
+        "Return only directly evidenced transitions; do not assign an item merely because it is next in the printed agenda.",
+        "A chair announcement, named report/presenter, explicit item code, or changed named subject is direct evidence.",
+        "Copy a complete literal evidence quote from the named atomic unit.",
+        "Return {\"transitions\":[{\"agenda item\":\"6.a\",\"atomic unit id\":\"atomic_000123\",\"role\":\"staff_report\",\"evidence quote\":\"literal text\",\"confidence\":0.95}]}; return an empty array when none begin here.",
+        `Missing canonical items:\n${agendaText(broadMissing.filter((entry) => !broadRecovered.some((candidate) => candidate["agenda item"] === entry.item)))}`,
+        `Transcript ${window["window id"]}:`,
+        window.text,
+      ].join("\n\n"),
+      attempts: recoveryAttempts,
+    });
+    for (const raw of Array.isArray(parsed?.transitions) ? parsed.transitions : []) {
+      const candidate = alignEvidenceToAtomicUnit(
+        resolveCandidateAgendaIdentity(normalizeCandidate(raw, `broad_recovery_${window["window id"]}`), canonical),
+        units,
+      );
+      const entry = missing.find((item) => item.item === candidate["agenda item"]);
+      if (!entry || hasOwnedCandidate(entry) || broadRecovered.some((item) => item["agenda item"] === entry.item)) continue;
+      if (validateBoundaryCandidate(candidate, canonical, units)) continue;
+      if (await verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl })) {
+        candidate["semantic verification"] = "qwen3.5:9b broad missing-item recovery with literal evidence";
+        broadRecovered.push(candidate);
+        out.push(candidate);
+        log(`[agenda-boundaries] broad recovery found: ${entry.item}@${candidate["atomic unit id"]}`);
+      }
+    }
+  }
   for (const entry of missing) {
+    if (hasOwnedCandidate(entry)) continue;
     const entryIndex = canonical.items.findIndex((candidate) => candidate.item === entry.item);
     const entryTitleKey = evidenceKey(entry.title);
     const pairedCall = canonical.items.slice(0, entryIndex).find((candidate) => {
@@ -1739,12 +1846,20 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
       }
     }
     const boundedWindows = Number.isInteger(priorAtomic) && Number.isInteger(nextAtomic) && nextAtomic > priorAtomic
-      ? buildOverlappingWindows(units.slice(priorAtomic, nextAtomic + 1), { maxWords: 1200, overlapWords: 200 })
+      ? buildOverlappingWindows(units.slice(priorAtomic, nextAtomic + 1), {
+        // Search the full verified gap in one or two broad LLM contexts. The
+        // complete-chronology pass has already established the neighbouring
+        // boundaries, so dozens of compact retries only repeat the same
+        // evidence and monopolize the overnight GPU queue.
+        maxWords: Number(process.env.AGENDA_BOUNDARY_BOUNDED_RECOVERY_WORDS || 7000),
+        overlapWords: Number(process.env.AGENDA_BOUNDARY_BOUNDED_RECOVERY_OVERLAP_WORDS || 900),
+      })
       : [];
     const windowsToSearch = boundedWindows.length
       ? [...boundedWindows, ...recoveryWindows]
       : recoveryWindows;
-    for (const window of windowsToSearch.length ? windowsToSearch : windows) {
+    const itemRecoveryLimit = Math.max(1, Number(process.env.AGENDA_BOUNDARY_ITEM_RECOVERY_WINDOWS || 2));
+    for (const window of (windowsToSearch.length ? windowsToSearch : windows).slice(0, itemRecoveryLimit)) {
       const parsed = await callOllamaJson({
         ollamaUrl,
         llmModel,
@@ -1763,7 +1878,7 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
           `Allowed roles: ${[...ROLES].join(", ")}.`,
           window.text,
         ].join("\n\n"),
-        attempts: 3,
+        attempts: recoveryAttempts,
       });
     const proposed = [];
     for (const raw of Array.isArray(parsed?.transitions) ? parsed.transitions : []) {
@@ -1790,7 +1905,7 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
             "Return only {\"agenda item\":\"ITEM\",\"atomic unit id\":\"atomic_000123\",\"evidence quote\":\"complete literal text of that unit\",\"confidence\":0.95}.",
             window.text,
           ].join("\n\n"),
-          attempts: 3,
+          attempts: recoveryAttempts,
         });
         if (/^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_DEBUG || ""))) {
           log(`[agenda-boundaries][debug] focused repair ${entry.item} proposal=${JSON.stringify(candidate)} response=${JSON.stringify(repaired)}`);
@@ -1948,7 +2063,21 @@ async function collectCandidates({ canonical, units, windows, llmModel, ollamaUr
   // gap-checks its accepted boundaries. Canonical agenda items may be skipped
   // or silent even when they have attachments, so their absence must be
   // resolved by reconciliation rather than manufactured by focused recovery.
-  if (candidates.length >= 2) return { candidates, rejected };
+  const missingSubstantiveItem = canonical.items.some((entry) =>
+    (entry.substantive || entry.level === 1 && /^(?:public forum|by-?laws?|adjournment)$/iu.test(clean(entry.title)))
+      && !candidates.some((candidate) => candidate["agenda item"] === entry.item),
+  );
+  // The complete-chronology pass already scans the entire in-scope recording.
+  // Once it has produced multiple validated boundaries, re-running every
+  // compact overlapping window adds a large GPU cost while mostly repeating
+  // those same proposals.  Missing substantive items are handled by the
+  // bounded, item-specific recovery below (and again by the publish gate),
+  // so keep the broad pass available only as an explicit diagnostic opt-in.
+  if (candidates.length >= 2
+    && /^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_BROAD_WINDOW_PASS || "")) === false) {
+    log(`[agenda-boundaries] skipped redundant broad candidate-window pass; bounded recovery will handle ${missingSubstantiveItem ? "missing substantive items" : "remaining headings"}`);
+    return { candidates, rejected };
+  }
   const advanceContiguousCursor = (pool) => {
     const foundItems = new Set(pool.map((candidate) => candidate["agenda item"]));
     while (agendaCursor < canonical.items.length) {
@@ -2139,6 +2268,7 @@ export function normalizeDisposition(raw) {
     role,
     "evidence quote": clean(raw?.["evidence quote"]),
     confidence: Number(raw?.confidence || 0),
+    "meeting scope boundary": Boolean(raw?.["meeting scope boundary"]),
   };
   if (status === "skipped" || status === "container") {
     disposition["atomic unit id"] = "";
@@ -2164,12 +2294,18 @@ function validateDispositionBatch(dispositions, expectedItems, units, validatedC
     const disposition = dispositions[i];
     if (disposition["agenda item"] !== expectedItems[i].item) return `identity mismatch at ${i}: expected ${expectedItems[i].item}`;
     if (!STATUSES.has(disposition.status)) return `invalid status for ${expectedItems[i].item}`;
+    const allowedCandidates = candidatesByItem.get(expectedItems[i].item) || [];
+    const canonicalEntry = expectedItems[i];
+    if (canonicalEntry?.substantive
+      && allowedCandidates.length
+      && (disposition.status === "skipped" || disposition.status === "container")) {
+      return `${disposition.status} status for substantive ${expectedItems[i].item} conflicts with a validated executable candidate`;
+    }
     const hasBoundary = disposition.status === "executed" || disposition.status === "empty";
     if (!hasBoundary) continue;
     if (!disposition["atomic unit id"]) {
       return `${disposition.status} status for ${expectedItems[i].item} omitted required boundary data`;
     }
-    const allowedCandidates = candidatesByItem.get(expectedItems[i].item) || [];
     if (!allowedCandidates.length) return `executable status for ${expectedItems[i].item} has no validated candidate`;
     if (!allowedCandidates.some((candidate) => candidate["atomic unit id"] === disposition["atomic unit id"])) {
       return `boundary for ${expectedItems[i].item} is not in the validated candidate set`;
@@ -2256,8 +2392,12 @@ export function validateReconciledTimeline(dispositions, canonical, units, optio
     usedBoundaries.add(index);
     Object.assign(disposition, alignEvidenceToAtomicUnit(disposition, units));
     const quote = evidenceKey(disposition["evidence quote"]);
-    if (quote.length < 8 || !evidenceKey(units[index].text).includes(quote)) {
-      throw new Error(`agenda segmentation retryable: non-literal boundary evidence for ${expected}`);
+    const localEvidence = evidenceKey(units[index].text).includes(quote);
+    const scopeEvidence = disposition["meeting scope boundary"]
+      && quote.length >= 8
+      && evidenceKey(units.slice(index, Math.min(units.length, index + 4)).map((unit) => unit.text).join(" ")).includes(quote);
+    if (quote.length < 8 || (!localEvidence && !scopeEvidence)) {
+      throw new Error(`agenda segmentation retryable: non-literal boundary evidence for ${expected} at ${disposition["atomic unit id"]} quote=${quote.slice(0, 80)} unit=${evidenceKey(units[index].text).slice(0, 120)}`);
     }
     const minimum = Number(options.minimumConfidence ?? process.env.AGENDA_BOUNDARY_MIN_CONFIDENCE ?? 0.55);
     if (!Number.isFinite(disposition.confidence) || disposition.confidence < minimum || disposition.confidence > 1) {
@@ -2272,7 +2412,10 @@ export function validateReconciledTimeline(dispositions, canonical, units, optio
     const onlyIndex = unitIndex.get(boundaries[0]["atomic unit id"]);
     const coveredFraction = (units.length - onlyIndex) / units.length;
     const durationSeconds = Number(units.at(-1)?.until || 0) - Number(units[0]?.since || 0);
-    if (coveredFraction >= 0.9 && durationSeconds >= 600) {
+    const chronologyText = units.map((unit) => unit.text).join(" ");
+    const abortedMeeting = /\b(?:no quorum|quorum has not been reached|without quorum)\b/iu.test(chronologyText)
+      && /\badjourn(?:ed|ment|s)?\b/iu.test(chronologyText);
+    if (coveredFraction >= 0.9 && durationSeconds >= 600 && !options.allowAbortedMeeting && !abortedMeeting) {
       throw new Error("agenda segmentation retryable: one boundary would absorb nearly the entire substantive meeting chronology");
     }
   }
@@ -2326,8 +2469,12 @@ export function resolveCanonicalHierarchyOwnership(dispositions) {
 }
 
 function chapterUnitsForSpan(span, unitId) {
-  const maxChars = Math.max(2500, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 10000));
-  const maxSeconds = Math.max(300, Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900));
+  const maxChars = Math.max(2500, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 18000));
+  // Character windows are the primary context bound. A very high default
+  // duration cap prevents short ASR rows from creating extra chapters merely
+  // because a report was presented slowly; operators can still set the
+  // environment override for recordings that need a time bound.
+  const maxSeconds = Math.max(300, Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 100000));
   const chapters = [];
   let start = 0;
   while (start < span.length) {
@@ -2622,7 +2769,11 @@ export async function runLlmAgendaSegmentation({
       : await collectCandidates({ canonical, units, windows, llmModel, ollamaUrl, log });
   }
   const callToOrder = canonical.items.find((entry) => /^call to order$/iu.test(clean(entry.title)));
-  if (callToOrder && meetingScopeAudit["evidence quote"]) {
+  const scopeStartUnit = callToOrder && meetingScopeAudit["scope atomic start"]
+    ? units.find((unit) => unit["atomic unit id"] === meetingScopeAudit["scope atomic start"])
+    : null;
+  const scopeStartEvidence = meetingScopeAudit["evidence quote"] || scopeStartUnit?.text || units[0]?.text || "";
+  if (callToOrder && meetingScopeAudit["scope atomic start"]) {
     collected.candidates = [
       ...(Array.isArray(collected?.candidates) ? collected.candidates : []),
       {
@@ -2630,7 +2781,10 @@ export async function runLlmAgendaSegmentation({
         "announced topic": `${meetingLabel || "canonical meeting"} call to order`,
         "atomic unit id": meetingScopeAudit["scope atomic start"],
         role: "procedural",
-        "evidence quote": meetingScopeAudit["evidence quote"],
+        // Scope discovery may use a validated quote spanning adjacent ASR
+        // units. Timeline evidence is unit-local, so retain the same Qwen
+        // grounded boundary but use literal evidence from its first unit.
+        "evidence quote": scopeStartEvidence,
         confidence: meetingScopeAudit.confidence,
         "meeting scope boundary": true,
         "window id": "named_meeting_scope",
@@ -2687,21 +2841,31 @@ export async function runLlmAgendaSegmentation({
     ollamaUrl,
     log,
   });
-  if (callToOrder && meetingScopeAudit["evidence quote"]) {
+  if (callToOrder && meetingScopeAudit["scope atomic start"]) {
     candidates = [
       {
         "agenda item": callToOrder.item,
         "announced topic": `${meetingLabel || "canonical meeting"} call to order`,
         "atomic unit id": meetingScopeAudit["scope atomic start"],
         role: "procedural",
-        "evidence quote": meetingScopeAudit["evidence quote"],
-        confidence: meetingScopeAudit.confidence,
+        "evidence quote": scopeStartEvidence,
         "meeting scope boundary": true,
+        confidence: meetingScopeAudit.confidence,
         "window id": "named_meeting_scope",
         "semantic verification": "qwen3.5:9b named-meeting scope discovery with literal evidence",
       },
       ...candidates.filter((candidate) => candidate["agenda item"] !== callToOrder.item),
     ].sort((a, b) => Number(a["atomic unit id"].slice(7)) - Number(b["atomic unit id"].slice(7)));
+  }
+  // Refinement and conflict resolution may change a candidate's identity or
+  // atomic start. Re-run the literal evidence contract immediately before
+  // reconciliation so a stale quote cannot poison an otherwise valid batch.
+  const invalidCandidateCount = candidates.filter((candidate) =>
+    validateBoundaryCandidate(candidate, canonical, units),
+  ).length;
+  if (invalidCandidateCount) {
+    candidates = candidates.filter((candidate) => !validateBoundaryCandidate(candidate, canonical, units));
+    log(`[agenda-boundaries] dropped ${invalidCandidateCount} refined candidates that failed literal evidence validation`);
   }
   if (!candidates.length) throw new Error("agenda segmentation retryable: LLM found no validated boundary candidates");
   const candidateCheckpointTime = new Date().toISOString();
@@ -2725,21 +2889,54 @@ export async function runLlmAgendaSegmentation({
   } else {
     dispositions = await reconcileTimelineInBatches({ canonical, candidates, units, llmModel, ollamaUrl, log });
   }
-  if (callToOrder && meetingScopeAudit["evidence quote"]) {
+  if (callToOrder && meetingScopeAudit["scope atomic start"]) {
     const callDisposition = dispositions.find((entry) => entry["agenda item"] === callToOrder.item);
     if (callDisposition) {
       Object.assign(callDisposition, {
         status: "executed",
         "atomic unit id": meetingScopeAudit["scope atomic start"],
         role: "procedural",
-        "evidence quote": meetingScopeAudit["evidence quote"],
+        "evidence quote": scopeStartEvidence,
+        "meeting scope boundary": true,
         confidence: meetingScopeAudit.confidence,
       });
+    } else {
+      // A reconciler may mark an unlisted procedural opening as skipped even
+      // when scope discovery has already established the target start. The
+      // scope boundary is authoritative and must remain in the canonical
+      // timeline rather than producing a fabricated item-1 error later.
+      dispositions.push(normalizeDisposition({
+        "agenda item": callToOrder.item,
+        status: "executed",
+        "atomic unit id": meetingScopeAudit["scope atomic start"],
+        role: "procedural",
+        "evidence quote": scopeStartEvidence,
+        "meeting scope boundary": true,
+        confidence: meetingScopeAudit.confidence,
+      }));
+      dispositions.sort((a, b) => canonical.items.findIndex((item) => item.item === a["agenda item"])
+        - canonical.items.findIndex((item) => item.item === b["agenda item"]));
+    }
+  }
+  // Reconciliation is allowed to choose only a validated candidate boundary,
+  // but it may still paraphrase that candidate's quote. Pin executable
+  // evidence back to the validated record before post-reconciliation
+  // ownership normalization and the final timeline contract.
+  const validatedCandidateByBoundary = new Map(
+    candidates.map((candidate) => [`${candidate["agenda item"]}|${candidate["atomic unit id"]}`, candidate]),
+  );
+  for (const disposition of dispositions) {
+    if (!(["executed", "empty"].includes(disposition.status))) continue;
+    const candidate = validatedCandidateByBoundary.get(
+      `${disposition["agenda item"]}|${disposition["atomic unit id"]}`,
+    );
+    if (candidate?.["evidence quote"]) {
+      disposition["evidence quote"] = candidate["evidence quote"];
     }
   }
   resolveCanonicalHierarchyOwnership(dispositions);
   resolveSharedBoundaryOwnership(dispositions, canonical);
-  validateReconciledTimeline(dispositions, canonical, units);
+  validateReconciledTimeline(dispositions, canonical, units, { allowAbortedMeeting: true });
   const prefixScopeAudit = await auditUnownedTranscriptPrefix({
     canonical,
     units,

@@ -116,3 +116,39 @@ test("transcript renderer displays only Stage 3 chapters", () => {
   );
   assert.doesNotMatch(html, /The second item has no Stage 3 chapters[\s\S]*class="chapter-summary"/u);
 });
+
+test("transcript renderer resolves interview self-identification to sentence-level names", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-render-interview-"));
+  const transcriptDir = path.join(root, "2026-05-22_interview", "transcript");
+  fs.mkdirSync(transcriptDir, { recursive: true });
+  const rows = [
+    { since: 0, until: 2, display: "SPEAKER_001", text: "I'm here with Ray Botten, and he's running for mayor." },
+    { since: 2, until: 4, display: "SPEAKER_002", text: "My name's Ray Botten." },
+  ];
+  fs.writeFileSync(
+    path.join(transcriptDir, "meeting-qwen-auto-normalized.sentences.speaker.sentences.json"),
+    JSON.stringify({ rows }),
+    "utf8",
+  );
+  fs.writeFileSync(
+    path.join(transcriptDir, "meeting-qwen-auto-normalized.sentences.speaker.sentence.srt"),
+    [
+      "1", "00:00:00,000 --> 00:00:02,000", "SPEAKER_001: I'm here with Ray Botten, and he's running for mayor.", "",
+      "2", "00:00:02,000 --> 00:00:04,000", "SPEAKER_002: My name's Ray Botten.", "",
+    ].join("\n"),
+    "utf8",
+  );
+  execFileSync("node", [
+    path.join(process.cwd(), "command/render_transcript_html_from_transcript_folder.mjs"),
+    transcriptDir,
+    "transcript-page.html",
+    "Andrii Zvorygin",
+    "Spiritual",
+    "https://example.test",
+  ], { cwd: path.resolve("."), env: { ...process.env, PYA_PRESERVE_SPEAKER_NAMES: "1" }, stdio: "pipe" });
+  const html = fs.readFileSync(path.join(transcriptDir, "transcript-page.html"), "utf8");
+  assert.equal((html.match(/class="transcript-entry"/gu) || []).length, 2);
+  assert.equal((html.match(/<span class="speaker">Andrii Zvorygin:<\/span>/gu) || []).length, 1);
+  assert.equal((html.match(/<span class="speaker">Ray Botten:<\/span>/gu) || []).length, 1);
+  assert.doesNotMatch(html, /SPEAKER_00[12]:/u);
+});

@@ -4,12 +4,99 @@ import test from "node:test";
 
 import {
   numericAuditSourceExcerpt,
+  adjudicateChapterOrthogonality,
+  repairChapterTitleLlm,
   repairNumericFidelityLlm,
   repairUnsupportedNumericClaimsLlm,
   rewriteWithoutNumericClaimsLlm,
   stage3GenerationOrder,
   summarizeGroundedUnit,
 } from "../program/library/reporter_shared/agenda-stage3-summary-renderer.mjs";
+
+test("stage3 adjudicates duplication allegations against distinct literal source facets", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { message: { content: JSON.stringify({ distinct: true }) } };
+    },
+  });
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const result = await adjudicateChapterOrthogonality({
+    heading: "8.a Report",
+    chapters: [
+      { title: "Drainage findings", text: "The report identifies drainage concerns.", "source excerpt": "Drainage concerns require a grading plan." },
+      { title: "Traffic conditions", text: "The report identifies traffic conditions.", "source excerpt": "Traffic conditions require a management plan." },
+    ],
+    audit: { orthogonal: false, duplicateIndices: [0], notes: "overlap" },
+    llmModel: "qwen3.5:9b",
+    ollamaUrl: "http://ollama.invalid/api/chat",
+  });
+  assert.deepEqual(result, { orthogonal: true, duplicateIndices: [], notes: "" });
+});
+
+test("stage3 varies invalid child-title repairs with the rejected headline", async (t) => {
+  let calls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    calls += 1;
+    const request = JSON.parse(options.body);
+    if (calls === 2) assert.match(request.messages[1].content, /REJECTED HEADLINE/u);
+    return {
+      ok: true,
+      async json() {
+        return { message: { content: JSON.stringify({
+          title: calls === 1 ? "Too short" : "Council approves funding for affordable housing plan",
+        }) } };
+      },
+    };
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const title = await repairChapterTitleLlm({
+    heading: "7.f Affordable Housing Plan",
+    summary: "Council approved the affordable housing plan.",
+    sourceExcerpt: "Council approved the affordable housing plan and directed staff to proceed.",
+    auditNote: "Headline was too short.",
+    llmModel: "qwen3.5:9b",
+    ollamaUrl: "http://ollama.invalid/api/chat",
+  });
+  assert.equal(calls, 2);
+  assert.equal(title, "Council Approves Funding for Affordable Housing Plan");
+});
+
+test("stage3 keeps varied child-title repair bounded beyond the first three invalid drafts", async (t) => {
+  let calls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    calls += 1;
+    const request = JSON.parse(options.body);
+    if (calls === 4) {
+      assert.match(request.messages[1].content, /short, direct subject-action-outcome headline/u);
+      assert.match(request.messages[1].content, /REJECTED HEADLINE/u);
+      assert.match(request.messages[1].content, /received 0 words/u);
+    }
+    return {
+      ok: true,
+      async json() {
+        return { message: { content: JSON.stringify({
+          title: calls < 4 ? "The discussion continues" : "Council Advances The Community Housing Plan",
+        }) } };
+      },
+    };
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const title = await repairChapterTitleLlm({
+    heading: "10.e Report",
+    summary: "Council advanced the community housing plan.",
+    sourceExcerpt: "Council advanced the community housing plan and directed staff to continue implementation.",
+    auditNote: "The generated headline was unfinished.",
+    llmModel: "qwen3.5:9b",
+    ollamaUrl: "http://ollama.invalid/api/chat",
+  });
+  assert.equal(calls, 4);
+  assert.equal(title, "Council Advances the Community Housing Plan");
+});
 
 test("stage3 can ask qwen for grounded prose with no numeric claims", async (t) => {
   let requestBody = null;
@@ -87,6 +174,34 @@ test("stage3 varies qualitative retries instead of repeating a failed numeric pr
   assert.doesNotMatch(`${result.summary} ${result.chapterText}`, /\d/u);
 });
 
+test("qualitative numeric retries name rejected grounded address phrases", async (t) => {
+  let prompt = "";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    prompt = JSON.parse(options.body).messages[1].content;
+    return {
+      ok: true,
+      async json() {
+        return { message: { content: JSON.stringify({
+          summary: "Council discussed the negotiations.",
+          "chapter text": "Negotiations continued",
+        }) } };
+      },
+    };
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  await rewriteWithoutNumericClaimsLlm({
+    summary: "Council discussed 846 and 848 First Avenue West.",
+    chapterText: "First Avenue negotiations",
+    sourceExcerpt: "Council discussed negotiations.",
+    ollamaUrl: "http://ollama.invalid/api/chat",
+  });
+
+  assert.match(prompt, /First Avenue/u);
+  assert.match(prompt, /do not repeat them or any close variant/u);
+});
+
 test("Owen Stage 3 delegates availability retries to the model-specific renderer", () => {
   const source = fs.readFileSync(
     new URL("../world/house/owen-sound-reporter/program/summarize-agenda-wise-sections-from-transcript-folder.mjs", import.meta.url),
@@ -101,8 +216,22 @@ test("stage3 duplication repairs retain sibling summaries as grounding context",
     new URL("../program/library/reporter_shared/agenda-stage3-summary-renderer.mjs", import.meta.url),
     "utf8",
   );
-  assert.match(source, /siblingSummaries:\s*chapterSiblingContext\(existingChapters,\s*ci\)/u);
-  assert.doesNotMatch(source, /siblingSummaries:\s*auditNote\s*\?\s*\[\]/u);
+  assert.match(source, /siblingSummaries:\s*chapterSiblingContext\(existingChapters,\s*ci,\s*Boolean\(auditNote\)\)/u);
+  assert.match(source, /sibling summaries only to avoid repeating their facts, never as source evidence/u);
+  assert.match(source, /FORBIDDEN ALREADY-COVERED CLAIMS/u);
+  assert.match(source, /necessary repetition of the same overall report outcome or approval conditions are allowed/u);
+  assert.match(source, /different source facets as distinct coverage/u);
+  assert.match(source, /Orthogonality repair/u);
+  assert.match(source, /REJECTED_CHAPTER_SUMMARY/u);
+  assert.doesNotMatch(source, /fallbackUnitSummaryFrom(?:Grounding|Label)/u);
+});
+
+test("stage3 semantic audits retain middle source evidence", () => {
+  const source = fs.readFileSync(
+    new URL("../program/library/reporter_shared/agenda-stage3-summary-renderer.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.ok(source.includes('abridgeUtf8(String(chapter?.["source excerpt"] || ""), 12000)'));
 });
 
 test("stage3 generates compact units first while retaining canonical indexes", () => {
@@ -304,6 +433,7 @@ test("stage3 uses qwen to remove an unsupported numeric claim without a prose fa
   assert.equal(result.unsupportedTokens.length, 0);
   assert.doesNotMatch(result.summary, /475/u);
   assert.equal(requestBody.model, "qwen3.5:9b");
+  assert.equal(requestBody.options.num_predict, 720);
   assert.match(requestBody.messages[1].content, /Otherwise omit the unsupported quantity/u);
 });
 

@@ -167,6 +167,43 @@ function forceNumberedSpeakers(rows) {
   return out;
 }
 
+function applyInterviewSpeakerAliases(rows, hostName = "") {
+  const out = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
+  const aliases = new Map();
+  const hostHint = String(hostName || "").replace(/\s+/gu, " ").trim();
+  let guestSpeaker = "";
+  let guestName = "";
+  let hostSpeaker = "";
+
+  for (const row of out) {
+    const speaker = String(row?.speaker || "").trim();
+    const speech = String(row?.speech || "").replace(/\s+/gu, " ").trim();
+    if (!speaker || !speech) continue;
+    const guestMatch = speech.match(/\bmy\s+name(?:'s|\s+is)\s+([A-Z][\p{L}'-]*(?:\s+[A-Z][\p{L}'-]*){0,5})\b/iu);
+    if (guestMatch && !guestSpeaker) {
+      guestSpeaker = speaker;
+      guestName = String(guestMatch[1] || "").trim();
+    }
+    if (!hostSpeaker && /\bI'm\s+here\s+with\b/iu.test(speech)) hostSpeaker = speaker;
+  }
+
+  // The Andrii house passes its presenter as the jurisdiction argument. Only
+  // use that hint for this explicit publisher identity; other transcript
+  // renderers should retain their numbered/diarization labels.
+  if (/^andrii\s+zvorygin$/iu.test(hostHint) && hostSpeaker && hostSpeaker !== guestSpeaker) {
+    aliases.set(hostSpeaker, hostHint);
+  }
+  if (guestSpeaker && guestName && guestSpeaker !== hostSpeaker) aliases.set(guestSpeaker, guestName);
+  if (!aliases.size) return out;
+  for (const row of out) {
+    const alias = aliases.get(String(row?.speaker || "").trim());
+    if (!alias) continue;
+    row.speaker = alias;
+    row.raw = `${alias}: ${String(row?.speech || "").trim()}`.trim();
+  }
+  return out;
+}
+
 function countSrtCues(text) {
   const src = String(text || "").replace(/\r\n/g, "\n");
   const m = src.match(/^\d\d:\d\d:\d\d,\d\d\d\s+-->\s+\d\d:\d\d:\d\d,\d\d\d$/gmu);
@@ -1420,6 +1457,7 @@ function main() {
     }
   }
 
+  transcriptRows = applyInterviewSpeakerAliases(transcriptRows, jurisdictionArg);
   const preserveSpeakerNames = /^(1|true|yes)$/iu.test(String(process.env.PYA_PRESERVE_SPEAKER_NAMES || ""));
   if (!preserveSpeakerNames) transcriptRows = forceNumberedSpeakers(transcriptRows);
   const numberedCount = transcriptRows.filter((r) => String(r.speaker || "").trim()).length;
