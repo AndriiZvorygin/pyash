@@ -353,11 +353,12 @@ function longBenchSample(row, index) {
     : Object.entries(options).map(([key, value]) => `${key}. ${value}`).join("\n");
   const context = row.context ?? row.input ?? row.passage ?? "";
   const question = row.question ?? row.prompt ?? "";
+  const input = [context, question, optionLines].filter(Boolean).join("\n\n");
   return {
     id: String(row.id ?? row._id ?? `longbench-${index + 1}`),
     prompt: `Read the context and answer the multiple-choice question. Return only the answer letter.\n\nCONTEXT:\n${context}\n\nQUESTION:\n${question}\n\nOPTIONS:\n${optionLines}`,
     reference: String(row.answer ?? row.label ?? ""),
-    input: context,
+    input,
     expectedAnswer: String(row.answer ?? row.label ?? "").trim(),
     metadata: { category: row.category ?? null, subcategory: row.subcategory ?? null, difficulty: row.difficulty ?? null, source: "LongBench v2" },
     contextLength: Number(row.context_length ?? row.contextLength ?? row.length ?? 0) || null

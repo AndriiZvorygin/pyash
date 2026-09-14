@@ -54,7 +54,8 @@ function queryRelevanceScore(query, output) {
 
 export function scoreSample({ suiteKey, sample, output }) {
   if (suiteKey === "longbench" || suiteKey === "mmlu-pro" || suiteKey === "gpqa") {
-    return { accuracy: output ? (stripThinking(output).match(/\b([ABCD])\b/i)?.[1]?.toUpperCase() === sample.expectedAnswer.toUpperCase() ? 1 : 0) : 0, schemaValidity: output ? 1 : 0 };
+    const answerPattern = suiteKey === "mmlu-pro" ? /\b([A-J])\b/i : /\b([A-D])\b/i;
+    return { accuracy: output ? (stripThinking(output).match(answerPattern)?.[1]?.toUpperCase() === sample.expectedAnswer.toUpperCase() ? 1 : 0) : 0, schemaValidity: output ? 1 : 0 };
   }
   if (suiteKey === "helpos-local") return structuredHelpOSScore(sample, output);
   if (suiteKey === "qmsum") {
@@ -314,6 +315,7 @@ export async function runCriterion({
     ? groupedAggregates(results, resolvedModels, "evaluationMode")
     : [];
   const taskAggregates = suiteKey === "longbench-summary" ? groupedAggregates(results, resolvedModels, "task") : [];
+  const categoryAggregates = suiteKey === "mmlu-pro" ? groupedAggregates(results, resolvedModels, "category") : [];
   const finishedAt = now().toISOString();
   const finalRun = await writeRunArtifacts({
     runId: id,
@@ -346,6 +348,7 @@ export async function runCriterion({
     aggregates,
     evaluationAggregates,
     taskAggregates,
+    categoryAggregates,
     taskMacroAggregates: taskAggregates.length ? macroAggregates(taskAggregates, resolvedModels, "task") : [],
     modelMetadata
   }, { root });
