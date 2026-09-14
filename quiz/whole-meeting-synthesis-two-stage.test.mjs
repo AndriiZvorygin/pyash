@@ -257,7 +257,7 @@ test("meeting-wide one-sentence generation retries the complete teaser contract"
     source.indexOf("function oneSentenceMatchesLeadTopic"),
   );
   assert.match(generator, /explainMalformedOneSentence\(candidate/u);
-  assert.match(generator, /at most 2 commas/u);
+  assert.match(generator, /at most 4 commas/u);
   assert.match(generator, /If the reason is too_many_commas, rewrite from scratch with zero commas/u);
   assert.match(generator, /Fresh repair contract: do not revise or quote the rejected sentence/u);
   assert.match(generator, /Math\.min\(3, blocks\.length\)/u);
