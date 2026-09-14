@@ -3,6 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { SUITE_CATALOG, readDatasetFile } from "../program/runtime/criterion/datasets.mjs";
+import { runBaseline } from "../program/runtime/criterion/baseline-run.mjs";
+import { createHuggingFaceExecutor } from "../program/runtime/criterion/huggingface.mjs";
 import { runCriterion, rerunCriterion } from "../program/runtime/criterion/run.mjs";
 import { runNightmare, runReverie } from "../program/runtime/criterion/suites.mjs";
 import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime/criterion/report.mjs";
@@ -40,6 +42,7 @@ function baseOptions(args, root) {
     limit: hasFlag(args, "--smoke") ? 1 : numericFlag(args, "--limit"),
     models: models.length ? models : undefined,
     profile: flag(args, "--profile", "summary_direct"),
+    engine: flag(args, "--engine", "ollama"),
     contextLength: numericFlag(args, "--context-length"),
     sampling: {
       ...(numericFlag(args, "--temperature") === null ? {} : { temperature: numericFlag(args, "--temperature") }),
@@ -51,6 +54,10 @@ function baseOptions(args, root) {
     ifevalVerifierCommand: flag(args, "--ifeval-verifier", process.env.PYA_IFEVAL_VERIFIER ?? null),
     ifevalVerifierArgs: String(flag(args, "--ifeval-verifier-args", "") ?? "").split(" ").filter(Boolean),
     runId: flag(args, "--run-id"),
+    gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+    criterionGpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
+    huggingFaceRevision: flag(args, "--huggingface-revision", process.env.PYA_HUGGINGFACE_REVISION ?? null),
+    huggingFaceDtype: flag(args, "--huggingface-dtype", process.env.PYA_HF_DTYPE ?? "auto"),
     root,
     resume: hasFlag(args, "--resume"),
     smoke: hasFlag(args, "--smoke")
@@ -65,7 +72,8 @@ function usage() {
   return [
     "criterion list",
     "criterion inspect --benchmark <name>",
-    "criterion run --benchmark <name> --dataset <local.jsonl> [--model <a,b>] [--profile summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
+    "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|huggingface] [--model <a,b>] [--profile summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
+    "criterion baseline --benchmark meetingbank --dataset <local.jsonl> --baseline lead-3 [--resume]",
     "criterion report <run-id>",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",
@@ -93,7 +101,32 @@ async function inspectCommand(args) {
 }
 
 async function runCommand(args, root) {
-  const result = await runCriterion(baseOptions(args, root));
+  const options = baseOptions(args, root);
+  let result;
+  if (options.engine === "huggingface") {
+    const adapter = await createHuggingFaceExecutor({
+      root,
+      runId: options.runId ?? `${options.benchmark ?? "criterion"}-${Date.now()}`,
+      housekeeperUrl: options.gpuHousekeeperUrl,
+      gpuId: options.criterionGpuId,
+      revision: options.huggingFaceRevision,
+      dtype: options.huggingFaceDtype
+    });
+    try {
+      result = await runCriterion({ ...options, engine: "huggingface", executor: adapter.executor, metadataProvider: adapter.metadataProvider });
+    } finally {
+      await adapter.close();
+    }
+  } else {
+    result = await runCriterion(options);
+  }
+  print({ runId: result.runId, status: result.status, results: `criterion/results/${result.runId}.jsonl`, report: `criterion/results/${result.runId}.md`, csv: `criterion/results/${result.runId}.csv`, review: `criterion/review/${result.runId}.html` }, hasFlag(args, "--json"));
+  return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
+async function baselineCommand(args, root) {
+  const options = baseOptions(args, root);
+  const result = await runBaseline({ ...options, baseline: flag(args, "--baseline", "lead-3") });
   print({ runId: result.runId, status: result.status, results: `criterion/results/${result.runId}.jsonl`, report: `criterion/results/${result.runId}.md`, csv: `criterion/results/${result.runId}.csv`, review: `criterion/review/${result.runId}.html` }, hasFlag(args, "--json"));
   return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
 }
@@ -103,7 +136,40 @@ async function againCommand(args, root) {
   if (!runId) throw new Error("criterion again requires a run id");
   const prior = await loadRun(runId, { root });
   const requestedModels = String(flag(args, "--model", "") ?? "").split(",").map(value => value.trim()).filter(Boolean);
-  const result = await rerunCriterion(runId, { root, profile: flag(args, "--profile") ?? prior.profile, models: requestedModels.length ? requestedModels : prior.models });
+  if (prior.engine === "baseline") {
+    const result = await runBaseline({
+      root,
+      benchmark: prior.criterion,
+      datasetPath: prior.datasetPath,
+      fixtureRoot: prior.fixtureRoot,
+      split: prior.split ?? "test",
+      baseline: String(prior.models?.[0] ?? "baseline:lead-3").replace(/^baseline:/u, ""),
+      runId,
+      resume: true
+    });
+    print({ runId: result.runId, status: result.status, resumed: true, report: `criterion/results/${result.runId}.md` }, hasFlag(args, "--json"));
+    return 0;
+  }
+  const options = { root, profile: flag(args, "--profile") ?? prior.profile, models: requestedModels.length ? requestedModels : prior.models, engine: prior.engine };
+  let adapter = null;
+  if (prior.engine === "huggingface") {
+    adapter = await createHuggingFaceExecutor({
+      root,
+      runId,
+      housekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+      gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
+      revision: process.env.PYA_HUGGINGFACE_REVISION ?? null,
+      dtype: process.env.PYA_HF_DTYPE ?? "auto"
+    });
+    options.executor = adapter.executor;
+    options.metadataProvider = adapter.metadataProvider;
+  }
+  let result;
+  try {
+    result = await rerunCriterion(runId, options);
+  } finally {
+    if (adapter) await adapter.close();
+  }
   print({ runId: result.runId, status: result.status, resumed: true, report: `criterion/results/${result.runId}.md` }, hasFlag(args, "--json"));
   return 0;
 }
@@ -171,6 +237,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && subcommand === "list") return listCommand(args);
   if (command === "criterion" && subcommand === "inspect") return inspectCommand(args);
   if (command === "criterion" && subcommand === "run") return runCommand(args, root);
+  if (command === "criterion" && subcommand === "baseline") return baselineCommand(args, root);
   if (command === "criterion" && subcommand === "report") return reportCommand(rest, root);
   if (command === "criterion" && subcommand === "compare") return compareCommand(rest, root);
   if (command === "criterion" && subcommand === "golden") return goldenCommand(rest, root);
@@ -178,6 +245,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "list") return listCommand([subcommand, ...rest].filter(Boolean));
   if (command === "inspect") return inspectCommand([subcommand, ...rest].filter(Boolean));
   if (command === "run") return runCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "baseline") return baselineCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "report") return reportCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "compare") return compareCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "golden") return goldenCommand([subcommand, ...rest].filter(Boolean), root);

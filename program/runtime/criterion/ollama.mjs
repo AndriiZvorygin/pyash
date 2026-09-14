@@ -5,6 +5,7 @@ export function resolveOllamaBaseUrl(baseUrl = null, env = process.env) {
 }
 
 export const DEFAULT_PROFILES = Object.freeze({
+  baseline: Object.freeze({ think: false, reasoningMode: "deterministic", temperature: null, top_p: null, top_k: null, contextLength: null }),
   summary_direct: Object.freeze({ think: false, reasoningMode: "direct", temperature: 0.2, top_p: 0.8, top_k: 20, contextLength: 32768 }),
   summary_reasoned: Object.freeze({ think: true, reasoningMode: "reasoned", temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 }),
   summary_reasoned_hidden: Object.freeze({ think: true, reasoningMode: "reasoned-hidden", temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 }),
@@ -17,7 +18,9 @@ export function resolveProfile(name = "summary_direct", overrides = {}) {
   return {
     ...base,
     ...overrides,
-    contextLength: Number(overrides.contextLength ?? base.contextLength)
+    contextLength: overrides.contextLength === null || base.contextLength === null
+      ? (overrides.contextLength === null ? null : base.contextLength)
+      : Number(overrides.contextLength ?? base.contextLength)
   };
 }
 

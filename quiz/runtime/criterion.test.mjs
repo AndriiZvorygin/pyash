@@ -7,6 +7,9 @@ import path from "node:path";
 import { parse } from "../../program/understand/index.mjs";
 import { deriveSignatureFromCall } from "../../program/bridge/signature.mjs";
 import { runCriterion, rerunCriterion, scoreSample } from "../../program/runtime/criterion/run.mjs";
+import { extractLead3, extractSentences } from "../../program/runtime/criterion/baseline.mjs";
+import { runBaseline } from "../../program/runtime/criterion/baseline-run.mjs";
+import { createHuggingFaceExecutor, huggingFaceModelDefaults } from "../../program/runtime/criterion/huggingface.mjs";
 import { loadSuiteSamples } from "../../program/runtime/criterion/datasets.mjs";
 import { contextLengthBucket, ollamaTiming, percentile, rougeScores } from "../../program/runtime/criterion/metrics.mjs";
 import { runNightmare, runReverie } from "../../program/runtime/criterion/suites.mjs";
@@ -69,6 +72,75 @@ test("Ollama adapter uses one configured profile and keeps thinking out of score
 test("criterion language surface is registered as be criterion do", () => {
   const sentence = parse("be criterion do");
   assert.deepEqual(deriveSignatureFromCall(sentence), ["be", "criterion"]);
+});
+
+test("Lead-3 extracts actual sentences across speaker labels and newlines", () => {
+  const source = "[00:01] Speaker A: First motion passed.\nSpeaker B: Second motion failed!\nSpeaker A: Third item is pending?\nSpeaker B: Fourth item follows.";
+  assert.deepEqual(extractSentences(source), ["First motion passed.", "Second motion failed!", "Third item is pending?", "Fourth item follows."]);
+  assert.equal(extractLead3(source), "First motion passed. Second motion failed! Third item is pending?");
+  assert.deepEqual(extractSentences(""), []);
+  assert.equal(extractLead3(null), "");
+});
+
+test("Lead-3 baseline uses the first three sentences and writes resumable artifacts", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "meetingbank.json", [{ id: "m1", transcript: "First sentence. Second sentence. Third sentence. Fourth sentence.", summary: "First sentence. Second sentence. Third sentence." }]);
+  const run = await runBaseline({ benchmark: "meetingbank", datasetPath: dataset, runId: "meetingbank-lead3", root });
+  assert.equal(run.engine, "baseline");
+  assert.equal(run.results[0].model, "baseline:lead-3");
+  assert.equal(run.results[0].output, "First sentence. Second sentence. Third sentence.");
+  assert.equal(run.results[0].scores.rouge1, 1);
+  assert.equal(run.results[0].metrics.generationTokensPerSecond, null);
+  for (const suffix of ["pya", "json", "jsonl", "md", "csv"]) await fs.access(path.join(root, "criterion", "results", `meetingbank-lead3.${suffix}`));
+  const resumed = await runBaseline({ benchmark: "meetingbank", datasetPath: dataset, runId: "meetingbank-lead3", root, resume: true });
+  assert.equal(resumed.results.length, 1);
+  assert.equal(resumed.results[0].output, run.results[0].output);
+});
+
+test("Hugging Face adapter exposes model defaults without loading a model", async () => {
+  assert.equal(huggingFaceModelDefaults("ahmeddeldalyyy/meeting-summarizer-meetingbank").maxInputTokens, 1024);
+  assert.equal(huggingFaceModelDefaults("Shaelois/MeetingScript").maxInputTokens, 4096);
+  const adapter = await createHuggingFaceExecutor({ housekeeperUrl: "http://mriczo:8090" });
+  const metadata = await adapter.metadataProvider({ model: "Shaelois/MeetingScript" });
+  assert.equal(metadata.model, "Shaelois/MeetingScript");
+  assert.equal(metadata.engine, "huggingface");
+  assert.equal(metadata.maxInputTokens, 4096);
+  await adapter.close();
+});
+
+test("Hugging Face adapter sends inference through the durable GPU lane", async () => {
+  const requests = [];
+  let status = { status: "queued" };
+  let workerCalls = 0;
+  const adapter = await createHuggingFaceExecutor({
+    root: await tempRoot(),
+    runId: "hf-queue-test",
+    housekeeperUrl: "http://housekeeper:8090",
+    enqueue: async (_worldRoot, envelope) => requests.push(envelope),
+    writeStatus: async (_worldRoot, handleId, next) => ({ ...next, handleId }),
+    readStatus: async () => status,
+    workerRunner: async () => {
+      workerCalls += 1;
+      status = { status: "success", result: JSON.stringify({ text: "summary", timing: { outputTokens: 5 }, metadata: { truncated: true }, metadataRecord: { parameterCount: 123 } }) };
+    },
+    pollMs: 1
+  });
+
+  const result = await adapter.executor({
+    model: "Shaelois/MeetingScript",
+    prompt: "Summarize this meeting.",
+    sample: { id: "m1", input: "Alice: The meeting ended." }
+  });
+
+  assert.equal(result.text, "summary");
+  assert.deepEqual(result.metadata.modelMetadata, { parameterCount: 123 });
+  assert.equal(workerCalls, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].lane, "criterion");
+  assert.equal(requests[0].serviceName, "huggingface");
+  assert.equal(requests[0].jobSpec.kind, "huggingface-generate");
+  assert.equal(requests[0].jobSpec.payload.model, "Shaelois/MeetingScript");
+  await adapter.close();
 });
 
 test("criterion run compares models and writes replayable artifacts", async () => {

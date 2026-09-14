@@ -34,3 +34,49 @@ Official QMSum JSONL meeting rows containing `meeting_transcripts`, `general_que
 `nightmare` is single-flight by default. Its repeat, timeout, malformed-output, and stress controls are extension points for remote runners; local GPU-heavy work remains serialized by Pyash host policy. `reverie` runs controlled-response simulations without calling a model.
 
 Long suites can use the runtime `runCriterionRefinery` adapter so each benchmark stage has the same dependency, retry, checkpoint and fail-fast semantics as other Pyash refinery work.
+
+## Deterministic baselines
+
+Criterion also supports non-model baselines through the same dataset, checkpoint and artifact path. MeetingBank Lead-3 selects the first three transcript sentences and makes no Ollama request:
+
+```bash
+node command/criterion.mjs baseline \
+  --benchmark meetingbank \
+  --dataset /path/to/meetingbank/test.jsonl \
+  --split test \
+  --baseline lead-3 \
+  --run-id meetingbank-lead3-full \
+  --resume \
+  --json
+```
+
+The run is recorded as `baseline:lead-3`. Processing latency is recorded, while generation speed is unavailable because no model is called.
+
+## Hugging Face sequence-to-sequence models
+
+Criterion keeps dataset loading, scoring, checkpoints and reports in Node. Hugging Face inference runs as a GPU-managed Pyash duty through the existing `gpu-worker` and `gpu-housekeeper` services. The CUDA host owns the container and its private model cache; the development machine does not need a Python virtual environment or model dependencies:
+
+```bash
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+node command/criterion.mjs run \
+  --benchmark meetingbank \
+  --engine huggingface \
+  --model ahmeddeldalyyy/meeting-summarizer-meetingbank \
+  --dataset /path/to/meetingbank/test.jsonl \
+  --split test \
+  --profile summary_direct \
+  --run-id meetingbank-hf-ahmed-full \
+  --resume \
+  --json
+```
+
+Start the normal Pyash GPU worker for the Criterion lane when one is not already running:
+
+```bash
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+node command/gpu_worker.mjs --world world
+```
+
+Supported MeetingBank defaults are `ahmeddeldalyyy/meeting-summarizer-meetingbank` (1,024 input tokens, 56-142 output tokens, four beams, length penalty 2.0) and `Shaelois/MeetingScript` (4,096 input tokens, four beams). Input truncation, model/tokenizer revision, parameter count, dtype, CUDA device, load time and warm inference timing are recorded. Model-card ROUGE numbers are published claims only until reproduced through the same local split, reference extraction, scorer and generation settings.
+
+The container is the managed `huggingface` runtime in `gpu-housekeeper`, alongside `ollama`, `comfyui`, and `katago`. Its cache is `container/criterion-huggingface/cache/` on the GPU host and is ignored by Git. Criterion submits one JSON job per sample to the durable `criterion` GPU lane, so `--resume` does not rerun completed samples.

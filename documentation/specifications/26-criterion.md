@@ -48,4 +48,10 @@ Each run records a dataset hash when a file is supplied, input/prompt/output has
 
 Long benchmark runs can be wrapped with `runCriterionRefinery`, an adapter over the existing refinery runner. Its units use the normal dependency ordering, retries, checkpoints, smoke/full modes and fail-fast behaviour. `criterion golden <run-id> --write` records aggregate expectations; without `--write` it compares the current aggregate against that golden. Reports contain a reproducible `criterion run ... --resume` command and all result files carry hashes/content-addressed copies.
 
-Datasets, private transcripts and GPQA files remain outside tracked source. Official source and licence/revision metadata belong in the run record. Missing data or unavailable Ollama models are errors/skips, never invented scores.
+Datasets, private transcripts and GPQA files remain outside tracked source. Official source and licence/revision metadata belong in the run record. Missing data or unavailable models are errors/skips, never invented scores.
+
+## Deterministic and Hugging Face execution
+
+The `criterion baseline` command currently provides the MeetingBank `lead-3` baseline as `baseline:lead-3`. It selects three sentence boundaries from the normalized transcript and uses the ordinary Criterion checkpoint/artifact contract without a model request. Its processing latency is distinct from neural generation throughput.
+
+The `criterion run --engine huggingface` path keeps orchestration in Node and delegates model loading/generation to a persistent `criterion-huggingface` container through the existing Pyash GPU duty queue and `gpu-housekeeper`. The container embeds `program/runtime/criterion/huggingface_worker.py`, uses a private ignored Hugging Face cache on the CUDA host, and is registered as the managed `huggingface` runtime. Each row preserves model/tokenizer revision, model size, dtype, device, input limit, truncation, generation settings, load time and warm inference timing. Open fine-tuned MeetingBank models and zero-shot Ollama models remain separate evaluation conditions even when they share a scorer. The `baseline:lead-3` lane is deterministic CPU work and does not use GPU management.
