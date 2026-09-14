@@ -1,0 +1,4 @@
+A: We need to choose the portable display for the next prototype.
+B: The lighter display is easier to carry, but its controls are too small.
+A: Let us choose the larger controls and document the weight tradeoff.
+C: I will update the prototype brief and send it to the team tomorrow.

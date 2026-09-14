@@ -93,6 +93,16 @@ export function percentile(values, fraction) {
   return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
 }
 
+export function contextLengthBucket(tokens) {
+  const value = Number(tokens);
+  if (!Number.isFinite(value) || value < 0) return "unknown";
+  if (value <= 8192) return "0-8K";
+  if (value <= 16384) return "8K-16K";
+  if (value <= 32768) return "16K-32K";
+  if (value <= 65536) return "32K-64K";
+  return ">64K";
+}
+
 export function mean(values) {
   const finite = values.filter(Number.isFinite);
   return finite.length ? finite.reduce((sum, value) => sum + value, 0) / finite.length : null;
@@ -172,10 +182,15 @@ export function compareExpectedFacts(expectedFacts = [], output = "") {
   return { factualAccuracy: checks.length ? passed / checks.length : null, factChecks: checks };
 }
 
-export function aggregateSampleResults(results) {
+function aggregateCore(results) {
   const successful = results.filter(row => row.status === "ok");
   const latencies = successful.map(row => row.metrics?.totalElapsedMs).filter(Number.isFinite);
   const aggregateMetric = key => mean(successful.map(row => Number(row.scores?.[key])).filter(Number.isFinite));
+  const qualityPerSecond = mean(successful.map(row => {
+    const quality = Number(row.scores?.rougeL ?? row.scores?.accuracy ?? row.scores?.factualAccuracy ?? row.scores?.instructionAccuracy);
+    const elapsed = Number(row.metrics?.totalElapsedMs);
+    return Number.isFinite(quality) && elapsed > 0 ? quality / (elapsed / 1000) : null;
+  }).filter(Number.isFinite));
   return {
     sampleCount: results.length,
     successfulCount: successful.length,
@@ -197,9 +212,25 @@ export function aggregateSampleResults(results) {
     factualAccuracy: aggregateMetric("factualAccuracy"),
     unsupportedClaimCount: successful.reduce((sum, row) => sum + Number(row.scores?.unsupportedClaimCount ?? 0), 0),
     averageOutputTokens: mean(successful.map(row => row.metrics?.outputTokens).filter(Number.isFinite)),
+    averageInputTokens: mean(successful.map(row => row.metrics?.promptTokens ?? row.inputTokens).filter(Number.isFinite)),
     promptTokensPerSecond: mean(successful.map(row => row.metrics?.promptTokensPerSecond).filter(Number.isFinite)),
     generationTokensPerSecond: mean(successful.map(row => row.metrics?.generationTokensPerSecond).filter(Number.isFinite)),
+    averageLatencyMs: mean(latencies),
     p50LatencyMs: percentile(latencies, 0.5),
-    p95LatencyMs: percentile(latencies, 0.95)
+    medianLatencyMs: percentile(latencies, 0.5),
+    p95LatencyMs: percentile(latencies, 0.95),
+    qualityPerSecond
   };
+}
+
+export function aggregateSampleResults(results) {
+  const aggregate = aggregateCore(results);
+  const buckets = new Map();
+  for (const row of results) {
+    const bucket = row.contextLengthBucket ?? contextLengthBucket(row.inputTokens);
+    if (!buckets.has(bucket)) buckets.set(bucket, []);
+    buckets.get(bucket).push(row);
+  }
+  aggregate.contextBuckets = Object.fromEntries([...buckets.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([bucket, rows]) => [bucket, aggregateCore(rows)]));
+  return aggregate;
 }
