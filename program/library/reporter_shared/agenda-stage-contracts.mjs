@@ -166,7 +166,7 @@ export function validateSectionGroundingStrict(grounding = {}, gross = {}) {
   const grossChunkIds = new Set(
     grossChunks.map((c) => String(c?.["chunk id"] || "")).filter(Boolean),
   );
-  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 12000));
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 8000));
   const sectionSplitSeconds = Math.max(60, Number(process.env.AGENDA_SECTION_SPLIT_SECONDS || 900));
 
   for (let i = 0; i < units.length; i += 1) {

@@ -733,6 +733,7 @@ function leadingPhraseKey(text = "", size = 3) {
 function pickSplitChapterText({ llmText = "", summary = "", heading = "", seenLeadPhrases = new Set() }) {
   const candidates = buildSplitChapterCandidates({ llmText, summary, heading });
   const hasForbidden = (cand) => SPLIT_GENERIC_PREFIXES.some((p) => wordsKey(cand).startsWith(wordsKey(p)));
+  const parentWords = new Set(wordsKey(stripLeadingAgendaNumber(heading)).split(" ").filter(Boolean));
   for (const c of candidates) {
     if (hasForbidden(c)) continue;
     if (/^(the\s+discussion\s+addresses|the\s+presentation\s+addresses|the\s+section\s+addresses)\b/iu.test(c)) continue;
@@ -740,6 +741,12 @@ function pickSplitChapterText({ llmText = "", summary = "", heading = "", seenLe
     const words = c.split(/\s+/u).filter(Boolean);
     if (words.length < 6 || words.length > 12) continue;
     if (isLikelyFragmentEnding(words)) continue;
+    // A child heading that is almost entirely the parent agenda title is not
+    // an additional topic and creates noisy duplicate TOC entries. Reject it
+    // generically so the bounded title-repair prompt can choose a distinct
+    // source-grounded subject instead.
+    const parentOverlap = words.filter((word) => parentWords.has(String(word || "").toLowerCase())).length / Math.max(1, words.length);
+    if (parentOverlap >= 0.75) continue;
     const lead = leadingPhraseKey(c);
     if (lead && seenLeadPhrases.has(lead)) continue;
     return c.replace(/[.,;:!?]+$/u, "");
@@ -1663,7 +1670,7 @@ export async function runAgendaStage3SummaryRenderer({
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {
-  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 18000));
+  const maxChapterSourceChars = Math.max(2000, Number(process.env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || 8000));
   assertExactGroundingRoot(sectionGroundingPyaPath);
   const grounding = await readPyaMapArtifact(sectionGroundingPyaPath, STAGE2_GROUNDING_ROOT);
   assertExactGroundingSchema(grounding);
