@@ -20,15 +20,18 @@ function pickLargestFileFromDir(dirPath, matcher) {
 }
 
 export function pickRichestAgendaMarkdownPathFromConvertedDir(convertedDir) {
-  return pickLargestFileFromDir(convertedDir, /^agenda-\d+(?:-[a-z0-9-]+)?\.md$/iu);
+  // eScribe sometimes exposes the complete agenda as an `agenda-cover-01`
+  // document rather than `agenda-01`. Treat both names as agenda sources;
+  // the cover-labelled file can still contain the complete multi-page agenda.
+  return pickLargestFileFromDir(convertedDir, /^agenda(?:-cover)?-\d+(?:-[a-z0-9-]+)?\.md$/iu);
 }
 
 export function pickRichestAgendaPrunedMarkdownPathFromConvertedDir(convertedDir) {
-  return pickLargestFileFromDir(convertedDir, /^agenda-\d+(?:-[a-z0-9-]+)?\.pruned\.md$/iu);
+  return pickLargestFileFromDir(convertedDir, /^agenda(?:-cover)?-\d+(?:-[a-z0-9-]+)?\.pruned\.md$/iu);
 }
 
 export function pickRichestAgendaPdfPathFromSourceDir(sourceDir) {
-  return pickLargestFileFromDir(sourceDir, /^agenda-\d+\.pdf$/iu);
+  return pickLargestFileFromDir(sourceDir, /^agenda(?:-cover)?-\d+\.pdf$/iu);
 }
 
 export function pickRichestAgendaPathFromMeetingDir(meetingDir) {

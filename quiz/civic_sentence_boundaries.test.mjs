@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   agendaRoleConstraint,
+  extractCivicLeadingSentence,
   splitCivicSentences,
   unsupportedAgendaRoles,
   unsupportedCivicOutcomeVerbs,
@@ -27,6 +28,22 @@ test("civic sentence boundaries preserve middle initials and municipal abbreviat
       "Zoning By-law Amendment No. 59 concerned the Sydenham Heights proposal.",
     ],
   );
+  assert.equal(
+    extractCivicLeadingSentence(
+      "On September 1, 2026 at 3:00 PM, staff will present severance applications. - **Application File No. B10-2026:**",
+    ),
+    "On September 1, 2026 at 3:00 PM, staff will present severance applications.",
+  );
+  assert.equal(
+    extractCivicLeadingSentence("Zoning By-law Amendment No. 59 concerns the proposal."),
+    "Zoning By-law Amendment No. 59 concerns the proposal.",
+  );
+  assert.equal(
+    extractCivicLeadingSentence(
+      "The application requests a minor variance increasing lot frontage from 10.0 metres to 11.30 metres while maintaining R5 zoning compliance.",
+    ),
+    "The application requests a minor variance increasing lot frontage from 10.0 metres to 11.30 metres while maintaining R5 zoning compliance.",
+  );
 });
 
 test("Owen whole-meeting recap preserves civic abbreviations and gives retries rejection feedback", () => {
@@ -48,6 +65,15 @@ test("Owen whole-meeting recap preserves civic abbreviations and gives retries r
   assert.match(source, /num_predict: attempt > 1 \? 180 : 110/u);
   assert.doesNotMatch(source, /Council heard\.\.\., considered\.\.\., and adopted/u);
   assert.match(source, /unsupported outcome verb named in that error must be replaced/u);
+
+  const agendaSource = fs.readFileSync(
+    new URL("../world/house/owen-sound-reporter/program/run-owen-sound-meeting-from-ref.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(agendaSource, /extractCivicLeadingSentence/u);
+  assert.match(agendaSource, /REJECTION_REASON:/u);
+  assert.match(agendaSource, /candidateText: llmOneSentence \|\| oneSentenceSummary/u);
+  assert.doesNotMatch(agendaSource, /function buildAgendaOneSentenceFallback/u);
 });
 
 test("generated agenda roles must occur in authoritative structured headings", () => {
@@ -62,6 +88,16 @@ test("generated agenda roles must occur in authoritative structured headings", (
     unsupportedAgendaRoles(
       "Council reviewed the staff presentation and heard Public Forum comments.",
       ["Staff Presentation", "Public Forum"],
+    ),
+    [],
+  );
+  assert.deepEqual(
+    unsupportedAgendaRoles(
+      "Council held the statutory public meeting for the amendment.",
+      [
+        "5.a Official Plan Amendment No. 14",
+        "The statutory public meeting for the amendment gathered public input.",
+      ],
     ),
     [],
   );

@@ -445,6 +445,13 @@ function isKeywordHookReady(hook = "", sourceSummary = "", hookMode = "recap") {
   return hasConcreteKeywordOverlap(hook, sourceSummary);
 }
 
+function hookTerminalDateFeedback(hook = "") {
+  if (/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|20\d{2})$/iu.test(String(hook || "").trim())) {
+    return "Hook ends with a date, year, or month; remove the date wording and keep the concrete topic terms. The hook must not end with a calendar term.";
+  }
+  return "";
+}
+
 function isProseHookLike(text = "") {
   const s = String(text || "").replace(/\s+/gu, " ").trim();
   if (!s) return true;
@@ -853,6 +860,7 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, h
 	    '- Prefer strong, high-signal wording over generic committee language.',
 	    '- Concrete and specific, not clickbait.',
 	    '- Faithful to SOURCE_SUMMARY only.',
+	    '- Never use a date, year, or month in the hook; if a source sentence contains an implementation date, omit that date rather than ending the hook with it.',
     ...(isPreview
       ? ['- Prospective language only; this is an upcoming agenda.', '- Do not use completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Prefer considers/reviews/discusses/hears/receives/debates.']
       : []),
@@ -1065,6 +1073,9 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
     } else if (hookSourcePolarityUnsupported(draft, verifierSource)) {
       review = 'Hook flips source polarity (barrier/denial context recast as positive service expansion).\n0';
       score = 0;
+    } else if (hookTerminalDateFeedback(draft)) {
+      review = `${hookTerminalDateFeedback(draft)}\n0`;
+      score = 0;
     } else {
       review = await ask([
         { role: 'system', content: 'You are a strict semantic verifier.' },
@@ -1205,6 +1216,7 @@ export {
   hasAgendaReportCode,
   hookDecisionClaimUnsupported,
   hookSourcePolarityUnsupported,
+  hookTerminalDateFeedback,
   isClippedContrastHook,
   isKeywordHookReady,
   stripAgendaReportCodes,

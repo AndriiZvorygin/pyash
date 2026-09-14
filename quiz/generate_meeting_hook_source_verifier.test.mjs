@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   hasAgendaReportCode,
   hookSourcePolarityUnsupported,
+  hookTerminalDateFeedback,
   isClippedContrastHook,
   stripAgendaReportCodes,
   selectHookGenerationSource,
@@ -19,6 +20,14 @@ test('hook validation recognizes and removes municipality report identifiers', (
 test('hook validation rejects headings clipped at a terminal preposition', () => {
   assert.equal(isClippedContrastHook('Year Deputation Summerfolk Boardwalk Against'), true);
   assert.equal(isClippedContrastHook('Boardwalk Accessibility Options Reviewed'), false);
+});
+
+test('hook validation gives the LLM actionable feedback for a terminal calendar term', () => {
+  assert.match(
+    hookTerminalDateFeedback('Beaver Coyote Bylaw Rates Align January'),
+    /remove the date wording/iu,
+  );
+  assert.equal(hookTerminalDateFeedback('Beaver Coyote Bylaw Rates Align'), '');
 });
 
 test('source verifier blocks positive-service hook when source describes access barriers', () => {

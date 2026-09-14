@@ -101,6 +101,15 @@ function youtubeVideoId(sourceUrl) {
   return '';
 }
 
+function ytDlpExtractorArgs() {
+  const value = String(
+    process.env.ANDRII_YTDLP_EXTRACTOR_ARGS
+      || process.env.YTDLP_EXTRACTOR_ARGS
+      || "",
+  ).trim();
+  return value ? ["--extractor-args", value] : [];
+}
+
 async function downloadYoutubeSourceThumbnail(sourceUrl, sourceDir) {
   const videoId = youtubeVideoId(sourceUrl);
   if (!videoId) return '';
@@ -157,6 +166,7 @@ async function prepareVideoFrameBackground({ transcriptDir, prefix, drawRunCwd }
           '--force-keyframes-at-cuts',
           '-f', 'bestvideo[height<=720]/best[height<=720]',
           '-o', clipTemplate,
+          ...ytDlpExtractorArgs(),
           sourceUrl,
         ],
         cwd: drawRunCwd,

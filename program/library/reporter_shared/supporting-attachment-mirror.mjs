@@ -1,8 +1,14 @@
 import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
 const DEFAULT_ATTACHMENT_ENDPOINT = "https://helpos.ca/api/helpos/v1/attachment-publish";
+// Keep multipart requests below the deployed endpoint's 64 MiB request cap.
+// Scanned agenda PDFs can be much larger than their useful rendered content;
+// Ghostscript's ebook/screen profiles preserve a readable PDF while making
+// those documents mirrorable. Override for a deployment with a different cap.
+const DEFAULT_MIRROR_MAX_BYTES = 60 * 1024 * 1024;
 
 function safeJsonParse(text, fallback = null) {
   try {
@@ -108,6 +114,69 @@ function findRetainedAttachment({
   return "";
 }
 
+function mirrorableLocalPath(localPath = "") {
+  const resolved = path.resolve(String(localPath || ""));
+  const stat = fs.statSync(resolved);
+  const maxBytes = Number.parseInt(
+    String(process.env.ATTACHMENT_MIRROR_MAX_BYTES || DEFAULT_MIRROR_MAX_BYTES),
+    10,
+  );
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0 || stat.size <= maxBytes) return resolved;
+  if (path.extname(resolved).toLowerCase() !== ".pdf") {
+    throw new Error(`attachment exceeds mirror upload limit (${stat.size} bytes): ${resolved}`);
+  }
+
+  const optimized = `${resolved}.mirror-optimized.pdf`;
+  if (fs.existsSync(optimized) && fs.statSync(optimized).size > 0 && fs.statSync(optimized).size <= maxBytes) {
+    return optimized;
+  }
+
+  const temp = `${optimized}.${process.pid}.tmp`;
+  const profiles = ["/ebook", "/screen"];
+  let lastError = "";
+  try {
+    for (const profile of profiles) {
+      try { fs.unlinkSync(temp); } catch {}
+      const result = spawnSync("gs", [
+        "-sDEVICE=pdfwrite",
+        "-dCompatibilityLevel=1.7",
+        `-dPDFSETTINGS=${profile}`,
+        "-dNOPAUSE",
+        "-dBATCH",
+        "-dQUIET",
+        `-sOutputFile=${temp}`,
+        resolved,
+      ], { stdio: "ignore", timeout: 10 * 60 * 1000 });
+      if (result.error || result.status !== 0) {
+        lastError = String(result.error?.message || `gs exited ${result.status}`);
+        continue;
+      }
+      const outputStat = fs.existsSync(temp) ? fs.statSync(temp) : null;
+      if (!outputStat?.size || outputStat.size > maxBytes) {
+        lastError = `Ghostscript ${profile} output is ${outputStat?.size || 0} bytes`;
+        continue;
+      }
+      fs.renameSync(temp, optimized);
+      return optimized;
+    }
+  } finally {
+    try { fs.unlinkSync(temp); } catch {}
+  }
+  throw new Error(`unable to compact oversized PDF for mirror: ${resolved}; ${lastError}`);
+}
+
+function attachmentIdempotencyKey(entry = {}) {
+  const identity = [
+    entry.sha256,
+    entry.sourceUrl,
+    entry.item,
+    entry.label,
+    entry.filename,
+  ].map((value) => String(value || "").trim()).join("\n");
+  const identityHash = crypto.createHash("sha256").update(identity).digest("hex");
+  return `attachment-${identityHash}`;
+}
+
 export function findSupportingAttachmentIndex({
   payloadDir,
   attachmentIndexPath = "",
@@ -168,13 +237,14 @@ export function buildSupportingAttachmentMirrorPlan({
           `supporting attachment has no retained local copy: item=${String(item?.item || "")} url=${sourceUrl}`,
         );
       }
-      const bytes = fs.readFileSync(localPath);
+      const mirrorPath = mirrorableLocalPath(localPath);
+      const bytes = fs.readFileSync(mirrorPath);
       const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
       plan.push({
         item: String(item?.item || ""),
         label: normalizeText(attachment?.label || path.basename(localPath)),
         sourceUrl,
-        localPath,
+        localPath: mirrorPath,
         filename: path.basename(localPath),
         contentType: contentTypeForFile(localPath),
         sizeBytes: bytes.length,
@@ -190,12 +260,13 @@ export function buildSupportingAttachmentMirrorPlan({
     if (!localPath || !fs.existsSync(localPath) || !fs.statSync(localPath).isFile()) {
       throw new Error(`agenda source document has no retained local copy: url=${sourceUrl}`);
     }
-    const bytes = fs.readFileSync(localPath);
+    const mirrorPath = mirrorableLocalPath(localPath);
+    const bytes = fs.readFileSync(mirrorPath);
     plan.push({
       item: String(source?.item || "agenda-source"),
       label: normalizeText(source?.label || path.basename(localPath)),
       sourceUrl,
-      localPath,
+      localPath: mirrorPath,
       filename: path.basename(localPath),
       contentType: contentTypeForFile(localPath),
       sizeBytes: bytes.length,
@@ -265,16 +336,16 @@ export async function mirrorSupportingAttachments({
     ? safeJsonParse(fs.readFileSync(resolvedResponsePath, "utf8"), {})
     : {};
   const cachedRows = Array.isArray(cached?.attachments) ? cached.attachments : [];
-  const cachedByHash = new Map(
+  const cachedByIdentity = new Map(
     cachedRows
       .filter((row) => row?.sha256 && row?.mirror_url)
-      .map((row) => [String(row.sha256), row]),
+      .map((row) => [attachmentIdempotencyKey(row), row]),
   );
   const responses = [];
   const mapping = new Map();
 
   for (const entry of plan) {
-    const cachedRow = cachedByHash.get(entry.sha256);
+    const cachedRow = cachedByIdentity.get(attachmentIdempotencyKey(entry));
     if (cachedRow) {
       mapping.set(entry.sourceUrl, String(cachedRow.mirror_url));
       responses.push({ ...entry, mirror_url: String(cachedRow.mirror_url), cached: true });
@@ -291,7 +362,7 @@ export async function mirrorSupportingAttachments({
       content_type: entry.contentType,
       size_bytes: entry.sizeBytes,
       sha256: entry.sha256,
-      idempotency_key: `attachment-${entry.sha256}`,
+      idempotency_key: attachmentIdempotencyKey(entry),
     };
     const form = new FormData();
     form.append("metadata", JSON.stringify(metadata));
