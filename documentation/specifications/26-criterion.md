@@ -55,3 +55,34 @@ Datasets, private transcripts and GPQA files remain outside tracked source. Offi
 The `criterion baseline` command currently provides the MeetingBank `lead-3` baseline as `baseline:lead-3`. It selects three sentence boundaries from the normalized transcript and uses the ordinary Criterion checkpoint/artifact contract without a model request. Its processing latency is distinct from neural generation throughput.
 
 The `criterion run --engine huggingface` path keeps orchestration in Node and delegates model loading/generation to a persistent `criterion-huggingface` container through the existing Pyash GPU duty queue and `gpu-housekeeper`. The container embeds `program/runtime/criterion/huggingface_worker.py`, uses a private ignored Hugging Face cache on the CUDA host, and is registered as the managed `huggingface` runtime. Each row preserves model/tokenizer revision, model size, dtype, device, input limit, truncation, generation settings, load time and warm inference timing. Open fine-tuned MeetingBank models and zero-shot Ollama models remain separate evaluation conditions even when they share a scorer. The `baseline:lead-3` lane is deterministic CPU work and does not use GPU management.
+
+## Fact evaluation
+
+Criterion also exposes a post-hoc fact-evaluation lane over persisted model
+outputs. `meetingbank-fact-audit` is the 862-sample automated proxy and
+`omnicseval-meeting` is the exact-compatible released 75-sample MeetingBank
+subset. Both reuse source-run rows, sample IDs, output hashes, the existing
+checkpoint boundary and artifact writers; neither calls the evaluated model.
+
+For a fact run, the external judge is a separate engine adapter. It extracts
+source key facts, summary atomic claims and sentence/fact matches, then returns
+supported, unsupported, contradiction or unresolved decisions with evidence.
+Judge model/provider, prompt version, scorer version, sampling and timing are
+stored separately from the evaluated model's provenance.
+
+The persisted fact ratios are the OmniCSEval definitions:
+
+```text
+completeness = matched gold key facts / gold key facts
+conciseness = summary sentences matched to a key fact / summary sentences
+faithfulness = supported atomic claims / atomic summary claims
+```
+
+Reports render percentage projections and preserve the raw counts. Empty
+denominators are unknown (`null`). The exact lane requires explicit source ID
+joins to released annotations and fails closed on missing or ambiguous joins;
+the full lane is labelled `automated_proxy` because automated fact extraction is
+not the paper's human-adjudicated annotation process. Municipal claim flags are
+evidence annotations only. Per-row JSONL is restart-safe and `--resume` never
+rejudges a completed source-run/model/sample tuple. The same durable state
+renders JSON, JSONL, Markdown, CSV, `.pya` and HTML.

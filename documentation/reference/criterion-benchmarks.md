@@ -71,3 +71,56 @@ node command/criterion.mjs baseline --benchmark meetingbank --dataset "$PYA_BENC
 For fine-tuned open summarizers, Criterion supports `--engine huggingface`. The Node runner submits inference through Pyash's existing durable GPU duty lane and `gpu-housekeeper`; it does not create a second GPU manager or require a host virtual environment. Start `container/criterion-huggingface/command/begin.sh` on the CUDA host and point `PYA_GPU_HOUSEKEEPER_URL` at its housekeeper. The supported MeetingBank candidates are `ahmeddeldalyyy/meeting-summarizer-meetingbank`, `Shaelois/MeetingScript`, and `MingZhong/DialogLED-large-5120`. These are fine-tuned or pretrained Hugging Face models served by the external GPU runtime, while Qwen runs are general-purpose zero-shot Ollama prompts, so published model-card scores are not directly comparable until the same local data, references, scorer and generation configuration are used.
 
 The Ahmed model defaults to 1,024 input tokens, 56-142 output tokens, four beams and length penalty 2.0. MeetingScript defaults to 4,096 input tokens and four beams. DialogLED-large-5120 defaults to 5,120 input tokens and four beams. MeetingScript and DialogLED use deterministic overlapping token windows for long inputs in the external runtime; each result explicitly records chunking and truncation metadata, and never silently drops over-limit input. Model loading and warm inference are separated; unavailable metrics remain null. Weights and datasets stay in the private Hugging Face cache on the execution host. Lead-3 is a CPU-only deterministic baseline and never enters the GPU lane.
+
+## MeetingBank fact audit
+
+The OmniCSEval-style fact lane is post-hoc scoring over saved Criterion output
+runs. It never regenerates MeetingScript, Qwen, DialogLED or Lead-3 outputs.
+The paper defines completeness as the fraction of gold key facts matched by a
+summary sentence, conciseness as the fraction of summary sentences matched to a
+key fact, and faithfulness as the fraction of atomic summary claims supported by
+the source. Criterion stores these ratios plus percentage projections and the
+source sentence, summary sentence, fact/claim, decision, explanation,
+confidence, and hash evidence.
+
+There are two deliberately separate modes:
+
+* `omnicseval-meeting` is exact-compatible with the released 75-sample
+  MeetingBank portion when the local annotation package is supplied. It joins
+  only by explicit MeetingBank source ID and reports missing, ambiguous and
+  source-hash-mismatched joins.
+* `meetingbank-fact-audit` is an `automated_proxy` over all 862 local test rows.
+  A separately configured external judge extracts key facts, summary claims and
+  support decisions. It is not human-adjudicated OmniCSEval and should be
+interpreted as a broad audit, not an exact reproduction.
+
+The currently published benchmark archive is an external download. If an
+archive version contains MeetingBank records without a source ID, Criterion
+reports all 75 as unmatched rather than joining by transcript text or array
+position; this is intentional fail-closed behaviour.
+
+Example post-hoc smoke and resume command:
+
+```bash
+node command/criterion.mjs meetingbank-fact-audit \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --source-runs meetingbank-meetingscript-full-20260915 \
+  --judge-model <separate-external-judge> \
+  --run-id meetingbank-meetingscript-fact-smoke --limit 5 --resume --json
+
+node command/criterion.mjs meetingbank-fact-audit \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --source-runs meetingbank-meetingscript-full-20260915,meetingbank-lead3-full,meetingbank-dialogled-full-20260915,full-meetingbank-summary-direct-20260913 \
+  --judge-model <separate-external-judge> \
+  --run-id meetingbank-fact-audit-full --judge-max-output-tokens 4096 --resume --json
+```
+
+The judge model/provider, prompt version, scorer version and temperature are
+recorded separately from each evaluated source run. The JSONL checkpoint is the
+resume boundary; generated `.json`, `.jsonl`, `.md`, `.csv`, `.pya` and review
+HTML files remain under ignored `criterion/results` and `criterion/review`.
+Municipal flags such as motion, vote, amount, date, deadline and final outcome
+are evidence labels only. They do not rewrite summaries or promote judge output
+to authoritative source material. See the [OmniCSEval paper](https://arxiv.org/html/2606.15974v1)
+and [official repository](https://github.com/zhouweixiao/OmniCSEval) for the
+reference benchmark and its human-adjudicated construction.

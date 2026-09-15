@@ -82,6 +82,20 @@ export const SUITE_CATALOG = Object.freeze({
     version: "optional calibration",
     sourceUrl: "https://github.com/idavidrein/gpqa",
     required: "private/licensed local dataset export"
+  },
+  "omnicseval-meeting": {
+    name: "OmniCSEval MeetingBank subset",
+    version: "released OmniCSEval annotations; exact-compatible 75-sample MeetingBank lane",
+    sourceUrl: "https://github.com/zhouweixiao/OmniCSEval",
+    paperUrl: "https://arxiv.org/html/2606.15974v1",
+    required: "local released annotation package plus saved MeetingBank model outputs"
+  },
+  "meetingbank-fact-audit": {
+    name: "MeetingBank automated fact audit",
+    version: "automated_proxy; full MeetingBank post-hoc fact lane",
+    sourceUrl: "https://meetingbank.github.io/dataset/",
+    paperUrl: "https://arxiv.org/html/2606.15974v1",
+    required: "local MeetingBank dataset, saved model runs, and an external fact judge"
   }
 });
 

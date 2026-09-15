@@ -7,3 +7,16 @@ export { loadRun, renderComparison, renderRunCsv, renderRunMarkdown, renderRevie
 export { extractLead3, extractSentences, runLead3, baselineMetadata } from "./baseline.mjs";
 export { runBaseline } from "./baseline-run.mjs";
 export { HUGGING_FACE_MODEL_DEFAULTS, createHuggingFaceExecutor, huggingFaceModelDefaults } from "./huggingface.mjs";
+export {
+  FACT_EVALUATION_MODES,
+  FACT_JUDGE_PROMPT_VERSION,
+  FACT_SCORER_VERSION,
+  computeFactMetrics,
+  createDeterministicFactJudge,
+  createOllamaFactJudge,
+  joinOmniMeetingSample,
+  municipalClaimFlags,
+  normalizeFactEvidence,
+  runFactAudit,
+  splitFactSentences
+} from "./fact-audit.mjs";
