@@ -53,6 +53,7 @@ function promptAblationLines(run) {
     `- Generation settings: ${verification.settingsMatch ? "match" : "mismatch"}`,
     `- Model digest verification: ${verification.modelDigestsMatch ? "match" : "not proven"}`,
     `- Model digests: ${Object.entries(verification.modelDigests ?? {}).map(([model, value]) => `${model}=${value.status}`).join("; ") || "not recorded"}`,
+    ...(verification.pairedBaselineRegenerated ? ["- Historical baseline digest recording: unavailable for one or more source rows; generic baseline rows were regenerated for this paired run."] : []),
     "",
     "### Paired deltas: MeetingBank-aware minus generic",
     "",

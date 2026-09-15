@@ -101,6 +101,13 @@ export async function readOllamaMetadata({ model, baseUrl, fetchImpl = globalThi
     out.modelDigest = details.digest ?? details.modelfile?.match(/digest[:=]\s*([^\s]+)/i)?.[1] ?? null;
     out.quantization = details.details?.quantization_level ?? details.details?.quantization ?? null;
   } catch { /* an unavailable model is reported by the actual sample request */ }
+  if (!out.modelDigest) {
+    try {
+      const tags = await fetchJson(`${base}/api/tags`, {}, fetchImpl);
+      const listed = Array.isArray(tags.models) ? tags.models.find(entry => entry.name === model) : null;
+      out.modelDigest = listed?.digest ?? null;
+    } catch { /* tags are an optional digest fallback */ }
+  }
   return out;
 }
 
