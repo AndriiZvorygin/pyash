@@ -100,6 +100,11 @@ test("Lead-3 baseline uses the first three sentences and writes resumable artifa
 test("Hugging Face adapter exposes model defaults without loading a model", async () => {
   assert.equal(huggingFaceModelDefaults("ahmeddeldalyyy/meeting-summarizer-meetingbank").maxInputTokens, 1024);
   assert.equal(huggingFaceModelDefaults("Shaelois/MeetingScript").maxInputTokens, 4096);
+  const dialogLed = huggingFaceModelDefaults("MingZhong/DialogLED-large-5120");
+  assert.equal(dialogLed.maxInputTokens, 5120);
+  assert.equal(dialogLed.numBeams, 4);
+  assert.equal(dialogLed.doSample, false);
+  assert.equal(dialogLed.chunkLongInputs, true);
   const adapter = await createHuggingFaceExecutor({ housekeeperUrl: "http://mriczo:8090" });
   const metadata = await adapter.metadataProvider({ model: "Shaelois/MeetingScript" });
   assert.equal(metadata.model, "Shaelois/MeetingScript");
@@ -140,6 +145,34 @@ test("Hugging Face adapter sends inference through the durable GPU lane", async 
   assert.equal(requests[0].serviceName, "huggingface");
   assert.equal(requests[0].jobSpec.kind, "huggingface-generate");
   assert.equal(requests[0].jobSpec.payload.model, "Shaelois/MeetingScript");
+  await adapter.close();
+});
+
+test("Hugging Face adapter forwards target-specific long-context generation settings", async () => {
+  const requests = [];
+  let status = { status: "queued" };
+  const adapter = await createHuggingFaceExecutor({
+    root: await tempRoot(),
+    runId: "hf-target-settings",
+    housekeeperUrl: "http://housekeeper:8090",
+    enqueue: async (_worldRoot, envelope) => requests.push(envelope),
+    writeStatus: async () => {},
+    readStatus: async () => status,
+    workerRunner: async () => {
+      status = { status: "success", result: JSON.stringify({ text: "summary", timing: {} }) };
+    },
+    pollMs: 1
+  });
+
+  await adapter.executor({
+    model: "MingZhong/DialogLED-large-5120",
+    prompt: "Summarize this meeting.",
+    sample: { id: "m1", input: "Speaker A: The meeting ended." }
+  });
+
+  assert.equal(requests[0].jobSpec.payload.generation.maxInputTokens, 5120);
+  assert.equal(requests[0].jobSpec.payload.generation.chunkLongInputs, true);
+  assert.equal(requests[0].jobSpec.payload.generation.doSample, false);
   await adapter.close();
 });
 

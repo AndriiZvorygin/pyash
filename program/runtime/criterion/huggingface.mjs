@@ -22,7 +22,20 @@ export const HUGGING_FACE_MODEL_DEFAULTS = Object.freeze({
     minOutputTokens: 56,
     maxOutputTokens: 142,
     numBeams: 4,
-    lengthPenalty: 2.0
+    lengthPenalty: 2.0,
+    doSample: false,
+    chunkLongInputs: true,
+    chunkOverlapTokens: 128
+  }),
+  "MingZhong/DialogLED-large-5120": Object.freeze({
+    maxInputTokens: 5120,
+    minOutputTokens: 1,
+    maxOutputTokens: 256,
+    numBeams: 4,
+    lengthPenalty: 1.0,
+    doSample: false,
+    chunkLongInputs: true,
+    chunkOverlapTokens: 128
   })
 });
 
