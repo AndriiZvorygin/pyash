@@ -7,6 +7,7 @@ services:
     image: liberit/gpu-housekeeper:latest
     entrypoint: ["python3", "/service/server.py"]
     command: ["--host", "0.0.0.0", "--port", "8090", "--host-id", "${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}"]
+    restart: unless-stopped
     ports:
       - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-8090}:8090"
     runtime: nvidia
