@@ -58,11 +58,13 @@ export async function runOllamaChat({
       messages: [{ role: "user", content: String(prompt ?? "") }],
       stream: false,
       think: settings.think,
+      ...(settings.format === undefined ? {} : { format: settings.format }),
       options: {
         temperature: settings.temperature,
         top_p: settings.top_p,
         top_k: settings.top_k,
-        num_ctx: settings.contextLength
+        num_ctx: settings.contextLength,
+        ...(settings.num_predict === undefined ? {} : { num_predict: settings.num_predict })
       }
     })
   });
