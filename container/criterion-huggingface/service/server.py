@@ -28,6 +28,7 @@ WORKER_SPEC.loader.exec_module(WORKER)
 
 _STATE = None
 _MODEL = ""
+_MODEL_KEY = None
 _LOCK = threading.Lock()
 
 
@@ -54,12 +55,13 @@ def read_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
 
 
 def generate(payload: Dict[str, Any]) -> Dict[str, Any]:
-  global _STATE, _MODEL
+  global _STATE, _MODEL, _MODEL_KEY
   model = str(payload.get("model") or "").strip()
   if not model:
     raise ValueError("model is required")
   with _LOCK:
-    if _STATE is None or _MODEL != model:
+    model_key = (model, payload.get("revision") or "", payload.get("dtype") or "auto")
+    if _STATE is None or _MODEL_KEY != model_key:
       _STATE = WORKER.load_state({
         "model": model,
         "revision": payload.get("revision"),
@@ -67,6 +69,7 @@ def generate(payload: Dict[str, Any]) -> Dict[str, Any]:
         "generation": payload.get("generation") or {}
       })
       _MODEL = model
+      _MODEL_KEY = model_key
     return WORKER.generate(_STATE, payload)
 
 
