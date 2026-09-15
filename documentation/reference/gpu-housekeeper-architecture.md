@@ -76,6 +76,7 @@ The worker currently talks to one configured housekeeper URL at a time. It does 
 - `GET /queue`
 - `GET /runtime`
 - `GET /runtime/<runtimeName>`
+- `POST /capacity/preview`
 - `POST /submit`
 - `GET /job/<remoteJobId>`
 - `POST /discharge`
@@ -97,6 +98,15 @@ The default managed runtimes are:
 - `huggingface` (the Criterion sequence-to-sequence service)
 
 Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
+
+The runtime registry is also the safety boundary for automatic memory
+reclamation. A runtime being present in the registry means that the
+housekeeper is allowed to inspect and manage its configured container; it does
+not mean that the housekeeper may terminate arbitrary host processes. Automatic
+reclamation requires both a runtime-specific `activityProbe` and a supported
+`dischargeKind`. The default ComfyUI entry uses the empty-queue probe and the
+provider's `/interrupt`, queue-clear, and `/free` hooks. Unknown processes and
+managed runtimes without a safe hook remain untouched.
 
 ## 3. Runtime Behavior
 
@@ -151,6 +161,44 @@ KataGo jobs use:
 KataGo analysis accepts an already-normalized query. Pyash helper code converts SGF points into KataGo board coordinates before enqueueing.
 
 KataGo is currently deployed as a managed container on `mriczo`. The housekeeper runs it with `APPIMAGE_EXTRACT_AND_RUN=1` so the KataGo AppImage works without FUSE inside the container.
+
+### 3.5 Demand-driven residency reclamation
+
+Jobs may declare an optional memory request in their `jobSpec`:
+
+```json
+{
+  "kind": "ollama-generate",
+  "resourceRequest": {
+    "vramRequiredMb": 22000,
+    "deviceId": "gpu0"
+  },
+  "payload": {
+    "model": "qwen3.5:9b",
+    "prompt": "..."
+  }
+}
+```
+
+`gpu-housekeeper` compares that request with live `nvidia-smi` memory data. A
+request that already fits is admitted without a provider probe. If it does not
+fit, the housekeeper considers only managed runtimes with an explicit safe
+discharge hook and a provider-specific idle result. The default idle grace is
+300 seconds and can be set with `GPU_HOUSEKEEPER_IDLE_GRACE_SEC`. ComfyUI is
+discharged without stopping its container, using its existing API hooks. The
+housekeeper rechecks memory after each successful discharge and fails closed if
+the request still does not fit.
+
+The caller's `dischargeAllowed` envelope field is honored. Setting it to false
+prevents reclamation even when a safe idle runtime is available. Jobs without a
+VRAM request preserve the existing behavior and do not cause implicit
+reclamation. `/capacity/preview` accepts the same runtime/profile/jobSpec shape
+and reports the decision, available memory, and eligible idle candidates without
+performing a discharge or starting a job.
+
+The snapshot also includes GPU compute-process telemetry split into managed
+runtime processes and unmanaged processes. This is diagnostic evidence only;
+unmanaged processes are never discharged by the housekeeper.
 
 ## 4. Configuration
 
