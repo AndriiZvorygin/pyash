@@ -3,11 +3,15 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { SUITE_CATALOG, readDatasetFile } from "../program/runtime/criterion/datasets.mjs";
+import { runBaseline } from "../program/runtime/criterion/baseline-run.mjs";
+import { createHuggingFaceExecutor } from "../program/runtime/criterion/huggingface.mjs";
 import { runCriterion, rerunCriterion } from "../program/runtime/criterion/run.mjs";
 import { runNightmare, runReverie } from "../program/runtime/criterion/suites.mjs";
 import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime/criterion/report.mjs";
 import { DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
+import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
+import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -17,6 +21,18 @@ function flag(args, name, fallback = null) {
 }
 
 function hasFlag(args, name) { return args.includes(name) || args.some(value => value.startsWith(`${name}=`)); }
+
+function listFlag(args, names) {
+  const values = [];
+  for (const name of names) {
+    for (let index = 0; index < args.length; index += 1) {
+      const value = args[index];
+      if (value === name && args[index + 1]) values.push(args[index + 1]);
+      else if (value.startsWith(`${name}=`)) values.push(value.slice(name.length + 1));
+    }
+  }
+  return values.flatMap(value => String(value).split(",")).map(value => value.trim()).filter(Boolean);
+}
 
 function numericFlag(args, name, fallback = null) {
   const value = flag(args, name, null);
@@ -40,6 +56,7 @@ function baseOptions(args, root) {
     limit: hasFlag(args, "--smoke") ? 1 : numericFlag(args, "--limit"),
     models: models.length ? models : undefined,
     profile: flag(args, "--profile", "summary_direct"),
+    engine: flag(args, "--engine", "ollama"),
     contextLength: numericFlag(args, "--context-length"),
     sampling: {
       ...(numericFlag(args, "--temperature") === null ? {} : { temperature: numericFlag(args, "--temperature") }),
@@ -51,6 +68,10 @@ function baseOptions(args, root) {
     ifevalVerifierCommand: flag(args, "--ifeval-verifier", process.env.PYA_IFEVAL_VERIFIER ?? null),
     ifevalVerifierArgs: String(flag(args, "--ifeval-verifier-args", "") ?? "").split(" ").filter(Boolean),
     runId: flag(args, "--run-id"),
+    gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+    criterionGpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
+    huggingFaceRevision: flag(args, "--huggingface-revision", process.env.PYA_HUGGINGFACE_REVISION ?? null),
+    huggingFaceDtype: flag(args, "--huggingface-dtype", process.env.PYA_HF_DTYPE ?? "auto"),
     root,
     resume: hasFlag(args, "--resume"),
     smoke: hasFlag(args, "--smoke")
@@ -65,7 +86,11 @@ function usage() {
   return [
     "criterion list",
     "criterion inspect --benchmark <name>",
-    "criterion run --benchmark <name> --dataset <local.jsonl> [--model <a,b>] [--profile summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
+    "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|huggingface] [--model <a,b>] [--profile summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
+    "criterion baseline --benchmark meetingbank --dataset <local.jsonl> --baseline lead-3 [--resume]",
+    "criterion fact-audit --dataset <meetingbank.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--limit 5] [--resume]",
+    "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",
+    "criterion prompt-ablation --dataset <meetingbank.jsonl> --annotations <annotations.json> --source-run <generic-run-id> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion report <run-id>",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",
@@ -93,8 +118,115 @@ async function inspectCommand(args) {
 }
 
 async function runCommand(args, root) {
-  const result = await runCriterion(baseOptions(args, root));
+  const options = baseOptions(args, root);
+  let result;
+  if (options.engine === "huggingface") {
+    const adapter = await createHuggingFaceExecutor({
+      root,
+      runId: options.runId ?? `${options.benchmark ?? "criterion"}-${Date.now()}`,
+      housekeeperUrl: options.gpuHousekeeperUrl,
+      gpuId: options.criterionGpuId,
+      revision: options.huggingFaceRevision,
+      dtype: options.huggingFaceDtype
+    });
+    try {
+      result = await runCriterion({ ...options, engine: "huggingface", executor: adapter.executor, metadataProvider: adapter.metadataProvider });
+    } finally {
+      await adapter.close();
+    }
+  } else {
+    result = await runCriterion(options);
+  }
   print({ runId: result.runId, status: result.status, results: `criterion/results/${result.runId}.jsonl`, report: `criterion/results/${result.runId}.md`, csv: `criterion/results/${result.runId}.csv`, review: `criterion/review/${result.runId}.html` }, hasFlag(args, "--json"));
+  return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
+async function baselineCommand(args, root) {
+  const options = baseOptions(args, root);
+  const result = await runBaseline({ ...options, baseline: flag(args, "--baseline", "lead-3") });
+  print({ runId: result.runId, status: result.status, results: `criterion/results/${result.runId}.jsonl`, report: `criterion/results/${result.runId}.md`, csv: `criterion/results/${result.runId}.csv`, review: `criterion/review/${result.runId}.html` }, hasFlag(args, "--json"));
+  return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
+async function factAuditCommand(args, root, forcedMode = null) {
+  const mode = forcedMode ?? flag(args, "--mode", FACT_EVALUATION_MODES.automatedProxy);
+  const sourceRuns = listFlag(args, ["--source-runs", "--source-run"]);
+  const result = await runFactAudit({
+    mode,
+    datasetPath: flag(args, "--dataset"),
+    annotationPath: flag(args, "--annotations"),
+    sourceRunIds: sourceRuns,
+    split: flag(args, "--split", "test"),
+    limit: hasFlag(args, "--smoke") ? 5 : numericFlag(args, "--limit"),
+    runId: flag(args, "--run-id"),
+    root,
+    judgeModel: flag(args, "--judge-model", process.env.PYA_CRITERION_FACT_JUDGE_MODEL ?? null),
+    judgeProvider: flag(args, "--judge-provider", process.env.PYA_CRITERION_FACT_JUDGE_PROVIDER ?? "ollama"),
+    judgeBaseUrl: flag(args, "--judge-base-url", flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST)),
+    judgeTemperature: numericFlag(args, "--judge-temperature", 0),
+    judgeMaxOutputTokens: numericFlag(args, "--judge-max-output-tokens", 4096),
+    judgePromptVersion: flag(args, "--judge-prompt-version", FACT_JUDGE_PROMPT_VERSION),
+    factScorerVersion: flag(args, "--fact-scorer-version", FACT_SCORER_VERSION),
+    datasetRevision: flag(args, "--dataset-revision", process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned"),
+    resume: hasFlag(args, "--resume"),
+    smoke: hasFlag(args, "--smoke")
+  });
+  print({
+    runId: result.runId,
+    status: result.status,
+    evaluationMode: result.evaluationMode,
+    results: `criterion/results/${result.runId}.jsonl`,
+    report: `criterion/results/${result.runId}.md`,
+    csv: `criterion/results/${result.runId}.csv`,
+    pya: `criterion/results/${result.runId}.pya`,
+    json: `criterion/results/${result.runId}.json`,
+    review: `criterion/review/${result.runId}.html`,
+    matchedJoins: result.matchedJoins?.length ?? 0,
+    unmatchedJoins: result.unmatchedJoins.length,
+    sourceHashMismatches: result.sourceHashMismatches.length
+  }, hasFlag(args, "--json"));
+  return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
+async function promptAblationCommand(args, root) {
+  const sourceRuns = listFlag(args, ["--source-runs", "--source-run"]);
+  const comparisonRuns = listFlag(args, ["--comparison-runs", "--comparison-run"]);
+  const models = listFlag(args, ["--model"]);
+  const ollamaBaseUrl = flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST);
+  const result = await runPromptAblation({
+    datasetPath: flag(args, "--dataset"),
+    annotationPath: flag(args, "--annotations"),
+    sourceRunIds: sourceRuns.length ? sourceRuns : undefined,
+    comparisonRunIds: comparisonRuns.length ? comparisonRuns : undefined,
+    models: models.length ? models : null,
+    split: flag(args, "--split", "test"),
+    limit: hasFlag(args, "--smoke") ? 5 : numericFlag(args, "--limit"),
+    smoke: hasFlag(args, "--smoke"),
+    resume: hasFlag(args, "--resume"),
+    runId: flag(args, "--run-id"),
+    root,
+    baseUrl: ollamaBaseUrl,
+    factJudgeModel: flag(args, "--fact-judge-model", process.env.PYA_CRITERION_FACT_JUDGE_MODEL ?? null),
+    factJudgeProvider: flag(args, "--fact-judge-provider", process.env.PYA_CRITERION_FACT_JUDGE_PROVIDER ?? "ollama"),
+    factJudgeBaseUrl: flag(args, "--fact-judge-base-url", ollamaBaseUrl),
+    factJudgeTemperature: numericFlag(args, "--fact-judge-temperature", 0),
+    factJudgeMaxOutputTokens: numericFlag(args, "--fact-judge-max-output-tokens", 4096),
+    factRunId: flag(args, "--fact-run-id")
+  });
+  print({
+    runId: result.runId,
+    status: result.status,
+    evaluationMode: result.evaluationMode,
+    promptVariants: result.promptVariants,
+    matchedSubsetCount: result.matchedSubsetCount,
+    selectedSampleCount: result.selectedSampleCount,
+    results: `criterion/results/${result.runId}.jsonl`,
+    report: `criterion/results/${result.runId}.md`,
+    csv: `criterion/results/${result.runId}.csv`,
+    pya: `criterion/results/${result.runId}.pya`,
+    json: `criterion/results/${result.runId}.json`,
+    review: `criterion/review/${result.runId}.html`
+  }, hasFlag(args, "--json"));
   return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
 }
 
@@ -103,7 +235,40 @@ async function againCommand(args, root) {
   if (!runId) throw new Error("criterion again requires a run id");
   const prior = await loadRun(runId, { root });
   const requestedModels = String(flag(args, "--model", "") ?? "").split(",").map(value => value.trim()).filter(Boolean);
-  const result = await rerunCriterion(runId, { root, profile: flag(args, "--profile") ?? prior.profile, models: requestedModels.length ? requestedModels : prior.models });
+  if (prior.engine === "baseline") {
+    const result = await runBaseline({
+      root,
+      benchmark: prior.criterion,
+      datasetPath: prior.datasetPath,
+      fixtureRoot: prior.fixtureRoot,
+      split: prior.split ?? "test",
+      baseline: String(prior.models?.[0] ?? "baseline:lead-3").replace(/^baseline:/u, ""),
+      runId,
+      resume: true
+    });
+    print({ runId: result.runId, status: result.status, resumed: true, report: `criterion/results/${result.runId}.md` }, hasFlag(args, "--json"));
+    return 0;
+  }
+  const options = { root, profile: flag(args, "--profile") ?? prior.profile, models: requestedModels.length ? requestedModels : prior.models, engine: prior.engine };
+  let adapter = null;
+  if (prior.engine === "huggingface") {
+    adapter = await createHuggingFaceExecutor({
+      root,
+      runId,
+      housekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+      gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
+      revision: process.env.PYA_HUGGINGFACE_REVISION ?? null,
+      dtype: process.env.PYA_HF_DTYPE ?? "auto"
+    });
+    options.executor = adapter.executor;
+    options.metadataProvider = adapter.metadataProvider;
+  }
+  let result;
+  try {
+    result = await rerunCriterion(runId, options);
+  } finally {
+    if (adapter) await adapter.close();
+  }
   print({ runId: result.runId, status: result.status, resumed: true, report: `criterion/results/${result.runId}.md` }, hasFlag(args, "--json"));
   return 0;
 }
@@ -171,6 +336,10 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && subcommand === "list") return listCommand(args);
   if (command === "criterion" && subcommand === "inspect") return inspectCommand(args);
   if (command === "criterion" && subcommand === "run") return runCommand(args, root);
+  if (command === "criterion" && subcommand === "baseline") return baselineCommand(args, root);
+  if (command === "criterion" && (subcommand === "fact-audit" || subcommand === "meetingbank-fact-audit")) return factAuditCommand(args, root);
+  if (command === "criterion" && subcommand === "omnicseval-meeting") return factAuditCommand(args, root, FACT_EVALUATION_MODES.exact);
+  if (command === "criterion" && (subcommand === "prompt-ablation" || subcommand === "meetingbank-prompt-ablation")) return promptAblationCommand(args, root);
   if (command === "criterion" && subcommand === "report") return reportCommand(rest, root);
   if (command === "criterion" && subcommand === "compare") return compareCommand(rest, root);
   if (command === "criterion" && subcommand === "golden") return goldenCommand(rest, root);
@@ -178,6 +347,10 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "list") return listCommand([subcommand, ...rest].filter(Boolean));
   if (command === "inspect") return inspectCommand([subcommand, ...rest].filter(Boolean));
   if (command === "run") return runCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "baseline") return baselineCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "fact-audit" || command === "meetingbank-fact-audit") return factAuditCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "omnicseval-meeting") return factAuditCommand([subcommand, ...rest].filter(Boolean), root, FACT_EVALUATION_MODES.exact);
+  if (command === "prompt-ablation" || command === "meetingbank-prompt-ablation") return promptAblationCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "report") return reportCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "compare") return compareCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "golden") return goldenCommand([subcommand, ...rest].filter(Boolean), root);

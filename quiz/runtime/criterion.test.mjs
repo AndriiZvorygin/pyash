@@ -6,7 +6,10 @@ import path from "node:path";
 
 import { parse } from "../../program/understand/index.mjs";
 import { deriveSignatureFromCall } from "../../program/bridge/signature.mjs";
-import { runCriterion, rerunCriterion } from "../../program/runtime/criterion/run.mjs";
+import { runCriterion, rerunCriterion, scoreSample } from "../../program/runtime/criterion/run.mjs";
+import { extractLead3, extractSentences } from "../../program/runtime/criterion/baseline.mjs";
+import { runBaseline } from "../../program/runtime/criterion/baseline-run.mjs";
+import { createHuggingFaceExecutor, huggingFaceModelDefaults } from "../../program/runtime/criterion/huggingface.mjs";
 import { loadSuiteSamples } from "../../program/runtime/criterion/datasets.mjs";
 import { contextLengthBucket, ollamaTiming, percentile, rougeScores } from "../../program/runtime/criterion/metrics.mjs";
 import { runNightmare, runReverie } from "../../program/runtime/criterion/suites.mjs";
@@ -71,6 +74,108 @@ test("criterion language surface is registered as be criterion do", () => {
   assert.deepEqual(deriveSignatureFromCall(sentence), ["be", "criterion"]);
 });
 
+test("Lead-3 extracts actual sentences across speaker labels and newlines", () => {
+  const source = "[00:01] Speaker A: First motion passed.\nSpeaker B: Second motion failed!\nSpeaker A: Third item is pending?\nSpeaker B: Fourth item follows.";
+  assert.deepEqual(extractSentences(source), ["First motion passed.", "Second motion failed!", "Third item is pending?", "Fourth item follows."]);
+  assert.equal(extractLead3(source), "First motion passed. Second motion failed! Third item is pending?");
+  assert.deepEqual(extractSentences(""), []);
+  assert.equal(extractLead3(null), "");
+});
+
+test("Lead-3 baseline uses the first three sentences and writes resumable artifacts", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "meetingbank.json", [{ id: "m1", transcript: "First sentence. Second sentence. Third sentence. Fourth sentence.", summary: "First sentence. Second sentence. Third sentence." }]);
+  const run = await runBaseline({ benchmark: "meetingbank", datasetPath: dataset, runId: "meetingbank-lead3", root });
+  assert.equal(run.engine, "baseline");
+  assert.equal(run.results[0].model, "baseline:lead-3");
+  assert.equal(run.results[0].output, "First sentence. Second sentence. Third sentence.");
+  assert.equal(run.results[0].scores.rouge1, 1);
+  assert.equal(run.results[0].metrics.generationTokensPerSecond, null);
+  for (const suffix of ["pya", "json", "jsonl", "md", "csv"]) await fs.access(path.join(root, "criterion", "results", `meetingbank-lead3.${suffix}`));
+  const resumed = await runBaseline({ benchmark: "meetingbank", datasetPath: dataset, runId: "meetingbank-lead3", root, resume: true });
+  assert.equal(resumed.results.length, 1);
+  assert.equal(resumed.results[0].output, run.results[0].output);
+});
+
+test("Hugging Face adapter exposes model defaults without loading a model", async () => {
+  assert.equal(huggingFaceModelDefaults("ahmeddeldalyyy/meeting-summarizer-meetingbank").maxInputTokens, 1024);
+  assert.equal(huggingFaceModelDefaults("Shaelois/MeetingScript").maxInputTokens, 4096);
+  const dialogLed = huggingFaceModelDefaults("MingZhong/DialogLED-large-5120");
+  assert.equal(dialogLed.maxInputTokens, 5120);
+  assert.equal(dialogLed.numBeams, 4);
+  assert.equal(dialogLed.doSample, false);
+  assert.equal(dialogLed.chunkLongInputs, true);
+  const adapter = await createHuggingFaceExecutor({ housekeeperUrl: "http://mriczo:8090" });
+  const metadata = await adapter.metadataProvider({ model: "Shaelois/MeetingScript" });
+  assert.equal(metadata.model, "Shaelois/MeetingScript");
+  assert.equal(metadata.engine, "huggingface");
+  assert.equal(metadata.maxInputTokens, 4096);
+  await adapter.close();
+});
+
+test("Hugging Face adapter sends inference through the durable GPU lane", async () => {
+  const requests = [];
+  let status = { status: "queued" };
+  let workerCalls = 0;
+  const adapter = await createHuggingFaceExecutor({
+    root: await tempRoot(),
+    runId: "hf-queue-test",
+    housekeeperUrl: "http://housekeeper:8090",
+    enqueue: async (_worldRoot, envelope) => requests.push(envelope),
+    writeStatus: async (_worldRoot, handleId, next) => ({ ...next, handleId }),
+    readStatus: async () => status,
+    workerRunner: async () => {
+      workerCalls += 1;
+      status = { status: "success", result: JSON.stringify({ text: "summary", timing: { outputTokens: 5 }, metadata: { truncated: true }, metadataRecord: { parameterCount: 123 } }) };
+    },
+    pollMs: 1
+  });
+
+  const result = await adapter.executor({
+    model: "Shaelois/MeetingScript",
+    prompt: "Summarize this meeting.",
+    sample: { id: "m1", input: "Alice: The meeting ended." }
+  });
+
+  assert.equal(result.text, "summary");
+  assert.deepEqual(result.metadata.modelMetadata, { parameterCount: 123 });
+  assert.equal(workerCalls, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].lane, "criterion");
+  assert.equal(requests[0].serviceName, "huggingface");
+  assert.equal(requests[0].jobSpec.kind, "huggingface-generate");
+  assert.equal(requests[0].jobSpec.payload.model, "Shaelois/MeetingScript");
+  await adapter.close();
+});
+
+test("Hugging Face adapter forwards target-specific long-context generation settings", async () => {
+  const requests = [];
+  let status = { status: "queued" };
+  const adapter = await createHuggingFaceExecutor({
+    root: await tempRoot(),
+    runId: "hf-target-settings",
+    housekeeperUrl: "http://housekeeper:8090",
+    enqueue: async (_worldRoot, envelope) => requests.push(envelope),
+    writeStatus: async () => {},
+    readStatus: async () => status,
+    workerRunner: async () => {
+      status = { status: "success", result: JSON.stringify({ text: "summary", timing: {} }) };
+    },
+    pollMs: 1
+  });
+
+  await adapter.executor({
+    model: "MingZhong/DialogLED-large-5120",
+    prompt: "Summarize this meeting.",
+    sample: { id: "m1", input: "Speaker A: The meeting ended." }
+  });
+
+  assert.equal(requests[0].jobSpec.payload.generation.maxInputTokens, 5120);
+  assert.equal(requests[0].jobSpec.payload.generation.chunkLongInputs, true);
+  assert.equal(requests[0].jobSpec.payload.generation.doSample, false);
+  await adapter.close();
+});
+
 test("criterion run compares models and writes replayable artifacts", async () => {
   const root = await tempRoot();
   const dataset = await writeJson(root, "meetingbank.json", [{ id: "m1", transcript: "The council approved a budget.", summary: "The council approved a budget." }]);
@@ -133,6 +238,18 @@ test("criterion resume reuses completed sample rows without calling the model", 
   const resumed = await runCriterion({ benchmark: "meetingbank", datasetPath: dataset, models: ["model"], runId: "resume", root, resume: true, executor: async () => { calls += 1; throw new Error("must not call"); }, metadataProvider });
   assert.equal(calls, 0);
   assert.equal(resumed.results.length, 1);
+});
+
+test("criterion resume normalizes legacy null context identity and removes duplicate rows", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "data.json", [{ id: "m1", transcript: "A", summary: "A" }]);
+  await runBaseline({ benchmark: "meetingbank", datasetPath: dataset, runId: "legacy-context", root });
+  const jsonl = path.join(root, "criterion", "results", "legacy-context.jsonl");
+  const [row] = (await fs.readFile(jsonl, "utf8")).trim().split("\n").map(JSON.parse);
+  await fs.writeFile(jsonl, `${JSON.stringify({ ...row, contextLength: 0 })}\n${JSON.stringify(row)}\n`, "utf8");
+  const resumed = await runBaseline({ benchmark: "meetingbank", datasetPath: dataset, runId: "legacy-context", root, resume: true });
+  assert.equal(resumed.results.length, 1);
+  assert.equal(resumed.results[0].sampleId, "m1");
 });
 
 test("dataset adapters preserve QMSum spans and skip oversized LongBench context", async () => {
@@ -311,4 +428,16 @@ test("summary reasoning profiles record effective thinking and context buckets",
   assert.equal(contextLengthBucket(32768), "16K-32K");
   assert.ok(run.aggregates[0].aggregate.averageLatencyMs);
   assert.ok(run.aggregates[0].aggregate.qualityPerSecond);
+});
+
+test("MMLU-Pro accepts ten-choice answers and preserves category aggregates", async () => {
+  assert.equal(scoreSample({ suiteKey: "mmlu-pro", sample: { expectedAnswer: "J" }, output: "J" }).accuracy, 1);
+  assert.equal(scoreSample({ suiteKey: "mmlu-pro", sample: { expectedAnswer: "J" }, output: "D" }).accuracy, 0);
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "mmlu-pro.json", [{ question: "Pick one", options: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"], answer: "J", category: "business" }]);
+  const run = await runCriterion({ benchmark: "mmlu-pro", datasetPath: dataset, models: ["model"], profile: "summary_direct", runId: "mmlu-pro-category", root, executor: async () => ({ text: "J", timing: { totalElapsedMs: 1, outputTokens: 1 } }), metadataProvider });
+  assert.equal(run.aggregates[0].aggregate.accuracy, 1);
+  assert.equal(run.categoryAggregates[0].category, "business");
+  assert.equal(run.categoryAggregates[0].aggregate.accuracy, 1);
+  assert.match(renderRunMarkdown(run), /Category breakdown/);
 });
