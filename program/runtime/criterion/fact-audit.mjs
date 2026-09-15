@@ -382,6 +382,7 @@ export async function runFactAudit({
   datasetPath,
   annotationPath = null,
   sourceRunIds = [],
+  sampleIds = null,
   split = "test",
   limit = null,
   runId = null,
@@ -407,7 +408,9 @@ export async function runFactAudit({
   const loaded = await loadSuiteSamples({ benchmark: "meetingbank", datasetPath, split });
   const annotations = mode === FACT_EVALUATION_MODES.exact ? await loadAnnotations(annotationPath) : [];
   const selection = sampleOutputRows({ mode, samples: loaded.samples, outputs: sourceRuns, annotations });
-  const selected = limit === null || limit === undefined ? selection.selected : selection.selected.slice(0, Math.max(0, Number(limit)));
+  const requestedSampleIds = Array.isArray(sampleIds) ? new Set(sampleIds.map(String)) : null;
+  const sampleSelection = requestedSampleIds ? selection.selected.filter(item => requestedSampleIds.has(String(item.sample.id))) : selection.selected;
+  const selected = limit === null || limit === undefined ? sampleSelection : sampleSelection.slice(0, Math.max(0, Number(limit)));
   const sourceRows = sourceRunRows(sourceRuns);
   const modelNames = runModels(sourceRuns);
   if (judgeModel && modelNames.includes(judgeModel)) throw new Error("fact audit judge must be separate from every evaluated source model");

@@ -17,6 +17,77 @@ function isFactRun(run) {
   return run?.engine === "posthoc-fact" || Boolean(run?.evaluationMode?.includes?.("omnicseval") || run?.evaluationMode === "automated_proxy");
 }
 
+function formatRatioPercent(value) {
+  return value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) ? "-" : `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function promptAblationLines(run) {
+  if (run?.experiment !== "prompt-ablation") return [];
+  const verification = run.sourceVerification ?? {};
+  const paired = run.pairedAggregates ?? [];
+  const groups = run.groupAggregates ?? {};
+  const interval = value => value?.lower === null || value?.lower === undefined ? "-" : `[${formatRatioPercent(value.lower)}, ${formatRatioPercent(value.upper)}]`;
+  const pairedDelta = value => value === null || value === undefined ? "-" : `${(Number(value) * 100).toFixed(2)} pp`;
+  const exampleLines = (label, values) => [
+    `### ${label}`,
+    "",
+    ...(values?.length ? values.map(value => {
+      const output = value.meetingBank?.output ?? "";
+      const generic = value.generic?.output ?? "";
+      return `- ${value.model}/${value.sampleId}: ROUGE-L delta ${pairedDelta(value.rougeLDelta)}\n  Generic: ${generic}\n  MeetingBank-aware: ${output}`;
+    }) : ["No complete paired examples recorded."]),
+    ""
+  ];
+  return [
+    "## Prompt ablation",
+    "",
+    `- Evaluation mode: ${run.evaluationMode}`,
+    `- Annotation subset: ${run.annotationCount ?? 0} annotations; ${run.matchedSubsetCount ?? 0} matched; ${run.selectedSampleCount ?? 0} selected`,
+    `- Join gaps: ${run.subsetJoins?.unmatched?.length ?? 0}`,
+    `- Annotation/local transcript hash mismatches: ${run.annotationSourceHashMismatches?.length ?? 0}`,
+    `- Baseline source runs: ${(run.baselineSourceRunIds ?? []).join(", ") || "none"}`,
+    `- Ollama endpoint: ${run.ollamaBaseUrl ?? "not recorded"}`,
+    `- Experimental run: ${run.experimentalRunId ?? "not recorded"}`,
+    `- Prompt-only verification: ${verification.promptOnlyChange ? "passed" : "not proven"}`,
+    `- Input hashes: ${verification.inputHashesMatch ? "match" : "mismatch"}`,
+    `- Generation settings: ${verification.settingsMatch ? "match" : "mismatch"}`,
+    `- Model digest verification: ${verification.modelDigestsMatch ? "match" : "not proven"}`,
+    `- Model digests: ${Object.entries(verification.modelDigests ?? {}).map(([model, value]) => `${model}=${value.status}`).join("; ") || "not recorded"}`,
+    "",
+    "### Paired deltas: MeetingBank-aware minus generic",
+    "",
+    "| Model | Pairs | ROUGE-1 delta | 95% CI | ROUGE-2 delta | 95% CI | ROUGE-L delta | 95% CI | Completeness delta | Conciseness delta | Faithfulness delta |",
+    "| --- | ---: | ---: | --- | ---: | --- | ---: | --- | ---: | ---: | ---: |",
+    ...paired.map(value => `| ${value.model} | ${value.sampleCount} | ${pairedDelta(value.rouge1Delta)} | ${interval(value.rouge1DeltaConfidence95)} | ${pairedDelta(value.rouge2Delta)} | ${interval(value.rouge2DeltaConfidence95)} | ${pairedDelta(value.rougeLDelta)} | ${interval(value.rougeLDeltaConfidence95)} | ${pairedDelta(value.completenessDelta)} | ${pairedDelta(value.concisenessDelta)} | ${pairedDelta(value.faithfulnessDelta)} |`),
+    "",
+    "### Prompt-variant aggregates",
+    "",
+    "| Model | Variant | Samples | ROUGE-1 | ROUGE-2 | ROUGE-L | Completeness | Conciseness | Faithfulness | Avg output tokens | Avg latency ms | Generation tok/s | Failures |",
+    "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ...(run.aggregates ?? []).map(value => `| ${value.model} | ${value.promptVariant} | ${value.aggregate.sampleCount} | ${formatRatioPercent(value.aggregate.rouge1)} | ${formatRatioPercent(value.aggregate.rouge2)} | ${formatRatioPercent(value.aggregate.rougeL)} | ${formatPercent(value.aggregate.completenessPercent)} | ${formatPercent(value.aggregate.concisenessPercent)} | ${formatPercent(value.aggregate.faithfulnessPercent)} | ${formatNumber(value.aggregate.averageOutputTokens, 1)} | ${formatNumber(value.aggregate.averageLatencyMs, 1)} | ${formatNumber(value.aggregate.generationTokensPerSecond, 1)} | ${value.aggregate.failureCount} |`),
+    "",
+    "### MeetingScript comparison",
+    "",
+    ...(run.comparisonAggregates?.length
+      ? ["| Model | Samples | ROUGE-1 | ROUGE-2 | ROUGE-L | Avg latency ms | Failures |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: |", ...run.comparisonAggregates.map(value => `| ${value.model} | ${value.aggregate.sampleCount} | ${formatRatioPercent(value.aggregate.rouge1)} | ${formatRatioPercent(value.aggregate.rouge2)} | ${formatRatioPercent(value.aggregate.rougeL)} | ${formatNumber(value.aggregate.averageLatencyMs, 1)} | ${value.aggregate.failureCount} |`)]
+      : ["No comparable MeetingScript rows were found for the selected subset."]),
+    "",
+    "### Grouped results",
+    "",
+    ...Object.entries(groups).flatMap(([name, values]) => [
+      `- ${name}:`,
+      ...(values.length ? values.map(value => `  ${value.model}/${value.promptVariant}/${value[name] ?? "unspecified"}: ROUGE-L ${formatRatioPercent(value.aggregate.rougeL)}, samples ${value.aggregate.sampleCount}`) : ["  none"])
+    ]),
+    "",
+    ...exampleLines("Improved examples", run.examples?.improved),
+    ...exampleLines("Degraded examples", run.examples?.degraded),
+    "### Fact audit linkage",
+    "",
+    `- Fact run: ${run.factRunId ?? "not run; use the post-hoc fact audit lane"}`,
+    ""
+  ];
+}
+
 function factReportLines(run) {
   if (!isFactRun(run)) return [];
   const mode = run.evaluationMode ?? "unknown";
@@ -169,10 +240,11 @@ export function renderRunMarkdown(run) {
     "",
     `### ${run.runScope ?? (run.smoke ? "smoke" : "full")} aggregate`,
     "",
-    "| Benchmark | Model | Samples | Pass | Accuracy | ROUGE-1 | ROUGE-2 | ROUGE-L | Schema | Avg input tokens | Avg output tokens | Prompt tok/s | Generation tok/s | Avg ms | Median ms | p95 ms | Quality/sec | Failures | Skipped |",
-    "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-    ...rows.map(row => `| ${run.suite?.name ?? run.criterion} | ${row.model} | ${row.aggregate.sampleCount} | ${row.aggregate.passEvaluatedCount ? `${row.aggregate.passCount}/${row.aggregate.passEvaluatedCount}` : "-"} | ${formatNumber(row.aggregate.accuracy)} | ${formatNumber(row.aggregate.rouge1)} | ${formatNumber(row.aggregate.rouge2)} | ${formatNumber(row.aggregate.rougeL)} | ${formatNumber(row.aggregate.schemaValidity)} | ${formatNumber(row.aggregate.averageInputTokens, 1)} | ${formatNumber(row.aggregate.averageOutputTokens, 1)} | ${formatNumber(row.aggregate.promptTokensPerSecond, 1)} | ${formatNumber(row.aggregate.generationTokensPerSecond, 1)} | ${formatNumber(row.aggregate.averageLatencyMs, 1)} | ${formatNumber(row.aggregate.medianLatencyMs, 1)} | ${formatNumber(row.aggregate.p95LatencyMs, 1)} | ${formatNumber(row.aggregate.qualityPerSecond, 4)} | ${row.aggregate.failureCount} | ${row.aggregate.skippedCount} |`),
+    "| Benchmark | Model | Prompt variant | Samples | Pass | Accuracy | ROUGE-1 | ROUGE-2 | ROUGE-L | Completeness | Conciseness | Faithfulness | Schema | Avg input tokens | Avg output tokens | Prompt tok/s | Generation tok/s | Avg ms | Median ms | p95 ms | Quality/sec | Failures | Skipped |",
+    "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ...rows.map(row => `| ${run.suite?.name ?? run.criterion} | ${row.model} | ${row.promptVariant ?? "-"} | ${row.aggregate.sampleCount} | ${row.aggregate.passEvaluatedCount ? `${row.aggregate.passCount}/${row.aggregate.passEvaluatedCount}` : "-"} | ${formatNumber(row.aggregate.accuracy)} | ${formatNumber(row.aggregate.rouge1)} | ${formatNumber(row.aggregate.rouge2)} | ${formatNumber(row.aggregate.rougeL)} | ${formatPercent(row.aggregate.completenessPercent)} | ${formatPercent(row.aggregate.concisenessPercent)} | ${formatPercent(row.aggregate.faithfulnessPercent)} | ${formatNumber(row.aggregate.schemaValidity)} | ${formatNumber(row.aggregate.averageInputTokens, 1)} | ${formatNumber(row.aggregate.averageOutputTokens, 1)} | ${formatNumber(row.aggregate.promptTokensPerSecond, 1)} | ${formatNumber(row.aggregate.generationTokensPerSecond, 1)} | ${formatNumber(row.aggregate.averageLatencyMs, 1)} | ${formatNumber(row.aggregate.medianLatencyMs, 1)} | ${formatNumber(row.aggregate.p95LatencyMs, 1)} | ${formatNumber(row.aggregate.qualityPerSecond, 4)} | ${row.aggregate.failureCount} | ${row.aggregate.skippedCount} |`),
     "",
+    ...promptAblationLines(run),
     ...factReportLines(run),
     "## Evaluation modes",
     "",
@@ -219,11 +291,11 @@ export function renderRunMarkdown(run) {
 }
 
 export function renderRunCsv(run) {
-  const headers = ["run_id", "run_scope", "engine", "benchmark", "task", "model", "sample_id", "status", "accuracy", "rouge1", "rouge2", "rougeL", "schema_validity", "factual_accuracy", "completeness_percent", "conciseness_percent", "faithfulness_percent", "key_fact_count", "matched_key_fact_count", "summary_sentence_count", "atomic_claim_count", "supported_claim_count", "unsupported_claim_count", "contradiction_count", "unresolved_judge_count", "input_tokens", "output_tokens", "prompt_tokens_per_second", "generation_tokens_per_second", "latency_ms", "processing_latency_ms", "quality_per_second", "effective_think", "reasoning_mode", "failure", "skip_reason", "input_hash", "prompt_hash", "output_hash"];
+  const headers = ["run_id", "run_scope", "engine", "benchmark", "task", "model", "prompt_variant", "sample_id", "status", "accuracy", "rouge1", "rouge2", "rougeL", "schema_validity", "factual_accuracy", "completeness_percent", "conciseness_percent", "faithfulness_percent", "key_fact_count", "matched_key_fact_count", "summary_sentence_count", "atomic_claim_count", "supported_claim_count", "unsupported_claim_count", "contradiction_count", "unresolved_judge_count", "input_tokens", "output_tokens", "prompt_tokens_per_second", "generation_tokens_per_second", "latency_ms", "processing_latency_ms", "quality_per_second", "effective_think", "reasoning_mode", "failure", "skip_reason", "input_hash", "prompt_hash", "output_hash"];
   const rows = [headers.join(",")];
   for (const row of run.results ?? []) {
     rows.push([
-      run.runId, run.runScope ?? (run.smoke ? "smoke" : "full"), run.engine ?? "ollama", run.criterion, row.metadata?.task, row.model, row.sampleId, row.status,
+      run.runId, run.runScope ?? (run.smoke ? "smoke" : "full"), run.engine ?? "ollama", run.criterion, row.metadata?.task, row.model, row.promptVariant, row.sampleId, row.status,
       row.scores?.accuracy, row.scores?.rouge1, row.scores?.rouge2, row.scores?.rougeL,
       row.scores?.schemaValidity, row.scores?.factualAccuracy, row.scores?.completenessPercent, row.scores?.concisenessPercent, row.scores?.faithfulnessPercent,
       row.scores?.keyFactCount, row.scores?.matchedKeyFactCount, row.scores?.summarySentenceCount, row.scores?.atomicClaimCount,
@@ -238,7 +310,7 @@ export function renderRunCsv(run) {
 
 export function renderReviewHtml(run) {
   const rows = (run.results ?? []).filter(row => row.status === "ok").slice(0, 20);
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Criterion review ${escapeHtml(run.runId)}</title><style>body{font-family:system-ui,sans-serif;max-width:1200px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.5rem;vertical-align:top}pre{white-space:pre-wrap;max-height:20rem;overflow:auto}</style></head><body><h1>Criterion review: ${escapeHtml(run.criterion)}</h1><p>Run ${escapeHtml(run.runId)}. Review samples are selected deterministically from the run. Mode: ${escapeHtml(run.evaluationMode ?? "standard")}</p><table><thead><tr><th>Sample</th><th>Model</th><th>Reference</th><th>Output</th><th>Scores</th><th>Fact evidence</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.sampleId)}</td><td>${escapeHtml(row.model)}</td><td><pre>${escapeHtml(row.reference)}</pre></td><td><pre>${escapeHtml(row.output)}</pre></td><td>${escapeHtml(JSON.stringify(row.scores))}</td><td><pre>${escapeHtml(JSON.stringify(row.factEvidence ?? null))}</pre></td></tr>`).join("")}</tbody></table></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Criterion review ${escapeHtml(run.runId)}</title><style>body{font-family:system-ui,sans-serif;max-width:1200px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.5rem;vertical-align:top}pre{white-space:pre-wrap;max-height:20rem;overflow:auto}</style></head><body><h1>Criterion review: ${escapeHtml(run.criterion)}</h1><p>Run ${escapeHtml(run.runId)}. Review samples are selected deterministically from the run. Mode: ${escapeHtml(run.evaluationMode ?? "standard")}</p><table><thead><tr><th>Sample</th><th>Model</th><th>Prompt variant</th><th>Reference</th><th>Output</th><th>Scores</th><th>Fact evidence</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.sampleId)}</td><td>${escapeHtml(row.model)}</td><td>${escapeHtml(row.promptVariant ?? "")}</td><td><pre>${escapeHtml(row.reference)}</pre></td><td><pre>${escapeHtml(row.output)}</pre></td><td>${escapeHtml(JSON.stringify(row.scores))}</td><td><pre>${escapeHtml(JSON.stringify(row.factEvidence ?? null))}</pre></td></tr>`).join("")}</tbody></table></body></html>`;
 }
 
 export async function writeRunArtifacts(run, { root = process.cwd(), checkpointResults = null } = {}) {
@@ -280,11 +352,11 @@ export function renderComparison(runs) {
   const lines = [
     "# Criterion comparison",
     "",
-    "| Run | Scope | Engine | Benchmark | Model | Samples | Accuracy | ROUGE-L | Completeness | Conciseness | Faithfulness | Schema | p50 latency ms | p95 latency ms |",
-    "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    "| Run | Scope | Engine | Benchmark | Model | Prompt variant | Samples | Accuracy | ROUGE-L | Completeness | Conciseness | Faithfulness | Schema | p50 latency ms | p95 latency ms |",
+    "| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
   ];
   for (const run of runs) for (const row of run.aggregates ?? []) {
-    lines.push(`| ${run.runId} | ${run.runScope ?? (run.smoke ? "smoke" : "full")} | ${run.engine ?? "ollama"} | ${run.suite?.name ?? run.criterion} | ${row.model} | ${row.aggregate.sampleCount} | ${formatNumber(row.aggregate.accuracy)} | ${formatNumber(row.aggregate.rougeL)} | ${formatPercent(row.aggregate.completenessPercent)} | ${formatPercent(row.aggregate.concisenessPercent)} | ${formatPercent(row.aggregate.faithfulnessPercent)} | ${formatNumber(row.aggregate.schemaValidity)} | ${formatNumber(row.aggregate.p50LatencyMs, 1)} | ${formatNumber(row.aggregate.p95LatencyMs, 1)} |`);
+    lines.push(`| ${run.runId} | ${run.runScope ?? (run.smoke ? "smoke" : "full")} | ${run.engine ?? "ollama"} | ${run.suite?.name ?? run.criterion} | ${row.model} | ${row.promptVariant ?? "-"} | ${row.aggregate.sampleCount} | ${formatNumber(row.aggregate.accuracy)} | ${formatNumber(row.aggregate.rougeL)} | ${formatPercent(row.aggregate.completenessPercent)} | ${formatPercent(row.aggregate.concisenessPercent)} | ${formatPercent(row.aggregate.faithfulnessPercent)} | ${formatNumber(row.aggregate.schemaValidity)} | ${formatNumber(row.aggregate.p50LatencyMs, 1)} | ${formatNumber(row.aggregate.p95LatencyMs, 1)} |`);
   }
   return `${lines.join("\n")}\n`;
 }

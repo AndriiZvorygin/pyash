@@ -14,6 +14,7 @@ node command/criterion.mjs golden <run-id> --write
 node command/criterion.mjs again <run-id>
 node command/criterion.mjs meetingbank-fact-audit --dataset /path/to/meetingbank/test.jsonl --source-runs meetingbank-meetingscript-full-20260915 --judge-model <external-judge> --smoke --resume
 node command/criterion.mjs omnicseval-meeting --dataset /path/to/meetingbank/test.jsonl --annotations /path/to/omnicseval-meeting.jsonl --source-runs meetingbank-meetingscript-full-20260915 --judge-model <external-judge> --resume
+node command/criterion.mjs prompt-ablation --dataset /path/to/meetingbank/test.jsonl --annotations /path/to/omnicseval-meeting.json --source-run full-meetingbank-summary-direct-20260913 --run-id meetingbank-qwen-prompt-ablation --smoke --resume
 ```
 
 Use `OLLAMA_BASE_URL` (or the existing `OLLAMA_HOST`) for the Ollama endpoint. A run uses the same profile and context length for every model in a comparison. `--resume` reuses completed sample rows and is the benchmark equivalent of `again`. Reports persist `runScope: smoke` for `--smoke`; unrestricted runs are labelled `runScope: full`.
@@ -116,3 +117,60 @@ prompt version, temperature and scorer version in the run. The post-hoc path
 does not generate new summaries. Every row is checkpointed in JSONL and
 `--resume` skips completed source-run/model/sample tuples. The same durable run
 produces JSON, JSONL, Markdown, CSV, `.pya` and HTML review artifacts.
+
+## Paired MeetingBank prompt ablation
+
+`criterion prompt-ablation` measures the effect of a MeetingBank-aware prompt
+on existing Qwen zero-shot outputs. Variant A is the saved `summary_direct`
+prompt and is labelled `qwen_baseline_generic`. Variant B is a fixed zero-shot
+municipal-minutes prompt and is labelled `qwen_meetingbank_reference`. It has
+no demonstrations or reference summaries. The complete effective prompt,
+prompt hash and variant are stored on every row, so the outputs remain
+auditable and resumable.
+
+The lane requires an exact, deterministic join to the 75 MeetingBank rows in
+the OmniCSEval Meeting subset. Joins use an explicit source ID such as
+`sourceId`, `meeting_id` or `id`; transcript text, array position and fuzzy
+matching are not used. Missing, duplicate or ambiguous IDs are reported and
+fail closed. Some released archive forms contain the 75 annotations without
+source IDs. In that case the command produces a partial manifest with zero
+model calls until an ID-bearing annotation export is supplied. Annotation/local
+transcript hash mismatches are also recorded.
+
+Example smoke and full commands:
+
+```bash
+OLLAMA_BASE_URL=http://mriczo:11434 node command/criterion.mjs prompt-ablation \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --annotations "$PYA_BENCHMARK_CACHE/omnicseval/meetingbank-with-source-ids.json" \
+  --source-run full-meetingbank-summary-direct-20260913 \
+  --comparison-run meetingbank-meetscript-full-20260915 \
+  --model qwen3.5:9b,hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M \
+  --run-id meetingbank-qwen-prompt-ablation-20260915 --smoke --resume --json
+
+OLLAMA_BASE_URL=http://mriczo:11434 node command/criterion.mjs prompt-ablation \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --annotations "$PYA_BENCHMARK_CACHE/omnicseval/meetingbank-with-source-ids.json" \
+  --source-run full-meetingbank-summary-direct-20260913 \
+  --comparison-run meetingbank-meetscript-full-20260915 \
+  --model qwen3.5:9b,hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M \
+  --run-id meetingbank-qwen-prompt-ablation-20260915 --resume --json
+```
+
+The first command evaluates at most five selected IDs; remove `--smoke` for
+the 75-row run. Existing generic rows are reused only when status, source
+hash, generic prompt hash, profile/context/sampling settings and model digest
+match. Otherwise missing or unverifiable generic rows are regenerated under a
+separate checkpoint, without overwriting the full-corpus run. Both variants
+use the source run's non-thinking `summary_direct` settings and model list.
+Model digest equality is reported; an unavailable provider digest makes a row
+unverifiable rather than being invented.
+
+The combined report includes per-variant ROUGE-1/2/L, schema, latency, output
+length and generation speed, paired per-sample deltas, deterministic bootstrap
+95% intervals, city/item-type/chunking groups, examples and MeetingScript rows
+matched to the same IDs. Fact completeness, conciseness and faithfulness are
+attached when `--fact-judge-model` is provided; the judge is a separate
+post-hoc external runtime and never regenerates a summary. The prompt
+experiment consumes model-host time, while fact scoring can be resumed later
+from the saved output rows.
