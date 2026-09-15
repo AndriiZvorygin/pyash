@@ -12,7 +12,7 @@ node command/criterion.mjs report <run-id>
 node command/criterion.mjs compare <run-a> <run-b>
 node command/criterion.mjs golden <run-id> --write
 node command/criterion.mjs again <run-id>
-node command/criterion.mjs meetingbank-fact-audit --dataset /path/to/meetingbank/test.jsonl --source-runs meetingbank-meetingscript-full-20260915 --judge-model <external-judge> --limit 5 --resume
+node command/criterion.mjs meetingbank-fact-audit --dataset /path/to/meetingbank/test.jsonl --source-runs meetingbank-meetingscript-full-20260915 --judge-model <external-judge> --smoke --resume
 node command/criterion.mjs omnicseval-meeting --dataset /path/to/meetingbank/test.jsonl --annotations /path/to/omnicseval-meeting.jsonl --source-runs meetingbank-meetingscript-full-20260915 --judge-model <external-judge> --resume
 ```
 

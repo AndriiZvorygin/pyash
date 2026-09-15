@@ -106,7 +106,7 @@ node command/criterion.mjs meetingbank-fact-audit \
   --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
   --source-runs meetingbank-meetingscript-full-20260915 \
   --judge-model <separate-external-judge> \
-  --run-id meetingbank-meetingscript-fact-smoke --limit 5 --resume --json
+  --run-id meetingbank-meetingscript-fact-smoke --smoke --resume --json
 
 node command/criterion.mjs meetingbank-fact-audit \
   --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
