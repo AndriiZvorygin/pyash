@@ -82,6 +82,27 @@ export const SUITE_CATALOG = Object.freeze({
     version: "optional calibration",
     sourceUrl: "https://github.com/idavidrein/gpqa",
     required: "private/licensed local dataset export"
+  },
+  "omnicseval-meeting": {
+    name: "OmniCSEval MeetingBank subset",
+    version: "released OmniCSEval annotations; exact-compatible 75-sample MeetingBank lane",
+    sourceUrl: "https://github.com/zhouweixiao/OmniCSEval",
+    paperUrl: "https://arxiv.org/html/2606.15974v1",
+    required: "local released annotation package plus saved MeetingBank model outputs"
+  },
+  "meetingbank-fact-audit": {
+    name: "MeetingBank automated fact audit",
+    version: "automated_proxy; full MeetingBank post-hoc fact lane",
+    sourceUrl: "https://meetingbank.github.io/dataset/",
+    paperUrl: "https://arxiv.org/html/2606.15974v1",
+    required: "local MeetingBank dataset, saved model runs, and an external fact judge"
+  },
+  "meetingbank-prompt-ablation": {
+    name: "MeetingBank Qwen prompt ablation",
+    version: "paired generic versus MeetingBank-aware zero-shot prompts",
+    sourceUrl: "https://meetingbank.github.io/dataset/",
+    subsetSourceUrl: "https://github.com/zhouweixiao/OmniCSEval",
+    required: "local MeetingBank dataset, released OmniCSEval subset annotations, and saved generic Qwen outputs"
   }
 });
 
@@ -353,11 +374,12 @@ function longBenchSample(row, index) {
     : Object.entries(options).map(([key, value]) => `${key}. ${value}`).join("\n");
   const context = row.context ?? row.input ?? row.passage ?? "";
   const question = row.question ?? row.prompt ?? "";
+  const input = [context, question, optionLines].filter(Boolean).join("\n\n");
   return {
     id: String(row.id ?? row._id ?? `longbench-${index + 1}`),
     prompt: `Read the context and answer the multiple-choice question. Return only the answer letter.\n\nCONTEXT:\n${context}\n\nQUESTION:\n${question}\n\nOPTIONS:\n${optionLines}`,
     reference: String(row.answer ?? row.label ?? ""),
-    input: context,
+    input,
     expectedAnswer: String(row.answer ?? row.label ?? "").trim(),
     metadata: { category: row.category ?? null, subcategory: row.subcategory ?? null, difficulty: row.difficulty ?? null, source: "LongBench v2" },
     contextLength: Number(row.context_length ?? row.contextLength ?? row.length ?? 0) || null

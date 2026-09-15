@@ -48,4 +48,71 @@ Each run records a dataset hash when a file is supplied, input/prompt/output has
 
 Long benchmark runs can be wrapped with `runCriterionRefinery`, an adapter over the existing refinery runner. Its units use the normal dependency ordering, retries, checkpoints, smoke/full modes and fail-fast behaviour. `criterion golden <run-id> --write` records aggregate expectations; without `--write` it compares the current aggregate against that golden. Reports contain a reproducible `criterion run ... --resume` command and all result files carry hashes/content-addressed copies.
 
-Datasets, private transcripts and GPQA files remain outside tracked source. Official source and licence/revision metadata belong in the run record. Missing data or unavailable Ollama models are errors/skips, never invented scores.
+Datasets, private transcripts and GPQA files remain outside tracked source. Official source and licence/revision metadata belong in the run record. Missing data or unavailable models are errors/skips, never invented scores.
+
+## Deterministic and Hugging Face execution
+
+The `criterion baseline` command currently provides the MeetingBank `lead-3` baseline as `baseline:lead-3`. It selects three sentence boundaries from the normalized transcript and uses the ordinary Criterion checkpoint/artifact contract without a model request. Its processing latency is distinct from neural generation throughput.
+
+The `criterion run --engine huggingface` path keeps orchestration in Node and delegates model loading/generation to a persistent `criterion-huggingface` container through the existing Pyash GPU duty queue and `gpu-housekeeper`. The container embeds `program/runtime/criterion/huggingface_worker.py`, uses a private ignored Hugging Face cache on the CUDA host, and is registered as the managed `huggingface` runtime. Each row preserves model/tokenizer revision, model size, dtype, device, input limit, truncation, generation settings, load time and warm inference timing. Open fine-tuned MeetingBank models and zero-shot Ollama models remain separate evaluation conditions even when they share a scorer. The `baseline:lead-3` lane is deterministic CPU work and does not use GPU management.
+
+## Fact evaluation
+
+Criterion also exposes a post-hoc fact-evaluation lane over persisted model
+outputs. `meetingbank-fact-audit` is the 862-sample automated proxy and
+`omnicseval-meeting` is the exact-compatible released 75-sample MeetingBank
+subset. Both reuse source-run rows, sample IDs, output hashes, the existing
+checkpoint boundary and artifact writers; neither calls the evaluated model.
+
+For a fact run, the external judge is a separate engine adapter. It extracts
+source key facts, summary atomic claims and sentence/fact matches, then returns
+supported, unsupported, contradiction or unresolved decisions with evidence.
+Judge model/provider, prompt version, scorer version, sampling and timing are
+stored separately from the evaluated model's provenance.
+
+The persisted fact ratios are the OmniCSEval definitions:
+
+```text
+completeness = matched gold key facts / gold key facts
+conciseness = summary sentences matched to a key fact / summary sentences
+faithfulness = supported atomic claims / atomic summary claims
+```
+
+Reports render percentage projections and preserve the raw counts. Empty
+denominators are unknown (`null`). The exact lane requires explicit source ID
+joins to released annotations and fails closed on missing or ambiguous joins;
+the full lane is labelled `automated_proxy` because automated fact extraction is
+not the paper's human-adjudicated annotation process. Municipal claim flags are
+evidence annotations only. Per-row JSONL is restart-safe and `--resume` never
+rejudges a completed source-run/model/sample tuple. The same durable state
+renders JSON, JSONL, Markdown, CSV, `.pya` and HTML.
+
+## Prompt ablation
+
+The MeetingBank Qwen prompt experiment is a Criterion evaluation, not a model
+or hosting subsystem. `criterion prompt-ablation` takes an existing generic
+`summary_direct` run and an explicit OmniCSEval Meeting annotation manifest.
+It emits two paired labels: `qwen_baseline_generic` for the saved generic
+prompt and `qwen_meetingbank_reference` for the fixed zero-shot
+MeetingBank-aware prompt. The prompt text and hash are durable per-sample
+evidence. No reference summary or generated output is used as an in-context
+example.
+
+The experiment joins the exact 75-sample target only by explicit source ID.
+Missing, duplicate and ambiguous IDs fail closed and are included in
+`subsetJoins.unmatched`; Criterion never guesses by source text, row order or
+fuzzy similarity. It records annotation/local input hash mismatches. Generic
+rows are reused only when their input hash, generic prompt hash, status and
+profile/context/sampling settings and model digest match the source run. Missing or unverifiable
+rows are regenerated under a separate checkpoint run ID, leaving the original
+full-corpus artifacts unchanged.
+
+Both variants are run with the same model list and non-thinking
+`summary_direct` settings. The durable paired report contains ROUGE-1/2/L,
+schema status, latency, output length and generation speed, grouped city,
+item-type and chunking aggregates, paired deltas and reproducible bootstrap
+confidence intervals. Saved MeetingScript rows may be projected for comparison
+only when their IDs match the selected subset. An optional separate external
+fact judge can attach completeness, conciseness and faithfulness after output
+generation; that post-hoc step is independent of the generation model and can
+be resumed with `--resume`.
