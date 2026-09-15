@@ -120,6 +120,23 @@ function sourceRows(run) {
   return (run.results ?? []).map(row => ({ ...row, sourceRunId: run.runId, sourceRun: run }));
 }
 
+function sampleIdentity(sample) {
+  return firstDefined(sample?.metadata, ["meetingId", "uid"], firstDefined(sample, ["uid", "id"], null));
+}
+
+function rowIdentity(row) {
+  return firstDefined(row?.metadata, ["meetingId", "uid"], firstDefined(row, ["meetingId", "uid", "sampleId"], null));
+}
+
+function rowsForSample(rows, sample) {
+  const direct = rows.filter(row => String(row.sampleId) === String(sample.id));
+  if (direct.length) return direct;
+  const identity = sampleIdentity(sample);
+  return identity === null || identity === undefined
+    ? []
+    : rows.filter(row => rowIdentity(row) !== null && String(rowIdentity(row)) === String(identity));
+}
+
 function sourceSettingsMatch(row, expected) {
   if (!row || row.status !== "ok") return false;
   const actual = {
@@ -144,8 +161,10 @@ function verifyBaselineRows({ samples, models, sourceRuns, expectedSettings }) {
     if (models.includes(row.model)) rows.set(sourceRowKey(row.model, row.sampleId), row);
   }
   for (const model of models) for (const sample of samples) {
-    const row = rows.get(sourceRowKey(model, sample.id));
+    const candidates = sourceRuns.flatMap(run => rowsForSample(sourceRows(run).filter(row => row.model === model), sample));
+    const row = candidates.length === 1 ? candidates[0] : rows.get(sourceRowKey(model, sample.id));
     const reasons = [];
+    if (candidates.length > 1) reasons.push("ambiguous saved row identity");
     if (!row) reasons.push("missing saved row");
     if (row && row.inputHash !== sha256(sample.input ?? "")) reasons.push("source hash mismatch");
     if (row && row.promptHash !== sha256(sample.prompt ?? "")) reasons.push("generic prompt hash mismatch");
@@ -277,18 +296,20 @@ function pairedSummaries(pairs, models, seedText) {
   });
 }
 
-function promptOnlyVerification({ samples, rows, baselineRun, experimentalRun, expectedSettings, models }) {
+function promptOnlyVerification({ samples, rows, baselineRun, genericRows = [], experimentalRun, expectedSettings, models }) {
   const inputHashesMatch = samples.every(sample => rows.filter(row => row.sampleId === sample.id).every(row => row.inputHash === sha256(sample.input ?? "")));
   const sourceSettings = generationSettings(baselineRun);
   const experimentalSettings = generationSettings(experimentalRun);
   const settingsMatch = stableJson(sourceSettings) === stableJson(expectedSettings) && stableJson(experimentalSettings) === stableJson(expectedSettings);
   const digest = Object.fromEntries(models.map(model => {
-    const before = sourceModelMetadata(baselineRun, model)?.modelDigest ?? null;
+    const pairedGeneric = genericRows.find(row => row.model === model);
+    const before = pairedGeneric?.modelDigest ?? sourceModelMetadata(baselineRun, model)?.modelDigest ?? null;
     const after = sourceModelMetadata(experimentalRun, model)?.modelDigest ?? null;
     return [model, { baseline: before, experimental: after, status: before && after ? (before === after ? "match" : "mismatch") : "unavailable" }];
   }));
+  const historicalBaselineDigests = Object.fromEntries(models.map(model => [model, sourceModelMetadata(baselineRun, model)?.modelDigest ?? null]));
   const modelDigestsMatch = models.every(model => digest[model]?.status === "match");
-  return { inputHashesMatch, settingsMatch, modelDigestsMatch, promptOnlyChange: inputHashesMatch && settingsMatch && modelDigestsMatch, modelDigests: digest, baselineSettings: sourceSettings, experimentalSettings };
+  return { inputHashesMatch, settingsMatch, modelDigestsMatch, promptOnlyChange: inputHashesMatch && settingsMatch && modelDigestsMatch, modelDigests: digest, historicalBaselineDigests, pairedBaselineRegenerated: genericRows.some(row => row.baselineReused === false), baselineSettings: sourceSettings, experimentalSettings };
 }
 
 async function attachFactScores({ rows, factRun, sourceRowsByVariant }) {
@@ -440,7 +461,8 @@ export async function runPromptAblation({
     if (!comparison) continue;
     comparisonRuns.push(comparison);
     for (const sample of samples) {
-      const row = comparison.results?.find(candidate => candidate.sampleId === sample.id && candidate.status === "ok");
+      const candidates = rowsForSample((comparison.results ?? []).filter(candidate => candidate.status === "ok"), sample);
+      const row = candidates.length === 1 ? candidates[0] : null;
       if (!row) continue;
       comparisonRows.push({ ...row, runId: id, sourceRunId: comparison.runId, promptVariant: "meetingscript_reference", comparisonOnly: true, promptText: sample.prompt });
     }
@@ -477,7 +499,7 @@ export async function runPromptAblation({
     profile: expectedSettings.profile,
     sampling: { ...expectedSettings, think: false },
     contextLength: expectedSettings.contextLength,
-    sourceVerification: promptOnlyVerification({ samples, rows: allRows, baselineRun: sourceRuns[0], experimentalRun, expectedSettings, models: configuredModels }),
+    sourceVerification: promptOnlyVerification({ samples, rows: allRows, baselineRun: sourceRuns[0], genericRows, experimentalRun, expectedSettings, models: configuredModels }),
     subsetJoins: { matched: boundedSelection.map(item => ({ annotationIndex: item.annotationIndex, sourceId: annotationSourceId(item.annotation), sampleId: item.sample.id })), unmatched: subset.unmatched },
     baselineVerification: initial.invalid,
     sourceHashMismatches: initial.invalid.filter(item => item.reasons.includes("source hash mismatch")),

@@ -40,7 +40,7 @@ async function writeFixture(root, { withIds = true, withDigest = true } = {}) {
   }), "utf8");
   await fs.writeFile(path.join(root, "criterion", "results", "meeting-script.json"), JSON.stringify({
     runId: "meeting-script", criterion: "meetingbank", models: ["Shaelois/MeetingScript"], results: [{
-      runId: "meeting-script", model: "Shaelois/MeetingScript", sampleId: "m1", status: "ok", output: "The council approved the motion.", outputHash: sha256("The council approved the motion."),
+      runId: "meeting-script", model: "Shaelois/MeetingScript", sampleId: "legacy-0", metadata: { meetingId: "meeting-1" }, status: "ok", output: "The council approved the motion.", outputHash: sha256("The council approved the motion."),
       scores: { rouge1: 0.7, rouge2: 0.6, rougeL: 0.7 }, metrics: { totalElapsedMs: 80 }
     }]
   }), "utf8");
