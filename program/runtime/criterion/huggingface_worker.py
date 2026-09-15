@@ -21,8 +21,49 @@ MODEL_DEFAULTS = {
         "maxOutputTokens": 142,
         "numBeams": 4,
         "lengthPenalty": 2.0,
+        "doSample": False,
+        "chunkLongInputs": True,
+        "chunkOverlapTokens": 128,
+    },
+    "MingZhong/DialogLED-large-5120": {
+        "maxInputTokens": 5120,
+        "minOutputTokens": 1,
+        "maxOutputTokens": 256,
+        "numBeams": 4,
+        "lengthPenalty": 1.0,
+        "doSample": False,
+        "chunkLongInputs": True,
+        "chunkOverlapTokens": 128,
     },
 }
+
+
+def chunk_ranges(total_tokens, limit, overlap):
+    """Return deterministic token windows without silently dropping long input."""
+    total = max(0, int(total_tokens))
+    size = max(1, int(limit))
+    shared = max(0, min(size - 1, int(overlap)))
+    if total <= size:
+        return [(0, total)]
+
+    ranges = []
+    start = 0
+    while start < total:
+        end = min(total, start + size)
+        ranges.append((start, end))
+        if end >= total:
+            break
+        next_start = end - shared
+        start = next_start if next_start > start else end
+    return ranges
+
+
+def resolved_revision(tokenizer, model, requested_revision):
+    tokenizer_revision = getattr(tokenizer, "_commit_hash", None)
+    if not tokenizer_revision:
+        tokenizer_revision = getattr(tokenizer, "init_kwargs", {}).get("_commit_hash")
+    model_revision = getattr(getattr(model, "config", None), "_commit_hash", None)
+    return model_revision or tokenizer_revision or requested_revision
 
 
 def reply(request_id, **payload):
@@ -51,6 +92,7 @@ def load_state(request):
     model = AutoModelForSeq2SeqLM.from_pretrained(model_id, **model_options)
     model.to(device)
     model.eval()
+    effective_revision = resolved_revision(tokenizer, model, revision)
     parameters = sum(parameter.numel() for parameter in model.parameters())
     defaults = MODEL_DEFAULTS.get(model_id, {})
     config = request.get("generation") or {}
@@ -62,11 +104,14 @@ def load_state(request):
         "torch": torch,
         "device": device,
         "generation": generation,
+        "modelType": getattr(getattr(model, "config", None), "model_type", None),
         "metadata": {
             "engine": "huggingface",
             "modelId": model_id,
-            "modelRevision": revision,
-            "tokenizerRevision": revision,
+            "modelRevision": effective_revision,
+            "tokenizerRevision": getattr(tokenizer, "_commit_hash", None) or effective_revision,
+            "requestedRevision": revision,
+            "modelDigest": effective_revision,
             "tokenizerName": getattr(tokenizer, "name_or_path", model_id),
             "parameterCount": parameters,
             "dtype": str(next(model.parameters()).dtype),
@@ -77,6 +122,10 @@ def load_state(request):
             "minOutputTokens": generation.get("minOutputTokens"),
             "maxOutputTokens": generation.get("maxOutputTokens"),
             "lengthPenalty": generation.get("lengthPenalty"),
+            "doSample": generation.get("doSample", False),
+            "chunkLongInputs": generation.get("chunkLongInputs", False),
+            "chunkOverlapTokens": generation.get("chunkOverlapTokens", 0),
+            "modelType": getattr(getattr(model, "config", None), "model_type", None),
             "loadTimeMs": load_ms,
         },
     }
@@ -87,32 +136,58 @@ def generate(state, request):
     tokenizer = state["tokenizer"]
     model = state["model"]
     torch = state["torch"]
-    generation = state["generation"]
+    generation = {**state["generation"], **(request.get("generation") or {})}
     limit = int(generation.get("maxInputTokens") or 4096)
     all_tokens = tokenizer(prompt, add_special_tokens=True, truncation=False)["input_ids"]
-    truncated = len(all_tokens) > limit
+    input_token_count = len(all_tokens)
+    wants_chunking = bool(generation.get("chunkLongInputs", False))
+    overlap = int(generation.get("chunkOverlapTokens") or 0)
+    ranges = chunk_ranges(input_token_count, limit, overlap if wants_chunking else 0)
+    truncated = input_token_count > limit and not wants_chunking
     started = time.perf_counter()
-    encoded = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=limit)
-    encoded = {key: value.to(state["device"]) for key, value in encoded.items()}
-    input_tokens = int(encoded["input_ids"].shape[-1])
-    with torch.inference_mode():
-        output = model.generate(
-            **encoded,
-            num_beams=int(generation.get("numBeams") or 1),
-            min_length=int(generation.get("minOutputTokens") or 1),
-            max_length=int(generation.get("maxOutputTokens") or 142),
-            length_penalty=float(generation.get("lengthPenalty") or 1.0),
-        )
-    text = tokenizer.decode(output[0], skip_special_tokens=True).strip()
+    outputs = []
+    processed_input_tokens = 0
+    output_tokens = 0
+    for start_token, end_token in ranges:
+        input_ids = all_tokens[start_token:end_token]
+        encoded = {
+            "input_ids": torch.tensor([input_ids], dtype=torch.long).to(state["device"]),
+            "attention_mask": torch.ones((1, len(input_ids)), dtype=torch.long).to(state["device"]),
+        }
+        if state.get("modelType") == "led":
+            global_attention_mask = torch.zeros_like(encoded["input_ids"])
+            global_attention_mask[:, 0] = 1
+            encoded["global_attention_mask"] = global_attention_mask
+        with torch.inference_mode():
+            output = model.generate(
+                **encoded,
+                num_beams=int(generation.get("numBeams") or 1),
+                min_length=int(generation.get("minOutputTokens") or 1),
+                max_length=int(generation.get("maxOutputTokens") or 142),
+                length_penalty=float(generation.get("lengthPenalty") or 1.0),
+                do_sample=bool(generation.get("doSample", False)),
+            )
+        outputs.append(tokenizer.decode(output[0], skip_special_tokens=True).strip())
+        processed_input_tokens += len(input_ids)
+        output_tokens += int(output.shape[-1])
+    text = " ".join(item for item in outputs if item).strip()
     elapsed_ms = (time.perf_counter() - started) * 1000
-    output_tokens = int(output.shape[-1])
     return {
         "text": text,
         "effectiveThink": False,
         "reasoningMode": "direct",
-        "metadata": {"truncated": truncated, "inputLimit": limit},
+        "metadata": {
+            "truncated": truncated,
+            "truncatedTokens": max(0, input_token_count - processed_input_tokens) if truncated else 0,
+            "chunked": len(ranges) > 1,
+            "chunkCount": len(ranges),
+            "inputLimit": limit,
+            "inputTokenCount": input_token_count,
+            "inputTokens": processed_input_tokens,
+            "outputTokens": output_tokens,
+        },
         "timing": {
-            "promptTokens": input_tokens,
+            "promptTokens": processed_input_tokens,
             "outputTokens": output_tokens,
             "promptTokensPerSecond": None,
             "generationTokensPerSecond": output_tokens / (elapsed_ms / 1000) if elapsed_ms > 0 else None,
