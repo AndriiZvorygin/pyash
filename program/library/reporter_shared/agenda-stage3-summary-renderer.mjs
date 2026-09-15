@@ -10,6 +10,7 @@ import {
   unsupportedNumericTokens,
 } from "./grounded-numeric-fidelity.mjs";
 import { unsupportedNamedMotionAttributions } from "./motion-attribution-verifier.mjs";
+import { auditFinancialClaim } from "./financial-claim-audit.mjs";
 
 const STAGE2_GROUNDING_ROOT = "agenda section grounding artifact";
 const STAGE3_SUMMARY_ROOT = "agenda summary artifact";
@@ -1139,6 +1140,77 @@ export async function summarizeGroundedUnit({
     assertCleanStage3Text(rawSummary, "stage3 multi-sentence rewrite");
     summary = enforceSummaryBudget(rawSummary, budget);
   }
+  const financialAsk = async (messages, { numPredict = 260 } = {}) => {
+    const system = messages
+      .filter((message) => message?.role === "system")
+      .map((message) => String(message?.content || "").trim())
+      .filter(Boolean)
+      .join("\n");
+    const user = messages
+      .filter((message) => message?.role !== "system")
+      .map((message) => String(message?.content || "").trim())
+      .filter(Boolean)
+      .join("\n\n");
+    const result = await callOllamaJson({
+      ollamaUrl,
+      llmModel,
+      system: system || "You are a strict financial-claim verifier for civic reporting.",
+      prompt: user,
+      maxOutputTokens: numPredict,
+      temperature: 0,
+      seed: seed + 1000,
+    });
+    return JSON.stringify(result || {});
+  };
+  let financialAudit = await auditFinancialClaim({
+    ask: financialAsk,
+    sourceText: String(unit?.["source excerpt"] || ""),
+    candidateText: `${summary}\n${String(parsed?.["chapter text"] || "")}`,
+    context: `Agenda item ${String(unit?.["agenda item"] || "")}; preserve whether any financial amount is direct, combined, projected, or merely reported.`,
+  });
+  for (let financialAttempt = 1; financialAudit.verdict !== "PASS" && financialAttempt <= 5; financialAttempt += 1) {
+    const financialRetryInstruction = [
+      `Financial-claim retry ${financialAttempt}: ${financialAudit.feedback}`,
+      "Rewrite the summary and chapter text so aggregate savings, new revenue, operational efficiencies, soft savings, and future cost avoidance are clearly qualified and attributed to the report or staff.",
+      "Do not present a reported, projected, compounded, or combined amount as a direct or approved net saving.",
+      "Use explicit wording such as the report says, the speaker reported, or combined benefits when the source supports those categories; do not silently collapse them into savings.",
+      "Preserve exact source numbers and the item's decision status.",
+    ].join(" ");
+    if (financialAttempt < 3) {
+      parsed = await queryParsed(financialRetryInstruction);
+    } else {
+      parsed = await callOllamaJson({
+        ollamaUrl,
+        llmModel: "qwen3.5:9b",
+        system: "Write a fresh source-grounded civic summary. Return strict JSON only.",
+        prompt: [
+          "Start over from the grounded source excerpt; do not revise or repeat the prior draft.",
+          "If the source combines savings, new revenue, efficiencies, soft savings, or future cost avoidance, describe that as a reported combined benefit and attribute it to the report or speaker.",
+          "Never call a combined, projected, annualized, compounded, or merely reported amount a direct or approved net saving.",
+          "Preserve exact source numbers and the item's decision status. Do not add facts.",
+          "Return exactly: {\"summary\":\"...\",\"chapter text\":\"...\",\"confidence\":0.9,\"notes\":\"\"}.",
+          `Label: ${unit.label}`,
+          `Agenda item: ${unit["agenda item"] || ""}`,
+          "Grounded source excerpt:",
+          String(unit["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000)),
+        ].join("\n\n"),
+        temperature: 0.25,
+        seed: seed + 2000 + financialAttempt,
+      });
+    }
+    rawSummary = normalizeText(parsed?.summary || "");
+    assertCleanStage3Text(rawSummary, "stage3 financial-claim retry");
+    summary = enforceSummaryBudget(rawSummary, budget);
+    financialAudit = await auditFinancialClaim({
+      ask: financialAsk,
+      sourceText: String(unit?.["source excerpt"] || ""),
+      candidateText: `${summary}\n${String(parsed?.["chapter text"] || "")}`,
+      context: `Agenda item ${String(unit?.["agenda item"] || "")}; preserve whether any financial amount is direct, combined, projected, or merely reported.`,
+    });
+  }
+  if (financialAudit.verdict !== "PASS") {
+    throw new Error(`stage3 retryable: financial claim requires source-faithful qualification for unit ${String(unit?.["unit id"] || unit?.["agenda item"] || "unknown")}: ${financialAudit.feedback}`);
+  }
   const attributionSource = String(unit?.["attribution source excerpt"] || unit?.["source excerpt"] || "");
   for (let attributionAttempt = 1; attributionAttempt <= 3; attributionAttempt += 1) {
     const defects = unsupportedNamedMotionAttributions({
@@ -1426,6 +1498,15 @@ export async function summarizeGroundedUnit({
   summary = cleanupTranscriptScrapText(summary);
   assertCleanStage3Text(summary, "stage3 final summary");
   assertCleanStage3Text(parsed?.["chapter text"] || "", "stage3 chapter text");
+  const finalFinancialAudit = await auditFinancialClaim({
+    ask: financialAsk,
+    sourceText: String(unit?.["source excerpt"] || ""),
+    candidateText: `${summary}\n${String(parsed?.["chapter text"] || "")}`,
+    context: `Agenda item ${String(unit?.["agenda item"] || "")}; final downstream output must preserve direct versus combined, projected, or reported financial claims.`,
+  });
+  if (finalFinancialAudit.verdict !== "PASS") {
+    throw new Error(`stage3 retryable: final financial claim requires source-faithful qualification for unit ${String(unit?.["unit id"] || unit?.["agenda item"] || "unknown")}: ${finalFinancialAudit.feedback}`);
+  }
 
   return {
     summary,
