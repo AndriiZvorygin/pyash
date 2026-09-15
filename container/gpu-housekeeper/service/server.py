@@ -772,7 +772,8 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
     "freeBeforeMb": free_before,
     "totalMb": int(device.get("vramTotalMb") or 0),
     "usedBeforeMb": int(device.get("vramUsedMb") or 0),
-    "candidates": []
+    "candidates": [],
+    "candidateDiagnostics": []
   }
   if free_before >= required:
     common["decision"] = "fits"
@@ -796,6 +797,12 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
       continue
     activity = observe_runtime_activity(runtime_name, entry)
     if activity.get("state") != "idle":
+      common["candidateDiagnostics"].append({
+        "runtimeName": runtime_name,
+        "state": activity.get("state") or "unknown",
+        "reason": activity.get("reason") or "runtime is not eligible for discharge",
+        "activity": activity
+      })
       continue
     usage = process_view.get("runtimes", {}).get(runtime_name, {})
     candidates.append({

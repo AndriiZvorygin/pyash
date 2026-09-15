@@ -187,14 +187,17 @@ discharge hook and a provider-specific idle result. The default idle grace is
 300 seconds and can be set with `GPU_HOUSEKEEPER_IDLE_GRACE_SEC`. ComfyUI is
 discharged without stopping its container, using its existing API hooks. The
 housekeeper rechecks memory after each successful discharge and fails closed if
-the request still does not fit.
+the request still does not fit. Its dry-run response also includes candidate
+diagnostics when a managed runtime is active, still inside idle grace,
+unavailable, or lacks a safe hook, so an operator can distinguish "not yet
+reclaimable" from "not managed" without starting a job.
 
 The caller's `dischargeAllowed` envelope field is honored. Setting it to false
 prevents reclamation even when a safe idle runtime is available. Jobs without a
 VRAM request preserve the existing behavior and do not cause implicit
 reclamation. `/capacity/preview` accepts the same runtime/profile/jobSpec shape
-and reports the decision, available memory, and eligible idle candidates without
-performing a discharge or starting a job.
+and reports the decision, available memory, eligible idle candidates, and skipped
+candidate diagnostics without performing a discharge or starting a job.
 
 The snapshot also includes GPU compute-process telemetry split into managed
 runtime processes and unmanaged processes. This is diagnostic evidence only;
