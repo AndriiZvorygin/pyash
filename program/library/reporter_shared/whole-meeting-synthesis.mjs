@@ -21,6 +21,14 @@ const MAX_ATTEMPTS = Math.max(
   1,
   Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_ATTEMPTS || "4"), 10) || 4,
 );
+const OLLAMA_RETRY_ATTEMPTS = Math.max(
+  1,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_RETRY_ATTEMPTS || "3"), 10) || 3,
+);
+const OLLAMA_RETRY_DELAY_MS = Math.max(
+  0,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_RETRY_DELAY_MS || "2500"), 10) || 2500,
+);
 const OLLAMA_TIMEOUT_MS = Math.max(
   5000,
   Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_TIMEOUT_MS || "90000"), 10) || 90000,
@@ -117,7 +125,27 @@ function pickAgendaSummaryArtifact(transcriptDir, prefix = "auto") {
   return { summaryPath: chosen.full, resolvedPrefix: chosen.pfx };
 }
 
-async function ask(messages, { numPredict = 520 } = {}) {
+function ollamaStatusRetryable(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function ollamaErrorRetryable(error) {
+  if (error?.retryable === true) return true;
+  const message = String(error?.message || error || "");
+  return /AbortError|fetch failed|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|timed out/iu.test(message);
+}
+
+function waitMs(durationMs) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(durationMs) || 0)));
+}
+
+export async function requestOllamaChat(messages, {
+  numPredict = 520,
+  fetchImpl = globalThis.fetch,
+  retryAttempts = OLLAMA_RETRY_ATTEMPTS,
+  retryDelayMs = OLLAMA_RETRY_DELAY_MS,
+  sleepImpl = waitMs,
+} = {}) {
   const body = {
     model: MODEL,
     mode: "chat",
@@ -127,20 +155,40 @@ async function ask(messages, { numPredict = 520 } = {}) {
     options: { num_predict: numPredict },
     messages,
   };
-  let res;
-  try {
-    res = await fetch(OLLAMA_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
-    });
-  } catch (err) {
-    throw new Error(`Ollama fetch failed for whole-meeting-summary using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(err?.message || err)})`);
+  const attempts = Math.max(1, Number.parseInt(String(retryAttempts), 10) || 1);
+  const delay = Math.max(0, Number(retryDelayMs) || 0);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const res = await fetchImpl(OLLAMA_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        const error = new Error(`ollama status ${res.status}`);
+        error.retryable = ollamaStatusRetryable(Number(res.status));
+        throw error;
+      }
+      const json = await res.json();
+      return String(json?.message?.content || "").trim();
+    } catch (error) {
+      lastError = error;
+      if (!ollamaErrorRetryable(error) || attempt >= attempts) break;
+      await sleepImpl(delay * (2 ** (attempt - 1)));
+    }
   }
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || "").trim();
+
+  if (lastError && !/^ollama status \d+$/u.test(String(lastError.message || ""))) {
+    throw new Error(`Ollama fetch failed for whole-meeting-summary using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(lastError?.message || lastError)})`);
+  }
+  throw lastError || new Error("ollama request failed for whole-meeting-summary");
+}
+
+async function ask(messages, options = {}) {
+  return requestOllamaChat(messages, options);
 }
 
 function sectionContent(mdText, heading) {
