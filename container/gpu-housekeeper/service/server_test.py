@@ -179,6 +179,211 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(server.queue_depth(), 0)
 
 
+class HousekeeperCapacityTests(unittest.TestCase):
+  def setUp(self):
+    self.orig_parse_nvidia_smi = server.parse_nvidia_smi
+    self.orig_parse_nvidia_smi_processes = server.parse_nvidia_smi_processes
+    self.orig_managed_gpu_processes = server.managed_gpu_processes
+    self.orig_parse_runtime_status = server.parse_runtime_status
+    self.orig_request_comfyui_json = server.request_comfyui_json
+    self.orig_idle_grace_seconds = server.idle_grace_seconds
+    server._RUNTIME_ACTIVITY.clear()
+    server._PROFILES.clear()
+    server._JOBS.clear()
+
+  def tearDown(self):
+    server.parse_nvidia_smi = self.orig_parse_nvidia_smi
+    server.parse_nvidia_smi_processes = self.orig_parse_nvidia_smi_processes
+    server.managed_gpu_processes = self.orig_managed_gpu_processes
+    server.parse_runtime_status = self.orig_parse_runtime_status
+    server.request_comfyui_json = self.orig_request_comfyui_json
+    server.idle_grace_seconds = self.orig_idle_grace_seconds
+    server._RUNTIME_ACTIVITY.clear()
+    server._PROFILES.clear()
+    server._JOBS.clear()
+
+  def target_job(self, **job_spec):
+    return {
+      "runtimeName": "huggingface",
+      "profileName": "large-model",
+      "dischargeAllowed": True,
+      "jobSpec": {
+        "kind": "huggingface-generate",
+        "payload": {"model": "large-model", "input": "hello"},
+        "resourceRequest": {"vramRequiredMb": 20000},
+        **job_spec
+      }
+    }
+
+  def test_process_telemetry_parses_pid_name_and_memory(self):
+    class FakeProcess:
+      returncode = 0
+      stdout = "123, python, 456\n124, /usr/bin/ollama, 789\n"
+      stderr = ""
+
+    original_run = server.subprocess.run
+    server.subprocess.run = lambda *args, **kwargs: FakeProcess()
+    try:
+      result = server.parse_nvidia_smi_processes()
+    finally:
+      server.subprocess.run = original_run
+
+    self.assertTrue(result["available"])
+    self.assertEqual(result["processes"][0]["pid"], 123)
+    self.assertEqual(result["processes"][1]["usedMemoryMb"], 789)
+
+  def test_capacity_that_fits_does_not_probe_or_discharge(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 4000, "vramFreeMb": 20576}]
+    }
+    result = server.ensure_capacity_for_job(self.target_job(), {"huggingface": {"runtimeName": "huggingface"}})
+    self.assertEqual(result["decision"], "fits")
+
+  def test_idle_comfyui_is_reclaimed_through_provider_hooks_without_stop(self):
+    telemetry = iter([
+      {
+        "available": True,
+        "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576}]
+      },
+      {
+        "available": True,
+        "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 4000, "vramFreeMb": 20576}]
+      }
+    ])
+    server.parse_nvidia_smi = lambda: next(telemetry)
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"comfyui": {"usedMemoryMb": 18000}},
+      "unmanagedProcesses": []
+    }
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    server.idle_grace_seconds = lambda: 0
+    calls = []
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      calls.append((pathname, payload))
+      if pathname == "/queue":
+        return {"queue_running": [], "queue_pending": []}
+      return {}
+
+    server.request_comfyui_json = fake_request
+    result = server.ensure_capacity_for_job(self.target_job(), {
+      "huggingface": {"runtimeName": "huggingface"},
+      "comfyui": {
+        "runtimeName": "comfyui",
+        "containerName": "comfyui",
+        "gpuExpected": True,
+        "activityProbe": "comfyui-queue",
+        "dischargeKind": "comfyui"
+      }
+    })
+
+    self.assertEqual(result["decision"], "reclaimed")
+    self.assertEqual(result["discharged"], ["comfyui"])
+    self.assertIn(("/interrupt", {}), calls)
+    self.assertIn(("/queue", {"clear": True}), calls)
+    self.assertIn(("/free", {"unload_models": True, "free_memory": True}), calls)
+
+  def test_active_comfyui_queue_is_never_discharged(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576}]
+    }
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"comfyui": {"usedMemoryMb": 18000}},
+      "unmanagedProcesses": []
+    }
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    server.request_comfyui_json = lambda pathname, payload=None, timeout_sec=600: {
+      "queue_running": [{"prompt": "active"}],
+      "queue_pending": []
+    }
+    with self.assertRaisesRegex(RuntimeError, "insufficient"):
+      server.ensure_capacity_for_job(self.target_job(), {
+        "huggingface": {"runtimeName": "huggingface"},
+        "comfyui": {
+          "runtimeName": "comfyui",
+          "containerName": "comfyui",
+          "gpuExpected": True,
+          "activityProbe": "comfyui-queue",
+          "dischargeKind": "comfyui"
+        }
+      })
+
+  def test_unregistered_provider_cannot_be_automatically_discharged(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576}]
+    }
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"other": {"usedMemoryMb": 18000}},
+      "unmanagedProcesses": []
+    }
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    with self.assertRaisesRegex(RuntimeError, "insufficient"):
+      server.ensure_capacity_for_job(self.target_job(), {
+        "huggingface": {"runtimeName": "huggingface"},
+        "other": {"runtimeName": "other", "activityProbe": "unknown", "dischargeKind": ""}
+      })
+
+  def test_capacity_preview_is_read_only_and_reports_reclaim_candidate(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576}]
+    }
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"comfyui": {"usedMemoryMb": 18000}},
+      "unmanagedProcesses": []
+    }
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    server.idle_grace_seconds = lambda: 0
+    server.request_comfyui_json = lambda pathname, payload=None, timeout_sec=600: {
+      "queue_running": [],
+      "queue_pending": []
+    }
+    result = server.preview_capacity({
+      "runtimeName": "huggingface",
+      "profileName": "large-model",
+      "jobSpec": self.target_job()["jobSpec"]
+    }, {
+      "huggingface": {"runtimeName": "huggingface"},
+      "comfyui": {
+        "runtimeName": "comfyui",
+        "containerName": "comfyui",
+        "gpuExpected": True,
+        "activityProbe": "comfyui-queue",
+        "dischargeKind": "comfyui"
+      }
+    })
+    self.assertTrue(result["dryRun"])
+    self.assertTrue(result["feasible"])
+    self.assertEqual(result["decision"], "reclaim-available")
+
+
 class HousekeeperComfyuiTests(unittest.TestCase):
   def setUp(self):
     self.orig_parse_runtime_status = server.parse_runtime_status

@@ -18,6 +18,9 @@ _PROFILES: Dict[str, Dict[str, Any]] = {}
 _LOCK = threading.Lock()
 _EXECUTION_LOCK = threading.Lock()
 _RUNNING_JOB_ID: Optional[str] = None
+_RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
+
+DEFAULT_IDLE_GRACE_SECONDS = 300
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -27,7 +30,9 @@ DEFAULT_RUNTIME_REGISTRY = {
     "gpuExpected": True,
     "beginAction": ["start", "ollama"],
     "stopAction": ["stop", "ollama"],
-    "restartAction": ["restart", "ollama"]
+    "restartAction": ["restart", "ollama"],
+    "activityProbe": "provider-owned",
+    "dischargeKind": ""
   },
   "comfyui": {
     "runtimeName": "comfyui",
@@ -35,7 +40,9 @@ DEFAULT_RUNTIME_REGISTRY = {
     "gpuExpected": True,
     "beginAction": ["start", "comfyui"],
     "stopAction": ["stop", "comfyui"],
-    "restartAction": ["restart", "comfyui"]
+    "restartAction": ["restart", "comfyui"],
+    "activityProbe": "comfyui-queue",
+    "dischargeKind": "comfyui"
   },
   "katago": {
     "runtimeName": "katago",
@@ -43,7 +50,9 @@ DEFAULT_RUNTIME_REGISTRY = {
     "gpuExpected": True,
     "beginAction": ["start", "katago"],
     "stopAction": ["stop", "katago"],
-    "restartAction": ["restart", "katago"]
+    "restartAction": ["restart", "katago"],
+    "activityProbe": "provider-owned",
+    "dischargeKind": ""
   },
   "huggingface": {
     "runtimeName": "huggingface",
@@ -51,7 +60,9 @@ DEFAULT_RUNTIME_REGISTRY = {
     "gpuExpected": True,
     "beginAction": ["start", "criterion-huggingface"],
     "stopAction": ["stop", "criterion-huggingface"],
-    "restartAction": ["restart", "criterion-huggingface"]
+    "restartAction": ["restart", "criterion-huggingface"],
+    "activityProbe": "provider-owned",
+    "dischargeKind": ""
   }
 }
 
@@ -136,6 +147,53 @@ def parse_nvidia_smi() -> Dict[str, Any]:
   }
 
 
+def parse_nvidia_smi_processes() -> Dict[str, Any]:
+  """Return GPU compute processes without treating unknown processes as managed."""
+  try:
+    proc = subprocess.run(
+      [
+        "nvidia-smi",
+        "--query-compute-apps=pid,process_name,used_memory",
+        "--format=csv,noheader,nounits"
+      ],
+      check=True,
+      capture_output=True,
+      text=True,
+      timeout=3
+    )
+  except Exception:
+    return {
+      "available": False,
+      "processes": []
+    }
+
+  processes: List[Dict[str, Any]] = []
+  for raw_line in proc.stdout.splitlines():
+    line = raw_line.strip()
+    if not line:
+      continue
+    parts = [part.strip() for part in line.split(",", 2)]
+    if len(parts) < 3:
+      continue
+    try:
+      pid = int(parts[0])
+      used_memory = int(float(parts[2]))
+    except ValueError:
+      continue
+    if pid <= 0:
+      continue
+    processes.append({
+      "pid": pid,
+      "processName": parts[1],
+      "usedMemoryMb": max(0, used_memory)
+    })
+
+  return {
+    "available": True,
+    "processes": processes
+  }
+
+
 def queue_depth() -> int:
   with _LOCK:
     running = 1 if _RUNNING_JOB_ID else 0
@@ -174,11 +232,17 @@ def minimal_jobs() -> List[Dict[str, Any]]:
 
 def make_snapshot(host_id: str) -> Dict[str, Any]:
   telemetry = parse_nvidia_smi()
+  process_view = managed_gpu_processes(Handler.runtime_registry) if "Handler" in globals() else {
+    "available": False,
+    "runtimes": {},
+    "unmanagedProcesses": []
+  }
   return {
     "hostId": host_id,
     "queueDepth": queue_depth(),
     "devices": telemetry["devices"],
-    "profiles": profile_list()
+    "profiles": profile_list(),
+    "gpuProcesses": process_view
   }
 
 
@@ -198,6 +262,14 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {
       "accepted": False,
       "error": "jobSpec must be map or text"
+    }
+
+  try:
+    job_resource_request({"jobSpec": job_spec})
+  except RuntimeError as err:
+    return {
+      "accepted": False,
+      "error": normalize_text(err)
     }
 
   runtime_lower = runtime_name.lower()
@@ -278,6 +350,8 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
     "runtimeName": runtime_name,
     "profileName": profile_name,
     "jobSpec": job_spec,
+    "deviceId": normalize_text(payload.get("deviceId")),
+    "dischargeAllowed": payload.get("dischargeAllowed", True) is not False,
     "status": "queued",
     "message": "queued",
     "submittedAt": now,
@@ -475,6 +549,368 @@ def parse_runtime_status(runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   }
 
 
+def idle_grace_seconds() -> float:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_IDLE_GRACE_SEC"))
+  try:
+    value = float(raw) if raw else DEFAULT_IDLE_GRACE_SECONDS
+  except ValueError:
+    value = DEFAULT_IDLE_GRACE_SECONDS
+  return max(0.0, value)
+
+
+def container_process_ids(container_name: str) -> List[int]:
+  if not container_name:
+    return []
+  result = run_docker(["top", container_name, "-eo", "pid,args"], timeout_sec=6)
+  if not result.get("success"):
+    return []
+  pids: List[int] = []
+  for raw_line in normalize_text(result.get("stdout")).splitlines():
+    parts = raw_line.strip().split(None, 1)
+    if not parts or not parts[0].isdigit():
+      continue
+    pid = int(parts[0])
+    if pid > 0:
+      pids.append(pid)
+  return pids
+
+
+def managed_gpu_processes(runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  telemetry = parse_nvidia_smi_processes()
+  processes = telemetry.get("processes") if isinstance(telemetry, dict) else []
+  if not isinstance(processes, list):
+    processes = []
+  by_pid = {
+    item.get("pid"): item
+    for item in processes
+    if isinstance(item, dict) and isinstance(item.get("pid"), int)
+  }
+  managed: Dict[str, Dict[str, Any]] = {}
+  assigned = set()
+  for runtime_name in sorted(runtime_registry.keys()):
+    entry = runtime_registry[runtime_name]
+    pids = container_process_ids(normalize_text(entry.get("containerName")))
+    matched = []
+    for pid in pids:
+      process = by_pid.get(pid)
+      if not process or pid in assigned:
+        continue
+      assigned.add(pid)
+      matched.append(dict(process))
+    managed[runtime_name] = {
+      "runtimeName": runtime_name,
+      "managed": True,
+      "pids": pids,
+      "processes": matched,
+      "usedMemoryMb": sum(item.get("usedMemoryMb", 0) for item in matched)
+    }
+
+  unmanaged = [
+    dict(item) for item in processes
+    if isinstance(item, dict) and item.get("pid") not in assigned
+  ]
+  return {
+    "available": bool(telemetry.get("available", False)),
+    "runtimes": managed,
+    "unmanagedProcesses": unmanaged
+  }
+
+
+def comfyui_queue_has_work(queue: Dict[str, Any]) -> bool:
+  if not isinstance(queue, dict):
+    return True
+  for key in ("queue_running", "queue_pending"):
+    value = queue.get(key)
+    if isinstance(value, list) and value:
+      return True
+  return False
+
+
+def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
+  status = parse_runtime_status(runtime_entry)
+  base = {
+    "runtimeName": runtime_name,
+    "probe": normalize_text(runtime_entry.get("activityProbe")) or "unknown",
+    "checkedAt": utc_now_iso(),
+    "status": status.get("status") or "unknown",
+    "lastActivityAt": "",
+    "reason": ""
+  }
+  if runtime_is_stopped(status):
+    base["state"] = "not-running"
+    base["reason"] = status.get("message") or "runtime is not running"
+    return base
+  if status.get("gpuObserved") is False:
+    base["state"] = "unavailable"
+    base["reason"] = "runtime GPU is not observed"
+    return base
+
+  probe = normalize_text(runtime_entry.get("activityProbe")).lower()
+  if probe != "comfyui-queue":
+    base["state"] = "unknown"
+    base["reason"] = "runtime has no safe activity probe"
+    return base
+
+  try:
+    queue = request_comfyui_json("/queue", None, timeout_sec=10)
+  except Exception as err:
+    base["state"] = "unknown"
+    base["reason"] = f"activity probe failed: {normalize_text(err)}"
+    return base
+
+  now = time.time()
+  if comfyui_queue_has_work(queue):
+    with _LOCK:
+      _RUNTIME_ACTIVITY[runtime_name] = {
+        "lastActivityAt": utc_now_iso(),
+        "idleSince": 0.0
+      }
+    base["state"] = "active"
+    base["lastActivityAt"] = utc_now_iso()
+    base["reason"] = "provider queue is active"
+    return base
+
+  with _LOCK:
+    previous = _RUNTIME_ACTIVITY.get(runtime_name, {})
+    idle_since = float(previous.get("idleSince") or now)
+    last_activity = normalize_text(previous.get("lastActivityAt"))
+    _RUNTIME_ACTIVITY[runtime_name] = {
+      "lastActivityAt": last_activity,
+      "idleSince": idle_since
+    }
+  elapsed = max(0.0, now - idle_since)
+  base["lastActivityAt"] = last_activity
+  base["idleSince"] = datetime.fromtimestamp(idle_since, timezone.utc).isoformat().replace("+00:00", "Z")
+  base["idleSeconds"] = round(elapsed, 3)
+  if elapsed >= idle_grace_seconds():
+    base["state"] = "idle"
+    base["reason"] = "provider queue is empty beyond idle grace"
+  else:
+    base["state"] = "cooldown"
+    base["reason"] = "provider queue is empty but idle grace has not elapsed"
+  return base
+
+
+def normalize_device_id(raw: Any, devices: List[Dict[str, Any]]) -> str:
+  value = normalize_text(raw).lower()
+  if value.isdigit():
+    value = f"gpu{value}"
+  if value:
+    return value
+  if devices:
+    return normalize_text(devices[0].get("deviceId"))
+  return ""
+
+
+def job_resource_request(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    return None
+  request = job_spec.get("resourceRequest")
+  if request is None:
+    request = job_spec.get("resource_request")
+  if request is None and isinstance(job_spec.get("payload"), dict):
+    request = job_spec["payload"].get("resourceRequest")
+  if request is None:
+    return None
+  if not isinstance(request, dict):
+    raise RuntimeError("resourceRequest must be a map")
+  raw_vram = request.get("vramRequiredMb")
+  if raw_vram is None:
+    raw_vram = request.get("vram_required_mb")
+  if raw_vram is None:
+    raise RuntimeError("resourceRequest.vramRequiredMb is required")
+  try:
+    vram = int(float(raw_vram))
+  except (TypeError, ValueError):
+    raise RuntimeError("resourceRequest.vramRequiredMb must be a positive number")
+  if vram <= 0:
+    raise RuntimeError("resourceRequest.vramRequiredMb must be a positive number")
+  return {
+    "vramRequiredMb": vram,
+    "deviceId": normalize_text(request.get("deviceId"))
+  }
+
+
+def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  request = job_resource_request(job)
+  if not request:
+    return {
+      "decision": "not-requested",
+      "reason": "job did not declare a VRAM requirement",
+      "requiredVramMb": None,
+      "candidates": []
+    }
+
+  telemetry = parse_nvidia_smi()
+  devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+  if not telemetry.get("available") or not devices:
+    return {
+      "decision": "telemetry-unavailable",
+      "reason": "nvidia-smi memory telemetry unavailable",
+      "requiredVramMb": request["vramRequiredMb"],
+      "candidates": []
+    }
+
+  requested_device = request.get("deviceId") or job.get("deviceId")
+  device_id = normalize_device_id(requested_device, devices)
+  device = next((item for item in devices if item.get("deviceId") == device_id), None)
+  if device is None:
+    return {
+      "decision": "invalid-device",
+      "reason": f"requested GPU device is not available: {device_id or 'missing'}",
+      "requiredVramMb": request["vramRequiredMb"],
+      "deviceId": device_id,
+      "candidates": []
+    }
+
+  required = request["vramRequiredMb"]
+  free_before = int(device.get("vramFreeMb") or 0)
+  common = {
+    "requiredVramMb": required,
+    "deviceId": device_id,
+    "freeBeforeMb": free_before,
+    "totalMb": int(device.get("vramTotalMb") or 0),
+    "usedBeforeMb": int(device.get("vramUsedMb") or 0),
+    "candidates": []
+  }
+  if free_before >= required:
+    common["decision"] = "fits"
+    common["reason"] = "free VRAM satisfies request"
+    return common
+
+  if not bool(job.get("dischargeAllowed", True)):
+    common["decision"] = "discharge-disabled"
+    common["reason"] = "free VRAM is insufficient and discharge is disabled"
+    return common
+
+  process_view = managed_gpu_processes(runtime_registry)
+  target_runtime = normalize_text(job.get("runtimeName")).lower()
+  candidates = []
+  for runtime_name in sorted(runtime_registry.keys()):
+    if runtime_name == target_runtime:
+      continue
+    entry = runtime_registry[runtime_name]
+    discharge_kind = normalize_text(entry.get("dischargeKind")).lower()
+    if not discharge_kind:
+      continue
+    activity = observe_runtime_activity(runtime_name, entry)
+    if activity.get("state") != "idle":
+      continue
+    usage = process_view.get("runtimes", {}).get(runtime_name, {})
+    candidates.append({
+      "runtimeName": runtime_name,
+      "dischargeKind": discharge_kind,
+      "usedMemoryMb": int(usage.get("usedMemoryMb") or 0),
+      "activity": activity
+    })
+  candidates.sort(key=lambda item: (-item["usedMemoryMb"], item["runtimeName"]))
+  common["candidates"] = candidates
+  reclaimable = sum(item["usedMemoryMb"] for item in candidates)
+  if free_before + reclaimable >= required:
+    common["decision"] = "reclaim-available"
+    common["reason"] = "idle managed runtimes can be discharged through provider hooks"
+  else:
+    common["decision"] = "insufficient"
+    common["reason"] = "free VRAM plus safely reclaimable idle VRAM is insufficient"
+  return common
+
+
+def discharge_runtime(runtime_name: str, runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
+  kind = normalize_text(runtime_entry.get("dischargeKind")).lower()
+  if kind != "comfyui":
+    return {
+      "success": False,
+      "runtimeName": runtime_name,
+      "reason": "runtime has no registered safe discharge hook"
+    }
+
+  try:
+    queue = request_comfyui_json("/queue", None, timeout_sec=10)
+    if comfyui_queue_has_work(queue):
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": "provider became active during final discharge check"
+      }
+    request_comfyui_json("/interrupt", {}, timeout_sec=10)
+    request_comfyui_json("/queue", {"clear": True}, timeout_sec=10)
+    request_comfyui_json("/free", {"unload_models": True, "free_memory": True}, timeout_sec=30)
+  except Exception as err:
+    return {
+      "success": False,
+      "runtimeName": runtime_name,
+      "reason": normalize_text(err) or "provider discharge failed"
+    }
+
+  with _LOCK:
+    for profile in _PROFILES.values():
+      if normalize_text(profile.get("runtimeName")).lower() == runtime_name:
+        profile["loaded"] = False
+    _RUNTIME_ACTIVITY[runtime_name] = {
+      "lastActivityAt": normalize_text(_RUNTIME_ACTIVITY.get(runtime_name, {}).get("lastActivityAt")),
+      "idleSince": time.time()
+    }
+  return {
+    "success": True,
+    "runtimeName": runtime_name,
+    "reason": "provider-specific discharge completed"
+  }
+
+
+def ensure_capacity_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  plan = capacity_plan_for_job(job, runtime_registry)
+  decision = plan.get("decision")
+  if decision in {"not-requested", "fits"}:
+    return plan
+  if decision == "telemetry-unavailable":
+    raise RuntimeError(plan.get("reason") or "GPU capacity telemetry unavailable")
+  if decision in {"invalid-device", "discharge-disabled", "insufficient"}:
+    raise RuntimeError(plan.get("reason") or "GPU capacity is insufficient")
+
+  for candidate in plan.get("candidates", []):
+    runtime_name = normalize_text(candidate.get("runtimeName")).lower()
+    result = discharge_runtime(runtime_name, runtime_registry[runtime_name])
+    candidate["discharge"] = result
+    if not result.get("success"):
+      continue
+    refreshed = capacity_plan_for_job({**job, "dischargeAllowed": False}, runtime_registry)
+    if refreshed.get("decision") == "fits":
+      refreshed["discharged"] = [runtime_name]
+      refreshed["decision"] = "reclaimed"
+      refreshed["reason"] = "idle managed runtime discharged through its provider hook"
+      return refreshed
+
+  raise RuntimeError("GPU capacity remains insufficient after safe managed-runtime discharge")
+
+
+def preview_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  job_spec = payload.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    return {
+      "feasible": False,
+      "error": "jobSpec must be map for capacity preview"
+    }
+  job = {
+    "runtimeName": normalize_text(payload.get("runtimeName")),
+    "profileName": normalize_text(payload.get("profileName")),
+    "deviceId": normalize_text(payload.get("deviceId")),
+    "dischargeAllowed": payload.get("dischargeAllowed", True) is not False,
+    "jobSpec": job_spec
+  }
+  try:
+    plan = capacity_plan_for_job(job, runtime_registry)
+  except RuntimeError as err:
+    return {
+      "feasible": False,
+      "decision": "invalid-request",
+      "error": normalize_text(err)
+    }
+  plan["feasible"] = plan.get("decision") in {"not-requested", "fits", "reclaim-available"}
+  plan["dryRun"] = True
+  return plan
+
+
 def list_runtime_statuses(runtime_registry: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
   out = []
   for runtime_name in sorted(runtime_registry.keys()):
@@ -665,10 +1101,12 @@ def discharge_warm_ollama_models(target_model: str) -> None:
 
 
 def normalize_ollama_payload(job_spec: Dict[str, Any], profile_name: str) -> Dict[str, Any]:
-  payload = job_spec.get("payload") if isinstance(job_spec.get("payload"), dict) else dict(job_spec)
+  payload = dict(job_spec.get("payload")) if isinstance(job_spec.get("payload"), dict) else dict(job_spec)
   payload.pop("kind", None)
   payload.pop("payload", None)
   payload.pop("host", None)
+  payload.pop("resourceRequest", None)
+  payload.pop("resource_request", None)
   payload["model"] = normalize_text(payload.get("model")) or profile_name
   payload["stream"] = False
   if "keep_alive" not in payload:
@@ -717,6 +1155,9 @@ def execute_huggingface_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
   payload = job_spec.get("payload")
   if not isinstance(payload, dict):
     raise RuntimeError("huggingface payload must be a map")
+  payload = dict(payload)
+  payload.pop("resourceRequest", None)
+  payload.pop("resource_request", None)
 
   ensure_runtime_ready(runtime_registry, runtime_name)
   result = request_huggingface_json(
@@ -906,6 +1347,7 @@ def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[st
 
 
 def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  ensure_capacity_for_job(job, runtime_registry)
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   if runtime_name == "ollama":
     return execute_ollama_job(job, runtime_registry)
@@ -952,7 +1394,9 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         "gpuExpected": bool(item.get("gpuExpected", True)),
         "beginAction": item.get("beginAction") if isinstance(item.get("beginAction"), list) else ["start", container_name],
         "stopAction": item.get("stopAction") if isinstance(item.get("stopAction"), list) else ["stop", container_name],
-        "restartAction": item.get("restartAction") if isinstance(item.get("restartAction"), list) else ["restart", container_name]
+        "restartAction": item.get("restartAction") if isinstance(item.get("restartAction"), list) else ["restart", container_name],
+        "activityProbe": normalize_text(item.get("activityProbe")) or "unknown",
+        "dischargeKind": normalize_text(item.get("dischargeKind"))
       }
 
   if registry:
@@ -1063,6 +1507,11 @@ class Handler(BaseHTTPRequestHandler):
     json_response(self, 404, {"error": "not found"})
 
   def do_POST(self) -> None:
+    if self.path == "/capacity/preview":
+      payload = read_json_body(self)
+      json_response(self, 200, preview_capacity(payload, self.runtime_registry))
+      return
+
     if self.path == "/submit":
       payload = read_json_body(self)
       result = submit_job(payload)

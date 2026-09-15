@@ -44,7 +44,7 @@ test("gpu worker claims oldest envelope, submits to housekeeper, and writes succ
   const worldRoot = path.join(root, "world");
   const calls = [];
 
-  await enqueueMind(worldRoot);
+  await enqueueMind(worldRoot, { deviceId: "gpu0" });
   const result = await runGpuWorkerOnce({
     worldRoot,
     pollIntervalMs: 1,
@@ -72,6 +72,8 @@ test("gpu worker claims oldest envelope, submits to housekeeper, and writes succ
   assert.equal(calls[0][1].runtimeName, "ollama");
   assert.equal(calls[0][1].profileName, "qwen-test");
   assert.equal(calls[0][1].jobSpec.kind, "ollama-generate");
+  assert.equal(calls[0][1].deviceId, "gpu0");
+  assert.equal(calls[0][1].dischargeAllowed, true);
 
   const status = await readGpuHandleStatus(worldRoot, "mind-job-one");
   assert.equal(status?.status, "success");
