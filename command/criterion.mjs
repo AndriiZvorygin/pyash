@@ -11,6 +11,7 @@ import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime
 import { DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
 import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
+import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -89,6 +90,7 @@ function usage() {
     "criterion baseline --benchmark meetingbank --dataset <local.jsonl> --baseline lead-3 [--resume]",
     "criterion fact-audit --dataset <meetingbank.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--limit 5] [--resume]",
     "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",
+    "criterion prompt-ablation --dataset <meetingbank.jsonl> --annotations <annotations.json> --source-run <generic-run-id> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion report <run-id>",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",
@@ -182,6 +184,48 @@ async function factAuditCommand(args, root, forcedMode = null) {
     matchedJoins: result.matchedJoins?.length ?? 0,
     unmatchedJoins: result.unmatchedJoins.length,
     sourceHashMismatches: result.sourceHashMismatches.length
+  }, hasFlag(args, "--json"));
+  return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
+async function promptAblationCommand(args, root) {
+  const sourceRuns = listFlag(args, ["--source-runs", "--source-run"]);
+  const comparisonRuns = listFlag(args, ["--comparison-runs", "--comparison-run"]);
+  const models = listFlag(args, ["--model"]);
+  const ollamaBaseUrl = flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST);
+  const result = await runPromptAblation({
+    datasetPath: flag(args, "--dataset"),
+    annotationPath: flag(args, "--annotations"),
+    sourceRunIds: sourceRuns.length ? sourceRuns : undefined,
+    comparisonRunIds: comparisonRuns.length ? comparisonRuns : undefined,
+    models: models.length ? models : null,
+    split: flag(args, "--split", "test"),
+    limit: hasFlag(args, "--smoke") ? 5 : numericFlag(args, "--limit"),
+    smoke: hasFlag(args, "--smoke"),
+    resume: hasFlag(args, "--resume"),
+    runId: flag(args, "--run-id"),
+    root,
+    baseUrl: ollamaBaseUrl,
+    factJudgeModel: flag(args, "--fact-judge-model", process.env.PYA_CRITERION_FACT_JUDGE_MODEL ?? null),
+    factJudgeProvider: flag(args, "--fact-judge-provider", process.env.PYA_CRITERION_FACT_JUDGE_PROVIDER ?? "ollama"),
+    factJudgeBaseUrl: flag(args, "--fact-judge-base-url", ollamaBaseUrl),
+    factJudgeTemperature: numericFlag(args, "--fact-judge-temperature", 0),
+    factJudgeMaxOutputTokens: numericFlag(args, "--fact-judge-max-output-tokens", 4096),
+    factRunId: flag(args, "--fact-run-id")
+  });
+  print({
+    runId: result.runId,
+    status: result.status,
+    evaluationMode: result.evaluationMode,
+    promptVariants: result.promptVariants,
+    matchedSubsetCount: result.matchedSubsetCount,
+    selectedSampleCount: result.selectedSampleCount,
+    results: `criterion/results/${result.runId}.jsonl`,
+    report: `criterion/results/${result.runId}.md`,
+    csv: `criterion/results/${result.runId}.csv`,
+    pya: `criterion/results/${result.runId}.pya`,
+    json: `criterion/results/${result.runId}.json`,
+    review: `criterion/review/${result.runId}.html`
   }, hasFlag(args, "--json"));
   return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
 }
@@ -295,6 +339,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && subcommand === "baseline") return baselineCommand(args, root);
   if (command === "criterion" && (subcommand === "fact-audit" || subcommand === "meetingbank-fact-audit")) return factAuditCommand(args, root);
   if (command === "criterion" && subcommand === "omnicseval-meeting") return factAuditCommand(args, root, FACT_EVALUATION_MODES.exact);
+  if (command === "criterion" && (subcommand === "prompt-ablation" || subcommand === "meetingbank-prompt-ablation")) return promptAblationCommand(args, root);
   if (command === "criterion" && subcommand === "report") return reportCommand(rest, root);
   if (command === "criterion" && subcommand === "compare") return compareCommand(rest, root);
   if (command === "criterion" && subcommand === "golden") return goldenCommand(rest, root);
@@ -305,6 +350,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "baseline") return baselineCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "fact-audit" || command === "meetingbank-fact-audit") return factAuditCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "omnicseval-meeting") return factAuditCommand([subcommand, ...rest].filter(Boolean), root, FACT_EVALUATION_MODES.exact);
+  if (command === "prompt-ablation" || command === "meetingbank-prompt-ablation") return promptAblationCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "report") return reportCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "compare") return compareCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "golden") return goldenCommand([subcommand, ...rest].filter(Boolean), root);

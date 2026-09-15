@@ -33,6 +33,46 @@ python "$PYA_BENCHMARK_CACHE/AMICorpusXML/main_obtain_meeting2summary_data.py" -
 
 Inspect that converter's input/output directory options for the local AMI release, then map its transcript, summary, speaker and turn files into the prepared JSON/JSONL contract above. The runner records the source URL, caller-provided dataset revision, dataset hash, access status and preparation provenance; it deliberately does not silently fetch large or access-controlled datasets.
 
+## Paired MeetingBank prompt experiment
+
+Use `prompt-ablation` to compare the existing generic `summary_direct` prompt
+with a fixed MeetingBank-aware zero-shot municipal-minutes prompt for Qwen:
+
+```bash
+OLLAMA_BASE_URL=http://mriczo:11434 node command/criterion.mjs prompt-ablation \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --annotations "$PYA_BENCHMARK_CACHE/omnicseval/meetingbank-with-source-ids.json" \
+  --source-run full-meetingbank-summary-direct-20260913 \
+  --comparison-run meetingbank-meetscript-full-20260915 \
+  --model qwen3.5:9b,hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M \
+  --run-id meetingbank-qwen-prompt-ablation-20260915 --smoke --resume --json
+```
+
+The two variants are `qwen_baseline_generic` and
+`qwen_meetingbank_reference`. The latter is zero-shot and has no examples or
+reference summaries. The experiment is paired by exact MeetingBank source ID
+and uses the same local transcript, profile, context, model, retry and output
+parsing for both variants. It never overwrites the generic full-corpus run.
+
+The annotation input must identify each source row explicitly. Criterion does
+not guess from transcript text, array position or fuzzy similarity. It records
+missing, duplicate and ambiguous joins and makes no model request for an
+unmatched subset. This matters because some released OmniCSEval archive forms
+contain 75 MeetingBank annotations but omit source IDs; provide an ID-bearing
+local manifest before claiming a 75-sample result.
+
+Every selected row stores the complete effective prompt and its hash. The
+combined report verifies source hashes and generation settings, records model
+digest equality when the provider exposes digests, and marks unavailable
+digests as unverified. An unavailable digest makes a saved generic row
+unverifiable for reuse, so it is regenerated in its own checkpoint. It renders
+ROUGE, schema, latency, output length and
+generation speed for each variant, paired sample deltas with deterministic
+bootstrap 95% intervals, city/item-type/chunking groups, degraded/improved
+examples and MeetingScript rows matched to the same IDs. Use
+`--fact-judge-model` to attach the separate post-hoc fact-audit scores; this
+does not regenerate either variant.
+
 ## Typical runs
 
 ```bash

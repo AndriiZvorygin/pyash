@@ -96,6 +96,13 @@ export const SUITE_CATALOG = Object.freeze({
     sourceUrl: "https://meetingbank.github.io/dataset/",
     paperUrl: "https://arxiv.org/html/2606.15974v1",
     required: "local MeetingBank dataset, saved model runs, and an external fact judge"
+  },
+  "meetingbank-prompt-ablation": {
+    name: "MeetingBank Qwen prompt ablation",
+    version: "paired generic versus MeetingBank-aware zero-shot prompts",
+    sourceUrl: "https://meetingbank.github.io/dataset/",
+    subsetSourceUrl: "https://github.com/zhouweixiao/OmniCSEval",
+    required: "local MeetingBank dataset, released OmniCSEval subset annotations, and saved generic Qwen outputs"
   }
 });
 

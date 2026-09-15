@@ -86,3 +86,33 @@ not the paper's human-adjudicated annotation process. Municipal claim flags are
 evidence annotations only. Per-row JSONL is restart-safe and `--resume` never
 rejudges a completed source-run/model/sample tuple. The same durable state
 renders JSON, JSONL, Markdown, CSV, `.pya` and HTML.
+
+## Prompt ablation
+
+The MeetingBank Qwen prompt experiment is a Criterion evaluation, not a model
+or hosting subsystem. `criterion prompt-ablation` takes an existing generic
+`summary_direct` run and an explicit OmniCSEval Meeting annotation manifest.
+It emits two paired labels: `qwen_baseline_generic` for the saved generic
+prompt and `qwen_meetingbank_reference` for the fixed zero-shot
+MeetingBank-aware prompt. The prompt text and hash are durable per-sample
+evidence. No reference summary or generated output is used as an in-context
+example.
+
+The experiment joins the exact 75-sample target only by explicit source ID.
+Missing, duplicate and ambiguous IDs fail closed and are included in
+`subsetJoins.unmatched`; Criterion never guesses by source text, row order or
+fuzzy similarity. It records annotation/local input hash mismatches. Generic
+rows are reused only when their input hash, generic prompt hash, status and
+profile/context/sampling settings and model digest match the source run. Missing or unverifiable
+rows are regenerated under a separate checkpoint run ID, leaving the original
+full-corpus artifacts unchanged.
+
+Both variants are run with the same model list and non-thinking
+`summary_direct` settings. The durable paired report contains ROUGE-1/2/L,
+schema status, latency, output length and generation speed, grouped city,
+item-type and chunking aggregates, paired deltas and reproducible bootstrap
+confidence intervals. Saved MeetingScript rows may be projected for comparison
+only when their IDs match the selected subset. An optional separate external
+fact judge can attach completeness, conciseness and faithfulness after output
+generation; that post-hoc step is independent of the generation model and can
+be resumed with `--resume`.
