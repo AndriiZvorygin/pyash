@@ -853,6 +853,7 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, h
 	    '- 4 to 6 words only.',
 	    '- Title case.',
 	    '- Lead with the most newsworthy or surprising concrete development.',
+	    '- Describe one coherent development from SOURCE_SUMMARY; never concatenate unrelated agenda items (for example an election topic plus a zoning approval) into one hook.',
 	    '- Use keyword-style noun phrases, like YouTube chapter headings, not sentence/prose wording.',
 	    '- Include concrete source keywords: project type, street/location, dollar amount, policy, service, or affected thing.',
 	    '- If using dollar amounts, write them as words or digits without punctuation.',
@@ -909,7 +910,8 @@ function buildScorePrompt({ sourceSummary, hook, jurisdiction, body, hookMode })
     '- Fail hooks that invent a causal relationship between separate developments, including wording that one item blocked, funded, enabled, or caused another.',
     '- Treat equivalent number words and digits as the same amount (for example "Five Hundred Thousand" equals "$500,000"); do not claim digits are missing when the amount is written in words.',
     '- Do not require currency symbols or comma-formatted numbers; hooks are punctuation-free keyword titles.',
-    '- Penalize action verbs that overstate status (adopted/approved/passed) unless SOURCE_SUMMARY explicitly supports that action for the same subject.',
+	    '- Penalize action verbs that overstate status (adopted/approved/passed) unless SOURCE_SUMMARY explicitly supports that action for the same subject.',
+	    '- Fail hooks that combine separate agenda developments into a misleading compound phrase; select one concrete subject and outcome or status.',
 	    '- Penalize polarity flips: if SOURCE_SUMMARY says access barriers/denials/lack of access, do not reward positive-service wording (serves/expands/enables) unless explicit approved expansion evidence exists.',
     ...(isPreview
       ? ['- For preview mode, fail completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Reward prospective framing (considers/reviews/discusses/hears/receives/debates).']

@@ -1184,7 +1184,7 @@ async function verifyTargetedRecovery({ candidate, entry, units, llmModel, ollam
       `Proposed boundary: ${candidate["atomic unit id"]} evidence=${JSON.stringify(candidate["evidence quote"])}`,
       "Does the proposed atomic unit, read with the immediately following ASR fragments, begin this exact agenda item?",
       "ASR can split one chair transition across several very short units. Accept when the proposed unit and the next few fragments collectively announce the item now, even if the proposed fragment alone is grammatically incomplete.",
-      "Accept only a chair/new presenter introduction that starts the item now, or an explicit statement that this exact item is empty. Reject previews saying an item will happen later or in a minute, discussion inside the previous item, an ending/thank-you, a passing mention, or language merely related to the title.",
+      "Accept a chair/new presenter introduction that starts the item now, an explicit statement that this exact item is empty, or a clear next-item/second-request/return-to-item transition that turns the discussion to this exact item (even when staff, rather than the chair, says the transition). Reject previews saying an item will happen later or in a minute, discussion inside the previous item, an ending/thank-you, a passing mention, or language merely related to the title.",
       "Reject a different explicitly spoken report code or title even when its subject is related to the canonical item.",
       "Return only {\"accepted\":true,\"confidence\":0.95} or {\"accepted\":false,\"confidence\":0.95}.",
       context.map((unit) => `[${unit["atomic unit id"]}] ${unit.speaker}: ${unit.text}`).join("\n"),
@@ -1354,6 +1354,12 @@ async function promoteSingleChildCandidates({ candidates, canonical, units, llmM
 
 async function refineCandidateStarts({ candidates, canonical, units, llmModel, ollamaUrl, log }) {
   const indexById = new Map(units.map((unit, index) => [unit["atomic unit id"], index]));
+  const siblingRefinementItems = new Set(
+    String(process.env.AGENDA_BOUNDARY_SIBLING_REFINEMENT_ITEMS || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
   const refined = [];
   for (const candidate of candidates) {
     if (candidate["focused recovery refined"] === true) {
@@ -1373,7 +1379,22 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
       && candidateUnit
       && structuredTitleHasStrongLiteralSupport(canonicalEntry.title, `${candidate["evidence quote"] || ""} ${candidateUnit.text || ""}`),
     );
-    if (directAttachmentBoundary) {
+    // A direct attachment can still be introduced in a spoken list preamble
+    // immediately before the preceding sibling's discussion. Keep the strong
+    // identity evidence, but let the consecutive-sibling audit adjudicate the
+    // actual discussion start when a canonical sibling exists.
+    const directAttachmentHasSibling = Boolean(
+      directAttachmentBoundary
+      && canonicalEntry?.item.includes(".")
+      && canonical.items.some((entry) => entry.item !== canonicalEntry.item
+        && entry.item.replace(/\.[^.]+$/u, "") === canonicalEntry.item.replace(/\.[^.]+$/u, "")),
+    );
+    if (/^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_DEBUG || ""))
+      && siblingRefinementItems.size
+      && siblingRefinementItems.has(candidate["agenda item"])) {
+      log(`[agenda-boundaries][debug] sibling candidate ${candidate["agenda item"]}@${candidate["atomic unit id"]} semantic=${candidate["semantic verification"] || ""} direct=${directAttachmentBoundary} sibling=${directAttachmentHasSibling}`);
+    }
+    if (directAttachmentBoundary && !directAttachmentHasSibling) {
       refined.push(candidate);
       continue;
     }
@@ -1422,7 +1443,7 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
         continue;
       }
     }
-    if (/complete-chronology segmentation/u.test(candidate["semantic verification"] || "")
+    if (/(?:complete-chronology segmentation|independently classified and audited exact agenda identity)/u.test(candidate["semantic verification"] || "")
       && !candidateUnit?.["llm split source atomic unit"]
       && candidate["trailing chronology audit"] !== true) {
       const target = canonical.items.find((entry) => entry.item === candidate["agenda item"]);
@@ -1430,7 +1451,8 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
       const hasCanonicalSibling = Boolean(parentPrefix) && canonical.items.some(
         (entry) => entry.item !== target.item && entry.item.replace(/\.[^.]+$/u, "") === parentPrefix,
       );
-      if (target && hasCanonicalSibling && Number.isInteger(candidateIndex)) {
+      if (target && hasCanonicalSibling && Number.isInteger(candidateIndex)
+        && (!siblingRefinementItems.size || siblingRefinementItems.has(target.item))) {
         const contextWordLimit = Math.max(800, Number(process.env.AGENDA_SIBLING_REFINEMENT_WORDS || 2600));
         let contextStart = candidateIndex;
         let contextEnd = candidateIndex + 1;
@@ -1460,14 +1482,163 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
           ].join("\n\n"),
           attempts: 3,
         });
-        const proposal = alignEvidenceToAtomicUnit(resolveCandidateAgendaIdentity({
+        let proposal = alignEvidenceToAtomicUnit(resolveCandidateAgendaIdentity({
           ...candidate,
           "agenda item": itemKey(parsed?.["agenda item"]),
           "agenda item raw": clean(parsed?.["agenda item"]),
-          "atomic unit id": clean(parsed?.["atomic unit id"]),
-          "evidence quote": clean(parsed?.["evidence quote"]),
+          "atomic unit id": clean(parsed?.["atomic unit id"] || parsed?.atomic_id || parsed?.atomicId),
+          "evidence quote": clean(parsed?.["evidence quote"] || parsed?.evidence || parsed?.quote),
           confidence: Math.min(Number(candidate.confidence || 1), Number(parsed?.confidence || 0)),
-        }, canonical), units);
+          }, canonical), units);
+        const priorSibling = canonical.items
+          .filter((entry) => entry.item !== target.item && entry.item.replace(/\.[^.]+$/u, "") === parentPrefix)
+          .sort((a, b) => canonical.items.findIndex((entry) => entry.item === b.item) - canonical.items.findIndex((entry) => entry.item === a.item))
+          .find((entry) => canonical.items.findIndex((item) => item.item === entry.item) < canonical.items.findIndex((item) => item.item === target.item));
+        // Consecutive correspondence/deputation labels are often read aloud
+        // together before discussion begins. In that shape, the first unit
+        // that names the next sibling is only a list preamble; accepting it
+        // makes the following sibling inherit the previous item's motion and
+        // can turn an AORS fee reduction into an Alzheimer request outcome.
+        // Ask Qwen to adjudicate that exact transition against a bounded
+        // neighbourhood and, when needed, move the sibling to the first
+        // target-specific discussion unit. This is agenda-format agnostic and
+        // remains subject to the ordinary literal/semantic gates below.
+        const precedingUnitText = candidateIndex > 0 ? clean(units[candidateIndex - 1]?.text) : "";
+        const precededByListPreamble = /\b(?:next|second|another|following|same correspondence|both of them|two requests?)\b/iu.test(precedingUnitText);
+        if (directAttachmentHasSibling
+          || proposal["atomic unit id"] === candidate["atomic unit id"]
+          || precededByListPreamble) {
+          const siblingContextStart = Math.max(0, candidateIndex - 10);
+          // Keep the adjudication window bounded around the adjacent
+          // transition. Very large neighbourhoods make the model over-weight
+          // the first spoken heading and can hide the later turn into the
+          // target matter.
+          const siblingContextEnd = Math.min(units.length, candidateIndex + 70);
+          const siblingContext = units.slice(siblingContextStart, siblingContextEnd);
+          const siblingAudit = await callOllamaJson({
+            ollamaUrl,
+            llmModel,
+            system: "You adjudicate the exact start of one consecutive municipal agenda sibling. Return strict JSON only.",
+            prompt: [
+              `Target sibling: ${target.item}: ${target.title}`,
+              priorSibling ? `Previous sibling: ${priorSibling.item}: ${priorSibling.title}` : "",
+              `Provisional target boundary: ${candidate["atomic unit id"]}`,
+              "The provisional unit may be only a list preamble: a spoken agenda label followed by the previous sibling's discussion. If the following chronology discusses the previous sibling, do NOT keep the provisional boundary.",
+              "Move forward to the earliest later atomic unit where the chair, staff, or councillor explicitly turns to this target subject. A sentence such as 'the second request by [target]', 'going back to you', 'the second one', or 'moving on to [target]' is the correct transition; do not use the earlier list label, a later answer, statistic, motion result, or the next agenda item's heading.",
+              "Inspect the entire neighbourhood for an interleaved return to the previous sibling. If the previous sibling resumes after the provisional target transition (for example, a motion is made for the previous item and only then the chair says 'going back to' the second item), move the target boundary to that later uninterrupted restart. The target section must not contain a previous-sibling motion.",
+              "Non-overlap is mandatory: if any previous-sibling discussion or vote occurs after the provisional target unit, the provisional unit is invalid even if it names the target. Return the first later unit that begins the target's resumed discussion after that prior matter ends.",
+              "If the provisional unit genuinely starts the target, keep it. Never move the target into the previous sibling's discussion.",
+              "Return only {\"agenda item\":\"ITEM\",\"atomic unit id\":\"atomic_000123\",\"evidence quote\":\"complete literal text of that unit\",\"confidence\":0.95}.",
+              siblingContext.map((unit) => `[${unit["atomic unit id"]}] ${unit.speaker}: ${unit.text}`).join("\n"),
+            ].filter(Boolean).join("\n\n"),
+            attempts: 2,
+          });
+          if (/^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_DEBUG || ""))
+            && (!siblingRefinementItems.size || siblingRefinementItems.has(target.item))) {
+            log(`[agenda-boundaries][debug] sibling audit ${target.item}@${candidate["atomic unit id"]} response=${JSON.stringify(siblingAudit)}`);
+          }
+          const auditedRawId = clean(siblingAudit?.["atomic unit id"] || siblingAudit?.atomic_id || siblingAudit?.atomicId);
+          const auditedNumber = auditedRawId.match(/^atomic_0*(\d+)$/u)?.[1];
+          const auditedId = auditedNumber
+            ? `atomic_${String(Number(auditedNumber)).padStart(6, "0")}`
+            : auditedRawId;
+          const auditedIndex = indexById.get(auditedId);
+          const audited = alignEvidenceToAtomicUnit({
+            ...proposal,
+            "agenda item": target.item,
+            "atomic unit id": auditedId,
+            "evidence quote": clean(siblingAudit?.["evidence quote"] || siblingAudit?.evidence || siblingAudit?.quote),
+            confidence: Math.min(
+              Number(candidate.confidence || 1),
+              Number.isFinite(Number(siblingAudit?.confidence))
+                ? Number(siblingAudit.confidence)
+                : Number(candidate.confidence || 1),
+            ),
+          }, units);
+          if (Number.isInteger(auditedIndex)
+            && !validateBoundaryCandidate(audited, { items: [target] }, units)
+            && await verifyTargetedRecovery({ candidate: audited, entry: target, units, llmModel, ollamaUrl })) {
+            proposal = audited;
+            proposal["semantic verification"] = `${candidate["semantic verification"]}; Qwen sibling list-preamble transition audit`;
+            if (auditedId !== candidate["atomic unit id"]) {
+              log(`[agenda-boundaries] refined sibling list-preamble ${target.item} start ${candidate["atomic unit id"]} -> ${auditedId}`);
+            }
+          }
+        }
+        // A sibling can be interleaved: the next item's policy explanation is
+        // read before the previous item's motion, then the chair returns to
+        // the next item. When the single-boundary adjudication is indecisive,
+        // ask Qwen for both sides of the exclusive partition. This keeps a
+        // prior item's motion out of the target source range without relying
+        // on meeting-specific names or fixed timestamps.
+        if (directAttachmentHasSibling) {
+          const rangeContext = units.slice(Math.max(0, candidateIndex - 10), Math.min(units.length, candidateIndex + 70));
+          const rangeAudit = await callOllamaJson({
+            ollamaUrl,
+            llmModel,
+            system: "You partition interleaved consecutive municipal agenda items. Return strict JSON only.",
+            prompt: [
+              `Previous sibling: ${priorSibling ? `${priorSibling.item}: ${priorSibling.title}` : "the immediately preceding canonical sibling"}`,
+              `Target sibling: ${target.item}: ${target.title}`,
+              `Provisional target boundary: ${candidate["atomic unit id"]}`,
+              "Identify the last transcript unit belonging to the previous sibling and the first target unit after that previous matter is complete. A target heading or policy explanation may be read before the previous sibling's motion; in that case, the target start is the later return to the target, not the heading.",
+              "Include the vote question and its result (for example 'all in favour', 'carried', 'approved', or 'passed') in the previous sibling's span. Return the earliest target unit after that complete discussion or vote. If the previous sibling is not interleaved, the target may retain its provisional boundary.",
+              "Return only {\"previous last atomic unit id\":\"atomic_000123\",\"target start atomic unit id\":\"atomic_000123\",\"target evidence quote\":\"complete literal text of target unit\",\"confidence\":0.95}.",
+              rangeContext.map((unit) => `[${unit["atomic unit id"]}] ${unit.speaker}: ${unit.text}`).join("\n"),
+            ].join("\n\n"),
+            attempts: 2,
+          });
+          if (/^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_DEBUG || ""))
+            && (!siblingRefinementItems.size || siblingRefinementItems.has(target.item))) {
+            log(`[agenda-boundaries][debug] sibling range audit ${target.item}@${candidate["atomic unit id"]} response=${JSON.stringify(rangeAudit)}`);
+          }
+          const rangeTargetRaw = clean(
+            rangeAudit?.["target start atomic unit id"]
+              || rangeAudit?.["target atomic unit id"]
+              || rangeAudit?.target_start_atomic_id
+              || rangeAudit?.atomic_id,
+          );
+          const rangeTargetNumber = rangeTargetRaw.match(/^atomic_0*(\d+)$/u)?.[1];
+          const rangeTargetId = rangeTargetNumber
+            ? `atomic_${String(Number(rangeTargetNumber)).padStart(6, "0")}`
+            : rangeTargetRaw;
+          const rangePreviousRaw = clean(
+            rangeAudit?.["previous last atomic unit id"]
+              || rangeAudit?.["previous atomic unit id"]
+              || rangeAudit?.previous_last_atomic_id,
+          );
+          const rangePreviousNumber = rangePreviousRaw.match(/^atomic_0*(\d+)$/u)?.[1];
+          const rangePreviousId = rangePreviousNumber
+            ? `atomic_${String(Number(rangePreviousNumber)).padStart(6, "0")}`
+            : rangePreviousRaw;
+          const rangeTargetIndex = indexById.get(rangeTargetId);
+          const rangePreviousIndex = indexById.get(rangePreviousId);
+          const rangeCandidate = alignEvidenceToAtomicUnit({
+            ...candidate,
+            "agenda item": target.item,
+            "atomic unit id": rangeTargetId,
+            // Bind evidence to the selected atomic unit itself. Qwen may copy
+            // a quote from a nearby unit while returning the correct ID; the
+            // boundary contract must never accept that mismatched quote.
+            "evidence quote": units[rangeTargetIndex]?.text
+              || clean(rangeAudit?.["target evidence quote"] || rangeAudit?.["evidence quote"] || rangeAudit?.quote),
+            confidence: Math.min(
+              Number(candidate.confidence || 1),
+              Number.isFinite(Number(rangeAudit?.confidence)) ? Number(rangeAudit.confidence) : Number(candidate.confidence || 1),
+            ),
+          }, units);
+          if (Number.isInteger(rangeTargetIndex)
+            && Number.isInteger(rangePreviousIndex)
+            && rangeTargetIndex > rangePreviousIndex
+            && !validateBoundaryCandidate(rangeCandidate, { items: [target] }, units)
+            && await verifyTargetedRecovery({ candidate: rangeCandidate, entry: target, units, llmModel, ollamaUrl })) {
+            proposal = rangeCandidate;
+            proposal["semantic verification"] = `${candidate["semantic verification"]}; Qwen exclusive sibling range audit`;
+            if (rangeTargetId !== candidate["atomic unit id"]) {
+              log(`[agenda-boundaries] refined exclusive sibling ${target.item} start ${candidate["atomic unit id"]} -> ${rangeTargetId}`);
+            }
+          }
+        }
         if (proposal["agenda item"] === target.item
           && !validateBoundaryCandidate(proposal, canonical, units)
           && await verifyTargetedRecovery({ candidate: proposal, entry: target, units, llmModel, ollamaUrl })) {
@@ -2842,23 +3013,40 @@ export async function runLlmAgendaSegmentation({
     ollamaUrl,
     log,
   }), canonical);
-  const initialCandidates = await auditWholeChronologyCandidates({
-    candidates: resolvedInitialCandidates,
-    canonical,
-    units,
-    llmModel,
-    ollamaUrl,
-    log,
-  });
-  const recoveredCandidates = await recoverMissingCanonicalCandidates({
-    candidates: initialCandidates,
-    canonical,
-    units,
-    windows,
-    llmModel,
-    ollamaUrl,
-    log,
-  });
+  // A same-input checkpoint explicitly marked trusted has already passed the
+  // literal and semantic candidate contract. Re-auditing every cached
+  // boundary can randomly discard valid sibling transitions and trigger broad
+  // recovery for unrelated skipped items. Keep the opt-in trust mode truly
+  // reusable; normal runs continue to receive the independent blind audit.
+  const trustValidatedCandidates = /^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_TRUST_VALIDATED_CHECKPOINT || ""))
+    && /^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_REUSE_CANDIDATES || ""));
+  const initialCandidates = trustValidatedCandidates
+    ? resolvedInitialCandidates
+    : await auditWholeChronologyCandidates({
+      candidates: resolvedInitialCandidates,
+      canonical,
+      units,
+      llmModel,
+      ollamaUrl,
+      log,
+    });
+  if (trustValidatedCandidates) log(`[agenda-boundaries] trusted same-input candidate checkpoint; skipped blind chronology re-audit`);
+  // A trusted same-input checkpoint has already passed the candidate contract.
+  // Re-running broad missing-item recovery on that checkpoint is both
+  // needlessly expensive and capable of manufacturing unrelated procedural
+  // boundaries. New inputs still take the normal recovery path.
+  const recoveredCandidates = trustValidatedCandidates
+    ? initialCandidates
+    : await recoverMissingCanonicalCandidates({
+      candidates: initialCandidates,
+      canonical,
+      units,
+      windows,
+      llmModel,
+      ollamaUrl,
+      log,
+    });
+  if (trustValidatedCandidates) log(`[agenda-boundaries] trusted same-input candidate checkpoint; skipped missing-item recovery`);
   const reconciliableCandidates = pruneConflictingBoundaryCandidates(await resolveCandidateBoundaryConflicts({
     candidates: pruneConflictingBoundaryCandidates(recoveredCandidates, canonical),
     canonical,
