@@ -795,6 +795,13 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
     discharge_kind = normalize_text(entry.get("dischargeKind")).lower()
     if not discharge_kind:
       continue
+    if not process_view.get("available"):
+      common["candidateDiagnostics"].append({
+        "runtimeName": runtime_name,
+        "state": "telemetry-unavailable",
+        "reason": "GPU process ownership telemetry unavailable"
+      })
+      continue
     activity = observe_runtime_activity(runtime_name, entry)
     if activity.get("state") != "idle":
       common["candidateDiagnostics"].append({
@@ -805,10 +812,18 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
       })
       continue
     usage = process_view.get("runtimes", {}).get(runtime_name, {})
+    used_memory = int(usage.get("usedMemoryMb") or 0)
+    if used_memory <= 0:
+      common["candidateDiagnostics"].append({
+        "runtimeName": runtime_name,
+        "state": "no-mapped-vram",
+        "reason": "no GPU memory is mapped to the managed runtime"
+      })
+      continue
     candidates.append({
       "runtimeName": runtime_name,
       "dischargeKind": discharge_kind,
-      "usedMemoryMb": int(usage.get("usedMemoryMb") or 0),
+      "usedMemoryMb": used_memory,
       "activity": activity
     })
   candidates.sort(key=lambda item: (-item["usedMemoryMb"], item["runtimeName"]))

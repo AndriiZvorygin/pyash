@@ -344,6 +344,28 @@ class HousekeeperCapacityTests(unittest.TestCase):
         "other": {"runtimeName": "other", "activityProbe": "unknown", "dischargeKind": ""}
       })
 
+  def test_missing_gpu_process_telemetry_does_not_authorize_reclamation(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576}]
+    }
+    server.managed_gpu_processes = lambda _registry: {
+      "available": False,
+      "runtimes": {},
+      "unmanagedProcesses": []
+    }
+    with self.assertRaisesRegex(RuntimeError, "insufficient"):
+      server.ensure_capacity_for_job(self.target_job(), {
+        "huggingface": {"runtimeName": "huggingface"},
+        "comfyui": {
+          "runtimeName": "comfyui",
+          "containerName": "comfyui",
+          "gpuExpected": True,
+          "activityProbe": "comfyui-queue",
+          "dischargeKind": "comfyui"
+        }
+      })
+
   def test_capacity_preview_is_read_only_and_reports_reclaim_candidate(self):
     server.parse_nvidia_smi = lambda: {
       "available": True,
