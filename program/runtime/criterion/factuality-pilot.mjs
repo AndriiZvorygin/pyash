@@ -258,7 +258,24 @@ async function fetchJson(url, options = {}, fetchImpl = globalThis.fetch) {
   return response.json();
 }
 
-export async function preflightOllama({ baseUrl, models, sample, fetchImpl = globalThis.fetch } = {}) {
+export async function preflightOllamaModel({ baseUrl, model, sample, fetchImpl = globalThis.fetch } = {}) {
+  const base = resolveOllamaBaseUrl(baseUrl);
+  const result = { status: "ok", baseUrl: base, model, requests: [] };
+  try {
+    for (const [kind, prompt] of [["warmup", "Reply with exactly OK."], ["meeting", `${MEETINGBANK_FACTUALITY_PROMPT}\n\nTRANSCRIPT:\n${sample.input}`]]) {
+      try {
+        const response = await runOllamaChat({ model, prompt, profile: "summary_direct", contextLength: 32768, baseUrl: base, fetchImpl, requestTimeoutMs: 180000, maxRetries: 2 });
+        result.requests.push({ model, kind, status: "ok", timing: response.timing, request: response.request });
+      } catch (error) {
+        result.requests.push({ model, kind, status: isTransientOllamaError(error) ? "transient-error" : "error", error: text(error?.message ?? error), request: error?.request ?? null });
+        throw error;
+      }
+    }
+  } catch (error) { result.status = "failed"; result.error = text(error?.message ?? error); }
+  return result;
+}
+
+export async function preflightOllama({ baseUrl, models, sample, fetchImpl = globalThis.fetch, probeModels = true } = {}) {
   const base = resolveOllamaBaseUrl(baseUrl);
   const result = { status: "ok", baseUrl: base, startedAt: new Date().toISOString(), version: null, models: [], requests: [] };
   try {
@@ -268,14 +285,10 @@ export async function preflightOllama({ baseUrl, models, sample, fetchImpl = glo
     result.models = models.map(model => ({ requestedModel: model, resolvedModel: available.has(model) ? model : null, available: available.has(model), digest: available.get(model)?.digest ?? null }));
     for (const model of models) {
       if (!available.has(model)) throw new Error(`requested Ollama model unavailable: ${model}`);
-      for (const [kind, prompt] of [["warmup", "Reply with exactly OK."], ["meeting", `${MEETINGBANK_FACTUALITY_PROMPT}\n\nTRANSCRIPT:\n${sample.input}`]]) {
-        try {
-          const response = await runOllamaChat({ model, prompt, profile: "summary_direct", contextLength: 32768, baseUrl: base, fetchImpl, requestTimeoutMs: 180000, maxRetries: 2 });
-          result.requests.push({ model, kind, status: "ok", timing: response.timing, request: response.request });
-        } catch (error) {
-          result.requests.push({ model, kind, status: isTransientOllamaError(error) ? "transient-error" : "error", error: text(error?.message ?? error), request: error?.request ?? null });
-          throw error;
-        }
+      if (probeModels) {
+        const probe = await preflightOllamaModel({ baseUrl: base, model, sample, fetchImpl });
+        result.requests.push(...probe.requests);
+        if (probe.status !== "ok") throw new Error(probe.error);
       }
     }
   } catch (error) { result.status = "failed"; result.error = text(error?.message ?? error); }
@@ -318,23 +331,39 @@ export async function runMeetingBankFactualityPilot({
   const loaded = await loadSuiteSamples({ benchmark: "meetingbank", datasetPath, split });
   const selection = selectMeetingBankJudgePilotSamples(loaded.samples, { count: smoke ? Math.min(5, selectionCount) : selectionCount, seed: selectionSeed });
   if (!selection.length) throw new Error("MeetingBank factuality pilot selected no samples");
-  const ollama = await preflightOllama({ baseUrl, models, sample: selection[0], fetchImpl });
+  const ollama = await preflightOllama({ baseUrl, models, sample: selection[0], fetchImpl, probeModels: false });
   if (ollama.status !== "ok") throw new Error(`Ollama preflight failed: ${ollama.error}`);
-  const generationRunId = `${id}-generation`;
   const metadataProvider = async ({ model }) => ({ ...(await readOllamaMetadata({ model, baseUrl: ollama.baseUrl, fetchImpl })), requestedModel: model, resolvedModel: model });
   const generationExecutor = input => reliableExecutor({ input: { ...input, model: input.model }, baseUrl: ollama.baseUrl, fetchImpl });
-  const generation = generationRunner ? await generationRunner({ id: generationRunId, samples: selection, models, resume }) : await runCriterion({
-    benchmark: "meetingbank", datasetPath, split, sampleIds: selection.map(sample => sample.id), models, profile: "summary_direct", contextLength: 32768,
-    runId: generationRunId, root, resume, engine: "ollama", executor: generationExecutor, metadataProvider,
-    promptTransform: sample => `${MEETINGBANK_FACTUALITY_PROMPT}\n\nTRANSCRIPT:\n${sample.input}`,
-    promptVariant: "summary_meetingbank_factuality", promptTemplateHash: MEETINGBANK_FACTUALITY_PROMPT_HASH, recordPrompt: true,
-    replayCommand: `node command/criterion.mjs meetingbank-factuality-pilot --dataset ${datasetPath} --run-id ${id} --resume`
-  });
-  const ollamaDischarge = await dischargeOllamaModels({ baseUrl: ollama.baseUrl, models, fetchImpl });
+  const generationRuns = {};
+  const generationRows = [];
+  const ollamaDischarge = { status: "pending", results: [] };
+  for (const model of models) {
+    const generationRunId = `${id}-generation-${sha256(model).slice(0, 12)}`;
+    generationRuns[model] = generationRunId;
+    let generation;
+    try {
+      const probe = await preflightOllamaModel({ baseUrl: ollama.baseUrl, model, sample: selection[0], fetchImpl });
+      ollama.requests.push(...probe.requests);
+      if (probe.status !== "ok") throw new Error(`Ollama preflight failed for ${model}: ${probe.error}`);
+      generation = generationRunner ? await generationRunner({ id: generationRunId, samples: selection, models: [model], resume }) : await runCriterion({
+        benchmark: "meetingbank", datasetPath, split, sampleIds: selection.map(sample => sample.id), models: [model], profile: "summary_direct", contextLength: 32768,
+        runId: generationRunId, root, resume, engine: "ollama", executor: generationExecutor, metadataProvider,
+        promptTransform: sample => `${MEETINGBANK_FACTUALITY_PROMPT}\n\nTRANSCRIPT:\n${sample.input}`,
+        promptVariant: "summary_meetingbank_factuality", promptTemplateHash: MEETINGBANK_FACTUALITY_PROMPT_HASH, recordPrompt: true,
+        replayCommand: `node command/criterion.mjs meetingbank-factuality-pilot --dataset ${datasetPath} --run-id ${id} --resume`
+      });
+      generationRuns[model] = generationRunId;
+      generationRows.push(...(generation.results ?? []));
+    } finally {
+      const discharge = await dischargeOllamaModels({ baseUrl: ollama.baseUrl, models: [model], fetchImpl });
+      ollamaDischarge.results.push(...discharge.results);
+    }
+  }
+  ollamaDischarge.status = ollamaDischarge.results.every(result => result.status === "ok") ? "ok" : "partial";
   const checkpointPath = path.resolve(root, "criterion", "results", `${id}.jsonl`);
   const prior = resume ? await readRows(checkpointPath) : [];
   const rows = new Map(prior.map(row => [row.identity, row]));
-  const generationRows = generation.results ?? [];
   const judge = { modelId: UNIRRM_FACTUALITY_MODEL, name: UNIRRM_FACTUALITY_NAME, promptVersion: UNIRRM_FACTUALITY_PROMPT_VERSION, temperature: 0, maxOutputTokens: JUDGE_MAX_OUTPUT_TOKENS, referenceHidden: true, discharge: { status: "pending" } };
   let adapter = null;
   const executor = judgeExecutor ?? (adapter = await createHuggingFaceJudgeExecutor({ model: UNIRRM_FACTUALITY_MODEL, root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, generation: { maxInputTokens: 32768, maxOutputTokens: JUDGE_MAX_OUTPUT_TOKENS, minOutputTokens: 1, numBeams: 1, doSample: false, enableThinking: false, repetitionPenalty: 1.05 }, dischargeOnClose: true })).executor;
@@ -370,7 +399,7 @@ export async function runMeetingBankFactualityPilot({
         meetingMetadata: sample.metadata ?? {}, sourceHash: sha256(sample.input), summary: generationRow.output, summaryHash: generationRow.outputHash ?? sha256(generationRow.output), referenceHiddenFromJudge: true,
         claims, claimCounts, scores, generation: { status: generationRow.status, outputHash: generationRow.outputHash, timing: generationRow.metrics ?? {}, modelMetadata: generationRow.modelMetadata ?? null },
         judge: { status: result.status, attempts: result.attempts, repairRetries: result.repairRetries, rawResponse: result.rawResponse ?? "", normalized: normalized ?? null, error: result.error ?? null, metadata: result.metadata ?? null, timing: result.timing ?? {} },
-        provenance: { datasetHash: loaded.datasetHash, split: loaded.actualSplit, sampleId: sample.id, sourceHash: sha256(sample.input), generationRunId, generationPromptHash: MEETINGBANK_FACTUALITY_PROMPT_HASH, judgeModel: UNIRRM_FACTUALITY_MODEL, judgePromptVersion: UNIRRM_FACTUALITY_PROMPT_VERSION, referenceHidden: true },
+        provenance: { datasetHash: loaded.datasetHash, split: loaded.actualSplit, sampleId: sample.id, sourceHash: sha256(sample.input), generationRunId: generationRuns[model], generationPromptHash: MEETINGBANK_FACTUALITY_PROMPT_HASH, judgeModel: UNIRRM_FACTUALITY_MODEL, judgePromptVersion: UNIRRM_FACTUALITY_PROMPT_VERSION, referenceHidden: true },
         error: complete ? null : normalized?.error ?? result.error ?? "judge evidence incomplete", finishedAt: now().toISOString()
       });
       await writeRows(checkpointPath, [...rows.values()]);
@@ -386,7 +415,7 @@ export async function runMeetingBankFactualityPilot({
   const judgeRows = resultRows.map(row => row.judge).filter(Boolean);
   const judgeStats = { initialRequests: judgeRows.length, repairRetries: judgeRows.reduce((sum, row) => sum + Number(row.repairRetries ?? 0), 0), successful: resultRows.filter(row => row.status === "ok").length, malformed: judgeRows.filter(row => row.status === "malformed-output").length, truncated: judgeRows.filter(row => row.status === "truncated-output").length, transport: judgeRows.filter(row => row.status === "transport-error").length, incomplete: judgeRows.filter(row => row.status === "incomplete").length };
   const finalRun = await writeRunArtifacts({
-    runId: id, criterion: "meetingbank-factuality-pilot", evaluationMode: MEETINGBANK_FACTUALITY_MODE, suite: { key: "meetingbank-factuality-pilot", name: "MeetingBank transcript-grounded factuality pilot", version: "factuality-v3-single-request", sourceUrls: ["https://meetingbank.github.io/dataset/", "https://huggingface.co/SUSTech-NLP/UniRRM-8B", "https://arxiv.org/html/2609.05910v1"], licenseUrls: ["https://meetingbank.github.io/license/"] }, status: resultRows.some(row => row.status !== "ok") ? "partial" : "completed", split, actualSplit: loaded.actualSplit, datasetPath, datasetHash: loaded.datasetHash, datasetRevision: process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned", models, engine: "ollama-plus-huggingface-judge", profile: "summary_direct", contextLength: 32768, promptHash: MEETINGBANK_FACTUALITY_PROMPT_HASH, generationPrompt: { name: "summary_meetingbank_factuality", hash: MEETINGBANK_FACTUALITY_PROMPT_HASH, text: MEETINGBANK_FACTUALITY_PROMPT }, generationRunId, selection: { seed: selectionSeed, count: selection.length, sampleIds: selection.map(sample => sample.id), datasetHash: loaded.datasetHash }, results: resultRows, aggregates,
+    runId: id, criterion: "meetingbank-factuality-pilot", evaluationMode: MEETINGBANK_FACTUALITY_MODE, suite: { key: "meetingbank-factuality-pilot", name: "MeetingBank transcript-grounded factuality pilot", version: "factuality-v3-single-request", sourceUrls: ["https://meetingbank.github.io/dataset/", "https://huggingface.co/SUSTech-NLP/UniRRM-8B", "https://arxiv.org/html/2609.05910v1"], licenseUrls: ["https://meetingbank.github.io/license/"] }, status: resultRows.some(row => row.status !== "ok") ? "partial" : "completed", split, actualSplit: loaded.actualSplit, datasetPath, datasetHash: loaded.datasetHash, datasetRevision: process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned", models, engine: "ollama-plus-huggingface-judge", profile: "summary_direct", contextLength: 32768, promptHash: MEETINGBANK_FACTUALITY_PROMPT_HASH, generationPrompt: { name: "summary_meetingbank_factuality", hash: MEETINGBANK_FACTUALITY_PROMPT_HASH, text: MEETINGBANK_FACTUALITY_PROMPT }, generationRunIds: generationRuns, selection: { seed: selectionSeed, count: selection.length, sampleIds: selection.map(sample => sample.id), datasetHash: loaded.datasetHash }, execution: { generationCompletedForAllModelsBeforeJudging: true, generationOrder: models, judgingOrder: models }, results: resultRows, aggregates,
     generationStats: { attempted: generationRows.length, successful: generationRows.filter(row => row.status === "ok").length, transientRetries: generationRows.reduce((sum, row) => sum + Number(row.metrics?.transportRetries ?? 0), 0), permanentFailures: generationRows.filter(row => row.status === "error").length }, judgeStats,
     ollama: { ...ollama, preflight: ollama, discharge: ollamaDischarge }, judge: { ...judge, revision: null, digest: null, referenceHidden: true }, machine: await collectMachineMetadata(), smoke, runScope: smoke ? "smoke" : "pilot", createdAt: now().toISOString(), startedAt: now().toISOString(), finishedAt: now().toISOString(), totalWallClockMs: 0, replayCommand: `node command/criterion.mjs meetingbank-factuality-pilot --dataset ${datasetPath} --run-id ${id} --resume`
   }, { root, checkpointResults: resultRows, renderMarkdown, renderCsv, renderHtml });
