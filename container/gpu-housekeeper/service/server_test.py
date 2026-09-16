@@ -796,6 +796,42 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertEqual(result["result"], {"response": "ok"})
     self.assertEqual(calls, [("http://swac:8090", "/job/job-peer", None)])
 
+  def test_peer_route_uses_execution_slot_reservation_not_only_running_queue(self):
+    responses = iter([
+      {
+        "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+        "profiles": [],
+        "executionSlotBusy": True,
+        "queueDepth": 0,
+      },
+      {"feasible": True, "decision": "fits"},
+    ])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "swac",
+      "http://swac:8090",
+      {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}}
+    )
+
+    self.assertTrue(candidate["available"])
+    self.assertTrue(candidate["busy"])
+    self.assertFalse(candidate["immediate"])
+
+  def test_local_queued_submission_reserves_execution_slot(self):
+    server.configured_peers = lambda: {}
+    server.local_route_state = server.__dict__["local_route_state"]
+    result = server.submit_job({
+      "handleId": "reservation",
+      "runtimeName": "ollama",
+      "profileName": "qwen",
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}}
+    }, {"ollama": {}}, "mriczo")
+
+    self.assertTrue(result["accepted"])
+    self.assertTrue(server.local_execution_slot_busy())
+    self.assertTrue(server.make_snapshot("mriczo")["executionSlotBusy"])
+
   def test_forwarding_failure_does_not_create_local_duplicate(self):
     server.configured_peers = lambda: {"swac": "http://swac:8090"}
     server.local_route_state = lambda _job, _registry, _host: {
