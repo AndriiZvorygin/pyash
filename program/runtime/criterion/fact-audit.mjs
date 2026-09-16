@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { loadSuiteSamples, readDatasetFile } from "./datasets.mjs";
-import { runOllamaChat } from "./ollama.mjs";
-import { parseJsonOutput, sha256, stableJson, tokenize } from "./metrics.mjs";
+import { createQueuedOllamaExecutor, runOllamaChat } from "./ollama.mjs";
+import { parseJsonOutput, sha256, stableJson, stripThinking, tokenize } from "./metrics.mjs";
 import { loadRun, writeRunArtifacts } from "./report.mjs";
 
 export const FACT_EVALUATION_MODES = Object.freeze({
@@ -13,6 +13,42 @@ export const FACT_EVALUATION_MODES = Object.freeze({
 
 export const FACT_SCORER_VERSION = "omnicseval-style-v1";
 export const FACT_JUDGE_PROMPT_VERSION = "meetingbank-fact-judge-v1";
+
+const EXACT_JUDGE_RESPONSE_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    matches: {
+      type: "array",
+      maxItems: 32,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          keyFactIndex: { type: "integer", minimum: 0 },
+          summarySentenceId: { type: "string" },
+          matched: { type: "boolean" }
+        },
+        required: ["keyFactIndex", "summarySentenceId", "matched"]
+      }
+    },
+    verifications: {
+      type: "array",
+      maxItems: 40,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          claimIndex: { type: "integer", minimum: 0 },
+          support: { type: "string", enum: ["supported", "unsupported", "contradiction", "unresolved"] },
+          sourceSentenceRefs: { type: "array", items: { type: "string" } }
+        },
+        required: ["claimIndex", "support", "sourceSentenceRefs"]
+      }
+    }
+  },
+  required: ["matches", "verifications"]
+});
 
 const MUNICIPAL_FLAGS = Object.freeze({
   motion: /\b(?:motion|moved|move to)\b/iu,
@@ -73,9 +109,10 @@ function normalizeMatches(rawMatches = []) {
   if (!Array.isArray(rawMatches)) return [];
   return rawMatches.map((match, index) => {
     const item = match && typeof match === "object" ? match : {};
+    const keyFactIndex = Number(item.keyFactIndex ?? item.key_fact_index);
     return {
       id: String(item.id ?? `match${index + 1}`),
-      keyFactId: String(item.keyFactId ?? item.factId ?? item.fact_id ?? item.key_fact_id ?? ""),
+      keyFactId: String(item.keyFactId ?? item.factId ?? item.fact_id ?? item.key_fact_id ?? (Number.isInteger(keyFactIndex) ? `fact${keyFactIndex + 1}` : "")),
       summarySentenceId: String(item.summarySentenceId ?? item.sentenceId ?? item.summary_sentence_id ?? ""),
       matched: item.matched === undefined ? item.match === undefined ? item.decision === "matched" || item.status === "matched" : Boolean(item.match) : Boolean(item.matched),
       decision: item.decision ?? (item.matched ? "matched" : "unmatched"),
@@ -91,7 +128,8 @@ function normalizeVerifications(rawVerifications = [], claims = []) {
   const source = Array.isArray(rawVerifications) ? rawVerifications : [];
   const byClaim = new Map(source.map(item => [String(item?.claimId ?? item?.id ?? ""), item]));
   return claims.map((claim, index) => {
-    const item = byClaim.get(String(claim.id)) ?? source[index] ?? {};
+    const indexed = source.find(candidate => Number(candidate?.claimIndex ?? candidate?.claim_index) === index);
+    const item = byClaim.get(String(claim.id)) ?? indexed ?? source[index] ?? {};
     const decision = String(item.support ?? item.decision ?? item.status ?? "unresolved").toLowerCase();
     const support = ["supported", "support", "yes", "true"].includes(decision)
       ? "supported"
@@ -199,57 +237,86 @@ export function createDeterministicFactJudge({ scorerVersion = "deterministic-le
 }
 
 function factPrompt({ sourceText, summaryText, annotation = null }) {
+  const releasedKeyFacts = annotation?.keyFacts ?? annotation?.key_facts ?? annotation?.facts ?? null;
+  const exact = Array.isArray(releasedKeyFacts) && releasedKeyFacts.length > 0;
   const annotationHints = annotation ? {
     sourceDataset: annotationSourceDataset(annotation),
     sourceId: annotationSourceId(annotation),
-    keyFacts: annotation.keyFacts ?? annotation.key_facts ?? annotation.facts ?? null,
+    keyFacts: releasedKeyFacts,
     reference: annotation.reference ?? null
   } : null;
+  const outputContract = exact
+    ? "For this exact annotated mode, do not repeat or regenerate the released key facts. Return exactly one compact JSON object with only {matches:[{keyFactIndex,summarySentenceId,matched}],verifications:[{claimIndex,support,sourceSentenceRefs}]}. Use zero-based keyFactIndex and claimIndex. Include at most one match per released key fact and one verification per summary sentence. Do not emit keyFacts, claims, text, flags, explanations, confidence, transcript, reference, markdown, or prose."
+    : "The JSON shape must be: {keyFacts:[{id,text,sourceSentenceRefs,flags}],claims:[{id,text,sentenceId,flags}],matches:[{keyFactId,summarySentenceId,matched,explanation,confidence}],verifications:[{claimId,support,sourceSentenceRefs,explanation,confidence}]}";
   return [
     "You are an external factuality evaluator for a municipal meeting summary.",
     "Return JSON only. Do not write a narrative outside the JSON object.",
-    "Extract atomic key facts from SOURCE, atomic claims from SUMMARY, match key facts to summary sentences, and verify every summary claim against SOURCE.",
+    exact ? "Use the released key facts below as the authoritative source inventory. Extract only atomic claims from SUMMARY, match those released facts to summary sentences, and verify every summary claim against SOURCE." : "Extract atomic key facts from SOURCE, atomic claims from SUMMARY, match key facts to summary sentences, and verify every summary claim against SOURCE.",
     "Use support values supported, unsupported, contradiction, or unresolved.",
     "Preserve source sentence ids as s1, s2... and summary sentence ids as s1, s2... in evidence references.",
-    "The JSON shape must be: {keyFacts:[{id,text,sourceSentenceRefs,flags}],claims:[{id,text,sentenceId,flags}],matches:[{keyFactId,summarySentenceId,matched,explanation,confidence}],verifications:[{claimId,support,sourceSentenceRefs,explanation,confidence}]}",
+    outputContract,
     annotationHints ? `RELEASED ANNOTATION HINTS:\n${JSON.stringify(annotationHints)}` : "",
     `SOURCE:\n${sourceText}`,
     `SUMMARY:\n${summaryText}`
   ].filter(Boolean).join("\n\n");
 }
 
-export function createOllamaFactJudge({ model, baseUrl, temperature = 0, maxOutputTokens = 4096, promptVersion = FACT_JUDGE_PROMPT_VERSION, scorerVersion = FACT_SCORER_VERSION, fetchImpl: configuredFetchImpl, profile = "summary_direct" } = {}) {
+export function createOllamaFactJudge({ model, baseUrl, temperature = 0, maxOutputTokens = 4096, promptVersion = FACT_JUDGE_PROMPT_VERSION, scorerVersion = FACT_SCORER_VERSION, fetchImpl: configuredFetchImpl, profile = "summary_direct", executor = null, maxRepairRetries = 1 } = {}) {
   if (!model) throw new Error("fact audit requires a separate judge model");
-  return async ({ sourceText, summaryText, annotation, fetchImpl = configuredFetchImpl }) => {
+  return async ({ sourceText, summaryText, annotation, fetchImpl = configuredFetchImpl, sampleId = "", sourceRunId = "", model: evaluatedModel = "" }) => {
     const startedAt = Date.now();
-    const response = await runOllamaChat({
-      model,
-      prompt: factPrompt({ sourceText, summaryText, annotation }),
-      profile,
-      sampling: { temperature, format: "json", num_predict: maxOutputTokens },
-      baseUrl,
-      fetchImpl
-    });
-    const parsed = parseJsonOutput(response.text);
-    if (!parsed.valid || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
-      throw new Error(`fact judge returned invalid JSON: ${parsed.error ?? "object required"}`);
-    }
-    return {
-      ...parsed.value,
-      judge: {
-        provider: "ollama",
+    const basePrompt = factPrompt({ sourceText, summaryText, annotation });
+    const attempts = [];
+    for (let attempt = 0; attempt <= Math.max(0, Number(maxRepairRetries) || 0); attempt += 1) {
+      const repairPrompt = attempt
+        ? `${basePrompt}\n\nYour previous response was not valid JSON. Return the same evidence as one complete valid JSON object only. Do not add prose or markdown.\nPREVIOUS RESPONSE:\n${attempts.at(-1)?.raw?.slice(0, 30000) ?? ""}`
+        : basePrompt;
+      const request = {
         model,
-        promptVersion,
-        scorerVersion,
-        temperature,
-        maxOutputTokens,
+        prompt: repairPrompt,
         profile,
-        effectiveThink: response.effectiveThink ?? false,
-        timing: response.timing ?? {},
-        elapsedMs: Date.now() - startedAt
+        sampling: { temperature, format: exactResponseFormat(annotation), num_predict: maxOutputTokens },
+        identity: `fact:${sourceRunId}:${evaluatedModel}:${sampleId}${attempt ? `:repair-${attempt}` : ""}`,
+        operation: "judge"
+      };
+      const response = executor
+        ? await executor(request)
+        : await runOllamaChat({ ...request, baseUrl, fetchImpl });
+      const raw = String(response.text ?? "");
+      const parsed = parseJsonOutput(stripThinking(raw));
+      attempts.push({ attempt: attempt + 1, status: parsed.valid ? "ok" : "malformed-output", raw, error: parsed.error ?? null, responseHash: sha256(raw) });
+      if (!parsed.valid || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
+        if (attempt < Math.max(0, Number(maxRepairRetries) || 0)) continue;
+        const error = new Error(`fact judge returned invalid JSON: ${parsed.error ?? "object required"}`);
+        error.judge = { attempts, repairRetries: attempt, rawResponse: raw };
+        throw error;
       }
-    };
+      return {
+        ...parsed.value,
+        judge: {
+          provider: "ollama",
+          model,
+          promptVersion,
+          scorerVersion,
+          temperature,
+          maxOutputTokens,
+          profile,
+          effectiveThink: response.effectiveThink ?? false,
+          timing: response.timing ?? {},
+          elapsedMs: Date.now() - startedAt,
+          attempts,
+          repairRetries: attempt,
+          rawResponse: raw
+        }
+      };
+    }
+    throw new Error("fact judge exhausted JSON repair attempts");
   };
+}
+
+function exactResponseFormat(annotation) {
+  const facts = annotation?.keyFacts ?? annotation?.key_facts ?? annotation?.facts ?? null;
+  return Array.isArray(facts) && facts.length > 0 ? EXACT_JUDGE_RESPONSE_SCHEMA : "json";
 }
 
 function annotationSourceId(annotation) {
@@ -287,7 +354,8 @@ export function joinOmniMeetingSample(annotations, samples) {
 
 function sourceRowMatches(row, sample) {
   return String(row.sampleId) === String(sample.id)
-    || (sample.metadata?.meetingId && String(row.metadata?.meetingId ?? "") === String(sample.metadata.meetingId));
+    || (sample.metadata?.meetingId && String(row.metadata?.meetingId ?? "") === String(sample.metadata.meetingId))
+    || (row.inputHash && row.inputHash === sha256(sample.input ?? ""));
 }
 
 function factAggregate(rows) {
@@ -395,6 +463,8 @@ export async function runFactAudit({
   judgeMaxOutputTokens = 4096,
   judgePromptVersion = FACT_JUDGE_PROMPT_VERSION,
   factScorerVersion = FACT_SCORER_VERSION,
+  gpuHousekeeperUrl = process.env.PYA_GPU_HOUSEKEEPER_URL ?? null,
+  gpuId = process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0",
   datasetRevision = process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned",
   resume = false,
   smoke = false,
@@ -414,7 +484,10 @@ export async function runFactAudit({
   const sourceRows = sourceRunRows(sourceRuns);
   const modelNames = runModels(sourceRuns);
   if (judgeModel && modelNames.includes(judgeModel)) throw new Error("fact audit judge must be separate from every evaluated source model");
-  const resolvedJudge = judge ?? (judgeModel ? createOllamaFactJudge({ model: judgeModel, baseUrl: judgeBaseUrl, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, promptVersion: judgePromptVersion, scorerVersion: factScorerVersion }) : null);
+  const managedOllama = !judge && judgeProvider === "ollama" && gpuHousekeeperUrl
+    ? createQueuedOllamaExecutor({ root, runId: runId ?? "criterion-fact", housekeeperUrl: gpuHousekeeperUrl, gpuId, vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB })
+    : null;
+  const resolvedJudge = judge ?? (judgeModel ? createOllamaFactJudge({ model: judgeModel, baseUrl: judgeBaseUrl, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, promptVersion: judgePromptVersion, scorerVersion: factScorerVersion, executor: managedOllama?.executor }) : null);
   if (!resolvedJudge) throw new Error("fact audit requires an external judge model; tests may inject a deterministic judge");
   const id = String(runId ?? `${mode}-${now().toISOString().replace(/[-:.TZ]/gu, "").slice(0, 14)}-${sha256(`${mode}:${now().toISOString()}`).slice(0, 8)}`);
   const outputJsonl = path.resolve(root, "criterion", "results", `${id}.jsonl`);
@@ -527,13 +600,14 @@ export async function runFactAudit({
         };
         results.push(row); completed.set(identity, row);
       } catch (error) {
-        const row = { ...base, status: "error", factEvidence: null, scores: {}, metrics: {}, error: error?.message ?? String(error), finishedAt: now().toISOString() };
+        const row = { ...base, status: "error", factEvidence: null, scores: {}, metrics: {}, judge: error?.judge ?? null, error: error?.message ?? String(error), finishedAt: now().toISOString() };
         attemptHistory.push(row);
         results.push(row); completed.set(identity, row);
       }
       await persistRows();
     }
   }
+  const judgeDischarge = managedOllama ? await managedOllama.dischargeModels([judgeModel]) : null;
   const aggregates = modelNames.map(model => ({ model, aggregate: factAggregate(results.filter(row => row.model === model)) }));
   const groupAggregates = {
     city: modelNames.flatMap(model => factGroups(results.filter(row => row.model === model), "city")),
@@ -561,7 +635,7 @@ export async function runFactAudit({
     engine: "posthoc-fact",
     profile: "external-judge",
     sampling: { temperature: judgeTemperature, think: false },
-    judge: { provider: judgeProvider, model: judgeModel ?? null, promptVersion: judgePromptVersion, scorerVersion: factScorerVersion, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens },
+    judge: { provider: judgeProvider, model: judgeModel ?? null, promptVersion: judgePromptVersion, scorerVersion: factScorerVersion, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, managedBy: managedOllama ? "gpu-housekeeper" : "direct", discharge: judgeDischarge },
     mode: "criterion-fact",
     smoke,
     runScope: smoke ? "smoke" : "full",

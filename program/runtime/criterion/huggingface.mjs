@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { enqueueInputEnvelope } from "../gpu/queue.mjs";
 import { runGpuWorkerOnce } from "../gpu/worker.mjs";
+import { createGpuHousekeeperAdapter } from "../gpu/housekeeper_adapter.mjs";
 import {
   isTerminalHandleStatus,
   readGpuHandleStatus,
@@ -44,7 +45,8 @@ export const HUGGING_FACE_MODEL_DEFAULTS = Object.freeze({
     numBeams: 1,
     doSample: false,
     repetitionPenalty: 1.05,
-    operation: "judge"
+    operation: "judge",
+    vramRequiredMb: 20000
   })
 });
 
@@ -148,6 +150,8 @@ export async function createHuggingFaceExecutor({
   dtype = process.env.PYA_HF_DTYPE ?? "auto",
   generation = {},
   operation = "generate",
+  dischargeOnClose = false,
+  dischargeProfileName = null,
   timeoutMs = Number(process.env.PYA_CRITERION_HF_TIMEOUT_MS || 1800000),
   pollMs = 50,
   enqueue = enqueueInputEnvelope,
@@ -183,7 +187,7 @@ export async function createHuggingFaceExecutor({
       requestId: identity ?? requestId ?? ""
     });
     const queuedAt = now().toISOString();
-    const defaults = { ...huggingFaceModelDefaults(model), ...generation };
+    const { vramRequiredMb, ...generationDefaults } = { ...huggingFaceModelDefaults(model), ...generation };
     const payload = {
       model,
       revision,
@@ -192,8 +196,9 @@ export async function createHuggingFaceExecutor({
       prompt: String(prompt ?? ""),
       input: operation === "judge" ? String(prompt ?? "") : String(sample?.input ?? prompt ?? ""),
       ...(Array.isArray(messages) && messages.length ? { messages } : {}),
-      generation: defaults
+      generation: generationDefaults
     };
+    const resourceRequest = Number(vramRequiredMb) > 0 ? { vramRequiredMb: Number(vramRequiredMb) } : null;
 
     await writeStatus(worldRoot, handleId, {
       status: "queued",
@@ -225,6 +230,7 @@ export async function createHuggingFaceExecutor({
       dischargeAllowed: true,
       jobSpec: {
         kind: "huggingface-generate",
+        ...(resourceRequest ? { resourceRequest } : {}),
         payload
       }
     });
@@ -249,7 +255,11 @@ export async function createHuggingFaceExecutor({
     };
   };
 
-  const close = async () => {};
+  const close = async () => {
+    if (!dischargeOnClose || !normalizedHousekeeperUrl) return { success: false, skipped: true, reason: "discharge not requested" };
+    const housekeeper = createGpuHousekeeperAdapter({ baseUrl: normalizedHousekeeperUrl });
+    return housekeeper.discharge({ profileName: normalizeText(dischargeProfileName) || "" });
+  };
   executor.close = close;
   executor.metadataProvider = metadataProvider;
   return { executor, metadataProvider, close };
@@ -259,7 +269,12 @@ export async function createHuggingFaceJudgeExecutor({
   model = "SUSTech-NLP/UniRRM-8B",
   ...options
 } = {}) {
-  const adapter = await createHuggingFaceExecutor({ ...options, operation: "judge" });
+  const adapter = await createHuggingFaceExecutor({
+    ...options,
+    operation: "judge",
+    dischargeOnClose: options.dischargeOnClose ?? true,
+    dischargeProfileName: options.dischargeProfileName ?? model
+  });
   const executor = async input => adapter.executor({ ...input, model });
   const metadataProvider = async input => ({
     ...(await adapter.metadataProvider({ ...input, model })),

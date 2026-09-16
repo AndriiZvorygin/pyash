@@ -112,6 +112,71 @@ For fine-tuned open summarizers, Criterion supports `--engine huggingface`. The 
 
 The Ahmed model defaults to 1,024 input tokens, 56-142 output tokens, four beams and length penalty 2.0. MeetingScript defaults to 4,096 input tokens and four beams. DialogLED-large-5120 defaults to 5,120 input tokens and four beams. MeetingScript and DialogLED use deterministic overlapping token windows for long inputs in the external runtime; each result explicitly records chunking and truncation metadata, and never silently drops over-limit input. Model loading and warm inference are separated; unavailable metrics remain null. Weights and datasets stay in the private Hugging Face cache on the execution host. Lead-3 is a CPU-only deterministic baseline and never enters the GPU lane.
 
+## MeetingBank factuality pilot
+
+The factuality-first pilot is a separate, post-generation evaluation lane:
+
+```bash
+OLLAMA_BASE_URL=http://mriczo:11434 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+node command/criterion.mjs meetingbank-factuality-pilot \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --run-id meetingbank-qwen-factuality-pilot-20260916 \
+  --resume --json
+```
+
+It selects ten deterministic MeetingBank test samples and runs the same
+MeetingBank-aware generation prompt for `qwen3.5:9b`,
+`hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M`, and `qwen3.8:27b`.
+Generation remains on remote Ollama, but when `PYA_GPU_HOUSEKEEPER_URL` is
+configured every non-streaming model request is submitted through the existing
+Pyash GPU duty queue and `gpu-housekeeper`; Criterion does not call the Ollama
+inference endpoint directly. The reference summary is retained for provenance
+but is hidden from the UniRRM judge. Set
+`PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB` when a workload needs a declared VRAM
+floor, such as a large 27B model; the request is passed to housekeeper so its
+existing ComfyUI and other-runtime discharge policy can make room safely.
+
+The judge lane is transcript-grounded and provisional. It sends one UniRRM
+pointwise request per successful summary, with a bounded claim list and
+transcript turn evidence in the response. Criterion performs the arithmetic
+locally for faithfulness, completeness, decision/action fidelity, relevance,
+conciseness, and publication suitability. Faithfulness is
+`(supported + 0.5 * partially-supported) / material claims`. Human-facing
+values are percentages and the dimensions remain separate; no overall winner
+is declared without human-labelled calibration.
+
+Generation is batched before judging to avoid GPU/VRAM thrashing: Criterion
+preflights and generates all selected rows for one Qwen model through the
+queue, asks the housekeeper to discharge that residency, then continues with
+the next Qwen model. Only after every Qwen generation batch is complete does
+Criterion queue UniRRM and judge the successful summaries. UniRRM is discharged
+through the same housekeeper path after the judge batch completes.
+
+ROUGE is excluded from the default factuality report and remains historical
+reference-similarity evidence in the older model-run artifacts. A judge row is
+complete only when all required passes return structured native UniRRM
+evaluations with evidence. Transport, model, malformed-output, truncated, and
+incomplete responses are recorded separately, with one bounded JSON repair
+retry. The judge uses a bounded 2,048-token response budget by default so
+native UniRRM evidence JSON is not cut off mid-claim. The JSONL checkpoint is
+resumable and preserves raw response hashes.
+
+The default UniRRM judge target is the quantized Ollama tag
+`hf.co/mradermacher/UniRRM-8B-GGUF:Q4_K_M`, configured through
+`PYA_CRITERION_FACTUALITY_JUDGE_MODEL` or `--judge-model`. With the housekeeper
+configured, its existing Ollama runtime performs admission, residency
+switching, and provider discharge; Criterion only submits queue envelopes and
+records the result. This keeps the existing external model-hosting boundary
+intact and prevents the large judge from occupying VRAM after a pilot.
+
+The original BF16 `SUSTech-NLP/UniRRM-8B` target remains available through the
+external `criterion-huggingface` service with
+`--judge-engine huggingface --judge-model SUSTech-NLP/UniRRM-8B` when that
+heavier path is explicitly required. Its GPU jobs declare a 20 GB VRAM request
+so the existing housekeeper can discharge competing residency before
+admission.
+
 ## MeetingBank fact audit
 
 The OmniCSEval-style fact lane is post-hoc scoring over saved Criterion output

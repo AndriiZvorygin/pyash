@@ -62,7 +62,7 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "criterion-huggingface"],
     "restartAction": ["restart", "criterion-huggingface"],
     "activityProbe": "provider-owned",
-    "dischargeKind": ""
+    "dischargeKind": "huggingface"
   }
 }
 
@@ -389,23 +389,35 @@ def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def discharge(payload: Dict[str, Any]) -> Dict[str, Any]:
+def discharge(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
   profile_name = normalize_text(payload.get("profileName"))
+  runtime_registry = runtime_registry or DEFAULT_RUNTIME_REGISTRY
+  runtime_name = ""
   with _LOCK:
     if profile_name:
       if profile_name in _PROFILES:
+        runtime_name = normalize_text(_PROFILES[profile_name].get("runtimeName")).lower()
         _PROFILES[profile_name]["loaded"] = False
-      return {"success": True}
+      else:
+        return {"success": True, "profileName": profile_name, "discharged": False, "reason": "profile was not resident"}
+      runtime_entry = runtime_registry.get(runtime_name)
+      if not runtime_entry or normalize_text(runtime_entry.get("dischargeKind")).lower() not in {"huggingface", "comfyui"}:
+        return {"success": True, "profileName": profile_name, "discharged": False, "reason": "runtime has no provider discharge hook"}
+    else:
+      for name in _PROFILES:
+        _PROFILES[name]["loaded"] = False
+      runtime_entry = None
 
-    for name in _PROFILES:
-      _PROFILES[name]["loaded"] = False
+  if profile_name and runtime_entry:
+    result = discharge_runtime(runtime_name, runtime_entry)
+    return {"profileName": profile_name, "runtimeName": runtime_name, "discharged": bool(result.get("success")), **result}
 
   try:
     subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=2)
   except Exception:
     pass
 
-  return {"success": True}
+  return {"success": True, "discharged": False, "reason": "residency flags cleared; no profile-specific runtime selected"}
 
 
 def run_docker(args: List[str], timeout_sec: int = 8) -> Dict[str, Any]:
@@ -858,6 +870,34 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
 
 def discharge_runtime(runtime_name: str, runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   kind = normalize_text(runtime_entry.get("dischargeKind")).lower()
+  if kind == "huggingface":
+    try:
+      result = request_huggingface_json("/discharge", {}, timeout_sec=60)
+    except Exception as err:
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": normalize_text(err) or "Hugging Face provider discharge failed"
+      }
+    if result.get("success") is False:
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": normalize_text(result.get("reason") or result.get("error")) or "Hugging Face provider refused discharge"
+      }
+    with _LOCK:
+      for profile in _PROFILES.values():
+        if normalize_text(profile.get("runtimeName")).lower() == runtime_name:
+          profile["loaded"] = False
+      _RUNTIME_ACTIVITY[runtime_name] = {
+        "lastActivityAt": normalize_text(_RUNTIME_ACTIVITY.get(runtime_name, {}).get("lastActivityAt")),
+        "idleSince": time.time()
+      }
+    return {
+      "success": True,
+      "runtimeName": runtime_name,
+      "reason": "Hugging Face model state unloaded and CUDA cache released"
+    }
   if kind != "comfyui":
     return {
       "success": False,
@@ -1573,7 +1613,7 @@ class Handler(BaseHTTPRequestHandler):
 
     if self.path == "/discharge":
       payload = read_json_body(self)
-      json_response(self, 200, discharge(payload))
+      json_response(self, 200, discharge(payload, self.runtime_registry))
       return
 
     if self.path == "/runtime/begin":

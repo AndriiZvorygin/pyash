@@ -75,6 +75,16 @@ def generate(payload: Dict[str, Any]) -> Dict[str, Any]:
     return WORKER.generate(_STATE, payload)
 
 
+def discharge() -> Dict[str, Any]:
+  global _STATE, _MODEL, _MODEL_KEY
+  with _LOCK:
+    result = WORKER.unload_state(_STATE)
+    _STATE = None
+    _MODEL = ""
+    _MODEL_KEY = None
+    return result
+
+
 class Handler(BaseHTTPRequestHandler):
   def do_GET(self) -> None:
     if self.path == "/health":
@@ -87,6 +97,12 @@ class Handler(BaseHTTPRequestHandler):
     json_response(self, 404, {"error": "not found"})
 
   def do_POST(self) -> None:
+    if self.path == "/discharge":
+      try:
+        json_response(self, 200, discharge())
+      except Exception as error:
+        json_response(self, 500, {"success": False, "error": f"{type(error).__name__}: {error}"})
+      return
     if self.path != "/generate":
       json_response(self, 404, {"error": "not found"})
       return
