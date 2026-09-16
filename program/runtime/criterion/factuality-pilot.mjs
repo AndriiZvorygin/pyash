@@ -147,8 +147,13 @@ function parseCriterionPayload(explanation) {
   const candidates = [source, source.match(/```(?:json)?\s*([\s\S]*?)```/iu)?.[1], source.match(/(?:CRITERION_JSON|EVALUATION_JSON)\s*[:=]\s*([\s\S]+)/iu)?.[1]];
   for (const candidate of candidates) {
     if (!candidate) continue;
-    const parsed = parseJsonOutput(candidate).value;
+    const direct = parseJsonOutput(candidate);
+    const parsed = direct.value;
     if (parsed && typeof parsed === "object" && (parsed.faithfulness_score !== undefined || parsed.claims !== undefined)) return parsed;
+    if (/^\s*\{[\s\S]*\]\s*$/u.test(candidate)) {
+      const repaired = parseJsonOutput(`${candidate.trim()}}`).value;
+      if (repaired && typeof repaired === "object" && (repaired.faithfulness_score !== undefined || repaired.claims !== undefined)) return repaired;
+    }
   }
   return {};
 }
