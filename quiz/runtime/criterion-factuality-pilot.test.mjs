@@ -86,6 +86,30 @@ test("factuality lane maps native UniRRM evaluations to transcript-grounded fiel
   assert.deepEqual(result.claims[1].transcriptTurnIds, ["turn-2"]);
 });
 
+test("factuality lane maps Criterion dimensions encoded in native UniRRM explanation", () => {
+  const explanation = JSON.stringify({
+    faithfulness_score: 4,
+    completeness_score: 3,
+    decision_action_score: 5,
+    relevance_score: 4,
+    conciseness_score: 3,
+    publication_suitability_score: 4,
+    confidence: 5,
+    claims: [{ claim: "The motion passed.", status: "supported", evidence: "It passed.", transcript_turn_ids: ["turn-1"] }],
+    omitted_important_items: [],
+    reasoning: "Directly grounded.",
+    final_verdict: "acceptable"
+  });
+  const result = normalizeNativeJudgeResponse(JSON.stringify({
+    Analysis_process: "native UniRRM evaluation",
+    evaluations: [{ response_id: "Response1", explanation, final_score: 4 }]
+  }));
+  assert.equal(result.status, "ok");
+  assert.equal(result.scores.faithfulnessPercentage, 75);
+  assert.equal(result.scores.completenessPercentage, 50);
+  assert.equal(result.claims[0].status, "supported");
+});
+
 test("factuality preflight verifies version, tags, warmup, and a real sample request", async () => {
   const result = await preflightOllama({
     baseUrl: "http://ollama.test",

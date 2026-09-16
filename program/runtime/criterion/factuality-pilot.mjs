@@ -141,6 +141,17 @@ function parseClaims(value, explanation) {
   }));
 }
 
+function parseCriterionPayload(explanation) {
+  const source = text(explanation);
+  const candidates = [source, source.match(/```(?:json)?\s*([\s\S]*?)```/iu)?.[1], source.match(/(?:CRITERION_JSON|EVALUATION_JSON)\s*[:=]\s*([\s\S]+)/iu)?.[1]];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const parsed = parseJsonOutput(candidate).value;
+    if (parsed && typeof parsed === "object" && (parsed.faithfulness_score !== undefined || parsed.claims !== undefined)) return parsed;
+  }
+  return {};
+}
+
 function dimensionValue(objects, keys, explanation) {
   const direct = nestedValue(objects, keys);
   if (direct !== null) return finite(direct);
@@ -153,8 +164,8 @@ export function normalizeNativeJudgeResponse(raw, { maxClaims = CLAIM_LIMIT } = 
   if (!parsed.valid) return { status: /(?:unfinished|truncated|maximum|length)/iu.test(text(parsed.error)) ? "truncated-output" : "malformed-output", parsed: null, error: parsed.error, claims: [] };
   const native = parsed.value;
   const evaluation = Array.isArray(native.evaluations) ? (native.evaluations[0] ?? {}) : {};
-  const criterion = evaluation.criterion ?? native.criterion ?? {};
   const explanation = text(evaluation.explanation ?? native.Analysis_process ?? native.reasoning);
+  const criterion = evaluation.criterion ?? native.criterion ?? parseCriterionPayload(explanation);
   const objects = [criterion, evaluation, native];
   const claims = parseClaims(criterion.claims ?? native.claims ?? evaluation.claims, explanation).slice(0, maxClaims);
   const scores = Object.fromEntries(DIMENSIONS.map(([name, keys]) => [name, scorePercentage(dimensionValue(objects, keys, explanation))]));
@@ -168,7 +179,7 @@ export function normalizeNativeJudgeResponse(raw, { maxClaims = CLAIM_LIMIT } = 
 function nativePrompt({ transcript, summary, sourceTurnsForPrompt, previousRaw = "" }) {
   const source = sourceTurnsForPrompt.map(turn => `[${turn.turnId}] ${turn.speaker ? `${turn.speaker}: ` : ""}${turn.text}`).join("\n");
   const task = "Evaluate one municipal meeting summary using only the transcript. The reference summary is withheld. Assess factuality and practical publication usefulness, not wording similarity.";
-  const contract = `Use the native UniRRM outer JSON format: {"Analysis_process":"...","rubrics":[...],"evaluations":[{"response_id":"Response1","explanation":"...","final_score":1}],"best_id":"Response1"}. Put a criterion object inside evaluations[0] with exactly these fields: faithfulness_score, completeness_score, decision_action_score, relevance_score, conciseness_score, publication_suitability_score, confidence, claims, omitted_important_items, reasoning, final_verdict. Each score is 1-5. Each claims entry must have claim, status (supported|partially_supported|unsupported|contradicted|unclear), importance, evidence, transcript_turn_ids, explanation. Include evidence for every material claim. Return JSON only.`;
+  const contract = `Use the native UniRRM outer JSON format: {"Analysis_process":"...","rubrics":[...],"evaluations":[{"response_id":"Response1","explanation":"...","final_score":1}],"best_id":"Response1"}. Keep that outer format. Put the Criterion evaluation as one compact JSON object encoded inside the evaluations[0].explanation string, not as prose and not as a new top-level format. The encoded object must have exactly these fields: faithfulness_score, completeness_score, decision_action_score, relevance_score, conciseness_score, publication_suitability_score, confidence, claims, omitted_important_items, reasoning, final_verdict. Each score is 1-5. Each claims entry must have claim, status (supported|partially_supported|unsupported|contradicted|unclear), importance, evidence, transcript_turn_ids, explanation. Include evidence for every material claim. Keep the object compact and use at most 12 material claims. Return JSON only.`;
   const prompt = [`<User_Input>\n${task}\n\n${contract}\n\nSOURCE TRANSCRIPT WITH STABLE TURN IDS:\n${source}\n</User_Input>`, `<Response1>\n${summary}\n</Response1>`, "Use at most 12 material claims. Keep reasoning, rubrics, explanations, and evidence quotes concise."];
   if (previousRaw) prompt.push(`Repair the previous response into valid native JSON without dropping criterion fields:\n${previousRaw.slice(0, 30000)}`);
   return prompt.join("\n\n");
