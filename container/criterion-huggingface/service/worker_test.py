@@ -50,6 +50,19 @@ class CriterionHuggingFaceWorkerTests(unittest.TestCase):
 
     self.assertEqual(worker.resolved_revision(Tokenizer(), Model(), "requested"), "model-commit")
 
+  def test_causal_judge_uses_the_model_chat_template(self):
+    class Tokenizer:
+      def apply_chat_template(self, messages, tokenize, add_generation_prompt):
+        self.messages = messages
+        self.options = (tokenize, add_generation_prompt)
+        return [11, 22, 33]
+
+    tokenizer = Tokenizer()
+    result = worker.prompt_token_ids(tokenizer, "raw", [{"role": "system", "content": "system"}], True)
+    self.assertEqual(result, [11, 22, 33])
+    self.assertEqual(tokenizer.options, (True, True))
+    self.assertEqual(tokenizer.messages[0]["role"], "system")
+
 
 if __name__ == "__main__":
   unittest.main()
