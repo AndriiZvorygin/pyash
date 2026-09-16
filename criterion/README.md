@@ -174,3 +174,46 @@ attached when `--fact-judge-model` is provided; the judge is a separate
 post-hoc external runtime and never regenerates a summary. The prompt
 experiment consumes model-host time, while fact scoring can be resumed later
 from the saved output rows.
+
+## MeetingBank UniRRM judge pilot
+
+`criterion meetingbank-judge-pilot` is a bounded ten-sample comparison lane. It
+generates one controlled `summary_meetingbank_judge_pilot` output for each of
+the requested Qwen Ollama tags, then submits successful summaries to the
+external `judge:unirrm-8b` runtime for independent pointwise and pairwise
+judgement. Criterion does not host UniRRM: the existing GPU-managed
+`criterion-huggingface` service loads `SUSTech-NLP/UniRRM-8B` and receives the
+same durable `huggingface-generate` queue jobs with `operation: judge`.
+
+The judge sees the transcript, task and municipal rubric, but never the
+MeetingBank reference summary. Native 1-5 scores and normalized percentages
+are stored together. A single bounded JSON-repair retry is recorded separately
+from transport, model and parse failures. Pairwise order and the deterministic
+order-swapped check are persisted with the original model identities.
+
+On the CUDA host, update the existing checkout and start the managed runtime:
+
+```bash
+cd /home/htaf/pyac/pyash
+git pull --ff-only origin master
+./container/criterion-huggingface/command/begin.sh
+```
+
+Run or resume the pilot from the development machine:
+
+```bash
+OLLAMA_BASE_URL=http://mriczo:11434 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+node command/criterion.mjs meetingbank-judge-pilot \
+  --dataset /tmp/pyash-criterion-cache/meetingbank/test.jsonl \
+  --run-id meetingbank-qwen-unirrm-pilot-20260915 \
+  --resume --json
+```
+
+Use `--smoke` for a five-sample execution check. The generation checkpoint is
+stored as `<run-id>-generation`; the pilot checkpoint is
+`criterion/results/<run-id>.jsonl`. Reports are written as JSON, JSONL,
+Markdown, CSV, `.pya` and review HTML under the normal ignored Criterion
+directories. Skywork is not enabled by default because the current managed HF
+protocol has no sequence-classification endpoint; an unavailable secondary
+judge must not prevent the UniRRM pilot.

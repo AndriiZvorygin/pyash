@@ -35,6 +35,15 @@ MODEL_DEFAULTS = {
         "chunkLongInputs": True,
         "chunkOverlapTokens": 128,
     },
+    "SUSTech-NLP/UniRRM-8B": {
+        "maxInputTokens": 32768,
+        "minOutputTokens": 1,
+        "maxOutputTokens": 4096,
+        "numBeams": 1,
+        "doSample": False,
+        "repetitionPenalty": 1.05,
+        "operation": "judge",
+    },
 }
 
 
@@ -73,9 +82,10 @@ def reply(request_id, **payload):
 
 def load_state(request):
     import torch
-    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
     model_id = str(request["model"])
+    operation = str(request.get("operation") or "generate")
     revision = request.get("revision") or None
     started = time.perf_counter()
     tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
@@ -89,7 +99,8 @@ def load_state(request):
     model_options = {"revision": revision} if revision else {}
     if dtype is not None:
         model_options["torch_dtype"] = dtype
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_id, **model_options)
+    model_class = AutoModelForCausalLM if operation == "judge" else AutoModelForSeq2SeqLM
+    model = model_class.from_pretrained(model_id, **model_options)
     model.to(device)
     model.eval()
     effective_revision = resolved_revision(tokenizer, model, revision)
@@ -104,9 +115,12 @@ def load_state(request):
         "torch": torch,
         "device": device,
         "generation": generation,
+        "operation": operation,
+        "causal": operation == "judge",
         "modelType": getattr(getattr(model, "config", None), "model_type", None),
         "metadata": {
             "engine": "huggingface",
+            "operation": operation,
             "modelId": model_id,
             "modelRevision": effective_revision,
             "tokenizerRevision": getattr(tokenizer, "_commit_hash", None) or effective_revision,
@@ -158,24 +172,33 @@ def generate(state, request):
             global_attention_mask = torch.zeros_like(encoded["input_ids"])
             global_attention_mask[:, 0] = 1
             encoded["global_attention_mask"] = global_attention_mask
+        generate_options = {
+            "num_beams": int(generation.get("numBeams") or 1),
+            "do_sample": bool(generation.get("doSample", False)),
+        }
+        if generation.get("repetitionPenalty") is not None:
+            generate_options["repetition_penalty"] = float(generation["repetitionPenalty"])
+        if state.get("causal"):
+            generate_options["min_new_tokens"] = int(generation.get("minOutputTokens") or 1)
+            generate_options["max_new_tokens"] = int(generation.get("maxOutputTokens") or 4096)
+        else:
+            generate_options["min_length"] = int(generation.get("minOutputTokens") or 1)
+            generate_options["max_length"] = int(generation.get("maxOutputTokens") or 142)
+            generate_options["length_penalty"] = float(generation.get("lengthPenalty") or 1.0)
         with torch.inference_mode():
-            output = model.generate(
-                **encoded,
-                num_beams=int(generation.get("numBeams") or 1),
-                min_length=int(generation.get("minOutputTokens") or 1),
-                max_length=int(generation.get("maxOutputTokens") or 142),
-                length_penalty=float(generation.get("lengthPenalty") or 1.0),
-                do_sample=bool(generation.get("doSample", False)),
-            )
-        outputs.append(tokenizer.decode(output[0], skip_special_tokens=True).strip())
+            output = model.generate(**encoded, **generate_options)
+        generated = output[0]
+        if state.get("causal"):
+            generated = generated[len(input_ids):]
+        outputs.append(tokenizer.decode(generated, skip_special_tokens=True).strip())
         processed_input_tokens += len(input_ids)
-        output_tokens += int(output.shape[-1])
+        output_tokens += int(len(generated))
     text = " ".join(item for item in outputs if item).strip()
     elapsed_ms = (time.perf_counter() - started) * 1000
     return {
         "text": text,
         "effectiveThink": False,
-        "reasoningMode": "direct",
+        "reasoningMode": "judge" if state.get("causal") else "direct",
         "metadata": {
             "truncated": truncated,
             "truncatedTokens": max(0, input_token_count - processed_input_tokens) if truncated else 0,

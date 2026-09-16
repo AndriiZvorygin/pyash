@@ -314,13 +314,19 @@ export function renderReviewHtml(run) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>Criterion review ${escapeHtml(run.runId)}</title><style>body{font-family:system-ui,sans-serif;max-width:1200px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.5rem;vertical-align:top}pre{white-space:pre-wrap;max-height:20rem;overflow:auto}</style></head><body><h1>Criterion review: ${escapeHtml(run.criterion)}</h1><p>Run ${escapeHtml(run.runId)}. Review samples are selected deterministically from the run. Mode: ${escapeHtml(run.evaluationMode ?? "standard")}</p><table><thead><tr><th>Sample</th><th>Model</th><th>Prompt variant</th><th>Reference</th><th>Output</th><th>Scores</th><th>Fact evidence</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.sampleId)}</td><td>${escapeHtml(row.model)}</td><td>${escapeHtml(row.promptVariant ?? "")}</td><td><pre>${escapeHtml(row.reference)}</pre></td><td><pre>${escapeHtml(row.output)}</pre></td><td>${escapeHtml(JSON.stringify(row.scores))}</td><td><pre>${escapeHtml(JSON.stringify(row.factEvidence ?? null))}</pre></td></tr>`).join("")}</tbody></table></body></html>`;
 }
 
-export async function writeRunArtifacts(run, { root = process.cwd(), checkpointResults = null } = {}) {
+export async function writeRunArtifacts(run, {
+  root = process.cwd(),
+  checkpointResults = null,
+  renderMarkdown = renderRunMarkdown,
+  renderCsv = renderRunCsv,
+  renderHtml = renderReviewHtml
+} = {}) {
   const artifacts = [];
   const jsonlResults = checkpointResults ?? run.results ?? [];
   const jsonl = jsonlResults.map(row => JSON.stringify(row)).join("\n") + (jsonlResults.length ? "\n" : "");
-  const markdown = renderRunMarkdown(run);
-  const csv = renderRunCsv(run);
-  const html = renderReviewHtml(run);
+  const markdown = renderMarkdown(run);
+  const csv = renderCsv(run);
+  const html = renderHtml(run);
   const exchangeEvents = [];
   setExchangeRecorder({ runRoot: root, record: sentence => exchangeEvents.push(sentence) });
   setExchangeRunId(run.runId);

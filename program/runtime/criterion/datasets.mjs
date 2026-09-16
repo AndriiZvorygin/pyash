@@ -103,6 +103,15 @@ export const SUITE_CATALOG = Object.freeze({
     sourceUrl: "https://meetingbank.github.io/dataset/",
     subsetSourceUrl: "https://github.com/zhouweixiao/OmniCSEval",
     required: "local MeetingBank dataset, released OmniCSEval subset annotations, and saved generic Qwen outputs"
+  },
+  "meetingbank-judge-pilot": {
+    name: "MeetingBank Qwen UniRRM judge pilot",
+    version: "ten-sample generation plus external UniRRM pointwise/pairwise judging",
+    sourceUrl: "https://meetingbank.github.io/dataset/",
+    judgeModelUrl: "https://huggingface.co/SUSTech-NLP/UniRRM-8B",
+    paperUrl: "https://arxiv.org/html/2609.05910v1",
+    licenseUrl: "https://meetingbank.github.io/license/",
+    required: "local MeetingBank split, remote Ollama Qwen tags, and managed UniRRM judge runtime"
   }
 });
 

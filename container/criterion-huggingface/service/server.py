@@ -60,12 +60,14 @@ def generate(payload: Dict[str, Any]) -> Dict[str, Any]:
   if not model:
     raise ValueError("model is required")
   with _LOCK:
-    model_key = (model, payload.get("revision") or "", payload.get("dtype") or "auto")
+    operation = payload.get("operation") or "generate"
+    model_key = (model, payload.get("revision") or "", payload.get("dtype") or "auto", operation)
     if _STATE is None or _MODEL_KEY != model_key:
       _STATE = WORKER.load_state({
         "model": model,
         "revision": payload.get("revision"),
         "dtype": payload.get("dtype", "auto"),
+        "operation": operation,
         "generation": payload.get("generation") or {}
       })
       _MODEL = model
