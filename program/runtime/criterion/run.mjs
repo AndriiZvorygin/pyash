@@ -333,7 +333,7 @@ export async function runCriterion({
         };
         results.push(row); completed.set(key, row); emit("sample-completed", { model, sampleId: sample.id, scores, metrics: row.metrics });
       } catch (error) {
-        const row = { ...base, status: "error", output: "", outputHash: sha256(""), scores: {}, metrics: {}, error: error?.message ?? String(error), finishedAt: now().toISOString() };
+        const row = { ...base, status: "error", output: "", outputHash: sha256(""), scores: {}, metrics: {}, error: error?.message ?? String(error), errorMetadata: error?.request ?? error?.metadata ?? null, finishedAt: now().toISOString() };
         results.push(row); completed.set(key, row); emit("sample-failed", { model, sampleId: sample.id, error: row.error });
       }
       // Keep a restart-safe partial record after every model/sample boundary.
