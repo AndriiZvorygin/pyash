@@ -1,5 +1,6 @@
 import importlib.util
 import pathlib
+import time
 import unittest
 
 SERVER_PATH = pathlib.Path(__file__).with_name("server.py")
@@ -177,6 +178,23 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(status["status"], "success")
     self.assertEqual(status["result"], {"response": "ok"})
     self.assertEqual(server.queue_depth(), 0)
+
+  def test_start_registered_job_returns_without_waiting_for_execution(self):
+    started = []
+    original = server.execute_registered_job
+    try:
+      def fake_execute(remote_job_id, runtime_registry):
+        started.append((remote_job_id, runtime_registry))
+
+      server.execute_registered_job = fake_execute
+      server.start_registered_job("job-background", {"ollama": {}})
+      for _ in range(100):
+        if started:
+          break
+        time.sleep(0.001)
+      self.assertEqual(started, [("job-background", {"ollama": {}})])
+    finally:
+      server.execute_registered_job = original
 
 
 class HousekeeperCapacityTests(unittest.TestCase):
