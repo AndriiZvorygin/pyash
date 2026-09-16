@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { enqueueInputEnvelope } from "../gpu/queue.mjs";
 import { runGpuWorkerOnce } from "../gpu/worker.mjs";
+import { createGpuHousekeeperAdapter } from "../gpu/housekeeper_adapter.mjs";
 import {
   isTerminalHandleStatus,
   readGpuHandleStatus,
@@ -148,6 +149,8 @@ export async function createHuggingFaceExecutor({
   dtype = process.env.PYA_HF_DTYPE ?? "auto",
   generation = {},
   operation = "generate",
+  dischargeOnClose = false,
+  dischargeProfileName = null,
   timeoutMs = Number(process.env.PYA_CRITERION_HF_TIMEOUT_MS || 1800000),
   pollMs = 50,
   enqueue = enqueueInputEnvelope,
@@ -249,7 +252,11 @@ export async function createHuggingFaceExecutor({
     };
   };
 
-  const close = async () => {};
+  const close = async () => {
+    if (!dischargeOnClose || !normalizedHousekeeperUrl) return { success: false, skipped: true, reason: "discharge not requested" };
+    const housekeeper = createGpuHousekeeperAdapter({ baseUrl: normalizedHousekeeperUrl });
+    return housekeeper.discharge({ profileName: normalizeText(dischargeProfileName) || "" });
+  };
   executor.close = close;
   executor.metadataProvider = metadataProvider;
   return { executor, metadataProvider, close };
@@ -259,7 +266,12 @@ export async function createHuggingFaceJudgeExecutor({
   model = "SUSTech-NLP/UniRRM-8B",
   ...options
 } = {}) {
-  const adapter = await createHuggingFaceExecutor({ ...options, operation: "judge" });
+  const adapter = await createHuggingFaceExecutor({
+    ...options,
+    operation: "judge",
+    dischargeOnClose: options.dischargeOnClose ?? true,
+    dischargeProfileName: options.dischargeProfileName ?? model
+  });
   const executor = async input => adapter.executor({ ...input, model });
   const metadataProvider = async input => ({
     ...(await adapter.metadataProvider({ ...input, model })),
