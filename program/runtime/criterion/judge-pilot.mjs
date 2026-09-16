@@ -20,6 +20,7 @@ export const MEETINGBANK_JUDGE_PILOT_MODELS = Object.freeze([
 export const MEETINGBANK_JUDGE_PILOT_SELECTION_SEED = "meetingbank-unirrm-pilot-20260915";
 export const MEETINGBANK_JUDGE_PILOT_PROMPT = "You are summarizing one city-council meeting transcript for a municipal publication. Write one concise, factual meeting summary based only on the transcript. Include the main topics, decisions and resolutions, motions and votes, action items and responsible parties, important dates and deadlines, and any uncertainty that remains in the transcript. Preserve exact names, numbers, dates, ordinance or resolution identifiers, and vote outcomes when present. Do not invent details or add commentary about this evaluation. Output plain text suitable for municipal minutes, with no title, labels, bullets, preamble, analysis, or explanation.";
 export const MEETINGBANK_JUDGE_PILOT_PROMPT_HASH = sha256(MEETINGBANK_JUDGE_PILOT_PROMPT);
+export const UNIRRM_SYSTEM_PROMPT = `You are a multilingual evaluation expert, responsible for conducting rigorous, objective, and multi-dimensional evaluations of responses generated for User Input. First analyze the user input, task type, risks, requirements, and expected content. Next generate evaluation rubrics tailored to the task, each using a 1-5 scale. Finally evaluate each response by extracting evidence, identifying gaps, and assigning a score from 1 to 5. Return one JSON object only with this shape: {"Analysis_process":"Concise summary of the analysis.","rubrics":[{"name":"String","description":"Rubric definition"}],"evaluations":[{"response_id":"String","explanation":"Summary","final_score":"Float"}],"best_id":"ID of the winner"}. For pointwise evaluation, return the single response as Response1. Do not add prose outside the JSON object.`;
 export const UNIRRM_NATIVE_SCALE = Object.freeze({ min: 1, max: 5, formula: "((score - 1) / 4) * 100" });
 
 const DEFAULT_SELECTION_COUNT = 10;
@@ -223,21 +224,25 @@ export function normalizeUniRrmJudgement(parsed, { mode = "pointwise" } = {}) {
 
 function pilotJudgePrompt({ sourceText, summaryText, pairwise = false, displayed = null, repair = false } = {}) {
   const rubric = "Score each applicable dimension from 1 (poor) to 5 (excellent). Ground every finding in SOURCE. Check factual faithfulness, coverage of decisions/actions, concise relevance, and suitability for municipal minutes. Identify unsupported or contradicted claims and omitted important items with source evidence.";
-  const schema = '{"overall_score":1,"faithfulness_score":1,"completeness_score":1,"decision_action_coverage_score":1,"relevance_conciseness_score":1,"municipal_summary_suitability_score":1,"unsupported_claims":[],"contradicted_claims":[],"omitted_important_items":[],"evidence":[],"confidence":1,"reasoning":"","final_verdict":""}';
   const candidates = pairwise
     ? `<Response1 model="${displayed?.[0] ?? "A"}">\n${displayed?.[2] ?? ""}\n</Response1>\n<Response2 model="${displayed?.[1] ?? "B"}">\n${displayed?.[3] ?? ""}\n</Response2>`
-    : `<CandidateSummary>\n${summaryText}\n</CandidateSummary>`;
+    : `<Response1 model="candidate">\n${summaryText}\n</Response1>`;
   return [
-    "You are UniRRM evaluating a municipal meeting-summary task.",
-    "Return one JSON object only. Do not expose analysis outside the JSON object.",
-    "The reference summary is intentionally withheld. Judge the candidate only against the transcript and task rubric.",
-    "TASK: Produce a concise, source-grounded municipal meeting summary covering topics, decisions, motions, votes, action items, names, dates, amounts, deadlines and uncertainty without invention.",
+    "<User_Input>",
+    "Evaluate a candidate municipal meeting summary against the source transcript. The reference summary is intentionally withheld. Judge only source-grounded correctness and the rubric below.",
     `RUBRIC: ${rubric}`,
-    `REQUIRED JSON SHAPE: ${schema}`,
-    repair ? "Repair the previous response into valid JSON matching the required shape. Preserve the substantive judgement; do not add prose." : "",
     `SOURCE:\n${sourceText}`,
+    "</User_Input>",
+    repair ? "Repair the previous response into valid JSON matching the required shape. Preserve the substantive judgement; do not add prose." : "",
     candidates
   ].filter(Boolean).join("\n\n");
+}
+
+function pilotJudgeMessages(options) {
+  return [
+    { role: "system", content: UNIRRM_SYSTEM_PROMPT },
+    { role: "user", content: pilotJudgePrompt(options) }
+  ];
 }
 
 function classifyJudgeError(error) {
@@ -245,13 +250,14 @@ function classifyJudgeError(error) {
   return /fetch|network|timeout|ECONN|HTTP|request failed/iu.test(message) ? "transport-error" : "model-error";
 }
 
-async function judgeOne({ executor, sample, prompt, mode, identity, now = () => new Date(), maxRepair = 1 }) {
+async function judgeOne({ executor, sample, prompt, messages = null, mode, identity, now = () => new Date(), maxRepair = 1 }) {
   const attempts = [];
   let repair = false;
   for (let attempt = 0; attempt <= maxRepair; attempt += 1) {
     try {
       const requestPrompt = repair ? `${prompt}\n\nPREVIOUS INVALID RESPONSE:\n${text(attempts.at(-1)?.raw).slice(0, 12000)}` : prompt;
-      const response = await executor({ model: UNIRRM_MODEL_ID, prompt: requestPrompt, sample, operation: "judge" });
+      const requestMessages = Array.isArray(messages) ? [messages[0], { ...messages[1], content: requestPrompt }] : null;
+      const response = await executor({ model: UNIRRM_MODEL_ID, prompt: requestPrompt, messages: requestMessages, sample, operation: "judge" });
       const raw = String(response?.text ?? "");
       const parsed = parseUniRrmOutput(raw);
       attempts.push({ attempt: attempt + 1, promptHash: sha256(requestPrompt), raw, parseError: parsed.valid ? null : parsed.error, repaired: repair, timing: response?.timing ?? null });
@@ -605,7 +611,8 @@ export async function runMeetingBankJudgePilot({
         if (!generationRow) continue;
         const identity = `pointwise\u0000${model}\u0000${sample.id}`;
         if (priorSuccessful.has(identity)) continue;
-        const result = await judgeOne({ executor: executeJudge, sample, prompt: pilotJudgePrompt({ sourceText: sample.input, summaryText: generationRow.output }), mode: "pointwise", identity, now });
+        const promptOptions = { sourceText: sample.input, summaryText: generationRow.output };
+        const result = await judgeOne({ executor: executeJudge, sample, prompt: pilotJudgePrompt(promptOptions), messages: pilotJudgeMessages(promptOptions), mode: "pointwise", identity, now });
         addRow(pointwiseRow({ runId: id, sample, generationRow, result, judgeSettings }));
         await writeJsonl(pilotCheckpointPath, checkpointRows);
       }
@@ -628,8 +635,10 @@ export async function runMeetingBankJudgePilot({
         if (priorSuccessful.has(identity)) continue;
         const swappedFirst = hashRank(`${effectiveSelectionSeed}:pairwise`, `${sample.id}:${modelA}:${modelB}`).charCodeAt(0) % 2 === 0;
         const displayed = swappedFirst ? [modelB, modelA, right.output, left.output] : [modelA, modelB, left.output, right.output];
-        const primary = await judgeOne({ executor: executeJudge, sample, prompt: pilotJudgePrompt({ sourceText: sample.input, pairwise: true, displayed }), mode: "pairwise", identity, now });
-        const swapped = await judgeOne({ executor: executeJudge, sample, prompt: pilotJudgePrompt({ sourceText: sample.input, pairwise: true, displayed: [displayed[1], displayed[0], displayed[3], displayed[2]] }), mode: "pairwise", identity: `${identity}\u0000swap`, now });
+        const primaryOptions = { sourceText: sample.input, pairwise: true, displayed };
+        const swappedOptions = { sourceText: sample.input, pairwise: true, displayed: [displayed[1], displayed[0], displayed[3], displayed[2]] };
+        const primary = await judgeOne({ executor: executeJudge, sample, prompt: pilotJudgePrompt(primaryOptions), messages: pilotJudgeMessages(primaryOptions), mode: "pairwise", identity, now });
+        const swapped = await judgeOne({ executor: executeJudge, sample, prompt: pilotJudgePrompt(swappedOptions), messages: pilotJudgeMessages(swappedOptions), mode: "pairwise", identity: `${identity}\u0000swap`, now });
         addRow(pairwiseRow({ runId: id, sample, left, right, primary, swapped, displayed: [displayed[0], displayed[1]] }));
         await writeJsonl(pilotCheckpointPath, checkpointRows);
       }

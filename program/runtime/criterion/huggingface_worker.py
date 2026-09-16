@@ -75,6 +75,22 @@ def resolved_revision(tokenizer, model, requested_revision):
     return model_revision or tokenizer_revision or requested_revision
 
 
+def prompt_token_ids(tokenizer, prompt, messages, causal):
+    if not causal:
+        return tokenizer(prompt, add_special_tokens=True, truncation=False)["input_ids"]
+    conversation = messages if isinstance(messages, list) and messages else [{"role": "user", "content": prompt}]
+    rendered = tokenizer.apply_chat_template(conversation, tokenize=True, add_generation_prompt=True)
+    if hasattr(rendered, "tolist"):
+        rendered = rendered.tolist()
+    if isinstance(rendered, dict):
+        rendered = rendered.get("input_ids")
+    while isinstance(rendered, list) and rendered and isinstance(rendered[0], list):
+        rendered = rendered[0]
+    if not isinstance(rendered, list) or not all(isinstance(item, int) for item in rendered):
+        raise RuntimeError("judge tokenizer chat template did not return token ids")
+    return rendered
+
+
 def resolve_dtype(dtype_name, operation, device, torch):
     normalized = str(dtype_name or "auto").lower()
     if device != "cuda":
@@ -161,7 +177,7 @@ def generate(state, request):
     torch = state["torch"]
     generation = {**state["generation"], **(request.get("generation") or {})}
     limit = int(generation.get("maxInputTokens") or 4096)
-    all_tokens = tokenizer(prompt, add_special_tokens=True, truncation=False)["input_ids"]
+    all_tokens = prompt_token_ids(tokenizer, prompt, request.get("messages"), state.get("causal"))
     input_token_count = len(all_tokens)
     if state.get("causal") and input_token_count > limit:
         raise RuntimeError(f"judge input exceeds configured limit ({input_token_count} > {limit}); no truncation is permitted")
