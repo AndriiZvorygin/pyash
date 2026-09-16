@@ -61,13 +61,24 @@ function terminalStatus(raw = "") {
 }
 
 async function pollRemoteJob({ adapter, remoteJobId, pollIntervalMs, maxPolls, heartbeat }) {
+  let lastPollError = null;
   for (let index = 0; index < maxPolls; index += 1) {
-    const status = await adapter.getJobStatus({ remoteJobId });
+    let status;
+    try {
+      status = await adapter.getJobStatus({ remoteJobId });
+      lastPollError = null;
+    } catch (error) {
+      lastPollError = error;
+      if (typeof heartbeat === "function") await heartbeat();
+      await delay(pollIntervalMs);
+      continue;
+    }
     const terminal = terminalStatus(status?.status);
     if (terminal) return { ...status, status: terminal };
     if (typeof heartbeat === "function") await heartbeat();
     await delay(pollIntervalMs);
   }
+  if (lastPollError) throw new Error(`gpu worker could not read remote job ${remoteJobId}: ${shortError(lastPollError)}`);
   throw new Error(`gpu worker timed out waiting for remote job ${remoteJobId}`);
 }
 

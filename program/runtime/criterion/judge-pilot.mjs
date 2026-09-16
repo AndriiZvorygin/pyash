@@ -25,7 +25,8 @@ export const UNIRRM_NATIVE_SCALE = Object.freeze({ min: 1, max: 5, formula: "((s
 
 const DEFAULT_SELECTION_COUNT = 10;
 const DEFAULT_JUDGE_MAX_INPUT_TOKENS = 8192;
-const DEFAULT_JUDGE_MAX_OUTPUT_TOKENS = 1024;
+// UniRRM's concise native JSON completes within this bound when hidden Qwen thinking is disabled.
+const DEFAULT_JUDGE_MAX_OUTPUT_TOKENS = 384;
 const DEFAULT_JUDGE_TEMPERATURE = 0;
 
 function text(value) { return String(value ?? "").trim(); }
@@ -257,7 +258,7 @@ async function judgeOne({ executor, sample, prompt, messages = null, mode, ident
     try {
       const requestPrompt = repair ? `${prompt}\n\nPREVIOUS INVALID RESPONSE:\n${text(attempts.at(-1)?.raw).slice(0, 12000)}` : prompt;
       const requestMessages = Array.isArray(messages) ? [messages[0], { ...messages[1], content: requestPrompt }] : null;
-      const response = await executor({ model: UNIRRM_MODEL_ID, prompt: requestPrompt, messages: requestMessages, sample, operation: "judge" });
+      const response = await executor({ model: UNIRRM_MODEL_ID, prompt: requestPrompt, messages: requestMessages, sample, identity, operation: "judge" });
       const raw = String(response?.text ?? "");
       const parsed = parseUniRrmOutput(raw);
       attempts.push({ attempt: attempt + 1, promptHash: sha256(requestPrompt), raw, parseError: parsed.valid ? null : parsed.error, repaired: repair, timing: response?.timing ?? null });

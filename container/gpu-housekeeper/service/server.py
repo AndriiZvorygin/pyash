@@ -1471,6 +1471,15 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
         _RUNNING_JOB_ID = None
 
 
+def start_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
+  threading.Thread(
+    target=execute_registered_job,
+    args=(remote_job_id, runtime_registry),
+    name=f"gpu-job-{remote_job_id}",
+    daemon=True
+  ).start()
+
+
 class Handler(BaseHTTPRequestHandler):
   host_id = "gpu-housekeeper"
   runtime_registry = DEFAULT_RUNTIME_REGISTRY
@@ -1538,7 +1547,7 @@ class Handler(BaseHTTPRequestHandler):
       payload = read_json_body(self)
       result = submit_job(payload)
       if result.get("accepted"):
-        execute_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)
+        start_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)
         json_response(self, 200, result)
       else:
         json_response(self, 400, result)
