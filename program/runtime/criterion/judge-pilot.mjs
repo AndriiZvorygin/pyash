@@ -258,7 +258,7 @@ async function judgeOne({ executor, sample, prompt, messages = null, mode, ident
     try {
       const requestPrompt = repair ? `${prompt}\n\nPREVIOUS INVALID RESPONSE:\n${text(attempts.at(-1)?.raw).slice(0, 12000)}` : prompt;
       const requestMessages = Array.isArray(messages) ? [messages[0], { ...messages[1], content: requestPrompt }] : null;
-      const response = await executor({ model: UNIRRM_MODEL_ID, prompt: requestPrompt, messages: requestMessages, sample, operation: "judge" });
+      const response = await executor({ model: UNIRRM_MODEL_ID, prompt: requestPrompt, messages: requestMessages, sample, identity, operation: "judge" });
       const raw = String(response?.text ?? "");
       const parsed = parseUniRrmOutput(raw);
       attempts.push({ attempt: attempt + 1, promptHash: sha256(requestPrompt), raw, parseError: parsed.valid ? null : parsed.error, repaired: repair, timing: response?.timing ?? null });
