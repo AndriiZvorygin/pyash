@@ -75,11 +75,14 @@ def resolved_revision(tokenizer, model, requested_revision):
     return model_revision or tokenizer_revision or requested_revision
 
 
-def prompt_token_ids(tokenizer, prompt, messages, causal):
+def prompt_token_ids(tokenizer, prompt, messages, causal, enable_thinking=None):
     if not causal:
         return tokenizer(prompt, add_special_tokens=True, truncation=False)["input_ids"]
     conversation = messages if isinstance(messages, list) and messages else [{"role": "user", "content": prompt}]
-    rendered = tokenizer.apply_chat_template(conversation, tokenize=True, add_generation_prompt=True)
+    template_options = {"tokenize": True, "add_generation_prompt": True}
+    if enable_thinking is not None:
+        template_options["enable_thinking"] = bool(enable_thinking)
+    rendered = tokenizer.apply_chat_template(conversation, **template_options)
     if hasattr(rendered, "tolist"):
         rendered = rendered.tolist()
     if isinstance(rendered, dict):
@@ -162,6 +165,7 @@ def load_state(request):
             "maxOutputTokens": generation.get("maxOutputTokens"),
             "lengthPenalty": generation.get("lengthPenalty"),
             "doSample": generation.get("doSample", False),
+            "enableThinking": generation.get("enableThinking"),
             "chunkLongInputs": generation.get("chunkLongInputs", False),
             "chunkOverlapTokens": generation.get("chunkOverlapTokens", 0),
             "modelType": getattr(getattr(model, "config", None), "model_type", None),
@@ -177,7 +181,7 @@ def generate(state, request):
     torch = state["torch"]
     generation = {**state["generation"], **(request.get("generation") or {})}
     limit = int(generation.get("maxInputTokens") or 4096)
-    all_tokens = prompt_token_ids(tokenizer, prompt, request.get("messages"), state.get("causal"))
+    all_tokens = prompt_token_ids(tokenizer, prompt, request.get("messages"), state.get("causal"), generation.get("enableThinking"))
     input_token_count = len(all_tokens)
     if state.get("causal") and input_token_count > limit:
         raise RuntimeError(f"judge input exceeds configured limit ({input_token_count} > {limit}); no truncation is permitted")
