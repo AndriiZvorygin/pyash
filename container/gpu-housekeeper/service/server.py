@@ -17,6 +17,7 @@ _JOBS: Dict[str, Dict[str, Any]] = {}
 _PROFILES: Dict[str, Dict[str, Any]] = {}
 _LOCK = threading.Lock()
 _EXECUTION_LOCK = threading.Lock()
+_SUBMISSION_LOCK = threading.Lock()
 _RUNNING_JOB_ID: Optional[str] = None
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
 
@@ -202,6 +203,15 @@ def queue_depth() -> int:
   return running
 
 
+def local_execution_slot_busy() -> bool:
+  with _LOCK:
+    return any(
+      not bool(job.get("forwarded", False))
+      and job.get("status") in {"queued", "running"}
+      for job in _JOBS.values()
+    )
+
+
 def profile_list() -> List[Dict[str, Any]]:
   with _LOCK:
     names = sorted(_PROFILES.keys())
@@ -315,7 +325,7 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
   with _LOCK:
     profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
     warm = bool(profile.get("loaded", False))
-  busy = queue_depth() > 0
+  busy = local_execution_slot_busy()
   score = 0
   if warm:
     score += 100
@@ -394,7 +404,12 @@ def peer_route_candidate(
   profiles = snapshot.get("profiles") if isinstance(snapshot.get("profiles"), list) else []
   target_profile = normalize_text(job.get("profileName"))
   warm = any(normalize_text(item.get("profileName")) == target_profile and item.get("loaded") is True for item in profiles)
-  busy = int(snapshot.get("queueDepth") or 0) > 0
+  busy = bool(
+    snapshot.get(
+      "executionSlotBusy",
+      int(snapshot.get("queueDepth") or 0) > 0
+    )
+  )
   score = 0
   if warm:
     score += 100
@@ -463,6 +478,7 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "profiles": profile_list(),
     "runtimes": list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else [],
     "gpuProcesses": process_view,
+    "executionSlotBusy": local_execution_slot_busy(),
     "federation": {
       "enabled": bool(configured_peers()),
       "acceptsForwarded": parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True),
@@ -657,39 +673,40 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
     }
   }
 
-  route = select_route(payload, job, runtime_registry, selected_host)
-  selected = route.get("selected") or {}
-  if route.get("forwarded"):
-    try:
-      return forward_job_to_peer(payload, job, route)
-    except Exception as err:
+  with _SUBMISSION_LOCK:
+    route = select_route(payload, job, runtime_registry, selected_host)
+    selected = route.get("selected") or {}
+    if route.get("forwarded"):
+      try:
+        return forward_job_to_peer(payload, job, route)
+      except Exception as err:
+        return {
+          "accepted": False,
+          "error": f"peer forwarding failed: {normalize_text(err) or 'unknown error'}",
+          "route": {"candidates": route.get("candidates", [])}
+        }
+    if not selected:
       return {
         "accepted": False,
-        "error": f"peer forwarding failed: {normalize_text(err) or 'unknown error'}",
+        "error": route.get("reason") or "no executable local or peer GPU target",
         "route": {"candidates": route.get("candidates", [])}
       }
-  if not selected:
-    return {
-      "accepted": False,
-      "error": route.get("reason") or "no executable local or peer GPU target",
-      "route": {"candidates": route.get("candidates", [])}
+    job["route"] = {
+      "forwarded": False,
+      "originHostId": selected_host,
+      "executionHostId": selected_host,
+      "score": int(selected.get("score") or 0),
+      "reason": selected.get("reason") or route.get("reason") or "local candidate"
     }
-  job["route"] = {
-    "forwarded": False,
-    "originHostId": selected_host,
-    "executionHostId": selected_host,
-    "score": int(selected.get("score") or 0),
-    "reason": selected.get("reason") or route.get("reason") or "local candidate"
-  }
 
-  with _LOCK:
-    _JOBS[remote_job_id] = job
-    existing = _PROFILES.get(profile_name, {})
-    _PROFILES[profile_name] = {
-      "profileName": profile_name,
-      "runtimeName": runtime_name,
-      "loaded": bool(existing.get("loaded", False))
-    }
+    with _LOCK:
+      _JOBS[remote_job_id] = job
+      existing = _PROFILES.get(profile_name, {})
+      _PROFILES[profile_name] = {
+        "profileName": profile_name,
+        "runtimeName": runtime_name,
+        "loaded": bool(existing.get("loaded", False))
+      }
 
   return {
     "remoteJobId": remote_job_id,
