@@ -14,6 +14,42 @@ export const FACT_EVALUATION_MODES = Object.freeze({
 export const FACT_SCORER_VERSION = "omnicseval-style-v1";
 export const FACT_JUDGE_PROMPT_VERSION = "meetingbank-fact-judge-v1";
 
+const EXACT_JUDGE_RESPONSE_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    matches: {
+      type: "array",
+      maxItems: 32,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          keyFactIndex: { type: "integer", minimum: 0 },
+          summarySentenceId: { type: "string" },
+          matched: { type: "boolean" }
+        },
+        required: ["keyFactIndex", "summarySentenceId", "matched"]
+      }
+    },
+    verifications: {
+      type: "array",
+      maxItems: 40,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          claimIndex: { type: "integer", minimum: 0 },
+          support: { type: "string", enum: ["supported", "unsupported", "contradiction", "unresolved"] },
+          sourceSentenceRefs: { type: "array", items: { type: "string" } }
+        },
+        required: ["claimIndex", "support", "sourceSentenceRefs"]
+      }
+    }
+  },
+  required: ["matches", "verifications"]
+});
+
 const MUNICIPAL_FLAGS = Object.freeze({
   motion: /\b(?:motion|moved|move to)\b/iu,
   amendment: /\bamend(?:ment|ed)?\b/iu,
@@ -239,7 +275,7 @@ export function createOllamaFactJudge({ model, baseUrl, temperature = 0, maxOutp
         model,
         prompt: repairPrompt,
         profile,
-        sampling: { temperature, format: "json", num_predict: maxOutputTokens },
+        sampling: { temperature, format: exactResponseFormat(annotation), num_predict: maxOutputTokens },
         identity: `fact:${sourceRunId}:${evaluatedModel}:${sampleId}${attempt ? `:repair-${attempt}` : ""}`,
         operation: "judge"
       };
@@ -276,6 +312,11 @@ export function createOllamaFactJudge({ model, baseUrl, temperature = 0, maxOutp
     }
     throw new Error("fact judge exhausted JSON repair attempts");
   };
+}
+
+function exactResponseFormat(annotation) {
+  const facts = annotation?.keyFacts ?? annotation?.key_facts ?? annotation?.facts ?? null;
+  return Array.isArray(facts) && facts.length > 0 ? EXACT_JUDGE_RESPONSE_SCHEMA : "json";
 }
 
 function annotationSourceId(annotation) {
