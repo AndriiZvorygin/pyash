@@ -25,7 +25,8 @@ export const UNIRRM_NATIVE_SCALE = Object.freeze({ min: 1, max: 5, formula: "((s
 
 const DEFAULT_SELECTION_COUNT = 10;
 const DEFAULT_JUDGE_MAX_INPUT_TOKENS = 8192;
-const DEFAULT_JUDGE_MAX_OUTPUT_TOKENS = 1024;
+// UniRRM's concise native JSON completes within this bound when hidden Qwen thinking is disabled.
+const DEFAULT_JUDGE_MAX_OUTPUT_TOKENS = 384;
 const DEFAULT_JUDGE_TEMPERATURE = 0;
 
 function text(value) { return String(value ?? "").trim(); }
