@@ -14,13 +14,13 @@ import {
   auditFinancialClaim,
   containsFinancialClaimText,
 } from "./financial-claim-audit.mjs";
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, "")
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, "")}/api/chat`
   : "http://mriczo:11434/api/chat";
 const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
-const MODEL = "qwen3.5:9b";
 const MAX_ATTEMPTS = Math.max(
   1,
   Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_ATTEMPTS || "4"), 10) || 4,
@@ -35,7 +35,7 @@ const OLLAMA_RETRY_DELAY_MS = Math.max(
 );
 const OLLAMA_TIMEOUT_MS = Math.max(
   5000,
-  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_TIMEOUT_MS || "90000"), 10) || 90000,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_TIMEOUT_MS || "300000"), 10) || 300000,
 );
 const PASS_THRESHOLD = 0.8;
 const SUMMARY_TIME_MODE = String(process.env.AGENDA_SUMMARY_TIME_MODE || "standard").trim().toLowerCase();
@@ -136,7 +136,7 @@ function ollamaStatusRetryable(status) {
 function ollamaErrorRetryable(error) {
   if (error?.retryable === true) return true;
   const message = String(error?.message || error || "");
-  return /AbortError|fetch failed|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|timed out/iu.test(message);
+  return /AbortError|fetch failed|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|timed out|gpu-managed.*(?:failed|timed out)|status\s+(?:408|425|429|5\d\d)/iu.test(message);
 }
 
 function waitMs(durationMs) {
@@ -150,34 +150,23 @@ export async function requestOllamaChat(messages, {
   retryDelayMs = OLLAMA_RETRY_DELAY_MS,
   sleepImpl = waitMs,
 } = {}) {
-  const body = {
-    model: MODEL,
-    mode: "chat",
-    keep_alive: 300,
-    think: false,
-    stream: false,
-    options: { num_predict: numPredict },
-    messages,
-  };
   const attempts = Math.max(1, Number.parseInt(String(retryAttempts), 10) || 1);
   const delay = Math.max(0, Number(retryDelayMs) || 0);
   let lastError = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const res = await fetchImpl(OLLAMA_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
+      const json = await requestManagedOllamaChat({
+        ollamaUrl: OLLAMA_URL,
+        managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+        messages,
+        think: false,
+        keepAlive: 300,
+        options: { num_predict: numPredict },
+        fetchImpl,
+        timeoutMs: OLLAMA_TIMEOUT_MS,
       });
-      if (!res.ok) {
-        const error = new Error(`ollama status ${res.status}`);
-        error.retryable = ollamaStatusRetryable(Number(res.status));
-        throw error;
-      }
-      const json = await res.json();
-      return String(json?.message?.content || "").trim();
+      return String(json?.message?.content || json?.response || "").trim();
     } catch (error) {
       lastError = error;
       if (!ollamaErrorRetryable(error) || attempt >= attempts) break;

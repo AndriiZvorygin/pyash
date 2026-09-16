@@ -371,7 +371,7 @@ export function buildCodexPrompt({ incidentPath, reporters, artifactDir }) {
     "Before acting, read /home/htaf/pyash/AGENTS.md, /home/htaf/pyash/skills/reporter-refinery-recovery/SKILL.md, and its linked runbook completely.",
     "Diagnose from the incident evidence, reproduce narrowly, implement the general pipeline fix, run targeted tests, and then rerun only the affected reporter entry points to publish or update the missing work.",
     "For the final recovery run, use world/house/refinery-watchdog/program/run-nightly-refinery.mjs so the watchdog records and can independently verify today's successful outcome.",
-    "Use qwen3.5:9b exclusively for local reporter-pipeline LLM work. Do not configure, invoke, or add references to any other local model.",
+    "Use the text model declared in the repository's .pya configuration for local reporter-pipeline LLM work. Do not configure, invoke, or add references to another local text model.",
     "Do not create meeting-specific, date-specific, page-specific, or agenda-item-specific exceptions. Do not replace LLM transcript segmentation, prose generation, or summaries with regexes, opening fragments, first-sentence extraction, or other deterministic prose fallbacks.",
     "Respect the shared municipal reporter pipeline lock, do not overlap GPU-heavy work, preserve unrelated dirty-worktree changes, do not commit or push, do not use destructive Git commands, and never print credentials.",
     "Structured eScribe HTML remains authoritative for agenda identity and attachment ownership. Transcript segmentation must follow the complete meeting chronology, including public forum and revisited items. Whole-meeting output must cover the complete meeting rather than early items or one deputation.",

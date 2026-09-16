@@ -13,6 +13,7 @@ import {
 import { runCoverPromptifyStage, buildRetryPromptForBackgroundRisk } from "../program/library/reporter_shared/cover-promptify-stage.mjs";
 import { selectCoverOverlaySource } from "../program/library/reporter_shared/cover-overlay-source.mjs";
 import { diagnoseCoverBackground } from "../program/library/reporter_shared/cover-background-diagnostics.mjs";
+import { resolveVisionModel } from "../program/runtime/gpu/text-model.mjs";
 
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(COMMAND_DIR, "..");
@@ -289,7 +290,9 @@ function normalizeOverlayText(text) {
 async function observeVisibleTextRaw(imagePath) {
   if (String(process.env.COVER_BACKGROUND_OCR || '').trim() !== '1') return '';
   const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
-  const model = String(process.env.DRAW_OVERLAY_VERIFY_MODEL || "qwen3.5:9b").trim();
+  // Overlay OCR is a vision request; keep its independently configured
+  // multimodal model separate from the text-generation default.
+  const model = resolveVisionModel(process.env.DRAW_OVERLAY_VERIFY_MODEL || "");
   const prompt = [
     "Read this image and extract all visible readable text.",
     "Return one line with text exactly as visible.",
@@ -320,7 +323,7 @@ async function verifyRenderedOverlayWords({
   const verifyHost = String(process.env.OLLAMA_HOST || "http://mriczo:11434").trim();
   const verifyModels = [
     String(process.env.DRAW_OVERLAY_VERIFY_MODEL || "").trim(),
-    "qwen3.5:9b",
+    resolveVisionModel(),
   ].filter(Boolean);
   const uniqModels = [...new Set(verifyModels)];
 

@@ -62,7 +62,7 @@ su name chip llm from text source with text style to name series output be cerem
   from name text chip llm source focused atmost byte 5000 to name text chip gross chips be gross chip do
   ob text of with of this to name text chip programmatic style current be text do
 
-  exists su name chip boundary proposer be mind via state "qwen3.5:9b" fromtext name chip llm boundary prompt ya
+  exists su name chip boundary proposer be mind via state "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" fromtext name chip llm boundary prompt ya
 
   from name chip gross chips by name chip llm boundary to name text chip boundary proposals llm be series map do
   from name chip gross chips by name chip programmatic boundary to name text chip boundary proposals programmatic be series map do

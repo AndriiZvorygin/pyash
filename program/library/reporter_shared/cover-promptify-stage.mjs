@@ -1,4 +1,6 @@
 import { writePyaReport } from "./cover-overlay-stage.mjs";
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
+import { resolveTextModel } from "../../runtime/gpu/text-model.mjs";
 
 const TEXT_INDUCING_TERMS = ["news", "poster", "headline", "title", "sign", "signage", "label", "banner", "infographic", "article", "caption", "typography", "letters", "wordmark", "logo", "watermark"];
 const NEGATIVE_PHRASING = [/\bno\b/iu, /\bwithout\b/iu, /\bdo\s+not\b/iu, /\bdon'?t\b/iu, /\bexclude\b/iu, /\bavoid\b/iu];
@@ -99,35 +101,21 @@ function fallbackPositivePrompt({ jurisdiction = "", meetingType = "" } = {}) {
 }
 
 async function callPromptifyLlm({ host, model, prompt }) {
-  const endpoint = `${normalizeHost(host)}/api/chat`;
-  const body = {
+  const timeoutMs = Math.max(5_000, Number(process.env.COVER_PROMPTIFY_TIMEOUT_MS || 120_000));
+  const data = await requestManagedOllamaChat({
     model,
-    stream: false,
+    ollamaUrl: normalizeHost(host),
+    managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
     messages: [
-      {
-        role: "system",
-        content: "You write one concise positive image-generation prompt. Return only one line of prompt text.",
-      },
+      { role: "system", content: "You write one concise positive image-generation prompt. Return only one line of prompt text." },
       { role: "user", content: prompt },
     ],
-  };
-  const timeoutMs = Math.max(5_000, Number(process.env.COVER_PROMPTIFY_TIMEOUT_MS || 120_000));
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let res;
-  try {
-    res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-  if (!res.ok) throw new Error(`promptify ollama status ${res.status}`);
-  const data = await res.json();
-  return cleanLine(String(data?.message?.content || ""));
+    options: { temperature: 0.2, num_predict: 256 },
+    think: false,
+    keepAlive: 300,
+    timeoutMs,
+  });
+  return cleanLine(String(data?.message?.content || data?.response || ""));
 }
 
 async function callPromptifyLlmWithRetry({ host, model, prompt }) {
@@ -207,7 +195,7 @@ export async function runCoverPromptifyStage({
   reportPath = "",
 } = {}) {
   const host = process.env.OLLAMA_HOST || "http://mriczo:11434";
-  const model = "qwen3.5:9b";
+  const model = resolveTextModel();
   const req = buildPromptRequest({ hookText, oneSentenceSummary, topNews, jurisdiction, meetingType });
 
   let positivePrompt = "";

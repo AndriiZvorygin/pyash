@@ -174,7 +174,7 @@ Jobs may declare an optional memory request in their `jobSpec`:
     "deviceId": "gpu0"
   },
   "payload": {
-    "model": "qwen3.5:9b",
+    "model": "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M",
     "prompt": "..."
   }
 }
@@ -198,6 +198,12 @@ VRAM request preserve the existing behavior and do not cause implicit
 reclamation. `/capacity/preview` accepts the same runtime/profile/jobSpec shape
 and reports the decision, available memory, eligible idle candidates, and skipped
 candidate diagnostics without performing a discharge or starting a job.
+
+All reporter text-generation callers resolve the model through
+`program/runtime/gpu/text-model.mjs`. The resolver reads the house's
+`conduct/runtime.pya` first and falls back to `configure/default.pya`; callers
+do not carry separate model literals. Image/vision requests use the separate
+`see default mind` setting from the same declarative configuration.
 
 The snapshot also includes GPU compute-process telemetry split into managed
 runtime processes and unmanaged processes. This is diagnostic evidence only;

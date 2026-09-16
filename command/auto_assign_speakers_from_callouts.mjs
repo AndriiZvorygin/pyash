@@ -2,6 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readPyaTextValues } from './pya_lookup.mjs';
+import { requestManagedOllamaChat } from '../program/runtime/gpu/managed-ollama.mjs';
+import { resolveTextModel } from '../program/runtime/gpu/text-model.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
 const DEFAULT_VOICES = path.join(ROOT, 'world/voices');
@@ -20,7 +22,7 @@ const VERIFY_MODEL = process.env.AUTOASSIGN_VERIFY_MODEL
   || process.env.MEETING_SUMMARY_MODEL
   || process.env.SUMMARY_MODEL
   || process.env.OWEN_SUMMARY_MODEL
-  || 'qwen3.5:9b';
+  || resolveTextModel();
 const VERIFY_ENABLED = !/^(0|false|no)$/iu.test(String(process.env.PYA_AUTOASSIGN_VERIFY || '1'));
 const VERIFY_CONTEXT_RADIUS = (() => {
   const raw = Number(process.env.PYA_AUTOASSIGN_VERIFY_CONTEXT_RADIUS || 4);
@@ -952,23 +954,16 @@ function countUnknown(rows) {
 }
 
 async function ask(messages, { numPredict = 220 } = {}) {
-  const body = {
+  const json = await requestManagedOllamaChat({
     model: VERIFY_MODEL,
-    mode: 'chat',
-    keep_alive: 180,
-    think: false,
-    stream: false,
+    ollamaUrl: OLLAMA_URL,
+    managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || '',
     options: { num_predict: numPredict },
-    messages
-  };
-  const res = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    messages,
+    think: false,
+    keepAlive: 300,
   });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || '').trim();
+  return String(json?.message?.content || json?.response || '').trim();
 }
 
 function parseJsonObjectFromText(text) {

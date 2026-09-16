@@ -15,6 +15,7 @@ import {
   readGpuHandleStatus,
   writeGpuHandleStatus
 } from "../runtime/gpu/handle_status.mjs";
+import { resolveTextModel } from "../runtime/gpu/text-model.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -125,7 +126,7 @@ function defaultProfileForIntent(intent, jobSpec = {}, sentence = {}, { remember
   if (intent === "mind") {
     const configured = rememberFn("mind model") || rememberFn("mind ollama model");
     const model = String(configured?.ob?.text ?? configured?.ob?.name ?? "").trim();
-    return model || String(jobSpec.model ?? "").trim() || "llama3.2";
+    return model || String(jobSpec.model ?? "").trim() || resolveTextModel();
   }
   if (intent === "katago") {
     const configured = rememberFn("katago profile");
@@ -149,7 +150,8 @@ function buildMindJobSpec(sentence = {}, intent = "mind", { rememberFn = remembe
     });
   }
   const configured = rememberFn("mind model") || rememberFn("mind ollama model");
-  const model = String(sentence?.to?.name ?? sentence?.to?.text ?? configured?.ob?.text ?? configured?.ob?.name ?? "").trim() || "llama3.2";
+  const model = String(sentence?.to?.name ?? sentence?.to?.text ?? configured?.ob?.text ?? configured?.ob?.name ?? "").trim()
+    || resolveTextModel();
   return {
     kind: "ollama-generate",
     model,

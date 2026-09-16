@@ -4,6 +4,7 @@ import {
   writePyaMapArtifact,
   validateGrossChunksStrict,
 } from "./agenda-stage-contracts.mjs";
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
 
 const STAGE1_ROOT = "agenda gross chunks artifact";
 
@@ -97,14 +98,16 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt }) {
   let lastErr = null;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const res = await fetch(ollamaUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+      const payload = await requestManagedOllamaChat({
+        model: llmModel,
+        ollamaUrl,
+        managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+        messages: body.messages,
+        options: body.options,
+        think: false,
+        keepAlive: 300,
       });
-      if (!res.ok) throw new Error(`ollama status ${res.status}`);
-      const payload = await res.json();
-      const content = String(payload?.message?.content || "").trim();
+      const content = String(payload?.message?.content || payload?.response || "").trim();
       const direct = (() => {
         try { return JSON.parse(content); } catch { return null; }
       })();
@@ -163,7 +166,7 @@ export async function runAgendaStage1GrossChunking({
   rowsJsonPath,
   agendaPath,
   grossChunksPyaPath,
-  llmModel = "qwen3.5:9b",
+  llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {

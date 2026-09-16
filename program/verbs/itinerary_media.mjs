@@ -23,6 +23,7 @@ import {
 import { callPromptMind, buildPromptifyPacket, buildDistinctFullScript } from "../../command/itinerary_promptify.mjs";
 import { emitExchangeSentence, getExchangeRunId, lookupArtifactLocator, recordArtifact } from "../bridge/exchange.mjs";
 import { renderSayValue } from "./say.mjs";
+import { resolveTextModel } from "../runtime/gpu/text-model.mjs";
 
 function buildRunTag(now = new Date()) {
   const iso = now.toISOString();
@@ -614,7 +615,7 @@ function promptifyModel(sentence, rememberFn) {
   const mindFact = rememberFn?.(mindName);
   const model = String(mindFact?.as?.name ?? "").trim();
   if (model) return model;
-  return resolveConfigText("mind model", { rememberFn }) || process.env.PYA_MIND_MODEL || "qwen3.5:9b";
+  return resolveTextModel(resolveConfigText("mind model", { rememberFn }) || process.env.PYA_MIND_MODEL || "");
 }
 
 function promptifyHost(sentence, rememberFn) {
