@@ -4,6 +4,7 @@ import vm from "node:vm";
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { forget } from "../program/remember/index.mjs";
+import { DEFAULT_TEXT_MODEL } from "../program/runtime/gpu/text-model.mjs";
 
 test("compile write to mind emits mind call", async () => {
   forget();
@@ -62,7 +63,7 @@ test("compiled write to mind builds messages payload and uses helper transport",
   assert.equal(calls.length, 2, "helper should be called for each say");
   const [payload] = calls;
   assert.equal(payload.host, "http://localhost:11434");
-  assert.equal(payload.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(payload.model, DEFAULT_TEXT_MODEL);
   assert.equal(payload.messages.at(-1).content, "hello");
   assert.equal(payload.messages.at(-1).role, "user");
   assert.ok(payload.messages.every(m => m.role && m.content !== undefined));

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { DEFAULT_TEXT_MODEL } from "../program/runtime/gpu/text-model.mjs";
+
 import {
   parseSummaryCoverageChunks,
   verifyStreamSummaryLlm,
@@ -75,7 +77,7 @@ test("Andrii whole-stream verifier retries a repair that omits a late chronology
   let auditCalls = 0;
   globalThis.fetch = async (_url, options) => {
     const body = JSON.parse(String(options?.body || "{}"));
-    assert.equal(body.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+    assert.equal(body.model, DEFAULT_TEXT_MODEL);
     const prompt = String(body?.messages?.[1]?.content || "");
     prompts.push(prompt);
     let content;

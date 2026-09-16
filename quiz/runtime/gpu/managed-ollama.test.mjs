@@ -43,10 +43,10 @@ test("remote Ollama requests submit to the GPU housekeeper with Qwen resource de
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "http://mriczo:8090/submit");
   assert.equal(calls[0].body.runtimeName, "ollama");
-  assert.equal(calls[0].body.profileName, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(calls[0].body.profileName, DEFAULT_TEXT_MODEL);
   assert.equal(calls[0].body.jobSpec.kind, "ollama-chat");
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 12000);
-  assert.equal(calls[0].body.jobSpec.payload.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(calls[0].body.jobSpec.payload.model, DEFAULT_TEXT_MODEL);
 });
 
 test("text and vision models are loaded from declarative pya configuration", async () => {
@@ -61,7 +61,7 @@ test("text and vision models are loaded from declarative pya configuration", asy
   // The legacy environment-object call shape remains supported for callers
   // that have not migrated to the explicit options object.
   assert.equal(resolveTextModel("", { PYA_TEXT_MODEL: "env-text-model" }), "env-text-model");
-  assert.equal(DEFAULT_TEXT_MODEL, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(DEFAULT_TEXT_MODEL, "qwen3.5:9b");
   assert.equal(resolveVisionModel(), "qwen3.5:9b");
 
   const calls = [];

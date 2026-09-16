@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
+import { DEFAULT_TEXT_MODEL } from "../program/runtime/gpu/text-model.mjs";
+
 import {
   numericAuditSourceExcerpt,
   adjudicateChapterOrthogonality,
@@ -127,7 +129,7 @@ test("stage3 can ask qwen for grounded prose with no numeric claims", async (t) 
   });
 
   assert.equal(result.summary, "Council returned to open session and reported that no direction was provided.");
-  assert.equal(requestBody.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(requestBody.model, DEFAULT_TEXT_MODEL);
   assert.match(requestBody.messages[1].content, /Do not write any digits/u);
 });
 
@@ -432,7 +434,7 @@ test("stage3 uses qwen to remove an unsupported numeric claim without a prose fa
 
   assert.equal(result.unsupportedTokens.length, 0);
   assert.doesNotMatch(result.summary, /475/u);
-  assert.equal(requestBody.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(requestBody.model, DEFAULT_TEXT_MODEL);
   assert.equal(requestBody.options.num_predict, 720);
   assert.match(requestBody.messages[1].content, /Otherwise omit the unsupported quantity/u);
 });
@@ -665,7 +667,7 @@ test("stage3 uses the configured text model for focused numeric repair without r
     ollamaUrl: "http://ollama.invalid/api/chat",
   });
   assert.match(result.summary, /77 drainage projects.*9th Avenue.*4th Avenue.*16th Avenue/u);
-  assert.equal(requestBody.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(requestBody.model, DEFAULT_TEXT_MODEL);
   assert.match(requestBody.messages[1].content, /Keep all non-numeric wording and sentence structure unchanged/u);
 });
 

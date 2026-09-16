@@ -3,7 +3,7 @@ exists su name text module manuscript paragraph break ob text quoted.text.
 
 .text.quoted be text ya
 
-exists su name module manuscript mind be mind as name "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" fromtext text "You write clear spoken teaching manuscripts from source text." ya
+exists su name module manuscript mind be mind as name "qwen3.5:9b" fromtext text "You write clear spoken teaching manuscripts from source text." ya
 exists su name module manuscript fit mind be mind fromtext name module manuscript fit prompt ya
 exists su name module manuscript hook mind be mind fromtext name module manuscript hook prompt ya
 exists su name module manuscript hook fit mind be mind fromtext name module manuscript hook fit prompt ya
@@ -16,7 +16,7 @@ exists su name module manuscript segment two mind be mind fromtext name module m
 exists su name module manuscript segment three mind be mind fromtext name module manuscript segment three prompt ya
 exists su name module manuscript recap mind be mind fromtext name module manuscript recap prompt ya
 exists su name module manuscript cta mind be mind fromtext name module manuscript cta prompt ya
-exists su name module manuscript scored semantic score mind be mind as name "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" fromtext name module manuscript scored semantic score prompt ya
+exists su name module manuscript scored semantic score mind be mind as name "qwen3.5:9b" fromtext name module manuscript scored semantic score prompt ya
 exists su name module manuscript platform verify mind be mind fromtext name module manuscript platform verify prompt ya
 exists su name module manuscript source thrust verify mind be mind fromtext name module manuscript source thrust verify prompt ya
 exists su name module manuscript source thrust verdict mind be mind fromtext name module manuscript source thrust verdict prompt ya
