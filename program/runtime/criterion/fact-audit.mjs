@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { loadSuiteSamples, readDatasetFile } from "./datasets.mjs";
-import { runOllamaChat } from "./ollama.mjs";
+import { createQueuedOllamaExecutor, runOllamaChat } from "./ollama.mjs";
 import { parseJsonOutput, sha256, stableJson, tokenize } from "./metrics.mjs";
 import { loadRun, writeRunArtifacts } from "./report.mjs";
 
@@ -218,18 +218,21 @@ function factPrompt({ sourceText, summaryText, annotation = null }) {
   ].filter(Boolean).join("\n\n");
 }
 
-export function createOllamaFactJudge({ model, baseUrl, temperature = 0, maxOutputTokens = 4096, promptVersion = FACT_JUDGE_PROMPT_VERSION, scorerVersion = FACT_SCORER_VERSION, fetchImpl: configuredFetchImpl, profile = "summary_direct" } = {}) {
+export function createOllamaFactJudge({ model, baseUrl, temperature = 0, maxOutputTokens = 4096, promptVersion = FACT_JUDGE_PROMPT_VERSION, scorerVersion = FACT_SCORER_VERSION, fetchImpl: configuredFetchImpl, profile = "summary_direct", executor = null } = {}) {
   if (!model) throw new Error("fact audit requires a separate judge model");
-  return async ({ sourceText, summaryText, annotation, fetchImpl = configuredFetchImpl }) => {
+  return async ({ sourceText, summaryText, annotation, fetchImpl = configuredFetchImpl, sampleId = "", sourceRunId = "", model: evaluatedModel = "" }) => {
     const startedAt = Date.now();
-    const response = await runOllamaChat({
+    const request = {
       model,
       prompt: factPrompt({ sourceText, summaryText, annotation }),
       profile,
       sampling: { temperature, format: "json", num_predict: maxOutputTokens },
-      baseUrl,
-      fetchImpl
-    });
+      identity: `fact:${sourceRunId}:${evaluatedModel}:${sampleId}`,
+      operation: "judge"
+    };
+    const response = executor
+      ? await executor(request)
+      : await runOllamaChat({ ...request, baseUrl, fetchImpl });
     const parsed = parseJsonOutput(response.text);
     if (!parsed.valid || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
       throw new Error(`fact judge returned invalid JSON: ${parsed.error ?? "object required"}`);
@@ -287,7 +290,8 @@ export function joinOmniMeetingSample(annotations, samples) {
 
 function sourceRowMatches(row, sample) {
   return String(row.sampleId) === String(sample.id)
-    || (sample.metadata?.meetingId && String(row.metadata?.meetingId ?? "") === String(sample.metadata.meetingId));
+    || (sample.metadata?.meetingId && String(row.metadata?.meetingId ?? "") === String(sample.metadata.meetingId))
+    || (row.inputHash && row.inputHash === sha256(sample.input ?? ""));
 }
 
 function factAggregate(rows) {
@@ -395,6 +399,8 @@ export async function runFactAudit({
   judgeMaxOutputTokens = 4096,
   judgePromptVersion = FACT_JUDGE_PROMPT_VERSION,
   factScorerVersion = FACT_SCORER_VERSION,
+  gpuHousekeeperUrl = process.env.PYA_GPU_HOUSEKEEPER_URL ?? null,
+  gpuId = process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0",
   datasetRevision = process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned",
   resume = false,
   smoke = false,
@@ -414,7 +420,10 @@ export async function runFactAudit({
   const sourceRows = sourceRunRows(sourceRuns);
   const modelNames = runModels(sourceRuns);
   if (judgeModel && modelNames.includes(judgeModel)) throw new Error("fact audit judge must be separate from every evaluated source model");
-  const resolvedJudge = judge ?? (judgeModel ? createOllamaFactJudge({ model: judgeModel, baseUrl: judgeBaseUrl, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, promptVersion: judgePromptVersion, scorerVersion: factScorerVersion }) : null);
+  const managedOllama = !judge && judgeProvider === "ollama" && gpuHousekeeperUrl
+    ? createQueuedOllamaExecutor({ root, runId: runId ?? "criterion-fact", housekeeperUrl: gpuHousekeeperUrl, gpuId, vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB })
+    : null;
+  const resolvedJudge = judge ?? (judgeModel ? createOllamaFactJudge({ model: judgeModel, baseUrl: judgeBaseUrl, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, promptVersion: judgePromptVersion, scorerVersion: factScorerVersion, executor: managedOllama?.executor }) : null);
   if (!resolvedJudge) throw new Error("fact audit requires an external judge model; tests may inject a deterministic judge");
   const id = String(runId ?? `${mode}-${now().toISOString().replace(/[-:.TZ]/gu, "").slice(0, 14)}-${sha256(`${mode}:${now().toISOString()}`).slice(0, 8)}`);
   const outputJsonl = path.resolve(root, "criterion", "results", `${id}.jsonl`);
@@ -534,6 +543,7 @@ export async function runFactAudit({
       await persistRows();
     }
   }
+  const judgeDischarge = managedOllama ? await managedOllama.dischargeModels([judgeModel]) : null;
   const aggregates = modelNames.map(model => ({ model, aggregate: factAggregate(results.filter(row => row.model === model)) }));
   const groupAggregates = {
     city: modelNames.flatMap(model => factGroups(results.filter(row => row.model === model), "city")),
@@ -561,7 +571,7 @@ export async function runFactAudit({
     engine: "posthoc-fact",
     profile: "external-judge",
     sampling: { temperature: judgeTemperature, think: false },
-    judge: { provider: judgeProvider, model: judgeModel ?? null, promptVersion: judgePromptVersion, scorerVersion: factScorerVersion, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens },
+    judge: { provider: judgeProvider, model: judgeModel ?? null, promptVersion: judgePromptVersion, scorerVersion: factScorerVersion, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, managedBy: managedOllama ? "gpu-housekeeper" : "direct", discharge: judgeDischarge },
     mode: "criterion-fact",
     smoke,
     runScope: smoke ? "smoke" : "full",

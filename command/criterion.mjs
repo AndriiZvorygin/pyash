@@ -184,6 +184,8 @@ async function factAuditCommand(args, root, forcedMode = null) {
     judgeMaxOutputTokens: numericFlag(args, "--judge-max-output-tokens", 4096),
     judgePromptVersion: flag(args, "--judge-prompt-version", FACT_JUDGE_PROMPT_VERSION),
     factScorerVersion: flag(args, "--fact-scorer-version", FACT_SCORER_VERSION),
+    gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+    gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
     datasetRevision: flag(args, "--dataset-revision", process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned"),
     resume: hasFlag(args, "--resume"),
     smoke: hasFlag(args, "--smoke")
