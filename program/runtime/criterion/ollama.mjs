@@ -99,6 +99,7 @@ export async function runOllamaChat({
             top_p: settings.top_p,
             top_k: settings.top_k,
             num_ctx: settings.contextLength,
+            ...(settings.repeat_penalty === undefined ? {} : { repeat_penalty: settings.repeat_penalty }),
             ...(settings.num_predict === undefined ? {} : { num_predict: settings.num_predict })
           }
         })
