@@ -12,6 +12,7 @@ import { DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
 import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
+import { runMeetingBankJudgePilot, MEETINGBANK_JUDGE_PILOT_MODELS } from "../program/runtime/criterion/judge-pilot.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -91,6 +92,7 @@ function usage() {
     "criterion fact-audit --dataset <meetingbank.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--limit 5] [--resume]",
     "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",
     "criterion prompt-ablation --dataset <meetingbank.jsonl> --annotations <annotations.json> --source-run <generic-run-id> [--model <qwen,...>] [--smoke] [--resume]",
+    "criterion meetingbank-judge-pilot --dataset <meetingbank.jsonl> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion report <run-id>",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",
@@ -230,6 +232,48 @@ async function promptAblationCommand(args, root) {
   return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
 }
 
+async function meetingBankJudgePilotCommand(args, root) {
+  const models = listFlag(args, ["--model"]);
+  const result = await runMeetingBankJudgePilot({
+    root,
+    datasetPath: flag(args, "--dataset"),
+    split: flag(args, "--split", "test"),
+    runId: flag(args, "--run-id"),
+    models: models.length ? models : MEETINGBANK_JUDGE_PILOT_MODELS,
+    selectionSeed: flag(args, "--selection-seed"),
+    selectionCount: numericFlag(args, "--selection-count", 10),
+    profile: flag(args, "--profile", "summary_direct"),
+    contextLength: numericFlag(args, "--context-length"),
+    baseUrl: flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST ?? "http://mriczo:11434"),
+    gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+    gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
+    huggingFaceRevision: flag(args, "--huggingface-revision", process.env.PYA_HUGGINGFACE_REVISION ?? null),
+    huggingFaceDtype: flag(args, "--huggingface-dtype", process.env.PYA_HF_DTYPE ?? "auto"),
+    judgeTemperature: numericFlag(args, "--judge-temperature", 0),
+    judgeMaxOutputTokens: numericFlag(args, "--judge-max-output-tokens", 4096),
+    resume: hasFlag(args, "--resume"),
+    smoke: hasFlag(args, "--smoke")
+  });
+  print({
+    runId: result.runId,
+    status: result.status,
+    generationRunId: result.generationRunId,
+    selectedSampleCount: result.selection.count,
+    sampleIds: result.selection.sampleIds,
+    modelAvailability: result.ollama.resolved,
+    generationRows: result.generationRows.length,
+    pointwiseRows: result.pointwiseRows.length,
+    pairwiseRows: result.pairwiseRows.length,
+    results: `criterion/results/${result.runId}.jsonl`,
+    report: `criterion/results/${result.runId}.md`,
+    csv: `criterion/results/${result.runId}.csv`,
+    pya: `criterion/results/${result.runId}.pya`,
+    json: `criterion/results/${result.runId}.json`,
+    review: `criterion/review/${result.runId}.html`
+  }, hasFlag(args, "--json"));
+  return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
 async function againCommand(args, root) {
   const runId = positional(args)[0] ?? flag(args, "--run-id");
   if (!runId) throw new Error("criterion again requires a run id");
@@ -340,6 +384,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && (subcommand === "fact-audit" || subcommand === "meetingbank-fact-audit")) return factAuditCommand(args, root);
   if (command === "criterion" && subcommand === "omnicseval-meeting") return factAuditCommand(args, root, FACT_EVALUATION_MODES.exact);
   if (command === "criterion" && (subcommand === "prompt-ablation" || subcommand === "meetingbank-prompt-ablation")) return promptAblationCommand(args, root);
+  if (command === "criterion" && (subcommand === "meetingbank-judge-pilot" || subcommand === "judge-pilot")) return meetingBankJudgePilotCommand(args, root);
   if (command === "criterion" && subcommand === "report") return reportCommand(rest, root);
   if (command === "criterion" && subcommand === "compare") return compareCommand(rest, root);
   if (command === "criterion" && subcommand === "golden") return goldenCommand(rest, root);
@@ -351,6 +396,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "fact-audit" || command === "meetingbank-fact-audit") return factAuditCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "omnicseval-meeting") return factAuditCommand([subcommand, ...rest].filter(Boolean), root, FACT_EVALUATION_MODES.exact);
   if (command === "prompt-ablation" || command === "meetingbank-prompt-ablation") return promptAblationCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "meetingbank-judge-pilot" || command === "judge-pilot") return meetingBankJudgePilotCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "report") return reportCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "compare") return compareCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "golden") return goldenCommand([subcommand, ...rest].filter(Boolean), root);

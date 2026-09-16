@@ -6,7 +6,7 @@ export { runNightmare, runReverie } from "./suites.mjs";
 export { loadRun, renderComparison, renderRunCsv, renderRunMarkdown, renderReviewHtml, writeRunArtifacts } from "./report.mjs";
 export { extractLead3, extractSentences, runLead3, baselineMetadata } from "./baseline.mjs";
 export { runBaseline } from "./baseline-run.mjs";
-export { HUGGING_FACE_MODEL_DEFAULTS, createHuggingFaceExecutor, huggingFaceModelDefaults } from "./huggingface.mjs";
+export { HUGGING_FACE_MODEL_DEFAULTS, createHuggingFaceExecutor, createHuggingFaceJudgeExecutor, huggingFaceModelDefaults } from "./huggingface.mjs";
 export {
   FACT_EVALUATION_MODES,
   FACT_JUDGE_PROMPT_VERSION,
@@ -28,3 +28,13 @@ export {
   buildMeetingBankReferencePrompt,
   runPromptAblation
 } from "./prompt-ablation.mjs";
+export {
+  MEETINGBANK_JUDGE_PILOT_MODE,
+  MEETINGBANK_JUDGE_PILOT_PROMPT,
+  UNIRRM_MODEL_ID,
+  UNIRRM_JUDGE_NAME,
+  normalizeUniRrmJudgement,
+  parseUniRrmOutput,
+  selectMeetingBankJudgePilotSamples,
+  runMeetingBankJudgePilot
+} from "./judge-pilot.mjs";

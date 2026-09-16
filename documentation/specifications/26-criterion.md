@@ -116,3 +116,42 @@ only when their IDs match the selected subset. An optional separate external
 fact judge can attach completeness, conciseness and faithfulness after output
 generation; that post-hoc step is independent of the generation model and can
 be resumed with `--resume`.
+
+## MeetingBank judge pilot
+
+The `meetingbank-judge-pilot` lane is a small, resumable comparison experiment,
+not a model-hosting subsystem. It deterministically selects ten MeetingBank
+samples and generates identical-prompt rows for `qwen3.5:9b`,
+`hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M` and `qwen3.8:27b` through the
+remote Ollama adapter. Requested and resolved tags, digests, source hashes and
+the full prompt hash are retained; missing tags produce explicit unavailable
+rows and are never silently substituted.
+
+Successful rows are judged by the external `judge:unirrm-8b` adapter. The
+existing GPU queue still submits a `huggingface-generate` job to the managed
+`criterion-huggingface` runtime, with only a backwards-compatible
+`operation: "judge"` payload extension. The external worker loads
+`SUSTech-NLP/UniRRM-8B` as a causal language model; Criterion remains the
+owner of samples, prompts, scoring, checkpoints, provenance and reports.
+UniRRM receives only the transcript, candidate summary, task description and
+municipal rubric. It does not receive the reference summary used for ROUGE.
+
+The native 1-5 UniRRM scores are preserved with the explicit normalization
+`((score - 1) / 4) * 100`. Pointwise rows retain evidence, unsupported and
+contradicted claims, omissions, confidence, raw response and repair history.
+Pairwise rows retain deterministic displayed order, model identity mapping,
+winner, margin, confidence and the order-swapped result. Malformed JSON gets
+one bounded repair request; transport, model, malformed-output and successful
+statuses remain distinct. Pilot generation and judge rows are checkpointed
+independently, and `--resume` reuses successful identities without repeating
+them.
+
+The current Hugging Face service does not expose a sequence-classification
+endpoint, so Skywork reward scoring is explicitly optional and is not required
+for this pilot. The normal external-runtime deployment remains:
+
+```bash
+cd /home/htaf/pyac/pyash
+git pull --ff-only origin master
+./container/criterion-huggingface/command/begin.sh
+```

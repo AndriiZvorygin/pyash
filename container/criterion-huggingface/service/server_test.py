@@ -59,3 +59,8 @@ class CriterionHuggingFaceServerTests(unittest.TestCase):
       [(item["model"], item["revision"], item["dtype"]) for item in server.WORKER.loads],
       [("model-one", "rev-a", "float16"), ("model-one", "rev-b", "float16"), ("model-one", "rev-b", "bfloat16")]
     )
+
+  def test_operation_is_part_of_residency_identity_and_reaches_worker(self):
+    server.generate({"model": "judge", "operation": "judge", "prompt": "rubric", "input": "source"})
+    self.assertEqual(server.WORKER.loads[0]["operation"], "judge")
+    self.assertEqual(server.WORKER.generations[0][1]["prompt"], "rubric")

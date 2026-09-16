@@ -17,6 +17,7 @@ class CriterionHuggingFaceWorkerTests(unittest.TestCase):
     self.assertEqual(meeting_script["maxInputTokens"], 4096)
     self.assertEqual(dialog_led["numBeams"], 4)
     self.assertFalse(dialog_led["doSample"])
+    self.assertEqual(worker.MODEL_DEFAULTS["SUSTech-NLP/UniRRM-8B"]["operation"], "judge")
 
   def test_long_inputs_are_covered_by_deterministic_overlapping_windows(self):
     ranges = worker.chunk_ranges(9000, 4096, 128)

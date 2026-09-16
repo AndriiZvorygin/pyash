@@ -1,7 +1,7 @@
 # Criterion Hugging Face Runtime
 
-This is the GPU-managed runtime for Criterion's fine-tuned sequence-to-sequence
-models. It is a Pyash GPU duty service, not a second benchmark scheduler.
+This is the GPU-managed runtime for Criterion's external Hugging Face models
+and judges. It is a Pyash GPU duty service, not a second benchmark scheduler.
 
 Build and start it on the CUDA host:
 
@@ -23,4 +23,8 @@ Stop it without removing the model cache:
 
 The image uses an NVIDIA CUDA runtime and the GPU Compose override. The
 development machine only needs Node and access to the configured Pyash
-housekeeper; Python and model packages stay inside the container.
+housekeeper; Python and model packages stay inside the container. The same
+backwards-compatible `/generate` protocol supports `operation: "judge"` for
+`SUSTech-NLP/UniRRM-8B`; that operation loads the causal model class and treats
+the full rubric prompt as model input. Criterion still owns the judge prompt,
+parsing, evidence, scoring and report artifacts.
