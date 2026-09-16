@@ -169,7 +169,7 @@ export async function createHuggingFaceExecutor({
     ...huggingFaceModelDefaults(model)
   });
 
-  const executor = async ({ model, prompt, sample }) => {
+  const executor = async ({ model, prompt, messages, sample }) => {
     if (!normalizedHousekeeperUrl) {
       throw new Error("Hugging Face GPU execution requires PYA_GPU_HOUSEKEEPER_URL");
     }
@@ -183,6 +183,7 @@ export async function createHuggingFaceExecutor({
       operation,
       prompt: String(prompt ?? ""),
       input: operation === "judge" ? String(prompt ?? "") : String(sample?.input ?? prompt ?? ""),
+      ...(Array.isArray(messages) && messages.length ? { messages } : {}),
       generation: defaults
     };
 
