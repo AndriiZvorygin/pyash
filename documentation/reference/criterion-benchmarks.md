@@ -112,6 +112,48 @@ For fine-tuned open summarizers, Criterion supports `--engine huggingface`. The 
 
 The Ahmed model defaults to 1,024 input tokens, 56-142 output tokens, four beams and length penalty 2.0. MeetingScript defaults to 4,096 input tokens and four beams. DialogLED-large-5120 defaults to 5,120 input tokens and four beams. MeetingScript and DialogLED use deterministic overlapping token windows for long inputs in the external runtime; each result explicitly records chunking and truncation metadata, and never silently drops over-limit input. Model loading and warm inference are separated; unavailable metrics remain null. Weights and datasets stay in the private Hugging Face cache on the execution host. Lead-3 is a CPU-only deterministic baseline and never enters the GPU lane.
 
+## MeetingBank factuality pilot
+
+The factuality-first pilot is a separate, post-generation evaluation lane:
+
+```bash
+OLLAMA_BASE_URL=http://mriczo:11434 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+node command/criterion.mjs meetingbank-factuality-pilot \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --run-id meetingbank-qwen-factuality-pilot-20260916 \
+  --resume --json
+```
+
+It selects ten deterministic MeetingBank test samples and runs the same
+MeetingBank-aware generation prompt for `qwen3.5:9b`,
+`hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M`, and `qwen3.8:27b`.
+Generation remains on remote Ollama. The reference summary is retained for
+provenance but is hidden from the UniRRM judge.
+
+The judge lane is transcript-grounded and provisional. It extracts bounded
+candidate claims, retrieves transcript evidence, and runs independent UniRRM
+passes for faithfulness, source coverage, relevance, and conciseness. Decision
+and action fidelity are derived from the source inventory. Faithfulness is
+`(supported + 0.5 * partially-supported) / material claims`; source coverage
+uses the analogous covered/partial formula. Human-facing values are
+percentages and the dimensions remain separate; no overall winner is declared
+without human-labelled calibration.
+
+ROUGE is excluded from the default factuality report and remains historical
+reference-similarity evidence in the older model-run artifacts. A judge row is
+complete only when all required passes return structured native UniRRM
+evaluations with evidence. Transport, model, malformed-output, truncated, and
+incomplete responses are recorded separately, with one bounded JSON repair
+retry. The JSONL checkpoint is resumable and preserves raw response hashes.
+
+UniRRM is hosted by the external `criterion-huggingface` service. On close of
+the judge adapter, Criterion asks the GPU housekeeper to discharge the named
+Hugging Face profile; the provider unloads model state and releases CUDA cache
+without stopping the service. This prevents the large judge from occupying VRAM
+after a pilot and keeps the existing GPU queue/lease/housekeeper architecture
+in control of residency.
+
 ## MeetingBank fact audit
 
 The OmniCSEval-style fact lane is post-hoc scoring over saved Criterion output

@@ -25,7 +25,33 @@ export function resolveProfile(name = "summary_direct", overrides = {}) {
 }
 
 function responseError(response, endpoint) {
-  return new Error(`ollama request failed at ${endpoint}: ${response.status} ${response.statusText ?? ""}`.trim());
+  const error = new Error(`ollama request failed at ${endpoint}: ${response.status} ${response.statusText ?? ""}`.trim());
+  error.status = response.status;
+  return error;
+}
+
+export function isTransientOllamaError(error) {
+  const status = Number(error?.status);
+  if ([429, 502, 503, 504].includes(status)) return true;
+  const message = String(error?.message ?? error ?? "");
+  return /fetch failed|network|timed? ?out|ECONNRESET|ECONNREFUSED|ECONNABORTED|ETIMEDOUT|EPIPE|socket hang up|aborted/iu.test(message);
+}
+
+function requestSignal(parentSignal, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error("Ollama request timeout")), Math.max(1, Number(timeoutMs) || 120000));
+  const abort = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) abort();
+    else parentSignal.addEventListener("abort", abort, { once: true });
+  }
+  return {
+    signal: controller.signal,
+    clear() {
+      clearTimeout(timeout);
+      parentSignal?.removeEventListener?.("abort", abort);
+    }
+  };
 }
 
 async function fetchJson(url, options, fetchImpl) {
@@ -43,46 +69,69 @@ export async function runOllamaChat({
   baseUrl,
   fetchImpl = globalThis.fetch,
   now = () => Date.now(),
-  signal
+  signal,
+  requestTimeoutMs = Number(process.env.PYA_CRITERION_OLLAMA_TIMEOUT_MS || 180000),
+  maxRetries = Number(process.env.PYA_CRITERION_OLLAMA_RETRIES || 2),
+  retryBaseMs = Number(process.env.PYA_CRITERION_OLLAMA_RETRY_BASE_MS || 750)
 } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("Ollama benchmark requires fetch");
   if (!model) throw new Error("Ollama benchmark requires a model");
   const settings = resolveProfile(profile, { ...sampling, contextLength });
-  const startedAt = new Date(now()).toISOString();
-  const response = await fetchImpl(`${resolveOllamaBaseUrl(baseUrl)}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    signal,
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: String(prompt ?? "") }],
-      stream: false,
-      think: settings.think,
-      ...(settings.format === undefined ? {} : { format: settings.format }),
-      options: {
-        temperature: settings.temperature,
-        top_p: settings.top_p,
-        top_k: settings.top_k,
-        num_ctx: settings.contextLength,
-        ...(settings.num_predict === undefined ? {} : { num_predict: settings.num_predict })
+  const endpoint = `${resolveOllamaBaseUrl(baseUrl)}/api/chat`;
+  const attempts = [];
+  const retryLimit = Math.max(0, Math.trunc(Number(maxRetries) || 0));
+  for (let attempt = 0; attempt <= retryLimit; attempt += 1) {
+    const startedAt = new Date(now()).toISOString();
+    const request = requestSignal(signal, requestTimeoutMs);
+    try {
+      const response = await fetchImpl(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: request.signal,
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: String(prompt ?? "") }],
+          stream: false,
+          think: settings.think,
+          ...(settings.format === undefined ? {} : { format: settings.format }),
+          options: {
+            temperature: settings.temperature,
+            top_p: settings.top_p,
+            top_k: settings.top_k,
+            num_ctx: settings.contextLength,
+            ...(settings.num_predict === undefined ? {} : { num_predict: settings.num_predict })
+          }
+        })
+      });
+      if (!response.ok) throw responseError(response, "/api/chat");
+      const payload = await response.json();
+      if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
+      const finishedAt = new Date(now()).toISOString();
+      const rawText = payload.message?.content ?? payload.response ?? "";
+      attempts.push({ attempt: attempt + 1, status: response.status, error: null });
+      return {
+        text: stripThinking(rawText),
+        thinking: payload.message?.thinking ?? payload.thinking ?? "",
+        payload,
+        timing: { ...ollamaTiming(payload, startedAt, finishedAt), requestAttempts: attempt + 1, transportRetries: attempt },
+        request: { endpoint, model, attempts, retries: attempt },
+        effectiveThink: settings.think,
+        reasoningMode: settings.reasoningMode,
+        startedAt,
+        finishedAt
+      };
+    } catch (error) {
+      attempts.push({ attempt: attempt + 1, status: Number(error?.status) || null, error: String(error?.message ?? error) });
+      if (!isTransientOllamaError(error) || attempt >= retryLimit) {
+        error.request = { endpoint, model, attempts, retries: attempt };
+        throw error;
       }
-    })
-  });
-  if (!response.ok) throw responseError(response, "/api/chat");
-  const payload = await response.json();
-  if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
-  const finishedAt = new Date(now()).toISOString();
-  const rawText = payload.message?.content ?? payload.response ?? "";
-  return {
-    text: stripThinking(rawText),
-    thinking: payload.message?.thinking ?? payload.thinking ?? "",
-    payload,
-    timing: ollamaTiming(payload, startedAt, finishedAt),
-    effectiveThink: settings.think,
-    reasoningMode: settings.reasoningMode,
-    startedAt,
-    finishedAt
-  };
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(retryBaseMs) || 0) * (2 ** attempt)));
+    } finally {
+      request.clear();
+    }
+  }
+  throw new Error("Ollama request exhausted without a terminal result");
 }
 
 export async function readOllamaMetadata({ model, baseUrl, fetchImpl = globalThis.fetch } = {}) {

@@ -73,6 +73,19 @@ class CriterionHuggingFaceWorkerTests(unittest.TestCase):
     self.assertEqual(worker.prompt_token_ids(tokenizer, "raw", [], True, False), [11])
     self.assertEqual(tokenizer.options["enable_thinking"], False)
 
+  def test_unload_state_clears_provider_residency(self):
+    class Torch:
+      class cuda:
+        @staticmethod
+        def is_available():
+          return False
+
+    state = {"model": object(), "tokenizer": object(), "torch": Torch()}
+    result = worker.unload_state(state)
+    self.assertTrue(result["success"])
+    self.assertTrue(result["unloaded"])
+    self.assertEqual(state, {})
+
 
 if __name__ == "__main__":
   unittest.main()
