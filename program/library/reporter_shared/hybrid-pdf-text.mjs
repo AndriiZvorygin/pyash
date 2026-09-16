@@ -2,8 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
+import { resolveTextModel } from "../../runtime/gpu/text-model.mjs";
 
-const MODEL = "qwen3.5:9b";
 
 function normalize(value = "") {
   return String(value).replace(/[\u00a0\u2007\u202f]/gu, " ").replace(/\s+/gu, " ").trim();
@@ -100,16 +101,13 @@ async function qwenTranscribePage({ pdfPath, page, ollamaHost, timeoutMs, attemp
     }
     const image = fs.readFileSync(imagePath).toString("base64");
     const host = String(ollamaHost || process.env.OLLAMA_HOST || "http://mriczo:11434").replace(/\/+$/u, "");
-    const response = await fetch(`${host}/api/chat`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: MODEL,
-        think: false,
-        stream: false,
-        keep_alive: 300,
-        options: { num_predict: 1200, temperature: 0 },
-        messages: [{
+    const response = await requestManagedOllamaChat({
+      ollamaUrl: host,
+      managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+      think: false,
+      keepAlive: 300,
+      options: { num_predict: 1200, temperature: 0 },
+      messages: [{
           role: "user",
           content: [
             "Transcribe every visible word on this document page exactly.",
@@ -125,19 +123,17 @@ async function qwenTranscribePage({ pdfPath, page, ollamaHost, timeoutMs, attemp
           ].filter(Boolean).join(" "),
           images: [image],
         }],
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
+      timeoutMs,
     });
-    if (!response.ok) throw new Error(`qwen PDF OCR HTTP ${response.status}`);
-    const payload = await response.json();
-    return String(payload?.message?.content || "").trim();
+    return String(response?.message?.content || response?.response || "").trim();
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
 /**
- * Extract a PDF page-by-page, retaining native text and using qwen3.5:9b only
+ * Extract a PDF page-by-page, retaining native text and using the configured
+ * text model only
  * for pages whose text layer is absent. A failed scanned-page transcription is
  * fatal so an attachment can never be silently published with trailing pages cut off.
  */
@@ -226,7 +222,7 @@ export async function extractHybridPdfText({
     }
     if (wordCount(transcribed) < 4) {
       throw new Error(
-        `qwen3.5:9b returned no usable transcription for scanned PDF page ${page} of ${totalPages}`
+        `configured text model returned no usable transcription for scanned PDF page ${page} of ${totalPages}`
         + (lastError ? ` after ${maxAttempts} attempts (${lastError})` : ` after ${maxAttempts} attempts`),
       );
     }
@@ -243,6 +239,6 @@ export async function extractHybridPdfText({
     blankPages,
     paginationOnlyPages,
     verifiedShortNativePages,
-    model: ocrPages.length ? MODEL : "native_text",
+    model: ocrPages.length ? resolveTextModel() : "native_text",
   };
 }

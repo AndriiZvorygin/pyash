@@ -154,7 +154,7 @@ test("chunk review adjudication checks an alleged outcome against literal eviden
   });
 
   assert.equal(result.score, 0.92);
-  assert.equal(requestBody.model, "qwen3.5:9b");
+  assert.equal(requestBody.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
   assert.match(requestBody.messages[1].content, /prior review is only a claim and may be wrong/iu);
   assert.match(requestBody.messages[1].content, /Do not infer approval.*agenda heading/iu);
 });
@@ -223,7 +223,7 @@ test("whole-meeting review adjudication resolves conflicting claims from literal
   });
 
   assert.equal(result.score, 0.88);
-  assert.equal(requestBody.model, "qwen3.5:9b");
+  assert.equal(requestBody.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
   assert.match(requestBody.messages[1].content, /supplied reviews are untrusted claims/iu);
   assert.match(requestBody.messages[1].content, /Do not infer approval.*headings/iu);
 });

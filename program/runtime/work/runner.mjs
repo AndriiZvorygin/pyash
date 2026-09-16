@@ -25,6 +25,7 @@ import {
 import { deriveImplementationProgress } from "./progress.mjs";
 import { currentTimeoutPolicy } from "./timeout_policy.mjs";
 import { reconcileOperationalWorkTasks } from "./turn_reconciliation.mjs";
+import { resolveTextModel } from "../gpu/text-model.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -117,7 +118,7 @@ export async function probeExternalEvidenceTask(task, {
         const response = await fetchImpl(`${ollamaHost.replace(/\/$/u, "")}/api/tags`);
         const payload = await response.json();
         const names = (payload.models || []).map((model) => String(model.name || model.model || ""));
-        healthy = names.includes(text(env.PYA_MIND_MODEL) || "qwen3.5:9b");
+        healthy = names.includes(resolveTextModel(text(env.PYA_MIND_MODEL), { env }));
       } catch {
         healthy = false;
       }

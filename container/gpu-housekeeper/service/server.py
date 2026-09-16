@@ -775,6 +775,24 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
     "candidates": [],
     "candidateDiagnostics": []
   }
+  # A warm target profile does not require another model allocation. This is
+  # important for repeated Qwen requests: nvidia-smi reports the resident
+  # model's full footprint as used VRAM, but the job will reuse that footprint
+  # rather than competing with it. Only treat the profile as warm when the
+  # housekeeper itself recorded it as loaded; unknown profiles still go
+  # through the normal admission and safe-discharge checks below.
+  target_profile = normalize_text(job.get("profileName"))
+  if not target_profile and isinstance(job.get("jobSpec"), dict):
+    payload = job["jobSpec"].get("payload")
+    if isinstance(payload, dict):
+      target_profile = normalize_text(payload.get("model"))
+  with _LOCK:
+    target_loaded = bool(target_profile and _PROFILES.get(target_profile, {}).get("loaded", False))
+  if target_loaded:
+    common["decision"] = "fits"
+    common["reason"] = "target profile is already warm; no additional VRAM is required"
+    common["targetProfileLoaded"] = True
+    return common
   if free_before >= required:
     common["decision"] = "fits"
     common["reason"] = "free VRAM satisfies request"

@@ -82,6 +82,28 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(calls[1][1]["model"], "old-model")
     self.assertEqual(calls[2][1]["model"], "qwen-test")
 
+  def test_warm_target_profile_is_admitted_when_vram_is_full(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 24000, "vramFreeMb": 576}],
+    }
+    server._PROFILES["qwen-test"] = {
+      "profileName": "qwen-test",
+      "runtimeName": "ollama",
+      "loaded": True,
+    }
+    plan = server.capacity_plan_for_job({
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {
+        "kind": "ollama-chat",
+        "resourceRequest": {"vramRequiredMb": 12000},
+        "payload": {"model": "qwen-test", "messages": []},
+      },
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+    self.assertEqual(plan["decision"], "fits")
+    self.assertTrue(plan["targetProfileLoaded"])
+
   def test_stopped_runtime_triggers_begin_before_ollama_job(self):
     actions = []
     statuses = iter([

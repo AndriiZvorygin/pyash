@@ -53,11 +53,11 @@ In timeline reconciliation, `empty` is a boundary-bearing status and must retain
 
 When an article verifier flags evaluative language, distinguish an unsupported value judgment from grounded institutional terminology such as a crisis residence or crisis service. Exact source-backed service names must not be rejected solely because one word can also be rhetorical.
 
-When qualitative numeric repair keeps copying a malformed phone number, address, date, or amount from the rejected draft, stop including that draft after bounded attempts. Ask qwen3.5:9b for fresh source-grounded qualitative prose with all contact information and quantitative details omitted, while retaining the non-numeric civic action and outcome.
+When qualitative numeric repair keeps copying a malformed phone number, address, date, or amount from the rejected draft, stop including that draft after bounded attempts. Ask the canonical local text model loaded from `.pya` configuration for fresh source-grounded qualitative prose with all contact information and quantitative details omitted, while retaining the non-numeric civic action and outcome.
 
 Distinguish a failed publication from a genuine no-candidate night. If recent meetings expose agendas but no recording or minutes, do not fabricate a transcript recap; report the missing authoritative media explicitly and keep checking future calendar refreshes.
 
-Local reporter LLM work must use only `qwen3.5:9b`. Do not introduce another local model, deterministic content-generation fallbacks, or meeting-specific exceptions.
+Local reporter LLM work must use only the canonical text model declared in `.pya` configuration by default. Do not introduce another local model, deterministic content-generation fallbacks, or meeting-specific exceptions.
 
 For corrected transcript-to-ASR timing, local word-count progression is not a safe alignment contract: an edited or removed passage can cause every later cue to drift, and consuming an unmatched sentence once while locating its start and again while locating its end doubles that error. Align corrected sentences with a monotonic chain of globally unique verbatim n-grams from the ASR word clock, retain exact ASR cue boundaries, and fail long inputs whose document-anchor coverage is too low. This deterministic evidence validation is for timestamps only; it must not replace LLM chronology segmentation or prose generation.
 

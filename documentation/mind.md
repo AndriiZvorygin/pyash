@@ -21,7 +21,7 @@ Example:
 ```pyash
 su generator be mind
   from space "http://localhost:11434"
-  via  state "qwen3.5:9b"
+  via  state "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"
   from discourse "pyash_orchestrator"
   accordingto name session
   by   num 6
@@ -33,7 +33,9 @@ Fields:
 * `from space` → host (default: `http://localhost:11434` if `OLLAMA_HOST` is unset).
 * `via state` (`as`) → model
 
-  * interpreter default: `qwen3.5:9b` if missing.
+  * If omitted, the interpreter loads `mind model` from `configure/default.pya`
+    (or `model` from the nearest house `conduct/runtime.pya`). The current
+    repository default is `hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M`.
 * `from discourse` (`fromtext`) → system prompt string for the mind.
 * `accordingto name <session>` → series-backed session history (optional).
 * `by num N` (quantity/way case) → history window for that mind (keeps ~N user+assistant pairs). Using the existing quantity axis avoids adding a new case; defaults to ~8 if omitted. Per-call override via `by num` is accepted too.
@@ -44,7 +46,7 @@ Internally, the runtime stores at least:
 {
   "name": "generator",
   "host": "http://localhost:11434",
-  "model": "qwen3.5:9b",
+  "model": "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M",
   "system": "pyash_orchestrator",
   "session": "session"
 }
@@ -149,7 +151,7 @@ For internal history, the runtime derives context from `memory`. For each mind `
     "be": "mind",
     "ob": {
       "text": "<llm reply>",
-      "model": "qwen3.5:9b"
+      "model": "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"
     }
   }
   ```
@@ -265,7 +267,7 @@ and uses `message.content` as the reply text.
 Use one caller shape and swap provider by helper config:
 
 ```pyash
-exists su name helper be mind as name "qwen3.5:9b" ya
+exists su name helper be mind ya
 ob text "Task." for name helper to name text output be write do
 ```
 
@@ -284,7 +286,7 @@ Some mind backends expose a module-level discharge ceremony. For Ollama:
 
 ```pyash
 from filename "./module/mind_ollama.pya" ob name discharge to name mind discharge be import do
-ob text "qwen3.5:9b" be mind discharge do
+ob text "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" be mind discharge do
 ```
 
 This sends `keep_alive: 0` to Ollama to unload the model after a run.
@@ -300,8 +302,8 @@ This removes the refinery from the runtime registry and invalidates helper alias
 The same module exposes `begin` and `restart` so you can warm or cycle the model:
 
 ```pyash
-ob text "qwen3.5:9b" be mind begin do
-ob text "qwen3.5:9b" be mind restart do
+ob text "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" be mind begin do
+ob text "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" be mind restart do
 ```
 
 ---
@@ -328,7 +330,7 @@ Example:
   "be": "mind",
   "ob": {
     "text":  "<llm reply text>",
-    "model": "qwen3.5:9b"
+    "model": "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"
   }
 }
 ```
@@ -342,7 +344,7 @@ A secondary “result” fact may mirror the reply for downstream use:
   "be": "write",
   "ob": {
     "text":  "<llm reply text>",
-    "model": "qwen3.5:9b"
+    "model": "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"
   }
 }
 ```

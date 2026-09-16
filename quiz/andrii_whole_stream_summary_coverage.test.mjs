@@ -75,7 +75,7 @@ test("Andrii whole-stream verifier retries a repair that omits a late chronology
   let auditCalls = 0;
   globalThis.fetch = async (_url, options) => {
     const body = JSON.parse(String(options?.body || "{}"));
-    assert.equal(body.model, "qwen3.5:9b");
+    assert.equal(body.model, "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
     const prompt = String(body?.messages?.[1]?.content || "");
     prompts.push(prompt);
     let content;

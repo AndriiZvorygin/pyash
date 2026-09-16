@@ -1,4 +1,4 @@
-exists su name mind model ob text "qwen3.5:9b" be default ya
+exists su name mind model ob text "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" be default ya
 su name mind configure be map def
   su name think ob bool lie ya
   su name max tokens ob num 140 ya

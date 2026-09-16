@@ -7,6 +7,8 @@ import {
   CANADIAN_ENGLISH_SPELLING_PAIRS,
   normalizeCanadianEnglish,
 } from "../program/library/reporter_shared/canadian-english.mjs";
+import { requestManagedOllamaChat } from "../program/runtime/gpu/managed-ollama.mjs";
+import { resolveTextModel } from "../program/runtime/gpu/text-model.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -17,7 +19,7 @@ const PROFILES = {
     house: path.join(ROOT, "world/house/grey-county-reporter"),
     termsEnv: "GREY_NORMALIZE_TERMS_FILE",
     rosterEnv: "GREY_NORMALIZE_ROSTER_FILE",
-    defaultModel: "qwen3.5:9b",
+    defaultModel: "",
     canonicalCleanup(text) {
       let out = String(text || "");
       out = out.replace(/\bGrey\s+county\b/giu, "Grey County");
@@ -54,7 +56,7 @@ const PROFILES = {
     house: path.join(ROOT, "world/house/owen-sound-reporter"),
     termsEnv: "OWEN_NORMALIZE_TERMS_FILE",
     rosterEnv: "OWEN_NORMALIZE_ROSTER_FILE",
-    defaultModel: "qwen3.5:9b",
+    defaultModel: "",
     canonicalCleanup(text) {
       let out = String(text || "");
       out = out.replace(/\bOceansound\b/giu, "Owen Sound");
@@ -123,7 +125,7 @@ const PROFILES = {
     house: path.join(ROOT, "world/house/andrii-youtube-reporter"),
     termsEnv: "ANDRII_NORMALIZE_TERMS_FILE",
     rosterEnv: "ANDRII_NORMALIZE_ROSTER_FILE",
-    defaultModel: "qwen3.5:9b",
+    defaultModel: "",
     canonicalCleanup(text) {
       let out = String(text || "");
       out = out.replace(/\bAndrei Zvorov\b/gu, "Andrii Zvorygin");
@@ -436,19 +438,6 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
     chunk,
   ].join("\n");
 
-  const body = {
-    model,
-    mode: "chat",
-    stream: false,
-    think: false,
-    keep_alive: 300,
-    options: { temperature: 0.05, num_predict: 4096 },
-    messages: [
-      { role: "system", content: "You are a careful transcript text normalizer. Preserve meaning exactly; only correct obvious transcription errors." },
-      { role: "user", content: prompt },
-    ],
-  };
-
   const timeoutMsRaw = Number(process.env.PYA_NORMALIZE_FETCH_TIMEOUT_MS || 120000);
   const timeoutMs = Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 5000 ? Math.floor(timeoutMsRaw) : 120000;
   const attemptsRaw = Number(process.env.PYA_NORMALIZE_FETCH_ATTEMPTS || 3);
@@ -458,19 +447,21 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
   let attemptsUsed = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     attemptsUsed = attempt;
-    let timer = null;
     try {
-      const ctl = new AbortController();
-      timer = setTimeout(() => ctl.abort(), timeoutMs);
-      const res = await fetch(ollamaUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: ctl.signal,
+      const json = await requestManagedOllamaChat({
+        model,
+        ollamaUrl,
+        managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+        options: { temperature: 0.05, num_predict: 4096 },
+        messages: [
+          { role: "system", content: "You are a careful transcript text normalizer. Preserve meaning exactly; only correct obvious transcription errors." },
+          { role: "user", content: prompt },
+        ],
+        think: false,
+        keepAlive: 300,
+        timeoutMs,
       });
-      if (!res.ok) throw new Error(`ollama status ${res.status}`);
-      const json = await res.json();
-      const out = String(json?.message?.content || "").trim();
+      const out = String(json?.message?.content || json?.response || "").trim();
       if (!out) throw new Error("empty normalize response");
       return out;
     } catch (err) {
@@ -480,8 +471,6 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
       if (attempt >= attempts) break;
       const delay = 1200 * attempt;
       await new Promise((r) => setTimeout(r, delay));
-    } finally {
-      if (timer) clearTimeout(timer);
     }
   }
   throw new Error(`normalize fetch failed after ${attemptsUsed} attempt${attemptsUsed === 1 ? "" : "s"}: ${lastErr}`);
@@ -518,7 +507,10 @@ export async function runNormalizeShared(writer, argv = []) {
   const termMapText = termsForPrompt(normalizationTerms);
   const stringReplacementMap = buildStringReplacementMap(profile, normalizationTerms);
   const sourceText = fs.readFileSync(plainPath, "utf8");
-  const model = String(process.env[`${profile.envPrefix}_NORMALIZE_MODEL`] || profile.defaultModel);
+  const model = resolveTextModel(
+    String(process.env[`${profile.envPrefix}_NORMALIZE_MODEL`] || profile.defaultModel),
+    { runtimePath: path.join(profile.house, "conduct", "runtime.pya") },
+  );
   const maxCharsRaw = Number(process.env[`${profile.envPrefix}_NORMALIZE_MAX_CHARS`] || 9000);
   const maxChunksRaw = Number(process.env[`${profile.envPrefix}_NORMALIZE_MAX_CHUNKS`] || 0);
   const maxChars = Number.isFinite(maxCharsRaw) && maxCharsRaw > 1500 ? Math.floor(maxCharsRaw) : 9000;
