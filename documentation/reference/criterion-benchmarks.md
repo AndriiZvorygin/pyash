@@ -140,6 +140,12 @@ conciseness, and publication suitability. Faithfulness is
 values are percentages and the dimensions remain separate; no overall winner
 is declared without human-labelled calibration.
 
+Generation is batched before judging to avoid GPU/VRAM thrashing: Criterion
+preflights and generates all selected rows for one Qwen model, discharges that
+model, then continues with the next Qwen model. Only after every Qwen
+generation batch is complete does Criterion load UniRRM and judge the
+successful summaries. UniRRM is discharged after the judge batch completes.
+
 ROUGE is excluded from the default factuality report and remains historical
 reference-similarity evidence in the older model-run artifacts. A judge row is
 complete only when all required passes return structured native UniRRM
