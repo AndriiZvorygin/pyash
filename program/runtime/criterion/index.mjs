@@ -1,5 +1,5 @@
 export { DEFAULT_MODELS, getProfile, runCriterion, rerunCriterion, scoreBenchmarkSample, scoreSample } from "./run.mjs";
-export { DEFAULT_PROFILES, resolveOllamaBaseUrl, resolveProfile, runOllamaChat, readOllamaMetadata, probeOllama } from "./ollama.mjs";
+export { DEFAULT_PROFILES, createQueuedOllamaExecutor, resolveOllamaBaseUrl, resolveProfile, runOllamaChat, readOllamaMetadata, probeOllama } from "./ollama.mjs";
 export { SUITE_CATALOG, loadSuiteSamples, loadHelpOSFixtures, readDatasetFile } from "./datasets.mjs";
 export { runCriterionRefinery } from "./refinery.mjs";
 export { runNightmare, runReverie } from "./suites.mjs";
@@ -7,6 +7,7 @@ export { loadRun, renderComparison, renderRunCsv, renderRunMarkdown, renderRevie
 export { extractLead3, extractSentences, runLead3, baselineMetadata } from "./baseline.mjs";
 export { runBaseline } from "./baseline-run.mjs";
 export { HUGGING_FACE_MODEL_DEFAULTS, createHuggingFaceExecutor, createHuggingFaceJudgeExecutor, huggingFaceModelDefaults } from "./huggingface.mjs";
+export { MEETINGBANK_FACTUALITY_MODE, MEETINGBANK_FACTUALITY_MODELS, extractCandidateClaims, retrieveTranscriptEvidence, buildSourceInventory, normalizeNativeJudgeResponse, preflightOllama, preflightOllamaModel, dischargeOllamaModels, createOllamaFactualityJudge, runMeetingBankFactualityPilot } from "./factuality-pilot.mjs";
 export {
   FACT_EVALUATION_MODES,
   FACT_JUDGE_PROMPT_VERSION,
