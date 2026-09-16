@@ -114,6 +114,7 @@ async function waitForHandle({
   workerTag
 }) {
   const deadline = Date.now() + timeoutMs;
+  const workerMaxPolls = Math.max(1200, Math.ceil(timeoutMs / 250) + 1);
   while (Date.now() <= deadline) {
     const status = await readStatus(worldRoot, handleId);
     if (status && isTerminalHandleStatus(status.status)) {
@@ -129,7 +130,7 @@ async function waitForHandle({
       gpuId,
       lane: "criterion",
       pollIntervalMs: 250,
-      maxPolls: 1200,
+      maxPolls: workerMaxPolls,
       leaseTtlMs: timeoutMs + 60000
     });
     await sleep(pollMs);

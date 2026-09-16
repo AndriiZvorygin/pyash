@@ -49,6 +49,7 @@ test("UniRRM native pairwise output exposes best response without a reference", 
 
 test("Hugging Face judge adapter uses the existing durable queue with a judge operation", async () => {
   const requests = [];
+  const workerCalls = [];
   let status = { status: "queued" };
   const adapter = await createHuggingFaceJudgeExecutor({
     root: await tempRoot(),
@@ -57,7 +58,8 @@ test("Hugging Face judge adapter uses the existing durable queue with a judge op
     enqueue: async (_root, envelope) => requests.push(envelope),
     writeStatus: async () => {},
     readStatus: async () => status,
-    workerRunner: async () => {
+    workerRunner: async options => {
+      workerCalls.push(options);
       status = { status: "success", result: JSON.stringify({ text: JSON.stringify({ overall_score: 4 }), timing: {} }) };
     },
     pollMs: 1
@@ -70,6 +72,8 @@ test("Hugging Face judge adapter uses the existing durable queue with a judge op
   assert.equal(requests[0].jobSpec.payload.model, UNIRRM_MODEL_ID);
   assert.equal(requests[0].jobSpec.payload.input, "judge this");
   assert.deepEqual(requests[0].jobSpec.payload.messages, messages);
+  assert.equal(workerCalls.length, 1);
+  assert.equal(workerCalls[0].maxPolls, 7201);
   await adapter.close();
 });
 
