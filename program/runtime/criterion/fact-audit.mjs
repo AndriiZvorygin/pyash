@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { loadSuiteSamples, readDatasetFile } from "./datasets.mjs";
 import { createQueuedOllamaExecutor, runOllamaChat } from "./ollama.mjs";
-import { parseJsonOutput, sha256, stableJson, tokenize } from "./metrics.mjs";
+import { parseJsonOutput, sha256, stableJson, stripThinking, tokenize } from "./metrics.mjs";
 import { loadRun, writeRunArtifacts } from "./report.mjs";
 
 export const FACT_EVALUATION_MODES = Object.freeze({
@@ -218,40 +218,56 @@ function factPrompt({ sourceText, summaryText, annotation = null }) {
   ].filter(Boolean).join("\n\n");
 }
 
-export function createOllamaFactJudge({ model, baseUrl, temperature = 0, maxOutputTokens = 4096, promptVersion = FACT_JUDGE_PROMPT_VERSION, scorerVersion = FACT_SCORER_VERSION, fetchImpl: configuredFetchImpl, profile = "summary_direct", executor = null } = {}) {
+export function createOllamaFactJudge({ model, baseUrl, temperature = 0, maxOutputTokens = 4096, promptVersion = FACT_JUDGE_PROMPT_VERSION, scorerVersion = FACT_SCORER_VERSION, fetchImpl: configuredFetchImpl, profile = "summary_direct", executor = null, maxRepairRetries = 1 } = {}) {
   if (!model) throw new Error("fact audit requires a separate judge model");
   return async ({ sourceText, summaryText, annotation, fetchImpl = configuredFetchImpl, sampleId = "", sourceRunId = "", model: evaluatedModel = "" }) => {
     const startedAt = Date.now();
-    const request = {
-      model,
-      prompt: factPrompt({ sourceText, summaryText, annotation }),
-      profile,
-      sampling: { temperature, format: "json", num_predict: maxOutputTokens },
-      identity: `fact:${sourceRunId}:${evaluatedModel}:${sampleId}`,
-      operation: "judge"
-    };
-    const response = executor
-      ? await executor(request)
-      : await runOllamaChat({ ...request, baseUrl, fetchImpl });
-    const parsed = parseJsonOutput(response.text);
-    if (!parsed.valid || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
-      throw new Error(`fact judge returned invalid JSON: ${parsed.error ?? "object required"}`);
-    }
-    return {
-      ...parsed.value,
-      judge: {
-        provider: "ollama",
+    const basePrompt = factPrompt({ sourceText, summaryText, annotation });
+    const attempts = [];
+    for (let attempt = 0; attempt <= Math.max(0, Number(maxRepairRetries) || 0); attempt += 1) {
+      const repairPrompt = attempt
+        ? `${basePrompt}\n\nYour previous response was not valid JSON. Return the same evidence as one complete valid JSON object only. Do not add prose or markdown.\nPREVIOUS RESPONSE:\n${attempts.at(-1)?.raw?.slice(0, 30000) ?? ""}`
+        : basePrompt;
+      const request = {
         model,
-        promptVersion,
-        scorerVersion,
-        temperature,
-        maxOutputTokens,
+        prompt: repairPrompt,
         profile,
-        effectiveThink: response.effectiveThink ?? false,
-        timing: response.timing ?? {},
-        elapsedMs: Date.now() - startedAt
+        sampling: { temperature, format: "json", num_predict: maxOutputTokens },
+        identity: `fact:${sourceRunId}:${evaluatedModel}:${sampleId}${attempt ? `:repair-${attempt}` : ""}`,
+        operation: "judge"
+      };
+      const response = executor
+        ? await executor(request)
+        : await runOllamaChat({ ...request, baseUrl, fetchImpl });
+      const raw = String(response.text ?? "");
+      const parsed = parseJsonOutput(stripThinking(raw));
+      attempts.push({ attempt: attempt + 1, status: parsed.valid ? "ok" : "malformed-output", raw, error: parsed.error ?? null, responseHash: sha256(raw) });
+      if (!parsed.valid || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
+        if (attempt < Math.max(0, Number(maxRepairRetries) || 0)) continue;
+        const error = new Error(`fact judge returned invalid JSON: ${parsed.error ?? "object required"}`);
+        error.judge = { attempts, repairRetries: attempt, rawResponse: raw };
+        throw error;
       }
-    };
+      return {
+        ...parsed.value,
+        judge: {
+          provider: "ollama",
+          model,
+          promptVersion,
+          scorerVersion,
+          temperature,
+          maxOutputTokens,
+          profile,
+          effectiveThink: response.effectiveThink ?? false,
+          timing: response.timing ?? {},
+          elapsedMs: Date.now() - startedAt,
+          attempts,
+          repairRetries: attempt,
+          rawResponse: raw
+        }
+      };
+    }
+    throw new Error("fact judge exhausted JSON repair attempts");
   };
 }
 
@@ -536,7 +552,7 @@ export async function runFactAudit({
         };
         results.push(row); completed.set(identity, row);
       } catch (error) {
-        const row = { ...base, status: "error", factEvidence: null, scores: {}, metrics: {}, error: error?.message ?? String(error), finishedAt: now().toISOString() };
+        const row = { ...base, status: "error", factEvidence: null, scores: {}, metrics: {}, judge: error?.judge ?? null, error: error?.message ?? String(error), finishedAt: now().toISOString() };
         attemptHistory.push(row);
         results.push(row); completed.set(identity, row);
       }
