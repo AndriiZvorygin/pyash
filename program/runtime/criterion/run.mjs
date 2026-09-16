@@ -116,7 +116,7 @@ function contextLengthKey(value) {
   return numeric === 0 ? "" : String(value);
 }
 
-function rowKey(row) { return `${row.model}\u0000${row.sampleId}\u0000${row.profile}\u0000${contextLengthKey(row.contextLength)}`; }
+function rowKey(row) { return `${row.model}\u0000${row.sampleId}\u0000${row.profile}\u0000${contextLengthKey(row.contextLength)}\u0000${row.promptVariant ?? ""}`; }
 
 function completedRows(prior) {
   const rows = new Map();
@@ -203,12 +203,20 @@ export async function runCriterion({
   nightmare = null,
   smoke = false,
   engine = "ollama",
+  sampleIds = null,
+  promptTransform = null,
+  promptVariant = null,
+  promptTemplateHash = null,
+  recordPrompt = false,
+  replayCommand = null,
   onEvent = null,
   now = () => new Date()
 } = {}) {
   const loaded = await loadSuiteSamples({ benchmark, datasetPath, fixtureRoot, fixtureId, split });
   const suiteKey = loaded.key;
-  const selectedSamples = limit === null || limit === undefined ? loaded.samples : loaded.samples.slice(0, Math.max(0, Number(limit)));
+  const requestedSampleIds = Array.isArray(sampleIds) ? new Set(sampleIds.map(String)) : null;
+  const sampleSelection = requestedSampleIds ? loaded.samples.filter(sample => requestedSampleIds.has(String(sample.id))) : loaded.samples;
+  const selectedSamples = limit === null || limit === undefined ? sampleSelection : sampleSelection.slice(0, Math.max(0, Number(limit)));
   const resolvedProfile = resolveProfile(profile, { ...sampling, contextLength });
   const resolvedContextLength = resolvedProfile.contextLength === null ? null : Number(resolvedProfile.contextLength);
   const resolvedModels = normalizeModels(models);
@@ -236,7 +244,8 @@ export async function runCriterion({
 
   for (const model of resolvedModels) {
     for (const sample of selectedSamples) {
-      const key = rowKey({ model, sampleId: sample.id, profile, contextLength: resolvedContextLength });
+      const prompt = typeof promptTransform === "function" ? String(await promptTransform(sample)) : sample.prompt;
+      const key = rowKey({ model, sampleId: sample.id, profile, contextLength: resolvedContextLength, promptVariant });
       if (completed.has(key)) {
         emit("resumed", { model, sampleId: sample.id });
         continue;
@@ -251,6 +260,8 @@ export async function runCriterion({
         modelDigest: modelMetadata[model]?.modelDigest ?? null,
         quantization: modelMetadata[model]?.quantization ?? null,
         profile,
+        promptVariant,
+        promptTemplateHash,
         contextLength: resolvedContextLength,
         effectiveThink: Boolean(resolvedProfile.think),
         reasoningMode: resolvedProfile.reasoningMode ?? null,
@@ -258,7 +269,7 @@ export async function runCriterion({
         reference: sample.reference ?? "",
         relevantTextSpan: sample.metadata?.relevantTextSpan ?? null,
         inputHash: sha256(sample.input ?? sample.prompt ?? ""),
-        promptHash: sha256(sample.prompt ?? ""),
+        promptHash: sha256(prompt ?? ""),
         inputTokens: tokenize(sample.input ?? sample.prompt ?? "").length,
         contextLengthBucket: contextLengthBucket(contextTokens),
         startedAt,
@@ -270,14 +281,17 @@ export async function runCriterion({
           split: loaded.actualSplit,
           sampleId: sample.id,
           source: sample.metadata?.source ?? null,
-          reference: sample.metadata?.referenceProvenance ?? null
-        }
+          reference: sample.metadata?.referenceProvenance ?? null,
+          promptVariant,
+          promptHash: sha256(prompt ?? "")
+        },
+        ...(recordPrompt ? { promptText: prompt } : {})
       };
       if ((suiteKey === "longbench" || suiteKey === "longbench-summary") && contextTokens > resolvedContextLength) {
         const skipped = { ...base, status: "skipped", skipReason: `context length ${contextTokens} exceeds configured ${resolvedContextLength}`, contextTokens, finishedAt: now().toISOString() };
         results.push(skipped); completed.set(key, skipped); emit("skipped", { model, sampleId: sample.id, reason: skipped.skipReason }); await persistRows(); continue;
       }
-      if (!sample.prompt || !sample.input) {
+      if (!prompt || !sample.input) {
         const malformed = { ...base, status: "error", output: "", outputHash: sha256(""), scores: {}, metrics: {}, error: "malformed benchmark row: transcript/input or prompt is missing", finishedAt: now().toISOString() };
         results.push(malformed); completed.set(key, malformed); emit("sample-failed", { model, sampleId: sample.id, error: malformed.error });
         await persistRows();
@@ -285,7 +299,7 @@ export async function runCriterion({
       }
       emit("sample-started", { model, sampleId: sample.id });
       try {
-        const response = await executor({ model, prompt: sample.prompt, profile, contextLength: resolvedContextLength, sampling, baseUrl, fetchImpl, sample, signal });
+        const response = await executor({ model, prompt, profile, contextLength: resolvedContextLength, sampling, baseUrl, fetchImpl, sample, promptVariant, signal });
         const output = String(response?.text ?? "");
         const responseMetadata = response?.metadata?.modelMetadata ?? response?.metadata ?? {};
         modelMetadata[model] = { ...modelMetadata[model], ...responseMetadata };
@@ -338,9 +352,9 @@ export async function runCriterion({
   const taskAggregates = suiteKey === "longbench-summary" ? groupedAggregates(results, resolvedModels, "task") : [];
   const categoryAggregates = suiteKey === "mmlu-pro" ? groupedAggregates(results, resolvedModels, "category") : [];
   const finishedAt = now().toISOString();
-  const replayCommand = engine === "baseline"
+  const effectiveReplayCommand = replayCommand ?? (engine === "baseline"
     ? `node command/criterion.mjs baseline --benchmark ${suiteKey} ${replaySource({ datasetPath, fixtureRoot })} --baseline ${String(resolvedModels[0] ?? "baseline:lead-3").replace(/^baseline:/u, "")} --run-id ${id} --resume`
-    : `node command/criterion.mjs run --benchmark ${suiteKey} ${replaySource({ datasetPath, fixtureRoot })} --engine ${engine} --profile ${profile} --model ${resolvedModels.join(",")} --run-id ${id} --resume`;
+    : `node command/criterion.mjs run --benchmark ${suiteKey} ${replaySource({ datasetPath, fixtureRoot })} --engine ${engine} --profile ${profile} --model ${resolvedModels.join(",")} --run-id ${id} --resume`);
   const finalRun = await writeRunArtifacts({
     runId: id,
     criterion: suiteKey,
@@ -354,6 +368,8 @@ export async function runCriterion({
     models: resolvedModels,
     engine,
     profile,
+    promptVariant,
+    promptTemplateHash,
     sampling: { ...resolvedProfile, ...sampling },
     contextLength: resolvedContextLength,
     machine: machineInfo,
@@ -368,7 +384,7 @@ export async function runCriterion({
     totalWallClockMs: Math.max(0, new Date(finishedAt).getTime() - new Date(runStartedAt).getTime()),
     datasetPath: datasetPath ?? null,
     fixtureRoot: fixtureRoot ?? null,
-    replayCommand,
+    replayCommand: effectiveReplayCommand,
     results,
     aggregates,
     evaluationAggregates,

@@ -166,7 +166,9 @@ export async function runGpuWorkerOnce({
       handleId: envelope.handleId,
       runtimeName,
       profileName,
-      jobSpec
+      jobSpec,
+      deviceId: envelope.deviceId,
+      dischargeAllowed: envelope.dischargeAllowed
     });
     const remoteJobId = remoteJobIdFromSubmit(submit);
     if (!remoteJobId) throw new Error("gpu worker defective: housekeeper did not return remoteJobId");

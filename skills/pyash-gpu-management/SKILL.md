@@ -1,6 +1,6 @@
 ---
 name: pyash-gpu-management
-description: "Diagnose and reduce GPU/model thrashing in Pyash refinery runs using stage-first checks, explicit manual discharge policy, and minimal probes."
+description: "Diagnose and reduce GPU/model thrashing in Pyash refinery runs using demand-driven housekeeper admission, provider-safe discharge, and minimal probes."
 ---
 
 # Pyash GPU Management
@@ -11,14 +11,23 @@ Use this skill when video/refinery runs show repeated GPU model load/unload chur
 
 - Keep model/provider transitions intentional and stage-bounded.
 - Verify mind path behavior with a minimal probe before full refinery runs.
-- Ensure discharges happen only where explicitly declared.
+- Ensure automatic discharges happen only for explicitly registered runtimes with a safe provider hook and verified idle state.
 
 ## Canonical policy
 
-- Prefer manual discharge stages in refinery wiring.
-- Avoid hidden/implicit discharge in verb internals or provider modules.
-- Use one canonical mind model for run-level consistency.
-- Validate with minimal probes before running full multi-paragraph refinery.
+- Criterion and Pyash callers may declare a VRAM demand when a job needs
+  capacity for a large model. The housekeeper owns admission and must compare
+  that demand with live GPU telemetry before reclaiming residency.
+- Automatic reclamation is demand-driven, not a general idle cleanup job.
+- A provider is reclaimable only when its runtime is explicitly registered, its
+  provider-specific activity probe says idle beyond the configured grace, and
+  its safe discharge hook succeeds.
+- ComfyUI discharge uses the existing API hooks and does not stop the container.
+- Unknown host processes and registered runtimes without safe hooks are
+  diagnostics only and are never touched.
+- Manual discharge remains available for explicit lifecycle operations.
+- Use one canonical mind model for run-level consistency and validate with
+  minimal probes before full refinery runs.
 
 ## Quick probes
 
@@ -44,9 +53,9 @@ curl -sS http://host.docker.internal:11434/api/ps
 
 1. Run mind-only probe first.
 2. Confirm one model name is used.
-3. Confirm no auto-discharge emissions in logs.
-4. Confirm no hidden module-level `be discharge do` in active path.
-5. Confirm refinery has explicit stage discharges at intended boundaries.
+3. Inspect housekeeper `/snapshot` and, for large jobs, `/capacity/preview`.
+4. Confirm a discharge candidate has a verified provider-idle result.
+5. Confirm no unmanaged host process is treated as reclaimable.
 6. Only then run wide/3-paragraph refinery.
 
 ## High-signal log patterns
@@ -77,8 +86,12 @@ Single-sentence quick run:
 
 ## Remediation checklist
 
-- Remove auto discharge hooks from verbs if manual-only policy is required.
-- Remove module-level hidden discharges in draw/say/hear wrappers.
-- Keep discharge stages explicit in refinery source.
+- Declare a realistic `resourceRequest.vramRequiredMb` for jobs that need
+  additional model capacity.
+- Inspect `/capacity/preview` before a large run when residency is uncertain.
+- Keep automatic discharge limited to registered providers with a safe hook and
+  verified idle state; do not add generic process-kill logic.
+- Keep explicit Pyash discharge stages available at intended refinery
+  boundaries.
 - Keep stage discharges outside inner per-item loops unless intentional.
 - Increase mind runner request timeout if premature abort fallback is occurring.

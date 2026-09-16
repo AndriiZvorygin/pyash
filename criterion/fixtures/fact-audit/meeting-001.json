@@ -1,0 +1,24 @@
+{
+  "id": "fact-audit-meeting-001",
+  "sourceDataset": "MeetingBank",
+  "sourceId": "fixture-meeting-001",
+  "sourceText": "On June 3, 2026, Chair Jane Doe moved the motion. The council voted 5-0 to approve a $20,000 grant. The parks department will report by July 1, 2026.",
+  "summary": "The council approved a $20,000 grant.",
+  "keyFacts": [
+    { "id": "fact-motion", "text": "Chair Jane Doe moved the motion.", "sourceSentenceRefs": ["s1"], "flags": { "motion": true } },
+    { "id": "fact-vote", "text": "The council voted 5-0.", "sourceSentenceRefs": ["s2"], "flags": { "vote": true } },
+    { "id": "fact-amount", "text": "The approved grant was $20,000.", "sourceSentenceRefs": ["s2"], "flags": { "monetaryAmount": true, "approvalOrRejection": true } },
+    { "id": "fact-deadline", "text": "The parks department will report by July 1, 2026.", "sourceSentenceRefs": ["s3"], "flags": { "date": true, "departmentOrResponsiblePerson": true, "deadline": true } }
+  ],
+  "claims": [
+    { "id": "claim-approval", "text": "The council approved a $20,000 grant.", "sentenceId": "s1", "flags": { "approvalOrRejection": true, "monetaryAmount": true } },
+    { "id": "claim-unsupported", "text": "The grant was delivered yesterday.", "sentenceId": "s1" }
+  ],
+  "matches": [
+    { "keyFactId": "fact-amount", "summarySentenceId": "s1", "matched": true, "sourceSentenceRefs": ["s2"] }
+  ],
+  "verifications": [
+    { "claimId": "claim-approval", "support": "supported", "sourceSentenceRefs": ["s2"], "explanation": "The amount and approval are stated in the source." },
+    { "claimId": "claim-unsupported", "support": "unsupported", "sourceSentenceRefs": [], "explanation": "The source contains no delivery date." }
+  ]
+}

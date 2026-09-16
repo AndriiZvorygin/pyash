@@ -12,6 +12,9 @@ node command/criterion.mjs report <run-id>
 node command/criterion.mjs compare <run-a> <run-b>
 node command/criterion.mjs golden <run-id> --write
 node command/criterion.mjs again <run-id>
+node command/criterion.mjs meetingbank-fact-audit --dataset /path/to/meetingbank/test.jsonl --source-runs meetingbank-meetingscript-full-20260915 --judge-model <external-judge> --smoke --resume
+node command/criterion.mjs omnicseval-meeting --dataset /path/to/meetingbank/test.jsonl --annotations /path/to/omnicseval-meeting.jsonl --source-runs meetingbank-meetingscript-full-20260915 --judge-model <external-judge> --resume
+node command/criterion.mjs prompt-ablation --dataset /path/to/meetingbank/test.jsonl --annotations /path/to/omnicseval-meeting.json --source-run full-meetingbank-summary-direct-20260913 --run-id meetingbank-qwen-prompt-ablation --smoke --resume
 ```
 
 Use `OLLAMA_BASE_URL` (or the existing `OLLAMA_HOST`) for the Ollama endpoint. A run uses the same profile and context length for every model in a comparison. `--resume` reuses completed sample rows and is the benchmark equivalent of `again`. Reports persist `runScope: smoke` for `--smoke`; unrestricted runs are labelled `runScope: full`.
@@ -80,3 +83,137 @@ node command/gpu_worker.mjs --world world
 Supported MeetingBank defaults are `ahmeddeldalyyy/meeting-summarizer-meetingbank` (1,024 input tokens, 56-142 output tokens, four beams, length penalty 2.0), `Shaelois/MeetingScript` (4,096 input tokens, four beams), and `MingZhong/DialogLED-large-5120` (5,120 input tokens, four beams, deterministic generation). The latter two target profiles use deterministic overlapping token windows for over-limit inputs; each row records the original input count, processed count, window count and any actual truncation. Model/tokenizer revision, parameter count, dtype, CUDA device, load time and warm inference timing are also recorded. Model-card ROUGE numbers are published claims only until reproduced through the same local split, reference extraction, scorer and generation settings.
 
 The container is the managed `huggingface` runtime in `gpu-housekeeper`, alongside `ollama`, `comfyui`, and `katago`. Its cache is `container/criterion-huggingface/cache/` on the GPU host and is ignored by Git. Criterion submits one JSON job per sample to the durable `criterion` GPU lane, so `--resume` does not rerun completed samples.
+
+## Fact evaluation of saved outputs
+
+Criterion can rescore existing MeetingBank model runs without calling the
+evaluated model again. `meetingbank-fact-audit` is the full 862-sample
+`automated_proxy` lane: an external judge extracts source key facts and summary
+claims, then verifies support. `omnicseval-meeting` consumes the released
+OmniCSEval Meeting annotations and is the exact-compatible lane for its 75
+MeetingBank samples. The annotation archive is an external input and is never
+silently inferred from the local task list; joins use an explicit source ID and
+ambiguous or missing IDs are reported as unmatched.
+
+The three fact scores are the paper's bidirectional measures:
+
+* **Completeness** is gold key facts matched by at least one summary sentence,
+  divided by the number of gold key facts.
+* **Conciseness** is summary sentences matched to at least one key fact,
+  divided by the number of summary sentences.
+* **Faithfulness** is supported atomic summary claims divided by all atomic
+  summary claims.
+
+Runs persist the ratio and percentage forms, per-fact/per-claim source evidence,
+municipal claim flags, judge explanation, hashes, source run ID and judge
+configuration. Empty denominators are `null`, not fabricated zeros. The exact
+OmniCSEval annotations use human-adjudicated key facts; the 862-sample lane is
+explicitly an automated proxy, so its percentages are not interchangeable with
+the exact subset or with ROUGE.
+
+The judge is a separate external runtime. Configure it explicitly with
+`--judge-model` or `PYA_CRITERION_FACT_JUDGE_MODEL` and keep its provider,
+prompt version, temperature and scorer version in the run. The post-hoc path
+does not generate new summaries. Every row is checkpointed in JSONL and
+`--resume` skips completed source-run/model/sample tuples. The same durable run
+produces JSON, JSONL, Markdown, CSV, `.pya` and HTML review artifacts.
+
+## Paired MeetingBank prompt ablation
+
+`criterion prompt-ablation` measures the effect of a MeetingBank-aware prompt
+on existing Qwen zero-shot outputs. Variant A is the saved `summary_direct`
+prompt and is labelled `qwen_baseline_generic`. Variant B is a fixed zero-shot
+municipal-minutes prompt and is labelled `qwen_meetingbank_reference`. It has
+no demonstrations or reference summaries. The complete effective prompt,
+prompt hash and variant are stored on every row, so the outputs remain
+auditable and resumable.
+
+The lane requires an exact, deterministic join to the 75 MeetingBank rows in
+the OmniCSEval Meeting subset. Joins use an explicit source ID such as
+`sourceId`, `meeting_id` or `id`; transcript text, array position and fuzzy
+matching are not used. Missing, duplicate or ambiguous IDs are reported and
+fail closed. Some released archive forms contain the 75 annotations without
+source IDs. In that case the command produces a partial manifest with zero
+model calls until an ID-bearing annotation export is supplied. Annotation/local
+transcript hash mismatches are also recorded.
+
+Example smoke and full commands:
+
+```bash
+OLLAMA_BASE_URL=http://mriczo:11434 node command/criterion.mjs prompt-ablation \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --annotations "$PYA_BENCHMARK_CACHE/omnicseval/meetingbank-with-source-ids.json" \
+  --source-run full-meetingbank-summary-direct-20260913 \
+  --comparison-run meetingbank-meetscript-full-20260915 \
+  --model qwen3.5:9b,hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M \
+  --run-id meetingbank-qwen-prompt-ablation-20260915 --smoke --resume --json
+
+OLLAMA_BASE_URL=http://mriczo:11434 node command/criterion.mjs prompt-ablation \
+  --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
+  --annotations "$PYA_BENCHMARK_CACHE/omnicseval/meetingbank-with-source-ids.json" \
+  --source-run full-meetingbank-summary-direct-20260913 \
+  --comparison-run meetingbank-meetscript-full-20260915 \
+  --model qwen3.5:9b,hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M \
+  --run-id meetingbank-qwen-prompt-ablation-20260915 --resume --json
+```
+
+The first command evaluates at most five selected IDs; remove `--smoke` for
+the 75-row run. Existing generic rows are reused only when status, source
+hash, generic prompt hash, profile/context/sampling settings and model digest
+match. Otherwise missing or unverifiable generic rows are regenerated under a
+separate checkpoint, without overwriting the full-corpus run. Both variants
+use the source run's non-thinking `summary_direct` settings and model list.
+Model digest equality is reported; an unavailable provider digest makes a row
+unverifiable rather than being invented.
+
+The combined report includes per-variant ROUGE-1/2/L, schema, latency, output
+length and generation speed, paired per-sample deltas, deterministic bootstrap
+95% intervals, city/item-type/chunking groups, examples and MeetingScript rows
+matched to the same IDs. Fact completeness, conciseness and faithfulness are
+attached when `--fact-judge-model` is provided; the judge is a separate
+post-hoc external runtime and never regenerates a summary. The prompt
+experiment consumes model-host time, while fact scoring can be resumed later
+from the saved output rows.
+
+## MeetingBank UniRRM judge pilot
+
+`criterion meetingbank-judge-pilot` is a bounded ten-sample comparison lane. It
+generates one controlled `summary_meetingbank_judge_pilot` output for each of
+the requested Qwen Ollama tags, then submits successful summaries to the
+external `judge:unirrm-8b` runtime for independent pointwise and pairwise
+judgement. Criterion does not host UniRRM: the existing GPU-managed
+`criterion-huggingface` service loads `SUSTech-NLP/UniRRM-8B` and receives the
+same durable `huggingface-generate` queue jobs with `operation: judge`.
+
+The judge sees the transcript, task and municipal rubric, but never the
+MeetingBank reference summary. Native 1-5 scores and normalized percentages
+are stored together. A single bounded JSON-repair retry is recorded separately
+from transport, model and parse failures. Pairwise order and the deterministic
+order-swapped check are persisted with the original model identities.
+
+On the CUDA host, update the existing checkout and start the managed runtime:
+
+```bash
+cd /home/htaf/pyac/pyash
+git pull --ff-only origin master
+./container/criterion-huggingface/command/begin.sh
+```
+
+Run or resume the pilot from the development machine:
+
+```bash
+OLLAMA_BASE_URL=http://mriczo:11434 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+node command/criterion.mjs meetingbank-judge-pilot \
+  --dataset /tmp/pyash-criterion-cache/meetingbank/test.jsonl \
+  --run-id meetingbank-qwen-unirrm-pilot-20260915 \
+  --resume --json
+```
+
+Use `--smoke` for a five-sample execution check. The generation checkpoint is
+stored as `<run-id>-generation`; the pilot checkpoint is
+`criterion/results/<run-id>.jsonl`. Reports are written as JSON, JSONL,
+Markdown, CSV, `.pya` and review HTML under the normal ignored Criterion
+directories. Skywork is not enabled by default because the current managed HF
+protocol has no sequence-classification endpoint; an unavailable secondary
+judge must not prevent the UniRRM pilot.
