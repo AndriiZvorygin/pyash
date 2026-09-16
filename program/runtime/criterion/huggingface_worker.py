@@ -154,6 +154,8 @@ def generate(state, request):
     limit = int(generation.get("maxInputTokens") or 4096)
     all_tokens = tokenizer(prompt, add_special_tokens=True, truncation=False)["input_ids"]
     input_token_count = len(all_tokens)
+    if state.get("causal") and input_token_count > limit:
+        raise RuntimeError(f"judge input exceeds configured limit ({input_token_count} > {limit}); no truncation is permitted")
     wants_chunking = bool(generation.get("chunkLongInputs", False))
     overlap = int(generation.get("chunkOverlapTokens") or 0)
     ranges = chunk_ranges(input_token_count, limit, overlap if wants_chunking else 0)
