@@ -146,3 +146,29 @@ test("gpu worker writes fail handle status when remote job fails", async () => {
   const depth = await queueDepth(worldRoot);
   assert.equal(depth.total, 0);
 });
+
+test("gpu worker tolerates a transient remote status fetch failure", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-status-retry-"));
+  const worldRoot = path.join(root, "world");
+  await enqueueMind(worldRoot, { handleId: "mind-job-status-retry" });
+  let statusCalls = 0;
+
+  const result = await runGpuWorkerOnce({
+    worldRoot,
+    pollIntervalMs: 1,
+    maxPolls: 5,
+    adapter: {
+      async submitJob() { return { remoteJobId: "remote-status-retry" }; },
+      async getJobStatus() {
+        statusCalls += 1;
+        if (statusCalls === 1) throw new Error("temporary network failure");
+        return { status: "success", message: "completed", result: { response: "recovered" } };
+      }
+    }
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(statusCalls, 2);
+  const status = await readGpuHandleStatus(worldRoot, "mind-job-status-retry");
+  assert.equal(status?.status, "success");
+});
