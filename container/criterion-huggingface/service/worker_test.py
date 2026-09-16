@@ -63,6 +63,16 @@ class CriterionHuggingFaceWorkerTests(unittest.TestCase):
     self.assertEqual(tokenizer.options, (True, True))
     self.assertEqual(tokenizer.messages[0]["role"], "system")
 
+  def test_causal_judge_can_disable_hidden_thinking_without_affecting_raw_mode(self):
+    class Tokenizer:
+      def apply_chat_template(self, messages, **options):
+        self.options = options
+        return [11]
+
+    tokenizer = Tokenizer()
+    self.assertEqual(worker.prompt_token_ids(tokenizer, "raw", [], True, False), [11])
+    self.assertEqual(tokenizer.options["enable_thinking"], False)
+
 
 if __name__ == "__main__":
   unittest.main()
