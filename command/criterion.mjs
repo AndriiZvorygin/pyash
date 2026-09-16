@@ -249,6 +249,7 @@ async function meetingBankJudgePilotCommand(args, root) {
     gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
     huggingFaceRevision: flag(args, "--huggingface-revision", process.env.PYA_HUGGINGFACE_REVISION ?? null),
     huggingFaceDtype: flag(args, "--huggingface-dtype", process.env.PYA_HF_DTYPE ?? "auto"),
+    judgeMaxInputTokens: numericFlag(args, "--judge-max-input-tokens", Number(process.env.PYA_CRITERION_JUDGE_MAX_INPUT_TOKENS || 8192)),
     judgeTemperature: numericFlag(args, "--judge-temperature", 0),
     judgeMaxOutputTokens: numericFlag(args, "--judge-max-output-tokens", 4096),
     resume: hasFlag(args, "--resume"),

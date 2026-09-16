@@ -23,7 +23,8 @@ export const MEETINGBANK_JUDGE_PILOT_PROMPT_HASH = sha256(MEETINGBANK_JUDGE_PILO
 export const UNIRRM_NATIVE_SCALE = Object.freeze({ min: 1, max: 5, formula: "((score - 1) / 4) * 100" });
 
 const DEFAULT_SELECTION_COUNT = 10;
-const DEFAULT_JUDGE_MAX_OUTPUT_TOKENS = 4096;
+const DEFAULT_JUDGE_MAX_INPUT_TOKENS = 8192;
+const DEFAULT_JUDGE_MAX_OUTPUT_TOKENS = 1024;
 const DEFAULT_JUDGE_TEMPERATURE = 0;
 
 function text(value) { return String(value ?? "").trim(); }
@@ -249,10 +250,11 @@ async function judgeOne({ executor, sample, prompt, mode, identity, now = () => 
   let repair = false;
   for (let attempt = 0; attempt <= maxRepair; attempt += 1) {
     try {
-      const response = await executor({ model: UNIRRM_MODEL_ID, prompt: repair ? `${prompt}\n\nPREVIOUS INVALID RESPONSE:\n${text(attempts.at(-1)?.raw).slice(0, 12000)}` : prompt, sample, operation: "judge" });
+      const requestPrompt = repair ? `${prompt}\n\nPREVIOUS INVALID RESPONSE:\n${text(attempts.at(-1)?.raw).slice(0, 12000)}` : prompt;
+      const response = await executor({ model: UNIRRM_MODEL_ID, prompt: requestPrompt, sample, operation: "judge" });
       const raw = String(response?.text ?? "");
       const parsed = parseUniRrmOutput(raw);
-      attempts.push({ attempt: attempt + 1, raw, parseError: parsed.valid ? null : parsed.error, repaired: repair, timing: response?.timing ?? null });
+      attempts.push({ attempt: attempt + 1, promptHash: sha256(requestPrompt), raw, parseError: parsed.valid ? null : parsed.error, repaired: repair, timing: response?.timing ?? null });
       if (parsed.valid) {
         return {
           status: "ok",
@@ -263,6 +265,7 @@ async function judgeOne({ executor, sample, prompt, mode, identity, now = () => 
           attempts,
           repairAttempted: attempt > 0,
           repairStatus: attempt > 0 ? "succeeded" : "not-needed",
+          promptHash: sha256(requestPrompt),
           judgeMetadata: response?.metadata?.modelMetadata ?? response?.metadata ?? null,
           timing: response?.timing ?? {},
           finishedAt: now().toISOString()
@@ -270,7 +273,7 @@ async function judgeOne({ executor, sample, prompt, mode, identity, now = () => 
       }
       repair = true;
     } catch (error) {
-      attempts.push({ attempt: attempt + 1, raw: "", parseError: null, repaired: repair, error: text(error?.message ?? error) });
+      attempts.push({ attempt: attempt + 1, promptHash: sha256(repair ? `${prompt}\n\nPREVIOUS INVALID RESPONSE:\n${text(attempts.at(-1)?.raw).slice(0, 12000)}` : prompt), raw: "", parseError: null, repaired: repair, error: text(error?.message ?? error) });
       return {
         status: classifyJudgeError(error),
         identity,
@@ -280,12 +283,13 @@ async function judgeOne({ executor, sample, prompt, mode, identity, now = () => 
         attempts,
         repairAttempted: attempt > 0,
         repairStatus: attempt > 0 ? "failed-transport" : "not-started",
+        promptHash: attempts.at(-1)?.promptHash ?? sha256(prompt),
         error: text(error?.message ?? error),
         finishedAt: now().toISOString()
       };
     }
   }
-  return { status: "malformed-output", identity, mode, judgement: null, rawResponse: "", attempts, repairAttempted: true, repairStatus: "exhausted", error: "UniRRM output remained malformed after one repair retry", finishedAt: now().toISOString() };
+  return { status: "malformed-output", identity, mode, judgement: null, rawResponse: "", attempts, repairAttempted: true, repairStatus: "exhausted", promptHash: attempts.at(-1)?.promptHash ?? sha256(prompt), error: "UniRRM output remained malformed after one repair retry", finishedAt: now().toISOString() };
 }
 
 function pointwiseRow({ runId, sample, generationRow, result, judgeSettings }) {
@@ -299,7 +303,7 @@ function pointwiseRow({ runId, sample, generationRow, result, judgeSettings }) {
     modelDigest: generationRow.modelDigest ?? generationRow.modelMetadata?.modelDigest ?? null,
     sourceHash: generationRow.inputHash,
     candidateOutputHash: generationRow.outputHash,
-    judge: { name: UNIRRM_JUDGE_NAME, modelId: UNIRRM_MODEL_ID, provider: "huggingface", ...judgeSettings, ...result.judgeMetadata },
+    judge: { name: UNIRRM_JUDGE_NAME, modelId: UNIRRM_MODEL_ID, provider: "huggingface", promptHash: result.promptHash ?? null, ...judgeSettings, ...result.judgeMetadata },
     judgement: result.judgement,
     rawResponse: result.rawResponse,
     attempts: result.attempts,
@@ -338,8 +342,8 @@ function pairwiseRow({ runId, sample, left, right, primary, swapped, displayed }
     sourceHash: left.inputHash,
     judge: { name: UNIRRM_JUDGE_NAME, modelId: UNIRRM_MODEL_ID, provider: "huggingface" },
     displayedOrder: displayed,
-    primary: primary.status === "ok" ? { winner: primaryWinner, judgement: primary.judgement, rawResponse: primary.rawResponse, attempts: primary.attempts, timing: primary.timing } : null,
-    orderSwap: swapped ? { winner: swappedWinner, judgement: swapped.judgement, rawResponse: swapped.rawResponse, attempts: swapped.attempts, timing: swapped.timing } : null,
+    primary: primary.status === "ok" ? { winner: primaryWinner, judgement: primary.judgement, rawResponse: primary.rawResponse, attempts: primary.attempts, promptHash: primary.promptHash ?? null, timing: primary.timing } : null,
+    orderSwap: swapped ? { winner: swappedWinner, judgement: swapped.judgement, rawResponse: swapped.rawResponse, attempts: swapped.attempts, promptHash: swapped.promptHash ?? null, timing: swapped.timing } : null,
     winner: primaryWinner,
     margin,
     positionAgreement,
@@ -522,6 +526,7 @@ export async function runMeetingBankJudgePilot({
   huggingFaceDtype = process.env.PYA_HF_DTYPE ?? "auto",
   judgeModel = UNIRRM_MODEL_ID,
   judgeProvider = "huggingface",
+  judgeMaxInputTokens = Number(process.env.PYA_CRITERION_JUDGE_MAX_INPUT_TOKENS || DEFAULT_JUDGE_MAX_INPUT_TOKENS),
   judgeTemperature = DEFAULT_JUDGE_TEMPERATURE,
   judgeMaxOutputTokens = DEFAULT_JUDGE_MAX_OUTPUT_TOKENS,
   resume = false,
@@ -590,7 +595,7 @@ export async function runMeetingBankJudgePilot({
   let adapter = null;
   let executeJudge = judgeExecutor;
   if (!executeJudge) {
-    adapter = await createHuggingFaceJudgeExecutor({ model: judgeModel, root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, revision: huggingFaceRevision, dtype: huggingFaceDtype, generation: { maxInputTokens: 32768, maxOutputTokens: judgeMaxOutputTokens, minOutputTokens: 1, numBeams: 1, doSample: false, repetitionPenalty: 1.05 } });
+    adapter = await createHuggingFaceJudgeExecutor({ model: judgeModel, root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, revision: huggingFaceRevision, dtype: huggingFaceDtype, generation: { maxInputTokens: judgeMaxInputTokens, maxOutputTokens: judgeMaxOutputTokens, minOutputTokens: 1, numBeams: 1, doSample: false, repetitionPenalty: 1.05 } });
     executeJudge = adapter.executor;
   }
   try {
@@ -676,7 +681,7 @@ export async function runMeetingBankJudgePilot({
     selection: { seed: effectiveSelectionSeed, count: selection.length, sampleIds: selection.map(sample => sample.id), datasetHash: loaded.datasetHash },
     sampleMetadata,
     ollama,
-    judge: { name: UNIRRM_JUDGE_NAME, modelId: judgeModel, provider: judgeProvider, scale: UNIRRM_NATIVE_SCALE, temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, referenceHidden: true },
+    judge: { name: UNIRRM_JUDGE_NAME, modelId: judgeModel, provider: judgeProvider, scale: UNIRRM_NATIVE_SCALE, temperature: judgeTemperature, maxInputTokens: judgeMaxInputTokens, maxOutputTokens: judgeMaxOutputTokens, referenceHidden: true },
     secondaryJudges: { skywork: { status: "unavailable", reason: "managed Hugging Face protocol exposes text generation only; no sequence-classification endpoint" } },
     judgeStats,
     pairwiseSeed: `${effectiveSelectionSeed}:pairwise`,

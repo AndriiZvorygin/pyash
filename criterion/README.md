@@ -191,6 +191,12 @@ are stored together. A single bounded JSON-repair retry is recorded separately
 from transport, model and parse failures. Pairwise order and the deterministic
 order-swapped check are persisted with the original model identities.
 
+The pilot defaults the UniRRM request to an 8,192-token input and 1,024-token
+output budget for the available 24 GB CUDA host. The external worker rejects an
+over-limit judge prompt rather than silently truncating or independently
+chunking a source-grounded judgement; use `PYA_CRITERION_JUDGE_MAX_INPUT_TOKENS`
+and the corresponding CLI option when a larger-memory host is available.
+
 On the CUDA host, update the existing checkout and start the managed runtime:
 
 ```bash
