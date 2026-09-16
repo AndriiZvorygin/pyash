@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   buildSourceInventory,
+  dischargeOllamaModels,
   extractCandidateClaims,
   MEETINGBANK_FACTUALITY_MODELS,
   normalizeNativeJudgeResponse,
@@ -91,6 +92,20 @@ test("factuality preflight verifies version, tags, warmup, and a real sample req
   assert.equal(result.status, "ok");
   assert.equal(result.models[0].available, true);
   assert.deepEqual(result.requests.map(request => request.kind), ["warmup", "meeting"]);
+});
+
+test("factuality lane discharges each Ollama model without stopping Ollama", async () => {
+  const requests = [];
+  const result = await dischargeOllamaModels({
+    baseUrl: "http://ollama.test",
+    models: ["qwen3.5:9b"],
+    fetchImpl: async (url, options) => {
+      requests.push({ url, body: JSON.parse(options.body) });
+      return { ok: true, json: async () => ({}) };
+    }
+  });
+  assert.equal(result.status, "ok");
+  assert.deepEqual(requests[0].body, { model: "qwen3.5:9b", prompt: "", stream: false, keep_alive: 0 });
 });
 
 test("factuality pilot is resumable, hides references, and writes a ROUGE-free report", async () => {
