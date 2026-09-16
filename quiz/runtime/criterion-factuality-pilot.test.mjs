@@ -175,6 +175,7 @@ test("factuality judge defaults to the quantized UniRRM Ollama target", async ()
   assert.equal(body.format, "json");
   assert.equal(body.options.num_ctx, 16384);
   assert.equal(body.options.num_predict, 1024);
+  assert.equal(body.options.repeat_penalty, 1.05);
 });
 
 test("factuality pilot is resumable, hides references, and writes a ROUGE-free report", async () => {

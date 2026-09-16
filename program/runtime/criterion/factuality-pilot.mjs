@@ -358,7 +358,7 @@ export function createOllamaFactualityJudge({ model = UNIRRM_FACTUALITY_MODEL, b
       prompt: `${UNIRRM_SYSTEM_PROMPT}\n\n${prompt}`,
       profile: "summary_direct",
       contextLength,
-      sampling: { temperature: 0, format: "json", num_predict: maxOutputTokens },
+      sampling: { temperature: 0, format: "json", num_predict: maxOutputTokens, repeat_penalty: 1.05 },
       requestTimeoutMs: Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_TIMEOUT_MS || 900000),
       maxRetries: 2,
       retryBaseMs: 1000
