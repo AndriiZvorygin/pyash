@@ -131,14 +131,14 @@ MeetingBank-aware generation prompt for `qwen3.5:9b`,
 Generation remains on remote Ollama. The reference summary is retained for
 provenance but is hidden from the UniRRM judge.
 
-The judge lane is transcript-grounded and provisional. It extracts bounded
-candidate claims, retrieves transcript evidence, and runs independent UniRRM
-passes for faithfulness, source coverage, relevance, and conciseness. Decision
-and action fidelity are derived from the source inventory. Faithfulness is
-`(supported + 0.5 * partially-supported) / material claims`; source coverage
-uses the analogous covered/partial formula. Human-facing values are
-percentages and the dimensions remain separate; no overall winner is declared
-without human-labelled calibration.
+The judge lane is transcript-grounded and provisional. It sends one UniRRM
+pointwise request per successful summary, with a bounded claim list and
+transcript turn evidence in the response. Criterion performs the arithmetic
+locally for faithfulness, completeness, decision/action fidelity, relevance,
+conciseness, and publication suitability. Faithfulness is
+`(supported + 0.5 * partially-supported) / material claims`. Human-facing
+values are percentages and the dimensions remain separate; no overall winner
+is declared without human-labelled calibration.
 
 ROUGE is excluded from the default factuality report and remains historical
 reference-similarity evidence in the older model-run artifacts. A judge row is

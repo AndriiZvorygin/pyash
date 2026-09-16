@@ -52,17 +52,33 @@ test("factuality lane extracts bounded claims and transcript evidence", () => {
 
 test("factuality lane maps native UniRRM evaluations to transcript-grounded fields", () => {
   const result = normalizeNativeJudgeResponse(JSON.stringify({
-    Analysis_process: "LABEL: supported [turn-1]",
+    Analysis_process: "Evidence-backed municipal evaluation",
     evaluations: [
-      { response_id: "claim-1", final_score: 5, explanation: "LABEL: supported [turn-1]" },
-      { response_id: "claim-2", final_score: 2, explanation: "LABEL: contradicted [turn-2]" }
+      {
+        response_id: "Response1",
+        final_score: 5,
+        criterion: {
+          faithfulness_score: 5,
+          completeness_score: 4,
+          decision_action_score: 4,
+          relevance_score: 5,
+          conciseness_score: 4,
+          publication_suitability_score: 5,
+          confidence: 4,
+          claims: [
+            { claim: "The motion passed.", status: "supported", evidence: "The motion passed.", transcript_turn_ids: ["turn-1"] },
+            { claim: "The vote was unanimous.", status: "contradicted", evidence: "The vote was split.", transcript_turn_ids: ["turn-2"] }
+          ]
+        }
+      }
     ]
-  }), { responseIds: ["claim-1", "claim-2"] });
+  }));
   assert.equal(result.status, "ok");
-  assert.equal(result.evaluations[0].classification, "supported");
-  assert.equal(result.evaluations[0].percentage, 100);
-  assert.equal(result.evaluations[1].classification, "contradicted");
-  assert.deepEqual(result.evaluations[1].evidenceIds, ["turn-2"]);
+  assert.equal(result.scores.faithfulnessPercentage, 100);
+  assert.equal(result.scores.completenessPercentage, 75);
+  assert.equal(result.claims[0].status, "supported");
+  assert.equal(result.claims[1].status, "contradicted");
+  assert.deepEqual(result.claims[1].transcriptTurnIds, ["turn-2"]);
 });
 
 test("factuality preflight verifies version, tags, warmup, and a real sample request", async () => {
@@ -81,10 +97,22 @@ test("factuality pilot is resumable, hides references, and writes a ROUGE-free r
   const root = await tempRoot();
   const datasetPath = path.join(root, "meetingbank.jsonl");
   await fs.writeFile(datasetPath, `${JSON.stringify({ id: "m1", transcript: "Chair: The council approved the motion. Staff will report back by June 5.", summary: "The council approved the motion." })}\n`, "utf8");
-  const judgeExecutor = async ({ identity }) => {
-    const responseId = identity.endsWith("faithfulness") ? "claim-1" : identity.endsWith("coverage") ? "source-item-1" : "summary";
-    const classification = identity.endsWith("coverage") ? "covered" : "supported";
-    return { text: JSON.stringify({ evaluations: [{ response_id: responseId, final_score: 5, explanation: `LABEL: ${classification} [turn-1]` }] }), timing: { totalElapsedMs: 2 } };
+  let judgeCalls = 0;
+  const judgeExecutor = async () => {
+    judgeCalls += 1;
+    return { text: JSON.stringify({ evaluations: [{ response_id: "Response1", final_score: 5, criterion: {
+      faithfulness_score: 5,
+      completeness_score: 5,
+      decision_action_score: 5,
+      relevance_score: 5,
+      conciseness_score: 5,
+      publication_suitability_score: 5,
+      confidence: 5,
+      claims: [{ claim: "The council approved the motion.", status: "supported", importance: "high", evidence: "The council approved the motion.", transcript_turn_ids: ["turn-1"], explanation: "Directly stated." }],
+      omitted_important_items: [],
+      reasoning: "The summary is grounded.",
+      final_verdict: "supported"
+    } }] }), timing: { totalElapsedMs: 2 } };
   };
   const generationRunner = async ({ samples, models }) => ({ results: models.map(model => ({
     model,
@@ -110,6 +138,7 @@ test("factuality pilot is resumable, hides references, and writes a ROUGE-free r
   assert.equal(run.results[0].status, "ok");
   assert.equal(run.results[0].referenceHiddenFromJudge, true);
   assert.equal(run.results[0].scores.faithfulnessPercentage, 100);
+  assert.equal(judgeCalls, 1);
   assert.match(await fs.readFile(path.join(root, "criterion", "results", "factuality-test.md"), "utf8"), /ROUGE is intentionally excluded/);
   assert.equal(run.judge.discharge.status, "not-managed-by-adapter");
 });
