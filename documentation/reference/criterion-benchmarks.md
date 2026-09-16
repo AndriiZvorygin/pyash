@@ -151,7 +151,9 @@ reference-similarity evidence in the older model-run artifacts. A judge row is
 complete only when all required passes return structured native UniRRM
 evaluations with evidence. Transport, model, malformed-output, truncated, and
 incomplete responses are recorded separately, with one bounded JSON repair
-retry. The JSONL checkpoint is resumable and preserves raw response hashes.
+retry. The judge uses a bounded 2,048-token response budget by default so
+native UniRRM evidence JSON is not cut off mid-claim. The JSONL checkpoint is
+resumable and preserves raw response hashes.
 
 The default UniRRM judge target is the quantized Ollama tag
 `hf.co/mradermacher/UniRRM-8B-GGUF:Q4_K_M`, configured through
