@@ -14,7 +14,7 @@ import { loadSuiteSamples } from "../../program/runtime/criterion/datasets.mjs";
 import { contextLengthBucket, ollamaTiming, percentile, rougeScores } from "../../program/runtime/criterion/metrics.mjs";
 import { runNightmare, runReverie } from "../../program/runtime/criterion/suites.mjs";
 import { runCriterionRefinery } from "../../program/runtime/criterion/refinery.mjs";
-import { runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
+import { createQueuedOllamaExecutor, runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
 import { loadRun, renderRunCsv, renderRunMarkdown } from "../../program/runtime/criterion/report.mjs";
 
 async function tempRoot() { return fs.mkdtemp(path.join(os.tmpdir(), "pyash-criterion-test-")); }
@@ -67,6 +67,39 @@ test("Ollama adapter uses one configured profile and keeps thinking out of score
   assert.equal(request.body.options.num_ctx, 65536);
   assert.equal(result.text, "final answer");
   assert.equal(result.timing.outputTokens, 3);
+});
+
+test("queued Ollama Criterion adapter uses the durable GPU lane and housekeeper residency", async () => {
+  const root = await tempRoot();
+  const requests = [];
+  const statuses = new Map();
+  const adapter = createQueuedOllamaExecutor({
+    root,
+    runId: "queued-ollama-test",
+    housekeeperUrl: "http://housekeeper:8090",
+    vramRequiredMb: 22000,
+    enqueue: async (_worldRoot, envelope) => {
+      requests.push(envelope);
+      statuses.set(envelope.handleId, { status: "success", result: JSON.stringify({ message: { content: "managed answer" }, eval_count: 4, eval_duration: 1e8, total_duration: 2e8 }) });
+    },
+    writeStatus: async () => {},
+    readStatus: async (_worldRoot, handleId) => statuses.get(handleId) ?? { status: "queued" },
+    workerRunner: async () => {},
+    pollMs: 1
+  });
+
+  const result = await adapter.executor({ model: "qwen3.8:27b", prompt: "Summarize this.", identity: "sample-1" });
+  assert.equal(result.text, "managed answer");
+  assert.equal(result.metadata.managedBy, "gpu-housekeeper");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].serviceName, "ollama");
+  assert.equal(requests[0].jobSpec.kind, "ollama-chat");
+  assert.equal(requests[0].jobSpec.resourceRequest.vramRequiredMb, 22000);
+  assert.equal(requests[0].jobSpec.payload.model, "qwen3.8:27b");
+
+  await adapter.dischargeModels(["qwen3.8:27b"]);
+  assert.equal(requests[1].jobSpec.kind, "ollama-generate");
+  assert.equal(requests[1].jobSpec.payload.keep_alive, 0);
 });
 
 test("criterion language surface is registered as be criterion do", () => {

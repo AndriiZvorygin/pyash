@@ -8,7 +8,7 @@ import { createHuggingFaceExecutor } from "../program/runtime/criterion/huggingf
 import { runCriterion, rerunCriterion } from "../program/runtime/criterion/run.mjs";
 import { runNightmare, runReverie } from "../program/runtime/criterion/suites.mjs";
 import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime/criterion/report.mjs";
-import { DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
+import { createQueuedOllamaExecutor, DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
 import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
@@ -139,7 +139,20 @@ async function runCommand(args, root) {
       await adapter.close();
     }
   } else {
-    result = await runCriterion(options);
+    let adapter = null;
+    try {
+      adapter = options.gpuHousekeeperUrl
+        ? createQueuedOllamaExecutor({ root, runId: options.runId ?? `${options.benchmark ?? "criterion"}-${Date.now()}`, housekeeperUrl: options.gpuHousekeeperUrl, gpuId: options.criterionGpuId, vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB })
+        : null;
+      result = await runCriterion({
+        ...options,
+        ...(adapter ? { executor: adapter.executor, metadataProvider: adapter.metadataProvider } : {})
+      });
+    } finally {
+      if (adapter && result) {
+        await adapter.dischargeModels(result.models ?? options.models ?? []);
+      }
+    }
   }
   print({ runId: result.runId, status: result.status, results: `criterion/results/${result.runId}.jsonl`, report: `criterion/results/${result.runId}.md`, csv: `criterion/results/${result.runId}.csv`, review: `criterion/review/${result.runId}.html` }, hasFlag(args, "--json"));
   return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;

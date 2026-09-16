@@ -1,3 +1,9 @@
+import crypto from "node:crypto";
+import path from "node:path";
+
+import { enqueueInputEnvelope } from "../gpu/queue.mjs";
+import { runGpuWorkerOnce } from "../gpu/worker.mjs";
+import { isTerminalHandleStatus, readGpuHandleStatus, writeGpuHandleStatus } from "../gpu/handle_status.mjs";
 import { ollamaTiming, stripThinking } from "./metrics.mjs";
 
 export function resolveOllamaBaseUrl(baseUrl = null, env = process.env) {
@@ -133,6 +139,204 @@ export async function runOllamaChat({
     }
   }
   throw new Error("Ollama request exhausted without a terminal result");
+}
+
+function queuedHandleId({ runId, model, operation, requestId, prompt }) {
+  return `criterion-ollama-${crypto.createHash("sha256")
+    .update(`${runId}\u0000${model}\u0000${operation}\u0000${requestId || prompt || Date.now()}`)
+    .digest("hex")
+    .slice(0, 24)}`;
+}
+
+function parseQueuedResult(status) {
+  if (status?.result && typeof status.result === "object") return status.result;
+  try {
+    const value = JSON.parse(String(status?.result ?? ""));
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    throw new Error(`queued Ollama result was not JSON: ${String(status?.result ?? "").slice(0, 300)}`);
+  }
+}
+
+async function waitForQueuedOllama({
+  worldRoot,
+  handleId,
+  housekeeperUrl,
+  gpuId,
+  workerRunner,
+  readStatus,
+  timeoutMs,
+  pollMs,
+  workerTag
+}) {
+  const deadline = Date.now() + timeoutMs;
+  const workerMaxPolls = Math.max(1200, Math.ceil(timeoutMs / 250) + 1);
+  while (Date.now() <= deadline) {
+    const status = await readStatus(worldRoot, handleId);
+    if (status && isTerminalHandleStatus(status.status)) {
+      if (status.status === "success") return parseQueuedResult(status);
+      throw new Error(status.error || status.message || "queued Ollama job failed");
+    }
+    await workerRunner({
+      worldRoot,
+      housekeeperUrl,
+      workerTag,
+      owner: workerTag,
+      gpuId,
+      lane: "durable",
+      pollIntervalMs: 250,
+      maxPolls: workerMaxPolls,
+      leaseTtlMs: timeoutMs + 60000
+    });
+    await new Promise(resolve => setTimeout(resolve, Math.max(1, Number(pollMs) || 100)));
+  }
+  throw new Error(`queued Ollama job timed out waiting for ${handleId}`);
+}
+
+/**
+ * Route non-streaming Criterion Ollama calls through Pyash's durable GPU lane.
+ * The remote housekeeper owns runtime admission, residency switching and
+ * provider discharge; Criterion only receives the completed Ollama payload.
+ */
+export function createQueuedOllamaExecutor({
+  root = process.cwd(),
+  runId = "criterion",
+  housekeeperUrl = process.env.PYA_GPU_HOUSEKEEPER_URL ?? "",
+  gpuId = process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0",
+  hostId = process.env.PYA_GPU_HOST_ID ?? "",
+  timeoutMs = Number(process.env.PYA_CRITERION_OLLAMA_TIMEOUT_MS || 900000),
+  pollMs = 100,
+  workerRunner = runGpuWorkerOnce,
+  readStatus = readGpuHandleStatus,
+  writeStatus = writeGpuHandleStatus,
+  enqueue = enqueueInputEnvelope,
+  vramRequiredMb = null,
+  now = () => new Date()
+} = {}) {
+  const worldRoot = path.resolve(root, "world");
+  const normalizedHousekeeperUrl = String(housekeeperUrl ?? "").trim();
+  if (!normalizedHousekeeperUrl) throw new Error("queued Ollama execution requires PYA_GPU_HOUSEKEEPER_URL");
+  const normalizedGpuId = String(gpuId || "gpu-0").trim() || "gpu-0";
+  const normalizedTimeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Math.trunc(Number(timeoutMs)) : 900000;
+  const normalizedVram = Number(vramRequiredMb) > 0 ? Math.trunc(Number(vramRequiredMb)) : null;
+
+  async function submit({ model, prompt = "", profile = "summary_direct", contextLength, sampling = {}, identity = "", operation = "generate", kind = "ollama-chat" }) {
+    const settings = resolveProfile(profile, { ...sampling, contextLength });
+    const handleId = queuedHandleId({ runId, model, operation, requestId: identity, prompt });
+    const queuedAt = now().toISOString();
+    const startedAt = Date.now();
+    const options = {
+      temperature: settings.temperature,
+      top_p: settings.top_p,
+      top_k: settings.top_k,
+      num_ctx: settings.contextLength,
+      ...(settings.repeat_penalty === undefined ? {} : { repeat_penalty: settings.repeat_penalty }),
+      ...(settings.num_predict === undefined ? {} : { num_predict: settings.num_predict })
+    };
+    const payload = kind === "ollama-generate"
+      ? { model, prompt: String(prompt ?? ""), stream: false, keep_alive: sampling.keep_alive ?? 300, options }
+      : {
+        model,
+        messages: [{ role: "user", content: String(prompt ?? "") }],
+        stream: false,
+        think: settings.think,
+        ...(settings.format === undefined ? {} : { format: settings.format }),
+        options
+      };
+    const requestResource = Number(sampling.vramRequiredMb ?? normalizedVram) > 0
+      ? { vramRequiredMb: Math.trunc(Number(sampling.vramRequiredMb ?? normalizedVram)) }
+      : null;
+    await writeStatus(worldRoot, handleId, {
+      status: "queued",
+      agentName: "criterion-ollama",
+      gpuId: normalizedGpuId,
+      intent: "criterion",
+      lane: "durable",
+      queuedAt,
+      startedAt: "",
+      finishedAt: "",
+      retryCount: 0,
+      outcome: "queued",
+      message: "queued",
+      result: "",
+      error: ""
+    });
+    await enqueue(worldRoot, {
+      queuedAt,
+      handleId,
+      agentName: "criterion-ollama",
+      gpuId: normalizedGpuId,
+      hostId,
+      intent: "criterion",
+      lane: "durable",
+      payloadSentence: { mood: "do", be: "gpu criterion", ob: { text: `${model}: ${operation}` }, as: { name: "ollama" } },
+      serviceName: "ollama",
+      residencyName: model,
+      residencyRequired: true,
+      beginRequired: true,
+      dischargeAllowed: true,
+      jobSpec: {
+        kind,
+        ...(requestResource ? { resourceRequest: requestResource } : {}),
+        payload
+      }
+    });
+    const response = await waitForQueuedOllama({
+      worldRoot,
+      handleId,
+      housekeeperUrl: normalizedHousekeeperUrl,
+      gpuId: normalizedGpuId,
+      workerRunner,
+      readStatus,
+      timeoutMs: normalizedTimeout,
+      pollMs,
+      workerTag: `criterion-ollama-${process.pid}`
+    });
+    const finishedAt = now().toISOString();
+    const rawText = response.message?.content ?? response.response ?? "";
+    return {
+      text: stripThinking(rawText),
+      thinking: response.message?.thinking ?? response.thinking ?? "",
+      payload: response,
+      timing: { ...ollamaTiming(response, new Date(startedAt).toISOString(), finishedAt), queueManaged: true },
+      request: { endpoint: `${normalizedHousekeeperUrl.replace(/\/$/u, "")}/submit`, model, operation, handleId },
+      effectiveThink: settings.think,
+      reasoningMode: settings.reasoningMode,
+      startedAt: new Date(startedAt).toISOString(),
+      finishedAt,
+      metadata: {
+        engine: "ollama",
+        managedBy: "gpu-housekeeper",
+        housekeeperUrl: normalizedHousekeeperUrl,
+        gpuId: normalizedGpuId,
+        resourceRequest: requestResource
+      }
+    };
+  }
+
+  const executor = input => submit({ ...input, kind: "ollama-chat" });
+  const dischargeModel = async model => submit({
+    model,
+    prompt: "",
+    profile: "baseline",
+    sampling: { keep_alive: 0, num_predict: 1 },
+    identity: `discharge-${Date.now()}`,
+    operation: "discharge",
+    kind: "ollama-generate"
+  });
+  const dischargeModels = async models => {
+    const results = [];
+    for (const model of models ?? []) {
+      try {
+        await dischargeModel(model);
+        results.push({ model, status: "ok" });
+      } catch (error) {
+        results.push({ model, status: "failed", error: String(error?.message ?? error) });
+      }
+    }
+    return { status: results.every(result => result.status === "ok") ? "ok" : "partial", results, verifiedByHousekeeper: true };
+  };
+  return { executor, dischargeModel, dischargeModels, metadataProvider: async ({ model, baseUrl, fetchImpl }) => readOllamaMetadata({ model, baseUrl, fetchImpl }) };
 }
 
 export async function readOllamaMetadata({ model, baseUrl, fetchImpl = globalThis.fetch } = {}) {

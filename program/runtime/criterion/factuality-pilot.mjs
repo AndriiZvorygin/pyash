@@ -4,7 +4,7 @@ import path from "node:path";
 import { collectMachineMetadata } from "./machine.mjs";
 import { loadSuiteSamples } from "./datasets.mjs";
 import { createHuggingFaceJudgeExecutor } from "./huggingface.mjs";
-import { isTransientOllamaError, readOllamaMetadata, resolveOllamaBaseUrl, runOllamaChat } from "./ollama.mjs";
+import { createQueuedOllamaExecutor, isTransientOllamaError, readOllamaMetadata, resolveOllamaBaseUrl, runOllamaChat } from "./ollama.mjs";
 import { runCriterion } from "./run.mjs";
 import { writeRunArtifacts } from "./report.mjs";
 import { mean, parseJsonOutput, sha256, stripThinking, tokenize } from "./metrics.mjs";
@@ -278,13 +278,15 @@ async function fetchJson(url, options = {}, fetchImpl = globalThis.fetch) {
   return response.json();
 }
 
-export async function preflightOllamaModel({ baseUrl, model, sample, fetchImpl = globalThis.fetch } = {}) {
+export async function preflightOllamaModel({ baseUrl, model, sample, fetchImpl = globalThis.fetch, requestExecutor = null } = {}) {
   const base = resolveOllamaBaseUrl(baseUrl);
   const result = { status: "ok", baseUrl: base, model, requests: [] };
   try {
     for (const [kind, prompt] of [["warmup", "Reply with exactly OK."], ["meeting", `${MEETINGBANK_FACTUALITY_PROMPT}\n\nTRANSCRIPT:\n${sample.input}`]]) {
       try {
-        const response = await runOllamaChat({ model, prompt, profile: "summary_direct", contextLength: 32768, baseUrl: base, fetchImpl, requestTimeoutMs: 180000, maxRetries: 2 });
+        const response = requestExecutor
+          ? await requestExecutor({ model, prompt, profile: "summary_direct", contextLength: 32768, identity: `preflight:${kind}`, operation: "preflight" })
+          : await runOllamaChat({ model, prompt, profile: "summary_direct", contextLength: 32768, baseUrl: base, fetchImpl, requestTimeoutMs: 180000, maxRetries: 2 });
         result.requests.push({ model, kind, status: "ok", timing: response.timing, request: response.request });
       } catch (error) {
         result.requests.push({ model, kind, status: isTransientOllamaError(error) ? "transient-error" : "error", error: text(error?.message ?? error), request: error?.request ?? null });
@@ -350,23 +352,31 @@ export async function dischargeOllamaModels({ baseUrl, models, fetchImpl = globa
   return { baseUrl: base, results, status: "partial", verified: false, remainingModels: lastLoaded, verificationError: "Ollama models remained resident after discharge timeout" };
 }
 
-export function createOllamaFactualityJudge({ model = UNIRRM_FACTUALITY_MODEL, baseUrl, fetchImpl = globalThis.fetch, maxOutputTokens = JUDGE_MAX_OUTPUT_TOKENS, contextLength = JUDGE_CONTEXT_LENGTH } = {}) {
-  return async ({ prompt }) => {
-    const response = await runOllamaChat({
+export function createOllamaFactualityJudge({ model = UNIRRM_FACTUALITY_MODEL, baseUrl, fetchImpl = globalThis.fetch, maxOutputTokens = JUDGE_MAX_OUTPUT_TOKENS, contextLength = JUDGE_CONTEXT_LENGTH, executor = null } = {}) {
+  return async ({ prompt, identity = "", sample = null }) => {
+    const request = {
       model,
-      baseUrl,
-      fetchImpl,
       prompt: `${UNIRRM_SYSTEM_PROMPT}\n\n${prompt}`,
       profile: "summary_direct",
       contextLength,
       sampling: { temperature: 0, format: "json", num_predict: maxOutputTokens, repeat_penalty: 1.05 },
-      requestTimeoutMs: Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_TIMEOUT_MS || 900000),
-      maxRetries: 2,
-      retryBaseMs: 1000
-    });
+      identity,
+      operation: "judge",
+      sample
+    };
+    const response = executor
+      ? await executor(request)
+      : await runOllamaChat({
+        ...request,
+        baseUrl,
+        fetchImpl,
+        requestTimeoutMs: Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_TIMEOUT_MS || 900000),
+        maxRetries: 2,
+        retryBaseMs: 1000
+      });
     return {
       text: response.text,
-      metadata: { engine: "ollama", model, quantization: "Q4_K_M", contextLength, maxOutputTokens, effectiveThink: response.effectiveThink },
+      metadata: { ...(response.metadata ?? {}), engine: "ollama", model, quantization: "Q4_K_M", contextLength, maxOutputTokens, effectiveThink: response.effectiveThink },
       timing: response.timing,
       request: response.request
     };
@@ -406,7 +416,12 @@ export async function runMeetingBankFactualityPilot({
   const ollama = await preflightOllama({ baseUrl, models: ollamaModels, sample: selection[0], fetchImpl, probeModels: false });
   if (ollama.status !== "ok") throw new Error(`Ollama preflight failed: ${ollama.error}`);
   const metadataProvider = async ({ model }) => ({ ...(await readOllamaMetadata({ model, baseUrl: ollama.baseUrl, fetchImpl })), requestedModel: model, resolvedModel: model });
-  const generationExecutor = input => reliableExecutor({ input: { ...input, model: input.model }, baseUrl: ollama.baseUrl, fetchImpl });
+  const managedOllama = gpuHousekeeperUrl
+    ? createQueuedOllamaExecutor({ root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB })
+    : null;
+  const generationExecutor = managedOllama
+    ? input => managedOllama.executor({ ...input, model: input.model })
+    : input => reliableExecutor({ input: { ...input, model: input.model }, baseUrl: ollama.baseUrl, fetchImpl });
   const generationRuns = {};
   const generationRows = [];
   const generationReuse = {};
@@ -422,7 +437,7 @@ export async function runMeetingBankFactualityPilot({
       continue;
     }
     try {
-      const probe = await preflightOllamaModel({ baseUrl: ollama.baseUrl, model, sample: selection[0], fetchImpl });
+      const probe = await preflightOllamaModel({ baseUrl: ollama.baseUrl, model, sample: selection[0], fetchImpl, requestExecutor: managedOllama?.executor });
       ollama.requests.push(...probe.requests);
       if (probe.status !== "ok") throw new Error(`Ollama preflight failed for ${model}: ${probe.error}`);
       generation = generationRunner ? await generationRunner({ id: generationRunId, samples: selection, models: [model], resume }) : await runCriterion({
@@ -435,15 +450,19 @@ export async function runMeetingBankFactualityPilot({
       generationRuns[model] = generationRunId;
       generationRows.push(...(generation.results ?? []));
     } finally {
-      const discharge = await dischargeOllamaModels({ baseUrl: ollama.baseUrl, models: [model], fetchImpl, verifyRelease: true });
+      const discharge = managedOllama
+        ? await managedOllama.dischargeModels([model])
+        : await dischargeOllamaModels({ baseUrl: ollama.baseUrl, models: [model], fetchImpl, verifyRelease: true });
       ollamaDischarge.results.push(...discharge.results);
-      generationReuse[model] = { runId: generationRunId, reused: false, rows: generation?.results?.length ?? 0, dischargeVerified: discharge.verified === true };
+      generationReuse[model] = { runId: generationRunId, reused: false, rows: generation?.results?.length ?? 0, dischargeVerified: discharge.verified === true || discharge.verifiedByHousekeeper === true };
     }
   }
   ollamaDischarge.status = ollamaDischarge.results.every(result => result.status === "ok") ? "ok" : "partial";
-  const preJudgeDischarge = await dischargeOllamaModels({ baseUrl: ollama.baseUrl, models, fetchImpl, verifyRelease: true });
+  const preJudgeDischarge = managedOllama
+    ? await managedOllama.dischargeModels(models)
+    : await dischargeOllamaModels({ baseUrl: ollama.baseUrl, models, fetchImpl, verifyRelease: true });
   ollamaDischarge.preJudge = preJudgeDischarge;
-  if (preJudgeDischarge.status !== "ok" || preJudgeDischarge.verified !== true) {
+  if (preJudgeDischarge.status !== "ok" || (managedOllama ? preJudgeDischarge.verifiedByHousekeeper !== true : preJudgeDischarge.verified !== true)) {
     throw new Error(`Ollama Qwen discharge could not be verified before judging: ${preJudgeDischarge.verificationError ?? preJudgeDischarge.status}`);
   }
   const checkpointPath = path.resolve(root, "criterion", "results", `${id}.jsonl`);
@@ -452,7 +471,7 @@ export async function runMeetingBankFactualityPilot({
   const judge = { modelId: judgeModel, name: UNIRRM_FACTUALITY_NAME, engine: judgeEngine, sourceModel: judgeEngine === "ollama" ? UNIRRM_FACTUALITY_MODEL : UNIRRM_FACTUALITY_HF_MODEL, quantization: judgeEngine === "ollama" ? "Q4_K_M" : null, contextLength: judgeContextLength, promptVersion: UNIRRM_FACTUALITY_PROMPT_VERSION, temperature: 0, maxOutputTokens: judgeMaxOutputTokens, referenceHidden: true, discharge: { status: "pending" } };
   let adapter = null;
   const executor = judgeExecutor ?? (judgeEngine === "ollama"
-    ? createOllamaFactualityJudge({ model: judgeModel, baseUrl: ollama.baseUrl, fetchImpl, maxOutputTokens: judgeMaxOutputTokens, contextLength: judgeContextLength })
+    ? createOllamaFactualityJudge({ model: judgeModel, baseUrl: ollama.baseUrl, fetchImpl, maxOutputTokens: judgeMaxOutputTokens, contextLength: judgeContextLength, executor: managedOllama?.executor })
     : (adapter = await createHuggingFaceJudgeExecutor({ model: judgeModel || UNIRRM_FACTUALITY_HF_MODEL, root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, generation: { maxInputTokens: judgeContextLength, maxOutputTokens: judgeMaxOutputTokens, minOutputTokens: 1, numBeams: 1, doSample: false, enableThinking: false, repetitionPenalty: 1.05 }, dischargeOnClose: true })).executor);
   try {
     for (const model of models) for (const sample of selection) {
@@ -495,6 +514,10 @@ export async function runMeetingBankFactualityPilot({
     if (adapter) {
       try { const discharge = await adapter.close(); judge.discharge = discharge?.success === false && !discharge?.skipped ? { status: "failed", detail: discharge } : { status: "completed", detail: discharge }; }
       catch (error) { judge.discharge = { status: "failed", error: text(error?.message ?? error) }; }
+    } else if (!judgeExecutor && judgeEngine === "ollama" && managedOllama) {
+      try {
+        judge.discharge = await managedOllama.dischargeModels([judgeModel]);
+      } catch (error) { judge.discharge = { status: "failed", error: text(error?.message ?? error) }; }
     } else if (!judgeExecutor && judgeEngine === "ollama") {
       try {
         judge.discharge = await dischargeOllamaModels({ baseUrl: ollama.baseUrl, models: [judgeModel], fetchImpl, verifyRelease: true });

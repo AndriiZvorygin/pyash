@@ -128,8 +128,14 @@ node command/criterion.mjs meetingbank-factuality-pilot \
 It selects ten deterministic MeetingBank test samples and runs the same
 MeetingBank-aware generation prompt for `qwen3.5:9b`,
 `hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M`, and `qwen3.8:27b`.
-Generation remains on remote Ollama. The reference summary is retained for
-provenance but is hidden from the UniRRM judge.
+Generation remains on remote Ollama, but when `PYA_GPU_HOUSEKEEPER_URL` is
+configured every non-streaming model request is submitted through the existing
+Pyash GPU duty queue and `gpu-housekeeper`; Criterion does not call the Ollama
+inference endpoint directly. The reference summary is retained for provenance
+but is hidden from the UniRRM judge. Set
+`PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB` when a workload needs a declared VRAM
+floor, such as a large 27B model; the request is passed to housekeeper so its
+existing ComfyUI and other-runtime discharge policy can make room safely.
 
 The judge lane is transcript-grounded and provisional. It sends one UniRRM
 pointwise request per successful summary, with a bounded claim list and
@@ -141,10 +147,11 @@ values are percentages and the dimensions remain separate; no overall winner
 is declared without human-labelled calibration.
 
 Generation is batched before judging to avoid GPU/VRAM thrashing: Criterion
-preflights and generates all selected rows for one Qwen model, discharges that
-model, then continues with the next Qwen model. Only after every Qwen
-generation batch is complete does Criterion load UniRRM and judge the
-successful summaries. UniRRM is discharged after the judge batch completes.
+preflights and generates all selected rows for one Qwen model through the
+queue, asks the housekeeper to discharge that residency, then continues with
+the next Qwen model. Only after every Qwen generation batch is complete does
+Criterion queue UniRRM and judge the successful summaries. UniRRM is discharged
+through the same housekeeper path after the judge batch completes.
 
 ROUGE is excluded from the default factuality report and remains historical
 reference-similarity evidence in the older model-run artifacts. A judge row is
@@ -157,12 +164,11 @@ resumable and preserves raw response hashes.
 
 The default UniRRM judge target is the quantized Ollama tag
 `hf.co/mradermacher/UniRRM-8B-GGUF:Q4_K_M`, configured through
-`PYA_CRITERION_FACTUALITY_JUDGE_MODEL` or `--judge-model`. Criterion first
-discharges every Qwen generation model and polls `/api/ps` until those models
-are no longer resident. Only then does it load the judge. After judging it
-requests and verifies judge discharge as well, without stopping Ollama. This
-keeps the existing external model-hosting boundary intact and prevents the
-large judge from occupying VRAM after a pilot.
+`PYA_CRITERION_FACTUALITY_JUDGE_MODEL` or `--judge-model`. With the housekeeper
+configured, its existing Ollama runtime performs admission, residency
+switching, and provider discharge; Criterion only submits queue envelopes and
+records the result. This keeps the existing external model-hosting boundary
+intact and prevents the large judge from occupying VRAM after a pilot.
 
 The original BF16 `SUSTech-NLP/UniRRM-8B` target remains available through the
 external `criterion-huggingface` service with
