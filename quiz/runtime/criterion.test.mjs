@@ -148,6 +148,30 @@ test("Hugging Face adapter sends inference through the durable GPU lane", async 
   await adapter.close();
 });
 
+test("Hugging Face judge requests use distinct handles for each review identity", async () => {
+  const handles = [];
+  const adapter = await createHuggingFaceExecutor({
+    root: await tempRoot(),
+    runId: "hf-judge-handle-test",
+    operation: "judge",
+    housekeeperUrl: "http://housekeeper:8090",
+    enqueue: async (_worldRoot, envelope) => handles.push(envelope.handleId),
+    writeStatus: async () => {},
+    readStatus: async () => ({ status: "success", result: JSON.stringify({ text: "{}" }) }),
+    workerRunner: async () => {},
+    pollMs: 1
+  });
+
+  const sample = { id: "m1", input: "Alice: The meeting ended." };
+  await adapter.executor({ prompt: "pointwise", identity: "pointwise\u0000qwen\u0000m1", sample });
+  await adapter.executor({ prompt: "pairwise", identity: "pairwise\u0000m1\u0000qwen-a\u0000qwen-b", sample });
+  await adapter.executor({ prompt: "swap", identity: "pairwise\u0000m1\u0000qwen-a\u0000qwen-b\u0000swap", sample });
+
+  assert.equal(handles.length, 3);
+  assert.equal(new Set(handles).size, 3);
+  await adapter.close();
+});
+
 test("Hugging Face adapter forwards target-specific long-context generation settings", async () => {
   const requests = [];
   let status = { status: "queued" };
