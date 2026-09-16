@@ -62,12 +62,14 @@ test("Hugging Face judge adapter uses the existing durable queue with a judge op
     },
     pollMs: 1
   });
-  const result = await adapter.executor({ prompt: "judge this", sample: { id: "m1", input: "source" } });
+  const messages = [{ role: "system", content: "system" }, { role: "user", content: "judge this" }];
+  const result = await adapter.executor({ prompt: "judge this", messages, sample: { id: "m1", input: "source" } });
   assert.equal(result.text, '{"overall_score":4}');
   assert.equal(requests[0].jobSpec.kind, "huggingface-generate");
   assert.equal(requests[0].jobSpec.payload.operation, "judge");
   assert.equal(requests[0].jobSpec.payload.model, UNIRRM_MODEL_ID);
   assert.equal(requests[0].jobSpec.payload.input, "judge this");
+  assert.deepEqual(requests[0].jobSpec.payload.messages, messages);
   await adapter.close();
 });
 
