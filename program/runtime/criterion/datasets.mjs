@@ -82,6 +82,36 @@ export const SUITE_CATALOG = Object.freeze({
     version: "optional calibration",
     sourceUrl: "https://github.com/idavidrein/gpqa",
     required: "private/licensed local dataset export"
+  },
+  "omnicseval-meeting": {
+    name: "OmniCSEval MeetingBank subset",
+    version: "released OmniCSEval annotations; exact-compatible 75-sample MeetingBank lane",
+    sourceUrl: "https://github.com/zhouweixiao/OmniCSEval",
+    paperUrl: "https://arxiv.org/html/2606.15974v1",
+    required: "local released annotation package plus saved MeetingBank model outputs"
+  },
+  "meetingbank-fact-audit": {
+    name: "MeetingBank automated fact audit",
+    version: "automated_proxy; full MeetingBank post-hoc fact lane",
+    sourceUrl: "https://meetingbank.github.io/dataset/",
+    paperUrl: "https://arxiv.org/html/2606.15974v1",
+    required: "local MeetingBank dataset, saved model runs, and an external fact judge"
+  },
+  "meetingbank-prompt-ablation": {
+    name: "MeetingBank Qwen prompt ablation",
+    version: "paired generic versus MeetingBank-aware zero-shot prompts",
+    sourceUrl: "https://meetingbank.github.io/dataset/",
+    subsetSourceUrl: "https://github.com/zhouweixiao/OmniCSEval",
+    required: "local MeetingBank dataset, released OmniCSEval subset annotations, and saved generic Qwen outputs"
+  },
+  "meetingbank-judge-pilot": {
+    name: "MeetingBank Qwen UniRRM judge pilot",
+    version: "ten-sample generation plus external UniRRM pointwise/pairwise judging",
+    sourceUrl: "https://meetingbank.github.io/dataset/",
+    judgeModelUrl: "https://huggingface.co/SUSTech-NLP/UniRRM-8B",
+    paperUrl: "https://arxiv.org/html/2609.05910v1",
+    licenseUrl: "https://meetingbank.github.io/license/",
+    required: "local MeetingBank split, remote Ollama Qwen tags, and managed UniRRM judge runtime"
   }
 });
 

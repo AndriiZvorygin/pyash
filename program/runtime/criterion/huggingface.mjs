@@ -36,6 +36,15 @@ export const HUGGING_FACE_MODEL_DEFAULTS = Object.freeze({
     doSample: false,
     chunkLongInputs: true,
     chunkOverlapTokens: 128
+  }),
+  "SUSTech-NLP/UniRRM-8B": Object.freeze({
+    maxInputTokens: 32768,
+    minOutputTokens: 1,
+    maxOutputTokens: 4096,
+    numBeams: 1,
+    doSample: false,
+    repetitionPenalty: 1.05,
+    operation: "judge"
   })
 });
 
@@ -136,6 +145,7 @@ export async function createHuggingFaceExecutor({
   revision = process.env.PYA_HUGGINGFACE_REVISION ?? null,
   dtype = process.env.PYA_HF_DTYPE ?? "auto",
   generation = {},
+  operation = "generate",
   timeoutMs = Number(process.env.PYA_CRITERION_HF_TIMEOUT_MS || 1800000),
   pollMs = 50,
   enqueue = enqueueInputEnvelope,
@@ -152,6 +162,7 @@ export async function createHuggingFaceExecutor({
   const metadataProvider = async ({ model }) => ({
     model,
     engine: "huggingface",
+    operation,
     modelId: model,
     modelRevision: revision,
     tokenizerRevision: revision,
@@ -169,8 +180,9 @@ export async function createHuggingFaceExecutor({
       model,
       revision,
       dtype,
+      operation,
       prompt: String(prompt ?? ""),
-      input: String(sample?.input ?? prompt ?? ""),
+      input: operation === "judge" ? String(prompt ?? "") : String(sample?.input ?? prompt ?? ""),
       generation: defaults
     };
 
@@ -232,4 +244,20 @@ export async function createHuggingFaceExecutor({
   executor.close = close;
   executor.metadataProvider = metadataProvider;
   return { executor, metadataProvider, close };
+}
+
+export async function createHuggingFaceJudgeExecutor({
+  model = "SUSTech-NLP/UniRRM-8B",
+  ...options
+} = {}) {
+  const adapter = await createHuggingFaceExecutor({ ...options, operation: "judge" });
+  const executor = async input => adapter.executor({ ...input, model });
+  const metadataProvider = async input => ({
+    ...(await adapter.metadataProvider({ ...input, model })),
+    judgeModel: "judge:unirrm-8b",
+    modelId: model,
+    operation: "judge"
+  });
+  executor.close = adapter.close;
+  return { ...adapter, executor, metadataProvider, model };
 }

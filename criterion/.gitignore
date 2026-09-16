@@ -3,3 +3,6 @@ artifacts/*
 review/*
 goldens/*
 !.gitkeep
+data/*
+!data/.gitkeep
+!data/README.md

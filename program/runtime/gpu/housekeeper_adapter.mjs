@@ -76,18 +76,37 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) 
       });
     },
 
-    async submitJob({ handleId = "", runtimeName = "", profileName = "", jobSpec = {} } = {}) {
+    async submitJob({ handleId = "", runtimeName = "", profileName = "", jobSpec = {}, deviceId = "", dischargeAllowed } = {}) {
+      const body = {
+        handleId: normalizeText(handleId),
+        runtimeName: normalizeText(runtimeName),
+        profileName: normalizeText(profileName),
+        jobSpec,
+        hostId: defaultHostId
+      };
+      if (normalizeText(deviceId)) body.deviceId = normalizeText(deviceId);
+      if (typeof dischargeAllowed === "boolean") body.dischargeAllowed = dischargeAllowed;
       return requestJson({
         baseUrl: rootUrl,
         pathname: "/submit",
         method: "POST",
-        body: {
-          handleId: normalizeText(handleId),
-          runtimeName: normalizeText(runtimeName),
-          profileName: normalizeText(profileName),
-          jobSpec,
-          hostId: defaultHostId
-        }
+        body
+      });
+    },
+
+    async previewCapacity({ runtimeName = "", profileName = "", jobSpec = {}, deviceId = "", dischargeAllowed } = {}) {
+      const body = {
+        runtimeName: normalizeText(runtimeName),
+        profileName: normalizeText(profileName),
+        jobSpec
+      };
+      if (normalizeText(deviceId)) body.deviceId = normalizeText(deviceId);
+      if (typeof dischargeAllowed === "boolean") body.dischargeAllowed = dischargeAllowed;
+      return requestJson({
+        baseUrl: rootUrl,
+        pathname: "/capacity/preview",
+        method: "POST",
+        body
       });
     },
 

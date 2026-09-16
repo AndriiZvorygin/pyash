@@ -105,6 +105,57 @@ test("housekeeper adapter submitJob posts expected payload", async () => {
   );
 });
 
+test("housekeeper adapter forwards optional capacity controls", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { remoteJobId: "job-capacity", accepted: true } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090", hostId: "renderbox" });
+      await adapter.submitJob({
+        handleId: "h-capacity",
+        runtimeName: "huggingface",
+        profileName: "large-model",
+        deviceId: "gpu0",
+        dischargeAllowed: true,
+        jobSpec: {
+          kind: "huggingface-generate",
+          resourceRequest: { vramRequiredMb: 22000 }
+        }
+      });
+
+      assert.deepEqual(JSON.parse(calls[0].options.body), {
+        handleId: "h-capacity",
+        runtimeName: "huggingface",
+        profileName: "large-model",
+        deviceId: "gpu0",
+        dischargeAllowed: true,
+        jobSpec: {
+          kind: "huggingface-generate",
+          resourceRequest: { vramRequiredMb: 22000 }
+        },
+        hostId: "renderbox"
+      });
+    }
+  );
+});
+
+test("housekeeper adapter previews capacity without submitting a job", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { dryRun: true, decision: "reclaim-available" } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090" });
+      const result = await adapter.previewCapacity({
+        runtimeName: "huggingface",
+        profileName: "large-model",
+        jobSpec: { resourceRequest: { vramRequiredMb: 22000 } }
+      });
+
+      assert.equal(calls[0].url, "http://housekeeper:8090/capacity/preview");
+      assert.equal(calls[0].options.method, "POST");
+      assert.equal(result.dryRun, true);
+    }
+  );
+});
+
 test("housekeeper adapter getJobStatus calls GET /job/<id>", async () => {
   await withMockFetch(
     async () => makeJsonResponse({ body: { status: "running", message: "working", startedAt: "", finishedAt: "" } }),
