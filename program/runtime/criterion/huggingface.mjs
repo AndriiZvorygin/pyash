@@ -68,10 +68,11 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, Math.max(1, Number(ms) || 1)));
 }
 
-function handleIdFor({ runId, model, sampleId }) {
+function handleIdFor({ runId, model, sampleId, operation, requestId }) {
+  const requestKey = requestId ? `${operation}\u0000${requestId}` : operation;
   const digest = crypto
     .createHash("sha256")
-    .update(`${runId}\u0000${model}\u0000${sampleId}`)
+    .update(`${runId}\u0000${model}\u0000${sampleId}\u0000${requestKey}`)
     .digest("hex")
     .slice(0, 24);
   return `criterion-hf-${digest}`;
@@ -170,11 +171,17 @@ export async function createHuggingFaceExecutor({
     ...huggingFaceModelDefaults(model)
   });
 
-  const executor = async ({ model, prompt, messages, sample }) => {
+  const executor = async ({ model, prompt, messages, sample, identity, requestId }) => {
     if (!normalizedHousekeeperUrl) {
       throw new Error("Hugging Face GPU execution requires PYA_GPU_HOUSEKEEPER_URL");
     }
-    const handleId = handleIdFor({ runId, model, sampleId: sample?.id ?? prompt });
+    const handleId = handleIdFor({
+      runId,
+      model,
+      sampleId: sample?.id ?? prompt,
+      operation,
+      requestId: identity ?? requestId ?? ""
+    });
     const queuedAt = now().toISOString();
     const defaults = { ...huggingFaceModelDefaults(model), ...generation };
     const payload = {
