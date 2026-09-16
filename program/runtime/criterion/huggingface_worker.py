@@ -75,6 +75,19 @@ def resolved_revision(tokenizer, model, requested_revision):
     return model_revision or tokenizer_revision or requested_revision
 
 
+def resolve_dtype(dtype_name, operation, device, torch):
+    normalized = str(dtype_name or "auto").lower()
+    if device != "cuda":
+        return None
+    if normalized == "float16":
+        return torch.float16
+    if normalized == "bfloat16":
+        return torch.bfloat16
+    if normalized == "auto" and operation == "judge":
+        return torch.bfloat16
+    return None
+
+
 def reply(request_id, **payload):
     sys.stdout.write(json.dumps({"id": request_id, **payload}, ensure_ascii=False) + "\n")
     sys.stdout.flush()
@@ -91,11 +104,7 @@ def load_state(request):
     tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
     dtype_name = str(request.get("dtype") or os.environ.get("PYA_HF_DTYPE", "auto"))
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = None
-    if dtype_name == "float16" and device == "cuda":
-        dtype = torch.float16
-    elif dtype_name == "bfloat16" and device == "cuda":
-        dtype = torch.bfloat16
+    dtype = resolve_dtype(dtype_name, operation, device, torch)
     model_options = {"revision": revision} if revision else {}
     if dtype is not None:
         model_options["torch_dtype"] = dtype
