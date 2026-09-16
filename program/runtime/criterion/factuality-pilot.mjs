@@ -26,6 +26,7 @@ export const UNIRRM_FACTUALITY_NAME = "judge:unirrm-8b";
 export const UNIRRM_FACTUALITY_PROMPT_VERSION = "meetingbank-transcript-grounded-single-request-v3";
 
 const CLAIM_LIMIT = 12;
+const PROMPT_CLAIM_LIMIT = 6;
 const JUDGE_MAX_OUTPUT_TOKENS = Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_MAX_OUTPUT_TOKENS || 2048);
 const JUDGE_CONTEXT_LENGTH = Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_CONTEXT_LENGTH || 16384);
 const DIMENSIONS = Object.freeze([
@@ -179,8 +180,8 @@ export function normalizeNativeJudgeResponse(raw, { maxClaims = CLAIM_LIMIT } = 
 function nativePrompt({ transcript, summary, sourceTurnsForPrompt, previousRaw = "" }) {
   const source = sourceTurnsForPrompt.map(turn => `[${turn.turnId}] ${turn.speaker ? `${turn.speaker}: ` : ""}${turn.text}`).join("\n");
   const task = "Evaluate one municipal meeting summary using only the transcript. The reference summary is withheld. Assess factuality and practical publication usefulness, not wording similarity.";
-  const contract = `Use the native UniRRM outer JSON format: {"Analysis_process":"...","rubrics":[...],"evaluations":[{"response_id":"Response1","explanation":"...","final_score":1}],"best_id":"Response1"}. Keep that outer format. Put the Criterion evaluation as one compact JSON object encoded inside the evaluations[0].explanation string, not as prose and not as a new top-level format. The encoded object must have exactly these fields: faithfulness_score, completeness_score, decision_action_score, relevance_score, conciseness_score, publication_suitability_score, confidence, claims, omitted_important_items, reasoning, final_verdict. Each score is 1-5. Each claims entry must have claim, status (supported|partially_supported|unsupported|contradicted|unclear), importance, evidence, transcript_turn_ids, explanation. Include evidence for every material claim. Keep the object compact and use at most 12 material claims. Return JSON only.`;
-  const prompt = [`<User_Input>\n${task}\n\n${contract}\n\nSOURCE TRANSCRIPT WITH STABLE TURN IDS:\n${source}\n</User_Input>`, `<Response1>\n${summary}\n</Response1>`, "Use at most 12 material claims. Keep reasoning, rubrics, explanations, and evidence quotes concise."];
+  const contract = `Use the native UniRRM outer JSON format: {"Analysis_process":"...","rubrics":[...],"evaluations":[{"response_id":"Response1","explanation":"...","final_score":1}],"best_id":"Response1"}. Keep that outer format. Put the Criterion evaluation as one compact JSON object encoded inside the evaluations[0].explanation string, not as prose and not as a new top-level format. The encoded object must have exactly these fields: faithfulness_score, completeness_score, decision_action_score, relevance_score, conciseness_score, publication_suitability_score, confidence, claims, omitted_important_items, reasoning, final_verdict. Each score is 1-5. Each claims entry must have claim, status (supported|partially_supported|unsupported|contradicted|unclear), importance, evidence, transcript_turn_ids, explanation. Include evidence for every material claim. Keep rubrics to names only, use at most ${PROMPT_CLAIM_LIMIT} material claims, use one short evidence quote and a brief explanation per claim, and return JSON only.`;
+  const prompt = [`<User_Input>\n${task}\n\n${contract}\n\nSOURCE TRANSCRIPT WITH STABLE TURN IDS:\n${source}\n</User_Input>`, `<Response1>\n${summary}\n</Response1>`, `Use at most ${PROMPT_CLAIM_LIMIT} material claims. Keep every string concise; do not repeat the transcript or rubric descriptions.`];
   if (previousRaw) prompt.push(`Repair the previous response into valid native JSON without dropping criterion fields:\n${previousRaw.slice(0, 30000)}`);
   return prompt.join("\n\n");
 }
