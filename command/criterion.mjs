@@ -285,7 +285,7 @@ async function meetingBankFactualityPilotCommand(args, root) {
     split: flag(args, "--split", "test"),
     runId: flag(args, "--run-id", MEETINGBANK_FACTUALITY_RUN_ID),
     models: models.length ? models : MEETINGBANK_FACTUALITY_MODELS,
-    selectionSeed: flag(args, "--selection-seed"),
+    selectionSeed: flag(args, "--selection-seed", MEETINGBANK_FACTUALITY_SELECTION_SEED),
     selectionCount: numericFlag(args, "--selection-count", 10),
     baseUrl: flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST ?? "http://mriczo:11434"),
     gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
