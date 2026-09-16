@@ -138,6 +138,28 @@ test("housekeeper adapter forwards optional capacity controls", async () => {
   );
 });
 
+test("housekeeper adapter forwards optional federation routing metadata", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { remoteJobId: "job-route", accepted: true, forwarded: true } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090", hostId: "mriczo" });
+      await adapter.submitJob({
+        handleId: "h-route",
+        runtimeName: "ollama",
+        profileName: "qwen3.5:9b",
+        routing: { originHostId: "mriczo", forwardDepth: 1, visitedHosts: ["mriczo"] },
+        jobSpec: { kind: "ollama-generate", payload: { model: "qwen3.5:9b", prompt: "hello" } }
+      });
+
+      assert.deepEqual(JSON.parse(calls[0].options.body).routing, {
+        originHostId: "mriczo",
+        forwardDepth: 1,
+        visitedHosts: ["mriczo"]
+      });
+    }
+  );
+});
+
 test("housekeeper adapter previews capacity without submitting a job", async () => {
   await withMockFetch(
     async () => makeJsonResponse({ body: { dryRun: true, decision: "reclaim-available" } }),

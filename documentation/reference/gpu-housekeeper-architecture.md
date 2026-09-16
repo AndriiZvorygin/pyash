@@ -238,19 +238,19 @@ The current architecture is intentionally conservative.
 
 Limitations:
 
-- one configured housekeeper URL per local worker,
+- one configured entry housekeeper URL per local worker,
 - one active running job per housekeeper process,
-- no automatic peer forwarding,
-- no automatic host selection,
 - no per-device runtime containers,
 - no per-GPU `CUDA_VISIBLE_DEVICES` assignment per runtime,
 - warm residency is tracked lightly as profile state, not as a full scheduling model.
 
-The queue envelope already has useful fields for future routing, but the executor does not yet use them as a real load-balancing policy.
+The entry housekeeper now performs bounded, residency-aware peer routing when
+`GPU_HOUSEKEEPER_PEERS` is configured. Pyash still has one durable queue and
+one entry URL; the housekeeper may execute locally or forward one hop to a
+configured peer. The queue envelope remains the source of truth and does not
+become a second distributed queue.
 
-## 6. Residency-Aware Federation Direction
-
-The desired next architecture is a federation of housekeepers.
+## 6. Residency-Aware Federation
 
 Each GPU machine runs its own housekeeper. A housekeeper may know peers such as:
 
@@ -258,13 +258,13 @@ Each GPU machine runs its own housekeeper. A housekeeper may know peers such as:
 - `swac`
 - future GPU hosts
 
-When a local worker claims a Pyash holding duty and submits it, a housekeeper
-should decide whether to:
+When a local worker claims a Pyash holding duty and submits it, the entry
+housekeeper decides whether to:
 
 1. accept and run locally,
-2. wait on its local execution lock briefly,
-3. forward once to a better peer,
-4. reject if no local or peer capacity is suitable.
+2. forward once to a better peer,
+3. retain local queue behavior if no peer can execute immediately,
+4. reject if neither local nor peer capacity is suitable.
 
 The key scheduling goal is not even load distribution. The key scheduling goal is minimizing residency thrash.
 
@@ -326,9 +326,38 @@ A simple first routing score could be:
 -20 health degraded
 ```
 
-The housekeeper should choose the highest scoring target above a minimum threshold. If no peer is better than local, local should keep ownership.
+The housekeeper chooses the highest-scoring immediately executable target. A
+busy local execution slot is skipped when a capable peer is available, so two
+hosts can run independent jobs at the same time. If no peer can execute
+immediately, the local housekeeper retains the existing queued-job behavior.
+Equal scores prefer the local host.
 
-## 7. Operational Notes
+## 7. Configuration and operational notes
+
+Peer configuration is host-local deployment configuration, not durable Pyash
+state. The value is a semicolon-separated allowlist of normalized host IDs and
+URLs:
+
+```sh
+GPU_HOUSEKEEPER_HOST_ID=mriczo
+GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
+GPU_HOUSEKEEPER_ACCEPT_FORWARDED=true
+```
+
+The first live pair is configured symmetrically:
+
+```sh
+# mriczo
+GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
+
+# swac
+GPU_HOUSEKEEPER_PEERS='mriczo=http://mriczo:8090'
+```
+
+Forwarded requests carry `forwardDepth` and `visitedHosts`. A peer executes a
+forwarded request locally or rejects it; it never forwards again. Forwarded
+job status is reflected through the original `/job/<id>` endpoint, and a peer
+failure never triggers an unsafe duplicate submission.
 
 Useful live checks:
 

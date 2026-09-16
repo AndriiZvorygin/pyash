@@ -76,16 +76,17 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) 
       });
     },
 
-    async submitJob({ handleId = "", runtimeName = "", profileName = "", jobSpec = {}, deviceId = "", dischargeAllowed } = {}) {
+    async submitJob({ handleId = "", runtimeName = "", profileName = "", jobSpec = {}, deviceId = "", dischargeAllowed, routing = null } = {}) {
       const body = {
         handleId: normalizeText(handleId),
         runtimeName: normalizeText(runtimeName),
         profileName: normalizeText(profileName),
-        jobSpec,
-        hostId: defaultHostId
-      };
+      jobSpec,
+      hostId: defaultHostId
+    };
       if (normalizeText(deviceId)) body.deviceId = normalizeText(deviceId);
       if (typeof dischargeAllowed === "boolean") body.dischargeAllowed = dischargeAllowed;
+      if (routing && typeof routing === "object" && !Array.isArray(routing)) body.routing = { ...routing };
       return requestJson({
         baseUrl: rootUrl,
         pathname: "/submit",
