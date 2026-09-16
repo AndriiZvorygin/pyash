@@ -20,7 +20,7 @@ export const MEETINGBANK_JUDGE_PILOT_MODELS = Object.freeze([
 export const MEETINGBANK_JUDGE_PILOT_SELECTION_SEED = "meetingbank-unirrm-pilot-20260915";
 export const MEETINGBANK_JUDGE_PILOT_PROMPT = "You are summarizing one city-council meeting transcript for a municipal publication. Write one concise, factual meeting summary based only on the transcript. Include the main topics, decisions and resolutions, motions and votes, action items and responsible parties, important dates and deadlines, and any uncertainty that remains in the transcript. Preserve exact names, numbers, dates, ordinance or resolution identifiers, and vote outcomes when present. Do not invent details or add commentary about this evaluation. Output plain text suitable for municipal minutes, with no title, labels, bullets, preamble, analysis, or explanation.";
 export const MEETINGBANK_JUDGE_PILOT_PROMPT_HASH = sha256(MEETINGBANK_JUDGE_PILOT_PROMPT);
-export const UNIRRM_SYSTEM_PROMPT = `You are a multilingual evaluation expert, responsible for conducting rigorous, objective, and multi-dimensional evaluations of responses generated for User Input. First analyze the user input, task type, risks, requirements, and expected content. Next generate evaluation rubrics tailored to the task, each using a 1-5 scale. Finally evaluate each response by extracting evidence, identifying gaps, and assigning a score from 1 to 5. Return one JSON object only with this shape: {"Analysis_process":"Concise summary of the analysis.","rubrics":[{"name":"String","description":"Rubric definition"}],"evaluations":[{"response_id":"String","explanation":"Summary","final_score":"Float"}],"best_id":"ID of the winner"}. For pointwise evaluation, return the single response as Response1. Do not add prose outside the JSON object.`;
+export const UNIRRM_SYSTEM_PROMPT = `You are a multilingual evaluation expert conducting rigorous, objective, multi-dimensional evaluations of responses for User Input. Analyze requirements briefly, generate concise 1-5 rubrics, and evaluate each response with source evidence. Keep the analysis and rubric descriptions brief so the complete answer fits in a small response. Return one JSON object only with this shape: {"Analysis_process":"Brief analysis.","rubrics":[{"name":"String","description":"Brief rubric"}],"evaluations":[{"response_id":"String","explanation":"Brief evidence-based result","final_score":"Float"}],"best_id":"ID of the winner"}. For pointwise evaluation, return the single response as Response1. Do not add prose outside the JSON object.`;
 export const UNIRRM_NATIVE_SCALE = Object.freeze({ min: 1, max: 5, formula: "((score - 1) / 4) * 100" });
 
 const DEFAULT_SELECTION_COUNT = 10;
@@ -597,11 +597,11 @@ export async function runMeetingBankJudgePilot({
     currentRows.set(row.identity, row);
   };
   const generationRows = generationRun.results ?? [];
-  const judgeSettings = { temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, promptVersion: "meetingbank-unirrm-rubric-v1" };
+  const judgeSettings = { temperature: judgeTemperature, maxOutputTokens: judgeMaxOutputTokens, enableThinking: false, promptVersion: "meetingbank-unirrm-rubric-v1" };
   let adapter = null;
   let executeJudge = judgeExecutor;
   if (!executeJudge) {
-    adapter = await createHuggingFaceJudgeExecutor({ model: judgeModel, root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, revision: huggingFaceRevision, dtype: huggingFaceDtype, generation: { maxInputTokens: judgeMaxInputTokens, maxOutputTokens: judgeMaxOutputTokens, minOutputTokens: 1, numBeams: 1, doSample: false, repetitionPenalty: 1.05 } });
+    adapter = await createHuggingFaceJudgeExecutor({ model: judgeModel, root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, revision: huggingFaceRevision, dtype: huggingFaceDtype, generation: { maxInputTokens: judgeMaxInputTokens, maxOutputTokens: judgeMaxOutputTokens, minOutputTokens: 1, numBeams: 1, doSample: false, enableThinking: false, repetitionPenalty: 1.05 } });
     executeJudge = adapter.executor;
   }
   try {
@@ -690,7 +690,7 @@ export async function runMeetingBankJudgePilot({
     selection: { seed: effectiveSelectionSeed, count: selection.length, sampleIds: selection.map(sample => sample.id), datasetHash: loaded.datasetHash },
     sampleMetadata,
     ollama,
-    judge: { name: UNIRRM_JUDGE_NAME, modelId: judgeModel, provider: judgeProvider, scale: UNIRRM_NATIVE_SCALE, temperature: judgeTemperature, maxInputTokens: judgeMaxInputTokens, maxOutputTokens: judgeMaxOutputTokens, referenceHidden: true },
+    judge: { name: UNIRRM_JUDGE_NAME, modelId: judgeModel, provider: judgeProvider, scale: UNIRRM_NATIVE_SCALE, temperature: judgeTemperature, maxInputTokens: judgeMaxInputTokens, maxOutputTokens: judgeMaxOutputTokens, enableThinking: false, referenceHidden: true },
     secondaryJudges: { skywork: { status: "unavailable", reason: "managed Hugging Face protocol exposes text generation only; no sequence-classification endpoint" } },
     judgeStats,
     pairwiseSeed: `${effectiveSelectionSeed}:pairwise`,
