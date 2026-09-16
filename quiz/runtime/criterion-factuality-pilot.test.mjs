@@ -157,3 +157,44 @@ test("factuality pilot is resumable, hides references, and writes a ROUGE-free r
   assert.match(await fs.readFile(path.join(root, "criterion", "results", "factuality-test.md"), "utf8"), /ROUGE is intentionally excluded/);
   assert.equal(run.judge.discharge.status, "not-managed-by-adapter");
 });
+
+test("factuality pilot completes every generation batch before judging", async () => {
+  const root = await tempRoot();
+  const datasetPath = path.join(root, "meetingbank.jsonl");
+  await fs.writeFile(datasetPath, `${JSON.stringify({ id: "m1", transcript: "Chair: The council approved the motion.", summary: "The council approved the motion." })}\n`, "utf8");
+  const models = MEETINGBANK_FACTUALITY_MODELS.slice(0, 2);
+  const events = [];
+  const generationRunner = async ({ id, models: batchModels }) => {
+    const model = batchModels[0];
+    events.push(`generate:${model}`);
+    return { runId: id, results: [{ model, sampleId: "m1", status: "ok", output: "The council approved the motion.", outputHash: `summary-${model}`, metrics: { totalElapsedMs: 10, generationTokensPerSecond: 5 } }] };
+  };
+  const judgeExecutor = async ({ identity }) => {
+    events.push(`judge:${identity.split("\u0000")[0]}`);
+    return { text: JSON.stringify({ evaluations: [{ response_id: "Response1", final_score: 5, criterion: {
+      faithfulness_score: 5, completeness_score: 5, decision_action_score: 5, relevance_score: 5, conciseness_score: 5, publication_suitability_score: 5,
+      confidence: 5, claims: [{ claim: "The council approved the motion.", status: "supported", evidence: "The council approved the motion.", transcript_turn_ids: ["turn-1"] }]
+    } }] }) };
+  };
+  const fetchImpl = async (url, options = {}) => {
+    if (url.endsWith("/api/version")) return { ok: true, json: async () => ({ version: "test" }) };
+    if (url.endsWith("/api/tags")) return { ok: true, json: async () => ({ models: MEETINGBANK_FACTUALITY_MODELS.map(name => ({ name, digest: `digest-${name}` })) }) };
+    if (url.endsWith("/api/generate")) {
+      events.push(`discharge:${JSON.parse(options.body).model}`);
+      return { ok: true, json: async () => ({}) };
+    }
+    const body = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ message: { content: body.messages.at(-1)?.content === "Reply with exactly OK." ? "OK" : "A factual summary." }, prompt_eval_count: 1, prompt_eval_duration: 1e6, eval_count: 1, eval_duration: 1e6, total_duration: 2e6 }) };
+  };
+  const run = await runMeetingBankFactualityPilot({
+    root, datasetPath, models, selectionCount: 1, runId: "factuality-model-major-test", fetchImpl, generationRunner, judgeExecutor, smoke: true
+  });
+  assert.deepEqual(events, [
+    `generate:${models[0]}`, `discharge:${models[0]}`,
+    `generate:${models[1]}`, `discharge:${models[1]}`,
+    `judge:${models[0]}`, `judge:${models[1]}`
+  ]);
+  assert.equal(run.execution.generationCompletedForAllModelsBeforeJudging, true);
+  assert.deepEqual(Object.keys(run.generationRunIds), models);
+  assert.equal(run.judgeStats.initialRequests, 2);
+});
