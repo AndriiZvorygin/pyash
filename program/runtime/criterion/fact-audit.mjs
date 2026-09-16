@@ -73,9 +73,10 @@ function normalizeMatches(rawMatches = []) {
   if (!Array.isArray(rawMatches)) return [];
   return rawMatches.map((match, index) => {
     const item = match && typeof match === "object" ? match : {};
+    const keyFactIndex = Number(item.keyFactIndex ?? item.key_fact_index);
     return {
       id: String(item.id ?? `match${index + 1}`),
-      keyFactId: String(item.keyFactId ?? item.factId ?? item.fact_id ?? item.key_fact_id ?? ""),
+      keyFactId: String(item.keyFactId ?? item.factId ?? item.fact_id ?? item.key_fact_id ?? (Number.isInteger(keyFactIndex) ? `fact${keyFactIndex + 1}` : "")),
       summarySentenceId: String(item.summarySentenceId ?? item.sentenceId ?? item.summary_sentence_id ?? ""),
       matched: item.matched === undefined ? item.match === undefined ? item.decision === "matched" || item.status === "matched" : Boolean(item.match) : Boolean(item.matched),
       decision: item.decision ?? (item.matched ? "matched" : "unmatched"),
@@ -91,7 +92,8 @@ function normalizeVerifications(rawVerifications = [], claims = []) {
   const source = Array.isArray(rawVerifications) ? rawVerifications : [];
   const byClaim = new Map(source.map(item => [String(item?.claimId ?? item?.id ?? ""), item]));
   return claims.map((claim, index) => {
-    const item = byClaim.get(String(claim.id)) ?? source[index] ?? {};
+    const indexed = source.find(candidate => Number(candidate?.claimIndex ?? candidate?.claim_index) === index);
+    const item = byClaim.get(String(claim.id)) ?? indexed ?? source[index] ?? {};
     const decision = String(item.support ?? item.decision ?? item.status ?? "unresolved").toLowerCase();
     const support = ["supported", "support", "yes", "true"].includes(decision)
       ? "supported"
@@ -208,7 +210,7 @@ function factPrompt({ sourceText, summaryText, annotation = null }) {
     reference: annotation.reference ?? null
   } : null;
   const outputContract = exact
-    ? "For this exact annotated mode, do not repeat or regenerate the released key facts. Return only {claims:[{id,text,sentenceId,flags}],matches:[{keyFactId,summarySentenceId,matched,explanation,confidence}],verifications:[{claimId,support,sourceSentenceRefs,explanation,confidence}]}. Use at most 12 summary claims, 12 matches, and 12 verifications."
+    ? "For this exact annotated mode, do not repeat or regenerate the released key facts. Return exactly one compact JSON object with only {matches:[{keyFactIndex,summarySentenceId,matched}],verifications:[{claimIndex,support,sourceSentenceRefs}]}. Use zero-based keyFactIndex and claimIndex. Include at most one match per released key fact and one verification per summary sentence. Do not emit keyFacts, claims, text, flags, explanations, confidence, transcript, reference, markdown, or prose."
     : "The JSON shape must be: {keyFacts:[{id,text,sourceSentenceRefs,flags}],claims:[{id,text,sentenceId,flags}],matches:[{keyFactId,summarySentenceId,matched,explanation,confidence}],verifications:[{claimId,support,sourceSentenceRefs,explanation,confidence}]}";
   return [
     "You are an external factuality evaluator for a municipal meeting summary.",
