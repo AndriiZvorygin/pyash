@@ -21,6 +21,8 @@ _RUNNING_JOB_ID: Optional[str] = None
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
 
 DEFAULT_IDLE_GRACE_SECONDS = 300
+DEFAULT_PEER_TIMEOUT_MS = 1500
+DEFAULT_PEER_FAILURE_LIMIT = 3
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -230,6 +232,223 @@ def minimal_jobs() -> List[Dict[str, Any]]:
   return out
 
 
+def parse_bool_env(name: str, default: bool = False) -> bool:
+  value = normalize_text(os.environ.get(name)).lower()
+  if not value:
+    return default
+  return value in {"1", "true", "yes", "on", "truth"}
+
+
+def peer_timeout_ms() -> int:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_PEER_TIMEOUT_MS"))
+  try:
+    value = int(raw) if raw else DEFAULT_PEER_TIMEOUT_MS
+  except ValueError:
+    value = DEFAULT_PEER_TIMEOUT_MS
+  return max(100, min(10000, value))
+
+
+def peer_failure_limit() -> int:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT"))
+  try:
+    value = int(raw) if raw else DEFAULT_PEER_FAILURE_LIMIT
+  except ValueError:
+    value = DEFAULT_PEER_FAILURE_LIMIT
+  return max(1, min(20, value))
+
+
+def parse_peer_registry(raw: str = "") -> Dict[str, str]:
+  peers: Dict[str, str] = {}
+  for item in normalize_text(raw).split(";"):
+    entry = item.strip()
+    if not entry or "=" not in entry:
+      continue
+    host_id, url = entry.split("=", 1)
+    host = normalize_text(host_id).lower()
+    base = normalize_text(url).rstrip("/")
+    if host and base.startswith(("http://", "https://")):
+      peers[host] = base
+  return peers
+
+
+def configured_peers() -> Dict[str, str]:
+  return parse_peer_registry(os.environ.get("GPU_HOUSEKEEPER_PEERS", ""))
+
+
+def route_visited_hosts(payload: Dict[str, Any]) -> List[str]:
+  routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+  visited = routing.get("visitedHosts")
+  if not isinstance(visited, list):
+    visited = []
+  return [normalize_text(item).lower() for item in visited if normalize_text(item)]
+
+
+def route_forward_depth(payload: Dict[str, Any]) -> int:
+  routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+  try:
+    return max(0, int(routing.get("forwardDepth", 0)))
+  except (TypeError, ValueError):
+    return 0
+
+
+def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], host_id: str) -> Dict[str, Any]:
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  if runtime_name not in runtime_registry:
+    return {
+      "hostId": host_id,
+      "available": False,
+      "immediate": False,
+      "reason": f"runtime not managed: {runtime_name}"
+    }
+  try:
+    capacity = capacity_plan_for_job(job, runtime_registry)
+  except RuntimeError as err:
+    return {
+      "hostId": host_id,
+      "available": False,
+      "immediate": False,
+      "reason": normalize_text(err) or "local capacity check failed"
+    }
+  # Submission remains durable even when telemetry is temporarily unavailable;
+  # final execution admission still fails closed in ensure_capacity_for_job.
+  feasible = capacity.get("decision") in {"not-requested", "fits", "reclaim-available", "telemetry-unavailable"}
+  with _LOCK:
+    profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
+    warm = bool(profile.get("loaded", False))
+  busy = queue_depth() > 0
+  score = 0
+  if warm:
+    score += 100
+  if capacity.get("decision") == "fits":
+    score += 20
+  elif capacity.get("decision") == "reclaim-available":
+    score -= 60
+  if busy:
+    score -= 30
+  return {
+    "hostId": host_id,
+    "available": feasible,
+    "immediate": feasible and not busy,
+    "busy": busy,
+    "queueDepth": queue_depth(),
+    "warm": warm,
+    "score": score,
+    "capacity": capacity,
+    "reason": "local execution slot occupied" if busy else capacity.get("reason", "local candidate")
+  }
+
+
+def peer_request_json(base_url: str, pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_ms: int = 1500) -> Dict[str, Any]:
+  url = f"{normalize_text(base_url).rstrip('/')}/{pathname.lstrip('/')}"
+  data = None if payload is None else json.dumps(payload).encode("utf-8")
+  request = Request(url, data=data, headers={"Content-Type": "application/json"})
+  if payload is None:
+    request.get_method = lambda: "GET"
+  try:
+    with urlopen(request, timeout=max(0.1, timeout_ms / 1000.0)) as response:
+      raw = response.read().decode("utf-8")
+  except HTTPError as err:
+    detail = ""
+    try:
+      detail = err.read().decode("utf-8")
+    except Exception:
+      detail = str(err)
+    raise RuntimeError(f"peer request failed {err.code}: {detail}")
+  except URLError as err:
+    raise RuntimeError(f"peer request failed: {err.reason}")
+  try:
+    parsed = json.loads(raw or "{}")
+  except Exception as err:
+    raise RuntimeError(f"peer returned invalid JSON: {err}")
+  if not isinstance(parsed, dict):
+    raise RuntimeError("peer returned a non-map response")
+  return parsed
+
+
+def peer_route_candidate(
+  peer_host_id: str,
+  peer_url: str,
+  job: Dict[str, Any]
+) -> Dict[str, Any]:
+  snapshot = peer_request_json(peer_url, "/snapshot", timeout_ms=peer_timeout_ms())
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  runtimes = snapshot.get("runtimes") if isinstance(snapshot.get("runtimes"), list) else []
+  runtime = next((item for item in runtimes if normalize_text(item.get("runtimeName")).lower() == runtime_name), None)
+  if not isinstance(runtime, dict):
+    return {"hostId": peer_host_id, "url": peer_url, "available": False, "reason": f"runtime not advertised: {runtime_name}"}
+  preview = peer_request_json(peer_url, "/capacity/preview", {
+    "runtimeName": runtime_name,
+    "profileName": normalize_text(job.get("profileName")),
+    "deviceId": normalize_text(job.get("deviceId")),
+    "dischargeAllowed": job.get("dischargeAllowed", True) is not False,
+    "jobSpec": job.get("jobSpec")
+  }, timeout_ms=peer_timeout_ms())
+  if not preview.get("feasible"):
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "available": False,
+      "preview": preview,
+      "reason": preview.get("error") or preview.get("reason") or "peer capacity is unavailable"
+    }
+  profiles = snapshot.get("profiles") if isinstance(snapshot.get("profiles"), list) else []
+  target_profile = normalize_text(job.get("profileName"))
+  warm = any(normalize_text(item.get("profileName")) == target_profile and item.get("loaded") is True for item in profiles)
+  busy = int(snapshot.get("queueDepth") or 0) > 0
+  score = 0
+  if warm:
+    score += 100
+  if preview.get("decision") == "fits":
+    score += 20
+  elif preview.get("decision") == "reclaim-available":
+    score -= 60
+  if busy:
+    score -= 30
+  if normalize_text(runtime.get("status")).lower() == "running":
+    score += 40
+  return {
+    "hostId": peer_host_id,
+    "url": peer_url,
+    "available": True,
+    "immediate": not busy,
+    "busy": busy,
+    "queueDepth": int(snapshot.get("queueDepth") or 0),
+    "warm": warm,
+    "score": score,
+    "preview": preview,
+    "reason": "peer execution slot occupied" if busy else "peer candidate"
+  }
+
+
+def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], host_id: str) -> Dict[str, Any]:
+  depth = route_forward_depth(payload)
+  visited = set(route_visited_hosts(payload))
+  local = local_route_state(job, runtime_registry, host_id)
+  candidates = [local]
+  if depth == 0:
+    for peer_host_id, peer_url in configured_peers().items():
+      if peer_host_id == host_id or peer_host_id in visited:
+        continue
+      try:
+        candidate = peer_route_candidate(peer_host_id, peer_url, job)
+      except Exception as err:
+        candidate = {
+          "hostId": peer_host_id,
+          "url": peer_url,
+          "available": False,
+          "reason": normalize_text(err) or "peer probe failed"
+        }
+      candidates.append(candidate)
+
+  immediate = [item for item in candidates if item.get("available") and item.get("immediate")]
+  if immediate:
+    selected = max(immediate, key=lambda item: (int(item.get("score") or 0), item.get("hostId") == host_id))
+    return {"selected": selected, "candidates": candidates, "forwarded": selected.get("hostId") != host_id}
+  if local.get("available"):
+    return {"selected": local, "candidates": candidates, "forwarded": False, "reason": "no peer has an immediate free slot"}
+  return {"selected": None, "candidates": candidates, "forwarded": False, "reason": "no local or peer route is executable"}
+
+
 def make_snapshot(host_id: str) -> Dict[str, Any]:
   telemetry = parse_nvidia_smi()
   process_view = managed_gpu_processes(Handler.runtime_registry) if "Handler" in globals() else {
@@ -242,11 +461,74 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "queueDepth": queue_depth(),
     "devices": telemetry["devices"],
     "profiles": profile_list(),
-    "gpuProcesses": process_view
+    "runtimes": list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else [],
+    "gpuProcesses": process_view,
+    "federation": {
+      "enabled": bool(configured_peers()),
+      "acceptsForwarded": parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True),
+      "peers": [
+        {"hostId": peer_host_id, "url": peer_url}
+        for peer_host_id, peer_url in configured_peers().items()
+      ]
+    }
   }
 
 
-def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
+def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dict[str, Any]) -> Dict[str, Any]:
+  selected = route.get("selected") or {}
+  peer_url = normalize_text(selected.get("url"))
+  if not peer_url:
+    return {"accepted": False, "error": "selected peer has no URL"}
+  visited = route_visited_hosts(payload)
+  origin = normalize_text((payload.get("routing") or {}).get("originHostId")) if isinstance(payload.get("routing"), dict) else ""
+  if not origin:
+    origin = normalize_text(Handler.host_id)
+  forwarded_payload = {
+    "handleId": job["handleId"],
+    "runtimeName": job["runtimeName"],
+    "profileName": job["profileName"],
+    "jobSpec": job["jobSpec"],
+    "deviceId": job.get("deviceId", ""),
+    "dischargeAllowed": job.get("dischargeAllowed", True),
+    "routing": {
+      "originHostId": origin,
+      "forwardDepth": route_forward_depth(payload) + 1,
+      "visitedHosts": list(dict.fromkeys([*visited, normalize_text(Handler.host_id)]))
+    }
+  }
+  peer_result = peer_request_json(peer_url, "/submit", forwarded_payload, timeout_ms=peer_timeout_ms())
+  peer_job_id = normalize_text(peer_result.get("remoteJobId"))
+  if not peer_result.get("accepted") or not peer_job_id:
+    return {
+      "accepted": False,
+      "error": peer_result.get("error") or "peer rejected forwarded job",
+      "peerHostId": selected.get("hostId")
+    }
+  job["status"] = "running"
+  job["message"] = f"forwarded to {selected.get('hostId')}"
+  job["forwarded"] = True
+  job["peerUrl"] = peer_url
+  job["peerJobId"] = peer_job_id
+  job["executionHostId"] = normalize_text(selected.get("hostId"))
+  job["route"] = {
+    "forwarded": True,
+    "originHostId": origin,
+    "executionHostId": normalize_text(selected.get("hostId")),
+    "score": int(selected.get("score") or 0),
+    "reason": selected.get("reason") or "peer selected"
+  }
+  with _LOCK:
+    _JOBS[job["remoteJobId"]] = job
+  return {
+    "accepted": True,
+    "remoteJobId": job["remoteJobId"],
+    "forwarded": True,
+    "executionHostId": job["executionHostId"],
+    "route": job["route"]
+  }
+
+
+def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None, host_id: str = "") -> Dict[str, Any]:
   handle_id = normalize_text(payload.get("handleId"))
   runtime_name = normalize_text(payload.get("runtimeName"))
   profile_name = normalize_text(payload.get("profileName"))
@@ -342,6 +624,14 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
         "error": "huggingface jobSpec.payload must be map"
       }
 
+  runtime_registry = runtime_registry or Handler.runtime_registry
+  selected_host = normalize_text(host_id) or normalize_text(Handler.host_id)
+  if route_forward_depth(payload) > 0 and not parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True):
+    return {
+      "accepted": False,
+      "error": "forwarded jobs are disabled on this housekeeper"
+    }
+
   remote_job_id = f"job-{uuid.uuid4().hex[:12]}"
   now = utc_now_iso()
   job = {
@@ -356,7 +646,40 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
     "message": "queued",
     "submittedAt": now,
     "startedAt": "",
-    "finishedAt": ""
+    "finishedAt": "",
+    "executionHostId": selected_host,
+    "forwarded": False,
+    "route": {
+      "forwarded": False,
+      "originHostId": selected_host,
+      "executionHostId": selected_host,
+      "reason": "local candidate"
+    }
+  }
+
+  route = select_route(payload, job, runtime_registry, selected_host)
+  selected = route.get("selected") or {}
+  if route.get("forwarded"):
+    try:
+      return forward_job_to_peer(payload, job, route)
+    except Exception as err:
+      return {
+        "accepted": False,
+        "error": f"peer forwarding failed: {normalize_text(err) or 'unknown error'}",
+        "route": {"candidates": route.get("candidates", [])}
+      }
+  if not selected:
+    return {
+      "accepted": False,
+      "error": route.get("reason") or "no executable local or peer GPU target",
+      "route": {"candidates": route.get("candidates", [])}
+    }
+  job["route"] = {
+    "forwarded": False,
+    "originHostId": selected_host,
+    "executionHostId": selected_host,
+    "score": int(selected.get("score") or 0),
+    "reason": selected.get("reason") or route.get("reason") or "local candidate"
   }
 
   with _LOCK:
@@ -370,11 +693,53 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
 
   return {
     "remoteJobId": remote_job_id,
-    "accepted": True
+    "accepted": True,
+    "forwarded": False,
+    "executionHostId": selected_host,
+    "route": job["route"]
   }
 
 
+def refresh_forwarded_job(remote_job_id: str) -> None:
+  with _LOCK:
+    job = _JOBS.get(remote_job_id)
+    if not job or not job.get("forwarded") or job.get("status") in {"success", "fail"}:
+      return
+    peer_url = normalize_text(job.get("peerUrl"))
+    peer_job_id = normalize_text(job.get("peerJobId"))
+  if not peer_url or not peer_job_id:
+    return
+  try:
+    remote = peer_request_json(peer_url, f"/job/{peer_job_id}", timeout_ms=peer_timeout_ms())
+    with _LOCK:
+      current = _JOBS.get(remote_job_id)
+      if not current:
+        return
+      status = normalize_text(remote.get("status")).lower()
+      if status in {"queued", "running", "success", "fail"}:
+        current["status"] = status
+      current["message"] = normalize_text(remote.get("message")) or current.get("message") or "forwarded"
+      current["result"] = remote.get("result")
+      current["error"] = remote.get("error")
+      current["startedAt"] = remote.get("startedAt") or current.get("startedAt", "")
+      current["finishedAt"] = remote.get("finishedAt") or current.get("finishedAt", "")
+      current["peerFailureCount"] = 0
+  except Exception as err:
+    with _LOCK:
+      current = _JOBS.get(remote_job_id)
+      if not current:
+        return
+      failures = int(current.get("peerFailureCount") or 0) + 1
+      current["peerFailureCount"] = failures
+      current["message"] = f"forwarded job status unavailable: {normalize_text(err) or 'peer request failed'}"
+      if failures >= peer_failure_limit():
+        current["status"] = "fail"
+        current["error"] = {"message": current["message"]}
+        current["finishedAt"] = utc_now_iso()
+
+
 def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
+  refresh_forwarded_job(remote_job_id)
   with _LOCK:
     job = _JOBS.get(remote_job_id)
     if not job:
@@ -385,7 +750,10 @@ def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
       "result": job.get("result"),
       "error": job.get("error"),
       "startedAt": job.get("startedAt") or "",
-      "finishedAt": job.get("finishedAt") or ""
+      "finishedAt": job.get("finishedAt") or "",
+      "executionHostId": job.get("executionHostId") or "",
+      "route": job.get("route") or {},
+      "forwarded": bool(job.get("forwarded", False))
     }
 
 
@@ -1603,9 +1971,10 @@ class Handler(BaseHTTPRequestHandler):
 
     if self.path == "/submit":
       payload = read_json_body(self)
-      result = submit_job(payload)
+      result = submit_job(payload, self.runtime_registry, self.host_id)
       if result.get("accepted"):
-        start_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)
+        if not result.get("forwarded"):
+          start_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)
         json_response(self, 200, result)
       else:
         json_response(self, 400, result)

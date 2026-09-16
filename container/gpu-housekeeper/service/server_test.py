@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import pathlib
 import time
 import unittest
@@ -705,6 +706,128 @@ class HousekeeperHuggingFaceTests(unittest.TestCase):
     self.assertEqual(calls[0][1]["model"], "model-one")
     self.assertEqual(calls[0][2], 44)
     self.assertTrue(server._PROFILES["model-one"]["loaded"])
+
+
+class HousekeeperFederationTests(unittest.TestCase):
+  def setUp(self):
+    self.orig_configured_peers = server.configured_peers
+    self.orig_local_route_state = server.local_route_state
+    self.orig_peer_route_candidate = server.peer_route_candidate
+    self.orig_peer_request_json = server.peer_request_json
+    self.orig_host_id = server.Handler.host_id
+    self.orig_accept_forwarded = os.environ.get("GPU_HOUSEKEEPER_ACCEPT_FORWARDED")
+    server._JOBS.clear()
+    server.Handler.host_id = "mriczo"
+
+  def tearDown(self):
+    server.configured_peers = self.orig_configured_peers
+    server.local_route_state = self.orig_local_route_state
+    server.peer_route_candidate = self.orig_peer_route_candidate
+    server.peer_request_json = self.orig_peer_request_json
+    server.Handler.host_id = self.orig_host_id
+    if self.orig_accept_forwarded is None:
+      os.environ.pop("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_ACCEPT_FORWARDED"] = self.orig_accept_forwarded
+    server._JOBS.clear()
+
+  def test_parse_peer_registry_uses_host_url_pairs(self):
+    self.assertEqual(
+      server.parse_peer_registry("swac=http://swac:8090;mriczo=http://mriczo:8090"),
+      {"swac": "http://swac:8090", "mriczo": "http://mriczo:8090"}
+    )
+
+  def test_busy_local_host_routes_to_idle_peer(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": False, "busy": True, "score": 100
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True, "busy": False, "score": 20
+    }
+    route = server.select_route({}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}}, {"ollama": {}}, "mriczo")
+    self.assertTrue(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "swac")
+
+  def test_forwarded_request_cannot_forward_again(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "swac", "available": True, "immediate": True, "score": 20
+    }
+    server.peer_route_candidate = lambda *_args: self.fail("forwarded jobs must not probe another peer")
+    route = server.select_route(
+      {"routing": {"forwardDepth": 1, "visitedHosts": ["mriczo"]}},
+      {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}},
+      {"ollama": {}},
+      "swac"
+    )
+    self.assertFalse(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "swac")
+
+  def test_forwarded_job_status_mirrors_peer_without_resubmitting(self):
+    server._JOBS["job-proxy"] = {
+      "remoteJobId": "job-proxy",
+      "forwarded": True,
+      "peerUrl": "http://swac:8090",
+      "peerJobId": "job-peer",
+      "status": "running",
+      "message": "forwarded",
+      "result": None,
+      "error": None,
+      "startedAt": "",
+      "finishedAt": ""
+    }
+    calls = []
+
+    def fake_peer_request(url, pathname, payload=None, timeout_ms=1500):
+      calls.append((url, pathname, payload))
+      return {
+        "status": "success",
+        "message": "completed",
+        "result": {"response": "ok"},
+        "error": None,
+        "startedAt": "start",
+        "finishedAt": "finish"
+      }
+
+    server.peer_request_json = fake_peer_request
+    result = server.job_status("job-proxy")
+    self.assertEqual(result["status"], "success")
+    self.assertEqual(result["result"], {"response": "ok"})
+    self.assertEqual(calls, [("http://swac:8090", "/job/job-peer", None)])
+
+  def test_forwarding_failure_does_not_create_local_duplicate(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": False, "busy": True, "score": 0
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True, "score": 20
+    }
+    server.peer_request_json = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("connection reset"))
+    result = server.submit_job({
+      "handleId": "no-duplicate",
+      "runtimeName": "ollama",
+      "profileName": "qwen",
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}}
+    }, {"ollama": {}}, "mriczo")
+    self.assertFalse(result["accepted"])
+    self.assertEqual(server._JOBS, {})
+
+  def test_no_peer_configuration_preserves_local_submission(self):
+    server.configured_peers = lambda: {}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 0
+    }
+    result = server.submit_job({
+      "handleId": "local-only",
+      "runtimeName": "ollama",
+      "profileName": "qwen",
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}}
+    }, {"ollama": {}}, "mriczo")
+    self.assertTrue(result["accepted"])
+    self.assertFalse(result["forwarded"])
+    self.assertEqual(result["executionHostId"], "mriczo")
 
 
 if __name__ == "__main__":
