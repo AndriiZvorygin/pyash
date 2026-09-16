@@ -153,12 +153,21 @@ evaluations with evidence. Transport, model, malformed-output, truncated, and
 incomplete responses are recorded separately, with one bounded JSON repair
 retry. The JSONL checkpoint is resumable and preserves raw response hashes.
 
-UniRRM is hosted by the external `criterion-huggingface` service. On close of
-the judge adapter, Criterion asks the GPU housekeeper to discharge the named
-Hugging Face profile; the provider unloads model state and releases CUDA cache
-without stopping the service. This prevents the large judge from occupying VRAM
-after a pilot and keeps the existing GPU queue/lease/housekeeper architecture
-in control of residency.
+The default UniRRM judge target is the quantized Ollama tag
+`hf.co/mradermacher/UniRRM-8B-GGUF:Q4_K_M`, configured through
+`PYA_CRITERION_FACTUALITY_JUDGE_MODEL` or `--judge-model`. Criterion first
+discharges every Qwen generation model and polls `/api/ps` until those models
+are no longer resident. Only then does it load the judge. After judging it
+requests and verifies judge discharge as well, without stopping Ollama. This
+keeps the existing external model-hosting boundary intact and prevents the
+large judge from occupying VRAM after a pilot.
+
+The original BF16 `SUSTech-NLP/UniRRM-8B` target remains available through the
+external `criterion-huggingface` service with
+`--judge-engine huggingface --judge-model SUSTech-NLP/UniRRM-8B` when that
+heavier path is explicitly required. Its GPU jobs declare a 20 GB VRAM request
+so the existing housekeeper can discharge competing residency before
+admission.
 
 ## MeetingBank fact audit
 

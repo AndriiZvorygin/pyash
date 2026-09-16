@@ -145,6 +145,29 @@ test("Hugging Face adapter sends inference through the durable GPU lane", async 
   assert.equal(requests[0].serviceName, "huggingface");
   assert.equal(requests[0].jobSpec.kind, "huggingface-generate");
   assert.equal(requests[0].jobSpec.payload.model, "Shaelois/MeetingScript");
+  assert.equal(requests[0].jobSpec.resourceRequest, undefined);
+  await adapter.close();
+});
+
+test("Hugging Face judge jobs declare VRAM so housekeeper can discharge competing residency", async () => {
+  const requests = [];
+  let status = { status: "queued" };
+  const adapter = await createHuggingFaceExecutor({
+    root: await tempRoot(),
+    runId: "hf-judge-resource-test",
+    housekeeperUrl: "http://housekeeper:8090",
+    operation: "judge",
+    enqueue: async (_worldRoot, envelope) => requests.push(envelope),
+    writeStatus: async () => {},
+    readStatus: async () => status,
+    workerRunner: async () => {
+      status = { status: "success", result: JSON.stringify({ text: "{}" }) };
+    },
+    pollMs: 1
+  });
+  await adapter.executor({ model: "SUSTech-NLP/UniRRM-8B", prompt: "judge", sample: { id: "m1" } });
+  assert.equal(requests[0].jobSpec.resourceRequest.vramRequiredMb, 20000);
+  assert.equal(requests[0].jobSpec.payload.generation.vramRequiredMb, undefined);
   await adapter.close();
 });
 

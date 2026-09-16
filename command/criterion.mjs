@@ -13,7 +13,7 @@ import { stableJson } from "../program/runtime/criterion/metrics.mjs";
 import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
 import { runMeetingBankJudgePilot, MEETINGBANK_JUDGE_PILOT_MODELS } from "../program/runtime/criterion/judge-pilot.mjs";
-import { runMeetingBankFactualityPilot, MEETINGBANK_FACTUALITY_MODELS, MEETINGBANK_FACTUALITY_RUN_ID, MEETINGBANK_FACTUALITY_SELECTION_SEED } from "../program/runtime/criterion/factuality-pilot.mjs";
+import { runMeetingBankFactualityPilot, MEETINGBANK_FACTUALITY_MODELS, MEETINGBANK_FACTUALITY_RUN_ID, MEETINGBANK_FACTUALITY_SELECTION_SEED, UNIRRM_FACTUALITY_MODEL } from "../program/runtime/criterion/factuality-pilot.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -290,6 +290,10 @@ async function meetingBankFactualityPilotCommand(args, root) {
     baseUrl: flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST ?? "http://mriczo:11434"),
     gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
     gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
+    judgeEngine: flag(args, "--judge-engine", process.env.PYA_CRITERION_FACTUALITY_JUDGE_ENGINE ?? "ollama"),
+    judgeModel: flag(args, "--judge-model", process.env.PYA_CRITERION_FACTUALITY_JUDGE_MODEL ?? UNIRRM_FACTUALITY_MODEL),
+    judgeMaxOutputTokens: numericFlag(args, "--judge-max-output-tokens", Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_MAX_OUTPUT_TOKENS || 1024)),
+    judgeContextLength: numericFlag(args, "--judge-context-length", Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_CONTEXT_LENGTH || 16384)),
     resume: hasFlag(args, "--resume"),
     smoke: hasFlag(args, "--smoke")
   });
