@@ -26,7 +26,7 @@ export const UNIRRM_FACTUALITY_NAME = "judge:unirrm-8b";
 export const UNIRRM_FACTUALITY_PROMPT_VERSION = "meetingbank-transcript-grounded-single-request-v3";
 
 const CLAIM_LIMIT = 12;
-const JUDGE_MAX_OUTPUT_TOKENS = Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_MAX_OUTPUT_TOKENS || 1024);
+const JUDGE_MAX_OUTPUT_TOKENS = Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_MAX_OUTPUT_TOKENS || 2048);
 const JUDGE_CONTEXT_LENGTH = Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_CONTEXT_LENGTH || 16384);
 const DIMENSIONS = Object.freeze([
   ["faithfulnessPercentage", ["faithfulness_score", "faithfulnessScore", "faithfulness"]],
