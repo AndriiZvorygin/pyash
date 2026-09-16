@@ -111,6 +111,8 @@ test("factuality lane maps Criterion dimensions encoded in native UniRRM explana
   const truncatedExplanation = JSON.stringify({ faithfulness_score: 4, completeness_score: 3, decision_action_score: 5, relevance_score: 4, conciseness_score: 3, publication_suitability_score: 4, confidence: 5, claims: [{ claim: "The motion passed.", status: "supported", evidence: "It passed.", transcript_turn_ids: ["turn-1"] }] }).slice(0, -1);
   const repaired = normalizeNativeJudgeResponse(JSON.stringify({ evaluations: [{ response_id: "Response1", explanation: truncatedExplanation, final_score: 4 }] }));
   assert.equal(repaired.status, "ok");
+  const objectExplanation = normalizeNativeJudgeResponse(JSON.stringify({ evaluations: [{ response_id: "Response1", explanation: { faithfulness_score: 5, completeness_score: 5, decision_action_score: 5, relevance_score: 5, conciseness_score: 5, publication_suitability_score: 5, confidence: 5, claims: [{ claim: "The motion passed.", status: "supported", evidence: "It passed.", transcript_turn_ids: ["turn-1"] }] } }] }));
+  assert.equal(objectExplanation.status, "ok");
 });
 
 test("factuality preflight verifies version, tags, warmup, and a real sample request", async () => {
