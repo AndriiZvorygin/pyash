@@ -174,7 +174,7 @@ Jobs may declare an optional memory request in their `jobSpec`:
     "deviceId": "gpu0"
   },
   "payload": {
-    "model": "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M",
+    "model": "qwen3.5:9b",
     "prompt": "..."
   }
 }

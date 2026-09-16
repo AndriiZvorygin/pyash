@@ -1,4 +1,4 @@
-exists su name chirp mind be mind as name "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" fromtext text "You write concise evergreen social posts from source text." ya
+exists su name chirp mind be mind as name "qwen3.5:9b" fromtext text "You write concise evergreen social posts from source text." ya
 exists su name chirp problem mind be mind fromtext name chirp problem prompt ya
 exists su name chirp cause mind be mind fromtext name chirp cause prompt ya
 exists su name chirp insight mind be mind fromtext name chirp insight prompt ya
