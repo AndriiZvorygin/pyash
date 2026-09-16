@@ -818,6 +818,22 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertTrue(candidate["busy"])
     self.assertFalse(candidate["immediate"])
 
+  def test_peer_without_live_runtime_is_not_a_route_target(self):
+    server.peer_request_json = lambda *_args, **_kwargs: {
+      "runtimes": [{"runtimeName": "huggingface", "status": "unknown"}],
+      "profiles": [],
+      "executionSlotBusy": False,
+    }
+
+    candidate = server.peer_route_candidate(
+      "swac",
+      "http://swac:8090",
+      {"runtimeName": "huggingface", "profileName": "large", "jobSpec": {}}
+    )
+
+    self.assertFalse(candidate["available"])
+    self.assertIn("unavailable", candidate["reason"])
+
   def test_local_queued_submission_reserves_execution_slot(self):
     server.configured_peers = lambda: {}
     server.local_route_state = server.__dict__["local_route_state"]

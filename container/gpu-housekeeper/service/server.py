@@ -386,6 +386,14 @@ def peer_route_candidate(
   runtime = next((item for item in runtimes if normalize_text(item.get("runtimeName")).lower() == runtime_name), None)
   if not isinstance(runtime, dict):
     return {"hostId": peer_host_id, "url": peer_url, "available": False, "reason": f"runtime not advertised: {runtime_name}"}
+  runtime_status = normalize_text(runtime.get("status")).lower()
+  if runtime_status == "unknown":
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "available": False,
+      "reason": f"peer runtime is unavailable: {runtime_name}"
+    }
   preview = peer_request_json(peer_url, "/capacity/preview", {
     "runtimeName": runtime_name,
     "profileName": normalize_text(job.get("profileName")),
@@ -419,7 +427,7 @@ def peer_route_candidate(
     score -= 60
   if busy:
     score -= 30
-  if normalize_text(runtime.get("status")).lower() == "running":
+  if runtime_status == "running":
     score += 40
   return {
     "hostId": peer_host_id,
