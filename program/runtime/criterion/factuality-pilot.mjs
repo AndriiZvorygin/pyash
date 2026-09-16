@@ -225,7 +225,7 @@ function renderMarkdown(run) {
     "No overall winner is declared; these judge-estimated dimensions are provisional until human-labelled calibration.", "", "## Operational evidence", "",
     `- Generation: ${run.generationStats.successful}/${run.generationStats.attempted} successful; transient retries ${run.generationStats.transientRetries}; permanent failures ${run.generationStats.permanentFailures}`,
     `- Judge requests: ${run.judgeStats.initialRequests} initial; repair retries ${run.judgeStats.repairRetries}; successful ${run.judgeStats.successful}; malformed ${run.judgeStats.malformed}; truncated ${run.judgeStats.truncated}; transport ${run.judgeStats.transport}; incomplete ${run.judgeStats.incomplete}`,
-    `- Ollama endpoint: ${run.ollama.baseUrl}; preflight ${run.ollama.preflight.status}`, `- UniRRM VRAM discharge: ${run.judge.discharge.status}`, "", "## Per-sample evidence", "",
+    `- Ollama endpoint: ${run.ollama.baseUrl}; preflight ${run.ollama.preflight.status}; between-phase discharge ${run.ollama.discharge?.status ?? "not-recorded"}`, `- UniRRM VRAM discharge: ${run.judge.discharge.status}`, "", "## Per-sample evidence", "",
     ...run.results.map(row => `### ${row.model} / ${row.sampleId}\n\n- Status: ${row.status}; source hash: ${row.sourceHash}; summary hash: ${row.summaryHash}\n- Scores: faithfulness ${pct(row.scores?.faithfulnessPercentage)} (${row.claimCounts?.total ?? 0} claims); completeness ${pct(row.scores?.completenessPercentage)}; decision/action ${pct(row.scores?.decisionActionPercentage)}; relevance ${pct(row.scores?.relevancePercentage)}; conciseness ${pct(row.scores?.concisenessPercentage)}; publication ${pct(row.scores?.publicationSuitabilityPercentage)}\n- Claim counts: supported ${row.claimCounts?.supported ?? 0}, partial ${row.claimCounts?.["partially-supported"] ?? 0}, unsupported ${row.claimCounts?.unsupported ?? 0}, contradicted ${row.claimCounts?.contradicted ?? 0}, unclear ${row.claimCounts?.unclear ?? 0}\n- Judge attempts: ${row.judge?.attempts?.length ?? 0}; evidence coverage ${pct(row.scores?.evidenceCoveragePercentage)}\n- Claims/evidence: ${JSON.stringify(row.claims ?? [])}\n- Summary: ${row.summary ?? "[unavailable]"}`), "", "## Provenance", "", `- Generation prompt hash: ${run.promptHash}`, `- Judge prompt version: ${run.judge.promptVersion}`, `- Judge model digest: ${run.judge.digest ?? "unknown"}`, `- Reference summary: ${run.judge.referenceHidden ? "hidden from judge" : "invalid"}`, ""
   ];
   return lines.join("\n");
@@ -282,6 +282,25 @@ export async function preflightOllama({ baseUrl, models, sample, fetchImpl = glo
   return result;
 }
 
+export async function dischargeOllamaModels({ baseUrl, models, fetchImpl = globalThis.fetch } = {}) {
+  const base = resolveOllamaBaseUrl(baseUrl);
+  const results = [];
+  for (const model of models) {
+    try {
+      const response = await fetchImpl(`${base}/api/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, prompt: "", stream: false, keep_alive: 0 })
+      });
+      if (!response.ok) throw new Error(`Ollama discharge failed for ${model}: ${response.status}`);
+      results.push({ model, status: "ok" });
+    } catch (error) {
+      results.push({ model, status: "failed", error: text(error?.message ?? error) });
+    }
+  }
+  return { baseUrl: base, results, status: results.every(result => result.status === "ok") ? "ok" : "partial" };
+}
+
 async function reliableExecutor({ input, baseUrl, fetchImpl }) {
   return runOllamaChat({ ...input, baseUrl, fetchImpl, requestTimeoutMs: 180000, maxRetries: 3, retryBaseMs: 1000 });
 }
@@ -311,6 +330,7 @@ export async function runMeetingBankFactualityPilot({
     promptVariant: "summary_meetingbank_factuality", promptTemplateHash: MEETINGBANK_FACTUALITY_PROMPT_HASH, recordPrompt: true,
     replayCommand: `node command/criterion.mjs meetingbank-factuality-pilot --dataset ${datasetPath} --run-id ${id} --resume`
   });
+  const ollamaDischarge = await dischargeOllamaModels({ baseUrl: ollama.baseUrl, models, fetchImpl });
   const checkpointPath = path.resolve(root, "criterion", "results", `${id}.jsonl`);
   const prior = resume ? await readRows(checkpointPath) : [];
   const rows = new Map(prior.map(row => [row.identity, row]));
@@ -368,7 +388,7 @@ export async function runMeetingBankFactualityPilot({
   const finalRun = await writeRunArtifacts({
     runId: id, criterion: "meetingbank-factuality-pilot", evaluationMode: MEETINGBANK_FACTUALITY_MODE, suite: { key: "meetingbank-factuality-pilot", name: "MeetingBank transcript-grounded factuality pilot", version: "factuality-v3-single-request", sourceUrls: ["https://meetingbank.github.io/dataset/", "https://huggingface.co/SUSTech-NLP/UniRRM-8B", "https://arxiv.org/html/2609.05910v1"], licenseUrls: ["https://meetingbank.github.io/license/"] }, status: resultRows.some(row => row.status !== "ok") ? "partial" : "completed", split, actualSplit: loaded.actualSplit, datasetPath, datasetHash: loaded.datasetHash, datasetRevision: process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned", models, engine: "ollama-plus-huggingface-judge", profile: "summary_direct", contextLength: 32768, promptHash: MEETINGBANK_FACTUALITY_PROMPT_HASH, generationPrompt: { name: "summary_meetingbank_factuality", hash: MEETINGBANK_FACTUALITY_PROMPT_HASH, text: MEETINGBANK_FACTUALITY_PROMPT }, generationRunId, selection: { seed: selectionSeed, count: selection.length, sampleIds: selection.map(sample => sample.id), datasetHash: loaded.datasetHash }, results: resultRows, aggregates,
     generationStats: { attempted: generationRows.length, successful: generationRows.filter(row => row.status === "ok").length, transientRetries: generationRows.reduce((sum, row) => sum + Number(row.metrics?.transportRetries ?? 0), 0), permanentFailures: generationRows.filter(row => row.status === "error").length }, judgeStats,
-    ollama: { ...ollama, preflight: ollama }, judge: { ...judge, revision: null, digest: null, referenceHidden: true }, machine: await collectMachineMetadata(), smoke, runScope: smoke ? "smoke" : "pilot", createdAt: now().toISOString(), startedAt: now().toISOString(), finishedAt: now().toISOString(), totalWallClockMs: 0, replayCommand: `node command/criterion.mjs meetingbank-factuality-pilot --dataset ${datasetPath} --run-id ${id} --resume`
+    ollama: { ...ollama, preflight: ollama, discharge: ollamaDischarge }, judge: { ...judge, revision: null, digest: null, referenceHidden: true }, machine: await collectMachineMetadata(), smoke, runScope: smoke ? "smoke" : "pilot", createdAt: now().toISOString(), startedAt: now().toISOString(), finishedAt: now().toISOString(), totalWallClockMs: 0, replayCommand: `node command/criterion.mjs meetingbank-factuality-pilot --dataset ${datasetPath} --run-id ${id} --resume`
   }, { root, checkpointResults: resultRows, renderMarkdown, renderCsv, renderHtml });
   return finalRun;
 }
