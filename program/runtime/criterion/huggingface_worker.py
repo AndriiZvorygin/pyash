@@ -253,6 +253,21 @@ def generate(state, request):
     }
 
 
+def unload_state(state):
+    """Release provider residency without stopping the serving container."""
+    if not isinstance(state, dict):
+        return {"success": True, "unloaded": False}
+    model = state.get("model")
+    torch = state.get("torch")
+    state.clear()
+    del model
+    if torch is not None and hasattr(torch, "cuda") and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        if hasattr(torch.cuda, "ipc_collect"):
+            torch.cuda.ipc_collect()
+    return {"success": True, "unloaded": True}
+
+
 def main():
     state = None
     for line in sys.stdin:

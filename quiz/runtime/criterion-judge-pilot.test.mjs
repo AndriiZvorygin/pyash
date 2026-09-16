@@ -58,6 +58,7 @@ test("Hugging Face judge adapter uses the existing durable queue with a judge op
     enqueue: async (_root, envelope) => requests.push(envelope),
     writeStatus: async () => {},
     readStatus: async () => status,
+    dischargeOnClose: false,
     workerRunner: async options => {
       workerCalls.push(options);
       status = { status: "success", result: JSON.stringify({ text: JSON.stringify({ overall_score: 4 }), timing: {} }) };

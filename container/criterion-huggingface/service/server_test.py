@@ -22,6 +22,10 @@ class FakeWorker:
     self.generations.append((state, request))
     return {"text": f"summary for {state['model']}", "metadataRecord": state["metadata"]}
 
+  def unload_state(self, state):
+    self.unloads = getattr(self, "unloads", 0) + 1
+    return {"success": True, "unloaded": bool(state)}
+
 
 class CriterionHuggingFaceServerTests(unittest.TestCase):
   def setUp(self):
@@ -64,3 +68,12 @@ class CriterionHuggingFaceServerTests(unittest.TestCase):
     server.generate({"model": "judge", "operation": "judge", "prompt": "rubric", "input": "source"})
     self.assertEqual(server.WORKER.loads[0]["operation"], "judge")
     self.assertEqual(server.WORKER.generations[0][1]["prompt"], "rubric")
+
+  def test_discharge_releases_loaded_worker_state_without_stopping_service(self):
+    server.generate({"model": "judge", "operation": "judge", "prompt": "rubric", "input": "source"})
+    result = server.discharge()
+    self.assertTrue(result["success"])
+    self.assertTrue(result["unloaded"])
+    self.assertIsNone(server._STATE)
+    self.assertEqual(server._MODEL, "")
+    self.assertIsNone(server._MODEL_KEY)

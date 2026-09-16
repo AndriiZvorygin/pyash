@@ -13,6 +13,7 @@ import { stableJson } from "../program/runtime/criterion/metrics.mjs";
 import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
 import { runMeetingBankJudgePilot, MEETINGBANK_JUDGE_PILOT_MODELS } from "../program/runtime/criterion/judge-pilot.mjs";
+import { runMeetingBankFactualityPilot, MEETINGBANK_FACTUALITY_MODELS, MEETINGBANK_FACTUALITY_RUN_ID, MEETINGBANK_FACTUALITY_SELECTION_SEED } from "../program/runtime/criterion/factuality-pilot.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -93,6 +94,7 @@ function usage() {
     "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",
     "criterion prompt-ablation --dataset <meetingbank.jsonl> --annotations <annotations.json> --source-run <generic-run-id> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion meetingbank-judge-pilot --dataset <meetingbank.jsonl> [--model <qwen,...>] [--smoke] [--resume]",
+    "criterion meetingbank-factuality-pilot --dataset <meetingbank.jsonl> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion report <run-id>",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",
@@ -240,7 +242,7 @@ async function meetingBankJudgePilotCommand(args, root) {
     split: flag(args, "--split", "test"),
     runId: flag(args, "--run-id"),
     models: models.length ? models : MEETINGBANK_JUDGE_PILOT_MODELS,
-    selectionSeed: flag(args, "--selection-seed"),
+    selectionSeed: flag(args, "--selection-seed", MEETINGBANK_FACTUALITY_SELECTION_SEED),
     selectionCount: numericFlag(args, "--selection-count", 10),
     profile: flag(args, "--profile", "summary_direct"),
     contextLength: numericFlag(args, "--context-length"),
@@ -265,6 +267,41 @@ async function meetingBankJudgePilotCommand(args, root) {
     generationRows: result.generationRows.length,
     pointwiseRows: result.pointwiseRows.length,
     pairwiseRows: result.pairwiseRows.length,
+    results: `criterion/results/${result.runId}.jsonl`,
+    report: `criterion/results/${result.runId}.md`,
+    csv: `criterion/results/${result.runId}.csv`,
+    pya: `criterion/results/${result.runId}.pya`,
+    json: `criterion/results/${result.runId}.json`,
+    review: `criterion/review/${result.runId}.html`
+  }, hasFlag(args, "--json"));
+  return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
+async function meetingBankFactualityPilotCommand(args, root) {
+  const models = listFlag(args, ["--model"]);
+  const result = await runMeetingBankFactualityPilot({
+    root,
+    datasetPath: flag(args, "--dataset"),
+    split: flag(args, "--split", "test"),
+    runId: flag(args, "--run-id", MEETINGBANK_FACTUALITY_RUN_ID),
+    models: models.length ? models : MEETINGBANK_FACTUALITY_MODELS,
+    selectionSeed: flag(args, "--selection-seed"),
+    selectionCount: numericFlag(args, "--selection-count", 10),
+    baseUrl: flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST ?? "http://mriczo:11434"),
+    gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+    gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
+    resume: hasFlag(args, "--resume"),
+    smoke: hasFlag(args, "--smoke")
+  });
+  print({
+    runId: result.runId,
+    status: result.status,
+    generationRunId: result.generationRunId,
+    selectedSampleCount: result.selection.count,
+    sampleIds: result.selection.sampleIds,
+    generationStats: result.generationStats,
+    judgeStats: result.judgeStats,
+    judgeDischarge: result.judge.discharge,
     results: `criterion/results/${result.runId}.jsonl`,
     report: `criterion/results/${result.runId}.md`,
     csv: `criterion/results/${result.runId}.csv`,
@@ -386,6 +423,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && subcommand === "omnicseval-meeting") return factAuditCommand(args, root, FACT_EVALUATION_MODES.exact);
   if (command === "criterion" && (subcommand === "prompt-ablation" || subcommand === "meetingbank-prompt-ablation")) return promptAblationCommand(args, root);
   if (command === "criterion" && (subcommand === "meetingbank-judge-pilot" || subcommand === "judge-pilot")) return meetingBankJudgePilotCommand(args, root);
+  if (command === "criterion" && (subcommand === "meetingbank-factuality-pilot" || subcommand === "factuality-pilot")) return meetingBankFactualityPilotCommand(args, root);
   if (command === "criterion" && subcommand === "report") return reportCommand(rest, root);
   if (command === "criterion" && subcommand === "compare") return compareCommand(rest, root);
   if (command === "criterion" && subcommand === "golden") return goldenCommand(rest, root);
@@ -398,6 +436,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "omnicseval-meeting") return factAuditCommand([subcommand, ...rest].filter(Boolean), root, FACT_EVALUATION_MODES.exact);
   if (command === "prompt-ablation" || command === "meetingbank-prompt-ablation") return promptAblationCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "meetingbank-judge-pilot" || command === "judge-pilot") return meetingBankJudgePilotCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "meetingbank-factuality-pilot" || command === "factuality-pilot") return meetingBankFactualityPilotCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "report") return reportCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "compare") return compareCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "golden") return goldenCommand([subcommand, ...rest].filter(Boolean), root);

@@ -7,6 +7,7 @@ export { loadRun, renderComparison, renderRunCsv, renderRunMarkdown, renderRevie
 export { extractLead3, extractSentences, runLead3, baselineMetadata } from "./baseline.mjs";
 export { runBaseline } from "./baseline-run.mjs";
 export { HUGGING_FACE_MODEL_DEFAULTS, createHuggingFaceExecutor, createHuggingFaceJudgeExecutor, huggingFaceModelDefaults } from "./huggingface.mjs";
+export { MEETINGBANK_FACTUALITY_MODE, MEETINGBANK_FACTUALITY_MODELS, extractCandidateClaims, retrieveTranscriptEvidence, buildSourceInventory, normalizeNativeJudgeResponse, preflightOllama, runMeetingBankFactualityPilot } from "./factuality-pilot.mjs";
 export {
   FACT_EVALUATION_MODES,
   FACT_JUDGE_PROMPT_VERSION,
