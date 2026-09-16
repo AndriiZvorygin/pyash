@@ -199,19 +199,24 @@ export function createDeterministicFactJudge({ scorerVersion = "deterministic-le
 }
 
 function factPrompt({ sourceText, summaryText, annotation = null }) {
+  const releasedKeyFacts = annotation?.keyFacts ?? annotation?.key_facts ?? annotation?.facts ?? null;
+  const exact = Array.isArray(releasedKeyFacts) && releasedKeyFacts.length > 0;
   const annotationHints = annotation ? {
     sourceDataset: annotationSourceDataset(annotation),
     sourceId: annotationSourceId(annotation),
-    keyFacts: annotation.keyFacts ?? annotation.key_facts ?? annotation.facts ?? null,
+    keyFacts: releasedKeyFacts,
     reference: annotation.reference ?? null
   } : null;
+  const outputContract = exact
+    ? "For this exact annotated mode, do not repeat or regenerate the released key facts. Return only {claims:[{id,text,sentenceId,flags}],matches:[{keyFactId,summarySentenceId,matched,explanation,confidence}],verifications:[{claimId,support,sourceSentenceRefs,explanation,confidence}]}. Use at most 12 summary claims, 12 matches, and 12 verifications."
+    : "The JSON shape must be: {keyFacts:[{id,text,sourceSentenceRefs,flags}],claims:[{id,text,sentenceId,flags}],matches:[{keyFactId,summarySentenceId,matched,explanation,confidence}],verifications:[{claimId,support,sourceSentenceRefs,explanation,confidence}]}";
   return [
     "You are an external factuality evaluator for a municipal meeting summary.",
     "Return JSON only. Do not write a narrative outside the JSON object.",
-    "Extract atomic key facts from SOURCE, atomic claims from SUMMARY, match key facts to summary sentences, and verify every summary claim against SOURCE.",
+    exact ? "Use the released key facts below as the authoritative source inventory. Extract only atomic claims from SUMMARY, match those released facts to summary sentences, and verify every summary claim against SOURCE." : "Extract atomic key facts from SOURCE, atomic claims from SUMMARY, match key facts to summary sentences, and verify every summary claim against SOURCE.",
     "Use support values supported, unsupported, contradiction, or unresolved.",
     "Preserve source sentence ids as s1, s2... and summary sentence ids as s1, s2... in evidence references.",
-    "The JSON shape must be: {keyFacts:[{id,text,sourceSentenceRefs,flags}],claims:[{id,text,sentenceId,flags}],matches:[{keyFactId,summarySentenceId,matched,explanation,confidence}],verifications:[{claimId,support,sourceSentenceRefs,explanation,confidence}]}",
+    outputContract,
     annotationHints ? `RELEASED ANNOTATION HINTS:\n${JSON.stringify(annotationHints)}` : "",
     `SOURCE:\n${sourceText}`,
     `SUMMARY:\n${summaryText}`
