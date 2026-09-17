@@ -612,6 +612,17 @@ def peer_route_candidate(
       "available": False,
       "reason": f"peer runtime is unavailable: {runtime_name}"
     }
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  job_kind = normalize_text(job_spec.get("kind")).lower()
+  if job_kind == "ollama-ensure-model":
+    capabilities = snapshot.get("capabilities") if isinstance(snapshot.get("capabilities"), dict) else {}
+    if capabilities.get("ollamaModelProvisioning") is not True:
+      return {
+        "hostId": peer_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": "peer does not advertise Ollama model provisioning"
+      }
   model_name = ollama_model_for_job(job) if runtime_name == "ollama" else ""
   catalog = snapshot.get("ollamaModelCatalog") if isinstance(snapshot.get("ollamaModelCatalog"), dict) else {}
   if model_name and catalog.get("available") and not ollama_model_entry(model_name, catalog):
@@ -731,6 +742,9 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
   }
   return {
     "hostId": host_id,
+    "capabilities": {
+      "ollamaModelProvisioning": True
+    },
     "queueDepth": queue_depth(),
     "devices": telemetry["devices"],
     "profiles": profile_list(),

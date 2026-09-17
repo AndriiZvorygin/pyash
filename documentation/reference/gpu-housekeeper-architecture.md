@@ -104,6 +104,9 @@ physical device, and `/job/<remoteJobId>` exposes transient status so
 runtimes are exclusive per device. A runtime may set `concurrencySafe` in the
 host-local runtime registry to opt into shared same-device execution; that
 choice is still subject to its declared VRAM request and live capacity checks.
+Housekeeper snapshots advertise protocol capabilities; model provisioning is
+forwarded only to peers that advertise `ollamaModelProvisioning`, so an older
+peer cannot receive an unsupported `ollama-ensure-model` job.
 Different physical devices can execute concurrently without sharing a gate.
 
 The default managed runtimes are:

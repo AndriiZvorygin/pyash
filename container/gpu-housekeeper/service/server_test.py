@@ -1167,6 +1167,32 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertTrue(candidate["busy"])
     self.assertFalse(candidate["immediate"])
 
+  def test_peer_without_provisioning_capability_is_not_a_model_ensure_target(self):
+    responses = iter([{
+      "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+      "profiles": [],
+      "devices": [{"deviceId": "gpu0", "vramFreeMb": 12000}],
+      "queueDepth": 0,
+    }])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "mriczo",
+      "http://mriczo:8090",
+      {
+        "runtimeName": "ollama",
+        "profileName": "qwen3.5:9b",
+        "jobSpec": {
+          "kind": "ollama-ensure-model",
+          "resourceRequest": {"vramRequiredMb": 7000},
+          "payload": {"model": "qwen3.5:9b", "pullIfMissing": False}
+        }
+      }
+    )
+
+    self.assertFalse(candidate["available"])
+    self.assertIn("does not advertise", candidate["reason"])
+
   def test_peer_route_uses_the_requested_device_slot(self):
     responses = iter([
       {
