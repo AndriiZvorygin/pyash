@@ -23,6 +23,12 @@ _SUBMISSION_LOCK = threading.Lock()
 _RUNNING_JOB_ID: Optional[str] = None
 _RUNNING_JOB_IDS: Dict[str, set] = {}
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
+_OLLAMA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
+  "observedAt": 0.0,
+  "available": False,
+  "models": [],
+  "error": "not observed"
+}
 
 
 class DeviceExecutionGate:
@@ -65,6 +71,7 @@ _EXECUTION_GATES: Dict[str, DeviceExecutionGate] = {}
 DEFAULT_IDLE_GRACE_SECONDS = 300
 DEFAULT_PEER_TIMEOUT_MS = 1500
 DEFAULT_PEER_FAILURE_LIMIT = 3
+DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -77,7 +84,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "restartAction": ["restart", "ollama"],
     "activityProbe": "provider-owned",
     "dischargeKind": "",
-    "concurrencySafe": False
+    "concurrencySafe": False,
+    "modelStorePath": DEFAULT_OLLAMA_MODEL_STORE_PATH
   },
   "comfyui": {
     "runtimeName": "comfyui",
@@ -488,6 +496,13 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
   devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
   if not isinstance(devices, list):
     devices = []
+  model_name = ollama_model_for_job(job) if runtime_name == "ollama" else ""
+  model_catalog = ollama_model_catalog() if model_name else {}
+  model_missing = bool(
+    model_name
+    and model_catalog.get("available")
+    and not ollama_model_entry(model_name, model_catalog)
+  )
   candidates = []
   for device_id in device_candidates_for_job(job, devices):
     candidate_job = {**job, "deviceId": device_id}
@@ -504,7 +519,10 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       continue
     # Submission remains durable even when telemetry is temporarily unavailable;
     # final execution admission still fails closed in ensure_capacity_for_job.
-    feasible = capacity.get("decision") in {"not-requested", "fits", "reclaim-available", "telemetry-unavailable"}
+    feasible = (
+      capacity.get("decision") in {"not-requested", "fits", "reclaim-available", "telemetry-unavailable"}
+      and not model_missing
+    )
     with _LOCK:
       profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
       warm = bool(profile.get("loaded", False))
@@ -528,7 +546,11 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "warm": warm,
       "score": score,
       "capacity": capacity,
-      "reason": "local execution slot occupied" if busy else capacity.get("reason", "local candidate")
+      "reason": (
+        f"Ollama model is not installed: {model_name}"
+        if model_missing
+        else ("local execution slot occupied" if busy else capacity.get("reason", "local candidate"))
+      )
     })
   available = [item for item in candidates if item.get("available")]
   if not available:
@@ -589,6 +611,15 @@ def peer_route_candidate(
       "url": peer_url,
       "available": False,
       "reason": f"peer runtime is unavailable: {runtime_name}"
+    }
+  model_name = ollama_model_for_job(job) if runtime_name == "ollama" else ""
+  catalog = snapshot.get("ollamaModelCatalog") if isinstance(snapshot.get("ollamaModelCatalog"), dict) else {}
+  if model_name and catalog.get("available") and not ollama_model_entry(model_name, catalog):
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "available": False,
+      "reason": f"Ollama model is not installed: {model_name}"
     }
   profiles = snapshot.get("profiles") if isinstance(snapshot.get("profiles"), list) else []
   target_profile = normalize_text(job.get("profileName"))
@@ -703,6 +734,7 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "queueDepth": queue_depth(),
     "devices": telemetry["devices"],
     "profiles": profile_list(),
+    "ollamaModelCatalog": ollama_model_catalog(),
     "runtimes": list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else [],
     "gpuProcesses": process_view,
     "executionSlotBusy": local_execution_slot_busy(),
@@ -806,10 +838,15 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
         "error": "ollama jobSpec must be map"
       }
     kind = normalize_text(job_spec.get("kind")).lower()
-    if kind not in {"ollama-generate", "ollama-chat"}:
+    if kind not in {"ollama-generate", "ollama-chat", "ollama-ensure-model"}:
       return {
         "accepted": False,
-        "error": "ollama jobSpec.kind must be ollama-generate or ollama-chat"
+        "error": "ollama jobSpec.kind must be ollama-generate, ollama-chat, or ollama-ensure-model"
+      }
+    if kind == "ollama-ensure-model" and not isinstance(job_spec.get("payload"), dict):
+      return {
+        "accepted": False,
+        "error": "ollama-ensure-model jobSpec.payload must be map"
       }
 
   if runtime_lower == "comfyui":
@@ -1356,9 +1393,30 @@ def job_resource_request(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     raise RuntimeError("resourceRequest.vramRequiredMb must be a positive number")
   if vram <= 0:
     raise RuntimeError("resourceRequest.vramRequiredMb must be a positive number")
+
+  def optional_positive(name: str, aliases: List[str]) -> Optional[int]:
+    raw_value = None
+    for alias in aliases:
+      if alias in request:
+        raw_value = request.get(alias)
+        break
+    if raw_value is None:
+      return None
+    try:
+      value = int(float(raw_value))
+    except (TypeError, ValueError):
+      raise RuntimeError(f"resourceRequest.{name} must be a positive number")
+    if value <= 0:
+      raise RuntimeError(f"resourceRequest.{name} must be a positive number")
+    return value
+
+  ram = optional_positive("ramRequiredMb", ["ramRequiredMb", "ram_required_mb"])
+  disk = optional_positive("diskRequiredMb", ["diskRequiredMb", "disk_required_mb"])
   return {
     "vramRequiredMb": vram,
-    "deviceId": normalize_text(request.get("deviceId"))
+    "deviceId": normalize_text(request.get("deviceId")),
+    "ramRequiredMb": ram,
+    "diskRequiredMb": disk
   }
 
 
@@ -1711,6 +1769,158 @@ def request_ollama_json(pathname: str, payload: Optional[Dict[str, Any]] = None,
   return {"value": parsed}
 
 
+def ollama_model_catalog(force: bool = False) -> Dict[str, Any]:
+  now = time.monotonic()
+  try:
+    ttl = max(0.0, min(300.0, float(os.environ.get("GPU_HOUSEKEEPER_OLLAMA_CATALOG_TTL_SEC", "30"))))
+  except (TypeError, ValueError):
+    ttl = 30.0
+  with _LOCK:
+    cached = dict(_OLLAMA_MODEL_CATALOG_CACHE)
+  if not force and cached.get("observedAt") and now - float(cached.get("observedAt") or 0) <= ttl:
+    return cached
+
+  try:
+    payload = request_ollama_json("/api/tags", None, timeout_sec=5)
+    raw_models = payload.get("models") if isinstance(payload, dict) else []
+    if not isinstance(raw_models, list):
+      raise RuntimeError("Ollama model catalog response was malformed")
+    models = []
+    for item in raw_models:
+      if not isinstance(item, dict):
+        continue
+      name = normalize_text(item.get("name") or item.get("model"))
+      if not name:
+        continue
+      record = {"name": name}
+      digest = normalize_text(item.get("digest"))
+      if digest:
+        record["digest"] = digest
+      size = item.get("size")
+      if isinstance(size, (int, float)) and size >= 0:
+        record["size"] = int(size)
+      details = item.get("details")
+      if isinstance(details, dict):
+        selected = {}
+        for key in ("parameter_size", "quantization_level", "family", "context_length"):
+          if key in details and details[key] not in (None, ""):
+            selected[key] = details[key]
+        if selected:
+          record["details"] = selected
+      models.append(record)
+    result = {
+      "observedAt": now,
+      "available": True,
+      "models": models,
+      "error": ""
+    }
+  except Exception as err:
+    result = {
+      "observedAt": now,
+      "available": False,
+      "models": [],
+      "error": normalize_text(err) or "Ollama model catalog unavailable"
+    }
+  with _LOCK:
+    _OLLAMA_MODEL_CATALOG_CACHE.clear()
+    _OLLAMA_MODEL_CATALOG_CACHE.update(result)
+  return dict(result)
+
+
+def reset_ollama_model_catalog_cache() -> None:
+  with _LOCK:
+    _OLLAMA_MODEL_CATALOG_CACHE.clear()
+    _OLLAMA_MODEL_CATALOG_CACHE.update({
+      "observedAt": 0.0,
+      "available": False,
+      "models": [],
+      "error": "not observed"
+    })
+
+
+def ollama_model_entry(model_name: str, catalog: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+  wanted = normalize_text(model_name)
+  source = catalog if isinstance(catalog, dict) else ollama_model_catalog()
+  models = source.get("models") if isinstance(source, dict) else []
+  if not isinstance(models, list):
+    return None
+  return next((item for item in models if isinstance(item, dict) and normalize_text(item.get("name")) == wanted), None)
+
+
+def ollama_model_for_job(job: Dict[str, Any]) -> str:
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    return ""
+  kind = normalize_text(job_spec.get("kind")).lower()
+  if kind not in {"ollama-generate", "ollama-chat"}:
+    return ""
+  payload = job_spec.get("payload") if isinstance(job_spec.get("payload"), dict) else job_spec
+  return normalize_text(payload.get("model")) or normalize_text(job.get("profileName"))
+
+
+def ollama_model_pull_allowed(model_name: str) -> bool:
+  if not parse_bool_env("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL", False):
+    return False
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_MODEL_ALLOWLIST"))
+  allowed = {
+    item.strip()
+    for item in raw.replace(";", ",").split(",")
+    if item.strip()
+  }
+  return normalize_text(model_name) in allowed
+
+
+def memory_available_mb() -> Dict[str, Any]:
+  try:
+    values = {}
+    with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+      for line in handle:
+        if ":" not in line:
+          continue
+        key, raw = line.split(":", 1)
+        fields = raw.strip().split()
+        if fields and fields[0].isdigit():
+          values[key.strip()] = int(fields[0]) // 1024
+    available = values.get("MemAvailable")
+    total = values.get("MemTotal")
+    if available is None or total is None:
+      raise RuntimeError("/proc/meminfo lacks MemAvailable")
+    return {"available": True, "availableMb": available, "totalMb": total}
+  except Exception as err:
+    return {"available": False, "error": normalize_text(err) or "memory telemetry unavailable"}
+
+
+def container_disk_available_mb(container_name: str, path_name: str) -> Dict[str, Any]:
+  result = run_docker(["exec", container_name, "df", "-Pk", path_name], timeout_sec=15)
+  if not result.get("success"):
+    return {"available": False, "error": result.get("message") or "model-store disk telemetry unavailable"}
+  rows = [line.strip().split() for line in normalize_text(result.get("stdout")).splitlines() if line.strip()]
+  if len(rows) < 2:
+    return {"available": False, "error": "model-store disk telemetry was malformed"}
+  fields = rows[-1]
+  if len(fields) < 4:
+    return {"available": False, "error": "model-store disk telemetry was malformed"}
+  try:
+    available_mb = int(fields[3]) // 1024
+  except (TypeError, ValueError):
+    return {"available": False, "error": "model-store disk telemetry was malformed"}
+  return {"available": True, "availableMb": max(0, available_mb), "path": path_name}
+
+
+def sync_ollama_profiles(warm_models: List[str]) -> None:
+  warm = {normalize_text(item) for item in warm_models if normalize_text(item)}
+  with _LOCK:
+    for profile in _PROFILES.values():
+      if normalize_text(profile.get("runtimeName")).lower() == "ollama":
+        profile["loaded"] = normalize_text(profile.get("profileName")) in warm
+    for model in warm:
+      _PROFILES[model] = {
+        "profileName": model,
+        "runtimeName": "ollama",
+        "loaded": True
+      }
+
+
 def huggingface_runtime_url() -> str:
   return normalize_text(os.environ.get("HUGGINGFACE_RUNTIME_URL")) or "http://host.docker.internal:8020"
 
@@ -1782,9 +1992,9 @@ def warm_ollama_models() -> List[str]:
   return out
 
 
-def discharge_warm_ollama_models(target_model: str) -> None:
+def discharge_warm_ollama_models(target_model: str, warm_models: Optional[List[str]] = None) -> None:
   target = normalize_text(target_model)
-  for model in warm_ollama_models():
+  for model in warm_models if isinstance(warm_models, list) else warm_ollama_models():
     if model == target:
       continue
     try:
@@ -1815,6 +2025,164 @@ def normalize_ollama_payload(job_spec: Dict[str, Any], profile_name: str) -> Dic
   return payload
 
 
+def is_zero_keep_alive(value: Any) -> bool:
+  if value is False or value == 0:
+    return True
+  return normalize_text(value).lower() in {"0", "0s", "0m", "0h", "false", "off", "no"}
+
+
+def ensure_ollama_resource_capacity(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], require_storage: bool) -> Dict[str, Any]:
+  try:
+    request = job_resource_request(job)
+  except RuntimeError as err:
+    return {"state": "invalid-resource-request", "reason": normalize_text(err)}
+  if not request:
+    return {
+      "state": "invalid-resource-request",
+      "reason": "ollama-ensure-model requires resourceRequest.vramRequiredMb"
+    }
+  if require_storage and request.get("ramRequiredMb") is None:
+    return {
+      "state": "invalid-resource-request",
+      "reason": "pulling a missing model requires resourceRequest.ramRequiredMb"
+    }
+  if require_storage and request.get("diskRequiredMb") is None:
+    return {
+      "state": "invalid-resource-request",
+      "reason": "pulling a missing model requires resourceRequest.diskRequiredMb"
+    }
+
+  try:
+    capacity = ensure_capacity_for_job(job, runtime_registry)
+  except RuntimeError as err:
+    reason = normalize_text(err) or "declared VRAM requirement does not fit"
+    return {
+      "state": "capacity-unknown" if "telemetry" in reason.lower() else "insufficient-capacity",
+      "reason": reason,
+      "capacity": {"decision": "telemetry-unavailable" if "telemetry" in reason.lower() else "insufficient"}
+    }
+
+  resources = {"vram": capacity}
+  ram_required = request.get("ramRequiredMb")
+  if ram_required is not None:
+    memory = memory_available_mb()
+    resources["ram"] = memory
+    if not memory.get("available"):
+      return {"state": "capacity-unknown", "reason": memory.get("error") or "memory telemetry unavailable", "resources": resources}
+    if int(memory.get("availableMb") or 0) < ram_required:
+      return {
+        "state": "insufficient-capacity",
+        "reason": f"available RAM is below declared requirement ({memory.get('availableMb')} < {ram_required} MiB)",
+        "resources": resources
+      }
+
+  if require_storage:
+    entry = runtime_registry.get("ollama") or {}
+    container_name = normalize_text(entry.get("containerName")) or "ollama"
+    store_path = normalize_text(entry.get("modelStorePath")) or normalize_text(os.environ.get("GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH")) or DEFAULT_OLLAMA_MODEL_STORE_PATH
+    disk = container_disk_available_mb(container_name, store_path)
+    resources["disk"] = disk
+    if not disk.get("available"):
+      return {"state": "capacity-unknown", "reason": disk.get("error") or "model-store disk telemetry unavailable", "resources": resources}
+    disk_required = request.get("diskRequiredMb")
+    if int(disk.get("availableMb") or 0) < disk_required:
+      return {
+        "state": "insufficient-capacity",
+        "reason": f"available model-store disk is below declared requirement ({disk.get('availableMb')} < {disk_required} MiB)",
+        "resources": resources
+      }
+  return {"state": "fits", "resources": resources}
+
+
+def execute_ollama_ensure_model(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  job_spec = job.get("jobSpec")
+  payload = job_spec.get("payload") if isinstance(job_spec, dict) else None
+  if not isinstance(payload, dict):
+    raise RuntimeError("ollama-ensure-model payload must be a map")
+  profile_name = normalize_text(job.get("profileName"))
+  model_name = normalize_text(payload.get("model")) or profile_name
+  if not model_name or any(ord(char) < 32 or ord(char) == 127 for char in model_name):
+    raise RuntimeError("ollama-ensure-model requires a valid model name")
+
+  pull_requested = parse_bool_value(payload.get("pullIfMissing", payload.get("pull_if_missing", False)), False)
+  ensure_runtime_ready(runtime_registry, "ollama")
+  warm_models = warm_ollama_models()
+  sync_ollama_profiles(warm_models)
+  catalog = ollama_model_catalog(force=True)
+  if not catalog.get("available"):
+    raise RuntimeError(catalog.get("error") or "Ollama model catalog unavailable")
+  installed = ollama_model_entry(model_name, catalog)
+  resource_check = ensure_ollama_resource_capacity(
+    {
+      **job,
+      "profileName": model_name,
+    },
+    runtime_registry,
+    require_storage=installed is None and pull_requested
+  )
+  if resource_check.get("state") != "fits":
+    return {
+      "state": resource_check.get("state"),
+      "model": model_name,
+      "available": False,
+      "pulled": False,
+      "reason": resource_check.get("reason"),
+      "resources": resource_check.get("resources", {}),
+    }
+  if installed:
+    return {
+      "state": "available",
+      "model": model_name,
+      "available": True,
+      "pulled": False,
+      "metadata": installed,
+      "resources": resource_check.get("resources", {})
+    }
+
+  if not pull_requested:
+    return {
+      "state": "not-installed",
+      "model": model_name,
+      "available": False,
+      "pulled": False,
+      "reason": "model is not installed and pullIfMissing was not requested",
+      "resources": resource_check.get("resources", {})
+    }
+  if not ollama_model_pull_allowed(model_name):
+    return {
+      "state": "not-authorized",
+      "model": model_name,
+      "available": False,
+      "pulled": False,
+      "reason": "model pull is disabled or the exact model is not on the housekeeper allowlist",
+      "resources": resource_check.get("resources", {})
+    }
+
+  try:
+    pull = request_ollama_json(
+      "/api/pull",
+      {"name": model_name, "stream": False},
+      timeout_sec=int(os.environ.get("OLLAMA_MODEL_PULL_TIMEOUT_SEC", "1800"))
+    )
+  except Exception as err:
+    raise RuntimeError(f"Ollama model pull failed for {model_name}: {normalize_text(err)}")
+  if normalize_text(pull.get("error")):
+    raise RuntimeError(f"Ollama model pull failed for {model_name}: {normalize_text(pull.get('error'))}")
+  reset_ollama_model_catalog_cache()
+  catalog = ollama_model_catalog(force=True)
+  installed = ollama_model_entry(model_name, catalog)
+  if not installed:
+    raise RuntimeError(f"Ollama pull completed without the exact model tag: {model_name}")
+  return {
+    "state": "available",
+    "model": model_name,
+    "available": True,
+    "pulled": True,
+    "metadata": installed,
+    "resources": resource_check.get("resources", {})
+  }
+
+
 def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   profile_name = normalize_text(job.get("profileName"))
@@ -1831,7 +2199,9 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   target_model = normalize_text(payload.get("model"))
   if not target_model:
     raise RuntimeError("ollama model is required")
-  discharge_warm_ollama_models(target_model)
+  warm_models = warm_ollama_models()
+  sync_ollama_profiles(warm_models)
+  discharge_warm_ollama_models(target_model, warm_models)
 
   endpoint = "/api/chat" if kind == "ollama-chat" else "/api/generate"
   result = request_ollama_json(endpoint, payload, timeout_sec=int(os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900")))
@@ -1839,7 +2209,7 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
     _PROFILES[target_model] = {
       "profileName": target_model,
       "runtimeName": runtime_name,
-      "loaded": True
+      "loaded": not is_zero_keep_alive(payload.get("keep_alive"))
     }
   return result
 
@@ -2048,8 +2418,11 @@ def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[st
 
 
 def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-  ensure_capacity_for_job(job, runtime_registry)
   runtime_name = normalize_text(job.get("runtimeName")).lower()
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  if runtime_name == "ollama" and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model":
+    return execute_ollama_ensure_model(job, runtime_registry)
+  ensure_capacity_for_job(job, runtime_registry)
   if runtime_name == "ollama":
     return execute_ollama_job(job, runtime_registry)
   if runtime_name == "comfyui":
@@ -2098,7 +2471,8 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         "restartAction": item.get("restartAction") if isinstance(item.get("restartAction"), list) else ["restart", container_name],
         "activityProbe": normalize_text(item.get("activityProbe")) or "unknown",
         "dischargeKind": normalize_text(item.get("dischargeKind")),
-        "concurrencySafe": parse_bool_value(item.get("concurrencySafe", False), False)
+        "concurrencySafe": parse_bool_value(item.get("concurrencySafe", False), False),
+        "modelStorePath": normalize_text(item.get("modelStorePath")) or DEFAULT_OLLAMA_MODEL_STORE_PATH
       }
 
   if registry:
@@ -2139,7 +2513,12 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
       job["startedAt"] = utc_now_iso()
       profile_name = normalize_text(job.get("profileName"))
       runtime_name = normalize_text(job.get("runtimeName"))
-      if profile_name:
+      job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+      is_model_ensure = (
+        runtime_name.lower() == "ollama"
+        and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model"
+      )
+      if profile_name and not is_model_ensure:
         _PROFILES[profile_name] = {
           "profileName": profile_name,
           "runtimeName": runtime_name,
@@ -2214,6 +2593,10 @@ class Handler(BaseHTTPRequestHandler):
       json_response(self, 200, {
         "runtimes": list_runtime_statuses(self.runtime_registry)
       })
+      return
+
+    if self.path == "/runtime/ollama/models":
+      json_response(self, 200, ollama_model_catalog())
       return
 
     if self.path.startswith("/runtime/"):

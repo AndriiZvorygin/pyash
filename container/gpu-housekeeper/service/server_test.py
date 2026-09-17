@@ -14,16 +14,36 @@ spec.loader.exec_module(server)
 
 class HousekeeperOllamaTests(unittest.TestCase):
   def setUp(self):
+    self.orig_parse_nvidia_smi = server.parse_nvidia_smi
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
     self.orig_request_ollama_json = server.request_ollama_json
+    self.orig_ollama_model_catalog = server.ollama_model_catalog
+    self.orig_memory_available_mb = server.memory_available_mb
+    self.orig_container_disk_available_mb = server.container_disk_available_mb
+    self.original_pull_env = os.environ.get("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL")
+    self.original_allowlist_env = os.environ.get("GPU_HOUSEKEEPER_MODEL_ALLOWLIST")
     server._PROFILES.clear()
     server._JOBS.clear()
+    server.reset_ollama_model_catalog_cache()
 
   def tearDown(self):
+    server.parse_nvidia_smi = self.orig_parse_nvidia_smi
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_ollama_json = self.orig_request_ollama_json
+    server.ollama_model_catalog = self.orig_ollama_model_catalog
+    server.memory_available_mb = self.orig_memory_available_mb
+    server.container_disk_available_mb = self.orig_container_disk_available_mb
+    if self.original_pull_env is None:
+      os.environ.pop("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_ALLOW_MODEL_PULL"] = self.original_pull_env
+    if self.original_allowlist_env is None:
+      os.environ.pop("GPU_HOUSEKEEPER_MODEL_ALLOWLIST", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_MODEL_ALLOWLIST"] = self.original_allowlist_env
+    server.reset_ollama_model_catalog_cache()
     server._PROFILES.clear()
     server._JOBS.clear()
 
@@ -40,6 +60,16 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "profileName": "qwen-test",
       "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen-test", "messages": []}}
     })
+    ensure = server.submit_job({
+      "handleId": "handle-ensure",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": "qwen-test", "pullIfMissing": False}
+      }
+    })
     bad = server.submit_job({
       "handleId": "handle-three",
       "runtimeName": "ollama",
@@ -49,7 +79,157 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     self.assertTrue(generate["accepted"])
     self.assertTrue(chat["accepted"])
+    self.assertTrue(ensure["accepted"])
     self.assertFalse(bad["accepted"])
+
+  def test_ensure_model_reports_an_installed_exact_tag_without_pulling(self):
+    model = "qwen3.5:9b"
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 100, "vramFreeMb": 12188}]
+    }
+    calls = []
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      calls.append((pathname, payload))
+      if pathname == "/api/ps":
+        return {"models": []}
+      if pathname == "/api/tags":
+        return {"models": [{"name": model, "digest": "sha256:test", "size": 1000}]}
+      raise AssertionError(pathname)
+
+    server.request_ollama_json = fake_request
+    result = server.execute_ollama_ensure_model({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "dischargeAllowed": False,
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": model, "pullIfMissing": False}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result["state"], "available")
+    self.assertFalse(result["pulled"])
+    self.assertEqual(result["metadata"]["name"], model)
+    self.assertEqual([item[0] for item in calls], ["/api/ps", "/api/tags"])
+
+  def test_ensure_model_reports_missing_tag_without_pull_budget_requirements(self):
+    model = "missing-model:latest"
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 100, "vramFreeMb": 12188}]
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      {"models": []} if pathname in {"/api/ps", "/api/tags"} else AssertionError(pathname)
+    )
+    result = server.execute_ollama_ensure_model({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "dischargeAllowed": False,
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": model, "pullIfMissing": False}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result["state"], "not-installed")
+    self.assertFalse(result["available"])
+
+  def test_ensure_model_pulls_only_the_allowlisted_exact_tag_with_storage_checks(self):
+    model = "qwen3.5:9b"
+    catalogs = iter([
+      {"available": True, "models": []},
+      {"available": True, "models": [{"name": model, "digest": "sha256:pulled", "size": 1234}]}
+    ])
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 100, "vramFreeMb": 12188}]
+    }
+    server.ollama_model_catalog = lambda force=False: next(catalogs)
+    server.memory_available_mb = lambda: {"available": True, "availableMb": 16000, "totalMb": 64000}
+    server.container_disk_available_mb = lambda _container, path_name: {
+      "available": True, "availableMb": 100000, "path": path_name
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      calls.append((pathname, payload)) or ({"models": []} if pathname == "/api/ps" else {"status": "success"})
+    )
+    os.environ["GPU_HOUSEKEEPER_ALLOW_MODEL_PULL"] = "true"
+    os.environ["GPU_HOUSEKEEPER_MODEL_ALLOWLIST"] = model
+    result = server.execute_ollama_ensure_model({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "dischargeAllowed": False,
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000, "ramRequiredMb": 8000, "diskRequiredMb": 5000},
+        "payload": {"model": model, "pullIfMissing": True}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True, "containerName": "ollama"}})
+
+    self.assertEqual(result["state"], "available")
+    self.assertTrue(result["pulled"])
+    self.assertEqual(calls[1][0], "/api/pull")
+    self.assertEqual(calls[1][1], {"name": model, "stream": False})
+
+  def test_ensure_model_reports_insufficient_vram(self):
+    model = "large-model:latest"
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 12000, "vramFreeMb": 288}]
+    }
+    server.ollama_model_catalog = lambda force=False: {
+      "available": True, "models": [{"name": model}]
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: {"models": []}
+    result = server.execute_ollama_ensure_model({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "dischargeAllowed": False,
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": model, "pullIfMissing": False}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result["state"], "insufficient-capacity")
+    self.assertIn("discharge is disabled", result["reason"])
+
+  def test_zero_keep_alive_marks_ollama_profile_not_loaded(self):
+    model = "qwen3.5:9b"
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      {"models": []} if pathname == "/api/ps" else {"response": "ok"}
+    )
+    result = server.execute_ollama_job({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "jobSpec": {
+        "kind": "ollama-generate",
+        "payload": {"model": model, "prompt": "probe", "keep_alive": 0}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result, {"response": "ok"})
+    self.assertFalse(server._PROFILES[model]["loaded"])
 
   def test_ollama_execution_discharges_non_target_warm_models_then_runs_target(self):
     calls = []

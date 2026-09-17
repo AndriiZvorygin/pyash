@@ -88,6 +88,7 @@ multi-host scheduler.
 - `GET /queue`
 - `GET /runtime`
 - `GET /runtime/<runtimeName>`
+- `GET /runtime/ollama/models`
 - `POST /capacity/preview`
 - `POST /submit`
 - `GET /job/<remoteJobId>`
@@ -140,6 +141,26 @@ Before execution, the housekeeper:
 4. checks warm models via `/api/ps`,
 5. discharges non-target warm models with `keep_alive: 0`,
 6. runs the requested model with default `keep_alive: 300`.
+
+Ollama model availability is exposed separately from model execution. An
+explicit `ollama-ensure-model` job can check an exact provider tag and return
+its digest, size and model metadata through the same queue, device gate and
+runtime lifecycle. It does not pull by default. Pulling is an explicit,
+allowlisted operation controlled on the host by
+`GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` and
+`GPU_HOUSEKEEPER_MODEL_ALLOWLIST=<exact tags>`, and requires declared VRAM,
+RAM and model-store disk capacity. The housekeeper starts the registered
+Ollama container when needed and uses Ollama's own `/api/pull`; Criterion or a
+Pyash caller never copies model files between hosts or manages model
+residency itself. A missing model therefore produces a structured
+`not-installed` or `not-authorized` result instead of an implicit download.
+
+The model catalog is queried from Ollama `/api/tags` and is available at
+`GET /runtime/ollama/models` and in `/snapshot`. Matching is exact, including
+provider tags containing colons, slashes and quantization suffixes. A normal
+generation request with `keep_alive: 0` also clears the housekeeper's warm
+residency flag, so its snapshot does not claim that a discharged model remains
+loaded.
 
 This is the first real GPU-managed mind path for non-streaming Pyash Ollama calls.
 

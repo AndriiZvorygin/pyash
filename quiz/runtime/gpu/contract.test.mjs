@@ -5,6 +5,7 @@ import {
   normalizeGpuId,
   normalizeLane,
   normalizeHandleId,
+  normalizeResidencyName,
   normalizeDependencyHandles,
   buildGpuQueueEnvelope,
   assertGpuQueueEnvelope
@@ -88,5 +89,20 @@ test("gpu queue envelope carries explicit handle dependencies", () => {
   });
 
   assert.deepEqual(envelope.dependsOnHandles, ["second", "producer"]);
+  assert.doesNotThrow(() => assertGpuQueueEnvelope(envelope));
+});
+
+test("provider residency names preserve exact Ollama model tags", () => {
+  assert.equal(normalizeResidencyName("qwen3.5:9b"), "qwen3.5:9b");
+  assert.equal(normalizeResidencyName("hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"), "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  const envelope = buildGpuQueueEnvelope({
+    handleId: "model-tag",
+    agentName: "agent-a",
+    gpuId: "gpu0",
+    intent: "probe",
+    residencyName: "qwen3.5:9b",
+    payloadSentence: { mood: "do", be: "gpu probe", ob: { text: "model-tag" } }
+  });
+  assert.equal(envelope.residencyName, "qwen3.5:9b");
   assert.doesNotThrow(() => assertGpuQueueEnvelope(envelope));
 });

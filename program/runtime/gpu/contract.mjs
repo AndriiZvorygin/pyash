@@ -3,6 +3,12 @@ function normalizeText(value) {
   return String(value).trim();
 }
 
+export function normalizeResidencyName(raw = "") {
+  const text = normalizeText(raw);
+  if (!text || /[\u0000-\u001f\u007f]/u.test(text)) return "";
+  return text;
+}
+
 function normalizeSegment(raw = "", { allowColon = false, fallback = "" } = {}) {
   const pattern = allowColon ? /[^a-z0-9._:-]+/g : /[^a-z0-9._-]+/g;
   const text = String(raw ?? "")
@@ -64,6 +70,14 @@ function assertNormalizedOptionalSegment(value, label) {
   }
 }
 
+function assertNormalizedResidencyName(value) {
+  const text = normalizeText(value);
+  if (!text) return;
+  if (normalizeResidencyName(text) !== text) {
+    throw new Error("gpu queue envelope defective: invalid residency name");
+  }
+}
+
 export function normalizeGpuId(raw = "") {
   return normalizeSegment(raw, { allowColon: true, fallback: "" });
 }
@@ -97,7 +111,7 @@ export function buildGpuQueueEnvelope(input = {}) {
     hostId: normalizeSegment(input?.hostId, { fallback: "" }),
     deviceId: normalizeSegment(input?.deviceId, { fallback: "" }),
     serviceName: normalizeSegment(input?.serviceName, { fallback: "" }),
-    residencyName: normalizeSegment(input?.residencyName, { fallback: "" }),
+    residencyName: normalizeResidencyName(input?.residencyName),
     residencyRequired: normalizeBool(input?.residencyRequired, false),
     beginRequired: normalizeBool(input?.beginRequired, false),
     dischargeAllowed: normalizeBool(input?.dischargeAllowed, true),
@@ -141,7 +155,7 @@ export function assertGpuQueueEnvelope(value = {}) {
   assertNormalizedOptionalSegment(value.hostId, "host id");
   assertNormalizedOptionalSegment(value.deviceId, "device id");
   assertNormalizedOptionalSegment(value.serviceName, "service name");
-  assertNormalizedOptionalSegment(value.residencyName, "residency name");
+  assertNormalizedResidencyName(value.residencyName);
 
   if (typeof value.residencyRequired !== "boolean") {
     throw new Error("gpu queue envelope defective: invalid residency required");

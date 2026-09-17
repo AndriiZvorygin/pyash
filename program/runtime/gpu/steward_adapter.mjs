@@ -12,6 +12,12 @@ function normalizeSegment(raw = "") {
     .replace(/^-+|-+$/g, "");
 }
 
+function normalizeResidencyName(raw = "") {
+  const text = normalizeText(raw);
+  if (!text || /[\u0000-\u001f\u007f]/u.test(text)) return "";
+  return text;
+}
+
 function normalizeSpec(raw) {
   if (raw == null) return {};
   if (typeof raw === "string") return raw;
@@ -158,7 +164,7 @@ export function createGpuStewardAdapter({ hostId = "", transport = null } = {}) 
         hostId: resolveHostId(callHostId, adapterHostId),
         deviceId: normalizeSegment(deviceId),
         serviceName: normalizeSegment(serviceName),
-        residencyName: normalizeSegment(residencyName),
+        residencyName: normalizeResidencyName(residencyName),
         beginSpec: normalizeSpec(beginSpec)
       };
       return stewardTransport.beginService(payload);
@@ -174,7 +180,7 @@ export function createGpuStewardAdapter({ hostId = "", transport = null } = {}) 
         hostId: resolveHostId(callHostId, adapterHostId),
         deviceId: normalizeSegment(deviceId),
         serviceName: normalizeSegment(serviceName),
-        residencyName: normalizeSegment(residencyName)
+        residencyName: normalizeResidencyName(residencyName)
       };
       return stewardTransport.dischargeService(payload);
     },
@@ -191,7 +197,7 @@ export function createGpuStewardAdapter({ hostId = "", transport = null } = {}) 
         hostId: resolveHostId(callHostId, adapterHostId),
         deviceId: normalizeSegment(deviceId),
         serviceName: normalizeSegment(serviceName),
-        residencyName: normalizeSegment(residencyName),
+        residencyName: normalizeResidencyName(residencyName),
         handleId: normalizeSegment(handleId),
         jobSpec: normalizeSpec(jobSpec)
       };
