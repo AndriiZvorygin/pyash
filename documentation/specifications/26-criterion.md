@@ -38,7 +38,7 @@ Each run records a dataset hash when a file is supplied, input/prompt/output has
 
 ## Nightmare
 
-`nightmare` repeats a criterion workload and records timeout/failure/skipped evidence. `nightmare run`, `soak` and `stress` are command modes. The default local execution is single-flight because Pyash treats GPU/LLM-heavy pipelines as exclusive. A remote execution adapter may add bounded concurrency without changing the result contract.
+`nightmare` repeats a criterion workload and records timeout/failure/skipped evidence. `nightmare run`, `soak` and `stress` are command modes. GPU/LLM-heavy execution remains single-flight by default per physical housekeeper device. The existing bounded `gpu_worker` coordinator may fan out independent duties across available housekeeper hosts/devices, while same-device overlap requires an explicitly registered `concurrencySafe` runtime and housekeeper capacity admission. This does not change the Criterion result contract.
 
 ## Reverie
 

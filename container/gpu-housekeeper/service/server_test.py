@@ -1,6 +1,8 @@
 import importlib.util
+import json
 import os
 import pathlib
+import threading
 import time
 import unittest
 
@@ -219,6 +221,153 @@ class HousekeeperOllamaTests(unittest.TestCase):
     finally:
       server.execute_registered_job = original
 
+  def test_registered_jobs_on_different_devices_run_in_parallel(self):
+    original_execute_job = server.execute_job
+    started = threading.Event()
+    both_started = threading.Event()
+    counter_lock = threading.Lock()
+    active = 0
+
+    def fake_execute(job, _runtime_registry):
+      nonlocal active
+      with counter_lock:
+        active += 1
+        if active == 2:
+          both_started.set()
+      started.set()
+      both_started.wait(1)
+      with counter_lock:
+        active -= 1
+      return {"device": job["deviceId"]}
+
+    try:
+      server.execute_job = fake_execute
+      server._JOBS.update({
+        "parallel-one": {
+          "remoteJobId": "parallel-one", "runtimeName": "test", "profileName": "one",
+          "deviceId": "gpu-0", "status": "queued", "forwarded": False
+        },
+        "parallel-two": {
+          "remoteJobId": "parallel-two", "runtimeName": "test", "profileName": "two",
+          "deviceId": "gpu-1", "status": "queued", "forwarded": False
+        }
+      })
+      registry = {"test": {"runtimeName": "test", "concurrencySafe": False}}
+      server.start_registered_job("parallel-one", registry)
+      server.start_registered_job("parallel-two", registry)
+      self.assertTrue(both_started.wait(1))
+      for _ in range(100):
+        if all(server._JOBS[item]["status"] == "success" for item in ("parallel-one", "parallel-two")):
+          break
+        time.sleep(0.01)
+      self.assertEqual(server._JOBS["parallel-one"]["status"], "success")
+      self.assertEqual(server._JOBS["parallel-two"]["status"], "success")
+    finally:
+      server.execute_job = original_execute_job
+      server._JOBS.clear()
+      server._RUNNING_JOB_IDS.clear()
+      server._RUNNING_JOB_ID = None
+
+  def test_same_device_overlap_requires_concurrency_safe_runtime(self):
+    server._JOBS["safe-running"] = {
+      "remoteJobId": "safe-running", "runtimeName": "safe", "profileName": "one",
+      "deviceId": "gpu-0", "status": "running", "forwarded": False,
+      "jobSpec": {"resourceRequest": {"vramRequiredMb": 4000}}
+    }
+    safe_registry = {"safe": {"runtimeName": "safe", "concurrencySafe": True}}
+    unsafe_registry = {"unsafe": {"runtimeName": "unsafe", "concurrencySafe": False}}
+    self.assertFalse(server.local_execution_slot_busy({
+      "runtimeName": "safe", "deviceId": "gpu-0",
+      "jobSpec": {"resourceRequest": {"vramRequiredMb": 4000}}
+    }, safe_registry))
+    self.assertTrue(server.local_execution_slot_busy({
+      "runtimeName": "unsafe", "deviceId": "gpu-0"
+    }, unsafe_registry))
+
+  def test_different_devices_do_not_share_the_default_execution_block(self):
+    server._JOBS["gpu-zero-running"] = {
+      "remoteJobId": "gpu-zero-running", "runtimeName": "unsafe", "profileName": "one",
+      "deviceId": "gpu-0", "status": "running", "forwarded": False
+    }
+    registry = {"unsafe": {"runtimeName": "unsafe", "concurrencySafe": False}}
+    self.assertFalse(server.local_execution_slot_busy({
+      "runtimeName": "unsafe", "deviceId": "gpu-1"
+    }, registry))
+
+  def test_same_device_shared_runtime_can_run_two_jobs(self):
+    original_execute_job = server.execute_job
+    original_parse_nvidia_smi = server.parse_nvidia_smi
+    started = threading.Event()
+    both_started = threading.Event()
+    counter_lock = threading.Lock()
+    active = 0
+
+    def fake_execute(job, _runtime_registry):
+      nonlocal active
+      with counter_lock:
+        active += 1
+        if active == 2:
+          both_started.set()
+      started.set()
+      both_started.wait(1)
+      with counter_lock:
+        active -= 1
+      return {"job": job["remoteJobId"]}
+
+    try:
+      server.execute_job = fake_execute
+      server.parse_nvidia_smi = lambda: {
+        "available": True,
+        "devices": [{"deviceId": "gpu0", "vramFreeMb": 12000, "vramTotalMb": 24576, "vramUsedMb": 12576}]
+      }
+      server._JOBS.update({
+        "shared-one": {
+          "remoteJobId": "shared-one", "runtimeName": "safe", "profileName": "one",
+          "deviceId": "gpu-0", "status": "queued", "forwarded": False,
+          "jobSpec": {"resourceRequest": {"vramRequiredMb": 4000}}
+        },
+        "shared-two": {
+          "remoteJobId": "shared-two", "runtimeName": "safe", "profileName": "two",
+          "deviceId": "gpu-0", "status": "queued", "forwarded": False,
+          "jobSpec": {"resourceRequest": {"vramRequiredMb": 4000}}
+        }
+      })
+      registry = {"safe": {"runtimeName": "safe", "concurrencySafe": True}}
+      server.start_registered_job("shared-one", registry)
+      server.start_registered_job("shared-two", registry)
+      self.assertTrue(both_started.wait(1))
+      for _ in range(100):
+        if all(server._JOBS[item]["status"] == "success" for item in ("shared-one", "shared-two")):
+          break
+        time.sleep(0.01)
+      self.assertEqual(server._JOBS["shared-one"]["status"], "success")
+      self.assertEqual(server._JOBS["shared-two"]["status"], "success")
+      self.assertEqual(server.queue_depth(), 0)
+    finally:
+      server.execute_job = original_execute_job
+      server.parse_nvidia_smi = original_parse_nvidia_smi
+      server._JOBS.clear()
+      server._RUNNING_JOB_IDS.clear()
+      server._RUNNING_JOB_ID = None
+
+  def test_custom_runtime_registry_parses_concurrency_safely(self):
+    original_registry = os.environ.get("GPU_HOUSEKEEPER_RUNTIME_REGISTRY")
+    os.environ["GPU_HOUSEKEEPER_RUNTIME_REGISTRY"] = json.dumps([{
+      "runtimeName": "safe",
+      "containerName": "safe-runtime",
+      "gpuExpected": "true",
+      "concurrencySafe": "true"
+    }])
+    try:
+      registry = server.load_runtime_registry()
+    finally:
+      if original_registry is None:
+        os.environ.pop("GPU_HOUSEKEEPER_RUNTIME_REGISTRY", None)
+      else:
+        os.environ["GPU_HOUSEKEEPER_RUNTIME_REGISTRY"] = original_registry
+    self.assertTrue(registry["safe"]["gpuExpected"])
+    self.assertTrue(registry["safe"]["concurrencySafe"])
+
 
 class HousekeeperCapacityTests(unittest.TestCase):
   def setUp(self):
@@ -280,6 +429,26 @@ class HousekeeperCapacityTests(unittest.TestCase):
     }
     result = server.ensure_capacity_for_job(self.target_job(), {"huggingface": {"runtimeName": "huggingface"}})
     self.assertEqual(result["decision"], "fits")
+
+  def test_local_route_selects_an_idle_device_when_device_is_unspecified(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [
+        {"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 12000, "vramFreeMb": 12576},
+        {"deviceId": "gpu1", "vramTotalMb": 24576, "vramUsedMb": 4000, "vramFreeMb": 20576},
+      ]
+    }
+    server._JOBS["gpu-zero-running"] = {
+      "remoteJobId": "gpu-zero-running", "runtimeName": "ollama", "profileName": "one",
+      "deviceId": "gpu0", "status": "running", "forwarded": False
+    }
+    result = server.local_route_state(
+      {"runtimeName": "ollama", "profileName": "two", "jobSpec": {}},
+      {"ollama": {"runtimeName": "ollama", "concurrencySafe": False}},
+      "mriczo"
+    )
+    self.assertEqual(result["deviceId"], "gpu1")
+    self.assertTrue(result["immediate"])
 
   def test_idle_comfyui_is_reclaimed_through_provider_hooks_without_stop(self):
     telemetry = iter([
@@ -817,6 +986,33 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertTrue(candidate["available"])
     self.assertTrue(candidate["busy"])
     self.assertFalse(candidate["immediate"])
+
+  def test_peer_route_uses_the_requested_device_slot(self):
+    responses = iter([
+      {
+        "runtimes": [{"runtimeName": "ollama", "status": "running", "concurrencySafe": False}],
+        "profiles": [],
+        "executionSlots": [{
+          "deviceId": "gpu0",
+          "busy": True,
+          "jobs": [{"runtimeName": "ollama", "concurrencySafe": False, "status": "running"}]
+        }],
+        "executionSlotBusy": True,
+        "queueDepth": 1,
+      },
+      {"feasible": True, "decision": "fits"},
+    ])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "swac",
+      "http://swac:8090",
+      {"runtimeName": "ollama", "profileName": "qwen", "deviceId": "gpu1", "jobSpec": {}}
+    )
+
+    self.assertTrue(candidate["available"])
+    self.assertFalse(candidate["busy"])
+    self.assertTrue(candidate["immediate"])
 
   def test_peer_without_live_runtime_is_not_a_route_target(self):
     server.peer_request_json = lambda *_args, **_kwargs: {

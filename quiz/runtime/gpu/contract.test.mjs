@@ -5,6 +5,7 @@ import {
   normalizeGpuId,
   normalizeLane,
   normalizeHandleId,
+  normalizeDependencyHandles,
   buildGpuQueueEnvelope,
   assertGpuQueueEnvelope
 } from "../../../program/runtime/gpu/contract.mjs";
@@ -27,6 +28,7 @@ test("gpu contract queue envelope normalization works", () => {
   assert.equal(envelope.intent, "verify");
   assert.equal(envelope.lane, "fast");
   assert.equal(envelope.retryCount, 2);
+  assert.deepEqual(envelope.dependsOnHandles, []);
   assert.ok(envelope.payloadSentence);
   assert.doesNotThrow(() => assertGpuQueueEnvelope(envelope));
 });
@@ -71,4 +73,20 @@ test("gpu id, lane, and handle id normalization is stable", () => {
   assert.equal(normalizeLane("", "durable"), "durable");
   assert.equal(normalizeHandleId("  Handle__ABC  "), "handle__abc");
   assert.equal(normalizeHandleId(""), "");
+  assert.deepEqual(normalizeDependencyHandles(["First Handle", "first-handle", ""]), ["first-handle"]);
+});
+
+test("gpu queue envelope carries explicit handle dependencies", () => {
+  const envelope = buildGpuQueueEnvelope({
+    handleId: "consumer",
+    agentName: "agent-a",
+    gpuId: "gpu-0",
+    intent: "verify",
+    payloadSentence: { mood: "do", be: "gpu verify", ob: { text: "consumer" } },
+    jobSpec: { kind: "sleep", dependsOnHandles: ["producer"] },
+    dependsOnHandles: ["second", "producer"]
+  });
+
+  assert.deepEqual(envelope.dependsOnHandles, ["second", "producer"]);
+  assert.doesNotThrow(() => assertGpuQueueEnvelope(envelope));
 });

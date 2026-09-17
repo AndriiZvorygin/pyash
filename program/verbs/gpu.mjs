@@ -337,6 +337,7 @@ export async function gpu(call, { remember: rememberFn = remember } = {}) {
     residencyRequired: true,
     beginRequired: true,
     dischargeAllowed: true,
+    dependsOnHandles: jobSpec?.dependsOnHandles,
     jobSpec
   });
   await writeGpuHandleStatus(worldRoot, handleId, {
