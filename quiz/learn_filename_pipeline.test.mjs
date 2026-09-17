@@ -14,7 +14,10 @@ import {
   resolveChildArtifactProduceFilename,
   resolveChildArtifactResult,
   planMergeLayers,
-  recoverLearnCardFromChildArtifacts
+  recoverLearnCardFromChildArtifacts,
+  mapWithConcurrency,
+  resolveLearnParallelism,
+  buildLearnChildEnv
 } from "../command/learn_from_filename_pipeline.mjs";
 
 test("parseLearningPipelineRequest reads labeled stdin payload", () => {
@@ -66,6 +69,46 @@ test("planMergeLayers builds bounded merge tree for many cards", () => {
       ]
     }
   ]);
+});
+
+test("resolveLearnParallelism follows explicit bounds and worker defaults", () => {
+  assert.equal(resolveLearnParallelism(0), 4);
+  assert.equal(resolveLearnParallelism(2.9), 2);
+  assert.equal(resolveLearnParallelism(99), 8);
+});
+
+test("mapWithConcurrency fans out work while preserving input order", async () => {
+  let active = 0;
+  let maxActive = 0;
+  const started = [];
+  const result = await mapWithConcurrency(["one", "two", "three", "four"], async (value, index) => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    started.push(index);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    active -= 1;
+    return value.toUpperCase();
+  }, { concurrency: 2 });
+
+  assert.deepEqual(result, ["ONE", "TWO", "THREE", "FOUR"]);
+  assert.ok(maxActive >= 2, `expected sibling work to overlap, max active=${maxActive}`);
+  assert.deepEqual(started.slice(0, 2), [0, 1]);
+});
+
+test("learn child runs opt into the configured housekeeper queue", () => {
+  const originalManager = process.env.PYA_GPU_HOUSEKEEPER_URL;
+  const originalQueue = process.env.PYA_GPU_MIND_QUEUE;
+  try {
+    process.env.PYA_GPU_HOUSEKEEPER_URL = "http://gpu-housekeeper:8090";
+    delete process.env.PYA_GPU_MIND_QUEUE;
+    assert.equal(buildLearnChildEnv().PYA_GPU_MIND_QUEUE, "truth");
+    assert.equal(buildLearnChildEnv({ PYA_GPU_MIND_QUEUE: "false" }).PYA_GPU_MIND_QUEUE, "false");
+  } finally {
+    if (originalManager === undefined) delete process.env.PYA_GPU_HOUSEKEEPER_URL;
+    else process.env.PYA_GPU_HOUSEKEEPER_URL = originalManager;
+    if (originalQueue === undefined) delete process.env.PYA_GPU_MIND_QUEUE;
+    else process.env.PYA_GPU_MIND_QUEUE = originalQueue;
+  }
 });
 
 test("resolveRunProgramPath follows the current checkout root", () => {
@@ -235,6 +278,35 @@ test("runLearnFilenamePipeline uses chunk extract then merge-refine for large so
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
   }
+});
+
+test("runLearnFilenamePipeline extracts independent chunks concurrently", async () => {
+  const writes = new Map();
+  const source = "Independent learning sentence. ".repeat(900);
+  const expectedChunks = splitIntoOverlappingChunks(source, DEFAULT_CHUNK_SIZE, 1800);
+  assert.ok(expectedChunks.length >= 2, "fixture should produce multiple chunks");
+  let active = 0;
+  let maxActive = 0;
+
+  const output = await runLearnFilenamePipeline({
+    sourceFilename: "parallel-large.txt",
+    learningFocus: "independent learning",
+    parallelism: 2,
+    readFileFn: async (file) => file === "parallel-large.txt" ? source : writes.get(file) ?? "",
+    mkdtempFn: async () => "/tmp/learn-parallel-test",
+    writeFileFn: async (file, text) => writes.set(file, text),
+    runExtractFn: async ({ sourceFilename }) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      active -= 1;
+      return `CARD ${path.basename(sourceFilename)}`;
+    },
+    runMergeRefineFn: async () => "FINAL PARALLEL CARD"
+  });
+
+  assert.equal(output, "FINAL PARALLEL CARD");
+  assert.ok(maxActive >= 2, `expected chunk extraction to overlap, max active=${maxActive}`);
 });
 
 test("runLearnFilenamePipeline retries chunk extraction when learn card schema validation fails", async () => {

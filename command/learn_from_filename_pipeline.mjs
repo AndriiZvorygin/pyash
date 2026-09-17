@@ -9,6 +9,8 @@ export const DEFAULT_CHUNK_SIZE = 8 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
 export const DEFAULT_MERGE_GROUP_SIZE = 4;
 export const DEFAULT_STAGE_RETRIES = 3;
+export const DEFAULT_LEARN_PARALLELISM = 4;
+const MAX_LEARN_PARALLELISM = 8;
 const PARAGRAPH_BOUNDARY = /\n\s*\n/gmu;
 const CHILD_OLLAMA_TIMEOUT_MS = "600000";
 const VERBOSE_STREAM_MAX_LINES = 24;
@@ -90,6 +92,32 @@ function normalizeStageResult(result) {
     resultText: String(result ?? ""),
     traceFilename: ""
   };
+}
+
+export function resolveLearnParallelism(value) {
+  const configured = value ?? process.env.PYA_LEARN_PARALLELISM ?? process.env.PYA_GPU_WORKER_CONCURRENCY;
+  const numeric = Number(configured);
+  if (!Number.isFinite(numeric) || numeric < 1) return DEFAULT_LEARN_PARALLELISM;
+  return Math.max(1, Math.min(MAX_LEARN_PARALLELISM, Math.floor(numeric)));
+}
+
+export async function mapWithConcurrency(items, worker, { concurrency = resolveLearnParallelism() } = {}) {
+  const values = Array.isArray(items) ? items : [];
+  if (values.length === 0) return [];
+  const limit = Math.min(values.length, resolveLearnParallelism(concurrency));
+  const results = new Array(values.length);
+  let nextIndex = 0;
+
+  async function consume() {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(values[index], index);
+    }
+  }
+
+  await Promise.all(new Array(limit).fill(null).map(() => consume()));
+  return results;
 }
 
 function stageRetryCount() {
@@ -487,15 +515,25 @@ export function resolveRunProgramPath(cwd = process.cwd()) {
   return path.resolve(String(cwd ?? process.cwd()), "run");
 }
 
-async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir = "", traceLabel = "stage", childRunId = "" } = {}) {
-  const effectiveRunId = String(childRunId ?? "").trim() || buildChildRunId(process.env.PYA_RUN_ID, traceLabel);
-  const runArgs = ["--verbose", "--run-id", effectiveRunId, examplePath, ...args];
-  runArgs.push("--no-checkpoint");
+export function buildLearnChildEnv(envOverrides = {}) {
   const childEnv = {
     ...process.env,
     PYA_OLLAMA_REQUEST_TIMEOUT_MS: process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS || CHILD_OLLAMA_TIMEOUT_MS,
     ...envOverrides
   };
+  // A configured housekeeper is the explicit opt-in for routing child mind work
+  // through the durable GPU lane. An explicit false value still preserves direct mode.
+  if (childEnv.PYA_GPU_MIND_QUEUE == null && String(childEnv.PYA_GPU_HOUSEKEEPER_URL ?? "").trim()) {
+    childEnv.PYA_GPU_MIND_QUEUE = "truth";
+  }
+  return childEnv;
+}
+
+async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir = "", traceLabel = "stage", childRunId = "" } = {}) {
+  const effectiveRunId = String(childRunId ?? "").trim() || buildChildRunId(process.env.PYA_RUN_ID, traceLabel);
+  const runArgs = ["--verbose", "--run-id", effectiveRunId, examplePath, ...args];
+  runArgs.push("--no-checkpoint");
+  const childEnv = buildLearnChildEnv(envOverrides);
   const { stdoutText, stderrText } = await new Promise((resolve, reject) => {
     const runPath = resolveRunProgramPath(process.cwd());
     const proc = spawn(runPath, runArgs, {
@@ -566,7 +604,8 @@ export async function runLearnFilenamePipeline({
   writeFileFn = (file, text) => fsp.writeFile(file, text),
   runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel, childRunId }),
   runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel, childRunId }),
-  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel, childRunId })
+  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel, childRunId }),
+  parallelism
 }) {
   if (!String(sourceFilename ?? "").trim()) {
     throw new Error("learn filename pipeline defective: missing source filename");
@@ -575,6 +614,7 @@ export async function runLearnFilenamePipeline({
     throw new Error("learn filename pipeline defective: missing learning focus");
   }
   const takeFixtureResponses = createMindFixtureAllocator(process.env.PYA_MIND_RESPONSE);
+  const stageParallelism = resolveLearnParallelism(parallelism);
   const sourceText = await readFileFn(sourceFilename);
   const artifactRoot = resolvePipelineArtifactRoot();
   logVerbose(`[learn pipeline] source filename: ${sourceFilename}`);
@@ -604,23 +644,34 @@ export async function runLearnFilenamePipeline({
   logVerbose(`[learn pipeline] chunk overlap chars: ${DEFAULT_CHUNK_OVERLAP}`);
   logVerbose(`[learn pipeline] chunk count: ${chunks.length}`);
   logVerbose(`[learn pipeline] chunk sizes: first=${chunks[0]?.length ?? 0} last=${chunks.at(-1)?.length ?? 0}`);
-  const chunkCards = [];
-  for (let idx = 0; idx < chunks.length; idx += 1) {
+  logVerbose(`[learn pipeline] sibling stage parallelism: ${stageParallelism}`);
+  const chunkJobs = chunks.map((chunk, idx) => {
     const chunkFilename = path.join(tempRoot, `chunk-${String(idx + 1).padStart(3, "0")}.txt`);
-    await writeFileFn(chunkFilename, chunks[idx]);
-    logVerbose(`[learn pipeline] extracting chunk ${idx + 1}/${chunks.length} (${chunks[idx].length} chars)`);
+    return {
+      index: idx,
+      chunk,
+      chunkFilename,
+      envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(1) ?? process.env.PYA_MIND_RESPONSE }
+    };
+  });
+  for (const job of chunkJobs) {
+    await writeFileFn(job.chunkFilename, job.chunk);
+  }
+  const chunkCards = await mapWithConcurrency(chunkJobs, async (job) => {
+    const idx = job.index;
+    logVerbose(`[learn pipeline] extracting chunk ${idx + 1}/${chunks.length} (${job.chunk.length} chars)`);
     const card = normalizeStageResult(await runStageWithRetries(`chunk ${idx + 1}/${chunks.length}`, async () => runExtractFn({
-      sourceFilename: chunkFilename,
+      sourceFilename: job.chunkFilename,
       learningFocus,
-      envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(1) ?? process.env.PYA_MIND_RESPONSE },
+      envOverrides: job.envOverrides,
       traceDir: tempRoot,
       traceLabel: `chunk-${String(idx + 1).padStart(3, "0")}`,
       childRunId: buildChildRunId(process.env.PYA_RUN_ID, `chunk-${String(idx + 1).padStart(3, "0")}`, path.basename(tempRoot))
     })));
     if (card.traceFilename) logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} trace: ${card.traceFilename}`);
     logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} ok`);
-    chunkCards.push(card.resultText);
-  }
+    return card.resultText;
+  }, { concurrency: stageParallelism });
   const mergePlan = planMergeLayers(chunkCards, DEFAULT_MERGE_GROUP_SIZE);
   if (mergePlan.length) {
     logVerbose(`[learn pipeline] merge layers: ${mergePlan.length}`);
@@ -636,7 +687,7 @@ export async function runLearnFilenamePipeline({
     const layerDir = path.join(tempRoot, layerLabel);
     await fsp.mkdir(layerDir, { recursive: true });
     const groups = buildMergeGroups(currentCards, DEFAULT_MERGE_GROUP_SIZE);
-    const mergedCards = [];
+    const mergeJobs = [];
     for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
       const groupNumber = groupIndex + 1;
       const groupLabel = `group-${String(groupNumber).padStart(3, "0")}`;
@@ -647,20 +698,31 @@ export async function runLearnFilenamePipeline({
         .join("\n\n=====\n\n");
       const cardsFilename = path.join(groupDir, "chunk-cards.txt");
       await writeFileFn(cardsFilename, cardsText);
-      logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} starting (${groups[groupIndex].length} cards)`);
+      mergeJobs.push({
+        groupIndex,
+        groupLabel,
+        groupDir,
+        cardsFilename,
+        cardCount: groups[groupIndex].length,
+        envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE }
+      });
+    }
+    const mergedCards = await mapWithConcurrency(mergeJobs, async (job) => {
+      const { groupLabel, groupDir, cardsFilename, cardCount } = job;
+      logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} starting (${cardCount} cards)`);
       const merged = normalizeStageResult(await runStageWithRetries(`${layerLabel} ${groupLabel}`, async () => runMergeRefineFn({
         sourceFilename,
         cardsFilename,
         learningFocus,
-        envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
+        envOverrides: job.envOverrides,
         traceDir: groupDir,
         traceLabel: "merge-refine",
         childRunId: buildChildRunId(process.env.PYA_RUN_ID, `${layerLabel}/${groupLabel}`, path.basename(tempRoot))
       })));
       if (merged.traceFilename) logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} trace: ${merged.traceFilename}`);
       logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} ok`);
-      mergedCards.push(merged.resultText);
-    }
+      return merged.resultText;
+    }, { concurrency: stageParallelism });
     currentCards = mergedCards;
   }
 
