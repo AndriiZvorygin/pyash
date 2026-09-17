@@ -60,6 +60,15 @@ Review/coding loops must declare:
 
 Refineries may be triggered by calendar/scheduler services; scheduler control lives in agent/world specs.
 
+The filename-backed `be learn do` pipeline uses the same dependency shape for
+large sources: independent chunk extraction fans out with bounded concurrency,
+then sibling merge groups fan out within each merge layer, and the next layer
+waits for those results. `PYA_LEARN_PARALLELISM` controls the pipeline fan-out
+(bounded to eight); when unset, `PYA_GPU_WORKER_CONCURRENCY` is respected and
+the default is four. Child mind calls automatically use the durable GPU lane
+when `PYA_GPU_HOUSEKEEPER_URL` is explicitly configured, while an explicit
+`PYA_GPU_MIND_QUEUE=false` keeps direct execution for local debugging.
+
 ## 6. Comparison refinery module profile (normative)
 
 `be better compare do` is a pairwise comparison loop profile for module-driven candidate selection.
