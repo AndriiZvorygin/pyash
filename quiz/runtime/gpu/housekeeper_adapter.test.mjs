@@ -77,6 +77,21 @@ test("housekeeper adapter getQueue calls GET /queue", async () => {
   );
 });
 
+test("housekeeper adapter reads the exact Ollama model catalog", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { available: true, models: [{ name: "qwen3.5:9b" }] } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090" });
+      const result = await adapter.getOllamaModels();
+
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, "http://housekeeper:8090/runtime/ollama/models");
+      assert.equal(calls[0].options.method, "GET");
+      assert.equal(result.models[0].name, "qwen3.5:9b");
+    }
+  );
+});
+
 test("housekeeper adapter submitJob posts expected payload", async () => {
   await withMockFetch(
     async () => makeJsonResponse({ body: { remoteJobId: "job-abc", accepted: true } }),

@@ -6,6 +6,7 @@ import path from "node:path";
 
 import {
   DEFAULT_TEXT_MODEL,
+  ensureManagedOllamaModel,
   requestManagedOllamaChat,
   resolveGpuHousekeeperUrl,
   submitManagedGpuJob,
@@ -109,4 +110,33 @@ test("generic ComfyUI jobs use the same manager queue and return the remote resu
   assert.equal(calls[0].url, "http://mriczo:8090/submit");
   assert.equal(calls[0].body.runtimeName, "comfyui");
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 12000);
+});
+
+test("Ollama model provisioning uses one exact queued housekeeper job", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith("/submit")) return response({ remoteJobId: "job-ensure" });
+    return response({
+      status: "success",
+      result: { state: "available", model: "qwen3.5:9b", pulled: false },
+    });
+  };
+
+  const result = await ensureManagedOllamaModel({
+    model: "qwen3.5:9b",
+    managerUrl: "http://mriczo:8090",
+    vramRequiredMb: 7000,
+    pullIfMissing: false,
+    fetchImpl,
+    pollIntervalMs: 1,
+  });
+
+  assert.equal(result.state, "available");
+  assert.equal(calls[0].body.runtimeName, "ollama");
+  assert.equal(calls[0].body.profileName, "qwen3.5:9b");
+  assert.equal(calls[0].body.jobSpec.kind, "ollama-ensure-model");
+  assert.equal(calls[0].body.jobSpec.payload.model, "qwen3.5:9b");
+  assert.equal(calls[0].body.jobSpec.payload.pullIfMissing, false);
+  assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 7000);
 });

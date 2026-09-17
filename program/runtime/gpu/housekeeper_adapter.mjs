@@ -76,6 +76,14 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) 
       });
     },
 
+    async getOllamaModels() {
+      return requestJson({
+        baseUrl: rootUrl,
+        pathname: "/runtime/ollama/models",
+        method: "GET"
+      });
+    },
+
     async submitJob({ handleId = "", runtimeName = "", profileName = "", jobSpec = {}, deviceId = "", dischargeAllowed, routing = null } = {}) {
       const body = {
         handleId: normalizeText(handleId),

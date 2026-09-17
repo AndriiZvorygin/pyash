@@ -160,6 +160,53 @@ export async function submitManagedGpuJob({
   throw new Error(`gpu-managed ${normalizedRuntime} job timed out after ${timeoutMs}ms`);
 }
 
+/** Check or explicitly provision an exact Ollama tag through gpu-housekeeper. */
+export async function ensureManagedOllamaModel({
+  model = "",
+  managerUrl = "",
+  providerUrl = "",
+  deviceId = process.env.PYA_GPU_DEVICE_ID || "",
+  vramRequiredMb = Number.parseInt(String(process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || "12000"), 10) || 12000,
+  ramRequiredMb = 0,
+  diskRequiredMb = 0,
+  pullIfMissing = false,
+  dischargeAllowed = true,
+  handleId = "",
+  fetchImpl = globalThis.fetch,
+  timeoutMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || "3600000"), 10) || 3600000,
+  pollIntervalMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_POLL_MS || "500"), 10) || 500,
+} = {}) {
+  const exactModel = text(model);
+  if (!exactModel) throw new Error("managed Ollama provisioning requires an exact model tag");
+  const resourceRequest = {
+    vramRequiredMb: Math.max(1, Number(vramRequiredMb) || 0),
+    ...(Number(ramRequiredMb) > 0 ? { ramRequiredMb: Math.floor(Number(ramRequiredMb)) } : {}),
+    ...(Number(diskRequiredMb) > 0 ? { diskRequiredMb: Math.floor(Number(diskRequiredMb)) } : {}),
+    ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
+  };
+  return submitManagedGpuJob({
+    runtimeName: "ollama",
+    profileName: exactModel,
+    managerUrl,
+    providerUrl,
+    deviceId,
+    dischargeAllowed,
+    handleId,
+    fetchImpl,
+    timeoutMs,
+    pollIntervalMs,
+    vramRequiredMb: resourceRequest.vramRequiredMb,
+    jobSpec: {
+      kind: "ollama-ensure-model",
+      resourceRequest,
+      payload: {
+        model: exactModel,
+        pullIfMissing: Boolean(pullIfMissing),
+      },
+    },
+  });
+}
+
 export async function requestManagedOllamaChat({
   model = "",
   runtimePath = "",
