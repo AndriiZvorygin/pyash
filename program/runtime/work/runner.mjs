@@ -199,6 +199,10 @@ function filterUnsatisfiedDependencies(entries, tasks, roadmap) {
   return { eligible, blocked };
 }
 
+export function selectIndependentWorkCandidates(entries = [], tasks = [], roadmap = {}) {
+  return filterUnsatisfiedDependencies(entries, tasks, roadmap);
+}
+
 export async function inspectWorkBackground({
   worldRoot,
   owner = "",
@@ -222,8 +226,8 @@ export async function inspectWorkBackground({
     });
   let allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
   let roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
-  let dependencyFilter = filterUnsatisfiedDependencies(eligible, allTasks, roadmap);
-  let recoveryDependencyFilter = filterUnsatisfiedDependencies(
+  let dependencyFilter = selectIndependentWorkCandidates(eligible, allTasks, roadmap);
+  let recoveryDependencyFilter = selectIndependentWorkCandidates(
     recoverable.map((task) => ({ task })),
     allTasks,
     roadmap
@@ -237,7 +241,7 @@ export async function inspectWorkBackground({
     maxRecoveryCount: policy.maxOperationalRecoveries,
     currentPolicy: timeoutPolicy
   });
-  const revalidationDependencyFilter = filterUnsatisfiedDependencies(
+  const revalidationDependencyFilter = selectIndependentWorkCandidates(
     policyRevalidation.map((task) => ({ task })),
     allTasks,
     roadmap
@@ -280,15 +284,15 @@ export async function inspectWorkBackground({
       });
       allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
       roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
-      dependencyFilter = filterUnsatisfiedDependencies(eligible, allTasks, roadmap);
-      recoveryDependencyFilter = filterUnsatisfiedDependencies(
+      dependencyFilter = selectIndependentWorkCandidates(eligible, allTasks, roadmap);
+      recoveryDependencyFilter = selectIndependentWorkCandidates(
         recoverable.map((task) => ({ task })),
         allTasks,
         roadmap
       );
       eligible = dependencyFilter.eligible;
       recoverable = recoveryDependencyFilter.eligible.map((entry) => entry.task);
-      const resumedRevalidationDependencyFilter = filterUnsatisfiedDependencies(
+      const resumedRevalidationDependencyFilter = selectIndependentWorkCandidates(
         policyRevalidation.map((task) => ({ task })),
         allTasks,
         roadmap

@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { parse } from "../../understand/index.mjs";
@@ -15,7 +16,8 @@ import {
   buildGpuQueueEnvelope,
   assertGpuQueueEnvelope,
   normalizeGpuId,
-  normalizeLane
+  normalizeLane,
+  normalizeDependencyHandles
 } from "./contract.mjs";
 
 function quotePyashText(value) {
@@ -153,6 +155,7 @@ function envelopeToText(envelope = {}) {
     { key: "discharge allowed", type: "bool", value: envelope.dischargeAllowed !== false ? "yes" : "no" },
     { key: "begin spec", type: "text", value: quotePyashText(encodeSpecValue(envelope.beginSpec)) },
     { key: "job spec", type: "text", value: quotePyashText(encodeSpecValue(envelope.jobSpec)) },
+    { key: "depends on handles", type: "text", value: quotePyashText(JSON.stringify(normalizeDependencyHandles(envelope.dependsOnHandles))) },
     { key: "remote job id", type: "text", value: quotePyashText(String(envelope.remoteJobId ?? "")) }
   ];
   return `${mapBlock("gpu queue envelope", entries)}\n`;
@@ -185,6 +188,7 @@ function envelopeFromText(text) {
     dischargeAllowed: true,
     beginSpec: "",
     jobSpec: "",
+    dependsOnHandles: [],
     remoteJobId: ""
   };
   for (const entry of entries) {
@@ -215,6 +219,13 @@ function envelopeFromText(text) {
     if (entry.key === "discharge allowed") out.dischargeAllowed = parseBoolValue(entry.valueRaw);
     if (entry.key === "begin spec") out.beginSpec = decodeSpecValue(entry.valueRaw);
     if (entry.key === "job spec") out.jobSpec = decodeSpecValue(entry.valueRaw);
+    if (entry.key === "depends on handles") {
+      try {
+        out.dependsOnHandles = normalizeDependencyHandles(JSON.parse(parsePyashQuotedText(entry.valueRaw)));
+      } catch {
+        out.dependsOnHandles = [];
+      }
+    }
     if (entry.key === "remote job id") out.remoteJobId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
   }
   return out;
@@ -284,12 +295,22 @@ export async function enqueueProduceEnvelope(worldRoot, envelope = {}) {
 
 export async function claimOldestInputEnvelope(
   worldRoot,
-  { workerTag = "", gpuId = "", agentName = "", lane = "" } = {}
+  { workerTag = "", gpuId = "", agentName = "", lane = "", dependencyReady = null } = {}
 ) {
   const paths = await ensureGpuQueueDirs(worldRoot);
   const pending = await listSpoolItemsOldestFirst(paths.inputDir);
   for (const filename of pending) {
     if (!filenameMatchesScope(filename, { gpuId, agentName })) continue;
+    if (typeof dependencyReady === "function") {
+      try {
+        const preview = await readEnvelopeFile(path.join(paths.inputDir, filename));
+        assertGpuQueueEnvelope(preview);
+        const readiness = await dependencyReady(preview);
+        if (readiness === false || readiness?.ready === false) continue;
+      } catch {
+        // Claim malformed or unreadable envelopes so the existing requeue path can handle them.
+      }
+    }
     const claim = await claimSpoolItem({
       fromDir: paths.inputDir,
       runtimeDir: paths.runtimeDir,
@@ -308,6 +329,18 @@ export async function claimOldestInputEnvelope(
       await requeueClaim(paths, claim, "input");
       continue;
     }
+    if (typeof dependencyReady === "function") {
+      let readiness = { ready: true };
+      try {
+        readiness = await dependencyReady(envelope);
+      } catch (error) {
+        readiness = { ready: false, reason: String(error?.message || error) };
+      }
+      if (readiness === false || readiness?.ready === false) {
+        await requeueClaim(paths, claim, "input");
+        continue;
+      }
+    }
     return { ...claim, envelope };
   }
   return null;
@@ -315,12 +348,22 @@ export async function claimOldestInputEnvelope(
 
 export async function claimOldestProduceEnvelope(
   worldRoot,
-  { workerTag = "", gpuId = "", agentName = "", lane = "" } = {}
+  { workerTag = "", gpuId = "", agentName = "", lane = "", dependencyReady = null } = {}
 ) {
   const paths = await ensureGpuQueueDirs(worldRoot);
   const pending = await listSpoolItemsOldestFirst(paths.produceDir);
   for (const filename of pending) {
     if (!filenameMatchesScope(filename, { gpuId, agentName })) continue;
+    if (typeof dependencyReady === "function") {
+      try {
+        const preview = await readEnvelopeFile(path.join(paths.produceDir, filename));
+        assertGpuQueueEnvelope(preview);
+        const readiness = await dependencyReady(preview);
+        if (readiness === false || readiness?.ready === false) continue;
+      } catch {
+        // Claim malformed or unreadable envelopes so the existing requeue path can handle them.
+      }
+    }
     const claim = await claimSpoolItem({
       fromDir: paths.produceDir,
       runtimeDir: paths.runtimeDir,
@@ -338,6 +381,18 @@ export async function claimOldestProduceEnvelope(
     if (!envelopeMatchesScope(envelope, { gpuId, agentName }) || !laneMatches(envelope, lane)) {
       await requeueClaim(paths, claim, "produce");
       continue;
+    }
+    if (typeof dependencyReady === "function") {
+      let readiness = { ready: true };
+      try {
+        readiness = await dependencyReady(envelope);
+      } catch (error) {
+        readiness = { ready: false, reason: String(error?.message || error) };
+      }
+      if (readiness === false || readiness?.ready === false) {
+        await requeueClaim(paths, claim, "produce");
+        continue;
+      }
     }
     return { ...claim, envelope };
   }

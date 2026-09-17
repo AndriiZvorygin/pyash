@@ -45,6 +45,17 @@ function normalizeSpecValue(raw) {
   throw new Error("gpu queue envelope defective: spec must be map or text");
 }
 
+export function normalizeDependencyHandles(raw = []) {
+  const values = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(",")
+      : [];
+  return [...new Set(values
+    .map((value) => normalizeHandleId(value))
+    .filter(Boolean))];
+}
+
 function assertNormalizedOptionalSegment(value, label) {
   const text = normalizeText(value);
   if (!text) return;
@@ -72,6 +83,8 @@ export function buildGpuQueueEnvelope(input = {}) {
   const payloadSentence = input?.payloadSentence && typeof input.payloadSentence === "object"
     ? input.payloadSentence
     : null;
+  const jobSpec = normalizeSpecValue(input?.jobSpec);
+  const specDependencies = jobSpec && typeof jobSpec === "object" ? jobSpec.dependsOnHandles : [];
   return {
     handleId: normalizeHandleId(input?.handleId ?? input?.payloadId ?? ""),
     agentName: normalizeText(input?.agentName),
@@ -89,7 +102,8 @@ export function buildGpuQueueEnvelope(input = {}) {
     beginRequired: normalizeBool(input?.beginRequired, false),
     dischargeAllowed: normalizeBool(input?.dischargeAllowed, true),
     beginSpec: normalizeSpecValue(input?.beginSpec),
-    jobSpec: normalizeSpecValue(input?.jobSpec),
+    jobSpec,
+    dependsOnHandles: normalizeDependencyHandles(input?.dependsOnHandles ?? specDependencies),
     remoteJobId: normalizeText(input?.remoteJobId)
   };
 }
@@ -144,6 +158,13 @@ export function assertGpuQueueEnvelope(value = {}) {
   }
   if (!(typeof value.jobSpec === "string" || (value.jobSpec && typeof value.jobSpec === "object" && !Array.isArray(value.jobSpec)))) {
     throw new Error("gpu queue envelope defective: invalid job spec");
+  }
+
+  if (value.dependsOnHandles != null && (!Array.isArray(value.dependsOnHandles) || value.dependsOnHandles.some((handleId) => {
+    const normalized = normalizeHandleId(handleId);
+    return !normalized || normalized !== String(handleId).toLowerCase();
+  }))) {
+    throw new Error("gpu queue envelope defective: invalid dependency handles");
   }
 
   const remoteJobId = value.remoteJobId;

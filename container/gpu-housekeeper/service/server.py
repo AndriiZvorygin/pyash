@@ -16,10 +16,51 @@ from urllib.request import Request, urlopen
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _PROFILES: Dict[str, Dict[str, Any]] = {}
 _LOCK = threading.Lock()
+# Kept for compatibility with older imports; device locks below are the
+# execution boundary used by the current housekeeper.
 _EXECUTION_LOCK = threading.Lock()
 _SUBMISSION_LOCK = threading.Lock()
 _RUNNING_JOB_ID: Optional[str] = None
+_RUNNING_JOB_IDS: Dict[str, set] = {}
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
+
+
+class DeviceExecutionGate:
+  """Shared/exclusive admission for one physical device."""
+
+  def __init__(self) -> None:
+    self.condition = threading.Condition()
+    self.shared = 0
+    self.shared_vram_mb = 0
+    self.exclusive = False
+
+  def acquire(self, shared: bool, vram_required_mb: int = 0, can_share=None) -> None:
+    with self.condition:
+      if shared:
+        while self.exclusive or (
+          self.shared > 0
+          and can_share is not None
+          and not can_share(self.shared_vram_mb)
+        ):
+          self.condition.wait()
+        self.shared += 1
+        self.shared_vram_mb += max(0, int(vram_required_mb or 0))
+        return
+      while self.exclusive or self.shared:
+        self.condition.wait()
+      self.exclusive = True
+
+  def release(self, shared: bool, vram_required_mb: int = 0) -> None:
+    with self.condition:
+      if shared:
+        self.shared = max(0, self.shared - 1)
+        self.shared_vram_mb = max(0, self.shared_vram_mb - max(0, int(vram_required_mb or 0)))
+      else:
+        self.exclusive = False
+      self.condition.notify_all()
+
+
+_EXECUTION_GATES: Dict[str, DeviceExecutionGate] = {}
 
 DEFAULT_IDLE_GRACE_SECONDS = 300
 DEFAULT_PEER_TIMEOUT_MS = 1500
@@ -35,7 +76,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "ollama"],
     "restartAction": ["restart", "ollama"],
     "activityProbe": "provider-owned",
-    "dischargeKind": ""
+    "dischargeKind": "",
+    "concurrencySafe": False
   },
   "comfyui": {
     "runtimeName": "comfyui",
@@ -45,7 +87,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "comfyui"],
     "restartAction": ["restart", "comfyui"],
     "activityProbe": "comfyui-queue",
-    "dischargeKind": "comfyui"
+    "dischargeKind": "comfyui",
+    "concurrencySafe": False
   },
   "katago": {
     "runtimeName": "katago",
@@ -55,7 +98,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "katago"],
     "restartAction": ["restart", "katago"],
     "activityProbe": "provider-owned",
-    "dischargeKind": ""
+    "dischargeKind": "",
+    "concurrencySafe": False
   },
   "huggingface": {
     "runtimeName": "huggingface",
@@ -65,7 +109,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "criterion-huggingface"],
     "restartAction": ["restart", "criterion-huggingface"],
     "activityProbe": "provider-owned",
-    "dischargeKind": "huggingface"
+    "dischargeKind": "huggingface",
+    "concurrencySafe": False
   }
 }
 
@@ -199,17 +244,140 @@ def parse_nvidia_smi_processes() -> Dict[str, Any]:
 
 def queue_depth() -> int:
   with _LOCK:
-    running = 1 if _RUNNING_JOB_ID else 0
+    running = sum(len(job_ids) for job_ids in _RUNNING_JOB_IDS.values())
+    if _RUNNING_JOB_ID and not running:
+      running = 1
   return running
 
 
-def local_execution_slot_busy() -> bool:
+def execution_device_id(job: Optional[Dict[str, Any]] = None) -> str:
+  value = normalize_text((job or {}).get("deviceId"))
+  if not value and isinstance((job or {}).get("jobSpec"), dict):
+    request = (job or {}).get("jobSpec", {}).get("resourceRequest")
+    if isinstance(request, dict):
+      value = normalize_text(request.get("deviceId") or request.get("device_id"))
+  value = value.lower()
+  if value.startswith("gpu-") and value[4:].isdigit():
+    value = f"gpu{value[4:]}"
+  if value.isdigit():
+    value = f"gpu{value}"
+  return value or "gpu0"
+
+
+def explicit_execution_device_id(job: Optional[Dict[str, Any]] = None) -> str:
+  value = normalize_text((job or {}).get("deviceId"))
+  if not value and isinstance((job or {}).get("jobSpec"), dict):
+    request = (job or {}).get("jobSpec", {}).get("resourceRequest")
+    if isinstance(request, dict):
+      value = normalize_text(request.get("deviceId") or request.get("device_id"))
+  value = value.lower()
+  if value.startswith("gpu-") and value[4:].isdigit():
+    value = f"gpu{value[4:]}"
+  if value.isdigit():
+    value = f"gpu{value}"
+  return value
+
+
+def execution_gate_for(device_id: str) -> DeviceExecutionGate:
+  key = execution_device_id({"deviceId": device_id})
   with _LOCK:
-    return any(
-      not bool(job.get("forwarded", False))
-      and job.get("status") in {"queued", "running"}
-      for job in _JOBS.values()
-    )
+    gate = _EXECUTION_GATES.get(key)
+    if gate is None:
+      gate = DeviceExecutionGate()
+      _EXECUTION_GATES[key] = gate
+    return gate
+
+
+def first_running_job_id() -> Optional[str]:
+  for job_ids in _RUNNING_JOB_IDS.values():
+    if job_ids:
+      return next(iter(job_ids))
+  return None
+
+
+def local_execution_slot_busy(job: Optional[Dict[str, Any]] = None, runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
+  with _LOCK:
+    active = [
+      candidate for candidate in _JOBS.values()
+      if not bool(candidate.get("forwarded", False))
+      and candidate.get("status") in {"queued", "running"}
+    ]
+  if not active:
+    return False
+  if job is None or runtime_registry is None:
+    return True
+  target_device = execution_device_id(job)
+  target_runtime = normalize_text(job.get("runtimeName")).lower()
+  target_entry = runtime_registry.get(target_runtime) or {}
+  for candidate in active:
+    if execution_device_id(candidate) != target_device:
+      continue
+    candidate_entry = runtime_registry.get(normalize_text(candidate.get("runtimeName")).lower()) or {}
+    target_vram = declared_vram_mb(job)
+    candidate_vram = declared_vram_mb(candidate)
+    if (
+      not bool(target_entry.get("concurrencySafe", False))
+      or not bool(candidate_entry.get("concurrencySafe", False))
+      or target_vram <= 0
+      or candidate_vram <= 0
+    ):
+      return True
+  return False
+
+
+def execution_slots(runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+  with _LOCK:
+    active = [
+      candidate for candidate in _JOBS.values()
+      if not bool(candidate.get("forwarded", False))
+      and candidate.get("status") in {"queued", "running"}
+    ]
+  slots: Dict[str, Dict[str, Any]] = {}
+  for candidate in active:
+    device_id = execution_device_id(candidate)
+    slot = slots.setdefault(device_id, {"deviceId": device_id, "busy": False, "jobs": []})
+    slot["busy"] = True
+    slot["jobs"].append({
+      "remoteJobId": candidate.get("remoteJobId"),
+      "runtimeName": candidate.get("runtimeName"),
+      "status": candidate.get("status"),
+      "concurrencySafe": bool(
+        (runtime_registry or {}).get(normalize_text(candidate.get("runtimeName")).lower(), {}).get("concurrencySafe", False)
+      )
+    })
+  return [slots[key] for key in sorted(slots)]
+
+
+def device_candidates_for_job(job: Dict[str, Any], devices: List[Dict[str, Any]]) -> List[str]:
+  explicit = explicit_execution_device_id(job)
+  if explicit:
+    return [explicit]
+  discovered = sorted({
+    normalize_text(item.get("deviceId")).lower()
+    for item in devices
+    if isinstance(item, dict) and normalize_text(item.get("deviceId"))
+  })
+  return discovered or [execution_device_id(job)]
+
+
+def declared_vram_mb(job: Optional[Dict[str, Any]] = None) -> int:
+  try:
+    request = job_resource_request(job or {})
+  except RuntimeError:
+    return 0
+  return int(request.get("vramRequiredMb") or 0) if request else 0
+
+
+def shared_vram_can_admit(device_id: str, required_vram_mb: int, reserved_vram_mb: int) -> bool:
+  if required_vram_mb <= 0:
+    return False
+  telemetry = parse_nvidia_smi()
+  devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+  device = next((item for item in devices if item.get("deviceId") == device_id), None)
+  if not telemetry.get("available") or not isinstance(device, dict):
+    return False
+  free_mb = int(device.get("vramFreeMb") or 0)
+  return free_mb - max(0, int(reserved_vram_mb or 0)) >= required_vram_mb
 
 
 def profile_list() -> List[Dict[str, Any]]:
@@ -243,7 +411,13 @@ def minimal_jobs() -> List[Dict[str, Any]]:
 
 
 def parse_bool_env(name: str, default: bool = False) -> bool:
-  value = normalize_text(os.environ.get(name)).lower()
+  return parse_bool_value(os.environ.get(name), default)
+
+
+def parse_bool_value(raw: Any, default: bool = False) -> bool:
+  if isinstance(raw, bool):
+    return raw
+  value = normalize_text(raw).lower()
   if not value:
     return default
   return value in {"1", "true", "yes", "on", "truth"}
@@ -310,42 +484,64 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "immediate": False,
       "reason": f"runtime not managed: {runtime_name}"
     }
-  try:
-    capacity = capacity_plan_for_job(job, runtime_registry)
-  except RuntimeError as err:
+  telemetry = parse_nvidia_smi()
+  devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+  if not isinstance(devices, list):
+    devices = []
+  candidates = []
+  for device_id in device_candidates_for_job(job, devices):
+    candidate_job = {**job, "deviceId": device_id}
+    try:
+      capacity = capacity_plan_for_job(candidate_job, runtime_registry)
+    except RuntimeError as err:
+      candidates.append({
+        "hostId": host_id,
+        "deviceId": device_id,
+        "available": False,
+        "immediate": False,
+        "reason": normalize_text(err) or "local capacity check failed"
+      })
+      continue
+    # Submission remains durable even when telemetry is temporarily unavailable;
+    # final execution admission still fails closed in ensure_capacity_for_job.
+    feasible = capacity.get("decision") in {"not-requested", "fits", "reclaim-available", "telemetry-unavailable"}
+    with _LOCK:
+      profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
+      warm = bool(profile.get("loaded", False))
+    busy = local_execution_slot_busy(candidate_job, runtime_registry)
+    score = 0
+    if warm:
+      score += 100
+    if capacity.get("decision") == "fits":
+      score += 20
+    elif capacity.get("decision") == "reclaim-available":
+      score -= 60
+    if not busy:
+      score += 10
+    candidates.append({
+      "hostId": host_id,
+      "deviceId": device_id,
+      "available": feasible,
+      "immediate": feasible and not busy,
+      "busy": busy,
+      "queueDepth": queue_depth(),
+      "warm": warm,
+      "score": score,
+      "capacity": capacity,
+      "reason": "local execution slot occupied" if busy else capacity.get("reason", "local candidate")
+    })
+  available = [item for item in candidates if item.get("available")]
+  if not available:
+    reason = next((item.get("reason") for item in candidates if item.get("reason")), "no executable local GPU device")
     return {
       "hostId": host_id,
       "available": False,
       "immediate": False,
-      "reason": normalize_text(err) or "local capacity check failed"
+      "deviceId": explicit_execution_device_id(job),
+      "candidates": candidates,
+      "reason": reason
     }
-  # Submission remains durable even when telemetry is temporarily unavailable;
-  # final execution admission still fails closed in ensure_capacity_for_job.
-  feasible = capacity.get("decision") in {"not-requested", "fits", "reclaim-available", "telemetry-unavailable"}
-  with _LOCK:
-    profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
-    warm = bool(profile.get("loaded", False))
-  busy = local_execution_slot_busy()
-  score = 0
-  if warm:
-    score += 100
-  if capacity.get("decision") == "fits":
-    score += 20
-  elif capacity.get("decision") == "reclaim-available":
-    score -= 60
-  if busy:
-    score -= 30
-  return {
-    "hostId": host_id,
-    "available": feasible,
-    "immediate": feasible and not busy,
-    "busy": busy,
-    "queueDepth": queue_depth(),
-    "warm": warm,
-    "score": score,
-    "capacity": capacity,
-    "reason": "local execution slot occupied" if busy else capacity.get("reason", "local candidate")
-  }
+  return max(available, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
 
 
 def peer_request_json(base_url: str, pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_ms: int = 1500) -> Dict[str, Any]:
@@ -394,53 +590,76 @@ def peer_route_candidate(
       "available": False,
       "reason": f"peer runtime is unavailable: {runtime_name}"
     }
-  preview = peer_request_json(peer_url, "/capacity/preview", {
-    "runtimeName": runtime_name,
-    "profileName": normalize_text(job.get("profileName")),
-    "deviceId": normalize_text(job.get("deviceId")),
-    "dischargeAllowed": job.get("dischargeAllowed", True) is not False,
-    "jobSpec": job.get("jobSpec")
-  }, timeout_ms=peer_timeout_ms())
-  if not preview.get("feasible"):
-    return {
-      "hostId": peer_host_id,
-      "url": peer_url,
-      "available": False,
-      "preview": preview,
-      "reason": preview.get("error") or preview.get("reason") or "peer capacity is unavailable"
-    }
   profiles = snapshot.get("profiles") if isinstance(snapshot.get("profiles"), list) else []
   target_profile = normalize_text(job.get("profileName"))
   warm = any(normalize_text(item.get("profileName")) == target_profile and item.get("loaded") is True for item in profiles)
-  busy = bool(
-    snapshot.get(
-      "executionSlotBusy",
-      int(snapshot.get("queueDepth") or 0) > 0
-    )
-  )
-  score = 0
-  if warm:
-    score += 100
-  if preview.get("decision") == "fits":
-    score += 20
-  elif preview.get("decision") == "reclaim-available":
-    score -= 60
-  if busy:
-    score -= 30
-  if runtime_status == "running":
-    score += 40
-  return {
-    "hostId": peer_host_id,
-    "url": peer_url,
-    "available": True,
-    "immediate": not busy,
-    "busy": busy,
-    "queueDepth": int(snapshot.get("queueDepth") or 0),
-    "warm": warm,
-    "score": score,
-    "preview": preview,
-    "reason": "peer execution slot occupied" if busy else "peer candidate"
-  }
+  target_safe = bool(runtime.get("concurrencySafe", False))
+  execution_slots_view = snapshot.get("executionSlots")
+  devices = snapshot.get("devices") if isinstance(snapshot.get("devices"), list) else []
+  candidate_devices = device_candidates_for_job(job, devices)
+  candidates = []
+  for device_id in candidate_devices:
+    preview = peer_request_json(peer_url, "/capacity/preview", {
+      "runtimeName": runtime_name,
+      "profileName": normalize_text(job.get("profileName")),
+      "deviceId": device_id,
+      "dischargeAllowed": job.get("dischargeAllowed", True) is not False,
+      "jobSpec": job.get("jobSpec")
+    }, timeout_ms=peer_timeout_ms())
+    if not preview.get("feasible"):
+      continue
+    target_device = execution_device_id({**job, "deviceId": device_id})
+    if isinstance(execution_slots_view, list):
+      busy = False
+      for slot in execution_slots_view:
+        if not isinstance(slot, dict) or normalize_text(slot.get("deviceId")).lower() != target_device:
+          continue
+        for active_job in slot.get("jobs", []):
+          if not target_safe or not bool(active_job.get("concurrencySafe", False)):
+            busy = True
+            break
+        if busy:
+          break
+    else:
+      busy = bool(
+        snapshot.get(
+          "executionSlotBusy",
+          int(snapshot.get("queueDepth") or 0) > 0
+        )
+      )
+    score = 0
+    if warm:
+      score += 100
+    if preview.get("decision") == "fits":
+      score += 20
+    elif preview.get("decision") == "reclaim-available":
+      score -= 60
+    if not busy:
+      score += 10
+    if runtime_status == "running":
+      score += 40
+    candidates.append({
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "deviceId": target_device,
+      "available": True,
+      "immediate": not busy,
+      "busy": busy,
+      "queueDepth": int(snapshot.get("queueDepth") or 0),
+      "warm": warm,
+      "score": score,
+      "preview": preview,
+      "reason": "peer execution slot occupied" if busy else "peer candidate"
+    })
+  if not candidates:
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "deviceId": explicit_execution_device_id(job),
+      "available": False,
+      "reason": "peer capacity is unavailable"
+    }
+  return max(candidates, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
 
 
 def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], host_id: str) -> Dict[str, Any]:
@@ -487,6 +706,7 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "runtimes": list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else [],
     "gpuProcesses": process_view,
     "executionSlotBusy": local_execution_slot_busy(),
+    "executionSlots": execution_slots(Handler.runtime_registry) if "Handler" in globals() else execution_slots(),
     "federation": {
       "enabled": bool(configured_peers()),
       "acceptsForwarded": parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True),
@@ -699,6 +919,9 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
         "error": route.get("reason") or "no executable local or peer GPU target",
         "route": {"candidates": route.get("candidates", [])}
       }
+    selected_device = normalize_text(selected.get("deviceId"))
+    if selected_device:
+      job["deviceId"] = selected_device
     job["route"] = {
       "forwarded": False,
       "originHostId": selected_host,
@@ -1098,6 +1321,8 @@ def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -
 
 def normalize_device_id(raw: Any, devices: List[Dict[str, Any]]) -> str:
   value = normalize_text(raw).lower()
+  if value.startswith("gpu-") and value[4:].isdigit():
+    value = f"gpu{value[4:]}"
   if value.isdigit():
     value = f"gpu{value}"
   if value:
@@ -1387,7 +1612,10 @@ def preview_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[s
 def list_runtime_statuses(runtime_registry: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
   out = []
   for runtime_name in sorted(runtime_registry.keys()):
-    out.append(parse_runtime_status(runtime_registry[runtime_name]))
+    entry = runtime_registry[runtime_name]
+    status = parse_runtime_status(entry)
+    status["concurrencySafe"] = bool(entry.get("concurrencySafe", False))
+    out.append(status)
   return out
 
 
@@ -1864,12 +2092,13 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
       registry[runtime_name] = {
         "runtimeName": runtime_name,
         "containerName": container_name,
-        "gpuExpected": bool(item.get("gpuExpected", True)),
+        "gpuExpected": parse_bool_value(item.get("gpuExpected", True), True),
         "beginAction": item.get("beginAction") if isinstance(item.get("beginAction"), list) else ["start", container_name],
         "stopAction": item.get("stopAction") if isinstance(item.get("stopAction"), list) else ["stop", container_name],
         "restartAction": item.get("restartAction") if isinstance(item.get("restartAction"), list) else ["restart", container_name],
         "activityProbe": normalize_text(item.get("activityProbe")) or "unknown",
-        "dischargeKind": normalize_text(item.get("dischargeKind"))
+        "dischargeKind": normalize_text(item.get("dischargeKind")),
+        "concurrencySafe": parse_bool_value(item.get("concurrencySafe", False), False)
       }
 
   if registry:
@@ -1880,11 +2109,30 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
 
 def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
   global _RUNNING_JOB_ID
-  with _EXECUTION_LOCK:
+  with _LOCK:
+    initial = _JOBS.get(remote_job_id)
+    if not initial:
+      return
+    device_id = execution_device_id(initial)
+    runtime_name = normalize_text(initial.get("runtimeName")).lower()
+    vram_required_mb = declared_vram_mb(initial)
+    shared = bool(
+      (runtime_registry.get(runtime_name) or {}).get("concurrencySafe", False)
+      and vram_required_mb > 0
+    )
+  gate = execution_gate_for(device_id)
+  gate.acquire(
+    shared,
+    vram_required_mb,
+    can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
+    if shared else None
+  )
+  try:
     with _LOCK:
       job = _JOBS.get(remote_job_id)
       if not job:
         return
+      _RUNNING_JOB_IDS.setdefault(device_id, set()).add(remote_job_id)
       _RUNNING_JOB_ID = remote_job_id
       job["status"] = "running"
       job["message"] = "running"
@@ -1919,7 +2167,13 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           current["finishedAt"] = utc_now_iso()
     finally:
       with _LOCK:
-        _RUNNING_JOB_ID = None
+        running_on_device = _RUNNING_JOB_IDS.get(device_id, set())
+        running_on_device.discard(remote_job_id)
+        if not running_on_device:
+          _RUNNING_JOB_IDS.pop(device_id, None)
+        _RUNNING_JOB_ID = first_running_job_id()
+  finally:
+    gate.release(shared, vram_required_mb)
 
 
 def start_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
