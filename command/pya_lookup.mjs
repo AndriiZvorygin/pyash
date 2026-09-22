@@ -32,10 +32,13 @@ export function readPyaTextValues(filePath, wantedNames = []) {
     if (!s) continue;
     const suName = String(s?.su?.name || "").trim();
     if (!suName || !wanted.has(suName.toLowerCase())) continue;
-    const text = String(s?.ob?.text || "").trim();
+    // Declarative defaults may store a text value on either `ob text` or the
+    // `as text` axis (for example the configured vision mind). Treat both as
+    // readable configuration values while preserving the requested sentence
+    // name as the lookup key.
+    const text = String(s?.ob?.text || s?.as?.text || "").trim();
     if (!text) continue;
     out[suName] = text;
   }
   return out;
 }
-

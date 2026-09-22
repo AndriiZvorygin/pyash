@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
+import { resolveTextModel } from "../../runtime/gpu/text-model.mjs";
 
 import { readPyaMapArtifact, writePyaMapArtifact } from "./agenda-stage-contracts.mjs";
 
@@ -25,6 +27,14 @@ const STATUSES = new Set(["executed", "empty", "skipped", "container"]);
 
 function clean(value = "") {
   return String(value || "").replace(/\s+/gu, " ").trim();
+}
+
+function modelLabel(model = "") {
+  return clean(model) || resolveTextModel() || "configured text model";
+}
+
+function verificationMethod(model, detail) {
+  return `${modelLabel(model)} ${detail}`;
 }
 
 function evidenceKey(value = "") {
@@ -292,25 +302,22 @@ export async function callOllamaJson({
   let retryInstruction = "";
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const res = await fetchImpl(ollamaUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          model: llmModel,
-          stream: false,
-          think: false,
-          format: "json",
-          options: { temperature: 0, num_predict: outputTokens },
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: retryInstruction ? `${prompt}\n\n${retryInstruction}` : prompt },
-          ],
-        }),
-        signal: AbortSignal.timeout(Math.max(10_000, Number(process.env.AGENDA_BOUNDARY_LLM_TIMEOUT_MS || 180_000))),
+      const payload = await requestManagedOllamaChat({
+        model: llmModel,
+        ollamaUrl,
+        managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: retryInstruction ? `${prompt}\n\n${retryInstruction}` : prompt },
+        ],
+        format: "json",
+        options: { temperature: 0, num_predict: outputTokens },
+        think: false,
+        keepAlive: 300,
+        fetchImpl,
+        timeoutMs: Math.max(10_000, Number(process.env.AGENDA_BOUNDARY_LLM_TIMEOUT_MS || 180_000)),
       });
-      if (!res.ok) throw new Error(`ollama status ${res.status}`);
-      const payload = await res.json();
-      const content = clean(payload?.message?.content);
+      const content = clean(payload?.message?.content || payload?.response);
       try {
         return JSON.parse(content);
       } catch (parseError) {
@@ -334,7 +341,7 @@ export async function callOllamaJson({
       }
     } catch (error) {
       lastError = error;
-      if (attempt < attempts && /fetch failed|timeout|socket|status 5\d\d/iu.test(String(error?.message || error))) {
+      if (attempt < attempts && /fetch failed|timeout|socket|status (?:408|429|5\d\d)|gpu-managed.*(?:failed|timed out)/iu.test(String(error?.message || error))) {
         await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
       }
     }
@@ -345,7 +352,7 @@ export async function callOllamaJson({
 export async function splitOversizedTranscriptUnits(units, {
   maxWords = 120,
   segmentProvider = null,
-  llmModel = "qwen3.5:9b",
+  llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
 } = {}) {
   const expanded = [];
@@ -582,7 +589,7 @@ export async function locateCanonicalMeetingScopeStart({
   canonical,
   units,
   meetingLabel = "",
-  llmModel = "qwen3.5:9b",
+  llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
   scopeStartProvider = null,
@@ -699,7 +706,7 @@ export async function locateCanonicalMeetingScopeStart({
         log(`[agenda-boundaries] rejected wrong-meeting ${label} scope candidate ${atomicId}`);
         continue;
       }
-      log(`[agenda-boundaries] Qwen located ${label} scope at ${atomicId}; excluded ${index} preceding units`);
+      log(`[agenda-boundaries] ${modelLabel(llmModel)} located ${label} scope at ${atomicId}; excluded ${index} preceding units`);
       return {
         "scope atomic start": atomicId,
         "prefix atomic units": index,
@@ -709,7 +716,7 @@ export async function locateCanonicalMeetingScopeStart({
         reason,
         "evidence quote": evidenceQuote,
         confidence,
-        "verification method": "qwen3.5:9b named-meeting scope discovery with literal evidence",
+        "verification method": verificationMethod(llmModel, "named-meeting scope discovery with literal evidence"),
       };
     }
   }
@@ -741,7 +748,7 @@ export async function locateCanonicalMeetingScopeEnd({
   canonical,
   units,
   meetingLabel = "",
-  llmModel = "qwen3.5:9b",
+  llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
   scopeEndProvider = null,
@@ -823,7 +830,7 @@ export async function locateCanonicalMeetingScopeEnd({
       log(`[agenda-boundaries] rejected ungrounded ${label} scope-end candidate ${atomicId || "(missing id)"}`);
       continue;
     }
-    log(`[agenda-boundaries] Qwen located the end of ${label} before ${atomicId}; excluded ${units.length - index} following units`);
+    log(`[agenda-boundaries] ${modelLabel(llmModel)} located the end of ${label} before ${atomicId}; excluded ${units.length - index} following units`);
     return {
       "scope atomic end": units[index - 1]["atomic unit id"],
       "following meeting atomic start": atomicId,
@@ -835,7 +842,7 @@ export async function locateCanonicalMeetingScopeEnd({
       reason,
       "evidence quote": evidenceQuote,
       confidence,
-      "verification method": "qwen3.5:9b following-meeting scope discovery with literal evidence",
+      "verification method": verificationMethod(llmModel, "following-meeting scope discovery with literal evidence"),
     };
   }
   log(`[agenda-boundaries] Qwen found no separate meeting after ${label} across the complete recording`);
@@ -845,7 +852,7 @@ export async function locateCanonicalMeetingScopeEnd({
     "out of scope suffix": false,
     reason: "no separate following meeting located across complete recording",
     confidence: 1,
-    "verification method": "qwen3.5:9b complete-window following-meeting scope audit",
+    "verification method": verificationMethod(llmModel, "complete-window following-meeting scope audit"),
   };
 }
 
@@ -904,7 +911,7 @@ async function collectWholeChronologyCandidates({ canonical, units, llmModel, ol
         const key = `${candidate["agenda item"]}|${candidate["atomic unit id"]}`;
         if (seen.has(key) || validateBoundaryCandidate(candidate, canonical, units) || candidate.confidence < 0.55) continue;
         seen.add(key);
-        candidate["semantic verification"] = "qwen3.5:9b complete-chronology segmentation with literal evidence";
+        candidate["semantic verification"] = verificationMethod(llmModel, "complete-chronology segmentation with literal evidence");
         if (windowIndex + 1 === chronologyWindows.length) candidate["trailing chronology audit"] = true;
         accepted.push(candidate);
       }
@@ -1084,7 +1091,7 @@ export async function verifyCandidateSemantics({
       classified["agenda item"] = candidate["agenda item"];
       const entry = targetEntry;
       if (entry && await verifyTargetedRecovery({ candidate: classified, entry, units, llmModel, ollamaUrl })) {
-        classified["semantic verification"] = "qwen3.5:9b independently classified and audited exact agenda identity and boundary";
+        classified["semantic verification"] = verificationMethod(llmModel, "independently classified and audited exact agenda identity and boundary");
         if (candidate["explicit revisit candidate"] === true) {
           classified["explicit revisit"] = true;
           classified["prior occurrence atomic unit id"] = candidate["prior occurrence atomic unit id"];
@@ -1100,7 +1107,7 @@ export async function verifyCandidateSemantics({
       const transcriptSpan = context.map((unit) => unit.text).join(" ");
       if (target && competing
         && competingCanonicalIdentityHasDirectSupport({ target, competing, transcriptSpan })) {
-        classified["semantic verification"] = "qwen3.5:9b blind classification selected a different canonical identity with direct title support";
+        classified["semantic verification"] = verificationMethod(llmModel, "blind classification selected a different canonical identity with direct title support");
         competingSelections.push({ originalCandidate: candidate, classified });
       }
     }
@@ -1683,7 +1690,7 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
           ...candidate,
           "agenda item": selectedItem,
           confidence: Math.min(Number(candidate.confidence || 1), Number(classifiedIsCanonical ? parsed.confidence : candidate.confidence || 1)),
-          "semantic verification": "qwen3.5:9b classified verbatim oversized-row span",
+          "semantic verification": verificationMethod(llmModel, "classified verbatim oversized-row span"),
         };
         const entry = canonical.items.find((item) => item.item === reclassified["agenda item"]);
         const ownershipAudit = entry ? await callOllamaJson({
@@ -1764,17 +1771,17 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
           ...context.map((unit) => unit.text),
         ].filter(Boolean).join(" ");
         if (target && competing && competingCanonicalIdentityHasDirectSupport({ target, competing, transcriptSpan: identitySpan })) {
-          proposal["semantic verification"] = "qwen3.5:9b blind classification selected a different canonical identity with direct title support";
+          proposal["semantic verification"] = verificationMethod(llmModel, "blind classification selected a different canonical identity with direct title support");
           log(`[agenda-boundaries] reclassified ${candidate["agenda item"]} boundary as directly announced ${proposal["agenda item"]}`);
           refined.push(proposal);
           continue;
         }
         if (target && await verifyTargetedRecovery({ candidate, entry: target, units, llmModel, ollamaUrl })) {
-          candidate["semantic verification"] = `${candidate["semantic verification"] || "qwen3.5:9b candidate"}; targeted audit resolved competing refinement`;
+          candidate["semantic verification"] = `${candidate["semantic verification"] || `${modelLabel(llmModel)} candidate`}; targeted audit resolved competing refinement`;
           refined.push(candidate);
           continue;
         }
-        log(`[agenda-boundaries] rejected ${candidate["agenda item"]} boundary because qwen3.5:9b classified ${proposal["agenda item"]}`);
+        log(`[agenda-boundaries] rejected ${candidate["agenda item"]} boundary because ${modelLabel(llmModel)} classified ${proposal["agenda item"]}`);
         continue;
       }
       refined.push(candidate);
@@ -1898,9 +1905,9 @@ async function resolveCandidateBoundaryConflicts({ candidates, canonical, units,
     const owners = group.filter((entry) => entry["agenda item"] === selected);
     if (owners.length && Number(parsed?.confidence || 0) >= 0.55) {
       output.push(...owners);
-      log(`[agenda-boundaries] qwen3.5:9b assigned shared ${boundary} boundary to ${selected}`);
+      log(`[agenda-boundaries] ${modelLabel(llmModel)} assigned shared ${boundary} boundary to ${selected}`);
     } else {
-      log(`[agenda-boundaries] qwen3.5:9b rejected ambiguous shared ${boundary} boundary`);
+      log(`[agenda-boundaries] ${modelLabel(llmModel)} rejected ambiguous shared ${boundary} boundary`);
     }
   }
   return output;
@@ -2009,7 +2016,7 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
       if (!entry || hasOwnedCandidate(entry) || broadRecovered.some((item) => item["agenda item"] === entry.item)) continue;
       if (validateBoundaryCandidate(candidate, canonical, units)) continue;
       if (await verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl })) {
-        candidate["semantic verification"] = "qwen3.5:9b broad missing-item recovery with literal evidence";
+        candidate["semantic verification"] = verificationMethod(llmModel, "broad missing-item recovery with literal evidence");
         broadRecovered.push(candidate);
         out.push(candidate);
         log(`[agenda-boundaries] broad recovery found: ${entry.item}@${candidate["atomic unit id"]}`);
@@ -2157,7 +2164,7 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
           if (await verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl })) {
             independentlyAccepted.push({
               ...candidate,
-              "semantic verification": "qwen3.5:9b focused recovery with independent literal-boundary audit",
+              "semantic verification": verificationMethod(llmModel, "focused recovery with independent literal-boundary audit"),
             });
           }
         }
@@ -2421,7 +2428,7 @@ async function collectCandidates({ canonical, units, windows, llmModel, ollamaUr
           break;
         }
       }
-      if (recovered) recovered["semantic verification"] = "qwen3.5:9b targeted exact-item recovery; pending reconciliation";
+      if (recovered) recovered["semantic verification"] = verificationMethod(llmModel, "targeted exact-item recovery; pending reconciliation");
       if (recovered) break;
     }
     if (recovered) {
@@ -2787,7 +2794,7 @@ export async function auditUnownedTranscriptPrefix({
   canonical,
   units,
   dispositions,
-  llmModel = "qwen3.5:9b",
+  llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
   scopeAuditProvider = null,
@@ -2844,7 +2851,7 @@ export async function auditUnownedTranscriptPrefix({
   if (!outOfScope || confidence < minimumConfidence || confidence > 1 || evidenceKey(evidenceQuote).length < 8 || !literalEvidence || !reason) {
     throw new Error(`agenda segmentation retryable: ${firstBoundaryIndex} transcript units precede the first canonical boundary without validated separate-meeting evidence`);
   }
-  log(`[agenda-boundaries] excluded ${firstBoundaryIndex} prefix units after Qwen scope audit: ${reason}`);
+  log(`[agenda-boundaries] excluded ${firstBoundaryIndex} prefix units after ${modelLabel(llmModel)} scope audit: ${reason}`);
   return {
     "prefix atomic units": firstBoundaryIndex,
     "prefix atomic start": prefixUnits[0]["atomic unit id"],
@@ -2853,7 +2860,7 @@ export async function auditUnownedTranscriptPrefix({
     reason,
     "evidence quote": evidenceQuote,
     confidence,
-    "verification method": "qwen3.5:9b separate-meeting scope audit with literal evidence",
+    "verification method": verificationMethod(llmModel, "separate-meeting scope audit with literal evidence"),
   };
 }
 
@@ -2876,7 +2883,7 @@ export async function runLlmAgendaSegmentation({
   matchesPyaPath,
   wiseSeriesPyaPath,
   sectionGroundingPyaPath,
-  llmModel = "qwen3.5:9b",
+  llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
   candidateProvider = null,
@@ -3001,7 +3008,7 @@ export async function runLlmAgendaSegmentation({
         confidence: meetingScopeAudit.confidence,
         "meeting scope boundary": true,
         "window id": "named_meeting_scope",
-        "semantic verification": "qwen3.5:9b named-meeting scope discovery with literal evidence",
+        "semantic verification": verificationMethod(llmModel, "named-meeting scope discovery with literal evidence"),
       },
     ];
   }
@@ -3082,7 +3089,7 @@ export async function runLlmAgendaSegmentation({
         "meeting scope boundary": true,
         confidence: meetingScopeAudit.confidence,
         "window id": "named_meeting_scope",
-        "semantic verification": "qwen3.5:9b named-meeting scope discovery with literal evidence",
+        "semantic verification": verificationMethod(llmModel, "named-meeting scope discovery with literal evidence"),
       },
       ...candidates.filter((candidate) => candidate["agenda item"] !== callToOrder.item),
     ].sort((a, b) => Number(a["atomic unit id"].slice(7)) - Number(b["atomic unit id"].slice(7)));

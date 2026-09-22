@@ -62,7 +62,7 @@ test("Owen whole-meeting recap preserves civic abbreviations and gives retries r
   assert.match(source, /Delete the exact meeting-date phrase/u);
   assert.match(source, /meeting date is article metadata, not SOURCE_ITEM information to preserve/u);
   assert.match(source, /Begin directly with the substantive item action or topic/u);
-  assert.match(source, /num_predict: attempt > 1 \? 180 : 110/u);
+  assert.match(source, /numPredict: attempt > 1 \? 180 : 110/u);
   assert.doesNotMatch(source, /Council heard\.\.\., considered\.\.\., and adopted/u);
   assert.match(source, /unsupported outcome verb named in that error must be replaced/u);
 

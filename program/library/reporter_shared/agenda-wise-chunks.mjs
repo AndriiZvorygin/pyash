@@ -1,4 +1,18 @@
 import fs from "node:fs";
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
+
+async function managedChat({ ollamaUrl, llmModel, messages, options = {}, format = "" }) {
+  return requestManagedOllamaChat({
+    model: llmModel,
+    ollamaUrl,
+    managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+    messages,
+    options,
+    format,
+    think: false,
+    keepAlive: 300,
+  });
+}
 
 const GROSS_PASS_THRESHOLD = (() => {
   const raw = Number(process.env.AGENDA_GROSS_PASS_THRESHOLD || 0.65);
@@ -437,14 +451,8 @@ async function ollamaSummarizeGrossWindow({ start, end, preview, llmModel, ollam
       { role: "user", content: prompt },
     ],
   };
-  const res = await fetch(ollamaUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const payload = await res.json();
-  const text = String(payload?.message?.content || "").trim();
+  const payload = await managedChat({ ollamaUrl, llmModel, messages: body.messages, options: body.options, format: "json" });
+  const text = String(payload?.message?.content || payload?.response || "").trim();
   let parsed = null;
   try { parsed = JSON.parse(text); } catch {
     const m = text.match(/\{[\s\S]*\}/u);
@@ -497,14 +505,8 @@ async function ollamaScoreGrossWindowSummary({ preview, summary, llmModel, ollam
       { role: "user", content: prompt },
     ],
   };
-  const res = await fetch(ollamaUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const payload = await res.json();
-  const review = String(payload?.message?.content || "").trim();
+  const payload = await managedChat({ ollamaUrl, llmModel, messages: body.messages, options: body.options });
+  const review = String(payload?.message?.content || payload?.response || "").trim();
   const score = parseGrossScore(review);
   return { score, review };
 }
@@ -612,14 +614,8 @@ async function ollamaPickGrossWindow({ section, startIndex, paragraphs, searchEn
     ],
   };
 
-  const res = await fetch(ollamaUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const payload = await res.json();
-  const text = String(payload?.message?.content || "").trim();
+  const payload = await managedChat({ ollamaUrl, llmModel, messages: body.messages, options: body.options, format: "json" });
+  const text = String(payload?.message?.content || payload?.response || "").trim();
 
   let parsed = null;
   try { parsed = JSON.parse(text); } catch {
@@ -732,14 +728,8 @@ async function ollamaPickParagraph({ section, startIndex, paragraphs, topCandida
     ],
   };
 
-  const res = await fetch(ollamaUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const payload = await res.json();
-  const text = String(payload?.message?.content || "").trim();
+  const payload = await managedChat({ ollamaUrl, llmModel, messages: body.messages, options: body.options, format: "json" });
+  const text = String(payload?.message?.content || payload?.response || "").trim();
 
   let parsed = null;
   try { parsed = JSON.parse(text); } catch {
@@ -824,14 +814,8 @@ async function ollamaRefineSectionWindow({ section, nextSection, paragraphs, min
     ],
   };
 
-  const res = await fetch(ollamaUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const payload = await res.json();
-  const text = String(payload?.message?.content || "").trim();
+  const payload = await managedChat({ ollamaUrl, llmModel, messages: body.messages, options: body.options, format: "json" });
+  const text = String(payload?.message?.content || payload?.response || "").trim();
 
   let parsed = null;
   try { parsed = JSON.parse(text); } catch {
@@ -885,7 +869,7 @@ export async function generateAgendaWiseArtifacts({
   grossJsonPath = "",
   grossSeriesPath = "",
   useLlmRange = false,
-  llmModel = "qwen3.5:9b",
+  llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {

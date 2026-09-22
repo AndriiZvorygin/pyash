@@ -11,6 +11,7 @@ import {
 } from "./grounded-numeric-fidelity.mjs";
 import { unsupportedNamedMotionAttributions } from "./motion-attribution-verifier.mjs";
 import { auditFinancialClaim } from "./financial-claim-audit.mjs";
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
 
 const STAGE2_GROUNDING_ROOT = "agenda section grounding artifact";
 const STAGE3_SUMMARY_ROOT = "agenda summary artifact";
@@ -224,6 +225,7 @@ export async function repairNumericFidelityLlm({
   summary = "",
   chapterText = "",
   sourceExcerpt = "",
+  llmModel = "",
   ollamaUrl = OLLAMA_URL,
 } = {}) {
   let currentSummary = normalizeText(summary);
@@ -241,7 +243,7 @@ export async function repairNumericFidelityLlm({
     if (attempt > 1 && lastAuditValid && !defects.length) break;
     const parsed = await callOllamaJson({
       ollamaUrl,
-      llmModel: "qwen3.5:9b",
+      llmModel,
       system: "You correct numeric notation in generated civic summaries. Return strict JSON only.",
       prompt: [
         "Audit and correct only numeric notation in the generated fields using the grounded source.",
@@ -274,7 +276,7 @@ export async function repairNumericFidelityLlm({
       // phrase, leaving an otherwise grounded substantive item unpublished.
       const parsed = await callOllamaJson({
         ollamaUrl,
-        llmModel: "qwen3.5:9b",
+        llmModel,
         system: "You convert exact English numeric phrases to Arabic numeric notation. Return strict JSON only.",
         prompt: [
           "Return one replacement for the listed exact phrase as JSON: {\"replacements\":[{\"from\":\"Sixth Street\",\"to\":\"6th Street\"}]}",
@@ -300,7 +302,7 @@ export async function repairNumericFidelityLlm({
     if (!remaining.length) break;
     const parsed = await callOllamaJson({
       ollamaUrl,
-      llmModel: "qwen3.5:9b",
+      llmModel,
       system: "You resolve malformed numeric notation in grounded civic summaries. Return strict JSON only.",
       prompt: [
         "Rewrite both generated fields so none of the listed malformed numeric phrases remain.",
@@ -327,6 +329,7 @@ export async function rewriteWithoutNumericClaimsLlm({
   summary = "",
   chapterText = "",
   sourceExcerpt = "",
+  llmModel = "",
   ollamaUrl = OLLAMA_URL,
 } = {}) {
   let currentSummary = normalizeText(summary);
@@ -339,7 +342,7 @@ export async function rewriteWithoutNumericClaimsLlm({
     ])];
     const parsed = await callOllamaJson({
       ollamaUrl,
-      llmModel: "qwen3.5:9b",
+      llmModel,
       system: "You write grounded civic summaries without numeric claims. Return strict JSON only.",
       prompt: [
         `Correction attempt ${attempt} of 6.`,
@@ -372,7 +375,7 @@ export async function rewriteWithoutNumericClaimsLlm({
     }
   }
   if (!currentSummary) {
-    throw new Error("stage3 retryable: qwen3.5:9b returned an empty qualitative summary");
+    throw new Error("stage3 retryable: configured text model returned an empty qualitative summary");
   }
   return { summary: currentSummary, chapterText: currentChapterText };
 }
@@ -382,6 +385,7 @@ export async function repairUnsupportedNumericClaimsLlm({
   chapterText = "",
   sourceExcerpt = "",
   unsupportedTokens = [],
+  llmModel = "",
   ollamaUrl = OLLAMA_URL,
 } = {}) {
   let currentSummary = normalizeText(summary);
@@ -394,7 +398,7 @@ export async function repairUnsupportedNumericClaimsLlm({
   for (let attempt = 1; attempt <= 4 && unsupported.length; attempt += 1) {
     const parsed = await callOllamaJson({
       ollamaUrl,
-      llmModel: "qwen3.5:9b",
+      llmModel,
       // Numeric repair only returns two bounded prose fields. A large output
       // allowance lets qwen continue explaining the repair until its JSON is
       // truncated or malformed on long source excerpts; keep the response
@@ -869,42 +873,25 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt, maxOutputTo
           lastMalformedContent ? `Previous rejected response (do not repeat its syntax): ${lastMalformedContent.slice(-5000)}` : "",
         ].filter(Boolean).join("\n")
         : "";
-      const body = {
+      const payload = await requestManagedOllamaChat({
         model: llmModel,
-        stream: false,
-        think: false,
-        // Ask Ollama to enforce JSON syntax at the transport boundary. The
-        // prompt still defines the required fields and grounding rules, but
-        // this prevents an otherwise valid Qwen response with an unescaped
-        // quote/newline from aborting a whole meeting after many sections.
+        ollamaUrl,
+        managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: `${prompt}${retryJsonLine}` },
+        ],
         format: "json",
+        think: false,
+        keepAlive: 300,
         options: {
           temperature: Math.max(0, Math.min(1, Number(temperature) || 0)),
           ...(Number(seed) > 0 ? { seed: Number(seed) } : {}),
           ...(Number(maxOutputTokens) > 0 ? { num_predict: Number(maxOutputTokens) } : {}),
         },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: `${prompt}${retryJsonLine}` },
-        ],
-      };
-      const res = await fetch(ollamaUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
+        timeoutMs,
       });
-      if (!res.ok) {
-        const retryableStatus = res.status === 408 || res.status === 429 || res.status >= 500;
-        if (retryableStatus && attempt < maxAttempts) {
-          const waitMs = baseDelayMs * attempt;
-          await new Promise((r) => setTimeout(r, waitMs));
-          continue;
-        }
-        throw new Error(`ollama status ${res.status}`);
-      }
-      const payload = await res.json();
-      const content = String(payload?.message?.content || "").trim();
+      const content = String(payload?.message?.content || payload?.response || "").trim();
       try { return JSON.parse(content); } catch {}
       const m = content.match(/\{[\s\S]*\}/u);
       if (!m) {
@@ -920,7 +907,7 @@ async function callOllamaJson({ ollamaUrl, llmModel, system, prompt, maxOutputTo
     } catch (err) {
       lastErr = err;
       const msg = String(err?.message || err).toLowerCase();
-      const retryable = /fetch failed|network|socket|timeout|timed out|econnreset|enotfound|eai_again|unexpected token|json|unparseable/u.test(msg);
+      const retryable = /fetch failed|network|socket|timeout|timed out|econnreset|enotfound|eai_again|unexpected token|json|unparseable|gpu-managed.*(?:failed|timed out)|status\s+(?:408|429|5\d\d)/u.test(msg);
       if (!retryable || attempt >= maxAttempts) break;
       const waitMs = baseDelayMs * attempt;
       await new Promise((r) => setTimeout(r, waitMs));
@@ -974,7 +961,7 @@ export async function repairChapterTitleLlm({
     rejected = raw || title;
     rejection = `Rejected headline was not a complete 6-12 word civic headline (received ${wordCount} words). Rewrite it from the source.`;
   }
-  throw new Error("stage3 retryable: qwen3.5:9b returned an invalid repaired child title after bounded varied retries");
+  throw new Error("stage3 retryable: configured text model returned an invalid repaired child title after bounded varied retries");
 }
 
 export async function summarizeGroundedUnit({
@@ -1079,7 +1066,7 @@ export async function summarizeGroundedUnit({
     parsed = await queryParsed();
   } catch (err) {
     throw new Error(
-      `stage3 retryable: qwen3.5:9b unavailable at ${ollamaUrl} (${normalizeText(String(err?.message || err)).slice(0, 200)})`,
+      `stage3 retryable: configured text model unavailable at ${ollamaUrl} (${normalizeText(String(err?.message || err)).slice(0, 200)})`,
     );
   }
   let rawSummary = normalizeText(parsed?.summary || "");
@@ -1096,7 +1083,7 @@ export async function summarizeGroundedUnit({
   if (!summary && rawSummary) {
     parsed = await callOllamaJson({
       ollamaUrl,
-      llmModel: "qwen3.5:9b",
+      llmModel,
       system: "You rewrite generated civic-report fragments as complete factual sentences. Return strict JSON only.",
       prompt: [
         "Rewrite the generated fragment into one or two complete grammatical sentences ending with sentence punctuation.",
@@ -1125,7 +1112,7 @@ export async function summarizeGroundedUnit({
   if (longTier && splitSentences(summary).length < 2 && summary) {
     parsed = await callOllamaJson({
       ollamaUrl,
-      llmModel: "qwen3.5:9b",
+      llmModel,
       system: "Rewrite one grounded civic-report sentence as multiple complete sentences. Return strict JSON only.",
       prompt: [
         "Rewrite the generated summary as 2 or 3 separate complete sentences with periods between them.",
@@ -1181,7 +1168,7 @@ export async function summarizeGroundedUnit({
     } else {
       parsed = await callOllamaJson({
         ollamaUrl,
-        llmModel: "qwen3.5:9b",
+        llmModel,
         system: "Write a fresh source-grounded civic summary. Return strict JSON only.",
         prompt: [
           "Start over from the grounded source excerpt; do not revise or repeat the prior draft.",
@@ -1242,7 +1229,7 @@ export async function summarizeGroundedUnit({
   for (let freshAttempt = 1; repeatedAttributionDefects.length && freshAttempt <= 3; freshAttempt += 1) {
     parsed = await callOllamaJson({
       ollamaUrl,
-      llmModel: "qwen3.5:9b",
+      llmModel,
       system: "Write a fresh source-grounded civic summary with no personal names. Return strict JSON only.",
       prompt: [
         "Start over from the grounded source. Do not revise or repeat the rejected draft.",
@@ -1290,6 +1277,7 @@ export async function summarizeGroundedUnit({
     summary,
     chapterText: parsed?.["chapter text"] || "",
     sourceExcerpt: unit["source excerpt"] || "",
+    llmModel,
     ollamaUrl,
   });
   if (repaired.summary) {
@@ -1319,6 +1307,7 @@ export async function summarizeGroundedUnit({
       chapterText: parsed?.["chapter text"] || "",
       sourceExcerpt: numericGroundingSource,
       unsupportedTokens: unsupportedAfterRegeneration,
+      llmModel,
       ollamaUrl,
     });
     rawSummary = groundedRepair.summary;
@@ -1340,6 +1329,7 @@ export async function summarizeGroundedUnit({
         summary,
         chapterText: parsed?.["chapter text"] || "",
         sourceExcerpt: numericGroundingSource,
+        llmModel,
         ollamaUrl,
       });
       rawSummary = notationRepair.summary;
@@ -1356,6 +1346,7 @@ export async function summarizeGroundedUnit({
         chapterText: parsed?.["chapter text"] || "",
         sourceExcerpt: numericGroundingSource,
         unsupportedTokens: unsupported,
+        llmModel,
         ollamaUrl,
       });
       rawSummary = groundingRepair.summary;
@@ -1377,6 +1368,7 @@ export async function summarizeGroundedUnit({
       summary,
       chapterText: parsed?.["chapter text"] || "",
       sourceExcerpt: numericGroundingSource,
+      llmModel,
       ollamaUrl,
     });
     rawSummary = qualitativeRepair.summary;
@@ -1388,7 +1380,7 @@ export async function summarizeGroundedUnit({
     ];
   }
   if (unrepairedNumericDefects.length) {
-    throw new Error(`stage3 retryable: qwen3.5:9b failed numeric fidelity for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}: ${unrepairedNumericDefects.join(", ")}`);
+    throw new Error(`stage3 retryable: configured text model failed numeric fidelity for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}: ${unrepairedNumericDefects.join(", ")}`);
   }
   let unsupportedNumericClaims = unsupportedNumericTokens(
     `${summary} ${String(parsed?.["chapter text"] || "")}`,
@@ -1404,6 +1396,7 @@ export async function summarizeGroundedUnit({
       summary,
       chapterText: parsed?.["chapter text"] || "",
       sourceExcerpt: numericGroundingSource,
+      llmModel,
       ollamaUrl,
     });
     rawSummary = qualitativeRepair.summary;
@@ -1435,7 +1428,7 @@ export async function summarizeGroundedUnit({
     );
     parsed = await callOllamaJson({
       ollamaUrl,
-      llmModel: "qwen3.5:9b",
+      llmModel,
       system: "Write fresh qualitative civic prose with no personal names or numeric claims. Return strict JSON only.",
       prompt: [
         "A downstream repair reintroduced unsupported named movers or seconders. Start over from the grounded source; do not revise the contaminated draft.",
@@ -1477,6 +1470,7 @@ export async function summarizeGroundedUnit({
       summary,
       chapterText: parsed?.["chapter text"] || "",
       sourceExcerpt: freshQualitativeSource,
+      llmModel,
       ollamaUrl,
     });
     summary = enforceSummaryBudget(freshQualitative.summary, budget);
@@ -1747,7 +1741,7 @@ export async function runAgendaStage3SummaryRenderer({
   outSummaryPyaPath,
   outSummaryMdPath,
   focus = "",
-  llmModel = "qwen3.5:9b",
+  llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
 }) {

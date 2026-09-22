@@ -29,6 +29,23 @@ Use this skill when video/refinery runs show repeated GPU model load/unload chur
 - Use one canonical mind model for run-level consistency and validate with
   minimal probes before full refinery runs.
 
+### Explicit model provisioning
+
+- Model availability is a queued `ollama-ensure-model` duty, not an implicit
+  pull hidden inside generation. Preserve the exact provider tag, including
+  `:` `/` and quantization suffixes.
+- Require a realistic full-load `vramRequiredMb`; model pulls additionally
+  require declared `ramRequiredMb` and `diskRequiredMb` and are denied unless
+  the host allowlists the exact tag with `GPU_HOUSEKEEPER_ALLOW_MODEL_PULL`
+  and `GPU_HOUSEKEEPER_MODEL_ALLOWLIST`.
+- The host-local housekeeper starts the registered Ollama runtime and uses
+  Ollama's catalog/pull API. Do not copy model files between GPU hosts or add
+  a model registry to Criterion. A failed fit should be reported as
+  insufficient capacity; unavailable telemetry should remain unknown.
+- `keep_alive: 0` is a real discharge request for the target model. Verify
+  `/api/ps`, `/runtime/ollama/models` and housekeeper snapshot state after
+  provisioning or a smoke request.
+
 ## Quick probes
 
 Mind-only probe (three sequential mind writes):

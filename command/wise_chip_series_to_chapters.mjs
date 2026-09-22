@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "../program/understand/index.mjs";
 import { callPromptMind } from "./itinerary_promptify.mjs";
+import { resolveTextModel } from "../program/runtime/gpu/text-model.mjs";
 
 function usage() {
   return "Usage: node command/wise_chip_series_to_chapters.mjs <input.series.pya> <output_chapters.txt> [--max-words <num>]";
@@ -15,7 +16,7 @@ function parseArgs(argv) {
     inputPath: argv[0],
     outputPath: argv[1],
     maxWords: 4,
-    model: process.env.PYA_MIND_MODEL || "qwen3.5:9b",
+    model: resolveTextModel(process.env.PYA_MIND_MODEL || ""),
     host: process.env.OLLAMA_HOST || "http://localhost:11434"
   };
   for (let i = 2; i < argv.length; i += 1) {

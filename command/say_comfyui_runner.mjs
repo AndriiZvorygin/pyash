@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { resolveGpuHousekeeperUrl, submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -462,21 +463,44 @@ async function main() {
     setAtPath(promptObject, mapping.saveAudioPrefixPath, base);
   }
 
-  const queued = await requestJson(`${host.replace(/\/$/, "")}/prompt`, {
-    client_id: `pyash-${crypto.randomBytes(6).toString("hex")}`,
-    prompt: promptObject
-  });
-  if (queued?.error) {
-    const message = String(queued.error?.message ?? queued.error ?? "prompt rejected");
-    throw new Error(`say_comfyui_runner: prompt rejected: ${message}`);
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "", ollamaUrl: host });
+  let promptId = "";
+  let historyOutput;
+  if (managerUrl) {
+    const managed = await submitManagedGpuJob({
+      runtimeName: "comfyui",
+      profileName: resolveWorkflowName(opts),
+      providerUrl: host,
+      managerUrl,
+      jobSpec: {
+        kind: "comfyui-say",
+        resourceRequest: { vramRequiredMb: Number.parseInt(String(process.env.PYA_COMFYUI_VRAM_REQUIRED_MB || "12000"), 10) || 12000 },
+        prompt: promptObject,
+        clientId: `pyash-${crypto.randomBytes(6).toString("hex")}`,
+        timeoutSec: Math.ceil(resolvePollTimeoutMs() / 1000),
+      },
+      timeoutMs: resolvePollTimeoutMs() + 120_000,
+    });
+    promptId = String(managed?.promptId || "");
+    const entry = managed?.history || managed;
+    const audio = pickFirstAudio(entry);
+    historyOutput = { audio, entry };
+  } else {
+    const queued = await requestJson(`${host.replace(/\/$/, "")}/prompt`, {
+      client_id: `pyash-${crypto.randomBytes(6).toString("hex")}`,
+      prompt: promptObject
+    });
+    if (queued?.error) {
+      const message = String(queued.error?.message ?? queued.error ?? "prompt rejected");
+      throw new Error(`say_comfyui_runner: prompt rejected: ${message}`);
+    }
+    if (queued?.node_errors && typeof queued.node_errors === "object" && Object.keys(queued.node_errors).length > 0) {
+      throw new Error(`say_comfyui_runner: prompt node_errors: ${JSON.stringify(queued.node_errors)}`);
+    }
+    promptId = queued?.prompt_id;
+    if (!promptId) throw new Error("say_comfyui_runner: missing prompt_id from ComfyUI");
+    historyOutput = await pollHistoryForOutput(host, promptId);
   }
-  if (queued?.node_errors && typeof queued.node_errors === "object" && Object.keys(queued.node_errors).length > 0) {
-    throw new Error(`say_comfyui_runner: prompt node_errors: ${JSON.stringify(queued.node_errors)}`);
-  }
-  const promptId = queued?.prompt_id;
-  if (!promptId) throw new Error("say_comfyui_runner: missing prompt_id from ComfyUI");
-
-  const historyOutput = await pollHistoryForOutput(host, promptId);
   let audio = historyOutput?.audio ?? null;
   if (mapping.audioPath) {
     const filename = String(audio?.filename ?? "");

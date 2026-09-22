@@ -45,7 +45,8 @@ export const HUGGING_FACE_MODEL_DEFAULTS = Object.freeze({
     numBeams: 1,
     doSample: false,
     repetitionPenalty: 1.05,
-    operation: "judge"
+    operation: "judge",
+    vramRequiredMb: 20000
   })
 });
 
@@ -186,7 +187,7 @@ export async function createHuggingFaceExecutor({
       requestId: identity ?? requestId ?? ""
     });
     const queuedAt = now().toISOString();
-    const defaults = { ...huggingFaceModelDefaults(model), ...generation };
+    const { vramRequiredMb, ...generationDefaults } = { ...huggingFaceModelDefaults(model), ...generation };
     const payload = {
       model,
       revision,
@@ -195,8 +196,9 @@ export async function createHuggingFaceExecutor({
       prompt: String(prompt ?? ""),
       input: operation === "judge" ? String(prompt ?? "") : String(sample?.input ?? prompt ?? ""),
       ...(Array.isArray(messages) && messages.length ? { messages } : {}),
-      generation: defaults
+      generation: generationDefaults
     };
+    const resourceRequest = Number(vramRequiredMb) > 0 ? { vramRequiredMb: Number(vramRequiredMb) } : null;
 
     await writeStatus(worldRoot, handleId, {
       status: "queued",
@@ -228,6 +230,7 @@ export async function createHuggingFaceExecutor({
       dischargeAllowed: true,
       jobSpec: {
         kind: "huggingface-generate",
+        ...(resourceRequest ? { resourceRequest } : {}),
         payload
       }
     });

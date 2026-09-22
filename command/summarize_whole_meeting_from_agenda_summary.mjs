@@ -2,6 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readPyaTextValues } from './pya_lookup.mjs';
+import { requestManagedOllamaChat } from '../program/runtime/gpu/managed-ollama.mjs';
+import { resolveTextModel } from '../program/runtime/gpu/text-model.mjs';
 
 // LEGACY ENTRYPOINT: JSON-era whole-meeting synthesis.
 // Canonical writers call reporter_shared/whole-meeting-synthesis.mjs (.pya-native).
@@ -21,7 +23,7 @@ const MODEL = process.env.MEETING_SUMMARY_MODEL
   || process.env.SUMMARY_MODEL
   || process.env.OWEN_MEETING_SUMMARY_MODEL
   || process.env.OWEN_SUMMARY_MODEL
-  || 'qwen3.5:9b';
+  || resolveTextModel();
 const MAX_ATTEMPTS = Math.max(
   1,
   Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_ATTEMPTS || '2'), 10) || 2,
@@ -116,24 +118,17 @@ function abridgeUtf8(text, maxBytes) {
 }
 
 async function ask(messages, { numPredict = 520 } = {}) {
-  const body = {
+  const json = await requestManagedOllamaChat({
     model: MODEL,
-    mode: 'chat',
-    keep_alive: 300,
-    think: false,
-    stream: false,
+    ollamaUrl: OLLAMA_URL,
+    managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || '',
+    messages,
     options: { num_predict: numPredict },
-    messages
-  };
-  const res = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
+    think: false,
+    keepAlive: 300,
+    timeoutMs: OLLAMA_TIMEOUT_MS,
   });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || '').trim();
+  return String(json?.message?.content || json?.response || '').trim();
 }
 
 function sectionContent(mdText, heading) {

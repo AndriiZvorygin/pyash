@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import { splitIntoOverlappingChunks } from "./learn_from_filename_pipeline.mjs";
+import { resolveTextModel } from "../program/runtime/gpu/text-model.mjs";
 
-const MODEL = "qwen3.5:9b";
+const MODEL = resolveTextModel();
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, "")
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, "")}/api/chat`
   : "http://localhost:11434/api/chat";

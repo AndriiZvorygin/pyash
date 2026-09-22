@@ -4,6 +4,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { attachImagesToMessages } from "./ollama_image_payload.mjs";
+import { resolveVisionModel } from "../program/runtime/gpu/text-model.mjs";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -255,8 +256,12 @@ async function main() {
   }
   const host = resolveHost(args.host);
   const openAiEndpoint = `${host.replace(/\/$/, "")}/v1/chat/completions`;
+  const model = resolveVisionModel(args.model || "");
+  if (!model) throw new Error("see_vl_runner: no vision model configured; set see default mind in configure/default.pya");
   const openAiBody = {
-    model: args.model ?? "qwen3.5:9b",
+    // This endpoint accepts image content; use the independently configured
+    // multimodal model rather than the text-only house model.
+    model,
     messages: [{ role: "user", content: [{ type: "text", text: effectivePrompt }, ...openAiParts] }],
     max_tokens: Number.isFinite(args.maxTokens) ? args.maxTokens : undefined
   };
@@ -281,7 +286,7 @@ async function main() {
       ollamaImages
     );
     const ollamaBody = {
-      model: args.model ?? "qwen3.5:9b",
+      model,
       messages: ollamaMessages
     };
     response = await requestJson(ollamaEndpoint, ollamaBody);

@@ -8,12 +8,12 @@ import { createHuggingFaceExecutor } from "../program/runtime/criterion/huggingf
 import { runCriterion, rerunCriterion } from "../program/runtime/criterion/run.mjs";
 import { runNightmare, runReverie } from "../program/runtime/criterion/suites.mjs";
 import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime/criterion/report.mjs";
-import { DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
+import { createQueuedOllamaExecutor, DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
 import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
 import { runMeetingBankJudgePilot, MEETINGBANK_JUDGE_PILOT_MODELS } from "../program/runtime/criterion/judge-pilot.mjs";
-import { runMeetingBankFactualityPilot, MEETINGBANK_FACTUALITY_MODELS, MEETINGBANK_FACTUALITY_RUN_ID, MEETINGBANK_FACTUALITY_SELECTION_SEED } from "../program/runtime/criterion/factuality-pilot.mjs";
+import { runMeetingBankFactualityPilot, MEETINGBANK_FACTUALITY_MODELS, MEETINGBANK_FACTUALITY_RUN_ID, MEETINGBANK_FACTUALITY_SELECTION_SEED, UNIRRM_FACTUALITY_MODEL } from "../program/runtime/criterion/factuality-pilot.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -139,7 +139,20 @@ async function runCommand(args, root) {
       await adapter.close();
     }
   } else {
-    result = await runCriterion(options);
+    let adapter = null;
+    try {
+      adapter = options.gpuHousekeeperUrl
+        ? createQueuedOllamaExecutor({ root, runId: options.runId ?? `${options.benchmark ?? "criterion"}-${Date.now()}`, housekeeperUrl: options.gpuHousekeeperUrl, gpuId: options.criterionGpuId, vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB })
+        : null;
+      result = await runCriterion({
+        ...options,
+        ...(adapter ? { executor: adapter.executor, metadataProvider: adapter.metadataProvider } : {})
+      });
+    } finally {
+      if (adapter && result) {
+        await adapter.dischargeModels(result.models ?? options.models ?? []);
+      }
+    }
   }
   print({ runId: result.runId, status: result.status, results: `criterion/results/${result.runId}.jsonl`, report: `criterion/results/${result.runId}.md`, csv: `criterion/results/${result.runId}.csv`, review: `criterion/review/${result.runId}.html` }, hasFlag(args, "--json"));
   return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
@@ -171,6 +184,8 @@ async function factAuditCommand(args, root, forcedMode = null) {
     judgeMaxOutputTokens: numericFlag(args, "--judge-max-output-tokens", 4096),
     judgePromptVersion: flag(args, "--judge-prompt-version", FACT_JUDGE_PROMPT_VERSION),
     factScorerVersion: flag(args, "--fact-scorer-version", FACT_SCORER_VERSION),
+    gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+    gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
     datasetRevision: flag(args, "--dataset-revision", process.env.PYA_CRITERION_DATASET_REVISION ?? "local-unpinned"),
     resume: hasFlag(args, "--resume"),
     smoke: hasFlag(args, "--smoke")
@@ -285,11 +300,15 @@ async function meetingBankFactualityPilotCommand(args, root) {
     split: flag(args, "--split", "test"),
     runId: flag(args, "--run-id", MEETINGBANK_FACTUALITY_RUN_ID),
     models: models.length ? models : MEETINGBANK_FACTUALITY_MODELS,
-    selectionSeed: flag(args, "--selection-seed"),
+    selectionSeed: flag(args, "--selection-seed", MEETINGBANK_FACTUALITY_SELECTION_SEED),
     selectionCount: numericFlag(args, "--selection-count", 10),
     baseUrl: flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST ?? "http://mriczo:11434"),
     gpuHousekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
     gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
+    judgeEngine: flag(args, "--judge-engine", process.env.PYA_CRITERION_FACTUALITY_JUDGE_ENGINE ?? "ollama"),
+    judgeModel: flag(args, "--judge-model", process.env.PYA_CRITERION_FACTUALITY_JUDGE_MODEL ?? UNIRRM_FACTUALITY_MODEL),
+    judgeMaxOutputTokens: numericFlag(args, "--judge-max-output-tokens", Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_MAX_OUTPUT_TOKENS || 2048)),
+    judgeContextLength: numericFlag(args, "--judge-context-length", Number(process.env.PYA_CRITERION_FACTUALITY_JUDGE_CONTEXT_LENGTH || 16384)),
     resume: hasFlag(args, "--resume"),
     smoke: hasFlag(args, "--smoke")
   });

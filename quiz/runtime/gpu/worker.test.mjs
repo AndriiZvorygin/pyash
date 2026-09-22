@@ -7,7 +7,7 @@ import path from "node:path";
 import { enqueueInputEnvelope, queueDepth } from "../../../program/runtime/gpu/queue.mjs";
 import { acquireGpuLease, releaseGpuLease } from "../../../program/runtime/gpu/lease.mjs";
 import { readGpuHandleStatus } from "../../../program/runtime/gpu/handle_status.mjs";
-import { runGpuWorkerOnce } from "../../../program/runtime/gpu/worker.mjs";
+import { runGpuWorkerBatch, runGpuWorkerOnce } from "../../../program/runtime/gpu/worker.mjs";
 
 function payload(text) {
   return {
@@ -171,4 +171,71 @@ test("gpu worker tolerates a transient remote status fetch failure", async () =>
   assert.equal(statusCalls, 2);
   const status = await readGpuHandleStatus(worldRoot, "mind-job-status-retry");
   assert.equal(status?.status, "success");
+});
+
+test("gpu worker leaves a dependency-waiting envelope and claims an independent one", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-dependency-"));
+  const worldRoot = path.join(root, "world");
+  await enqueueMind(worldRoot, {
+    queuedAt: "2026-03-10T09:00:00.000Z",
+    handleId: "dependent-job",
+    dependsOnHandles: ["missing-job"]
+  });
+  await enqueueMind(worldRoot, {
+    queuedAt: "2026-03-10T09:00:01.000Z",
+    handleId: "independent-job"
+  });
+
+  const result = await runGpuWorkerOnce({
+    worldRoot,
+    pollIntervalMs: 1,
+    maxPolls: 3,
+    adapter: {
+      async submitJob(args) {
+        assert.equal(args.handleId, "independent-job");
+        return { remoteJobId: "remote-independent" };
+      },
+      async getJobStatus() {
+        return { status: "success", result: { response: "ok" } };
+      }
+    }
+  });
+
+  assert.equal(result.received, 1);
+  assert.equal(result.handled, 1);
+  assert.equal(result.dependencyWaiting[0].handleId, "dependent-job");
+  assert.equal((await queueDepth(worldRoot)).input, 1);
+});
+
+test("bounded GPU worker batch fans out independent duties through the existing adapter", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-batch-"));
+  const worldRoot = path.join(root, "world");
+  await enqueueMind(worldRoot, { handleId: "batch-one", queuedAt: "2026-03-10T08:00:00.000Z" });
+  await enqueueMind(worldRoot, { handleId: "batch-two", queuedAt: "2026-03-10T08:00:01.000Z" });
+
+  let active = 0;
+  let maximum = 0;
+  const result = await runGpuWorkerBatch({
+    worldRoot,
+    concurrency: 2,
+    pollIntervalMs: 1,
+    maxPolls: 5,
+    adapter: {
+      async submitJob({ handleId }) {
+        return { remoteJobId: `remote-${handleId}` };
+      },
+      async getJobStatus() {
+        active += 1;
+        maximum = Math.max(maximum, active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active -= 1;
+        return { status: "success", result: { response: "ok" } };
+      }
+    }
+  });
+
+  assert.equal(result.received, 2);
+  assert.equal(result.handled, 2);
+  assert.equal(maximum, 2);
+  assert.equal((await queueDepth(worldRoot)).total, 0);
 });

@@ -33,7 +33,9 @@ Fields:
 * `from space` → host (default: `http://localhost:11434` if `OLLAMA_HOST` is unset).
 * `via state` (`as`) → model
 
-  * interpreter default: `qwen3.5:9b` if missing.
+  * If omitted, the interpreter loads `mind model` from `configure/default.pya`
+    (or `model` from the nearest house `conduct/runtime.pya`). The current
+    repository default is `qwen3.5:9b`.
 * `from discourse` (`fromtext`) → system prompt string for the mind.
 * `accordingto name <session>` → series-backed session history (optional).
 * `by num N` (quantity/way case) → history window for that mind (keeps ~N user+assistant pairs). Using the existing quantity axis avoids adding a new case; defaults to ~8 if omitted. Per-call override via `by num` is accepted too.
@@ -265,7 +267,7 @@ and uses `message.content` as the reply text.
 Use one caller shape and swap provider by helper config:
 
 ```pyash
-exists su name helper be mind as name "qwen3.5:9b" ya
+exists su name helper be mind ya
 ob text "Task." for name helper to name text output be write do
 ```
 

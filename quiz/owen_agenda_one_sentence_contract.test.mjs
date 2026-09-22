@@ -93,7 +93,8 @@ test("affected reporter prose stages keep failed generation retryable", () => {
   );
   assert.doesNotMatch(greyFullPipeline, /buildOneSentenceSummary|firstSentence|fallbackLead/u);
   assert.match(greyFullPipeline, /generateOneSentenceSummaryLlm/u);
-  assert.match(greyFullPipeline, /model: "qwen3\.5:9b"/u);
+  assert.match(greyFullPipeline, /requestManagedOllamaChat/u);
+  assert.doesNotMatch(greyFullPipeline, /model:\s*["'](?:qwen3\.5:9b|llama3\.2)/iu);
 
   const picker = fs.readFileSync(new URL("../command/run_next_unposted_story.mjs", import.meta.url), "utf8");
   assert.match(picker, /posted_remote_transcript: true/u);

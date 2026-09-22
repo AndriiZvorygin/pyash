@@ -16,11 +16,62 @@ from urllib.request import Request, urlopen
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _PROFILES: Dict[str, Dict[str, Any]] = {}
 _LOCK = threading.Lock()
+# Kept for compatibility with older imports; device locks below are the
+# execution boundary used by the current housekeeper.
 _EXECUTION_LOCK = threading.Lock()
+_SUBMISSION_LOCK = threading.Lock()
 _RUNNING_JOB_ID: Optional[str] = None
+_RUNNING_JOB_IDS: Dict[str, set] = {}
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
+_OLLAMA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
+  "observedAt": 0.0,
+  "available": False,
+  "models": [],
+  "error": "not observed"
+}
+
+
+class DeviceExecutionGate:
+  """Shared/exclusive admission for one physical device."""
+
+  def __init__(self) -> None:
+    self.condition = threading.Condition()
+    self.shared = 0
+    self.shared_vram_mb = 0
+    self.exclusive = False
+
+  def acquire(self, shared: bool, vram_required_mb: int = 0, can_share=None) -> None:
+    with self.condition:
+      if shared:
+        while self.exclusive or (
+          self.shared > 0
+          and can_share is not None
+          and not can_share(self.shared_vram_mb)
+        ):
+          self.condition.wait()
+        self.shared += 1
+        self.shared_vram_mb += max(0, int(vram_required_mb or 0))
+        return
+      while self.exclusive or self.shared:
+        self.condition.wait()
+      self.exclusive = True
+
+  def release(self, shared: bool, vram_required_mb: int = 0) -> None:
+    with self.condition:
+      if shared:
+        self.shared = max(0, self.shared - 1)
+        self.shared_vram_mb = max(0, self.shared_vram_mb - max(0, int(vram_required_mb or 0)))
+      else:
+        self.exclusive = False
+      self.condition.notify_all()
+
+
+_EXECUTION_GATES: Dict[str, DeviceExecutionGate] = {}
 
 DEFAULT_IDLE_GRACE_SECONDS = 300
+DEFAULT_PEER_TIMEOUT_MS = 1500
+DEFAULT_PEER_FAILURE_LIMIT = 3
+DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -32,7 +83,9 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "ollama"],
     "restartAction": ["restart", "ollama"],
     "activityProbe": "provider-owned",
-    "dischargeKind": ""
+    "dischargeKind": "",
+    "concurrencySafe": False,
+    "modelStorePath": DEFAULT_OLLAMA_MODEL_STORE_PATH
   },
   "comfyui": {
     "runtimeName": "comfyui",
@@ -42,7 +95,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "comfyui"],
     "restartAction": ["restart", "comfyui"],
     "activityProbe": "comfyui-queue",
-    "dischargeKind": "comfyui"
+    "dischargeKind": "comfyui",
+    "concurrencySafe": False
   },
   "katago": {
     "runtimeName": "katago",
@@ -52,7 +106,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "katago"],
     "restartAction": ["restart", "katago"],
     "activityProbe": "provider-owned",
-    "dischargeKind": ""
+    "dischargeKind": "",
+    "concurrencySafe": False
   },
   "huggingface": {
     "runtimeName": "huggingface",
@@ -62,7 +117,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "stopAction": ["stop", "criterion-huggingface"],
     "restartAction": ["restart", "criterion-huggingface"],
     "activityProbe": "provider-owned",
-    "dischargeKind": "huggingface"
+    "dischargeKind": "huggingface",
+    "concurrencySafe": False
   }
 }
 
@@ -196,8 +252,140 @@ def parse_nvidia_smi_processes() -> Dict[str, Any]:
 
 def queue_depth() -> int:
   with _LOCK:
-    running = 1 if _RUNNING_JOB_ID else 0
+    running = sum(len(job_ids) for job_ids in _RUNNING_JOB_IDS.values())
+    if _RUNNING_JOB_ID and not running:
+      running = 1
   return running
+
+
+def execution_device_id(job: Optional[Dict[str, Any]] = None) -> str:
+  value = normalize_text((job or {}).get("deviceId"))
+  if not value and isinstance((job or {}).get("jobSpec"), dict):
+    request = (job or {}).get("jobSpec", {}).get("resourceRequest")
+    if isinstance(request, dict):
+      value = normalize_text(request.get("deviceId") or request.get("device_id"))
+  value = value.lower()
+  if value.startswith("gpu-") and value[4:].isdigit():
+    value = f"gpu{value[4:]}"
+  if value.isdigit():
+    value = f"gpu{value}"
+  return value or "gpu0"
+
+
+def explicit_execution_device_id(job: Optional[Dict[str, Any]] = None) -> str:
+  value = normalize_text((job or {}).get("deviceId"))
+  if not value and isinstance((job or {}).get("jobSpec"), dict):
+    request = (job or {}).get("jobSpec", {}).get("resourceRequest")
+    if isinstance(request, dict):
+      value = normalize_text(request.get("deviceId") or request.get("device_id"))
+  value = value.lower()
+  if value.startswith("gpu-") and value[4:].isdigit():
+    value = f"gpu{value[4:]}"
+  if value.isdigit():
+    value = f"gpu{value}"
+  return value
+
+
+def execution_gate_for(device_id: str) -> DeviceExecutionGate:
+  key = execution_device_id({"deviceId": device_id})
+  with _LOCK:
+    gate = _EXECUTION_GATES.get(key)
+    if gate is None:
+      gate = DeviceExecutionGate()
+      _EXECUTION_GATES[key] = gate
+    return gate
+
+
+def first_running_job_id() -> Optional[str]:
+  for job_ids in _RUNNING_JOB_IDS.values():
+    if job_ids:
+      return next(iter(job_ids))
+  return None
+
+
+def local_execution_slot_busy(job: Optional[Dict[str, Any]] = None, runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
+  with _LOCK:
+    active = [
+      candidate for candidate in _JOBS.values()
+      if not bool(candidate.get("forwarded", False))
+      and candidate.get("status") in {"queued", "running"}
+    ]
+  if not active:
+    return False
+  if job is None or runtime_registry is None:
+    return True
+  target_device = execution_device_id(job)
+  target_runtime = normalize_text(job.get("runtimeName")).lower()
+  target_entry = runtime_registry.get(target_runtime) or {}
+  for candidate in active:
+    if execution_device_id(candidate) != target_device:
+      continue
+    candidate_entry = runtime_registry.get(normalize_text(candidate.get("runtimeName")).lower()) or {}
+    target_vram = declared_vram_mb(job)
+    candidate_vram = declared_vram_mb(candidate)
+    if (
+      not bool(target_entry.get("concurrencySafe", False))
+      or not bool(candidate_entry.get("concurrencySafe", False))
+      or target_vram <= 0
+      or candidate_vram <= 0
+    ):
+      return True
+  return False
+
+
+def execution_slots(runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+  with _LOCK:
+    active = [
+      candidate for candidate in _JOBS.values()
+      if not bool(candidate.get("forwarded", False))
+      and candidate.get("status") in {"queued", "running"}
+    ]
+  slots: Dict[str, Dict[str, Any]] = {}
+  for candidate in active:
+    device_id = execution_device_id(candidate)
+    slot = slots.setdefault(device_id, {"deviceId": device_id, "busy": False, "jobs": []})
+    slot["busy"] = True
+    slot["jobs"].append({
+      "remoteJobId": candidate.get("remoteJobId"),
+      "runtimeName": candidate.get("runtimeName"),
+      "status": candidate.get("status"),
+      "concurrencySafe": bool(
+        (runtime_registry or {}).get(normalize_text(candidate.get("runtimeName")).lower(), {}).get("concurrencySafe", False)
+      )
+    })
+  return [slots[key] for key in sorted(slots)]
+
+
+def device_candidates_for_job(job: Dict[str, Any], devices: List[Dict[str, Any]]) -> List[str]:
+  explicit = explicit_execution_device_id(job)
+  if explicit:
+    return [explicit]
+  discovered = sorted({
+    normalize_text(item.get("deviceId")).lower()
+    for item in devices
+    if isinstance(item, dict) and normalize_text(item.get("deviceId"))
+  })
+  return discovered or [execution_device_id(job)]
+
+
+def declared_vram_mb(job: Optional[Dict[str, Any]] = None) -> int:
+  try:
+    request = job_resource_request(job or {})
+  except RuntimeError:
+    return 0
+  return int(request.get("vramRequiredMb") or 0) if request else 0
+
+
+def shared_vram_can_admit(device_id: str, required_vram_mb: int, reserved_vram_mb: int) -> bool:
+  if required_vram_mb <= 0:
+    return False
+  telemetry = parse_nvidia_smi()
+  devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+  device = next((item for item in devices if item.get("deviceId") == device_id), None)
+  if not telemetry.get("available") or not isinstance(device, dict):
+    return False
+  free_mb = int(device.get("vramFreeMb") or 0)
+  return free_mb - max(0, int(reserved_vram_mb or 0)) >= required_vram_mb
 
 
 def profile_list() -> List[Dict[str, Any]]:
@@ -230,6 +418,321 @@ def minimal_jobs() -> List[Dict[str, Any]]:
   return out
 
 
+def parse_bool_env(name: str, default: bool = False) -> bool:
+  return parse_bool_value(os.environ.get(name), default)
+
+
+def parse_bool_value(raw: Any, default: bool = False) -> bool:
+  if isinstance(raw, bool):
+    return raw
+  value = normalize_text(raw).lower()
+  if not value:
+    return default
+  return value in {"1", "true", "yes", "on", "truth"}
+
+
+def peer_timeout_ms() -> int:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_PEER_TIMEOUT_MS"))
+  try:
+    value = int(raw) if raw else DEFAULT_PEER_TIMEOUT_MS
+  except ValueError:
+    value = DEFAULT_PEER_TIMEOUT_MS
+  return max(100, min(10000, value))
+
+
+def peer_failure_limit() -> int:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT"))
+  try:
+    value = int(raw) if raw else DEFAULT_PEER_FAILURE_LIMIT
+  except ValueError:
+    value = DEFAULT_PEER_FAILURE_LIMIT
+  return max(1, min(20, value))
+
+
+def parse_peer_registry(raw: str = "") -> Dict[str, str]:
+  peers: Dict[str, str] = {}
+  for item in normalize_text(raw).split(";"):
+    entry = item.strip()
+    if not entry or "=" not in entry:
+      continue
+    host_id, url = entry.split("=", 1)
+    host = normalize_text(host_id).lower()
+    base = normalize_text(url).rstrip("/")
+    if host and base.startswith(("http://", "https://")):
+      peers[host] = base
+  return peers
+
+
+def configured_peers() -> Dict[str, str]:
+  return parse_peer_registry(os.environ.get("GPU_HOUSEKEEPER_PEERS", ""))
+
+
+def route_visited_hosts(payload: Dict[str, Any]) -> List[str]:
+  routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+  visited = routing.get("visitedHosts")
+  if not isinstance(visited, list):
+    visited = []
+  return [normalize_text(item).lower() for item in visited if normalize_text(item)]
+
+
+def route_forward_depth(payload: Dict[str, Any]) -> int:
+  routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+  try:
+    return max(0, int(routing.get("forwardDepth", 0)))
+  except (TypeError, ValueError):
+    return 0
+
+
+def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], host_id: str) -> Dict[str, Any]:
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  if runtime_name not in runtime_registry:
+    return {
+      "hostId": host_id,
+      "available": False,
+      "immediate": False,
+      "reason": f"runtime not managed: {runtime_name}"
+    }
+  telemetry = parse_nvidia_smi()
+  devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+  if not isinstance(devices, list):
+    devices = []
+  model_name = ollama_model_for_job(job) if runtime_name == "ollama" else ""
+  model_catalog = ollama_model_catalog() if model_name else {}
+  model_missing = bool(
+    model_name
+    and model_catalog.get("available")
+    and not ollama_model_entry(model_name, model_catalog)
+  )
+  candidates = []
+  for device_id in device_candidates_for_job(job, devices):
+    candidate_job = {**job, "deviceId": device_id}
+    try:
+      capacity = capacity_plan_for_job(candidate_job, runtime_registry)
+    except RuntimeError as err:
+      candidates.append({
+        "hostId": host_id,
+        "deviceId": device_id,
+        "available": False,
+        "immediate": False,
+        "reason": normalize_text(err) or "local capacity check failed"
+      })
+      continue
+    # Submission remains durable even when telemetry is temporarily unavailable;
+    # final execution admission still fails closed in ensure_capacity_for_job.
+    feasible = (
+      capacity.get("decision") in {"not-requested", "fits", "reclaim-available", "telemetry-unavailable"}
+      and not model_missing
+    )
+    with _LOCK:
+      profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
+      warm = bool(profile.get("loaded", False))
+    busy = local_execution_slot_busy(candidate_job, runtime_registry)
+    score = 0
+    if warm:
+      score += 100
+    if capacity.get("decision") == "fits":
+      score += 20
+    elif capacity.get("decision") == "reclaim-available":
+      score -= 60
+    if not busy:
+      score += 10
+    candidates.append({
+      "hostId": host_id,
+      "deviceId": device_id,
+      "available": feasible,
+      "immediate": feasible and not busy,
+      "busy": busy,
+      "queueDepth": queue_depth(),
+      "warm": warm,
+      "score": score,
+      "capacity": capacity,
+      "reason": (
+        f"Ollama model is not installed: {model_name}"
+        if model_missing
+        else ("local execution slot occupied" if busy else capacity.get("reason", "local candidate"))
+      )
+    })
+  available = [item for item in candidates if item.get("available")]
+  if not available:
+    reason = next((item.get("reason") for item in candidates if item.get("reason")), "no executable local GPU device")
+    return {
+      "hostId": host_id,
+      "available": False,
+      "immediate": False,
+      "deviceId": explicit_execution_device_id(job),
+      "candidates": candidates,
+      "reason": reason
+    }
+  return max(available, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
+
+
+def peer_request_json(base_url: str, pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_ms: int = 1500) -> Dict[str, Any]:
+  url = f"{normalize_text(base_url).rstrip('/')}/{pathname.lstrip('/')}"
+  data = None if payload is None else json.dumps(payload).encode("utf-8")
+  request = Request(url, data=data, headers={"Content-Type": "application/json"})
+  if payload is None:
+    request.get_method = lambda: "GET"
+  try:
+    with urlopen(request, timeout=max(0.1, timeout_ms / 1000.0)) as response:
+      raw = response.read().decode("utf-8")
+  except HTTPError as err:
+    detail = ""
+    try:
+      detail = err.read().decode("utf-8")
+    except Exception:
+      detail = str(err)
+    raise RuntimeError(f"peer request failed {err.code}: {detail}")
+  except URLError as err:
+    raise RuntimeError(f"peer request failed: {err.reason}")
+  try:
+    parsed = json.loads(raw or "{}")
+  except Exception as err:
+    raise RuntimeError(f"peer returned invalid JSON: {err}")
+  if not isinstance(parsed, dict):
+    raise RuntimeError("peer returned a non-map response")
+  return parsed
+
+
+def peer_route_candidate(
+  peer_host_id: str,
+  peer_url: str,
+  job: Dict[str, Any]
+) -> Dict[str, Any]:
+  snapshot = peer_request_json(peer_url, "/snapshot", timeout_ms=peer_timeout_ms())
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  runtimes = snapshot.get("runtimes") if isinstance(snapshot.get("runtimes"), list) else []
+  runtime = next((item for item in runtimes if normalize_text(item.get("runtimeName")).lower() == runtime_name), None)
+  if not isinstance(runtime, dict):
+    return {"hostId": peer_host_id, "url": peer_url, "available": False, "reason": f"runtime not advertised: {runtime_name}"}
+  runtime_status = normalize_text(runtime.get("status")).lower()
+  if runtime_status == "unknown":
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "available": False,
+      "reason": f"peer runtime is unavailable: {runtime_name}"
+    }
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  job_kind = normalize_text(job_spec.get("kind")).lower()
+  if job_kind == "ollama-ensure-model":
+    capabilities = snapshot.get("capabilities") if isinstance(snapshot.get("capabilities"), dict) else {}
+    if capabilities.get("ollamaModelProvisioning") is not True:
+      return {
+        "hostId": peer_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": "peer does not advertise Ollama model provisioning"
+      }
+  model_name = ollama_model_for_job(job) if runtime_name == "ollama" else ""
+  catalog = snapshot.get("ollamaModelCatalog") if isinstance(snapshot.get("ollamaModelCatalog"), dict) else {}
+  if model_name and catalog.get("available") and not ollama_model_entry(model_name, catalog):
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "available": False,
+      "reason": f"Ollama model is not installed: {model_name}"
+    }
+  profiles = snapshot.get("profiles") if isinstance(snapshot.get("profiles"), list) else []
+  target_profile = normalize_text(job.get("profileName"))
+  warm = any(normalize_text(item.get("profileName")) == target_profile and item.get("loaded") is True for item in profiles)
+  target_safe = bool(runtime.get("concurrencySafe", False))
+  execution_slots_view = snapshot.get("executionSlots")
+  devices = snapshot.get("devices") if isinstance(snapshot.get("devices"), list) else []
+  candidate_devices = device_candidates_for_job(job, devices)
+  candidates = []
+  for device_id in candidate_devices:
+    preview = peer_request_json(peer_url, "/capacity/preview", {
+      "runtimeName": runtime_name,
+      "profileName": normalize_text(job.get("profileName")),
+      "deviceId": device_id,
+      "dischargeAllowed": job.get("dischargeAllowed", True) is not False,
+      "jobSpec": job.get("jobSpec")
+    }, timeout_ms=peer_timeout_ms())
+    if not preview.get("feasible"):
+      continue
+    target_device = execution_device_id({**job, "deviceId": device_id})
+    if isinstance(execution_slots_view, list):
+      busy = False
+      for slot in execution_slots_view:
+        if not isinstance(slot, dict) or normalize_text(slot.get("deviceId")).lower() != target_device:
+          continue
+        for active_job in slot.get("jobs", []):
+          if not target_safe or not bool(active_job.get("concurrencySafe", False)):
+            busy = True
+            break
+        if busy:
+          break
+    else:
+      busy = bool(
+        snapshot.get(
+          "executionSlotBusy",
+          int(snapshot.get("queueDepth") or 0) > 0
+        )
+      )
+    score = 0
+    if warm:
+      score += 100
+    if preview.get("decision") == "fits":
+      score += 20
+    elif preview.get("decision") == "reclaim-available":
+      score -= 60
+    if not busy:
+      score += 10
+    if runtime_status == "running":
+      score += 40
+    candidates.append({
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "deviceId": target_device,
+      "available": True,
+      "immediate": not busy,
+      "busy": busy,
+      "queueDepth": int(snapshot.get("queueDepth") or 0),
+      "warm": warm,
+      "score": score,
+      "preview": preview,
+      "reason": "peer execution slot occupied" if busy else "peer candidate"
+    })
+  if not candidates:
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "deviceId": explicit_execution_device_id(job),
+      "available": False,
+      "reason": "peer capacity is unavailable"
+    }
+  return max(candidates, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
+
+
+def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], host_id: str) -> Dict[str, Any]:
+  depth = route_forward_depth(payload)
+  visited = set(route_visited_hosts(payload))
+  local = local_route_state(job, runtime_registry, host_id)
+  candidates = [local]
+  if depth == 0:
+    for peer_host_id, peer_url in configured_peers().items():
+      if peer_host_id == host_id or peer_host_id in visited:
+        continue
+      try:
+        candidate = peer_route_candidate(peer_host_id, peer_url, job)
+      except Exception as err:
+        candidate = {
+          "hostId": peer_host_id,
+          "url": peer_url,
+          "available": False,
+          "reason": normalize_text(err) or "peer probe failed"
+        }
+      candidates.append(candidate)
+
+  immediate = [item for item in candidates if item.get("available") and item.get("immediate")]
+  if immediate:
+    selected = max(immediate, key=lambda item: (int(item.get("score") or 0), item.get("hostId") == host_id))
+    return {"selected": selected, "candidates": candidates, "forwarded": selected.get("hostId") != host_id}
+  if local.get("available"):
+    return {"selected": local, "candidates": candidates, "forwarded": False, "reason": "no peer has an immediate free slot"}
+  return {"selected": None, "candidates": candidates, "forwarded": False, "reason": "no local or peer route is executable"}
+
+
 def make_snapshot(host_id: str) -> Dict[str, Any]:
   telemetry = parse_nvidia_smi()
   process_view = managed_gpu_processes(Handler.runtime_registry) if "Handler" in globals() else {
@@ -239,14 +742,83 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
   }
   return {
     "hostId": host_id,
+    "capabilities": {
+      "ollamaModelProvisioning": True
+    },
     "queueDepth": queue_depth(),
     "devices": telemetry["devices"],
     "profiles": profile_list(),
-    "gpuProcesses": process_view
+    "ollamaModelCatalog": ollama_model_catalog(),
+    "runtimes": list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else [],
+    "gpuProcesses": process_view,
+    "executionSlotBusy": local_execution_slot_busy(),
+    "executionSlots": execution_slots(Handler.runtime_registry) if "Handler" in globals() else execution_slots(),
+    "federation": {
+      "enabled": bool(configured_peers()),
+      "acceptsForwarded": parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True),
+      "peers": [
+        {"hostId": peer_host_id, "url": peer_url}
+        for peer_host_id, peer_url in configured_peers().items()
+      ]
+    }
   }
 
 
-def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
+def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dict[str, Any]) -> Dict[str, Any]:
+  selected = route.get("selected") or {}
+  peer_url = normalize_text(selected.get("url"))
+  if not peer_url:
+    return {"accepted": False, "error": "selected peer has no URL"}
+  visited = route_visited_hosts(payload)
+  origin = normalize_text((payload.get("routing") or {}).get("originHostId")) if isinstance(payload.get("routing"), dict) else ""
+  if not origin:
+    origin = normalize_text(Handler.host_id)
+  forwarded_payload = {
+    "handleId": job["handleId"],
+    "runtimeName": job["runtimeName"],
+    "profileName": job["profileName"],
+    "jobSpec": job["jobSpec"],
+    "deviceId": job.get("deviceId", ""),
+    "dischargeAllowed": job.get("dischargeAllowed", True),
+    "routing": {
+      "originHostId": origin,
+      "forwardDepth": route_forward_depth(payload) + 1,
+      "visitedHosts": list(dict.fromkeys([*visited, normalize_text(Handler.host_id)]))
+    }
+  }
+  peer_result = peer_request_json(peer_url, "/submit", forwarded_payload, timeout_ms=peer_timeout_ms())
+  peer_job_id = normalize_text(peer_result.get("remoteJobId"))
+  if not peer_result.get("accepted") or not peer_job_id:
+    return {
+      "accepted": False,
+      "error": peer_result.get("error") or "peer rejected forwarded job",
+      "peerHostId": selected.get("hostId")
+    }
+  job["status"] = "running"
+  job["message"] = f"forwarded to {selected.get('hostId')}"
+  job["forwarded"] = True
+  job["peerUrl"] = peer_url
+  job["peerJobId"] = peer_job_id
+  job["executionHostId"] = normalize_text(selected.get("hostId"))
+  job["route"] = {
+    "forwarded": True,
+    "originHostId": origin,
+    "executionHostId": normalize_text(selected.get("hostId")),
+    "score": int(selected.get("score") or 0),
+    "reason": selected.get("reason") or "peer selected"
+  }
+  with _LOCK:
+    _JOBS[job["remoteJobId"]] = job
+  return {
+    "accepted": True,
+    "remoteJobId": job["remoteJobId"],
+    "forwarded": True,
+    "executionHostId": job["executionHostId"],
+    "route": job["route"]
+  }
+
+
+def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None, host_id: str = "") -> Dict[str, Any]:
   handle_id = normalize_text(payload.get("handleId"))
   runtime_name = normalize_text(payload.get("runtimeName"))
   profile_name = normalize_text(payload.get("profileName"))
@@ -280,10 +852,15 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
         "error": "ollama jobSpec must be map"
       }
     kind = normalize_text(job_spec.get("kind")).lower()
-    if kind not in {"ollama-generate", "ollama-chat"}:
+    if kind not in {"ollama-generate", "ollama-chat", "ollama-ensure-model"}:
       return {
         "accepted": False,
-        "error": "ollama jobSpec.kind must be ollama-generate or ollama-chat"
+        "error": "ollama jobSpec.kind must be ollama-generate, ollama-chat, or ollama-ensure-model"
+      }
+    if kind == "ollama-ensure-model" and not isinstance(job_spec.get("payload"), dict):
+      return {
+        "accepted": False,
+        "error": "ollama-ensure-model jobSpec.payload must be map"
       }
 
   if runtime_lower == "comfyui":
@@ -342,6 +919,14 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
         "error": "huggingface jobSpec.payload must be map"
       }
 
+  runtime_registry = runtime_registry or Handler.runtime_registry
+  selected_host = normalize_text(host_id) or normalize_text(Handler.host_id)
+  if route_forward_depth(payload) > 0 and not parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True):
+    return {
+      "accepted": False,
+      "error": "forwarded jobs are disabled on this housekeeper"
+    }
+
   remote_job_id = f"job-{uuid.uuid4().hex[:12]}"
   now = utc_now_iso()
   job = {
@@ -356,25 +941,104 @@ def submit_job(payload: Dict[str, Any]) -> Dict[str, Any]:
     "message": "queued",
     "submittedAt": now,
     "startedAt": "",
-    "finishedAt": ""
+    "finishedAt": "",
+    "executionHostId": selected_host,
+    "forwarded": False,
+    "route": {
+      "forwarded": False,
+      "originHostId": selected_host,
+      "executionHostId": selected_host,
+      "reason": "local candidate"
+    }
   }
 
-  with _LOCK:
-    _JOBS[remote_job_id] = job
-    existing = _PROFILES.get(profile_name, {})
-    _PROFILES[profile_name] = {
-      "profileName": profile_name,
-      "runtimeName": runtime_name,
-      "loaded": bool(existing.get("loaded", False))
+  with _SUBMISSION_LOCK:
+    route = select_route(payload, job, runtime_registry, selected_host)
+    selected = route.get("selected") or {}
+    if route.get("forwarded"):
+      try:
+        return forward_job_to_peer(payload, job, route)
+      except Exception as err:
+        return {
+          "accepted": False,
+          "error": f"peer forwarding failed: {normalize_text(err) or 'unknown error'}",
+          "route": {"candidates": route.get("candidates", [])}
+        }
+    if not selected:
+      return {
+        "accepted": False,
+        "error": route.get("reason") or "no executable local or peer GPU target",
+        "route": {"candidates": route.get("candidates", [])}
+      }
+    selected_device = normalize_text(selected.get("deviceId"))
+    if selected_device:
+      job["deviceId"] = selected_device
+    job["route"] = {
+      "forwarded": False,
+      "originHostId": selected_host,
+      "executionHostId": selected_host,
+      "score": int(selected.get("score") or 0),
+      "reason": selected.get("reason") or route.get("reason") or "local candidate"
     }
+
+    with _LOCK:
+      _JOBS[remote_job_id] = job
+      existing = _PROFILES.get(profile_name, {})
+      _PROFILES[profile_name] = {
+        "profileName": profile_name,
+        "runtimeName": runtime_name,
+        "loaded": bool(existing.get("loaded", False))
+      }
 
   return {
     "remoteJobId": remote_job_id,
-    "accepted": True
+    "accepted": True,
+    "forwarded": False,
+    "executionHostId": selected_host,
+    "route": job["route"]
   }
 
 
+def refresh_forwarded_job(remote_job_id: str) -> None:
+  with _LOCK:
+    job = _JOBS.get(remote_job_id)
+    if not job or not job.get("forwarded") or job.get("status") in {"success", "fail"}:
+      return
+    peer_url = normalize_text(job.get("peerUrl"))
+    peer_job_id = normalize_text(job.get("peerJobId"))
+  if not peer_url or not peer_job_id:
+    return
+  try:
+    remote = peer_request_json(peer_url, f"/job/{peer_job_id}", timeout_ms=peer_timeout_ms())
+    with _LOCK:
+      current = _JOBS.get(remote_job_id)
+      if not current:
+        return
+      status = normalize_text(remote.get("status")).lower()
+      if status in {"queued", "running", "success", "fail"}:
+        current["status"] = status
+      current["message"] = normalize_text(remote.get("message")) or current.get("message") or "forwarded"
+      current["result"] = remote.get("result")
+      current["error"] = remote.get("error")
+      current["startedAt"] = remote.get("startedAt") or current.get("startedAt", "")
+      current["finishedAt"] = remote.get("finishedAt") or current.get("finishedAt", "")
+      current["peerFailureCount"] = 0
+  except Exception as err:
+    with _LOCK:
+      current = _JOBS.get(remote_job_id)
+      if not current:
+        return
+      failures = int(current.get("peerFailureCount") or 0) + 1
+      current["peerFailureCount"] = failures
+      current["message"] = f"forwarded job status unavailable: {normalize_text(err) or 'peer request failed'}"
+      if failures >= peer_failure_limit():
+        current["status"] = "fail"
+        current["error"] = {"message": current["message"]}
+        current["finishedAt"] = utc_now_iso()
+
+
 def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
+  refresh_forwarded_job(remote_job_id)
   with _LOCK:
     job = _JOBS.get(remote_job_id)
     if not job:
@@ -385,7 +1049,10 @@ def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
       "result": job.get("result"),
       "error": job.get("error"),
       "startedAt": job.get("startedAt") or "",
-      "finishedAt": job.get("finishedAt") or ""
+      "finishedAt": job.get("finishedAt") or "",
+      "executionHostId": job.get("executionHostId") or "",
+      "route": job.get("route") or {},
+      "forwarded": bool(job.get("forwarded", False))
     }
 
 
@@ -705,6 +1372,8 @@ def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -
 
 def normalize_device_id(raw: Any, devices: List[Dict[str, Any]]) -> str:
   value = normalize_text(raw).lower()
+  if value.startswith("gpu-") and value[4:].isdigit():
+    value = f"gpu{value[4:]}"
   if value.isdigit():
     value = f"gpu{value}"
   if value:
@@ -738,9 +1407,30 @@ def job_resource_request(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     raise RuntimeError("resourceRequest.vramRequiredMb must be a positive number")
   if vram <= 0:
     raise RuntimeError("resourceRequest.vramRequiredMb must be a positive number")
+
+  def optional_positive(name: str, aliases: List[str]) -> Optional[int]:
+    raw_value = None
+    for alias in aliases:
+      if alias in request:
+        raw_value = request.get(alias)
+        break
+    if raw_value is None:
+      return None
+    try:
+      value = int(float(raw_value))
+    except (TypeError, ValueError):
+      raise RuntimeError(f"resourceRequest.{name} must be a positive number")
+    if value <= 0:
+      raise RuntimeError(f"resourceRequest.{name} must be a positive number")
+    return value
+
+  ram = optional_positive("ramRequiredMb", ["ramRequiredMb", "ram_required_mb"])
+  disk = optional_positive("diskRequiredMb", ["diskRequiredMb", "disk_required_mb"])
   return {
     "vramRequiredMb": vram,
-    "deviceId": normalize_text(request.get("deviceId"))
+    "deviceId": normalize_text(request.get("deviceId")),
+    "ramRequiredMb": ram,
+    "diskRequiredMb": disk
   }
 
 
@@ -787,6 +1477,24 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
     "candidates": [],
     "candidateDiagnostics": []
   }
+  # A warm target profile does not require another model allocation. This is
+  # important for repeated Qwen requests: nvidia-smi reports the resident
+  # model's full footprint as used VRAM, but the job will reuse that footprint
+  # rather than competing with it. Only treat the profile as warm when the
+  # housekeeper itself recorded it as loaded; unknown profiles still go
+  # through the normal admission and safe-discharge checks below.
+  target_profile = normalize_text(job.get("profileName"))
+  if not target_profile and isinstance(job.get("jobSpec"), dict):
+    payload = job["jobSpec"].get("payload")
+    if isinstance(payload, dict):
+      target_profile = normalize_text(payload.get("model"))
+  with _LOCK:
+    target_loaded = bool(target_profile and _PROFILES.get(target_profile, {}).get("loaded", False))
+  if target_loaded:
+    common["decision"] = "fits"
+    common["reason"] = "target profile is already warm; no additional VRAM is required"
+    common["targetProfileLoaded"] = True
+    return common
   if free_before >= required:
     common["decision"] = "fits"
     common["reason"] = "free VRAM satisfies request"
@@ -976,7 +1684,10 @@ def preview_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[s
 def list_runtime_statuses(runtime_registry: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
   out = []
   for runtime_name in sorted(runtime_registry.keys()):
-    out.append(parse_runtime_status(runtime_registry[runtime_name]))
+    entry = runtime_registry[runtime_name]
+    status = parse_runtime_status(entry)
+    status["concurrencySafe"] = bool(entry.get("concurrencySafe", False))
+    out.append(status)
   return out
 
 
@@ -1072,6 +1783,158 @@ def request_ollama_json(pathname: str, payload: Optional[Dict[str, Any]] = None,
   return {"value": parsed}
 
 
+def ollama_model_catalog(force: bool = False) -> Dict[str, Any]:
+  now = time.monotonic()
+  try:
+    ttl = max(0.0, min(300.0, float(os.environ.get("GPU_HOUSEKEEPER_OLLAMA_CATALOG_TTL_SEC", "30"))))
+  except (TypeError, ValueError):
+    ttl = 30.0
+  with _LOCK:
+    cached = dict(_OLLAMA_MODEL_CATALOG_CACHE)
+  if not force and cached.get("observedAt") and now - float(cached.get("observedAt") or 0) <= ttl:
+    return cached
+
+  try:
+    payload = request_ollama_json("/api/tags", None, timeout_sec=5)
+    raw_models = payload.get("models") if isinstance(payload, dict) else []
+    if not isinstance(raw_models, list):
+      raise RuntimeError("Ollama model catalog response was malformed")
+    models = []
+    for item in raw_models:
+      if not isinstance(item, dict):
+        continue
+      name = normalize_text(item.get("name") or item.get("model"))
+      if not name:
+        continue
+      record = {"name": name}
+      digest = normalize_text(item.get("digest"))
+      if digest:
+        record["digest"] = digest
+      size = item.get("size")
+      if isinstance(size, (int, float)) and size >= 0:
+        record["size"] = int(size)
+      details = item.get("details")
+      if isinstance(details, dict):
+        selected = {}
+        for key in ("parameter_size", "quantization_level", "family", "context_length"):
+          if key in details and details[key] not in (None, ""):
+            selected[key] = details[key]
+        if selected:
+          record["details"] = selected
+      models.append(record)
+    result = {
+      "observedAt": now,
+      "available": True,
+      "models": models,
+      "error": ""
+    }
+  except Exception as err:
+    result = {
+      "observedAt": now,
+      "available": False,
+      "models": [],
+      "error": normalize_text(err) or "Ollama model catalog unavailable"
+    }
+  with _LOCK:
+    _OLLAMA_MODEL_CATALOG_CACHE.clear()
+    _OLLAMA_MODEL_CATALOG_CACHE.update(result)
+  return dict(result)
+
+
+def reset_ollama_model_catalog_cache() -> None:
+  with _LOCK:
+    _OLLAMA_MODEL_CATALOG_CACHE.clear()
+    _OLLAMA_MODEL_CATALOG_CACHE.update({
+      "observedAt": 0.0,
+      "available": False,
+      "models": [],
+      "error": "not observed"
+    })
+
+
+def ollama_model_entry(model_name: str, catalog: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+  wanted = normalize_text(model_name)
+  source = catalog if isinstance(catalog, dict) else ollama_model_catalog()
+  models = source.get("models") if isinstance(source, dict) else []
+  if not isinstance(models, list):
+    return None
+  return next((item for item in models if isinstance(item, dict) and normalize_text(item.get("name")) == wanted), None)
+
+
+def ollama_model_for_job(job: Dict[str, Any]) -> str:
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    return ""
+  kind = normalize_text(job_spec.get("kind")).lower()
+  if kind not in {"ollama-generate", "ollama-chat"}:
+    return ""
+  payload = job_spec.get("payload") if isinstance(job_spec.get("payload"), dict) else job_spec
+  return normalize_text(payload.get("model")) or normalize_text(job.get("profileName"))
+
+
+def ollama_model_pull_allowed(model_name: str) -> bool:
+  if not parse_bool_env("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL", False):
+    return False
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_MODEL_ALLOWLIST"))
+  allowed = {
+    item.strip()
+    for item in raw.replace(";", ",").split(",")
+    if item.strip()
+  }
+  return normalize_text(model_name) in allowed
+
+
+def memory_available_mb() -> Dict[str, Any]:
+  try:
+    values = {}
+    with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+      for line in handle:
+        if ":" not in line:
+          continue
+        key, raw = line.split(":", 1)
+        fields = raw.strip().split()
+        if fields and fields[0].isdigit():
+          values[key.strip()] = int(fields[0]) // 1024
+    available = values.get("MemAvailable")
+    total = values.get("MemTotal")
+    if available is None or total is None:
+      raise RuntimeError("/proc/meminfo lacks MemAvailable")
+    return {"available": True, "availableMb": available, "totalMb": total}
+  except Exception as err:
+    return {"available": False, "error": normalize_text(err) or "memory telemetry unavailable"}
+
+
+def container_disk_available_mb(container_name: str, path_name: str) -> Dict[str, Any]:
+  result = run_docker(["exec", container_name, "df", "-Pk", path_name], timeout_sec=15)
+  if not result.get("success"):
+    return {"available": False, "error": result.get("message") or "model-store disk telemetry unavailable"}
+  rows = [line.strip().split() for line in normalize_text(result.get("stdout")).splitlines() if line.strip()]
+  if len(rows) < 2:
+    return {"available": False, "error": "model-store disk telemetry was malformed"}
+  fields = rows[-1]
+  if len(fields) < 4:
+    return {"available": False, "error": "model-store disk telemetry was malformed"}
+  try:
+    available_mb = int(fields[3]) // 1024
+  except (TypeError, ValueError):
+    return {"available": False, "error": "model-store disk telemetry was malformed"}
+  return {"available": True, "availableMb": max(0, available_mb), "path": path_name}
+
+
+def sync_ollama_profiles(warm_models: List[str]) -> None:
+  warm = {normalize_text(item) for item in warm_models if normalize_text(item)}
+  with _LOCK:
+    for profile in _PROFILES.values():
+      if normalize_text(profile.get("runtimeName")).lower() == "ollama":
+        profile["loaded"] = normalize_text(profile.get("profileName")) in warm
+    for model in warm:
+      _PROFILES[model] = {
+        "profileName": model,
+        "runtimeName": "ollama",
+        "loaded": True
+      }
+
+
 def huggingface_runtime_url() -> str:
   return normalize_text(os.environ.get("HUGGINGFACE_RUNTIME_URL")) or "http://host.docker.internal:8020"
 
@@ -1143,9 +2006,9 @@ def warm_ollama_models() -> List[str]:
   return out
 
 
-def discharge_warm_ollama_models(target_model: str) -> None:
+def discharge_warm_ollama_models(target_model: str, warm_models: Optional[List[str]] = None) -> None:
   target = normalize_text(target_model)
-  for model in warm_ollama_models():
+  for model in warm_models if isinstance(warm_models, list) else warm_ollama_models():
     if model == target:
       continue
     try:
@@ -1176,6 +2039,164 @@ def normalize_ollama_payload(job_spec: Dict[str, Any], profile_name: str) -> Dic
   return payload
 
 
+def is_zero_keep_alive(value: Any) -> bool:
+  if value is False or value == 0:
+    return True
+  return normalize_text(value).lower() in {"0", "0s", "0m", "0h", "false", "off", "no"}
+
+
+def ensure_ollama_resource_capacity(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], require_storage: bool) -> Dict[str, Any]:
+  try:
+    request = job_resource_request(job)
+  except RuntimeError as err:
+    return {"state": "invalid-resource-request", "reason": normalize_text(err)}
+  if not request:
+    return {
+      "state": "invalid-resource-request",
+      "reason": "ollama-ensure-model requires resourceRequest.vramRequiredMb"
+    }
+  if require_storage and request.get("ramRequiredMb") is None:
+    return {
+      "state": "invalid-resource-request",
+      "reason": "pulling a missing model requires resourceRequest.ramRequiredMb"
+    }
+  if require_storage and request.get("diskRequiredMb") is None:
+    return {
+      "state": "invalid-resource-request",
+      "reason": "pulling a missing model requires resourceRequest.diskRequiredMb"
+    }
+
+  try:
+    capacity = ensure_capacity_for_job(job, runtime_registry)
+  except RuntimeError as err:
+    reason = normalize_text(err) or "declared VRAM requirement does not fit"
+    return {
+      "state": "capacity-unknown" if "telemetry" in reason.lower() else "insufficient-capacity",
+      "reason": reason,
+      "capacity": {"decision": "telemetry-unavailable" if "telemetry" in reason.lower() else "insufficient"}
+    }
+
+  resources = {"vram": capacity}
+  ram_required = request.get("ramRequiredMb")
+  if ram_required is not None:
+    memory = memory_available_mb()
+    resources["ram"] = memory
+    if not memory.get("available"):
+      return {"state": "capacity-unknown", "reason": memory.get("error") or "memory telemetry unavailable", "resources": resources}
+    if int(memory.get("availableMb") or 0) < ram_required:
+      return {
+        "state": "insufficient-capacity",
+        "reason": f"available RAM is below declared requirement ({memory.get('availableMb')} < {ram_required} MiB)",
+        "resources": resources
+      }
+
+  if require_storage:
+    entry = runtime_registry.get("ollama") or {}
+    container_name = normalize_text(entry.get("containerName")) or "ollama"
+    store_path = normalize_text(entry.get("modelStorePath")) or normalize_text(os.environ.get("GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH")) or DEFAULT_OLLAMA_MODEL_STORE_PATH
+    disk = container_disk_available_mb(container_name, store_path)
+    resources["disk"] = disk
+    if not disk.get("available"):
+      return {"state": "capacity-unknown", "reason": disk.get("error") or "model-store disk telemetry unavailable", "resources": resources}
+    disk_required = request.get("diskRequiredMb")
+    if int(disk.get("availableMb") or 0) < disk_required:
+      return {
+        "state": "insufficient-capacity",
+        "reason": f"available model-store disk is below declared requirement ({disk.get('availableMb')} < {disk_required} MiB)",
+        "resources": resources
+      }
+  return {"state": "fits", "resources": resources}
+
+
+def execute_ollama_ensure_model(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  job_spec = job.get("jobSpec")
+  payload = job_spec.get("payload") if isinstance(job_spec, dict) else None
+  if not isinstance(payload, dict):
+    raise RuntimeError("ollama-ensure-model payload must be a map")
+  profile_name = normalize_text(job.get("profileName"))
+  model_name = normalize_text(payload.get("model")) or profile_name
+  if not model_name or any(ord(char) < 32 or ord(char) == 127 for char in model_name):
+    raise RuntimeError("ollama-ensure-model requires a valid model name")
+
+  pull_requested = parse_bool_value(payload.get("pullIfMissing", payload.get("pull_if_missing", False)), False)
+  ensure_runtime_ready(runtime_registry, "ollama")
+  warm_models = warm_ollama_models()
+  sync_ollama_profiles(warm_models)
+  catalog = ollama_model_catalog(force=True)
+  if not catalog.get("available"):
+    raise RuntimeError(catalog.get("error") or "Ollama model catalog unavailable")
+  installed = ollama_model_entry(model_name, catalog)
+  resource_check = ensure_ollama_resource_capacity(
+    {
+      **job,
+      "profileName": model_name,
+    },
+    runtime_registry,
+    require_storage=installed is None and pull_requested
+  )
+  if resource_check.get("state") != "fits":
+    return {
+      "state": resource_check.get("state"),
+      "model": model_name,
+      "available": False,
+      "pulled": False,
+      "reason": resource_check.get("reason"),
+      "resources": resource_check.get("resources", {}),
+    }
+  if installed:
+    return {
+      "state": "available",
+      "model": model_name,
+      "available": True,
+      "pulled": False,
+      "metadata": installed,
+      "resources": resource_check.get("resources", {})
+    }
+
+  if not pull_requested:
+    return {
+      "state": "not-installed",
+      "model": model_name,
+      "available": False,
+      "pulled": False,
+      "reason": "model is not installed and pullIfMissing was not requested",
+      "resources": resource_check.get("resources", {})
+    }
+  if not ollama_model_pull_allowed(model_name):
+    return {
+      "state": "not-authorized",
+      "model": model_name,
+      "available": False,
+      "pulled": False,
+      "reason": "model pull is disabled or the exact model is not on the housekeeper allowlist",
+      "resources": resource_check.get("resources", {})
+    }
+
+  try:
+    pull = request_ollama_json(
+      "/api/pull",
+      {"name": model_name, "stream": False},
+      timeout_sec=int(os.environ.get("OLLAMA_MODEL_PULL_TIMEOUT_SEC", "1800"))
+    )
+  except Exception as err:
+    raise RuntimeError(f"Ollama model pull failed for {model_name}: {normalize_text(err)}")
+  if normalize_text(pull.get("error")):
+    raise RuntimeError(f"Ollama model pull failed for {model_name}: {normalize_text(pull.get('error'))}")
+  reset_ollama_model_catalog_cache()
+  catalog = ollama_model_catalog(force=True)
+  installed = ollama_model_entry(model_name, catalog)
+  if not installed:
+    raise RuntimeError(f"Ollama pull completed without the exact model tag: {model_name}")
+  return {
+    "state": "available",
+    "model": model_name,
+    "available": True,
+    "pulled": True,
+    "metadata": installed,
+    "resources": resource_check.get("resources", {})
+  }
+
+
 def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   profile_name = normalize_text(job.get("profileName"))
@@ -1192,7 +2213,9 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   target_model = normalize_text(payload.get("model"))
   if not target_model:
     raise RuntimeError("ollama model is required")
-  discharge_warm_ollama_models(target_model)
+  warm_models = warm_ollama_models()
+  sync_ollama_profiles(warm_models)
+  discharge_warm_ollama_models(target_model, warm_models)
 
   endpoint = "/api/chat" if kind == "ollama-chat" else "/api/generate"
   result = request_ollama_json(endpoint, payload, timeout_sec=int(os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900")))
@@ -1200,7 +2223,7 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
     _PROFILES[target_model] = {
       "profileName": target_model,
       "runtimeName": runtime_name,
-      "loaded": True
+      "loaded": not is_zero_keep_alive(payload.get("keep_alive"))
     }
   return result
 
@@ -1409,8 +2432,11 @@ def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[st
 
 
 def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-  ensure_capacity_for_job(job, runtime_registry)
   runtime_name = normalize_text(job.get("runtimeName")).lower()
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  if runtime_name == "ollama" and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model":
+    return execute_ollama_ensure_model(job, runtime_registry)
+  ensure_capacity_for_job(job, runtime_registry)
   if runtime_name == "ollama":
     return execute_ollama_job(job, runtime_registry)
   if runtime_name == "comfyui":
@@ -1453,12 +2479,14 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
       registry[runtime_name] = {
         "runtimeName": runtime_name,
         "containerName": container_name,
-        "gpuExpected": bool(item.get("gpuExpected", True)),
+        "gpuExpected": parse_bool_value(item.get("gpuExpected", True), True),
         "beginAction": item.get("beginAction") if isinstance(item.get("beginAction"), list) else ["start", container_name],
         "stopAction": item.get("stopAction") if isinstance(item.get("stopAction"), list) else ["stop", container_name],
         "restartAction": item.get("restartAction") if isinstance(item.get("restartAction"), list) else ["restart", container_name],
         "activityProbe": normalize_text(item.get("activityProbe")) or "unknown",
-        "dischargeKind": normalize_text(item.get("dischargeKind"))
+        "dischargeKind": normalize_text(item.get("dischargeKind")),
+        "concurrencySafe": parse_bool_value(item.get("concurrencySafe", False), False),
+        "modelStorePath": normalize_text(item.get("modelStorePath")) or DEFAULT_OLLAMA_MODEL_STORE_PATH
       }
 
   if registry:
@@ -1469,18 +2497,42 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
 
 def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
   global _RUNNING_JOB_ID
-  with _EXECUTION_LOCK:
+  with _LOCK:
+    initial = _JOBS.get(remote_job_id)
+    if not initial:
+      return
+    device_id = execution_device_id(initial)
+    runtime_name = normalize_text(initial.get("runtimeName")).lower()
+    vram_required_mb = declared_vram_mb(initial)
+    shared = bool(
+      (runtime_registry.get(runtime_name) or {}).get("concurrencySafe", False)
+      and vram_required_mb > 0
+    )
+  gate = execution_gate_for(device_id)
+  gate.acquire(
+    shared,
+    vram_required_mb,
+    can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
+    if shared else None
+  )
+  try:
     with _LOCK:
       job = _JOBS.get(remote_job_id)
       if not job:
         return
+      _RUNNING_JOB_IDS.setdefault(device_id, set()).add(remote_job_id)
       _RUNNING_JOB_ID = remote_job_id
       job["status"] = "running"
       job["message"] = "running"
       job["startedAt"] = utc_now_iso()
       profile_name = normalize_text(job.get("profileName"))
       runtime_name = normalize_text(job.get("runtimeName"))
-      if profile_name:
+      job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+      is_model_ensure = (
+        runtime_name.lower() == "ollama"
+        and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model"
+      )
+      if profile_name and not is_model_ensure:
         _PROFILES[profile_name] = {
           "profileName": profile_name,
           "runtimeName": runtime_name,
@@ -1508,7 +2560,13 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           current["finishedAt"] = utc_now_iso()
     finally:
       with _LOCK:
-        _RUNNING_JOB_ID = None
+        running_on_device = _RUNNING_JOB_IDS.get(device_id, set())
+        running_on_device.discard(remote_job_id)
+        if not running_on_device:
+          _RUNNING_JOB_IDS.pop(device_id, None)
+        _RUNNING_JOB_ID = first_running_job_id()
+  finally:
+    gate.release(shared, vram_required_mb)
 
 
 def start_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
@@ -1551,6 +2609,10 @@ class Handler(BaseHTTPRequestHandler):
       })
       return
 
+    if self.path == "/runtime/ollama/models":
+      json_response(self, 200, ollama_model_catalog())
+      return
+
     if self.path.startswith("/runtime/"):
       runtime_name = unquote(self.path[len("/runtime/"):]).strip().lower()
       if not runtime_name:
@@ -1585,9 +2647,10 @@ class Handler(BaseHTTPRequestHandler):
 
     if self.path == "/submit":
       payload = read_json_body(self)
-      result = submit_job(payload)
+      result = submit_job(payload, self.runtime_registry, self.host_id)
       if result.get("accepted"):
-        start_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)
+        if not result.get("forwarded"):
+          start_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)
         json_response(self, 200, result)
       else:
         json_response(self, 400, result)

@@ -7,6 +7,8 @@ import {
   auditFinancialClaim,
   containsFinancialClaimText,
 } from '../program/library/reporter_shared/financial-claim-audit.mjs';
+import { requestManagedOllamaChat } from '../program/runtime/gpu/managed-ollama.mjs';
+import { resolveTextModel } from '../program/runtime/gpu/text-model.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
 function resolveOllamaHost() {
@@ -20,7 +22,7 @@ function resolveOllamaHost() {
 }
 const OLLAMA_URL = `${resolveOllamaHost()}/api/chat`;
 const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
-const MODEL = process.env.OWEN_HOOK_MODEL || process.env.OWEN_SUMMARY_MODEL || 'qwen3.5:9b';
+const MODEL = resolveTextModel(process.env.OWEN_HOOK_MODEL || process.env.OWEN_SUMMARY_MODEL || "");
 const MAX_ATTEMPTS = 8;
 const PASS_THRESHOLD = 0.8;
 // eScribe report identifiers are metadata, not human-facing news hooks. Keep
@@ -999,28 +1001,21 @@ async function generateYouTubeStyleHookFromSource({ sourceSummary = "" }) {
 }
 
 async function ask(messages, { numPredict = 120 } = {}) {
-  const body = {
-    model: MODEL,
-    mode: 'chat',
-    stream: false,
-    think: false,
-    keep_alive: 300,
-    options: { temperature: 0.15, num_predict: numPredict },
-    messages,
-  };
-  let res;
   try {
-    res = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+    const json = await requestManagedOllamaChat({
+      model: MODEL,
+      ollamaUrl: OLLAMA_URL,
+      managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || '',
+      messages,
+      options: { temperature: 0.15, num_predict: numPredict },
+      think: false,
+      keepAlive: 300,
+      timeoutMs: Math.max(30_000, Number.parseInt(String(process.env.MEETING_HOOK_OLLAMA_TIMEOUT_MS || '300000'), 10) || 300000),
     });
+    return String(json?.message?.content || json?.response || '').trim();
   } catch (err) {
-    throw new Error(`Ollama fetch failed for meeting-hook using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(err?.message || err)})`);
+    throw new Error(`Ollama managed request failed for meeting-hook using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST}: ${String(err?.message || err)}`);
   }
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || '').trim();
 }
 
 async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings, focus, jurisdiction, body, hookMode }) {

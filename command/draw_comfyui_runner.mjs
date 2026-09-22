@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { resolveGpuHousekeeperUrl, submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 import { fileURLToPath } from "node:url";
 
 function parseArgs(argv) {
@@ -543,22 +544,43 @@ async function main() {
     }
   }
 
-  const payload = {
-    client_id: `pyash-${crypto.randomBytes(6).toString("hex")}`,
-    prompt: promptObject
-  };
-  const queued = await requestJson(`${host.replace(/\/$/, "")}/prompt`, payload);
-  if (queued?.error) {
-    const message = String(queued.error?.message ?? queued.error ?? "prompt rejected");
-    throw new Error(`draw_comfyui_runner: prompt rejected: ${message}`);
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "", ollamaUrl: host });
+  let promptId = "";
+  let image;
+  if (managerUrl) {
+    const managed = await submitManagedGpuJob({
+      runtimeName: "comfyui",
+      profileName: resolveWorkflowName(opts),
+      providerUrl: host,
+      managerUrl,
+      jobSpec: {
+        kind: "comfyui-draw",
+        resourceRequest: { vramRequiredMb: Number.parseInt(String(process.env.PYA_COMFYUI_VRAM_REQUIRED_MB || "12000"), 10) || 12000 },
+        prompt: promptObject,
+        clientId: `pyash-${crypto.randomBytes(6).toString("hex")}`,
+        timeoutSec: 900,
+      },
+      timeoutMs: 1_000_000,
+    });
+    promptId = String(managed?.promptId || "");
+    image = pickFirstImage(managed?.history || managed);
+  } else {
+    const queued = await requestJson(`${host.replace(/\/$/, "")}/prompt`, {
+      client_id: `pyash-${crypto.randomBytes(6).toString("hex")}`,
+      prompt: promptObject
+    });
+    if (queued?.error) {
+      const message = String(queued.error?.message ?? queued.error ?? "prompt rejected");
+      throw new Error(`draw_comfyui_runner: prompt rejected: ${message}`);
+    }
+    if (queued?.node_errors && typeof queued.node_errors === "object" && Object.keys(queued.node_errors).length > 0) {
+      throw new Error(`draw_comfyui_runner: prompt node_errors: ${JSON.stringify(queued.node_errors)}`);
+    }
+    promptId = queued?.prompt_id;
+    if (!promptId) throw new Error("draw_comfyui_runner: missing prompt_id from ComfyUI");
+    image = await pollHistoryForImage(host, promptId);
   }
-  if (queued?.node_errors && typeof queued.node_errors === "object" && Object.keys(queued.node_errors).length > 0) {
-    throw new Error(`draw_comfyui_runner: prompt node_errors: ${JSON.stringify(queued.node_errors)}`);
-  }
-  const promptId = queued?.prompt_id;
-  if (!promptId) throw new Error("draw_comfyui_runner: missing prompt_id from ComfyUI");
-
-  const image = await pollHistoryForImage(host, promptId);
+  if (!image) throw new Error("draw_comfyui_runner: history image missing");
   const filename = String(image?.filename ?? "");
   if (!filename) throw new Error("draw_comfyui_runner: history image missing filename");
   const subfolder = String(image?.subfolder ?? "");

@@ -69,6 +69,36 @@ test("gpu queue enqueues two input envelopes and claims oldest-first", async () 
   assert.equal(first?.envelope?.payloadSentence?.ob?.text, "old");
 });
 
+test("gpu queue skips dependency-waiting envelopes without consuming them", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-queue-dependency-"));
+  const worldRoot = path.join(root, "world");
+
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt: "2026-03-01T09:00:00.000Z",
+    handleId: "dependent",
+    agentName: "agent-a",
+    gpuId: "gpu-0",
+    intent: "verify",
+    payloadSentence: payload("dependent"),
+    dependsOnHandles: ["missing-producer"]
+  });
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt: "2026-03-01T09:00:01.000Z",
+    handleId: "independent",
+    agentName: "agent-a",
+    gpuId: "gpu-0",
+    intent: "verify",
+    payloadSentence: payload("independent")
+  });
+
+  const claimed = await claimOldestInputEnvelope(worldRoot, {
+    workerTag: "gpu-worker",
+    dependencyReady: async (envelope) => ({ ready: envelope.handleId !== "dependent" })
+  });
+  assert.equal(claimed?.envelope?.handleId, "independent");
+  assert.equal((await queueDepth(worldRoot)).input, 1);
+});
+
 test("gpu queue claim filters by lane and gpuId", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-queue-scope-"));
   const worldRoot = path.join(root, "world");
