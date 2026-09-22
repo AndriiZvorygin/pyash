@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
+import { DEFAULT_TEXT_MODEL } from "../program/runtime/gpu/text-model.mjs";
+
 import {
   numericAuditSourceExcerpt,
   adjudicateChapterOrthogonality,
@@ -127,7 +129,7 @@ test("stage3 can ask qwen for grounded prose with no numeric claims", async (t) 
   });
 
   assert.equal(result.summary, "Council returned to open session and reported that no direction was provided.");
-  assert.equal(requestBody.model, "qwen3.5:9b");
+  assert.equal(requestBody.model, DEFAULT_TEXT_MODEL);
   assert.match(requestBody.messages[1].content, /Do not write any digits/u);
 });
 
@@ -432,7 +434,7 @@ test("stage3 uses qwen to remove an unsupported numeric claim without a prose fa
 
   assert.equal(result.unsupportedTokens.length, 0);
   assert.doesNotMatch(result.summary, /475/u);
-  assert.equal(requestBody.model, "qwen3.5:9b");
+  assert.equal(requestBody.model, DEFAULT_TEXT_MODEL);
   assert.equal(requestBody.options.num_predict, 720);
   assert.match(requestBody.messages[1].content, /Otherwise omit the unsupported quantity/u);
 });
@@ -638,7 +640,7 @@ test("numeric audit grounding keeps numeric evidence and adjacent context", () =
   assert.doesNotMatch(excerpt, /Unrelated closing/u);
 });
 
-test("stage3 uses qwen3.5:9b for focused numeric repair without replacing prose", async (t) => {
+test("stage3 uses the configured text model for focused numeric repair without replacing prose", async (t) => {
   let requestBody = null;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (_url, options) => {
@@ -665,7 +667,7 @@ test("stage3 uses qwen3.5:9b for focused numeric repair without replacing prose"
     ollamaUrl: "http://ollama.invalid/api/chat",
   });
   assert.match(result.summary, /77 drainage projects.*9th Avenue.*4th Avenue.*16th Avenue/u);
-  assert.equal(requestBody.model, "qwen3.5:9b");
+  assert.equal(requestBody.model, DEFAULT_TEXT_MODEL);
   assert.match(requestBody.messages[1].content, /Keep all non-numeric wording and sentence structure unchanged/u);
 });
 

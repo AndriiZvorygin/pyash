@@ -25,6 +25,7 @@ import {
 import { deriveImplementationProgress } from "./progress.mjs";
 import { currentTimeoutPolicy } from "./timeout_policy.mjs";
 import { reconcileOperationalWorkTasks } from "./turn_reconciliation.mjs";
+import { resolveTextModel } from "../gpu/text-model.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -117,7 +118,7 @@ export async function probeExternalEvidenceTask(task, {
         const response = await fetchImpl(`${ollamaHost.replace(/\/$/u, "")}/api/tags`);
         const payload = await response.json();
         const names = (payload.models || []).map((model) => String(model.name || model.model || ""));
-        healthy = names.includes(text(env.PYA_MIND_MODEL) || "qwen3.5:9b");
+        healthy = names.includes(resolveTextModel(text(env.PYA_MIND_MODEL), { env }));
       } catch {
         healthy = false;
       }
@@ -198,6 +199,10 @@ function filterUnsatisfiedDependencies(entries, tasks, roadmap) {
   return { eligible, blocked };
 }
 
+export function selectIndependentWorkCandidates(entries = [], tasks = [], roadmap = {}) {
+  return filterUnsatisfiedDependencies(entries, tasks, roadmap);
+}
+
 export async function inspectWorkBackground({
   worldRoot,
   owner = "",
@@ -221,8 +226,8 @@ export async function inspectWorkBackground({
     });
   let allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
   let roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
-  let dependencyFilter = filterUnsatisfiedDependencies(eligible, allTasks, roadmap);
-  let recoveryDependencyFilter = filterUnsatisfiedDependencies(
+  let dependencyFilter = selectIndependentWorkCandidates(eligible, allTasks, roadmap);
+  let recoveryDependencyFilter = selectIndependentWorkCandidates(
     recoverable.map((task) => ({ task })),
     allTasks,
     roadmap
@@ -236,7 +241,7 @@ export async function inspectWorkBackground({
     maxRecoveryCount: policy.maxOperationalRecoveries,
     currentPolicy: timeoutPolicy
   });
-  const revalidationDependencyFilter = filterUnsatisfiedDependencies(
+  const revalidationDependencyFilter = selectIndependentWorkCandidates(
     policyRevalidation.map((task) => ({ task })),
     allTasks,
     roadmap
@@ -279,15 +284,15 @@ export async function inspectWorkBackground({
       });
       allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
       roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
-      dependencyFilter = filterUnsatisfiedDependencies(eligible, allTasks, roadmap);
-      recoveryDependencyFilter = filterUnsatisfiedDependencies(
+      dependencyFilter = selectIndependentWorkCandidates(eligible, allTasks, roadmap);
+      recoveryDependencyFilter = selectIndependentWorkCandidates(
         recoverable.map((task) => ({ task })),
         allTasks,
         roadmap
       );
       eligible = dependencyFilter.eligible;
       recoverable = recoveryDependencyFilter.eligible.map((entry) => entry.task);
-      const resumedRevalidationDependencyFilter = filterUnsatisfiedDependencies(
+      const resumedRevalidationDependencyFilter = selectIndependentWorkCandidates(
         policyRevalidation.map((task) => ({ task })),
         allTasks,
         roadmap

@@ -15,7 +15,8 @@ The housekeeper owns host-local GPU runtime control:
 
 - inspect runtime containers,
 - start/restart/discharge managed runtimes,
-- serialize active execution,
+- admit execution per physical device,
+- serialize default runtimes while allowing explicitly safe shared runtimes,
 - execute real Ollama, ComfyUI, and KataGo jobs,
 - expose job status and results over HTTP.
 
@@ -46,6 +47,7 @@ GPU envelopes carry routing and residency fields, including:
 - `residencyRequired`,
 - `beginRequired`,
 - `dischargeAllowed`,
+- optional `dependsOnHandles`,
 - `jobSpec`.
 
 In the current implementation, `serviceName` maps to the housekeeper runtime, such as `ollama`, `comfyui`, or `katago`. `residencyName` is the profile/model/workflow that should stay warm when possible.
@@ -58,14 +60,24 @@ It:
 
 1. loads Pyash config,
 2. resolves `PYA_GPU_HOUSEKEEPER_URL` or `gpu housekeeper url`,
-3. claims the oldest eligible GPU envelope,
-4. acquires a local GPU lease keyed by `gpuId`,
-5. submits the job to the housekeeper,
+3. claims ready GPU envelopes through bounded worker slots,
+4. acquires a dispatch lease for each claimed duty,
+5. submits the jobs to the housekeeper,
 6. polls `/job/<remoteJobId>`,
 7. writes terminal handle status back to Pyash holding,
 8. acks success/fail in the durable queue.
 
-The worker currently talks to one configured housekeeper URL at a time. It does not choose among multiple remote hosts.
+`PYA_GPU_WORKER_CONCURRENCY` controls bounded coordinator fan-out and is
+clamped to a small finite range. It is a dispatch concurrency limit, not a
+permission to overlap arbitrary work on one GPU. The housekeeper remains the
+authority for host/device admission; with peer federation configured, separate
+slots can be routed to separate GPU hosts or devices. The default worker value
+is `2` so independent duties can make progress without turning the worker into
+an unbounded scheduler.
+
+The worker talks to one configured entry housekeeper URL at a time; the entry
+housekeeper performs the peer selection rather than making the worker a second
+multi-host scheduler.
 
 ### 2.3 GPU Housekeeper
 
@@ -76,6 +88,7 @@ The worker currently talks to one configured housekeeper URL at a time. It does 
 - `GET /queue`
 - `GET /runtime`
 - `GET /runtime/<runtimeName>`
+- `GET /runtime/ollama/models`
 - `POST /capacity/preview`
 - `POST /submit`
 - `GET /job/<remoteJobId>`
@@ -84,11 +97,17 @@ The worker currently talks to one configured housekeeper URL at a time. It does 
 - `POST /runtime/stop`
 - `POST /runtime/restart`
 
-The housekeeper has one active execution slot. It does not own a durable job
-queue; `world/holding/gpu/` owns that. `/submit` registers an execution record,
-runs it under the housekeeper execution lock, and `/job/<remoteJobId>` exposes
-that transient status so `gpu_worker` can copy the final result back into the
-Pyash handle.
+The housekeeper does not own a durable job queue; `world/holding/gpu/` owns
+that. `/submit` registers an execution record, admits it through a gate for its
+physical device, and `/job/<remoteJobId>` exposes transient status so
+`gpu_worker` can copy the final result back into the Pyash handle. Default
+runtimes are exclusive per device. A runtime may set `concurrencySafe` in the
+host-local runtime registry to opt into shared same-device execution; that
+choice is still subject to its declared VRAM request and live capacity checks.
+Housekeeper snapshots advertise protocol capabilities; model provisioning is
+forwarded only to peers that advertise `ollamaModelProvisioning`, so an older
+peer cannot receive an unsupported `ollama-ensure-model` job.
+Different physical devices can execute concurrently without sharing a gate.
 
 The default managed runtimes are:
 
@@ -125,6 +144,26 @@ Before execution, the housekeeper:
 4. checks warm models via `/api/ps`,
 5. discharges non-target warm models with `keep_alive: 0`,
 6. runs the requested model with default `keep_alive: 300`.
+
+Ollama model availability is exposed separately from model execution. An
+explicit `ollama-ensure-model` job can check an exact provider tag and return
+its digest, size and model metadata through the same queue, device gate and
+runtime lifecycle. It does not pull by default. Pulling is an explicit,
+allowlisted operation controlled on the host by
+`GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` and
+`GPU_HOUSEKEEPER_MODEL_ALLOWLIST=<exact tags>`, and requires declared VRAM,
+RAM and model-store disk capacity. The housekeeper starts the registered
+Ollama container when needed and uses Ollama's own `/api/pull`; Criterion or a
+Pyash caller never copies model files between hosts or manages model
+residency itself. A missing model therefore produces a structured
+`not-installed` or `not-authorized` result instead of an implicit download.
+
+The model catalog is queried from Ollama `/api/tags` and is available at
+`GET /runtime/ollama/models` and in `/snapshot`. Matching is exact, including
+provider tags containing colons, slashes and quantization suffixes. A normal
+generation request with `keep_alive: 0` also clears the housekeeper's warm
+residency flag, so its snapshot does not claim that a discharged model remains
+loaded.
 
 This is the first real GPU-managed mind path for non-streaming Pyash Ollama calls.
 
@@ -199,6 +238,12 @@ reclamation. `/capacity/preview` accepts the same runtime/profile/jobSpec shape
 and reports the decision, available memory, eligible idle candidates, and skipped
 candidate diagnostics without performing a discharge or starting a job.
 
+All reporter text-generation callers resolve the model through
+`program/runtime/gpu/text-model.mjs`. The resolver reads the house's
+`conduct/runtime.pya` first and falls back to `configure/default.pya`; callers
+do not carry separate model literals. Image/vision requests use the separate
+`see default mind` setting from the same declarative configuration.
+
 The snapshot also includes GPU compute-process telemetry split into managed
 runtime processes and unmanaged processes. This is diagnostic evidence only;
 unmanaged processes are never discharged by the housekeeper.
@@ -232,19 +277,21 @@ The current architecture is intentionally conservative.
 
 Limitations:
 
-- one configured housekeeper URL per local worker,
-- one active running job per housekeeper process,
-- no automatic peer forwarding,
-- no automatic host selection,
+- one configured entry housekeeper URL per local worker,
+- one active default-runtime job per physical device,
 - no per-device runtime containers,
 - no per-GPU `CUDA_VISIBLE_DEVICES` assignment per runtime,
-- warm residency is tracked lightly as profile state, not as a full scheduling model.
+- warm residency is tracked lightly as profile state, not as a full scheduling model,
+- safe same-device sharing requires explicit runtime registration and is not a
+  general guarantee for arbitrary processes.
 
-The queue envelope already has useful fields for future routing, but the executor does not yet use them as a real load-balancing policy.
+The entry housekeeper now performs bounded, residency-aware peer routing when
+`GPU_HOUSEKEEPER_PEERS` is configured. Pyash still has one durable queue and
+one entry URL; the housekeeper may execute locally or forward one hop to a
+configured peer. The queue envelope remains the source of truth and does not
+become a second distributed queue.
 
-## 6. Residency-Aware Federation Direction
-
-The desired next architecture is a federation of housekeepers.
+## 6. Residency-Aware Federation
 
 Each GPU machine runs its own housekeeper. A housekeeper may know peers such as:
 
@@ -252,13 +299,13 @@ Each GPU machine runs its own housekeeper. A housekeeper may know peers such as:
 - `swac`
 - future GPU hosts
 
-When a local worker claims a Pyash holding duty and submits it, a housekeeper
-should decide whether to:
+When a local worker claims a Pyash holding duty and submits it, the entry
+housekeeper decides whether to:
 
 1. accept and run locally,
-2. wait on its local execution lock briefly,
-3. forward once to a better peer,
-4. reject if no local or peer capacity is suitable.
+2. forward once to a better peer,
+3. retain local queue behavior if no peer can execute immediately,
+4. reject if neither local nor peer capacity is suitable.
 
 The key scheduling goal is not even load distribution. The key scheduling goal is minimizing residency thrash.
 
@@ -320,9 +367,58 @@ A simple first routing score could be:
 -20 health degraded
 ```
 
-The housekeeper should choose the highest scoring target above a minimum threshold. If no peer is better than local, local should keep ownership.
+The housekeeper chooses the highest-scoring immediately executable target. A
+busy local execution slot is skipped when a capable peer is available, so two
+hosts can run independent jobs at the same time. If no peer can execute
+immediately, the local housekeeper retains the existing queued-job behavior.
+Equal scores prefer the local host.
 
-## 7. Operational Notes
+## 7. Dependency-ready dispatch
+
+The GPU duty envelope may carry `dependsOnHandles`. The worker reads each
+dependency's durable handle status before claiming the envelope. Only a
+successful producer handle makes the consumer ready; queued, running, failed,
+missing or malformed producer state leaves it in the input spool. This is a
+cheap pre-claim check, so dependency filtering consumes no model turn and does
+not increment retry state. A second check after claiming closes the race where
+a producer changes while the consumer is being claimed.
+
+This is the execution adapter's projection of the existing Pyash dependency
+model. Refinery programs continue to express stage relationships with the
+normal `from name ...` and `from ve name ...` sentences; the GPU envelope only
+transports the resulting handle prerequisites. A dependent duty cannot jump
+ahead of its producer merely because another worker slot is free.
+
+The durable WorkTask roadmap uses its existing machine-readable package
+dependencies for the same reason. Its ready set and the GPU queue's ready set
+are separate projections over durable Pyash state, not competing schedulers.
+
+## 8. Configuration and operational notes
+
+Peer configuration is host-local deployment configuration, not durable Pyash
+state. The value is a semicolon-separated allowlist of normalized host IDs and
+URLs:
+
+```sh
+GPU_HOUSEKEEPER_HOST_ID=mriczo
+GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
+GPU_HOUSEKEEPER_ACCEPT_FORWARDED=true
+```
+
+The first live pair is configured symmetrically:
+
+```sh
+# mriczo
+GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
+
+# swac
+GPU_HOUSEKEEPER_PEERS='mriczo=http://mriczo:8090'
+```
+
+Forwarded requests carry `forwardDepth` and `visitedHosts`. A peer executes a
+forwarded request locally or rejects it; it never forwards again. Forwarded
+job status is reflected through the original `/job/<id>` endpoint, and a peer
+failure never triggers an unsafe duplicate submission.
 
 Useful live checks:
 
@@ -338,6 +434,18 @@ Start a local worker against configured housekeeper:
 ```sh
 node command/gpu_worker.mjs --world world
 ```
+
+For independent queued duties, the same worker can use a bounded coordinator:
+
+```sh
+PYA_GPU_WORKER_CONCURRENCY=2 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+node command/gpu_worker.mjs --world world --once
+```
+
+The worker does not need a second queue or a host-specific model scheduler.
+Peer housekeepers make the local routing decision from live residency,
+capacity, device and execution-slot evidence.
 
 Start with explicit environment:
 
@@ -355,7 +463,7 @@ as wo katago be restart do
 
 Direct queued KataGo analysis can use `command/katago_runner.mjs`; Pyash mind-style usage can use `katago command mind`.
 
-## 8. Design Preference
+## 9. Design Preference
 
 The housekeeper should be the federation boundary.
 

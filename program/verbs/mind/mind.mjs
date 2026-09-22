@@ -34,6 +34,7 @@ import { runGenerate } from "./generate.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 import { consumeMindInterrupt } from "../../agent/interrupt.mjs";
+import { resolveTextModel } from "../../runtime/gpu/text-model.mjs";
 
 const DEFAULT_TOOL_MAP_NAME = "agent tools";
 const DEFAULT_TOOL_MAP_PATH = path.resolve(
@@ -304,7 +305,7 @@ export async function mind_to_name_text(sentence, {
   const configModel = configSentence?.as?.name ?? null;
   const runtimeModel = agentRuntime?.model ? String(agentRuntime.model).trim() : null;
   const configuredModel = resolveConfigText("mind model", { rememberFn: remember }) ?? null;
-  const model = explicitModel ?? runtimeModel ?? configModel ?? configuredModel ?? "qwen3.5:9b";
+  const model = explicitModel ?? runtimeModel ?? configModel ?? configuredModel ?? resolveTextModel();
   await ensureMindTuningLoaded(model);
   const modelTuning = resolveMindTuningForModel(model, { rememberFn: remember });
   const configuredThink = resolveConfigMapBool("mind configure", "think", { rememberFn: remember });

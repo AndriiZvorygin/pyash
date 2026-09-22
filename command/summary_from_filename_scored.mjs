@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { resolveTextModel } from "../program/runtime/gpu/text-model.mjs";
 
-const MODEL = "qwen3.5:9b";
+const MODEL = resolveTextModel();
 const OLLAMA_URL = "http://localhost:11434/api/chat";
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = 0.8;

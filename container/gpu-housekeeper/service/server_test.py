@@ -1,5 +1,8 @@
 import importlib.util
+import json
+import os
 import pathlib
+import threading
 import time
 import unittest
 
@@ -11,16 +14,36 @@ spec.loader.exec_module(server)
 
 class HousekeeperOllamaTests(unittest.TestCase):
   def setUp(self):
+    self.orig_parse_nvidia_smi = server.parse_nvidia_smi
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
     self.orig_request_ollama_json = server.request_ollama_json
+    self.orig_ollama_model_catalog = server.ollama_model_catalog
+    self.orig_memory_available_mb = server.memory_available_mb
+    self.orig_container_disk_available_mb = server.container_disk_available_mb
+    self.original_pull_env = os.environ.get("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL")
+    self.original_allowlist_env = os.environ.get("GPU_HOUSEKEEPER_MODEL_ALLOWLIST")
     server._PROFILES.clear()
     server._JOBS.clear()
+    server.reset_ollama_model_catalog_cache()
 
   def tearDown(self):
+    server.parse_nvidia_smi = self.orig_parse_nvidia_smi
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_ollama_json = self.orig_request_ollama_json
+    server.ollama_model_catalog = self.orig_ollama_model_catalog
+    server.memory_available_mb = self.orig_memory_available_mb
+    server.container_disk_available_mb = self.orig_container_disk_available_mb
+    if self.original_pull_env is None:
+      os.environ.pop("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_ALLOW_MODEL_PULL"] = self.original_pull_env
+    if self.original_allowlist_env is None:
+      os.environ.pop("GPU_HOUSEKEEPER_MODEL_ALLOWLIST", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_MODEL_ALLOWLIST"] = self.original_allowlist_env
+    server.reset_ollama_model_catalog_cache()
     server._PROFILES.clear()
     server._JOBS.clear()
 
@@ -37,6 +60,16 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "profileName": "qwen-test",
       "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen-test", "messages": []}}
     })
+    ensure = server.submit_job({
+      "handleId": "handle-ensure",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": "qwen-test", "pullIfMissing": False}
+      }
+    })
     bad = server.submit_job({
       "handleId": "handle-three",
       "runtimeName": "ollama",
@@ -46,7 +79,157 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     self.assertTrue(generate["accepted"])
     self.assertTrue(chat["accepted"])
+    self.assertTrue(ensure["accepted"])
     self.assertFalse(bad["accepted"])
+
+  def test_ensure_model_reports_an_installed_exact_tag_without_pulling(self):
+    model = "qwen3.5:9b"
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 100, "vramFreeMb": 12188}]
+    }
+    calls = []
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      calls.append((pathname, payload))
+      if pathname == "/api/ps":
+        return {"models": []}
+      if pathname == "/api/tags":
+        return {"models": [{"name": model, "digest": "sha256:test", "size": 1000}]}
+      raise AssertionError(pathname)
+
+    server.request_ollama_json = fake_request
+    result = server.execute_ollama_ensure_model({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "dischargeAllowed": False,
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": model, "pullIfMissing": False}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result["state"], "available")
+    self.assertFalse(result["pulled"])
+    self.assertEqual(result["metadata"]["name"], model)
+    self.assertEqual([item[0] for item in calls], ["/api/ps", "/api/tags"])
+
+  def test_ensure_model_reports_missing_tag_without_pull_budget_requirements(self):
+    model = "missing-model:latest"
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 100, "vramFreeMb": 12188}]
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      {"models": []} if pathname in {"/api/ps", "/api/tags"} else AssertionError(pathname)
+    )
+    result = server.execute_ollama_ensure_model({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "dischargeAllowed": False,
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": model, "pullIfMissing": False}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result["state"], "not-installed")
+    self.assertFalse(result["available"])
+
+  def test_ensure_model_pulls_only_the_allowlisted_exact_tag_with_storage_checks(self):
+    model = "qwen3.5:9b"
+    catalogs = iter([
+      {"available": True, "models": []},
+      {"available": True, "models": [{"name": model, "digest": "sha256:pulled", "size": 1234}]}
+    ])
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 100, "vramFreeMb": 12188}]
+    }
+    server.ollama_model_catalog = lambda force=False: next(catalogs)
+    server.memory_available_mb = lambda: {"available": True, "availableMb": 16000, "totalMb": 64000}
+    server.container_disk_available_mb = lambda _container, path_name: {
+      "available": True, "availableMb": 100000, "path": path_name
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      calls.append((pathname, payload)) or ({"models": []} if pathname == "/api/ps" else {"status": "success"})
+    )
+    os.environ["GPU_HOUSEKEEPER_ALLOW_MODEL_PULL"] = "true"
+    os.environ["GPU_HOUSEKEEPER_MODEL_ALLOWLIST"] = model
+    result = server.execute_ollama_ensure_model({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "dischargeAllowed": False,
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000, "ramRequiredMb": 8000, "diskRequiredMb": 5000},
+        "payload": {"model": model, "pullIfMissing": True}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True, "containerName": "ollama"}})
+
+    self.assertEqual(result["state"], "available")
+    self.assertTrue(result["pulled"])
+    self.assertEqual(calls[1][0], "/api/pull")
+    self.assertEqual(calls[1][1], {"name": model, "stream": False})
+
+  def test_ensure_model_reports_insufficient_vram(self):
+    model = "large-model:latest"
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 12000, "vramFreeMb": 288}]
+    }
+    server.ollama_model_catalog = lambda force=False: {
+      "available": True, "models": [{"name": model}]
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: {"models": []}
+    result = server.execute_ollama_ensure_model({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "dischargeAllowed": False,
+      "jobSpec": {
+        "kind": "ollama-ensure-model",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": model, "pullIfMissing": False}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result["state"], "insufficient-capacity")
+    self.assertIn("discharge is disabled", result["reason"])
+
+  def test_zero_keep_alive_marks_ollama_profile_not_loaded(self):
+    model = "qwen3.5:9b"
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      {"models": []} if pathname == "/api/ps" else {"response": "ok"}
+    )
+    result = server.execute_ollama_job({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "jobSpec": {
+        "kind": "ollama-generate",
+        "payload": {"model": model, "prompt": "probe", "keep_alive": 0}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result, {"response": "ok"})
+    self.assertFalse(server._PROFILES[model]["loaded"])
 
   def test_ollama_execution_discharges_non_target_warm_models_then_runs_target(self):
     calls = []
@@ -81,6 +264,28 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(calls[0][0], "/api/ps")
     self.assertEqual(calls[1][1]["model"], "old-model")
     self.assertEqual(calls[2][1]["model"], "qwen-test")
+
+  def test_warm_target_profile_is_admitted_when_vram_is_full(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 24000, "vramFreeMb": 576}],
+    }
+    server._PROFILES["qwen-test"] = {
+      "profileName": "qwen-test",
+      "runtimeName": "ollama",
+      "loaded": True,
+    }
+    plan = server.capacity_plan_for_job({
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {
+        "kind": "ollama-chat",
+        "resourceRequest": {"vramRequiredMb": 12000},
+        "payload": {"model": "qwen-test", "messages": []},
+      },
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+    self.assertEqual(plan["decision"], "fits")
+    self.assertTrue(plan["targetProfileLoaded"])
 
   def test_stopped_runtime_triggers_begin_before_ollama_job(self):
     actions = []
@@ -196,6 +401,153 @@ class HousekeeperOllamaTests(unittest.TestCase):
     finally:
       server.execute_registered_job = original
 
+  def test_registered_jobs_on_different_devices_run_in_parallel(self):
+    original_execute_job = server.execute_job
+    started = threading.Event()
+    both_started = threading.Event()
+    counter_lock = threading.Lock()
+    active = 0
+
+    def fake_execute(job, _runtime_registry):
+      nonlocal active
+      with counter_lock:
+        active += 1
+        if active == 2:
+          both_started.set()
+      started.set()
+      both_started.wait(1)
+      with counter_lock:
+        active -= 1
+      return {"device": job["deviceId"]}
+
+    try:
+      server.execute_job = fake_execute
+      server._JOBS.update({
+        "parallel-one": {
+          "remoteJobId": "parallel-one", "runtimeName": "test", "profileName": "one",
+          "deviceId": "gpu-0", "status": "queued", "forwarded": False
+        },
+        "parallel-two": {
+          "remoteJobId": "parallel-two", "runtimeName": "test", "profileName": "two",
+          "deviceId": "gpu-1", "status": "queued", "forwarded": False
+        }
+      })
+      registry = {"test": {"runtimeName": "test", "concurrencySafe": False}}
+      server.start_registered_job("parallel-one", registry)
+      server.start_registered_job("parallel-two", registry)
+      self.assertTrue(both_started.wait(1))
+      for _ in range(100):
+        if all(server._JOBS[item]["status"] == "success" for item in ("parallel-one", "parallel-two")):
+          break
+        time.sleep(0.01)
+      self.assertEqual(server._JOBS["parallel-one"]["status"], "success")
+      self.assertEqual(server._JOBS["parallel-two"]["status"], "success")
+    finally:
+      server.execute_job = original_execute_job
+      server._JOBS.clear()
+      server._RUNNING_JOB_IDS.clear()
+      server._RUNNING_JOB_ID = None
+
+  def test_same_device_overlap_requires_concurrency_safe_runtime(self):
+    server._JOBS["safe-running"] = {
+      "remoteJobId": "safe-running", "runtimeName": "safe", "profileName": "one",
+      "deviceId": "gpu-0", "status": "running", "forwarded": False,
+      "jobSpec": {"resourceRequest": {"vramRequiredMb": 4000}}
+    }
+    safe_registry = {"safe": {"runtimeName": "safe", "concurrencySafe": True}}
+    unsafe_registry = {"unsafe": {"runtimeName": "unsafe", "concurrencySafe": False}}
+    self.assertFalse(server.local_execution_slot_busy({
+      "runtimeName": "safe", "deviceId": "gpu-0",
+      "jobSpec": {"resourceRequest": {"vramRequiredMb": 4000}}
+    }, safe_registry))
+    self.assertTrue(server.local_execution_slot_busy({
+      "runtimeName": "unsafe", "deviceId": "gpu-0"
+    }, unsafe_registry))
+
+  def test_different_devices_do_not_share_the_default_execution_block(self):
+    server._JOBS["gpu-zero-running"] = {
+      "remoteJobId": "gpu-zero-running", "runtimeName": "unsafe", "profileName": "one",
+      "deviceId": "gpu-0", "status": "running", "forwarded": False
+    }
+    registry = {"unsafe": {"runtimeName": "unsafe", "concurrencySafe": False}}
+    self.assertFalse(server.local_execution_slot_busy({
+      "runtimeName": "unsafe", "deviceId": "gpu-1"
+    }, registry))
+
+  def test_same_device_shared_runtime_can_run_two_jobs(self):
+    original_execute_job = server.execute_job
+    original_parse_nvidia_smi = server.parse_nvidia_smi
+    started = threading.Event()
+    both_started = threading.Event()
+    counter_lock = threading.Lock()
+    active = 0
+
+    def fake_execute(job, _runtime_registry):
+      nonlocal active
+      with counter_lock:
+        active += 1
+        if active == 2:
+          both_started.set()
+      started.set()
+      both_started.wait(1)
+      with counter_lock:
+        active -= 1
+      return {"job": job["remoteJobId"]}
+
+    try:
+      server.execute_job = fake_execute
+      server.parse_nvidia_smi = lambda: {
+        "available": True,
+        "devices": [{"deviceId": "gpu0", "vramFreeMb": 12000, "vramTotalMb": 24576, "vramUsedMb": 12576}]
+      }
+      server._JOBS.update({
+        "shared-one": {
+          "remoteJobId": "shared-one", "runtimeName": "safe", "profileName": "one",
+          "deviceId": "gpu-0", "status": "queued", "forwarded": False,
+          "jobSpec": {"resourceRequest": {"vramRequiredMb": 4000}}
+        },
+        "shared-two": {
+          "remoteJobId": "shared-two", "runtimeName": "safe", "profileName": "two",
+          "deviceId": "gpu-0", "status": "queued", "forwarded": False,
+          "jobSpec": {"resourceRequest": {"vramRequiredMb": 4000}}
+        }
+      })
+      registry = {"safe": {"runtimeName": "safe", "concurrencySafe": True}}
+      server.start_registered_job("shared-one", registry)
+      server.start_registered_job("shared-two", registry)
+      self.assertTrue(both_started.wait(1))
+      for _ in range(100):
+        if all(server._JOBS[item]["status"] == "success" for item in ("shared-one", "shared-two")):
+          break
+        time.sleep(0.01)
+      self.assertEqual(server._JOBS["shared-one"]["status"], "success")
+      self.assertEqual(server._JOBS["shared-two"]["status"], "success")
+      self.assertEqual(server.queue_depth(), 0)
+    finally:
+      server.execute_job = original_execute_job
+      server.parse_nvidia_smi = original_parse_nvidia_smi
+      server._JOBS.clear()
+      server._RUNNING_JOB_IDS.clear()
+      server._RUNNING_JOB_ID = None
+
+  def test_custom_runtime_registry_parses_concurrency_safely(self):
+    original_registry = os.environ.get("GPU_HOUSEKEEPER_RUNTIME_REGISTRY")
+    os.environ["GPU_HOUSEKEEPER_RUNTIME_REGISTRY"] = json.dumps([{
+      "runtimeName": "safe",
+      "containerName": "safe-runtime",
+      "gpuExpected": "true",
+      "concurrencySafe": "true"
+    }])
+    try:
+      registry = server.load_runtime_registry()
+    finally:
+      if original_registry is None:
+        os.environ.pop("GPU_HOUSEKEEPER_RUNTIME_REGISTRY", None)
+      else:
+        os.environ["GPU_HOUSEKEEPER_RUNTIME_REGISTRY"] = original_registry
+    self.assertTrue(registry["safe"]["gpuExpected"])
+    self.assertTrue(registry["safe"]["concurrencySafe"])
+
 
 class HousekeeperCapacityTests(unittest.TestCase):
   def setUp(self):
@@ -257,6 +609,26 @@ class HousekeeperCapacityTests(unittest.TestCase):
     }
     result = server.ensure_capacity_for_job(self.target_job(), {"huggingface": {"runtimeName": "huggingface"}})
     self.assertEqual(result["decision"], "fits")
+
+  def test_local_route_selects_an_idle_device_when_device_is_unspecified(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [
+        {"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 12000, "vramFreeMb": 12576},
+        {"deviceId": "gpu1", "vramTotalMb": 24576, "vramUsedMb": 4000, "vramFreeMb": 20576},
+      ]
+    }
+    server._JOBS["gpu-zero-running"] = {
+      "remoteJobId": "gpu-zero-running", "runtimeName": "ollama", "profileName": "one",
+      "deviceId": "gpu0", "status": "running", "forwarded": False
+    }
+    result = server.local_route_state(
+      {"runtimeName": "ollama", "profileName": "two", "jobSpec": {}},
+      {"ollama": {"runtimeName": "ollama", "concurrencySafe": False}},
+      "mriczo"
+    )
+    self.assertEqual(result["deviceId"], "gpu1")
+    self.assertTrue(result["immediate"])
 
   def test_idle_comfyui_is_reclaimed_through_provider_hooks_without_stop(self):
     telemetry = iter([
@@ -683,6 +1055,233 @@ class HousekeeperHuggingFaceTests(unittest.TestCase):
     self.assertEqual(calls[0][1]["model"], "model-one")
     self.assertEqual(calls[0][2], 44)
     self.assertTrue(server._PROFILES["model-one"]["loaded"])
+
+
+class HousekeeperFederationTests(unittest.TestCase):
+  def setUp(self):
+    self.orig_configured_peers = server.configured_peers
+    self.orig_local_route_state = server.local_route_state
+    self.orig_peer_route_candidate = server.peer_route_candidate
+    self.orig_peer_request_json = server.peer_request_json
+    self.orig_host_id = server.Handler.host_id
+    self.orig_accept_forwarded = os.environ.get("GPU_HOUSEKEEPER_ACCEPT_FORWARDED")
+    server._JOBS.clear()
+    server.Handler.host_id = "mriczo"
+
+  def tearDown(self):
+    server.configured_peers = self.orig_configured_peers
+    server.local_route_state = self.orig_local_route_state
+    server.peer_route_candidate = self.orig_peer_route_candidate
+    server.peer_request_json = self.orig_peer_request_json
+    server.Handler.host_id = self.orig_host_id
+    if self.orig_accept_forwarded is None:
+      os.environ.pop("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_ACCEPT_FORWARDED"] = self.orig_accept_forwarded
+    server._JOBS.clear()
+
+  def test_parse_peer_registry_uses_host_url_pairs(self):
+    self.assertEqual(
+      server.parse_peer_registry("swac=http://swac:8090;mriczo=http://mriczo:8090"),
+      {"swac": "http://swac:8090", "mriczo": "http://mriczo:8090"}
+    )
+
+  def test_busy_local_host_routes_to_idle_peer(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": False, "busy": True, "score": 100
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True, "busy": False, "score": 20
+    }
+    route = server.select_route({}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}}, {"ollama": {}}, "mriczo")
+    self.assertTrue(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "swac")
+
+  def test_forwarded_request_cannot_forward_again(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "swac", "available": True, "immediate": True, "score": 20
+    }
+    server.peer_route_candidate = lambda *_args: self.fail("forwarded jobs must not probe another peer")
+    route = server.select_route(
+      {"routing": {"forwardDepth": 1, "visitedHosts": ["mriczo"]}},
+      {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}},
+      {"ollama": {}},
+      "swac"
+    )
+    self.assertFalse(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "swac")
+
+  def test_forwarded_job_status_mirrors_peer_without_resubmitting(self):
+    server._JOBS["job-proxy"] = {
+      "remoteJobId": "job-proxy",
+      "forwarded": True,
+      "peerUrl": "http://swac:8090",
+      "peerJobId": "job-peer",
+      "status": "running",
+      "message": "forwarded",
+      "result": None,
+      "error": None,
+      "startedAt": "",
+      "finishedAt": ""
+    }
+    calls = []
+
+    def fake_peer_request(url, pathname, payload=None, timeout_ms=1500):
+      calls.append((url, pathname, payload))
+      return {
+        "status": "success",
+        "message": "completed",
+        "result": {"response": "ok"},
+        "error": None,
+        "startedAt": "start",
+        "finishedAt": "finish"
+      }
+
+    server.peer_request_json = fake_peer_request
+    result = server.job_status("job-proxy")
+    self.assertEqual(result["status"], "success")
+    self.assertEqual(result["result"], {"response": "ok"})
+    self.assertEqual(calls, [("http://swac:8090", "/job/job-peer", None)])
+
+  def test_peer_route_uses_execution_slot_reservation_not_only_running_queue(self):
+    responses = iter([
+      {
+        "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+        "profiles": [],
+        "executionSlotBusy": True,
+        "queueDepth": 0,
+      },
+      {"feasible": True, "decision": "fits"},
+    ])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "swac",
+      "http://swac:8090",
+      {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}}
+    )
+
+    self.assertTrue(candidate["available"])
+    self.assertTrue(candidate["busy"])
+    self.assertFalse(candidate["immediate"])
+
+  def test_peer_without_provisioning_capability_is_not_a_model_ensure_target(self):
+    responses = iter([{
+      "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+      "profiles": [],
+      "devices": [{"deviceId": "gpu0", "vramFreeMb": 12000}],
+      "queueDepth": 0,
+    }])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "mriczo",
+      "http://mriczo:8090",
+      {
+        "runtimeName": "ollama",
+        "profileName": "qwen3.5:9b",
+        "jobSpec": {
+          "kind": "ollama-ensure-model",
+          "resourceRequest": {"vramRequiredMb": 7000},
+          "payload": {"model": "qwen3.5:9b", "pullIfMissing": False}
+        }
+      }
+    )
+
+    self.assertFalse(candidate["available"])
+    self.assertIn("does not advertise", candidate["reason"])
+
+  def test_peer_route_uses_the_requested_device_slot(self):
+    responses = iter([
+      {
+        "runtimes": [{"runtimeName": "ollama", "status": "running", "concurrencySafe": False}],
+        "profiles": [],
+        "executionSlots": [{
+          "deviceId": "gpu0",
+          "busy": True,
+          "jobs": [{"runtimeName": "ollama", "concurrencySafe": False, "status": "running"}]
+        }],
+        "executionSlotBusy": True,
+        "queueDepth": 1,
+      },
+      {"feasible": True, "decision": "fits"},
+    ])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "swac",
+      "http://swac:8090",
+      {"runtimeName": "ollama", "profileName": "qwen", "deviceId": "gpu1", "jobSpec": {}}
+    )
+
+    self.assertTrue(candidate["available"])
+    self.assertFalse(candidate["busy"])
+    self.assertTrue(candidate["immediate"])
+
+  def test_peer_without_live_runtime_is_not_a_route_target(self):
+    server.peer_request_json = lambda *_args, **_kwargs: {
+      "runtimes": [{"runtimeName": "huggingface", "status": "unknown"}],
+      "profiles": [],
+      "executionSlotBusy": False,
+    }
+
+    candidate = server.peer_route_candidate(
+      "swac",
+      "http://swac:8090",
+      {"runtimeName": "huggingface", "profileName": "large", "jobSpec": {}}
+    )
+
+    self.assertFalse(candidate["available"])
+    self.assertIn("unavailable", candidate["reason"])
+
+  def test_local_queued_submission_reserves_execution_slot(self):
+    server.configured_peers = lambda: {}
+    server.local_route_state = server.__dict__["local_route_state"]
+    result = server.submit_job({
+      "handleId": "reservation",
+      "runtimeName": "ollama",
+      "profileName": "qwen",
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}}
+    }, {"ollama": {}}, "mriczo")
+
+    self.assertTrue(result["accepted"])
+    self.assertTrue(server.local_execution_slot_busy())
+    self.assertTrue(server.make_snapshot("mriczo")["executionSlotBusy"])
+
+  def test_forwarding_failure_does_not_create_local_duplicate(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": False, "busy": True, "score": 0
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True, "score": 20
+    }
+    server.peer_request_json = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("connection reset"))
+    result = server.submit_job({
+      "handleId": "no-duplicate",
+      "runtimeName": "ollama",
+      "profileName": "qwen",
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}}
+    }, {"ollama": {}}, "mriczo")
+    self.assertFalse(result["accepted"])
+    self.assertEqual(server._JOBS, {})
+
+  def test_no_peer_configuration_preserves_local_submission(self):
+    server.configured_peers = lambda: {}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 0
+    }
+    result = server.submit_job({
+      "handleId": "local-only",
+      "runtimeName": "ollama",
+      "profileName": "qwen",
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}}
+    }, {"ollama": {}}, "mriczo")
+    self.assertTrue(result["accepted"])
+    self.assertFalse(result["forwarded"])
+    self.assertEqual(result["executionHostId"], "mriczo")
 
 
 if __name__ == "__main__":
