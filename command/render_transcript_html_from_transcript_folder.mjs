@@ -1141,8 +1141,8 @@ function buildPage({
     return Math.floor(Number(fallbackRow) || 0);
   };
 
-  const renderChapterSummary = (section, chapter, index) => {
-    const since = Number(chapter?.since);
+  const renderChapterSummary = (section, chapter, index, displaySince = Number(chapter?.since)) => {
+    const since = Number(displaySince);
     const ts = Number.isFinite(since) ? fmtClock(since) : "";
     const jumpUrl = Number.isFinite(since) ? buildTimedVideoUrl(videoUrl || meetingUrl, since) : (videoUrl || meetingUrl || "#");
     const title = String(chapter?.title || "").trim();
@@ -1172,14 +1172,18 @@ function buildPage({
     return false;
   };
   const mergedTopicRows = hasSections
-    ? transcriptSections.map((s) => ({
+    ? transcriptSections.map((s, sectionIndex) => ({
       href: `#${s.id}`,
       label: s.heading,
-      since: Number(transcriptRows[s.startRow]?.since),
+      // YouTube chapter descriptions use the video start as their first
+      // marker even when the first spoken cue begins a few seconds later.
+      // Keep the transcript cue timing intact, but make the displayed first
+      // section/chapter marker satisfy that same :00 contract.
+      since: sectionIndex === 0 ? 0 : Number(transcriptRows[s.startRow]?.since),
       chapters: (Array.isArray(s.chapters) ? s.chapters : []).map((ch, i) => ({
         href: `#${chapterAnchor(s, ch, i)}`,
         label: String(ch?.title || ch?.text || `Chapter ${i + 1}`).trim() || `Chapter ${i + 1}`,
-        since: Number(ch?.since),
+        since: sectionIndex === 0 && i === 0 ? 0 : Number(ch?.since),
       })),
     }))
     : topics.map((t) => ({ href: "#full-transcript", label: t, chapters: [] }));
@@ -1194,7 +1198,7 @@ function buildPage({
     return `<li><a href="${escapeHtml(row.href)}">${escapeHtml(ts)}${escapeHtml(row.label)}</a>${chapters}</li>`;
   }).join("")}</ol></nav>`;
   const transcriptHtml = hasSections
-    ? transcriptSections.map((s) => {
+    ? transcriptSections.map((s, sectionIndex) => {
       const rows = transcriptRows.slice(s.startRow, s.endRow + 1);
       const firstRowText = rows.length ? String(rows[0]?.speech || rows[0]?.raw || "").trim() : "";
       const showSummary = !summaryLooksDuplicate(String(s.summary || ""), firstRowText);
@@ -1209,7 +1213,12 @@ function buildPage({
       const entries = rows.map((row, localIndex) => {
         const globalRow = s.startRow + localIndex;
         const summaries = (chaptersByStartRow.get(globalRow) || [])
-          .map(({ chapter, index }) => renderChapterSummary(s, chapter, index))
+          .map(({ chapter, index }) => renderChapterSummary(
+            s,
+            chapter,
+            index,
+            sectionIndex === 0 && index === 0 ? 0 : Number(chapter?.since),
+          ))
           .join("\n");
         return `${summaries}${summaries ? "\n" : ""}${renderEntry(row)}`;
       }).join("\n");
