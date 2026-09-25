@@ -591,6 +591,14 @@ export function verifyArticleClaims({
       const supportedByStrong = Boolean(strongHit.snippet);
       const supportedBySecondary = Boolean(secondaryHit.snippet);
       const supportedByWeakOnly = !supportedByStrong && !supportedBySecondary && Boolean(weakHit.snippet);
+      // Video-only articles intentionally use the verified whole-stream
+      // summary as their source corpus. A causal sentence that is directly
+      // present in that summary is grounded even when no agenda/secondary
+      // corpus exists; do not delete its opening subject and leave a dangling
+      // pronoun such as “He contends …”.
+      const causalSupportedByWeak = hasCausal
+        && supportedByWeakOnly
+        && ["one-sentence summary", "whole stream summary"].includes(target.key);
       const scopedOutcome = hasOutcome ? itemScopedOutcomeSupport(sentenceNorm, groundedClaimUnits) : null;
       const isSupportedOutcome = !hasOutcome || (scopedOutcome == null
         ? (outcomeWords.test(strongNorm) || outcomeWords.test(secondaryNorm))
@@ -598,7 +606,7 @@ export function verifyArticleClaims({
 
       let severity = "supported";
       let issueType = "";
-      if (hasValue || (hasEsc && !supportedEsc) || (hasCausal && !supportedByStrong && !supportedBySecondary)) {
+      if (hasValue || (hasEsc && !supportedEsc) || (hasCausal && !causalSupportedByWeak && !supportedByStrong && !supportedBySecondary)) {
         severity = "unsupported";
         issueType = hasValue ? "value_judgment_overclaim" : ((hasEsc && !supportedEsc) ? "action_escalation" : "causal_overclaim");
       }
