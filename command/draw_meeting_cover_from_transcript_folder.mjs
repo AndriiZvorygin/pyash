@@ -297,7 +297,12 @@ async function prepareVideoFrameBackground({ transcriptDir, prefix, drawRunCwd }
       process.stdout.write(`[meeting-cover] warn source video segment unavailable: ${String(err?.message || err)}\n`);
     }
   }
-  const sourceImagePath = videoPath ? '' : await downloadYoutubeSourceThumbnail(sourceUrl, sourceDir);
+  // A YouTube transcript must use an actual frame from its recording. A
+  // channel thumbnail is not a substitute for a video screengrab and can
+  // silently turn a failed media download into an unrelated cover.
+  const sourceImagePath = videoPath || (sourceUrl && youtubeVideoId(sourceUrl))
+    ? ''
+    : await downloadYoutubeSourceThumbnail(sourceUrl, sourceDir);
   const sourceMediaPath = videoPath || sourceImagePath;
   if (!sourceMediaPath) return { backgroundPath: '', sourceUrl, videoPath: '', sourceImagePath: '' };
 
@@ -720,7 +725,10 @@ async function main() {
     process.stdout.write(`[meeting-cover] wrote: ${coverImageStablePath}\n`);
     return;
   }
-  if (String(process.env.COVER_REQUIRE_SOURCE_VIDEO || '').trim() === '1') {
+  if (
+    String(process.env.COVER_REQUIRE_SOURCE_VIDEO || '').trim() === '1'
+    || (videoFrame.sourceUrl && youtubeVideoId(videoFrame.sourceUrl))
+  ) {
     throw new Error('meeting-cover source video required but no usable video frame was available');
   }
 
