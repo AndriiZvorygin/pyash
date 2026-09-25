@@ -95,14 +95,24 @@ test("mapWithConcurrency fans out work while preserving input order", async () =
   assert.deepEqual(started.slice(0, 2), [0, 1]);
 });
 
-test("learn child runs opt into the configured housekeeper queue", () => {
+test("learn child runs default to the local housekeeper and preserve explicit queue settings", () => {
   const originalManager = process.env.PYA_GPU_HOUSEKEEPER_URL;
   const originalQueue = process.env.PYA_GPU_MIND_QUEUE;
   try {
-    process.env.PYA_GPU_HOUSEKEEPER_URL = "http://gpu-housekeeper:8090";
+    delete process.env.PYA_GPU_HOUSEKEEPER_URL;
     delete process.env.PYA_GPU_MIND_QUEUE;
+    const defaults = buildLearnChildEnv();
+    assert.equal(defaults.PYA_GPU_HOUSEKEEPER_URL, "http://localhost:8090");
+    assert.equal(defaults.PYA_GPU_MIND_QUEUE, "truth");
+
+    const configured = buildLearnChildEnv({ PYA_GPU_HOUSEKEEPER_URL: "http://gpu-housekeeper:8090" });
+    assert.equal(configured.PYA_GPU_HOUSEKEEPER_URL, "http://gpu-housekeeper:8090");
+    assert.equal(configured.PYA_GPU_MIND_QUEUE, "truth");
+
     assert.equal(buildLearnChildEnv().PYA_GPU_MIND_QUEUE, "truth");
-    assert.equal(buildLearnChildEnv({ PYA_GPU_MIND_QUEUE: "false" }).PYA_GPU_MIND_QUEUE, "false");
+    const direct = buildLearnChildEnv({ PYA_GPU_MIND_QUEUE: "false" });
+    assert.equal(direct.PYA_GPU_MIND_QUEUE, "false");
+    assert.equal(direct.PYA_GPU_HOUSEKEEPER_URL, "http://localhost:8090");
   } finally {
     if (originalManager === undefined) delete process.env.PYA_GPU_HOUSEKEEPER_URL;
     else process.env.PYA_GPU_HOUSEKEEPER_URL = originalManager;
