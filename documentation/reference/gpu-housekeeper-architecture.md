@@ -166,6 +166,11 @@ with `GPU_HOUSEKEEPER_OLLAMA_GPU_STARTUP_GRACE_SEC` (60 seconds),
 `GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC` (1 second), and
 `GPU_HOUSEKEEPER_OLLAMA_MIN_GPU_MODEL_FRACTION` (0.99).
 
+Ollama's CUDA runtime must also match the actual host driver. Keep a supported
+host driver fixed and deploy a compatible runtime profile when an upstream
+image raises its minimum; for example, swac's RTX 3060 uses the documented
+[CUDA 12.2 / sm_86 profile](../../ops/ollama/swac-rtx3060-cuda122/README.md).
+
 Ollama model availability is exposed separately from model execution. An
 explicit `ollama-ensure-model` job can check an exact provider tag and return
 its digest, size and model metadata through the same queue, device gate and
