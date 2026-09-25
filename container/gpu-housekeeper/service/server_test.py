@@ -25,6 +25,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.original_pull_env = os.environ.get("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL")
     self.original_allowlist_env = os.environ.get("GPU_HOUSEKEEPER_MODEL_ALLOWLIST")
     self.original_guard_poll_env = os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC")
+    self.original_watchdog_interval_env = os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC")
     server._PROFILES.clear()
     server._JOBS.clear()
     server.reset_ollama_model_catalog_cache()
@@ -50,6 +51,10 @@ class HousekeeperOllamaTests(unittest.TestCase):
       os.environ.pop("GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC", None)
     else:
       os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC"] = self.original_guard_poll_env
+    if self.original_watchdog_interval_env is None:
+      os.environ.pop("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC"] = self.original_watchdog_interval_env
     server.reset_ollama_model_catalog_cache()
     server._PROFILES.clear()
     server._JOBS.clear()
@@ -318,7 +323,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertFalse(server._PROFILES["partial-model"]["loaded"])
     self.assertTrue(server._PROFILES["gpu-model"]["loaded"])
 
-  def test_cpu_resident_model_is_stopped_before_request_is_sent(self):
+  def test_cpu_resident_model_restarts_ollama_before_request_is_sent(self):
     actions = []
     requests = []
     model = "qwen3.5:9b"
@@ -341,10 +346,16 @@ class HousekeeperOllamaTests(unittest.TestCase):
         "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "must not run"}}
       }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
 
-    self.assertEqual(actions, [("ollama", "stopAction")])
+    self.assertEqual(actions, [("ollama", "restartAction")])
     self.assertEqual(requests, [])
 
-  def test_periodic_residency_audit_stops_idle_cpu_resident_model(self):
+  def test_watchdog_defaults_to_five_minutes_and_interval_is_configurable(self):
+    os.environ.pop("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC", None)
+    self.assertEqual(server.ollama_gpu_watchdog_interval_seconds(), 300)
+    os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC"] = "12"
+    self.assertEqual(server.ollama_gpu_watchdog_interval_seconds(), 12)
+
+  def test_periodic_residency_audit_restarts_idle_cpu_resident_model(self):
     actions = []
     model = "qwen3.5:9b"
     server.parse_runtime_status = lambda _entry: {"status": "running"}
@@ -360,9 +371,9 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     result = server.audit_ollama_gpu_residency({"ollama": {"gpuExpected": True}})
 
-    self.assertTrue(result["stopped"])
+    self.assertTrue(result["restarted"])
     self.assertEqual(result["model"], model)
-    self.assertEqual(actions, [("ollama", "stopAction")])
+    self.assertEqual(actions, [("ollama", "restartAction")])
     self.assertFalse(server._PROFILES[model]["gpuResident"])
 
   def test_periodic_residency_audit_keeps_gpu_resident_model_running(self):
@@ -381,10 +392,10 @@ class HousekeeperOllamaTests(unittest.TestCase):
     result = server.audit_ollama_gpu_residency({"ollama": {"gpuExpected": True}})
 
     self.assertTrue(result["checked"])
-    self.assertFalse(result["stopped"])
+    self.assertFalse(result["restarted"])
     self.assertEqual(actions, [])
 
-  def test_periodic_residency_audit_reports_failed_ollama_stop(self):
+  def test_periodic_residency_audit_reports_failed_ollama_restart(self):
     model = "cpu-model"
     server.parse_runtime_status = lambda _entry: {"status": "running"}
     server.ollama_running_model_status = lambda: {
@@ -399,12 +410,12 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     result = server.audit_ollama_gpu_residency({"ollama": {"gpuExpected": True}})
 
-    self.assertFalse(result["stopped"])
-    self.assertEqual(result["stopError"], "docker socket unavailable")
+    self.assertFalse(result["restarted"])
+    self.assertEqual(result["restartError"], "docker socket unavailable")
     self.assertTrue(server._PROFILES[model]["loaded"])
-    self.assertIn("stop failed", server._PROFILES[model]["gpuResidencyReason"])
+    self.assertIn("restart failed", server._PROFILES[model]["gpuResidencyReason"])
 
-  def test_cold_cpu_fallback_is_stopped_while_request_runs(self):
+  def test_cold_cpu_fallback_restarts_ollama_while_request_runs(self):
     actions = []
     request_started = threading.Event()
     release_request = threading.Event()
@@ -442,7 +453,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.request_ollama_json = fake_request
     os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC"] = "0.05"
 
-    with self.assertRaisesRegex(RuntimeError, r"GPU guard rejected CPU/partial-offload inference \(Ollama stopped\)"):
+    with self.assertRaisesRegex(RuntimeError, r"GPU guard rejected CPU/partial-offload inference \(Ollama restarted\)"):
       server.execute_ollama_job({
         "runtimeName": "ollama",
         "profileName": model,
@@ -450,7 +461,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
 
     self.assertTrue(request_started.is_set())
-    self.assertEqual(actions, [("ollama", "stopAction")])
+    self.assertEqual(actions, [("ollama", "restartAction")])
 
   def test_stopped_runtime_triggers_begin_before_ollama_job(self):
     actions = []

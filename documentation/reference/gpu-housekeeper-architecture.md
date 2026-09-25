@@ -144,13 +144,17 @@ Before execution, the housekeeper:
 4. checks model placement through `/api/ps` and counts a model as warm only when at least 99% of its reported size is resident in GPU VRAM,
 5. discharges non-target warm models with `keep_alive: 0`,
 6. runs the requested model with default `keep_alive: 300` while polling GPU residency,
-7. stops Ollama and fails the job if the target model is CPU-only, materially partial-offloaded, or never becomes observable in GPU VRAM.
+7. restarts Ollama and fails the job if the target model is CPU-only, materially partial-offloaded, or never becomes observable in GPU VRAM.
 
-An idle-time watchdog also checks `/api/ps` every five seconds by default while
+An idle-time watchdog also checks `/api/ps` every five minutes by default while
 the Ollama runtime is running. If it finds a loaded model below the GPU
-residency threshold, it stops the Ollama container and records the reason in
+residency threshold, it restarts the Ollama container and records the reason in
 the profile state. Tune this interval with
 `GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC`.
+
+During an active inference, the separate GPU residency guard continues polling
+at one-second intervals by default. It restarts Ollama and fails that request
+immediately if the model is CPU-only or materially partial-offloaded.
 
 This is an active placement guard, not just a container/device-request check:
 the container can see an NVIDIA device while Ollama still selects its CPU
