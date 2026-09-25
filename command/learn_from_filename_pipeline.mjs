@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { extractFinalResult } from "./extract_learn_pipeline_result.mjs";
+import { DEFAULT_GPU_HOUSEKEEPER_URL } from "../program/runtime/gpu/managed-ollama.mjs";
 
 export const DEFAULT_CHUNK_SIZE = 8 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
@@ -521,9 +522,12 @@ export function buildLearnChildEnv(envOverrides = {}) {
     PYA_OLLAMA_REQUEST_TIMEOUT_MS: process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS || CHILD_OLLAMA_TIMEOUT_MS,
     ...envOverrides
   };
-  // A configured housekeeper is the explicit opt-in for routing child mind work
-  // through the durable GPU lane. An explicit false value still preserves direct mode.
-  if (childEnv.PYA_GPU_MIND_QUEUE == null && String(childEnv.PYA_GPU_HOUSEKEEPER_URL ?? "").trim()) {
+  // Default child runs to the local housekeeper; an explicit URL still wins.
+  if (!String(childEnv.PYA_GPU_HOUSEKEEPER_URL ?? "").trim()) {
+    childEnv.PYA_GPU_HOUSEKEEPER_URL = DEFAULT_GPU_HOUSEKEEPER_URL;
+  }
+  // An explicit false value preserves direct mind mode.
+  if (childEnv.PYA_GPU_MIND_QUEUE == null) {
     childEnv.PYA_GPU_MIND_QUEUE = "truth";
   }
   return childEnv;

@@ -3,6 +3,8 @@ import { resolveTextModel } from "./text-model.mjs";
 
 export { DEFAULT_TEXT_MODEL } from "./text-model.mjs";
 
+export const DEFAULT_GPU_HOUSEKEEPER_URL = "http://localhost:8090";
+
 const DEFAULT_FETCH = globalThis.fetch;
 
 function text(value) {
@@ -27,7 +29,7 @@ function managerUrlFromOllama(ollamaUrl = "") {
   try {
     const parsed = new URL(base);
     const host = parsed.hostname.toLowerCase();
-    if (["localhost", "127.0.0.1", "::1"].includes(host)) return "";
+    if (["localhost", "127.0.0.1", "::1"].includes(host)) return DEFAULT_GPU_HOUSEKEEPER_URL;
     // Only infer the co-located housekeeper for the known remote GPU host.
     // Other hosts must opt in with PYA_GPU_HOUSEKEEPER_URL rather than having
     // a provider port guessed from an arbitrary URL.
