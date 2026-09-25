@@ -74,7 +74,7 @@ DEFAULT_PEER_FAILURE_LIMIT = 3
 DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
-DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 5
+DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -2130,18 +2130,18 @@ def ollama_gpu_guard_poll_seconds() -> float:
   return max(0.05, min(10.0, value))
 
 
-def stop_ollama_after_gpu_guard_failure(
+def restart_ollama_after_gpu_guard_failure(
   runtime_registry: Dict[str, Dict[str, Any]], model_name: str, reason: str
 ) -> Dict[str, Any]:
-  result = runtime_action(runtime_registry, "ollama", "stopAction")
-  stopped = bool(result.get("success"))
+  result = runtime_action(runtime_registry, "ollama", "restartAction")
+  restarted = bool(result.get("success"))
   with _LOCK:
     _PROFILES[model_name] = {
       "profileName": model_name,
       "runtimeName": "ollama",
-      "loaded": not stopped,
+      "loaded": not restarted,
       "gpuResident": False,
-      "gpuResidencyReason": reason if stopped else f"{reason}; stop failed: {normalize_text(result.get('message'))}"
+      "gpuResidencyReason": reason if restarted else f"{reason}; restart failed: {normalize_text(result.get('message'))}"
     }
   return result
 
@@ -2154,7 +2154,7 @@ def ollama_gpu_watchdog_interval_seconds() -> float:
     ))
   except (TypeError, ValueError):
     value = DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS
-  return max(0.5, min(60.0, value))
+  return max(1.0, min(3600.0, value))
 
 
 def audit_ollama_gpu_residency(runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -2172,17 +2172,17 @@ def audit_ollama_gpu_residency(runtime_registry: Dict[str, Dict[str, Any]]) -> D
   sync_ollama_profiles(models)
   cpu_models = [item for item in models if item.get("loaded") and not item.get("gpuResident")]
   if not cpu_models:
-    return {"available": True, "checked": True, "stopped": False, "models": models}
+    return {"available": True, "checked": True, "restarted": False, "models": models}
 
   model = cpu_models[0]
   model_name = normalize_text(model.get("name"))
   reason = model.get("reason") or "Ollama model is not sufficiently resident on GPU"
-  stop_result = stop_ollama_after_gpu_guard_failure(runtime_registry, model_name, reason)
+  restart_result = restart_ollama_after_gpu_guard_failure(runtime_registry, model_name, reason)
   return {
     "available": True,
     "checked": True,
-    "stopped": bool(stop_result.get("success")),
-    "stopError": "" if stop_result.get("success") else normalize_text(stop_result.get("message")) or "Ollama stop action failed",
+    "restarted": bool(restart_result.get("success")),
+    "restartError": "" if restart_result.get("success") else normalize_text(restart_result.get("message")) or "Ollama restart action failed",
     "model": model_name,
     "reason": reason,
     "models": models
@@ -2195,7 +2195,7 @@ def ollama_gpu_watchdog_loop(runtime_registry: Dict[str, Dict[str, Any]]) -> Non
     try:
       result = audit_ollama_gpu_residency(runtime_registry)
       if result.get("model"):
-        action = "stopped" if result.get("stopped") else f"failed to stop: {result.get('stopError')}"
+        action = "restarted" if result.get("restarted") else f"failed to restart: {result.get('restartError')}"
         print(
           f"[gpu-housekeeper] {action} Ollama after GPU residency audit: "
           f"model={result.get('model')} reason={result.get('reason')}",
@@ -2237,15 +2237,15 @@ def guarded_ollama_request(
     if residency:
       if not residency.get("gpuResident"):
         reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
-        stopped = stop_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
-        stop_state = "Ollama stopped" if stopped.get("success") else f"Ollama stop failed: {normalize_text(stopped.get('message'))}"
-        raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({stop_state}): {reason}")
+        restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+        restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+        raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({restart_state}): {reason}")
       observed_gpu = True
     if not observed_gpu and time.monotonic() - started >= grace:
       reason = "Ollama did not report the target model resident on GPU before the startup deadline"
-      stopped = stop_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
-      stop_state = "Ollama stopped" if stopped.get("success") else f"Ollama stop failed: {normalize_text(stopped.get('message'))}"
-      raise RuntimeError(f"Ollama GPU guard rejected unverified inference ({stop_state}): {reason}")
+      restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+      restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+      raise RuntimeError(f"Ollama GPU guard rejected unverified inference ({restart_state}): {reason}")
 
   if "error" in result:
     raise RuntimeError(f"Ollama inference request failed: {normalize_text(result['error'])}")
@@ -2256,14 +2256,14 @@ def guarded_ollama_request(
       observed_gpu = True
     elif residency:
       reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
-      stopped = stop_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
-      stop_state = "Ollama stopped" if stopped.get("success") else f"Ollama stop failed: {normalize_text(stopped.get('message'))}"
-      raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({stop_state}): {reason}")
+      restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+      restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+      raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({restart_state}): {reason}")
   if not observed_gpu:
     reason = "Ollama completed inference without observable GPU model residency"
-    stopped = stop_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
-    stop_state = "Ollama stopped" if stopped.get("success") else f"Ollama stop failed: {normalize_text(stopped.get('message'))}"
-    raise RuntimeError(f"Ollama GPU guard rejected inference ({stop_state}): {reason}")
+    restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+    restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+    raise RuntimeError(f"Ollama GPU guard rejected inference ({restart_state}): {reason}")
   return result.get("value") if isinstance(result.get("value"), dict) else {}
 
 
@@ -2487,9 +2487,9 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   gpu_expected = bool((runtime_registry.get(runtime_name) or {}).get("gpuExpected", True))
   if gpu_expected and target_residency and not target_residency.get("gpuResident"):
     reason = target_residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
-    stopped = stop_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
-    stop_state = "Ollama stopped" if stopped.get("success") else f"Ollama stop failed: {normalize_text(stopped.get('message'))}"
-    raise RuntimeError(f"Ollama GPU guard refused CPU/partial-offload model before inference ({stop_state}): {reason}")
+    restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+    restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+    raise RuntimeError(f"Ollama GPU guard refused CPU/partial-offload model before inference ({restart_state}): {reason}")
   warm_models = [item["name"] for item in running_models if item.get("gpuResident")]
   discharge_warm_ollama_models(target_model, warm_models)
 
