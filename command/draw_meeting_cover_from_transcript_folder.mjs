@@ -106,7 +106,7 @@ function ytDlpExtractorArgs() {
   const value = String(
     process.env.ANDRII_YTDLP_EXTRACTOR_ARGS
       || process.env.YTDLP_EXTRACTOR_ARGS
-      || "",
+      || "youtube:player_client=android",
   ).trim();
   return value ? ["--extractor-args", value] : [];
 }
@@ -135,6 +135,120 @@ async function downloadYoutubeSourceThumbnail(sourceUrl, sourceDir) {
   return '';
 }
 
+function candidateVideoTimes(durationSeconds) {
+  const duration = Number(durationSeconds);
+  const maxStart = Number.isFinite(duration) && duration > 3 ? Math.max(0, duration - 3) : 3600;
+  const points = [0, 30, 120, 300, 900, 1800, 3600];
+  if (Number.isFinite(duration) && duration > 3) {
+    points.push(duration * 0.75);
+  }
+  return [...new Set(points
+    .map((value) => Math.max(0, Math.min(maxStart, Math.floor(Number(value) || 0)))))]
+    .sort((a, b) => a - b);
+}
+
+async function sourceVideoDuration(sourceUrl, drawRunCwd) {
+  if (!sourceUrl || !youtubeVideoId(sourceUrl)) return 0;
+  try {
+    const result = await runWithStreaming({
+      cmd: 'yt-dlp',
+      args: ['--quiet', '--no-warnings', '--no-playlist', '--dump-single-json', '--skip-download', ...ytDlpExtractorArgs(), sourceUrl],
+      cwd: drawRunCwd,
+      timeoutMs: 90 * 1000,
+      label: 'meeting-cover-probe-video-duration',
+    });
+    const raw = String(result.stdout || '').trim();
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start < 0 || end <= start) return 0;
+    return Number(JSON.parse(raw.slice(start, end + 1))?.duration || 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function findCandidateClip(sourceDir, startSeconds) {
+  const stem = `meeting-cover-source-clip-candidate-${startSeconds}`;
+  try {
+    const found = fs.readdirSync(sourceDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.startsWith(stem) && /\.(?:mp4|mkv|webm|mov|m4v)$/iu.test(entry.name))
+      .map((entry) => path.join(sourceDir, entry.name))
+      .find(existsFile);
+    return found || '';
+  } catch {
+    return '';
+  }
+}
+
+async function downloadCandidateClip({ sourceUrl, sourceDir, startSeconds, drawRunCwd }) {
+  const existing = findCandidateClip(sourceDir, startSeconds);
+  if (existing) return existing;
+  const clipTemplate = path.join(sourceDir, `meeting-cover-source-clip-candidate-${startSeconds}.%(ext)s`);
+  try {
+    await runWithStreaming({
+      cmd: 'yt-dlp',
+      args: [
+        '--no-playlist',
+        '--download-sections', `*${startSeconds}-${startSeconds + 3}`,
+        '--force-keyframes-at-cuts',
+        '-f', 'bestvideo[height<=720]/best[height<=720]',
+        '-o', clipTemplate,
+        ...ytDlpExtractorArgs(),
+        sourceUrl,
+      ],
+      cwd: drawRunCwd,
+      timeoutMs: 15 * 60 * 1000,
+      label: `meeting-cover-download-video-segment-${startSeconds}`,
+    });
+  } catch (err) {
+    process.stdout.write(`[meeting-cover] warn source segment ${startSeconds}s unavailable: ${String(err?.message || err)}\n`);
+  }
+  return findCandidateClip(sourceDir, startSeconds);
+}
+
+async function extractCandidateFrame(videoPath, framePath, drawRunCwd) {
+  if (existsFile(framePath)) return framePath;
+  try {
+    await runWithStreaming({
+      cmd: 'ffmpeg',
+      args: ['-y', '-ss', '1', '-i', videoPath, '-frames:v', '1', '-update', '1', framePath],
+      cwd: drawRunCwd,
+      timeoutMs: 3 * 60 * 1000,
+      label: 'meeting-cover-extract-candidate-frame',
+    });
+  } catch {}
+  return existsFile(framePath) ? framePath : '';
+}
+
+async function selectYoutubeVideoClip({ sourceUrl, sourceDir, drawRunCwd }) {
+  const duration = await sourceVideoDuration(sourceUrl, drawRunCwd);
+  const starts = candidateVideoTimes(duration);
+  let best = null;
+  for (const startSeconds of starts) {
+    const clipPath = await downloadCandidateClip({ sourceUrl, sourceDir, startSeconds, drawRunCwd });
+    if (!clipPath) continue;
+    const framePath = path.join(sourceDir, `meeting-cover-source-frame-candidate-${startSeconds}.png`);
+    const extracted = await extractCandidateFrame(clipPath, framePath, drawRunCwd);
+    if (!extracted) continue;
+    let diagnostic = null;
+    try {
+      diagnostic = await diagnoseCoverBackground({
+        backgroundPath: extracted,
+        backgroundKind: 'source_video_frame',
+      });
+    } catch {}
+    const metrics = diagnostic?.visualUsefulnessMetrics || {};
+    const score = (diagnostic?.backgroundUseful ? 100000 : 0)
+      + Number(metrics.edgeDetailScore || 0)
+      + Number(metrics.luminanceVariance || 0) * 0.05
+      + Number(metrics.colourVariance || 0) * 0.01
+      - Number(metrics.nearBlackPixelRatio || 1) * 100;
+    process.stdout.write(`[meeting-cover] candidate ${startSeconds}s score=${score.toFixed(2)} useful=${String(Boolean(diagnostic?.backgroundUseful))}\n`);
+    if (!best || score > best.score) best = { clipPath, startSeconds, score };
+  }
+  return best?.clipPath || '';
+}
+
 async function prepareVideoFrameBackground({ transcriptDir, prefix, drawRunCwd }) {
   const meetingDir = path.resolve(transcriptDir, '..');
   const meeting = safeReadJson(path.join(meetingDir, 'meeting.json'), {});
@@ -150,6 +264,10 @@ async function prepareVideoFrameBackground({ transcriptDir, prefix, drawRunCwd }
   fs.mkdirSync(sourceDir, { recursive: true });
 
   let videoPath = findLocalSourceVideo(meetingDir);
+  if (sourceUrl && youtubeVideoId(sourceUrl)) {
+    const selected = await selectYoutubeVideoClip({ sourceUrl, sourceDir, drawRunCwd });
+    if (selected) videoPath = selected;
+  }
   if (!videoPath && sourceUrl && /\.(?:mp4|mkv|webm|mov|m4v)(?:[?#].*)?$/iu.test(sourceUrl)) {
     // Direct media URLs are already valid ffmpeg inputs and usually support
     // range seeking. Avoid yt-dlp format selection, which can reject generic
@@ -184,7 +302,12 @@ async function prepareVideoFrameBackground({ transcriptDir, prefix, drawRunCwd }
   if (!sourceMediaPath) return { backgroundPath: '', sourceUrl, videoPath: '', sourceImagePath: '' };
 
   const framePath = path.join(transcriptDir, `${prefix}.meeting-cover.background.video-frame.png`);
-  const seekArgs = sourceImagePath || path.basename(videoPath).startsWith('meeting-cover-source-clip.') ? [] : ['-ss', '120'];
+  const videoName = path.basename(videoPath);
+  const seekArgs = sourceImagePath
+    ? []
+    : videoName.includes('meeting-cover-source-clip-candidate-')
+      ? ['-ss', '1']
+      : videoName.startsWith('meeting-cover-source-clip.') ? [] : ['-ss', '120'];
   await runWithStreaming({
     cmd: 'ffmpeg',
     args: [
