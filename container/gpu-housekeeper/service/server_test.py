@@ -243,6 +243,72 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(result, {"response": "ok"})
     self.assertFalse(server._PROFILES[model]["loaded"])
 
+  def test_cold_model_is_gpu_verified_before_real_prompt_is_sent(self):
+    model = "qwen3.5:9b"
+    loaded = {"gpu": False}
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/api/ps":
+        models = [{
+          "name": model, "size": 6000, "size_vram": 6000
+        }] if loaded["gpu"] else []
+        return {"available": True, "models": models}
+      calls.append(dict(payload))
+      if payload.get("prompt") == "":
+        self.assertEqual(payload.get("keep_alive"), 300)
+        loaded["gpu"] = True
+        return {"response": ""}
+      self.assertTrue(loaded["gpu"], "real prompt must wait for verified GPU residency")
+      return {"response": "answer"}
+
+    server.request_ollama_json = fake_request
+    result = server.execute_ollama_job({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "teach this"}}
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result, {"response": "answer"})
+    self.assertEqual([payload["prompt"] for payload in calls], ["", "teach this"])
+
+  def test_cold_cpu_model_is_restarted_without_sending_real_prompt(self):
+    actions = []
+    model = "qwen3.5:9b"
+    loaded = {"cpu": False}
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/api/ps":
+        models = [{
+          "name": model, "size": 6000, "size_vram": 0
+        }] if loaded["cpu"] else []
+        return {"available": True, "models": models}
+      calls.append(dict(payload))
+      if payload.get("prompt") == "":
+        loaded["cpu"] = True
+        return {"response": ""}
+      self.fail("real prompt was sent before GPU residency was verified")
+
+    server.request_ollama_json = fake_request
+    server.runtime_action = lambda _registry, runtime_name, action: actions.append((runtime_name, action)) or {"success": True}
+
+    with self.assertRaisesRegex(RuntimeError, "cold-loaded CPU/partial-offload model"):
+      server.execute_ollama_job({
+        "runtimeName": "ollama",
+        "profileName": model,
+        "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "teach this"}}
+      }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual([payload["prompt"] for payload in calls], [""])
+    self.assertEqual(actions, [("ollama", "restartAction")])
+
   def test_ollama_execution_discharges_non_target_warm_models_then_runs_target(self):
     calls = []
     server.parse_runtime_status = lambda _entry: {
@@ -415,7 +481,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertTrue(server._PROFILES[model]["loaded"])
     self.assertIn("restart failed", server._PROFILES[model]["gpuResidencyReason"])
 
-  def test_cold_cpu_fallback_restarts_ollama_while_request_runs(self):
+  def test_mid_inference_cpu_fallback_restarts_ollama(self):
     actions = []
     request_started = threading.Event()
     release_request = threading.Event()
@@ -454,11 +520,14 @@ class HousekeeperOllamaTests(unittest.TestCase):
     os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC"] = "0.05"
 
     with self.assertRaisesRegex(RuntimeError, r"GPU guard rejected CPU/partial-offload inference \(Ollama restarted\)"):
-      server.execute_ollama_job({
-        "runtimeName": "ollama",
-        "profileName": model,
-        "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "stop if CPU"}}
-      }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+      server.guarded_ollama_request(
+        "/api/generate",
+        {"model": model, "prompt": "stop if CPU"},
+        model,
+        {"ollama": {"runtimeName": "ollama", "gpuExpected": True}},
+        timeout_sec=60,
+        already_gpu_resident=True
+      )
 
     self.assertTrue(request_started.is_set())
     self.assertEqual(actions, [("ollama", "restartAction")])
