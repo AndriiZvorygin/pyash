@@ -37,6 +37,10 @@ function oneLine(text) {
   return String(text ?? "").replace(/\s+/gu, " ").trim();
 }
 
+function looksLikeWcSummary(text) {
+  return /^\s*\d+\s+\d+\s+\d+\s*$/u.test(String(text ?? ""));
+}
+
 function summarizeCard(text) {
   const raw = String(text ?? "");
   const lines = raw.split("\n").map(line => line.trim());
@@ -619,7 +623,10 @@ export async function runLearnFilenamePipeline({
   }
   const takeFixtureResponses = createMindFixtureAllocator(process.env.PYA_MIND_RESPONSE);
   const stageParallelism = resolveLearnParallelism(parallelism);
-  const sourceText = await readFileFn(sourceFilename);
+  const sourceText = String(await readFileFn(sourceFilename));
+  if (looksLikeWcSummary(sourceText)) {
+    throw new Error(`learn filename pipeline defective: source file contains only a three-column count summary, not source text (${sourceFilename})`);
+  }
   const artifactRoot = resolvePipelineArtifactRoot();
   logVerbose(`[learn pipeline] source filename: ${sourceFilename}`);
   logVerbose(`[learn pipeline] learning focus: ${learningFocus || "(empty)"}`);
