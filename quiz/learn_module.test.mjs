@@ -6,6 +6,9 @@ test("learn module exports text and filename learning ceremonies", async () => {
   const text = await fs.readFile(new URL("../module/learn.pya", import.meta.url), "utf8");
 
   assert.match(text, /exists su name learning source support verify mind be mind fromtext name learning source support verify prompt ya/u);
+  assert.match(text, /Return exactly one number: 1\.0 for strongly supported, 0\.8 for mostly supported, 0\.5 for mixed or uncertain, or 0\.0 for clear unsupported drift\. Output only the number on one line\./u);
+  assert.match(text, /learning source support verify mind to name text learning source support review by num 0 atmost num 16 be write do/u);
+  assert.doesNotMatch(text, /learning source support verify mind to name text learning source support review by num 0 atmost num 520 be write do/u);
   assert.match(text, /Do not flatten the source into generic academic, managerial, sociological, dictionary, or textbook language\./u);
   assert.match(text, /Preserve the source's actual ontology, symbolic world, and mode of causation when distilling the teaching\./u);
   assert.match(text, /do not replace those with generic abstractions like resources, authority, compliance, leverage, enforcement, persuasion, or social control unless the source itself clearly does so\./u);
