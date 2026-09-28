@@ -37,8 +37,8 @@ export function parseArgs(argv) {
   if (!Number.isFinite(out.seconds) || out.seconds <= 0 || out.seconds > 5) {
     throw new Error("seconds must be between 0 and 5");
   }
-  if (!Number.isFinite(out.yRatio) || out.yRatio < 0.45 || out.yRatio > 0.75) {
-    throw new Error("y-ratio must be between 0.45 and 0.75");
+  if (!Number.isFinite(out.yRatio) || out.yRatio < 0.05 || out.yRatio > 0.75) {
+    throw new Error("y-ratio must be between 0.05 and 0.75");
   }
   if (!Number.isFinite(out.maxWidthRatio) || out.maxWidthRatio < 0.60 || out.maxWidthRatio > 0.95) {
     throw new Error("max-width-ratio must be between 0.60 and 0.95");
@@ -91,19 +91,34 @@ function ffmpegEscapePathForFilter(inputPath) {
     .replace(/'/g, "\\'");
 }
 
-function resolveHeadingText(opts) {
-  if (typeof opts.text === "string" && opts.text.trim()) return opts.text.trim().replace(/\s+/g, " ");
-  if (opts.textStdin) return String(fsSync.readFileSync(0, "utf8") ?? "").trim().replace(/\s+/g, " ");
-  return "";
+export function resolveHeadingText(opts) {
+  const raw = typeof opts.text === "string" && opts.text.trim()
+    ? opts.text
+    : opts.textStdin ? String(fsSync.readFileSync(0, "utf8") ?? "") : "";
+  return raw
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(line => line.replace(/[\t ]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
-function truncateHeadingWords(text, maxWords = 7) {
-  const words = String(text ?? "").trim().split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return words.join(" ");
-  return words.slice(0, maxWords).join(" ");
+export function truncateHeadingWords(text, maxWords = 7) {
+  const lines = String(text ?? "")
+    .split(/\r?\n/)
+    .map(line => line.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+  const words = lines.flatMap(line => line.split(/\s+/).filter(Boolean));
+  if (words.length > maxWords) return words.slice(0, maxWords).join(" ");
+  return lines.join("\n");
 }
 
-function layoutHeadingLines(text) {
+export function layoutHeadingLines(text) {
+  const explicitLines = String(text ?? "")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+  if (explicitLines.length > 1) return explicitLines;
   const words = String(text ?? "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return [""];
   if (words.length <= 3) return [words.join(" ")];
