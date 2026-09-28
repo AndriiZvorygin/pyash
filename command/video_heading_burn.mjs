@@ -138,6 +138,10 @@ export function layoutHeadingLines(text) {
   return best;
 }
 
+export function resolveHeadingTopMargin({ height, yRatio, fontSize, lineCount }) {
+  return Math.max(8, Math.round(height * yRatio - lineCount * fontSize * 1.2));
+}
+
 function resolveRenderOutputPath(inputVideo, outputVideo) {
   const inputResolved = path.resolve(inputVideo);
   const outputResolved = path.resolve(outputVideo);
@@ -237,7 +241,12 @@ export async function main(argv = process.argv) {
   // meaningfully above subtitle lanes instead of centering through them.
   const yExpr = `max(12\\,h*${opts.yRatio.toFixed(3)}-text_h)`;
   const enableExpr = `lt(t\\,${Number(opts.seconds).toFixed(3)})`;
-  const marginV = Math.max(8, Math.round(height * opts.yRatio));
+  const marginV = resolveHeadingTopMargin({
+    height,
+    yRatio: opts.yRatio,
+    fontSize,
+    lineCount: headingLines.length
+  });
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-video-heading-"));
   const textFile = path.join(tmpDir, "heading.txt");
