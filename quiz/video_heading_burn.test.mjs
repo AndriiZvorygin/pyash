@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   layoutHeadingLines,
   parseArgs,
+  resolveHeadingTopMargin,
   resolveHeadingText,
   truncateHeadingWords
 } from "../command/video_heading_burn.mjs";
@@ -76,4 +77,19 @@ test("video heading burn preserves explicit multi-line headings", () => {
   assert.equal(truncateHeadingWords(text), text);
   assert.deepEqual(layoutHeadingLines(text), ["Secure Homes.", "Safer Neighbourhoods."]);
   assert.equal(opts.yRatio, 0.24);
+});
+
+test("video heading burn keeps ASS fallback aligned to the lower y-ratio anchor", () => {
+  assert.equal(resolveHeadingTopMargin({
+    height: 1920,
+    yRatio: 0.25,
+    fontSize: 111,
+    lineCount: 3
+  }), 80);
+  assert.equal(resolveHeadingTopMargin({
+    height: 1920,
+    yRatio: 0.05,
+    fontSize: 111,
+    lineCount: 3
+  }), 8);
 });
