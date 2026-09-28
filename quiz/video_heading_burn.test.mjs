@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseArgs } from "../command/video_heading_burn.mjs";
+import {
+  layoutHeadingLines,
+  parseArgs,
+  resolveHeadingText,
+  truncateHeadingWords
+} from "../command/video_heading_burn.mjs";
 
 test("video heading burn parseArgs accepts defaults", () => {
   const opts = parseArgs([
@@ -39,7 +44,7 @@ test("video heading burn parseArgs validates seconds and y-ratio bands", () => {
       "--y-ratio",
       "0.8"
     ]),
-    /y-ratio must be between 0.45 and 0.75/u
+    /y-ratio must be between 0.05 and 0.75/u
   );
 
   assert.throws(
@@ -53,4 +58,22 @@ test("video heading burn parseArgs validates seconds and y-ratio bands", () => {
     ]),
     /font-scale must be between 0.25 and 2/u
   );
+});
+
+test("video heading burn preserves explicit multi-line headings", () => {
+  const opts = parseArgs([
+    "node",
+    "command/video_heading_burn.mjs",
+    "in.mp4",
+    "out.mp4",
+    "--text",
+    " Secure   Homes.\r\nSafer Neighbourhoods. ",
+    "--y-ratio",
+    "0.24"
+  ]);
+  const text = resolveHeadingText(opts);
+  assert.equal(text, "Secure Homes.\nSafer Neighbourhoods.");
+  assert.equal(truncateHeadingWords(text), text);
+  assert.deepEqual(layoutHeadingLines(text), ["Secure Homes.", "Safer Neighbourhoods."]);
+  assert.equal(opts.yRatio, 0.24);
 });
