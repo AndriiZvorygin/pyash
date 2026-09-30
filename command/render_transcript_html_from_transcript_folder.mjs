@@ -57,6 +57,13 @@ function buildTimedVideoUrl(baseUrl, seconds) {
   return `${base}#t=${sec}`;
 }
 
+function normalizeConfiguredModeratorSpeech(text) {
+  const configured = String(process.env.PYA_SPEAKER_MODERATOR_NAME || "").replace(/\s+/gu, " ").trim();
+  const source = String(text || "");
+  if (!configured) return source;
+  return source.replace(/(\bmy\s+name(?:'s|\s+is)\s+)([A-Z][\p{L}.'-]*(?:\s+[A-Z][\p{L}.'-]*){1,5})(?=[.!?](?:\s|$))/iu, `$1${configured}`);
+}
+
 function htmlId(input, fallback = "item") {
   const slug = slugify(input);
   return slug || fallback;
@@ -179,12 +186,16 @@ function applyEvidenceSpeakerNameMap(rows, mapPath, sourceJsonPath) {
     };
     const cue = /^(?:all right|okay|the question|question(?: is|:)|next up|first up|second|third|fourth|fifth|sixth|our next|let(?:'s| us)|candidates?[, ]|time-wise|before i|each candidate|we have|we're going|i(?:'ll| will) (?:start|go|jump)|is (?:there|anyone)|please|good evening|ladies and gentlemen)\b|\b(?:the order in which|with that said|we will get opening statements|first up|second will|third will|fourth will|fifth will|sixth will|next up|opening statement|the question is|for this next question|we're going to start|when we do closing remarks|don't worry,? guys|i will remember where you were)\b/iu;
     const aliases = new Map();
+    const moderatorRows = new Set();
     for (const span of map.spans) {
       const name = String(span?.canonical_name || "").trim();
       const confidence = Number(span?.confidence);
       const start = Number(span?.start_row);
       const end = Number(span?.end_row);
       if (!name || !Number.isFinite(confidence) || confidence < 0.82 || !Number.isInteger(start) || !Number.isInteger(end) || end < start) continue;
+      if (span?.role === "moderator" && process.env.PYA_SPEAKER_MODERATOR_NAME) {
+        for (let row = start; row <= end; row += 1) moderatorRows.add(row);
+      }
       for (let row = start; row <= end; row += 1) {
         if (cue.test(String(sourceRows[row - 1]?.text || ""))) continue;
         const prior = aliases.get(row);
@@ -193,7 +204,8 @@ function applyEvidenceSpeakerNameMap(rows, mapPath, sourceJsonPath) {
     }
     const out = rows.map((row, index) => {
       const alias = aliases.get(index + 1);
-      const speech = replaceNameAliases(String(row?.speech || "").trim());
+      let speech = replaceNameAliases(String(row?.speech || "").trim());
+      if (moderatorRows.has(index + 1)) speech = normalizeConfiguredModeratorSpeech(speech);
       if (!alias) return speech === String(row?.speech || "").trim() ? row : { ...row, speech, raw: `${String(row?.speaker || "").trim()}: ${speech}`.trim() };
       return { ...row, speaker: alias.name, speech, raw: `${alias.name}: ${speech}`.trim() };
     });
@@ -656,6 +668,8 @@ function parseChapterSummarySectionsFromPya(summaryPath, groundingPath = "") {
       "unit id": summary.id || ground.id || `chapter_${String(index + 1).padStart(3, "0")}`,
       heading: summary.title || ground.title || `Chapter ${index + 1}`,
       summary: summary.summary || ground.summary || "",
+      since: Number.isFinite(summary.since) ? summary.since : ground.since,
+      until: Number.isFinite(summary.until) ? summary.until : ground.until,
       start_row: Number.isFinite(summary.start_row) ? summary.start_row : ground.start_row,
       end_row: Number.isFinite(summary.end_row) ? summary.end_row : ground.end_row,
       source_rows: Number.isFinite(summary.source_rows) ? summary.source_rows : ground.source_rows,
@@ -790,6 +804,8 @@ function normalizeSectionRanges(rows, ranges) {
       id: String(source[i]?.id || `section-${i + 1}`),
       heading: String(source[i]?.heading || `Section ${i + 1}`),
       summary: String(source[i]?.summary || ""),
+      since: Number.isFinite(Number(source[i]?.since)) ? Number(source[i].since) : undefined,
+      until: Number.isFinite(Number(source[i]?.until)) ? Number(source[i].until) : undefined,
       startRow,
       endRow,
     });
@@ -889,6 +905,11 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
         id: `section-${i + 1}`,
         heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
         summary: String(sec?.summary || "").trim(),
+        // Keep the authoritative chapter marker separate from the first
+        // diarized row.  The transcript anchor should land on speech, while
+        // the TOC/chapter label should retain the supplied recording time.
+        since: Number.isFinite(Number(sec?.since)) ? Number(sec.since) : undefined,
+        until: Number.isFinite(Number(sec?.until)) ? Number(sec.until) : undefined,
         startRow: start,
         endRow: end,
       };
@@ -911,6 +932,10 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
         id: `section-${i + 1}`,
         heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
         summary: String(sec?.summary || "").trim(),
+        // Preserve official recording markers for the TOC; row anchors still
+        // point at the first diarized speech cue in each section.
+        since: Number.isFinite(Number(sec?.since)) ? Number(sec.since) : undefined,
+        until: Number.isFinite(Number(sec?.until)) ? Number(sec.until) : undefined,
         startRow: start,
         endRow: end,
       };
@@ -967,6 +992,8 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
         id: `section-${i + 1}`,
         heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
         summary: String(sec?.summary || "").trim(),
+        since: Number.isFinite(Number(sec?.since)) ? Number(sec.since) : undefined,
+        until: Number.isFinite(Number(sec?.until)) ? Number(sec.until) : undefined,
         startRow: start,
         endRow: end,
       });
@@ -1241,7 +1268,9 @@ function buildPage({
       // marker even when the first spoken cue begins a few seconds later.
       // Keep the transcript cue timing intact, but make the displayed first
       // section/chapter marker satisfy that same :00 contract.
-      since: sectionIndex === 0 ? 0 : Number(transcriptRows[s.startRow]?.since),
+      since: sectionIndex === 0
+        ? 0
+        : (Number.isFinite(Number(s?.since)) ? Number(s.since) : Number(transcriptRows[s.startRow]?.since)),
       chapters: (Array.isArray(s.chapters) ? s.chapters : []).map((ch, i) => ({
         href: `#${chapterAnchor(s, ch, i)}`,
         label: String(ch?.title || ch?.text || `Chapter ${i + 1}`).trim() || `Chapter ${i + 1}`,
