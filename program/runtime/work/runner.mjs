@@ -8,7 +8,7 @@ import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs"
 import { readWorkTaskStatus, updateWorkTaskCheckpoint } from "./status.mjs";
 import { emitWorkEvent } from "./observer.mjs";
 import { renderWorkDeferredReport, renderWorkIdleReport, renderWorkTaskReport } from "./report.mjs";
-import { curateWorkBacklog } from "./curator.mjs";
+import { buildExecutableSupply, curateWorkBacklog } from "./curator.mjs";
 import { appendWorkSchedulerEvent } from "./history.mjs";
 import {
   findRecoverableOperationalWorkTasks,
@@ -313,14 +313,21 @@ export async function inspectWorkBackground({
     }
   }
   const capacity = await capacitySource({ now: typeof now === "function" ? now() : now });
+  const candidateOrder = orderedWorkCandidates(eligible, recoverable, policyRevalidation);
+  const executableSupply = buildExecutableSupply({
+    tasks: allTasks,
+    roadmap,
+    curation: { created: [], proposed: [] },
+    durableCandidates: candidateOrder
+  });
+  const hasExecutableSupply = executableSupply.runnable.length > 0;
   const admission = admitBackgroundWork({
     capacity,
     policy: { ...DEFAULT_BACKGROUND_POLICY, ...policy },
     foregroundActive: typeof foregroundActive === "function" ? await foregroundActive() : foregroundActive,
-    hasEligibleWork: eligible.length > 0 || recoverable.length > 0 || policyRevalidation.length > 0,
+    hasEligibleWork: hasExecutableSupply,
     now: typeof now === "function" ? now() : now
   });
-  const candidateOrder = orderedWorkCandidates(eligible, recoverable, policyRevalidation);
   return {
     eligible,
     recoverable,
@@ -329,6 +336,8 @@ export async function inspectWorkBackground({
     temporarilyUnexecutableTechnical,
     dependencyBlocked,
     roadmap,
+    allTasks,
+    executableSupply,
     externalEvidence,
     resumedExternal,
     capacity,
@@ -399,19 +408,20 @@ export async function runWorkBackgroundOnce({
       }, { now });
     }
   }
-  const curation = curate
+  let curation = curate
     ? await curateWorkBacklog({
       worldRoot,
       repositoryRoot,
       owner,
       threshold: policy.curationThreshold ?? DEFAULT_BACKGROUND_POLICY.curationThreshold,
       maxTasks: policy.curationMaxTasks ?? DEFAULT_BACKGROUND_POLICY.curationMaxTasks,
+      candidateAvailability,
       staleTurnMs: policy.staleOperationalTurnMs,
       maxRecoveryCount: policy.maxOperationalRecoveries,
       now
     })
     : null;
-  const { eligible, recoverable, policyRevalidation, candidateOrder: inspectedCandidates, temporarilyUnexecutableTechnical, dependencyBlocked, externalEvidence, capacity, admission } = await inspectWorkBackground({
+  let inspection = await inspectWorkBackground({
     worldRoot,
     owner,
     policy,
@@ -421,6 +431,53 @@ export async function runWorkBackgroundOnce({
     repositoryRoot,
     now
   });
+  let {
+    eligible,
+    recoverable,
+    policyRevalidation,
+    candidateOrder: inspectedCandidates,
+    temporarilyUnexecutableTechnical,
+    dependencyBlocked,
+    externalEvidence,
+    capacity,
+    admission
+  } = inspection;
+  if (curate && curation?.proposed?.length && !curation.created?.length && !inspectedCandidates.length) {
+    const materialized = await curateWorkBacklog({
+      worldRoot,
+      repositoryRoot,
+      owner,
+      threshold: 0,
+      maxTasks: curation.proposed.length,
+      forceCandidates: true,
+      staleTurnMs: policy.staleOperationalTurnMs,
+      maxRecoveryCount: policy.maxOperationalRecoveries,
+      candidateAvailability,
+      now
+    });
+    curation = { ...curation, ...materialized };
+    inspection = await inspectWorkBackground({
+      worldRoot,
+      owner,
+      policy,
+      capacitySource: async () => capacity,
+      foregroundActive,
+      externalEvidenceProbe,
+      repositoryRoot,
+      now
+    });
+    ({
+      eligible,
+      recoverable,
+      policyRevalidation,
+      candidateOrder: inspectedCandidates,
+      temporarilyUnexecutableTechnical,
+      dependencyBlocked,
+      externalEvidence,
+      capacity,
+      admission
+    } = inspection);
+  }
   const taskCount = eligible.length + recoverable.length + policyRevalidation.length;
   await emitWorkEvent(onEvent, "capacity", {
     capacity,
