@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { readPyaTextValues } from "./pya_lookup.mjs";
 import { normalizeCanadianEnglish } from "../program/library/reporter_shared/canadian-english.mjs";
@@ -147,6 +148,57 @@ function mergeSpeakerLabelsByIndex(baseRows, speakerRows) {
   return out;
 }
 
+function applyEvidenceSpeakerNameMap(rows, mapPath, sourceJsonPath) {
+  if (!mapPath || !sourceJsonPath || !fs.existsSync(mapPath) || !fs.existsSync(sourceJsonPath)) return rows;
+  try {
+    const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
+    const sourceSha = crypto.createHash("sha256").update(fs.readFileSync(sourceJsonPath)).digest("hex");
+    if (Number(map?.schema_version || 0) !== 1 || String(map?.source_sha256 || "") !== sourceSha || !Array.isArray(map?.spans)) return rows;
+    const source = JSON.parse(fs.readFileSync(sourceJsonPath, "utf8"));
+    const sourceRows = Array.isArray(source?.rows) ? source.rows : [];
+    const nameAliases = (Array.isArray(map?.aliases) ? map.aliases : [])
+      .map((alias) => ({
+        observed: String(alias?.observed || "").replace(/\s+/gu, " ").trim(),
+        canonical: String(alias?.canonical_name || "").replace(/\s+/gu, " ").trim(),
+        confidence: Number(alias?.confidence),
+      }))
+      .filter((alias) => alias.observed.length >= 4 && alias.canonical.length >= 3 && alias.confidence >= 0.82)
+      .sort((a, b) => b.observed.length - a.observed.length);
+    const replaceNameAliases = (text) => {
+      let out = String(text || "");
+      for (const alias of nameAliases) {
+        const escaped = alias.observed.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        out = out.replace(new RegExp(`\\b${escaped}\\b`, "giu"), alias.canonical);
+      }
+      return out;
+    };
+    const cue = /^(?:all right|okay|thanks?|thank you|the question|question(?: is|:)|next up|first up|second|third|fourth|fifth|sixth|our next|let(?:'s| us)|candidates?[, ]|time-wise|before i|each candidate|we have|we're going|i(?:'ll| will) (?:start|go|jump)|is (?:there|anyone)|please|good evening|ladies and gentlemen)\b|\b(?:the order in which|with that said|we will get opening statements|first up|second will|third will|fourth will|fifth will|sixth will|next up|opening statement|the question is|for this next question|we're going to start|we will go to|thank you,?\s+(?:[A-Z][a-z]+|everyone)|thank you\.|when we do closing remarks|don't worry,? guys|i will remember where you were)\b/iu;
+    const aliases = new Map();
+    for (const span of map.spans) {
+      const name = String(span?.canonical_name || "").trim();
+      const confidence = Number(span?.confidence);
+      const start = Number(span?.start_row);
+      const end = Number(span?.end_row);
+      if (!name || !Number.isFinite(confidence) || confidence < 0.82 || !Number.isInteger(start) || !Number.isInteger(end) || end < start) continue;
+      for (let row = start; row <= end; row += 1) {
+        if (cue.test(String(sourceRows[row - 1]?.text || ""))) continue;
+        const prior = aliases.get(row);
+        if (!prior || confidence > prior.confidence) aliases.set(row, { name, confidence });
+      }
+    }
+    const out = rows.map((row, index) => {
+      const alias = aliases.get(index + 1);
+      const speech = replaceNameAliases(String(row?.speech || "").trim());
+      if (!alias) return speech === String(row?.speech || "").trim() ? row : { ...row, speech, raw: `${String(row?.speaker || "").trim()}: ${speech}`.trim() };
+      return { ...row, speaker: alias.name, speech, raw: `${alias.name}: ${speech}`.trim() };
+    });
+    process.stdout.write(`[transcript-html] applied evidence-backed speaker names: ${aliases.size} rows from ${mapPath}\n`);
+    return out;
+  } catch {
+    return rows;
+  }
+}
+
 function forceNumberedSpeakers(rows) {
   const out = Array.isArray(rows) ? rows.map((r) => ({ ...r })) : [];
   if (!out.length) return out;
@@ -179,7 +231,7 @@ function applyInterviewSpeakerAliases(rows, hostName = "") {
     const speaker = String(row?.speaker || "").trim();
     const speech = String(row?.speech || "").replace(/\s+/gu, " ").trim();
     if (!speaker || !speech) continue;
-    const guestMatch = speech.match(/\bmy\s+name(?:'s|\s+is)\s+([A-Z][\p{L}'-]*(?:\s+[A-Z][\p{L}'-]*){0,5})\b/iu);
+    const guestMatch = speech.match(/\bmy\s+name(?:'s|\s+is)\s+([A-Z][\p{L}.'-]*(?:\s+[A-Z][\p{L}.'-]*){0,5})\b/iu);
     if (guestMatch && !guestSpeaker) {
       guestSpeaker = speaker;
       guestName = String(guestMatch[1] || "").trim();
@@ -1439,6 +1491,11 @@ function main() {
         process.stdout.write(`[transcript-html] merged speaker labels by time from json: ${speakerRowsJsonPath} (${jsonRows.length} rows)\n`);
       }
     }
+  }
+
+  const evidenceSpeakerMapPath = String(process.env.PYA_SPEAKER_NAME_MAP_PATH || "").trim();
+  if (evidenceSpeakerMapPath && speakerRowsJsonPath) {
+    transcriptRows = applyEvidenceSpeakerNameMap(transcriptRows, evidenceSpeakerMapPath, speakerRowsJsonPath);
   }
 
   // Guard against truncated speaker SRT checkpoints; fall back to full sentence-merged SRT.
