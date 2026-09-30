@@ -198,9 +198,17 @@ test("draw from name itinerary honors Andrii workflow metadata from promptify", 
   doRemember({ mood: "ya", su: { name: "draw workflow default" }, ob: { text: "Z-Image-TSV" }, be: "default" });
   doRemember({
     mood: "ya",
-    su: { name: "andrii draw workflow default" },
-    ob: { text: "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled" },
-    be: "default"
+    su: { name: "draw character routes" },
+    be: "map",
+    ob: {
+      map: {
+        "andrii zvorygin": {
+          ob: {
+            text: "aliases: andrii or andrii zvorygin or zvorygin\nworkflow: andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled\nprefix: same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones.\nsuffix: no severed body parts. no extra limbs. no bad eyes. irises visible."
+          }
+        }
+      }
+    }
   });
   doRemember({ mood: "ya", su: { name: "draw host" }, ob: { text: "http://localhost:8188" }, be: "default" });
 

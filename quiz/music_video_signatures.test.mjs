@@ -34,3 +34,9 @@ test("music video footnotes use karaoke mode explicitly", async () => {
     /su name result ob filename of ob of footnote filename stage be music video ya/u
   );
 });
+
+test("generic music video prompt does not embed a character identity", async () => {
+  const text = await fs.readFile(new URL("../module/music_video.pya", import.meta.url), "utf8");
+
+  assert.doesNotMatch(text, /Andrii|Zvorygin|andrii_zvorygin/u);
+});

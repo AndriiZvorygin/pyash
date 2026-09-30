@@ -35,7 +35,9 @@
     "typescript": "^5.9.2"
   },
   "bin": {
-    "pyash": "command/pyash.mjs"
+    "pyash": "command/pyash.mjs",
+    "print-audit": "command/print_audit_report.mjs",
+    "print-audit-reconcile": "command/print_audit_reconcile.mjs"
   },
   "files": [
     "program/",

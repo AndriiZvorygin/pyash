@@ -9,6 +9,8 @@ import { writeGpuHandleStatus } from "./handle_status.mjs";
 import { createGpuHousekeeperAdapter } from "./housekeeper_adapter.mjs";
 import { gpuEnvelopeDependencyStatus } from "./readiness.mjs";
 
+export const DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS = 20 * 60 * 1000;
+
 function normalizeText(value) {
   if (value == null) return "";
   return String(value).trim();
@@ -64,6 +66,45 @@ function terminalStatus(raw = "") {
   if (["success", "succeeded", "complete", "completed", "done"].includes(status)) return "success";
   if (["fail", "failed", "error", "defective"].includes(status)) return "fail";
   return "";
+}
+
+export function resolveGpuWorkerMaxPolls({
+  pollIntervalMs = 250,
+  maxPolls,
+  timeoutMs = DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS
+} = {}) {
+  const explicitMaxPolls = Number(maxPolls);
+  if (Number.isFinite(explicitMaxPolls) && explicitMaxPolls > 0) {
+    return Math.max(1, Math.trunc(explicitMaxPolls));
+  }
+  const interval = Math.max(1, Number(pollIntervalMs) || 250);
+  const timeout = Number(timeoutMs);
+  const safeTimeout = Number.isFinite(timeout) && timeout > 0
+    ? timeout
+    : DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS;
+  return Math.max(1, Math.ceil(safeTimeout / interval));
+}
+
+export function resolveGpuQueueWaitTimeoutMs({
+  queueDepth = 1,
+  baseTimeoutMs = 15 * 60 * 1000,
+  explicitTimeoutMs,
+  remoteJobTimeoutMs = DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS
+} = {}) {
+  const explicitTimeout = Number(explicitTimeoutMs);
+  if (Number.isFinite(explicitTimeout) && explicitTimeout > 0) {
+    return Math.trunc(explicitTimeout);
+  }
+  const depth = Math.max(1, Math.trunc(Number(queueDepth) || 1));
+  const baseTimeout = Number(baseTimeoutMs);
+  const safeBaseTimeout = Number.isFinite(baseTimeout) && baseTimeout > 0
+    ? baseTimeout
+    : 15 * 60 * 1000;
+  const perJobTimeout = Number(remoteJobTimeoutMs);
+  const safePerJobTimeout = Number.isFinite(perJobTimeout) && perJobTimeout > 0
+    ? perJobTimeout
+    : DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS;
+  return Math.max(safeBaseTimeout, depth * safePerJobTimeout);
 }
 
 async function pollRemoteJob({ adapter, remoteJobId, pollIntervalMs, maxPolls, heartbeat }) {
@@ -132,7 +173,8 @@ export async function runGpuWorkerOnce({
   gpuId = "",
   lane = "durable",
   pollIntervalMs = 250,
-  maxPolls = 1200,
+  maxPolls,
+  remoteJobTimeoutMs = Number(process.env.PYA_GPU_WORKER_TIMEOUT_MS) || DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS,
   leaseTtlMs = 300000,
   retryMax = 0,
   leaseScope = "physical"
@@ -212,11 +254,16 @@ export async function runGpuWorkerOnce({
     const remoteJobId = remoteJobIdFromSubmit(submit);
     if (!remoteJobId) throw new Error("gpu worker defective: housekeeper did not return remoteJobId");
 
+    const effectiveMaxPolls = resolveGpuWorkerMaxPolls({
+      pollIntervalMs,
+      maxPolls,
+      timeoutMs: remoteJobTimeoutMs
+    });
     const remote = await pollRemoteJob({
       adapter: housekeeper,
       remoteJobId,
       pollIntervalMs,
-      maxPolls,
+      maxPolls: effectiveMaxPolls,
       heartbeat: () => heartbeatGpuLease(worldRoot, {
         gpuId: leaseId,
         owner,
