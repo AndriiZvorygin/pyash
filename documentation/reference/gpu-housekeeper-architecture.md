@@ -141,9 +141,35 @@ Before execution, the housekeeper:
 1. checks the `ollama` container status,
 2. starts it if stopped,
 3. restarts it if GPU is expected but not observed,
-4. checks warm models via `/api/ps`,
+4. checks model placement through `/api/ps` and counts a model as warm only when at least 99% of its reported size is resident in GPU VRAM,
 5. discharges non-target warm models with `keep_alive: 0`,
-6. runs the requested model with default `keep_alive: 300`.
+6. runs the requested model with default `keep_alive: 300` while polling GPU residency,
+7. restarts Ollama and fails the job if the target model is CPU-only, materially partial-offloaded, or never becomes observable in GPU VRAM.
+
+An idle-time watchdog also checks `/api/ps` every five minutes by default while
+the Ollama runtime is running. If it finds a loaded model below the GPU
+residency threshold, it restarts the Ollama container and records the reason in
+the profile state. Tune this interval with
+`GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC`.
+
+During an active inference, the separate GPU residency guard continues polling
+at one-second intervals by default. It restarts Ollama and fails that request
+immediately if the model is CPU-only or materially partial-offloaded.
+
+This is an active placement guard, not just a container/device-request check:
+the container can see an NVIDIA device while Ollama still selects its CPU
+backend. Snapshots advertise `ollamaGpuResidencyGuard` and report
+`ollamaRunningModels`; peer routing refuses older peers without that guard and
+peers whose requested model is resident on CPU. A running peer no longer gets
+a route-score bonus over an available local GPU. The defaults can be tuned
+with `GPU_HOUSEKEEPER_OLLAMA_GPU_STARTUP_GRACE_SEC` (60 seconds),
+`GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC` (1 second), and
+`GPU_HOUSEKEEPER_OLLAMA_MIN_GPU_MODEL_FRACTION` (0.99).
+
+Ollama's CUDA runtime must also match the actual host driver. Keep a supported
+host driver fixed and deploy a compatible runtime profile when an upstream
+image raises its minimum; for example, swac's RTX 3060 uses the documented
+[CUDA 12.2 / sm_86 profile](../../ops/ollama/swac-rtx3060-cuda122/README.md).
 
 Ollama model availability is exposed separately from model execution. An
 explicit `ollama-ensure-model` job can check an exact provider tag and return

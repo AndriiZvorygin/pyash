@@ -46,6 +46,82 @@ function sourceRecord(candidate, source) {
   };
 }
 
+const EXECUTABLE_TASK_STATUSES = new Set([
+  "ready",
+  "planning",
+  "implementing",
+  "reviewing",
+  "revision",
+  "reconciliation",
+  "integration-reconciliation",
+  "integration-revision",
+  "usage-limited"
+]);
+
+function taskForPackage(item, tasks) {
+  return tasks.find((task) => task.taskId === item.taskId)
+    || tasks.find((task) => task.workSpec?.provenance?.key === `${item.sourcePath}:${item.sourceAnchor}`);
+}
+
+/**
+ * The digest and scheduler must agree about what the roadmap can actually
+ * supply. An absent candidate is visible roadmap work, but it is not
+ * executable until curation proposes/materializes it in the current wake.
+ */
+export function buildExecutableSupply({ tasks = [], roadmap = {}, curation = {}, durableCandidates = null } = {}) {
+  roadmap = roadmap || {};
+  const proposed = new Set([
+    ...(curation.created || []),
+    ...(curation.proposed || []).map((item) => item.taskId)
+  ]);
+  const packages = roadmap.packages || [];
+  const runnablePackages = packages
+    .filter((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status))
+    .filter((item) => item.dependencyStatus?.satisfied !== false)
+    .filter((item) => {
+      const task = taskForPackage(item, tasks);
+      return task
+        ? EXECUTABLE_TASK_STATUSES.has(task.status)
+        : proposed.has(item.taskId);
+    });
+  const dependencyWaiting = packages
+    .filter((item) => item.dependencyStatus?.satisfied === false)
+    .map((item) => ({
+      taskId: item.taskId,
+      title: item.title,
+      unmet: item.dependencyStatus.unmet || []
+    }));
+  const packagesByTaskId = new Map(packages.map((item) => [item.taskId, item]));
+  const dependencySatisfiedTask = (task) => {
+    const item = packagesByTaskId.get(task.taskId)
+      || packages.find((candidate) => task.workSpec?.provenance?.key === `${candidate.sourcePath}:${candidate.sourceAnchor}`);
+    return !item || item.dependencyStatus?.satisfied !== false;
+  };
+  const durable = (durableCandidates || tasks)
+    .filter((task) => durableCandidates || EXECUTABLE_TASK_STATUSES.has(task.status))
+    .filter(dependencySatisfiedTask)
+    .map((task) => ({ taskId: task.taskId, title: task.title, priority: task.priority, source: "durable-task" }));
+  const packageSupply = runnablePackages.map((item) => ({
+    taskId: item.taskId,
+    title: item.title,
+    priority: item.priority,
+    source: "roadmap-package"
+  }));
+  const runnable = [...durable, ...packageSupply]
+    .filter((candidate, index, values) => values.findIndex((item) => item.taskId === candidate.taskId) === index)
+    .sort((left, right) => Number(right.priority || 0) - Number(left.priority || 0));
+  const candidatePackages = packages
+    .filter((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status))
+    .filter((item) => item.dependencyStatus?.satisfied !== false)
+    .filter((item) => !runnablePackages.some((runnable) => runnable.taskId === item.taskId));
+  return {
+    runnable,
+    runnablePackages,
+    candidatePackages,
+    dependencyWaiting
+  };
+}
+
 export async function curateWorkBacklog({
   worldRoot,
   repositoryRoot = process.cwd(),
@@ -53,6 +129,8 @@ export async function curateWorkBacklog({
   threshold = 1,
   maxTasks = 3,
   dryRun = false,
+  candidateAvailability = null,
+  forceCandidates = false,
   staleTurnMs,
   maxRecoveryCount,
   now = () => new Date()
@@ -70,7 +148,31 @@ export async function curateWorkBacklog({
     const candidate = candidates.find((item) => item.taskId === task.taskId);
     return !candidate || dependencyWaiting.get(candidate.taskId)?.satisfied !== false;
   };
-  const runnableActive = active.filter(taskDependencySatisfied);
+  const dependencySatisfiedActive = active.filter(taskDependencySatisfied);
+  const temporarilyUnavailableActive = [];
+  const runnableActive = [];
+  for (const task of dependencySatisfiedActive) {
+    if (typeof candidateAvailability !== "function") {
+      runnableActive.push(task);
+      continue;
+    }
+    let availability;
+    try {
+      availability = await candidateAvailability({ task, owner, repositoryRoot, now });
+    } catch (error) {
+      availability = { available: true, reason: "availability probe failed open", error: text(error?.message || error) };
+    }
+    if (availability?.available === false) {
+      temporarilyUnavailableActive.push({
+        taskId: task.taskId,
+        title: task.title,
+        reason: text(availability.reason) || "temporarily unavailable",
+        detail: text(availability.error)
+      });
+    } else {
+      runnableActive.push(task);
+    }
+  }
   const retryableTechnical = tasks.filter((task) => isRetryableWorkBlock(task));
   const recoverableTechnicalAll = await findRecoverableOperationalWorkTasks(worldRoot, {
     owner,
@@ -98,9 +200,10 @@ export async function curateWorkBacklog({
     policyRevalidation: policyRevalidation.map((task) => task.taskId),
     temporarilyUnexecutableTechnical,
     awaitingExternalEvidence: awaitingExternalEvidence.map((task) => task.taskId),
-    runnableActive: runnableActive.length
+    runnableActive: runnableActive.length,
+    temporarilyUnavailableActive
   };
-  if (runnableActive.length >= Math.max(0, Number(threshold) || 0)) {
+  if (!forceCandidates && runnableActive.length >= Math.max(0, Number(threshold) || 0)) {
     return {
       created: [],
       proposed: [],
@@ -113,7 +216,7 @@ export async function curateWorkBacklog({
       dependencyDefects: []
     };
   }
-  if (recoverableTechnical.length) {
+  if (!forceCandidates && recoverableTechnical.length) {
     return {
       created: [],
       proposed: [],
@@ -126,7 +229,7 @@ export async function curateWorkBacklog({
       dependencyDefects: []
     };
   }
-  if (policyRevalidation.length) {
+  if (!forceCandidates && policyRevalidation.length) {
     return {
       created: [],
       proposed: [],

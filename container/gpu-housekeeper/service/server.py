@@ -72,6 +72,9 @@ DEFAULT_IDLE_GRACE_SECONDS = 300
 DEFAULT_PEER_TIMEOUT_MS = 1500
 DEFAULT_PEER_FAILURE_LIMIT = 3
 DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
+DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
+DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
+DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -394,7 +397,9 @@ def profile_list() -> List[Dict[str, Any]]:
     return [
       {
         "profileName": name,
-        "loaded": bool(_PROFILES.get(name, {}).get("loaded", False))
+        "loaded": bool(_PROFILES.get(name, {}).get("loaded", False)),
+        "gpuResident": bool(_PROFILES.get(name, {}).get("gpuResident", False)),
+        "gpuResidencyReason": normalize_text(_PROFILES.get(name, {}).get("gpuResidencyReason"))
       }
       for name in names
     ]
@@ -497,6 +502,11 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
   if not isinstance(devices, list):
     devices = []
   model_name = ollama_model_for_job(job) if runtime_name == "ollama" else ""
+  running_models = ollama_running_model_status() if runtime_name == "ollama" else {"available": True, "models": []}
+  if runtime_name == "ollama" and running_models.get("available"):
+    sync_ollama_profiles(running_models.get("models", []))
+  target_residency = ollama_model_residency(model_name, running_models.get("models", [])) if model_name else None
+  model_cpu_resident = bool(target_residency and target_residency.get("loaded") and not target_residency.get("gpuResident"))
   model_catalog = ollama_model_catalog() if model_name else {}
   model_missing = bool(
     model_name
@@ -522,6 +532,7 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
     feasible = (
       capacity.get("decision") in {"not-requested", "fits", "reclaim-available", "telemetry-unavailable"}
       and not model_missing
+      and not model_cpu_resident
     )
     with _LOCK:
       profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
@@ -549,7 +560,11 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "reason": (
         f"Ollama model is not installed: {model_name}"
         if model_missing
-        else ("local execution slot occupied" if busy else capacity.get("reason", "local candidate"))
+        else (
+          target_residency.get("reason", "Ollama model is not GPU resident")
+          if model_cpu_resident
+          else ("local execution slot occupied" if busy else capacity.get("reason", "local candidate"))
+        )
       )
     })
   available = [item for item in candidates if item.get("available")]
@@ -612,6 +627,13 @@ def peer_route_candidate(
       "available": False,
       "reason": f"peer runtime is unavailable: {runtime_name}"
     }
+  if runtime_is_stopped(runtime):
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "available": False,
+      "reason": f"peer runtime is stopped: {runtime_name}"
+    }
   job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
   job_kind = normalize_text(job_spec.get("kind")).lower()
   if job_kind == "ollama-ensure-model":
@@ -624,6 +646,31 @@ def peer_route_candidate(
         "reason": "peer does not advertise Ollama model provisioning"
       }
   model_name = ollama_model_for_job(job) if runtime_name == "ollama" else ""
+  if model_name:
+    capabilities = snapshot.get("capabilities") if isinstance(snapshot.get("capabilities"), dict) else {}
+    if capabilities.get("ollamaGpuResidencyGuard") is not True:
+      return {
+        "hostId": peer_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": "peer does not advertise the Ollama GPU residency guard"
+      }
+    residency_report = snapshot.get("ollamaRunningModels")
+    if not isinstance(residency_report, dict) or residency_report.get("available") is not True:
+      return {
+        "hostId": peer_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": "peer Ollama GPU residency telemetry is unavailable"
+      }
+    target_residency = ollama_model_residency(model_name, residency_report.get("models", []))
+    if target_residency and target_residency.get("loaded") and not target_residency.get("gpuResident"):
+      return {
+        "hostId": peer_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": target_residency.get("reason") or f"peer Ollama model is not GPU resident: {model_name}"
+      }
   catalog = snapshot.get("ollamaModelCatalog") if isinstance(snapshot.get("ollamaModelCatalog"), dict) else {}
   if model_name and catalog.get("available") and not ollama_model_entry(model_name, catalog):
     return {
@@ -678,8 +725,6 @@ def peer_route_candidate(
       score -= 60
     if not busy:
       score += 10
-    if runtime_status == "running":
-      score += 40
     candidates.append({
       "hostId": peer_host_id,
       "url": peer_url,
@@ -740,14 +785,19 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "runtimes": {},
     "unmanagedProcesses": []
   }
+  ollama_residency = ollama_running_model_status()
+  if ollama_residency.get("available"):
+    sync_ollama_profiles(ollama_residency.get("models", []))
   return {
     "hostId": host_id,
     "capabilities": {
-      "ollamaModelProvisioning": True
+      "ollamaModelProvisioning": True,
+      "ollamaGpuResidencyGuard": True
     },
     "queueDepth": queue_depth(),
     "devices": telemetry["devices"],
     "profiles": profile_list(),
+    "ollamaRunningModels": ollama_residency,
     "ollamaModelCatalog": ollama_model_catalog(),
     "runtimes": list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else [],
     "gpuProcesses": process_view,
@@ -985,6 +1035,7 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
       _JOBS[remote_job_id] = job
       existing = _PROFILES.get(profile_name, {})
       _PROFILES[profile_name] = {
+        **existing,
         "profileName": profile_name,
         "runtimeName": runtime_name,
         "loaded": bool(existing.get("loaded", False))
@@ -1921,17 +1972,81 @@ def container_disk_available_mb(container_name: str, path_name: str) -> Dict[str
   return {"available": True, "availableMb": max(0, available_mb), "path": path_name}
 
 
-def sync_ollama_profiles(warm_models: List[str]) -> None:
-  warm = {normalize_text(item) for item in warm_models if normalize_text(item)}
+def ollama_min_gpu_model_fraction() -> float:
+  try:
+    value = float(os.environ.get("GPU_HOUSEKEEPER_OLLAMA_MIN_GPU_MODEL_FRACTION", DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION))
+  except (TypeError, ValueError):
+    value = DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION
+  return max(0.0, min(1.0, value))
+
+
+def ollama_running_model_status() -> Dict[str, Any]:
+  try:
+    payload = request_ollama_json("/api/ps", None, timeout_sec=5)
+  except Exception as err:
+    return {"available": False, "models": [], "error": normalize_text(err) or "Ollama residency probe failed"}
+  raw_models = payload.get("models") if isinstance(payload, dict) else None
+  if not isinstance(raw_models, list):
+    return {"available": False, "models": [], "error": "Ollama residency response was malformed"}
+  models = []
+  for item in raw_models:
+    if not isinstance(item, dict):
+      continue
+    name = normalize_text(item.get("name") or item.get("model"))
+    if not name:
+      continue
+    try:
+      size = max(0, int(item.get("size") or 0))
+      size_vram = max(0, int(item.get("size_vram") or 0))
+    except (TypeError, ValueError):
+      size = 0
+      size_vram = 0
+    fraction = (size_vram / size) if size > 0 else None
+    resident = size > 0 and size_vram > 0 and fraction >= ollama_min_gpu_model_fraction()
+    reason = "model weights are resident on GPU" if resident else (
+      "Ollama loaded the model without GPU VRAM" if size_vram <= 0 else
+      "Ollama did not report total model size for GPU residency verification" if fraction is None else
+      f"Ollama model GPU residency is below threshold ({fraction:.0%} < {ollama_min_gpu_model_fraction():.0%})"
+    )
+    models.append({
+      "name": name,
+      "size": size,
+      "sizeVram": size_vram,
+      "gpuFraction": round(fraction, 4) if fraction is not None else None,
+      "loaded": True,
+      "gpuResident": resident,
+      "reason": reason
+    })
+  return {"available": True, "models": models, "error": ""}
+
+
+def ollama_model_residency(model_name: str, models: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+  wanted = normalize_text(model_name)
+  if not wanted:
+    return None
+  return next((item for item in models if isinstance(item, dict) and normalize_text(item.get("name")) == wanted), None)
+
+
+def sync_ollama_profiles(model_statuses: List[Dict[str, Any]]) -> None:
+  gpu_models = {
+    normalize_text(item.get("name")): item
+    for item in model_statuses
+    if isinstance(item, dict) and normalize_text(item.get("name"))
+  }
   with _LOCK:
     for profile in _PROFILES.values():
       if normalize_text(profile.get("runtimeName")).lower() == "ollama":
-        profile["loaded"] = normalize_text(profile.get("profileName")) in warm
-    for model in warm:
+        observed = gpu_models.get(normalize_text(profile.get("profileName")))
+        profile["loaded"] = bool(observed and observed.get("gpuResident"))
+        profile["gpuResident"] = bool(observed and observed.get("gpuResident"))
+        profile["gpuResidencyReason"] = (observed or {}).get("reason") or "model is not resident"
+    for model, observed in gpu_models.items():
       _PROFILES[model] = {
         "profileName": model,
         "runtimeName": "ollama",
-        "loaded": True
+        "loaded": bool(observed.get("gpuResident")),
+        "gpuResident": bool(observed.get("gpuResident")),
+        "gpuResidencyReason": observed.get("reason") or "residency was not verified"
       }
 
 
@@ -1992,18 +2107,164 @@ def ensure_runtime_ready(runtime_registry: Dict[str, Dict[str, Any]], runtime_na
 
 
 def warm_ollama_models() -> List[str]:
-  payload = request_ollama_json("/api/ps", None, timeout_sec=10)
-  models = payload.get("models") if isinstance(payload, dict) else []
-  if not isinstance(models, list):
-    return []
-  out: List[str] = []
-  for item in models:
-    if not isinstance(item, dict):
-      continue
-    name = normalize_text(item.get("name") or item.get("model"))
-    if name:
-      out.append(name)
-  return out
+  report = ollama_running_model_status()
+  return [
+    item["name"] for item in report.get("models", [])
+    if isinstance(item, dict) and item.get("gpuResident") and normalize_text(item.get("name"))
+  ]
+
+
+def ollama_gpu_startup_grace_seconds() -> float:
+  try:
+    value = float(os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_STARTUP_GRACE_SEC", DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS))
+  except (TypeError, ValueError):
+    value = DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS
+  return max(1.0, min(600.0, value))
+
+
+def ollama_gpu_guard_poll_seconds() -> float:
+  try:
+    value = float(os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC", "1"))
+  except (TypeError, ValueError):
+    value = 1.0
+  return max(0.05, min(10.0, value))
+
+
+def restart_ollama_after_gpu_guard_failure(
+  runtime_registry: Dict[str, Dict[str, Any]], model_name: str, reason: str
+) -> Dict[str, Any]:
+  result = runtime_action(runtime_registry, "ollama", "restartAction")
+  restarted = bool(result.get("success"))
+  with _LOCK:
+    _PROFILES[model_name] = {
+      "profileName": model_name,
+      "runtimeName": "ollama",
+      "loaded": not restarted,
+      "gpuResident": False,
+      "gpuResidencyReason": reason if restarted else f"{reason}; restart failed: {normalize_text(result.get('message'))}"
+    }
+  return result
+
+
+def ollama_gpu_watchdog_interval_seconds() -> float:
+  try:
+    value = float(os.environ.get(
+      "GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC",
+      DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS
+    ))
+  except (TypeError, ValueError):
+    value = DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS
+  return max(1.0, min(3600.0, value))
+
+
+def audit_ollama_gpu_residency(runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  entry = runtime_registry.get("ollama") or {}
+  if not bool(entry.get("gpuExpected", False)):
+    return {"available": True, "checked": False, "reason": "GPU residency is not required for this runtime"}
+  runtime_status = parse_runtime_status(entry)
+  if runtime_is_stopped(runtime_status):
+    return {"available": True, "checked": False, "reason": "Ollama runtime is stopped"}
+
+  report = ollama_running_model_status()
+  if not report.get("available"):
+    return {"available": False, "checked": True, "reason": report.get("error") or "Ollama residency telemetry unavailable"}
+  models = report.get("models", [])
+  sync_ollama_profiles(models)
+  cpu_models = [item for item in models if item.get("loaded") and not item.get("gpuResident")]
+  if not cpu_models:
+    return {"available": True, "checked": True, "restarted": False, "models": models}
+
+  model = cpu_models[0]
+  model_name = normalize_text(model.get("name"))
+  reason = model.get("reason") or "Ollama model is not sufficiently resident on GPU"
+  restart_result = restart_ollama_after_gpu_guard_failure(runtime_registry, model_name, reason)
+  return {
+    "available": True,
+    "checked": True,
+    "restarted": bool(restart_result.get("success")),
+    "restartError": "" if restart_result.get("success") else normalize_text(restart_result.get("message")) or "Ollama restart action failed",
+    "model": model_name,
+    "reason": reason,
+    "models": models
+  }
+
+
+def ollama_gpu_watchdog_loop(runtime_registry: Dict[str, Dict[str, Any]]) -> None:
+  while True:
+    time.sleep(ollama_gpu_watchdog_interval_seconds())
+    try:
+      result = audit_ollama_gpu_residency(runtime_registry)
+      if result.get("model"):
+        action = "restarted" if result.get("restarted") else f"failed to restart: {result.get('restartError')}"
+        print(
+          f"[gpu-housekeeper] {action} Ollama after GPU residency audit: "
+          f"model={result.get('model')} reason={result.get('reason')}",
+          flush=True
+        )
+    except Exception as err:
+      print(f"[gpu-housekeeper] Ollama GPU watchdog check failed: {normalize_text(err)}", flush=True)
+
+
+def guarded_ollama_request(
+  endpoint: str,
+  payload: Dict[str, Any],
+  target_model: str,
+  runtime_registry: Dict[str, Dict[str, Any]],
+  timeout_sec: int,
+  already_gpu_resident: bool = False
+) -> Dict[str, Any]:
+  result: Dict[str, Any] = {}
+  done = threading.Event()
+
+  def request() -> None:
+    try:
+      result["value"] = request_ollama_json(endpoint, payload, timeout_sec=timeout_sec)
+    except Exception as err:
+      result["error"] = err
+    finally:
+      done.set()
+
+  threading.Thread(target=request, name="ollama-gpu-guard-request", daemon=True).start()
+  started = time.monotonic()
+  observed_gpu = already_gpu_resident
+  grace = ollama_gpu_startup_grace_seconds()
+  poll_interval = ollama_gpu_guard_poll_seconds()
+  while not done.is_set():
+    if done.wait(poll_interval):
+      break
+    report = ollama_running_model_status()
+    residency = ollama_model_residency(target_model, report.get("models", []))
+    if residency:
+      if not residency.get("gpuResident"):
+        reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
+        restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+        restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+        raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({restart_state}): {reason}")
+      observed_gpu = True
+    if not observed_gpu and time.monotonic() - started >= grace:
+      reason = "Ollama did not report the target model resident on GPU before the startup deadline"
+      restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+      restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+      raise RuntimeError(f"Ollama GPU guard rejected unverified inference ({restart_state}): {reason}")
+
+  if "error" in result:
+    raise RuntimeError(f"Ollama inference request failed: {normalize_text(result['error'])}")
+  if not observed_gpu:
+    report = ollama_running_model_status()
+    residency = ollama_model_residency(target_model, report.get("models", []))
+    if residency and residency.get("gpuResident"):
+      observed_gpu = True
+    elif residency:
+      reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
+      restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+      restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+      raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({restart_state}): {reason}")
+  if not observed_gpu:
+    reason = "Ollama completed inference without observable GPU model residency"
+    restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+    restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+    raise RuntimeError(f"Ollama GPU guard rejected inference ({restart_state}): {reason}")
+  return result.get("value") if isinstance(result.get("value"), dict) else {}
 
 
 def discharge_warm_ollama_models(target_model: str, warm_models: Optional[List[str]] = None) -> None:
@@ -2021,8 +2282,62 @@ def discharge_warm_ollama_models(target_model: str, warm_models: Optional[List[s
       with _LOCK:
         if model in _PROFILES:
           _PROFILES[model]["loaded"] = False
+          _PROFILES[model]["gpuResident"] = False
+          _PROFILES[model]["gpuResidencyReason"] = "model discharged before inference"
     except Exception:
       continue
+
+
+def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
+  """Load a cold model with an empty prompt, then verify placement before real inference."""
+  model = normalize_text(model_name)
+  grace = ollama_gpu_startup_grace_seconds()
+  status = ollama_running_model_status()
+  if not status.get("available"):
+    raise RuntimeError(status.get("error") or "Ollama GPU residency telemetry unavailable")
+
+  residency = ollama_model_residency(model, status.get("models", []))
+  if residency and residency.get("gpuResident"):
+    return
+  if residency:
+    reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
+    restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, model, reason)
+    restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+    raise RuntimeError(f"Ollama GPU guard refused CPU/partial-offload model before inference ({restart_state}): {reason}")
+
+  # Ollama loads on the first generate call. Keep the real prompt out of that
+  # cold-load window, where /api/ps can briefly report zero GPU VRAM.
+  try:
+    load_result = request_ollama_json("/api/generate", {
+      "model": model,
+      "prompt": "",
+      "stream": False,
+      "keep_alive": 300
+    }, timeout_sec=max(30, int(grace)))
+  except Exception as err:
+    raise RuntimeError(f"Ollama GPU model load failed for {model}: {normalize_text(err)}")
+  if normalize_text(load_result.get("error")):
+    raise RuntimeError(f"Ollama GPU model load failed for {model}: {normalize_text(load_result.get('error'))}")
+
+  deadline = time.monotonic() + grace
+  while True:
+    status = ollama_running_model_status()
+    if status.get("available"):
+      residency = ollama_model_residency(model, status.get("models", []))
+      if residency and residency.get("gpuResident"):
+        sync_ollama_profiles(status.get("models", []))
+        return
+      if residency:
+        reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
+        restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, model, reason)
+        restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+        raise RuntimeError(f"Ollama GPU guard refused cold-loaded CPU/partial-offload model ({restart_state}): {reason}")
+    if time.monotonic() >= deadline:
+      reason = "Ollama did not report the cold-loaded model resident on GPU before the startup deadline"
+      restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, model, reason)
+      restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+      raise RuntimeError(f"Ollama GPU guard rejected unverified model load ({restart_state}): {reason}")
+    time.sleep(ollama_gpu_guard_poll_seconds())
 
 
 def normalize_ollama_payload(job_spec: Dict[str, Any], profile_name: str) -> Dict[str, Any]:
@@ -2120,8 +2435,10 @@ def execute_ollama_ensure_model(job: Dict[str, Any], runtime_registry: Dict[str,
 
   pull_requested = parse_bool_value(payload.get("pullIfMissing", payload.get("pull_if_missing", False)), False)
   ensure_runtime_ready(runtime_registry, "ollama")
-  warm_models = warm_ollama_models()
-  sync_ollama_profiles(warm_models)
+  running_models = ollama_running_model_status()
+  if not running_models.get("available"):
+    raise RuntimeError(running_models.get("error") or "Ollama residency telemetry unavailable")
+  sync_ollama_profiles(running_models.get("models", []))
   catalog = ollama_model_catalog(force=True)
   if not catalog.get("available"):
     raise RuntimeError(catalog.get("error") or "Ollama model catalog unavailable")
@@ -2213,17 +2530,50 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   target_model = normalize_text(payload.get("model"))
   if not target_model:
     raise RuntimeError("ollama model is required")
-  warm_models = warm_ollama_models()
-  sync_ollama_profiles(warm_models)
+  residency_report = ollama_running_model_status()
+  if not residency_report.get("available"):
+    raise RuntimeError(residency_report.get("error") or "Ollama GPU residency telemetry unavailable")
+  running_models = residency_report.get("models", [])
+  sync_ollama_profiles(running_models)
+  target_residency = ollama_model_residency(target_model, running_models)
+  gpu_expected = bool((runtime_registry.get(runtime_name) or {}).get("gpuExpected", True))
+  if gpu_expected and target_residency and not target_residency.get("gpuResident"):
+    reason = target_residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
+    restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+    restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+    raise RuntimeError(f"Ollama GPU guard refused CPU/partial-offload model before inference ({restart_state}): {reason}")
+  warm_models = [item["name"] for item in running_models if item.get("gpuResident")]
   discharge_warm_ollama_models(target_model, warm_models)
+  if gpu_expected and not (target_residency and target_residency.get("gpuResident")):
+    ensure_ollama_model_gpu_resident(target_model, runtime_registry)
 
   endpoint = "/api/chat" if kind == "ollama-chat" else "/api/generate"
-  result = request_ollama_json(endpoint, payload, timeout_sec=int(os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900")))
+  timeout_sec = int(os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900"))
+  if gpu_expected:
+    result = guarded_ollama_request(
+      endpoint,
+      payload,
+      target_model,
+      runtime_registry,
+      timeout_sec,
+      already_gpu_resident=bool(target_residency and target_residency.get("gpuResident"))
+    )
+    residency_report = ollama_running_model_status()
+    if residency_report.get("available"):
+      sync_ollama_profiles(residency_report.get("models", []))
+  else:
+    result = request_ollama_json(endpoint, payload, timeout_sec=timeout_sec)
   with _LOCK:
+    loaded = not is_zero_keep_alive(payload.get("keep_alive"))
+    if gpu_expected:
+      observed = ollama_model_residency(target_model, residency_report.get("models", [])) if residency_report.get("available") else None
+      loaded = bool(loaded and observed and observed.get("gpuResident"))
     _PROFILES[target_model] = {
       "profileName": target_model,
       "runtimeName": runtime_name,
-      "loaded": not is_zero_keep_alive(payload.get("keep_alive"))
+      "loaded": loaded,
+      "gpuResident": loaded if gpu_expected else False,
+      "gpuResidencyReason": "model residency verified" if loaded else "model not currently GPU resident"
     }
   return result
 
@@ -2532,7 +2882,7 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
         runtime_name.lower() == "ollama"
         and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model"
       )
-      if profile_name and not is_model_ensure:
+      if profile_name and not is_model_ensure and runtime_name.lower() != "ollama":
         _PROFILES[profile_name] = {
           "profileName": profile_name,
           "runtimeName": runtime_name,
@@ -2706,6 +3056,13 @@ def main() -> None:
 
   Handler.host_id = normalize_text(args.host_id) or "gpu-housekeeper"
   Handler.runtime_registry = load_runtime_registry()
+
+  threading.Thread(
+    target=ollama_gpu_watchdog_loop,
+    args=(Handler.runtime_registry,),
+    name="ollama-gpu-residency-watchdog",
+    daemon=True
+  ).start()
 
   server = ThreadingHTTPServer((args.host, args.port), Handler)
   server.serve_forever()

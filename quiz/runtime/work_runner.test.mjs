@@ -493,6 +493,57 @@ test("exhausted technical continuation does not starve a runnable candidate", as
   assert.equal(health["work-started wakes"], "1");
 });
 
+test("temporarily unavailable active work does not suppress same-wake candidate materialization", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-supply-fallback-");
+  const repositoryRoot = path.join(path.dirname(worldRoot), "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(
+    path.join(repositoryRoot, "documentation", "todo.md"),
+    "Introduce result tracking with per-command IDs instead of generic result.\n"
+  );
+  await enqueueWorkTask(worldRoot, {
+    ...task("active-but-unavailable", 200),
+    status: "ready",
+    workSpec: { granularity: "substantial" }
+  });
+  const active = await readWorkTaskStatus(worldRoot, "active-but-unavailable");
+  await writeWorkTaskStatus(worldRoot, { ...active, status: "implementing" });
+  const probes = [];
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    repositoryRoot,
+    curate: true,
+    policy: { enabled: true },
+    capacitySource: async () => ({
+      state: "available",
+      remainingPercent: 100,
+      usedPercent: 0,
+      weekly: {
+        identified: true,
+        state: "available",
+        remainingPercent: 100,
+        usedPercent: 0,
+        windowStartAt: "2026-08-17T12:00:00.000Z",
+        resetAt: "2026-08-24T12:00:00.000Z"
+      }
+    }),
+    candidateAvailability: async ({ task: candidate }) => {
+      probes.push(candidate.taskId);
+      return candidate.taskId === "active-but-unavailable"
+        ? { available: false, reason: "active-writer" }
+        : { available: true };
+    },
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "accepted", workStarted: true }),
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "roadmap-command-result-identity");
+  assert.deepEqual(result.curation.created, ["roadmap-command-result-identity"]);
+  assert.equal(result.temporarilySkipped[0].taskId, "active-but-unavailable");
+  assert.deepEqual(probes.slice(-2), ["active-but-unavailable", "roadmap-command-result-identity"]);
+});
+
 test("an active-writer candidate is skipped in the same wake for the next runnable task", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-active-writer-fallback-");
   await enqueueWorkTask(worldRoot, task("high-active-writer", 200));

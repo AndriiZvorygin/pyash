@@ -6,7 +6,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
+import { buildExecutableSupply, curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
 import { integrateAcceptedWork, synchronizeAutomationBranch } from "../../program/runtime/work/integration.mjs";
 import { appendWorkSchedulerEvent } from "../../program/runtime/work/history.mjs";
 import {
@@ -71,6 +71,26 @@ test("backlog curation creates bounded TODO-sourced substantial packages without
   const curated = stored.find((task) => task.taskId !== "roadmap-translation-parity-tranche");
   assert.equal(curated.workSpec.granularity, "substantial");
   assert.match(curated.contextText, /Why now/u);
+});
+
+test("an absent roadmap candidate is executable only after curation proposes it", () => {
+  const roadmap = {
+    packages: [{
+      taskId: "hq-email-and-capability-boundaries",
+      title: "Extend Headquarters email and capability boundaries",
+      status: "CANDIDATE",
+      dependencyStatus: { satisfied: true, unmet: [] }
+    }]
+  };
+  assert.deepEqual(buildExecutableSupply({ tasks: [], roadmap }).runnable, []);
+  assert.deepEqual(
+    buildExecutableSupply({
+      tasks: [],
+      roadmap,
+      curation: { proposed: [{ taskId: "hq-email-and-capability-boundaries" }] }
+    }).runnable.map((item) => item.taskId),
+    ["hq-email-and-capability-boundaries"]
+  );
 });
 
 test("accepted work integrates onto a synchronized automation baseline", async () => {
@@ -332,7 +352,8 @@ test("daily digest reports completed work before additional temporary blockers",
     capacitySource: async () => capacity,
     now: "2026-08-18T23:00:00.000Z"
   });
-  assert.match(digest.report, /Runnable roadmap/u);
+  assert.doesNotMatch(digest.report, /Runnable roadmap/u);
+  assert.match(digest.report, /ROADMAP WORK TEMPORARILY BLOCKED/u);
   assert.doesNotMatch(digest.report, /No package completed today\./u);
   assert.doesNotMatch(digest.report, /No package completed today\./u);
   assert.match(digest.report, /Useful wakes: 1 \/ 2/u);
@@ -468,8 +489,8 @@ test("timeout-blocked work is operationally blocked, not roadmap exhaustion", as
     capacitySource: async () => ({ weekly: { remainingPercent: 80, usedPercent: 20, resetAt: "2026-08-10T00:00:00.000Z" } }),
     now: "2026-08-09T23:00:00.000Z"
   });
-  assert.equal(digest.status, "roadmap-partially-blocked");
-  assert.doesNotMatch(digest.subject, /temporarily blocked/iu);
+  assert.equal(digest.status, "roadmap-blocked");
+  assert.match(digest.subject, /temporarily blocked/iu);
   assert.match(digest.report, /Operational blocks/iu);
   assert.doesNotMatch(digest.report, /backlog exhausted/iu);
 });
@@ -522,6 +543,9 @@ test("digest uses one canonical Next package for runnable and roadmap sections",
     since: "2026-08-23T00:00:00.000Z",
     until: "2026-08-23T23:00:00.000Z",
     capacity: { weekly: { identified: true, remainingPercent: 90, usedPercent: 10 } },
+    curation: {
+      proposed: [{ taskId: "hq-organization-and-work-contract", title: "Define Headquarters organization and work contracts" }]
+    },
     roadmap: {
       packages: [
         { taskId: "hq-organization-and-work-contract", title: "Define Headquarters organization and work contracts", status: "CANDIDATE" },
@@ -563,6 +587,9 @@ test("digest separates active work from dependency-waiting work", () => {
     since: "2026-08-23T00:00:00.000Z",
     until: "2026-08-23T23:00:00.000Z",
     capacity: { weekly: { identified: true, remainingPercent: 90, usedPercent: 10 } },
+    curation: {
+      proposed: [{ taskId: "roadmap-command-result-identity", title: "Add durable per-command result identity" }]
+    },
     tasks: [
       { taskId: "hq-fixture-mail-vertical-slice", title: "Prove Headquarters fixture mail", status: "ready" },
       { taskId: "hq-approval-and-resumption", title: "Add Headquarters approval", status: "ready" }

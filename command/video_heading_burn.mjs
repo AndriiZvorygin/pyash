@@ -37,8 +37,8 @@ export function parseArgs(argv) {
   if (!Number.isFinite(out.seconds) || out.seconds <= 0 || out.seconds > 5) {
     throw new Error("seconds must be between 0 and 5");
   }
-  if (!Number.isFinite(out.yRatio) || out.yRatio < 0.45 || out.yRatio > 0.75) {
-    throw new Error("y-ratio must be between 0.45 and 0.75");
+  if (!Number.isFinite(out.yRatio) || out.yRatio < 0.05 || out.yRatio > 0.75) {
+    throw new Error("y-ratio must be between 0.05 and 0.75");
   }
   if (!Number.isFinite(out.maxWidthRatio) || out.maxWidthRatio < 0.60 || out.maxWidthRatio > 0.95) {
     throw new Error("max-width-ratio must be between 0.60 and 0.95");
@@ -91,19 +91,34 @@ function ffmpegEscapePathForFilter(inputPath) {
     .replace(/'/g, "\\'");
 }
 
-function resolveHeadingText(opts) {
-  if (typeof opts.text === "string" && opts.text.trim()) return opts.text.trim().replace(/\s+/g, " ");
-  if (opts.textStdin) return String(fsSync.readFileSync(0, "utf8") ?? "").trim().replace(/\s+/g, " ");
-  return "";
+export function resolveHeadingText(opts) {
+  const raw = typeof opts.text === "string" && opts.text.trim()
+    ? opts.text
+    : opts.textStdin ? String(fsSync.readFileSync(0, "utf8") ?? "") : "";
+  return raw
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(line => line.replace(/[\t ]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
-function truncateHeadingWords(text, maxWords = 7) {
-  const words = String(text ?? "").trim().split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return words.join(" ");
-  return words.slice(0, maxWords).join(" ");
+export function truncateHeadingWords(text, maxWords = 7) {
+  const lines = String(text ?? "")
+    .split(/\r?\n/)
+    .map(line => line.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+  const words = lines.flatMap(line => line.split(/\s+/).filter(Boolean));
+  if (words.length > maxWords) return words.slice(0, maxWords).join(" ");
+  return lines.join("\n");
 }
 
-function layoutHeadingLines(text) {
+export function layoutHeadingLines(text) {
+  const explicitLines = String(text ?? "")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+  if (explicitLines.length > 1) return explicitLines;
   const words = String(text ?? "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return [""];
   if (words.length <= 3) return [words.join(" ")];
@@ -121,6 +136,10 @@ function layoutHeadingLines(text) {
     }
   }
   return best;
+}
+
+export function resolveHeadingTopMargin({ height, yRatio, fontSize, lineCount }) {
+  return Math.max(8, Math.round(height * yRatio - lineCount * fontSize * 1.2));
 }
 
 function resolveRenderOutputPath(inputVideo, outputVideo) {
@@ -222,7 +241,12 @@ export async function main(argv = process.argv) {
   // meaningfully above subtitle lanes instead of centering through them.
   const yExpr = `max(12\\,h*${opts.yRatio.toFixed(3)}-text_h)`;
   const enableExpr = `lt(t\\,${Number(opts.seconds).toFixed(3)})`;
-  const marginV = Math.max(8, Math.round(height * opts.yRatio));
+  const marginV = resolveHeadingTopMargin({
+    height,
+    yRatio: opts.yRatio,
+    fontSize,
+    lineCount: headingLines.length
+  });
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-video-heading-"));
   const textFile = path.join(tmpDir, "heading.txt");

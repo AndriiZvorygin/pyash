@@ -225,6 +225,31 @@ test("runLearnFilenamePipeline rejects empty learning focus clearly", async () =
   );
 });
 
+test("runLearnFilenamePipeline rejects a wc count summary before any model stage", async () => {
+  let modelCalls = 0;
+  await assert.rejects(
+    () => runLearnFilenamePipeline({
+      sourceFilename: "addict_42k.txt",
+      learningFocus: "addiction",
+      readFileFn: async () => "     55    7257   41862\n",
+      runDirectFn: async () => {
+        modelCalls += 1;
+        return "should not run";
+      },
+      runExtractFn: async () => {
+        modelCalls += 1;
+        return "should not run";
+      },
+      runMergeRefineFn: async () => {
+        modelCalls += 1;
+        return "should not run";
+      }
+    }),
+    /source file contains only a three-column count summary, not source text \(addict_42k\.txt\)/u
+  );
+  assert.equal(modelCalls, 0);
+});
+
 test("runLearnFilenamePipeline uses chunk extract then merge-refine for large sources", async () => {
   const writes = new Map();
   const calls = [];

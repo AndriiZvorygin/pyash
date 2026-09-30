@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { readCodexCapacity, calculateWeeklyPacing, DEFAULT_BACKGROUND_POLICY } from "./capacity.mjs";
-import { curateWorkBacklog } from "./curator.mjs";
+import { buildExecutableSupply, curateWorkBacklog } from "./curator.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
@@ -420,12 +420,11 @@ export function renderWorkDailyDigest({
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
   const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
-  const runnablePackages = (roadmap?.packages || []).filter((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status)
-    && item.dependencyStatus?.satisfied !== false);
+  const executableSupply = buildExecutableSupply({ tasks, roadmap, curation });
+  const runnablePackages = executableSupply.runnablePackages;
   const runnableRoadmap = active.length > 0
     || runnableReady.length > 0
-    || runnablePackages.length > 0
-    || (curation.proposed || []).length > 0;
+    || executableSupply.runnable.length > 0;
   const blockedRoadmap = retryable.length > 0 || externalEvidence.length > 0 || humanDecisions.length > 0;
   const temporarilyBlocked = retryable.length > 0 && !runnableRoadmap;
   const status = exhausted
@@ -574,9 +573,12 @@ export function renderWorkDailyDigest({
       lines.push("", "External evidence waiting", "-------------------------", ...externalEvidence.slice(0, 5).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`));
     }
     if (runnableRoadmap) {
-      const next = runnablePackages.find((item) => item.status === "QUEUED")
-        || runnablePackages.find((item) => item.status === "CANDIDATE");
-      const later = runnablePackages.filter((item) => item.taskId !== next?.taskId);
+      const next = executableSupply.runnable[0] || null;
+      const futurePackages = [
+        ...runnablePackages,
+        ...executableSupply.candidatePackages
+      ].filter((item, index, values) => values.findIndex((candidate) => candidate.taskId === item.taskId) === index);
+      const later = futurePackages.filter((item) => item.taskId !== next?.taskId);
       lines.push("", "Runnable roadmap", "-----------------", ...(next ? [`  Next: ${next.title}`] : ["  Next: (none)"]), ...later.slice(0, 3).map((item) => `  Later: ${item.title}`));
     }
   } else if (!active.length && !ready && !runnableRoadmap && !curation.proposed?.length && roadmapWork) {
@@ -588,7 +590,12 @@ export function renderWorkDailyDigest({
     lines.push("", "ROADMAP", "-------", "Active:");
     const activePackages = runnablePackages.filter((item) => item.status === "ACTIVE");
     const queuedPackages = runnablePackages.filter((item) => item.status === "QUEUED");
-    const candidatePackages = runnablePackages.filter((item) => item.status === "CANDIDATE");
+    const candidatePackages = [
+      ...runnablePackages,
+      ...executableSupply.candidatePackages
+    ]
+      .filter((item, index, values) => values.findIndex((candidate) => candidate.taskId === item.taskId) === index)
+      .filter((item) => item.status === "CANDIDATE");
     const blockedPackages = [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...humanDecisions
@@ -601,7 +608,10 @@ export function renderWorkDailyDigest({
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / EXTERNAL EVIDENCE"),
       ...(roadmap.externalEvidence || []).filter((item) => !(roadmap.packages || []).some((candidate) => candidate.taskId === item.taskId))
     ];
-    const nextPackage = queuedPackages[0] || candidatePackages[0] || null;
+    const nextSupply = executableSupply.runnable[0] || null;
+    const nextPackage = nextSupply
+      ? (runnablePackages.find((item) => item.taskId === nextSupply.taskId) || nextSupply)
+      : null;
     const laterPackages = candidatePackages.filter((item) => item.taskId !== nextPackage?.taskId);
     lines.push(...(activePackages.length ? activePackages.map((item) => `  ${item.title} — ${item.progress}`) : ["  (none)"]));
     lines.push("Next:", ...(nextPackage ? [`  ${nextPackage.title}`] : ["  (none)"]));
