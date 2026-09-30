@@ -93,13 +93,18 @@ function parseSpeakerRowsJson(jsonText) {
   for (const r of rows) {
     const since = Number(r?.since ?? r?.start_s ?? r?.start ?? 0);
     const until = Number(r?.until ?? r?.end_s ?? r?.end ?? since);
-    const speaker = String(r?.display || r?.speaker || r?.speaker_name || "").trim();
+    const speakerKey = String(r?.speaker_key || "").trim();
+    const preserveNamedDisplay = /^(1|true|yes)$/iu.test(String(process.env.PYA_INTERVIEW_SPEAKER_ALIASES || ""));
+    const speaker = (preserveNamedDisplay ? String(r?.display || "").trim() : "")
+      || (/^speaker_/iu.test(speakerKey) ? speakerKey.toUpperCase() : speakerKey)
+      || String(r?.speaker || r?.speaker_name || "").trim();
     const speech = String(r?.text || r?.speech || r?.raw || "").replace(/\s+/g, " ").trim();
     if (!speech) continue;
     out.push({
       since: Number.isFinite(since) ? since : 0,
       until: Number.isFinite(until) ? until : (Number.isFinite(since) ? since : 0),
       speaker,
+      speaker_key: speakerKey,
       speech,
       raw: speaker ? `${speaker}: ${speech}` : speech,
     });
@@ -172,7 +177,7 @@ function applyEvidenceSpeakerNameMap(rows, mapPath, sourceJsonPath) {
       }
       return out;
     };
-    const cue = /^(?:all right|okay|thanks?|thank you|the question|question(?: is|:)|next up|first up|second|third|fourth|fifth|sixth|our next|let(?:'s| us)|candidates?[, ]|time-wise|before i|each candidate|we have|we're going|i(?:'ll| will) (?:start|go|jump)|is (?:there|anyone)|please|good evening|ladies and gentlemen)\b|\b(?:the order in which|with that said|we will get opening statements|first up|second will|third will|fourth will|fifth will|sixth will|next up|opening statement|the question is|for this next question|we're going to start|we will go to|thank you,?\s+(?:[A-Z][a-z]+|everyone)|thank you\.|when we do closing remarks|don't worry,? guys|i will remember where you were)\b/iu;
+    const cue = /^(?:all right|okay|the question|question(?: is|:)|next up|first up|second|third|fourth|fifth|sixth|our next|let(?:'s| us)|candidates?[, ]|time-wise|before i|each candidate|we have|we're going|i(?:'ll| will) (?:start|go|jump)|is (?:there|anyone)|please|good evening|ladies and gentlemen)\b|\b(?:the order in which|with that said|we will get opening statements|first up|second will|third will|fourth will|fifth will|sixth will|next up|opening statement|the question is|for this next question|we're going to start|when we do closing remarks|don't worry,? guys|i will remember where you were)\b/iu;
     const aliases = new Map();
     for (const span of map.spans) {
       const name = String(span?.canonical_name || "").trim();
@@ -220,6 +225,11 @@ function forceNumberedSpeakers(rows) {
 }
 
 function applyInterviewSpeakerAliases(rows, hostName = "") {
+  // This heuristic is only valid for an explicitly configured interview. A
+  // panel moderator commonly says “my name is …” before handing the floor to
+  // several guests; applying the guest alias to the moderator's diarizer key
+  // would relabel every later sentence from that key as the moderator.
+  if (!/^(1|true|yes)$/iu.test(String(process.env.PYA_INTERVIEW_SPEAKER_ALIASES || ""))) return rows;
   const out = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
   const aliases = new Map();
   const hostHint = String(hostName || "").replace(/\s+/gu, " ").trim();
