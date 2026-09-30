@@ -677,6 +677,51 @@ function parseChapterSummarySectionsFromPya(summaryPath, groundingPath = "") {
   });
 }
 
+function parseCandidateAnswerChapters(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return [];
+  try {
+    const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return (Array.isArray(payload?.answers) ? payload.answers : []).map((answer) => ({
+      id: String(answer?.id || "candidate-answer"),
+      candidate: String(answer?.candidate || "").trim(),
+      questionTitle: String(answer?.question_title || "").trim(),
+      summary: String(answer?.summary || "").trim(),
+      since: Number(answer?.since),
+      until: Number(answer?.until),
+      startRow: Number(answer?.start_row) - 1,
+      endRow: Number(answer?.end_row) - 1,
+    })).filter((answer) => answer.candidate && answer.summary && Number.isFinite(answer.since)
+      && Number.isFinite(answer.until) && answer.endRow >= answer.startRow);
+  } catch {
+    return [];
+  }
+}
+
+function attachCandidateAnswerChapters(ranges, answers) {
+  const out = Array.isArray(ranges) ? ranges.map((range) => ({
+    ...range,
+    chapters: Array.isArray(range?.chapters) ? [...range.chapters] : [],
+  })) : [];
+  for (const answer of Array.isArray(answers) ? answers : []) {
+    const section = out.find((range) => answer.startRow <= range.endRow && answer.endRow >= range.startRow);
+    if (!section) continue;
+    section.chapters.push({
+      "chapter id": answer.id,
+      title: `${answer.candidate} — ${answer.questionTitle}`.replace(/\s+—\s*$/u, "").trim(),
+      text: answer.summary,
+      since: answer.since,
+      until: answer.until,
+      "row start": answer.startRow,
+      "row end": answer.endRow,
+      "candidate answer": true,
+    });
+  }
+  for (const section of out) {
+    section.chapters.sort((a, b) => Number(a?.since || 0) - Number(b?.since || 0));
+  }
+  return out;
+}
+
 function parseAgendaMatchesFromPya(filePath) {
   const sectionsTotalRaw = readPyaTextValues(filePath, ["sections total"])["sections total"];
   const assignments = parsePyaJsonField(filePath, "assignments");
@@ -1573,6 +1618,7 @@ function main() {
   const chapterSummaryPath = pickFile(transcriptDir, [/\.chapter-summary\.md$/u]);
   const chapterSummaryPyaPath = pickFile(transcriptDir, [/\.chapter-summary\.pya$/u]);
   const chapterGroundingPyaPath = pickFile(transcriptDir, [/\.chapter\.grounding\.pya$/u]);
+  const candidateAnswerChaptersPath = pickFile(transcriptDir, [/\.candidate-answer-chapters\.json$/u]);
   const agendaMatchesPath = pickFile(transcriptDir, [/\.agenda\.matches\.pya$/u]);
   const agendaWiseSeriesPath = pickFile(transcriptDir, [/\.agenda-wise\.series\.pya$/u]);
   const agendaGrossChunksPath = pickFile(transcriptDir, [/\.agenda\.gross-chunks\.pya$/u]);
@@ -1646,7 +1692,7 @@ function main() {
   const finalSource = sourceArg || meetingUrl || "";
   const finalAgendaPage = String(agendaPageArg || inferredAgendaPage).trim();
 
-  const transcriptSections = attachSectionChaptersByIndex(
+  let transcriptSections = attachSectionChaptersByIndex(
     buildSectionRanges({
       transcriptRows,
       sectionSummaries: agendaSummaryJson?.sections,
@@ -1656,6 +1702,10 @@ function main() {
     }),
     agendaSummaryJson?.sections,
     transcriptRows,
+  );
+  transcriptSections = attachCandidateAnswerChapters(
+    transcriptSections,
+    parseCandidateAnswerChapters(candidateAnswerChaptersPath),
   );
   assertNoLongUnsummarizedSections(
     transcriptRows,
