@@ -1,0 +1,82 @@
+ob ve filename text video filename text lyrics be input ya
+
+from filename "../../module/video_common.pya" ob name footnote mode to name footnote mode be import do
+from filename "../../module/audio_equilibrium.pya" ob name audio equilibrium to name audio equilibrium be import do
+
+exists su name hear backend default ob text "qwen" be default ya
+
+su name run id text stage ob name run id to name text run id text be text do
+ob name run root to name text workspace root be text do
+ob text "artifacts/" to name text karaoke run root be text do
+ob name text run id text to name karaoke run root be plus do
+ob text "mkdir -p \"" to name text ensure command be text do
+ob name text karaoke run root to name ensure command be plus do
+ob text "\"" to name ensure command be plus do
+su name ensure artifacts stage ob name ensure command be command do
+
+su name source video stage ob name video to name filename source video be filename do
+su name source lyrics stage ob name lyrics to name filename source lyrics be filename do
+su name video path stage ob name source video stage to name text video path be text do
+su name source lyrics path stage ob name source lyrics stage to name text source lyrics path be text do
+
+ob name text karaoke run root to name text audio wav path be text do
+ob text "/audio.wav" to name audio wav path be plus do
+ob text "ffmpeg -y -i \"" to name text extract audio command be text do
+ob name text video path to name extract audio command be plus do
+ob text "\" -vn -ac 2 -ar 48000 -c:a pcm_s16le \"" to name extract audio command be plus do
+ob name text audio wav path to name extract audio command be plus do
+ob text "\"" to name extract audio command be plus do
+su name extract audio stage ob name extract audio command be command do
+
+ob name text karaoke run root to name text lyrics path be text do
+ob text "/lyrics.txt" to name lyrics path be plus do
+ob text "cp -- \"" to name text copy lyrics command be text do
+ob name text source lyrics path to name copy lyrics command be plus do
+ob text "\" \"" to name copy lyrics command be plus do
+ob name text lyrics path to name copy lyrics command be plus do
+ob text "\"" to name copy lyrics command be plus do
+su name copy lyrics stage ob name copy lyrics command be command do
+
+ob name text karaoke run root to name text timing captions path be text do
+ob text "/captions-timing.srt" to name timing captions path be plus do
+ob name text karaoke run root to name text aligned captions path be text do
+ob text "/captions.srt" to name aligned captions path be plus do
+su name audio wav filename stage ob name text audio wav path to name filename audio wav be filename do
+ob name text karaoke run root to name text equilibrium audio path be text do
+ob text "/audio-equilibrium.wav" to name equilibrium audio path be plus do
+su name equilibrium audio filename stage ob name text equilibrium audio path to name filename equilibrium audio be filename do
+su name timing captions filename stage ob name text timing captions path to name filename timing captions be filename do
+su name aligned captions filename stage ob name text aligned captions path to name filename aligned captions be filename do
+su name equilibrium audio stage from filename of ob of audio wav filename stage to filename of ob of equilibrium audio filename stage be audio equilibrium do
+
+ob name text karaoke run root to name text normalized video path be text do
+ob text "/audio-normalized.mkv" to name normalized video path be plus do
+su name normalized video filename stage ob name text normalized video path to name filename normalized video be filename do
+ob text "ffmpeg -y -i \"" to name text mux normalized audio command be text do
+ob name text video path to name mux normalized audio command be plus do
+ob text "\" -i \"" to name mux normalized audio command be plus do
+ob name text equilibrium audio path to name mux normalized audio command be plus do
+ob text "\" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k -ar 48000 -ac 2 -shortest \"" to name mux normalized audio command be plus do
+ob name text normalized video path to name mux normalized audio command be plus do
+ob text "\"" to name mux normalized audio command be plus do
+su name mux normalized audio stage ob name text mux normalized audio command be command do
+
+su name hear timing stage from filename of ob of equilibrium audio filename stage become wo srt to filename of ob of timing captions filename stage be hear do
+
+ob text "node " to name text alignment command be text do
+ob name text workspace root to name alignment command be plus do
+ob text "/command/lyrics_to_srt_from_timing.mjs \"" to name alignment command be plus do
+ob name text lyrics path to name alignment command be plus do
+ob text "\" \"" to name alignment command be plus do
+ob name text timing captions path to name alignment command be plus do
+ob text "\" \"" to name alignment command be plus do
+ob name text aligned captions path to name alignment command be plus do
+ob text "\" --sentence-cues" to name alignment command be plus do
+su name align supplied lyrics stage ob name text alignment command be command do
+
+ob name text karaoke run root to name text karaoke output path be text do
+ob text "/karaoke.mp4" to name karaoke output path be plus do
+su name karaoke output filename stage ob name text karaoke output path to name filename karaoke output be filename do
+su name burn karaoke subtitles stage from filename of ob of aligned captions filename stage with filename of ob of normalized video filename stage to filename of ob of karaoke output filename stage by num 0.10 as text "karaoke" be footnote mode do
+su name result out text stage ob name text karaoke output path to name text result out be text do
+su name result out ob name text result out be write do

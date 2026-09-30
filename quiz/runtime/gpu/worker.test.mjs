@@ -7,7 +7,13 @@ import path from "node:path";
 import { enqueueInputEnvelope, queueDepth } from "../../../program/runtime/gpu/queue.mjs";
 import { acquireGpuLease, releaseGpuLease } from "../../../program/runtime/gpu/lease.mjs";
 import { readGpuHandleStatus } from "../../../program/runtime/gpu/handle_status.mjs";
-import { runGpuWorkerBatch, runGpuWorkerOnce } from "../../../program/runtime/gpu/worker.mjs";
+import {
+  DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS,
+  resolveGpuWorkerMaxPolls,
+  resolveGpuQueueWaitTimeoutMs,
+  runGpuWorkerBatch,
+  runGpuWorkerOnce
+} from "../../../program/runtime/gpu/worker.mjs";
 
 function payload(text) {
   return {
@@ -16,6 +22,16 @@ function payload(text) {
     ob: { text: String(text ?? "") }
   };
 }
+
+test("GPU worker default remote wait exceeds Housekeeper inference timeout", () => {
+  assert.ok(DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS > 15 * 60 * 1000);
+  assert.equal(resolveGpuWorkerMaxPolls(), Math.ceil(DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS / 250));
+  assert.equal(resolveGpuWorkerMaxPolls({ pollIntervalMs: 1000, timeoutMs: 5000 }), 5);
+  assert.equal(resolveGpuWorkerMaxPolls({ pollIntervalMs: 1000, timeoutMs: 5000, maxPolls: 3 }), 3);
+  assert.equal(resolveGpuQueueWaitTimeoutMs({ queueDepth: 1 }), DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS);
+  assert.equal(resolveGpuQueueWaitTimeoutMs({ queueDepth: 4 }), 4 * DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS);
+  assert.equal(resolveGpuQueueWaitTimeoutMs({ queueDepth: 4, explicitTimeoutMs: 10000 }), 10000);
+});
 
 async function enqueueMind(worldRoot, overrides = {}) {
   await enqueueInputEnvelope(worldRoot, {

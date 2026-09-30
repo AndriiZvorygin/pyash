@@ -95,14 +95,24 @@ test("mapWithConcurrency fans out work while preserving input order", async () =
   assert.deepEqual(started.slice(0, 2), [0, 1]);
 });
 
-test("learn child runs opt into the configured housekeeper queue", () => {
+test("learn child runs default to the local housekeeper and preserve explicit queue settings", () => {
   const originalManager = process.env.PYA_GPU_HOUSEKEEPER_URL;
   const originalQueue = process.env.PYA_GPU_MIND_QUEUE;
   try {
-    process.env.PYA_GPU_HOUSEKEEPER_URL = "http://gpu-housekeeper:8090";
+    delete process.env.PYA_GPU_HOUSEKEEPER_URL;
     delete process.env.PYA_GPU_MIND_QUEUE;
+    const defaults = buildLearnChildEnv();
+    assert.equal(defaults.PYA_GPU_HOUSEKEEPER_URL, "http://localhost:8090");
+    assert.equal(defaults.PYA_GPU_MIND_QUEUE, "truth");
+
+    const configured = buildLearnChildEnv({ PYA_GPU_HOUSEKEEPER_URL: "http://gpu-housekeeper:8090" });
+    assert.equal(configured.PYA_GPU_HOUSEKEEPER_URL, "http://gpu-housekeeper:8090");
+    assert.equal(configured.PYA_GPU_MIND_QUEUE, "truth");
+
     assert.equal(buildLearnChildEnv().PYA_GPU_MIND_QUEUE, "truth");
-    assert.equal(buildLearnChildEnv({ PYA_GPU_MIND_QUEUE: "false" }).PYA_GPU_MIND_QUEUE, "false");
+    const direct = buildLearnChildEnv({ PYA_GPU_MIND_QUEUE: "false" });
+    assert.equal(direct.PYA_GPU_MIND_QUEUE, "false");
+    assert.equal(direct.PYA_GPU_HOUSEKEEPER_URL, "http://localhost:8090");
   } finally {
     if (originalManager === undefined) delete process.env.PYA_GPU_HOUSEKEEPER_URL;
     else process.env.PYA_GPU_HOUSEKEEPER_URL = originalManager;
@@ -213,6 +223,31 @@ test("runLearnFilenamePipeline rejects empty learning focus clearly", async () =
     }),
     /learn filename pipeline defective: missing learning focus/u
   );
+});
+
+test("runLearnFilenamePipeline rejects a wc count summary before any model stage", async () => {
+  let modelCalls = 0;
+  await assert.rejects(
+    () => runLearnFilenamePipeline({
+      sourceFilename: "addict_42k.txt",
+      learningFocus: "addiction",
+      readFileFn: async () => "     55    7257   41862\n",
+      runDirectFn: async () => {
+        modelCalls += 1;
+        return "should not run";
+      },
+      runExtractFn: async () => {
+        modelCalls += 1;
+        return "should not run";
+      },
+      runMergeRefineFn: async () => {
+        modelCalls += 1;
+        return "should not run";
+      }
+    }),
+    /source file contains only a three-column count summary, not source text \(addict_42k\.txt\)/u
+  );
+  assert.equal(modelCalls, 0);
 });
 
 test("runLearnFilenamePipeline uses chunk extract then merge-refine for large sources", async () => {

@@ -18,11 +18,14 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
     self.orig_request_ollama_json = server.request_ollama_json
+    self.orig_ollama_model_status = server.ollama_running_model_status
     self.orig_ollama_model_catalog = server.ollama_model_catalog
     self.orig_memory_available_mb = server.memory_available_mb
     self.orig_container_disk_available_mb = server.container_disk_available_mb
     self.original_pull_env = os.environ.get("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL")
     self.original_allowlist_env = os.environ.get("GPU_HOUSEKEEPER_MODEL_ALLOWLIST")
+    self.original_guard_poll_env = os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC")
+    self.original_watchdog_interval_env = os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC")
     server._PROFILES.clear()
     server._JOBS.clear()
     server.reset_ollama_model_catalog_cache()
@@ -32,6 +35,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_ollama_json = self.orig_request_ollama_json
+    server.ollama_running_model_status = self.orig_ollama_model_status
     server.ollama_model_catalog = self.orig_ollama_model_catalog
     server.memory_available_mb = self.orig_memory_available_mb
     server.container_disk_available_mb = self.orig_container_disk_available_mb
@@ -43,6 +47,14 @@ class HousekeeperOllamaTests(unittest.TestCase):
       os.environ.pop("GPU_HOUSEKEEPER_MODEL_ALLOWLIST", None)
     else:
       os.environ["GPU_HOUSEKEEPER_MODEL_ALLOWLIST"] = self.original_allowlist_env
+    if self.original_guard_poll_env is None:
+      os.environ.pop("GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC"] = self.original_guard_poll_env
+    if self.original_watchdog_interval_env is None:
+      os.environ.pop("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC"] = self.original_watchdog_interval_env
     server.reset_ollama_model_catalog_cache()
     server._PROFILES.clear()
     server._JOBS.clear()
@@ -217,7 +229,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "status": "running", "gpuExpected": True, "gpuObserved": True
     }
     server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
-      {"models": []} if pathname == "/api/ps" else {"response": "ok"}
+      {"models": [{"name": model, "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
     result = server.execute_ollama_job({
       "runtimeName": "ollama",
@@ -231,6 +243,72 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(result, {"response": "ok"})
     self.assertFalse(server._PROFILES[model]["loaded"])
 
+  def test_cold_model_is_gpu_verified_before_real_prompt_is_sent(self):
+    model = "qwen3.5:9b"
+    loaded = {"gpu": False}
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/api/ps":
+        models = [{
+          "name": model, "size": 6000, "size_vram": 6000
+        }] if loaded["gpu"] else []
+        return {"available": True, "models": models}
+      calls.append(dict(payload))
+      if payload.get("prompt") == "":
+        self.assertEqual(payload.get("keep_alive"), 300)
+        loaded["gpu"] = True
+        return {"response": ""}
+      self.assertTrue(loaded["gpu"], "real prompt must wait for verified GPU residency")
+      return {"response": "answer"}
+
+    server.request_ollama_json = fake_request
+    result = server.execute_ollama_job({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "teach this"}}
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(result, {"response": "answer"})
+    self.assertEqual([payload["prompt"] for payload in calls], ["", "teach this"])
+
+  def test_cold_cpu_model_is_restarted_without_sending_real_prompt(self):
+    actions = []
+    model = "qwen3.5:9b"
+    loaded = {"cpu": False}
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/api/ps":
+        models = [{
+          "name": model, "size": 6000, "size_vram": 0
+        }] if loaded["cpu"] else []
+        return {"available": True, "models": models}
+      calls.append(dict(payload))
+      if payload.get("prompt") == "":
+        loaded["cpu"] = True
+        return {"response": ""}
+      self.fail("real prompt was sent before GPU residency was verified")
+
+    server.request_ollama_json = fake_request
+    server.runtime_action = lambda _registry, runtime_name, action: actions.append((runtime_name, action)) or {"success": True}
+
+    with self.assertRaisesRegex(RuntimeError, "cold-loaded CPU/partial-offload model"):
+      server.execute_ollama_job({
+        "runtimeName": "ollama",
+        "profileName": model,
+        "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "teach this"}}
+      }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual([payload["prompt"] for payload in calls], [""])
+    self.assertEqual(actions, [("ollama", "restartAction")])
+
   def test_ollama_execution_discharges_non_target_warm_models_then_runs_target(self):
     calls = []
     server.parse_runtime_status = lambda _entry: {
@@ -243,7 +321,10 @@ class HousekeeperOllamaTests(unittest.TestCase):
     def fake_request(pathname, payload=None, timeout_sec=600):
       calls.append((pathname, payload))
       if pathname == "/api/ps":
-        return {"models": [{"name": "old-model"}, {"name": "qwen-test"}]}
+        return {"models": [
+          {"name": "old-model", "size": 1000, "size_vram": 1000},
+          {"name": "qwen-test", "size": 1000, "size_vram": 1000}
+        ]}
       if pathname == "/api/generate" and payload.get("model") == "old-model":
         self.assertEqual(payload.get("keep_alive"), 0)
         return {"done": True}
@@ -261,9 +342,9 @@ class HousekeeperOllamaTests(unittest.TestCase):
     }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
 
     self.assertEqual(result, {"response": "ok"})
-    self.assertEqual(calls[0][0], "/api/ps")
-    self.assertEqual(calls[1][1]["model"], "old-model")
-    self.assertEqual(calls[2][1]["model"], "qwen-test")
+    generated_models = [payload.get("model") for pathname, payload in calls if pathname == "/api/generate"]
+    self.assertIn("old-model", generated_models)
+    self.assertIn("qwen-test", generated_models)
 
   def test_warm_target_profile_is_admitted_when_vram_is_full(self):
     server.parse_nvidia_smi = lambda: {
@@ -287,6 +368,170 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(plan["decision"], "fits")
     self.assertTrue(plan["targetProfileLoaded"])
 
+  def test_ollama_residency_probe_distinguishes_cpu_from_gpu_models(self):
+    server.request_ollama_json = lambda *_args, **_kwargs: {
+      "models": [
+        {"name": "cpu-model", "size": 1000, "size_vram": 0},
+        {"name": "partial-model", "size": 1000, "size_vram": 950},
+        {"name": "gpu-model", "size": 1000, "size_vram": 1000},
+        {"name": "unknown-size-model", "size": 0, "size_vram": 900}
+      ]
+    }
+    report = server.ollama_running_model_status()
+    server.sync_ollama_profiles(report["models"])
+
+    self.assertTrue(server.ollama_model_residency("cpu-model", report["models"])["loaded"])
+    self.assertFalse(server.ollama_model_residency("cpu-model", report["models"])["gpuResident"])
+    self.assertFalse(server.ollama_model_residency("partial-model", report["models"])["gpuResident"])
+    self.assertTrue(server.ollama_model_residency("gpu-model", report["models"])["gpuResident"])
+    self.assertFalse(server.ollama_model_residency("unknown-size-model", report["models"])["gpuResident"])
+    self.assertFalse(server._PROFILES["cpu-model"]["loaded"])
+    self.assertFalse(server._PROFILES["partial-model"]["loaded"])
+    self.assertTrue(server._PROFILES["gpu-model"]["loaded"])
+
+  def test_cpu_resident_model_restarts_ollama_before_request_is_sent(self):
+    actions = []
+    requests = []
+    model = "qwen3.5:9b"
+    server.parse_runtime_status = lambda _entry: {"status": "running", "gpuExpected": True, "gpuObserved": True}
+    server.ollama_running_model_status = lambda: {
+      "available": True,
+      "models": [{
+        "name": model, "size": 6000, "sizeVram": 0,
+        "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
+      }]
+    }
+    server.runtime_action = lambda _registry, runtime_name, action: actions.append((runtime_name, action)) or {"success": True}
+    server.request_ollama_json = lambda *args, **kwargs: requests.append((args, kwargs)) or {}
+
+    with self.assertRaisesRegex(RuntimeError, "refused CPU/partial-offload model before inference"):
+      server.execute_ollama_job({
+        "runtimeName": "ollama",
+        "profileName": model,
+        "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "must not run"}}
+      }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(actions, [("ollama", "restartAction")])
+    self.assertEqual(requests, [])
+
+  def test_watchdog_defaults_to_five_minutes_and_interval_is_configurable(self):
+    os.environ.pop("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC", None)
+    self.assertEqual(server.ollama_gpu_watchdog_interval_seconds(), 300)
+    os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC"] = "12"
+    self.assertEqual(server.ollama_gpu_watchdog_interval_seconds(), 12)
+
+  def test_periodic_residency_audit_restarts_idle_cpu_resident_model(self):
+    actions = []
+    model = "qwen3.5:9b"
+    server.parse_runtime_status = lambda _entry: {"status": "running"}
+    server.ollama_running_model_status = lambda: {
+      "available": True,
+      "models": [{
+        "name": model, "size": 6000, "sizeVram": 0,
+        "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
+      }]
+    }
+    server.runtime_action = lambda _registry, runtime_name, action: actions.append((runtime_name, action)) or {"success": True}
+
+    result = server.audit_ollama_gpu_residency({"ollama": {"gpuExpected": True}})
+
+    self.assertTrue(result["restarted"])
+    self.assertEqual(result["model"], model)
+    self.assertEqual(actions, [("ollama", "restartAction")])
+    self.assertFalse(server._PROFILES[model]["gpuResident"])
+
+  def test_periodic_residency_audit_keeps_gpu_resident_model_running(self):
+    actions = []
+    server.parse_runtime_status = lambda _entry: {"status": "running"}
+    server.ollama_running_model_status = lambda: {
+      "available": True,
+      "models": [{
+        "name": "gpu-model", "size": 6000, "sizeVram": 6000,
+        "loaded": True, "gpuResident": True,
+        "reason": "model weights are resident on GPU"
+      }]
+    }
+    server.runtime_action = lambda *_args: actions.append(_args) or {"success": True}
+
+    result = server.audit_ollama_gpu_residency({"ollama": {"gpuExpected": True}})
+
+    self.assertTrue(result["checked"])
+    self.assertFalse(result["restarted"])
+    self.assertEqual(actions, [])
+
+  def test_periodic_residency_audit_reports_failed_ollama_restart(self):
+    model = "cpu-model"
+    server.parse_runtime_status = lambda _entry: {"status": "running"}
+    server.ollama_running_model_status = lambda: {
+      "available": True,
+      "models": [{
+        "name": model, "size": 6000, "sizeVram": 0,
+        "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
+      }]
+    }
+    server.runtime_action = lambda *_args: {"success": False, "message": "docker socket unavailable"}
+
+    result = server.audit_ollama_gpu_residency({"ollama": {"gpuExpected": True}})
+
+    self.assertFalse(result["restarted"])
+    self.assertEqual(result["restartError"], "docker socket unavailable")
+    self.assertTrue(server._PROFILES[model]["loaded"])
+    self.assertIn("restart failed", server._PROFILES[model]["gpuResidencyReason"])
+
+  def test_mid_inference_cpu_fallback_restarts_ollama(self):
+    actions = []
+    request_started = threading.Event()
+    release_request = threading.Event()
+    model = "qwen3.5:9b"
+    reports = iter([
+      {"available": True, "models": []},
+      {"available": True, "models": [{
+        "name": model, "size": 6000, "sizeVram": 0,
+        "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
+      }]}
+    ])
+    server.parse_runtime_status = lambda _entry: {"status": "running", "gpuExpected": True, "gpuObserved": True}
+    server.ollama_running_model_status = lambda: next(reports, {
+      "available": True,
+      "models": [{
+        "name": model, "size": 6000, "sizeVram": 0,
+        "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
+      }]
+    })
+
+    def fake_action(_registry, runtime_name, action):
+      actions.append((runtime_name, action))
+      release_request.set()
+      return {"success": True}
+
+    def fake_request(pathname, _payload=None, timeout_sec=600):
+      self.assertEqual(pathname, "/api/generate")
+      request_started.set()
+      release_request.wait(2)
+      return {"response": "should be discarded"}
+
+    server.runtime_action = fake_action
+    server.request_ollama_json = fake_request
+    os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC"] = "0.05"
+
+    with self.assertRaisesRegex(RuntimeError, r"GPU guard rejected CPU/partial-offload inference \(Ollama restarted\)"):
+      server.guarded_ollama_request(
+        "/api/generate",
+        {"model": model, "prompt": "stop if CPU"},
+        model,
+        {"ollama": {"runtimeName": "ollama", "gpuExpected": True}},
+        timeout_sec=60,
+        already_gpu_resident=True
+      )
+
+    self.assertTrue(request_started.is_set())
+    self.assertEqual(actions, [("ollama", "restartAction")])
+
   def test_stopped_runtime_triggers_begin_before_ollama_job(self):
     actions = []
     statuses = iter([
@@ -301,7 +546,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     server.runtime_action = fake_action
     server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
-      {"models": []} if pathname == "/api/ps" else {"response": "ok"}
+      {"models": [{"name": "qwen-test", "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
 
     server.execute_ollama_job({
@@ -325,7 +570,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "message": "restarted"
     }
     server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
-      {"models": []} if pathname == "/api/ps" else {"response": "ok"}
+      {"models": [{"name": "qwen-test", "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
 
     server.execute_ollama_job({
@@ -365,7 +610,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "message": "running"
     }
     server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
-      {"models": []} if pathname == "/api/ps" else {"response": "ok"}
+      {"models": [{"name": "qwen-test", "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
 
     submitted = server.submit_job({
@@ -1063,6 +1308,9 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.orig_local_route_state = server.local_route_state
     self.orig_peer_route_candidate = server.peer_route_candidate
     self.orig_peer_request_json = server.peer_request_json
+    self.orig_ollama_running_model_status = server.ollama_running_model_status
+    self.orig_ollama_model_catalog = server.ollama_model_catalog
+    self.orig_parse_nvidia_smi = server.parse_nvidia_smi
     self.orig_host_id = server.Handler.host_id
     self.orig_accept_forwarded = os.environ.get("GPU_HOUSEKEEPER_ACCEPT_FORWARDED")
     server._JOBS.clear()
@@ -1073,6 +1321,9 @@ class HousekeeperFederationTests(unittest.TestCase):
     server.local_route_state = self.orig_local_route_state
     server.peer_route_candidate = self.orig_peer_route_candidate
     server.peer_request_json = self.orig_peer_request_json
+    server.ollama_running_model_status = self.orig_ollama_running_model_status
+    server.ollama_model_catalog = self.orig_ollama_model_catalog
+    server.parse_nvidia_smi = self.orig_parse_nvidia_smi
     server.Handler.host_id = self.orig_host_id
     if self.orig_accept_forwarded is None:
       os.environ.pop("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", None)
@@ -1166,6 +1417,96 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertTrue(candidate["available"])
     self.assertTrue(candidate["busy"])
     self.assertFalse(candidate["immediate"])
+
+  def test_ollama_peer_without_residency_guard_is_rejected(self):
+    server.peer_request_json = lambda *_args, **_kwargs: {
+      "capabilities": {"ollamaGpuResidencyGuard": False},
+      "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+      "ollamaRunningModels": {"available": True, "models": []}
+    }
+
+    candidate = server.peer_route_candidate(
+      "swac",
+      "http://swac:8090",
+      {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {
+        "kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}
+      }}
+    )
+
+    self.assertFalse(candidate["available"])
+    self.assertIn("GPU residency guard", candidate["reason"])
+
+  def test_ollama_peer_with_cpu_resident_target_is_rejected(self):
+    server.peer_request_json = lambda *_args, **_kwargs: {
+      "capabilities": {"ollamaGpuResidencyGuard": True},
+      "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+      "ollamaRunningModels": {"available": True, "models": [{
+        "name": "qwen", "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
+      }]}
+    }
+
+    candidate = server.peer_route_candidate(
+      "swac",
+      "http://swac:8090",
+      {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {
+        "kind": "ollama-chat", "payload": {"model": "qwen", "messages": []}
+      }}
+    )
+
+    self.assertFalse(candidate["available"])
+    self.assertIn("without GPU VRAM", candidate["reason"])
+
+  def test_running_peer_does_not_outrank_an_idle_local_gpu(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 30
+    }
+    responses = iter([
+      {
+        "capabilities": {"ollamaGpuResidencyGuard": True},
+        "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+        "ollamaRunningModels": {"available": True, "models": []},
+        "ollamaModelCatalog": {"available": False},
+        "profiles": [],
+        "devices": [{"deviceId": "gpu0"}],
+        "executionSlots": [],
+        "queueDepth": 0
+      },
+      {"feasible": True, "decision": "fits"}
+    ])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+    job = {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {
+      "kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}
+    }}
+
+    route = server.select_route({}, job, {"ollama": {"runtimeName": "ollama"}}, "mriczo")
+
+    self.assertFalse(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "mriczo")
+
+  def test_local_route_rejects_a_cpu_resident_target_model(self):
+    model = "qwen3.5:9b"
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24000, "vramUsedMb": 400, "vramFreeMb": 23600}]
+    }
+    server.ollama_running_model_status = lambda: {
+      "available": True,
+      "models": [{
+        "name": model, "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
+      }]
+    }
+    server.ollama_model_catalog = lambda **_kwargs: {"available": True, "models": [{"name": model}]}
+    job = {"runtimeName": "ollama", "profileName": model, "jobSpec": {
+      "kind": "ollama-generate", "payload": {"model": model, "prompt": "hi"}
+    }}
+
+    candidate = server.local_route_state(job, {"ollama": {"runtimeName": "ollama"}}, "mriczo")
+
+    self.assertFalse(candidate["available"])
+    self.assertIn("without GPU VRAM", candidate["reason"])
 
   def test_peer_without_provisioning_capability_is_not_a_model_ensure_target(self):
     responses = iter([{
