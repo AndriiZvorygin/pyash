@@ -502,6 +502,9 @@ export async function runNormalizeShared(writer, argv = []) {
   const rosterText = [
     rosterPath ? fs.readFileSync(rosterPath, "utf8") : "",
     readMeetingNormalizationContext(transcriptDir),
+    String(process.env.PYA_SPEAKER_NAME_ROSTER || "").trim()
+      ? `Operator-confirmed panel speaker roster (use these exact spellings when the transcript is referring to these people): ${String(process.env.PYA_SPEAKER_NAME_ROSTER).trim()}`
+      : "",
   ].filter(Boolean).join("\n\n");
   const normalizationTerms = loadNormalizationTerms(termsPath);
   const termMapText = termsForPrompt(normalizationTerms);
