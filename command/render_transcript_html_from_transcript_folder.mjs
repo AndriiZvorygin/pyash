@@ -197,7 +197,11 @@ function applyEvidenceSpeakerNameMap(rows, mapPath, sourceJsonPath) {
         for (let row = start; row <= end; row += 1) moderatorRows.add(row);
       }
       for (let row = start; row <= end; row += 1) {
-        if (cue.test(String(sourceRows[row - 1]?.text || ""))) continue;
+        // Candidate handoff spans are already bounded by the evidence map;
+        // retain short greetings and self-identifications such as “Good
+        // evening” or “Okay, I'm …” instead of dropping them as moderator
+        // control cues. Only suppress cues inside explicitly moderator spans.
+        if (span?.role === "moderator" && cue.test(String(sourceRows[row - 1]?.text || ""))) continue;
         const prior = aliases.get(row);
         if (!prior || confidence > prior.confidence) aliases.set(row, { name, confidence });
       }
