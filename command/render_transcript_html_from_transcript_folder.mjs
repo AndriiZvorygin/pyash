@@ -705,6 +705,13 @@ function attachCandidateAnswerChapters(ranges, answers) {
   for (const answer of Array.isArray(answers) ? answers : []) {
     const section = out.find((range) => answer.startRow <= range.endRow && answer.endRow >= range.startRow);
     if (!section) continue;
+    // Named opening/closing sections already carry the authoritative marker
+    // (for example, 00:15:22 Opening: Ray Botten).  Do not add a second
+    // nested marker a few seconds later for the same answer; the answer
+    // remains available in the structured artifact and the section summary.
+    const sectionTitle = String(section.heading || "").replace(/\s+/gu, " ").trim().toLocaleLowerCase();
+    const answerTitle = String(answer.questionTitle || "").replace(/\s+/gu, " ").trim().toLocaleLowerCase();
+    if (/^(?:opening|closing):\s*\S/iu.test(answerTitle) && sectionTitle === answerTitle) continue;
     section.chapters.push({
       "chapter id": answer.id,
       title: `${answer.candidate} — ${answer.questionTitle}`.replace(/\s+—\s*$/u, "").trim(),
