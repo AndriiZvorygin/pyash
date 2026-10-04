@@ -325,7 +325,7 @@ export function buildWorkCheckpoint(input = {}) {
       model: text(review.model),
       reasoningEffort: text(review.reasoningEffort),
       threadId: text(review.threadId),
-      previousThreadIds: list(review.previousThreadIds),
+      previousThreadIds: uniqueTextList(review.previousThreadIds),
       pass: Math.max(0, Math.trunc(Number(review.pass) || 0)),
       reviewedCommit: text(review.reviewedCommit),
       reviewedRevision: text(review.reviewedRevision),
