@@ -677,12 +677,26 @@ test("combined role, timeout, policy, reconciliation, approval, and compact stat
     worker: { role: "implementer", threadId: "implementer-thread", previousThreadIds: ["implementer-old", "implementer-old"] },
     reviewer: { role: "reviewer", model: "reviewer-model", threadId: "reviewer-thread" },
     escalationReviewer: { role: "escalationReviewer", model: "sol-model", threadId: "escalation-thread" },
-    review: { role: "reviewer", decision: "ESCALATE", explanation: "routine review needs Sol" },
+    review: {
+      role: "reviewer",
+      previousThreadIds: ["reviewer-old", "reviewer-old"],
+      decision: "ESCALATE",
+      explanation: "routine review needs Sol"
+    },
     routineReview: { role: "reviewer", decision: "ESCALATE", escalationReason: "semantic boundary" },
     escalationReview: { role: "escalationReviewer", decision: "REVISE", workOrder: "make the bounded correction" },
     timeoutPolicy: { policyVersion: "v2", activityAware: true, inactivityTimeoutMs: 120000, hardTimeoutMs: 900000 },
     policyRevalidation: { migrationId: "migration-1", outcome: "revalidated", attempts: 1 },
     turnReconciliation: { classification: "STALE", safeToResume: true, turnId: "turn-1" },
+    executionPreflight: {
+      status: "passed",
+      check: "workspace",
+      reason: "clean detached worktree",
+      observedAt: "2026-08-28T12:00:00.000Z",
+      worktree: "/worktree/combined-state-task",
+      threadSandbox: "thread-sandbox",
+      turnSandbox: "turn-sandbox"
+    },
     approval: { state: "approved", requestId: "approval-1", history: [{ state: "approved", requestId: "approval-1" }] },
     compactContext: {
       version: 1,
@@ -707,6 +721,9 @@ test("combined role, timeout, policy, reconciliation, approval, and compact stat
   assert.equal(stored.checkpoint.timeoutPolicy.hardTimeoutMs, 900000);
   assert.equal(stored.checkpoint.policyRevalidation.migrationId, "migration-1");
   assert.equal(stored.checkpoint.turnReconciliation.classification, "STALE");
+  assert.deepEqual(stored.checkpoint.review.previousThreadIds, ["reviewer-old"]);
+  assert.equal(stored.checkpoint.executionPreflight.status, "passed");
+  assert.equal(stored.checkpoint.executionPreflight.worktree, "/worktree/combined-state-task");
   assert.equal(stored.checkpoint.approval.history[0].requestId, "approval-1");
   assert.deepEqual(stored.checkpoint.compactContext.sourceTurnIds, ["turn-1"]);
 });
