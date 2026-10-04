@@ -10,20 +10,32 @@ import {
 } from "./agenda-stage-contracts.mjs";
 import { unsupportedNumericTokens } from "./grounded-numeric-fidelity.mjs";
 import { agendaPreviewPriorityAdjustment } from "./agenda-preview-priority.mjs";
+import {
+  auditFinancialClaim,
+  containsFinancialClaimText,
+} from "./financial-claim-audit.mjs";
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, "")
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, "")}/api/chat`
   : "http://mriczo:11434/api/chat";
 const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
-const MODEL = "qwen3.5:9b";
 const MAX_ATTEMPTS = Math.max(
   1,
   Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_ATTEMPTS || "4"), 10) || 4,
 );
+const OLLAMA_RETRY_ATTEMPTS = Math.max(
+  1,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_RETRY_ATTEMPTS || "3"), 10) || 3,
+);
+const OLLAMA_RETRY_DELAY_MS = Math.max(
+  0,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_RETRY_DELAY_MS || "2500"), 10) || 2500,
+);
 const OLLAMA_TIMEOUT_MS = Math.max(
   5000,
-  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_TIMEOUT_MS || "90000"), 10) || 90000,
+  Number.parseInt(String(process.env.MEETING_SUMMARY_OLLAMA_TIMEOUT_MS || "300000"), 10) || 300000,
 );
 const PASS_THRESHOLD = 0.8;
 const SUMMARY_TIME_MODE = String(process.env.AGENDA_SUMMARY_TIME_MODE || "standard").trim().toLowerCase();
@@ -117,30 +129,59 @@ function pickAgendaSummaryArtifact(transcriptDir, prefix = "auto") {
   return { summaryPath: chosen.full, resolvedPrefix: chosen.pfx };
 }
 
-async function ask(messages, { numPredict = 520 } = {}) {
-  const body = {
-    model: MODEL,
-    mode: "chat",
-    keep_alive: 300,
-    think: false,
-    stream: false,
-    options: { num_predict: numPredict },
-    messages,
-  };
-  let res;
-  try {
-    res = await fetch(OLLAMA_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
-    });
-  } catch (err) {
-    throw new Error(`Ollama fetch failed for whole-meeting-summary using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(err?.message || err)})`);
+function ollamaStatusRetryable(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function ollamaErrorRetryable(error) {
+  if (error?.retryable === true) return true;
+  const message = String(error?.message || error || "");
+  return /AbortError|fetch failed|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|timed out|gpu-managed.*(?:failed|timed out)|status\s+(?:408|425|429|5\d\d)/iu.test(message);
+}
+
+function waitMs(durationMs) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(durationMs) || 0)));
+}
+
+export async function requestOllamaChat(messages, {
+  numPredict = 520,
+  fetchImpl = globalThis.fetch,
+  retryAttempts = OLLAMA_RETRY_ATTEMPTS,
+  retryDelayMs = OLLAMA_RETRY_DELAY_MS,
+  sleepImpl = waitMs,
+} = {}) {
+  const attempts = Math.max(1, Number.parseInt(String(retryAttempts), 10) || 1);
+  const delay = Math.max(0, Number(retryDelayMs) || 0);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const json = await requestManagedOllamaChat({
+        ollamaUrl: OLLAMA_URL,
+        managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+        messages,
+        think: false,
+        keepAlive: 300,
+        options: { num_predict: numPredict },
+        fetchImpl,
+        timeoutMs: OLLAMA_TIMEOUT_MS,
+      });
+      return String(json?.message?.content || json?.response || "").trim();
+    } catch (error) {
+      lastError = error;
+      if (!ollamaErrorRetryable(error) || attempt >= attempts) break;
+      await sleepImpl(delay * (2 ** (attempt - 1)));
+    }
   }
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || "").trim();
+
+  if (lastError && !/^ollama status \d+$/u.test(String(lastError.message || ""))) {
+    throw new Error(`Ollama fetch failed for whole-meeting-summary using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(lastError?.message || lastError)})`);
+  }
+  throw lastError || new Error("ollama request failed for whole-meeting-summary");
+}
+
+async function ask(messages, options = {}) {
+  return requestOllamaChat(messages, options);
 }
 
 function sectionContent(mdText, heading) {
@@ -683,6 +724,9 @@ function buildFinalSummaryPrompt({
     "- Include key decisions and outcomes where present.",
     "- If a point is proposal-only or uncertain, say it was discussed/considered rather than adopted.",
     "- When source summaries disagree about whether a motion or approval occurred, omit the outcome claim and describe the proposal, report, or discussion conservatively.",
+    "- Preserve financial claim type and certainty: distinguish direct savings from combined savings, revenue, efficiencies, and future cost avoidance.",
+    "- Attribute aggregate, projected, estimated, annualized, compounded, or disputed financial figures to the report or staff; do not present them as independently verified net reductions in City spending.",
+    "- If Council only received a report for information, do not imply that Council approved the report's financial result.",
     "- Preserve status and tense exactly: do not change cleared/completed/authorized into targeting/planned/pending, or change a proposal into a completed outcome.",
     "- When motion wording or its outcome is unclear, do not say an item was moved, seconded, carried, or defeated; report only the underlying topic.",
     "- Never add unanimous, approved, adopted, awarded, or authorized when the supplied sources do not agree on that exact outcome.",
@@ -744,6 +788,9 @@ function buildFinalScorePrompt({
     "- Penalize omission of every substantive topic from an entire supplied chunk, especially the final chunk.",
     "- Do not penalize omission of secondary details when at least one substantive topic from that chunk is accurately covered.",
     "- When supplied sources conflict on vote or approval status, reward conservative proposal/discussion wording and penalize a definite outcome claim.",
+    "- Penalize unqualified financial headlines or summaries that turn combined savings, revenue, efficiencies, or cost avoidance into direct or net savings.",
+    "- Penalize projected, estimated, annualized, compounded, or target amounts presented as realized or approved.",
+    "- Penalize financial results described as Council-approved when the source only says the report was received for information.",
     "- When a chunk reports debate or consideration without an explicit outcome, reward conservative wording such as debated, considered, unresolved, or under consideration.",
     "- Watch Next may mention an unresolved decision only when a supplied chunk explicitly describes the terms as debated or under consideration.",
     "- Penalize invented causal or funding links between separate agenda sections.",
@@ -1170,6 +1217,7 @@ async function synthesizeFinalMeetingSummary({
   let bestScore = -1;
   let bestReview = "";
   let bestDiagnostics = "";
+  let bestFinancialAudit = null;
 
   for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
     const draftRaw = await ask(
@@ -1195,6 +1243,12 @@ async function synthesizeFinalMeetingSummary({
     const coverageAudit = await auditFinalChunkCoverage({
       chunks: chunksArtifact?.chunks || [],
       summaryMd: draft,
+    });
+    const financialAudit = await auditFinancialClaim({
+      ask,
+      sourceText: numericGroundingSource,
+      candidateText: draft,
+      context: `Whole-meeting ${SUMMARY_TIME_MODE === "upcoming" ? "preview" : "recap"}; preserve financial category, certainty, attribution, and governing-body decision status.`,
     });
 
     const reviews = [];
@@ -1248,7 +1302,8 @@ async function synthesizeFinalMeetingSummary({
     const numericDefects = unsupportedNumericTokens(draft, numericGroundingSource);
     const numericPenalty = numericDefects.length ? 0.6 : 0;
     const coveragePenalty = coverageAudit.missing.length ? 1 : 0;
-    const score = Math.max(0, verifierScore - completenessPenalty - stylePenalty - temporalPenalty - bodyPenalty - numericPenalty - coveragePenalty);
+    const financialPenalty = financialAudit.verdict === "PASS" ? 0 : 0.7;
+    const score = Math.max(0, verifierScore - completenessPenalty - stylePenalty - temporalPenalty - bodyPenalty - numericPenalty - coveragePenalty - financialPenalty);
     const diagnostics = [
       `attempt=${i}`,
       `verifier=${verifierScore.toFixed(3)}`,
@@ -1258,6 +1313,7 @@ async function synthesizeFinalMeetingSummary({
       `body_penalty=${bodyPenalty.toFixed(3)}`,
       `numeric_penalty=${numericPenalty.toFixed(3)}`,
       `coverage_penalty=${coveragePenalty.toFixed(3)}`,
+      `financial_penalty=${financialPenalty.toFixed(3)}`,
       `missing_chunks=${coverageAudit.missing.join(",") || "(none)"}`,
       `score=${score.toFixed(3)}`,
     ].join(" ");
@@ -1267,6 +1323,7 @@ async function synthesizeFinalMeetingSummary({
       bestScore = score;
       bestReview = review;
       bestDiagnostics = diagnostics;
+      bestFinancialAudit = financialAudit;
     }
     feedback = [
       review,
@@ -1274,6 +1331,7 @@ async function synthesizeFinalMeetingSummary({
       bodyDefects.length ? `GOVERNING_BODY_RETRY: Use only "${bodyLabel}" as the acting body; remove: ${bodyDefects.join(", ")}.` : "",
       numericDefects.length ? `NUMERIC_GROUNDING_RETRY: Remove or correct numeric tokens absent from source: ${numericDefects.join(", ")}.` : "",
       coverageAudit.missing.length ? `CHUNK_COVERAGE_RETRY: Cover a substantive topic from each missing chunk: ${coverageAudit.missing.join(", ")}.` : "",
+      financialAudit.verdict !== "PASS" ? `FINANCIAL_CLAIM_RETRY: ${financialAudit.feedback}` : "",
     ].filter(Boolean).join("\n");
     if (score >= PASS_THRESHOLD) break;
   }
@@ -1291,6 +1349,9 @@ async function synthesizeFinalMeetingSummary({
   const bodyDefects = governingBodyDefects(bestText, bodyLabel, chunkSource);
   if (bodyDefects.length) {
     throw new Error(`meeting summary retryable: incorrect governing body attribution for "${bodyLabel}": ${bodyDefects.join(", ")}`);
+  }
+  if (containsFinancialClaimText(bestText) && (!bestFinancialAudit || bestFinancialAudit.verdict !== "PASS")) {
+    throw new Error(`meeting summary retryable: financial claim requires source-faithful qualification: ${bestFinancialAudit?.feedback || "audit unavailable"}`);
   }
   if (!bestText || bestScore < PASS_THRESHOLD) {
     throw new Error(`meeting summary retryable: Qwen synthesis score ${Number(bestScore || 0).toFixed(3)} below publish threshold ${PASS_THRESHOLD.toFixed(2)} diagnostics=${bestDiagnostics} feedback=${String(bestReview || "").replace(/\s+/gu, " ").trim()}`);

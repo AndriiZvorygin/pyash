@@ -11,8 +11,10 @@ import {
 } from "../../program/runtime/work/capacity.mjs";
 import { claimOldestWorkTask, enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { readWorkSchedulerHealth } from "../../program/runtime/work/health.mjs";
+import { readWorkSchedulerEvents } from "../../program/runtime/work/history.mjs";
 import { readWorkTaskStatus, transitionWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import { inspectWorkBackground, probeExternalEvidenceTask, runWorkBackgroundContinuous, runWorkBackgroundOnce } from "../../program/runtime/work/runner.mjs";
+import { currentTimeoutPolicy } from "../../program/runtime/work/timeout_policy.mjs";
 
 async function makeWorldRoot(prefix) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -181,6 +183,44 @@ test("background one-shot records admission and scheduler health", async () => {
   assert.equal(health["capacity state"], "available");
   assert.equal(health["last decision"], "weekly pacing headroom");
   assert.deepEqual(events.map((event) => event.type), ["capacity"]);
+});
+
+test("turn reconciliation is observable and durable without starting a model turn", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-turn-history-");
+  const events = [];
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => ({ state: "unknown", weekly: { identified: false, state: "unknown" } }),
+    turnReconciliation: async () => [{
+      taskId: "stale-task",
+      classification: "STALE",
+      role: "worker",
+      threadId: "old-thread",
+      turnId: "old-turn",
+      remoteState: "idle",
+      remoteTurnState: "interrupted",
+      localOwnerAlive: false,
+      appServerAlive: false,
+      safeToResume: true,
+      worktreeState: "evidence captured",
+      reason: "no live writer evidence remains"
+    }],
+    onEvent: async (event) => events.push(event),
+    now: "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(result.admitted, false);
+  assert.equal(events[0].type, "turn-reconciled");
+  assert.equal(events[0].classification, "STALE");
+  const history = await readWorkSchedulerEvents(worldRoot);
+  const reconciliation = history.find((event) => event.action === "turn-reconciled");
+  assert.equal(reconciliation.taskId, "stale-task");
+  assert.equal(reconciliation.classification, "STALE");
+  assert.equal(reconciliation.threadId, "old-thread");
+  assert.equal(reconciliation.remoteTurnState, "interrupted");
+  assert.equal(reconciliation.safeToResume, "true");
+  assert.equal(reconciliation.worktreeState, "evidence captured");
 });
 
 test("a valid weekly sample is retained for diagnosis but never used after telemetry fails", async () => {
@@ -453,6 +493,189 @@ test("exhausted technical continuation does not starve a runnable candidate", as
   assert.equal(health["work-started wakes"], "1");
 });
 
+test("temporarily unavailable active work does not suppress same-wake candidate materialization", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-supply-fallback-");
+  const repositoryRoot = path.join(path.dirname(worldRoot), "repo");
+  await fs.mkdir(path.join(repositoryRoot, "documentation"), { recursive: true });
+  await fs.writeFile(
+    path.join(repositoryRoot, "documentation", "todo.md"),
+    "Introduce result tracking with per-command IDs instead of generic result.\n"
+  );
+  await enqueueWorkTask(worldRoot, {
+    ...task("active-but-unavailable", 200),
+    status: "ready",
+    workSpec: { granularity: "substantial" }
+  });
+  const active = await readWorkTaskStatus(worldRoot, "active-but-unavailable");
+  await writeWorkTaskStatus(worldRoot, { ...active, status: "implementing" });
+  const probes = [];
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    repositoryRoot,
+    curate: true,
+    policy: { enabled: true },
+    capacitySource: async () => ({
+      state: "available",
+      remainingPercent: 100,
+      usedPercent: 0,
+      weekly: {
+        identified: true,
+        state: "available",
+        remainingPercent: 100,
+        usedPercent: 0,
+        windowStartAt: "2026-08-17T12:00:00.000Z",
+        resetAt: "2026-08-24T12:00:00.000Z"
+      }
+    }),
+    candidateAvailability: async ({ task: candidate }) => {
+      probes.push(candidate.taskId);
+      return candidate.taskId === "active-but-unavailable"
+        ? { available: false, reason: "active-writer" }
+        : { available: true };
+    },
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "accepted", workStarted: true }),
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "roadmap-command-result-identity");
+  assert.deepEqual(result.curation.created, ["roadmap-command-result-identity"]);
+  assert.equal(result.temporarilySkipped[0].taskId, "active-but-unavailable");
+  assert.deepEqual(probes.slice(-2), ["active-but-unavailable", "roadmap-command-result-identity"]);
+});
+
+test("an active-writer candidate is skipped in the same wake for the next runnable task", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-active-writer-fallback-");
+  await enqueueWorkTask(worldRoot, task("high-active-writer", 200));
+  await enqueueWorkTask(worldRoot, task("low-runnable", 100));
+  const probes = [];
+  const started = [];
+  const capacitySource = async () => ({
+    state: "available",
+    remainingPercent: 100,
+    usedPercent: 0,
+    weekly: {
+      identified: true,
+      state: "available",
+      remainingPercent: 100,
+      usedPercent: 0,
+      windowStartAt: "2026-08-17T12:00:00.000Z",
+      resetAt: "2026-08-24T12:00:00.000Z"
+    }
+  });
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource,
+    candidateAvailability: async ({ task: candidate }) => {
+      probes.push(candidate.taskId);
+      return candidate.taskId === "high-active-writer"
+        ? { available: false, reason: "active-writer", error: "thread already has an active writer" }
+        : { available: true, reason: "role thread available" };
+    },
+    supervisor: async ({ taskId }) => {
+      started.push(taskId);
+      return { claimed: true, taskId, status: "implementing", workStarted: true };
+    },
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "low-runnable");
+  assert.deepEqual(probes, ["high-active-writer", "low-runnable"]);
+  assert.deepEqual(started, ["low-runnable"]);
+  assert.deepEqual(result.temporarilySkipped.map((entry) => entry.taskId), ["high-active-writer"]);
+  const high = await readWorkTaskStatus(worldRoot, "high-active-writer");
+  assert.equal(high.status, "ready");
+  assert.equal(high.checkpoint.recoveryCount, 0);
+  assert.equal(high.checkpoint.implementation.noProgressPasses, 0);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["technical continuation unavailable wakes"] || "0", "0");
+  assert.equal(health["temporarily skipped candidates"], "1");
+  assert.equal(health["work-started wakes"], "1");
+});
+
+test("temporary candidate skips do not consume a model turn when no executable candidate remains", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-active-writer-only-");
+  await enqueueWorkTask(worldRoot, task("high-active-writer", 200));
+  let supervisorCalls = 0;
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource: async () => ({
+      state: "available",
+      remainingPercent: 100,
+      usedPercent: 0,
+      weekly: {
+        identified: true,
+        state: "available",
+        remainingPercent: 100,
+        usedPercent: 0,
+        windowStartAt: "2026-08-17T12:00:00.000Z",
+        resetAt: "2026-08-24T12:00:00.000Z"
+      }
+    }),
+    candidateAvailability: async () => ({ available: false, reason: "active-writer" }),
+    supervisor: async () => {
+      supervisorCalls += 1;
+      return { claimed: true, taskId: "high-active-writer", status: "implementing", workStarted: true };
+    },
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, false);
+  assert.equal(result.reason, "technical continuation unavailable");
+  assert.equal(supervisorCalls, 0);
+  const taskState = await readWorkTaskStatus(worldRoot, "high-active-writer");
+  assert.equal(taskState.status, "ready");
+  assert.equal(taskState.checkpoint.recoveryCount, 0);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["technical continuation unavailable wakes"], "1");
+  assert.equal(health["work-started wakes"] || "0", "0");
+});
+
+test("an active-writer skip leaves priority intact for the next wake", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-active-writer-returns-");
+  await enqueueWorkTask(worldRoot, task("high-active-writer", 200));
+  await enqueueWorkTask(worldRoot, task("low-runnable", 100));
+  let writerAvailable = false;
+  const capacitySource = async () => ({
+    state: "available",
+    remainingPercent: 100,
+    usedPercent: 0,
+    weekly: {
+      identified: true,
+      state: "available",
+      remainingPercent: 100,
+      usedPercent: 0,
+      windowStartAt: "2026-08-17T12:00:00.000Z",
+      resetAt: "2026-08-24T12:00:00.000Z"
+    }
+  });
+  const run = () => runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true },
+    capacitySource,
+    candidateAvailability: async ({ task: candidate }) => candidate.taskId === "high-active-writer"
+      ? { available: writerAvailable, reason: writerAvailable ? "role thread available" : "active-writer" }
+      : { available: true },
+    supervisor: async ({ taskId }) => {
+      if (taskId === "low-runnable") {
+        const current = await readWorkTaskStatus(worldRoot, taskId);
+        await writeWorkTaskStatus(worldRoot, { ...current, status: "accepted" });
+      }
+      return { claimed: true, taskId, status: "accepted", workStarted: true };
+    },
+    now: "2026-08-18T12:00:00.000Z"
+  });
+  const first = await run();
+  assert.equal(first.selected, "low-runnable");
+  writerAvailable = true;
+  const second = await run();
+  assert.equal(second.selected, "high-active-writer");
+});
+
 test("a healthy external dependency resumes its parked task without replanning", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-external-probe-");
   await enqueueWorkTask(worldRoot, task("roadmap-translation-parity-tranche", 130));
@@ -533,4 +756,60 @@ test("search evidence probes the JSON search contract rather than the healthy la
   assert.equal(result.checks[0].name, "web search");
   assert.match(result.checks[0].endpoint, /\/search\?q=pyash&format=json&count=1/u);
   assert.equal(urls.length, 1);
+});
+
+test("healthy preflight admits one bounded revalidation of an exhausted legacy timeout", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-policy-runner-");
+  await enqueueWorkTask(worldRoot, {
+    ...task("roadmap-legacy-timeout-runner", 140),
+    workSpec: { granularity: "substantial" }
+  });
+  const queued = await readWorkTaskStatus(worldRoot, "roadmap-legacy-timeout-runner");
+  await writeWorkTaskStatus(worldRoot, {
+    ...queued,
+    status: "blocked",
+    message: "turn timeout",
+    error: "turn timeout",
+    checkpoint: {
+      ...queued.checkpoint,
+      blocker: "turn timeout",
+      recoveryCount: 2,
+      workspace: { ...queued.checkpoint.workspace, worktreePath: "/tmp/roadmap-legacy-timeout-runner" },
+      activeTurn: { phase: "implementation", role: "worker", state: "ambiguous", startedAt: "2026-08-10T00:00:00.000Z" },
+      interruption: { workspaceEvidence: { changedFiles: ["src/example.mjs"] } }
+    }
+  });
+  let supervisorCalls = 0;
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: {
+      enabled: true,
+      timeoutPolicy: currentTimeoutPolicy({ inactivityTimeoutMs: 900000, hardTimeoutMs: 1800000 })
+    },
+    capacitySource: async () => ({
+      state: "available",
+      weekly: {
+        identified: true,
+        usedPercent: 10,
+        remainingPercent: 90,
+        windowStartAt: "2026-08-10T00:00:00.000Z",
+        resetAt: "2026-08-17T00:00:00.000Z"
+      }
+    }),
+    executionPreflight: async () => ({ ok: true, status: "ready", check: "fake preflight" }),
+    supervisor: async ({ taskId }) => {
+      supervisorCalls += 1;
+      return { claimed: true, taskId, status: "reviewing", workStarted: true };
+    },
+    now: "2026-08-12T12:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "roadmap-legacy-timeout-runner");
+  assert.equal(result.policyRevalidation.migrationId, "fixed-wall-v1-to-activity-aware-v1");
+  assert.equal(result.policyRevalidation.task.status, "ready");
+  assert.equal(result.workStarted, true);
+  assert.equal(supervisorCalls, 1);
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["useful wakes"], "1");
 });

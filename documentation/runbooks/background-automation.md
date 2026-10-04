@@ -97,6 +97,17 @@ The hourly runner skips baseline synchronization while a substantial task is alr
 
 The daily digest includes a compact roadmap section showing active work, the next queued packages, later candidates, and decisions requiring human input.
 
+## Codex role topology
+
+The default execution path uses Sol-high for architecture and planning, Luna-xhigh
+for implementation and testing, and a separate Luna-xhigh thread for routine
+verification. Routine review returns `ACCEPT`, `REVISE`, or `ESCALATE`; only the
+last outcome invokes the Sol-high escalation reviewer. The reviewer never shares
+the implementer's conversational thread, even though both are Luna roles. The
+role models and reasoning levels can be overridden privately with
+`PYA_CODEX_PLANNER_*`, `PYA_CODEX_IMPLEMENTER_*`,
+`PYA_CODEX_REVIEWER_*`, and `PYA_CODEX_ESCALATION_REVIEWER_*` settings.
+
 ## Codex execution preflight
 
 Before a background task is claimed, Pyash checks the selected repository/worktree, writable access, Git, Node, Codex App Server initialization, and the configured thread sandbox. The supervisor repeats the check against the task worktree before opening manager or worker turns. A failed check is recorded as an infrastructure deferral in scheduler health and newspaper history; it does not make a roadmap task defective or claim the next task.
@@ -111,9 +122,17 @@ The normal `workspace-write`/`workspaceWrite` mode currently cannot execute shel
 
 Set `PYA_BACKGROUND_EXECUTION_BLOCKED=truth` to keep hourly implementation wakes globally deferred while preserving daily digest operation. Remove that gate only after the smoke passes.
 
-Long-running manager or worker turns can use a larger bounded client timeout through
-`PYA_CODEX_TURN_TIMEOUT_MS`. The deployed host uses `900000` (15 minutes); this changes only how
-long Pyash waits for a turn and does not remove the worktree or task-scope controls.
+Long-running manager or worker turns use bounded progress-aware timeouts. The deployed host keeps
+`PYA_CODEX_TURN_INACTIVITY_TIMEOUT_MS=900000` (15 minutes without meaningful App Server activity)
+and `PYA_CODEX_TURN_HARD_TIMEOUT_MS=1800000` (30 minutes maximum). The legacy
+`PYA_CODEX_TURN_TIMEOUT_MS=900000` remains the fallback inactivity value. These settings change only
+how long Pyash waits for a turn and do not remove the worktree or task-scope controls. A timeout
+records partial App Server output and a fresh worktree evidence snapshot; known remote turn IDs
+remain ambiguous and are not replayed automatically.
+
+The daily digest has an independent lock and durable health artifact. A digest generation failure is
+recorded as generation health, while a mail submission failure is recorded as delivery health. Neither
+failure changes the state of a roadmap task or prevents the hourly worker from running.
 
 ## Verify and disable
 

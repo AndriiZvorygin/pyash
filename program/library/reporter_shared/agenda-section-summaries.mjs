@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requestManagedOllamaChat } from "../../runtime/gpu/managed-ollama.mjs";
 
 // LEGACY MODULE: JSON-era agenda summarizer kept for backward compatibility.
 // Canonical pipeline uses Stage 1/2/3 .pya artifacts via:
@@ -12,7 +13,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const OLLAMA_URL = process.env.OLLAMA_HOST?.replace(/\/$/u, '')
   ? `${process.env.OLLAMA_HOST.replace(/\/$/u, '')}/api/chat`
   : 'http://mriczo:11434/api/chat';
-const MODEL = 'qwen3.5:9b';
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_PASS_THRESHOLD || process.env.MEETING_SUMMARY_PASS_THRESHOLD || process.env.OWEN_SUMMARY_PASS_THRESHOLD || 0.65);
@@ -563,23 +563,15 @@ function abridgeUtf8(text, maxBytes) {
 }
 
 async function ask(messages, { numPredict = 280 } = {}) {
-  const body = {
-    model: MODEL,
-    mode: 'chat',
-    keep_alive: 300,
-    think: false,
-    stream: false,
+  const json = await requestManagedOllamaChat({
+    ollamaUrl: OLLAMA_URL,
+    managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+    messages,
     options: { num_predict: numPredict },
-    messages
-  };
-  const res = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body)
+    think: false,
+    keepAlive: 300,
   });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || '').trim();
+  return String(json?.message?.content || json?.response || '').trim();
 }
 
 function buildShortSummaryPrompt({ heading, source, focus, feedback, rosterText }) {

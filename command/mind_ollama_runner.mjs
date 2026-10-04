@@ -4,8 +4,9 @@ import crypto from "node:crypto";
 import dns from "node:dns";
 import { spawn, spawnSync } from "node:child_process";
 import { attachImagesToMessages } from "./ollama_image_payload.mjs";
-import { enqueueInputEnvelope } from "../program/runtime/gpu/queue.mjs";
+import { enqueueInputEnvelope, queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus, writeGpuHandleStatus, isTerminalHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
+import { resolveGpuQueueWaitTimeoutMs } from "../program/runtime/gpu/worker.mjs";
 
 function requestTimeoutMs() {
   const raw = Number(process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS);
@@ -39,10 +40,12 @@ function truthyEnv(value) {
   return ["truth", "true", "yes", "1", "on"].includes(String(value ?? "").trim().toLowerCase());
 }
 
-function gpuMindTimeoutMs() {
-  const raw = Number(process.env.PYA_GPU_MIND_TIMEOUT_MS || process.env.PYA_COMMAND_TIMEOUT_MS);
-  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
-  return 900000;
+function gpuMindTimeoutMs(pendingQueueDepth = 1) {
+  return resolveGpuQueueWaitTimeoutMs({
+    queueDepth: pendingQueueDepth,
+    baseTimeoutMs: Number(process.env.PYA_COMMAND_TIMEOUT_MS) || 900000,
+    explicitTimeoutMs: process.env.PYA_GPU_MIND_TIMEOUT_MS
+  });
 }
 
 function resolveGpuWorldRoot(payload) {
@@ -92,8 +95,8 @@ async function delay(ms) {
   await new Promise((resolve) => setTimeout(resolve, Math.max(1, ms)));
 }
 
-async function waitForGpuMindResult(worldRoot, handleId) {
-  const deadline = Date.now() + gpuMindTimeoutMs();
+async function waitForGpuMindResult(worldRoot, handleId, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
     const status = await readGpuHandleStatus(worldRoot, handleId);
     if (status && isTerminalHandleStatus(status.status)) {
@@ -151,7 +154,8 @@ async function runQueuedGpuMind(payload) {
     }
   });
 
-  return waitForGpuMindResult(worldRoot, handleId);
+  const depth = await queueDepth(worldRoot);
+  return waitForGpuMindResult(worldRoot, handleId, gpuMindTimeoutMs(depth.total));
 }
 
 async function resolveIpv4Endpoint(endpoint) {

@@ -88,6 +88,47 @@ async function makeClient(options) {
   return client;
 }
 
+function makeTimedTurnClient({ activityMs = 0, completeMs = 0 } = {}) {
+  const notifications = new Set();
+  const timers = [];
+  const emit = (method, params) => {
+    for (const listener of notifications) listener(method, params, {});
+  };
+  return {
+    async request(method) {
+      if (method !== "turn/start") return {};
+      const turnId = "timed-turn";
+      if (activityMs > 0) {
+        timers.push(setInterval(() => emit("item/agentMessage/delta", {
+          threadId: "thread-1",
+          turnId,
+          delta: "."
+        }), activityMs));
+      }
+      if (completeMs > 0) {
+        timers.push(setTimeout(() => emit("turn/completed", {
+          threadId: "thread-1",
+          turn: { id: turnId, status: "completed" }
+        }), completeMs));
+      }
+      return { turn: { id: turnId, status: "inProgress" } };
+    },
+    onNotification(listener) {
+      notifications.add(listener);
+      return () => notifications.delete(listener);
+    },
+    onError() {
+      return () => {};
+    },
+    async close() {
+      for (const timer of timers) {
+        clearInterval(timer);
+        clearTimeout(timer);
+      }
+    }
+  };
+}
+
 test("app server adapter initializes, resumes, streams output, and captures diffs", async () => {
   const client = await makeClient();
   const started = await client.request("thread/start", { cwd: "/tmp/work" });
@@ -118,6 +159,69 @@ test("app server adapter surfaces server errors, malformed events, and process e
       runCodexTurn(client, { threadId: started.thread.id, input: "work" }),
       (err) => err instanceof CodexAppServerError
     );
+    await client.close();
+  }
+});
+
+test("active App Server events prevent an inactivity timeout", async () => {
+  const client = makeTimedTurnClient({ activityMs: 8, completeMs: 55 });
+  try {
+    const turn = await runCodexTurn(client, {
+      threadId: "thread-1",
+      input: "work",
+      inactivityTimeoutMs: 20,
+      hardTimeoutMs: 150
+    });
+    assert.equal(turn.status, "completed");
+    assert.ok(turn.activity.meaningfulEventCount >= 3);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a silent turn reaches the bounded inactivity timeout", async () => {
+  const client = makeTimedTurnClient();
+  try {
+    await assert.rejects(
+      runCodexTurn(client, {
+        threadId: "thread-1",
+        input: "work",
+        inactivityTimeoutMs: 25,
+        hardTimeoutMs: 200
+      }),
+      (error) => {
+        assert.equal(error.kind, "timeout");
+        assert.equal(error.details.timeoutType, "inactivity");
+        assert.equal(error.details.timeoutMs, 25);
+        assert.equal(error.details.hardTimeoutMs, 200);
+        return true;
+      }
+    );
+  } finally {
+    await client.close();
+  }
+});
+
+test("a productive turn still obeys its larger hard maximum", async () => {
+  const client = makeTimedTurnClient({ activityMs: 5 });
+  try {
+    await assert.rejects(
+      runCodexTurn(client, {
+        threadId: "thread-1",
+        input: "work",
+        inactivityTimeoutMs: 1000,
+        hardTimeoutMs: 35
+      }),
+      (error) => {
+        assert.equal(error.kind, "timeout");
+        assert.equal(error.details.timeoutType, "hard");
+        assert.equal(error.details.timeoutMs, 35);
+        assert.equal(error.details.hardTimeoutMs, 35);
+        assert.ok(error.details.meaningfulEventCount > 0);
+        return true;
+      }
+    );
+  } finally {
     await client.close();
   }
 });

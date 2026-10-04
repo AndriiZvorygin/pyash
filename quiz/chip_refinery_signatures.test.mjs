@@ -27,7 +27,7 @@ test("chip refinery module registers text and filename chip signatures", async (
 test("chip refinery module keeps adaptive staged flow", async () => {
   const text = await fs.readFile("module/chip_refinery.pya", "utf8");
   assert.match(text, /exists su name chip llm boundary prompt ob text quoted\.text\.You inspect one gross chip and return one exact boundary marker quote for where the next wise chip should begin\./);
-  assert.match(text, /exists su name chip boundary proposer be mind via state "qwen3\.5:9b" fromtext name chip llm boundary prompt ya/);
+  assert.match(text, /exists su name chip boundary proposer be mind via state "hf\.co\/empero-ai\/Qwen3\.8-9B-Distill-GGUF:Q4_K_M" fromtext name chip llm boundary prompt ya/);
   assert.match(text, /CHIP_STYLE_PROMPT/);
   assert.match(text, /ob name text chip llm boundary request for name chip boundary proposer to name text output be write do/);
   assert.match(text, /su name chip mixed boundary ob text gross chip to name text output be ceremony def/);

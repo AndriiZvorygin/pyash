@@ -3,6 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readPyaTextValues } from './pya_lookup.mjs';
+import {
+  auditFinancialClaim,
+  containsFinancialClaimText,
+} from '../program/library/reporter_shared/financial-claim-audit.mjs';
+import { requestManagedOllamaChat } from '../program/runtime/gpu/managed-ollama.mjs';
+import { resolveTextModel } from '../program/runtime/gpu/text-model.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
 function resolveOllamaHost() {
@@ -16,7 +22,7 @@ function resolveOllamaHost() {
 }
 const OLLAMA_URL = `${resolveOllamaHost()}/api/chat`;
 const RESOLVED_OLLAMA_HOST = OLLAMA_URL.replace(/\/api\/chat$/u, "");
-const MODEL = process.env.OWEN_HOOK_MODEL || process.env.OWEN_SUMMARY_MODEL || 'qwen3.5:9b';
+const MODEL = resolveTextModel(process.env.OWEN_HOOK_MODEL || process.env.OWEN_SUMMARY_MODEL || "");
 const MAX_ATTEMPTS = 8;
 const PASS_THRESHOLD = 0.8;
 // eScribe report identifiers are metadata, not human-facing news hooks. Keep
@@ -445,6 +451,13 @@ function isKeywordHookReady(hook = "", sourceSummary = "", hookMode = "recap") {
   return hasConcreteKeywordOverlap(hook, sourceSummary);
 }
 
+function hookTerminalDateFeedback(hook = "") {
+  if (/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|20\d{2})$/iu.test(String(hook || "").trim())) {
+    return "Hook ends with a date, year, or month; remove the date wording and keep the concrete topic terms. The hook must not end with a calendar term.";
+  }
+  return "";
+}
+
 function isProseHookLike(text = "") {
   const s = String(text || "").replace(/\s+/gu, " ").trim();
   if (!s) return true;
@@ -846,13 +859,18 @@ function buildHookPrompt({ sourceSummary, focus, jurisdiction, body, feedback, h
 	    '- 4 to 6 words only.',
 	    '- Title case.',
 	    '- Lead with the most newsworthy or surprising concrete development.',
+	    '- Describe one coherent development from SOURCE_SUMMARY; never concatenate unrelated agenda items (for example an election topic plus a zoning approval) into one hook.',
 	    '- Use keyword-style noun phrases, like YouTube chapter headings, not sentence/prose wording.',
 	    '- Include concrete source keywords: project type, street/location, dollar amount, policy, service, or affected thing.',
 	    '- If using dollar amounts, write them as words or digits without punctuation.',
 	    '- Never use a bare amount by itself; pair it with the exact source noun, such as Film Series Revenue or Studio Class Earnings.',
+	    '- If a source combines savings with revenue, efficiencies, soft savings, or future cost avoidance, qualify the hook with wording such as Report Cites or Combined Benefits; do not present the total as direct or net savings.',
+	    '- If an amount is projected, estimated, annualized, compounded, or a target, preserve that uncertainty and do not call it realized savings.',
+	    '- If Council only received a report for information, do not imply that Council approved the report\'s financial claim.',
 	    '- Prefer strong, high-signal wording over generic committee language.',
 	    '- Concrete and specific, not clickbait.',
 	    '- Faithful to SOURCE_SUMMARY only.',
+	    '- Never use a date, year, or month in the hook; if a source sentence contains an implementation date, omit that date rather than ending the hook with it.',
     ...(isPreview
       ? ['- Prospective language only; this is an upcoming agenda.', '- Do not use completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Prefer considers/reviews/discusses/hears/receives/debates.']
       : []),
@@ -901,7 +919,11 @@ function buildScorePrompt({ sourceSummary, hook, jurisdiction, body, hookMode })
     '- Fail hooks that invent a causal relationship between separate developments, including wording that one item blocked, funded, enabled, or caused another.',
     '- Treat equivalent number words and digits as the same amount (for example "Five Hundred Thousand" equals "$500,000"); do not claim digits are missing when the amount is written in words.',
     '- Do not require currency symbols or comma-formatted numbers; hooks are punctuation-free keyword titles.',
-    '- Penalize action verbs that overstate status (adopted/approved/passed) unless SOURCE_SUMMARY explicitly supports that action for the same subject.',
+	    '- Penalize action verbs that overstate status (adopted/approved/passed) unless SOURCE_SUMMARY explicitly supports that action for the same subject.',
+	    '- For aggregate financial claims that combine savings, revenue, efficiencies, or cost avoidance, fail unqualified wording such as "X Million Savings"; require attribution and a category qualifier such as "Report Cites Combined Benefits".',
+	    '- For projected, estimated, annualized, compounded, or target amounts, fail wording that presents the amount as realized or approved.',
+	    '- If Council merely received a report for information, fail wording that implies Council approved the report\'s financial result.',
+	    '- Fail hooks that combine separate agenda developments into a misleading compound phrase; select one concrete subject and outcome or status.',
 	    '- Penalize polarity flips: if SOURCE_SUMMARY says access barriers/denials/lack of access, do not reward positive-service wording (serves/expands/enables) unless explicit approved expansion evidence exists.',
     ...(isPreview
       ? ['- For preview mode, fail completed outcome verbs (adopts/approves/passes/defeats/confirms/carries).', '- Reward prospective framing (considers/reviews/discusses/hears/receives/debates).']
@@ -979,28 +1001,21 @@ async function generateYouTubeStyleHookFromSource({ sourceSummary = "" }) {
 }
 
 async function ask(messages, { numPredict = 120 } = {}) {
-  const body = {
-    model: MODEL,
-    mode: 'chat',
-    stream: false,
-    think: false,
-    keep_alive: 300,
-    options: { temperature: 0.15, num_predict: numPredict },
-    messages,
-  };
-  let res;
   try {
-    res = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+    const json = await requestManagedOllamaChat({
+      model: MODEL,
+      ollamaUrl: OLLAMA_URL,
+      managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || '',
+      messages,
+      options: { temperature: 0.15, num_predict: numPredict },
+      think: false,
+      keepAlive: 300,
+      timeoutMs: Math.max(30_000, Number.parseInt(String(process.env.MEETING_HOOK_OLLAMA_TIMEOUT_MS || '300000'), 10) || 300000),
     });
+    return String(json?.message?.content || json?.response || '').trim();
   } catch (err) {
-    throw new Error(`Ollama fetch failed for meeting-hook using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST} endpoint=${OLLAMA_URL}; check reachability to mriczo:11434 (${String(err?.message || err)})`);
+    throw new Error(`Ollama managed request failed for meeting-hook using OLLAMA_HOST=${RESOLVED_OLLAMA_HOST}: ${String(err?.message || err)}`);
   }
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || '').trim();
 }
 
 async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings, focus, jurisdiction, body, hookMode }) {
@@ -1008,12 +1023,21 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
     const ytStyle = await generateYouTubeStyleHookFromSource({ sourceSummary });
     if (ytStyle && isKeywordHookReady(ytStyle, sourceSummary, hookMode)) {
       const cleaned = sanitizeChapterStyleHook(ytStyle, { jurisdiction, body });
-      return {
-        hook: cleaned,
-        score: 1,
-        verifier_feedback: "Hook sourced from YouTube chapter-style prompt on current section.",
-        fallback_used: false,
-      };
+      const financialAudit = await auditFinancialClaim({
+        ask,
+        sourceText: verifierSourceText || sourceSummary,
+        candidateText: cleaned,
+        context: "Upcoming agenda preview hook; do not present a projected or reported financial amount as an approved or realized saving.",
+      });
+      if (financialAudit.verdict === "PASS") {
+        return {
+          hook: cleaned,
+          score: 1,
+          verifier_feedback: "Hook sourced from YouTube chapter-style prompt on current section.",
+          financial_audit: financialAudit,
+          fallback_used: false,
+        };
+      }
     }
   }
   const verifierSource = String(verifierSourceText || sourceSummary || '');
@@ -1024,6 +1048,7 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
   let bestHook = '';
   let bestScore = -1;
   let bestReview = '';
+  let bestFinancialAudit = null;
 
   for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
     const draftRaw = await ask([
@@ -1038,6 +1063,7 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
 
 	    let review = '';
 	    let score = 0;
+	    let candidateFinancialAudit = null;
 	    if (hookMode === 'preview' && containsPreviewBannedVerb(draft)) {
 	      review = 'Hook uses completed-outcome verbs disallowed for upcoming agenda previews.\n0';
 	      score = 0;
@@ -1062,9 +1088,29 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
 	    } else if (hookDecisionClaimUnsupported(draft, verifierSource)) {
 	      review = 'Hook uses an unsupported decision verb (adopted/approved/passed) for the same subject.\n0';
 	      score = 0;
-    } else if (hookSourcePolarityUnsupported(draft, verifierSource)) {
+	    } else if (hookSourcePolarityUnsupported(draft, verifierSource)) {
       review = 'Hook flips source polarity (barrier/denial context recast as positive service expansion).\n0';
       score = 0;
+	    } else if (hookTerminalDateFeedback(draft)) {
+      review = `${hookTerminalDateFeedback(draft)}\n0`;
+      score = 0;
+    } else if (containsFinancialClaimText(draft)) {
+      candidateFinancialAudit = await auditFinancialClaim({
+        ask,
+        sourceText: verifierSource,
+        candidateText: draft,
+        context: `Post-meeting ${hookMode} hook; preserve whether the amount is direct, combined, projected, or merely reported, and preserve the meeting body's decision status.`,
+      });
+      if (candidateFinancialAudit.verdict !== "PASS") {
+        review = `Financial claim requires source-faithful qualification: ${candidateFinancialAudit.feedback}\n0`;
+        score = 0;
+      } else {
+        review = await ask([
+          { role: 'system', content: 'You are a strict semantic verifier.' },
+          { role: 'user', content: buildScorePrompt({ sourceSummary, hook: draft, jurisdiction, body, hookMode }) },
+        ], { numPredict: 180 });
+        score = parseScore(review);
+      }
     } else {
       review = await ask([
         { role: 'system', content: 'You are a strict semantic verifier.' },
@@ -1076,6 +1122,7 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
       bestHook = draft;
       bestScore = score;
       bestReview = review;
+      bestFinancialAudit = candidateFinancialAudit;
     }
     feedback = review;
     if (score >= PASS_THRESHOLD && isKeywordHookReady(draft, sourceSummary, hookMode)) break;
@@ -1097,6 +1144,7 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
     hook: safeHook,
     score: Number(Math.max(0, bestScore).toFixed(3)),
     verifier_feedback: bestReview,
+    financial_audit: bestFinancialAudit,
     fallback_used: false,
   };
 }
@@ -1191,6 +1239,7 @@ async function main() {
     score: out.score,
     fallback_used: Boolean(out.fallback_used),
     verifier_feedback: out.verifier_feedback,
+    financial_audit: out.financial_audit || null,
   }, null, 2), 'utf8');
 
   process.stdout.write(`[meeting-hook] score: ${out.score.toFixed(3)}\n`);
@@ -1205,6 +1254,7 @@ export {
   hasAgendaReportCode,
   hookDecisionClaimUnsupported,
   hookSourcePolarityUnsupported,
+  hookTerminalDateFeedback,
   isClippedContrastHook,
   isKeywordHookReady,
   stripAgendaReportCodes,

@@ -80,6 +80,7 @@ suffix: no severed body parts. no extra limbs. no bad eyes. irises visible..text
 prah
 exists su name provider auto discharge ob bool lie be default ya
 exists su name gpu exclusive classes ob ve text "mind" "draw" "hear" "qwen say" be default ya
+exists su name gpu housekeeper url ob text "http://localhost:8090" be default ya
 exists su name provider auto discharge settle ms ob num 3000 be default ya
 exists su name newspaper enabled ob bool truth be default ya
 exists su name stream stdout ob bool lie be default ya
@@ -136,10 +137,10 @@ su name sandbox configure be map def
 prah
 exists su name mind be mind from name http://localhost:11434 via state "qwen3.5:9b" ya
 exists su name verify brief prompter ob text "Verify TASK, ANSWER, and FLOW TRANSCRIPT. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya
-exists su name verify mind brief be mind as name "bespoke-minicheck:latest" fromtext name verify brief prompter ya
+exists su name verify mind brief be mind as name "qwen3.5:9b" fromtext name verify brief prompter ya
 exists su name review brief prompter ob text "Review TASK, ANSWER, and FLOW TRANSCRIPT. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya
 exists su name review long prompter ob text "Review TASK, ANSWER, and FLOW TRANSCRIPT for factual support and contradictions. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya
-exists su name review mind brief be mind as name "bespoke-minicheck:latest" fromtext name review brief prompter ya
-exists su name review mind long be mind as name "tensortemplar/patronus-lynx:8b-instruct-q4_K_M" fromtext name review long prompter ya
+exists su name review mind brief be mind as name "qwen3.5:9b" fromtext name review brief prompter ya
+exists su name review mind long be mind as name "qwen3.5:9b" fromtext name review long prompter ya
 exists su hear be default ob name whisper command hear ya
 exists su name qwen say clip verify enabled ob bool truth be default ya

@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { pyaFileToJson } from "../../library/pya_to_json.mjs";
 import { listWorkTasks } from "./operator.mjs";
+import { isStaleTurnResumable } from "./checkpoint.mjs";
 import { resolveWorkRoleConfig } from "./supervisor.mjs";
 import {
   resumeCodexThread,
@@ -555,6 +556,24 @@ function progressForTask(task) {
   if (task.status === "accepted") return `accepted; Sol review ${text(checkpoint.review?.decision) || "complete"}`;
   if (task.status === "blocked" || task.status === "failed") {
     const reason = text(checkpoint.blocker || task.message || task.error) || task.status;
+    const liveness = text(checkpoint.turnReconciliation?.classification).toUpperCase();
+    const staleResumable = isStaleTurnResumable(checkpoint);
+    const hasCurrentIntegrationState = Boolean(text(checkpoint.integration?.status));
+    if (liveness === "STALE" && !staleResumable) {
+      return `stale Codex ownership: ${text(checkpoint.turnReconciliation?.reason) || "no live writer evidence remains"}`;
+    }
+    if (liveness === "STALE" && staleResumable && !hasCurrentIntegrationState) {
+      return "stale writer reconciled; safe continuation available";
+    }
+    if (liveness === "LIVE") {
+      return `writer live: ${text(checkpoint.turnReconciliation?.reason) || "recent liveness evidence remains"}`;
+    }
+    if (liveness === "AMBIGUOUS") {
+      return `writer liveness ambiguous: ${text(checkpoint.turnReconciliation?.reason) || "evidence is incomplete"}`;
+    }
+    if (liveness === "COMPLETED_UNRECONCILED") {
+      return "completed Codex outcome awaiting state reconciliation";
+    }
     const classification = isAwaitingExternalEvidence(task)
       ? "awaiting external evidence"
       : isRetryableWorkBlock(task)
@@ -1130,30 +1149,30 @@ export async function refreshAutonomousRoadmap({
   if (ifNeeded && !roadmapNeedsRefresh(current)) {
     return { status: "not-needed", roadmap: await writeAutonomousRoadmap(worldRoot, current) };
   }
-  const roles = resolveWorkRoleConfig({ manager: roleConfig.manager });
+  const roles = resolveWorkRoleConfig(roleConfig);
   const existingThread = current.architect?.threadId || "";
   const client = await appServerFactory({
-    role: "manager",
-    model: roles.manager.model,
-    reasoningEffort: roles.manager.reasoningEffort,
+    role: "planner",
+    model: roles.planner.model,
+    reasoningEffort: roles.planner.reasoningEffort,
     cwd: repositoryRoot,
     threadId: existingThread
   });
   try {
     let threadId = existingThread;
     if (threadId) {
-      if (typeof client.resumeThread === "function") await client.resumeThread({ threadId, cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, sandbox: threadSandbox });
-      else await resumeCodexThread(client, threadId, { cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, sandbox: threadSandbox });
+      if (typeof client.resumeThread === "function") await client.resumeThread({ threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox });
+      else await resumeCodexThread(client, threadId, { cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox });
     } else {
       const started = typeof client.startThread === "function"
-        ? await client.startThread({ role: "manager", cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, sandbox: threadSandbox })
-        : await startCodexThread(client, { cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, sandbox: threadSandbox });
+        ? await client.startThread({ role: "planner", cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox })
+        : await startCodexThread(client, { cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox });
       threadId = threadIdFromResponse(started);
     }
-    if (!threadId) throw new Error("Sol roadmap refresh returned no manager thread id");
+    if (!threadId) throw new Error("Sol roadmap refresh returned no planner thread id");
     const result = typeof client.runTurn === "function"
-      ? await client.runTurn({ threadId, cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] })
-      : await runCodexTurn(client, { threadId, cwd: repositoryRoot, model: roles.manager.model, reasoningEffort: roles.manager.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] });
+      ? await client.runTurn({ threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] })
+      : await runCodexTurn(client, { threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] });
     const proposal = parseArchitectResponse(result?.text || result?.output || "");
     const packages = proposal.packages.map(normalizeArchitectPackage);
     const refreshedTasks = await listWorkTasks(worldRoot, { includeTerminal: true });

@@ -1,0 +1,3 @@
+services:
+  criterion-huggingface:
+    gpus: all

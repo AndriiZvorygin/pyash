@@ -23,6 +23,7 @@ test("dense music video example uses lyric line cuts directly", async () => {
     text,
     /during num 999999/u
   );
+  assert.doesNotMatch(text, /Andrii|Zvorygin|andrii_zvorygin/u);
 });
 
 test("dense Andrii people music video example uses Klein workflow with shorts size", async () => {

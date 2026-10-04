@@ -276,23 +276,32 @@ function compactCounterFields(checkpoint) {
   ];
 }
 
-function promptForPhase(task, { phase, correction = "" } = {}) {
+function roleOpening(phase, role) {
+  const normalizedRole = text(role).toLowerCase();
+  if (phase === "accepted") return "You are preserving the accepted Pyash work context for replay.";
+  if (phase === "review" && normalizedRole === "reviewer") {
+    return "You are Luna, the independent Pyash reviewer. You did not implement this change and must not modify files.";
+  }
+  if (phase === "review") return "You are Sol reviewing Luna's latest completed implementation in the Pyash worktree.";
+  if (phase === "planning" || ["planner", "manager"].includes(normalizedRole)) {
+    return "You are Sol, the Pyash planner and architect, preparing a bounded implementation work order for Luna.";
+  }
+  if (phase === "escalation-review" || phase === "convergence-review" || normalizedRole === "escalationreviewer") {
+    return phase === "convergence-review"
+      ? "You are Sol performing a focused convergence review for a technical Pyash task."
+      : "You are Sol, the escalation reviewer for a Pyash roadmap task.";
+  }
+  if (phase === "revision") return "You are Luna applying Sol's immediately preceding technical correction in the Pyash worktree.";
+  return "You are Luna, the Pyash implementation worker, continuing the bounded work order.";
+}
+
+function promptForPhase(task, { phase, role, correction = "" } = {}) {
   const checkpoint = task?.checkpoint || {};
   const luna = implementationEvidence(task);
   const review = reviewEvidence(task);
   const convergence = convergenceEvidence(task);
   const segments = [
-    phase === "review"
-      ? "You are Sol reviewing Luna's latest completed implementation in the Pyash worktree."
-      : phase === "convergence-review"
-        ? "You are Sol performing a focused convergence review for a technical Pyash task."
-        : phase === "accepted"
-          ? "You are preserving the accepted Pyash work context for replay."
-          : phase === "revision"
-            ? "You are Luna applying Sol's immediately preceding technical correction in the Pyash worktree."
-            : phase === "planning"
-              ? "You are Sol, the Pyash manager and architect, preparing a bounded implementation work order."
-              : "You are Luna, the Pyash implementation worker, continuing the bounded work order.",
+    roleOpening(phase, role),
     "Original duty:",
     ...dutyFields(task, checkpoint)
   ];
@@ -308,9 +317,24 @@ function promptForPhase(task, { phase, correction = "" } = {}) {
       "Include REVIEW READY: yes only when the acceptance criteria are sufficiently implemented for Sol to review."
     );
   } else if (phase === "review") {
+    if (text(role).toLowerCase() === "reviewer") {
+      segments.push(
+        "Return exactly one decision using the heading DECISION: ACCEPT, DECISION: REVISE, or DECISION: ESCALATE.",
+        "ACCEPT only when every acceptance criterion is satisfied. REVISE only for a bounded technical correction. ESCALATE only for architectural ambiguity, contradictory semantics, safety concerns, non-converging disagreement, or a work order that needs Sol's judgment.",
+        "Also provide RATIONALE: and, when revising, CORRECTION:. When escalating, provide ESCALATION REASON:."
+      );
+    } else {
+      segments.push(
+        "Return exactly one decision: DECISION: ACCEPT, DECISION: REVISE, or DECISION: BLOCK.",
+        "Also provide RATIONALE: and, when revising, CORRECTION:."
+      );
+    }
+  } else if (phase === "escalation-review") {
     segments.push(
-      "Return exactly one decision: DECISION: ACCEPT, DECISION: REVISE, or DECISION: BLOCK.",
-      "Also provide RATIONALE: and, when revising, CORRECTION:."
+      "Routine independent Luna review could not safely decide the result. Resolve the bounded higher-level question using the evidence below.",
+      "Return exactly one decision: DECISION: ACCEPT, DECISION: REVISE, DECISION: REPLAN, or DECISION: BLOCK.",
+      "BLOCK is reserved for a genuine product, language-semantic, architectural, safety, policy, credential, or unavailable-required-external-system decision.",
+      "Use REVISE for a concrete correction back to Luna. Use REPLAN only when the original work order needs a corrected bounded scope. Provide RATIONALE: and CORRECTION: or WORK ORDER: as appropriate."
     );
   } else if (phase === "convergence-review") {
     segments.push(
@@ -321,25 +345,28 @@ function promptForPhase(task, { phase, correction = "" } = {}) {
   }
   if (phase === "review") {
     segments.push(...evidenceFields("Latest completed Luna implementation evidence", luna));
+  } else if (phase === "escalation-review") {
+    segments.push(...evidenceFields("Latest completed Luna implementation evidence", luna));
+    segments.push(...reviewFields("Routine independent Luna review evidence", review));
   } else if (phase === "revision") {
     segments.push(...evidenceFields("Immediately preceding Luna result", luna));
-    segments.push(...reviewFields("Sol's corresponding decision and correction", review));
+    segments.push(...reviewFields("Corresponding review decision and correction", review));
     if (correction && correction !== review.correction) {
       segments.push(promptField("Requested correction", correction, { priority: 90, preferredBytes: 1400, minimumBytes: 96 }));
     }
   } else if (phase === "accepted") {
     segments.push(...evidenceFields("Accepted Luna implementation evidence", luna));
-    segments.push(...reviewFields("Accepted Sol review evidence", review));
+    segments.push(...reviewFields("Accepted review evidence", review));
   } else if (phase === "convergence-review") {
     segments.push(...compactCounterFields(checkpoint));
     segments.push(...evidenceFields("Latest relevant Luna implementation evidence", luna));
-    segments.push(...reviewFields("Latest relevant Sol review evidence", review));
+    segments.push(...reviewFields("Latest relevant review evidence", review));
     if (convergence.sourceTurnIds.length || convergence.decision) {
       segments.push(...reviewFields("Latest convergence decision", convergence));
     }
   } else if (phase === "implementation" && correction) {
     segments.push(...evidenceFields("Immediately preceding Luna result", luna));
-    segments.push(...reviewFields("Sol's corresponding decision and correction", review));
+    segments.push(...reviewFields("Corresponding review decision and correction", review));
   }
   return segments;
 }
@@ -387,7 +414,7 @@ export function projectWorkContext(task, {
   activeThreadId = "",
   priorThreadIds = []
 } = {}) {
-  const prompt = assemblePrompt(promptForPhase(task, { phase, correction }));
+  const prompt = assemblePrompt(promptForPhase(task, { phase, role, correction }));
   const contextHash = sha256(prompt);
   return {
     version: WORK_CONTEXT_VERSION,
@@ -398,12 +425,12 @@ export function projectWorkContext(task, {
     prompt,
     sourceRequestIds: unique([
       ...implementationEvidence(task).sourceRequestIds,
-      ...(phase === "revision" || phase === "accepted" || phase === "convergence-review" ? reviewEvidence(task).sourceRequestIds : []),
+      ...(phase === "revision" || phase === "accepted" || phase === "escalation-review" || phase === "convergence-review" ? reviewEvidence(task).sourceRequestIds : []),
       ...(phase === "convergence-review" ? convergenceEvidence(task).sourceRequestIds : [])
     ]),
     sourceTurnIds: unique([
       ...implementationEvidence(task).sourceTurnIds,
-      ...(phase === "revision" || phase === "accepted" || phase === "convergence-review" ? reviewEvidence(task).sourceTurnIds : []),
+      ...(phase === "revision" || phase === "accepted" || phase === "escalation-review" || phase === "convergence-review" ? reviewEvidence(task).sourceTurnIds : []),
       ...(phase === "convergence-review" ? convergenceEvidence(task).sourceTurnIds : [])
     ]),
     requestIdentity: text(requestIdentity),

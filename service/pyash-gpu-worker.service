@@ -1,0 +1,22 @@
+[Unit]
+Description=Pyash GPU queue worker
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=htaf
+Group=htaf
+WorkingDirectory=/home/htaf/pyac/pyash
+Environment=HOME=/home/htaf
+Environment=NODE_VERSION=default
+Environment=PYA_GPU_HOUSEKEEPER_URL=http://localhost:8090
+Environment=PYA_GPU_WORKER_CONCURRENCY=1
+ExecStart=/home/htaf/.nvm/nvm-exec node /home/htaf/pyac/pyash/command/gpu_worker.mjs --world /home/htaf/pyac/pyash/world --interval-ms 400
+Restart=always
+RestartSec=5
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

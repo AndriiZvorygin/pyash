@@ -66,6 +66,19 @@ export function renderWorkTaskReport(task) {
   const workspace = checkpoint.workspace || {};
   const manager = checkpoint.manager || {};
   const worker = checkpoint.worker || {};
+  const routineReviewer = checkpoint.reviewer || {};
+  const escalationReviewer = checkpoint.escalationReviewer || {};
+  const reviewerRole = text(checkpoint.review?.role) || (checkpoint.reviewer?.threadId ? "reviewer" : "manager");
+  const reviewer = reviewerRole === "reviewer"
+    ? checkpoint.reviewer || {}
+    : reviewerRole === "escalationReviewer"
+      ? checkpoint.escalationReviewer || {}
+      : manager;
+  const reviewerLabel = reviewerRole === "reviewer"
+    ? "Luna routine reviewer"
+    : reviewerRole === "escalationReviewer"
+      ? "Sol escalation reviewer"
+      : "Sol review";
   const reconciliation = checkpoint.integration?.reconciliation || {};
   const progress = deriveImplementationProgress(checkpoint);
   const changedFiles = list(implementation.changedFiles)
@@ -88,11 +101,19 @@ export function renderWorkTaskReport(task) {
     `Escalation: ${text(current.escalation?.state) || "(none)"}${text(current.escalation?.target) ? ` -> ${text(current.escalation.target)}` : ""}`,
     `Delegation events: ${list(current.delegationEvents).length || 0}`,
     "",
-    "Manager:",
+    "Planner:",
     `  ${text(manager.model) || "(unknown)"}`,
     "",
-    "Worker:",
+    "Implementer:",
     `  ${text(worker.model) || "(unknown)"}`,
+    "",
+    "Reviewer:",
+    `  ${text((reviewerRole === "escalationReviewer" ? routineReviewer : reviewer).model) || "(unknown)"} (${reviewerRole === "manager" ? "Sol review" : "Luna routine reviewer"})`,
+    ...(reviewerRole === "escalationReviewer" ? [
+      "",
+      "Escalation reviewer:",
+      `  ${text(escalationReviewer.model || reviewer.model) || "(unknown)"} (Sol escalation reviewer)`
+    ] : []),
     "",
     "Sol plan:",
     indent(explicitText(checkpoint.plan?.summary || checkpoint.plan?.workOrder), "  ", 1200),
@@ -115,7 +136,12 @@ export function renderWorkTaskReport(task) {
   lines.push(changedFiles.length ? changedFiles.map((file) => `  ${file}`).join("\n") : "  (none recorded)");
   lines.push("", "Tests:");
   lines.push(tests.length ? tests.map((test) => `  ${test}`).join("\n") : "  (none recorded)");
-  lines.push("", "Sol review:");
+  if (reviewerRole === "escalationReviewer" && checkpoint.routineReview?.decision) {
+    lines.push("", "Luna routine review:");
+    lines.push(`  ${checkpoint.routineReview.decision}`);
+    lines.push(indent(checkpoint.routineReview.explanation, "  ", 1200));
+  }
+  lines.push("", `${reviewerLabel}:`);
   lines.push(`  ${decision || "(not completed)"}`);
   lines.push(indent(review.explanation, "  ", 1800));
   if (review.revisionInstructions) {
@@ -124,6 +150,9 @@ export function renderWorkTaskReport(task) {
   lines.push("", `Diff: ${diffStat(implementation.diff, changedFiles)}`);
   lines.push(`Worktree: ${text(workspace.worktreePath) || "(not created)"}`);
   if (text(implementation.commit)) lines.push(`Commit: ${text(implementation.commit)}`);
+  if (text(review.reviewedCommit || review.reviewedRevision)) {
+    lines.push(`Reviewed implementation: ${text(review.reviewedCommit || review.reviewedRevision)}`);
+  }
   if (text(checkpoint.integration?.branch)) {
     lines.push(`Automation branch: ${text(checkpoint.integration.branch)}`);
     lines.push(`Integration: ${text(checkpoint.integration.status) || "pending"}`);
@@ -134,6 +163,22 @@ export function renderWorkTaskReport(task) {
       lines.push(`Conflicts resolved: ${reconciliation.conflictsResolved || 0}`);
       if (reconciliation.worktreePath) lines.push(`Reconciliation worktree: ${reconciliation.worktreePath}`);
     }
+  }
+  const turnReconciliation = checkpoint.turnReconciliation || {};
+  if (turnReconciliation.classification) {
+    lines.push("", "Turn liveness:");
+    lines.push(`  ${turnReconciliation.classification}`);
+    if (turnReconciliation.classification === "STALE") {
+      lines.push(`  Safe continuation: ${turnReconciliation.safeToResume === true ? "yes" : "no"}`);
+    }
+    if (turnReconciliation.remoteState) {
+      lines.push(`  Remote state: ${turnReconciliation.remoteState}${turnReconciliation.remoteTurnState ? ` / ${turnReconciliation.remoteTurnState}` : ""}`);
+    }
+    if (turnReconciliation.localOwnerAlive != null || turnReconciliation.appServerAlive != null) {
+      lines.push(`  Local owner: ${turnReconciliation.localOwnerAlive === true ? "alive" : turnReconciliation.localOwnerAlive === false ? "dead" : "unknown"}; App Server: ${turnReconciliation.appServerAlive === true ? "alive" : turnReconciliation.appServerAlive === false ? "dead" : "unknown"}`);
+    }
+    if (turnReconciliation.checkedAt) lines.push(`  Checked: ${turnReconciliation.checkedAt}`);
+    if (turnReconciliation.reason) lines.push(indent(turnReconciliation.reason, "  ", 600));
   }
   lines.push(`Started: ${text(current.startedAt) || "(not started)"}`);
   lines.push(`Finished: ${text(current.finishedAt) || text(checkpoint.interruption?.at) || "(in progress)"}`);
@@ -198,6 +243,9 @@ export function renderWorkDryRunReport({ inspection = {}, policy = {} } = {}) {
     "",
     "Next task:",
     selected ? `  ${selected.taskId} [priority ${selected.priority}] ${selected.title}` : "  (none)",
+    inspection.blockerRepair?.candidate
+      ? `  Blocker repair: ${inspection.blockerRepair.candidate.taskId} [priority ${inspection.blockerRepair.candidate.priority}] ${inspection.blockerRepair.candidate.title}`
+      : "",
     inspection.curation?.proposed?.length
       ? `  Curated candidates: ${inspection.curation.proposed.map((item) => item.taskId).join(", ")}`
       : "",

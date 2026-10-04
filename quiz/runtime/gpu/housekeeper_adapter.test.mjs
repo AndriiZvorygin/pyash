@@ -77,6 +77,21 @@ test("housekeeper adapter getQueue calls GET /queue", async () => {
   );
 });
 
+test("housekeeper adapter reads the exact Ollama model catalog", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { available: true, models: [{ name: "qwen3.5:9b" }] } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090" });
+      const result = await adapter.getOllamaModels();
+
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, "http://housekeeper:8090/runtime/ollama/models");
+      assert.equal(calls[0].options.method, "GET");
+      assert.equal(result.models[0].name, "qwen3.5:9b");
+    }
+  );
+});
+
 test("housekeeper adapter submitJob posts expected payload", async () => {
   await withMockFetch(
     async () => makeJsonResponse({ body: { remoteJobId: "job-abc", accepted: true } }),
@@ -101,6 +116,79 @@ test("housekeeper adapter submitJob posts expected payload", async () => {
         hostId: "renderbox"
       });
       assert.deepEqual(result, { remoteJobId: "job-abc", accepted: true });
+    }
+  );
+});
+
+test("housekeeper adapter forwards optional capacity controls", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { remoteJobId: "job-capacity", accepted: true } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090", hostId: "renderbox" });
+      await adapter.submitJob({
+        handleId: "h-capacity",
+        runtimeName: "huggingface",
+        profileName: "large-model",
+        deviceId: "gpu0",
+        dischargeAllowed: true,
+        jobSpec: {
+          kind: "huggingface-generate",
+          resourceRequest: { vramRequiredMb: 22000 }
+        }
+      });
+
+      assert.deepEqual(JSON.parse(calls[0].options.body), {
+        handleId: "h-capacity",
+        runtimeName: "huggingface",
+        profileName: "large-model",
+        deviceId: "gpu0",
+        dischargeAllowed: true,
+        jobSpec: {
+          kind: "huggingface-generate",
+          resourceRequest: { vramRequiredMb: 22000 }
+        },
+        hostId: "renderbox"
+      });
+    }
+  );
+});
+
+test("housekeeper adapter forwards optional federation routing metadata", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { remoteJobId: "job-route", accepted: true, forwarded: true } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090", hostId: "mriczo" });
+      await adapter.submitJob({
+        handleId: "h-route",
+        runtimeName: "ollama",
+        profileName: "qwen3.5:9b",
+        routing: { originHostId: "mriczo", forwardDepth: 1, visitedHosts: ["mriczo"] },
+        jobSpec: { kind: "ollama-generate", payload: { model: "qwen3.5:9b", prompt: "hello" } }
+      });
+
+      assert.deepEqual(JSON.parse(calls[0].options.body).routing, {
+        originHostId: "mriczo",
+        forwardDepth: 1,
+        visitedHosts: ["mriczo"]
+      });
+    }
+  );
+});
+
+test("housekeeper adapter previews capacity without submitting a job", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { dryRun: true, decision: "reclaim-available" } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090" });
+      const result = await adapter.previewCapacity({
+        runtimeName: "huggingface",
+        profileName: "large-model",
+        jobSpec: { resourceRequest: { vramRequiredMb: 22000 } }
+      });
+
+      assert.equal(calls[0].url, "http://housekeeper:8090/capacity/preview");
+      assert.equal(calls[0].options.method, "POST");
+      assert.equal(result.dryRun, true);
     }
   );
 });

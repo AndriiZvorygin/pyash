@@ -6,10 +6,16 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
+import { buildExecutableSupply, curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
 import { integrateAcceptedWork, synchronizeAutomationBranch } from "../../program/runtime/work/integration.mjs";
 import { appendWorkSchedulerEvent } from "../../program/runtime/work/history.mjs";
-import { buildWorkDailyDigest, renderWorkDailyDigest, writeWorkDailyDigestState } from "../../program/runtime/work/digest.mjs";
+import {
+  buildWorkDailyDigest,
+  readWorkDailyDigestHealth,
+  recordWorkDailyDigestFailure,
+  renderWorkDailyDigest,
+  writeWorkDailyDigestState
+} from "../../program/runtime/work/digest.mjs";
 import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { listWorkTasks } from "../../program/runtime/work/operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
@@ -65,6 +71,26 @@ test("backlog curation creates bounded TODO-sourced substantial packages without
   const curated = stored.find((task) => task.taskId !== "roadmap-translation-parity-tranche");
   assert.equal(curated.workSpec.granularity, "substantial");
   assert.match(curated.contextText, /Why now/u);
+});
+
+test("an absent roadmap candidate is executable only after curation proposes it", () => {
+  const roadmap = {
+    packages: [{
+      taskId: "hq-email-and-capability-boundaries",
+      title: "Extend Headquarters email and capability boundaries",
+      status: "CANDIDATE",
+      dependencyStatus: { satisfied: true, unmet: [] }
+    }]
+  };
+  assert.deepEqual(buildExecutableSupply({ tasks: [], roadmap }).runnable, []);
+  assert.deepEqual(
+    buildExecutableSupply({
+      tasks: [],
+      roadmap,
+      curation: { proposed: [{ taskId: "hq-email-and-capability-boundaries" }] }
+    }).runnable.map((item) => item.taskId),
+    ["hq-email-and-capability-boundaries"]
+  );
 });
 
 test("accepted work integrates onto a synchronized automation baseline", async () => {
@@ -202,6 +228,22 @@ test("daily digest aggregates scheduler events and durable task progress", async
   assert.match(digest.report, /ROADMAP WORK REMAINS|READY QUEUE EMPTY|Current pacing floor/iu);
 });
 
+test("daily digest counts routine Luna reviews separately from Sol escalations", () => {
+  const report = renderWorkDailyDigest({
+    date: "2026-09-12",
+    since: "2026-09-12T00:00:00.000Z",
+    until: "2026-09-12T23:59:59.000Z",
+    capacity: { weekly: { identified: true, remainingPercent: 80, usedPercent: 20, resetAt: "2026-09-15T00:00:00.000Z", windowStartAt: "2026-09-08T00:00:00.000Z" } },
+    events: [
+      { action: "review-completed", role: "reviewer", taskId: "task-a", at: "2026-09-12T10:00:00.000Z" },
+      { action: "escalation-review-started", role: "escalationReviewer", taskId: "task-b", at: "2026-09-12T11:00:00.000Z" },
+      { action: "escalation-review-completed", role: "escalationReviewer", taskId: "task-b", at: "2026-09-12T11:05:00.000Z" }
+    ]
+  }).report;
+  assert.match(report, /Routine Luna reviews: 1/u);
+  assert.match(report, /Sol review escalations: 1/u);
+});
+
 test("daily digest reports material progress and deduplicates duplicate recovery records", async () => {
   const { root, worldRoot } = await world("pyash-work-digest-progress-");
   const repositoryRoot = path.join(root, "repo");
@@ -310,7 +352,8 @@ test("daily digest reports completed work before additional temporary blockers",
     capacitySource: async () => capacity,
     now: "2026-08-18T23:00:00.000Z"
   });
-  assert.match(digest.report, /Runnable roadmap/u);
+  assert.doesNotMatch(digest.report, /Runnable roadmap/u);
+  assert.match(digest.report, /ROADMAP WORK TEMPORARILY BLOCKED/u);
   assert.doesNotMatch(digest.report, /No package completed today\./u);
   assert.doesNotMatch(digest.report, /No package completed today\./u);
   assert.match(digest.report, /Useful wakes: 1 \/ 2/u);
@@ -378,6 +421,42 @@ test("daily digest surfaces a long gap since the previous successful report", as
   assert.match(digest.report, /scheduled report interval should be checked/u);
 });
 
+test("daily digest health records generation and delivery failures separately", async () => {
+  const { worldRoot } = await world("pyash-work-digest-health-");
+  await recordWorkDailyDigestFailure(worldRoot, {
+    kind: "generation",
+    reason: "report generation failed",
+    at: "2026-08-20T07:30:00.000Z"
+  });
+  await recordWorkDailyDigestFailure(worldRoot, {
+    kind: "delivery",
+    reason: "mail submission failed",
+    at: "2026-08-20T07:31:00.000Z"
+  });
+  const health = await readWorkDailyDigestHealth(worldRoot);
+  assert.equal(health["generation failures"], "1");
+  assert.equal(health["delivery failures"], "1");
+  const report = renderWorkDailyDigest({
+    date: "2026-08-20",
+    since: "2026-08-19T07:30:00.000Z",
+    until: "2026-08-20T07:30:00.000Z",
+    capacity: { weekly: { identified: true, remainingPercent: 90, usedPercent: 10, resetAt: "2026-08-24T00:00:00.000Z", windowStartAt: "2026-08-17T00:00:00.000Z" } },
+    reportingGap: { hours: 48, previousAt: "2026-08-18T07:30:00.000Z" },
+    digestHealth: {
+      expectedRuns: 2,
+      successfulReports: 1,
+      generationFailures: 1,
+      deliveryFailures: 1,
+      lastSuccessfulAt: "2026-08-20T07:30:00.000Z",
+      lastFailure: "2026-08-20T07:31:00.000Z: delivery: mail submission failed"
+    }
+  }).report;
+  assert.match(report, /Daily digest health[\s\S]*Expected runs: 2/u);
+  assert.match(report, /Generation failures: 1/u);
+  assert.match(report, /Delivery failures: 1/u);
+  assert.match(report, /mail submission failed/u);
+});
+
 test("timeout-blocked work is operationally blocked, not roadmap exhaustion", async () => {
   const { root, worldRoot } = await world("pyash-work-timeout-block-");
   const repositoryRoot = path.join(root, "repo");
@@ -410,8 +489,8 @@ test("timeout-blocked work is operationally blocked, not roadmap exhaustion", as
     capacitySource: async () => ({ weekly: { remainingPercent: 80, usedPercent: 20, resetAt: "2026-08-10T00:00:00.000Z" } }),
     now: "2026-08-09T23:00:00.000Z"
   });
-  assert.equal(digest.status, "roadmap-partially-blocked");
-  assert.doesNotMatch(digest.subject, /temporarily blocked/iu);
+  assert.equal(digest.status, "roadmap-blocked");
+  assert.match(digest.subject, /temporarily blocked/iu);
   assert.match(digest.report, /Operational blocks/iu);
   assert.doesNotMatch(digest.report, /backlog exhausted/iu);
 });
@@ -464,6 +543,9 @@ test("digest uses one canonical Next package for runnable and roadmap sections",
     since: "2026-08-23T00:00:00.000Z",
     until: "2026-08-23T23:00:00.000Z",
     capacity: { weekly: { identified: true, remainingPercent: 90, usedPercent: 10 } },
+    curation: {
+      proposed: [{ taskId: "hq-organization-and-work-contract", title: "Define Headquarters organization and work contracts" }]
+    },
     roadmap: {
       packages: [
         { taskId: "hq-organization-and-work-contract", title: "Define Headquarters organization and work contracts", status: "CANDIDATE" },
@@ -479,12 +561,35 @@ test("digest uses one canonical Next package for runnable and roadmap sections",
   assert.doesNotMatch(digest.report, /ROADMAP[\s\S]*Next:\n  \(none\)/u);
 });
 
+test("digest counts an active-writer skip as skipped work, not technical starvation", () => {
+  const digest = renderWorkDailyDigest({
+    date: "2026-09-09",
+    since: "2026-09-09T00:00:00.000Z",
+    until: "2026-09-09T23:00:00.000Z",
+    capacity: { weekly: { identified: true, remainingPercent: 100, usedPercent: 0 } },
+    events: [{
+      action: "admitted",
+      workStarted: true,
+      usefulWake: true,
+      materialProgress: true,
+      skippedCandidates: [{ taskId: "hq-chief-briefing", reason: "active-writer" }]
+    }],
+    roadmap: { packages: [], externalEvidence: [], needsDecision: [], retryableTechnical: [] }
+  });
+  assert.match(digest.report, /Temporarily skipped candidates: 1/u);
+  assert.match(digest.report, /Technical continuation unavailable: 0/u);
+  assert.match(digest.report, /Work started: 1/u);
+});
+
 test("digest separates active work from dependency-waiting work", () => {
   const digest = renderWorkDailyDigest({
     date: "2026-08-23",
     since: "2026-08-23T00:00:00.000Z",
     until: "2026-08-23T23:00:00.000Z",
     capacity: { weekly: { identified: true, remainingPercent: 90, usedPercent: 10 } },
+    curation: {
+      proposed: [{ taskId: "roadmap-command-result-identity", title: "Add durable per-command result identity" }]
+    },
     tasks: [
       { taskId: "hq-fixture-mail-vertical-slice", title: "Prove Headquarters fixture mail", status: "ready" },
       { taskId: "hq-approval-and-resumption", title: "Add Headquarters approval", status: "ready" }

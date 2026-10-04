@@ -163,11 +163,12 @@ test("Luna reconciliation on the current automation baseline integrates after So
   });
   const clients = new Map();
   class FakeClient {
-    constructor(role) { this.role = role; }
+    constructor(role) { this.role = role; this.turnOptions = []; }
     async startThread() { return { thread: { id: `${this.role}-thread` } }; }
     async resumeThread(options) { return { thread: { id: options.threadId } }; }
     async runTurn(options) {
-      if (this.role === "worker") {
+      this.turnOptions.push(options);
+      if (this.role === "implementer") {
         await fs.writeFile(path.join(options.cwd, "reconciled.txt"), "semantic reconciliation\n");
         await git(options.cwd, "add", "reconciled.txt");
         await git(options.cwd, "commit", "-qm", "reconcile ceremony capability");
@@ -199,5 +200,16 @@ test("Luna reconciliation on the current automation baseline integrates after So
   assert.equal(task.checkpoint.integration.status, "integrated");
   assert.equal(task.checkpoint.integration.reconciliation.materialAttempts, 1);
   assert.equal(task.checkpoint.integration.reconciliation.conflictsResolved, 1);
+  assert.equal(task.checkpoint.review.role, "reviewer");
+  assert.equal(task.checkpoint.review.model, "gpt-5.6-luna");
+  assert.equal(task.checkpoint.integration.reconciliation.reviewerThreadId, "reviewer-thread");
+  assert.equal(clients.has("manager"), false);
+  assert.equal(clients.has("implementer"), true);
+  assert.equal(clients.has("reviewer"), true);
+  assert.deepEqual([...clients.values()].flatMap((client) => client.turnOptions.map((options) => [
+    options.timeoutMs,
+    options.inactivityTimeoutMs,
+    options.hardTimeoutMs
+  ])), [[900000, 900000, 1800000], [900000, 900000, 1800000]]);
   assert.equal((await git(repositoryRoot, "show", "refs/heads/automation/roadmap:reconciled.txt")).stdout, "semantic reconciliation\n");
 });

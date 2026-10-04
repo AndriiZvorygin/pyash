@@ -557,6 +557,7 @@ export function verifyArticleClaims({
 
   const targets = [
     { key: "whole meeting summary", heading: "Whole Meeting Summary", isSingleLine: false },
+    { key: "whole stream summary", heading: "Whole Stream Summary", isSingleLine: false },
     { key: "one-sentence summary", heading: "One-Sentence Summary", isSingleLine: true },
     { key: "top newsworthy developments", heading: "Top Newsworthy Developments", isSingleLine: false },
     { key: "why it matters", heading: "Why It Matters", isSingleLine: false },
@@ -590,14 +591,28 @@ export function verifyArticleClaims({
       const supportedByStrong = Boolean(strongHit.snippet);
       const supportedBySecondary = Boolean(secondaryHit.snippet);
       const supportedByWeakOnly = !supportedByStrong && !supportedBySecondary && Boolean(weakHit.snippet);
+      // Video-only articles intentionally use the verified whole-stream
+      // summary as their source corpus. A causal sentence that is directly
+      // present in that summary is grounded even when no agenda/secondary
+      // corpus exists; do not delete its opening subject and leave a dangling
+      // pronoun such as “He contends …”.
+      const causalSupportedByWeak = hasCausal
+        && supportedByWeakOnly
+        && ["one-sentence summary", "whole stream summary"].includes(target.key);
       const scopedOutcome = hasOutcome ? itemScopedOutcomeSupport(sentenceNorm, groundedClaimUnits) : null;
-      const isSupportedOutcome = !hasOutcome || (scopedOutcome == null
+      // Video-only recaps commonly use proposal framing such as “candidates
+      // propose adopting…”, “an option of adopting…”, or “discussed whether
+      // to adopt…”.  These are not claims that a council adopted an outcome;
+      // treat them as discussion language while retaining the strict item-
+      // scoped disposition gate for agenda-backed civic articles.
+      const proposalFraming = /\b(?:propos(?:e|ed|es|ing)|suggest(?:s|ed|ing)?|consider(?:s|ed|ing)?|discuss(?:es|ed|ing)?|debate(?:s|d|ing)?|weigh(?:s|ed|ing)?|option of|would|could|might|plan(?:s|ned|ning)? to|if elected)\b/iu.test(sentenceNorm);
+      const isSupportedOutcome = !hasOutcome || proposalFraming || (scopedOutcome == null
         ? (outcomeWords.test(strongNorm) || outcomeWords.test(secondaryNorm))
         : scopedOutcome.supported);
 
       let severity = "supported";
       let issueType = "";
-      if (hasValue || (hasEsc && !supportedEsc) || (hasCausal && !supportedByStrong && !supportedBySecondary)) {
+      if (hasValue || (hasEsc && !supportedEsc) || (hasCausal && !causalSupportedByWeak && !supportedByStrong && !supportedBySecondary)) {
         severity = "unsupported";
         issueType = hasValue ? "value_judgment_overclaim" : ((hasEsc && !supportedEsc) ? "action_escalation" : "causal_overclaim");
       }
@@ -605,7 +620,12 @@ export function verifyArticleClaims({
         severity = "unsupported_high_severity";
         issueType = issueType || `outcome_claim_unsupported_${scopedOutcome?.reason || "global"}`;
       }
-      if (severity === "supported" && supportedByWeakOnly) {
+      // A video-only one-sentence recap is intentionally derived from the
+      // whole-stream summary.  When no agenda-grounding or secondary corpus
+      // exists, that summary is the appropriate direct source for this one
+      // compact line; keep the stricter weak-support rule for all other
+      // sections.
+      if (severity === "supported" && supportedByWeakOnly && !["one-sentence summary", "whole stream summary"].includes(target.key)) {
         severity = "unsupported";
         issueType = "weak_support_only";
       }

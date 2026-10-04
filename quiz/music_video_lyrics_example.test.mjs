@@ -21,4 +21,5 @@ test("lyrics and audio music video example uses stable footnote tail", async () 
     text,
     /su name result out stage ob filename of ob of footnote filename stage to name filename result out be filename do/u
   );
+  assert.doesNotMatch(text, /Andrii|Zvorygin|andrii_zvorygin/u);
 });

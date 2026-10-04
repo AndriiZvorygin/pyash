@@ -2,7 +2,11 @@
 import path from "node:path";
 import process from "node:process";
 
-import { runWorkSupervisorOnce } from "../program/runtime/work/supervisor.mjs";
+import {
+  probeWorkTaskAvailability,
+  resolveWorkRoleConfig,
+  runWorkSupervisorOnce
+} from "../program/runtime/work/supervisor.mjs";
 import {
   addWorkTask,
   archiveWorkTask,
@@ -24,7 +28,10 @@ import { readAndRenderWorkTaskReport, renderWorkDryRunReport } from "../program/
 import { createWorkWatchRenderer } from "../program/runtime/work/watch.mjs";
 import { readWorkTaskStatus } from "../program/runtime/work/status.mjs";
 import { curateWorkBacklog } from "../program/runtime/work/curator.mjs";
-import { buildWorkDailyDigest } from "../program/runtime/work/digest.mjs";
+import {
+  buildWorkDailyDigest,
+  recordWorkDailyDigestFailure
+} from "../program/runtime/work/digest.mjs";
 import {
   buildAutonomousRoadmap,
   refreshAutonomousRoadmap,
@@ -33,6 +40,9 @@ import {
 import { synchronizeAutomationBranch } from "../program/runtime/work/integration.mjs";
 import { inspectWorkExecutionPreflight } from "../program/runtime/work/preflight.mjs";
 import { runSandboxSmoke } from "../program/runtime/work/sandbox_smoke.mjs";
+import { reconcileOperationalWorkTasks } from "../program/runtime/work/turn_reconciliation.mjs";
+import { currentTimeoutPolicy } from "../program/runtime/work/timeout_policy.mjs";
+import { prepareBlockerRepair } from "../program/runtime/work/blocker_repair.mjs";
 import {
   defaultWorkEmailFrom,
   sendWorkReportNotification
@@ -71,10 +81,24 @@ function codexSandboxOptions(env = process.env) {
   const threadSandbox = String(env.PYA_CODEX_THREAD_SANDBOX || "").trim();
   const turnSandbox = String(env.PYA_CODEX_TURN_SANDBOX || "").trim();
   const timeoutMs = Number(env.PYA_CODEX_TURN_TIMEOUT_MS || "");
+  const inactivityTimeoutMs = Number(env.PYA_CODEX_TURN_INACTIVITY_TIMEOUT_MS || timeoutMs || "");
+  const hardTimeoutMs = Number(env.PYA_CODEX_TURN_HARD_TIMEOUT_MS || (timeoutMs > 0 ? timeoutMs * 2 : ""));
+  const timeoutPolicy = currentTimeoutPolicy({
+    fallbackTimeoutMs: timeoutMs || 900000,
+    inactivityTimeoutMs,
+    hardTimeoutMs
+  });
   return {
+    timeoutPolicy,
     ...(threadSandbox ? { threadSandbox } : {}),
     ...(turnSandbox ? { turnSandboxPolicy: { type: turnSandbox } } : {}),
-    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { turnTimeoutMs: Math.floor(timeoutMs) } : {})
+    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { turnTimeoutMs: Math.floor(timeoutMs) } : {}),
+    ...(Number.isFinite(inactivityTimeoutMs) && inactivityTimeoutMs > 0
+      ? { turnInactivityTimeoutMs: Math.floor(inactivityTimeoutMs) }
+      : {}),
+    ...(Number.isFinite(hardTimeoutMs) && hardTimeoutMs > 0
+      ? { turnHardTimeoutMs: Math.floor(hardTimeoutMs) }
+      : {})
   };
 }
 
@@ -159,8 +183,11 @@ function output(result, asJson) {
         priority: result.priority,
         "queued at": result.queuedAt,
         phase: checkpoint.interruption?.phase || result.status,
-        "manager model": checkpoint.manager?.model,
-        "worker model": checkpoint.worker?.model,
+        "planner model": checkpoint.manager?.model,
+        "implementer model": checkpoint.worker?.model,
+        "reviewer model": checkpoint.reviewer?.model || checkpoint.review?.model,
+        "escalation reviewer model": checkpoint.escalationReviewer?.model,
+        "review decision": checkpoint.review?.decision,
         worktree: checkpoint.workspace?.worktreePath,
         blocker: checkpoint.blocker,
         "last action": checkpoint.lastAction,
@@ -326,17 +353,32 @@ try {
       automationBranch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap"
     });
     const email = emailOptions(args);
-    if (email) result = await notifyResult(result, { worldRoot, email });
+    if (email) {
+      result = await notifyResult(result, { worldRoot, email });
+      if (notificationFailed(result)) {
+        await recordWorkDailyDigestFailure(worldRoot, {
+          kind: "delivery",
+          reason: result.notification?.error || "daily digest notification failed"
+        });
+      }
+    }
   } else if (action === "background") {
+    const timeoutOptions = codexSandboxOptions();
     const policy = {
       enabled: true,
       reservePercent: Number(value(args, "--reserve-percent", process.env.PYA_BACKGROUND_RESERVE_PERCENT || "15")),
       pacingDeadbandPercent: Number(process.env.PYA_BACKGROUND_PACING_DEADBAND_PERCENT || "1"),
       curationThreshold: Number(process.env.PYA_BACKGROUND_CURATION_THRESHOLD || "1"),
-      curationMaxTasks: Number(process.env.PYA_BACKGROUND_CURATION_MAX_TASKS || "3")
+      curationMaxTasks: Number(process.env.PYA_BACKGROUND_CURATION_MAX_TASKS || "3"),
+      timeoutPolicy: timeoutOptions.timeoutPolicy
     };
     if (has(args, "--dry-run")) {
       const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
+      const blockerRepair = await prepareBlockerRepair({
+        worldRoot,
+        owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
+        dryRun: true
+      });
       const curation = await curateWorkBacklog({
         worldRoot,
         repositoryRoot,
@@ -352,11 +394,23 @@ try {
         repositoryRoot,
         foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE)
       });
-      const dryEligible = inspection.eligible.length
-        ? inspection.eligible
-        : inspection.recoverable.length
-          ? inspection.recoverable.map((task) => ({ task }))
-        : curation.proposed.map((candidate) => ({ task: {
+      const dryEligible = blockerRepair.candidate
+        ? [{ task: {
+          taskId: blockerRepair.candidate.taskId,
+          title: blockerRepair.candidate.title,
+          priority: blockerRepair.candidate.priority,
+          kind: "blocker-repair",
+          queuedAt: new Date().toISOString()
+        } }]
+        : inspection.candidateOrder?.length
+        ? inspection.candidateOrder.map((task) => ({ task }))
+        : inspection.eligible.length
+          ? inspection.eligible
+          : inspection.recoverable.length
+            ? inspection.recoverable.map((task) => ({ task }))
+            : inspection.policyRevalidation?.length
+              ? inspection.policyRevalidation.map((task) => ({ task }))
+              : curation.proposed.map((candidate) => ({ task: {
           taskId: candidate.taskId,
           title: candidate.title,
           priority: candidate.priority,
@@ -373,11 +427,13 @@ try {
         eligible: dryEligible,
         selected: dryEligible[0]?.task || null,
         admission: dryAdmission,
-        curation
+        curation,
+        blockerRepair
       };
       result = {
         ...inspected,
         curation,
+        blockerRepair,
         report: renderWorkDryRunReport({ inspection: inspected, policy })
       };
     } else {
@@ -389,6 +445,19 @@ try {
         repositoryRoot,
         curate: true,
         executionPreflight: ({ worktreePath }) => configuredExecutionPreflight({ repositoryRoot, worktreePath }),
+        candidateAvailability: ({ task }) => probeWorkTaskAvailability({
+          task,
+          repositoryRoot,
+          threadSandbox: timeoutOptions.threadSandbox || "workspace-write"
+        }),
+        turnReconciliation: ({ worldRoot: reconciliationWorld, owner, repositoryRoot: reconciliationRepository, now }) =>
+          reconcileOperationalWorkTasks(reconciliationWorld, {
+            owner,
+            repositoryRoot: reconciliationRepository,
+            roleConfig: resolveWorkRoleConfig({}, process.env),
+            threadSandbox: timeoutOptions.threadSandbox || "workspace-write",
+            now
+          }),
         externalEvidenceProbe: (task) => probeExternalEvidenceTask(task),
         baselineSync: async () => synchronizeAutomationBranch({
           repositoryRoot,
@@ -409,7 +478,7 @@ try {
           reviewAfterImplementationPasses: 2,
           pyashFirstPolicy: true,
           executionPreflight: ({ worktreePath }) => configuredExecutionPreflight({ repositoryRoot, worktreePath }),
-          ...codexSandboxOptions()
+          ...timeoutOptions
         }
       };
       result = has(args, "--continuous")

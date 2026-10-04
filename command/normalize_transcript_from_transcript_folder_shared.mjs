@@ -7,6 +7,8 @@ import {
   CANADIAN_ENGLISH_SPELLING_PAIRS,
   normalizeCanadianEnglish,
 } from "../program/library/reporter_shared/canadian-english.mjs";
+import { requestManagedOllamaChat } from "../program/runtime/gpu/managed-ollama.mjs";
+import { resolveTextModel } from "../program/runtime/gpu/text-model.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -17,7 +19,7 @@ const PROFILES = {
     house: path.join(ROOT, "world/house/grey-county-reporter"),
     termsEnv: "GREY_NORMALIZE_TERMS_FILE",
     rosterEnv: "GREY_NORMALIZE_ROSTER_FILE",
-    defaultModel: "qwen3.5:9b",
+    defaultModel: "",
     canonicalCleanup(text) {
       let out = String(text || "");
       out = out.replace(/\bGrey\s+county\b/giu, "Grey County");
@@ -54,7 +56,7 @@ const PROFILES = {
     house: path.join(ROOT, "world/house/owen-sound-reporter"),
     termsEnv: "OWEN_NORMALIZE_TERMS_FILE",
     rosterEnv: "OWEN_NORMALIZE_ROSTER_FILE",
-    defaultModel: "qwen3.5:9b",
+    defaultModel: "",
     canonicalCleanup(text) {
       let out = String(text || "");
       out = out.replace(/\bOceansound\b/giu, "Owen Sound");
@@ -123,7 +125,7 @@ const PROFILES = {
     house: path.join(ROOT, "world/house/andrii-youtube-reporter"),
     termsEnv: "ANDRII_NORMALIZE_TERMS_FILE",
     rosterEnv: "ANDRII_NORMALIZE_ROSTER_FILE",
-    defaultModel: "qwen3.5:9b",
+    defaultModel: "",
     canonicalCleanup(text) {
       let out = String(text || "");
       out = out.replace(/\bAndrei Zvorov\b/gu, "Andrii Zvorygin");
@@ -327,13 +329,46 @@ function buildStringReplacementMap(profile, normalizationTerms) {
   return map;
 }
 
+function splitOversizedParagraph(paragraph, maxChars) {
+  const chunks = [];
+  let rest = String(paragraph || "").trim();
+  while (rest.length > maxChars) {
+    const window = rest.slice(0, maxChars);
+    // Prefer a sentence boundary, but do not allow an unusually long sentence
+    // to defeat the output bound. Falling back to whitespace keeps words intact.
+    let cut = 0;
+    const sentenceRe = /[.!?](?=\s|$)/gu;
+    let match;
+    while ((match = sentenceRe.exec(window)) !== null) {
+      if (match.index + 1 >= Math.floor(maxChars * 0.55)) cut = match.index + 1;
+    }
+    if (!cut) {
+      const whitespace = /\s+/gu;
+      while ((match = whitespace.exec(window)) !== null) {
+        if (match.index >= Math.floor(maxChars * 0.55)) cut = match.index;
+      }
+    }
+    if (!cut) cut = maxChars;
+    const piece = rest.slice(0, cut).trim();
+    if (!piece) {
+      // Defensive progress guarantee for unusual whitespace/control input.
+      cut = maxChars;
+    }
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks;
+}
+
 function splitIntoChunks(text, maxChars) {
   const paras = String(text || "").split(/\n\s*\n+/u).map((p) => p.trim()).filter(Boolean);
   if (!paras.length) return [];
+  const boundedParas = paras.flatMap((p) => splitOversizedParagraph(p, maxChars));
   const chunks = [];
   let buf = [];
   let chars = 0;
-  for (const p of paras) {
+  for (const p of boundedParas) {
     const add = p.length + (buf.length ? 2 : 0);
     if (buf.length && chars + add > maxChars) {
       chunks.push(buf.join("\n\n"));
@@ -346,6 +381,10 @@ function splitIntoChunks(text, maxChars) {
   }
   if (buf.length) chunks.push(buf.join("\n\n"));
   return chunks;
+}
+
+function transcriptWordCount(text) {
+  return String(text || "").trim().split(/\s+/u).filter(Boolean).length;
 }
 
 function termsForPrompt(terms) {
@@ -399,19 +438,6 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
     chunk,
   ].join("\n");
 
-  const body = {
-    model,
-    mode: "chat",
-    stream: false,
-    think: false,
-    keep_alive: 300,
-    options: { temperature: 0.05, num_predict: 4096 },
-    messages: [
-      { role: "system", content: "You are a careful transcript text normalizer. Preserve meaning exactly; only correct obvious transcription errors." },
-      { role: "user", content: prompt },
-    ],
-  };
-
   const timeoutMsRaw = Number(process.env.PYA_NORMALIZE_FETCH_TIMEOUT_MS || 120000);
   const timeoutMs = Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 5000 ? Math.floor(timeoutMsRaw) : 120000;
   const attemptsRaw = Number(process.env.PYA_NORMALIZE_FETCH_ATTEMPTS || 3);
@@ -421,19 +447,21 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
   let attemptsUsed = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     attemptsUsed = attempt;
-    let timer = null;
     try {
-      const ctl = new AbortController();
-      timer = setTimeout(() => ctl.abort(), timeoutMs);
-      const res = await fetch(ollamaUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: ctl.signal,
+      const json = await requestManagedOllamaChat({
+        model,
+        ollamaUrl,
+        managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+        options: { temperature: 0.05, num_predict: 4096 },
+        messages: [
+          { role: "system", content: "You are a careful transcript text normalizer. Preserve meaning exactly; only correct obvious transcription errors." },
+          { role: "user", content: prompt },
+        ],
+        think: false,
+        keepAlive: 300,
+        timeoutMs,
       });
-      if (!res.ok) throw new Error(`ollama status ${res.status}`);
-      const json = await res.json();
-      const out = String(json?.message?.content || "").trim();
+      const out = String(json?.message?.content || json?.response || "").trim();
       if (!out) throw new Error("empty normalize response");
       return out;
     } catch (err) {
@@ -443,8 +471,6 @@ async function askNormalize({ chunk, rosterText, termMapText, index, total, olla
       if (attempt >= attempts) break;
       const delay = 1200 * attempt;
       await new Promise((r) => setTimeout(r, delay));
-    } finally {
-      if (timer) clearTimeout(timer);
     }
   }
   throw new Error(`normalize fetch failed after ${attemptsUsed} attempt${attemptsUsed === 1 ? "" : "s"}: ${lastErr}`);
@@ -476,12 +502,18 @@ export async function runNormalizeShared(writer, argv = []) {
   const rosterText = [
     rosterPath ? fs.readFileSync(rosterPath, "utf8") : "",
     readMeetingNormalizationContext(transcriptDir),
+    String(process.env.PYA_SPEAKER_NAME_ROSTER || "").trim()
+      ? `Operator-confirmed panel speaker roster (use these exact spellings when the transcript is referring to these people): ${String(process.env.PYA_SPEAKER_NAME_ROSTER).trim()}`
+      : "",
   ].filter(Boolean).join("\n\n");
   const normalizationTerms = loadNormalizationTerms(termsPath);
   const termMapText = termsForPrompt(normalizationTerms);
   const stringReplacementMap = buildStringReplacementMap(profile, normalizationTerms);
   const sourceText = fs.readFileSync(plainPath, "utf8");
-  const model = String(process.env[`${profile.envPrefix}_NORMALIZE_MODEL`] || profile.defaultModel);
+  const model = resolveTextModel(
+    String(process.env[`${profile.envPrefix}_NORMALIZE_MODEL`] || profile.defaultModel),
+    { runtimePath: path.join(profile.house, "conduct", "runtime.pya") },
+  );
   const maxCharsRaw = Number(process.env[`${profile.envPrefix}_NORMALIZE_MAX_CHARS`] || 9000);
   const maxChunksRaw = Number(process.env[`${profile.envPrefix}_NORMALIZE_MAX_CHUNKS`] || 0);
   const maxChars = Number.isFinite(maxCharsRaw) && maxCharsRaw > 1500 ? Math.floor(maxCharsRaw) : 9000;
@@ -504,6 +536,7 @@ export async function runNormalizeShared(writer, argv = []) {
   const runChunks = maxChunks > 0 ? chunks.slice(0, maxChunks) : chunks;
   const out = [];
   const fallbackChunks = [];
+  const chunkCoverage = [];
   for (let i = 0; i < runChunks.length; i += 1) {
     process.stdout.write(`[normalize-transcript] atindex num ${i + 1} toindex num ${runChunks.length}\n`);
     let cleaned = "";
@@ -533,12 +566,35 @@ export async function runNormalizeShared(writer, argv = []) {
     }
     const canon = profile.canonicalCleanup(cleaned || runChunks[i]);
     const termsNormalized = applyNormalizationTerms(canon, normalizationTerms);
-    out.push(normalizeCanadianEnglish(termsNormalized));
+    const finalChunk = normalizeCanadianEnglish(termsNormalized);
+    out.push(finalChunk);
+    const sourceWords = transcriptWordCount(runChunks[i]);
+    const outputWords = transcriptWordCount(finalChunk);
+    chunkCoverage.push({
+      index: i + 1,
+      source_words: sourceWords,
+      output_words: outputWords,
+      ratio: sourceWords ? Number((outputWords / sourceWords).toFixed(4)) : 1,
+      fallback: fallbackChunks.some((entry) => entry.index === i + 1),
+    });
   }
 
   const normalized = out.join("\n\n").replace(/\n{3,}/gu, "\n\n").trim();
-  fs.writeFileSync(outputPath, `${normalized}\n`, "utf8");
-  fs.writeFileSync(metadataPath, JSON.stringify({
+  const sourceWords = transcriptWordCount(sourceText);
+  const normalizedWords = transcriptWordCount(normalized);
+  const coverageRatio = sourceWords ? normalizedWords / sourceWords : 1;
+  const minCoverageRaw = Number(process.env.PYA_NORMALIZE_MIN_COVERAGE_RATIO || 0.8);
+  const minCoverage = Number.isFinite(minCoverageRaw) && minCoverageRaw > 0 && minCoverageRaw <= 1
+    ? minCoverageRaw
+    : 0.8;
+  const minChunkCoverageRaw = Number(process.env.PYA_NORMALIZE_MIN_CHUNK_COVERAGE_RATIO || 0.7);
+  const minChunkCoverage = Number.isFinite(minChunkCoverageRaw) && minChunkCoverageRaw > 0 && minChunkCoverageRaw <= 1
+    ? minChunkCoverageRaw
+    : 0.7;
+  const incompleteRun = runChunks.length !== chunks.length;
+  const incompleteChunk = chunkCoverage.some((entry) => entry.ratio < minChunkCoverage);
+  const coveragePass = !incompleteRun && !incompleteChunk && coverageRatio >= minCoverage;
+  const metadata = {
     source: plainPath,
     output: outputPath,
     model,
@@ -554,7 +610,28 @@ export async function runNormalizeShared(writer, argv = []) {
     max_failed_chunks_before_circuit: maxFailedChunks,
     fallback_chunk_count: fallbackChunks.length,
     fallback_chunks: fallbackChunks,
-  }, null, 2), "utf8");
+    source_chars: sourceText.length,
+    normalized_chars: normalized.length,
+    source_words: sourceWords,
+    normalized_words: normalizedWords,
+    coverage_ratio: Number(coverageRatio.toFixed(4)),
+    minimum_coverage_ratio: minCoverage,
+    minimum_chunk_coverage_ratio: minChunkCoverage,
+    chunk_coverage: chunkCoverage,
+    coverage_pass: coveragePass,
+  };
+  fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), "utf8");
+  if (!coveragePass) {
+    // Do not leave a stale or partial output that a later checkpoint run could
+    // mistake for a completed normalization stage.
+    try { fs.unlinkSync(outputPath); } catch {}
+    const reasons = [];
+    if (incompleteRun) reasons.push(`only ${runChunks.length}/${chunks.length} chunks processed`);
+    if (incompleteChunk) reasons.push(`a chunk fell below ${minChunkCoverage} word coverage`);
+    if (coverageRatio < minCoverage) reasons.push(`overall word coverage ${coverageRatio.toFixed(3)} < ${minCoverage}`);
+    throw new Error(`normalized transcript coverage check failed: ${reasons.join("; ")}`);
+  }
+  fs.writeFileSync(outputPath, `${normalized}\n`, "utf8");
   process.stdout.write(`[normalize-transcript] wrote: ${outputPath}\n`);
   process.stdout.write(`[normalize-transcript] wrote: ${metadataPath}\n`);
 }

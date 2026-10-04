@@ -6,6 +6,31 @@ function object(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function policy(value = {}) {
+  const source = object(value);
+  return {
+    policyVersion: text(source.policyVersion),
+    activityAware: source.activityAware === true,
+    inactivityTimeoutMs: Math.max(0, Math.trunc(Number(source.inactivityTimeoutMs) || 0)),
+    hardTimeoutMs: Math.max(0, Math.trunc(Number(source.hardTimeoutMs) || 0))
+  };
+}
+
+function policyRevalidation(value = {}) {
+  const source = object(value);
+  return {
+    migrationId: text(source.migrationId),
+    reason: text(source.reason),
+    fromPolicy: policy(source.fromPolicy),
+    toPolicy: policy(source.toPolicy),
+    grantedAt: text(source.grantedAt),
+    attempts: Math.max(0, Math.trunc(Number(source.attempts) || 0)),
+    lastAttemptAt: text(source.lastAttemptAt),
+    outcome: text(source.outcome),
+    blocker: text(source.blocker)
+  };
+}
+
 function list(value) {
   return Array.isArray(value) ? [...value] : [];
 }
@@ -90,6 +115,18 @@ function turnResult(value) {
   };
 }
 
+function workspaceEvidence(value) {
+  const source = object(value);
+  return {
+    capturedAt: text(source.capturedAt),
+    revision: text(source.revision),
+    changedFiles: list(source.changedFiles),
+    status: text(source.status),
+    diff: text(source.diff),
+    error: text(source.error)
+  };
+}
+
 function turnRecord(value = {}) {
   const source = object(value);
   return {
@@ -103,8 +140,49 @@ function turnRecord(value = {}) {
     completedAt: text(source.completedAt),
     resultCaptured: source.resultCaptured === true,
     ambiguity: text(source.ambiguity),
+    lastActivityAt: text(source.lastActivityAt),
+    activityCount: Math.max(0, Math.trunc(Number(source.activityCount) || 0)),
+    meaningfulActivityCount: Math.max(0, Math.trunc(Number(source.meaningfulActivityCount) || 0)),
+    timeoutType: text(source.timeoutType),
+    timeoutMs: Math.max(0, Math.trunc(Number(source.timeoutMs) || 0)),
+    hardTimeoutMs: Math.max(0, Math.trunc(Number(source.hardTimeoutMs) || 0)),
+    inactivityTimeoutMs: Math.max(0, Math.trunc(Number(source.inactivityTimeoutMs) || 0)),
+    localOwnerPid: Math.max(0, Math.trunc(Number(source.localOwnerPid) || 0)),
+    appServerPid: Math.max(0, Math.trunc(Number(source.appServerPid) || 0)),
+    localOwnerStartedAt: text(source.localOwnerStartedAt),
     result: turnResult(source.result)
   };
+}
+
+function turnReconciliation(value = {}) {
+  const source = object(value);
+  const localOwnerAlive = source.localOwnerAlive == null
+    ? null
+    : source.localOwnerAlive === true;
+  return {
+    checkedAt: text(source.checkedAt),
+    role: text(source.role),
+    threadId: text(source.threadId),
+    turnId: text(source.turnId),
+    classification: text(source.classification).toUpperCase(),
+    lastActivityAt: text(source.lastActivityAt),
+    localOwnerPid: Math.max(0, Math.trunc(Number(source.localOwnerPid) || 0)),
+    localOwnerAlive,
+    appServerPid: Math.max(0, Math.trunc(Number(source.appServerPid) || 0)),
+    appServerAlive: source.appServerAlive == null ? null : source.appServerAlive === true,
+    remoteState: text(source.remoteState),
+    remoteTurnState: text(source.remoteTurnState),
+    remoteSessionId: text(source.remoteSessionId),
+    worktreeState: text(source.worktreeState),
+    safeToResume: source.safeToResume === true,
+    reason: text(source.reason)
+  };
+}
+
+export function isStaleTurnResumable(checkpoint = {}) {
+  const reconciliation = object(checkpoint?.turnReconciliation);
+  return text(reconciliation.classification).toUpperCase() === "STALE"
+    && reconciliation.safeToResume === true;
 }
 
 function progressRecord(value = {}) {
@@ -149,10 +227,44 @@ function compactContextRecord(value = {}) {
   };
 }
 
+function roleRecord(value = {}) {
+  const source = object(value);
+  return {
+    role: text(source.role),
+    model: text(source.model),
+    reasoningEffort: text(source.reasoningEffort),
+    threadId: text(source.threadId),
+    previousThreadIds: uniqueTextList(source.previousThreadIds)
+  };
+}
+
+function reviewRecord(value = {}) {
+  const source = object(value);
+  return {
+    role: text(source.role),
+    model: text(source.model),
+    reasoningEffort: text(source.reasoningEffort),
+    threadId: text(source.threadId),
+    previousThreadIds: uniqueTextList(source.previousThreadIds),
+    pass: Math.max(0, Math.trunc(Number(source.pass) || 0)),
+    reviewedCommit: text(source.reviewedCommit),
+    reviewedRevision: text(source.reviewedRevision),
+    decision: text(source.decision).toUpperCase(),
+    explanation: text(source.explanation),
+    revisionInstructions: text(source.revisionInstructions),
+    escalationReason: text(source.escalationReason),
+    workOrder: text(source.workOrder),
+    tests: list(source.tests),
+    evidence: text(source.evidence)
+  };
+}
+
 export function buildWorkCheckpoint(input = {}) {
   const workspace = object(input.workspace);
   const manager = object(input.manager);
   const worker = object(input.worker);
+  const reviewer = object(input.reviewer);
+  const escalationReviewer = object(input.escalationReviewer);
   const plan = object(input.plan);
   const implementation = object(input.implementation);
   const review = object(input.review);
@@ -182,6 +294,8 @@ export function buildWorkCheckpoint(input = {}) {
       threadId: text(worker.threadId),
       previousThreadIds: uniqueTextList(worker.previousThreadIds)
     },
+    reviewer: roleRecord(reviewer),
+    escalationReviewer: roleRecord(escalationReviewer),
     plan: {
       summary: text(plan.summary),
       workOrder: text(plan.workOrder),
@@ -207,10 +321,24 @@ export function buildWorkCheckpoint(input = {}) {
       lastMaterialProgressAt: text(implementation.lastMaterialProgressAt)
     },
     review: {
+      role: text(review.role),
+      model: text(review.model),
+      reasoningEffort: text(review.reasoningEffort),
+      threadId: text(review.threadId),
+      previousThreadIds: list(review.previousThreadIds),
+      pass: Math.max(0, Math.trunc(Number(review.pass) || 0)),
+      reviewedCommit: text(review.reviewedCommit),
+      reviewedRevision: text(review.reviewedRevision),
       decision: text(review.decision).toUpperCase(),
       explanation: text(review.explanation),
-      revisionInstructions: text(review.revisionInstructions)
+      revisionInstructions: text(review.revisionInstructions),
+      escalationReason: text(review.escalationReason),
+      workOrder: text(review.workOrder),
+      tests: list(review.tests),
+      evidence: text(review.evidence)
     },
+    routineReview: reviewRecord(input.routineReview),
+    escalationReview: reviewRecord(input.escalationReview),
     convergence: {
       status: text(input.convergence?.status),
       reviewCount: Math.max(0, Math.trunc(Number(input.convergence?.reviewCount) || 0)),
@@ -236,6 +364,8 @@ export function buildWorkCheckpoint(input = {}) {
         taskCommit: text(integration.reconciliation?.taskCommit),
         managerThreadId: text(integration.reconciliation?.managerThreadId),
         workerThreadId: text(integration.reconciliation?.workerThreadId),
+        reviewerThreadId: text(integration.reconciliation?.reviewerThreadId),
+        escalationReviewerThreadId: text(integration.reconciliation?.escalationReviewerThreadId),
         attempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.attempts) || 0)),
         materialAttempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.materialAttempts) || 0)),
         noProgressAttempts: Math.max(0, Math.trunc(Number(integration.reconciliation?.noProgressAttempts) || 0)),
@@ -262,11 +392,15 @@ export function buildWorkCheckpoint(input = {}) {
       threadSandbox: text(executionPreflight.threadSandbox),
       turnSandbox: text(executionPreflight.turnSandbox)
     },
+    timeoutPolicy: policy(input.timeoutPolicy),
+    policyRevalidation: policyRevalidation(input.policyRevalidation),
+    turnReconciliation: turnReconciliation(input.turnReconciliation),
     interruption: {
       phase: text(interruption.phase),
       at: text(interruption.at),
       reason: text(interruption.reason),
-      lastTurnId: text(interruption.lastTurnId)
+      lastTurnId: text(interruption.lastTurnId),
+      workspaceEvidence: workspaceEvidence(interruption.workspaceEvidence)
     },
     compactContext: compactContextRecord(input.compactContext || input.contextCheckpoint),
     activeTurn,
@@ -299,9 +433,13 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
     workspace: { ...current.workspace, ...object(update.workspace) },
     manager: { ...current.manager, ...object(update.manager) },
     worker: { ...current.worker, ...object(update.worker) },
+    reviewer: { ...current.reviewer, ...object(update.reviewer) },
+    escalationReviewer: { ...current.escalationReviewer, ...object(update.escalationReviewer) },
     plan: { ...current.plan, ...object(update.plan) },
     implementation: { ...current.implementation, ...object(update.implementation) },
     review: { ...current.review, ...object(update.review) },
+    routineReview: { ...current.routineReview, ...object(update.routineReview) },
+    escalationReview: { ...current.escalationReview, ...object(update.escalationReview) },
     convergence: { ...current.convergence, ...object(update.convergence) },
     integration: {
       ...current.integration,
@@ -312,6 +450,15 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
       }
     },
     executionPreflight: { ...current.executionPreflight, ...object(update.executionPreflight) },
+    timeoutPolicy: Object.prototype.hasOwnProperty.call(update, "timeoutPolicy")
+      ? policy(update.timeoutPolicy)
+      : current.timeoutPolicy,
+    policyRevalidation: Object.prototype.hasOwnProperty.call(update, "policyRevalidation")
+      ? policyRevalidation(update.policyRevalidation)
+      : current.policyRevalidation,
+    turnReconciliation: Object.prototype.hasOwnProperty.call(update, "turnReconciliation")
+      ? turnReconciliation(update.turnReconciliation)
+      : current.turnReconciliation,
     interruption: { ...current.interruption, ...object(update.interruption) },
     compactContext: Object.prototype.hasOwnProperty.call(update, "compactContext")
       ? compactContextRecord(update.compactContext)

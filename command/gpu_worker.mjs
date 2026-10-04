@@ -8,11 +8,11 @@ import { registerSignatureHandler, clearSignatureHandlers } from "../program/bri
 import { loadDefaultConfig, readFlagValue } from "./run_pya_helpers.mjs";
 import { resolveWorldRoot } from "../program/library/world.mjs";
 import { updateAgentPresence } from "../program/agent/presence.mjs";
-import { runGpuWorkerOnce } from "../program/runtime/gpu/worker.mjs";
+import { runGpuWorkerBatch } from "../program/runtime/gpu/worker.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 
 function usage() {
-  return "Usage: node command/gpu_worker.mjs [--world <path>] [--interval-ms 400] [--once]";
+  return "Usage: node command/gpu_worker.mjs [--world <path>] [--interval-ms 400] [--once] (PYA_GPU_WORKER_CONCURRENCY controls bounded fan-out)";
 }
 
 async function initializeRuntime({ cwd }) {
@@ -73,22 +73,26 @@ async function main() {
     : (resolveWorldRoot({ rememberFn: remember }) ?? path.resolve(process.cwd(), "world"));
   const intervalMs = Math.max(100, parseInteger(readFlagValue(args, "--interval-ms"), 400));
   const runOnce = args.includes("--once");
+  const concurrency = Math.max(1, Math.min(8, parseInteger(process.env.PYA_GPU_WORKER_CONCURRENCY, 2)));
 
   do {
     const cycleIso = shortIsoNow();
     await updateGpuWorkerPresence({ worldRoot, latestIso: cycleIso });
-    const result = await runGpuWorkerOnce({
+    const result = await runGpuWorkerBatch({
       worldRoot,
       housekeeperUrl,
-      hostId: process.env.PYA_GPU_HOUSEKEEPER_HOST_ID || ""
+      hostId: process.env.PYA_GPU_HOUSEKEEPER_HOST_ID || "",
+      concurrency
     });
     const received = Number(result?.received ?? 0);
     const handled = Number(result?.handled ?? 0);
     const sent = Number(result?.sent ?? 0);
     const queue = Number(result?.queueDepth ?? 0);
-    if (received > 0 || handled > 0 || sent > 0 || queue > 0) {
+    const dependencyWaiting = Array.isArray(result?.dependencyWaiting) ? result.dependencyWaiting.length : 0;
+    const errors = Array.isArray(result?.errors) ? result.errors.length : 0;
+    if (received > 0 || handled > 0 || sent > 0 || queue > 0 || dependencyWaiting > 0 || errors > 0) {
       console.log(
-        `${cycleIso} gpu worker: received=${received} handled=${handled} sent=${sent} queue=${queue}`
+        `${cycleIso} gpu worker: slots=${concurrency} received=${received} handled=${handled} sent=${sent} queue=${queue} dependency_waiting=${dependencyWaiting} errors=${errors}`
       );
     }
     if (runOnce) break;
