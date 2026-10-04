@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { readCodexCapacity, calculateWeeklyPacing, DEFAULT_BACKGROUND_POLICY } from "./capacity.mjs";
 import { buildExecutableSupply, curateWorkBacklog } from "./curator.mjs";
+import { prepareBlockerRepair } from "./blocker_repair.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
@@ -356,6 +357,7 @@ export function renderWorkDailyDigest({
   events = [],
   tasks = [],
   curation = {},
+  blockerRepair = {},
   roadmap = null,
   automationBranch = "automation/roadmap",
   reportingGap = null,
@@ -419,7 +421,8 @@ export function renderWorkDailyDigest({
     && event.role === "escalationReviewer");
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
-  const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
+  const blockerRepairAvailable = Boolean(blockerRepair?.candidate && blockerRepair.productivity?.noUsefulWork);
+  const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length && !blockerRepairAvailable;
   const executableSupply = buildExecutableSupply({ tasks, roadmap, curation });
   const runnablePackages = executableSupply.runnablePackages;
   const runnableRoadmap = active.length > 0
@@ -433,13 +436,15 @@ export function renderWorkDailyDigest({
       ? blockedRoadmap
         ? "roadmap-partially-blocked"
         : active.length || admitted.length || completed.length ? "roadmap-active" : "roadmap-ready"
-      : blockedRoadmap
-      ? "roadmap-blocked"
-      : completed.length
-        ? "progress"
-        : active.length
-          ? "in-progress"
-          : "idle";
+      : blockerRepairAvailable
+        ? "roadmap-partially-blocked"
+        : blockedRoadmap
+          ? "roadmap-blocked"
+          : completed.length
+            ? "progress"
+            : active.length
+              ? "in-progress"
+              : "idle";
   const subject = exhausted
     ? "Pyash needs direction: roadmap backlog exhausted"
     : status === "roadmap-blocked"
@@ -548,6 +553,17 @@ export function renderWorkDailyDigest({
   } else {
     lines.push("(none)");
   }
+  if (blockerRepair?.candidate && blockerRepair.productivity?.noUsefulWork) {
+    lines.push(
+      "",
+      "Blocker repair lane",
+      "-------------------",
+      `Prior 24h: no useful work across ${blockerRepair.productivity.observedWakes} scheduler wakes`,
+      `Next repair: ${blockerRepair.candidate.title}`,
+      `Blocker: ${compactBlocker(blockerRepair.candidate.blocker)}`,
+      `Source task: ${blockerRepair.candidate.sourceTaskId || "scheduler baseline"}`
+    );
+  }
   if (dependencyWaiting.length) {
     lines.push("", "Waiting on dependencies", "-----------------------");
     for (const entry of dependencyWaiting.slice(0, 5)) {
@@ -648,11 +664,12 @@ async function buildWorkDailyDigestInternal({
       previousAt: previousReportAt
     }
     : null;
-  const [capacity, tasks, events, curation, storedHealth, storedDigestHealth] = await Promise.all([
+  const [capacity, tasks, events, curation, blockerRepair, storedHealth, storedDigestHealth] = await Promise.all([
     capacitySource({ now: end }),
     listWorkTasks(worldRoot, { includeTerminal: true }),
     readWorkSchedulerEvents(worldRoot, { since: start.toISOString(), until: end.toISOString() }),
     curateWorkBacklog({ worldRoot, repositoryRoot, owner, threshold: policy.curationThreshold, maxTasks: policy.curationMaxTasks, dryRun: true, now: end }),
+    prepareBlockerRepair({ worldRoot, owner, now: end, dryRun: true }),
     readWorkSchedulerHealth(worldRoot),
     readWorkDailyDigestHealth(worldRoot)
   ]);
@@ -684,6 +701,7 @@ async function buildWorkDailyDigestInternal({
     events,
     tasks,
     curation,
+    blockerRepair,
     roadmap,
     automationBranch,
     reportingGap,
@@ -704,7 +722,7 @@ async function buildWorkDailyDigestInternal({
       subject: rendered.subject
     });
   }
-  return { ...rendered, since: start.toISOString(), until: end.toISOString(), capacity, tasks, events, curation, roadmap };
+  return { ...rendered, since: start.toISOString(), until: end.toISOString(), capacity, tasks, events, curation, blockerRepair, roadmap };
 }
 
 export async function buildWorkDailyDigest(options = {}) {

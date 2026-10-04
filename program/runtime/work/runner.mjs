@@ -26,6 +26,7 @@ import { deriveImplementationProgress } from "./progress.mjs";
 import { currentTimeoutPolicy } from "./timeout_policy.mjs";
 import { reconcileOperationalWorkTasks } from "./turn_reconciliation.mjs";
 import { resolveTextModel } from "../gpu/text-model.mjs";
+import { prepareBlockerRepair } from "./blocker_repair.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -363,6 +364,7 @@ export async function runWorkBackgroundOnce({
   candidateAvailability = null,
   turnReconciliation = null,
   externalEvidenceProbe = null,
+  blockerRepair = true,
   onEvent = null,
   now = () => new Date()
 } = {}) {
@@ -405,6 +407,25 @@ export async function runWorkBackgroundOnce({
         safeToResume: reconciliation.safeToResume === true,
         worktreeState: reconciliation.worktreeState,
         reason: reconciliation.reason
+      }, { now });
+    }
+  }
+  let blockerRepairResult = null;
+  if (blockerRepair) {
+    try {
+      blockerRepairResult = await prepareBlockerRepair({ worldRoot, owner, now });
+    } catch (error) {
+      blockerRepairResult = {
+        activated: false,
+        reason: `blocker repair preparation failed: ${text(error?.message || error)}`
+      };
+    }
+    if (blockerRepairResult?.created) {
+      await emitWorkEvent(onEvent, "blocker-repair-prepared", {
+        taskId: blockerRepairResult.task.taskId,
+        sourceTaskId: blockerRepairResult.candidate.sourceTaskId,
+        blockerClass: blockerRepairResult.candidate.blockerClass,
+        reason: blockerRepairResult.candidate.blocker
       }, { now });
     }
   }
@@ -530,7 +551,10 @@ export async function runWorkBackgroundOnce({
     "last decision": admission.reason,
     "hourly wakes": String((Number(prior["hourly wakes"]) || 0) + 1),
     "curation result": curation?.reason || prior["curation result"] || "",
-    "curated tasks": curation?.created?.join(", ") || prior["curated tasks"] || ""
+    "curated tasks": curation?.created?.join(", ") || prior["curated tasks"] || "",
+    "blocker repair status": blockerRepairResult?.reason || prior["blocker repair status"] || "",
+    "blocker repair task": blockerRepairResult?.task?.taskId || prior["blocker repair task"] || "",
+    "blocker repair source": blockerRepairResult?.candidate?.sourceTaskId || prior["blocker repair source"] || ""
   };
   if (!admission.admit) {
     const externalOnly = admission.reason === "no eligible work" && externalEvidence.length > 0;
@@ -599,7 +623,8 @@ export async function runWorkBackgroundOnce({
       report,
       queue: await queueDepth(worldRoot),
       curation,
-      reconciliations
+      reconciliations,
+      blockerRepair: blockerRepairResult
     };
   }
   const candidateScan = await availableCandidates(inspectedCandidates, candidateAvailability, {
@@ -640,7 +665,8 @@ export async function runWorkBackgroundOnce({
       report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
       queue: await queueDepth(worldRoot),
       curation,
-      reconciliations
+      reconciliations,
+      blockerRepair: blockerRepairResult
     };
   }
   let preflight = { status: executionPreflight ? "pending" : "not-configured" };
@@ -695,7 +721,8 @@ export async function runWorkBackgroundOnce({
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
         curation,
-        reconciliations
+        reconciliations,
+        blockerRepair: blockerRepairResult
       };
     }
   }
@@ -729,7 +756,8 @@ export async function runWorkBackgroundOnce({
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
         curation,
-        reconciliations
+        reconciliations,
+        blockerRepair: blockerRepairResult
       };
     }
     selected = policyRevalidationResult.task;
@@ -789,7 +817,8 @@ export async function runWorkBackgroundOnce({
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
         curation,
-        reconciliations
+        reconciliations,
+        blockerRepair: blockerRepairResult
       };
     }
     selected = recovery.task;
@@ -819,8 +848,13 @@ export async function runWorkBackgroundOnce({
     }, { now });
   }
   const activeRuntime = eligible.some(({ task }) => ACTIVE_WORK_STATUSES.has(task.status));
-  let baseline = { status: baselineSync ? (activeRuntime ? "skipped-active-task" : "pending") : "not-configured" };
-  if (baselineSync && !activeRuntime) {
+  const selectedIsBlockerRepair = selected.kind === "blocker-repair";
+  let baseline = {
+    status: baselineSync
+      ? (selectedIsBlockerRepair ? "skipped-blocker-repair" : activeRuntime ? "skipped-active-task" : "pending")
+      : "not-configured"
+  };
+  if (baselineSync && !activeRuntime && !selectedIsBlockerRepair) {
     try {
       baseline = await baselineSync({ repositoryRoot, selected, now });
       await emitWorkEvent(onEvent, "baseline-synced", {
@@ -858,7 +892,8 @@ export async function runWorkBackgroundOnce({
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
         curation,
-        reconciliations
+        reconciliations,
+        blockerRepair: blockerRepairResult
       };
     }
   }
@@ -888,6 +923,7 @@ export async function runWorkBackgroundOnce({
     const selectedSupervisor = selectedIntegration ? integrationSupervisor : supervisor;
     result = await selectedSupervisor({
       ...supervisorOptions,
+      ...(selectedIsBlockerRepair ? { integrateAccepted: false, pushIntegration: false } : {}),
       worldRoot,
       owner,
       taskId: selected.taskId,
@@ -972,6 +1008,7 @@ export async function runWorkBackgroundOnce({
     policyRevalidation: policyRevalidationResult,
     temporarilySkipped,
     reconciliations,
+    blockerRepair: blockerRepairResult,
     ...result,
     workStarted
   };
