@@ -9,7 +9,8 @@ const PIPELINE = fs.readFileSync("/home/htaf/pyash/world/house/andrii-youtube-re
 
 test("interview diarization routes one sentence cue per recognition request", () => {
   assert.match(DIARIZER, /function buildCueLevelTurns\(cues\)/u);
-  assert.match(DIARIZER, /TWO_SPEAKER_CUE_TURNS \? buildCueLevelTurns\(workCues\) : buildTurnsFromCues\(workCues\)/u);
+  assert.match(DIARIZER, /CUE_LEVEL_TURNS \? buildCueLevelTurns\(workCues\) : buildTurnsFromCues\(workCues\)/u);
+  assert.match(DIARIZER, /PYA_SPEAKER_CUE_LEVEL_TURNS/u);
   assert.match(DIARIZER, /prevSpeaker: prevSpeaker \|\| null/u);
 });
 
@@ -17,6 +18,19 @@ test("cue-level speaker mode propagates through every transcript pipeline wrappe
   assert.match(MEETING_RUNNER, /PYA_SPEAKER_TWO_SPEAKER_CUE_TURNS:/u);
   assert.match(FOLDER_RUNNER, /PYA_SPEAKER_TWO_SPEAKER_CUE_TURNS:/u);
   assert.match(PIPELINE, /PYA_SPEAKER_TWO_SPEAKER_CUE_TURNS:/u);
+  assert.match(PIPELINE, /PYA_SPEAKER_CUE_LEVEL_TURNS:/u);
   assert.match(MEETING_RUNNER, /looksLikeInterview\(/u);
   assert.match(FOLDER_RUNNER, /looksLikeInterview\(/u);
+});
+
+test("panel identity mapping does not apply interview self-introduction aliases globally", () => {
+  const RENDERER = fs.readFileSync("/home/htaf/pyash/command/render_transcript_html_from_transcript_folder.mjs", "utf8");
+  assert.match(RENDERER, /PYA_INTERVIEW_SPEAKER_ALIASES/u);
+  assert.match(RENDERER, /if \(!\/\^\(1\|true\|yes\)\$\/iu\.test\(String\(process\.env\.PYA_INTERVIEW_SPEAKER_ALIASES/u);
+});
+
+test("named panel handoffs repair gaps using transcript evidence", () => {
+  const LINKER = fs.readFileSync("/home/htaf/pyash/world/house/andrii-youtube-reporter/program/link-panel-speakers-from-transcript-folder.mjs", "utf8");
+  assert.match(LINKER, /function repairHandoffGaps\(spans, rows\)/u);
+  assert.match(LINKER, /Explicit moderator handoff names this candidate/u);
 });

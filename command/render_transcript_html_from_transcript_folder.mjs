@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { readPyaTextValues } from "./pya_lookup.mjs";
 import { normalizeCanadianEnglish } from "../program/library/reporter_shared/canadian-english.mjs";
@@ -56,6 +57,13 @@ function buildTimedVideoUrl(baseUrl, seconds) {
   return `${base}#t=${sec}`;
 }
 
+function normalizeConfiguredModeratorSpeech(text) {
+  const configured = String(process.env.PYA_SPEAKER_MODERATOR_NAME || "").replace(/\s+/gu, " ").trim();
+  const source = String(text || "");
+  if (!configured) return source;
+  return source.replace(/(\bmy\s+name(?:'s|\s+is)\s+)([A-Z][\p{L}.'-]*(?:\s+[A-Z][\p{L}.'-]*){1,5})(?=[.!?](?:\s|$))/iu, `$1${configured}`);
+}
+
 function htmlId(input, fallback = "item") {
   const slug = slugify(input);
   return slug || fallback;
@@ -92,13 +100,18 @@ function parseSpeakerRowsJson(jsonText) {
   for (const r of rows) {
     const since = Number(r?.since ?? r?.start_s ?? r?.start ?? 0);
     const until = Number(r?.until ?? r?.end_s ?? r?.end ?? since);
-    const speaker = String(r?.display || r?.speaker || r?.speaker_name || "").trim();
+    const speakerKey = String(r?.speaker_key || "").trim();
+    const preserveNamedDisplay = /^(1|true|yes)$/iu.test(String(process.env.PYA_INTERVIEW_SPEAKER_ALIASES || ""));
+    const speaker = (preserveNamedDisplay ? String(r?.display || "").trim() : "")
+      || (/^speaker_/iu.test(speakerKey) ? speakerKey.toUpperCase() : speakerKey)
+      || String(r?.speaker || r?.speaker_name || "").trim();
     const speech = String(r?.text || r?.speech || r?.raw || "").replace(/\s+/g, " ").trim();
     if (!speech) continue;
     out.push({
       since: Number.isFinite(since) ? since : 0,
       until: Number.isFinite(until) ? until : (Number.isFinite(since) ? since : 0),
       speaker,
+      speaker_key: speakerKey,
       speech,
       raw: speaker ? `${speaker}: ${speech}` : speech,
     });
@@ -147,6 +160,66 @@ function mergeSpeakerLabelsByIndex(baseRows, speakerRows) {
   return out;
 }
 
+function applyEvidenceSpeakerNameMap(rows, mapPath, sourceJsonPath) {
+  if (!mapPath || !sourceJsonPath || !fs.existsSync(mapPath) || !fs.existsSync(sourceJsonPath)) return rows;
+  try {
+    const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
+    const sourceSha = crypto.createHash("sha256").update(fs.readFileSync(sourceJsonPath)).digest("hex");
+    if (Number(map?.schema_version || 0) !== 1 || String(map?.source_sha256 || "") !== sourceSha || !Array.isArray(map?.spans)) return rows;
+    const source = JSON.parse(fs.readFileSync(sourceJsonPath, "utf8"));
+    const sourceRows = Array.isArray(source?.rows) ? source.rows : [];
+    const nameAliases = (Array.isArray(map?.aliases) ? map.aliases : [])
+      .map((alias) => ({
+        observed: String(alias?.observed || "").replace(/\s+/gu, " ").trim(),
+        canonical: String(alias?.canonical_name || "").replace(/\s+/gu, " ").trim(),
+        confidence: Number(alias?.confidence),
+      }))
+      .filter((alias) => alias.observed.length >= 4 && alias.canonical.length >= 3 && alias.confidence >= 0.82)
+      .sort((a, b) => b.observed.length - a.observed.length);
+    const replaceNameAliases = (text) => {
+      let out = String(text || "");
+      for (const alias of nameAliases) {
+        const escaped = alias.observed.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        out = out.replace(new RegExp(`\\b${escaped}\\b`, "giu"), alias.canonical);
+      }
+      return out;
+    };
+    const cue = /^(?:all right|okay|the question|question(?: is|:)|next up|first up|second|third|fourth|fifth|sixth|our next|let(?:'s| us)|candidates?[, ]|time-wise|before i|each candidate|we have|we're going|i(?:'ll| will) (?:start|go|jump)|is (?:there|anyone)|please|good evening|ladies and gentlemen)\b|\b(?:the order in which|with that said|we will get opening statements|first up|second will|third will|fourth will|fifth will|sixth will|next up|opening statement|the question is|for this next question|we're going to start|when we do closing remarks|don't worry,? guys|i will remember where you were)\b/iu;
+    const aliases = new Map();
+    const moderatorRows = new Set();
+    for (const span of map.spans) {
+      const name = String(span?.canonical_name || "").trim();
+      const confidence = Number(span?.confidence);
+      const start = Number(span?.start_row);
+      const end = Number(span?.end_row);
+      if (!name || !Number.isFinite(confidence) || confidence < 0.82 || !Number.isInteger(start) || !Number.isInteger(end) || end < start) continue;
+      if (span?.role === "moderator" && process.env.PYA_SPEAKER_MODERATOR_NAME) {
+        for (let row = start; row <= end; row += 1) moderatorRows.add(row);
+      }
+      for (let row = start; row <= end; row += 1) {
+        // Candidate handoff spans are already bounded by the evidence map;
+        // retain short greetings and self-identifications such as “Good
+        // evening” or “Okay, I'm …” instead of dropping them as moderator
+        // control cues. Only suppress cues inside explicitly moderator spans.
+        if (span?.role === "moderator" && cue.test(String(sourceRows[row - 1]?.text || ""))) continue;
+        const prior = aliases.get(row);
+        if (!prior || confidence > prior.confidence) aliases.set(row, { name, confidence });
+      }
+    }
+    const out = rows.map((row, index) => {
+      const alias = aliases.get(index + 1);
+      let speech = replaceNameAliases(String(row?.speech || "").trim());
+      if (moderatorRows.has(index + 1)) speech = normalizeConfiguredModeratorSpeech(speech);
+      if (!alias) return speech === String(row?.speech || "").trim() ? row : { ...row, speech, raw: `${String(row?.speaker || "").trim()}: ${speech}`.trim() };
+      return { ...row, speaker: alias.name, speech, raw: `${alias.name}: ${speech}`.trim() };
+    });
+    process.stdout.write(`[transcript-html] applied evidence-backed speaker names: ${aliases.size} rows from ${mapPath}\n`);
+    return out;
+  } catch {
+    return rows;
+  }
+}
+
 function forceNumberedSpeakers(rows) {
   const out = Array.isArray(rows) ? rows.map((r) => ({ ...r })) : [];
   if (!out.length) return out;
@@ -168,6 +241,11 @@ function forceNumberedSpeakers(rows) {
 }
 
 function applyInterviewSpeakerAliases(rows, hostName = "") {
+  // This heuristic is only valid for an explicitly configured interview. A
+  // panel moderator commonly says “my name is …” before handing the floor to
+  // several guests; applying the guest alias to the moderator's diarizer key
+  // would relabel every later sentence from that key as the moderator.
+  if (!/^(1|true|yes)$/iu.test(String(process.env.PYA_INTERVIEW_SPEAKER_ALIASES || ""))) return rows;
   const out = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
   const aliases = new Map();
   const hostHint = String(hostName || "").replace(/\s+/gu, " ").trim();
@@ -179,7 +257,7 @@ function applyInterviewSpeakerAliases(rows, hostName = "") {
     const speaker = String(row?.speaker || "").trim();
     const speech = String(row?.speech || "").replace(/\s+/gu, " ").trim();
     if (!speaker || !speech) continue;
-    const guestMatch = speech.match(/\bmy\s+name(?:'s|\s+is)\s+([A-Z][\p{L}'-]*(?:\s+[A-Z][\p{L}'-]*){0,5})\b/iu);
+    const guestMatch = speech.match(/\bmy\s+name(?:'s|\s+is)\s+([A-Z][\p{L}.'-]*(?:\s+[A-Z][\p{L}.'-]*){0,5})\b/iu);
     if (guestMatch && !guestSpeaker) {
       guestSpeaker = speaker;
       guestName = String(guestMatch[1] || "").trim();
@@ -594,11 +672,65 @@ function parseChapterSummarySectionsFromPya(summaryPath, groundingPath = "") {
       "unit id": summary.id || ground.id || `chapter_${String(index + 1).padStart(3, "0")}`,
       heading: summary.title || ground.title || `Chapter ${index + 1}`,
       summary: summary.summary || ground.summary || "",
+      since: Number.isFinite(summary.since) ? summary.since : ground.since,
+      until: Number.isFinite(summary.until) ? summary.until : ground.until,
       start_row: Number.isFinite(summary.start_row) ? summary.start_row : ground.start_row,
       end_row: Number.isFinite(summary.end_row) ? summary.end_row : ground.end_row,
       source_rows: Number.isFinite(summary.source_rows) ? summary.source_rows : ground.source_rows,
     };
   });
+}
+
+function parseCandidateAnswerChapters(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return [];
+  try {
+    const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return (Array.isArray(payload?.answers) ? payload.answers : []).map((answer) => ({
+      id: String(answer?.id || "candidate-answer"),
+      candidate: String(answer?.candidate || "").trim(),
+      questionTitle: String(answer?.question_title || "").trim(),
+      summary: String(answer?.summary || "").trim(),
+      since: Number(answer?.since),
+      until: Number(answer?.until),
+      startRow: Number(answer?.start_row) - 1,
+      endRow: Number(answer?.end_row) - 1,
+    })).filter((answer) => answer.candidate && answer.summary && Number.isFinite(answer.since)
+      && Number.isFinite(answer.until) && answer.endRow >= answer.startRow);
+  } catch {
+    return [];
+  }
+}
+
+function attachCandidateAnswerChapters(ranges, answers) {
+  const out = Array.isArray(ranges) ? ranges.map((range) => ({
+    ...range,
+    chapters: Array.isArray(range?.chapters) ? [...range.chapters] : [],
+  })) : [];
+  for (const answer of Array.isArray(answers) ? answers : []) {
+    const section = out.find((range) => answer.startRow <= range.endRow && answer.endRow >= range.startRow);
+    if (!section) continue;
+    // Named opening/closing sections already carry the authoritative marker
+    // (for example, 00:15:22 Opening: Ray Botten).  Do not add a second
+    // nested marker a few seconds later for the same answer; the answer
+    // remains available in the structured artifact and the section summary.
+    const sectionTitle = String(section.heading || "").replace(/\s+/gu, " ").trim().toLocaleLowerCase();
+    const answerTitle = String(answer.questionTitle || "").replace(/\s+/gu, " ").trim().toLocaleLowerCase();
+    if (/^(?:opening|closing):\s*\S/iu.test(answerTitle) && sectionTitle === answerTitle) continue;
+    section.chapters.push({
+      "chapter id": answer.id,
+      title: `${answer.candidate} — ${answer.questionTitle}`.replace(/\s+—\s*$/u, "").trim(),
+      text: answer.summary,
+      since: answer.since,
+      until: answer.until,
+      "row start": answer.startRow,
+      "row end": answer.endRow,
+      "candidate answer": true,
+    });
+  }
+  for (const section of out) {
+    section.chapters.sort((a, b) => Number(a?.since || 0) - Number(b?.since || 0));
+  }
+  return out;
 }
 
 function parseAgendaMatchesFromPya(filePath) {
@@ -728,6 +860,8 @@ function normalizeSectionRanges(rows, ranges) {
       id: String(source[i]?.id || `section-${i + 1}`),
       heading: String(source[i]?.heading || `Section ${i + 1}`),
       summary: String(source[i]?.summary || ""),
+      since: Number.isFinite(Number(source[i]?.since)) ? Number(source[i].since) : undefined,
+      until: Number.isFinite(Number(source[i]?.until)) ? Number(source[i].until) : undefined,
       startRow,
       endRow,
     });
@@ -827,6 +961,11 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
         id: `section-${i + 1}`,
         heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
         summary: String(sec?.summary || "").trim(),
+        // Keep the authoritative chapter marker separate from the first
+        // diarized row.  The transcript anchor should land on speech, while
+        // the TOC/chapter label should retain the supplied recording time.
+        since: Number.isFinite(Number(sec?.since)) ? Number(sec.since) : undefined,
+        until: Number.isFinite(Number(sec?.until)) ? Number(sec.until) : undefined,
         startRow: start,
         endRow: end,
       };
@@ -849,6 +988,10 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
         id: `section-${i + 1}`,
         heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
         summary: String(sec?.summary || "").trim(),
+        // Preserve official recording markers for the TOC; row anchors still
+        // point at the first diarized speech cue in each section.
+        since: Number.isFinite(Number(sec?.since)) ? Number(sec.since) : undefined,
+        until: Number.isFinite(Number(sec?.until)) ? Number(sec.until) : undefined,
         startRow: start,
         endRow: end,
       };
@@ -905,6 +1048,8 @@ function buildSectionRanges({ transcriptRows, sectionSummaries, agendaMatches, w
         id: `section-${i + 1}`,
         heading: deriveHeadingFromSummary(String(sec?.heading || "").trim(), String(sec?.summary || "").trim(), i),
         summary: String(sec?.summary || "").trim(),
+        since: Number.isFinite(Number(sec?.since)) ? Number(sec.since) : undefined,
+        until: Number.isFinite(Number(sec?.until)) ? Number(sec.until) : undefined,
         startRow: start,
         endRow: end,
       });
@@ -1179,7 +1324,9 @@ function buildPage({
       // marker even when the first spoken cue begins a few seconds later.
       // Keep the transcript cue timing intact, but make the displayed first
       // section/chapter marker satisfy that same :00 contract.
-      since: sectionIndex === 0 ? 0 : Number(transcriptRows[s.startRow]?.since),
+      since: sectionIndex === 0
+        ? 0
+        : (Number.isFinite(Number(s?.since)) ? Number(s.since) : Number(transcriptRows[s.startRow]?.since)),
       chapters: (Array.isArray(s.chapters) ? s.chapters : []).map((ch, i) => ({
         href: `#${chapterAnchor(s, ch, i)}`,
         label: String(ch?.title || ch?.text || `Chapter ${i + 1}`).trim() || `Chapter ${i + 1}`,
@@ -1441,6 +1588,11 @@ function main() {
     }
   }
 
+  const evidenceSpeakerMapPath = String(process.env.PYA_SPEAKER_NAME_MAP_PATH || "").trim();
+  if (evidenceSpeakerMapPath && speakerRowsJsonPath) {
+    transcriptRows = applyEvidenceSpeakerNameMap(transcriptRows, evidenceSpeakerMapPath, speakerRowsJsonPath);
+  }
+
   // Guard against truncated speaker SRT checkpoints; fall back to full sentence-merged SRT.
   const fallbackSrtPath = pickFile(transcriptDir, [
     /\.normalized\.sentences\.merged\.srt$/u,
@@ -1477,6 +1629,7 @@ function main() {
   const chapterSummaryPath = pickFile(transcriptDir, [/\.chapter-summary\.md$/u]);
   const chapterSummaryPyaPath = pickFile(transcriptDir, [/\.chapter-summary\.pya$/u]);
   const chapterGroundingPyaPath = pickFile(transcriptDir, [/\.chapter\.grounding\.pya$/u]);
+  const candidateAnswerChaptersPath = pickFile(transcriptDir, [/\.candidate-answer-chapters\.json$/u]);
   const agendaMatchesPath = pickFile(transcriptDir, [/\.agenda\.matches\.pya$/u]);
   const agendaWiseSeriesPath = pickFile(transcriptDir, [/\.agenda-wise\.series\.pya$/u]);
   const agendaGrossChunksPath = pickFile(transcriptDir, [/\.agenda\.gross-chunks\.pya$/u]);
@@ -1550,7 +1703,7 @@ function main() {
   const finalSource = sourceArg || meetingUrl || "";
   const finalAgendaPage = String(agendaPageArg || inferredAgendaPage).trim();
 
-  const transcriptSections = attachSectionChaptersByIndex(
+  let transcriptSections = attachSectionChaptersByIndex(
     buildSectionRanges({
       transcriptRows,
       sectionSummaries: agendaSummaryJson?.sections,
@@ -1560,6 +1713,10 @@ function main() {
     }),
     agendaSummaryJson?.sections,
     transcriptRows,
+  );
+  transcriptSections = attachCandidateAnswerChapters(
+    transcriptSections,
+    parseCandidateAnswerChapters(candidateAnswerChaptersPath),
   );
   assertNoLongUnsummarizedSections(
     transcriptRows,
