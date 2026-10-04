@@ -115,6 +115,15 @@ const TWO_SPEAKER_CUE_TURNS = (() => {
   if (/^(1|true|yes)$/iu.test(raw)) return true;
   return EXPECTED_MAX_SPEAKERS === 2;
 })();
+// Keep the old variable as a compatibility alias, but expose a neutral
+// sentence-level switch for panels. Every cue is classified independently;
+// this prevents a long turn from forcing one voice across a handoff.
+const CUE_LEVEL_TURNS = (() => {
+  const raw = String(process.env.PYA_SPEAKER_CUE_LEVEL_TURNS || '').trim();
+  if (/^(0|false|no)$/iu.test(raw)) return false;
+  if (/^(1|true|yes)$/iu.test(raw)) return true;
+  return TWO_SPEAKER_CUE_TURNS;
+})();
 const REASSIGN_WINDOW_ROWS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_REASSIGN_WINDOW_ROWS || 12);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 12;
@@ -1224,10 +1233,10 @@ async function main() {
   process.stdout.write(`[speaker-sentence] isolate voices: ${isolateVoices ? 'on' : 'off'}\n`);
   process.stdout.write(`[speaker-sentence] cues: ${cues.length}\n`);
   if (MAX_CUES > 0) process.stdout.write(`[speaker-sentence] cue limit: ${workCues.length}\n`);
-  const turns = TWO_SPEAKER_CUE_TURNS ? buildCueLevelTurns(workCues) : buildTurnsFromCues(workCues);
+  const turns = CUE_LEVEL_TURNS ? buildCueLevelTurns(workCues) : buildTurnsFromCues(workCues);
   process.stdout.write(`[speaker-sentence] turns: ${turns.length}\n`);
   process.stdout.write(
-    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} turn_max_seconds=${TURN_MAX_SECONDS} turn_max_words=${TURN_MAX_WORDS} turn_max_gap=${TURN_MAX_GAP_SECONDS} cue_level_turns=${TWO_SPEAKER_CUE_TURNS ? 'on' : 'off'} boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
+    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} turn_max_seconds=${TURN_MAX_SECONDS} turn_max_words=${TURN_MAX_WORDS} turn_max_gap=${TURN_MAX_GAP_SECONDS} cue_level_turns=${CUE_LEVEL_TURNS ? 'on' : 'off'} boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
   );
   process.stdout.write(
     `[speaker-sentence] reassign: enabled=${REASSIGN_PASS_ENABLED ? 'on' : 'off'} mode=${RELABEL_MODE || 'default'} expected_max=${EXPECTED_MAX_SPEAKERS || 0}\n`

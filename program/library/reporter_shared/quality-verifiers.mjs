@@ -600,7 +600,13 @@ export function verifyArticleClaims({
         && supportedByWeakOnly
         && ["one-sentence summary", "whole stream summary"].includes(target.key);
       const scopedOutcome = hasOutcome ? itemScopedOutcomeSupport(sentenceNorm, groundedClaimUnits) : null;
-      const isSupportedOutcome = !hasOutcome || (scopedOutcome == null
+      // Video-only recaps commonly use proposal framing such as “candidates
+      // propose adopting…”, “an option of adopting…”, or “discussed whether
+      // to adopt…”.  These are not claims that a council adopted an outcome;
+      // treat them as discussion language while retaining the strict item-
+      // scoped disposition gate for agenda-backed civic articles.
+      const proposalFraming = /\b(?:propos(?:e|ed|es|ing)|suggest(?:s|ed|ing)?|consider(?:s|ed|ing)?|discuss(?:es|ed|ing)?|debate(?:s|d|ing)?|weigh(?:s|ed|ing)?|option of|would|could|might|plan(?:s|ned|ning)? to|if elected)\b/iu.test(sentenceNorm);
+      const isSupportedOutcome = !hasOutcome || proposalFraming || (scopedOutcome == null
         ? (outcomeWords.test(strongNorm) || outcomeWords.test(secondaryNorm))
         : scopedOutcome.supported);
 
