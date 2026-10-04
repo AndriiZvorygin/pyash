@@ -42,6 +42,7 @@ import { inspectWorkExecutionPreflight } from "../program/runtime/work/preflight
 import { runSandboxSmoke } from "../program/runtime/work/sandbox_smoke.mjs";
 import { reconcileOperationalWorkTasks } from "../program/runtime/work/turn_reconciliation.mjs";
 import { currentTimeoutPolicy } from "../program/runtime/work/timeout_policy.mjs";
+import { prepareBlockerRepair } from "../program/runtime/work/blocker_repair.mjs";
 import {
   defaultWorkEmailFrom,
   sendWorkReportNotification
@@ -373,6 +374,11 @@ try {
     };
     if (has(args, "--dry-run")) {
       const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
+      const blockerRepair = await prepareBlockerRepair({
+        worldRoot,
+        owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
+        dryRun: true
+      });
       const curation = await curateWorkBacklog({
         worldRoot,
         repositoryRoot,
@@ -388,7 +394,15 @@ try {
         repositoryRoot,
         foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE)
       });
-      const dryEligible = inspection.candidateOrder?.length
+      const dryEligible = blockerRepair.candidate
+        ? [{ task: {
+          taskId: blockerRepair.candidate.taskId,
+          title: blockerRepair.candidate.title,
+          priority: blockerRepair.candidate.priority,
+          kind: "blocker-repair",
+          queuedAt: new Date().toISOString()
+        } }]
+        : inspection.candidateOrder?.length
         ? inspection.candidateOrder.map((task) => ({ task }))
         : inspection.eligible.length
           ? inspection.eligible
@@ -413,11 +427,13 @@ try {
         eligible: dryEligible,
         selected: dryEligible[0]?.task || null,
         admission: dryAdmission,
-        curation
+        curation,
+        blockerRepair
       };
       result = {
         ...inspected,
         curation,
+        blockerRepair,
         report: renderWorkDryRunReport({ inspection: inspected, policy })
       };
     } else {

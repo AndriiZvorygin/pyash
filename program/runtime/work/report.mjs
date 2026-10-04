@@ -236,6 +236,9 @@ export function renderWorkDryRunReport({ inspection = {}, policy = {} } = {}) {
     "",
     "Next task:",
     selected ? `  ${selected.taskId} [priority ${selected.priority}] ${selected.title}` : "  (none)",
+    inspection.blockerRepair?.candidate
+      ? `  Blocker repair: ${inspection.blockerRepair.candidate.taskId} [priority ${inspection.blockerRepair.candidate.priority}] ${inspection.blockerRepair.candidate.title}`
+      : "",
     inspection.curation?.proposed?.length
       ? `  Curated candidates: ${inspection.curation.proposed.map((item) => item.taskId).join(", ")}`
       : "",

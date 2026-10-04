@@ -71,7 +71,11 @@ export async function appendWorkSchedulerEvent(worldRoot, event = {}, { now = ()
     localOwnerAlive: event.localOwnerAlive,
     appServerAlive: event.appServerAlive,
     safeToResume: event.safeToResume,
-    worktreeState: event.worktreeState
+    worktreeState: event.worktreeState,
+    blockerRepair: event.blockerRepair === true,
+    repairSourceTaskId: event.repairSourceTaskId,
+    repairBlockerClass: event.repairBlockerClass,
+    repairAttempt: event.repairAttempt
   };
   const lines = [
     "su name work scheduler event be map def",
