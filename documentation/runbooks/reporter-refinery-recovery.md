@@ -14,7 +14,7 @@ Restore missing Andrii YouTube, Owen Sound, or Grey County publications by fixin
 
 ## Repair constraints
 
-- Local reporter LLM work uses only `qwen3.5:9b`.
+- Local reporter LLM work uses the canonical text model declared in `.pya` configuration (the current default is set in `configure/default.pya`).
 - Never add meeting-, date-, page-, title-, speaker-, or agenda-code-specific exceptions.
 - Deterministic logic may classify operational state, validate ownership, or enforce gates. It must not replace LLM transcript segmentation, prose generation, whole-meeting synthesis, or substantive summaries with regex matching, opening fragments, first sentences, or copied source text.
 - Structured eScribe HTML is authoritative for agenda item identity, order, title, description, and attachment ownership. Direct attachments outrank overlapping combined-package ranges.

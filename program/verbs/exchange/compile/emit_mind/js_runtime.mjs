@@ -1,3 +1,5 @@
+import { DEFAULT_TEXT_MODEL } from "../../../../runtime/gpu/text-model.mjs";
+
 function historyWindowLiteral(windowValue, fallbackExpression = "cfg.window") {
   const numeric = Number(windowValue);
   if (windowValue !== null && windowValue !== undefined && Number.isFinite(numeric)) {
@@ -62,7 +64,7 @@ export function handleMindSentenceJs(context, helpers) {
   }
   lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
   lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
-  lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3.5:9b\""};`);
+  lines.push(`const model = ${explicitModel ?? `cfg.model || ${JSON.stringify(DEFAULT_TEXT_MODEL)}`};`);
   const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
   const windowLiteral = historyWindowLiteral(windowVal, "cfg.window");
   const dialogue = `${mindName} story`;

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildAgendaPreviewChunkSpans,
   chunkAgendaPreviewSource,
+  prepareAgendaPreviewSource,
 } from "../program/library/reporter_shared/agenda-preview-source-chunks.mjs";
 
 function normalized(text = "") {
@@ -98,7 +99,17 @@ test("agenda preview chunking preserves reports longer than the former 60000 cha
 
   const chunks = chunkAgendaPreviewSource(source);
 
-  assert.equal(chunks.every((chunk) => chunk.length <= 9000), true);
+  assert.equal(chunks.every((chunk) => chunk.length <= 16000), true);
   assert.equal(normalized(chunks.join(" ")), normalized(source));
   assert.match(chunks.at(-1), /Report paragraph 900:/u);
+});
+
+test("agenda preview preparation omits only whitespace-padded image OCR blocks", () => {
+  const narrative = "---\n\nAttachment: Staff report.pdf\n\nRecommendation: approve the land exchange.\n";
+  const map = `---\n\nAttachment: Draft plan.pdf\n\n${(`${"          ".repeat(20)}30.123${"          ".repeat(20)}4890000.00${"          ".repeat(20)}PART 1\n`).repeat(1200)}`;
+  const prepared = prepareAgendaPreviewSource(`${narrative}\n${map}`);
+  assert.match(prepared, /Recommendation: approve the land exchange/u);
+  assert.match(prepared, /Attachment: Draft plan\.pdf/u);
+  assert.match(prepared, /image\/map OCR/u);
+  assert.ok(prepared.length < narrative.length + map.length);
 });

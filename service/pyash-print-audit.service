@@ -1,0 +1,20 @@
+[Unit]
+Description=Pyash CUPS print audit monitor
+After=cups.service dbus.service
+Requires=cups.service
+
+[Service]
+Type=simple
+User=htaf
+Group=htaf
+Environment=HOME=/home/htaf
+Environment=TZ=America/Toronto
+Environment=NODE_VERSION=default
+Environment=PYA_PRINT_JOURNAL_ROOT=/home/htaf/world/newspaper
+ExecStart=/home/htaf/.nvm/nvm-exec node /home/htaf/pyac/pyash/command/print_audit_monitor.mjs
+Restart=always
+RestartSec=3
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

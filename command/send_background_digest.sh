@@ -7,9 +7,10 @@ source "$SCRIPT_DIR/pyash_background_common.sh"
 pyash_background_prepare
 
 log_file="$PYA_BACKGROUND_LOG_DIR/background-digest.log"
-exec 9>"$PYASH_BACKGROUND_LOCK"
+digest_lock="${PYA_BACKGROUND_DIGEST_LOCK:-/tmp/pyash-digest.lock}"
+exec 9>"$digest_lock"
 if ! flock -n 9; then
-  pyash_background_log "digest skipped: another Pyash background process owns $PYASH_BACKGROUND_LOCK" >> "$log_file"
+  pyash_background_log "digest skipped: another digest process owns $digest_lock" >> "$log_file"
   exit 0
 fi
 if [[ -z "${PYA_WORK_EMAIL_REPORT:-}" ]]; then

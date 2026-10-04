@@ -1,0 +1,19 @@
+su name audio equilibrium from filename input to filename output be ceremony def
+  ob name run root to name text workspace root be text do
+  su name equilibrium input path stage ob filename of from of this to name text equilibrium input path be text do
+  su name equilibrium output path stage ob filename of to of this to name text equilibrium output path be text do
+
+  ob text "node \"" to name text equilibrium command be text do
+  ob name text workspace root to name equilibrium command be plus do
+  ob text "/command/audio_equilibrium.mjs\" \"" to name equilibrium command be plus do
+  ob name text equilibrium input path to name equilibrium command be plus do
+  ob text "\" \"" to name equilibrium command be plus do
+  ob name text equilibrium output path to name equilibrium command be plus do
+  ob text "\"" to name equilibrium command be plus do
+  su name equilibrium stage ob name text equilibrium command be command do
+
+  su name result ob filename of to of this be filename ya
+  su name result ret
+prah
+
+exists su name audio equilibrium be export ya

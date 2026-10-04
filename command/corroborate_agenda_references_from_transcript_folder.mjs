@@ -2,6 +2,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readPyaTextValues } from "./pya_lookup.mjs";
+import { requestManagedOllamaChat } from "../program/runtime/gpu/managed-ollama.mjs";
+import { resolveTextModel } from "../program/runtime/gpu/text-model.mjs";
 
 function usage() {
   return [
@@ -141,35 +143,28 @@ function assertCleanRepairText(text = "", where = "stage4 repair") {
 
 async function callOllamaJson({ prompt, model }) {
   const host = String(process.env.OLLAMA_HOST || "http://mriczo:11434").replace(/\/+$/u, "");
-  const url = `${host}/api/chat`;
   const attempts = Math.max(1, Number.parseInt(String(process.env.PYA_STAGE4_OLLAMA_ATTEMPTS || "3"), 10) || 3);
   let lastErr = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const retryLine = attempt > 1
       ? "\nRetry instruction: return one valid JSON object only, exactly {\"summary\":\"...\"}. Do not include markdown or serialized artifacts."
       : "";
-    const body = {
-      model: model || process.env.OLLAMA_MODEL || "qwen3.5:9b",
-      stream: false,
-      format: "json",
-      options: { temperature: attempt > 1 ? 0 : 0.1, top_p: 0.9 },
-      messages: [
-        { role: "system", content: "You are a strict civic transcript corroboration editor. Output one JSON object only." },
-        { role: "user", content: `${String(prompt || "")}${retryLine}` },
-      ],
-    };
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), Number(process.env.PYA_STAGE4_TIMEOUT_MS || 120000));
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: ctrl.signal,
+      const j = await requestManagedOllamaChat({
+        model: model || process.env.OLLAMA_MODEL || resolveTextModel(),
+        ollamaUrl: host,
+        managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+        format: "json",
+        options: { temperature: attempt > 1 ? 0 : 0.1, top_p: 0.9 },
+        messages: [
+          { role: "system", content: "You are a strict civic transcript corroboration editor. Output one JSON object only." },
+          { role: "user", content: `${String(prompt || "")}${retryLine}` },
+        ],
+        think: false,
+        keepAlive: 300,
+        timeoutMs: Number(process.env.PYA_STAGE4_TIMEOUT_MS || 120000),
       });
-      if (!res.ok) throw new Error(`ollama http ${res.status}`);
-      const j = await res.json();
-      const content = String(j?.message?.content || "").trim();
+      const content = String(j?.message?.content || j?.response || "").trim();
       try {
         return JSON.parse(content);
       } catch {
@@ -181,8 +176,6 @@ async function callOllamaJson({ prompt, model }) {
       lastErr = err;
       if (attempt >= attempts) break;
       await new Promise((r) => setTimeout(r, attempt * 1500));
-    } finally {
-      clearTimeout(timer);
     }
   }
   throw lastErr || new Error("ollama json failed");

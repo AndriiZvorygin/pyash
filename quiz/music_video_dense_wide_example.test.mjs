@@ -14,6 +14,7 @@ test("wide dense music video example uses lyric line cuts with widescreen draws"
   assert.match(text, /with name draw size widescreen to filename of ob of draw out dir be draw do/u);
   assert.doesNotMatch(text, /srt_section_collapse\.mjs/u);
   assert.doesNotMatch(text, /during num 999999/u);
+  assert.doesNotMatch(text, /Andrii|Zvorygin|andrii_zvorygin/u);
 });
 
 test("wide dense Andrii people example adds character route without changing dense flow", async () => {

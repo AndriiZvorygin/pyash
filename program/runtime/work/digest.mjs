@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { readCodexCapacity, calculateWeeklyPacing, DEFAULT_BACKGROUND_POLICY } from "./capacity.mjs";
-import { curateWorkBacklog } from "./curator.mjs";
+import { buildExecutableSupply, curateWorkBacklog } from "./curator.mjs";
+import { prepareBlockerRepair } from "./blocker_repair.mjs";
 import { listWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
@@ -31,21 +32,26 @@ function digestPath(worldRoot) {
   return path.join(worldRoot, "holding", "work", "artifacts", "daily-digest.pya");
 }
 
+function digestHealthPath(worldRoot) {
+  return path.join(worldRoot, "holding", "work", "artifacts", "daily-digest-health.pya");
+}
+
 function quote(value) {
   return JSON.stringify(String(value ?? ""));
 }
 
-function mapBlock(entries) {
+function mapBlock(name, entries) {
   return [
-    "su name work daily digest state be map def",
+    `su name ${name} be map def`,
     ...entries.map(([key, value]) => `  su name ${key} ob text ${quote(value)} ya`),
     "prah",
     ""
   ].join("\n");
 }
 
-function parseState(source) {
-  const match = String(source ?? "").match(/su name work daily digest state be map def\n([\s\S]*?)\nprah/iu);
+function parseState(source, name = "work daily digest state") {
+  const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(source ?? "").match(new RegExp(`su name ${escaped} be map def\\n([\\s\\S]*?)\\nprah`, "iu"));
   const state = {};
   for (const line of String(match?.[1] || "").split("\n")) {
     const found = line.trim().match(/^su name (.+?) ob text (.+?) ya$/iu);
@@ -72,9 +78,92 @@ export async function writeWorkDailyDigestState(worldRoot, state = {}) {
   const target = digestPath(worldRoot);
   await fs.mkdir(path.dirname(target), { recursive: true });
   const temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(temporary, mapBlock(Object.entries(state)), "utf8");
+  await fs.writeFile(temporary, mapBlock("work daily digest state", Object.entries(state)), "utf8");
   await fs.rename(temporary, target);
   return state;
+}
+
+function jsonList(value) {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function boundedHistory(value) {
+  return jsonList(value)
+    .filter((entry) => entry && Number.isFinite(Date.parse(entry.at)))
+    .slice(-100);
+}
+
+export async function readWorkDailyDigestHealth(worldRoot) {
+  try {
+    return parseState(await fs.readFile(digestHealthPath(worldRoot), "utf8"), "work daily digest health");
+  } catch (error) {
+    if (error?.code === "ENOENT") return {};
+    throw error;
+  }
+}
+
+export async function writeWorkDailyDigestHealth(worldRoot, state = {}) {
+  const target = digestHealthPath(worldRoot);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const normalized = {
+    ...state,
+    "success history": JSON.stringify(boundedHistory(state["success history"])),
+    "failure history": JSON.stringify(boundedHistory(state["failure history"]))
+  };
+  const temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
+  await fs.writeFile(temporary, mapBlock("work daily digest health", Object.entries(normalized)), "utf8");
+  await fs.rename(temporary, target);
+  return normalized;
+}
+
+function increment(value) {
+  return (Number(value) || 0) + 1;
+}
+
+export async function recordWorkDailyDigestSuccess(worldRoot, {
+  at = new Date(),
+  subject = ""
+} = {}) {
+  const stamp = iso(at);
+  const current = await readWorkDailyDigestHealth(worldRoot);
+  return writeWorkDailyDigestHealth(worldRoot, {
+    ...current,
+    "last attempted at": stamp,
+    "last successful at": stamp,
+    "successful reports": String(increment(current["successful reports"])),
+    "success history": JSON.stringify([
+      ...boundedHistory(current["success history"]),
+      { at: stamp, subject: text(subject) }
+    ])
+  });
+}
+
+export async function recordWorkDailyDigestFailure(worldRoot, {
+  kind = "generation",
+  reason = "digest failed",
+  at = new Date()
+} = {}) {
+  const stamp = iso(at);
+  const current = await readWorkDailyDigestHealth(worldRoot);
+  const failureKind = text(kind) || "generation";
+  return writeWorkDailyDigestHealth(worldRoot, {
+    ...current,
+    "last attempted at": stamp,
+    "last failure at": stamp,
+    "last failure kind": failureKind,
+    "last failure reason": text(reason),
+    "generation failures": String((Number(current["generation failures"]) || 0) + (failureKind === "generation" ? 1 : 0)),
+    "delivery failures": String((Number(current["delivery failures"]) || 0) + (failureKind === "delivery" ? 1 : 0)),
+    "failure history": JSON.stringify([
+      ...boundedHistory(current["failure history"]),
+      { at: stamp, kind: failureKind, reason: text(reason) }
+    ])
+  });
 }
 
 function taskTouched(task, start, end) {
@@ -91,6 +180,23 @@ function compactReport(task) {
     const body = text(value).replace(/\s+/gu, " ");
     return body.length <= limit ? body : `${body.slice(0, limit - 3)}...`;
   };
+  const review = checkpoint.review || {};
+  const reviewer = review.role === "reviewer"
+    ? checkpoint.reviewer || {}
+    : review.role === "escalationReviewer"
+      ? checkpoint.escalationReviewer || {}
+      : checkpoint.manager || {};
+  const reviewLabel = review.role === "reviewer"
+    ? "Luna review"
+    : review.role === "escalationReviewer"
+      ? "Sol escalation review"
+      : "Sol review";
+  const roleLines = review.role === "escalationReviewer"
+    ? [
+      `Reviewer: ${(checkpoint.reviewer?.model || "(unknown)")} (Luna routine reviewer)`,
+      `Escalation reviewer: ${(checkpoint.escalationReviewer?.model || reviewer.model || "(unknown)")} (Sol escalation reviewer)`
+    ]
+    : [`Reviewer: ${reviewer.model || "(unknown)"} (${reviewLabel})`];
   return [
     `Task: ${task.title}`,
     `Task ID: ${task.taskId}`,
@@ -104,7 +210,10 @@ function compactReport(task) {
     `Acceptance checks closed: ${progress.acceptanceChecksClosed}`,
     `Last material progress: ${progress.lastMaterialProgressAt || "not recorded"}`,
     `Tests: ${(checkpoint.implementation?.tests || []).map((test) => excerpt(test, 280)).join("; ") || "(not recorded)"}`,
-    `Sol review: ${checkpoint.review?.decision || "(not recorded)"} ${excerpt(checkpoint.review?.explanation, 280)}`,
+    `Planner: ${checkpoint.manager?.model || "(unknown)"}`,
+    `Implementer: ${checkpoint.worker?.model || "(unknown)"}`,
+    ...roleLines,
+    `${reviewLabel}: ${review.decision || "(not recorded)"} ${excerpt(review.explanation, 280)}`,
     `Diff: ${renderWorkTaskReport(task).match(/^Diff: .*$/mu)?.[0]?.replace(/^Diff:\s*/u, "") || "not recorded"}`,
     checkpoint.workspace?.worktreePath ? `Worktree: ${checkpoint.workspace.worktreePath}` : "",
     checkpoint.implementation?.commit ? `Commit: ${checkpoint.implementation.commit}` : ""
@@ -159,6 +268,28 @@ function compactBlocker(value) {
   return `technical correction required: ${body.slice(0, 220)}`;
 }
 
+function compactTaskBlocker(task) {
+  const reconciliation = task?.checkpoint?.turnReconciliation || {};
+  const safeToResume = reconciliation.classification === "STALE"
+    && reconciliation.safeToResume === true;
+  if (reconciliation.classification === "STALE" && !safeToResume) {
+    return `stale writer reconciled: ${reconciliation.reason || "no live writer evidence remains"}`;
+  }
+  if (safeToResume && !text(task?.checkpoint?.integration?.status)) {
+    return "stale writer reconciled; safe continuation available";
+  }
+  if (reconciliation.classification === "LIVE") {
+    return `writer live: ${reconciliation.reason || "recent liveness evidence remains"}`;
+  }
+  if (reconciliation.classification === "AMBIGUOUS") {
+    return `writer liveness ambiguous: ${reconciliation.reason || "evidence is incomplete"}`;
+  }
+  if (reconciliation.classification === "COMPLETED_UNRECONCILED") {
+    return "completed Codex result awaiting task-state reconciliation";
+  }
+  return compactBlocker(task?.checkpoint?.blocker || task?.message || task?.error);
+}
+
 function isCapacityTelemetryUnavailable(reason) {
   return /^(?:capacity unknown|capacity telemetry unavailable)$/iu.test(text(reason));
 }
@@ -189,6 +320,34 @@ function dependencyWaitingForTask(task, roadmap) {
   };
 }
 
+function digestHealthWindow(health = {}, start = "", end = "", currentSuccess = null) {
+  const lower = Date.parse(start || "1970-01-01T00:00:00.000Z");
+  const upper = Date.parse(end || "2999-12-31T23:59:59.999Z");
+  const inWindow = (entry) => {
+    const at = Date.parse(entry?.at || "");
+    return Number.isFinite(at) && at >= lower && at <= upper;
+  };
+  const successes = boundedHistory(health["success history"]).filter(inWindow);
+  const failures = boundedHistory(health["failure history"]).filter(inWindow);
+  if (currentSuccess && inWindow(currentSuccess)) successes.push(currentSuccess);
+  const expectedRuns = Math.max(1, Math.round((upper - lower) / (24 * 60 * 60 * 1000)));
+  const lastFailure = failures.at(-1) || (
+    health["last failure at"]
+      ? { at: health["last failure at"], kind: health["last failure kind"], reason: health["last failure reason"] }
+      : null
+  );
+  return {
+    expectedRuns,
+    successfulReports: successes.length,
+    generationFailures: failures.filter((entry) => entry.kind === "generation").length,
+    deliveryFailures: failures.filter((entry) => entry.kind === "delivery").length,
+    lastSuccessfulAt: successes.at(-1)?.at || health["last successful at"] || "",
+    lastFailure: lastFailure
+      ? `${lastFailure.at}: ${lastFailure.kind || "failure"}: ${lastFailure.reason || "unknown reason"}`
+      : "not recorded"
+  };
+}
+
 export function renderWorkDailyDigest({
   date,
   since,
@@ -198,10 +357,12 @@ export function renderWorkDailyDigest({
   events = [],
   tasks = [],
   curation = {},
+  blockerRepair = {},
   roadmap = null,
   automationBranch = "automation/roadmap",
   reportingGap = null,
-  health = {}
+  health = {},
+  digestHealth = {}
 } = {}) {
   const weekly = capacity.weekly || {};
   const weeklyAvailable = weekly.identified === true
@@ -225,12 +386,15 @@ export function renderWorkDailyDigest({
   const ready = runnableReady.length > 0;
   const retryable = technicalRetryableItems(roadmap || {}).length
     ? technicalRetryableItems(roadmap || {})
-    : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
+    : tasks.filter((task) => isRetryableWorkBlock(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: compactTaskBlocker(task) }));
   const externalEvidence = roadmap?.externalEvidence?.length
     ? roadmap.externalEvidence
     : tasks.filter((task) => isAwaitingExternalEvidence(task)).map((task) => ({ taskId: task.taskId, title: task.title, blocker: text(task.checkpoint?.blocker || task.message || task.error) }));
   const wakes = events.filter((event) => ["idle", "deferred", "admitted", "technical-blocked"].includes(event.action));
   const admitted = events.filter((event) => event.action === "admitted");
+  const temporarilySkipped = events.flatMap((event) => Array.isArray(event.skippedCandidates)
+    ? event.skippedCandidates
+    : []);
   const bool = (value) => value === true || /^(true|truth|yes|1)$/iu.test(text(value));
   const workStarted = admitted.filter((event) => bool(event.workStarted));
   // Recovery and outcome records accompany a wake; count usefulness on the
@@ -252,15 +416,18 @@ export function renderWorkDailyDigest({
     && !isProviderUsageLimited(event.reason));
   blockedBeforeModel.push(...admitted.filter((event) => !bool(event.workStarted)));
   const recovered = uniqueRecoveryEvents(events.filter((event) => event.action === "recovered"));
+  const routineReviews = events.filter((event) => event.action === "review-completed" && event.role === "reviewer");
+  const solEscalations = events.filter((event) => event.action === "escalation-review-completed"
+    && event.role === "escalationReviewer");
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
-  const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length;
-  const runnablePackages = (roadmap?.packages || []).filter((item) => ["ACTIVE", "QUEUED", "CANDIDATE"].includes(item.status)
-    && item.dependencyStatus?.satisfied !== false);
+  const blockerRepairAvailable = Boolean(blockerRepair?.candidate && blockerRepair.productivity?.noUsefulWork);
+  const exhausted = !roadmapWork && !retryable.length && !ready && !(curation.proposed || []).length && !blockerRepairAvailable;
+  const executableSupply = buildExecutableSupply({ tasks, roadmap, curation });
+  const runnablePackages = executableSupply.runnablePackages;
   const runnableRoadmap = active.length > 0
     || runnableReady.length > 0
-    || runnablePackages.length > 0
-    || (curation.proposed || []).length > 0;
+    || executableSupply.runnable.length > 0;
   const blockedRoadmap = retryable.length > 0 || externalEvidence.length > 0 || humanDecisions.length > 0;
   const temporarilyBlocked = retryable.length > 0 && !runnableRoadmap;
   const status = exhausted
@@ -269,13 +436,15 @@ export function renderWorkDailyDigest({
       ? blockedRoadmap
         ? "roadmap-partially-blocked"
         : active.length || admitted.length || completed.length ? "roadmap-active" : "roadmap-ready"
-      : blockedRoadmap
-      ? "roadmap-blocked"
-      : completed.length
-        ? "progress"
-        : active.length
-          ? "in-progress"
-          : "idle";
+      : blockerRepairAvailable
+        ? "roadmap-partially-blocked"
+        : blockedRoadmap
+          ? "roadmap-blocked"
+          : completed.length
+            ? "progress"
+            : active.length
+              ? "in-progress"
+              : "idle";
   const subject = exhausted
     ? "Pyash needs direction: roadmap backlog exhausted"
     : status === "roadmap-blocked"
@@ -283,6 +452,9 @@ export function renderWorkDailyDigest({
       : completed.length
       ? `Pyash daily: substantial progress on ${completed[0].title}`
       : "Pyash daily: background development status";
+  const showDigestHealth = Boolean(reportingGap)
+    || Number(digestHealth.generationFailures) > 0
+    || Number(digestHealth.deliveryFailures) > 0;
   const lines = [
     "PYASH DAILY IMPROVEMENT REPORT",
     "",
@@ -294,6 +466,17 @@ export function renderWorkDailyDigest({
       "--------------",
       `No successful daily digest was recorded for ${reportingGap.hours} hours after ${reportingGap.previousAt}.`,
       "The scheduled report interval should be checked for a skipped or failed run."
+    ] : []),
+    ...(showDigestHealth ? [
+      "",
+      "Daily digest health",
+      "-------------------",
+      `Expected runs: ${digestHealth.expectedRuns ?? "unknown"}`,
+      `Successful reports: ${digestHealth.successfulReports ?? "unknown"}`,
+      `Generation failures: ${digestHealth.generationFailures ?? "unknown"}`,
+      `Delivery failures: ${digestHealth.deliveryFailures ?? "unknown"}`,
+      `Last successful digest: ${digestHealth.lastSuccessfulAt || "not recorded"}`,
+      `Last failure: ${digestHealth.lastFailure || "not recorded"}`
     ] : []),
     "",
     "Weekly Codex budget",
@@ -327,8 +510,11 @@ export function renderWorkDailyDigest({
     `Provider usage-limited: ${providerUsageLimited.length}`,
     `Execution-environment blocked: ${executionBlocked.length}`,
     `Technical continuation unavailable: ${technicalUnavailable.length}`,
+    `Temporarily skipped candidates: ${temporarilySkipped.length}`,
     `Idle / no work: ${idle.length}`,
     `Operational recoveries: ${recovered.length}`,
+    `Routine Luna reviews: ${routineReviews.length}`,
+    `Sol review escalations: ${new Set(solEscalations.map((event) => `${event.taskId}:${event.reviewPass || event.at || ""}`)).size}`,
     "",
     "Completed work",
     "--------------"
@@ -367,6 +553,17 @@ export function renderWorkDailyDigest({
   } else {
     lines.push("(none)");
   }
+  if (blockerRepair?.candidate && blockerRepair.productivity?.noUsefulWork) {
+    lines.push(
+      "",
+      "Blocker repair lane",
+      "-------------------",
+      `Prior 24h: no useful work across ${blockerRepair.productivity.observedWakes} scheduler wakes`,
+      `Next repair: ${blockerRepair.candidate.title}`,
+      `Blocker: ${compactBlocker(blockerRepair.candidate.blocker)}`,
+      `Source task: ${blockerRepair.candidate.sourceTaskId || "scheduler baseline"}`
+    );
+  }
   if (dependencyWaiting.length) {
     lines.push("", "Waiting on dependencies", "-----------------------");
     for (const entry of dependencyWaiting.slice(0, 5)) {
@@ -392,9 +589,12 @@ export function renderWorkDailyDigest({
       lines.push("", "External evidence waiting", "-------------------------", ...externalEvidence.slice(0, 5).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`));
     }
     if (runnableRoadmap) {
-      const next = runnablePackages.find((item) => item.status === "QUEUED")
-        || runnablePackages.find((item) => item.status === "CANDIDATE");
-      const later = runnablePackages.filter((item) => item.taskId !== next?.taskId);
+      const next = executableSupply.runnable[0] || null;
+      const futurePackages = [
+        ...runnablePackages,
+        ...executableSupply.candidatePackages
+      ].filter((item, index, values) => values.findIndex((candidate) => candidate.taskId === item.taskId) === index);
+      const later = futurePackages.filter((item) => item.taskId !== next?.taskId);
       lines.push("", "Runnable roadmap", "-----------------", ...(next ? [`  Next: ${next.title}`] : ["  Next: (none)"]), ...later.slice(0, 3).map((item) => `  Later: ${item.title}`));
     }
   } else if (!active.length && !ready && !runnableRoadmap && !curation.proposed?.length && roadmapWork) {
@@ -406,7 +606,12 @@ export function renderWorkDailyDigest({
     lines.push("", "ROADMAP", "-------", "Active:");
     const activePackages = runnablePackages.filter((item) => item.status === "ACTIVE");
     const queuedPackages = runnablePackages.filter((item) => item.status === "QUEUED");
-    const candidatePackages = runnablePackages.filter((item) => item.status === "CANDIDATE");
+    const candidatePackages = [
+      ...runnablePackages,
+      ...executableSupply.candidatePackages
+    ]
+      .filter((item, index, values) => values.findIndex((candidate) => candidate.taskId === item.taskId) === index)
+      .filter((item) => item.status === "CANDIDATE");
     const blockedPackages = [
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / NEEDS DECISION"),
       ...humanDecisions
@@ -419,7 +624,10 @@ export function renderWorkDailyDigest({
       ...(roadmap.packages || []).filter((item) => item.status === "BLOCKED / EXTERNAL EVIDENCE"),
       ...(roadmap.externalEvidence || []).filter((item) => !(roadmap.packages || []).some((candidate) => candidate.taskId === item.taskId))
     ];
-    const nextPackage = queuedPackages[0] || candidatePackages[0] || null;
+    const nextSupply = executableSupply.runnable[0] || null;
+    const nextPackage = nextSupply
+      ? (runnablePackages.find((item) => item.taskId === nextSupply.taskId) || nextSupply)
+      : null;
     const laterPackages = candidatePackages.filter((item) => item.taskId !== nextPackage?.taskId);
     lines.push(...(activePackages.length ? activePackages.map((item) => `  ${item.title} — ${item.progress}`) : ["  (none)"]));
     lines.push("Next:", ...(nextPackage ? [`  ${nextPackage.title}`] : ["  (none)"]));
@@ -433,7 +641,7 @@ export function renderWorkDailyDigest({
   return { subject, status, report: lines.join("\n") };
 }
 
-export async function buildWorkDailyDigest({
+async function buildWorkDailyDigestInternal({
   worldRoot,
   repositoryRoot = process.cwd(),
   since = "",
@@ -456,12 +664,14 @@ export async function buildWorkDailyDigest({
       previousAt: previousReportAt
     }
     : null;
-  const [capacity, tasks, events, curation, storedHealth] = await Promise.all([
+  const [capacity, tasks, events, curation, blockerRepair, storedHealth, storedDigestHealth] = await Promise.all([
     capacitySource({ now: end }),
     listWorkTasks(worldRoot, { includeTerminal: true }),
     readWorkSchedulerEvents(worldRoot, { since: start.toISOString(), until: end.toISOString() }),
     curateWorkBacklog({ worldRoot, repositoryRoot, owner, threshold: policy.curationThreshold, maxTasks: policy.curationMaxTasks, dryRun: true, now: end }),
-    readWorkSchedulerHealth(worldRoot)
+    prepareBlockerRepair({ worldRoot, owner, now: end, dryRun: true }),
+    readWorkSchedulerHealth(worldRoot),
+    readWorkDailyDigestHealth(worldRoot)
   ]);
   const effectiveHealth = capacity.weekly?.identified === true
     && Number.isFinite(Number(capacity.weekly.usedPercent))
@@ -491,10 +701,15 @@ export async function buildWorkDailyDigest({
     events,
     tasks,
     curation,
+    blockerRepair,
     roadmap,
     automationBranch,
     reportingGap,
-    health: effectiveHealth
+    health: effectiveHealth,
+    digestHealth: digestHealthWindow(storedDigestHealth, start.toISOString(), end.toISOString(), {
+      at: end.toISOString(),
+      subject: "current report"
+    })
   });
   if (persist) {
     await writeWorkDailyDigestState(worldRoot, {
@@ -502,6 +717,27 @@ export async function buildWorkDailyDigest({
       "last subject": rendered.subject,
       status: rendered.status
     });
+    await recordWorkDailyDigestSuccess(worldRoot, {
+      at: end,
+      subject: rendered.subject
+    });
   }
-  return { ...rendered, since: start.toISOString(), until: end.toISOString(), capacity, tasks, events, curation, roadmap };
+  return { ...rendered, since: start.toISOString(), until: end.toISOString(), capacity, tasks, events, curation, blockerRepair, roadmap };
+}
+
+export async function buildWorkDailyDigest(options = {}) {
+  try {
+    return await buildWorkDailyDigestInternal(options);
+  } catch (error) {
+    if (options.persist !== false) {
+      try {
+        await recordWorkDailyDigestFailure(options.worldRoot, {
+          kind: "generation",
+          reason: text(error?.message || error),
+          at: options.until || options.now || new Date()
+        });
+      } catch {}
+    }
+    throw error;
+  }
 }

@@ -220,6 +220,43 @@ test("roadmap progress preserves active Luna checkpoint evidence", async () => {
   assert.match(active.progress, /implementation pass/iu);
 });
 
+test("stale liveness is provenance when a newer integration blocker exists", async () => {
+  const { worldRoot, repositoryRoot } = await world("pyash-roadmap-stale-integration-");
+  await enqueueWorkTask(worldRoot, {
+    taskId: "hq-chief-briefing",
+    owner: "background",
+    kind: "roadmap",
+    title: "Project the Chief of Staff daily briefing",
+    priority: 69,
+    promptText: "Project the briefing.",
+    acceptanceText: "The briefing is deterministic.",
+    workSpec: { granularity: "substantial" }
+  });
+  const current = await readWorkTaskStatus(worldRoot, "hq-chief-briefing");
+  await writeWorkTaskStatus(worldRoot, {
+    ...current,
+    status: "blocked",
+    message: "automation branch integration blocked: cherry-pick conflict",
+    error: "automation branch integration blocked: cherry-pick conflict",
+    checkpoint: {
+      ...current.checkpoint,
+      blocker: "automation branch integration blocked: cherry-pick conflict",
+      integration: { status: "integration-blocked" },
+      turnReconciliation: {
+        classification: "STALE",
+        safeToResume: true,
+        reason: "no live writer evidence remains; remote=idle"
+      }
+    }
+  });
+
+  const roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, persist: false });
+  const item = roadmap.packages.find((candidate) => candidate.taskId === "hq-chief-briefing");
+  assert.equal(item.status, "BLOCKED / NEEDS DECISION");
+  assert.match(item.progress, /integration blocked/iu);
+  assert.doesNotMatch(item.progress, /stale Codex ownership/iu);
+});
+
 test("schema change discards stale generated catalogs during reconciliation", async () => {
   const { worldRoot, repositoryRoot } = await world("pyash-roadmap-schema-");
   await fs.mkdir(path.join(worldRoot, "holding", "work", "artifacts"), { recursive: true });

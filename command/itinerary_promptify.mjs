@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseItineraryPya, renderItineraryPya } from "./itinerary_io.mjs";
+import { resolveTextModel } from "../program/runtime/gpu/text-model.mjs";
 
 function usage() {
   return "Usage: node command/itinerary_promptify.mjs <input-itinerary.pya> <output-itinerary.pya> [--model <name>] [--host <url>] [--system <text>]";
@@ -13,7 +14,7 @@ function parseArgs(argv) {
   const out = {
     inputFile: args[0],
     outputFile: args[1],
-    model: process.env.PYA_MIND_MODEL || "qwen3.5:9b",
+    model: resolveTextModel(process.env.PYA_MIND_MODEL || ""),
     host: process.env.OLLAMA_HOST || "http://localhost:11434",
     systemPrompt: "Use the provided fields to generate one image prompt. Follow instruction exactly and return only prompt text."
   };

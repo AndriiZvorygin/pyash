@@ -23,6 +23,7 @@ import {
 import { callPromptMind, buildPromptifyPacket, buildDistinctFullScript } from "../../command/itinerary_promptify.mjs";
 import { emitExchangeSentence, getExchangeRunId, lookupArtifactLocator, recordArtifact } from "../bridge/exchange.mjs";
 import { renderSayValue } from "./say.mjs";
+import { resolveTextModel } from "../runtime/gpu/text-model.mjs";
 
 function buildRunTag(now = new Date()) {
   const iso = now.toISOString();
@@ -485,18 +486,6 @@ function drawWorkflowName(rememberFn) {
   return String(rememberFn("draw workflow default")?.ob?.text ?? "").trim();
 }
 
-function defaultCharacterDrawRoutes() {
-  return [
-    {
-      name: "andrii zvorygin",
-      aliases: ["andrii", "andrii zvorygin", "zvorygin"],
-      workflowName: "andrii_zvorygin_image_flux2_klein_image_edit_4b_distilled",
-      prefix: "same guy but cartoony, one Andrii only: broad pale canvas gardener hat, mostly straight long brown hair tucked under it, with a few strands visible, long brown auburn beard with copper tones.",
-      suffix: "no severed body parts. no extra limbs. no bad eyes. irises visible."
-    }
-  ];
-}
-
 function parseCharacterRouteSpec(name, raw) {
   const fields = {};
   for (const part of String(raw ?? "").split(/[;\n]+/u)) {
@@ -521,7 +510,7 @@ function parseCharacterRouteSpec(name, raw) {
 function characterDrawRoutes(rememberFn) {
   const fact = rememberFn?.("draw character routes");
   const map = fact?.ob?.map;
-  if (!map || typeof map !== "object") return defaultCharacterDrawRoutes();
+  if (!map || typeof map !== "object") return [];
   const routes = [];
   for (const [name, entry] of Object.entries(map)) {
     const raw = resolveTextFromMapEntry(entry);
@@ -529,7 +518,7 @@ function characterDrawRoutes(rememberFn) {
     const route = parseCharacterRouteSpec(name, raw);
     if (route.aliases.length && route.workflowName) routes.push(route);
   }
-  return routes.length ? routes : defaultCharacterDrawRoutes();
+  return routes;
 }
 
 function escapeRegExp(value) {
@@ -614,7 +603,7 @@ function promptifyModel(sentence, rememberFn) {
   const mindFact = rememberFn?.(mindName);
   const model = String(mindFact?.as?.name ?? "").trim();
   if (model) return model;
-  return resolveConfigText("mind model", { rememberFn }) || process.env.PYA_MIND_MODEL || "qwen3.5:9b";
+  return resolveTextModel(resolveConfigText("mind model", { rememberFn }) || process.env.PYA_MIND_MODEL || "");
 }
 
 function promptifyHost(sentence, rememberFn) {

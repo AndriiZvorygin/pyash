@@ -15,6 +15,7 @@
     "repl": "node program/main.mjs",
     "run": "node command/run_pya_program.mjs",
     "trace": "node command/read_pya_trace.mjs",
+    "criterion": "node command/criterion.mjs",
     "compile": "node command/run_pya_program.mjs --gross",
     "push:all": "bash command/push_all.sh",
     "smoke:wide-teaching-video": "bash command/smoke_wide_teaching_video.sh"
@@ -34,11 +35,14 @@
     "typescript": "^5.9.2"
   },
   "bin": {
-    "pyash": "command/pyash.mjs"
+    "pyash": "command/pyash.mjs",
+    "print-audit": "command/print_audit_report.mjs",
+    "print-audit-reconcile": "command/print_audit_reconcile.mjs"
   },
   "files": [
     "program/",
     "command/",
+    "criterion/",
     "module/",
     "documentation/",
     "configure/",

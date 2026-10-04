@@ -234,7 +234,16 @@ function parseAgendaHtmlAttachments(htmlText, { baseOrigin = "" } = {}) {
 
 function isAgendaItemCode(line) {
   const raw = normalizeSpaces(line).toLowerCase();
-  return /^([0-9]{1,2})\.([a-z])$/.test(raw);
+  // eScribe cover PDFs print both top-level entries ("4.") and child
+  // entries ("4.a").  Treat both as agenda identity; a top-level printed
+  // number is never promoted from a page marker or motion text.
+  return /^(?:[0-9]{1,2}\.|[0-9]{1,2}\.[a-z])$/u.test(raw);
+}
+
+function normalizeAgendaItemCode(line) {
+  const raw = normalizeSpaces(line).toLowerCase();
+  const parent = raw.match(/^([0-9]{1,2})\.$/u);
+  return parent ? parent[1] : raw;
 }
 
 function collectPageMarkers(lines) {
@@ -295,7 +304,7 @@ function parseTocItems(lines, startLine, endLine) {
   for (let i = startLine; i <= endLine; i += 1) {
     if (!isAgendaItemCode(lines[i])) continue;
     candidateCount += 1;
-    const item = normalizeSpaces(lines[i]).toLowerCase();
+    const item = normalizeAgendaItemCode(lines[i]);
     const titleParts = [];
     let page = null;
     let j = i + 1;
@@ -1060,13 +1069,20 @@ async function main() {
       return true;
     })
     .map((x) => [String(x.item || "").toLowerCase(), x]));
-  index.items = selectCanonicalAgendaItemKeys(attachmentsByItem, index.sections)
+  const tocItemByKey = new Map(
+    tocItemsRaw.map((entry) => [String(entry?.item || "").toLowerCase(), entry]),
+  );
+  index.items = selectCanonicalAgendaItemKeys(
+    attachmentsByItem,
+    [...tocItemsRaw, ...index.sections],
+  )
     .map((item) => {
       const fromSection = sectionByItem.get(String(item || "").toLowerCase());
       const fromHtml = attachmentsByItem.get(item);
+      const fromToc = tocItemByKey.get(String(item || "").toLowerCase());
       return {
         item,
-        title: fromHtml?.title || fromSection?.title || item,
+        title: fromHtml?.title || fromSection?.title || fromToc?.title || item,
         has_page_slice: Boolean(fromSection),
         start_page: fromSection?.start_page ?? null,
         end_page: fromSection?.end_page ?? null,

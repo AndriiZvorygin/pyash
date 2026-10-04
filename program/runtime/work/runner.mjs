@@ -1,4 +1,4 @@
-import { runWorkSupervisorOnce } from "./supervisor.mjs";
+import { probeWorkTaskAvailability, runWorkSupervisorOnce } from "./supervisor.mjs";
 import { runWorkIntegrationReconciliationOnce } from "./integration_runner.mjs";
 import { listQueuedWorkTasks, listRuntimeWorkTasks, queueDepth } from "./queue.mjs";
 import { listWorkTasks, resumeExternalEvidenceTask } from "./operator.mjs";
@@ -8,11 +8,13 @@ import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs"
 import { readWorkTaskStatus, updateWorkTaskCheckpoint } from "./status.mjs";
 import { emitWorkEvent } from "./observer.mjs";
 import { renderWorkDeferredReport, renderWorkIdleReport, renderWorkTaskReport } from "./report.mjs";
-import { curateWorkBacklog } from "./curator.mjs";
+import { buildExecutableSupply, curateWorkBacklog } from "./curator.mjs";
 import { appendWorkSchedulerEvent } from "./history.mjs";
 import {
   findRecoverableOperationalWorkTasks,
-  recoverOperationalWorkTask
+  findPolicyRevalidationWorkTasks,
+  recoverOperationalWorkTask,
+  revalidateTimeoutExhaustedWorkTask
 } from "./recovery.mjs";
 import {
   buildAutonomousRoadmap,
@@ -21,6 +23,10 @@ import {
   roadmapDependencyStatus
 } from "./roadmap.mjs";
 import { deriveImplementationProgress } from "./progress.mjs";
+import { currentTimeoutPolicy } from "./timeout_policy.mjs";
+import { reconcileOperationalWorkTasks } from "./turn_reconciliation.mjs";
+import { resolveTextModel } from "../gpu/text-model.mjs";
+import { prepareBlockerRepair } from "./blocker_repair.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -38,11 +44,52 @@ function nowIso(now) {
 
 const ACTIVE_WORK_STATUSES = new Set(["planning", "implementing", "reviewing", "revision", "usage-limited"]);
 
-function selectWorkCandidate(eligible, recoverable) {
-  return eligible.find((entry) => ACTIVE_WORK_STATUSES.has(entry.task.status))?.task
-    || recoverable[0]
-    || eligible[0]?.task
-    || null;
+function orderedWorkCandidates(eligible, recoverable, policyRevalidation = []) {
+  const ordered = [
+    ...eligible.filter((entry) => ACTIVE_WORK_STATUSES.has(entry.task.status)).map((entry) => entry.task),
+    ...policyRevalidation,
+    ...recoverable,
+    ...eligible.filter((entry) => !ACTIVE_WORK_STATUSES.has(entry.task.status)).map((entry) => entry.task)
+  ];
+  const seen = new Set();
+  return ordered.filter((task) => {
+    if (!task?.taskId || seen.has(task.taskId)) return false;
+    seen.add(task.taskId);
+    return true;
+  });
+}
+
+function selectWorkCandidate(eligible, recoverable, policyRevalidation = []) {
+  return orderedWorkCandidates(eligible, recoverable, policyRevalidation)[0] || null;
+}
+
+async function availableCandidates(candidates, candidateAvailability, context = {}) {
+  if (typeof candidateAvailability !== "function") {
+    return { candidates, skipped: [] };
+  }
+  const executable = [];
+  const skipped = [];
+  for (const task of candidates) {
+    let availability;
+    try {
+      availability = await candidateAvailability({ ...context, task });
+    } catch (error) {
+      availability = { available: true, reason: "availability probe failed open", error: text(error?.message || error) };
+    }
+    if (availability?.available === false) {
+      skipped.push({
+        taskId: task.taskId,
+        title: task.title,
+        priority: task.priority,
+        reason: text(availability.reason) || "temporarily unavailable",
+        detail: text(availability.error)
+      });
+      continue;
+    }
+    executable.push(task);
+    break;
+  }
+  return { candidates: executable, skipped };
 }
 
 async function probeUrl(url, fetchImpl, timeoutMs = 3000) {
@@ -72,7 +119,7 @@ export async function probeExternalEvidenceTask(task, {
         const response = await fetchImpl(`${ollamaHost.replace(/\/$/u, "")}/api/tags`);
         const payload = await response.json();
         const names = (payload.models || []).map((model) => String(model.name || model.model || ""));
-        healthy = names.includes(text(env.PYA_MIND_MODEL) || "qwen3.5:9b");
+        healthy = names.includes(resolveTextModel(text(env.PYA_MIND_MODEL), { env }));
       } catch {
         healthy = false;
       }
@@ -153,6 +200,10 @@ function filterUnsatisfiedDependencies(entries, tasks, roadmap) {
   return { eligible, blocked };
 }
 
+export function selectIndependentWorkCandidates(entries = [], tasks = [], roadmap = {}) {
+  return filterUnsatisfiedDependencies(entries, tasks, roadmap);
+}
+
 export async function inspectWorkBackground({
   worldRoot,
   owner = "",
@@ -163,6 +214,10 @@ export async function inspectWorkBackground({
   repositoryRoot = process.cwd(),
   now = () => new Date()
 } = {}) {
+  const timeoutPolicy = policy.timeoutPolicy || currentTimeoutPolicy({
+    inactivityTimeoutMs: policy.turnInactivityTimeoutMs,
+    hardTimeoutMs: policy.turnHardTimeoutMs
+  });
   let eligible = await eligibleWork(worldRoot, owner);
   let recoverable = await findRecoverableOperationalWorkTasks(worldRoot, {
       owner,
@@ -172,15 +227,30 @@ export async function inspectWorkBackground({
     });
   let allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
   let roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
-  let dependencyFilter = filterUnsatisfiedDependencies(eligible, allTasks, roadmap);
-  let recoveryDependencyFilter = filterUnsatisfiedDependencies(
+  let dependencyFilter = selectIndependentWorkCandidates(eligible, allTasks, roadmap);
+  let recoveryDependencyFilter = selectIndependentWorkCandidates(
     recoverable.map((task) => ({ task })),
     allTasks,
     roadmap
   );
   eligible = dependencyFilter.eligible;
   recoverable = recoveryDependencyFilter.eligible.map((entry) => entry.task);
-  let dependencyBlocked = dependencyFilter.blocked.concat(recoveryDependencyFilter.blocked);
+  let policyRevalidation = await findPolicyRevalidationWorkTasks(worldRoot, {
+    owner,
+    now,
+    staleTurnMs: policy.staleOperationalTurnMs,
+    maxRecoveryCount: policy.maxOperationalRecoveries,
+    currentPolicy: timeoutPolicy
+  });
+  const revalidationDependencyFilter = selectIndependentWorkCandidates(
+    policyRevalidation.map((task) => ({ task })),
+    allTasks,
+    roadmap
+  );
+  policyRevalidation = revalidationDependencyFilter.eligible.map((entry) => entry.task);
+  let dependencyBlocked = dependencyFilter.blocked
+    .concat(recoveryDependencyFilter.blocked)
+    .concat(revalidationDependencyFilter.blocked);
   let blocked = allTasks
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isTechnicalContinuationBlock(task));
@@ -188,7 +258,8 @@ export async function inspectWorkBackground({
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isAwaitingExternalEvidence(task));
   let temporarilyUnexecutableTechnical = blocked
-    .filter((task) => !recoverable.some((candidate) => candidate.taskId === task.taskId));
+    .filter((task) => !recoverable.some((candidate) => candidate.taskId === task.taskId))
+    .filter((task) => !policyRevalidation.some((candidate) => candidate.taskId === task.taskId));
   const resumedExternal = [];
   if (externalEvidenceProbe) {
     for (const task of externalEvidence) {
@@ -205,17 +276,32 @@ export async function inspectWorkBackground({
         staleTurnMs: policy.staleOperationalTurnMs,
         maxRecoveryCount: policy.maxOperationalRecoveries
       });
+      policyRevalidation = await findPolicyRevalidationWorkTasks(worldRoot, {
+        owner,
+        now,
+        staleTurnMs: policy.staleOperationalTurnMs,
+        maxRecoveryCount: policy.maxOperationalRecoveries,
+        currentPolicy: timeoutPolicy
+      });
       allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
       roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
-      dependencyFilter = filterUnsatisfiedDependencies(eligible, allTasks, roadmap);
-      recoveryDependencyFilter = filterUnsatisfiedDependencies(
+      dependencyFilter = selectIndependentWorkCandidates(eligible, allTasks, roadmap);
+      recoveryDependencyFilter = selectIndependentWorkCandidates(
         recoverable.map((task) => ({ task })),
         allTasks,
         roadmap
       );
       eligible = dependencyFilter.eligible;
       recoverable = recoveryDependencyFilter.eligible.map((entry) => entry.task);
-      dependencyBlocked = dependencyFilter.blocked.concat(recoveryDependencyFilter.blocked);
+      const resumedRevalidationDependencyFilter = selectIndependentWorkCandidates(
+        policyRevalidation.map((task) => ({ task })),
+        allTasks,
+        roadmap
+      );
+      policyRevalidation = resumedRevalidationDependencyFilter.eligible.map((entry) => entry.task);
+      dependencyBlocked = dependencyFilter.blocked
+        .concat(recoveryDependencyFilter.blocked)
+        .concat(resumedRevalidationDependencyFilter.blocked);
       blocked = allTasks
         .filter((task) => !owner || task.owner === owner)
         .filter((task) => isTechnicalContinuationBlock(task));
@@ -223,29 +309,42 @@ export async function inspectWorkBackground({
         .filter((task) => !owner || task.owner === owner)
         .filter((task) => isAwaitingExternalEvidence(task));
       temporarilyUnexecutableTechnical = blocked
-        .filter((task) => !recoverable.some((candidate) => candidate.taskId === task.taskId));
+        .filter((task) => !recoverable.some((candidate) => candidate.taskId === task.taskId))
+        .filter((task) => !policyRevalidation.some((candidate) => candidate.taskId === task.taskId));
     }
   }
   const capacity = await capacitySource({ now: typeof now === "function" ? now() : now });
+  const candidateOrder = orderedWorkCandidates(eligible, recoverable, policyRevalidation);
+  const executableSupply = buildExecutableSupply({
+    tasks: allTasks,
+    roadmap,
+    curation: { created: [], proposed: [] },
+    durableCandidates: candidateOrder
+  });
+  const hasExecutableSupply = executableSupply.runnable.length > 0;
   const admission = admitBackgroundWork({
     capacity,
     policy: { ...DEFAULT_BACKGROUND_POLICY, ...policy },
     foregroundActive: typeof foregroundActive === "function" ? await foregroundActive() : foregroundActive,
-    hasEligibleWork: eligible.length > 0 || recoverable.length > 0,
+    hasEligibleWork: hasExecutableSupply,
     now: typeof now === "function" ? now() : now
   });
   return {
     eligible,
     recoverable,
+    policyRevalidation,
     technicalBlocked: blocked,
     temporarilyUnexecutableTechnical,
     dependencyBlocked,
     roadmap,
+    allTasks,
+    executableSupply,
     externalEvidence,
     resumedExternal,
     capacity,
     admission,
-    selected: selectWorkCandidate(eligible, recoverable)
+    candidateOrder,
+    selected: candidateOrder[0] || null
   };
 }
 
@@ -262,24 +361,88 @@ export async function runWorkBackgroundOnce({
   curate = false,
   baselineSync = null,
   executionPreflight = null,
+  candidateAvailability = null,
+  turnReconciliation = null,
   externalEvidenceProbe = null,
+  blockerRepair = true,
   onEvent = null,
   now = () => new Date()
 } = {}) {
   const wake = nowIso(now);
-  const curation = curate
+  let reconciliations = [];
+  if (typeof turnReconciliation === "function") {
+    try {
+      reconciliations = await turnReconciliation({ worldRoot, owner, repositoryRoot, now });
+    } catch (error) {
+      reconciliations = [{
+        classification: "ERROR",
+        reason: `turn reconciliation failed: ${text(error?.message || error)}`
+      }];
+    }
+    for (const reconciliation of reconciliations) {
+      await emitWorkEvent(onEvent, "turn-reconciled", {
+        taskId: reconciliation.task?.taskId || reconciliation.taskId || "",
+        classification: reconciliation.classification,
+        role: reconciliation.role,
+        threadId: reconciliation.threadId,
+        turnId: reconciliation.turnId,
+        remoteState: reconciliation.remoteState,
+        remoteTurnState: reconciliation.remoteTurnState,
+        localOwnerAlive: reconciliation.localOwnerAlive,
+        appServerAlive: reconciliation.appServerAlive,
+        safeToResume: reconciliation.safeToResume === true,
+        reason: reconciliation.reason
+      }, { now });
+      await appendWorkSchedulerEvent(worldRoot, {
+        type: "turn-reconciled",
+        taskId: reconciliation.task?.taskId || reconciliation.taskId || "",
+        classification: reconciliation.classification,
+        role: reconciliation.role,
+        threadId: reconciliation.threadId,
+        turnId: reconciliation.turnId,
+        remoteState: reconciliation.remoteState,
+        remoteTurnState: reconciliation.remoteTurnState,
+        localOwnerAlive: reconciliation.localOwnerAlive,
+        appServerAlive: reconciliation.appServerAlive,
+        safeToResume: reconciliation.safeToResume === true,
+        worktreeState: reconciliation.worktreeState,
+        reason: reconciliation.reason
+      }, { now });
+    }
+  }
+  let blockerRepairResult = null;
+  if (blockerRepair) {
+    try {
+      blockerRepairResult = await prepareBlockerRepair({ worldRoot, owner, now });
+    } catch (error) {
+      blockerRepairResult = {
+        activated: false,
+        reason: `blocker repair preparation failed: ${text(error?.message || error)}`
+      };
+    }
+    if (blockerRepairResult?.created) {
+      await emitWorkEvent(onEvent, "blocker-repair-prepared", {
+        taskId: blockerRepairResult.task.taskId,
+        sourceTaskId: blockerRepairResult.candidate.sourceTaskId,
+        blockerClass: blockerRepairResult.candidate.blockerClass,
+        reason: blockerRepairResult.candidate.blocker
+      }, { now });
+    }
+  }
+  let curation = curate
     ? await curateWorkBacklog({
       worldRoot,
       repositoryRoot,
       owner,
       threshold: policy.curationThreshold ?? DEFAULT_BACKGROUND_POLICY.curationThreshold,
       maxTasks: policy.curationMaxTasks ?? DEFAULT_BACKGROUND_POLICY.curationMaxTasks,
+      candidateAvailability,
       staleTurnMs: policy.staleOperationalTurnMs,
       maxRecoveryCount: policy.maxOperationalRecoveries,
       now
     })
     : null;
-  const { eligible, recoverable, temporarilyUnexecutableTechnical, dependencyBlocked, externalEvidence, capacity, admission } = await inspectWorkBackground({
+  let inspection = await inspectWorkBackground({
     worldRoot,
     owner,
     policy,
@@ -289,13 +452,61 @@ export async function runWorkBackgroundOnce({
     repositoryRoot,
     now
   });
-  const taskCount = eligible.length + recoverable.length;
+  let {
+    eligible,
+    recoverable,
+    policyRevalidation,
+    candidateOrder: inspectedCandidates,
+    temporarilyUnexecutableTechnical,
+    dependencyBlocked,
+    externalEvidence,
+    capacity,
+    admission
+  } = inspection;
+  if (curate && curation?.proposed?.length && !curation.created?.length && !inspectedCandidates.length) {
+    const materialized = await curateWorkBacklog({
+      worldRoot,
+      repositoryRoot,
+      owner,
+      threshold: 0,
+      maxTasks: curation.proposed.length,
+      forceCandidates: true,
+      staleTurnMs: policy.staleOperationalTurnMs,
+      maxRecoveryCount: policy.maxOperationalRecoveries,
+      candidateAvailability,
+      now
+    });
+    curation = { ...curation, ...materialized };
+    inspection = await inspectWorkBackground({
+      worldRoot,
+      owner,
+      policy,
+      capacitySource: async () => capacity,
+      foregroundActive,
+      externalEvidenceProbe,
+      repositoryRoot,
+      now
+    });
+    ({
+      eligible,
+      recoverable,
+      policyRevalidation,
+      candidateOrder: inspectedCandidates,
+      temporarilyUnexecutableTechnical,
+      dependencyBlocked,
+      externalEvidence,
+      capacity,
+      admission
+    } = inspection);
+  }
+  const taskCount = eligible.length + recoverable.length + policyRevalidation.length;
   await emitWorkEvent(onEvent, "capacity", {
     capacity,
     admitted: admission.admit,
     reason: admission.reason,
     eligible: eligible.length,
-    recoverable: recoverable.length
+    recoverable: recoverable.length,
+    policyRevalidation: policyRevalidation.length
   }, { now });
   const prior = await readWorkSchedulerHealth(worldRoot);
   const weeklyObservationIsGood = capacity.weekly?.identified === true
@@ -340,7 +551,10 @@ export async function runWorkBackgroundOnce({
     "last decision": admission.reason,
     "hourly wakes": String((Number(prior["hourly wakes"]) || 0) + 1),
     "curation result": curation?.reason || prior["curation result"] || "",
-    "curated tasks": curation?.created?.join(", ") || prior["curated tasks"] || ""
+    "curated tasks": curation?.created?.join(", ") || prior["curated tasks"] || "",
+    "blocker repair status": blockerRepairResult?.reason || prior["blocker repair status"] || "",
+    "blocker repair task": blockerRepairResult?.task?.taskId || prior["blocker repair task"] || "",
+    "blocker repair source": blockerRepairResult?.candidate?.sourceTaskId || prior["blocker repair source"] || ""
   };
   if (!admission.admit) {
     const externalOnly = admission.reason === "no eligible work" && externalEvidence.length > 0;
@@ -379,9 +593,9 @@ export async function runWorkBackgroundOnce({
       capacity,
       pacing: admission.pacing,
       taskCount,
-      selected: selectWorkCandidate(eligible, recoverable)?.taskId || ""
+      selected: selectWorkCandidate(eligible, recoverable, policyRevalidation)?.taskId || ""
     }, { now });
-    const deferredTask = selectWorkCandidate(eligible, recoverable);
+    const deferredTask = selectWorkCandidate(eligible, recoverable, policyRevalidation);
     if (deferredTask) {
       await updateWorkTaskCheckpoint(worldRoot, deferredTask.taskId, {
         interruption: {
@@ -408,29 +622,51 @@ export async function runWorkBackgroundOnce({
       eligible: taskCount,
       report,
       queue: await queueDepth(worldRoot),
-      curation
+      curation,
+      reconciliations,
+      blockerRepair: blockerRepairResult
     };
   }
-  let selected = selectWorkCandidate(eligible, recoverable);
+  const candidateScan = await availableCandidates(inspectedCandidates, candidateAvailability, {
+    repositoryRoot,
+    owner,
+    now
+  });
+  const temporarilySkipped = candidateScan.skipped;
+  for (const skipped of temporarilySkipped) {
+    await emitWorkEvent(onEvent, "candidate-skipped", skipped, { now });
+  }
+  let selected = candidateScan.candidates[0] || null;
   if (!selected) {
+    const reason = "technical continuation unavailable";
     await writeWorkSchedulerHealth(worldRoot, {
       ...baseHealth,
-      "idle wakes": String((Number(prior["idle wakes"]) || 0) + 1)
+      "last decision": reason,
+      "temporarily skipped candidates": String((Number(prior["temporarily skipped candidates"]) || 0) + temporarilySkipped.length),
+      "last temporarily skipped candidates": temporarilySkipped.map((entry) => `${entry.taskId}: ${entry.reason}`).join("; "),
+      "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + 1),
+      "blocked before model wakes": String((Number(prior["blocked before model wakes"]) || 0) + 1)
     });
     await appendWorkSchedulerEvent(worldRoot, {
-      type: "idle",
-      reason: "no eligible work",
+      type: "technical-blocked",
+      reason,
       capacity,
       pacing: admission.pacing,
-      taskCount
+      taskCount,
+      selected: "",
+      skippedCandidates: temporarilySkipped
     }, { now });
     return {
       admitted: false,
-      reason: "no eligible work",
+      reason,
       capacity,
       eligible: taskCount,
-      report: renderWorkIdleReport({ result: { reason: "no eligible work", eligible: taskCount }, capacity }),
-      curation
+      temporarilySkipped,
+      report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
+      queue: await queueDepth(worldRoot),
+      curation,
+      reconciliations,
+      blockerRepair: blockerRepairResult
     };
   }
   let preflight = { status: executionPreflight ? "pending" : "not-configured" };
@@ -484,9 +720,64 @@ export async function runWorkBackgroundOnce({
         preflight,
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
-        curation
+        curation,
+        reconciliations,
+        blockerRepair: blockerRepairResult
       };
     }
+  }
+  let policyRevalidationResult = null;
+  if (policyRevalidation.some((task) => task.taskId === selected.taskId)) {
+    policyRevalidationResult = await revalidateTimeoutExhaustedWorkTask(worldRoot, selected.taskId, {
+      now,
+      staleTurnMs: policy.staleOperationalTurnMs,
+      maxRecoveryCount: policy.maxOperationalRecoveries,
+      currentPolicy: policy.timeoutPolicy || currentTimeoutPolicy({
+        inactivityTimeoutMs: policy.turnInactivityTimeoutMs,
+        hardTimeoutMs: policy.turnHardTimeoutMs
+      }),
+      preflightPassed: executionPreflight ? preflight?.ok === true : false
+    });
+    if (!policyRevalidationResult) {
+      const reason = "timeout policy revalidation unavailable: preflight or preserved evidence is not sufficient";
+      await emitWorkEvent(onEvent, "deferred", { reason, selected: selected.taskId, preflight }, { now });
+      await writeWorkSchedulerHealth(worldRoot, {
+        ...baseHealth,
+        "last decision": reason,
+        "deferred wakes": String((Number(prior["deferred wakes"]) || 0) + 1)
+      });
+      return {
+        admitted: false,
+        reason,
+        capacity,
+        eligible: taskCount,
+        selected: selected.taskId,
+        preflight,
+        report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
+        queue: await queueDepth(worldRoot),
+        curation,
+        reconciliations,
+        blockerRepair: blockerRepairResult
+      };
+    }
+    selected = policyRevalidationResult.task;
+    await emitWorkEvent(onEvent, "policy-revalidated", {
+      migrationId: policyRevalidationResult.migrationId,
+      fromPolicy: policyRevalidationResult.fromPolicy,
+      toPolicy: policyRevalidationResult.toPolicy,
+      phase: policyRevalidationResult.phase,
+      recoveryCount: policyRevalidationResult.recoveryCount
+    }, { now });
+    await appendWorkSchedulerEvent(worldRoot, {
+      type: "policy-revalidated",
+      taskId: selected.taskId,
+      migrationId: policyRevalidationResult.migrationId,
+      phase: policyRevalidationResult.phase,
+      capacity,
+      pacing: admission.pacing,
+      taskCount,
+      preflight: "ready"
+    }, { now });
   }
   let recovery = null;
   if (recoverable.some((task) => task.taskId === selected.taskId)) {
@@ -525,7 +816,9 @@ export async function runWorkBackgroundOnce({
         preflight,
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
-        curation
+        curation,
+        reconciliations,
+        blockerRepair: blockerRepairResult
       };
     }
     selected = recovery.task;
@@ -555,8 +848,13 @@ export async function runWorkBackgroundOnce({
     }, { now });
   }
   const activeRuntime = eligible.some(({ task }) => ACTIVE_WORK_STATUSES.has(task.status));
-  let baseline = { status: baselineSync ? (activeRuntime ? "skipped-active-task" : "pending") : "not-configured" };
-  if (baselineSync && !activeRuntime) {
+  const selectedIsBlockerRepair = selected.kind === "blocker-repair";
+  let baseline = {
+    status: baselineSync
+      ? (selectedIsBlockerRepair ? "skipped-blocker-repair" : activeRuntime ? "skipped-active-task" : "pending")
+      : "not-configured"
+  };
+  if (baselineSync && !activeRuntime && !selectedIsBlockerRepair) {
     try {
       baseline = await baselineSync({ repositoryRoot, selected, now });
       await emitWorkEvent(onEvent, "baseline-synced", {
@@ -593,7 +891,9 @@ export async function runWorkBackgroundOnce({
         baseline: { status: "blocked", error: text(error?.message || error) },
         report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
         queue: await queueDepth(worldRoot),
-        curation
+        curation,
+        reconciliations,
+        blockerRepair: blockerRepairResult
       };
     }
   }
@@ -623,6 +923,7 @@ export async function runWorkBackgroundOnce({
     const selectedSupervisor = selectedIntegration ? integrationSupervisor : supervisor;
     result = await selectedSupervisor({
       ...supervisorOptions,
+      ...(selectedIsBlockerRepair ? { integrateAccepted: false, pushIntegration: false } : {}),
       worldRoot,
       owner,
       taskId: selected.taskId,
@@ -645,7 +946,7 @@ export async function runWorkBackgroundOnce({
       || finalProgress.materialProgressPasses > beforeProgress.materialProgressPasses
     : finalProgress.materialProgressPasses > beforeProgress.materialProgressPasses;
   const workStarted = executionStarted || result.workStarted === true;
-  const useful = Boolean(recovery || materialProgress || result.status === "accepted" || result.integration?.status === "integrated" || ["reviewing", "revision"].includes(result.status) && result.message);
+  const useful = Boolean(policyRevalidationResult || recovery || materialProgress || result.status === "accepted" || result.integration?.status === "integrated" || ["reviewing", "revision"].includes(result.status) && result.message);
   const health = {
     ...baseHealth,
     "execution preflight status": preflight.status || (preflight.ok ? "ready" : ""),
@@ -666,6 +967,8 @@ export async function runWorkBackgroundOnce({
     "work-started wakes": String((Number(prior["work-started wakes"]) || 0) + (workStarted ? 1 : 0)),
     "useful wakes": String((Number(prior["useful wakes"]) || 0) + (useful ? 1 : 0)),
     "material-progress wakes": String((Number(prior["material-progress wakes"]) || 0) + (materialProgress ? 1 : 0)),
+    "temporarily skipped candidates": String((Number(prior["temporarily skipped candidates"]) || 0) + temporarilySkipped.length),
+    "last temporarily skipped candidates": temporarilySkipped.map((entry) => `${entry.taskId}: ${entry.reason}`).join("; "),
     "blocked before model wakes": String(Number(prior["blocked before model wakes"]) || 0),
     "external evidence wakes": String(Number(prior["external evidence wakes"]) || 0)
   };
@@ -689,7 +992,8 @@ export async function runWorkBackgroundOnce({
     workStarted,
     usefulWake: useful,
     materialProgress,
-    integration: selectedIntegration ? finalTask?.checkpoint?.integration?.status || "" : ""
+    integration: selectedIntegration ? finalTask?.checkpoint?.integration?.status || "" : "",
+    skippedCandidates: temporarilySkipped
   }, { now });
   return {
     admitted: true,
@@ -701,6 +1005,10 @@ export async function runWorkBackgroundOnce({
     baseline,
     preflight,
     recovery,
+    policyRevalidation: policyRevalidationResult,
+    temporarilySkipped,
+    reconciliations,
+    blockerRepair: blockerRepairResult,
     ...result,
     workStarted
   };

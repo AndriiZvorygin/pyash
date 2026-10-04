@@ -2,6 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readPyaTextValues } from './pya_lookup.mjs';
+import { requestManagedOllamaChat } from '../program/runtime/gpu/managed-ollama.mjs';
+import { resolveTextModel } from '../program/runtime/gpu/text-model.mjs';
 
 // LEGACY CLI (JSON-era): intentionally quarantined.
 // Canonical Stage 3 summary path is:
@@ -22,7 +24,7 @@ const MODEL = process.env.AGENDA_SECTION_SUMMARY_MODEL
   || process.env.MEETING_SUMMARY_MODEL
   || process.env.SUMMARY_MODEL
   || process.env.OWEN_SUMMARY_MODEL
-  || 'qwen3.5:9b';
+  || resolveTextModel();
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = (() => {
   const raw = Number(process.env.AGENDA_SUMMARY_PASS_THRESHOLD || process.env.MEETING_SUMMARY_PASS_THRESHOLD || process.env.OWEN_SUMMARY_PASS_THRESHOLD || 0.65);
@@ -317,23 +319,16 @@ function abridgeUtf8(text, maxBytes) {
 }
 
 async function ask(messages, { numPredict = 280 } = {}) {
-  const body = {
+  const json = await requestManagedOllamaChat({
     model: MODEL,
-    mode: 'chat',
-    keep_alive: 300,
-    think: false,
-    stream: false,
+    ollamaUrl: OLLAMA_URL,
+    managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || '',
+    messages,
     options: { num_predict: numPredict },
-    messages
-  };
-  const res = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body)
+    think: false,
+    keepAlive: 300,
   });
-  if (!res.ok) throw new Error(`ollama status ${res.status}`);
-  const json = await res.json();
-  return String(json?.message?.content || '').trim();
+  return String(json?.message?.content || json?.response || '').trim();
 }
 
 function buildShortSummaryPrompt({ heading, source, focus, feedback, rosterText }) {

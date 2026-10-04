@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { inspectWorkExecutionPreflight } from "../../program/runtime/work/preflight.mjs";
+import { collectGitEvidence } from "../../program/runtime/work/workspace.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -53,4 +54,16 @@ test("execution preflight preserves sandbox initialization failure as infrastruc
   assert.equal(result.status, "blocked");
   assert.equal(result.check, "Codex App Server/sandbox initialization");
   assert.match(result.reason, /RTM_NEWADDR/u);
+});
+
+test("worktree evidence preserves the first status character and untracked paths", async () => {
+  const root = await repository("pyash-worktree-evidence-");
+  await execFileAsync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  await execFileAsync("git", ["config", "user.name", "Pyash Test"], { cwd: root });
+  await fs.writeFile(path.join(root, "README.md"), "baseline\n");
+  await execFileAsync("git", ["add", "README.md"], { cwd: root });
+  await execFileAsync("git", ["commit", "-qm", "baseline"], { cwd: root });
+  await fs.writeFile(path.join(root, "notes.txt"), "captured\n");
+  const evidence = await collectGitEvidence({ worktreePath: root });
+  assert.deepEqual(evidence.changedFiles, ["notes.txt"]);
 });

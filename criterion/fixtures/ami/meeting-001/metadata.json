@@ -1,0 +1,7 @@
+{
+  "meetingId": "meeting-001",
+  "source": "AMI prepared smoke fixture",
+  "accessStatus": "synthetic test fixture",
+  "preparation": "small repository fixture; not AMI corpus material",
+  "speakers": ["A", "B", "C"]
+}

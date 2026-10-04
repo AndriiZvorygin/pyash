@@ -1,3 +1,7 @@
+import { DEFAULT_TEXT_MODEL } from "../../../../../../runtime/gpu/text-model.mjs";
+
+const DEFAULT_TEXT_MODEL_C = JSON.stringify(DEFAULT_TEXT_MODEL);
+
 export const MIND_RUNTIME_HELPER_PART_02 = [
 "  pya_mind_counters[pya_mind_counter_len].count = 1;",
 "  pya_mind_counter_len += 1;",
@@ -138,7 +142,7 @@ export const MIND_RUNTIME_HELPER_PART_02 = [
 "  pya_mind_config *cfg = pya_mind_get_config(mind);",
 "  const char *host = cfg && cfg->space ? cfg->space : getenv(\"OLLAMA_HOST\");",
 "  if (!host) host = \"http://localhost:11434\";",
-"  const char *model = model_override ? model_override : (cfg && cfg->model ? cfg->model : \"qwen3.5:9b\");",
+`  const char *model = model_override ? model_override : (cfg && cfg->model ? cfg->model : (${DEFAULT_TEXT_MODEL_C}));`,
 "  int window = window_override > 0 ? window_override : (cfg && cfg->window > 0 ? cfg->window : 8);",
 "  const char *prompt = cfg && cfg->prompt ? cfg->prompt : NULL;",
 "  cJSON *messages = cJSON_CreateArray();",

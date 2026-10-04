@@ -13,6 +13,7 @@ const WORK_EVENT_TYPES = [
   "revision-requested",
   "budget-paused",
   "recovered",
+  "turn-reconciled",
   "blocked",
   "usage-limited",
   "accepted",

@@ -1,6 +1,10 @@
 
 # Roadmap (parity-driven, spec drops, hardening gates, modules early, media IO)
 
+## Model criterion benchmark lane
+
+The sleep/gold evaluation surface is executable through the existing Pyash run, refinery, artifact, verify, golden and `again` conventions. The first useful lane compares the configured Qwen models on cached MeetingBank, QMSum, LongBench v2, IFEval and HelpOS-local fixtures. It is an evaluation/provenance track, not a replacement runtime: private datasets stay local, model outputs remain evidence, and strict HelpOS validators remain authoritative. `nightmare` covers bounded stress/repeat runs and `reverie` covers controlled meeting simulations.
+
 ## Invariants
 
 * Parity-first: interpreter + JS + C ship together by default

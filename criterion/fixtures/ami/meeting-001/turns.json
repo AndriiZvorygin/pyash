@@ -1,0 +1,6 @@
+[
+  {"speaker": "A", "start": 0.0, "end": 4.2, "text": "We need to choose the portable display for the next prototype."},
+  {"speaker": "B", "start": 4.2, "end": 8.7, "text": "The lighter display is easier to carry, but its controls are too small."},
+  {"speaker": "A", "start": 8.7, "end": 12.4, "text": "Let us choose the larger controls and document the weight tradeoff."},
+  {"speaker": "C", "start": 12.4, "end": 16.8, "text": "I will update the prototype brief and send it to the team tomorrow."}
+]

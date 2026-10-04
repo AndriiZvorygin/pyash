@@ -95,6 +95,9 @@ import headquarters, { signatures as headquartersSignatures } from "./headquarte
 import ratify, { signatures as ratifySignatures } from "./ratify.mjs";
 import { claimIdentify, claimChoose, signatures as claimSignatures } from "./claim.mjs";
 import documentDigestion, { signatures as documentDigestionSignatures } from "./document_digest.mjs";
+import criterion, { signatures as criterionSignatures } from "./criterion.mjs";
+import nightmare, { signatures as nightmareSignatures } from "./nightmare.mjs";
+import reverie, { signatures as reverieSignatures } from "./reverie.mjs";
 
 export {
   plus,
@@ -181,7 +184,10 @@ export {
   ratify,
   claimIdentify,
   claimChoose,
-  documentDigestion
+  documentDigestion,
+  criterion,
+  nightmare,
+  reverie
 };
 
 export const builtInSignatures = [
@@ -282,4 +288,7 @@ export const builtInSignatures = [
   ...ratifySignatures,
   ...claimSignatures,
   ...documentDigestionSignatures,
+  ...criterionSignatures,
+  ...nightmareSignatures,
+  ...reverieSignatures,
 ];

@@ -1,0 +1,17 @@
+diff --git a/Dockerfile b/Dockerfile
+index 3a6abc3..b111927 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -18 +18 @@ FROM --platform=linux/amd64 rocm/dev-almalinux-8:${ROCMVERSION}-complete AS base
+-RUN dnf install -y yum-utils ccache gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gcc-toolset-13-binutils \
++RUN dnf install -y yum-utils ccache gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ gcc-toolset-12-binutils \
+@@ -20 +20 @@ RUN dnf install -y yum-utils ccache gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gc
+-ENV PATH=/opt/rh/gcc-toolset-13/root/usr/bin:$PATH
++ENV PATH=/opt/rh/gcc-toolset-12/root/usr/bin:$PATH
+diff --git a/llama/server/CMakePresets.json b/llama/server/CMakePresets.json
+index b2a9afd..78dc6e9 100644
+--- a/llama/server/CMakePresets.json
++++ b/llama/server/CMakePresets.json
+@@ -71 +71 @@
+-        "CMAKE_CUDA_ARCHITECTURES": "50-virtual;52-virtual;60;61;70;75;80;86;89;90;90a;100;120"
++        "CMAKE_CUDA_ARCHITECTURES": "86"

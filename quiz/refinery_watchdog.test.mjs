@@ -53,7 +53,7 @@ test("nightly recovery can pin and republish a Grey County meeting", () => {
     "9098944f-3e9c-4d24-8d32-6d2c70673f40",
   ]);
   assert.deepEqual(pinned.env, {
-    GREY_PIPELINE_FORCE_WHOLE_SUMMARY: "1",
+    GREY_AGENDA_REUSE_STAGE3: "1",
     MEETING_POST_COMMAND: `node ${REPORTERS.grey.publishScript}`,
     PIPELINE_FORCE_POST: "1",
     MEETING_PUBLISH_COMMUNITY_NAME: "grey-county-council",

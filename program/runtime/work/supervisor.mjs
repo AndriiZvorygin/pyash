@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 import { buildWorkTask, transitionWorkTask } from "./contract.mjs";
 import {
@@ -29,6 +30,7 @@ import {
   summarizeImplementationProgress,
   extractCommitIds
 } from "./progress.mjs";
+import { currentTimeoutPolicy } from "./timeout_policy.mjs";
 import {
   resumeCodexThread,
   runCodexTurn,
@@ -37,9 +39,18 @@ import {
   threadIdFromResponse
 } from "../codex/app_server.mjs";
 
+const DEFAULT_PLANNER = Object.freeze({ model: "gpt-5.6-sol", reasoningEffort: "high" });
+const DEFAULT_IMPLEMENTER = Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "xhigh" });
+const DEFAULT_REVIEWER = Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "xhigh" });
+const DEFAULT_ESCALATION_REVIEWER = Object.freeze({ model: "gpt-5.6-sol", reasoningEffort: "high" });
+
 export const DEFAULT_WORK_ROLE_CONFIG = Object.freeze({
-  manager: Object.freeze({ model: "gpt-5.6-sol", reasoningEffort: "high" }),
-  worker: Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "xhigh" })
+  planner: DEFAULT_PLANNER,
+  implementer: DEFAULT_IMPLEMENTER,
+  reviewer: DEFAULT_REVIEWER,
+  escalationReviewer: DEFAULT_ESCALATION_REVIEWER,
+  manager: DEFAULT_PLANNER,
+  worker: DEFAULT_IMPLEMENTER
 });
 
 function text(value) {
@@ -52,17 +63,41 @@ function envValue(env, key, fallback) {
 }
 
 export function resolveWorkRoleConfig(input = {}, env = process.env) {
+  const plannerInput = input.planner || input.manager || {};
+  const implementerInput = input.implementer || input.worker || {};
+  const planner = {
+    model: text(plannerInput.model)
+      || envValue(env, "PYA_CODEX_PLANNER_MODEL", envValue(env, "PYA_MANAGER_MODEL", DEFAULT_PLANNER.model)),
+    reasoningEffort: text(plannerInput.reasoningEffort)
+      || envValue(env, "PYA_CODEX_PLANNER_REASONING", envValue(env, "PYA_CODEX_PLANNER_REASONING_EFFORT", envValue(env, "PYA_MANAGER_REASONING_EFFORT", DEFAULT_PLANNER.reasoningEffort)))
+  };
+  const implementer = {
+    model: text(implementerInput.model)
+      || envValue(env, "PYA_CODEX_IMPLEMENTER_MODEL", envValue(env, "PYA_WORKER_MODEL", DEFAULT_IMPLEMENTER.model)),
+    reasoningEffort: text(implementerInput.reasoningEffort)
+      || envValue(env, "PYA_CODEX_IMPLEMENTER_REASONING", envValue(env, "PYA_CODEX_IMPLEMENTER_REASONING_EFFORT", envValue(env, "PYA_WORKER_REASONING_EFFORT", DEFAULT_IMPLEMENTER.reasoningEffort)))
+  };
+  const reviewerInput = input.reviewer || {};
+  const reviewer = {
+    model: text(reviewerInput.model)
+      || envValue(env, "PYA_CODEX_REVIEWER_MODEL", DEFAULT_REVIEWER.model),
+    reasoningEffort: text(reviewerInput.reasoningEffort)
+      || envValue(env, "PYA_CODEX_REVIEWER_REASONING", envValue(env, "PYA_CODEX_REVIEWER_REASONING_EFFORT", DEFAULT_REVIEWER.reasoningEffort))
+  };
+  const escalationInput = input.escalationReviewer || {};
+  const escalationReviewer = {
+    model: text(escalationInput.model)
+      || envValue(env, "PYA_CODEX_ESCALATION_REVIEWER_MODEL", DEFAULT_ESCALATION_REVIEWER.model),
+    reasoningEffort: text(escalationInput.reasoningEffort)
+      || envValue(env, "PYA_CODEX_ESCALATION_REVIEWER_REASONING", envValue(env, "PYA_CODEX_ESCALATION_REVIEWER_REASONING_EFFORT", DEFAULT_ESCALATION_REVIEWER.reasoningEffort))
+  };
   return {
-    manager: {
-      model: text(input.manager?.model) || envValue(env, "PYA_MANAGER_MODEL", DEFAULT_WORK_ROLE_CONFIG.manager.model),
-      reasoningEffort: text(input.manager?.reasoningEffort)
-        || envValue(env, "PYA_MANAGER_REASONING_EFFORT", DEFAULT_WORK_ROLE_CONFIG.manager.reasoningEffort)
-    },
-    worker: {
-      model: text(input.worker?.model) || envValue(env, "PYA_WORKER_MODEL", DEFAULT_WORK_ROLE_CONFIG.worker.model),
-      reasoningEffort: text(input.worker?.reasoningEffort)
-        || envValue(env, "PYA_WORKER_REASONING_EFFORT", DEFAULT_WORK_ROLE_CONFIG.worker.reasoningEffort)
-    }
+    planner,
+    implementer,
+    reviewer,
+    escalationReviewer,
+    manager: planner,
+    worker: implementer
   };
 }
 
@@ -145,18 +180,48 @@ export function parseConvergence(output) {
   };
 }
 
+function parseReviewDecision(output, fallback = "BLOCK") {
+  const body = String(output ?? "");
+  const headed = body.match(/^\s*DECISION\s*:\s*(ACCEPT|REVISE|ESCALATE|REPLAN|BLOCK)\b/imu);
+  const bare = body.match(/^\s*(ACCEPT|REVISE|ESCALATE|REPLAN|BLOCK)\s*$/imu);
+  const match = headed || bare;
+  return String(match?.[1] || fallback).toUpperCase();
+}
+
 export function parseReview(output) {
   const sections = sectionMap(output);
-  const match = String(output ?? "").match(/\b(ACCEPT|REVISE|BLOCK)\b/i);
   return {
-    decision: String(match?.[1] || "BLOCK").toUpperCase(),
+    decision: parseReviewDecision(output),
     explanation: firstSection(sections, ["RATIONALE", "EXPLANATION", "SUMMARY"]) || text(output),
     revisionInstructions: firstSection(sections, ["CORRECTION", "CORRECTIONS", "REVISION", "REVISION INSTRUCTIONS"])
   };
 }
 
+export function parseRoutineReview(output) {
+  const sections = sectionMap(output);
+  const decision = parseReviewDecision(output, "ESCALATE");
+  return {
+    decision: decision === "BLOCK" || decision === "REPLAN" ? "ESCALATE" : decision,
+    explanation: firstSection(sections, ["RATIONALE", "EXPLANATION", "SUMMARY"]) || text(output),
+    revisionInstructions: firstSection(sections, ["CORRECTION", "CORRECTIONS", "REVISION", "REVISION INSTRUCTIONS"]),
+    escalationReason: firstSection(sections, ["ESCALATION", "ESCALATION REASON", "DISPUTED QUESTION"])
+  };
+}
+
+export function parseEscalationReview(output) {
+  const sections = sectionMap(output);
+  const parsedDecision = parseReviewDecision(output, "BLOCK");
+  return {
+    decision: ["ACCEPT", "REVISE", "REPLAN", "BLOCK"].includes(parsedDecision) ? parsedDecision : "BLOCK",
+    explanation: firstSection(sections, ["RATIONALE", "EXPLANATION", "SUMMARY"]) || text(output),
+    revisionInstructions: firstSection(sections, ["CORRECTION", "CORRECTIONS", "REVISION", "REVISION INSTRUCTIONS"]),
+    workOrder: firstSection(sections, ["WORK ORDER", "IMPLEMENTATION", "STEPS"]),
+    escalationReason: firstSection(sections, ["ESCALATION", "ESCALATION REASON", "DISPUTED QUESTION"])
+  };
+}
+
 function promptPlan(task, workspace, roles) {
-  return projectWorkContext(task, { phase: "planning", role: "manager" }).prompt;
+  return projectWorkContext(task, { phase: "planning", role: "planner" }).prompt;
 }
 
 function promptImplementation(task, checkpoint, workspace, correction = "") {
@@ -168,11 +233,15 @@ function promptImplementation(task, checkpoint, workspace, correction = "") {
 }
 
 function promptReview(task, checkpoint, workspace) {
-  return projectWorkContext(task, { phase: "review", role: "manager" }).prompt;
+  return projectWorkContext(task, { phase: "review", role: "reviewer" }).prompt;
+}
+
+function promptEscalationReview(task, checkpoint, workspace) {
+  return projectWorkContext(task, { phase: "escalation-review", role: "escalationReviewer" }).prompt;
 }
 
 function promptConvergence(task, checkpoint, workspace) {
-  return projectWorkContext(task, { phase: "convergence-review", role: "manager" }).prompt;
+  return projectWorkContext(task, { phase: "convergence-review", role: "escalationReviewer" }).prompt;
 }
 
 function resultText(result) {
@@ -189,7 +258,9 @@ function requestIdentity(task, phase) {
     ? task.checkpoint.implementation.passes
     : phase === "convergence-review"
       ? task.checkpoint.convergence.reviewCount
-      : 0;
+      : phase === "review" || phase === "escalation-review"
+        ? task.checkpoint.revisionCount
+        : 0;
   return `pyash-${task.taskId}-${phase}-${task.checkpoint.revisionCount}-${task.checkpoint.resumeCount}-${pass}`;
 }
 
@@ -201,7 +272,8 @@ function storedTurnResult(turn) {
     fileChanges: Array.isArray(turn?.result?.fileChanges) ? turn.result.fileChanges : [],
     turn: turn?.result?.turn || {},
     turnId: turn?.turnId || "",
-    requestIdentity: turn?.requestIdentity || ""
+    requestIdentity: turn?.requestIdentity || "",
+    activity: turn?.activity || {}
   };
 }
 
@@ -217,8 +289,26 @@ function emptyTurn() {
     completedAt: "",
     resultCaptured: false,
     ambiguity: "",
+    lastActivityAt: "",
+    activityCount: 0,
+    meaningfulActivityCount: 0,
+    timeoutType: "",
+    timeoutMs: 0,
+    hardTimeoutMs: 0,
+    inactivityTimeoutMs: 0,
     result: { status: "", text: "", diff: "", fileChanges: [], turn: {} }
   };
+}
+
+function implementationIdentity(checkpoint, evidence = {}) {
+  const revision = text(evidence.revision || checkpoint?.implementation?.commit);
+  if (revision && revision !== text(checkpoint?.workspace?.baseRevision)) return `commit:${revision}`;
+  const diff = text(evidence.diff || checkpoint?.implementation?.diff);
+  const files = Array.isArray(evidence.changedFiles) && evidence.changedFiles.length
+    ? evidence.changedFiles
+    : checkpoint?.implementation?.changedFiles || [];
+  if (!diff && !files.length) return "";
+  return `evidence:${createHash("sha256").update(JSON.stringify({ files, diff })).digest("hex")}`;
 }
 
 export class AmbiguousWorkTurnError extends Error {
@@ -228,6 +318,14 @@ export class AmbiguousWorkTurnError extends Error {
     this.kind = "ambiguous";
     this.phase = phase;
     this.requestIdentity = identity;
+  }
+}
+
+export class StaleReviewError extends Error {
+  constructor(message) {
+    super(String(message));
+    this.name = "StaleReviewError";
+    this.kind = "ambiguous";
   }
 }
 
@@ -271,6 +369,123 @@ async function openRoleThread(client, {
   const id = threadIdFromResponse(started);
   if (!id) throw new Error(`${role} thread start returned no thread id`);
   return id;
+}
+
+function temporaryExecutionConflict(error) {
+  return /active writer|thread .* writer|already .* writer|local lock|lease .* held/iu.test(
+    text(error?.message || error)
+  );
+}
+
+function canonicalRole(role) {
+  const value = text(role).toLowerCase();
+  if (value === "manager" || value === "planner") return value === "manager" ? "manager" : "planner";
+  if (value === "worker" || value === "implementer") return value === "worker" ? "worker" : "implementer";
+  if (value === "escalationreviewer" || value === "escalation-reviewer") return "escalationReviewer";
+  if (value === "reviewer") return "reviewer";
+  return value;
+}
+
+function hasLegacySolReview(task) {
+  const checkpoint = task?.checkpoint || {};
+  if (checkpoint.reviewer?.role || !checkpoint.manager?.threadId) return false;
+  const activeRole = canonicalRole(checkpoint.activeTurn?.role);
+  const reviewRole = canonicalRole(checkpoint.review?.role);
+  return ["manager", "planner"].includes(activeRole)
+    || ["manager", "planner"].includes(reviewRole)
+    || Boolean(
+      checkpoint.review?.decision
+      || checkpoint.review?.explanation
+      || checkpoint.review?.revisionInstructions
+    );
+}
+
+function taskExecutionRole(task) {
+  const checkpoint = task?.checkpoint || {};
+  const activeRole = canonicalRole(checkpoint.activeTurn?.role);
+  if (activeRole) return activeRole;
+  const phase = text(checkpoint.interruption?.phase || task?.status).toLowerCase();
+  const planning = phase === "planning" || (task?.status === "ready" && !checkpoint.plan?.workOrder);
+  if (planning) return "planner";
+  if (phase === "reviewing") {
+    if (hasLegacySolReview(task)) return "manager";
+    return checkpoint.escalationReview?.decision
+      ? "escalationReviewer"
+      : "reviewer";
+  }
+  return "implementer";
+}
+
+function threadForRole(task, role) {
+  const checkpoint = task?.checkpoint || {};
+  if (role === "planner" || role === "manager") return checkpoint.manager?.threadId || task?.solThreadId;
+  if (role === "implementer" || role === "worker") return checkpoint.worker?.threadId || task?.lunaThreadId;
+  if (role === "escalationReviewer") return checkpoint.escalationReviewer?.threadId;
+  return checkpoint.reviewer?.threadId;
+}
+
+/**
+ * Probe an existing role thread without starting a model turn. A thread
+ * ownership conflict is a candidate-local skip; other probe failures remain
+ * available for the normal global preflight and supervisor error handling.
+ */
+export async function probeWorkTaskAvailability({
+  task,
+  appServerFactory = ({}) => spawnCodexAppServer({}),
+  repositoryRoot = process.cwd(),
+  roleConfig = {},
+  approvalPolicy = "never",
+  threadSandbox = "workspace-write"
+} = {}) {
+  const role = taskExecutionRole(task);
+  const settings = resolveWorkRoleConfig(roleConfig);
+  const threadId = text(threadForRole(task, role));
+  const knownConflict = text(task?.checkpoint?.activeTurn?.ambiguity || task?.checkpoint?.blocker || task?.message);
+  if (temporaryExecutionConflict({ message: knownConflict })) {
+    return {
+      available: false,
+      reason: "active-writer",
+      role,
+      threadId,
+      error: knownConflict
+    };
+  }
+  if (!threadId) return { available: true, reason: "no existing role thread" };
+  const worktreePath = text(task?.checkpoint?.workspace?.worktreePath) || repositoryRoot;
+  let client = null;
+  try {
+    client = await appServerFactory({
+      role,
+      model: (settings[role] || settings.manager).model,
+      reasoningEffort: (settings[role] || settings.manager).reasoningEffort,
+      cwd: worktreePath,
+      threadId,
+      approvalPolicy
+    });
+    await openRoleThread(client, {
+      role,
+      threadId,
+      workspace: { worktreePath },
+      roleConfig: settings[role] || settings.manager,
+      approvalPolicy,
+      threadSandbox
+    });
+    return { available: true, reason: "role thread available", role, threadId };
+  } catch (error) {
+    const message = text(error?.message || error);
+    if (temporaryExecutionConflict(error)) {
+      return {
+        available: false,
+        reason: "active-writer",
+        role,
+        threadId,
+        error: message
+      };
+    }
+    return { available: true, reason: "availability probe inconclusive", role, threadId, error: message };
+  } finally {
+    await closeClient(client);
+  }
 }
 
 function changedFilesFromResult(result, worktreePath) {
@@ -319,10 +534,17 @@ export async function runWorkSupervisorOnce({
     type: "workspaceWrite",
     writableRoots: [worktreePath]
   }),
+  turnInactivityTimeoutMs = 0,
+  turnHardTimeoutMs = 0,
   onEvent = null,
   now = () => new Date()
 } = {}) {
   const roleSettings = resolveWorkRoleConfig(roleConfig);
+  const timeoutPolicy = currentTimeoutPolicy({
+    fallbackTimeoutMs: turnTimeoutMs,
+    inactivityTimeoutMs: turnInactivityTimeoutMs,
+    hardTimeoutMs: turnHardTimeoutMs
+  });
   const claimed = taskId
     ? await claimWorkTaskById(worldRoot, taskId, { workerTag, owner })
     : await claimOldestWorkTask(worldRoot, { workerTag, owner })
@@ -336,6 +558,7 @@ export async function runWorkSupervisorOnce({
     checkpoint: persisted?.checkpoint || claimed.task.checkpoint,
     workSpec: persisted?.workSpec || claimed.task.workSpec
   });
+  const legacyReviewThread = hasLegacySolReview(task);
   const historicalProgress = deriveImplementationProgress(task.checkpoint);
   if (!task.checkpoint.implementation.passHistory.length && historicalProgress.passHistory.length) {
     task = await writeWorkTaskStatus(worldRoot, {
@@ -355,6 +578,8 @@ export async function runWorkSupervisorOnce({
   const startedClients = [];
   let managerClient = null;
   let workerClient = null;
+  let reviewerClient = null;
+  let escalationReviewerClient = null;
 
   await emit("selected", {
     reason: task.checkpoint.selectionReason || "selected by priority",
@@ -419,18 +644,61 @@ export async function runWorkSupervisorOnce({
     const message = text(err?.message || err) || "supervisor failed";
     const atValue = nowValue(now);
     const at = typeof atValue?.toISOString === "function" ? atValue.toISOString() : String(atValue);
+    const timeoutDetails = err?.details && typeof err.details === "object" ? err.details : {};
+    const timeoutLike = kind === "timeout" || /turn timeout/iu.test(message);
+    let workspaceEvidence = null;
+    if (timeoutLike && task.checkpoint.workspace.worktreePath) {
+      try {
+        workspaceEvidence = {
+          ...(await evidenceFactory({ worktreePath: task.checkpoint.workspace.worktreePath })),
+          capturedAt: at
+        };
+      } catch (evidenceError) {
+        workspaceEvidence = {
+          capturedAt: at,
+          error: text(evidenceError?.message || evidenceError)
+        };
+      }
+    }
+    const partialResult = timeoutDetails.partialResult && typeof timeoutDetails.partialResult === "object"
+      ? timeoutDetails.partialResult
+      : null;
+    const preservedTurn = turnPending || turnUncaptured
+      ? {
+        ...activeTurn,
+        turnId: text(timeoutDetails.turnId) || activeTurn.turnId,
+        lastActivityAt: text(timeoutDetails.lastActivityAt) || activeTurn.lastActivityAt,
+        activityCount: Number(timeoutDetails.eventCount) || activeTurn.activityCount || 0,
+        meaningfulActivityCount: Number(timeoutDetails.meaningfulEventCount) || activeTurn.meaningfulActivityCount || 0,
+        timeoutType: text(timeoutDetails.timeoutType) || activeTurn.timeoutType,
+        timeoutMs: Number(timeoutDetails.timeoutMs) || activeTurn.timeoutMs || 0,
+        hardTimeoutMs: Number(timeoutDetails.hardTimeoutMs) || activeTurn.hardTimeoutMs || 0,
+        inactivityTimeoutMs: Number(timeoutDetails.inactivityTimeoutMs) || activeTurn.inactivityTimeoutMs || 0,
+        result: partialResult
+          ? {
+            status: partialResult.status || "in-progress",
+            text: partialResult.text || "",
+            diff: partialResult.diff || "",
+            fileChanges: uniqueFileChanges(partialResult.fileChanges || []),
+            turn: partialResult.turn || {}
+          }
+          : activeTurn.result
+      }
+      : task.checkpoint.activeTurn;
     const checkpoint = {
+      timeoutPolicy,
       interruption: {
         phase: task.status,
         at,
         reason: message,
-        lastTurnId: activeTurn.turnId || ""
+        lastTurnId: text(timeoutDetails.turnId) || activeTurn.turnId || "",
+        ...(workspaceEvidence ? { workspaceEvidence } : {})
       },
       blocker: status === "blocked" ? message : task.checkpoint.blocker,
       activeTurn: status === "usage-limited"
         ? emptyTurn()
         : turnPending || turnUncaptured
-          ? { ...activeTurn, state: turnUncaptured ? "completed" : "ambiguous", ambiguity: message }
+          ? { ...preservedTurn, state: turnUncaptured ? "completed" : "ambiguous", ambiguity: message }
           : task.checkpoint.activeTurn
     };
     if (err?.preflight) checkpoint.executionPreflight = {
@@ -443,7 +711,13 @@ export async function runWorkSupervisorOnce({
       turnSandbox: err.preflight.details?.turnSandbox || ""
     };
     if (task.status !== status) task = transitionWorkTask(task, status, { now: atValue, message, error: message });
-    await save(checkpoint, { error: message, message });
+    await save(checkpoint, {
+      error: message,
+      message,
+      ...(workspaceEvidence ? {
+        lastAction: `${task.checkpoint.lastAction || "turn interrupted"}; workspace evidence captured`
+      } : {})
+    });
     if (status === "failed") {
       await ackWorkTaskFail(worldRoot, {
         runtimePath: claimed.path,
@@ -501,15 +775,28 @@ export async function runWorkSupervisorOnce({
     }
     await save({
       workspace,
+      timeoutPolicy,
       manager: {
-        model: roleSettings.manager.model,
-        reasoningEffort: roleSettings.manager.reasoningEffort,
+        model: roleSettings.planner.model,
+        reasoningEffort: roleSettings.planner.reasoningEffort,
         threadId: task.checkpoint.manager.threadId
       },
       worker: {
-        model: roleSettings.worker.model,
-        reasoningEffort: roleSettings.worker.reasoningEffort,
+        model: roleSettings.implementer.model,
+        reasoningEffort: roleSettings.implementer.reasoningEffort,
         threadId: task.checkpoint.worker.threadId
+      },
+      reviewer: {
+        role: "reviewer",
+        model: roleSettings.reviewer.model,
+        reasoningEffort: roleSettings.reviewer.reasoningEffort,
+        threadId: task.checkpoint.reviewer.threadId
+      },
+      escalationReviewer: {
+        role: "escalationReviewer",
+        model: roleSettings.escalationReviewer.model,
+        reasoningEffort: roleSettings.escalationReviewer.reasoningEffort,
+        threadId: task.checkpoint.escalationReviewer.threadId
       }
     });
   } catch (err) {
@@ -530,54 +817,20 @@ export async function runWorkSupervisorOnce({
   }
 
   function roleState(role) {
-    return task.checkpoint[role] || {};
+    const key = role === "planner" || role === "manager"
+      ? "manager"
+      : role === "implementer" || role === "worker"
+        ? "worker"
+        : role;
+    return task.checkpoint[key] || {};
   }
 
-  function preparedContextMatches(context, role, identity, { strictRequest = false } = {}) {
-    const prepared = task.checkpoint.compactContext || {};
-    if (prepared.version < 1
-      || prepared.phase !== context.phase
-      || prepared.role !== role
-      || prepared.contextHash !== context.contextHash
-      || prepared.prompt !== context.prompt
-      || prepared.activeThreadId !== roleState(role).threadId) return false;
-    return !strictRequest || prepared.requestIdentity === identity;
-  }
-
-  async function getRole(role, {
-    phase,
-    context,
-    rotate = false
-  } = {}) {
-    const config = roleSettings[role];
+  async function recordProjectedContext(role, phase, context, threadId) {
     const state = roleState(role);
     const identity = requestIdentity(task, phase === "revision" ? "implementation" : phase);
-    const active = task.checkpoint.activeTurn || {};
-    const activeRequest = active.requestIdentity === identity && active.role === role;
-    const strictRequest = rotate || phase === "planning" || phase === "review" || phase === "convergence-review" || phase === "revision";
-    const prepared = preparedContextMatches(context, role, identity, { strictRequest });
-    const rotationCandidate = rotate && !prepared && !activeRequest && Boolean(state.threadId);
-    let client = role === "manager" ? managerClient : workerClient;
-    if (!client) {
-      client = await getClient(role, config, rotationCandidate ? "" : state.threadId);
-      if (role === "manager") managerClient = client;
-      else workerClient = client;
-    }
-    const adapterCanStart = typeof client?.startThread === "function" || typeof client?.request === "function";
-    const boundaryRotation = rotationCandidate && adapterCanStart;
-    const existingThreadId = boundaryRotation ? "" : state.threadId;
-    const threadId = await openRoleThread(client, {
-      role,
-      threadId: existingThreadId,
-      workspace,
-      roleConfig: config,
-      approvalPolicy,
-      threadSandbox
-    });
-    const displaced = state.threadId && threadId !== state.threadId ? [state.threadId] : [];
     const priorThreadIds = [...new Set([
       ...(state.previousThreadIds || []),
-      ...displaced
+      ...(state.threadId && state.threadId !== threadId ? [state.threadId] : [])
     ].filter(Boolean))];
     const currentContext = {
       ...context,
@@ -585,32 +838,143 @@ export async function runWorkSupervisorOnce({
       activeThreadId: threadId,
       priorThreadIds
     };
-    const persistedContextMatches = task.checkpoint.compactContext?.contextHash === currentContext.contextHash
-      && task.checkpoint.compactContext?.phase === currentContext.phase
-      && task.checkpoint.compactContext?.role === currentContext.role
-      && task.checkpoint.compactContext?.activeThreadId === threadId
-      && task.checkpoint.compactContext?.requestIdentity === identity;
-    if (!persistedContextMatches || threadId !== state.threadId || priorThreadIds.length !== (state.previousThreadIds || []).length) {
-      const patch = {
-        [role]: { threadId, previousThreadIds: priorThreadIds },
-        compactContext: currentContext,
+    const previous = task.checkpoint.compactContext || {};
+    const persistedContextMatches = previous.contextHash === currentContext.contextHash
+      && previous.phase === currentContext.phase
+      && previous.role === currentContext.role
+      && previous.prompt === currentContext.prompt
+      && previous.activeThreadId === threadId
+      && previous.requestIdentity === identity
+      && JSON.stringify(previous.priorThreadIds || []) === JSON.stringify(priorThreadIds);
+    if (persistedContextMatches) return currentContext;
+    const checkpointRole = role === "planner" || role === "manager"
+      ? "manager"
+      : role === "implementer" || role === "worker"
+        ? "worker"
+        : role;
+    await save({
+      [checkpointRole]: { threadId, previousThreadIds: priorThreadIds },
+      compactContext: currentContext,
+      interruption: { phase: "", at: "", reason: "", lastTurnId: "" }
+    }, checkpointRole === "manager" ? { solThreadId: threadId } : checkpointRole === "worker" ? { lunaThreadId: threadId } : {});
+    await appendWorkOutcome(worldRoot, task, {
+      action: `context compacted before ${phase}`,
+      contextCheckpoint: currentContext
+    });
+    return currentContext;
+  }
+
+  async function getPlanner({ phase = "planning", context = projectWorkContext(task, { phase, role: "planner" }), rotate = false } = {}) {
+    const previousThreadId = task.checkpoint.manager.threadId;
+    if (!managerClient) managerClient = await getClient("planner", roleSettings.planner, previousThreadId);
+    const canStartFresh = typeof managerClient?.startThread === "function" || typeof managerClient?.request === "function";
+    const threadId = await openRoleThread(managerClient, {
+      role: "planner",
+      threadId: rotate && previousThreadId && canStartFresh ? "" : previousThreadId,
+      workspace,
+      roleConfig: roleSettings.planner,
+      approvalPolicy,
+      threadSandbox
+    });
+    if (threadId !== previousThreadId) {
+      await save({
+        manager: {
+          threadId,
+          previousThreadIds: [...new Set([...(task.checkpoint.manager.previousThreadIds || []), previousThreadId].filter(Boolean))]
+        },
         interruption: { phase: "", at: "", reason: "", lastTurnId: "" }
-      };
-      await save(patch, role === "manager" ? { solThreadId: threadId } : { lunaThreadId: threadId });
-      await appendWorkOutcome(worldRoot, task, {
-        action: `context compacted before ${phase}`,
-        contextCheckpoint: currentContext
+      }, { solThreadId: threadId });
+    }
+    await recordProjectedContext("planner", phase, context, threadId);
+    return { client: managerClient, threadId };
+  }
+
+  async function getWorker({ phase = "implementation", context = projectWorkContext(task, { phase, role: "implementer" }), rotate = false } = {}) {
+    const previousThreadId = task.checkpoint.worker.threadId;
+    if (!workerClient) workerClient = await getClient("implementer", roleSettings.implementer, previousThreadId);
+    const canStartFresh = typeof workerClient?.startThread === "function" || typeof workerClient?.request === "function";
+    const threadId = await openRoleThread(workerClient, {
+      role: "implementer",
+      threadId: rotate && previousThreadId && canStartFresh ? "" : previousThreadId,
+      workspace,
+      roleConfig: roleSettings.implementer,
+      approvalPolicy,
+      threadSandbox
+    });
+    if (threadId !== previousThreadId) {
+      await save({
+        worker: {
+          threadId,
+          previousThreadIds: [...new Set([...(task.checkpoint.worker.previousThreadIds || []), previousThreadId].filter(Boolean))]
+        },
+        interruption: { phase: "", at: "", reason: "", lastTurnId: "" }
+      }, { lunaThreadId: threadId });
+    }
+    await recordProjectedContext("implementer", phase, context, threadId);
+    return { client: workerClient, threadId };
+  }
+
+  async function getReviewer({ phase = "review", context = projectWorkContext(task, { phase, role: "reviewer" }) } = {}) {
+    const existingThreadId = task.checkpoint.reviewer.threadId;
+    const implementerThreadId = task.checkpoint.worker.threadId || task.lunaThreadId;
+    const reviewerThreadId = existingThreadId && existingThreadId !== implementerThreadId
+      ? existingThreadId
+      : "";
+    if (existingThreadId && !reviewerThreadId) {
+      await save({
+        reviewer: {
+          role: "reviewer",
+          threadId: "",
+          previousThreadIds: [...new Set([
+            ...(task.checkpoint.reviewer.previousThreadIds || []),
+            existingThreadId
+          ])]
+        },
+        lastAction: "reviewer thread collision retired before independent review"
       });
     }
-    return { client, threadId };
+    if (!reviewerClient) reviewerClient = await getClient("reviewer", roleSettings.reviewer, reviewerThreadId);
+    const threadId = await openRoleThread(reviewerClient, {
+      role: "reviewer",
+      threadId: reviewerThreadId,
+      workspace,
+      roleConfig: roleSettings.reviewer,
+      approvalPolicy,
+      threadSandbox
+    });
+    if (threadId !== task.checkpoint.reviewer.threadId) {
+      await save({ reviewer: { role: "reviewer", model: roleSettings.reviewer.model, reasoningEffort: roleSettings.reviewer.reasoningEffort, threadId } });
+    }
+    await recordProjectedContext("reviewer", phase, context, threadId);
+    return { client: reviewerClient, threadId };
   }
 
-  async function getManager(options = {}) {
-    return getRole("manager", options);
-  }
-
-  async function getWorker(options = {}) {
-    return getRole("worker", options);
+  async function getEscalationReviewer({ phase = "escalation-review", context = projectWorkContext(task, { phase, role: "escalationReviewer" }) } = {}) {
+    const previousThreadId = task.checkpoint.escalationReviewer.threadId;
+    if (!escalationReviewerClient) {
+      escalationReviewerClient = await getClient("escalationReviewer", roleSettings.escalationReviewer, previousThreadId);
+    }
+    const threadId = await openRoleThread(escalationReviewerClient, {
+      role: "escalationReviewer",
+      threadId: previousThreadId,
+      workspace,
+      roleConfig: roleSettings.escalationReviewer,
+      approvalPolicy,
+      threadSandbox
+    });
+    if (threadId !== previousThreadId) {
+      await save({
+        escalationReviewer: {
+          role: "escalationReviewer",
+          model: roleSettings.escalationReviewer.model,
+          reasoningEffort: roleSettings.escalationReviewer.reasoningEffort,
+          threadId,
+          previousThreadIds: [...new Set([...(task.checkpoint.escalationReviewer.previousThreadIds || []), previousThreadId].filter(Boolean))]
+        }
+      });
+    }
+    await recordProjectedContext("escalationReviewer", phase, context, threadId);
+    return { client: escalationReviewerClient, threadId };
   }
 
   async function executeTurn(phase, role, client, options) {
@@ -640,7 +1004,10 @@ export async function runWorkSupervisorOnce({
         threadId: options.threadId,
         requestIdentity: identity,
         state: "started",
-        startedAt
+        startedAt,
+        localOwnerPid: process.pid,
+        appServerPid: Number(client?.child?.pid) || 0,
+        localOwnerStartedAt: startedAt
       },
       lastAction: `${phase} turn started`
     });
@@ -669,7 +1036,18 @@ export async function runWorkSupervisorOnce({
           diff: result?.diff || "",
           fileChanges: uniqueFileChanges(result?.fileChanges || []),
           turn: result?.turn || {}
-        }
+        },
+        localOwnerPid: active.localOwnerPid || process.pid,
+        appServerPid: active.appServerPid || Number(client?.child?.pid) || 0,
+        localOwnerStartedAt: active.localOwnerStartedAt || startedAt,
+        ...(result?.activity ? {
+          lastActivityAt: result.activity.lastActivityAt || "",
+          activityCount: result.activity.eventCount || 0,
+          meaningfulActivityCount: result.activity.meaningfulEventCount || 0,
+          timeoutMs: Number(options.hardTimeoutMs || options.timeoutMs) || 0,
+          hardTimeoutMs: Number(options.hardTimeoutMs || options.timeoutMs) || 0,
+          inactivityTimeoutMs: Number(options.inactivityTimeoutMs) || 0
+        } : {})
       },
       lastAction: `${phase} turn completed; result checkpointed`
     });
@@ -701,24 +1079,26 @@ export async function runWorkSupervisorOnce({
   }
 
   async function doPlanning() {
-    const context = projectWorkContext(task, { phase: "planning", role: "manager" });
-    const { client, threadId } = await getManager({ phase: "planning", context });
+    const context = projectWorkContext(task, { phase: "planning", role: "planner" });
+    const { client, threadId } = await getPlanner({ phase: "planning", context });
     await emit("planning-started", {
-      role: "manager",
-      model: roleSettings.manager.model,
+      role: "planner",
+      model: roleSettings.planner.model,
       threadId,
       phase: "planning"
     });
-    const result = await executeTurn("planning", "manager", client, {
+    const result = await executeTurn("planning", "planner", client, {
       threadId,
       cwd: workspace.worktreePath,
-      model: roleSettings.manager.model,
-      reasoningEffort: roleSettings.manager.reasoningEffort,
+      model: roleSettings.planner.model,
+      reasoningEffort: roleSettings.planner.reasoningEffort,
       approvalPolicy,
       sandboxPolicy: typeof turnSandboxPolicy === "function"
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       input: [{ type: "text", text: context.prompt }]
     });
     const plan = parsePlan(resultText(result));
@@ -727,8 +1107,8 @@ export async function runWorkSupervisorOnce({
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     });
     await emit("plan-completed", {
-      role: "manager",
-      model: roleSettings.manager.model,
+      role: "planner",
+      model: roleSettings.planner.model,
       threadId,
       phase: "planning",
       summary: plan.summary,
@@ -741,7 +1121,7 @@ export async function runWorkSupervisorOnce({
     const phase = correction ? "revision" : "implementation";
     const context = projectWorkContext(task, {
       phase,
-      role: "worker",
+      role: "implementer",
       correction
     });
     const { client, threadId } = await getWorker({
@@ -750,22 +1130,24 @@ export async function runWorkSupervisorOnce({
       rotate: phase === "revision"
     });
     await emit("implementation-started", {
-      role: "worker",
-      model: roleSettings.worker.model,
+      role: "implementer",
+      model: roleSettings.implementer.model,
       threadId,
       phase: "implementation",
       worktree: workspace.worktreePath
     });
-    const result = await executeTurn("implementation", "worker", client, {
+    const result = await executeTurn("implementation", "implementer", client, {
       threadId,
       cwd: workspace.worktreePath,
-      model: roleSettings.worker.model,
-      reasoningEffort: roleSettings.worker.reasoningEffort,
+      model: roleSettings.implementer.model,
+      reasoningEffort: roleSettings.implementer.reasoningEffort,
       approvalPolicy,
       sandboxPolicy: typeof turnSandboxPolicy === "function"
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       input: [{ type: "text", text: context.prompt }]
     });
     const report = parseImplementation(resultText(result));
@@ -812,8 +1194,8 @@ export async function runWorkSupervisorOnce({
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     }, { result: report.summary });
     await emit("implementation-completed", {
-      role: "worker",
-      model: roleSettings.worker.model,
+      role: "implementer",
+      model: roleSettings.implementer.model,
       threadId,
       phase: "implementation",
       summary: report.summary,
@@ -822,8 +1204,8 @@ export async function runWorkSupervisorOnce({
       worktree: workspace.worktreePath
     });
     await emit("implementation-progress", {
-      role: "worker",
-      model: roleSettings.worker.model,
+      role: "implementer",
+      model: roleSettings.implementer.model,
       phase: "implementation",
       pass: progressEntry.pass,
       material: progressEntry.material,
@@ -833,13 +1215,13 @@ export async function runWorkSupervisorOnce({
       lastMaterialProgressAt: progress.lastMaterialProgressAt
     });
     await emit("tests-reported", {
-      role: "worker",
-      model: roleSettings.worker.model,
+      role: "implementer",
+      model: roleSettings.implementer.model,
       tests: report.tests,
       blockers: report.blockers
     });
     await emit("diff-collected", {
-      role: "worker",
+      role: "implementer",
       changedFiles,
       diff: evidence?.diff || result?.diff || "",
       diffStat: diffStat(evidence?.diff || result?.diff || "", changedFiles)
@@ -847,36 +1229,156 @@ export async function runWorkSupervisorOnce({
   }
 
   async function doReview() {
-    const context = projectWorkContext(task, { phase: "review", role: "manager" });
-    const { client, threadId } = await getManager({ phase: "review", context, rotate: true });
+    const legacyManagerReview = legacyReviewThread
+      || ["manager", "planner"].includes(canonicalRole(task.checkpoint.activeTurn?.role));
+    const role = legacyManagerReview ? "manager" : "reviewer";
+    const config = legacyManagerReview ? roleSettings.planner : roleSettings.reviewer;
+    const context = projectWorkContext(task, {
+      phase: "review",
+      role: legacyManagerReview ? "planner" : "reviewer"
+    });
+    const agent = legacyManagerReview
+      ? await getPlanner({ phase: "review", context, rotate: true })
+      : await getReviewer({ phase: "review", context });
+    const { client, threadId } = agent;
+    const evidenceBefore = await evidenceFactory({ worktreePath: workspace.worktreePath });
+    const reviewedRevision = implementationIdentity(task.checkpoint, evidenceBefore);
+    const reviewPass = task.checkpoint.review.pass + 1;
+    await save({
+      review: {
+        role,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        threadId,
+        pass: reviewPass,
+        reviewedCommit: text(evidenceBefore?.revision || task.checkpoint.implementation.commit),
+        reviewedRevision
+      },
+      ...(role === "reviewer" ? {
+        reviewer: { role, model: config.model, reasoningEffort: config.reasoningEffort, threadId }
+      } : {})
+    });
     await emit("review-started", {
-      role: "manager",
-      model: roleSettings.manager.model,
+      role,
+      model: config.model,
       threadId,
       phase: "review"
     });
-    const result = await executeTurn("review", "manager", client, {
+    const result = await executeTurn("review", role, client, {
       threadId,
       cwd: workspace.worktreePath,
-      model: roleSettings.manager.model,
-      reasoningEffort: roleSettings.manager.reasoningEffort,
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
       approvalPolicy,
       sandboxPolicy: typeof turnSandboxPolicy === "function"
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       input: [{ type: "text", text: context.prompt }]
     });
-    const review = parseReview(resultText(result));
+    const evidenceAfter = await evidenceFactory({ worktreePath: workspace.worktreePath });
+    const currentRevision = implementationIdentity(task.checkpoint, evidenceAfter);
+    if (reviewedRevision && currentRevision && reviewedRevision !== currentRevision) {
+      throw new StaleReviewError("review result is stale because implementation evidence changed during review");
+    }
+    const parsed = legacyManagerReview ? parseReview(resultText(result)) : parseRoutineReview(resultText(result));
+    const review = {
+      ...parsed,
+      role,
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
+      threadId,
+      pass: reviewPass,
+      reviewedCommit: text(evidenceBefore?.revision || task.checkpoint.implementation.commit),
+      reviewedRevision,
+      tests: task.checkpoint.implementation.tests,
+      evidence: currentRevision
+    };
     await captureTurn("review", {
       review,
+      ...(role === "reviewer" ? { routineReview: review } : {}),
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     }, { message: review.explanation, result: review.decision });
     await emit("review-completed", {
-      role: "manager",
-      model: roleSettings.manager.model,
+      role,
+      model: config.model,
       threadId,
       phase: "review",
+      decision: review.decision,
+      explanation: review.explanation,
+      correction: review.revisionInstructions
+    });
+    return review;
+  }
+
+  async function doEscalationReview() {
+    const { client, threadId } = await getEscalationReviewer();
+    const config = roleSettings.escalationReviewer;
+    const evidenceBefore = await evidenceFactory({ worktreePath: workspace.worktreePath });
+    const reviewedRevision = implementationIdentity(task.checkpoint, evidenceBefore);
+    const reviewPass = task.checkpoint.escalationReview.pass + 1;
+    await save({
+      escalationReview: {
+        role: "escalationReviewer",
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        threadId,
+        pass: reviewPass,
+        reviewedCommit: text(evidenceBefore?.revision || task.checkpoint.implementation.commit),
+        reviewedRevision
+      }
+    });
+    await emit("escalation-review-started", {
+      role: "escalationReviewer",
+      model: config.model,
+      threadId,
+      phase: "escalation-review",
+      reason: task.checkpoint.review.escalationReason || task.checkpoint.review.explanation
+    });
+    const result = await executeTurn("escalation-review", "escalationReviewer", client, {
+      threadId,
+      cwd: workspace.worktreePath,
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
+      approvalPolicy,
+      sandboxPolicy: typeof turnSandboxPolicy === "function"
+        ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
+        : turnSandboxPolicy,
+      timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
+      input: [{ type: "text", text: promptEscalationReview(task, task.checkpoint, workspace) }]
+    });
+    const evidenceAfter = await evidenceFactory({ worktreePath: workspace.worktreePath });
+    const currentRevision = implementationIdentity(task.checkpoint, evidenceAfter);
+    if (reviewedRevision && currentRevision && reviewedRevision !== currentRevision) {
+      throw new StaleReviewError("escalation review result is stale because implementation evidence changed during review");
+    }
+    const parsed = parseEscalationReview(resultText(result));
+    const review = {
+      ...parsed,
+      role: "escalationReviewer",
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
+      threadId,
+      pass: reviewPass,
+      reviewedCommit: text(evidenceBefore?.revision || task.checkpoint.implementation.commit),
+      reviewedRevision,
+      tests: task.checkpoint.implementation.tests,
+      evidence: currentRevision
+    };
+    await captureTurn("escalation-review", {
+      review,
+      escalationReview: review,
+      interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
+    }, { message: review.explanation, result: review.decision });
+    await emit("escalation-review-completed", {
+      role: "escalationReviewer",
+      model: config.model,
+      threadId,
+      phase: "escalation-review",
       decision: review.decision,
       explanation: review.explanation,
       correction: review.revisionInstructions
@@ -890,29 +1392,30 @@ export async function runWorkSupervisorOnce({
       convergence: { status: "reviewing", requestedAt },
       lastAction: "focused Sol convergence review started"
     });
-    const context = projectWorkContext(task, { phase: "convergence-review", role: "manager" });
-    const { client, threadId } = await getManager({
+    const context = projectWorkContext(task, { phase: "convergence-review", role: "escalationReviewer" });
+    const { client, threadId } = await getEscalationReviewer({
       phase: "convergence-review",
-      context,
-      rotate: true
+      context
     });
     await emit("convergence-review-started", {
-      role: "manager",
-      model: roleSettings.manager.model,
+      role: "escalationReviewer",
+      model: roleSettings.escalationReviewer.model,
       threadId,
       phase: "convergence-review",
       consecutiveNoProgressPasses: task.checkpoint.implementation.consecutiveNoProgressPasses
     });
-    const result = await executeTurn("convergence-review", "manager", client, {
+    const result = await executeTurn("convergence-review", "escalationReviewer", client, {
       threadId,
       cwd: workspace.worktreePath,
-      model: roleSettings.manager.model,
-      reasoningEffort: roleSettings.manager.reasoningEffort,
+      model: roleSettings.escalationReviewer.model,
+      reasoningEffort: roleSettings.escalationReviewer.reasoningEffort,
       approvalPolicy,
       sandboxPolicy: typeof turnSandboxPolicy === "function"
         ? turnSandboxPolicy({ worktreePath: workspace.worktreePath })
         : turnSandboxPolicy,
       timeoutMs: turnTimeoutMs,
+      inactivityTimeoutMs: turnInactivityTimeoutMs,
+      hardTimeoutMs: turnHardTimeoutMs,
       input: [{ type: "text", text: context.prompt }]
     });
     const convergence = parseConvergence(resultText(result));
@@ -933,8 +1436,8 @@ export async function runWorkSupervisorOnce({
       interruption: { phase: "", at: "", reason: "", lastTurnId: result?.turnId || "" }
     }, { message: convergence.rationale });
     await emit("convergence-review-completed", {
-      role: "manager",
-      model: roleSettings.manager.model,
+      role: "escalationReviewer",
+      model: roleSettings.escalationReviewer.model,
       threadId,
       phase: "convergence-review",
       decision: convergence.decision,
@@ -997,13 +1500,22 @@ export async function runWorkSupervisorOnce({
       }
     }
     if (status === "accepted") {
-      const context = projectWorkContext(task, { phase: "accepted", role: "manager" });
-      const manager = task.checkpoint.manager || {};
+      const acceptedRole = task.checkpoint.review.role === "escalationReviewer"
+        ? "escalationReviewer"
+        : task.checkpoint.review.role === "reviewer"
+          ? "reviewer"
+          : "manager";
+      const context = projectWorkContext(task, { phase: "accepted", role: acceptedRole });
+      const acceptedThread = acceptedRole === "reviewer"
+        ? task.checkpoint.reviewer
+        : acceptedRole === "escalationReviewer"
+          ? task.checkpoint.escalationReviewer
+          : task.checkpoint.manager;
       const acceptedContext = {
         ...context,
         requestIdentity: task.checkpoint.turnHistory.at(-1)?.requestIdentity || "",
-        activeThreadId: manager.threadId,
-        priorThreadIds: manager.previousThreadIds || []
+        activeThreadId: acceptedThread.threadId,
+        priorThreadIds: acceptedThread.previousThreadIds || []
       };
       const previous = task.checkpoint.compactContext || {};
       const unchanged = previous.phase === acceptedContext.phase
@@ -1141,11 +1653,30 @@ export async function runWorkSupervisorOnce({
         await move("reviewing");
       }
       if (task.status !== "reviewing") throw new Error(`supervisor cannot review status ${task.status}`);
-      const review = hasCapturedTurn("review")
+      let review = hasCapturedTurn("review")
         ? task.checkpoint.review
         : await doReview();
+      if (review.decision === "ESCALATE") {
+        review = hasCapturedTurn("escalation-review")
+          ? task.checkpoint.escalationReview
+          : await doEscalationReview();
+      }
       if (review.decision === "ACCEPT") return await finish("accepted", review.explanation);
       if (review.decision === "BLOCK") return await finish("blocked", review.explanation);
+      if (review.decision === "REPLAN") {
+        if (!review.workOrder) return await finish("blocked", review.explanation || "Sol escalation review did not provide a replacement work order");
+        await save({
+          plan: {
+            summary: review.explanation,
+            workOrder: review.workOrder,
+            risks: task.checkpoint.plan.risks
+          },
+          implementation: { passes: 0, reviewReady: false },
+          lastAction: "Sol escalation review supplied a replacement work order"
+        });
+        await move("implementing", { message: "continuing from Sol replacement work order" });
+        continue;
+      }
       if (task.checkpoint.revisionCount >= maxRevisions) {
         const continuationAt = isoText(nowValue(now));
         const continuationCount = task.checkpoint.continuationCount + 1;

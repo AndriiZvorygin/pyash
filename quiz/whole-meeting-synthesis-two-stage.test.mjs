@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+
+import { DEFAULT_TEXT_MODEL } from "../program/runtime/gpu/text-model.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -154,7 +156,7 @@ test("chunk review adjudication checks an alleged outcome against literal eviden
   });
 
   assert.equal(result.score, 0.92);
-  assert.equal(requestBody.model, "qwen3.5:9b");
+  assert.equal(requestBody.model, DEFAULT_TEXT_MODEL);
   assert.match(requestBody.messages[1].content, /prior review is only a claim and may be wrong/iu);
   assert.match(requestBody.messages[1].content, /Do not infer approval.*agenda heading/iu);
 });
@@ -223,7 +225,7 @@ test("whole-meeting review adjudication resolves conflicting claims from literal
   });
 
   assert.equal(result.score, 0.88);
-  assert.equal(requestBody.model, "qwen3.5:9b");
+  assert.equal(requestBody.model, DEFAULT_TEXT_MODEL);
   assert.match(requestBody.messages[1].content, /supplied reviews are untrusted claims/iu);
   assert.match(requestBody.messages[1].content, /Do not infer approval.*headings/iu);
 });
@@ -257,13 +259,18 @@ test("meeting-wide one-sentence generation retries the complete teaser contract"
     source.indexOf("function oneSentenceMatchesLeadTopic"),
   );
   assert.match(generator, /explainMalformedOneSentence\(candidate/u);
-  assert.match(generator, /at most 2 commas/u);
+  assert.match(generator, /at most 4 commas/u);
+  assert.match(generator, /If the reason is too_many_commas, rewrite from scratch with zero commas/u);
+  assert.match(generator, /Fresh repair contract: do not revise or quote the rejected sentence/u);
   assert.match(generator, /Math\.min\(3, blocks\.length\)/u);
   assert.match(generator, /all substantive recap items available for this short meeting/u);
   assert.match(generator, /Previous response contained \$\{lastWordCount\} words/u);
   assert.match(generator, /Return exactly 48-64 words/u);
   assert.match(generator, /Remove at least \$\{Math\.max\(1, lastWordCount - 64\)\} words/u);
   assert.match(generator, /maxWords: MEETING_TEASER_MAX_WORDS/u);
+  assert.match(generator, /chosenBlocks\.map\(\(block\) => `\$\{String\(block\.heading \|\| ""\)\} \$\{String\(block\.summary \|\| ""\)\}`\)/u);
+  assert.match(generator, /const authoritativeRoleConstraint = agendaRoleConstraint/u);
+  assert.match(generator, /authoritativeRoleConstraint,/u);
   assert.match(source, /const MEETING_TEASER_MAX_WORDS = 72/u);
   assert.match(source, /oneSentenceValidationContext = \{[\s\S]*?maxWords: MEETING_TEASER_MAX_WORDS/u);
 });

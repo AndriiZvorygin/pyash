@@ -48,7 +48,7 @@ export async function inspectWorkExecutionPreflight({
   appServerFactory = ({}) => spawnCodexAppServer({}),
   threadSandbox = "workspace-write",
   turnSandboxPolicy = { type: "workspaceWrite" },
-  model = process.env.PYA_WORKER_MODEL || "gpt-5.6-luna",
+  model = process.env.PYA_CODEX_IMPLEMENTER_MODEL || process.env.PYA_WORKER_MODEL || "gpt-5.6-luna",
   now = () => new Date()
 } = {}) {
   const repository = path.resolve(text(repositoryRoot) || process.cwd());

@@ -4,8 +4,10 @@ Agenda and transcript publishers must not publish links to an official
 attachment host unless a durable HelpOS copy has first been created. The
 reporters retain item attachments beside `subreports.index.json` and retain
 the full agenda package and cover in the meeting's `source` directory. The
-shared mirror client uploads those exact bytes and rewrites both the post
-Markdown and page HTML before publication.
+shared mirror client uploads those bytes and rewrites both the post Markdown
+and page HTML before publication. If a scanned PDF exceeds the multipart
+request limit, it creates a readable Ghostscript-compressed mirror copy while
+retaining the original extraction source locally.
 
 The client defaults to:
 
