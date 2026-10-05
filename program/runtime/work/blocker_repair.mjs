@@ -158,7 +158,7 @@ function taskCandidate(task, tasks, now) {
       "Diagnose the blocker using durable task evidence, then repair only the required local or remote infrastructure/configuration path.",
       "Use existing Pyash deployment conventions and the existing checkout on any remote host; do not create a parallel repository or service layout.",
       "Do not expose credentials or copy secrets into reports. Preserve the original task history and record exact verification evidence.",
-      remoteRepair ? "For remote services, inspect the existing host/container and configuration first; reload only the identified service, then run the smallest real endpoint probe." : "Keep the repair bounded and verify the original blocker with a deterministic focused probe.",
+      remoteRepair ? "For remote services, inspect the configured web-search motor and existing host/container first; do not assume the endpoint named in stale blocker prose is canonical. Pyash's current public SearXNG contract is https://tsoc.liberit.ca/; localhost:60490 is the local container fallback. Reload only an identified service, then run the smallest real JSON endpoint probe." : "Keep the repair bounded and verify the original blocker with a deterministic focused probe.",
       `Current blocker: ${reason}`
     ].join("\n"),
     acceptanceText: "The source task's blocker is either removed with a deterministic verification record, or its remaining external/human boundary is precisely diagnosed without changing source-task acceptance.",
