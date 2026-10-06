@@ -40,15 +40,24 @@ one-workflow-per-wake rule. A same-day repair is not duplicated after restart.
 
 ## Current search-endpoint example
 
-The deployed `mriczo:60490` SearXNG service currently responds to the root HTML
-page, but its mounted settings expose only HTML and force POST. That explains a
-GET JSON request returning HTTP 403. The current checkout contains the intended
-SearXNG settings under
-`container/searxng/configure/searxng/settings.yml`, including JSON output. A
-repair task should first reconcile the existing `mriczo` checkout with the
-intended Pyash revision, then use the existing SearXNG container command path
-and verify the smallest real JSON search probe. It must not copy or print the
-SearXNG secret.
+The canonical public SearXNG endpoint used by the current Pyash web-search
+examples and quizzes is `https://tsoc.liberit.ca/`. Its JSON search contract
+currently responds successfully to a probe. `localhost:60490` is the local
+container fallback, while `mriczo:60490` is a separate legacy/local deployment
+and must not be inferred as the public search motor.
+
+The stale research blocker named `mriczo:60490`; that service responds to its
+root HTML page, but its mounted settings expose only HTML and force POST. That
+explains a GET JSON request returning HTTP 403, but it does not prove that the
+canonical public SearXNG service is broken. A repair task should inspect the
+effective `PYA_WEB_SEARCH_MOTOR` and Pyash configuration first, switch the
+proof to the configured canonical endpoint when appropriate, and only then
+repair an existing container. It must not copy or print the SearXNG secret.
+
+`yacy.liberit.ca` is not a tracked Pyash search endpoint and did not resolve in
+the current development-machine probe. YaCy may be an upstream backend behind
+SearXNG, but it should not be treated as a direct Pyash motor without explicit
+configuration and a successful contract probe.
 
 The daily digest shows the lane separately, including the number of observed
 wakes, the selected repair, and the source blocker. This makes a no-progress
