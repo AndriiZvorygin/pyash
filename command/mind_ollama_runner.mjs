@@ -7,6 +7,7 @@ import { attachImagesToMessages } from "./ollama_image_payload.mjs";
 import { enqueueInputEnvelope, queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus, writeGpuHandleStatus, isTerminalHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import { resolveGpuQueueWaitTimeoutMs } from "../program/runtime/gpu/worker.mjs";
+import { buildOllamaUsageRecord, makeOllamaCallId, sha256Text, stableJson, writeOllamaUsageRecord } from "../program/library/ollama_usage.mjs";
 
 function requestTimeoutMs() {
   const raw = Number(process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS);
@@ -275,6 +276,7 @@ function finishStreamState(state) {
   };
   if (state.thinking) envelope.thinking = state.thinking;
   writeStreamRecord({ type: "terminal", ok: true, envelope });
+  return envelope;
 }
 
 async function consumeResponseBody(body) {
@@ -292,7 +294,7 @@ async function consumeResponseBody(body) {
   }
   buffer += decoder.decode();
   if (buffer.trim()) consumeStreamPayload(JSON.parse(buffer), state);
-  finishStreamState(state);
+  return finishStreamState(state);
 }
 
 async function requestStream(endpoint, body) {
@@ -309,13 +311,16 @@ async function requestStream(endpoint, body) {
     if (!res.ok) {
       throw new Error(`ollama request failed: ${res.status} ${res.statusText ?? ""} (${endpoint})`.trim());
     }
-    await consumeResponseBody(res.body);
+    const envelope = await consumeResponseBody(res.body);
+    return { ok: true, envelope };
   } catch (err) {
+    const error = { name: "mind stream failed", message: err?.message ?? String(err) };
     writeStreamRecord({
       type: "terminal",
       ok: false,
-      error: { name: "mind stream failed", message: err?.message ?? String(err) }
+      error
     });
+    return { ok: false, error };
   }
 }
 
@@ -380,6 +385,61 @@ function parseOllamaResponseText(text, endpoint) {
   }
 }
 
+function usageRequestHash(payload) {
+  return sha256Text(stableJson({
+    mode: payload?.mode ?? "generate",
+    model: payload?.model ?? "",
+    host: payload?.host ?? process.env.OLLAMA_HOST ?? "",
+    prompt: payload?.prompt ?? "",
+    messages: payload?.messages ?? [],
+    images: payload?.images ?? [],
+    options: payload?.options ?? {},
+    temperature: payload?.temperature,
+    topP: payload?.topP,
+    topK: payload?.topK,
+    minP: payload?.minP,
+    presencePenalty: payload?.presencePenalty,
+    think: payload?.think,
+    keep_alive: payload?.keep_alive,
+    tools: payload?.tools ?? []
+  }));
+}
+
+function usageEndpoint(payload) {
+  const base = resolveHost(payload).replace(/\/$/u, "");
+  return `${base}/api/${payload?.mode === "chat" ? "chat" : "generate"}`;
+}
+
+async function recordUsage({ payload, response, callId, startedAt, queueManaged, status = "completed", failureKind = "", error = "" } = {}) {
+  const finishedAt = new Date();
+  const responseForHash = response?.envelope ?? response;
+  const errorText = typeof error === "string"
+    ? error
+    : (error?.message ?? (error ? JSON.stringify(error) : ""));
+  const record = buildOllamaUsageRecord({
+    callId,
+    runId: payload?.runId || process.env.PYA_RUN_ID || "manual",
+    payload,
+    endpoint: usageEndpoint(payload),
+    response,
+    requestHash: usageRequestHash(payload),
+    responseHash: responseForHash && typeof responseForHash === "object" ? sha256Text(stableJson(responseForHash)) : "",
+    startedAt: startedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    elapsedMs: finishedAt.getTime() - startedAt.getTime(),
+    status,
+    failureKind,
+    error: errorText,
+    queueManaged
+  });
+  try {
+    return await writeOllamaUsageRecord({ record, cwd: process.cwd(), runId: record.run_id });
+  } catch (writeError) {
+    fs.writeFileSync(2, `ollama usage ledger failed: ${writeError?.message ?? writeError}\n`, "utf8");
+    return null;
+  }
+}
+
 async function runGenerate(payload) {
   const base = resolveHost(payload);
   const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
@@ -397,8 +457,7 @@ async function runGenerate(payload) {
   if (payload.think !== undefined) body.think = payload.think;
   if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {
-    await requestStream(endpoint, body);
-    return null;
+    return requestStream(endpoint, body);
   }
   return requestJson(endpoint, body);
 }
@@ -429,8 +488,7 @@ async function runChat(payload) {
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
   if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {
-    await requestStream(endpoint, body);
-    return null;
+    return requestStream(endpoint, body);
   }
   return requestJson(endpoint, body);
 }
@@ -485,9 +543,49 @@ async function main() {
   if (args.stream && !payload.stream) payload.stream = true;
   const mode = payload?.mode ?? "generate";
   const useGpuQueue = truthyEnv(process.env.PYA_GPU_MIND_QUEUE) && !payload?.stream;
-  const response = useGpuQueue
-    ? await runQueuedGpuMind(payload)
-    : (mode === "chat" ? await runChat(payload) : await runGenerate(payload));
+  const callId = makeOllamaCallId();
+  const startedAt = new Date();
+  let response;
+  try {
+    response = useGpuQueue
+      ? await runQueuedGpuMind(payload)
+      : (mode === "chat" ? await runChat(payload) : await runGenerate(payload));
+  } catch (error) {
+    await recordUsage({
+      payload,
+      response: {},
+      callId,
+      startedAt,
+      queueManaged: useGpuQueue,
+      status: "failed",
+      failureKind: "transport",
+      error: error?.message ?? String(error)
+    });
+    throw error;
+  }
+  if (payload?.stream && response?.ok === false) {
+    await recordUsage({
+      payload,
+      response,
+      callId,
+      startedAt,
+      queueManaged: false,
+      status: "failed",
+      failureKind: "transport",
+      error: response.error?.message ?? "mind stream failed"
+    });
+  } else {
+    await recordUsage({
+      payload,
+      response,
+      callId,
+      startedAt,
+      queueManaged: useGpuQueue,
+      status: response?.error ? "failed" : "completed",
+      failureKind: response?.error ? "model" : "",
+      error: response?.error?.message ?? response?.error ?? ""
+    });
+  }
   if (payload?.stream) return;
   process.stdout.write(`${JSON.stringify(response)}\n`);
 }

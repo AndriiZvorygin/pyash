@@ -260,6 +260,35 @@ The runtime then reads:
 
 and uses `message.content` as the reply text.
 
+## Ollama usage ledger
+
+`command/mind_ollama_runner.mjs` emits one immutable Pyash usage artifact for
+each Ollama call, including failed calls. By default the records are written
+under the run's artifact directory:
+
+```text
+artifacts/<run-id>/ollama/usage/call-<call-id>-<record-hash>.pya
+```
+
+The record captures the requested and resolved model, endpoint without
+credentials or query parameters, host, call mode, stream/queue status, request
+and response hashes, timestamps, status/failure kind, and Ollama's token and
+duration metadata. `PYA_OLLAMA_USAGE_DIR` may override the destination for
+managed integrations or isolated audits. The records are content-addressed by
+their canonical record hash and are created with exclusive file creation, so
+retries do not overwrite an existing call record.
+
+Streaming calls retain the terminal Ollama frame before writing the ledger
+entry. This preserves `prompt_eval_count`, `eval_count`, and duration fields
+that Ollama reports only in that final frame. Queue-managed calls are recorded
+by the local runner after the existing GPU queue/housekeeper returns; the
+ledger does not create a second model or GPU lifecycle.
+
+Use `listOllamaUsageRecords` and `summarizeOllamaUsage` from
+`program/library/ollama_usage.mjs` to inspect records and aggregate totals by
+model. A failure to write the ledger is reported on stderr and never changes
+the model-call result.
+
 ---
 
 ## Provider substitution
