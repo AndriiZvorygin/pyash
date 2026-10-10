@@ -241,128 +241,116 @@ async function requestJson(endpoint, body) {
   return parseOllamaResponseText(text, endpoint);
 }
 
-async function requestStream(endpoint, body) {
-  let res;
-  const payload = JSON.stringify(body);
-  const controller = new AbortController();
-  let timeout = setTimeout(() => controller.abort(), requestTimeoutMs());
-  try {
-    res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: payload,
-      signal: controller.signal
-    });
-  } catch (err) {
-    clearTimeout(timeout);
-    const fallback = await resolveIpv4Endpoint(endpoint);
-    if (fallback) {
-      try {
-        const retryController = new AbortController();
-        timeout = setTimeout(() => retryController.abort(), requestTimeoutMs());
-        res = await fetch(fallback, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: payload,
-          signal: retryController.signal
-        });
-        clearTimeout(timeout);
-      } catch (retryErr) {
-        clearTimeout(timeout);
-        const proc = runCurl(endpoint, body, { stream: true });
-        return streamFromProcess(proc);
-      }
-    } else {
-      const proc = runCurl(endpoint, body, { stream: true });
-      return streamFromProcess(proc);
-    }
+function writeStreamRecord(record) {
+  process.stdout.write(`${JSON.stringify(record)}\n`);
+}
+
+function streamPayloadState() {
+  return { text: "", thinking: "", terminal: null };
+}
+
+function consumeStreamPayload(payload, state) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("ollama stream malformed JSON record");
   }
-  clearTimeout(timeout);
-  if (!res.ok) {
-    throw new Error(`ollama request failed: ${res.status} ${res.statusText ?? ""} (${endpoint})`.trim());
+  if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
+  const textChunk = payload.response ?? payload.message?.content ?? "";
+  const thinkingChunk = payload.thinking ?? payload.message?.thinking ?? "";
+  if (textChunk) {
+    const text = String(textChunk);
+    state.text += text;
+    writeStreamRecord({ type: "chunk", text });
   }
-  if (!res.body) return;
+  if (thinkingChunk) state.thinking += String(thinkingChunk);
+  state.terminal = payload;
+}
+
+function finishStreamState(state) {
+  if (!state.terminal || state.terminal.done !== true) {
+    throw new Error("ollama stream truncated before terminal record");
+  }
+  const envelope = {
+    ...state.terminal,
+    response: state.text
+  };
+  if (state.thinking) envelope.thinking = state.thinking;
+  writeStreamRecord({ type: "terminal", ok: true, envelope });
+}
+
+async function consumeResponseBody(body) {
+  if (!body) throw new Error("ollama stream missing response body");
+  const state = streamPayloadState();
   const decoder = new TextDecoder();
   let buffer = "";
-  for await (const chunk of res.body) {
+  for await (const chunk of body) {
     buffer += decoder.decode(chunk, { stream: true });
     const parts = buffer.split("\n");
     buffer = parts.pop() ?? "";
     for (const part of parts) {
-      if (!part.trim()) continue;
-      const payload = JSON.parse(part);
-      if (payload.error) {
-        throw new Error(`ollama request error: ${payload.error}`);
-      }
-      const textChunk = payload.response ?? payload.message?.content ?? "";
-      if (textChunk) {
-        process.stdout.write(`${JSON.stringify(String(textChunk))}\n`);
-      }
+      if (part.trim()) consumeStreamPayload(JSON.parse(part), state);
     }
   }
   buffer += decoder.decode();
-  if (buffer.trim()) {
-    const payload = JSON.parse(buffer);
-    if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
-    const textChunk = payload.response ?? payload.message?.content ?? "";
-    if (textChunk) {
-      process.stdout.write(`${JSON.stringify(String(textChunk))}\n`);
+  if (buffer.trim()) consumeStreamPayload(JSON.parse(buffer), state);
+  finishStreamState(state);
+}
+
+async function requestStream(endpoint, body) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs());
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      throw new Error(`ollama request failed: ${res.status} ${res.statusText ?? ""} (${endpoint})`.trim());
     }
+    await consumeResponseBody(res.body);
+  } catch (err) {
+    writeStreamRecord({
+      type: "terminal",
+      ok: false,
+      error: { name: "mind stream failed", message: err?.message ?? String(err) }
+    });
   }
-  process.stdout.write("[STREAM_END]\n");
 }
 
 function streamFromProcess(proc) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
+    const state = streamPayloadState();
     let buffer = "";
+    const fail = (err) => {
+      writeStreamRecord({ type: "terminal", ok: false, error: { name: "mind stream failed", message: err.message } });
+      resolve();
+    };
     proc.stdout.on("data", (chunk) => {
       buffer += chunk.toString("utf8");
       const parts = buffer.split("\n");
       buffer = parts.pop() ?? "";
       for (const part of parts) {
         if (!part.trim()) continue;
-        try {
-          const payload = JSON.parse(part);
-          if (payload.error) {
-            reject(new Error(`ollama request error: ${payload.error}`));
-            return;
-          }
-          const textChunk = payload.response ?? payload.message?.content ?? "";
-          if (textChunk) {
-            process.stdout.write(`${JSON.stringify(String(textChunk))}\n`);
-          }
-        } catch {
-          // ignore malformed chunk lines
-        }
+        try { consumeStreamPayload(JSON.parse(part), state); }
+        catch (err) { fail(err); proc.kill(); return; }
       }
     });
     proc.stderr.on("data", (chunk) => {
       const message = chunk.toString("utf8").trim();
-      if (message) reject(new Error(message));
+      if (message) fail(new Error(message));
     });
-    proc.on("error", reject);
+    proc.on("error", fail);
     proc.on("close", (status) => {
-      if (status && status !== 0) {
-        reject(new Error(`ollama curl failed: status=${status}`));
-        return;
+      if (status && status !== 0) return fail(new Error(`ollama curl failed: status=${status}`));
+      try {
+        if (buffer.trim()) consumeStreamPayload(JSON.parse(buffer), state);
+        finishStreamState(state);
+        resolve();
+      } catch (err) {
+        fail(err);
       }
-      if (buffer.trim()) {
-        try {
-          const payload = JSON.parse(buffer);
-          if (payload.error) {
-            reject(new Error(`ollama request error: ${payload.error}`));
-            return;
-          }
-          const textChunk = payload.response ?? payload.message?.content ?? "";
-          if (textChunk) {
-            process.stdout.write(`${JSON.stringify(String(textChunk))}\n`);
-          }
-        } catch {
-          // ignore trailing partial
-        }
-      }
-      process.stdout.write("[STREAM_END]\n");
-      resolve();
     });
   });
 }

@@ -35,6 +35,7 @@ import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 import { consumeMindInterrupt } from "../../agent/interrupt.mjs";
 import { resolveTextModel } from "../../runtime/gpu/text-model.mjs";
+import { normalizeMindReply } from "./reply.mjs";
 
 const DEFAULT_TOOL_MAP_NAME = "agent tools";
 const DEFAULT_TOOL_MAP_PATH = path.resolve(
@@ -523,6 +524,7 @@ export async function mind_to_name_text(sentence, {
   }
 
   let responseText = "";
+  let replyEnvelope = null;
   let sessionFile = null;
   let agentSystemPrompt = resolvedConfigPrompt;
   const systemLogPrompt = resolvedConfigPrompt ?? "";
@@ -651,7 +653,7 @@ export async function mind_to_name_text(sentence, {
       checkInterrupted: assertNotInterrupted
     });
   } else {
-    const { responseText: text, stream } = await runGenerate({
+    const { responseText: text, reply, stream } = await runGenerate({
       sentence,
       ob,
       mindName,
@@ -676,6 +678,7 @@ export async function mind_to_name_text(sentence, {
     });
     if (stream) return stream;
     responseText = text ?? "";
+    replyEnvelope = reply ?? null;
   }
 
   if (!responseText && String(outputName ?? "").trim().endsWith("_channel_out")) {
@@ -683,7 +686,18 @@ export async function mind_to_name_text(sentence, {
   }
   if (effectiveModelTuning?.stripThinkInHistory) {
     responseText = stripThinkBlock(responseText);
+    if (replyEnvelope) replyEnvelope = { ...replyEnvelope, text: responseText };
   }
+
+  replyEnvelope = replyEnvelope ?? normalizeMindReply({ response: responseText });
+  const answerSentence = recordMindAnswer({
+    mindName,
+    dialogue,
+    callPrompt,
+    envelope: replyEnvelope,
+    outputName,
+    historySeriesName
+  });
 
   if (sessionAgentEnabled && sessionFile) {
     const userContent = String(sessionUserContent || callPrompt || "");
@@ -697,7 +711,11 @@ export async function mind_to_name_text(sentence, {
       sessionFile,
       role: "agent",
       content: responseText || "",
-      metadata: sessionAssistantMetadata
+      metadata: sessionAssistantMetadata,
+      replySentence: answerSentence,
+      replyEnvelope,
+      replyMetadataName: answerSentence.accordingto?.name,
+      replyMetadata: replyEnvelope.metadata
     });
     const agentHouse = resolvedSessionAgentHouse;
     await updateSessionSummary({
@@ -714,8 +732,6 @@ export async function mind_to_name_text(sentence, {
     });
   }
 
-  // Record turn so future calls have context
-  const answerSentence = recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName });
   return answerSentence;
 }
 

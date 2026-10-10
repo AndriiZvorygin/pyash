@@ -683,9 +683,8 @@ export async function handleImperative({
         return surfaced;
       }
       memory.doRemember({
+        ...surfaced,
         su: { name: "result" },
-        ob: surfaced.ob,
-        be: surfaced.be,
         mood: "ya"
       });
     }
