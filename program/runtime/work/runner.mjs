@@ -27,6 +27,7 @@ import { currentTimeoutPolicy } from "./timeout_policy.mjs";
 import { reconcileOperationalWorkTasks } from "./turn_reconciliation.mjs";
 import { resolveTextModel } from "../gpu/text-model.mjs";
 import { prepareBlockerRepair } from "./blocker_repair.mjs";
+import { normalizeSearxUrl, resolveExternalSearchMotor } from "../../library/web_search_endpoint.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -127,16 +128,12 @@ export async function probeExternalEvidenceTask(task, {
     checks.push({ name: "Ollama", healthy, endpoint: ollamaHost });
   }
   if (/search|60490/iu.test(reason)) {
-    const searchMotor = text(env.PYA_WEB_SEARCH_MOTOR) || "http://localhost:60490/";
+    const searchMotor = resolveExternalSearchMotor(env);
     let searchUrl = searchMotor;
     try {
-      const parsed = new URL(searchMotor.endsWith("/search") ? searchMotor : `${searchMotor.replace(/\/$/u, "")}/search`);
-      parsed.searchParams.set("q", "pyash");
-      parsed.searchParams.set("format", "json");
-      parsed.searchParams.set("count", "1");
-      searchUrl = parsed.toString();
+      searchUrl = normalizeSearxUrl(searchMotor, "pyash", 1);
     } catch {}
-    checks.push({ name: "web search", healthy: await probeUrl(searchUrl, fetchImpl), endpoint: searchUrl });
+    checks.push({ name: "web search", healthy: await probeUrl(searchUrl, fetchImpl, 10000), endpoint: searchUrl });
   }
   if (!checks.length) return { available: false, checked: false, reason: "no cheap external dependency probe configured" };
   const failed = checks.filter((check) => !check.healthy);
