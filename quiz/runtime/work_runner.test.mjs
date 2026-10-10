@@ -758,6 +758,23 @@ test("search evidence probes the JSON search contract rather than the healthy la
   assert.equal(urls.length, 1);
 });
 
+test("search evidence uses the canonical public motor by default and keeps explicit overrides", async () => {
+  const urls = [];
+  const result = await probeExternalEvidenceTask({
+    status: "blocked",
+    checkpoint: { blocker: "fixture-free search proof is unavailable" }
+  }, {
+    env: {},
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      return { ok: true, status: 200 };
+    }
+  });
+  assert.equal(result.available, true);
+  assert.deepEqual(urls, ["https://tsoc.liberit.ca/search?q=pyash&format=json&count=1"]);
+  assert.equal(result.checks[0].endpoint, urls[0]);
+});
+
 test("healthy preflight admits one bounded revalidation of an exhausted legacy timeout", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-policy-runner-");
   await enqueueWorkTask(worldRoot, {

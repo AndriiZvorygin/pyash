@@ -4,6 +4,7 @@ import path from "node:path";
 import { remember, doRemember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { normalizeSearxUrl } from "../library/web_search_endpoint.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -37,16 +38,6 @@ function resolveMotor(value, { rememberFn } = {}) {
     if (typeof fact?.ob?.text === "string") return fact.ob.text;
   }
   return "";
-}
-
-function normalizeSearxUrl(base, question, limit) {
-  const trimmed = String(base ?? "").replace(/\/+$/, "");
-  const hasSearch = trimmed.endsWith("/search");
-  const url = new URL(hasSearch ? trimmed : `${trimmed}/search`);
-  url.searchParams.set("q", question);
-  url.searchParams.set("format", "json");
-  if (limit) url.searchParams.set("count", String(limit));
-  return url.toString();
 }
 
 function rankKey(rank) {
