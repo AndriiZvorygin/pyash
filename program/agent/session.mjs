@@ -8,6 +8,8 @@ import { sentenceToPyash } from "../beautiful.mjs";
 import { callMindBackend } from "../verbs/mind/backend.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy.mjs";
+import { jsonToPyashText } from "../verbs/exchange/json_map.mjs";
+import { replySentence } from "../verbs/mind/reply.mjs";
 
 const SESSION_ROLE_NAMES = new Set(["user", "assistant", "agent", "tool"]);
 
@@ -394,19 +396,42 @@ export async function appendSessionEntry({
   role,
   content,
   model,
-  metadata
+  metadata,
+  replySentence: sourceSentence,
+  replyEnvelope,
+  replyMetadataName,
+  replyMetadata
 } = {}) {
   if (!sessionFile || !role) return;
   const meta = metadata && typeof metadata === "object" ? metadata : {};
-  const sentence = {
-    su: { name: role },
-    ob: { text: String(content ?? "") },
-    during: { date: String(meta.timestamp || nowIso()) },
-    mood: "ya"
-  };
+  const projectedReply = replyEnvelope && typeof replyEnvelope === "object"
+    ? replySentence({
+      envelope: replyEnvelope,
+      answerName: role,
+      metadataName: replyMetadataName ?? sourceSentence?.accordingto?.name,
+      role,
+      be: "answer"
+    })
+    : null;
+  const sentence = projectedReply
+    ?? (sourceSentence && typeof sourceSentence === "object"
+      ? {
+        ...sourceSentence,
+        su: { name: role },
+        ob: { text: String(sourceSentence.ob?.text ?? content ?? "") }
+      }
+      : {
+        su: { name: role },
+        ob: { text: String(content ?? "") },
+        during: { date: String(meta.timestamp || nowIso()) },
+        mood: "ya"
+      });
+  if (!sentence.during) sentence.during = { date: String(meta.timestamp || nowIso()) };
   if (role === "system" && model) {
     sentence.as = { name: model };
   }
+  if (role !== "system" && model && !sentence.as) sentence.as = { name: model };
+  if (meta.createdAt && sentence.during) sentence.during = { date: String(meta.createdAt) };
   if (meta.sender) sentence.from = { name: String(meta.sender) };
   if (meta.channelId) sentence.to = { name: String(meta.channelId) };
   if (meta.channelType) {
@@ -415,7 +440,11 @@ export async function appendSessionEntry({
   }
   if (meta.payloadId) sentence.accordingto = { text: String(meta.payloadId) };
   const line = sentenceToPyash(sentence);
-  await fs.appendFile(sessionFile, `${line}\n`, "utf8");
+  let prefix = "";
+  if (sentence.accordingto?.name && replyMetadata && typeof replyMetadata === "object") {
+    prefix = jsonToPyashText(replyMetadata, sentence.accordingto.name).text;
+  }
+  await fs.appendFile(sessionFile, `${prefix}${line}\n`, "utf8");
 }
 
 export async function readSessionMessages({ sessionFile, historyWindow = 50 } = {}) {

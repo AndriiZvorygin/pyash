@@ -1,5 +1,5 @@
-import { resolveStreamOutputPath, writeStreamChunk, writeStreamEnd, startStreamFile, startStreamTail, resolveStreamStdoutEnabled } from "./stream.mjs";
-import { recordMindJson, stripContext } from "./logging.mjs";
+import { resolveStreamOutputPath, writeStreamChunk, writeStreamTerminal, writeStreamEnd, startStreamFile, startStreamTail, resolveStreamStdoutEnabled } from "./stream.mjs";
+import { recordMindJson, recordMindReply, stripContext } from "./logging.mjs";
 import { callMindBackend, callMindBackendStream } from "./backend.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { makeStream } from "../../library/runtimePrimitives.mjs";
@@ -7,6 +7,9 @@ import { toolListFromMap } from "./tooling.mjs";
 import { recordMindAnswer } from "./series.mjs";
 import { resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
 import { remember } from "../../remember/index.mjs";
+import { normalizeMindReply, requireMindReplyText, mergeMindReplyChunks, errorReplyEnvelope } from "./reply.mjs";
+import { buildErrorSentence } from "../../error.mjs";
+import { doRemember } from "../../remember/index.mjs";
 
 let mockResponseQueueRaw = null;
 let mockResponseQueue = null;
@@ -37,15 +40,6 @@ function isLoadingModelError(text) {
     || lower.includes("loading model");
 }
 
-function extractBackendResponseText(backendResponse) {
-  const text = backendResponse?.response
-    ?? backendResponse?.message?.content
-    ?? backendResponse?.output_text
-    ?? backendResponse?.text
-    ?? "";
-  return String(text ?? "");
-}
-
 function nextMockGenerateResponse(mockResponseRaw) {
   if (!mockResponseRaw) return null;
   if (mockResponseRaw !== mockResponseQueueRaw) {
@@ -72,7 +66,7 @@ function nextMockGenerateResponse(mockResponseRaw) {
 function extractMockResponseText(mockResponse) {
   if (mockResponse == null) return "";
   if (typeof mockResponse === "string") return String(mockResponse);
-  return extractBackendResponseText(mockResponse);
+  return normalizeMindReply(mockResponse).text;
 }
 
 function isLoadingBackendResponse(backendResponse, backendErrorText) {
@@ -166,6 +160,7 @@ export async function runGenerate({
       await checkInterrupted();
     }
     const streamOutputPath = resolveStreamOutputPath(sentence, outputName);
+    const streamName = outputName ?? sentence?.su?.name ?? `${mindName ?? "mind"} stream`;
     startStreamFile(streamOutputPath);
     const streamStdoutEnabled = resolveStreamStdoutEnabled({ rememberFn: remember });
     const requestPayload = { mode: "chat", model, messages, stream: true };
@@ -176,30 +171,50 @@ export async function runGenerate({
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
+    const recordStreamAnswer = (envelope) => {
+      const prior = remember(streamName);
+      const index = prior?.be === "stream" ? (prior.ob?.index ?? 0) : 0;
+      recordMindAnswer({ mindName, dialogue, callPrompt, envelope, outputName, historySeriesName });
+      doRemember(makeStream({
+        name: streamName,
+        state: "done",
+        ob: { filename: streamOutputPath, index, kind: "mind", backend: "ollama", terminal: envelope }
+      }));
+    };
+    let signalFirstRecord;
+    const firstRecord = new Promise((resolve) => {
+      signalFirstRecord = resolve;
+    });
     (async () => {
-      let streamedText = "";
+      const streamedChunks = [];
+      let terminalPayload = null;
       try {
         const mockResponse = nextMockGenerateResponse(mockResponseRaw);
         if (mockResponse) {
-          const finalText = extractMockResponseText(mockResponse).trim();
+          const mockEnvelope = normalizeMindReply(mockResponse);
+          const finalText = mockEnvelope.text;
           const chunks = String(finalText ?? "")
             .split(/\s+/)
             .filter(Boolean)
             .map(word => `${word} `);
           for (const chunk of chunks) {
-            streamedText += chunk;
+            streamedChunks.push(chunk);
             writeStreamChunk(streamOutputPath, chunk);
+            signalFirstRecord?.();
             if (streamStdoutEnabled) {
               process.stdout.write(chunk);
             }
           }
-          recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: finalText, chunks }) });
+          terminalPayload = { ...mockEnvelope, response: finalText, done: true };
+          const envelope = requireMindReplyText(mergeMindReplyChunks(streamedChunks, terminalPayload));
+          recordMindReply({ targetName: mindName, envelope });
           if (mindDebug) {
             // eslint-disable-next-line no-console
             console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: finalText.length })}`);
           }
+          recordStreamAnswer(envelope);
+          writeStreamTerminal(streamOutputPath, { envelope });
           writeStreamEnd(streamOutputPath);
-          recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName, historySeriesName });
         } else if (backendName) {
           const backendStream = await callMindBackendStream({ backendName, payload: requestPayload });
           const backendPath =
@@ -210,33 +225,44 @@ export async function runGenerate({
           if (!backendPath) {
             throw new Error("mind backend stream missing filename");
           }
-          await new Promise((resolve) => {
+          await new Promise((resolve, reject) => {
             const stop = startStreamTail({
               filename: backendPath,
               onLine: (line) => {
-                try {
-                  const chunk = JSON.parse(line);
-                  const textChunk = String(chunk ?? "");
-                  streamedText += textChunk;
-                  writeStreamChunk(streamOutputPath, textChunk);
-                  if (streamStdoutEnabled) process.stdout.write(textChunk);
-                } catch {
-                  // ignore malformed chunk lines
+                const chunk = JSON.parse(line);
+                if (chunk?.type === "terminal") {
+                  if (chunk.ok === false) throw new Error(chunk.error?.message ?? "mind stream failed");
+                  terminalPayload = chunk.envelope ?? {};
+                  return;
                 }
+                const textChunk = chunk?.type === "chunk" ? chunk.text : chunk;
+                if (typeof textChunk !== "string") throw new Error("mind stream malformed chunk");
+                streamedChunks.push(textChunk);
+                writeStreamChunk(streamOutputPath, textChunk);
+                signalFirstRecord?.();
+                if (streamStdoutEnabled) process.stdout.write(textChunk);
               },
               onEnd: () => {
                 stop();
                 resolve();
+              },
+              onError: (err) => {
+                stop();
+                reject(err);
               }
             });
           });
-          recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: streamedText }) });
+          if (!terminalPayload) throw new Error("mind stream missing terminal reply");
+          const envelope = requireMindReplyText(mergeMindReplyChunks(streamedChunks, terminalPayload));
+          recordMindReply({ targetName: mindName, envelope });
           if (mindDebug) {
             // eslint-disable-next-line no-console
-            console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: streamedText.length })}`);
+            console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: envelope.text.length })}`);
           }
+          recordStreamAnswer(envelope);
+          writeStreamTerminal(streamOutputPath, { envelope });
           writeStreamEnd(streamOutputPath);
-          recordMindAnswer({ mindName, dialogue, callPrompt, responseText: streamedText.trim(), outputName, historySeriesName });
+          signalFirstRecord?.();
         } else {
           throwErrorSentence({
             name: "mind backend missing",
@@ -246,18 +272,27 @@ export async function runGenerate({
           });
         }
       } catch (err) {
+        const errorEnvelope = errorReplyEnvelope(err);
+        writeStreamTerminal(streamOutputPath, { error: errorEnvelope.error });
         writeStreamEnd(streamOutputPath);
-        throwErrorSentence({
-          name: "mind defective",
-          message: `mind defective: ${err?.message ?? "stream failed"}`,
+        signalFirstRecord?.();
+        const hollow = err?.code === "MIND_HOLLOW_ANSWER";
+        const errorName = hollow ? "mind hollow answer" : "mind defective";
+        const errorMessage = hollow
+          ? "mind hollow answer from backend"
+          : `mind defective: ${err?.message ?? "stream failed"}`;
+        doRemember(buildErrorSentence({
+          name: errorName,
+          message: errorMessage,
           from: { name: "mind" },
           raw: { error: err?.message ?? String(err ?? "") }
-        });
+        }));
       }
     })();
+    await firstRecord;
     return {
       stream: makeStream({
-        name: outputName ?? sentence?.su?.name ?? `${mindName ?? "mind"} stream`,
+        name: streamName,
         state: "open",
         ob: { filename: streamOutputPath, index: 0, kind: "mind", backend: "ollama" }
       })
@@ -265,6 +300,7 @@ export async function runGenerate({
   }
 
   let responseText = "";
+  let reply = null;
   if (typeof checkInterrupted === "function") {
     await checkInterrupted();
   }
@@ -278,7 +314,8 @@ export async function runGenerate({
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
-    responseText = extractMockResponseText(mockResponse);
+    reply = normalizeMindReply(mockResponse);
+    responseText = reply.text;
   } else {
     const requestPayload = { mode: "chat", model, messages, stream: false };
     requestPayload.prompt = buildPromptText(messages);
@@ -308,7 +345,7 @@ export async function runGenerate({
       attempts += 1;
       backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
       backendErrorText = String(backendResponse?.error ?? "").trim();
-      responseText = extractBackendResponseText(backendResponse);
+      responseText = normalizeMindReply(backendResponse).text;
       if (responseText) break;
       const loadingModel = isLoadingBackendResponse(backendResponse, backendErrorText);
       if (attempts >= maxAttempts) break;
@@ -325,6 +362,8 @@ export async function runGenerate({
         console.error(`[mind debug] ${JSON.stringify({ label: "empty-response", backendResponse: stripContext(backendResponse ?? {}) })}`);
       }
     }
+    reply = normalizeMindReply(backendResponse ?? {});
+    responseText = reply.text;
     if (!responseText) {
       if (backendErrorText) {
         throwErrorSentence({
@@ -343,5 +382,5 @@ export async function runGenerate({
     }
   }
 
-  return { responseText };
+  return { responseText, reply: reply ?? normalizeMindReply({ response: responseText }) };
 }

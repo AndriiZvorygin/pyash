@@ -29,7 +29,9 @@ test("mind stream uses config vyah stream and yields chips", async () => {
     const chunks = [];
     for (const line of lines) {
       if (line.trim() === "[PYA_STREAM_END]") break;
-      chunks.push(JSON.parse(line));
+      const record = JSON.parse(line);
+      if (typeof record === "string") chunks.push(record);
+      else if (record?.type === "chunk") chunks.push(String(record.text ?? ""));
     }
     assert.equal(chunks.join("").trim(), "alpha beta gamma");
   } finally {

@@ -1,8 +1,9 @@
 import { remember, doRemember } from "../../remember/index.mjs";
 import { appendLog, historyDialogueName, nextAnswerName } from "./history.mjs";
 import { getMindLog } from "./session.mjs";
+import { normalizeMindReply, rememberReplyMetadata, replyMetadataName, replySentence } from "./reply.mjs";
 
-function appendSeriesEntries({ seriesName, callPrompt, responseText }) {
+function appendSeriesEntries({ seriesName, callPrompt, envelope, responseText, metadataName }) {
   if (!seriesName) return;
   const fact = remember(seriesName);
   if (!fact || fact.be !== "series" || !Array.isArray(fact.ob?.series)) return;
@@ -15,13 +16,14 @@ function appendSeriesEntries({ seriesName, callPrompt, responseText }) {
       be: "write"
     });
   }
-  if (responseText !== undefined) {
-    entries.push({
-      mood: "ya",
-      su: { name: "assistant" },
-      ob: { text: responseText },
+  if (envelope || responseText !== undefined) {
+    entries.push(replySentence({
+      envelope: envelope ?? normalizeMindReply({ response: responseText }),
+      answerName: "assistant",
+      metadataName,
+      role: "assistant",
       be: "answer"
-    });
+    }));
   }
   doRemember({
     ...fact,
@@ -35,11 +37,30 @@ function seriesNameForDialogue(dialogue) {
 }
 
 function buildSeriesEntriesFromLog(log) {
-  return (log || []).map((entry) => ({
-    mood: "ya",
-    su: { name: entry?.role ?? "assistant" },
-    ob: { text: entry?.content ?? "" }
-  }));
+  return (log || []).map((entry) => {
+    if (entry?.role === "user") {
+      return {
+        mood: "ya",
+        su: { name: "user" },
+        ob: { text: String(entry?.content ?? "") },
+        be: "write"
+      };
+    }
+    return replySentence({
+      envelope: normalizeMindReply({
+        response: entry?.content ?? "",
+        ...(entry?.metadata && typeof entry.metadata === "object" ? entry.metadata : {}),
+        ...(entry?.thinking !== undefined ? { thinking: entry.thinking } : {}),
+        ...(entry?.createdAt !== undefined ? { created_at: entry.createdAt } : {}),
+        ...(entry?.model !== undefined ? { model: entry.model } : {}),
+        ...(entry?.role !== undefined ? { role: entry.role } : {})
+      }),
+      answerName: entry?.role ?? "assistant",
+      metadataName: entry?.metadataName,
+      role: entry?.role ?? "assistant",
+      be: "answer"
+    });
+  });
 }
 
 function syncSessionFacts({ dialogue }) {
@@ -72,8 +93,12 @@ function syncSessionFacts({ dialogue }) {
   });
 }
 
-function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName }) {
+function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, envelope, outputName, historySeriesName }) {
+  const reply = envelope ?? normalizeMindReply({ response: responseText });
   const { count, name: answerName } = nextAnswerName(mindName, dialogue);
+  const metadataName = Object.keys(reply.metadata ?? {}).length > 0
+    ? rememberReplyMetadata(replyMetadataName(answerName), reply.metadata)
+    : null;
   if (callPrompt) {
     doRemember({
       mood: "ya",
@@ -84,13 +109,13 @@ function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, output
     });
     appendLog(dialogue, { role: "user", content: callPrompt });
   }
-  const answerSentence = {
-    mood: "ya",
-    su: { name: answerName },
-    be: "answer",
-    from: { name: mindName },
-    ob: { text: responseText }
-  };
+  const answerSentence = replySentence({
+    envelope: reply,
+    subjectName: answerName,
+    answerName,
+    fromName: mindName,
+    metadataName
+  });
   doRemember(answerSentence);
   doRemember({
     ...answerSentence,
@@ -102,19 +127,26 @@ function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, output
       su: { name: outputName }
     });
   }
-  doRemember({
-    mood: "ya",
-    su: { name: `${mindName} ${dialogue} answer ${count}` },
-    be: "answer",
-    from: { name: mindName },
-    ob: { text: responseText }
+  doRemember(replySentence({
+    envelope: reply,
+    answerName: `${mindName} ${dialogue} answer ${count}`,
+    fromName: mindName,
+    metadataName
+  }));
+  appendLog(dialogue, {
+    role: "assistant",
+    content: reply.text,
+    metadata: reply.metadata,
+    metadataName,
+    thinking: reply.thinking,
+    createdAt: reply.createdAt,
+    model: reply.model
   });
-  appendLog(dialogue, { role: "assistant", content: responseText });
   if (historySeriesName) {
-    appendSeriesEntries({ seriesName: historySeriesName, callPrompt, responseText });
+    appendSeriesEntries({ seriesName: historySeriesName, callPrompt, envelope: reply, metadataName });
   }
   syncSessionFacts({ dialogue });
-  return answerSentence;
+  return { ...answerSentence, envelope: reply, metadataName };
 }
 
 export {
