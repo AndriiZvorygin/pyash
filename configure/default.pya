@@ -86,7 +86,7 @@ exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
 exists su name keyboard bin ob text "xdotool" be default ya
 exists su name keyboard enabled ob bool truth be default ya
-exists su name search web default ob la be search fromstate wo web ko from filename "http://localhost:60490/" be default ya
+exists su name web search motor ob filename "https://tsoc.liberit.ca/" be default ya
 exists su name ffmpeg input ob text "pulse" be default ya
 exists su name ffmpeg input device ob text "default" be default ya
 exists su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
