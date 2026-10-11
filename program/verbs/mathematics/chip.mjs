@@ -44,6 +44,44 @@ async function readHearStreamLines(filename) {
   }
 }
 
+async function readMindStreamLines(filename) {
+  try {
+    const raw = await fs.readFile(filename, "utf8");
+    const lines = raw.split(/\r?\n/).filter((line) => line.length > 0);
+    const values = [];
+    let terminal = null;
+    let final = false;
+    for (const line of lines) {
+      if (line.trim() === "[PYA_STREAM_END]") {
+        final = true;
+        break;
+      }
+      try {
+        const value = JSON.parse(line);
+        if (value && typeof value === "object" && value.type === "terminal") {
+          terminal = value;
+        } else if (value && typeof value === "object" && value.type === "chunk") {
+          values.push(String(value.text ?? ""));
+        } else if (typeof value === "string") {
+          values.push(value);
+        } else {
+          throw new Error("mind stream control record is not a chunk");
+        }
+      } catch (err) {
+        return {
+          values,
+          final: true,
+          terminal: { type: "terminal", ok: false, error: { name: "mind stream malformed", message: err.message } }
+        };
+      }
+    }
+    return { values, final, terminal };
+  } catch (err) {
+    if (err?.code === "ENOENT") return { values: [], final: false, terminal: null };
+    throw err;
+  }
+}
+
 function normalizeStreamLine(line) {
   return String(line ?? "").trim().toLowerCase();
 }
@@ -100,10 +138,10 @@ export async function chip_su_stream(sentence) {
       message: `stream not found: ${streamName}`
     });
   }
+  const index = stream.ob?.index ?? 0;
 
   if (stream.ob?.kind === "hear" && stream.ob?.filename) {
     const { lines, final: streamFinal } = await readHearStreamLines(stream.ob.filename);
-    const index = stream.ob?.index ?? 0;
     if (index >= lines.length) return null;
 
     const value = lines[index];
@@ -128,8 +166,45 @@ export async function chip_su_stream(sentence) {
     return chip;
   }
 
+  if (stream.ob?.kind === "mind" && stream.ob?.filename) {
+    const { values, final, terminal } = await readMindStreamLines(stream.ob.filename);
+    if (terminal?.ok === false) {
+      doRemember(makeStream({
+        name: streamName,
+        state: "error",
+        ob: { ...stream.ob, index, terminal }
+      }));
+      return makeRuntimeError({
+        name: terminal.error?.name ?? "mind stream failed",
+        message: terminal.error?.message ?? "mind stream failed"
+      });
+    }
+    if (index >= values.length) {
+      if (!final) return null;
+      return makeRuntimeError({
+        name: "chip exhausted",
+        message: `chip exhausted: ${streamName}`
+      });
+    }
+    const value = values[index];
+    const lastIndex = values.length - 1;
+    const chip = makeChip({
+      streamName,
+      index,
+      ob: { text: value },
+      toindex: final ? lastIndex : undefined,
+      vyahValues: ["eval", "success"]
+    });
+    const nextIndex = index + 1;
+    doRemember(makeStream({
+      name: streamName,
+      state: final && nextIndex >= values.length ? "done" : (stream.as?.name ?? "open"),
+      ob: { ...stream.ob, index: nextIndex, terminal }
+    }));
+    return chip;
+  }
+
   const values = stream.ob?.ve?.values ?? [];
-  const index = stream.ob?.index ?? 0;
   if (index >= values.length) {
     return makeRuntimeError({
       name: "chip exhausted",

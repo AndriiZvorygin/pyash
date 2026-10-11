@@ -1,5 +1,6 @@
 import { emitExchangeSentence } from "../../bridge/exchange.mjs";
 import { jsonToMapSentences } from "../exchange/json_map.mjs";
+import { normalizeMindReply } from "./reply.mjs";
 
 const mindDebugCounters = new Map();
 
@@ -85,6 +86,24 @@ export function recordMindJson({ targetName, label, payload }) {
   if (messageSeries) {
     for (const entry of messageSeries.lines) emitExchangeSentence(entry);
   }
+}
+
+export function recordMindReply({ targetName, envelope }) {
+  const reply = envelope?.text !== undefined ? envelope : normalizeMindReply(envelope ?? {});
+  recordMindJson({
+    targetName,
+    label: "response",
+    payload: {
+      response: reply.text,
+      ...(reply.thinking !== undefined ? { thinking: reply.thinking } : {}),
+      ...(reply.createdAt !== undefined ? { created_at: reply.createdAt } : {}),
+      ...(reply.model !== undefined ? { model: reply.model } : {}),
+      ...(reply.role !== undefined ? { role: reply.role } : {}),
+      ...(reply.done !== undefined ? { done: reply.done } : {}),
+      ...(reply.doneReason !== undefined ? { done_reason: reply.doneReason } : {}),
+      ...(reply.metadata ?? {})
+    }
+  });
 }
 
 export function resetMindDebugCounters() {

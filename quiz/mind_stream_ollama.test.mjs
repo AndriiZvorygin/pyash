@@ -52,12 +52,22 @@ test("mind stream pulls live Ollama chunks", { skip: !process.env.PYA_OLLAMA_STR
   assert.equal(first?.be, "chip");
   assert.equal(first?.atindex?.num, 0);
   assert.ok(first?.ob?.text?.length, "expected first chunk text");
-  const lastIndex = first?.toindex?.num;
-  assert.ok(typeof lastIndex === "number", "expected toindex on streamed chunk");
-
-  if (lastIndex > 0) {
-    const second = await run("su name mind-stream vyah eval be chip do");
-    assert.equal(second?.atindex?.num, 1);
-    assert.ok(second?.ob?.text?.length, "expected second chunk text");
-  }
+  await waitForStreamEnd(stream.ob.filename);
+  const second = await run("su name mind-stream vyah eval be chip do");
+  assert.equal(second?.atindex?.num, 1);
+  assert.ok(second?.ob?.text?.length, "expected second chunk text");
 });
+
+async function waitForStreamEnd(filename, { timeoutMs = 30000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const content = await fs.readFile(filename, "utf8");
+      if (content.includes("[PYA_STREAM_END]")) return;
+    } catch {
+      // The stream file is created immediately before the backend starts.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("live mind stream did not reach its terminal record");
+}

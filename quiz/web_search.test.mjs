@@ -41,3 +41,14 @@ test("web search returns map of found entries", async () => {
   assert.equal(first?.fromstate?.text, "web");
   assert.equal(first?.via?.name, "searxng");
 });
+
+test("web search keeps an explicit motor instead of applying a competing dynamic default", async () => {
+  forget();
+
+  const fixturePath = path.join(repoRoot, "quiz", "fixtures", "web_search_fixture.json");
+  await run(`exists su name web search fixture ob filename \"${fixturePath}\" be text ya`);
+  await run("exists su name web search motor ob filename \"https://tsoc.liberit.ca/\" be default ya");
+  await run("su name found ob text \"explicit motor\" fromstate wo web by num 1 be search do");
+
+  assert.equal(remember("found")?.from?.filename, "https://tsoc.liberit.ca/");
+});
