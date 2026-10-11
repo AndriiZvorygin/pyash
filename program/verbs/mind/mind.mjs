@@ -38,6 +38,7 @@ import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 import { consumeMindInterrupt } from "../../agent/interrupt.mjs";
 import { resolveTextModel } from "../../runtime/gpu/text-model.mjs";
+import { normalizeMindReply } from "./reply.mjs";
 
 const DEFAULT_TOOL_MAP_NAME = "agent tools";
 const DEFAULT_TOOL_MAP_PATH = path.resolve(
@@ -526,6 +527,7 @@ export async function mind_to_name_text(sentence, {
   }
 
   let responseText = "";
+  let replyEnvelope = null;
   let sessionFile = null;
   let sessionDir = null;
   let sessionTurn = null;
@@ -730,7 +732,7 @@ export async function mind_to_name_text(sentence, {
         });
       }
       : null;
-    const { responseText: text, stream } = await runGenerate({
+    const { responseText: text, reply, stream } = await runGenerate({
       sentence,
       ob,
       mindName,
@@ -752,10 +754,12 @@ export async function mind_to_name_text(sentence, {
       inputText,
       inputs,
       checkInterrupted: assertNotInterrupted,
-      onComplete: completeStreamSession
+      onComplete: completeStreamSession,
+      sessionTurn
     });
     if (stream) return stream;
     responseText = text ?? "";
+    replyEnvelope = reply ?? null;
   }
 
   if (!responseText && String(outputName ?? "").trim().endsWith("_channel_out")) {
@@ -763,7 +767,19 @@ export async function mind_to_name_text(sentence, {
   }
   if (effectiveModelTuning?.stripThinkInHistory) {
     responseText = stripThinkBlock(responseText);
+    if (replyEnvelope) replyEnvelope = { ...replyEnvelope, text: responseText };
   }
+
+  replyEnvelope = replyEnvelope ?? normalizeMindReply({ response: responseText });
+  const answerSentence = recordMindAnswer({
+    mindName,
+    dialogue,
+    callPrompt,
+    envelope: replyEnvelope,
+    outputName,
+    historySeriesName,
+    sessionTurn
+  });
 
   if (sessionAgentEnabled && sessionFile) {
     await completeSessionTurn({
@@ -787,8 +803,6 @@ export async function mind_to_name_text(sentence, {
     });
   }
 
-  // Record turn so future calls have context
-  const answerSentence = recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName, sessionTurn });
   return answerSentence;
 }
 

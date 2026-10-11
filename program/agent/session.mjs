@@ -20,6 +20,10 @@ import {
   nextSessionOrdinal,
   projectSessionReplay
 } from "./session_replay.mjs";
+import { jsonToPyashText } from "../verbs/exchange/json_map.mjs";
+import { replySentence } from "../verbs/mind/reply.mjs";
+
+const SESSION_ROLE_NAMES = new Set(["user", "assistant", "agent", "tool"]);
 
 export function normalizeHistoryWindow(historyWindow, {
   defaultPairs = 50,
@@ -404,7 +408,11 @@ export async function appendSessionEntry({
   role,
   content,
   model,
-  metadata
+  metadata,
+  replySentence: sourceSentence,
+  replyEnvelope,
+  replyMetadataName,
+  replyMetadata
 } = {}) {
   if (!sessionFile || !role) return;
   const meta = metadata && typeof metadata === "object" ? metadata : {};
@@ -421,15 +429,34 @@ export async function appendSessionEntry({
     await fs.appendFile(sessionFile, `${sentenceToPyash(sentence)}\n`, "utf8");
     return;
   }
-  const sentence = {
-    su: { name: role },
-    ob: { text: String(content ?? "") },
-    during: { date: String(meta.timestamp || nowIso()) },
-    mood: "ya"
-  };
+  const projectedReply = replyEnvelope && typeof replyEnvelope === "object"
+    ? replySentence({
+      envelope: replyEnvelope,
+      answerName: role,
+      metadataName: replyMetadataName ?? sourceSentence?.accordingto?.name,
+      role,
+      be: "answer"
+    })
+    : null;
+  const sentence = projectedReply
+    ?? (sourceSentence && typeof sourceSentence === "object"
+      ? {
+        ...sourceSentence,
+        su: { name: role },
+        ob: { text: String(sourceSentence.ob?.text ?? content ?? "") }
+      }
+      : {
+        su: { name: role },
+        ob: { text: String(content ?? "") },
+        during: { date: String(meta.timestamp || nowIso()) },
+        mood: "ya"
+      });
+  if (!sentence.during) sentence.during = { date: String(meta.timestamp || nowIso()) };
   if (role === "system" && model) {
     sentence.as = { name: model };
   }
+  if (role !== "system" && model && !sentence.as) sentence.as = { name: model };
+  if (meta.createdAt && sentence.during) sentence.during = { date: String(meta.createdAt) };
   if (meta.sender) sentence.from = { name: String(meta.sender) };
   if (meta.channelId) sentence.to = { name: String(meta.channelId) };
   if (meta.channelType) {
@@ -438,7 +465,11 @@ export async function appendSessionEntry({
   }
   if (meta.payloadId) sentence.accordingto = { text: String(meta.payloadId) };
   const line = sentenceToPyash(sentence);
-  await fs.appendFile(sessionFile, `${line}\n`, "utf8");
+  let prefix = "";
+  if (sentence.accordingto?.name && replyMetadata && typeof replyMetadata === "object") {
+    prefix = jsonToPyashText(replyMetadata, sentence.accordingto.name).text;
+  }
+  await fs.appendFile(sessionFile, `${prefix}${line}\n`, "utf8");
 }
 
 async function readSessionSentences({ sessionFile } = {}) {
@@ -454,6 +485,69 @@ async function readSessionSentences({ sessionFile } = {}) {
     .map((raw) => raw.trim())
     .filter(Boolean)
     .map((raw) => parse(raw));
+}
+
+function sessionMessageRole(sentence) {
+  const raw = String(sentence?.su?.name ?? "").trim().toLowerCase();
+  if (raw === "agent") return "assistant";
+  return raw;
+}
+
+function sessionMessageContent(sentence) {
+  return String(sentence?.ob?.text ?? "");
+}
+
+function sessionMessageTurnId(sentence) {
+  return String(sentence?.accordingto?.text ?? sentence?.accordingto?.name ?? "");
+}
+
+function projectSessionMessages({ sentences = [], historyWindow = 50 } = {}) {
+  const source = Array.isArray(sentences) ? sentences : [];
+  const replayEntries = [];
+  const projectedEntries = [];
+  for (const [index, sentence] of source.entries()) {
+    const role = sessionMessageRole(sentence);
+    if (!SESSION_ROLE_NAMES.has(role) || (sentence?.be !== "answer" && role !== "tool")) {
+      replayEntries.push({ index, sentence });
+      continue;
+    }
+    projectedEntries.push({
+      index,
+      message: {
+        role,
+        content: sessionMessageContent(sentence)
+      }
+    });
+  }
+
+  const projected = projectSessionReplay({
+    sentences: replayEntries.map(({ sentence }) => sentence),
+    historyWindow
+  });
+  const usedReplayEntries = new Set();
+  const replayMessages = projected.messages.map((message, messageIndex) => {
+    const match = replayEntries.find((entry, index) => {
+      if (usedReplayEntries.has(index)) return false;
+      const role = sessionMessageRole(entry.sentence);
+      if (role !== message.role || sessionMessageContent(entry.sentence) !== message.content) return false;
+      const turnId = String(message.turnId ?? "");
+      const entryTurnId = sessionMessageTurnId(entry.sentence);
+      return !turnId || !entryTurnId || turnId === entryTurnId;
+    });
+    if (match) usedReplayEntries.add(replayEntries.indexOf(match));
+    return {
+      index: match?.index ?? source.length + messageIndex,
+      message: { role: message.role, content: message.content }
+    };
+  });
+  const messages = [...replayMessages, ...projectedEntries]
+    .sort((left, right) => left.index - right.index)
+    .map(({ message }) => message);
+  const maxPairs = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 });
+  return {
+    ...projected,
+    messages: maxPairs > 0 ? messages : []
+  };
 }
 
 export async function readSessionReplay({ sessionFile, historyWindow = 50 } = {}) {
@@ -743,13 +837,12 @@ export async function appendAcceptedSessionCheckpoint({
 
 export async function readSessionMessages({ sessionFile, historyWindow = 50 } = {}) {
   if (!sessionFile) return { messages: [], lastSystemModel: null };
-  const projected = await readSessionReplay({ sessionFile, historyWindow });
-  const messages = projected.messages.map(({ role, content }) => ({ role, content }));
-  const maxMessages = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 }) * 2;
-  if (maxMessages <= 0) {
-    return { messages: [], lastSystemModel: projected.lastSystemModel };
-  }
-  return { messages, lastSystemModel: projected.lastSystemModel };
+  const sentences = await readSessionSentences({ sessionFile });
+  const projected = projectSessionMessages({ sentences, historyWindow });
+  return {
+    messages: projected.messages,
+    lastSystemModel: projected.lastSystemModel
+  };
 }
 
 export function buildSessionNamePrefix() {
@@ -768,11 +861,24 @@ export async function readSessionMessagesWithFallback({
   historyWindow = 50
 } = {}) {
   if (!sessionDir || !baseName) return { messages: [], lastSystemModel: null };
-  const projected = await readSessionReplayWithFallback({ sessionDir, baseName, historyWindow });
-  const maxMessages = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 }) * 2;
-  const messages = projected.messages.map(({ role, content }) => ({ role, content }));
+  const maxPairs = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 });
+  if (maxPairs <= 0) return { messages: [], lastSystemModel: null };
+  const todayKey = formatCompactDate(new Date());
+  const todayName = buildSessionNameForDate({ baseName, dateCompact: todayKey });
+  const todayFile = path.join(sessionDir, sessionFilename({ sessionName: todayName }));
+  const yesterdayKey = shiftCompactDate(todayKey, -1);
+  const yesterdayName = buildSessionNameForDate({ baseName, dateCompact: yesterdayKey });
+  const yesterdayFile = path.join(sessionDir, sessionFilename({ sessionName: yesterdayName }));
+  const [yesterdaySentences, todaySentences] = await Promise.all([
+    readSessionSentences({ sessionFile: yesterdayFile }),
+    readSessionSentences({ sessionFile: todayFile })
+  ]);
+  const projected = projectSessionMessages({
+    sentences: [...yesterdaySentences, ...todaySentences],
+    historyWindow
+  });
   return {
-    messages: maxMessages > 0 ? messages : [],
+    messages: projected.messages,
     lastSystemModel: projected.lastSystemModel
   };
 }

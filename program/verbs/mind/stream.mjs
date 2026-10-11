@@ -20,12 +20,19 @@ function writeStreamEnd(filePath) {
   fsSync.appendFileSync(filePath, "[PYA_STREAM_END]\n", "utf8");
 }
 
+function writeStreamTerminal(filePath, { envelope, error } = {}) {
+  const record = error
+    ? { type: "terminal", ok: false, error: { name: error.name, message: error.message } }
+    : { type: "terminal", ok: true, envelope: envelope ?? {} };
+  fsSync.appendFileSync(filePath, `${JSON.stringify(record)}\n`, "utf8");
+}
+
 function startStreamFile(filePath) {
   fsSync.mkdirSync(path.dirname(filePath), { recursive: true });
   fsSync.writeFileSync(filePath, "", "utf8");
 }
 
-function startStreamTail({ filename, onLine, onEnd }) {
+function startStreamTail({ filename, onLine, onEnd, onError }) {
   let offset = 0;
   let pending = "";
   const interval = setInterval(() => {
@@ -50,7 +57,13 @@ function startStreamTail({ filename, onLine, onEnd }) {
         if (onEnd) onEnd();
         return;
       }
-      if (onLine) onLine(line);
+      try {
+        if (onLine) onLine(line);
+      } catch (err) {
+        clearInterval(interval);
+        if (onError) onError(err);
+        return;
+      }
     }
   }, 50);
   return () => clearInterval(interval);
@@ -66,6 +79,7 @@ export {
   resolveStreamOutputPath,
   writeStreamChunk,
   writeStreamEnd,
+  writeStreamTerminal,
   startStreamFile,
   startStreamTail,
   resolveStreamStdoutEnabled

@@ -163,10 +163,16 @@ async function invokeMind({ mindName, prompt, outputName, toolMapName, numPredic
   }
   const result = await interpret(call);
   const output = remember(outputName);
-  const turnId = result?.accordingto?.text ?? result?.accordingto?.name
-    ?? output?.accordingto?.text ?? output?.accordingto?.name;
-  const sessionFile = result?.at?.filename ?? result?.at?.text
-    ?? output?.at?.filename ?? output?.at?.text;
+  const turnId = result?.sessionTurn?.turnId
+    ?? output?.sessionTurn?.turnId
+    ?? result?.accordingto?.text
+    ?? output?.accordingto?.text;
+  const sessionFile = result?.sessionTurn?.sessionFile
+    ?? output?.sessionTurn?.sessionFile
+    ?? result?.at?.filename
+    ?? result?.at?.text
+    ?? output?.at?.filename
+    ?? output?.at?.text;
   return {
     text: resolveFactText(outputName),
     sessionTurn: turnId && sessionFile
