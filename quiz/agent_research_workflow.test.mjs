@@ -163,7 +163,8 @@ test("fixture research workflow records evidence, writes the report, and replays
   const toolEvents = newspaper.filter((sentence) => sentence?.be === "tool");
   assert.equal(toolEvents.length, 3);
   assert.deepEqual(toolEvents.map((event) => event?.ob?.la?.be), ["search", "download", "read"]);
-  assert.ok(toolEvents.every((event) => event?.to?.la?.mood === "ya"));
+  assert.ok(toolEvents.every((event) => event?.mood === "ya"));
+  assert.ok(toolEvents.every((event) => event?.to?.la));
   assert.ok(newspaper.some((sentence) => sentence?.be === "artifact" && sentence?.to?.filename?.endsWith("report.md")));
   const artifactHashes = newspaper
     .filter((sentence) => sentence?.be === "artifact" && sentence?.fromtext?.text)
@@ -172,7 +173,9 @@ test("fixture research workflow records evidence, writes the report, and replays
   for (const hash of artifactHashes) {
     await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.html`)).catch(async () => {
       await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.md`)).catch(async () => {
-        await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.txt`));
+        await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.txt`)).catch(async () => {
+          await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.pya`));
+        });
       });
     });
   }
