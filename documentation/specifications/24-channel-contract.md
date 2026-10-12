@@ -167,6 +167,28 @@ Rules:
 2. Dedup handling MUST be shared between push and fallback intake paths.
 3. Dedup state MUST use managed Pyash sentence files (`.pya`) and MUST NOT introduce ad hoc JSON state files.
 
+### 7.3 Provider identity (Normative)
+
+Adapters MUST preserve provider identity as separate fields. The canonical
+identity metadata may contain `provider`, `account`, `channelId`, `eventId`,
+`historyId`, `messageId`, `threadId`, `rfcMessageId`, and `sourceLocator`.
+
+These fields have distinct meanings:
+
+1. `eventId` is the provider event/item identity used with the channel dedup
+   tuple.
+2. `messageId` is the provider message identity used for source/work
+   correlation.
+3. `historyId` is a provider cursor/checkpoint and MUST NOT be used as the
+   message or event identity.
+4. `rfcMessageId` is the RFC mail header identity used for reply headers and
+   MUST NOT replace the provider message identity.
+5. `threadId` is reply/thread correlation and is not a dedup cursor.
+
+Identity metadata is carried alongside the router sentence and is persisted
+explicitly in channel spool envelopes. It MUST NOT become an inferred Pyash
+case or a policy input derived from message prose.
+
 ## 7.1 Holding Spool Semantics (Normative)
 
 Channel runtime MUST use the channel spool under `world/holding/channel/` for staged processing.
@@ -194,6 +216,22 @@ Rules:
 2. New runtime queue families MUST use a dedicated lane under `world/holding/<lane>/` (for example `world/holding/gpu/`).
 3. Cross-lane reuse is not allowed; each lane owns its own lifecycle directories and checkpoint semantics.
 4. Router/channel tooling MUST treat unknown lanes as out of scope and must not mutate them.
+
+## 7.4 Channel capability boundary (Normative)
+
+Channel conduct may declare capabilities such as:
+
+```pyash
+su name gmail capability receive ob bool truth ya
+su name gmail capability send ob bool truth ya
+su name gmail capability mutate ob bool lie ya
+```
+
+When both global and agent-local channel policies declare a security field,
+the effective value is deny-dominant. An agent-local `truth` MUST NOT widen a
+global `lie`. A configured capability is usable only when its effective value
+is `truth`; absent capability policy retains legacy behavior for channels that
+have not adopted the capability contract.
 
 ## 8. Health Produce Requirements (Normative)
 

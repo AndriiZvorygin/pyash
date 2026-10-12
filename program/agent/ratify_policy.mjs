@@ -112,6 +112,7 @@ export function normalizeRatifyAction(value) {
 }
 
 export async function resolveRatifyDecision({
+  worldRoot: configuredWorldRoot,
   mindName,
   toolName,
   toolSignature,
@@ -125,8 +126,10 @@ export async function resolveRatifyDecision({
   workKind = "",
   rememberFn
 } = {}) {
-  if (!mindName || typeof rememberFn !== "function") return null;
-  const worldRoot = resolveWorldRoot(rememberFn);
+  if (!mindName || (!configuredWorldRoot && typeof rememberFn !== "function")) return null;
+  const worldRoot = configuredWorldRoot
+    ? path.resolve(String(configuredWorldRoot))
+    : resolveWorldRoot(rememberFn);
   const policyPath = path.join(worldRoot, "house", String(mindName), "conduct", "ratify.pya");
   const entries = await readPolicyEntries(policyPath);
   const index = new Map(entries.map(entry => [entry.key, entry]));

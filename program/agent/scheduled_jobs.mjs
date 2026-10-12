@@ -21,6 +21,7 @@ import {
   runChannelProduceOnce
 } from "./channels/index.mjs";
 import { createMatrixAdapter } from "./channels/matrix.mjs";
+import { createGmailAdapter } from "./channels/gmail.mjs";
 import { createCliAdapter } from "./channels/cli.mjs";
 import {
   resolveMatrixConfigWithMap,
@@ -224,7 +225,9 @@ async function runChannelPollJob({ worldRoot, job }) {
       }
       const adapter = channelType === "matrix"
         ? createMatrixAdapter()
-        : (channelType === "cli" ? createCliAdapter({ worldRoot, agentName: targetAgentName }) : null);
+        : ((channelType === "gmail" || channelType === "email")
+          ? createGmailAdapter()
+          : (channelType === "cli" ? createCliAdapter({ worldRoot, agentName: targetAgentName }) : null));
       if (!adapter) continue;
       let result = null;
       let activeMode = channelMode;

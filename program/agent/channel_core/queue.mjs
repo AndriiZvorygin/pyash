@@ -139,6 +139,13 @@ function envelopeToText(envelope = {}) {
     { key: "room name", type: "text", value: quotePyashText(String(envelope.roomName ?? "")) },
     { key: "payload", type: "text", value: quotePyashText(payloadSentenceText) }
   ];
+  if (envelope.channelIdentity && typeof envelope.channelIdentity === "object") {
+    entries.push({
+      key: "channel identity",
+      type: "text",
+      value: quotePyashText(JSON.stringify(envelope.channelIdentity))
+    });
+  }
   if (envelope.payloadId) {
     entries.push({ key: "payload id", type: "text", value: quotePyashText(String(envelope.payloadId)) });
   }
@@ -162,6 +169,7 @@ function envelopeFromText(text) {
     roomName: "",
     payloadId: "",
     eventId: "",
+    channelIdentity: null,
     payloadSentence: null
   };
   for (const entry of entries) {
@@ -175,6 +183,14 @@ function envelopeFromText(text) {
     if (entry.key === "room name") out.roomName = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "payload id") out.payloadId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "event id") out.eventId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
+    if (entry.key === "channel identity") {
+      try {
+        const parsed = JSON.parse(String(parsePyashQuotedText(entry.valueRaw) ?? ""));
+        out.channelIdentity = parsed && typeof parsed === "object" ? parsed : null;
+      } catch {
+        out.channelIdentity = null;
+      }
+    }
     if (entry.key === "payload") {
       const payloadText = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
       if (payloadText) {

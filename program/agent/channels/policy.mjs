@@ -36,6 +36,9 @@ function ensureChannel(channels, channelType) {
     channels.set(channelType, {
       type: channelType,
       enabled: undefined,
+      headquarters: undefined,
+      capabilitiesConfigured: false,
+      capabilities: {},
       authMode: null,
       mode: null,
       longPollMs: null,
@@ -98,6 +101,20 @@ export function parseChannelPolicyText(text) {
     if (action === "channel") {
       const enabled = readBoolValue(sentence);
       if (enabled != null) cfg.enabled = enabled;
+      continue;
+    }
+    if (action === "headquarters") {
+      const enabled = readBoolValue(sentence);
+      if (enabled != null) cfg.headquarters = enabled;
+      continue;
+    }
+    if (action.startsWith("capability ")) {
+      const capability = action.slice("capability ".length).trim();
+      if (!capability) continue;
+      const enabled = readBoolValue(sentence);
+      if (enabled == null) continue;
+      cfg.capabilitiesConfigured = true;
+      cfg.capabilities[capability] = enabled;
       continue;
     }
     if (action === "homeserver") {
@@ -269,10 +286,32 @@ function mergeChannelEntry(base = {}, override = {}) {
       ...room
     });
   }
+  const capabilityNames = new Set([
+    ...Object.keys(base.capabilities ?? {}),
+    ...Object.keys(override.capabilities ?? {})
+  ]);
+  const capabilities = {};
+  for (const name of capabilityNames) {
+    const globalValue = base.capabilities?.[name];
+    const localValue = override.capabilities?.[name];
+    if (globalValue === false || localValue === false) {
+      capabilities[name] = false;
+    } else if (globalValue === true || localValue === true) {
+      capabilities[name] = true;
+    }
+  }
+  const mergeSecurityBool = (globalValue, localValue, fallback) => {
+    if (globalValue === false || localValue === false) return false;
+    if (globalValue === true || localValue === true) return true;
+    return fallback;
+  };
   return {
     ...base,
     ...override,
-    enabled: override.enabled ?? base.enabled ?? false,
+    enabled: mergeSecurityBool(base.enabled, override.enabled, false),
+    headquarters: mergeSecurityBool(base.headquarters, override.headquarters, false),
+    capabilitiesConfigured: Boolean(base.capabilitiesConfigured || override.capabilitiesConfigured),
+    capabilities,
     mode: override.mode ?? base.mode ?? "sync",
     authMode: override.authMode ?? base.authMode ?? null,
     longPollMs: override.longPollMs ?? base.longPollMs ?? null,
