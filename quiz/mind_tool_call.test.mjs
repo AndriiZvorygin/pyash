@@ -26,6 +26,15 @@ test("mind tool chat ignores prose that is not an explicit allowed tool call", (
   );
 });
 
+test("mind tool chat preserves repeated explicit calls for the call limit", () => {
+  const call = JSON.stringify({ name: "search", arguments: { input: "Pyash" } });
+  const calls = extractExplicitToolCalls(
+    `<tool_call>${call}</tool_call><tool_call>${call}</tool_call>`,
+    [{ function: { name: "search" } }]
+  );
+  assert.equal(calls.length, 2);
+});
+
 test("mind tool calling executes allowed tool and returns final answer", async () => {
   forget();
   resetMindLogs();
