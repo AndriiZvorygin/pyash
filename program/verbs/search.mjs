@@ -4,7 +4,7 @@ import path from "node:path";
 import { remember, doRemember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
-import { normalizeSearxUrl } from "../library/web_search_endpoint.mjs";
+import { normalizeSearxUrl, resolveSearchMotor } from "../library/web_search_endpoint.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -130,6 +130,7 @@ async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
       raw: { sentence }
     });
   }
+  motorUrl = resolveSearchMotor(motorUrl);
   const limit = Math.max(1, Math.trunc(Number(sentence?.by?.num ?? 10)));
 
   let payload;

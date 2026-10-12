@@ -81,7 +81,7 @@ test("a bounded external blocker becomes a linked repair candidate after an unpr
   assert.equal(result.created, true);
   assert.equal(result.task.kind, "blocker-repair");
   assert.equal(result.task.workSpec.blockerRepair.sourceTaskId, "roadmap-agent-research-tool-chain");
-  assert.match(result.task.promptText, /existing checkout|remote service|60490/iu);
+  assert.match(result.task.promptText, /existing checkout|remote service|public SearXNG/iu);
   const source = await import("../../program/runtime/work/status.mjs").then(({ readWorkTaskStatus }) => readWorkTaskStatus(worldRoot, "roadmap-agent-research-tool-chain"));
   assert.equal(source.status, "blocked");
 });

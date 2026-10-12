@@ -755,6 +755,7 @@ test("search evidence probes the JSON search contract rather than the healthy la
   assert.equal(result.available, false);
   assert.equal(result.checks[0].name, "web search");
   assert.match(result.checks[0].endpoint, /\/search\?q=pyash&format=json&count=1/u);
+  assert.equal(result.checks[0].endpoint.startsWith("https://tsoc.liberit.ca/"), true);
   assert.equal(urls.length, 1);
 });
 
