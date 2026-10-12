@@ -13,7 +13,18 @@
           <p class="eyebrow">PRIVATE WORKSPACE</p>
           <h1>Pyash</h1>
         </div>
-        <div id="health" class="health" aria-live="polite">Connecting</div>
+        <div class="topbar-actions">
+          <label class="compact-control">
+            <span>Session</span>
+            <select id="session-select" aria-label="Session"></select>
+          </label>
+          <button id="new-session" class="icon-button" type="button" title="New session" aria-label="New session">+</button>
+          <label class="compact-control model-control">
+            <span>Model</span>
+            <select id="model-select" aria-label="Model"></select>
+          </label>
+          <div id="health" class="health" aria-live="polite">Connecting</div>
+        </div>
       </header>
 
       <section class="workspace">

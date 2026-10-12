@@ -9,7 +9,12 @@ import MarkdownIt from "markdown-it";
 import { interpret } from "../program/bridge/index.mjs";
 import { remember, doRemember } from "../program/remember/index.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
-import { ensureAgentDirs } from "../program/agent/session.mjs";
+import {
+  ensureAgentDirs,
+  listSessionFiles,
+  readSessionMessages
+} from "../program/agent/session.mjs";
+import { resolveConfigText } from "../program/configure/env.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import {
@@ -67,6 +72,25 @@ function parseArgs(argv) {
     toolsMap: readArgValue(args, "--tools-map", DEFAULT_TOOLS_MAP),
     assets: path.resolve(readArgValue(args, "--assets", path.resolve(process.cwd(), "web")))
   };
+}
+
+function normalizeSessionId(raw = "web") {
+  const normalized = String(raw ?? "web")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return normalized || "web";
+}
+
+function normalizeModelId(raw = "") {
+  return String(raw ?? "").trim().slice(0, 160);
+}
+
+function sessionIdFromFilename(filename = "") {
+  const base = path.basename(String(filename), ".pya");
+  return base.replace(/^\d{8}-/, "") || "web";
 }
 
 function jsonResponse(res, status, value) {
@@ -141,17 +165,114 @@ export function renderAssistantMarkdown(text = "") {
   return markdown.render(String(text ?? ""));
 }
 
-export function buildChatSentence({ message, root, agentHouse }) {
+export function buildChatSentence({ message, root, agentHouse, session = "web", model = "" }) {
   return {
     mood: "do",
     be: "write",
     for: { name: "web assistant" },
-    ob: { text: String(message ?? "").trim() },
+    ob: { text: String(message ?? "").trim(), ...(model ? { model } : {}) },
     to: { name: "text" },
     with: { name: "agent tools" },
-    fromtext: { name: "session name web" },
+    fromtext: { name: `session name ${normalizeSessionId(session)}` },
     at: { filename: path.resolve(agentHouse || path.join(root, "world", "house", "web-assistant")) }
   };
+}
+
+async function readWebSessions(sessionDir) {
+  const files = await listSessionFiles(sessionDir);
+  const grouped = new Map();
+  for (const filename of files) {
+    const id = sessionIdFromFilename(filename);
+    const filePath = path.join(sessionDir, filename);
+    let stat;
+    let history;
+    try {
+      [stat, history] = await Promise.all([
+        fs.stat(filePath),
+        readSessionMessages({ sessionFile: filePath, historyWindow: 100 })
+      ]);
+    } catch {
+      continue;
+    }
+    const prior = grouped.get(id);
+    grouped.set(id, {
+      id,
+      updatedAt: new Date(Math.max(prior ? Date.parse(prior.updatedAt) : 0, stat.mtimeMs)).toISOString(),
+      messageCount: (prior?.messageCount ?? 0) + history.messages.length,
+      model: history.lastSystemModel ?? prior?.model ?? null
+    });
+  }
+  return [...grouped.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+async function readWebSession(sessionDir, sessionId) {
+  const wanted = normalizeSessionId(sessionId);
+  const files = (await listSessionFiles(sessionDir)).filter((filename) => sessionIdFromFilename(filename) === wanted);
+  const messages = [];
+  let updatedAt = null;
+  let model = null;
+  for (const filename of files.sort()) {
+    const filePath = path.join(sessionDir, filename);
+    try {
+      const [stat, history] = await Promise.all([
+        fs.stat(filePath),
+        readSessionMessages({ sessionFile: filePath, historyWindow: 100 })
+      ]);
+      messages.push(...history.messages);
+      model = history.lastSystemModel ?? model;
+      updatedAt = new Date(Math.max(updatedAt ? Date.parse(updatedAt) : 0, stat.mtimeMs)).toISOString();
+    } catch {
+      // Ignore a session file that disappears during a concurrent append.
+    }
+  }
+  return {
+    id: wanted,
+    updatedAt,
+    model,
+    messages: messages.slice(-200).map((message) => ({
+      ...message,
+      html: message.role === "assistant" ? renderAssistantMarkdown(message.content) : null
+    }))
+  };
+}
+
+function configuredWebModels() {
+  return String(process.env.PYA_WEB_MODELS ?? "")
+    .split(",")
+    .map(normalizeModelId)
+    .filter(Boolean);
+}
+
+async function fetchOllamaModels(defaultModel) {
+  const configured = configuredWebModels();
+  const host = String(
+    resolveConfigText("ollama host")
+      || process.env.OLLAMA_HOST
+      || process.env.OLLAMA_BASE_URL
+      || "http://localhost:11434"
+  ).replace(/\/$/u, "");
+  try {
+    const response = await fetch(`${host}/api/tags`, { signal: AbortSignal.timeout(4000) });
+    if (!response.ok) throw new Error(`Ollama tags returned HTTP ${response.status}`);
+    const payload = await response.json();
+    const installed = (Array.isArray(payload?.models) ? payload.models : [])
+      .map((entry) => normalizeModelId(entry?.name ?? entry?.model))
+      .filter(Boolean);
+    const allowed = configured.length ? installed.filter((name) => configured.includes(name)) : installed;
+    return {
+      host,
+      available: true,
+      models: allowed.length ? allowed : (configured.length ? configured : [defaultModel]),
+      error: allowed.length ? null : "no configured web models are installed"
+    };
+  } catch (error) {
+    return {
+      host,
+      available: false,
+      models: configured.length ? configured : [defaultModel],
+      error: String(error?.message ?? error)
+    };
+  }
 }
 
 function extractUrls(events = []) {
@@ -262,7 +383,8 @@ export async function createWebServer({
   interpretFn = interpret,
   mindFn = mind_to_name_text,
   readStatusFn = readGpuHandleStatus,
-  queueDepthFn = queueDepth
+  queueDepthFn = queueDepth,
+  modelsFn = fetchOllamaModels
 } = {}) {
   const resolvedRoot = path.resolve(root);
   const runtime = providedRuntime || await buildRuntime({ root: resolvedRoot, toolsMap });
@@ -280,6 +402,16 @@ export async function createWebServer({
 
   const publicTools = filterPublicTools(runtime.tools || toolListFromSchemas([]));
   const runExclusive = makeMutex();
+  const sessionDir = path.join(agentHouse, "session");
+  let modelCatalog = null;
+  let modelCatalogAt = 0;
+
+  async function getModelCatalog() {
+    if (modelCatalog && Date.now() - modelCatalogAt < 30000) return modelCatalog;
+    modelCatalog = await modelsFn(model);
+    modelCatalogAt = Date.now();
+    return modelCatalog;
+  }
 
   async function handleRequest(req, res) {
     setSecurityHeaders(res);
@@ -292,6 +424,30 @@ export async function createWebServer({
       }
       if (req.method === "GET" && pathname === "/api/tools") {
         jsonResponse(res, 200, { ok: true, tools: publicTools });
+        return;
+      }
+      if (req.method === "GET" && pathname === "/api/models") {
+        const catalog = await getModelCatalog();
+        jsonResponse(res, 200, {
+          ok: true,
+          selected: model,
+          models: catalog.models,
+          available: catalog.available,
+          error: catalog.error ?? null
+        });
+        return;
+      }
+      if (req.method === "GET" && pathname === "/api/sessions") {
+        jsonResponse(res, 200, {
+          ok: true,
+          selected: "web",
+          sessions: await readWebSessions(sessionDir)
+        });
+        return;
+      }
+      if (req.method === "GET" && pathname.startsWith("/api/sessions/")) {
+        const sessionId = normalizeSessionId(decodeURIComponent(pathname.slice("/api/sessions/".length)));
+        jsonResponse(res, 200, { ok: true, session: await readWebSession(sessionDir, sessionId) });
         return;
       }
       if (req.method === "GET" && pathname === "/api/gpu") {
@@ -324,8 +480,21 @@ export async function createWebServer({
           errorResponse(res, 413, "message is too long", "message_too_large");
           return;
         }
+        const catalog = await getModelCatalog();
+        const selectedModel = normalizeModelId(body.model) || model;
+        if (catalog.models.length && !catalog.models.includes(selectedModel)) {
+          errorResponse(res, 400, `model is not available to this web assistant: ${selectedModel}`, "model_unavailable");
+          return;
+        }
+        const session = normalizeSessionId(body.session);
         const toolEvents = [];
-        const sentence = buildChatSentence({ message, root: resolvedRoot, agentHouse });
+        const sentence = buildChatSentence({
+          message,
+          root: resolvedRoot,
+          agentHouse,
+          session,
+          model: selectedModel
+        });
         const answer = await runExclusive(() => mindFn(sentence, {
           onToolCall: async (event) => {
             const safe = {
@@ -343,8 +512,8 @@ export async function createWebServer({
           html: renderAssistantMarkdown(serialized.text),
           toolEvents: toolEvents.map(({ stage, toolName }) => ({ stage, toolName })),
           sources: extractUrls(toolEvents),
-          session: "web",
-          model
+          session,
+          model: selectedModel
         });
         return;
       }

@@ -3,10 +3,31 @@ const chatForm = document.querySelector("#chat-form");
 const messageInput = document.querySelector("#message");
 const chatState = document.querySelector("#chat-state");
 const health = document.querySelector("#health");
+const sessionSelect = document.querySelector("#session-select");
+const modelSelect = document.querySelector("#model-select");
+const newSessionButton = document.querySelector("#new-session");
 const jobForm = document.querySelector("#job-form");
 const jobIntent = document.querySelector("#job-intent");
 const jobSpec = document.querySelector("#job-spec");
 const jobState = document.querySelector("#job-state");
+let currentSession = localStorage.getItem("pyash-session") || "web";
+
+function setSelectOptions(select, values, selectedValue, format = (value) => value) {
+  select.textContent = "";
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value.value ?? value;
+    option.textContent = format(value);
+    select.append(option);
+  }
+  if (selectedValue && values.some((value) => (value.value ?? value) === selectedValue)) {
+    select.value = selectedValue;
+  }
+}
+
+function clearMessages() {
+  messages.innerHTML = '<div class="empty-state">Ask a question, request a search, or bring a task into the queue.</div>';
+}
 
 function addMessage(kind, text, details = {}) {
   const empty = messages.querySelector(".empty-state");
@@ -85,6 +106,72 @@ async function loadTools() {
   }
 }
 
+async function loadModels() {
+  try {
+    const data = await requestJson("/api/models");
+    const models = (data.models || []).map((name) => ({ value: name, label: name }));
+    setSelectOptions(modelSelect, models, localStorage.getItem("pyash-model") || data.selected, (entry) => entry.label);
+    if (modelSelect.value) localStorage.setItem("pyash-model", modelSelect.value);
+  } catch (error) {
+    modelSelect.textContent = "";
+    const option = document.createElement("option");
+    option.textContent = "Model unavailable";
+    option.disabled = true;
+    option.selected = true;
+    modelSelect.append(option);
+  }
+}
+
+async function loadSessions() {
+  try {
+    const data = await requestJson("/api/sessions");
+    const sessions = (data.sessions || []).map((session) => ({
+      value: session.id,
+      label: `${session.id} (${session.messageCount})`
+    }));
+    if (!sessions.some((session) => session.value === currentSession)) {
+      sessions.unshift({ value: currentSession, label: `${currentSession} (new)` });
+    }
+    setSelectOptions(sessionSelect, sessions, currentSession, (entry) => entry.label);
+  } catch (error) {
+    setSelectOptions(sessionSelect, [{ value: currentSession, label: currentSession }], currentSession, (entry) => entry.label);
+  }
+}
+
+async function loadSession(sessionId) {
+  currentSession = sessionId;
+  localStorage.setItem("pyash-session", currentSession);
+  clearMessages();
+  try {
+    const data = await requestJson(`/api/sessions/${encodeURIComponent(currentSession)}`);
+    for (const message of data.session?.messages || []) {
+      const kind = message.role === "user" ? "user" : "assistant";
+      addMessage(kind, message.content, { html: message.html });
+    }
+    chatState.textContent = data.session?.model ? `Ready · ${data.session.model}` : "Ready";
+  } catch (error) {
+    chatState.textContent = "History unavailable";
+  }
+}
+
+sessionSelect.addEventListener("change", () => loadSession(sessionSelect.value));
+modelSelect.addEventListener("change", () => {
+  if (modelSelect.value) {
+    localStorage.setItem("pyash-model", modelSelect.value);
+    chatState.textContent = `Ready · ${modelSelect.value}`;
+  }
+});
+
+newSessionButton.addEventListener("click", async () => {
+  currentSession = `chat-${Date.now().toString(36)}`;
+  localStorage.setItem("pyash-session", currentSession);
+  await loadSessions();
+  sessionSelect.value = currentSession;
+  clearMessages();
+  chatState.textContent = "Ready";
+  messageInput.focus();
+});
+
 chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = messageInput.value.trim();
@@ -97,10 +184,14 @@ chatForm.addEventListener("submit", async (event) => {
     const data = await requestJson("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ message, session: currentSession, model: modelSelect.value })
     });
     addMessage("assistant", data.text || "No answer returned.", { html: data.html, events: data.toolEvents, sources: data.sources });
-    chatState.textContent = "Ready";
+    currentSession = data.session || currentSession;
+    localStorage.setItem("pyash-session", currentSession);
+    chatState.textContent = data.model ? `Ready · ${data.model}` : "Ready";
+    await loadSessions();
+    sessionSelect.value = currentSession;
   } catch (error) {
     addMessage("error", error.message);
     chatState.textContent = "Retry available";
@@ -154,4 +245,6 @@ jobForm.addEventListener("submit", async (event) => {
 document.querySelector("#refresh-status").addEventListener("click", refreshStatus);
 refreshStatus();
 loadTools();
+loadModels();
+loadSessions().then(() => loadSession(currentSession));
 setInterval(refreshStatus, 10000);
