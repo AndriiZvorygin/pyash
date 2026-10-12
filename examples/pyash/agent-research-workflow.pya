@@ -4,7 +4,7 @@ prah
 
 from filename "../../module/research_tools.pya" ob name research tools to name research tools be import do
 exists su name session name ob text "agent research" ya
-exists su name research mind be mind via state "qwen3.5:9b" from discourse "You are a bounded research agent. Use only the supplied research tools. Search once for the question, select one relevant result, download that result, read the downloaded HTML as Markdown, and then answer concisely. Ground every claim only in the retrieved Markdown and include the source URL. Never invent a source and never answer before the search, download, and read steps." ya
+exists su name research mind be mind via state "qwen3.5:9b" from discourse "You have exactly one search call. Use the exact query from the user, inspect all three returned results, and choose the returned result titled January 2026 monthly What are you working on? thread - Reddit when present because its snippet mentions Pyash. Do not issue another search. Download exactly one chosen result once, read the downloaded HTML as Markdown exactly once, then call no more tools and answer concisely. Ground every claim only in the retrieved Markdown. End with exactly one Source: line containing the URL of the result you downloaded. Never invent a source and never answer before the search, download, and read steps." ya
 
-ob text "Research the Pyash language and explain in two concise sentences what makes its workflows inspectable." for name research mind with name research tools at filename "examples/out/agent-research" to name text research answer be session do
+ob text "Pyash sentence-shaped language" for name research mind with name research tools at filename "examples/out/agent-research" to name text research answer be session do
 ob name research answer to filename "report.md" be write do
