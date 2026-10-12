@@ -653,7 +653,8 @@ export async function mind_to_name_text(sentence, {
         reasoningEffort: mindReasoningEffort,
         modelTuning: effectiveModelTuning,
         toolMap: toolMapName,
-        agentName: mindName
+        agentName: mindName,
+        probeProvider: true
       },
       mindDebug,
       debugMind,
