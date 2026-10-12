@@ -79,6 +79,19 @@ The worker talks to one configured entry housekeeper URL at a time; the entry
 housekeeper performs the peer selection rather than making the worker a second
 multi-host scheduler.
 
+#### Runtime claim recovery
+
+The worker also performs a lightweight GPU queue garbage-collection pass once
+per minute. A claim in `world/holding/gpu/runtime/` older than one hour is
+protected when its dispatch or physical lease is still heartbeating. Otherwise
+the claim is treated as abandoned: its handle is marked `fail`, the runtime
+file moves to `produce/fail`, and any stale matching lease is released. A claim
+whose handle is already terminal success is moved to `produce/success` instead.
+This keeps an interrupted worker from blocking the queue while avoiding an
+automatic replay of a remote job whose outcome is ambiguous. The stale age can
+be tuned with `PYA_GPU_RUNTIME_STALE_MS` when an unusually long-running job
+needs a larger recovery window.
+
 ### 2.3 GPU Housekeeper
 
 `container/gpu-housekeeper/service/server.py` exposes the remote HTTP surface:
