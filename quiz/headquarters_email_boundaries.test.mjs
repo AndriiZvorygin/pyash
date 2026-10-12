@@ -48,11 +48,15 @@ function gmailHeader(name, value) {
   return { name, value };
 }
 
-function gmailMessagePayload() {
+function gmailMessagePayload({
+  id = "gmail-message-1",
+  threadId = "gmail-thread-1",
+  historyId = "gmail-history-message-1"
+} = {}) {
   return {
-    id: "gmail-message-1",
-    threadId: "gmail-thread-1",
-    historyId: "gmail-history-message-1",
+    id,
+    threadId,
+    historyId,
     payload: {
       headers: [
         gmailHeader("From", "Ada <ada@example.test>"),
@@ -199,6 +203,107 @@ test("Gmail adapter preserves reply headers when sending a thread message", asyn
   assert.match(raw, /In-Reply-To: <rfc-message-1@example\.test>/);
   assert.match(raw, /References: <rfc-message-1@example\.test>/);
   assert.match(raw, /I will hold this for ratification/);
+});
+
+test("Gmail adapter drains every history page before returning the final cursor", async () => {
+  const calls = [];
+  const adapter = createGmailAdapter({
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      const parsed = new URL(String(url));
+      if (parsed.pathname.endsWith("/history") && !parsed.searchParams.has("pageToken")) {
+        return jsonResponse({
+          historyId: "gmail-history-page-1",
+          nextPageToken: "gmail-page-2",
+          history: [{
+            id: "gmail-history-page-1",
+            messagesAdded: [{ message: { id: "gmail-message-1", threadId: "gmail-thread-1" } }]
+          }]
+        });
+      }
+      if (parsed.pathname.endsWith("/history") && parsed.searchParams.get("pageToken") === "gmail-page-2") {
+        return jsonResponse({
+          historyId: "gmail-history-page-2",
+          history: [{
+            id: "gmail-history-page-2",
+            messagesAdded: [{ message: { id: "gmail-message-2", threadId: "gmail-thread-2" } }]
+          }]
+        });
+      }
+      if (parsed.pathname.endsWith("/messages/gmail-message-1")) {
+        return jsonResponse(gmailMessagePayload({
+          id: "gmail-message-1",
+          threadId: "gmail-thread-1",
+          historyId: "gmail-history-page-1"
+        }));
+      }
+      if (parsed.pathname.endsWith("/messages/gmail-message-2")) {
+        return jsonResponse(gmailMessagePayload({
+          id: "gmail-message-2",
+          threadId: "gmail-thread-2",
+          historyId: "gmail-history-page-2"
+        }));
+      }
+      throw new Error(`unexpected Gmail request: ${url}`);
+    }
+  });
+
+  const result = await adapter.receive({
+    config: { user: "hq@example.test", token: "secret" },
+    checkpoint: { historyId: "gmail-history-start" }
+  });
+
+  assert.deepEqual(result.events.map(event => event.eventId), ["gmail-message-1", "gmail-message-2"]);
+  assert.equal(result.checkpoint.historyId, "gmail-history-page-2");
+  assert.equal(calls.filter(call => call.url.includes("/history")).length, 2);
+  assert.match(calls[1].url, /pageToken=gmail-page-2/);
+});
+
+test("Gmail send rejects malformed recipients before provider I/O", async () => {
+  let calls = 0;
+  const adapter = createGmailAdapter({
+    fetchImpl: async () => {
+      calls += 1;
+      return jsonResponse({ id: "should-not-send" });
+    }
+  });
+
+  await assert.rejects(
+    adapter.send({
+      config: { user: "hq@example.test", token: "secret" },
+      event: { replyRecipient: "not-an-email" },
+      content: "bounded reply"
+    }),
+    /recipient/i
+  );
+  assert.equal(calls, 0);
+});
+
+test("Gmail send rejects CRLF in every generated dynamic header", async () => {
+  const dynamicHeaders = [
+    { replyRecipient: "ada@example.test\r\nBcc: attacker@example.test" },
+    { replyRecipient: "ada@example.test", subject: "Decision\nBcc: attacker@example.test" },
+    { replyRecipient: "ada@example.test", rfcMessageId: "<reply@example.test>\r\nX-Injected: yes" }
+  ];
+  let calls = 0;
+  const adapter = createGmailAdapter({
+    fetchImpl: async () => {
+      calls += 1;
+      return jsonResponse({ id: "should-not-send" });
+    }
+  });
+
+  for (const event of dynamicHeaders) {
+    await assert.rejects(
+      adapter.send({
+        config: { user: "hq@example.test", token: "secret" },
+        event,
+        content: "bounded reply"
+      }),
+      /header|recipient/i
+    );
+  }
+  assert.equal(calls, 0);
 });
 
 test("Headquarters Gmail send requires capability and the existing ratify policy", async () => {

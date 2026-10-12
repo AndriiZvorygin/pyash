@@ -194,6 +194,10 @@ as a separate text field and restore it before provider send. A restart MUST
 not substitute a provider configuration default for the recipient captured from
 the inbound event.
 
+History-based adapters MUST consume every provider history page before
+returning a checkpoint. The returned cursor MUST be the final page cursor, and
+no cursor may be persisted when a later page fails.
+
 ## 7.1 Holding Spool Semantics (Normative)
 
 Channel runtime MUST use the channel spool under `world/holding/channel/` for staged processing.

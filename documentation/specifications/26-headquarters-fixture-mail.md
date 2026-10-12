@@ -172,4 +172,7 @@ On the first Gmail receive with no checkpoint, the adapter calls
 it does not import the existing inbox as a warm-start backlog. Later receives
 use that checkpoint with Gmail history polling. Durable produce envelopes carry
 the inbound `reply recipient` independently of provider configuration so a
-restart preserves `Reply-To`/sender routing.
+restart preserves `Reply-To`/sender routing. History polling drains all pages
+before returning the final cursor. Outbound recipients must be a single valid
+email address, and every generated dynamic header rejects CR/LF injection
+before provider I/O.
