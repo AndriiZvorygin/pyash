@@ -37,6 +37,19 @@ h2 { font-size: 14px; margin-bottom: 0; }
 .message.user { margin-left: auto; }
 .message-label { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
 .message-body { white-space: pre-wrap; }
+.message.assistant .message-body { white-space: normal; }
+.message-body h1, .message-body h2, .message-body h3 { margin: 0 0 9px; line-height: 1.25; }
+.message-body p { margin: 0 0 10px; }
+.message-body p:last-child { margin-bottom: 0; }
+.message-body ul, .message-body ol { margin: 7px 0 10px; padding-left: 22px; }
+.message-body blockquote { border-left: 3px solid var(--line); color: var(--muted); margin: 10px 0; padding-left: 12px; }
+.message-body pre { overflow-x: auto; background: #101315; border: 1px solid var(--line); padding: 11px; margin: 10px 0; }
+.message-body code { background: #101315; padding: 2px 4px; font: 0.9em ui-monospace, SFMono-Regular, Consolas, monospace; }
+.message-body pre code { background: transparent; padding: 0; }
+.message-body table { border-collapse: collapse; margin: 10px 0; width: 100%; }
+.message-body th, .message-body td { border: 1px solid var(--line); padding: 5px 7px; text-align: left; }
+.message-body th { background: var(--panel-2); }
+.message-body a { color: var(--accent); }
 .message.user .message-body { background: var(--panel-2); border: 1px solid var(--line); padding: 12px 14px; }
 .message.error .message-body { color: var(--danger); }
 .composer { border-top: 1px solid var(--line); padding: 16px; }

@@ -9,8 +9,17 @@ import {
   buildChatSentence,
   createWebServer,
   filterPublicTools,
+  renderAssistantMarkdown,
   validateMediaJobRequest
 } from "../command/pyash_web_server.mjs";
+
+test("assistant markdown renders common structure without raw HTML", () => {
+  const html = renderAssistantMarkdown("## Result\n\n- **Ready**\n- `safe`\n\n<script>alert(1)</script>");
+  assert.match(html, /<h2>Result<\/h2>/);
+  assert.match(html, /<strong>Ready<\/strong>/);
+  assert.match(html, /<code>safe<\/code>/);
+  assert.doesNotMatch(html, /<script>/);
+});
 
 test("web gateway exposes only read/search-oriented tools", () => {
   const tools = filterPublicTools([

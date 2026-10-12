@@ -18,7 +18,8 @@ function addMessage(kind, text, details = {}) {
   label.textContent = kind === "user" ? "You" : "Pyash";
   const body = document.createElement("div");
   body.className = "message-body";
-  body.textContent = text;
+  if (kind === "assistant" && details.html) body.innerHTML = details.html;
+  else body.textContent = text;
   article.append(label, body);
   if (details.events?.length) {
     const events = document.createElement("div");
@@ -98,7 +99,7 @@ chatForm.addEventListener("submit", async (event) => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ message })
     });
-    addMessage("assistant", data.text || "No answer returned.", { events: data.toolEvents, sources: data.sources });
+    addMessage("assistant", data.text || "No answer returned.", { html: data.html, events: data.toolEvents, sources: data.sources });
     chatState.textContent = "Ready";
   } catch (error) {
     addMessage("error", error.message);
