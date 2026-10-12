@@ -7,6 +7,7 @@ The gateway provides:
 - durable Pyash-backed chat sessions, with history selectable from the browser;
 - an explicit model selector populated from the configured Ollama host;
 - allowlisted web search, download, read, listing, and existence tools;
+- a read-only `runtime status` tool that reports the effective model and turn settings to the assistant;
 - status for the existing GPU queue;
 - safe submission of prepared image and transcription jobs through the existing `gpu draw` and `gpu hear` queue paths.
 
@@ -66,3 +67,13 @@ Authentication, TLS, and public exposure belong to Caddy. Rotate the existing Ba
 Session history is stored in the existing dated `.pya` files under the web assistant's Pyash house. Selecting another session changes the `session name` supplied to the normal mind path; it does not create a browser-only transcript store. The selected model is passed as an explicit per-request model override and must be present in the discovered/allowed Ollama catalog.
 
 The persistent working sandbox is `world/house/web-assistant/workspace` (inside the container, `/app/world/house/web-assistant/workspace`). It is the intended location for search downloads, input files, and generated intermediate artifacts. The web image intentionally does not include the full development checkout, so paths such as `caterer` are not assumed to exist there.
+
+## Runtime status
+
+The agent tool map includes this Pyash-native capability:
+
+```pya
+su name runtime status be status as wo runtime can
+```
+
+When called, it returns the effective model tag, backend, runtime host label, thinking mode, sampling settings, output limit, tool map, and agent name for the current turn. Values that are not configured are reported as unavailable. It is read-only and does not expose credentials, raw memory, or arbitrary host paths.

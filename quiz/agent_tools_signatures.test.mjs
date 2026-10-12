@@ -18,6 +18,7 @@ test("agent tools map exposes standard tool signatures", async () => {
   const toolSentences = [
     "su name agent tools be map def",
     "su name agent ob bool truth ya",
+    "su name runtime status be status as wo runtime can",
     "su name read be read from filename input can",
     "su name read markdown be read from filename input fromstate wo html become wo markdown can",
     "su name write be write ob text input to filename input can",
@@ -43,6 +44,38 @@ test("agent tools map exposes standard tool signatures", async () => {
     const sigKey = joinSignatureWords(sigWords);
     assert.ok(toolMap.has(sigKey), `missing signature: ${sigKey}`);
   }
+});
+
+test("runtime status reports the effective model settings for the current turn", async () => {
+  forget();
+
+  const result = await interpret(parse("be status as wo runtime do"), {
+    runtimeContext: {
+      model: "qwen3.8:27b",
+      backend: "ollama",
+      host: "http://mriczo:11434",
+      reasoningEffort: "high",
+      modelTuning: {
+        think: false,
+        temperature: 0.2,
+        topP: 0.8,
+        topK: 20,
+        numPredict: 512
+      },
+      toolMap: "agent tools",
+      agentName: "web assistant"
+    }
+  });
+
+  assert.equal(result?.be, "map");
+  assert.equal(result?.ob?.map?.model?.text, "qwen3.8:27b");
+  assert.equal(result?.ob?.map?.backend?.text, "ollama");
+  assert.equal(result?.ob?.map?.["runtime host"]?.text, "mriczo");
+  assert.equal(result?.ob?.map?.think?.boolean, false);
+  assert.equal(result?.ob?.map?.temperature?.num, 0.2);
+  assert.equal(result?.ob?.map?.["top p"]?.num, 0.8);
+  assert.equal(result?.ob?.map?.["max output tokens"]?.num, 512);
+  assert.equal(result?.ob?.map?.["context length"]?.text, "unavailable");
 });
 
 test("agent tools map shortens long mcp tool names using readable subject words", async () => {

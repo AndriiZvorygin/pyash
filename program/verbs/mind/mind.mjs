@@ -646,6 +646,15 @@ export async function mind_to_name_text(sentence, {
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
       modelTuning: effectiveModelTuning,
+      runtimeContext: {
+        model,
+        backend: backendName,
+        host: ollamaHost,
+        reasoningEffort: mindReasoningEffort,
+        modelTuning: effectiveModelTuning,
+        toolMap: toolMapName,
+        agentName: mindName
+      },
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },

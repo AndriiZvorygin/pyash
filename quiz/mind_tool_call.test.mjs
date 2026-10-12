@@ -163,3 +163,62 @@ test("mind tool chat gives models readable errors instead of Pyash protocol sent
   assert.doesNotMatch(secondPrompt, /su name file or directory unavailable/);
   assert.doesNotMatch(secondPrompt, /call: be_/);
 });
+
+test("runtime status tool receives the current model context", async () => {
+  forget();
+  resetMindLogs();
+
+  const capability = parse("su name runtime status be status as wo runtime can");
+  const toolName = joinSignatureWords(deriveSignatureFromCall(capability));
+  const requests = [];
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "status" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "qwen3.8:27b",
+    dialogue: "helper story",
+    callPrompt: "tell me which model and settings are active",
+    resolvedConfigPrompt: "Use the runtime status tool when asked about the active model.",
+    historyMessages: [],
+    toolMap: new Map([[toolName, capability]]),
+    tools: [{ function: { name: toolName } }],
+    toolBlock: "",
+    backendName: "",
+    ollamaHost: "http://mriczo:11434",
+    reasoningEffort: "high",
+    modelTuning: { think: false, temperature: 0.2, topP: 0.8, topK: 20, numPredict: 512 },
+    runtimeContext: {
+      model: "qwen3.8:27b",
+      backend: "ollama",
+      host: "http://mriczo:11434",
+      reasoningEffort: "high",
+      modelTuning: { think: false, temperature: 0.2, topP: 0.8, topK: 20, numPredict: 512 },
+      toolMap: "agent tools",
+      agentName: "helper"
+    },
+    mindDebug: false,
+    debugMind: (label, payload) => {
+      if (label === "request") requests.push(payload);
+    },
+    inputs: {
+      inputText: "tell me which model and settings are active",
+      mockResponseRaw: JSON.stringify([
+        {
+          message: {
+            content: "",
+            tool_calls: [{ function: { name: toolName, arguments: {} } }]
+          }
+        },
+        { message: { content: "qwen3.8:27b is active." } }
+      ])
+    }
+  });
+
+  assert.equal(responseText, "qwen3.8:27b is active.");
+  assert.equal(requests.length, 2);
+  const toolResultPrompt = String(requests[1]?.prompt ?? "");
+  assert.match(toolResultPrompt, /qwen3\.8:27b/);
+  assert.match(toolResultPrompt, /temperature/);
+  assert.match(toolResultPrompt, /think/);
+  assert.match(toolResultPrompt, /mriczo/);
+});
