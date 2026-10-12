@@ -1086,6 +1086,7 @@ async function dispatchChannelEvents({
             agentName: targetAgent,
             roomName: event.channelId,
             payloadId: orchestratorDirective.payloadId,
+            replyRecipient: event.replyRecipient,
             channelIdentity: event.channelIdentity,
             payloadSentence: produceRequest
           });
@@ -1406,6 +1407,9 @@ function normalizeEvent(rawEvent, channelType) {
     messageId: rawEvent.messageId ? String(rawEvent.messageId) : "",
     rfcMessageId: rawEvent.rfcMessageId ? String(rawEvent.rfcMessageId) : "",
     historyId: rawEvent.historyId ? String(rawEvent.historyId) : "",
+    replyRecipient: rawEvent.replyRecipient
+      ? String(rawEvent.replyRecipient)
+      : sender,
     subject: rawEvent.subject ? String(rawEvent.subject) : "",
     receivedAt: rawEvent.receivedAt ? String(rawEvent.receivedAt) : "",
     domain: rawEvent.domain ? String(rawEvent.domain) : "",
@@ -1867,6 +1871,7 @@ export async function runChannelProduceOnce({
     const event = {
       channelType,
       channelId: roomId,
+      replyRecipient: String(claim?.envelope?.replyRecipient ?? "").trim(),
       ...(claim?.envelope?.channelIdentity && typeof claim.envelope.channelIdentity === "object"
         ? cloneValue(claim.envelope.channelIdentity)
         : {})

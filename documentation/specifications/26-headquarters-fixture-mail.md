@@ -166,3 +166,10 @@ the existing `action send` ratification policy before provider I/O. Gmail
 outbound produce retains the source identity through the channel spool. An
 uncertain provider send is blocked for reconciliation rather than retried as
 a purported exactly-once operation.
+
+On the first Gmail receive with no checkpoint, the adapter calls
+`users.getProfile()` and persists its `historyId` as the initial checkpoint;
+it does not import the existing inbox as a warm-start backlog. Later receives
+use that checkpoint with Gmail history polling. Durable produce envelopes carry
+the inbound `reply recipient` independently of provider configuration so a
+restart preserves `Reply-To`/sender routing.

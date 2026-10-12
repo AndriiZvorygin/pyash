@@ -139,6 +139,8 @@ function messageEvent(message, { account, configuredDomain, historyId }) {
   const messageHistoryId = text(message?.historyId || historyId);
   const threadId = text(message?.threadId);
   const rfcMessageId = headerValue(headers, "message-id");
+  const sender = firstEmail(headerValue(headers, "from"));
+  const replyRecipient = firstEmail(headerValue(headers, "reply-to") || headerValue(headers, "from"));
   const sourceLocator = `gmail:${account}/messages/${messageId}`;
   const receivedAt = receivedAtFor(message, headers);
   const event = {
@@ -146,7 +148,8 @@ function messageEvent(message, { account, configuredDomain, historyId }) {
     channelId: account,
     account,
     eventId: messageId,
-    sender: firstEmail(headerValue(headers, "from")),
+    sender,
+    replyRecipient,
     text: messageBody(message?.payload),
     timestamp: receivedAt,
     provider: "gmail",
@@ -181,12 +184,6 @@ function historyMessageStubs(history = []) {
     }
   }
   return messages;
-}
-
-function messageStubs(payload) {
-  return (Array.isArray(payload?.messages) ? payload.messages : [])
-    .map((message) => ({ id: text(message?.id), threadId: text(message?.threadId) }))
-    .filter((message) => message.id);
 }
 
 function queryUrl(url, entries) {
@@ -242,16 +239,14 @@ export function createGmailAdapter({
         stubs = historyMessageStubs(historyPayload.history);
         nextHistoryId = text(historyPayload.historyId) || historyId;
       } else {
-        const listUrl = queryUrl(`${root}/messages`, [
-          ["labelIds", "INBOX"],
-          ["maxResults", config.maxResults ?? 100]
-        ]);
-        const listPayload = await readJson(await fetchImpl(listUrl, {
+        const profilePayload = await readJson(await fetchImpl(`${root}/profile`, {
           method: "GET",
           headers: authHeaders(config)
-        }), "list");
-        stubs = messageStubs(listPayload);
-        nextHistoryId = text(listPayload.historyId);
+        }), "profile");
+        nextHistoryId = text(profilePayload.historyId);
+        if (!nextHistoryId) {
+          throw new Error("gmail profile defective: missing historyId");
+        }
       }
 
       const events = [];
@@ -275,7 +270,8 @@ export function createGmailAdapter({
           account,
           historyId,
           nextHistoryId,
-          messages: events.length
+          messages: events.length,
+          initializedFromProfile: !historyId
         }
       };
     },
@@ -283,7 +279,7 @@ export function createGmailAdapter({
     async send({ config = {}, event = {}, content = "" } = {}) {
       const account = userForConfig(config);
       const token = tokenForConfig(config);
-      const to = firstEmail(event.sender || config.replyTo);
+      const to = firstEmail(event.replyRecipient || event.sender || config.replyTo);
       const body = String(content ?? "").trim();
       if (!account || !token || !to || !body) {
         throw new Error("gmail send defective: account, token, recipient, and content are required");

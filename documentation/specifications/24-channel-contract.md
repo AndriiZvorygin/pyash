@@ -189,6 +189,11 @@ Identity metadata is carried alongside the router sentence and is persisted
 explicitly in channel spool envelopes. It MUST NOT become an inferred Pyash
 case or a policy input derived from message prose.
 
+Durable produce envelopes MUST also persist the normalized `reply recipient`
+as a separate text field and restore it before provider send. A restart MUST
+not substitute a provider configuration default for the recipient captured from
+the inbound event.
+
 ## 7.1 Holding Spool Semantics (Normative)
 
 Channel runtime MUST use the channel spool under `world/holding/channel/` for staged processing.

@@ -22,9 +22,16 @@ import {
   mergeChannelPolicies,
   parseChannelPolicyText
 } from "../program/agent/channels/policy.mjs";
-import { runChannelOnce } from "../program/agent/channels/index.mjs";
-import { runChannelProduceOnce } from "../program/agent/channels/index.mjs";
-import { enqueueProduceEnvelope } from "../program/agent/channel_core/queue.mjs";
+import {
+  runChannelOnce,
+  runChannelPollOnce,
+  runChannelProduceOnce
+} from "../program/agent/channels/index.mjs";
+import {
+  enqueueProduceEnvelope,
+  readChannelEnvelope
+} from "../program/agent/channel_core/queue.mjs";
+import { readChannelRuntimeState } from "../program/agent/channel_core/state.mjs";
 import { buildRouterProduceRequestSentence } from "../program/agent/channel_core/contract.mjs";
 
 function jsonResponse(payload, status = 200) {
@@ -49,6 +56,7 @@ function gmailMessagePayload() {
     payload: {
       headers: [
         gmailHeader("From", "Ada <ada@example.test>"),
+        gmailHeader("Reply-To", "Replies <replies@example.test>"),
         gmailHeader("To", "hq@example.test"),
         gmailHeader("Subject", "Re: Decision packet"),
         gmailHeader("Message-ID", "<rfc-message-1@example.test>"),
@@ -149,6 +157,7 @@ test("Gmail adapter uses history ids only for checkpointing and preserves messag
   assert.equal(event.channelId, "hq@example.test");
   assert.equal(event.eventId, "gmail-message-1");
   assert.equal(event.messageId, "gmail-message-1");
+  assert.equal(event.replyRecipient, "replies@example.test");
   assert.equal(event.threadId, "gmail-thread-1");
   assert.equal(event.rfcMessageId, "<rfc-message-1@example.test>");
   assert.equal(event.historyId, "gmail-history-message-1");
@@ -285,6 +294,7 @@ test("queued Gmail produce preserves reply identity until the real adapter sends
     channelId: "hq@example.test",
     eventId: "gmail-message-1",
     sender: "ada@example.test",
+    replyRecipient: "ada@example.test",
     subject: "Decision packet",
     threadId: "gmail-thread-1",
     rfcMessageId: "<rfc-message-1@example.test>",
@@ -297,13 +307,13 @@ test("queued Gmail produce preserves reply identity until the real adapter sends
       rfcMessageId: "<rfc-message-1@example.test>"
     }
   };
-  const sentEvents = [];
-  await enqueueProduceEnvelope(worldRoot, {
+  const queued = await enqueueProduceEnvelope(worldRoot, {
     channelType: "gmail",
     identity: "hq@example.test",
     agentName: "correspondence worker",
     roomName: "hq@example.test",
     payloadId: "payload-1",
+    replyRecipient: event.replyRecipient,
     channelIdentity: event.channelIdentity,
     payloadSentence: buildRouterProduceRequestSentence({
       channelType: "gmail",
@@ -314,28 +324,109 @@ test("queued Gmail produce preserves reply identity until the real adapter sends
     })
   });
 
+  const durableEnvelope = await readChannelEnvelope(queued.path);
+  assert.equal(durableEnvelope.replyRecipient, "ada@example.test");
+
+  const calls = [];
+  const adapter = createGmailAdapter({
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      return jsonResponse({ id: "gmail-sent-1", threadId: "gmail-thread-1" });
+    }
+  });
   const result = await runChannelProduceOnce({
     agentName: "correspondence worker",
     channelType: "gmail",
     channelConfig: {
       user: "hq@example.test",
+      token: "secret",
       headquarters: true,
       capabilitiesConfigured: true,
       capabilities: { send: true }
     },
-    adapter: {
-      async send({ event: captured }) {
-        sentEvents.push(captured);
-        return { eventId: "gmail-sent-1" };
-      }
-    },
+    adapter,
     agentHouse
   });
 
   assert.equal(result.sent, 1);
-  assert.equal(sentEvents[0].threadId, "gmail-thread-1");
-  assert.equal(sentEvents[0].rfcMessageId, "<rfc-message-1@example.test>");
-  assert.equal(sentEvents[0].historyId, "gmail-history-1");
+  const raw = decodeGmailRawMessage(JSON.parse(calls[0].options.body).raw);
+  assert.match(raw, /To: ada@example\.test/);
+  assert.match(raw, /In-Reply-To: <rfc-message-1@example\.test>/);
+  assert.equal(JSON.parse(calls[0].options.body).threadId, "gmail-thread-1");
+});
+
+test("Gmail warm start seeds profile history before the next history poll", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-hq-email-history-"));
+  const worldRoot = path.join(root, "world");
+  const agentHouse = path.join(worldRoot, "house", "correspondence worker");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  const calls = [];
+  const adapter = createGmailAdapter({
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (String(url).endsWith("/profile")) {
+        return jsonResponse({
+          emailAddress: "hq@example.test",
+          historyId: "gmail-profile-history-1"
+        });
+      }
+      if (String(url).includes("/history")) {
+        return jsonResponse({
+          historyId: "gmail-history-2",
+          history: [{
+            id: "gmail-history-2",
+            messagesAdded: [{ message: { id: "gmail-message-1", threadId: "gmail-thread-1" } }]
+          }]
+        });
+      }
+      if (String(url).includes("/messages/gmail-message-1")) {
+        return jsonResponse(gmailMessagePayload());
+      }
+      throw new Error(`unexpected Gmail request: ${url}`);
+    }
+  });
+  const channelConfig = {
+    user: "hq@example.test",
+    token: "secret",
+    warmStart: true,
+    capabilitiesConfigured: true,
+    capabilities: { receive: true }
+  };
+
+  const warmed = await runChannelPollOnce({
+    agentName: "correspondence worker",
+    channelType: "gmail",
+    channelConfig,
+    adapter,
+    agentHouse
+  });
+
+  assert.equal(warmed.warmed, true);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/profile$/);
+  assert.deepEqual(
+    (await readChannelRuntimeState({ agentHouse, channelType: "gmail" })).checkpoint,
+    { historyId: "gmail-profile-history-1" }
+  );
+
+  const polled = await runChannelPollOnce({
+    agentName: "correspondence worker",
+    channelType: "gmail",
+    channelConfig,
+    adapter,
+    agentHouse
+  });
+
+  assert.equal(polled.warmed, undefined);
+  assert.equal(polled.received, 1);
+  assert.equal(polled.enqueued, 1);
+  assert.match(calls[1].url, /\/history\?/);
+  assert.match(calls[1].url, /startHistoryId=gmail-profile-history-1/);
+  const state = await readChannelRuntimeState({ agentHouse, channelType: "gmail" });
+  assert.deepEqual(state.checkpoint, { historyId: "gmail-history-2" });
+  const queued = await readChannelEnvelope(polled.queuedPaths[0]);
+  const queuedEvent = JSON.parse(queued.payloadSentence.ob.text);
+  assert.equal(queuedEvent.replyRecipient, "replies@example.test");
 });
 
 test("ambiguous Gmail send is blocked for reconciliation instead of retried", async () => {
