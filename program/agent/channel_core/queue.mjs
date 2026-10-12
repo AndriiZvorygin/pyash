@@ -139,6 +139,13 @@ function envelopeToText(envelope = {}) {
     { key: "room name", type: "text", value: quotePyashText(String(envelope.roomName ?? "")) },
     { key: "payload", type: "text", value: quotePyashText(payloadSentenceText) }
   ];
+  if (envelope.replyRecipient) {
+    entries.push({
+      key: "reply recipient",
+      type: "text",
+      value: quotePyashText(String(envelope.replyRecipient))
+    });
+  }
   if (envelope.channelIdentity && typeof envelope.channelIdentity === "object") {
     entries.push({
       key: "channel identity",
@@ -169,6 +176,7 @@ function envelopeFromText(text) {
     roomName: "",
     payloadId: "",
     eventId: "",
+    replyRecipient: "",
     channelIdentity: null,
     payloadSentence: null
   };
@@ -183,6 +191,9 @@ function envelopeFromText(text) {
     if (entry.key === "room name") out.roomName = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "payload id") out.payloadId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "event id") out.eventId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
+    if (entry.key === "reply recipient") {
+      out.replyRecipient = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
+    }
     if (entry.key === "channel identity") {
       try {
         const parsed = JSON.parse(String(parsePyashQuotedText(entry.valueRaw) ?? ""));
