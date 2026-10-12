@@ -172,7 +172,6 @@ export function extractExplicitToolCalls(content, tools = [], toolMap = null) {
   const allowedNames = toolNames(tools, toolMap);
   if (!allowedNames.size) return [];
   const calls = [];
-  const seen = new Set();
   const add = (value, index) => {
     const parsed = parseJsonValue(value);
     const candidates = Array.isArray(parsed) ? parsed : [parsed];
@@ -181,9 +180,6 @@ export function extractExplicitToolCalls(content, tools = [], toolMap = null) {
       const entries = Array.isArray(normalized) ? normalized : [normalized];
       for (const entry of entries) {
         if (!entry) continue;
-        const key = `${entry.function.name}:${entry.function.arguments}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
         calls.push(entry);
       }
     }
