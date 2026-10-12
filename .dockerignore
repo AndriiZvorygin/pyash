@@ -1,0 +1,17 @@
+**
+!package.json
+!package-lock.json
+!command/
+!command/**
+!configure/
+!configure/**
+!caterer/
+!caterer/cjson/
+!caterer/cjson/cJSON.h
+!caterer/cjson/cJSON.c
+!module/
+!module/**
+!program/
+!program/**
+!web/
+!web/**

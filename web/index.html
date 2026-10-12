@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pyash</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">PRIVATE WORKSPACE</p>
+          <h1>Pyash</h1>
+        </div>
+        <div id="health" class="health" aria-live="polite">Connecting</div>
+      </header>
+
+      <section class="workspace">
+        <section class="chat-panel" aria-label="Assistant chat">
+          <div id="messages" class="messages" aria-live="polite">
+            <div class="empty-state">Ask a question, request a search, or bring a task into the queue.</div>
+          </div>
+          <form id="chat-form" class="composer">
+            <label class="sr-only" for="message">Message</label>
+            <textarea id="message" name="message" rows="3" placeholder="Ask Pyash..." required></textarea>
+            <div class="composer-row">
+              <span id="chat-state" class="muted">Ready</span>
+              <button type="submit" class="primary">Send <span aria-hidden="true">&#8594;</span></button>
+            </div>
+          </form>
+        </section>
+
+        <aside class="side-panel" aria-label="Runtime status">
+          <section class="side-section">
+            <div class="section-heading">
+              <h2>Runtime</h2>
+              <button id="refresh-status" class="icon-button" title="Refresh runtime status" aria-label="Refresh runtime status">&#8635;</button>
+            </div>
+            <dl class="status-list">
+              <div><dt>Queue</dt><dd id="queue-total">0</dd></div>
+              <div><dt>Input</dt><dd id="queue-input">0</dd></div>
+              <div><dt>Running</dt><dd id="queue-runtime">0</dd></div>
+            </dl>
+          </section>
+
+          <section class="side-section">
+            <div class="section-heading">
+              <h2>Media job</h2>
+            </div>
+            <form id="job-form" class="job-form">
+              <label for="job-intent">Type</label>
+              <select id="job-intent">
+                <option value="draw">Image</option>
+                <option value="hear">Transcription</option>
+              </select>
+              <label for="job-profile">Profile</label>
+              <input id="job-profile" value="default" maxlength="120">
+              <label for="job-spec">Prepared job JSON</label>
+              <textarea id="job-spec" rows="8">{
+  "kind": "comfyui-draw",
+  "prompt": {}
+}</textarea>
+              <button type="submit" class="secondary">Queue job</button>
+              <p id="job-state" class="muted">Jobs use the existing Pyash GPU queue.</p>
+            </form>
+          </section>
+
+          <section class="side-section tools-section">
+            <div class="section-heading"><h2>Available tools</h2></div>
+            <div id="tools" class="tool-list">Loading...</div>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

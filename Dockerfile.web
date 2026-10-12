@@ -1,0 +1,22 @@
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY command ./command
+COPY configure ./configure
+COPY caterer/cjson/cJSON.h ./caterer/cjson/cJSON.h
+COPY caterer/cjson/cJSON.c ./caterer/cjson/cJSON.c
+COPY module ./module
+COPY program ./program
+COPY web ./web
+
+ENV NODE_ENV=production
+ENV PYA_WEB_HOST=0.0.0.0
+ENV PYA_WEB_PORT=8787
+
+EXPOSE 8787
+
+CMD ["node", "command/pyash_web_server.mjs", "--root", "/app", "--host", "0.0.0.0", "--port", "8787"]
