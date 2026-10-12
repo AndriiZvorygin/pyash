@@ -14,6 +14,25 @@ export function normalizeSearxUrl(base, question, limit) {
   return url.toString();
 }
 
+export function isRetiredSearchMotor(value) {
+  try {
+    const url = new URL(text(value));
+    return url.hostname.toLowerCase() === "mriczo" && url.port === "60490";
+  } catch {
+    return false;
+  }
+}
+
 export function resolveExternalSearchMotor(env = process.env) {
-  return text(env?.PYA_WEB_SEARCH_MOTOR) || DEFAULT_PUBLIC_WEB_SEARCH_MOTOR;
+  const configured = text(env?.PYA_WEB_SEARCH_MOTOR);
+  return configured && !isRetiredSearchMotor(configured)
+    ? configured
+    : DEFAULT_PUBLIC_WEB_SEARCH_MOTOR;
+}
+
+export function resolveSearchMotor(value, env = process.env) {
+  const explicit = text(value);
+  return explicit && !isRetiredSearchMotor(explicit)
+    ? explicit
+    : resolveExternalSearchMotor(env);
 }

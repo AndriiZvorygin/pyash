@@ -9,6 +9,7 @@ import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { readWorkSchedulerHealth } from "../../program/runtime/work/health.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import { curateWorkBacklog } from "../../program/runtime/work/curator.mjs";
+import { reconcileCompletedSplitParent } from "../../program/runtime/work/operator.mjs";
 import {
   roadmapDependencyStatus,
   validateRoadmapDependencies
@@ -188,6 +189,61 @@ test("an integrated prerequisite releases its dependent package automatically", 
   assert.equal(result.admitted, true);
   assert.equal(result.selected, "hq-fixture-mail-vertical-slice");
   assert.deepEqual(calls, ["hq-fixture-mail-vertical-slice"]);
+});
+
+test("a completed split parent becomes an integrated prerequisite without erasing history", async () => {
+  const { worldRoot } = await world("pyash-deps-split-parent-");
+  const parentId = "roadmap-mind-reply-envelope-streaming";
+  const followUpId = `${parentId}-follow-up-5`;
+  await queueTask(worldRoot, parentId, 110);
+  await queueTask(worldRoot, followUpId, 110);
+  const parent = await readWorkTaskStatus(worldRoot, parentId);
+  const followUp = await readWorkTaskStatus(worldRoot, followUpId);
+  await writeWorkTaskStatus(worldRoot, {
+    ...followUp,
+    status: "blocked",
+    workSpec: { ...followUp.workSpec, archived: true, lifecycle: "superseded" }
+  });
+  await writeWorkTaskStatus(worldRoot, {
+    ...parent,
+    status: "blocked",
+    message: "technical scope split; follow-up task queued",
+    checkpoint: {
+      ...parent.checkpoint,
+      blocker: "technical scope split; follow-up task queued",
+      implementation: { ...parent.checkpoint.implementation, commit: "completed-mind-commit", passes: 32 },
+      convergence: { decision: "SPLIT", status: "split", splitTaskIds: [followUpId], reviewCount: 5 },
+      recoveryCount: 2
+    },
+    workSpec: { ...parent.workSpec, lifecycle: "split-parent", splitFollowUpTaskId: followUpId }
+  });
+
+  const reconciled = await reconcileCompletedSplitParent(worldRoot, parentId, {
+    capabilityCommit: "completed-mind-commit",
+    baselineCommit: "automation-baseline",
+    now: "2026-10-12T13:00:00.000Z"
+  });
+  assert.equal(reconciled.status, "accepted");
+  assert.equal(reconciled.workSpec.lifecycle, "completed-split-parent");
+  assert.equal(reconciled.checkpoint.integration.status, "integrated");
+  assert.equal(reconciled.checkpoint.integration.commit, "completed-mind-commit");
+  assert.equal(reconciled.checkpoint.integration.branchCommit, "automation-baseline");
+  assert.equal(reconciled.checkpoint.convergence.decision, "SPLIT");
+  assert.deepEqual(reconciled.checkpoint.convergence.splitTaskIds, [followUpId]);
+  assert.equal(reconciled.checkpoint.recoveryCount, 2);
+  assert.equal(reconciled.checkpoint.implementation.passes, 32);
+
+  const dependency = roadmapDependencyStatus(
+    { taskId: "roadmap-agent-research-tool-chain", dependsOnTaskIds: [parentId] },
+    {
+      tasks: [reconciled],
+      packages: [
+        { taskId: parentId, dependsOnTaskIds: [] },
+        { taskId: "roadmap-agent-research-tool-chain", dependsOnTaskIds: [parentId] }
+      ]
+    }
+  );
+  assert.equal(dependency.satisfied, true);
 });
 
 test("dependency cycles are deterministic roadmap defects", () => {
