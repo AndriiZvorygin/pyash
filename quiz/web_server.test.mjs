@@ -75,7 +75,7 @@ test("web routes use injected runtime without starting a model", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-web-"));
   let chatSentence = null;
   let queuedSentence = null;
-  const { server } = await createWebServer({
+  const { server, workspaceDir } = await createWebServer({
     root,
     assets: path.resolve(process.cwd(), "web"),
     runtime: {
@@ -105,6 +105,7 @@ test("web routes use injected runtime without starting a model", async () => {
       error: null
     })
   });
+  await fs.access(workspaceDir);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const base = `http://127.0.0.1:${address.port}`;

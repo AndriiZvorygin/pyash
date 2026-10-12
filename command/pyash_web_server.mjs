@@ -392,14 +392,21 @@ export async function createWebServer({
   const runtime = providedRuntime || await buildRuntime({ root: resolvedRoot, toolsMap });
   const agentHouse = path.join(resolvedRoot, "world", "house", "web-assistant");
   await ensureAgentDirs(agentHouse);
+  const workspaceDir = path.join(agentHouse, "workspace");
+  await fs.mkdir(workspaceDir, { recursive: true });
   const configuredMind = remember("mind model");
   const model = String(process.env.PYA_WEB_MODEL ?? configuredMind?.as?.name ?? "qwen3.5:9b").trim();
+  const webSystemPrompt = [
+    WEB_SYSTEM_PROMPT,
+    `Use ${workspaceDir} as the persistent working directory for downloaded or processed files.`,
+    "Keep temporary inputs and derived outputs under that directory; do not assume unrelated repository paths are available."
+  ].join("\n");
   doRemember({
     mood: "ya",
     su: { name: "web assistant" },
     be: "mind",
     as: { name: model },
-    fromtext: { text: WEB_SYSTEM_PROMPT }
+    fromtext: { text: webSystemPrompt }
   });
 
   const publicTools = filterPublicTools(runtime.tools || toolListFromSchemas([]));
@@ -552,7 +559,7 @@ export async function createWebServer({
   }
 
   const server = http.createServer(handleRequest);
-  return { server, runtime, agentHouse };
+  return { server, runtime, agentHouse, workspaceDir };
 }
 
 async function main() {
