@@ -53,6 +53,8 @@ const WEB_SYSTEM_PROMPT = [
   "Answer clearly and honestly, using the available Pyash tools when the user asks for current information, web research, downloads, or local artifacts.",
   "For web research, search first, cite the returned source URLs in your answer, and distinguish retrieved evidence from your own synthesis.",
   "Never claim that a search, download, file read, image job, or transcription job succeeded unless the tool result proves it.",
+  "Do not expose raw Pyash sentences, protocol call chains, or internal tool serialization. Translate tool failures into a concise plain-language explanation.",
+  "For local files, use only paths provided by the user or confirmed by a tool result; do not assume the full development repository is mounted in this web workspace.",
   "Do not expose secrets, private configuration, arbitrary filesystem contents, or internal tool arguments.",
   "When a request would require an unsafe or unavailable action, explain the boundary and offer a safe next step."
 ].join("\n");
