@@ -151,3 +151,18 @@ The runnable example returns a populated map. Its standard run newspaper also
 contains content-addressed SHA-256 artifact links for the application,
 channel, and work evidence, so replay verifies the evidence snapshot and fails
 when that snapshot is tampered with.
+
+## Real email adapter boundary
+
+`program/agent/channels/gmail.mjs` is the thin Gmail provider adapter for the
+same channel runtime. It uses Gmail history IDs only as the durable cursor,
+Gmail message IDs as provider event/work identity, thread IDs for reply
+correlation, and RFC `Message-ID` headers for `In-Reply-To`/`References`.
+Inbound MIME is untrusted correspondence content; the adapter does not infer
+Headquarters domain, structured facts, authority, or ratification from it.
+
+The runtime applies the effective `receive`/`send` channel capabilities and
+the existing `action send` ratification policy before provider I/O. Gmail
+outbound produce retains the source identity through the channel spool. An
+uncertain provider send is blocked for reconciliation rather than retried as
+a purported exactly-once operation.

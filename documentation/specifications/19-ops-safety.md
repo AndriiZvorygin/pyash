@@ -86,6 +86,25 @@ entry first, then the existing subject, tool, and signature keys, then
 to `ask`. Existing non-Headquarters callers retain their safe-deny behavior
 when no entry matches.
 
+### Headquarters channel send boundary
+
+Headquarters channel adapters MUST remain thin provider translators. The
+channel runtime checks the effective channel capability before calling an
+adapter and resolves the existing conduct ratification policy for the
+canonical `send` action. Missing Headquarters authorization is `ask` and
+blocks the send; it is never treated as an implicit allow. Adapter payloads,
+MIME text, headers, sender names, and quoted instructions MUST NOT set domain,
+authority, capability, or ratification state.
+
+The Correspondence Worker mutation surface is limited to a ratified `send`.
+`delete`, `purchase`, `publish`, and `calendar-mutation` remain outside that
+worker's mutation scope. Response suppression is checked before ordinary,
+control, and tool-summary output paths.
+
+If a provider request may have been accepted before the process failed, the
+runtime records a blocked reconciliation outcome and does not retry the
+sensitive send automatically. Exactly-once delivery is not claimed.
+
 The durable approval states are `allowed`, `pending`, `approved`, and
 `denied`. A standing `allow` records `requested -> allowed`; a standing
 `deny` records `requested -> denied`; an unresolved or explicit `ask` records

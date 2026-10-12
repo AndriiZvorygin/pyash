@@ -11,6 +11,11 @@ import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
 import { loadImportPolicyWithGlobal } from "../import/policy.mjs";
 import { beginActiveMindRun, requestMindInterrupt } from "../interrupt.mjs";
 import { buildRouterProduceRequestSentence } from "../channel_core/contract.mjs";
+import { appendChannelOutcome } from "./outcome.mjs";
+import {
+  authorizeChannelAction,
+  channelCapabilityAllowed
+} from "./authorization.mjs";
 import {
   readChannelRuntimeState,
   writeChannelRuntimeState
@@ -1023,15 +1028,41 @@ async function dispatchChannelEvents({
       });
       handled += 1;
       let responseText = "";
-      const includeToolSummary = shouldIncludeToolSummary({
-        channelConfig,
-        event,
-        dmRooms
-      });
-      const mindInputs = buildMindInputsFromAttachments(routedEvent.attachmentsSaved);
-      const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
-      let toolEventCount = 0;
-      const sendControlMessage = async (content) => {
+      const responseSuppressed = adapter?.suppressResponse === true;
+      let sendAuthorizationPromise = null;
+      const authorizeSend = async () => {
+        if (!sendAuthorizationPromise) {
+          sendAuthorizationPromise = authorizeChannelAction({
+            worldRoot: worldRootResolved,
+            agentName: targetAgent,
+            channelConfig,
+            action: "send",
+            proposal: {
+              subjectName: "channel email send",
+              toolName: `${channelType} channel send`
+            }
+          });
+        }
+        return sendAuthorizationPromise;
+      };
+      const sendResponse = async (content) => {
+        if (responseSuppressed) return false;
+        const authorization = await authorizeSend();
+        if (!authorization.allowed) {
+          try {
+            await appendChannelOutcome(agentHouse, {
+              channelType,
+              agentName: targetAgent,
+              area: "authorization",
+              stage: "send",
+              outcome: "fail",
+              message: `send blocked: ${authorization.reason}`
+            });
+          } catch {
+            // Channel outcome logging is best-effort.
+          }
+          return false;
+        }
         if (outputMode === "queue") {
           const produceRequest = buildRouterProduceRequestSentence({
             channelType,
@@ -1055,12 +1086,33 @@ async function dispatchChannelEvents({
             agentName: targetAgent,
             roomName: event.channelId,
             payloadId: orchestratorDirective.payloadId,
+            channelIdentity: event.channelIdentity,
             payloadSentence: produceRequest
           });
           sent += 1;
-          return;
+          return true;
         }
-        const sendResult = await adapter.send({ config: channelConfig, event, content });
+        let sendResult;
+        try {
+          sendResult = await adapter.send({ config: channelConfig, event, content });
+        } catch (error) {
+          if (error?.ambiguous === true) {
+            try {
+              await appendChannelOutcome(agentHouse, {
+                channelType,
+                agentName: targetAgent,
+                area: "authorization",
+                stage: "send-reconcile",
+                outcome: "fail",
+                message: "provider send outcome is ambiguous; blocked for reconciliation"
+              });
+            } catch {
+              // Channel outcome logging is best-effort.
+            }
+            return false;
+          }
+          throw error;
+        }
         if (sendResult?.eventId) {
           selfEventIds.add(sendResult.eventId);
           selfState.order.push(sendResult.eventId);
@@ -1071,6 +1123,18 @@ async function dispatchChannelEvents({
           }
         }
         sent += 1;
+        return true;
+      };
+      const includeToolSummary = shouldIncludeToolSummary({
+        channelConfig,
+        event,
+        dmRooms
+      });
+      const mindInputs = buildMindInputsFromAttachments(routedEvent.attachmentsSaved);
+      const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
+      let toolEventCount = 0;
+      const sendControlMessage = async (content) => {
+        await sendResponse(content);
       };
       if (isStopCommand(routedEvent.text, targetAgent)) {
         const stopResult = await requestMindInterrupt({
@@ -1099,45 +1163,7 @@ async function dispatchChannelEvents({
         continue;
       }
       const sendChannelMessage = async (content) => {
-        if (outputMode === "queue") {
-          const produceRequest = buildRouterProduceRequestSentence({
-            channelType,
-            event,
-            sourceAgentName: targetAgent,
-            payloadId: orchestratorDirective.payloadId,
-            responseText: content
-          });
-          await routeChannelProduce({
-            routerInterpretFn,
-            channelType,
-            event,
-            sourceAgentName: targetAgent,
-            payloadId: orchestratorDirective.payloadId,
-            responseText: content
-          });
-          await enqueueProduceEnvelope(worldRootResolved, {
-            lane: "durable",
-            channelType,
-            identity: String(channelConfig?.user ?? "").trim(),
-            agentName: targetAgent,
-            roomName: event.channelId,
-            payloadId: orchestratorDirective.payloadId,
-            payloadSentence: produceRequest
-          });
-          sent += 1;
-          return;
-        }
-        const sendResult = await adapter.send({ config: channelConfig, event, content });
-        if (sendResult?.eventId) {
-          selfEventIds.add(sendResult.eventId);
-          selfState.order.push(sendResult.eventId);
-          while (selfState.order.length > dedupLimit) {
-            const removed = selfState.order.shift();
-            if (!removed) break;
-            selfEventIds.delete(removed);
-          }
-        }
-        sent += 1;
+        await sendResponse(content);
       };
       const onToolCall = includeToolSummary
         ? async (payload) => {
@@ -1262,7 +1288,6 @@ async function dispatchChannelEvents({
           }
         }
       }
-      if (adapter?.suppressResponse === true) continue;
       if (toolExpectation && toolEventCount === 0) {
         await sendChannelMessage("tool call: none");
       }
@@ -1286,35 +1311,7 @@ async function dispatchChannelEvents({
         }, { channelType, agentName });
       }
       if (!responseText) responseText = emptyMindFallback();
-      const produceRequest = buildRouterProduceRequestSentence({
-        channelType,
-        event,
-        sourceAgentName: targetAgent,
-        payloadId: orchestratorDirective.payloadId,
-        responseText
-      });
-      await routeChannelProduce({
-        routerInterpretFn,
-        channelType,
-        event,
-        sourceAgentName: targetAgent,
-        payloadId: orchestratorDirective.payloadId,
-        responseText
-      });
-      if (outputMode === "queue") {
-        await enqueueProduceEnvelope(worldRootResolved, {
-          lane: "durable",
-          channelType,
-          identity: String(channelConfig?.user ?? "").trim(),
-          agentName: targetAgent,
-          roomName: event.channelId,
-          payloadId: orchestratorDirective.payloadId,
-          payloadSentence: produceRequest
-        });
-        sent += 1;
-      } else {
-        await sendChannelMessage(responseText);
-      }
+      await sendChannelMessage(responseText);
     }
   }
 
@@ -1405,7 +1402,10 @@ function normalizeEvent(rawEvent, channelType) {
     attachments: Array.isArray(rawEvent.attachments) ? rawEvent.attachments : [],
     dmRoom: rawEvent.dmRoom === true || rawEvent.directRoom === true,
     provider: rawEvent.provider ? String(rawEvent.provider) : "",
+    account: rawEvent.account ? String(rawEvent.account) : "",
     messageId: rawEvent.messageId ? String(rawEvent.messageId) : "",
+    rfcMessageId: rawEvent.rfcMessageId ? String(rawEvent.rfcMessageId) : "",
+    historyId: rawEvent.historyId ? String(rawEvent.historyId) : "",
     subject: rawEvent.subject ? String(rawEvent.subject) : "",
     receivedAt: rawEvent.receivedAt ? String(rawEvent.receivedAt) : "",
     domain: rawEvent.domain ? String(rawEvent.domain) : "",
@@ -1413,7 +1413,10 @@ function normalizeEvent(rawEvent, channelType) {
     decisionRequired: rawEvent.decisionRequired === true,
     draftResponseRequested: rawEvent.draftResponseRequested === true,
     mutationRequested: rawEvent.mutationRequested === true,
-    sourceLocator: rawEvent.sourceLocator ? String(rawEvent.sourceLocator) : ""
+    sourceLocator: rawEvent.sourceLocator ? String(rawEvent.sourceLocator) : "",
+    channelIdentity: rawEvent.channelIdentity && typeof rawEvent.channelIdentity === "object"
+      ? cloneValue(rawEvent.channelIdentity)
+      : null
   };
 }
 
@@ -1475,6 +1478,25 @@ export async function runChannelPollOnce({
   if (!lock) return { received: 0, enqueued: 0, queuedPaths: [], skippedDedup: 0, durationMs: 0, queueDepth: 0, locked: true };
 
   try {
+    if (!channelCapabilityAllowed(channelConfig, "receive")) {
+      await appendChannelOutcome(agentHouse, {
+        channelType,
+        agentName,
+        area: "authorization",
+        stage: "receive",
+        outcome: "fail",
+        message: "receive blocked: capability-deny"
+      });
+      return {
+        received: 0,
+        enqueued: 0,
+        queuedPaths: [],
+        skippedDedup: 0,
+        durationMs: 0,
+        queueDepth: 0,
+        blocked: true
+      };
+    }
     const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
     const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
       ? runtimeState.checkpoint
@@ -1485,7 +1507,7 @@ export async function runChannelPollOnce({
     const rawEvents = Array.isArray(recv?.events) ? recv.events : [];
     const events = rawEvents.map(event => normalizeEvent(event, channelType)).filter(Boolean);
     const newCheckpoint = recv?.checkpoint ?? checkpoint;
-    const checkpointText = String(checkpoint?.nextBatch ?? "").trim();
+    const checkpointText = String(checkpoint?.nextBatch ?? checkpoint?.historyId ?? "").trim();
     const shouldWarmStart = channelConfig?.warmStart === true
       && !checkpointText
       && Array.isArray(runtimeState?.dedupOrder)
@@ -1842,6 +1864,13 @@ export async function runChannelProduceOnce({
     const roomId = parseChannelIdFromEndpoint(payloadSentence?.to?.name);
     const sourceAgent = parseAgentNameFromEndpoint(payloadSentence?.from?.name) || agentName;
     const content = String(payloadSentence?.ob?.text ?? "").trim();
+    const event = {
+      channelType,
+      channelId: roomId,
+      ...(claim?.envelope?.channelIdentity && typeof claim.envelope.channelIdentity === "object"
+        ? cloneValue(claim.envelope.channelIdentity)
+        : {})
+    };
     if (!roomId || !content) {
       failed += 1;
       await ackRuntimeEnvelopeFail(worldRoot, {
@@ -1853,9 +1882,38 @@ export async function runChannelProduceOnce({
       continue;
     }
     try {
+      const authorization = await authorizeChannelAction({
+        worldRoot,
+        agentName: sourceAgent,
+        channelConfig,
+        action: "send",
+        proposal: { subjectName: "channel email send", toolName: `${channelType} channel send` }
+      });
+      if (!authorization.allowed) {
+        failed += 1;
+        try {
+          await appendChannelOutcome(agentHouse, {
+            channelType,
+            agentName: sourceAgent,
+            area: "authorization",
+            stage: "send",
+            outcome: "fail",
+            message: `send blocked: ${authorization.reason}`
+          });
+        } catch {
+          // Channel outcome logging is best-effort.
+        }
+        await ackRuntimeEnvelopeFail(worldRoot, {
+          runtimePath: claim.path,
+          retryCount,
+          maxRetries: 0,
+          requeuePhase: "produce"
+        });
+        continue;
+      }
       const sendResult = await adapter.send({
         config: channelConfig,
-        event: { channelType, channelId: roomId },
+        event,
         content
       });
       if (sendResult?.eventId) {
@@ -1872,12 +1930,26 @@ export async function runChannelProduceOnce({
         roomId,
         eventId: sendResult?.eventId ?? ""
       }, { channelType, agentName });
-    } catch {
+    } catch (error) {
       failed += 1;
+      if (error?.ambiguous === true) {
+        try {
+          await appendChannelOutcome(agentHouse, {
+            channelType,
+            agentName: sourceAgent,
+            area: "authorization",
+            stage: "send-reconcile",
+            outcome: "fail",
+            message: "provider send outcome is ambiguous; blocked for reconciliation"
+          });
+        } catch {
+          // Channel outcome logging is best-effort.
+        }
+      }
       await ackRuntimeEnvelopeFail(worldRoot, {
         runtimePath: claim.path,
-        retryCount: retryCount + 1,
-        maxRetries: 2,
+        retryCount: error?.ambiguous === true ? retryCount : retryCount + 1,
+        maxRetries: error?.ambiguous === true ? 0 : 2,
         requeuePhase: "produce"
       });
     }
@@ -1968,6 +2040,33 @@ export async function runChannelOnce({
   const dedupIds = new Set(dedupState.order);
   const selfEventIds = new Set(selfState.order);
 
+  if (!channelCapabilityAllowed(channelConfig, "receive")) {
+    try {
+      await appendChannelOutcome(agentHouse, {
+        channelType,
+        agentName,
+        area: "authorization",
+        stage: "receive",
+        outcome: "fail",
+        message: "receive blocked: capability-deny"
+      });
+    } catch {
+      // Channel outcome logging is best-effort.
+    }
+    return {
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0,
+      durationMs: 0,
+      lastInputAt: "",
+      queueDepth: 0,
+      blocked: true
+    };
+  }
+
   const startMs = Date.now();
   const recv = await adapter.receive({ config: channelConfig, checkpoint });
   const rawEvents = Array.isArray(recv?.events) ? recv.events : [];
@@ -1985,7 +2084,7 @@ export async function runChannelOnce({
     }, { channelType, agentName });
   }
 
-  const checkpointText = String(checkpoint?.nextBatch ?? "").trim();
+  const checkpointText = String(checkpoint?.nextBatch ?? checkpoint?.historyId ?? "").trim();
   const shouldWarmStart = channelConfig?.warmStart === true
     && !checkpointText
     && dedupState.order.length === 0
