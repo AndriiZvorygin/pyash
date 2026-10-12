@@ -152,7 +152,7 @@ test("fixture research workflow records evidence, writes the report, and replays
   const sessionFiles = (await fs.readdir(sessionDir)).filter((name) => name.endsWith(".pya"));
   assert.equal(sessionFiles.length, 1);
   const session = await fs.readFile(path.join(sessionDir, sessionFiles[0]), "utf8");
-  assert.match(session, /Pyash language/);
+  assert.match(session, /Pyash sentence-shaped language/);
   assert.match(session, /typed cases/);
 
   const newspaperPath = path.join(cwd, "newspaper", `${runId}.pya`);
