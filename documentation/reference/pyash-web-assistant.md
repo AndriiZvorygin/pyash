@@ -76,4 +76,4 @@ The agent tool map includes this Pyash-native capability:
 su name runtime status be status as wo runtime can
 ```
 
-When called, it returns the effective model tag, backend, runtime host label, thinking mode, sampling settings, output limit, tool map, and agent name for the current turn. Values that are not configured are reported as unavailable. It is read-only and does not expose credentials, raw memory, or arbitrary host paths.
+When called, it returns the effective model tag, backend, runtime host label, thinking mode, sampling settings, output limit, tool map, and agent name for the current turn. For Ollama, it also reads the selected model's `/api/show` metadata and reports model defaults, advertised context length, parameter size, quantization, and capabilities. A request override is distinguished from an Ollama model default; an output limit is reported as `provider default` when no `num_predict` override is configured. It is read-only and does not expose credentials, raw memory, or arbitrary host paths.
