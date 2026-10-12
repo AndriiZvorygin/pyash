@@ -290,6 +290,7 @@ export function admitBackgroundWork({
   policy = {},
   foregroundActive = false,
   hasEligibleWork = true,
+  forcePacing = false,
   now = new Date()
 } = {}) {
   const settings = { ...DEFAULT_BACKGROUND_POLICY, ...policy };
@@ -307,6 +308,15 @@ export function admitBackgroundWork({
     return { admit: false, reason: "weekly reserve", pacing };
   }
   if (pacing.headroomPercent < -pacing.deadbandPercent) {
+    if (forcePacing === true) {
+      return {
+        admit: true,
+        reason: "operator pacing override",
+        forced: true,
+        originalReason: "weekly pacing limit",
+        pacing
+      };
+    }
     return { admit: false, reason: "weekly pacing limit", pacing };
   }
   return { admit: true, reason: "weekly pacing headroom", pacing };

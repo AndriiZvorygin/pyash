@@ -236,7 +236,7 @@ function usage() {
     "  node command/work_supervisor.mjs block <task-id> --reason <text> [--json]",
     "  node command/work_supervisor.mjs resume <task-id> --context <text> [--json]",
     "  node command/work_supervisor.mjs fail|cancel <task-id> [--reason <text>] [--json]",
-    "  node command/work_supervisor.mjs background [--continuous] [--dry-run] [--watch] [--interval-ms <n>] [--reserve-percent <n>] [--json]",
+    "  node command/work_supervisor.mjs background [--continuous] [--dry-run] [--watch] [--interval-ms <n>] [--reserve-percent <n>] [--force-pacing] [--json]",
     "  node command/work_supervisor.mjs report <task-id> [--email-report <address>] [--email-from <address>] [--json]",
     "  node command/work_supervisor.mjs digest [--since <ISO>] [--email-report <address>] [--email-from <address>] [--json]",
     "  node command/work_supervisor.mjs health [--json]",
@@ -372,6 +372,7 @@ try {
       curationMaxTasks: Number(process.env.PYA_BACKGROUND_CURATION_MAX_TASKS || "3"),
       timeoutPolicy: timeoutOptions.timeoutPolicy
     };
+    const forcePacing = has(args, "--force-pacing") || truthy(process.env.PYA_BACKGROUND_FORCE_PACING);
     if (has(args, "--dry-run")) {
       const repositoryRoot = path.resolve(value(args, "--repository", process.cwd()));
       const blockerRepair = await prepareBlockerRepair({
@@ -391,6 +392,7 @@ try {
         worldRoot,
         owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
         policy,
+        forcePacing,
         repositoryRoot,
         foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE)
       });
@@ -419,6 +421,7 @@ try {
       const dryAdmission = admitBackgroundWork({
         capacity: inspection.capacity,
         policy,
+        forcePacing,
         foregroundActive: truthy(process.env.PYA_FOREGROUND_CODEX_ACTIVE),
         hasEligibleWork: dryEligible.length > 0
       });
@@ -442,6 +445,7 @@ try {
         worldRoot,
         owner: value(args, "--owner", process.env.PYA_WORK_OWNER || "background"),
         policy,
+        forcePacing,
         repositoryRoot,
         curate: true,
         executionPreflight: ({ worktreePath }) => configuredExecutionPreflight({ repositoryRoot, worktreePath }),

@@ -205,6 +205,7 @@ export async function inspectWorkBackground({
   worldRoot,
   owner = "",
   policy = {},
+  forcePacing = false,
   capacitySource = readCodexCapacity,
   foregroundActive = false,
   externalEvidenceProbe = null,
@@ -324,6 +325,7 @@ export async function inspectWorkBackground({
     policy: { ...DEFAULT_BACKGROUND_POLICY, ...policy },
     foregroundActive: typeof foregroundActive === "function" ? await foregroundActive() : foregroundActive,
     hasEligibleWork: hasExecutableSupply,
+    forcePacing,
     now: typeof now === "function" ? now() : now
   });
   return {
@@ -349,6 +351,7 @@ export async function runWorkBackgroundOnce({
   worldRoot,
   owner = "",
   policy = {},
+  forcePacing = false,
   capacitySource = readCodexCapacity,
   foregroundActive = false,
   supervisor = runWorkSupervisorOnce,
@@ -443,6 +446,7 @@ export async function runWorkBackgroundOnce({
     worldRoot,
     owner,
     policy,
+    forcePacing,
     capacitySource,
     foregroundActive,
     externalEvidenceProbe,
@@ -478,6 +482,7 @@ export async function runWorkBackgroundOnce({
       worldRoot,
       owner,
       policy,
+      forcePacing,
       capacitySource: async () => capacity,
       foregroundActive,
       externalEvidenceProbe,
@@ -501,6 +506,7 @@ export async function runWorkBackgroundOnce({
     capacity,
     admitted: admission.admit,
     reason: admission.reason,
+    forcedPacing: admission.forced === true,
     eligible: eligible.length,
     recoverable: recoverable.length,
     policyRevalidation: policyRevalidation.length
@@ -546,6 +552,7 @@ export async function runWorkBackgroundOnce({
     "capacity used percent": capacity.usedPercent == null ? "" : String(capacity.usedPercent),
     "capacity reset at": capacity.resetAt || "",
     "last decision": admission.reason,
+    "forced pacing": admission.forced === true ? "true" : "false",
     "hourly wakes": String((Number(prior["hourly wakes"]) || 0) + 1),
     "curation result": curation?.reason || prior["curation result"] || "",
     "curated tasks": curation?.created?.join(", ") || prior["curated tasks"] || "",
@@ -981,6 +988,7 @@ export async function runWorkBackgroundOnce({
     taskId: selected.taskId,
     status: result.status,
     reason: admission.reason,
+    forcedPacing: admission.forced === true,
     capacity,
     pacing: admission.pacing,
     taskCount,
@@ -995,6 +1003,7 @@ export async function runWorkBackgroundOnce({
   return {
     admitted: true,
     reason: admission.reason,
+    forcedPacing: admission.forced === true,
     capacity,
     selected: selected.taskId,
     report: renderWorkTaskReport(finalTask || selected),

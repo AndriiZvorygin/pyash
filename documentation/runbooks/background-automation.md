@@ -47,6 +47,21 @@ uses the durable report renderer plus the existing Docker Mailserver transport.
 Both share `/tmp/pyash-roadmap.lock`; a concurrent invocation logs a skip and
 exits successfully.
 
+For an explicit operator-triggered run, the wrapper supports:
+
+```bash
+node command/work_supervisor.mjs background --force-pacing --json
+```
+
+`--force-pacing` bypasses only a negative weekly pacing-headroom decision for
+that one wake. It does not bypass missing capacity telemetry, provider usage
+limits, foreground conflicts, the protected final reserve, execution preflight,
+dependency checks, or the one-workflow-per-wake rule. The admission and
+scheduler history record `operator pacing override` and `forcedPacing: true`.
+The equivalent private environment setting is
+`PYA_BACKGROUND_FORCE_PACING=truth`; it should not be enabled for the hourly
+cron wrapper.
+
 Logs are:
 
 ```text
