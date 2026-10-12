@@ -4,6 +4,7 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import MarkdownIt from "markdown-it";
 
 import { interpret } from "../program/bridge/index.mjs";
 import { remember, doRemember } from "../program/remember/index.mjs";
@@ -35,6 +36,12 @@ const PUBLIC_TOOL_WORDS = new Set([
   "list files",
   "exists"
 ]);
+const markdown = new MarkdownIt({
+  html: false,
+  breaks: true,
+  linkify: true,
+  typographer: true
+});
 
 const WEB_SYSTEM_PROMPT = [
   "You are the Pyash private web assistant.",
@@ -128,6 +135,10 @@ function publicToolName(name) {
 
 export function filterPublicTools(tools = []) {
   return tools.filter((entry) => publicToolName(entry?.name));
+}
+
+export function renderAssistantMarkdown(text = "") {
+  return markdown.render(String(text ?? ""));
 }
 
 export function buildChatSentence({ message, root, agentHouse }) {
@@ -329,6 +340,7 @@ export async function createWebServer({
         jsonResponse(res, 200, {
           ok: true,
           text: serialized.text,
+          html: renderAssistantMarkdown(serialized.text),
           toolEvents: toolEvents.map(({ stage, toolName }) => ({ stage, toolName })),
           sources: extractUrls(toolEvents),
           session: "web",
