@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { channelIdentityFromEvent } from "../channel_core/contract.mjs";
 
 const DEFAULT_GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1";
+const EMAIL_ADDRESS_PATTERN = /^[A-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)*$/iu;
 
 function text(value) {
   return String(value ?? "").trim();
@@ -47,6 +48,27 @@ function firstEmail(value) {
   if (angle?.[1]) return angle[1];
   const address = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu);
   return address?.[0] ?? raw;
+}
+
+function outboundRecipient(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw || /[\r\n]/u.test(raw)) {
+    throw new Error("gmail send defective: invalid recipient");
+  }
+  const angle = raw.match(/^[^<>]*<([^<>]+)>$/u);
+  const address = String(angle?.[1] ?? raw).trim();
+  if (address.length > 254 || !EMAIL_ADDRESS_PATTERN.test(address)) {
+    throw new Error("gmail send defective: invalid recipient");
+  }
+  return address;
+}
+
+function headerText(name, value) {
+  const textValue = String(value ?? "");
+  if (/[\r\n]/u.test(textValue)) {
+    throw new Error(`gmail send defective: ${name} header contains CR/LF`);
+  }
+  return textValue;
 }
 
 function headerValue(headers, name) {
@@ -171,9 +193,8 @@ function messageEvent(message, { account, configuredDomain, historyId }) {
   return event;
 }
 
-function historyMessageStubs(history = []) {
+function historyMessageStubs(history = [], seen = new Set()) {
   const messages = [];
-  const seen = new Set();
   for (const entry of Array.isArray(history) ? history : []) {
     for (const added of Array.isArray(entry?.messagesAdded) ? entry.messagesAdded : []) {
       const message = added?.message;
@@ -195,16 +216,17 @@ function queryUrl(url, entries) {
 }
 
 function composeRawMessage({ to, subject, content, inReplyTo, references, messageId }) {
-  const lines = [
-    `To: ${to}`,
-    `Subject: ${subject || "Pyash correspondence"}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit"
+  const headers = [
+    ["To", to],
+    ["Subject", subject || "Pyash correspondence"],
+    ["MIME-Version", "1.0"],
+    ["Content-Type", "text/plain; charset=UTF-8"],
+    ["Content-Transfer-Encoding", "8bit"]
   ];
-  if (messageId) lines.push(`Message-ID: ${messageId}`);
-  if (inReplyTo) lines.push(`In-Reply-To: ${inReplyTo}`);
-  if (references) lines.push(`References: ${references}`);
+  if (messageId) headers.push(["Message-ID", messageId]);
+  if (inReplyTo) headers.push(["In-Reply-To", inReplyTo]);
+  if (references) headers.push(["References", references]);
+  const lines = headers.map(([name, value]) => `${name}: ${headerText(name, value)}`);
   return `${lines.join("\r\n")}\r\n\r\n${String(content ?? "").trim()}\r\n`;
 }
 
@@ -227,17 +249,28 @@ export function createGmailAdapter({
       let stubs = [];
       let nextHistoryId = historyId;
       if (historyId) {
-        const historyUrl = queryUrl(`${root}/history`, [
-          ["startHistoryId", historyId],
-          ["historyTypes", "messageAdded"],
-          ["maxResults", config.maxResults ?? 100]
-        ]);
-        const historyPayload = await readJson(await fetchImpl(historyUrl, {
-          method: "GET",
-          headers: authHeaders(config)
-        }), "history");
-        stubs = historyMessageStubs(historyPayload.history);
-        nextHistoryId = text(historyPayload.historyId) || historyId;
+        const seenMessageIds = new Set();
+        const seenPageTokens = new Set();
+        let pageToken = "";
+        do {
+          if (pageToken && seenPageTokens.has(pageToken)) {
+            throw new Error("gmail history defective: repeated page token");
+          }
+          if (pageToken) seenPageTokens.add(pageToken);
+          const historyUrl = queryUrl(`${root}/history`, [
+            ["startHistoryId", historyId],
+            ["historyTypes", "messageAdded"],
+            ["maxResults", config.maxResults ?? 100],
+            ["pageToken", pageToken]
+          ]);
+          const historyPayload = await readJson(await fetchImpl(historyUrl, {
+            method: "GET",
+            headers: authHeaders(config)
+          }), "history");
+          stubs.push(...historyMessageStubs(historyPayload.history, seenMessageIds));
+          nextHistoryId = text(historyPayload.historyId) || nextHistoryId || historyId;
+          pageToken = text(historyPayload.nextPageToken);
+        } while (pageToken);
       } else {
         const profilePayload = await readJson(await fetchImpl(`${root}/profile`, {
           method: "GET",
@@ -279,7 +312,7 @@ export function createGmailAdapter({
     async send({ config = {}, event = {}, content = "" } = {}) {
       const account = userForConfig(config);
       const token = tokenForConfig(config);
-      const to = firstEmail(event.replyRecipient || event.sender || config.replyTo);
+      const to = outboundRecipient(event.replyRecipient || event.sender || config.replyTo);
       const body = String(content ?? "").trim();
       if (!account || !token || !to || !body) {
         throw new Error("gmail send defective: account, token, recipient, and content are required");
