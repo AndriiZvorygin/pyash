@@ -37,12 +37,15 @@ test("chat sentence uses a stable assistant house and session name", () => {
   const sentence = buildChatSentence({
     root: "/tmp/pyash",
     message: "find the latest meeting report",
-    agentHouse: "/tmp/pyash/world/house/web-assistant"
+    agentHouse: "/tmp/pyash/world/house/web-assistant",
+    session: "research notes",
+    model: "qwen3.8:27b"
   });
   assert.equal(sentence.be, "write");
   assert.equal(sentence.for.name, "web assistant");
   assert.equal(sentence.with.name, "agent tools");
-  assert.equal(sentence.fromtext.name, "session name web");
+  assert.equal(sentence.fromtext.name, "session name research-notes");
+  assert.equal(sentence.ob.model, "qwen3.8:27b");
   assert.equal(sentence.at.filename, "/tmp/pyash/world/house/web-assistant");
 });
 
@@ -95,12 +98,24 @@ test("web routes use injected runtime without starting a model", async () => {
       };
     },
     queueDepthFn: async () => ({ input: 1, runtime: 0, produceWaiting: 0, total: 1 }),
-    readStatusFn: async () => null
+    readStatusFn: async () => null,
+    modelsFn: async (defaultModel) => ({
+      available: true,
+      models: [defaultModel, "qwen3.8:27b"],
+      error: null
+    })
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const base = `http://127.0.0.1:${address.port}`;
   try {
+    await fs.writeFile(
+      path.join(root, "world", "house", "web-assistant", "session", "20261012-research-notes.pya"),
+      'su name 20261012-research-notes since date 2026-10-12 be series def\n' +
+      'su name user ob text "hello" ya\n' +
+      'su name agent ob text "## ready" ya\n',
+      "utf8"
+    );
     const health = await fetch(`${base}/healthz`);
     assert.equal(health.status, 200);
     assert.equal((await health.json()).ok, true);
@@ -108,14 +123,29 @@ test("web routes use injected runtime without starting a model", async () => {
     const tools = await fetch(`${base}/api/tools`);
     assert.deepEqual((await tools.json()).tools.map((tool) => tool.name), ["be_search"]);
 
+    const models = await fetch(`${base}/api/models`);
+    assert.deepEqual((await models.json()).models, ["qwen3.5:9b", "qwen3.8:27b"]);
+
     const chat = await fetch(`${base}/api/chat`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: "search for a report" })
+      body: JSON.stringify({ message: "search for a report", session: "research notes", model: "qwen3.8:27b" })
     });
     assert.equal(chat.status, 200);
     assert.equal((await chat.json()).text, "search complete");
     assert.equal(chatSentence.at.filename, path.join(root, "world", "house", "web-assistant"));
+    assert.equal(chatSentence.fromtext.name, "session name research-notes");
+    assert.equal(chatSentence.ob.model, "qwen3.8:27b");
+
+    const sessions = await fetch(`${base}/api/sessions`);
+    const sessionData = await sessions.json();
+    assert.equal(sessionData.ok, true);
+    assert.equal(sessionData.sessions[0].id, "research-notes");
+
+    const session = await fetch(`${base}/api/sessions/research-notes`);
+    const sessionPayload = await session.json();
+    assert.equal(sessionPayload.session.messages.length, 2);
+    assert.match(sessionPayload.session.messages[1].html, /<h2>ready<\/h2>/);
 
     const job = await fetch(`${base}/api/jobs`, {
       method: "POST",

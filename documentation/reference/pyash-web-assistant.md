@@ -4,7 +4,8 @@ The Pyash web assistant is a private browser gateway over the existing Pyash run
 
 The gateway provides:
 
-- a durable Pyash-backed chat session;
+- durable Pyash-backed chat sessions, with history selectable from the browser;
+- an explicit model selector populated from the configured Ollama host;
 - allowlisted web search, download, read, listing, and existence tools;
 - status for the existing GPU queue;
 - safe submission of prepared image and transcription jobs through the existing `gpu draw` and `gpu hear` queue paths.
@@ -38,7 +39,10 @@ The deployment mounts only the Pyash `world` directory for durable sessions and 
 
 - `GET /healthz` checks the gateway process.
 - `GET /api/tools` lists the public read/search tool subset.
-- `POST /api/chat` accepts `{ "message": "..." }` and returns the answer, tool event names, and discovered source URLs.
+- `GET /api/models` lists the installed/allowed Ollama model tags.
+- `GET /api/sessions` lists dated Pyash session records.
+- `GET /api/sessions/<id>` reads one session's persisted conversation history.
+- `POST /api/chat` accepts `{ "message": "...", "session": "...", "model": "..." }` and returns the answer, tool event names, and discovered source URLs.
 - `GET /api/gpu` reports queue depth.
 - `POST /api/jobs` accepts a validated prepared `comfyui-draw` or `comfyui-hear` job specification and returns a durable handle.
 - `GET /api/jobs/<handle>` reads an existing Pyash GPU handle status.
@@ -53,7 +57,10 @@ Useful environment values are:
 
 - `OLLAMA_HOST`: Ollama endpoint used by the configured Pyash mind backend;
 - `PYA_WEB_MODEL`: optional model override for the web assistant;
+- `PYA_WEB_MODELS`: optional comma-separated allowlist of Ollama tags exposed by the model selector; when absent, installed tags from `/api/tags` are offered;
 - `PYA_WEB_HOST` and `PYA_WEB_PORT`: local listener settings;
 - `PYA_GPU_HOUSEKEEPER_URL`: existing housekeeper configuration used by Pyash workers.
 
 Authentication, TLS, and public exposure belong to Caddy. Rotate the existing Basic Auth credential through the host's normal Caddy configuration process rather than adding credentials to this repository.
+
+Session history is stored in the existing dated `.pya` files under the web assistant's Pyash house. Selecting another session changes the `session name` supplied to the normal mind path; it does not create a browser-only transcript store. The selected model is passed as an explicit per-request model override and must be present in the discovered/allowed Ollama catalog.
