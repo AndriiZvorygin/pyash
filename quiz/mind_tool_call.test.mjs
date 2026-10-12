@@ -6,7 +6,25 @@ import { interpret } from "../program/bridge/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../program/bridge/signature.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
-import { runToolChat } from "../program/verbs/mind/tool_chat.mjs";
+import { extractExplicitToolCalls, runToolChat } from "../program/verbs/mind/tool_chat.mjs";
+
+test("mind tool chat normalizes explicit textual tool-call encodings", () => {
+  const tools = [{ function: { name: "search" } }];
+  const calls = extractExplicitToolCalls(
+    'I will search now. <tool_call>{"name":"search","arguments":{"input":"Pyash"}}</tool_call>',
+    tools
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].function.name, "search");
+  assert.deepEqual(JSON.parse(calls[0].function.arguments), { input: "Pyash" });
+});
+
+test("mind tool chat ignores prose that is not an explicit allowed tool call", () => {
+  assert.deepEqual(
+    extractExplicitToolCalls("I should search the web before answering.", [{ function: { name: "search" } }]),
+    []
+  );
+});
 
 test("mind tool calling executes allowed tool and returns final answer", async () => {
   forget();
@@ -20,16 +38,10 @@ test("mind tool calling executes allowed tool and returns final answer", async (
     {
       message: {
         role: "assistant",
-        content: "",
-        tool_calls: [
-          {
-            type: "function",
-            function: {
-              name: toolName,
-              arguments: { ob: 2, to: "total" }
-            }
-          }
-        ]
+        content: `<tool_call>${JSON.stringify({
+          name: toolName,
+          arguments: { ob: 2, to: "total" }
+        })}</tool_call>`
       }
     },
     { message: { role: "assistant", content: "done" } }
