@@ -55,6 +55,84 @@ export async function showWorkTask(worldRoot, taskId) {
   return task;
 }
 
+export async function reconcileCompletedSplitParent(worldRoot, taskId, {
+  capabilityCommit,
+  baselineCommit,
+  reason = "completed capability reconciled on the autonomous integration baseline",
+  now = new Date()
+} = {}) {
+  const completedCommit = text(capabilityCommit);
+  const integratedRevision = text(baselineCommit);
+  if (!completedCommit || !integratedRevision) {
+    throw new Error("split-parent reconciliation requires capability and baseline commits");
+  }
+  const explanation = text(reason);
+  if (!explanation) throw new Error("split-parent reconciliation reason is required");
+
+  return mutateTask(worldRoot, taskId, async (current) => {
+    const followUpTaskId = text(current.workSpec?.splitFollowUpTaskId);
+    const followUp = followUpTaskId
+      ? await readWorkTaskStatus(worldRoot, followUpTaskId)
+      : null;
+    if (current.status !== "blocked"
+      || current.workSpec?.lifecycle !== "split-parent"
+      || current.checkpoint?.convergence?.decision !== "SPLIT"
+      || !followUp?.workSpec?.archived) {
+      throw new Error(`work task is not a safely completed split parent: ${taskId}`);
+    }
+
+    const completedAt = iso(now);
+    const reconciliation = current.checkpoint.integration.reconciliation;
+    return {
+      ...current,
+      status: "accepted",
+      previousStatus: current.status,
+      finishedAt: completedAt,
+      message: `accepted: ${explanation}`,
+      result: "accepted",
+      error: "",
+      workSpec: {
+        ...current.workSpec,
+        lifecycle: "completed-split-parent",
+        completedCapabilityCommit: completedCommit,
+        completedAt,
+        completionReason: explanation
+      },
+      checkpoint: mergeWorkCheckpoint(current.checkpoint, {
+        implementation: { reviewReady: true },
+        review: {
+          role: current.checkpoint.review.role || "escalationReviewer",
+          decision: "ACCEPT",
+          reviewedCommit: completedCommit,
+          reviewedRevision: integratedRevision,
+          explanation,
+          evidence: "completed split capability preserved; follow-up is archived"
+        },
+        integration: {
+          branch: "automation/roadmap",
+          commit: completedCommit,
+          branchCommit: integratedRevision,
+          status: "integrated",
+          integratedAt: completedAt,
+          error: "",
+          reconciliation: {
+            ...reconciliation,
+            taskCommit: current.checkpoint.implementation.commit || completedCommit,
+            summary: explanation,
+            materialAttempts: reconciliation.materialAttempts + 1,
+            lastMaterialAt: completedAt,
+            lastReviewDecision: "ACCEPT",
+            lastReviewExplanation: explanation,
+            reviewCount: reconciliation.reviewCount + 1
+          }
+        },
+        blocker: "",
+        lastAction: "completed split parent reconciled as integrated capability"
+      })
+    };
+  });
+}
+
 export async function archiveWorkTask(worldRoot, taskId, reason, {
   supersededBy = "",
   now = new Date()
