@@ -258,7 +258,7 @@ export async function createWebServer({
   const agentHouse = path.join(resolvedRoot, "world", "house", "web-assistant");
   await ensureAgentDirs(agentHouse);
   const configuredMind = remember("mind model");
-  const model = String(configuredMind?.as?.name ?? process.env.PYA_WEB_MODEL ?? "qwen3.5:9b").trim();
+  const model = String(process.env.PYA_WEB_MODEL ?? configuredMind?.as?.name ?? "qwen3.5:9b").trim();
   doRemember({
     mood: "ya",
     su: { name: "web assistant" },
