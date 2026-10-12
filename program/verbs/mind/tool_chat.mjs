@@ -59,6 +59,140 @@ function buildToolUseDirective(tools = []) {
   ].join("\n");
 }
 
+function toolNames(tools = [], toolMap = null) {
+  const names = new Set(
+    (Array.isArray(tools) ? tools : [])
+      .map((entry) => String(entry?.function?.name ?? "").trim())
+      .filter(Boolean)
+  );
+  if (toolMap instanceof Map) {
+    for (const name of toolMap.keys()) {
+      const text = String(name ?? "").trim();
+      if (text) names.add(text);
+    }
+  }
+  return names;
+}
+
+function parseJsonValue(value) {
+  if (typeof value !== "string") return value;
+  const text = value.trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeTextToolCall(value, allowedNames, index = 0) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (Array.isArray(value.tool_calls)) {
+    return value.tool_calls
+      .map((entry, childIndex) => normalizeTextToolCall(entry, allowedNames, childIndex))
+      .filter(Boolean);
+  }
+
+  const nested = value.function && typeof value.function === "object" ? value.function : value;
+  const name = String(
+    nested.name ??
+    value.tool ??
+    value.tool_name ??
+    value.function_name ??
+    ""
+  ).trim();
+  if (!name || !allowedNames.has(name)) return null;
+  const rawArguments = nested.arguments ?? value.arguments ?? value.args ?? {};
+  const parsedArguments = typeof rawArguments === "string" ? parseJsonValue(rawArguments) : rawArguments;
+  if (!parsedArguments || typeof parsedArguments !== "object" || Array.isArray(parsedArguments)) return null;
+  return {
+    id: String(value.id ?? `text-tool-call-${index + 1}`).trim(),
+    type: "function",
+    function: {
+      name,
+      arguments: JSON.stringify(parsedArguments)
+    }
+  };
+}
+
+function balancedJsonAt(text, start) {
+  const opening = text[start];
+  if (opening !== "{" && opening !== "[") return null;
+  const stack = [opening === "{" ? "}" : "]"];
+  let quoted = false;
+  let escaped = false;
+  for (let index = start + 1; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') {
+      quoted = true;
+      continue;
+    }
+    if (character === "{" || character === "[") {
+      stack.push(character === "{" ? "}" : "]");
+      continue;
+    }
+    if (character !== stack[stack.length - 1]) continue;
+    stack.pop();
+    if (stack.length === 0) return text.slice(start, index + 1);
+  }
+  return null;
+}
+
+function explicitToolCallValues(content) {
+  const text = String(content ?? "");
+  const values = [];
+  const tagged = /(?:<tool_call>|<\|tool_call\|>)([\s\S]*?)(?:<\/tool_call>|<\|end\|>)/gi;
+  for (const match of text.matchAll(tagged)) values.push(match[1]);
+  const fenced = /```(?:json|tool_call)?\s*([\s\S]*?)```/gi;
+  for (const match of text.matchAll(fenced)) values.push(match[1]);
+  if (!values.length && text.trim()) values.push(text.trim());
+  return values;
+}
+
+function explicitFunctionCallValues(content, allowedNames) {
+  const text = String(content ?? "");
+  const values = [];
+  const namePattern = /\b([A-Za-z_][A-Za-z0-9_-]*)\s*\(\s*(\{|\[)/g;
+  for (const match of text.matchAll(namePattern)) {
+    if (!allowedNames.has(match[1])) continue;
+    const json = balancedJsonAt(text, match.index + match[0].lastIndexOf(match[2]));
+    if (!json) continue;
+    values.push(JSON.stringify({ name: match[1], arguments: parseJsonValue(json) }));
+  }
+  return values;
+}
+
+export function extractExplicitToolCalls(content, tools = [], toolMap = null) {
+  const allowedNames = toolNames(tools, toolMap);
+  if (!allowedNames.size) return [];
+  const calls = [];
+  const seen = new Set();
+  const add = (value, index) => {
+    const parsed = parseJsonValue(value);
+    const candidates = Array.isArray(parsed) ? parsed : [parsed];
+    for (const candidate of candidates) {
+      const normalized = normalizeTextToolCall(candidate, allowedNames, index);
+      const entries = Array.isArray(normalized) ? normalized : [normalized];
+      for (const entry of entries) {
+        if (!entry) continue;
+        const key = `${entry.function.name}:${entry.function.arguments}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        calls.push(entry);
+      }
+    }
+  };
+  explicitToolCallValues(content).forEach(add);
+  explicitFunctionCallValues(content, allowedNames).forEach(add);
+  return calls;
+}
+
 export async function runToolChat({
   sentence,
   ob,
@@ -223,7 +357,13 @@ export async function runToolChat({
       }
     }
 
-    const toolCalls = lastResponse?.message?.tool_calls;
+    const nativeToolCalls = lastResponse?.message?.tool_calls;
+    const textToolCalls = (!Array.isArray(nativeToolCalls) || nativeToolCalls.length === 0)
+      ? extractExplicitToolCalls(lastResponse?.message?.content ?? "", tools, toolMap)
+      : [];
+    const toolCalls = Array.isArray(nativeToolCalls) && nativeToolCalls.length > 0
+      ? nativeToolCalls
+      : textToolCalls;
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
       responseText = lastResponse?.message?.content ?? "";
       break;
@@ -231,7 +371,7 @@ export async function runToolChat({
 
     const assistantMessage = {
       role: "assistant",
-      content: lastResponse?.message?.content ?? "",
+      content: textToolCalls.length > 0 ? "" : lastResponse?.message?.content ?? "",
       tool_calls: toolCalls
     };
     messages.push(assistantMessage);
