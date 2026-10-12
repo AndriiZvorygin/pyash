@@ -27,7 +27,7 @@ import { currentTimeoutPolicy } from "./timeout_policy.mjs";
 import { reconcileOperationalWorkTasks } from "./turn_reconciliation.mjs";
 import { resolveTextModel } from "../gpu/text-model.mjs";
 import { prepareBlockerRepair } from "./blocker_repair.mjs";
-import { normalizeSearxUrl, resolveExternalSearchMotor } from "../../library/web_search_endpoint.mjs";
+import { normalizeSearxUrl, resolveSearchMotor } from "../../library/web_search_endpoint.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -127,8 +127,8 @@ export async function probeExternalEvidenceTask(task, {
     }
     checks.push({ name: "Ollama", healthy, endpoint: ollamaHost });
   }
-  if (/search|60490/iu.test(reason)) {
-    const searchMotor = resolveExternalSearchMotor(env);
+  if (/search/iu.test(reason)) {
+    const searchMotor = resolveSearchMotor(env.PYA_WEB_SEARCH_MOTOR, env);
     let searchUrl = searchMotor;
     try {
       searchUrl = normalizeSearxUrl(searchMotor, "pyash", 1);

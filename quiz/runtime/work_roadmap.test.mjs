@@ -32,7 +32,7 @@ test("live system refusal is external evidence, not technical retry or human dir
   const task = {
     status: "blocked",
     checkpoint: {
-      blocker: "The implementation corrections are complete and focused tests pass. Acceptance now depends solely on required live systems: configured search at localhost:60490 and Ollama at localhost:11434 both refuse connections. Further Luna turns cannot produce fixture-free evidence."
+      blocker: "The implementation corrections are complete and focused tests pass. Acceptance now depends solely on required live systems: the configured public search motor and Ollama both refuse connections. Further Luna turns cannot produce fixture-free evidence."
     }
   };
   assert.equal(isAwaitingExternalEvidence(task), true);
