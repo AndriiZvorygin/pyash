@@ -33,7 +33,7 @@ docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
 docker compose restart caddy
 ```
 
-The deployment mounts only the Pyash `world` directory for durable sessions and queue state. It does not mount the host filesystem or expose arbitrary shell, JavaScript interpretation, write, compile, repair, or model-management tools to the browser.
+The deployment mounts only the Pyash `world` directory for durable sessions, queue state, and the web assistant workspace at `world/house/web-assistant/workspace`. Downloads and derived files should stay in that workspace. It does not mount the host filesystem or expose arbitrary shell, JavaScript interpretation, write, compile, repair, or model-management tools to the browser.
 
 ## HTTP surface
 
@@ -64,3 +64,5 @@ Useful environment values are:
 Authentication, TLS, and public exposure belong to Caddy. Rotate the existing Basic Auth credential through the host's normal Caddy configuration process rather than adding credentials to this repository.
 
 Session history is stored in the existing dated `.pya` files under the web assistant's Pyash house. Selecting another session changes the `session name` supplied to the normal mind path; it does not create a browser-only transcript store. The selected model is passed as an explicit per-request model override and must be present in the discovered/allowed Ollama catalog.
+
+The persistent working sandbox is `world/house/web-assistant/workspace` (inside the container, `/app/world/house/web-assistant/workspace`). It is the intended location for search downloads, input files, and generated intermediate artifacts. The web image intentionally does not include the full development checkout, so paths such as `caterer` are not assumed to exist there.
