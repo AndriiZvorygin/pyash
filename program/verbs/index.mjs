@@ -43,6 +43,7 @@ import begin, { signatures as beginSignatures } from "./begin.mjs";
 import restart, { signatures as restartSignatures } from "./restart.mjs";
 import stop, { signatures as stopSignatures } from "./stop.mjs";
 import health, { signatures as healthSignatures } from "./health.mjs";
+import status, { signatures as statusSignatures } from "./status.mjs";
 import go, { signatures as goSignatures } from "./go.mjs";
 import copy, { signatures as copySignatures } from "./copy.mjs";
 import directory, { signatures as directorySignatures } from "./directory.mjs";
@@ -140,6 +141,7 @@ export {
   restart,
   stop,
   health,
+  status,
   go,
   copy,
   wait,
@@ -225,6 +227,7 @@ export const builtInSignatures = [
   ...restartSignatures,
   ...stopSignatures,
   ...healthSignatures,
+  ...statusSignatures,
   ...goSignatures,
   ...copySignatures,
   ...directorySignatures,

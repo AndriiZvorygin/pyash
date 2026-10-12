@@ -74,6 +74,7 @@ export async function runToolChat({
   ollamaHost,
   reasoningEffort,
   modelTuning,
+  runtimeContext,
   mindDebug,
   debugMind,
   inputs,
@@ -281,7 +282,7 @@ export async function runToolChat({
       }
       try {
         if (!toolResult) {
-          toolResult = await interpret(toolSentence);
+          toolResult = await interpret(toolSentence, { runtimeContext });
         }
       } catch (err) {
         const surfaced = surfaceErrorSentence(err);

@@ -252,6 +252,7 @@ export async function handleImperative({
   sentence,
   state,
   memory,
+  runtimeContext,
   recordSandpitTrace,
   getDefinitionEntry,
   interpret
@@ -670,7 +671,7 @@ export async function handleImperative({
     by: sentence.by
   };
 
-  const result = await fn(callSentence, { remember: memory.remember });
+  const result = await fn(callSentence, { remember: memory.remember, runtimeContext });
 
   if (result?.mood && result?.be && result?.su) {
     const surfaced = surfaceErrorSentence(result);
