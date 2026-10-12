@@ -109,6 +109,12 @@ chatForm.addEventListener("submit", async (event) => {
   }
 });
 
+messageInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  if (typeof chatForm.requestSubmit === "function") chatForm.requestSubmit();
+});
+
 jobIntent.addEventListener("change", () => {
   const kind = jobIntent.value === "hear" ? "comfyui-hear" : "comfyui-draw";
   try {
