@@ -51,10 +51,10 @@ configuration first, use the canonical public endpoint, and only then repair
 an explicitly configured current container. It must not copy or print the
 SearXNG secret.
 
-`yacy.liberit.ca` is not a tracked Pyash search endpoint and did not resolve in
-the current development-machine probe. YaCy may be an upstream backend behind
-SearXNG, but it should not be treated as a direct Pyash motor without explicit
-configuration and a successful contract probe.
+`yacy.zvorygin.ca` is a live YaCy endpoint. Its direct JSON contract is
+`/yacysearch.json?query=<term>&maximumRecords=<count>`, not SearXNG's
+`/search?...&format=json` contract. It should not replace the current public
+SearXNG motor without an explicit YaCy adapter and a successful contract probe.
 
 The daily digest shows the lane separately, including the number of observed
 wakes, the selected repair, and the source blocker. This makes a no-progress
