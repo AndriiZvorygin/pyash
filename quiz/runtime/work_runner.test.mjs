@@ -133,6 +133,60 @@ test("interactive usage ahead of the curve pauses background work", () => {
   assert.ok(decision.pacing.headroomPercent < 0);
 });
 
+test("operator pacing override bypasses only a negative weekly headroom", () => {
+  const capacity = {
+    weekly: {
+      identified: true,
+      state: "available",
+      usedPercent: 30,
+      remainingPercent: 70,
+      windowStartAt: "2026-08-03T00:00:00.000Z",
+      resetAt: "2026-08-10T00:00:00.000Z"
+    }
+  };
+  const decision = admitBackgroundWork({
+    capacity,
+    policy: { enabled: true, reservePercent: 15, pacingDeadbandPercent: 1 },
+    forcePacing: true,
+    hasEligibleWork: true,
+    now: "2026-08-04T00:00:00.000Z"
+  });
+  assert.equal(decision.admit, true);
+  assert.equal(decision.forced, true);
+  assert.equal(decision.reason, "operator pacing override");
+  assert.equal(decision.originalReason, "weekly pacing limit");
+});
+
+test("operator pacing override still protects unknown capacity and final reserve", () => {
+  const unknown = admitBackgroundWork({
+    capacity: { weekly: { identified: false, state: "unknown" } },
+    policy: { enabled: true },
+    forcePacing: true,
+    hasEligibleWork: true
+  });
+  assert.equal(unknown.admit, false);
+  assert.equal(unknown.reason, "capacity telemetry unavailable");
+
+  const reserve = admitBackgroundWork({
+    capacity: {
+      weekly: {
+        identified: true,
+        state: "available",
+        usedPercent: 90,
+        remainingPercent: 10,
+        windowStartAt: "2026-08-03T00:00:00.000Z",
+        resetAt: "2026-08-10T00:00:00.000Z"
+      }
+    },
+    policy: { enabled: true, reservePercent: 15 },
+    forcePacing: true,
+    hasEligibleWork: true,
+    now: "2026-08-09T00:00:00.000Z"
+  });
+  assert.equal(reserve.admit, false);
+  assert.equal(reserve.reason, "weekly reserve");
+});
+
 test("weekly pacing defers when reset timing is unknown", () => {
   const decision = admitBackgroundWork({
     capacity: {
@@ -183,6 +237,40 @@ test("background one-shot records admission and scheduler health", async () => {
   assert.equal(health["capacity state"], "available");
   assert.equal(health["last decision"], "weekly pacing headroom");
   assert.deepEqual(events.map((event) => event.type), ["capacity"]);
+});
+
+test("forced background wake records an auditable pacing override", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-forced-pacing-");
+  await enqueueWorkTask(worldRoot, task("forced-task", 100));
+  const events = [];
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    policy: { enabled: true, reservePercent: 15, pacingDeadbandPercent: 1 },
+    forcePacing: true,
+    capacitySource: async () => ({
+      state: "available",
+      remainingPercent: 70,
+      usedPercent: 30,
+      resetAt: "2026-08-10T00:00:00.000Z",
+      weekly: {
+        identified: true,
+        state: "available",
+        remainingPercent: 70,
+        usedPercent: 30,
+        windowStartAt: "2026-08-03T00:00:00.000Z",
+        resetAt: "2026-08-10T00:00:00.000Z"
+      }
+    }),
+    onEvent: async (event) => events.push(event),
+    supervisor: async ({ taskId }) => ({ claimed: true, taskId, status: "accepted" }),
+    now: () => "2026-08-04T00:00:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.forcedPacing, true);
+  assert.equal(result.reason, "operator pacing override");
+  assert.equal(events.find((event) => event.type === "capacity")?.forcedPacing, true);
+  assert.equal((await readWorkSchedulerHealth(worldRoot))["forced pacing"], "true");
 });
 
 test("turn reconciliation is observable and durable without starting a model turn", async () => {
@@ -755,6 +843,7 @@ test("search evidence probes the JSON search contract rather than the healthy la
   assert.equal(result.available, false);
   assert.equal(result.checks[0].name, "web search");
   assert.match(result.checks[0].endpoint, /\/search\?q=pyash&format=json&count=1/u);
+  assert.equal(result.checks[0].endpoint.startsWith("https://tsoc.liberit.ca/"), true);
   assert.equal(urls.length, 1);
 });
 
