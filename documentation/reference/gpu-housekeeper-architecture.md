@@ -129,6 +129,7 @@ The default managed runtimes are:
 - `comfyui`
 - `katago`
 - `huggingface` (the Criterion sequence-to-sequence service)
+- `strata` when `GPU_HOUSEKEEPER_STRATA_RUNTIME_URL` is configured
 
 Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
 
@@ -143,7 +144,13 @@ inference access logs; discharge sends `keep_alive: 0` and verifies `/api/ps` is
 empty. Unknown activity, failed telemetry, and managed runtimes without a safe
 hook remain untouched. The Strata pre-load hook requests admission through
 `/capacity/prepare`, which takes the device gate and performs capacity checks
-before Strata allocates model VRAM.
+before Strata allocates model VRAM. For reverse handoff, the optional Strata
+runtime entry queries its status through a short-lived host-network helper
+container; Strata remains loopback-bound. It is eligible for discharge only
+after its configured idle grace and with zero in-flight requests. Discharge
+uses Strata's `/v1/unload`, verifies `loaded:false`, and then rechecks actual
+free VRAM before the requesting runtime proceeds. Missing status, activity,
+authentication, or unload confirmation fails closed.
 
 ## 3. Runtime Behavior
 
