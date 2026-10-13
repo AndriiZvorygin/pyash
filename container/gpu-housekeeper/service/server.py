@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -65,6 +66,14 @@ class DeviceExecutionGate:
         self.exclusive = False
       self.condition.notify_all()
 
+  def try_acquire_exclusive(self) -> bool:
+    """Acquire the device only when no managed job is using it."""
+    with self.condition:
+      if self.exclusive or self.shared:
+        return False
+      self.exclusive = True
+      return True
+
 
 _EXECUTION_GATES: Dict[str, DeviceExecutionGate] = {}
 
@@ -85,8 +94,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "beginAction": ["start", "ollama"],
     "stopAction": ["stop", "ollama"],
     "restartAction": ["restart", "ollama"],
-    "activityProbe": "provider-owned",
-    "dischargeKind": "",
+    "activityProbe": "ollama-access-log",
+    "dischargeKind": "ollama",
     "concurrencySafe": False,
     "modelStorePath": DEFAULT_OLLAMA_MODEL_STORE_PATH
   },
@@ -1376,6 +1385,40 @@ def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -
     return base
 
   probe = normalize_text(runtime_entry.get("activityProbe")).lower()
+  if probe == "ollama-access-log":
+    with _LOCK:
+      active_jobs = [
+        job for job in _JOBS.values()
+        if normalize_text(job.get("runtimeName")).lower() == runtime_name
+        and normalize_text(job.get("status")).lower() in {"queued", "running"}
+      ]
+    if active_jobs:
+      base["state"] = "active"
+      base["reason"] = "GPU Housekeeper has queued or running Ollama work"
+      return base
+
+    grace = idle_grace_seconds()
+    since = f"{max(1, int(grace))}s"
+    logs = run_docker(["logs", "--since", since, "--tail", "2000", normalize_text(runtime_entry.get("containerName"))], timeout_sec=10)
+    if not logs.get("success"):
+      base["state"] = "unknown"
+      base["reason"] = normalize_text(logs.get("message")) or "Ollama access-log activity probe failed"
+      return base
+    inference_route = re.compile(
+      r'\b(?:POST|GET)\s+["\']?/(?:api/(?:generate|chat|embed|embeddings|rerank)|v1/(?:chat/completions|completions|embeddings))(?:["\'\s?]|$)',
+      re.IGNORECASE
+    )
+    recent = [line for line in normalize_text(logs.get("stdout")).splitlines() if inference_route.search(line)]
+    if recent:
+      base["state"] = "cooldown"
+      base["lastActivityAt"] = utc_now_iso()
+      base["reason"] = "Ollama inference request appeared in access logs within the idle grace"
+      return base
+    base["state"] = "idle"
+    base["idleSeconds"] = grace
+    base["reason"] = "no queued Ollama job or recent inference access log within the idle grace"
+    return base
+
   if probe != "comfyui-queue":
     base["state"] = "unknown"
     base["reason"] = "runtime has no safe activity probe"
@@ -1519,15 +1562,20 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
 
   required = request["vramRequiredMb"]
   free_before = int(device.get("vramFreeMb") or 0)
+  total = int(device.get("vramTotalMb") or 0)
   common = {
     "requiredVramMb": required,
     "deviceId": device_id,
     "freeBeforeMb": free_before,
-    "totalMb": int(device.get("vramTotalMb") or 0),
+    "totalMb": total,
     "usedBeforeMb": int(device.get("vramUsedMb") or 0),
     "candidates": [],
     "candidateDiagnostics": []
   }
+  if total > 0 and required > total:
+    common["decision"] = "request-exceeds-device"
+    common["reason"] = f"requested VRAM ({required} MiB) exceeds device capacity ({total} MiB)"
+    return common
   # A warm target profile does not require another model allocation. This is
   # important for repeated Qwen requests: nvidia-smi reports the resident
   # model's full footprint as used VRAM, but the job will reuse that footprint
@@ -1611,6 +1659,59 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
 
 def discharge_runtime(runtime_name: str, runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   kind = normalize_text(runtime_entry.get("dischargeKind")).lower()
+  if kind == "ollama":
+    activity = observe_runtime_activity(runtime_name, runtime_entry)
+    if activity.get("state") != "idle":
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": "Ollama became active or its idle state could not be verified before discharge"
+      }
+    before = ollama_running_model_status()
+    if not before.get("available"):
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": before.get("error") or "Ollama model residency could not be checked"
+      }
+    try:
+      for model in before.get("models", []):
+        name = normalize_text(model.get("name"))
+        if not name:
+          continue
+        result = request_ollama_json("/api/generate", {
+          "model": name,
+          "prompt": "",
+          "stream": False,
+          "keep_alive": 0
+        }, timeout_sec=30)
+        if normalize_text(result.get("error")):
+          raise RuntimeError(normalize_text(result.get("error")))
+    except Exception as err:
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": normalize_text(err) or "Ollama refused model unload"
+      }
+    after = ollama_running_model_status()
+    if not after.get("available") or after.get("models"):
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": after.get("error") or "Ollama still reports resident models after unload"
+      }
+    with _LOCK:
+      for profile in _PROFILES.values():
+        if normalize_text(profile.get("runtimeName")).lower() == runtime_name:
+          profile["loaded"] = False
+          profile["gpuResident"] = False
+          profile["gpuResidencyReason"] = "model discharged for managed GPU capacity handoff"
+      _RUNTIME_ACTIVITY[runtime_name] = {"lastActivityAt": "", "idleSince": time.time()}
+    return {
+      "success": True,
+      "runtimeName": runtime_name,
+      "reason": "idle Ollama models unloaded through keep_alive=0 and verified absent from /api/ps"
+    }
   if kind == "huggingface":
     try:
       result = request_huggingface_json("/discharge", {}, timeout_sec=60)
@@ -1686,7 +1787,7 @@ def ensure_capacity_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
     return plan
   if decision == "telemetry-unavailable":
     raise RuntimeError(plan.get("reason") or "GPU capacity telemetry unavailable")
-  if decision in {"invalid-device", "discharge-disabled", "insufficient"}:
+  if decision in {"invalid-device", "request-exceeds-device", "discharge-disabled", "insufficient"}:
     raise RuntimeError(plan.get("reason") or "GPU capacity is insufficient")
 
   for candidate in plan.get("candidates", []):
@@ -1703,6 +1804,43 @@ def ensure_capacity_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
       return refreshed
 
   raise RuntimeError("GPU capacity remains insufficient after safe managed-runtime discharge")
+
+
+def prepare_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  """Prepare a one-shot external model load under the manager's device gate."""
+  runtime_name = normalize_text(payload.get("runtimeName")).lower()
+  if runtime_name != "strata":
+    return {"prepared": False, "error": "capacity preparation is reserved for the strata runtime"}
+  job_spec = payload.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    return {"prepared": False, "error": "jobSpec must be a map"}
+  job = {
+    "runtimeName": runtime_name,
+    "profileName": normalize_text(payload.get("profileName")),
+    "deviceId": normalize_text(payload.get("deviceId")),
+    "dischargeAllowed": payload.get("dischargeAllowed", True) is not False,
+    "jobSpec": job_spec
+  }
+  try:
+    job_resource_request(job)
+  except RuntimeError as err:
+    return {"prepared": False, "error": normalize_text(err)}
+
+  telemetry = parse_nvidia_smi()
+  devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+  if not telemetry.get("available") or not devices:
+    return {"prepared": False, "error": "nvidia-smi memory telemetry unavailable"}
+  device_id = normalize_device_id(job.get("deviceId"), devices)
+  gate = execution_gate_for(device_id)
+  if not gate.try_acquire_exclusive():
+    return {"prepared": False, "busy": True, "deviceId": device_id, "error": "GPU Housekeeper has active managed GPU work"}
+  try:
+    capacity = ensure_capacity_for_job(job, runtime_registry)
+  except RuntimeError as err:
+    return {"prepared": False, "deviceId": device_id, "error": normalize_text(err)}
+  finally:
+    gate.release(shared=False)
+  return {"prepared": True, "deviceId": device_id, "capacity": capacity}
 
 
 def preview_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -2993,6 +3131,12 @@ class Handler(BaseHTTPRequestHandler):
     if self.path == "/capacity/preview":
       payload = read_json_body(self)
       json_response(self, 200, preview_capacity(payload, self.runtime_registry))
+      return
+
+    if self.path == "/capacity/prepare":
+      payload = read_json_body(self)
+      result = prepare_capacity(payload, self.runtime_registry)
+      json_response(self, 200 if result.get("prepared") else (409 if result.get("busy") else 503), result)
       return
 
     if self.path == "/submit":

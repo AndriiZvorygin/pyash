@@ -1,16 +1,55 @@
 # mind.md — Pyash Mind Integration
 
-This document defines how a **mind** (an LLM endpoint) is configured, how Pyash calls it, how replies are represented, and how conversational context flows to Ollama.
+This document defines how a **mind** (an LLM endpoint) is configured, how Pyash calls it, how replies are represented, and how conversational context flows across supported backends.
 
 ## Concepts
 
 - A **mind** is an LLM endpoint plus configuration.
 - Configure once with `be mind ya` (host/model/system prompt).
 - Invoke with `be write ... for name <mind> to name <output> do`.
-- The interpreter calls `motor/ollama.mjs`.
+- The selected backend module calls its provider adapter.
 - The compiler (JS) emits a call into a small JS HTTP helper instead of shelling out to `curl`.
 
-All calls use Ollama’s `/api/chat` endpoint with a `messages[]` array so the model receives previous turns as context.
+The default backend remains Ollama. Optional OpenAI-compatible backends use the same conversation and tool-call payloads through the OpenAI Chat Completions API.
+
+## Optional Local Strata Backend
+
+Pyash can use Strata as a selectable local backend without changing the default Ollama profile. Configure it with the backend key `strata`; its default host is `http://127.0.0.1:8081` and its OpenAI-compatible model alias is `strata`.
+
+```sh
+./run pyash configure mind --backend strata --host http://127.0.0.1:8081 --model strata
+```
+
+Pyash sends requests to `http://127.0.0.1:8081/v1/chat/completions`. The Strata runner uses a local placeholder bearer token by default so it never falls through to Codex OAuth; if Strata API-key auth is enabled, provide that key through `STRATA_API_KEY` outside the repository.
+
+### GPU manager handoff
+
+Strata must be installed outside this repository. Strata eagerly loads the model on its initial server start, before its `before_load` hook applies, so start it through the Pyash admission helper:
+
+```sh
+PYASH_ROOT=/path/to/pyash
+STRATA_ROOT="$HOME/Strata"
+python3 "$PYASH_ROOT/command/strata_prepare_gpu.py" 20000 -- "$STRATA_ROOT/run-iq2_xs.sh"
+```
+
+The helper starts Strata only after the GPU Housekeeper grants capacity. It retries the manager's specific post-discharge VRAM-settling refusal; all other refusals fail closed. In Strata's `strata-<model>.json`, also point `before_load` at the tracked Pyash capacity hook for future unload/reload cycles and set the same free-VRAM threshold. Replace `<pyash-root>` with this checkout's absolute path:
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 8081,
+  "before_load": ["python3", "<pyash-root>/command/strata_prepare_gpu.py", "20000"],
+  "before_load_timeout_s": 120,
+  "before_load_strict": true,
+  "min_free_vram_mib": 20000
+}
+```
+
+Before startup and before later model reloads, the helper/hook asks the local GPU Housekeeper to admit the requested VRAM. The manager refuses while its execution gate is busy, and only unloads a managed runtime when its provider-specific activity probe confirms it is safe. For Ollama this means no queued/running Housekeeper job, no inference request in the configured idle-log window, `keep_alive: 0` for each resident model, and a verified empty `/api/ps` response. Unknown activity or failed telemetry prevents loading. Strata's `min_free_vram_mib` checks the free-VRAM floor again, closing the short race between manager admission and allocation.
+
+Individual Chat Completions remain HTTP requests directly to Strata; they are not queued as individual Housekeeper jobs. The GPU manager governs model-load handoff, and its normal capacity admission sees Strata's actual VRAM use before starting other managed GPU work.
+
+Keep Strata bound to loopback. The Housekeeper endpoint is on the host-local `http://127.0.0.1:8090`; do not point the Strata hook at a remote or federated manager.
 
 ---
 
