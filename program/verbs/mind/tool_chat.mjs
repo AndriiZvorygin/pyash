@@ -26,7 +26,7 @@ function buildPromptText(messages) {
 function modelLooksVisionCapable(model) {
   const text = String(model ?? "").toLowerCase().trim();
   if (!text) return false;
-  return /(vl|vision|llava|minicpm-v|moondream|internvl|qvq)/.test(text);
+  return /(strata|vl|vision|llava|minicpm-v|moondream|internvl|qvq)/.test(text);
 }
 
 function normalizeVisionInput(input) {

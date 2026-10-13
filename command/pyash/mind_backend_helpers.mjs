@@ -4,7 +4,8 @@ export const MIND_BACKEND_CHOICES = [
   { key: "openai-api", value: "openai command mind", label: "OpenAI API key" },
   { key: "openai-codex", value: "openai command mind", label: "OpenAI Codex OAuth" },
   { key: "openrouter", value: "openrouter command mind", label: "OpenRouter" },
-  { key: "vllm", value: "vllm command mind", label: "vLLM" }
+  { key: "vllm", value: "vllm command mind", label: "vLLM" },
+  { key: "strata", value: "strata command mind", label: "Strata (local, GPU-managed)" }
 ];
 
 export function canonicalizeMindBackend(raw) {
@@ -17,6 +18,7 @@ export function canonicalizeMindBackend(raw) {
   if (text === "litellm") return "litellm command mind";
   if (text === "openrouter") return "openrouter command mind";
   if (text === "vllm") return "vllm command mind";
+  if (text === "strata") return "strata command mind";
   return text;
 }
 
@@ -41,6 +43,20 @@ export async function fetchOllamaModels(host, { timeoutMs = 5000 } = {}) {
     return { ok: true, models };
   } catch (err) {
     return { ok: false, error: String(err?.message || err), models: [] };
+  }
+}
+
+export async function fetchStrataHealth(host, { timeoutMs = 5000 } = {}) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`${host.replace(/\/+$/, "")}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return { ok: false, error: `status ${res.status}` };
+    const health = await res.json();
+    return { ok: true, health };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
   }
 }
 
@@ -205,6 +221,7 @@ export function suggestMindRelayName({ source = "", model = "", fallback = "defa
 
 export function defaultMindHostForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
+  if (key === "strata") return "http://127.0.0.1:8081";
   if (key === "openai-api" || key === "openai-codex") {
     return "https://api.openai.com";
   }
@@ -216,6 +233,7 @@ export function defaultMindHostForSource(source = "") {
 
 export function defaultMindModelForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
+  if (key === "strata") return "strata";
   if (key === "openai-api" || key === "openai-codex") return "gpt-5-codex";
   if (key === "openrouter") return "openrouter/auto";
   return "gpt-oss:latest";

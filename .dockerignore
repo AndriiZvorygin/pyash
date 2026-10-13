@@ -9,6 +9,10 @@
 !caterer/cjson/
 !caterer/cjson/cJSON.h
 !caterer/cjson/cJSON.c
+!container/
+!container/gpu-housekeeper/
+!container/gpu-housekeeper/service/
+!container/gpu-housekeeper/service/server.py
 !module/
 !module/**
 !program/

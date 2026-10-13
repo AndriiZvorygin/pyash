@@ -103,6 +103,7 @@ needs a larger recovery window.
 - `GET /runtime/<runtimeName>`
 - `GET /runtime/ollama/models`
 - `POST /capacity/preview`
+- `POST /capacity/prepare` (Strata pre-load admission and idle-runtime handoff)
 - `POST /submit`
 - `GET /job/<remoteJobId>`
 - `POST /discharge`
@@ -136,9 +137,13 @@ reclamation. A runtime being present in the registry means that the
 housekeeper is allowed to inspect and manage its configured container; it does
 not mean that the housekeeper may terminate arbitrary host processes. Automatic
 reclamation requires both a runtime-specific `activityProbe` and a supported
-`dischargeKind`. The default ComfyUI entry uses the empty-queue probe and the
-provider's `/interrupt`, queue-clear, and `/free` hooks. Unknown processes and
-managed runtimes without a safe hook remain untouched.
+`dischargeKind`. ComfyUI uses its empty-queue probe and `/interrupt`, queue-clear,
+and `/free` hooks. Ollama uses the Housekeeper job ledger plus recent container
+inference access logs; discharge sends `keep_alive: 0` and verifies `/api/ps` is
+empty. Unknown activity, failed telemetry, and managed runtimes without a safe
+hook remain untouched. The Strata pre-load hook requests admission through
+`/capacity/prepare`, which takes the device gate and performs capacity checks
+before Strata allocates model VRAM.
 
 ## 3. Runtime Behavior
 

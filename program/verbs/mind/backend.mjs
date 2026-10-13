@@ -1,5 +1,14 @@
 import { throwErrorSentence } from "../../error.mjs";
 
+function resolveMindBackendHost({ backendName = "", runtimeHost = "", ollamaHost = "", aiHost = "" } = {}) {
+  const runtime = String(runtimeHost ?? "").trim();
+  if (runtime) return runtime;
+  const backend = String(backendName ?? "").trim().toLowerCase();
+  const preferred = backend === "ollama command mind" ? ollamaHost : aiHost;
+  const fallback = backend === "ollama command mind" ? aiHost : ollamaHost;
+  return String(preferred ?? "").trim() || String(fallback ?? "").trim() || null;
+}
+
 async function resolveInterpret() {
   const mod = await import("../../bridge/index.mjs");
   return mod.interpret;
@@ -60,4 +69,4 @@ async function callMindBackendStream({ backendName, payload }) {
   });
 }
 
-export { resolveInterpret, callMindBackend, callMindBackendStream };
+export { resolveInterpret, callMindBackend, callMindBackendStream, resolveMindBackendHost };

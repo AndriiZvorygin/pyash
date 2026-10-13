@@ -60,6 +60,10 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server._JOBS.clear()
 
   def test_submit_accepts_ollama_generate_and_chat_jobs(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 0, "vramFreeMb": 24576}]
+    }
     generate = server.submit_job({
       "handleId": "handle-one",
       "runtimeName": "ollama",
@@ -801,6 +805,10 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.orig_managed_gpu_processes = server.managed_gpu_processes
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_request_comfyui_json = server.request_comfyui_json
+    self.orig_request_ollama_json = server.request_ollama_json
+    self.orig_ollama_running_model_status = server.ollama_running_model_status
+    self.orig_run_docker = server.run_docker
+    self.orig_observe_runtime_activity = server.observe_runtime_activity
     self.orig_idle_grace_seconds = server.idle_grace_seconds
     server._RUNTIME_ACTIVITY.clear()
     server._PROFILES.clear()
@@ -812,6 +820,10 @@ class HousekeeperCapacityTests(unittest.TestCase):
     server.managed_gpu_processes = self.orig_managed_gpu_processes
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.request_comfyui_json = self.orig_request_comfyui_json
+    server.request_ollama_json = self.orig_request_ollama_json
+    server.ollama_running_model_status = self.orig_ollama_running_model_status
+    server.run_docker = self.orig_run_docker
+    server.observe_runtime_activity = self.orig_observe_runtime_activity
     server.idle_grace_seconds = self.orig_idle_grace_seconds
     server._RUNTIME_ACTIVITY.clear()
     server._PROFILES.clear()
@@ -1039,6 +1051,114 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.assertTrue(result["dryRun"])
     self.assertTrue(result["feasible"])
     self.assertEqual(result["decision"], "reclaim-available")
+
+  def test_ollama_probe_requires_quiet_inference_logs_and_no_managed_jobs(self):
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True, "message": "running"
+    }
+    server.run_docker = lambda *_args, **_kwargs: {
+      "success": True, "stdout": '[GIN] POST "/v1/chat/completions"\n'
+    }
+    activity = server.observe_runtime_activity("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
+    self.assertEqual(activity["state"], "cooldown")
+
+    server._JOBS["ollama-running"] = {
+      "runtimeName": "ollama", "status": "running"
+    }
+    server.run_docker = lambda *_args, **_kwargs: self.fail("tracked work must be checked before logs")
+    activity = server.observe_runtime_activity("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
+    self.assertEqual(activity["state"], "active")
+
+  def test_ollama_discharge_unloads_and_verifies_models(self):
+    server.observe_runtime_activity = lambda *_args, **_kwargs: {"state": "idle"}
+    model_reports = iter([
+      {"available": True, "models": [{"name": "qwen3.5:9b"}]},
+      {"available": True, "models": []}
+    ])
+    server.ollama_running_model_status = lambda: next(model_reports)
+    requests = []
+    server.request_ollama_json = lambda path, payload=None, timeout_sec=600: requests.append((path, payload)) or {}
+    result = server.discharge_runtime("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
+    self.assertTrue(result["success"])
+    self.assertEqual(requests, [(
+      "/api/generate",
+      {"model": "qwen3.5:9b", "prompt": "", "stream": False, "keep_alive": 0}
+    )])
+
+  def test_ollama_discharge_fails_closed_when_idle_state_is_unknown(self):
+    server.observe_runtime_activity = lambda *_args, **_kwargs: {"state": "unknown"}
+    server.ollama_running_model_status = lambda: self.fail("must not inspect/unload after unknown activity")
+    result = server.discharge_runtime("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
+    self.assertFalse(result["success"])
+
+  def test_strata_capacity_admission_reclaims_idle_ollama_through_housekeeper(self):
+    telemetry = iter([
+      {"available": True, "devices": [{
+        "deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576
+      }]},
+      {"available": True, "devices": [{
+        "deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576
+      }]},
+      {"available": True, "devices": [{
+        "deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 4000, "vramFreeMb": 20576
+      }]}
+    ])
+    server.parse_nvidia_smi = lambda: next(telemetry)
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"ollama": {"usedMemoryMb": 18000}},
+      "unmanagedProcesses": []
+    }
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True, "message": "running"
+    }
+    server.run_docker = lambda *_args, **_kwargs: {"success": True, "stdout": ""}
+    model_reports = iter([
+      {"available": True, "models": [{"name": "qwen3.5:9b"}]},
+      {"available": True, "models": []}
+    ])
+    server.ollama_running_model_status = lambda: next(model_reports)
+    requests = []
+    server.request_ollama_json = lambda path, payload=None, timeout_sec=600: requests.append((path, payload)) or {}
+
+    result = server.prepare_capacity({
+      "runtimeName": "strata",
+      "jobSpec": {"resourceRequest": {"vramRequiredMb": 20000}}
+    }, server.DEFAULT_RUNTIME_REGISTRY)
+
+    self.assertTrue(result["prepared"], result)
+    self.assertEqual(result["capacity"]["decision"], "reclaimed")
+    self.assertEqual(result["capacity"]["discharged"], ["ollama"])
+    self.assertEqual(requests[0][1]["keep_alive"], 0)
+
+  def test_capacity_prepare_fails_fast_when_device_gate_is_busy(self):
+    telemetry = {"available": True, "devices": [{
+      "deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 4000, "vramFreeMb": 20576
+    }]}
+    server.parse_nvidia_smi = lambda: telemetry
+    gate = server.execution_gate_for("gpu0")
+    self.assertTrue(gate.try_acquire_exclusive())
+    try:
+      result = server.prepare_capacity({
+        "runtimeName": "strata",
+        "jobSpec": {"resourceRequest": {"vramRequiredMb": 20000}}
+      }, server.DEFAULT_RUNTIME_REGISTRY)
+    finally:
+      gate.release(shared=False)
+    self.assertFalse(result["prepared"])
+    self.assertTrue(result["busy"])
+
+  def test_capacity_prepare_runs_admission_under_manager_gate(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 4000, "vramFreeMb": 20576}]
+    }
+    result = server.prepare_capacity({
+      "runtimeName": "strata",
+      "jobSpec": {"resourceRequest": {"vramRequiredMb": 20000}}
+    }, server.DEFAULT_RUNTIME_REGISTRY)
+    self.assertTrue(result["prepared"])
+    self.assertEqual(result["capacity"]["decision"], "fits")
 
 
 class HousekeeperComfyuiTests(unittest.TestCase):

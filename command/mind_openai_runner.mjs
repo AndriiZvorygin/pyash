@@ -14,11 +14,12 @@ import {
 function parseArgs(argv) {
   const args = argv.slice(2);
   const stream = args.includes("--stream");
+  const strata = args.includes("--strata");
   const payloadIndex = args.indexOf("--payload");
   const payloadFileIndex = args.indexOf("--payload-file");
   const payload = payloadIndex !== -1 ? args[payloadIndex + 1] ?? "" : null;
   const payloadFile = payloadFileIndex !== -1 ? args[payloadFileIndex + 1] ?? "" : null;
-  return { stream, payload, payloadFile };
+  return { stream, strata, payload, payloadFile };
 }
 
 function readStdin() {
@@ -30,7 +31,7 @@ function readStdin() {
 }
 
 async function parsePayload() {
-  const { stream, payload: payloadArg, payloadFile } = parseArgs(process.argv);
+  const { stream, strata, payload: payloadArg, payloadFile } = parseArgs(process.argv);
   let raw = "";
   if (payloadArg != null) raw = payloadArg;
   else if (payloadFile) raw = await fs.promises.readFile(payloadFile, "utf8");
@@ -43,7 +44,7 @@ async function parsePayload() {
     throw new Error(`mind_openai_runner: invalid JSON payload (${err?.message ?? err})`);
   }
   payload.stream = stream || payload.stream === true;
-  return payload;
+  return { payload, strata };
 }
 
 function textPart(part) {
@@ -262,7 +263,7 @@ async function runCodexFallback(payload = {}, { stream = false } = {}) {
 }
 
 async function main() {
-  const payload = await parsePayload();
+  const { payload, strata } = await parsePayload();
 
   if (process.env.PYA_COMMAND_RESPONSE) {
     process.stdout.write(`${process.env.PYA_COMMAND_RESPONSE}\n`);
@@ -270,8 +271,11 @@ async function main() {
   }
 
   const host = resolveHost(payload);
-  const apiKey = resolveApiKey({ host, payload });
-  if (!apiKey) {
+  const strataKey = [payload.apiKey, process.env.STRATA_API_KEY]
+    .map((value) => String(value ?? "").trim())
+    .find(Boolean);
+  const apiKey = strata ? (strataKey || "pyash-local") : resolveApiKey({ host, payload });
+  if (!apiKey && !strata) {
     const fallback = await runCodexFallback(payload, { stream: payload.stream === true });
     if (fallback) process.stdout.write(`${JSON.stringify(fallback)}\n`);
     return;
