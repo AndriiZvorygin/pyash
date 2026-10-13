@@ -47,7 +47,15 @@ The helper starts Strata only after the GPU Housekeeper grants capacity. It retr
 
 Before startup and before later model reloads, the helper/hook asks the local GPU Housekeeper to admit the requested VRAM. The manager refuses while its execution gate is busy, and only unloads a managed runtime when its provider-specific activity probe confirms it is safe. For Ollama this means no queued/running Housekeeper job, no inference request in the configured idle-log window, `keep_alive: 0` for each resident model, and a verified empty `/api/ps` response. Unknown activity or failed telemetry prevents loading. Strata's `min_free_vram_mib` checks the free-VRAM floor again, closing the short race between manager admission and allocation.
 
-Individual Chat Completions remain HTTP requests directly to Strata; they are not queued as individual Housekeeper jobs. The GPU manager governs model-load handoff, and its normal capacity admission sees Strata's actual VRAM use before starting other managed GPU work.
+For reverse handoff, register this host's loopback Strata API with the Housekeeper by adding the following to `container/gpu-housekeeper/service/.env`, then restart the Housekeeper:
+
+```sh
+GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=http://127.0.0.1:8081
+```
+
+The manager then checks Strata before admitting another managed GPU runtime. It unloads Strata only after its status API confirms zero in-flight requests and the configured 300-second idle grace has elapsed; it verifies `loaded:false` and rechecks actual free VRAM before admitting the next runtime. The Housekeeper uses a short-lived host-network helper container to reach Strata's loopback API, so Strata itself remains bound to `127.0.0.1`. If Strata API-key authentication is enabled, put the same key in the Housekeeper environment as `STRATA_API_KEY`; never commit it.
+
+Individual Chat Completions remain HTTP requests directly to Strata; they are not queued as individual Housekeeper jobs. The Housekeeper's Strata activity probe uses Strata's own in-flight and last-request status, and refuses to discharge it when those fields are absent or invalid.
 
 Keep Strata bound to loopback. The Housekeeper endpoint is on the host-local `http://127.0.0.1:8090`; do not point the Strata hook at a remote or federated manager.
 

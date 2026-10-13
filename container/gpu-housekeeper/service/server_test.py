@@ -806,6 +806,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_request_comfyui_json = server.request_comfyui_json
     self.orig_request_ollama_json = server.request_ollama_json
+    self.orig_request_strata_json = server.request_strata_json
     self.orig_ollama_running_model_status = server.ollama_running_model_status
     self.orig_run_docker = server.run_docker
     self.orig_observe_runtime_activity = server.observe_runtime_activity
@@ -821,6 +822,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.request_comfyui_json = self.orig_request_comfyui_json
     server.request_ollama_json = self.orig_request_ollama_json
+    server.request_strata_json = self.orig_request_strata_json
     server.ollama_running_model_status = self.orig_ollama_running_model_status
     server.run_docker = self.orig_run_docker
     server.observe_runtime_activity = self.orig_observe_runtime_activity
@@ -1159,6 +1161,179 @@ class HousekeeperCapacityTests(unittest.TestCase):
     }, server.DEFAULT_RUNTIME_REGISTRY)
     self.assertTrue(result["prepared"])
     self.assertEqual(result["capacity"]["decision"], "fits")
+
+  def test_strata_probe_requires_idle_grace_and_no_in_flight_request(self):
+    now = time.time()
+    status = {
+      "service": "strata",
+      "loaded": True,
+      "started": now - 900,
+      "activity": {"in_flight": 0, "last_request_at": now - 301}
+    }
+    server.request_strata_json = lambda *_args, **_kwargs: status
+    server.idle_grace_seconds = lambda: 300
+    entry = {
+      "runtimeName": "strata", "gpuExpected": True,
+      "activityProbe": "strata-status", "dischargeKind": "strata"
+    }
+
+    self.assertEqual(server.observe_runtime_activity("strata", entry)["state"], "idle")
+    status["activity"]["in_flight"] = 1
+    self.assertEqual(server.observe_runtime_activity("strata", entry)["state"], "active")
+    status["activity"]["in_flight"] = 0
+    status["activity"]["last_request_at"] = now - 30
+    self.assertEqual(server.observe_runtime_activity("strata", entry)["state"], "cooldown")
+    del status["activity"]["in_flight"]
+    self.assertEqual(server.observe_runtime_activity("strata", entry)["state"], "unknown")
+
+  def test_strata_discharge_waits_for_idle_and_verifies_unloaded_state(self):
+    loaded = {"value": True}
+    calls = []
+    entry = {
+      "runtimeName": "strata", "gpuExpected": True,
+      "activityProbe": "strata-status", "dischargeKind": "strata"
+    }
+    server.idle_grace_seconds = lambda: 0
+
+    def fake_status(pathname, payload=None, timeout_sec=30):
+      calls.append((pathname, payload))
+      if pathname == "/v1/unload":
+        loaded["value"] = False
+        return {"loaded": False}
+      return {
+        "service": "strata", "loaded": loaded["value"], "started": time.time() - 10,
+        "activity": {"in_flight": 0, "last_request_at": time.time() - 10}
+      }
+
+    server.request_strata_json = fake_status
+    result = server.discharge_runtime("strata", entry)
+    self.assertTrue(result["success"], result)
+    self.assertEqual(calls.count(("/v1/unload", {})), 1)
+    self.assertEqual(calls[-1][0], "/v1/status")
+
+  def test_strata_discharge_refuses_active_or_unknown_state(self):
+    entry = {
+      "runtimeName": "strata", "gpuExpected": True,
+      "activityProbe": "strata-status", "dischargeKind": "strata"
+    }
+    server.observe_runtime_activity = lambda *_args, **_kwargs: {"state": "active"}
+    server.request_strata_json = lambda *_args, **_kwargs: self.fail("must not unload an active model")
+    result = server.discharge_runtime("strata", entry)
+    self.assertFalse(result["success"])
+    self.assertIn("active", result["reason"])
+
+  def test_explicit_profile_discharge_dispatches_to_strata_hook(self):
+    entry = {
+      "runtimeName": "strata", "gpuExpected": True,
+      "activityProbe": "strata-status", "dischargeKind": "strata"
+    }
+    server._PROFILES["strata-profile"] = {
+      "profileName": "strata-profile", "runtimeName": "strata", "loaded": True
+    }
+    original_discharge_runtime = server.discharge_runtime
+    calls = []
+    server.discharge_runtime = lambda runtime_name, runtime_entry: calls.append((runtime_name, runtime_entry)) or {
+      "success": True, "runtimeName": runtime_name, "reason": "verified"
+    }
+    try:
+      result = server.discharge({"profileName": "strata-profile"}, {"strata": entry})
+    finally:
+      server.discharge_runtime = original_discharge_runtime
+    self.assertTrue(result["discharged"])
+    self.assertEqual(calls, [("strata", entry)])
+
+  def test_managed_capacity_handoff_reclaims_idle_strata_then_rechecks_vram(self):
+    telemetry = iter([
+      {"available": True, "devices": [{
+        "deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576
+      }]},
+      {"available": True, "devices": [{
+        "deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 4000, "vramFreeMb": 20576
+      }]}
+    ])
+    server.parse_nvidia_smi = lambda: next(telemetry)
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"strata": {"usedMemoryMb": 0}},
+      "unmanagedProcesses": []
+    }
+    server.idle_grace_seconds = lambda: 0
+    loaded = {"value": True}
+
+    def fake_strata(pathname, payload=None, timeout_sec=30):
+      if pathname == "/v1/unload":
+        loaded["value"] = False
+        return {"loaded": False}
+      return {
+        "service": "strata", "loaded": loaded["value"], "started": time.time() - 10,
+        "activity": {"in_flight": 0, "last_request_at": time.time() - 10}
+      }
+
+    server.request_strata_json = fake_strata
+    registry = {
+      "huggingface": {"runtimeName": "huggingface"},
+      "strata": {
+        "runtimeName": "strata", "gpuExpected": True,
+        "activityProbe": "strata-status", "dischargeKind": "strata"
+      }
+    }
+    result = server.ensure_capacity_for_job(self.target_job(), registry)
+    self.assertEqual(result["decision"], "reclaimed")
+    self.assertEqual(result["discharged"], ["strata"])
+    self.assertEqual(result["freeBeforeMb"], 20576)
+
+  def test_strata_loopback_api_uses_host_network_helper(self):
+    original_url = os.environ.get("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL")
+    original_image = os.environ.get("GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE")
+    original_api_key = os.environ.get("STRATA_API_KEY")
+    os.environ["GPU_HOUSEKEEPER_STRATA_RUNTIME_URL"] = "http://127.0.0.1:8081"
+    os.environ["GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE"] = "test-housekeeper:local"
+    os.environ.pop("STRATA_API_KEY", None)
+    calls = []
+    server.run_docker = lambda args, timeout_sec=8: calls.append((args, timeout_sec)) or {
+      "success": True, "stdout": '{"service":"strata","loaded":true}'
+    }
+    try:
+      result = server.request_strata_json("/v1/status")
+    finally:
+      server.run_docker = self.orig_run_docker
+      for name, value in (
+        ("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL", original_url),
+        ("GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE", original_image),
+        ("STRATA_API_KEY", original_api_key)
+      ):
+        if value is None:
+          os.environ.pop(name, None)
+        else:
+          os.environ[name] = value
+    self.assertTrue(result["loaded"])
+    args = calls[0][0]
+    self.assertIn("--network", args)
+    self.assertIn("host", args)
+    self.assertIn("test-housekeeper:local", args)
+    self.assertIn("http://127.0.0.1:8081/v1/status", args)
+
+  def test_strata_runtime_is_added_only_when_loopback_url_is_configured(self):
+    original_url = os.environ.get("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL")
+    original_registry = os.environ.get("GPU_HOUSEKEEPER_RUNTIME_REGISTRY")
+    os.environ.pop("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL", None)
+    os.environ.pop("GPU_HOUSEKEEPER_RUNTIME_REGISTRY", None)
+    try:
+      self.assertNotIn("strata", server.load_runtime_registry())
+      os.environ["GPU_HOUSEKEEPER_STRATA_RUNTIME_URL"] = "http://127.0.0.1:8081"
+      entry = server.load_runtime_registry()["strata"]
+      self.assertEqual(entry["activityProbe"], "strata-status")
+      self.assertEqual(entry["dischargeKind"], "strata")
+      self.assertEqual(entry["containerName"], "")
+    finally:
+      for name, value in (
+        ("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL", original_url),
+        ("GPU_HOUSEKEEPER_RUNTIME_REGISTRY", original_registry)
+      ):
+        if value is None:
+          os.environ.pop(name, None)
+        else:
+          os.environ[name] = value
 
 
 class HousekeeperComfyuiTests(unittest.TestCase):
