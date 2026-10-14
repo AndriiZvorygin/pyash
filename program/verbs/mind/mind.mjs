@@ -31,6 +31,7 @@ import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from ".
 import { resolveHistoryContext } from "./history_context.mjs";
 import { runToolChat } from "./tool_chat.mjs";
 import { runGenerate } from "./generate.mjs";
+import { resolveMindBackendHost } from "./backend.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 import { consumeMindInterrupt } from "../../agent/interrupt.mjs";
@@ -489,7 +490,12 @@ export async function mind_to_name_text(sentence, {
   const runtimeHost = agentRuntime?.host ? String(agentRuntime.host).trim() : null;
   const runtimeReasoningEffort = agentRuntime?.reasoningEffort ? String(agentRuntime.reasoningEffort).trim() : null;
   const backendName = runtimeBackend || resolveConfigText("mind backend", { rememberFn: remember }) || null;
-  const ollamaHost = runtimeHost || resolveConfigText("ollama host", { rememberFn: remember }) || null;
+  const ollamaHost = resolveMindBackendHost({
+    backendName,
+    runtimeHost,
+    ollamaHost: resolveConfigText("ollama host", { rememberFn: remember }),
+    aiHost: resolveConfigText("ai host", { rememberFn: remember })
+  });
   const mindReasoningEffort = runtimeReasoningEffort || resolveConfigText("mind reasoning effort", { rememberFn: remember }) || null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
   const debugMind = (label, payload) => {

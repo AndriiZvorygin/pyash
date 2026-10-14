@@ -1594,6 +1594,44 @@ maybeTest("configure mind source switch ignores prior ollama host/model defaults
   assert.equal(payload.config.model, "gpt-5-codex");
 });
 
+maybeTest("configure mind selects Strata without overwriting the saved Ollama host", async () => {
+  const root = await makeRoot();
+  const ollama = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "local",
+    "--set-default", "truth",
+    "--backend", "ollama",
+    "--host", "http://mriczo:11434",
+    "--model", "qwen3.5:9b",
+    "--test-now", "lie"
+  ]);
+  assert.equal(ollama.status, 0, ollama.stderr);
+
+  const strata = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "local",
+    "--set-default", "truth",
+    "--backend", "strata",
+    "--test-now", "lie"
+  ]);
+  assert.equal(strata.status, 0, strata.stderr);
+  const result = JSON.parse(strata.stdout);
+  assert.equal(result.config.backend, "strata command mind");
+  assert.equal(result.config.host, "http://127.0.0.1:8081");
+  assert.equal(result.config.model, "strata");
+
+  const secretText = await fs.readFile(path.join(root, "configure", "secret.pya"), "utf8");
+  assert.match(secretText, /exists su name mind backend be default ob name strata command mind ya/);
+  assert.match(secretText, /exists su name ai host ob text "http:\/\/127\.0\.0\.1:8081" be default ya/);
+  assert.match(secretText, /exists su name ollama host ob text "http:\/\/mriczo:11434" be default ya/);
+});
+
 maybeTest("configure mind stores reasoning effort when provided", async () => {
   const root = await makeRoot();
   const run = runCli([

@@ -103,6 +103,7 @@ needs a larger recovery window.
 - `GET /runtime/<runtimeName>`
 - `GET /runtime/ollama/models`
 - `POST /capacity/preview`
+- `POST /capacity/prepare` (Strata pre-load admission and idle-runtime handoff)
 - `POST /submit`
 - `GET /job/<remoteJobId>`
 - `POST /discharge`
@@ -128,6 +129,7 @@ The default managed runtimes are:
 - `comfyui`
 - `katago`
 - `huggingface` (the Criterion sequence-to-sequence service)
+- `strata` when `GPU_HOUSEKEEPER_STRATA_RUNTIME_URL` is configured
 
 Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
 
@@ -136,9 +138,19 @@ reclamation. A runtime being present in the registry means that the
 housekeeper is allowed to inspect and manage its configured container; it does
 not mean that the housekeeper may terminate arbitrary host processes. Automatic
 reclamation requires both a runtime-specific `activityProbe` and a supported
-`dischargeKind`. The default ComfyUI entry uses the empty-queue probe and the
-provider's `/interrupt`, queue-clear, and `/free` hooks. Unknown processes and
-managed runtimes without a safe hook remain untouched.
+`dischargeKind`. ComfyUI uses its empty-queue probe and `/interrupt`, queue-clear,
+and `/free` hooks. Ollama uses the Housekeeper job ledger plus recent container
+inference access logs; discharge sends `keep_alive: 0` and verifies `/api/ps` is
+empty. Unknown activity, failed telemetry, and managed runtimes without a safe
+hook remain untouched. The Strata pre-load hook requests admission through
+`/capacity/prepare`, which takes the device gate and performs capacity checks
+before Strata allocates model VRAM. For reverse handoff, the optional Strata
+runtime entry queries its status through a short-lived host-network helper
+container; Strata remains loopback-bound. It is eligible for discharge only
+after its configured idle grace and with zero in-flight requests. Discharge
+uses Strata's `/v1/unload`, verifies `loaded:false`, and then rechecks actual
+free VRAM before the requesting runtime proceeds. Missing status, activity,
+authentication, or unload confirmation fails closed.
 
 ## 3. Runtime Behavior
 
