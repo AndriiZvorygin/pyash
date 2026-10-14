@@ -374,6 +374,29 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(plan["decision"], "fits")
     self.assertTrue(plan["targetProfileLoaded"])
 
+  def test_loaded_external_strata_target_is_admitted_after_housekeeper_restart(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 24000, "vramFreeMb": 576}],
+    }
+    server.request_strata_json = lambda pathname, payload=None, timeout_sec=30: {
+      "service": "strata", "loaded": True
+    }
+    plan = server.capacity_plan_for_job({
+      "runtimeName": "strata",
+      "profileName": "qwen3.8-flash-next-coder-iq1_m",
+      "jobSpec": {
+        "kind": "strata-chat",
+        "resourceRequest": {"vramRequiredMb": 20000},
+        "payload": {"model": "qwen3.8-flash-next-coder-iq1_m", "messages": []},
+      },
+    }, {
+      "strata": {"runtimeName": "strata", "dischargeKind": "strata"},
+      "ollama": {"runtimeName": "ollama", "dischargeKind": "ollama"},
+    })
+    self.assertEqual(plan["decision"], "fits")
+    self.assertTrue(plan["targetProfileLoaded"])
+
   def test_ollama_residency_probe_distinguishes_cpu_from_gpu_models(self):
     server.request_ollama_json = lambda *_args, **_kwargs: {
       "models": [

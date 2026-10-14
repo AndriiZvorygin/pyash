@@ -1691,6 +1691,14 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
       target_profile = normalize_text(payload.get("model"))
   with _LOCK:
     target_loaded = bool(target_profile and _PROFILES.get(target_profile, {}).get("loaded", False))
+  if not target_loaded and normalize_text(job.get("runtimeName")).lower() == "strata":
+    # Strata is external to the Housekeeper, so its residency record is
+    # intentionally in-memory. Reconcile provider state after a restart so a
+    # resident target is not treated as a new allocation.
+    try:
+      target_loaded = request_strata_json("/v1/status", None, timeout_sec=8).get("loaded") is True
+    except Exception:
+      target_loaded = False
   if target_loaded:
     common["decision"] = "fits"
     common["reason"] = "target profile is already warm; no additional VRAM is required"
