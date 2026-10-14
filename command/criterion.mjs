@@ -10,6 +10,7 @@ import { runNightmare, runReverie } from "../program/runtime/criterion/suites.mj
 import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime/criterion/report.mjs";
 import { createQueuedOllamaExecutor, DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
 import { createStrataExecutor, DEFAULT_STRATA_BASE_URL } from "../program/runtime/criterion/strata.mjs";
+import { runDeepSWE, DEFAULT_DEEPSWE_AGENT, DEFAULT_DEEPSWE_MODEL } from "../program/runtime/criterion/deepswe.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
 import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
@@ -99,6 +100,7 @@ function usage() {
     "criterion prompt-ablation --dataset <meetingbank.jsonl> --annotations <annotations.json> --source-run <generic-run-id> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion meetingbank-judge-pilot --dataset <meetingbank.jsonl> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion meetingbank-factuality-pilot --dataset <meetingbank.jsonl> [--model <qwen,...>] [--smoke] [--resume]",
+    "criterion deepswe --tasks <deep-swe/tasks> [--model <model,...>] [--agent mini-swe-agent] [--base-url <model-endpoint>] [--sample-seed 0] [--limit N|--smoke] [--resume]",
     "criterion report <run-id>",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",
@@ -106,6 +108,35 @@ function usage() {
     "nightmare run|soak|stress --benchmark <name> --dataset <path>",
     "reverie run --benchmark helpos-local --fixtures <path> --response <text>"
   ].join("\n");
+}
+
+async function deepSWECommand(args, root) {
+  const tasksPath = flag(args, "--tasks", flag(args, "--dataset", process.env.PYA_DEEPSWE_TASKS ?? null));
+  const requestedModels = String(flag(args, "--model", "") ?? "").split(",").map(value => value.trim()).filter(Boolean);
+  const sampleSeed = numericFlag(args, "--sample-seed", Number(process.env.PYA_DEEPSWE_SAMPLE_SEED ?? 0));
+  const result = await runDeepSWE({
+    tasksPath,
+    models: requestedModels.length ? requestedModels : [process.env.PYA_DEEPSWE_MODEL ?? DEFAULT_DEEPSWE_MODEL],
+    agent: flag(args, "--agent", process.env.PYA_DEEPSWE_AGENT ?? DEFAULT_DEEPSWE_AGENT),
+    pierCommand: flag(args, "--pier-command", process.env.PYA_DEEPSWE_PIER_COMMAND ?? "pier"),
+    sampleSeed,
+    limit: hasFlag(args, "--smoke") ? 10 : numericFlag(args, "--limit"),
+    runId: flag(args, "--run-id"),
+    root,
+    resume: hasFlag(args, "--resume"),
+    modelEndpoint: flag(args, "--base-url", process.env.PYA_DEEPSWE_MODEL_ENDPOINT ?? process.env.OPENAI_BASE_URL ?? null),
+    timeoutMs: numericFlag(args, "--timeout-ms", Number(process.env.PYA_DEEPSWE_TIMEOUT_MS || 3600000))
+  });
+  print({
+    runId: result.runId,
+    status: result.status,
+    selectedTasks: result.selectedTaskIds?.length ?? 0,
+    results: `criterion/results/${result.runId}.jsonl`,
+    report: `criterion/results/${result.runId}.md`,
+    csv: `criterion/results/${result.runId}.csv`,
+    review: `criterion/review/${result.runId}.html`
+  }, hasFlag(args, "--json"));
+  return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
 }
 
 async function listCommand(args) {
@@ -365,6 +396,22 @@ async function againCommand(args, root) {
     print({ runId: result.runId, status: result.status, resumed: true, report: `criterion/results/${result.runId}.md` }, hasFlag(args, "--json"));
     return 0;
   }
+  if (prior.engine === "pier" || prior.criterion === "deep-swe") {
+    const result = await runDeepSWE({
+      tasksPath: prior.datasetPath,
+      models: requestedModels.length ? requestedModels : prior.models,
+      agent: flag(args, "--agent", prior.pier?.agent ?? process.env.PYA_DEEPSWE_AGENT ?? DEFAULT_DEEPSWE_AGENT),
+      sampleSeed: Number(flag(args, "--sample-seed", prior.sampleSelectionSeed ?? 0)),
+      root,
+      runId,
+      resume: true,
+      modelEndpoint: flag(args, "--base-url", prior.pier?.modelEndpoint ?? process.env.PYA_DEEPSWE_MODEL_ENDPOINT ?? null),
+      pierCommand: flag(args, "--pier-command", prior.pier?.command ?? process.env.PYA_DEEPSWE_PIER_COMMAND ?? "pier"),
+      timeoutMs: numericFlag(args, "--timeout-ms", prior.pier?.timeoutMs ?? Number(process.env.PYA_DEEPSWE_TIMEOUT_MS || 3600000))
+    });
+    print({ runId: result.runId, status: result.status, resumed: true, report: `criterion/results/${result.runId}.md` }, hasFlag(args, "--json"));
+    return 0;
+  }
   const options = { root, profile: flag(args, "--profile") ?? prior.profile, models: requestedModels.length ? requestedModels : prior.models, engine: prior.engine, baseUrl: flag(args, "--base-url", flag(args, "--ollama-base-url", prior.baseUrl)) };
   let adapter = null;
   if (prior.engine === "huggingface") {
@@ -459,6 +506,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (!command || command === "help" || command === "--help") { print(usage()); return 0; }
   if (command === "criterion" && subcommand === "list") return listCommand(args);
   if (command === "criterion" && subcommand === "inspect") return inspectCommand(args);
+  if (command === "criterion" && (subcommand === "deepswe" || subcommand === "deep-swe")) return deepSWECommand(rest, root);
   if (command === "criterion" && subcommand === "run") return runCommand(args, root);
   if (command === "criterion" && subcommand === "baseline") return baselineCommand(args, root);
   if (command === "criterion" && (subcommand === "fact-audit" || subcommand === "meetingbank-fact-audit")) return factAuditCommand(args, root);
@@ -474,6 +522,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "inspect") return inspectCommand([subcommand, ...rest].filter(Boolean));
   if (command === "run") return runCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "baseline") return baselineCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "deepswe" || command === "deep-swe") return deepSWECommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "fact-audit" || command === "meetingbank-fact-audit") return factAuditCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "omnicseval-meeting") return factAuditCommand([subcommand, ...rest].filter(Boolean), root, FACT_EVALUATION_MODES.exact);
   if (command === "prompt-ablation" || command === "meetingbank-prompt-ablation") return promptAblationCommand([subcommand, ...rest].filter(Boolean), root);

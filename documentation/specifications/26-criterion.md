@@ -23,7 +23,8 @@ ob text <benchmark>
 be criterion do
 ```
 
-`from state` identifies the backend (`ollama` or `strata`), `from space`
+`from state` identifies the backend or external runner (`ollama`, `strata`, or
+`pier`), `from space`
 identifies that backend's endpoint, and `via state` identifies the model being
 tested. `during state` selects the Criterion profile so it does not collide
 with `via state`, which is normalized to the `as` case by the language parser.
@@ -79,6 +80,46 @@ Datasets, private transcripts and GPQA files remain outside tracked source. Offi
 The `criterion baseline` command currently provides the MeetingBank `lead-3` baseline as `baseline:lead-3`. It selects three sentence boundaries from the normalized transcript and uses the ordinary Criterion checkpoint/artifact contract without a model request. Its processing latency is distinct from neural generation throughput.
 
 The `criterion run --engine huggingface` path keeps orchestration in Node and delegates model loading/generation to a persistent `criterion-huggingface` container through the existing Pyash GPU duty queue and `gpu-housekeeper`. The container embeds `program/runtime/criterion/huggingface_worker.py`, uses a private ignored Hugging Face cache on the CUDA host, and is registered as the managed `huggingface` runtime. Each row preserves model/tokenizer revision, model size, dtype, device, input limit, truncation, generation settings, load time and warm inference timing. Open fine-tuned MeetingBank models and zero-shot Ollama models remain separate evaluation conditions even when they share a scorer. The `baseline:lead-3` lane is deterministic CPU work and does not use GPU management.
+
+## DeepSWE external agent lane
+
+`criterion deepswe` is an adapter over the official DeepSWE task corpus and
+Pier runner. It is intentionally not a prompt-only model benchmark: each task
+contains a `task.toml`, an isolated environment, an instruction, a verifier and
+held-out solution material. Pier/Harbor owns the agent tool loop, sandbox,
+commit collection and verifier execution; Criterion owns deterministic task
+selection, model/runtime provenance, per-task checkpoints, reward mapping and
+reports.
+
+The smoke lane selects ten tasks using a recorded seed and runs them one at a
+time, model-major, so a model is not repeatedly loaded and discharged between
+tasks. Completed model/task rows are reused by `--resume`; failed rows remain
+retryable. Verifier evidence is read from `reward.json` and `ctrf.json`, while
+Pier stdout/stderr are retained under the ignored run result directory.
+
+Install the official runner and place a checked-out corpus outside tracked
+source before running:
+
+```bash
+git clone https://github.com/datacurve-ai/deep-swe "$PYA_BENCHMARK_CACHE/deep-swe"
+uv tool install datacurve-pier
+```
+
+For a Qwen endpoint, configure the endpoint understood by the selected Pier
+agent without putting model hosting inside Criterion:
+
+```bash
+PYA_DEEPSWE_MODEL_ENDPOINT="http://mriczo:8081/v1" \
+node command/criterion.mjs deepswe \
+  --tasks "$PYA_BENCHMARK_CACHE/deep-swe/tasks" \
+  --model "qwen3.5:9b" \
+  --sample-seed 0 \
+  --smoke --resume --json
+```
+
+The full corpus removes `--smoke`; a run is resumable with
+`criterion again <run-id>`. DeepSWE reward/pass-fraction/verifier results are
+reported independently from ROUGE or ordinary summary quality metrics.
 
 ## Fact evaluation
 

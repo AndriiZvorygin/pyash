@@ -83,6 +83,14 @@ export const SUITE_CATALOG = Object.freeze({
     sourceUrl: "https://github.com/idavidrein/gpqa",
     required: "private/licensed local dataset export"
   },
+  "deep-swe": {
+    name: "DeepSWE",
+    version: "official long-horizon software-engineering task corpus",
+    sourceUrl: "https://github.com/datacurve-ai/deep-swe",
+    licenseUrl: "https://github.com/datacurve-ai/deep-swe/blob/main/LICENSE",
+    taskFormatUrl: "https://www.harborframework.com/",
+    required: "local task directory containing task.toml files and an installed Pier runner"
+  },
   "omnicseval-meeting": {
     name: "OmniCSEval MeetingBank subset",
     version: "released OmniCSEval annotations; exact-compatible 75-sample MeetingBank lane",

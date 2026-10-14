@@ -117,6 +117,37 @@ node command/criterion.mjs reverie run --benchmark helpos-local --fixtures ./fix
 
 Reports appear under `criterion/results/<run-id>.*` and review samples under `criterion/review/<run-id>.html`. The `.pya` result is the canonical sentence-shaped manifest; JSONL is the per-sample evidence/checkpoint. `criterion report`, `criterion compare` and `criterion golden` read those persisted records after the original process exits.
 
+## DeepSWE agent benchmark
+
+DeepSWE is an external long-horizon coding-agent benchmark. Its official task
+format includes an isolated environment and program verifier, and its Pier
+runner owns the agent interaction and grading. Criterion only selects tasks,
+passes the configured model target to Pier, checkpoints each model/task row,
+and renders the verifier evidence.
+
+Prepare the corpus and runner outside the Pyash checkout:
+
+```bash
+git clone https://github.com/datacurve-ai/deep-swe "$PYA_BENCHMARK_CACHE/deep-swe"
+uv tool install datacurve-pier
+```
+
+Run a deterministic ten-task smoke for the Qwen model:
+
+```bash
+PYA_DEEPSWE_MODEL_ENDPOINT="http://mriczo:8081/v1" \
+node command/criterion.mjs deepswe \
+  --tasks "$PYA_BENCHMARK_CACHE/deep-swe/tasks" \
+  --model "qwen3.5:9b" \
+  --agent mini-swe-agent \
+  --sample-seed 0 --smoke --resume --json
+```
+
+The endpoint must be one that the configured Pier agent understands; the
+adapter does not silently translate or substitute model providers. Remove
+`--smoke` for the full corpus. Reports use the standard Criterion result paths
+and keep DeepSWE verifier scores separate from summary ROUGE scores.
+
 ## Baseline and open-model lanes
 
 The deterministic MeetingBank baseline uses the same loader, reference extraction, ROUGE scorer and artifact writer as model runs:
