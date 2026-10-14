@@ -15,6 +15,7 @@ import {
   readSessionMessages
 } from "../program/agent/session.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
+import { fetchStrataModels } from "./pyash/mind_backend_helpers.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import {
@@ -168,7 +169,15 @@ export function renderAssistantMarkdown(text = "") {
   return markdown.render(String(text ?? ""));
 }
 
-export function buildChatSentence({ message, root, agentHouse, session = "web", model = "" }) {
+export function buildChatSentence({
+  message,
+  root,
+  agentHouse,
+  session = "web",
+  model = "",
+  backend = "",
+  host = ""
+}) {
   return {
     mood: "do",
     be: "write",
@@ -177,6 +186,8 @@ export function buildChatSentence({ message, root, agentHouse, session = "web", 
     to: { name: "text" },
     with: { name: "agent tools" },
     fromtext: { name: `session name ${normalizeSessionId(session)}` },
+    ...(backend ? { fromstate: { text: backend } } : {}),
+    ...(host ? { from: { text: host } } : {}),
     at: { filename: path.resolve(agentHouse || path.join(root, "world", "house", "web-assistant")) }
   };
 }
@@ -246,6 +257,70 @@ function configuredWebModels() {
     .filter(Boolean);
 }
 
+function configuredStrataModels() {
+  return String(process.env.PYA_WEB_STRATA_MODELS ?? process.env.PYA_STRATA_MODELS ?? "")
+    .split(",")
+    .map(normalizeModelId)
+    .filter(Boolean);
+}
+
+function normalizeBackendId(value) {
+  const backend = String(value ?? "").trim().toLowerCase();
+  return backend.includes("strata") ? "strata" : "ollama";
+}
+
+function modelTargetValue(backend, model) {
+  return normalizeBackendId(backend) === "strata" ? `strata::${normalizeModelId(model)}` : normalizeModelId(model);
+}
+
+function modelTargetFromValue(value, fallbackBackend = "ollama") {
+  const raw = normalizeModelId(value);
+  if (raw.startsWith("strata::")) {
+    return { value: raw, backend: "strata", model: raw.slice("strata::".length) };
+  }
+  return { value: raw, backend: normalizeBackendId(fallbackBackend), model: raw };
+}
+
+function modelOption({ backend, model, host, available = true }) {
+  const target = modelTargetValue(backend, model);
+  return {
+    value: target,
+    label: normalizeBackendId(backend) === "strata" ? `Strata: ${model}` : model,
+    backend: normalizeBackendId(backend),
+    model: normalizeModelId(model),
+    host: String(host ?? "").trim(),
+    available: Boolean(available)
+  };
+}
+
+function normalizeModelCatalog(catalog, { defaultBackend = "ollama", defaultModel = "" } = {}) {
+  const rawOptions = Array.isArray(catalog?.modelOptions) ? catalog.modelOptions : [];
+  const sourceModels = Array.isArray(catalog?.models) ? catalog.models : [];
+  const options = rawOptions.length
+    ? rawOptions.map((entry) => {
+      if (typeof entry === "string") return modelOption({ ...modelTargetFromValue(entry, defaultBackend), available: catalog?.available !== false });
+      const target = entry?.model
+        ? { backend: entry?.backend ?? defaultBackend, model: entry.model }
+        : modelTargetFromValue(entry?.value ?? "", entry?.backend ?? defaultBackend);
+      return modelOption({
+        backend: target.backend,
+        model: target.model,
+        host: entry?.host,
+        available: entry?.available !== false
+      });
+    }).filter((entry) => entry.model)
+    : sourceModels.map((entry) => {
+      const target = modelTargetFromValue(entry, defaultBackend);
+      return modelOption({ ...target, available: catalog?.available !== false });
+    }).filter((entry) => entry.model);
+  const deduped = [...new Map(options.map((entry) => [entry.value, entry])).values()];
+  return {
+    ...catalog,
+    models: deduped.map((entry) => entry.value),
+    modelOptions: deduped
+  };
+}
+
 async function fetchOllamaModels(defaultModel) {
   const configured = configuredWebModels();
   const host = String(
@@ -276,6 +351,48 @@ async function fetchOllamaModels(defaultModel) {
       error: String(error?.message ?? error)
     };
   }
+}
+
+async function fetchWebModels(defaultModel, defaultBackend = "ollama") {
+  const strataHost = String(
+    process.env.PYA_WEB_STRATA_HOST
+      || process.env.STRATA_HOST
+      || "http://127.0.0.1:8081"
+  ).replace(/\/+$/u, "");
+  const [ollama, strata] = await Promise.all([
+    fetchOllamaModels(defaultBackend === "ollama" ? defaultModel : ""),
+    fetchStrataModels(strataHost)
+  ]);
+  const configured = configuredStrataModels();
+  const strataModels = configured.length
+    ? (strata.models.length ? strata.models.filter((name) => configured.includes(name)) : configured)
+    : strata.models;
+  const modelOptions = [
+    ...(ollama.models || []).map((model) => modelOption({
+      backend: "ollama",
+      model,
+      host: ollama.host,
+      available: ollama.available
+    })),
+    ...strataModels.map((model) => modelOption({
+      backend: "strata",
+      model,
+      host: strataHost,
+      available: strata.ok
+    }))
+  ];
+  if (!modelOptions.length && defaultBackend === "strata" && defaultModel) {
+    modelOptions.push(modelOption({ backend: "strata", model: defaultModel, host: strataHost, available: false }));
+  }
+  return {
+    available: ollama.available || strata.ok,
+    models: modelOptions.map((entry) => entry.value),
+    modelOptions,
+    errors: {
+      ollama: ollama.error ?? null,
+      strata: strata.error ?? null
+    }
+  };
 }
 
 function extractUrls(events = []) {
@@ -387,7 +504,7 @@ export async function createWebServer({
   mindFn = mind_to_name_text,
   readStatusFn = readGpuHandleStatus,
   queueDepthFn = queueDepth,
-  modelsFn = fetchOllamaModels
+  modelsFn = null
 } = {}) {
   const resolvedRoot = path.resolve(root);
   const runtime = providedRuntime || await buildRuntime({ root: resolvedRoot, toolsMap });
@@ -396,7 +513,14 @@ export async function createWebServer({
   const workspaceDir = path.join(agentHouse, "workspace");
   await fs.mkdir(workspaceDir, { recursive: true });
   const configuredMind = remember("mind model");
+  const configuredMindBackend = remember("mind backend");
   const model = String(process.env.PYA_WEB_MODEL ?? configuredMind?.as?.name ?? "qwen3.5:9b").trim();
+  const backend = normalizeBackendId(
+    process.env.PYA_WEB_BACKEND
+      || configuredMindBackend?.ob?.name
+      || configuredMindBackend?.ob?.text
+      || "ollama"
+  );
   const webSystemPrompt = [
     WEB_SYSTEM_PROMPT,
     `Use ${workspaceDir} as the persistent working directory for downloaded or processed files.`,
@@ -418,7 +542,10 @@ export async function createWebServer({
 
   async function getModelCatalog() {
     if (modelCatalog && Date.now() - modelCatalogAt < 30000) return modelCatalog;
-    modelCatalog = await modelsFn(model);
+    const discovered = modelsFn
+      ? await modelsFn(model)
+      : await fetchWebModels(model, backend);
+    modelCatalog = normalizeModelCatalog(discovered, { defaultBackend: backend, defaultModel: model });
     modelCatalogAt = Date.now();
     return modelCatalog;
   }
@@ -440,8 +567,11 @@ export async function createWebServer({
         const catalog = await getModelCatalog();
         jsonResponse(res, 200, {
           ok: true,
-          selected: model,
+          selected: modelTargetValue(backend, model),
+          selectedModel: model,
+          selectedBackend: backend,
           models: catalog.models,
+          modelOptions: catalog.modelOptions,
           available: catalog.available,
           error: catalog.error ?? null
         });
@@ -491,11 +621,21 @@ export async function createWebServer({
           return;
         }
         const catalog = await getModelCatalog();
-        const selectedModel = normalizeModelId(body.model) || model;
-        if (catalog.models.length && !catalog.models.includes(selectedModel)) {
-          errorResponse(res, 400, `model is not available to this web assistant: ${selectedModel}`, "model_unavailable");
+        const requestedTarget = normalizeModelId(body.model) || modelTargetValue(backend, model);
+        const selectedOption = catalog.modelOptions.find((entry) => entry.value === requestedTarget)
+          || catalog.modelOptions.find((entry) => entry.model === requestedTarget && entry.backend === backend)
+          || catalog.modelOptions.find((entry) => entry.model === requestedTarget);
+        if (catalog.models.length && !selectedOption) {
+          errorResponse(res, 400, `model is not available to this web assistant: ${requestedTarget}`, "model_unavailable");
           return;
         }
+        const selected = selectedOption || modelOption({
+          backend,
+          model,
+          host: backend === "strata"
+            ? process.env.PYA_WEB_STRATA_HOST || process.env.STRATA_HOST || "http://127.0.0.1:8081"
+            : resolveConfigText("ollama host") || process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://localhost:11434"
+        });
         const session = normalizeSessionId(body.session);
         const toolEvents = [];
         const sentence = buildChatSentence({
@@ -503,7 +643,9 @@ export async function createWebServer({
           root: resolvedRoot,
           agentHouse,
           session,
-          model: selectedModel
+          model: selected.model,
+          backend: selected.backend,
+          host: selected.host
         });
         const answer = await runExclusive(() => mindFn(sentence, {
           onToolCall: async (event) => {
@@ -523,7 +665,8 @@ export async function createWebServer({
           toolEvents: toolEvents.map(({ stage, toolName }) => ({ stage, toolName })),
           sources: extractUrls(toolEvents),
           session,
-          model: selectedModel
+          model: selected.model,
+          backend: selected.backend
         });
         return;
       }

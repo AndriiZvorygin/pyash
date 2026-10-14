@@ -60,6 +60,23 @@ export async function fetchStrataHealth(host, { timeoutMs = 5000 } = {}) {
   }
 }
 
+export async function fetchStrataModels(host, { timeoutMs = 5000 } = {}) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`${String(host).replace(/\/+$/u, "")}/v1/models`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return { ok: false, error: `status ${res.status}`, models: [] };
+    const payload = await res.json();
+    const models = (Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : [])
+      .map((item) => item?.id ?? item?.name ?? item?.model)
+      .filter((name) => typeof name === "string" && name.trim());
+    return { ok: true, models: [...new Set(models)] };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err), models: [] };
+  }
+}
+
 export async function fetchCodexModels({
   rootDir,
   codexBin = "",

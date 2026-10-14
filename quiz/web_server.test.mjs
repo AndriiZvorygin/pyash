@@ -49,6 +49,20 @@ test("chat sentence uses a stable assistant house and session name", () => {
   assert.equal(sentence.at.filename, "/tmp/pyash/world/house/web-assistant");
 });
 
+test("chat sentence carries an explicit Strata backend and endpoint", () => {
+  const sentence = buildChatSentence({
+    root: "/tmp/pyash",
+    message: "check runtime",
+    agentHouse: "/tmp/pyash/world/house/web-assistant",
+    backend: "strata",
+    host: "http://swac:8081",
+    model: "qwen3.8:27b"
+  });
+  assert.equal(sentence.fromstate.text, "strata");
+  assert.equal(sentence.from.text, "http://swac:8081");
+  assert.equal(sentence.ob.model, "qwen3.8:27b");
+});
+
 test("media jobs accept only the existing safe GPU kinds", () => {
   const valid = validateMediaJobRequest({
     intent: "draw",
@@ -160,6 +174,53 @@ test("web routes use injected runtime without starting a model", async () => {
     assert.equal(job.status, 202);
     assert.equal(queuedSentence.be, "gpu draw");
     assert.equal(queuedSentence.vyah.ve.values[0], "start");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await fs.rm(root, { recursive: true, force: true });
+    forget();
+  }
+});
+
+test("web model catalogue routes a selected Strata model through the Strata mind", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-web-strata-"));
+  let chatSentence = null;
+  const { server } = await createWebServer({
+    root,
+    assets: path.resolve(process.cwd(), "web"),
+    runtime: { tools: [] },
+    modelsFn: async () => ({
+      available: true,
+      models: ["qwen3.5:9b", "strata::qwen3.8:27b"],
+      modelOptions: [
+        { value: "qwen3.5:9b", backend: "ollama", model: "qwen3.5:9b", host: "http://mriczo:11434" },
+        { value: "strata::qwen3.8:27b", backend: "strata", model: "qwen3.8:27b", host: "http://swac:8081" }
+      ]
+    }),
+    mindFn: async (sentence) => {
+      chatSentence = sentence;
+      return { ob: { text: "strata reply" } };
+    }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+  try {
+    const models = await fetch(`${base}/api/models`);
+    const modelPayload = await models.json();
+    assert.equal(modelPayload.modelOptions[1].label, "Strata: qwen3.8:27b");
+    const chat = await fetch(`${base}/api/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        message: "check runtime",
+        session: "strata",
+        model: "strata::qwen3.8:27b"
+      })
+    });
+    assert.equal(chat.status, 200);
+    assert.equal(chatSentence.fromstate.text, "strata");
+    assert.equal(chatSentence.from.text, "http://swac:8081");
+    assert.equal(chatSentence.ob.model, "qwen3.8:27b");
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await fs.rm(root, { recursive: true, force: true });

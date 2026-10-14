@@ -40,7 +40,7 @@ The deployment mounts only the Pyash `world` directory for durable sessions, que
 
 - `GET /healthz` checks the gateway process.
 - `GET /api/tools` lists the public read/search tool subset.
-- `GET /api/models` lists the installed/allowed Ollama model tags.
+- `GET /api/models` lists the installed/allowed Ollama model tags and any discovered/configured Strata models. Non-Ollama targets use an explicit `strata::model` value so the browser cannot accidentally route them through Ollama.
 - `GET /api/sessions` lists dated Pyash session records.
 - `GET /api/sessions/<id>` reads one session's persisted conversation history.
 - `POST /api/chat` accepts `{ "message": "...", "session": "...", "model": "..." }` and returns the answer, tool event names, and discovered source URLs.
@@ -59,6 +59,9 @@ Useful environment values are:
 - `OLLAMA_HOST`: Ollama endpoint used by the configured Pyash mind backend;
 - `PYA_WEB_MODEL`: optional model override for the web assistant;
 - `PYA_WEB_MODELS`: optional comma-separated allowlist of Ollama tags exposed by the model selector; when absent, installed tags from `/api/tags` are offered;
+- `PYA_WEB_BACKEND`: optional default web backend (`ollama` or `strata`);
+- `PYA_WEB_STRATA_HOST`: optional Strata OpenAI-compatible host, defaulting to `http://127.0.0.1:8081`;
+- `PYA_WEB_STRATA_MODELS`: optional comma-separated Strata model allowlist; when absent, the gateway discovers `/v1/models` from Strata;
 - `PYA_WEB_HOST` and `PYA_WEB_PORT`: local listener settings;
 - `PYA_GPU_HOUSEKEEPER_URL`: existing housekeeper configuration used by Pyash workers.
 
