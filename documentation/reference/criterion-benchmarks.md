@@ -135,7 +135,8 @@ uv tool install datacurve-pier
 Run a deterministic ten-task smoke for the Qwen model:
 
 ```bash
-PYA_DEEPSWE_MODEL_ENDPOINT="http://mriczo:8081/v1" \
+PYA_DEEPSWE_MODEL_ENDPOINT="http://mriczo:11434/v1" \
+PYA_DEEPSWE_API_KEY="ollama" \
 node command/criterion.mjs deepswe \
   --tasks "$PYA_BENCHMARK_CACHE/deep-swe/tasks" \
   --model "qwen3.5:9b" \
@@ -144,9 +145,15 @@ node command/criterion.mjs deepswe \
 ```
 
 The endpoint must be one that the configured Pier agent understands; the
-adapter does not silently translate or substitute model providers. Remove
+adapter does not silently substitute model providers. Remove
 `--smoke` for the full corpus. Reports use the standard Criterion result paths
 and keep DeepSWE verifier scores separate from summary ROUGE scores.
+
+Criterion records the requested model tag as-is and supplies Pier's required
+provider-qualified form internally. A raw tag such as `qwen3.5:9b` is sent as
+`openai/qwen3.5:9b` to an OpenAI-compatible endpoint; use an explicit provider
+prefix such as `ollama/qwen3.5:9b` when the selected Pier agent should use a
+different provider contract.
 
 ## Baseline and open-model lanes
 

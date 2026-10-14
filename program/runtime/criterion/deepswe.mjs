@@ -20,6 +20,19 @@ export const DEFAULT_DEEPSWE_AGENT = "mini-swe-agent";
 export const DEFAULT_DEEPSWE_SAMPLE_SEED = 0;
 export const DEFAULT_DEEPSWE_PIER_COMMAND = "pier";
 
+const PIER_PROVIDERS = new Set([
+  "ai21", "anthropic", "azure", "bedrock", "cerebras", "cohere", "deepinfra", "deepseek",
+  "fireworks_ai", "gemini", "groq", "huggingface", "mistral", "moonshot", "ollama", "openai",
+  "openrouter", "perplexity", "replicate", "together_ai", "vertex_ai", "xai", "zai"
+]);
+
+export function resolvePierModelName(model) {
+  const value = String(model ?? "").trim();
+  if (!value) throw new Error("DeepSWE model is required");
+  const provider = value.split("/", 1)[0];
+  return PIER_PROVIDERS.has(provider) ? value : `openai/${value}`;
+}
+
 function finiteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
@@ -177,6 +190,7 @@ function commandParts(command) {
 export function executePierTask({
   task,
   model,
+  pierModel = resolvePierModelName(model),
   agent = DEFAULT_DEEPSWE_AGENT,
   pierCommand = DEFAULT_DEEPSWE_PIER_COMMAND,
   pierArgs = [],
@@ -187,7 +201,7 @@ export function executePierTask({
 } = {}) {
   if (!task?.path) throw new Error("DeepSWE task path is required");
   const parts = commandParts(pierCommand);
-  const args = [...parts.args, ...pierArgs, "run", "-p", task.path, "--agent", agent, "--model", model];
+  const args = [...parts.args, ...pierArgs, "run", "-p", task.path, "--agent", agent, "--model", pierModel];
   return new Promise(resolve => {
     const startedAt = Date.now();
     let stdout = "";
@@ -313,6 +327,7 @@ export async function runDeepSWE({
   };
   const modelMetadata = Object.fromEntries(resolvedModels.map(model => [model, {
     model,
+    pierModel: resolvePierModelName(model),
     engine: "pier",
     runtime: "deepswe",
     agent,
@@ -323,12 +338,15 @@ export async function runDeepSWE({
       const key = rowKey(model, task.id);
       if (complete.has(key)) continue;
       const taskRoot = path.join(artifactRoot, model.replace(/[^A-Za-z0-9._-]+/gu, "_"), task.id.replace(/[^A-Za-z0-9._-]+/gu, "_"));
+      await fs.mkdir(taskRoot, { recursive: true });
       const taskStartedAt = now().toISOString();
+      const pierModel = resolvePierModelName(model);
       let execution;
       try {
         execution = await runTask({
           task,
           model,
+          pierModel,
           agent,
           pierCommand,
           pierArgs,
@@ -377,6 +395,7 @@ export async function runDeepSWE({
           repository: task.metadata?.repo ?? task.metadata?.repository ?? null,
           baseCommit: task.metadata?.base_commit ?? task.metadata?.baseCommit ?? null,
           agent,
+          pierModel,
           pierCommand: Array.isArray(pierCommand) ? pierCommand : [pierCommand, ...pierArgs],
           rewardPath,
           ctrfPath,
@@ -393,6 +412,7 @@ export async function runDeepSWE({
           sampleId: task.id,
           sampleSelectionSeed: sampleSeed,
           model,
+          pierModel,
           agent,
           taskTomlHash: task.taskTomlHash,
           instructionHash: task.instructionHash,

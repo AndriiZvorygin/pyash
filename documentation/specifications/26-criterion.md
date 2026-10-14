@@ -109,13 +109,20 @@ For a Qwen endpoint, configure the endpoint understood by the selected Pier
 agent without putting model hosting inside Criterion:
 
 ```bash
-PYA_DEEPSWE_MODEL_ENDPOINT="http://mriczo:8081/v1" \
+PYA_DEEPSWE_MODEL_ENDPOINT="http://mriczo:11434/v1" \
+PYA_DEEPSWE_API_KEY="ollama" \
 node command/criterion.mjs deepswe \
   --tasks "$PYA_BENCHMARK_CACHE/deep-swe/tasks" \
   --model "qwen3.5:9b" \
   --sample-seed 0 \
   --smoke --resume --json
 ```
+
+Criterion records the requested model tag as-is and supplies Pier's required
+provider-qualified form internally. A raw tag such as `qwen3.5:9b` is sent as
+`openai/qwen3.5:9b` to an OpenAI-compatible endpoint; use an explicit provider
+prefix such as `ollama/qwen3.5:9b` when the selected Pier agent should use a
+different provider contract.
 
 The full corpus removes `--smoke`; a run is resumable with
 `criterion again <run-id>`. DeepSWE reward/pass-fraction/verifier results are
