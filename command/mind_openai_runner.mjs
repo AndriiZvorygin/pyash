@@ -10,16 +10,18 @@ import {
   requestJson,
   requestStream
 } from "../program/motor/openai_mind.mjs";
+import { submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
   const stream = args.includes("--stream");
   const strata = args.includes("--strata");
+  const managed = args.includes("--managed");
   const payloadIndex = args.indexOf("--payload");
   const payloadFileIndex = args.indexOf("--payload-file");
   const payload = payloadIndex !== -1 ? args[payloadIndex + 1] ?? "" : null;
   const payloadFile = payloadFileIndex !== -1 ? args[payloadFileIndex + 1] ?? "" : null;
-  return { stream, strata, payload, payloadFile };
+  return { stream, strata, managed, payload, payloadFile };
 }
 
 function readStdin() {
@@ -31,7 +33,7 @@ function readStdin() {
 }
 
 async function parsePayload() {
-  const { stream, strata, payload: payloadArg, payloadFile } = parseArgs(process.argv);
+  const { stream, strata, managed, payload: payloadArg, payloadFile } = parseArgs(process.argv);
   let raw = "";
   if (payloadArg != null) raw = payloadArg;
   else if (payloadFile) raw = await fs.promises.readFile(payloadFile, "utf8");
@@ -44,7 +46,7 @@ async function parsePayload() {
     throw new Error(`mind_openai_runner: invalid JSON payload (${err?.message ?? err})`);
   }
   payload.stream = stream || payload.stream === true;
-  return { payload, strata };
+  return { payload, strata, managed };
 }
 
 function textPart(part) {
@@ -263,7 +265,7 @@ async function runCodexFallback(payload = {}, { stream = false } = {}) {
 }
 
 async function main() {
-  const { payload, strata } = await parsePayload();
+  const { payload, strata, managed } = await parsePayload();
 
   if (process.env.PYA_COMMAND_RESPONSE) {
     process.stdout.write(`${process.env.PYA_COMMAND_RESPONSE}\n`);
@@ -281,6 +283,29 @@ async function main() {
     return;
   }
   const body = await buildChatCompletionsRequest(payload);
+
+  if (strata && managed) {
+    const managedBody = { ...body, stream: false };
+    const result = await submitManagedGpuJob({
+      runtimeName: "strata",
+      profileName: payload.model,
+      managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || process.env.GPU_HOUSEKEEPER_URL || "",
+      vramRequiredMb: Number(process.env.PYA_STRATA_VRAM_REQUIRED_MB || process.env.PYASH_STRATA_VRAM_REQUIRED_MIB || 20000),
+      timeoutMs: Number(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || 1800000),
+      jobSpec: {
+        kind: "strata-chat",
+        payload: managedBody
+      }
+    });
+    if (payload.stream === true) {
+      const text = String(result?.choices?.[0]?.message?.content ?? result?.response ?? "");
+      if (text) process.stdout.write(`${JSON.stringify(text)}\n`);
+      process.stdout.write("[STREAM_END]\n");
+    } else {
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+    }
+    return;
+  }
 
   if (payload.stream === true) {
     await requestStream({

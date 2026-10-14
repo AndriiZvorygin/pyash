@@ -55,7 +55,17 @@ GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=http://127.0.0.1:8081
 
 The manager then checks Strata before admitting another managed GPU runtime. It unloads Strata only after its status API confirms zero in-flight requests and the configured 300-second idle grace has elapsed; it verifies `loaded:false` and rechecks actual free VRAM before admitting the next runtime. The Housekeeper uses a short-lived host-network helper container to reach Strata's loopback API, so Strata itself remains bound to `127.0.0.1`. If Strata API-key authentication is enabled, put the same key in the Housekeeper environment as `STRATA_API_KEY`; never commit it.
 
-Individual Chat Completions remain HTTP requests directly to Strata; they are not queued as individual Housekeeper jobs. The Housekeeper's Strata activity probe uses Strata's own in-flight and last-request status, and refuses to discharge it when those fields are absent or invalid.
+Non-streaming Strata mind calls are submitted as `strata-chat` jobs through the
+Pyash GPU Housekeeper. The Housekeeper owns the device gate, capacity check,
+safe discharge of idle managed runtimes, Strata load/reload, and the provider
+request. The caller receives the completed response after the queued job
+finishes. This keeps web chat and ordinary mind calls on the same GPU control
+plane instead of letting a caller race a resident model directly.
+
+The Housekeeper's Strata activity probe uses Strata's own in-flight and
+last-request status, and refuses to discharge it when those fields are absent
+or invalid. Streaming compatibility remains available for the legacy direct
+runner path; the web assistant uses the non-streaming queued path.
 
 Keep Strata bound to loopback. The Housekeeper endpoint is on the host-local `http://127.0.0.1:8090`; do not point the Strata hook at a remote or federated manager.
 

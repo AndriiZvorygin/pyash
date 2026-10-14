@@ -15,7 +15,7 @@ import {
   readSessionMessages
 } from "../program/agent/session.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
-import { fetchStrataModels } from "./pyash/mind_backend_helpers.mjs";
+import { fetchStrataRuntime } from "./pyash/mind_backend_helpers.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import {
@@ -109,8 +109,8 @@ function jsonResponse(res, status, value) {
   res.end(body);
 }
 
-function errorResponse(res, status, message, code = "request_failed") {
-  jsonResponse(res, status, { ok: false, error: { code, message } });
+function errorResponse(res, status, message, code = "request_failed", details = {}) {
+  jsonResponse(res, status, { ok: false, error: { code, message, ...details } });
 }
 
 function setSecurityHeaders(res) {
@@ -308,7 +308,16 @@ function modelTargetFromValue(value, fallbackBackend = "ollama") {
   return { value: raw, backend: normalizeBackendId(fallbackBackend), model: raw };
 }
 
-function modelOption({ backend, model, host, available = true }) {
+function modelOption({
+  backend,
+  model,
+  host,
+  available = true,
+  ready = available,
+  status = ready ? "ready" : "unavailable",
+  etaSeconds = null,
+  statusMessage = ""
+}) {
   const target = modelTargetValue(backend, model);
   return {
     value: target,
@@ -316,7 +325,13 @@ function modelOption({ backend, model, host, available = true }) {
     backend: normalizeBackendId(backend),
     model: normalizeModelId(model),
     host: String(host ?? "").trim(),
-    available: Boolean(available)
+    available: Boolean(available),
+    ready: Boolean(ready),
+    status: String(status || (ready ? "ready" : "unavailable")),
+    etaSeconds: etaSeconds == null || etaSeconds === ""
+      ? null
+      : Number.isFinite(Number(etaSeconds)) ? Math.max(0, Math.ceil(Number(etaSeconds))) : null,
+    statusMessage: String(statusMessage || "").trim()
   };
 }
 
@@ -325,7 +340,11 @@ function normalizeModelCatalog(catalog, { defaultBackend = "ollama", defaultMode
   const sourceModels = Array.isArray(catalog?.models) ? catalog.models : [];
   const options = rawOptions.length
     ? rawOptions.map((entry) => {
-      if (typeof entry === "string") return modelOption({ ...modelTargetFromValue(entry, defaultBackend), available: catalog?.available !== false });
+      if (typeof entry === "string") return modelOption({
+        ...modelTargetFromValue(entry, defaultBackend),
+        available: catalog?.available !== false,
+        ready: catalog?.available !== false
+      });
       const target = entry?.model
         ? { backend: entry?.backend ?? defaultBackend, model: entry.model }
         : modelTargetFromValue(entry?.value ?? "", entry?.backend ?? defaultBackend);
@@ -333,12 +352,20 @@ function normalizeModelCatalog(catalog, { defaultBackend = "ollama", defaultMode
         backend: target.backend,
         model: target.model,
         host: entry?.host,
-        available: entry?.available !== false
+        available: entry?.available !== false,
+        ready: entry?.ready ?? entry?.available !== false,
+        status: entry?.status,
+        etaSeconds: entry?.etaSeconds,
+        statusMessage: entry?.statusMessage
       });
     }).filter((entry) => entry.model)
     : sourceModels.map((entry) => {
       const target = modelTargetFromValue(entry, defaultBackend);
-      return modelOption({ ...target, available: catalog?.available !== false });
+      return modelOption({
+        ...target,
+        available: catalog?.available !== false,
+        ready: catalog?.available !== false
+      });
     }).filter((entry) => entry.model);
   const deduped = [...new Map(options.map((entry) => [entry.value, entry])).values()];
   return {
@@ -367,6 +394,8 @@ async function fetchOllamaModels(defaultModel) {
     return {
       host,
       available: true,
+      ready: true,
+      status: "ready",
       models: allowed.length ? allowed : (configured.length ? configured : [defaultModel]),
       error: allowed.length ? null : "no configured web models are installed"
     };
@@ -374,6 +403,8 @@ async function fetchOllamaModels(defaultModel) {
     return {
       host,
       available: false,
+      ready: false,
+      status: "unavailable",
       models: configured.length ? configured : [defaultModel],
       error: String(error?.message ?? error)
     };
@@ -385,19 +416,36 @@ export async function fetchWebModels(defaultModel, defaultBackend = "ollama") {
   const configuredTargets = configuredStrataTargets();
   const [ollama, strataRuntimes] = await Promise.all([
     fetchOllamaModels(defaultBackend === "ollama" ? defaultModel : ""),
-    Promise.all(strataHosts.map(async (host) => ({ host, ...(await fetchStrataModels(host)) })))
+    Promise.all(strataHosts.map((host) => fetchStrataRuntime(host)))
   ]);
   const configured = configuredStrataModels();
   const discoveredStrataModels = strataRuntimes.flatMap((runtime) => {
     const models = configured.length
       ? (runtime.models.length ? runtime.models.filter((name) => configured.includes(name)) : configured)
       : runtime.models;
-    return models.map((model) => ({ model, host: runtime.host, available: runtime.ok }));
+    return models.map((model) => ({
+      model,
+      host: runtime.host,
+      available: runtime.available,
+      ready: runtime.ready,
+      status: runtime.status,
+      etaSeconds: runtime.etaSeconds,
+      statusMessage: runtime.statusMessage
+    }));
   });
   const strataModels = configuredTargets.length
     ? configuredTargets.map(({ model, host }) => {
       const runtime = strataRuntimes.find((entry) => entry.host === host);
-      return { model, host, available: Boolean(runtime?.ok && runtime.models.includes(model)) };
+      const modelInstalled = Boolean(runtime?.models.includes(model));
+      return {
+        model,
+        host,
+        available: Boolean(runtime?.available && modelInstalled),
+        ready: Boolean(runtime?.ready && modelInstalled),
+        status: runtime?.status || "unavailable",
+        etaSeconds: runtime?.etaSeconds ?? null,
+        statusMessage: runtime?.statusMessage || "Strata target is unavailable"
+      };
     })
     : discoveredStrataModels;
   const modelOptions = [
@@ -407,11 +455,15 @@ export async function fetchWebModels(defaultModel, defaultBackend = "ollama") {
       host: ollama.host,
       available: ollama.available
     })),
-    ...strataModels.map(({ model, host, available }) => modelOption({
+    ...strataModels.map(({ model, host, available, ready, status, etaSeconds, statusMessage }) => modelOption({
       backend: "strata",
       model,
       host,
-      available
+      available,
+      ready,
+      status,
+      etaSeconds,
+      statusMessage
     }))
   ];
   if (!modelOptions.length && defaultBackend === "strata" && defaultModel) {
@@ -419,7 +471,10 @@ export async function fetchWebModels(defaultModel, defaultBackend = "ollama") {
       backend: "strata",
       model: defaultModel,
       host: strataHosts[0],
-      available: false
+      available: false,
+      ready: false,
+      status: "unavailable",
+      statusMessage: "Strata target is unavailable"
     }));
   }
   return {
@@ -581,8 +636,8 @@ export async function createWebServer({
   let modelCatalog = null;
   let modelCatalogAt = 0;
 
-  async function getModelCatalog() {
-    if (modelCatalog && Date.now() - modelCatalogAt < 30000) return modelCatalog;
+  async function getModelCatalog({ force = false } = {}) {
+    if (!force && modelCatalog && Date.now() - modelCatalogAt < 30000) return modelCatalog;
     const discovered = modelsFn
       ? await modelsFn(model)
       : await fetchWebModels(model, backend);
@@ -605,7 +660,7 @@ export async function createWebServer({
         return;
       }
       if (req.method === "GET" && pathname === "/api/models") {
-        const catalog = await getModelCatalog();
+        const catalog = await getModelCatalog({ force: requestUrl.searchParams.get("refresh") === "1" });
         jsonResponse(res, 200, {
           ok: true,
           selected: modelTargetValue(backend, model),
@@ -661,7 +716,7 @@ export async function createWebServer({
           errorResponse(res, 413, "message is too long", "message_too_large");
           return;
         }
-        const catalog = await getModelCatalog();
+        const catalog = await getModelCatalog({ force: true });
         const requestedTarget = normalizeModelId(body.model) || modelTargetValue(backend, model);
         const selectedOption = catalog.modelOptions.find((entry) => entry.value === requestedTarget)
           || catalog.modelOptions.find((entry) => entry.model === requestedTarget && entry.backend === backend)
@@ -677,6 +732,23 @@ export async function createWebServer({
             ? process.env.PYA_WEB_STRATA_HOST || process.env.STRATA_HOST || "http://127.0.0.1:8081"
             : resolveConfigText("ollama host") || process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://localhost:11434"
         });
+        if (!selected.ready) {
+          const loading = selected.status === "loading";
+          const eta = selected.etaSeconds == null ? "" : ` ETA about ${selected.etaSeconds}s.`;
+          errorResponse(
+            res,
+            409,
+            `${selected.label} is ${loading ? "still loading" : "not ready"}. Please wait for the runtime to become ready.${eta}`,
+            loading ? "model_loading" : "model_not_ready",
+            {
+              model: selected.model,
+              backend: selected.backend,
+              status: selected.status,
+              etaSeconds: selected.etaSeconds
+            }
+          );
+          return;
+        }
         const session = normalizeSessionId(body.session);
         const toolEvents = [];
         const sentence = buildChatSentence({

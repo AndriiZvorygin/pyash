@@ -5,12 +5,14 @@ const chatState = document.querySelector("#chat-state");
 const health = document.querySelector("#health");
 const sessionSelect = document.querySelector("#session-select");
 const modelSelect = document.querySelector("#model-select");
+const sendButton = chatForm.querySelector("button[type=submit]");
 const newSessionButton = document.querySelector("#new-session");
 const jobForm = document.querySelector("#job-form");
 const jobIntent = document.querySelector("#job-intent");
 const jobSpec = document.querySelector("#job-spec");
 const jobState = document.querySelector("#job-state");
 let currentSession = localStorage.getItem("pyash-session") || "web";
+let modelCatalog = null;
 
 function setSelectOptions(select, values, selectedValue, format = (value) => value) {
   select.textContent = "";
@@ -18,11 +20,44 @@ function setSelectOptions(select, values, selectedValue, format = (value) => val
     const option = document.createElement("option");
     option.value = value.value ?? value;
     option.textContent = format(value);
+    option.disabled = value.ready === false;
     select.append(option);
   }
   if (selectedValue && values.some((value) => (value.value ?? value) === selectedValue)) {
     select.value = selectedValue;
   }
+}
+
+function formatModelOption(entry) {
+  if (entry.status === "loading") {
+    const eta = entry.etaSeconds == null ? "" : `, ~${entry.etaSeconds}s`;
+    return `${entry.label} (loading${eta})`;
+  }
+  if (entry.status && entry.status !== "ready") return `${entry.label} (${entry.status})`;
+  return entry.label;
+}
+
+function selectedModelOption() {
+  return modelCatalog?.modelOptions?.find((entry) => entry.value === modelSelect.value) || null;
+}
+
+function updateChatReadiness() {
+  const selected = selectedModelOption();
+  if (!selected) {
+    chatState.textContent = "Select a ready model";
+    sendButton.disabled = true;
+    return;
+  }
+  if (selected.ready === false) {
+    const eta = selected.etaSeconds == null ? "" : ` · ~${selected.etaSeconds}s`;
+    chatState.textContent = selected.status === "loading"
+      ? `Loading ${selected.model}${eta}`
+      : `${selected.model} unavailable`;
+    sendButton.disabled = true;
+    return;
+  }
+  chatState.textContent = `Ready · ${selected.model}`;
+  sendButton.disabled = false;
 }
 
 function clearMessages() {
@@ -106,19 +141,24 @@ async function loadTools() {
   }
 }
 
-async function loadModels() {
+async function loadModels({ force = false } = {}) {
   try {
-    const data = await requestJson("/api/models");
+    const data = await requestJson(`/api/models${force ? "?refresh=1" : ""}`);
+    modelCatalog = data;
     const models = data.modelOptions || (data.models || []).map((name) => ({ value: name, label: name }));
-    setSelectOptions(modelSelect, models, localStorage.getItem("pyash-model") || data.selected, (entry) => entry.label);
+    setSelectOptions(modelSelect, models, localStorage.getItem("pyash-model") || data.selected, formatModelOption);
     if (modelSelect.value) localStorage.setItem("pyash-model", modelSelect.value);
+    updateChatReadiness();
   } catch (error) {
+    modelCatalog = null;
     modelSelect.textContent = "";
     const option = document.createElement("option");
     option.textContent = "Model unavailable";
     option.disabled = true;
     option.selected = true;
     modelSelect.append(option);
+    sendButton.disabled = true;
+    chatState.textContent = "Model status unavailable";
   }
 }
 
@@ -148,9 +188,9 @@ async function loadSession(sessionId) {
       const kind = message.role === "user" ? "user" : "assistant";
       addMessage(kind, message.content, { html: message.html });
     }
-    chatState.textContent = data.session?.model ? `Ready · ${data.session.model}` : "Ready";
+    updateChatReadiness();
   } catch (error) {
-    chatState.textContent = "History unavailable";
+    updateChatReadiness();
   }
 }
 
@@ -158,8 +198,8 @@ sessionSelect.addEventListener("change", () => loadSession(sessionSelect.value))
 modelSelect.addEventListener("change", () => {
   if (modelSelect.value) {
     localStorage.setItem("pyash-model", modelSelect.value);
-    chatState.textContent = `Ready · ${modelSelect.value}`;
   }
+  updateChatReadiness();
 });
 
 newSessionButton.addEventListener("click", async () => {
@@ -168,7 +208,7 @@ newSessionButton.addEventListener("click", async () => {
   await loadSessions();
   sessionSelect.value = currentSession;
   clearMessages();
-  chatState.textContent = "Ready";
+  updateChatReadiness();
   messageInput.focus();
 });
 
@@ -176,6 +216,10 @@ chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = messageInput.value.trim();
   if (!message) return;
+  if (sendButton.disabled) {
+    updateChatReadiness();
+    return;
+  }
   addMessage("user", message);
   messageInput.value = "";
   messageInput.disabled = true;
@@ -198,6 +242,7 @@ chatForm.addEventListener("submit", async (event) => {
   } finally {
     messageInput.disabled = false;
     messageInput.focus();
+    updateChatReadiness();
   }
 });
 
@@ -247,4 +292,7 @@ refreshStatus();
 loadTools();
 loadModels();
 loadSessions().then(() => loadSession(currentSession));
-setInterval(refreshStatus, 10000);
+setInterval(() => {
+  refreshStatus();
+  loadModels({ force: true });
+}, 5000);
