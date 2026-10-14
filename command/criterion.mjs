@@ -9,6 +9,7 @@ import { runCriterion, rerunCriterion } from "../program/runtime/criterion/run.m
 import { runNightmare, runReverie } from "../program/runtime/criterion/suites.mjs";
 import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime/criterion/report.mjs";
 import { createQueuedOllamaExecutor, DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
+import { createStrataExecutor, DEFAULT_STRATA_BASE_URL } from "../program/runtime/criterion/strata.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
 import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, runFactAudit } from "../program/runtime/criterion/fact-audit.mjs";
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
@@ -48,6 +49,7 @@ function positional(args) { return args.filter(value => !value.startsWith("--") 
 function baseOptions(args, root) {
   const benchmark = flag(args, "--benchmark", positional(args)[0] ?? null);
   const models = String(flag(args, "--model", "") ?? "").split(",").map(value => value.trim()).filter(Boolean);
+  const engine = flag(args, "--engine", "ollama");
   return {
     benchmark,
     datasetPath: flag(args, "--dataset"),
@@ -58,14 +60,16 @@ function baseOptions(args, root) {
     limit: hasFlag(args, "--smoke") ? 1 : numericFlag(args, "--limit"),
     models: models.length ? models : undefined,
     profile: flag(args, "--profile", "summary_direct"),
-    engine: flag(args, "--engine", "ollama"),
+    engine,
     contextLength: numericFlag(args, "--context-length"),
     sampling: {
       ...(numericFlag(args, "--temperature") === null ? {} : { temperature: numericFlag(args, "--temperature") }),
       ...(numericFlag(args, "--top-p") === null ? {} : { top_p: numericFlag(args, "--top-p") }),
       ...(numericFlag(args, "--top-k") === null ? {} : { top_k: numericFlag(args, "--top-k") })
     },
-    baseUrl: flag(args, "--ollama-base-url", process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST),
+    baseUrl: flag(args, "--base-url", flag(args, "--ollama-base-url", engine === "strata"
+      ? process.env.STRATA_HOST ?? DEFAULT_STRATA_BASE_URL
+      : process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_HOST)),
     machine: flag(args, "--machine"),
     ifevalVerifierCommand: flag(args, "--ifeval-verifier", process.env.PYA_IFEVAL_VERIFIER ?? null),
     ifevalVerifierArgs: String(flag(args, "--ifeval-verifier-args", "") ?? "").split(" ").filter(Boolean),
@@ -88,7 +92,7 @@ function usage() {
   return [
     "criterion list",
     "criterion inspect --benchmark <name>",
-    "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|huggingface] [--model <a,b>] [--profile summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
+    "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|strata|huggingface] [--base-url <runtime>] [--model <a,b>] [--profile summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
     "criterion baseline --benchmark meetingbank --dataset <local.jsonl> --baseline lead-3 [--resume]",
     "criterion fact-audit --dataset <meetingbank.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--limit 5] [--resume]",
     "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",
@@ -135,6 +139,17 @@ async function runCommand(args, root) {
     });
     try {
       result = await runCriterion({ ...options, engine: "huggingface", executor: adapter.executor, metadataProvider: adapter.metadataProvider });
+    } finally {
+      await adapter.close();
+    }
+  } else if (options.engine === "strata") {
+    const adapter = createStrataExecutor({
+      baseUrl: options.baseUrl,
+      housekeeperUrl: options.gpuHousekeeperUrl,
+      vramRequiredMb: process.env.PYA_CRITERION_STRATA_VRAM_REQUIRED_MB ?? process.env.PYASH_STRATA_VRAM_REQUIRED_MIB
+    });
+    try {
+      result = await runCriterion({ ...options, engine: "strata", executor: adapter.executor, metadataProvider: adapter.metadataProvider });
     } finally {
       await adapter.close();
     }
@@ -350,7 +365,7 @@ async function againCommand(args, root) {
     print({ runId: result.runId, status: result.status, resumed: true, report: `criterion/results/${result.runId}.md` }, hasFlag(args, "--json"));
     return 0;
   }
-  const options = { root, profile: flag(args, "--profile") ?? prior.profile, models: requestedModels.length ? requestedModels : prior.models, engine: prior.engine };
+  const options = { root, profile: flag(args, "--profile") ?? prior.profile, models: requestedModels.length ? requestedModels : prior.models, engine: prior.engine, baseUrl: flag(args, "--base-url", flag(args, "--ollama-base-url", prior.baseUrl)) };
   let adapter = null;
   if (prior.engine === "huggingface") {
     adapter = await createHuggingFaceExecutor({
@@ -360,6 +375,14 @@ async function againCommand(args, root) {
       gpuId: flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0"),
       revision: process.env.PYA_HUGGINGFACE_REVISION ?? null,
       dtype: process.env.PYA_HF_DTYPE ?? "auto"
+    });
+    options.executor = adapter.executor;
+    options.metadataProvider = adapter.metadataProvider;
+  } else if (prior.engine === "strata") {
+    adapter = createStrataExecutor({
+      baseUrl: options.baseUrl,
+      housekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? null),
+      vramRequiredMb: process.env.PYA_CRITERION_STRATA_VRAM_REQUIRED_MB ?? process.env.PYASH_STRATA_VRAM_REQUIRED_MIB
     });
     options.executor = adapter.executor;
     options.metadataProvider = adapter.metadataProvider;

@@ -75,6 +75,25 @@ does not regenerate either variant.
 
 ## Typical runs
 
+The Pyash-native form keeps the benchmark input and external model target
+explicit, matching `mind` calls:
+
+```pyash
+from filename "/cache/meetingbank/test.jsonl"
+from state "strata"
+from space "http://127.0.0.1:8081"
+via state "qwen3.5:9b"
+during state "summary_direct"
+ob text "meetingbank"
+be criterion do
+```
+
+Use `from state "ollama"` and the Ollama endpoint for an Ollama run. Strata
+Criterion runs require `PYA_GPU_HOUSEKEEPER_URL`; the adapter requests capacity
+before the first sample and discharges Strata after the run through the existing
+Housekeeper API. `as state "summary_direct"` remains a legacy profile-only form
+when no `via state` model is present.
+
 ```bash
 node command/criterion.mjs list
 node command/criterion.mjs run --benchmark meetingbank --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" --profile summary_direct --smoke
