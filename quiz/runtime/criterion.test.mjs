@@ -17,7 +17,7 @@ import { runNightmare, runReverie } from "../../program/runtime/criterion/suites
 import { runCriterionRefinery } from "../../program/runtime/criterion/refinery.mjs";
 import { createQueuedOllamaExecutor, runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
 import { createStrataExecutor } from "../../program/runtime/criterion/strata.mjs";
-import { discoverDeepSWETasks, parseDeepSWEResult, runDeepSWE, selectDeepSWETasks } from "../../program/runtime/criterion/deepswe.mjs";
+import { discoverDeepSWETasks, parseDeepSWEResult, resolvePierModelName, runDeepSWE, selectDeepSWETasks } from "../../program/runtime/criterion/deepswe.mjs";
 import { loadRun, renderRunCsv, renderRunMarkdown } from "../../program/runtime/criterion/report.mjs";
 
 async function tempRoot() { return fs.mkdtemp(path.join(os.tmpdir(), "pyash-criterion-test-")); }
@@ -199,6 +199,12 @@ test("DeepSWE task selection and verifier parsing are deterministic", () => {
   assert.equal(parsed.metrics.totalElapsedMs, 1200);
 });
 
+test("DeepSWE preserves model tags while supplying Pier's provider prefix", () => {
+  assert.equal(resolvePierModelName("qwen3.5:9b"), "openai/qwen3.5:9b");
+  assert.equal(resolvePierModelName("hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"), "openai/hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(resolvePierModelName("ollama/qwen3.5:9b"), "ollama/qwen3.5:9b");
+});
+
 test("DeepSWE Criterion lane checkpoints external Pier rows and resumes them", async () => {
   const root = await tempRoot();
   const tasksRoot = path.join(root, "deep-swe", "tasks");
@@ -218,8 +224,9 @@ test("DeepSWE Criterion lane checkpoints external Pier rows and resumes them", a
     runId: "deep-swe-test",
     root,
     machine: { hostname: "test", platform: "test" },
-    runTask: async ({ task, model }) => {
+    runTask: async ({ task, model, cwd }) => {
       calls += 1;
+      assert.equal((await fs.stat(cwd)).isDirectory(), true);
       return { exitCode: 0, signal: null, stdout: `ran ${model} ${task.id}`, stderr: "", elapsedMs: 25, reward: { reward: task.id === "task-a" ? 1 : 0.5, pass_fraction: task.id === "task-a" ? 1 : 0.5 } };
     }
   };

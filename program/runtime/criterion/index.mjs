@@ -8,7 +8,7 @@ export { extractLead3, extractSentences, runLead3, baselineMetadata } from "./ba
 export { runBaseline } from "./baseline-run.mjs";
 export { HUGGING_FACE_MODEL_DEFAULTS, createHuggingFaceExecutor, createHuggingFaceJudgeExecutor, huggingFaceModelDefaults } from "./huggingface.mjs";
 export { DEFAULT_STRATA_BASE_URL, createStrataExecutor, runStrataChat } from "./strata.mjs";
-export { DEEPSWE_CATALOG, DEFAULT_DEEPSWE_AGENT, DEFAULT_DEEPSWE_MODEL, discoverDeepSWETasks, selectDeepSWETasks, parseDeepSWEResult, executePierTask, runDeepSWE } from "./deepswe.mjs";
+export { DEEPSWE_CATALOG, DEFAULT_DEEPSWE_AGENT, DEFAULT_DEEPSWE_MODEL, discoverDeepSWETasks, selectDeepSWETasks, parseDeepSWEResult, resolvePierModelName, executePierTask, runDeepSWE } from "./deepswe.mjs";
 export { MEETINGBANK_FACTUALITY_MODE, MEETINGBANK_FACTUALITY_MODELS, extractCandidateClaims, retrieveTranscriptEvidence, buildSourceInventory, normalizeNativeJudgeResponse, preflightOllama, preflightOllamaModel, dischargeOllamaModels, createOllamaFactualityJudge, runMeetingBankFactualityPilot } from "./factuality-pilot.mjs";
 export {
   FACT_EVALUATION_MODES,
