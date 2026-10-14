@@ -109,7 +109,7 @@ async function loadTools() {
 async function loadModels() {
   try {
     const data = await requestJson("/api/models");
-    const models = (data.models || []).map((name) => ({ value: name, label: name }));
+    const models = data.modelOptions || (data.models || []).map((name) => ({ value: name, label: name }));
     setSelectOptions(modelSelect, models, localStorage.getItem("pyash-model") || data.selected, (entry) => entry.label);
     if (modelSelect.value) localStorage.setItem("pyash-model", modelSelect.value);
   } catch (error) {

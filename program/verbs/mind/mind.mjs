@@ -495,16 +495,19 @@ export async function mind_to_name_text(sentence, {
   const runtimeBackend = agentRuntime?.backend ? String(agentRuntime.backend).trim() : null;
   const runtimeHost = agentRuntime?.host ? String(agentRuntime.host).trim() : null;
   const runtimeReasoningEffort = agentRuntime?.reasoningEffort ? String(agentRuntime.reasoningEffort).trim() : null;
+  const callBackend = mindCaseValue(sentence?.fromstate);
   const configuredBackend = mindCaseValue(configSentence?.fromstate);
   const backendName = normalizeMindBackendName(
-    runtimeBackend
+    callBackend
+      || runtimeBackend
       || configuredBackend
       || resolveConfigText("mind backend", { rememberFn: remember })
       || ""
   ) || null;
+  const callHost = mindCaseValue(sentence?.from);
   const ollamaHost = resolveMindBackendHost({
     backendName,
-    runtimeHost,
+    runtimeHost: callHost || runtimeHost,
     configuredHost: mindCaseValue(configSentence?.from),
     ollamaHost: resolveConfigText("ollama host", { rememberFn: remember }),
     aiHost: resolveConfigText("ai host", { rememberFn: remember })
