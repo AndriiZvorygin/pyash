@@ -10,6 +10,27 @@ be nightmare do
 be reverie do
 ```
 
+When a Criterion run names an external model runtime, it uses the same
+provider/host/model vocabulary as `mind`:
+
+```text
+from filename <dataset>
+from state <backend>
+from space <runtime endpoint>
+via state <model>
+during state <criterion profile>
+ob text <benchmark>
+be criterion do
+```
+
+`from state` identifies the backend (`ollama` or `strata`), `from space`
+identifies that backend's endpoint, and `via state` identifies the model being
+tested. `during state` selects the Criterion profile so it does not collide
+with `via state`, which is normalized to the `as` case by the language parser.
+The legacy `as state <profile>` form remains readable when no model is named.
+Criterion keeps command-line/environment configuration as a compatibility path,
+but this sentence form is the canonical Pyash representation.
+
 The executable command adapter is `command/criterion.mjs`; the runtime is under `program/runtime/criterion/`. It uses the existing refinery/run/artifact/newspaper conventions and emits content-addressed evidence under `criterion/artifacts/`.
 
 ## Criterion
@@ -20,7 +41,10 @@ The adapters are MeetingBank, QMSum, AMI, ICSI, DialogSum, LongBench v1 summariz
 
 IFEval uses a deterministic built-in instruction contract for common list/JSON/length checks. An installed official verifier can be selected with `--ifeval-verifier`; the adapter sends one JSON sample to that configured executable and records its returned prompt/instruction scores.
 
-Ollama is called through `/api/chat` with one shared profile per comparison. The default profiles are:
+Ollama is called through `/api/chat` with one shared profile per comparison.
+Strata uses its OpenAI-compatible `/v1/chat/completions` endpoint and asks the
+existing GPU Housekeeper to prepare and discharge the `strata` runtime; Criterion
+does not own model residency or GPU lifecycle. The default profiles are:
 
 | Profile | Thinking | Temperature | top-p | top-k | Context |
 | --- | --- | ---: | ---: | ---: | ---: |
