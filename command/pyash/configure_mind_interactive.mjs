@@ -76,7 +76,7 @@ export function createCollectMindInteractive(deps) {
       printer.header("A.1 Mind Relay");
       printer.why("Channel and agent responses require a configured mind relay backend.");
       printer.how("Choose a provider by number or short name; Pyash maps it to the full backend command.");
-      printer.examples("1 | ollama | openai-api | openai-codex | openrouter");
+      printer.examples("1 | ollama | strata | openai-api | openai-codex | openrouter");
       textOut("- providers:");
       for (const line of formatNumberedRows(MIND_BACKEND_CHOICES.map((item) => `${item.key} (${item.label})`), { columns: 2 })) {
         textOut(`  ${line}`);
@@ -91,6 +91,10 @@ export function createCollectMindInteractive(deps) {
       }
       if (selectedChoice?.key === "openai-codex") {
         textOut("- auth note: openai-codex can run Codex OAuth now via codex app-server.");
+      }
+      if (selectedChoice?.key === "strata") {
+        textOut("- auth note: Strata is local; set STRATA_API_KEY only if its API key is enabled.");
+        textOut("- GPU note: Strata calls the local Pyash GPU Housekeeper before each model load.");
       }
 
       printer.header("B.1 Provider Endpoint");
