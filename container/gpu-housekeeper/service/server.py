@@ -922,6 +922,24 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
         "error": "ollama-ensure-model jobSpec.payload must be map"
       }
 
+  if runtime_lower == "strata":
+    if not isinstance(job_spec, dict):
+      return {
+        "accepted": False,
+        "error": "strata jobSpec must be map"
+      }
+    kind = normalize_text(job_spec.get("kind")).lower()
+    if kind != "strata-chat":
+      return {
+        "accepted": False,
+        "error": "strata jobSpec.kind must be strata-chat"
+      }
+    if not isinstance(job_spec.get("payload"), dict):
+      return {
+        "accepted": False,
+        "error": "strata-chat jobSpec.payload must be map"
+      }
+
   if runtime_lower == "comfyui":
     if not isinstance(job_spec, dict):
       return {
@@ -2884,6 +2902,38 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   return result
 
 
+def execute_strata_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict) or normalize_text(job_spec.get("kind")).lower() != "strata-chat":
+    raise RuntimeError("unsupported strata job kind")
+  payload = job_spec.get("payload")
+  if not isinstance(payload, dict):
+    raise RuntimeError("strata-chat payload must be a map")
+
+  status = parse_runtime_status(runtime_registry.get("strata") or {})
+  if runtime_is_stopped(status) or status.get("status") == "unknown":
+    raise RuntimeError(status.get("message") or "Strata runtime is unavailable")
+  if status.get("loaded") is not True:
+    request_strata_json("/v1/load", {}, timeout_sec=int(os.environ.get("STRATA_LOAD_TIMEOUT_SEC", "600")))
+    status = parse_runtime_status(runtime_registry.get("strata") or {})
+    if status.get("loaded") is not True:
+      raise RuntimeError(status.get("message") or "Strata model did not become ready after load")
+
+  request = dict(payload)
+  request["stream"] = False
+  timeout_sec = int(job_spec.get("timeoutSec") or os.environ.get("STRATA_RUNTIME_TIMEOUT_SEC", "1800"))
+  result = request_strata_json("/v1/chat/completions", request, timeout_sec=timeout_sec)
+  profile_name = normalize_text(job.get("profileName"))
+  if profile_name:
+    with _LOCK:
+      _PROFILES[profile_name] = {
+        "profileName": profile_name,
+        "runtimeName": "strata",
+        "loaded": True
+      }
+  return result
+
+
 def execute_huggingface_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   profile_name = normalize_text(job.get("profileName"))
@@ -3095,6 +3145,8 @@ def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]
   ensure_capacity_for_job(job, runtime_registry)
   if runtime_name == "ollama":
     return execute_ollama_job(job, runtime_registry)
+  if runtime_name == "strata":
+    return execute_strata_job(job, runtime_registry)
   if runtime_name == "comfyui":
     return execute_comfyui_job(job, runtime_registry)
   if runtime_name == "katago":

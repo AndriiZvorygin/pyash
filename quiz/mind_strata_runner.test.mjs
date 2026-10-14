@@ -108,3 +108,35 @@ test("Strata backend preserves OpenAI-compatible streaming", async () => {
     await api.close();
   }
 });
+
+test("managed Strata backend submits chat through the GPU Housekeeper", async () => {
+  const calls = [];
+  const api = await startServer((request, response) => {
+    calls.push({ method: request.method, path: request.url });
+    response.writeHead(200, { "content-type": "application/json" });
+    if (request.url === "/submit") {
+      response.end(JSON.stringify({ remoteJobId: "job-strata-test" }));
+      return;
+    }
+    response.end(JSON.stringify({
+      status: "success",
+      result: { choices: [{ message: { content: "queued strata" } }] }
+    }));
+  });
+  try {
+    const result = await runRunner(["--strata", "--managed"], {
+      host: "http://unused-strata:8081",
+      model: "qwen3.8:27b",
+      messages: [{ role: "user", content: "Say hello" }]
+    }, {
+      ...localStrataEnv("http://unused-strata:8081"),
+      PYA_GPU_HOUSEKEEPER_URL: api.host,
+      PYA_GPU_MANAGER_POLL_MS: "1"
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout.trim()).choices[0].message.content, "queued strata");
+    assert.deepEqual(calls.map((item) => `${item.method} ${item.path}`), ["POST /submit", "GET /job/job-strata-test"]);
+  } finally {
+    await api.close();
+  }
+});

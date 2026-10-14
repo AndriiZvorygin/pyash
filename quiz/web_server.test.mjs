@@ -81,6 +81,9 @@ test("web model discovery keeps separate Strata hosts for advertised models", as
     if (target === "http://host:18083/v1/models") {
       return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-coder-iq1_m" }] }; } };
     }
+    if (target === "http://host:18082/health" || target === "http://host:18083/health") {
+      return { ok: true, async json() { return { status: "ok", loaded: true }; } };
+    }
     throw new Error(`unexpected model discovery URL: ${target}`);
   };
   try {
@@ -115,13 +118,19 @@ test("configured Strata targets remain visible while one runtime is initializing
     if (target === "http://host:18083/v1/models") {
       return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-coder-iq1_m" }] }; } };
     }
+    if (target === "http://host:18082/health") {
+      return { ok: true, async json() { return { status: "loading", loaded: false, etaSeconds: 42 }; } };
+    }
+    if (target === "http://host:18083/health") {
+      return { ok: true, async json() { return { status: "ok", loaded: true }; } };
+    }
     throw new Error(`unexpected model discovery URL: ${target}`);
   };
   try {
     const catalog = await fetchWebModels("", "strata");
-    assert.deepEqual(catalog.modelOptions.map(({ value, available }) => ({ value, available })), [
-      { value: "strata::qwen3.8-flash-next-iq2_xs", available: false },
-      { value: "strata::qwen3.8-flash-next-coder-iq1_m", available: true }
+    assert.deepEqual(catalog.modelOptions.map(({ value, available, status, etaSeconds }) => ({ value, available, status, etaSeconds })), [
+      { value: "strata::qwen3.8-flash-next-iq2_xs", available: false, status: "loading", etaSeconds: 42 },
+      { value: "strata::qwen3.8-flash-next-coder-iq1_m", available: true, status: "ready", etaSeconds: 0 }
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -290,6 +299,51 @@ test("web model catalogue routes a selected Strata model through the Strata mind
     assert.equal(chatSentence.fromstate.text, "strata");
     assert.equal(chatSentence.from.text, "http://swac:8081");
     assert.equal(chatSentence.ob.model, "qwen3.8:27b");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await fs.rm(root, { recursive: true, force: true });
+    forget();
+  }
+});
+
+test("web chat refuses a Strata request until the runtime is ready", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-web-strata-loading-"));
+  let mindCalls = 0;
+  const { server } = await createWebServer({
+    root,
+    assets: path.resolve(process.cwd(), "web"),
+    runtime: { tools: [] },
+    modelsFn: async () => ({
+      available: false,
+      modelOptions: [{
+        value: "strata::qwen3.8:27b",
+        backend: "strata",
+        model: "qwen3.8:27b",
+        host: "http://swac:8081",
+        ready: false,
+        status: "loading",
+        etaSeconds: 37
+      }]
+    }),
+    mindFn: async () => {
+      mindCalls += 1;
+      return { ob: { text: "must not run" } };
+    }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+  try {
+    const chat = await fetch(`${base}/api/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: "hello", model: "strata::qwen3.8:27b" })
+    });
+    const body = await chat.json();
+    assert.equal(chat.status, 409);
+    assert.equal(body.error.code, "model_loading");
+    assert.equal(body.error.etaSeconds, 37);
+    assert.equal(mindCalls, 0);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await fs.rm(root, { recursive: true, force: true });

@@ -77,6 +77,64 @@ export async function fetchStrataModels(host, { timeoutMs = 5000 } = {}) {
   }
 }
 
+function etaSecondsFromHealth(health = {}) {
+  for (const key of ["etaSeconds", "estimatedSecondsRemaining", "remainingSeconds"]) {
+    const value = Number(health?.[key]);
+    if (Number.isFinite(value) && value >= 0) return Math.ceil(value);
+  }
+  for (const key of ["estimatedReadyAt", "readyAt", "etaAt"]) {
+    const timestamp = Date.parse(String(health?.[key] ?? ""));
+    if (!Number.isFinite(timestamp)) continue;
+    return Math.max(0, Math.ceil((timestamp - Date.now()) / 1000));
+  }
+  return null;
+}
+
+export function classifyStrataRuntime({ modelsOk = false, healthOk = false, health = {} } = {}) {
+  const loaded = health?.loaded === true || health?.ready === true;
+  const loading = health?.loaded === false
+    || ["loading", "starting", "initializing", "warming"].includes(String(health?.status ?? "").toLowerCase());
+  const ready = Boolean(modelsOk && healthOk && loaded);
+  const status = ready ? "ready" : loading || modelsOk || healthOk ? "loading" : "unavailable";
+  return {
+    ready,
+    available: ready,
+    status,
+    etaSeconds: ready ? 0 : etaSecondsFromHealth(health),
+    statusMessage: ready
+      ? "ready"
+      : loading
+        ? "Strata runtime is loading"
+        : modelsOk || healthOk
+          ? "Strata readiness is not confirmed"
+          : "Strata runtime is unavailable"
+  };
+}
+
+export async function fetchStrataRuntime(host, { timeoutMs = 5000 } = {}) {
+  const [models, health] = await Promise.all([
+    fetchStrataModels(host, { timeoutMs }),
+    fetchStrataHealth(host, { timeoutMs })
+  ]);
+  const readiness = classifyStrataRuntime({
+    modelsOk: models.ok,
+    healthOk: health.ok,
+    health: health.health
+  });
+  return {
+    host,
+    ok: readiness.ready,
+    models: models.models,
+    health: health.health ?? null,
+    status: readiness.status,
+    ready: readiness.ready,
+    available: readiness.available,
+    etaSeconds: readiness.etaSeconds,
+    statusMessage: readiness.statusMessage,
+    error: [models.error, health.error].filter(Boolean).join("; ") || null
+  };
+}
+
 export async function fetchCodexModels({
   rootDir,
   codexBin = "",

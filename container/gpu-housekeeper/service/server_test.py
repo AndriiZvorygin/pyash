@@ -18,6 +18,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
     self.orig_request_ollama_json = server.request_ollama_json
+    self.orig_request_strata_json = server.request_strata_json
     self.orig_ollama_model_status = server.ollama_running_model_status
     self.orig_ollama_model_catalog = server.ollama_model_catalog
     self.orig_memory_available_mb = server.memory_available_mb
@@ -35,6 +36,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_ollama_json = self.orig_request_ollama_json
+    server.request_strata_json = self.orig_request_strata_json
     server.ollama_running_model_status = self.orig_ollama_model_status
     server.ollama_model_catalog = self.orig_ollama_model_catalog
     server.memory_available_mb = self.orig_memory_available_mb
@@ -1221,6 +1223,43 @@ class HousekeeperCapacityTests(unittest.TestCase):
     result = server.discharge_runtime("strata", entry)
     self.assertFalse(result["success"])
     self.assertIn("active", result["reason"])
+
+  def test_strata_chat_job_loads_through_housekeeper_before_request(self):
+    loaded = {"value": False}
+    calls = []
+    entry = {
+      "runtimeName": "strata", "gpuExpected": True,
+      "activityProbe": "strata-status", "dischargeKind": "strata"
+    }
+    registry = {"strata": entry}
+
+    def fake_status(_entry):
+      return {
+        "service": "strata", "status": "running", "loaded": loaded["value"],
+        "gpuObserved": loaded["value"], "gpuExpected": True
+      }
+
+    def fake_request(pathname, payload=None, timeout_sec=30):
+      calls.append((pathname, payload))
+      if pathname == "/v1/load":
+        loaded["value"] = True
+        return {"loaded": True}
+      return {"choices": [{"message": {"content": "queued strata reply"}}]}
+
+    server.parse_runtime_status = fake_status
+    server.request_strata_json = fake_request
+    result = server.execute_strata_job({
+      "runtimeName": "strata",
+      "profileName": "qwen3.8:27b",
+      "jobSpec": {
+        "kind": "strata-chat",
+        "payload": {"model": "qwen3.8:27b", "messages": [], "stream": False}
+      }
+    }, registry)
+
+    self.assertEqual(result["choices"][0]["message"]["content"], "queued strata reply")
+    self.assertEqual([item[0] for item in calls], ["/v1/load", "/v1/chat/completions"])
+    self.assertTrue(server._PROFILES["qwen3.8:27b"]["loaded"])
 
   def test_explicit_profile_discharge_dispatches_to_strata_hook(self):
     entry = {
