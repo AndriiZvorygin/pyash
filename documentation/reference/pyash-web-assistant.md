@@ -61,11 +61,13 @@ Useful environment values are:
 - `PYA_WEB_MODELS`: optional comma-separated allowlist of Ollama tags exposed by the model selector; when absent, installed tags from `/api/tags` are offered;
 - `PYA_WEB_BACKEND`: optional default web backend (`ollama` or `strata`);
 - `PYA_WEB_STRATA_HOST`: optional Strata OpenAI-compatible host, defaulting to `http://127.0.0.1:8081`;
+- `PYA_WEB_STRATA_HOSTS`: optional comma-separated Strata hosts when multiple model servers are available; each discovered model retains its serving host;
+- `PYA_WEB_STRATA_TARGETS`: optional comma-separated `model@host` targets for deployments where each Strata process serves one known model, such as Flash and Coder;
 - `PYA_WEB_STRATA_MODELS`: optional comma-separated Strata model allowlist; when absent, the gateway discovers `/v1/models` from Strata;
 - `PYA_WEB_HOST` and `PYA_WEB_PORT`: local listener settings;
 - `PYA_GPU_HOUSEKEEPER_URL`: existing housekeeper configuration used by Pyash workers.
 
-Authentication, TLS, and public exposure belong to Caddy. Rotate the existing Basic Auth credential through the host's normal Caddy configuration process rather than adding credentials to this repository.
+Strata entries are only model IDs advertised by the configured Strata hosts (or explicitly allowlisted names); this does not make arbitrary Ollama models available through Strata. Authentication, TLS, and public exposure belong to Caddy. Rotate the existing Basic Auth credential through the host's normal Caddy configuration process rather than adding credentials to this repository.
 
 Session history is stored in the existing dated `.pya` files under the web assistant's Pyash house. Selecting another session changes the `session name` supplied to the normal mind path; it does not create a browser-only transcript store. The selected model is passed as an explicit per-request model override and must be present in the discovered/allowed Ollama catalog.
 

@@ -264,6 +264,33 @@ function configuredStrataModels() {
     .filter(Boolean);
 }
 
+function configuredStrataHosts() {
+  const hosts = String(process.env.PYA_WEB_STRATA_HOSTS ?? "")
+    .split(",")
+    .map((host) => host.trim().replace(/\/+$/u, ""))
+    .filter(Boolean);
+  if (hosts.length) return [...new Set(hosts)];
+  const host = String(
+    process.env.PYA_WEB_STRATA_HOST
+      || process.env.STRATA_HOST
+      || "http://127.0.0.1:8081"
+  ).trim().replace(/\/+$/u, "");
+  return host ? [host] : [];
+}
+
+function configuredStrataTargets() {
+  return String(process.env.PYA_WEB_STRATA_TARGETS ?? "")
+    .split(",")
+    .map((entry) => {
+      const separator = entry.indexOf("@");
+      if (separator <= 0) return null;
+      const model = normalizeModelId(entry.slice(0, separator));
+      const host = entry.slice(separator + 1).trim().replace(/\/+$/u, "");
+      return model && host ? { model, host } : null;
+    })
+    .filter(Boolean);
+}
+
 function normalizeBackendId(value) {
   const backend = String(value ?? "").trim().toLowerCase();
   return backend.includes("strata") ? "strata" : "ollama";
@@ -353,44 +380,58 @@ async function fetchOllamaModels(defaultModel) {
   }
 }
 
-async function fetchWebModels(defaultModel, defaultBackend = "ollama") {
-  const strataHost = String(
-    process.env.PYA_WEB_STRATA_HOST
-      || process.env.STRATA_HOST
-      || "http://127.0.0.1:8081"
-  ).replace(/\/+$/u, "");
-  const [ollama, strata] = await Promise.all([
+export async function fetchWebModels(defaultModel, defaultBackend = "ollama") {
+  const strataHosts = configuredStrataHosts();
+  const configuredTargets = configuredStrataTargets();
+  const [ollama, strataRuntimes] = await Promise.all([
     fetchOllamaModels(defaultBackend === "ollama" ? defaultModel : ""),
-    fetchStrataModels(strataHost)
+    Promise.all(strataHosts.map(async (host) => ({ host, ...(await fetchStrataModels(host)) })))
   ]);
   const configured = configuredStrataModels();
-  const strataModels = configured.length
-    ? (strata.models.length ? strata.models.filter((name) => configured.includes(name)) : configured)
-    : strata.models;
+  const discoveredStrataModels = strataRuntimes.flatMap((runtime) => {
+    const models = configured.length
+      ? (runtime.models.length ? runtime.models.filter((name) => configured.includes(name)) : configured)
+      : runtime.models;
+    return models.map((model) => ({ model, host: runtime.host, available: runtime.ok }));
+  });
+  const strataModels = configuredTargets.length
+    ? configuredTargets.map(({ model, host }) => {
+      const runtime = strataRuntimes.find((entry) => entry.host === host);
+      return { model, host, available: Boolean(runtime?.ok && runtime.models.includes(model)) };
+    })
+    : discoveredStrataModels;
   const modelOptions = [
-    ...(ollama.models || []).map((model) => modelOption({
+    ...(ollama.models || []).filter(Boolean).map((model) => modelOption({
       backend: "ollama",
       model,
       host: ollama.host,
       available: ollama.available
     })),
-    ...strataModels.map((model) => modelOption({
+    ...strataModels.map(({ model, host, available }) => modelOption({
       backend: "strata",
       model,
-      host: strataHost,
-      available: strata.ok
+      host,
+      available
     }))
   ];
   if (!modelOptions.length && defaultBackend === "strata" && defaultModel) {
-    modelOptions.push(modelOption({ backend: "strata", model: defaultModel, host: strataHost, available: false }));
+    modelOptions.push(modelOption({
+      backend: "strata",
+      model: defaultModel,
+      host: strataHosts[0],
+      available: false
+    }));
   }
   return {
-    available: ollama.available || strata.ok,
+    available: ollama.available || strataRuntimes.some((runtime) => runtime.ok),
     models: modelOptions.map((entry) => entry.value),
     modelOptions,
     errors: {
       ollama: ollama.error ?? null,
-      strata: strata.error ?? null
+      strata: strataRuntimes
+        .filter((runtime) => runtime.error)
+        .map((runtime) => `${runtime.host}: ${runtime.error}`)
+        .join("; ") || null
     }
   };
 }

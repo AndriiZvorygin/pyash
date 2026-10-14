@@ -8,6 +8,7 @@ import { forget } from "../program/remember/index.mjs";
 import {
   buildChatSentence,
   createWebServer,
+  fetchWebModels,
   filterPublicTools,
   renderAssistantMarkdown,
   validateMediaJobRequest
@@ -61,6 +62,74 @@ test("chat sentence carries an explicit Strata backend and endpoint", () => {
   assert.equal(sentence.fromstate.text, "strata");
   assert.equal(sentence.from.text, "http://swac:8081");
   assert.equal(sentence.ob.model, "qwen3.8:27b");
+});
+
+test("web model discovery keeps separate Strata hosts for advertised models", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalHosts = process.env.PYA_WEB_STRATA_HOSTS;
+  delete process.env.PYA_WEB_STRATA_HOST;
+  delete process.env.STRATA_HOST;
+  process.env.PYA_WEB_STRATA_HOSTS = "http://host:18082,http://host:18083";
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith("/api/tags")) {
+      return { ok: true, async json() { return { models: [{ name: "qwen3.5:9b" }] }; } };
+    }
+    if (target === "http://host:18082/v1/models") {
+      return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-iq2_xs" }] }; } };
+    }
+    if (target === "http://host:18083/v1/models") {
+      return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-coder-iq1_m" }] }; } };
+    }
+    throw new Error(`unexpected model discovery URL: ${target}`);
+  };
+  try {
+    const catalog = await fetchWebModels("qwen3.5:9b");
+    assert.deepEqual(catalog.modelOptions.map(({ value, host }) => ({ value, host })), [
+      { value: "qwen3.5:9b", host: "http://localhost:11434" },
+      { value: "strata::qwen3.8-flash-next-iq2_xs", host: "http://host:18082" },
+      { value: "strata::qwen3.8-flash-next-coder-iq1_m", host: "http://host:18083" }
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalHosts === undefined) delete process.env.PYA_WEB_STRATA_HOSTS;
+    else process.env.PYA_WEB_STRATA_HOSTS = originalHosts;
+  }
+});
+
+test("configured Strata targets remain visible while one runtime is initializing", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalHosts = process.env.PYA_WEB_STRATA_HOSTS;
+  const originalTargets = process.env.PYA_WEB_STRATA_TARGETS;
+  process.env.PYA_WEB_STRATA_HOSTS = "http://host:18082,http://host:18083";
+  process.env.PYA_WEB_STRATA_TARGETS =
+    "qwen3.8-flash-next-iq2_xs@http://host:18082,qwen3.8-flash-next-coder-iq1_m@http://host:18083";
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith("/api/tags")) {
+      return { ok: true, async json() { return { models: [] }; } };
+    }
+    if (target === "http://host:18082/v1/models") {
+      return { ok: false, status: 503, async json() { return {}; } };
+    }
+    if (target === "http://host:18083/v1/models") {
+      return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-coder-iq1_m" }] }; } };
+    }
+    throw new Error(`unexpected model discovery URL: ${target}`);
+  };
+  try {
+    const catalog = await fetchWebModels("", "strata");
+    assert.deepEqual(catalog.modelOptions.map(({ value, available }) => ({ value, available })), [
+      { value: "strata::qwen3.8-flash-next-iq2_xs", available: false },
+      { value: "strata::qwen3.8-flash-next-coder-iq1_m", available: true }
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalHosts === undefined) delete process.env.PYA_WEB_STRATA_HOSTS;
+    else process.env.PYA_WEB_STRATA_HOSTS = originalHosts;
+    if (originalTargets === undefined) delete process.env.PYA_WEB_STRATA_TARGETS;
+    else process.env.PYA_WEB_STRATA_TARGETS = originalTargets;
+  }
 });
 
 test("media jobs accept only the existing safe GPU kinds", () => {
