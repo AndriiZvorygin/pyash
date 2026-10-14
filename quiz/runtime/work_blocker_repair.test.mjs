@@ -107,6 +107,24 @@ test("a global baseline blocker takes precedence and is prepared only once per d
   assert.match(second.reason, /no bounded|prior day/iu);
 });
 
+test("a deferred baseline sync remains visible to the bounded repair lane", async () => {
+  const worldRoot = await makeWorldRoot();
+  const now = "2026-10-04T12:00:00.000Z";
+  await writeWorkSchedulerHealth(worldRoot, {
+    "baseline error": "automation baseline sync deferred: merge conflict",
+    "last decision": "weekly pacing headroom"
+  });
+  await appendWorkSchedulerEvent(worldRoot, {
+    action: "admitted",
+    reason: "weekly pacing headroom",
+    workStarted: false,
+    usefulWake: false
+  }, { now: "2026-10-04T11:00:00.000Z" });
+  const result = await prepareBlockerRepair({ worldRoot, now });
+  assert.equal(result.candidate.source, "automation-baseline-sync");
+  assert.match(result.candidate.blocker, /automation baseline sync deferred/iu);
+});
+
 test("blocker repair bypasses a failing baseline sync without mutating the source task", async () => {
   const worldRoot = await makeWorldRoot();
   const now = "2026-10-04T12:00:00.000Z";

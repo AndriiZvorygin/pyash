@@ -16,7 +16,9 @@ const WORK_TRANSITIONS = new Map([
   ["ready", new Set(["planning", "blocked", "failed"])],
   ["planning", new Set(["implementing", "revision", "blocked", "usage-limited", "failed"])],
   ["implementing", new Set(["reviewing", "revision", "blocked", "usage-limited", "failed"])],
-  ["reviewing", new Set(["accepted", "revision", "blocked", "usage-limited", "failed"])],
+  // A Sol escalation may replace the work order after review, so REPLAN can
+  // legitimately return the same task directly to implementation.
+  ["reviewing", new Set(["accepted", "implementing", "revision", "blocked", "usage-limited", "failed"])],
   ["revision", new Set(["implementing", "blocked", "usage-limited", "failed"])],
   ["blocked", new Set(["ready", "planning", "implementing", "reviewing", "revision", "failed"])],
   ["usage-limited", new Set([

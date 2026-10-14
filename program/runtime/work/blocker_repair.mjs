@@ -95,8 +95,8 @@ function existingRepair(tasks, sourceTaskId, repairId) {
 function globalBaselineCandidate(health, tasks, now) {
   const reason = [health?.["last decision"], health?.["baseline error"]]
     .map(text)
-    .find((value) => /automation baseline sync blocked/iu.test(value)) || "";
-  if (!/automation baseline sync blocked/iu.test(reason)) return null;
+    .find((value) => /automation baseline sync (?:blocked|deferred)/iu.test(value)) || "";
+  if (!/automation baseline sync (?:blocked|deferred)/iu.test(reason)) return null;
   const source = "automation-baseline-sync";
   const taskId = repairTaskId("automation-baseline-sync", source, now);
   if (existingRepair(tasks, source, taskId)) return null;
