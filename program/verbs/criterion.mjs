@@ -2,6 +2,7 @@ import { remember } from "../remember/index.mjs";
 import { runCriterion } from "../runtime/criterion/run.mjs";
 import { createQueuedOllamaExecutor, DEFAULT_PROFILES } from "../runtime/criterion/ollama.mjs";
 import { createStrataExecutor } from "../runtime/criterion/strata.mjs";
+import { runDeepSWE } from "../runtime/criterion/deepswe.mjs";
 
 function valueFromCase(value, rememberFn) {
   if (!value) return null;
@@ -23,6 +24,7 @@ function normalizeEngine(value) {
   const text = String(value ?? "").trim().toLowerCase();
   if (!text || text === "ollama" || text === "ollama command mind") return "ollama";
   if (text === "strata" || text === "strata command mind") return "strata";
+  if (text === "pier" || text === "deepswe" || text === "deep-swe") return "pier";
   return text;
 }
 
@@ -63,6 +65,19 @@ export function criterionOptions(sentence, { remember: rememberFn = remember } =
 export async function criterion(sentence, { remember: rememberFn = remember, runner = runCriterion } = {}) {
   const options = criterionOptions(sentence, { remember: rememberFn });
   if (!options.benchmark) throw new Error("criterion requires a benchmark name or PYA_CRITERION_BENCHMARK");
+  if (runner === runCriterion && (options.engine === "pier" || options.benchmark === "deep-swe")) {
+    const run = await runDeepSWE({
+      tasksPath: options.datasetPath,
+      models: options.models,
+      agent: process.env.PYA_DEEPSWE_AGENT,
+      sampleSeed: Number(process.env.PYA_DEEPSWE_SAMPLE_SEED ?? 0),
+      limit: options.limit,
+      root: options.root,
+      modelEndpoint: options.baseUrl,
+      resume: process.env.PYA_CRITERION_RESUME === "true"
+    });
+    return { ob: { map: { runId: run.runId, benchmark: run.criterion, status: run.status, result: `criterion/results/${run.runId}.md` } }, be: "criterion" };
+  }
   if (runner === runCriterion && !["ollama", "strata"].includes(options.engine)) {
     throw new Error(`criterion backend is not supported by the native runner: ${options.backend || options.engine}`);
   }
@@ -100,7 +115,7 @@ export const signatures = [
   { signatureWords: ["be", "criterion", "from", "filename", "ob", "text"], handler: criterion }
 ];
 
-for (const backend of ["ollama", "strata"]) {
+for (const backend of ["ollama", "strata", "pier"]) {
   signatures.push(
     { signatureWords: ["be", "criterion", "fromstate", "name", backend, "ob", "text"], handler: criterion },
     { signatureWords: ["be", "criterion", "from", "filename", "fromstate", "name", backend, "ob", "text"], handler: criterion },
