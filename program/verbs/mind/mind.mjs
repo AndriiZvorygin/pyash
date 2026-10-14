@@ -31,7 +31,7 @@ import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from ".
 import { resolveHistoryContext } from "./history_context.mjs";
 import { runToolChat } from "./tool_chat.mjs";
 import { runGenerate } from "./generate.mjs";
-import { resolveMindBackendHost } from "./backend.mjs";
+import { normalizeMindBackendName, resolveMindBackendHost } from "./backend.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 import { consumeMindInterrupt } from "../../agent/interrupt.mjs";
@@ -51,6 +51,12 @@ function unescapeQuotedText(value) {
   return String(value ?? "")
     .replace(/\\\\/g, "\\")
     .replace(/\\"/g, "\"");
+}
+
+function mindCaseValue(value) {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+  return String(value.name ?? value.text ?? value.wo ?? value.filename ?? "").trim();
 }
 
 function extractAgentRuntimeMapText(text) {
@@ -489,10 +495,17 @@ export async function mind_to_name_text(sentence, {
   const runtimeBackend = agentRuntime?.backend ? String(agentRuntime.backend).trim() : null;
   const runtimeHost = agentRuntime?.host ? String(agentRuntime.host).trim() : null;
   const runtimeReasoningEffort = agentRuntime?.reasoningEffort ? String(agentRuntime.reasoningEffort).trim() : null;
-  const backendName = runtimeBackend || resolveConfigText("mind backend", { rememberFn: remember }) || null;
+  const configuredBackend = mindCaseValue(configSentence?.fromstate);
+  const backendName = normalizeMindBackendName(
+    runtimeBackend
+      || configuredBackend
+      || resolveConfigText("mind backend", { rememberFn: remember })
+      || ""
+  ) || null;
   const ollamaHost = resolveMindBackendHost({
     backendName,
     runtimeHost,
+    configuredHost: mindCaseValue(configSentence?.from),
     ollamaHost: resolveConfigText("ollama host", { rememberFn: remember }),
     aiHost: resolveConfigText("ai host", { rememberFn: remember })
   });
