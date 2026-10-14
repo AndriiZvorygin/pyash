@@ -78,7 +78,8 @@ ya
 Fields:
 
 * `from space` → host (default: `http://localhost:11434` if `OLLAMA_HOST` is unset).
-* `via state` (`as`) → model
+* `from state` (`fromstate`) → backend/provider, using a short name such as `ollama`, `strata`, `openrouter`, or `vllm`.
+* `via state` (`as`) → model.
 
   * If omitted, the interpreter loads `mind model` from `configure/default.pya`
     (or `model` from the nearest house `conduct/runtime.pya`). The current
@@ -86,6 +87,18 @@ Fields:
 * `from discourse` (`fromtext`) → system prompt string for the mind.
 * `accordingto name <session>` → series-backed session history (optional).
 * `by num N` (quantity/way case) → history window for that mind (keeps ~N user+assistant pairs). Using the existing quantity axis avoids adding a new case; defaults to ~8 if omitted. Per-call override via `by num` is accepted too.
+
+For example, configure one mind to use Strata while leaving the global Ollama default unchanged:
+
+```pyash
+exists su stratahelper be mind
+  from state "strata"
+  from space "http://127.0.0.1:8081"
+  via state "qwen3.8-flash-next-iq2_xs"
+ya
+```
+
+The backend and endpoint are selected per mind. Resolution precedence is agent runtime configuration, then this mind declaration, then the global `mind backend` and host settings. Minds without `from state` keep the existing global backend behaviour.
 
 Internally, the runtime stores at least:
 
