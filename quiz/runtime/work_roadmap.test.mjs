@@ -141,6 +141,28 @@ test("Personal Headquarters packages survive an older generated roadmap catalog"
     .every((item) => item.nonGoals && item.whyMatters));
 });
 
+test("new canonical packages are appended to an existing schema-four catalog", async () => {
+  const { worldRoot, repositoryRoot } = await world("pyash-roadmap-catalog-union-");
+  await fs.mkdir(path.join(worldRoot, "holding", "work", "artifacts"), { recursive: true });
+  await fs.writeFile(path.join(worldRoot, "holding", "work", "artifacts", "autonomous-roadmap.pya"), [
+    "su name work autonomous roadmap state be map def",
+    "  su name schema ob text \"4\" ya",
+    "prah",
+    "su name work autonomous roadmap package roadmap-translation-parity-tranche be map def",
+    "  su name task id ob text \"roadmap-translation-parity-tranche\" ya",
+    "  su name title ob text \"Complete the higher-level translation parity tranche\" ya",
+    "  su name source path ob text \"documentation/todo.md\" ya",
+    "  su name source anchor ob text \"Higher-level translation paths parity\" ya",
+    "prah",
+    ""
+  ].join("\n"));
+
+  const roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, persist: false });
+  const saddle = roadmap.packages.find((item) => item.taskId === "roadmap-pyash-coding-saddle-core");
+  assert.ok(saddle);
+  assert.deepEqual(saddle.dependsOnTaskIds, ["roadmap-pyash-native-agent-workflows", "roadmap-session-replay-hardening"]);
+});
+
 test("roadmap refresh uses an injected Sol client and persists a bounded proposal", async () => {
   const { worldRoot, repositoryRoot } = await world("pyash-roadmap-refresh-");
   const packages = autonomousRoadmapPackages().slice(0, 5).map((item, index) => ({
@@ -185,9 +207,10 @@ test("roadmap refresh uses an injected Sol client and persists a bounded proposa
   assert.match(await fs.readFile(result.roadmap.paths.pya, "utf8"), /last sol summary/iu);
   const rebuilt = await buildAutonomousRoadmap({ worldRoot, repositoryRoot });
   assert.deepEqual(
-    rebuilt.packages.map((item) => item.taskId),
+    rebuilt.packages.slice(0, 5).map((item) => item.taskId),
     result.roadmap.packages.map((item) => item.taskId)
   );
+  assert.ok(rebuilt.packages.some((item) => item.taskId === "roadmap-pyash-coding-saddle-core"));
 });
 
 test("roadmap progress preserves active Luna checkpoint evidence", async () => {
