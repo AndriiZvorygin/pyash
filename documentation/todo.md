@@ -7,6 +7,9 @@
 - Docs sweep: remove stale `tloh` wording in documentation (it is deprecated; loops are `fromindex`/`toindex` stop-when-equal).
 
 ## Soon
+- Build the Pyash interactive coding saddle over existing mind, session,
+  saddle-tools, command-policy, provider, and checkpoint primitives; follow it
+  with WorkTask handoff without creating a parallel task system.
 - Expand verb coverage with quizzes for additional nouns/classes hinted in `pyac.txt` (e.g., files/models/pipeline nodes) before adding code.
 - Add hnuc/code validation utilities for compositional cases to align runtime with `compositionalCases.mjs` and the longer-term spec.
 - Improve mind integration: streaming handling for Ollama responses and richer reply mapping (assistant/thinking/timestamps) per `mind.md`.
