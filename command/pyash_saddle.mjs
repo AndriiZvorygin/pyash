@@ -183,6 +183,7 @@ async function main() {
   let busy = false;
   let closing = false;
   let modelPicker = null;
+  let modelPickerLoading = false;
   let promptLabel = "pyash> ";
   let renderedRows = 1;
 
@@ -195,6 +196,9 @@ async function main() {
     renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear, label });
   };
   const showModelPicker = async () => {
+    modelPickerLoading = true;
+    writeLine("discovering models...");
+    prompt({ clear: false, label: "model loading> " });
     const fallbackModels = String(process.env.PYA_SADDLE_MODELS || "")
       .split(",")
       .map((value) => value.trim())
@@ -219,6 +223,7 @@ async function main() {
     if (!modelPicker.length) {
       modelPicker = [{ model, value: model, backend, host, label: model }];
     }
+    modelPickerLoading = false;
     writeLine(formatSaddleModelPicker({
       models: modelPicker,
       currentModel: model,
@@ -256,6 +261,11 @@ async function main() {
       await shutdown();
       return;
     }
+    if (modelPickerLoading) {
+      writeLine("model discovery is still running; please choose after the list appears");
+      prompt({ clear: false, label: "model loading> " });
+      return;
+    }
     if (modelPicker) {
       const selected = resolveSaddleModelOption(input, modelPicker);
       if (!selected) {
@@ -269,7 +279,7 @@ async function main() {
       host = normalizeSaddleHost(selected.host, host);
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
-      writeLine(`model: ${model}`);
+      writeLine(`model: ${model} via ${backend}${host ? ` @ ${host}` : ""}`);
       prompt({ clear: false });
       return;
     }
