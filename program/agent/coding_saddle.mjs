@@ -35,16 +35,26 @@ export function normalizeSaddleHost(value, fallback = "http://localhost:11434") 
 }
 
 export function resolveSaddleModelSelection(value, models = []) {
+  const selected = resolveSaddleModelOption(value, models);
+  return selected?.model || "";
+}
+
+export function resolveSaddleModelOption(value, models = []) {
   const input = normalizeText(value);
-  const choices = Array.isArray(models) ? models.map(normalizeText).filter(Boolean) : [];
+  const choices = Array.isArray(models)
+    ? models.map((entry) => typeof entry === "string" ? { model: normalizeText(entry), value: normalizeText(entry) } : entry)
+      .filter((entry) => normalizeText(entry?.model))
+    : [];
   if (/^\d+$/.test(input)) {
     const index = Number.parseInt(input, 10);
-    return index >= 1 && index <= choices.length ? choices[index - 1] : "";
+    return index >= 1 && index <= choices.length ? choices[index - 1] : null;
   }
-  const exact = choices.find((model) => model === input);
+  const exact = choices.find((entry) => entry.value === input || entry.model === input || entry.label === input);
   if (exact) return exact;
-  const insensitive = choices.find((model) => model.toLowerCase() === input.toLowerCase());
-  return insensitive || "";
+  const insensitive = choices.find((entry) => [entry.value, entry.model, entry.label]
+    .filter(Boolean)
+    .some((candidate) => String(candidate).toLowerCase() === input.toLowerCase()));
+  return insensitive || null;
 }
 
 export async function discoverSaddleModels({
@@ -92,12 +102,24 @@ export async function discoverSaddleModels({
   }
 }
 
-export function formatSaddleModelPicker({ models = [], currentModel = "", error = "" } = {}) {
-  const choices = Array.isArray(models) ? models.map(normalizeText).filter(Boolean) : [];
+export function formatSaddleModelPicker({ models = [], currentModel = "", currentBackend = "", error = "" } = {}) {
+  const choices = Array.isArray(models)
+    ? models.map((entry) => typeof entry === "string" ? { model: normalizeText(entry), value: normalizeText(entry) } : entry)
+      .filter((entry) => normalizeText(entry?.model))
+    : [];
   const lines = ["available models:"];
-  choices.forEach((model, index) => {
-    const marker = model === normalizeText(currentModel) ? " (current)" : "";
-    lines.push(`${index + 1}. ${model}${marker}`);
+  choices.forEach((entry, index) => {
+    const model = normalizeText(entry.model);
+    const backend = normalizeText(entry.backend).toLowerCase();
+    const label = normalizeText(entry.label)
+      || (backend && backend !== "ollama" ? `${backend}: ${model}` : model);
+    const host = normalizeText(entry.host);
+    const location = backend && backend !== "ollama" && host ? ` @ ${host}` : "";
+    const marker = model === normalizeText(currentModel)
+      && (!normalizeText(currentBackend) || !backend || backend === normalizeText(currentBackend).toLowerCase())
+      ? " (current)"
+      : "";
+    lines.push(`${index + 1}. ${label}${location}${marker}`);
   });
   if (error) lines.push(`discovery: ${error}`);
   lines.push("Enter a number or exact model name; Ctrl+C cancels.");

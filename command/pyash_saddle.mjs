@@ -14,6 +14,7 @@ import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
+import { fetchWebModels } from "./pyash_web_server.mjs";
 import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
@@ -24,7 +25,7 @@ import {
   normalizeSaddleBackend,
   normalizeSaddleHost,
   normalizeSaddleModel,
-  resolveSaddleModelSelection,
+  resolveSaddleModelOption,
   saddleToolEventLabel
 } from "../program/agent/coding_saddle.mjs";
 
@@ -198,18 +199,34 @@ async function main() {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
-    const discovered = await discoverSaddleModels({
+    const discovered = await discoverSaddleModels({ backend, host, currentModel: model, fallbackModels });
+    const catalog = await fetchWebModels(model, backend).catch(() => ({ modelOptions: [], errors: {} }));
+    const discoveredOptions = discovered.models.map((entry) => ({
+      model: entry,
+      value: entry,
       backend,
       host,
-      currentModel: model,
-      fallbackModels
-    });
-    modelPicker = discovered.models;
-    if (!modelPicker.length) modelPicker = [model];
+      label: backend === "ollama" ? entry : `${backend}: ${entry}`
+    }));
+    const options = [
+      ...(Array.isArray(catalog.modelOptions) ? catalog.modelOptions : []),
+      ...discoveredOptions
+    ];
+    modelPicker = [...new Map(options
+      .filter((entry) => entry?.model)
+      .map((entry) => [entry.value || `${entry.backend || backend}::${entry.model}`, entry]))
+      .values()];
+    if (!modelPicker.length) {
+      modelPicker = [{ model, value: model, backend, host, label: model }];
+    }
     writeLine(formatSaddleModelPicker({
       models: modelPicker,
       currentModel: model,
-      error: discovered.available ? "" : discovered.error
+      currentBackend: backend,
+      error: discovered.available && !catalog.errors?.strata ? "" : [
+        discovered.available ? "" : discovered.error,
+        catalog.errors?.strata
+      ].filter(Boolean).join("; ")
     }));
     prompt({ clear: false, label: "select model> " });
   };
@@ -240,14 +257,16 @@ async function main() {
       return;
     }
     if (modelPicker) {
-      const selected = resolveSaddleModelSelection(input, modelPicker);
+      const selected = resolveSaddleModelOption(input, modelPicker);
       if (!selected) {
         writeLine("invalid model selection");
         prompt({ clear: false, label: "select model> " });
         return;
       }
       modelPicker = null;
-      model = selected;
+      model = normalizeSaddleModel(selected.model, model);
+      backend = normalizeSaddleBackend(selected.backend, backend);
+      host = normalizeSaddleHost(selected.host, host);
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model}`);
