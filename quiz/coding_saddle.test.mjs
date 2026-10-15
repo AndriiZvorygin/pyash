@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
-  formatSaddleStatus
+  discoverSaddleModels,
+  formatSaddleModelPicker,
+  formatSaddleStatus,
+  resolveSaddleModelSelection
 } from "../program/agent/coding_saddle.mjs";
 import { runSaddleTurn } from "../command/pyash_saddle.mjs";
 
@@ -87,4 +90,33 @@ test("coding saddle status exposes provider and queue state", () => {
   assert.match(status, /backend: strata/);
   assert.match(status, /gpu queue: 3/);
   assert.match(status, /state: running/);
+});
+
+test("coding saddle discovers and selects models from the active backend", async () => {
+  const ollama = await discoverSaddleModels({
+    backend: "ollama",
+    host: "http://mriczo:11434",
+    currentModel: "qwen3.5:9b",
+    fetchFn: async (url) => {
+      assert.equal(url, "http://mriczo:11434/api/tags");
+      return { ok: true, async json() { return { models: [{ name: "qwen3.5:9b" }, { name: "qwen3.8:27b" }] }; } };
+    }
+  });
+
+  assert.deepEqual(ollama.models, ["qwen3.5:9b", "qwen3.8:27b"]);
+  assert.equal(resolveSaddleModelSelection("2", ollama.models), "qwen3.8:27b");
+  assert.match(formatSaddleModelPicker({ models: ollama.models, currentModel: ollama.models[0] }), /1\. qwen3\.5:9b \(current\)/);
+});
+
+test("coding saddle preserves the current model when catalogue discovery fails", async () => {
+  const result = await discoverSaddleModels({
+    backend: "strata",
+    host: "http://swac:8081",
+    currentModel: "qwen3.8:27b",
+    fetchFn: async () => { throw new Error("connection refused"); }
+  });
+
+  assert.deepEqual(result.models, ["qwen3.8:27b"]);
+  assert.equal(result.available, false);
+  assert.equal(resolveSaddleModelSelection("qwen3.8:27b", result.models), "qwen3.8:27b");
 });
