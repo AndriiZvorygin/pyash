@@ -7,6 +7,7 @@ import {
   discoverSaddleModels,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  resolveSaddleModelOption,
   resolveSaddleModelSelection
 } from "../program/agent/coding_saddle.mjs";
 import { runSaddleTurn } from "../command/pyash_saddle.mjs";
@@ -119,4 +120,14 @@ test("coding saddle preserves the current model when catalogue discovery fails",
   assert.deepEqual(result.models, ["qwen3.8:27b"]);
   assert.equal(result.available, false);
   assert.equal(resolveSaddleModelSelection("qwen3.8:27b", result.models), "qwen3.8:27b");
+});
+
+test("coding saddle picker keeps Strata targets distinct from Ollama models", () => {
+  const options = [
+    { value: "qwen3.5:9b", model: "qwen3.5:9b", backend: "ollama" },
+    { value: "strata::qwen3.8-flash-next-coder-iq1_m", model: "qwen3.8-flash-next-coder-iq1_m", backend: "strata", host: "http://swac:8081", label: "Strata: qwen3.8-flash-next-coder-iq1_m" }
+  ];
+  const picker = formatSaddleModelPicker({ models: options, currentModel: "qwen3.5:9b", currentBackend: "ollama" });
+  assert.match(picker, /2\. Strata: qwen3\.8-flash-next-coder-iq1_m @ http:\/\/swac:8081/);
+  assert.deepEqual(resolveSaddleModelOption("2", options), options[1]);
 });
