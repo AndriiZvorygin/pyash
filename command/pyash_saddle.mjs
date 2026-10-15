@@ -13,6 +13,7 @@ import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
+import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
 import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
@@ -134,12 +135,7 @@ export async function runSaddleTurn({
 
 async function dischargeSaddleModel(model, backend) {
   if (normalizeSaddleBackend(backend) !== "ollama") return;
-  await interpret({
-    mood: "do",
-    be: "discharge",
-    as: { wo: "mind" },
-    ob: { ve: { type: "text", values: [String(model)] } }
-  });
+  await dischargeOllamaMind(model, { rememberFn: remember, timeoutMs: 3000 });
 }
 
 function writeLine(text = "") {
