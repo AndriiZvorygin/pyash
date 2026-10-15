@@ -2,6 +2,7 @@ import {
   canonicalizeMindBackend,
   looksLikeOllamaBackend,
   fetchOllamaModels,
+  fetchStrataHealth,
   backendChoiceKey,
   resolveMindBackendSource,
   defaultMindHostForSource,
@@ -93,6 +94,16 @@ export function createConfigureMindSupport(deps) {
       if (!available) return { ok: false, checks };
       return { ok: true, checks };
     }
+    if (backend === "strata command mind") {
+      const health = await fetchStrataHealth(cfg.host);
+      checks.push({
+        name: "Strata host reachable",
+        ok: health.ok,
+        error: health.error || "",
+        loaded: health.health?.loaded
+      });
+      return { ok: health.ok, checks };
+    }
     checks.push({
       name: "provider live check",
       ok: true,
@@ -133,16 +144,22 @@ export function createConfigureMindSupport(deps) {
     return lines.join("\n");
   }
 
-  function buildMindDefaultsBlock(cfg, { defaultRelay = DEFAULT_MIND_RELAY_NAME } = {}) {
-    return [
+  function buildMindDefaultsBlock(cfg, { defaultRelay = DEFAULT_MIND_RELAY_NAME, ollamaHost = "" } = {}) {
+    const lines = [
       `exists su name mind relay default ob text ${quoteText(defaultRelay)} be default ya`,
       `exists su name mind source ob text ${quoteText(cfg.source || backendChoiceKey(cfg.backend || ""))} be default ya`,
-      `exists su name mind backend be default ob name ${cfg.backend} ya`,
-      `exists su name ollama host ob text ${quoteText(cfg.host)} be default ya`,
+      `exists su name mind backend be default ob name ${cfg.backend} ya`
+    ];
+    const selectedOllamaHost = looksLikeOllamaBackend(cfg.backend) ? cfg.host : ollamaHost;
+    if (String(selectedOllamaHost || "").trim()) {
+      lines.push(`exists su name ollama host ob text ${quoteText(selectedOllamaHost)} be default ya`);
+    }
+    lines.push(
       `exists su name ai host ob text ${quoteText(cfg.host)} be default ya`,
       `exists su name mind model ob text ${quoteText(cfg.model)} be default ya`,
       `exists su name mind reasoning effort ob text ${quoteText(cfg.reasoningEffort || "")} be default ya`
-    ].join("\n");
+    );
+    return lines.join("\n");
   }
 
   return {

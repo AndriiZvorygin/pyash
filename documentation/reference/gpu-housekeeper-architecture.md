@@ -79,6 +79,19 @@ The worker talks to one configured entry housekeeper URL at a time; the entry
 housekeeper performs the peer selection rather than making the worker a second
 multi-host scheduler.
 
+#### Runtime claim recovery
+
+The worker also performs a lightweight GPU queue garbage-collection pass once
+per minute. A claim in `world/holding/gpu/runtime/` older than one hour is
+protected when its dispatch or physical lease is still heartbeating. Otherwise
+the claim is treated as abandoned: its handle is marked `fail`, the runtime
+file moves to `produce/fail`, and any stale matching lease is released. A claim
+whose handle is already terminal success is moved to `produce/success` instead.
+This keeps an interrupted worker from blocking the queue while avoiding an
+automatic replay of a remote job whose outcome is ambiguous. The stale age can
+be tuned with `PYA_GPU_RUNTIME_STALE_MS` when an unusually long-running job
+needs a larger recovery window.
+
 ### 2.3 GPU Housekeeper
 
 `container/gpu-housekeeper/service/server.py` exposes the remote HTTP surface:
@@ -90,6 +103,7 @@ multi-host scheduler.
 - `GET /runtime/<runtimeName>`
 - `GET /runtime/ollama/models`
 - `POST /capacity/preview`
+- `POST /capacity/prepare` (Strata pre-load admission and idle-runtime handoff)
 - `POST /submit`
 - `GET /job/<remoteJobId>`
 - `POST /discharge`
@@ -115,6 +129,7 @@ The default managed runtimes are:
 - `comfyui`
 - `katago`
 - `huggingface` (the Criterion sequence-to-sequence service)
+- `strata` when `GPU_HOUSEKEEPER_STRATA_RUNTIME_URL` is configured
 
 Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
 
@@ -123,9 +138,19 @@ reclamation. A runtime being present in the registry means that the
 housekeeper is allowed to inspect and manage its configured container; it does
 not mean that the housekeeper may terminate arbitrary host processes. Automatic
 reclamation requires both a runtime-specific `activityProbe` and a supported
-`dischargeKind`. The default ComfyUI entry uses the empty-queue probe and the
-provider's `/interrupt`, queue-clear, and `/free` hooks. Unknown processes and
-managed runtimes without a safe hook remain untouched.
+`dischargeKind`. ComfyUI uses its empty-queue probe and `/interrupt`, queue-clear,
+and `/free` hooks. Ollama uses the Housekeeper job ledger plus recent container
+inference access logs; discharge sends `keep_alive: 0` and verifies `/api/ps` is
+empty. Unknown activity, failed telemetry, and managed runtimes without a safe
+hook remain untouched. The Strata pre-load hook requests admission through
+`/capacity/prepare`, which takes the device gate and performs capacity checks
+before Strata allocates model VRAM. For reverse handoff, the optional Strata
+runtime entry queries its status through a short-lived host-network helper
+container; Strata remains loopback-bound. It is eligible for discharge only
+after its configured idle grace and with zero in-flight requests. Discharge
+uses Strata's `/v1/unload`, verifies `loaded:false`, and then rechecks actual
+free VRAM before the requesting runtime proceeds. Missing status, activity,
+authentication, or unload confirmation fails closed.
 
 ## 3. Runtime Behavior
 

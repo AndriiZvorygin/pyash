@@ -1,5 +1,6 @@
 su name agent tools be map def
 su name agent ob bool truth ya
+su name runtime status be status as wo runtime can
 su name read be read from filename input can
 su name see be see from filename input can
 su name write be write ob text input to filename input can

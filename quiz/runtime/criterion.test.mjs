@@ -7,6 +7,7 @@ import path from "node:path";
 import { parse } from "../../program/understand/index.mjs";
 import { deriveSignatureFromCall } from "../../program/bridge/signature.mjs";
 import { runCriterion, rerunCriterion, scoreSample } from "../../program/runtime/criterion/run.mjs";
+import { criterionOptions, signatures as criterionSignatures } from "../../program/verbs/criterion.mjs";
 import { extractLead3, extractSentences } from "../../program/runtime/criterion/baseline.mjs";
 import { runBaseline } from "../../program/runtime/criterion/baseline-run.mjs";
 import { createHuggingFaceExecutor, huggingFaceModelDefaults } from "../../program/runtime/criterion/huggingface.mjs";
@@ -15,6 +16,8 @@ import { contextLengthBucket, ollamaTiming, percentile, rougeScores } from "../.
 import { runNightmare, runReverie } from "../../program/runtime/criterion/suites.mjs";
 import { runCriterionRefinery } from "../../program/runtime/criterion/refinery.mjs";
 import { createQueuedOllamaExecutor, runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
+import { createStrataExecutor } from "../../program/runtime/criterion/strata.mjs";
+import { discoverDeepSWETasks, parseDeepSWEResult, resolvePierModelName, runDeepSWE, selectDeepSWETasks } from "../../program/runtime/criterion/deepswe.mjs";
 import { loadRun, renderRunCsv, renderRunMarkdown } from "../../program/runtime/criterion/report.mjs";
 
 async function tempRoot() { return fs.mkdtemp(path.join(os.tmpdir(), "pyash-criterion-test-")); }
@@ -105,6 +108,136 @@ test("queued Ollama Criterion adapter uses the durable GPU lane and housekeeper 
 test("criterion language surface is registered as be criterion do", () => {
   const sentence = parse("be criterion do");
   assert.deepEqual(deriveSignatureFromCall(sentence), ["be", "criterion"]);
+});
+
+test("criterion native cases match mind backend, endpoint, model, and profile vocabulary", () => {
+  const sentence = parse([
+    'from filename "/tmp/meetingbank.jsonl"',
+    'from state "strata"',
+    'from space "http://127.0.0.1:8081"',
+    'via state "qwen3.5:9b"',
+    'during state "summary_direct"',
+    'ob text "meetingbank"',
+    "be criterion do"
+  ].join(" "));
+  const options = criterionOptions(sentence, { remember: () => null });
+  assert.equal(options.datasetPath, "/tmp/meetingbank.jsonl");
+  assert.equal(options.backend, "strata");
+  assert.equal(options.engine, "strata");
+  assert.equal(options.baseUrl, "http://127.0.0.1:8081");
+  assert.deepEqual(options.models, ["qwen3.5:9b"]);
+  assert.equal(options.profile, "summary_direct");
+  assert.ok(criterionSignatures.some(({ signatureWords }) => JSON.stringify(signatureWords) === JSON.stringify(deriveSignatureFromCall(sentence))));
+});
+
+test("criterion native DeepSWE cases select the external Pier runner", () => {
+  const sentence = parse([
+    'from filename "/cache/deep-swe/tasks"',
+    'from state "pier"',
+    'from space "/usr/local/bin/pier"',
+    'via state "qwen3.5:9b"',
+    'during state "deepswe"',
+    'ob text "deep-swe"',
+    "be criterion do"
+  ].join(" "));
+  const options = criterionOptions(sentence, { remember: () => null });
+  assert.equal(options.engine, "pier");
+  assert.equal(options.baseUrl, "/usr/local/bin/pier");
+  assert.deepEqual(options.models, ["qwen3.5:9b"]);
+  assert.ok(criterionSignatures.some(({ signatureWords }) => JSON.stringify(signatureWords) === JSON.stringify(deriveSignatureFromCall(sentence))));
+});
+
+test("Strata Criterion adapter prepares capacity, sends OpenAI-compatible work, and discharges", async () => {
+  const calls = [];
+  const response = (value, status = 200) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? "OK" : "error",
+    async text() { return JSON.stringify(value); }
+  });
+  const adapter = createStrataExecutor({
+    baseUrl: "http://strata:8081",
+    housekeeperUrl: "http://housekeeper:8090",
+    vramRequiredMb: 20000,
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options, body: options?.body ? JSON.parse(options.body) : null });
+      if (url.endsWith("/capacity/prepare")) return response({ prepared: true, deviceId: "gpu0" });
+      if (url.endsWith("/v1/chat/completions")) return response({ choices: [{ message: { content: "strata summary" } }], usage: { prompt_tokens: 12, completion_tokens: 4 } });
+      if (url.endsWith("/discharge")) return response({ success: true, status: "discharged" });
+      return response({ error: "unexpected endpoint" }, 404);
+    }
+  });
+  const result = await adapter.executor({ model: "qwen3.5:9b", prompt: "Summarize.", profile: "summary_direct" });
+  assert.equal(result.text, "strata summary");
+  assert.equal(result.metadata.engine, "strata");
+  assert.equal(result.timing.promptTokens, 12);
+  assert.equal(result.timing.outputTokens, 4);
+  await adapter.close();
+  assert.deepEqual(calls.map(call => call.url), [
+    "http://housekeeper:8090/capacity/prepare",
+    "http://strata:8081/v1/chat/completions",
+    "http://housekeeper:8090/discharge"
+  ]);
+  assert.equal(calls[0].body.runtimeName, "strata");
+  assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 20000);
+  assert.equal(calls[1].body.model, "qwen3.5:9b");
+  assert.equal(calls[1].body.temperature, 0.2);
+});
+
+test("DeepSWE task selection and verifier parsing are deterministic", () => {
+  const tasks = [{ id: "task-b" }, { id: "task-a" }, { id: "task-c" }];
+  assert.deepEqual(selectDeepSWETasks(tasks, { limit: 2, sampleSeed: 0 }).map(task => task.id), ["task-a", "task-c"]);
+  const parsed = parseDeepSWEResult({
+    exitCode: 0,
+    reward: { reward: 1, pass_fraction: 0.75, tests_passed: 3, tests_total: 4 },
+    ctrf: { summary: { passed: 3, total: 4 } },
+    elapsedMs: 1200
+  });
+  assert.equal(parsed.status, "ok");
+  assert.equal(parsed.pass, false);
+  assert.deepEqual(parsed.scores, { reward: 1, passFraction: 0.75, verifierPass: 0, testsPassed: 3, testsTotal: 4 });
+  assert.equal(parsed.metrics.totalElapsedMs, 1200);
+});
+
+test("DeepSWE preserves model tags while supplying Pier's provider prefix", () => {
+  assert.equal(resolvePierModelName("qwen3.5:9b"), "openai/qwen3.5:9b");
+  assert.equal(resolvePierModelName("hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"), "openai/hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M");
+  assert.equal(resolvePierModelName("ollama/qwen3.5:9b"), "ollama/qwen3.5:9b");
+});
+
+test("DeepSWE Criterion lane checkpoints external Pier rows and resumes them", async () => {
+  const root = await tempRoot();
+  const tasksRoot = path.join(root, "deep-swe", "tasks");
+  for (const taskId of ["task-a", "task-b"]) {
+    const taskPath = path.join(tasksRoot, taskId);
+    await fs.mkdir(taskPath, { recursive: true });
+    await fs.writeFile(path.join(taskPath, "task.toml"), `id = "${taskId}"\nlanguage = "javascript"\nrepo = "example/repo"\n`, "utf8");
+  }
+  const discovered = await discoverDeepSWETasks(tasksRoot);
+  assert.deepEqual(discovered.map(task => task.id), ["task-a", "task-b"]);
+  let calls = 0;
+  const options = {
+    tasksPath: tasksRoot,
+    models: ["qwen3.5:9b"],
+    limit: 2,
+    sampleSeed: 0,
+    runId: "deep-swe-test",
+    root,
+    machine: { hostname: "test", platform: "test" },
+    runTask: async ({ task, model, cwd }) => {
+      calls += 1;
+      assert.equal((await fs.stat(cwd)).isDirectory(), true);
+      return { exitCode: 0, signal: null, stdout: `ran ${model} ${task.id}`, stderr: "", elapsedMs: 25, reward: { reward: task.id === "task-a" ? 1 : 0.5, pass_fraction: task.id === "task-a" ? 1 : 0.5 } };
+    }
+  };
+  const first = await runDeepSWE(options);
+  assert.equal(first.status, "completed");
+  assert.equal(calls, 2);
+  assert.equal(first.aggregates[0].aggregate.passedCount, 1);
+  assert.match(await fs.readFile(path.join(root, "criterion", "results", "deep-swe-test.md"), "utf8"), /DeepSWE rows are verifier-scored/u);
+  const resumed = await runDeepSWE({ ...options, resume: true, runTask: async () => { throw new Error("resume reran a completed task"); } });
+  assert.equal(resumed.status, "completed");
+  assert.equal(resumed.results.length, 2);
 });
 
 test("Lead-3 extracts actual sentences across speaker labels and newlines", () => {

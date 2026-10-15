@@ -22,6 +22,31 @@ HTML-to-Markdown read, session response, and newspaper evidence) is proven by
 `examples/pyash/agent-research-workflow.pya`. Builder and project-command
 execution remain incomplete; this does not complete the agent-harness milestone.
 
+### Pyash interactive coding saddle
+
+The coding saddle is a thin terminal-native projection over the existing Pyash
+agent runtime. It uses the existing `mind`, `saddle_tools`, agent sessions,
+command/repair policy, checkpoints, newspapers, GPU/provider queue, and
+discharge lifecycle. It is not a second agent framework, model host, GPU queue,
+tool registry, or task system.
+
+The first tranche is `roadmap-pyash-coding-saddle-core`: a raw ANSI terminal
+session with model/backend/queue status, Enter-to-submit, Shift+Enter or
+`Ctrl+J` multiline input, `Ctrl+C` interruption, and `Ctrl+D` exit. The
+launched repository is the default bounded coding root, while the canonical
+session remains under the coding-saddle agent house as `.pya` state. Existing
+tools enforce the repository command and file policy.
+
+The follow-on package,
+`roadmap-pyash-coding-saddle-work-handoff`, connects an interactive request to
+the existing durable `WorkTask`, review, checkpoint, and
+`automation/roadmap` integration path. It must preserve task/session/worktree
+identity and never bypass the normal Sol/Luna acceptance or integration rules.
+
+Launch with `node command/pyash_saddle.mjs`. The terminal surface is kept
+dependency-free so the same Pyash provider and GPU lifecycle remain in charge
+of Ollama, Strata, and other configured backends.
+
 Nice-to-have:
 * “Agent mode” defaults (auto-enable newspaper when mind/tools appear).
 

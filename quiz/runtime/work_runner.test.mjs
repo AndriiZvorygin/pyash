@@ -403,6 +403,53 @@ test("background baseline sync skips active work and runs before a new task", as
   assert.equal(syncCalls, 1);
 });
 
+test("a baseline conflict defers control-plane sync without starving an executable task", async () => {
+  const worldRoot = await makeWorldRoot("pyash-work-baseline-deferred-");
+  await enqueueWorkTask(worldRoot, task("independent-roadmap-task", 120));
+  let supervisorCalls = 0;
+  const events = [];
+  const result = await runWorkBackgroundOnce({
+    worldRoot,
+    owner: "background",
+    blockerRepair: false,
+    policy: { enabled: true },
+    capacitySource: async () => ({
+      state: "available",
+      remainingPercent: 90,
+      usedPercent: 10,
+      weekly: {
+        identified: true,
+        state: "available",
+        remainingPercent: 90,
+        usedPercent: 10,
+        windowStartAt: "2026-08-03T12:00:00.000Z",
+        resetAt: "2026-08-10T12:00:00.000Z"
+      }
+    }),
+    baselineSync: async () => {
+      throw new Error("merge conflict in automation/roadmap");
+    },
+    supervisor: async ({ taskId, onEvent }) => {
+      supervisorCalls += 1;
+      await onEvent({ type: "implementation-started", taskId });
+      return { claimed: true, taskId, status: "implementing", workStarted: true };
+    },
+    onEvent: async (event) => events.push(event),
+    now: () => "2026-08-07T12:01:00.000Z"
+  });
+  assert.equal(result.admitted, true);
+  assert.equal(result.selected, "independent-roadmap-task");
+  assert.equal(result.baseline.status, "deferred");
+  assert.match(result.baseline.error, /merge conflict/u);
+  assert.equal(supervisorCalls, 1);
+  assert.ok(events.some((event) => event.type === "baseline-deferred"));
+  assert.ok(events.some((event) => event.type === "implementation-started"));
+  const health = await readWorkSchedulerHealth(worldRoot);
+  assert.equal(health["technical continuation unavailable wakes"] || "0", "0");
+  assert.equal(health["baseline status"], "deferred");
+  assert.equal(health["baseline deferred wakes"], "1");
+});
+
 test("background preflight defers globally without claiming a task", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-preflight-");
   await enqueueWorkTask(worldRoot, task("preflight-task"));

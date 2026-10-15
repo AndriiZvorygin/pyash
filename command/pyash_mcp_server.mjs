@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -112,7 +113,7 @@ async function ensureDefaultToolsMap({ cwd, toolsMap }) {
   await materializeToolsMapFromDefinition({ mapPath, toolsMap });
 }
 
-async function buildRuntime({ root, toolsMap }) {
+export async function buildRuntime({ root, toolsMap = DEFAULT_TOOLS_MAP }) {
   process.chdir(root);
   forget();
   clearSignatureHandlers();
@@ -150,7 +151,7 @@ function writeError(id, code, message, data = undefined) {
   writeJson(payload);
 }
 
-async function handleToolsCall(runtime, params = {}) {
+export async function handleToolsCall(runtime, params = {}) {
   const toolName = String(params?.name ?? "").trim();
   if (!toolName) {
     return {
@@ -243,7 +244,11 @@ async function main() {
   });
 }
 
-main().catch((err) => {
-  process.stderr.write(`${String(err?.message ?? err)}\n`);
-  process.exit(1);
-});
+export { serializeResult, toolListFromSchemas };
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((err) => {
+    process.stderr.write(`${String(err?.message ?? err)}\n`);
+    process.exit(1);
+  });
+}

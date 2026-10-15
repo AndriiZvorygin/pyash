@@ -39,6 +39,10 @@ function createMindWritePlan({
   return (async () => {
     const secretPath = path.join(rootDir, "configure", "secret.pya");
     const secretExisting = await readText(secretPath);
+    const priorOllamaRelay = Object.values(prior?.relays ?? {}).find((relay) =>
+      String(relay?.source || "").trim().toLowerCase() === "ollama"
+      || String(relay?.backend || "").trim().toLowerCase().includes("ollama command mind")
+    );
     const mergedRelays = { ...(prior?.relays ?? {}) };
     mergedRelays[cfg.relayName] = {
       source: cfg.source || backendChoiceKey(cfg.backend),
@@ -65,7 +69,10 @@ function createMindWritePlan({
     const defaultsPlan = planManagedUpsert({
       existing: configPlan.nextText,
       blockName: MIND_DEFAULTS_BLOCK_NAME,
-      content: buildMindDefaultsBlock(selectedCfg, { defaultRelay })
+      content: buildMindDefaultsBlock(selectedCfg, {
+        defaultRelay,
+        ollamaHost: priorOllamaRelay?.host || ""
+      })
     });
     return {
       writes: [{

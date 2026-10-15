@@ -27,7 +27,7 @@ function buildPromptText(messages) {
 function modelLooksVisionCapable(model) {
   const text = String(model ?? "").toLowerCase().trim();
   if (!text) return false;
-  return /(vl|vision|llava|minicpm-v|moondream|internvl|qvq)/.test(text);
+  return /(strata|vl|vision|llava|minicpm-v|moondream|internvl|qvq)/.test(text);
 }
 
 function normalizeVisionInput(input) {
@@ -206,6 +206,7 @@ export async function runToolChat({
   reasoningEffort,
   modelTuning,
   maxToolCalls,
+  runtimeContext,
   mindDebug,
   debugMind,
   inputs,
@@ -461,7 +462,7 @@ export async function runToolChat({
       }
       try {
         if (!toolResult) {
-          toolResult = await interpret(toolSentence);
+          toolResult = await interpret(toolSentence, { runtimeContext });
         }
       } catch (err) {
         const surfaced = surfaceErrorSentence(err);
@@ -493,21 +494,24 @@ export async function runToolChat({
       })();
       let toolText = "";
       if (surfacedTool && typeof surfacedTool === "object") {
+        if (surfacedTool.be === "error") {
+          toolText = String(surfacedTool.ob?.text ?? "tool failed").trim();
+        }
         const mapName = surfacedTool.ob?.name;
         const mapFact = mapName ? remember(mapName) : null;
-        if (surfacedTool.be === "read" && typeof surfacedTool.ob?.text === "string") {
+        if (!toolText && surfacedTool.be === "read" && typeof surfacedTool.ob?.text === "string") {
           toolText = surfacedTool.ob.text;
-        } else if (surfacedTool.be === "list" && Array.isArray(surfacedTool.ob?.ve?.values)) {
+        } else if (!toolText && surfacedTool.be === "list" && Array.isArray(surfacedTool.ob?.ve?.values)) {
           toolText = surfacedTool.ob.ve.values.join("\n");
-        } else if (mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
+        } else if (!toolText && mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
           toolText = mapDefChainFromName(mapName, { rememberFn: remember });
-        } else if (surfacedTool.ob?.map && (surfacedTool.be === "json map" || surfacedTool.be === "map" || surfacedTool.be === "csv map")) {
+        } else if (!toolText && surfacedTool.ob?.map && (surfacedTool.be === "json map" || surfacedTool.be === "map" || surfacedTool.be === "csv map")) {
           toolText = mapSentenceToPyash(surfacedTool);
-        } else if (surfacedTool.be === "interpret" && typeof surfacedTool.ob?.text === "string") {
+        } else if (!toolText && surfacedTool.be === "interpret" && typeof surfacedTool.ob?.text === "string") {
           const rawText = surfacedTool.ob.text;
           const match = rawText.match(/^quoted\.([^.]+)\.([\s\S]*?)\.\1\.quoted$/);
           toolText = match ? match[2] : rawText;
-        } else {
+        } else if (!toolText) {
           toolText = sentenceToPyash(surfacedTool);
         }
       } else {
