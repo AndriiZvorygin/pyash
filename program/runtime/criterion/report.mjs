@@ -21,6 +21,77 @@ function formatRatioPercent(value) {
   return value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) ? "-" : `${(Number(value) * 100).toFixed(1)}%`;
 }
 
+function isDeepSWERun(run) {
+  return run?.criterion === "deep-swe" || run?.engine === "pier";
+}
+
+function deepSWEReportLines(run) {
+  const rows = run.aggregates ?? [];
+  const taskRows = run.results ?? [];
+  return [
+    `# Criterion DeepSWE run: ${run.runId}`,
+    "",
+    `- Benchmark: ${run.suite?.name ?? "DeepSWE"}`,
+    `- Status: ${run.status}`,
+    `- Scope: ${run.runScope ?? "unknown"}`,
+    `- Agent runner: ${run.pier?.command ?? "pier"}`,
+    `- Agent: ${run.pier?.agent ?? run.sampling?.agent ?? "unknown"}`,
+    `- Model endpoint: ${run.pier?.modelEndpoint ?? "external runner configuration"}`,
+    `- Sample seed: ${run.sampleSelectionSeed ?? run.sampling?.sampleSeed ?? "unknown"}`,
+    `- Selected tasks: ${run.selectedTaskIds?.length ?? 0}`,
+    `- Total wall-clock time: ${formatNumber(run.totalWallClockMs, 1)} ms`,
+    `- Replay: \`${run.replayCommand}\``,
+    "",
+    "DeepSWE rows are verifier-scored agent runs. Criterion does not replace the Pier/Harbor sandbox, agent tool loop, commit collection, or verifier.",
+    "",
+    "## Comparison",
+    "",
+    "| Model | Tasks | Successful runs | Verifier passes | Pass rate | Mean reward | Mean pass fraction | Avg ms | Median ms | P95 ms | Failures |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ...rows.map(row => {
+      const aggregate = row.aggregate ?? {};
+      return `| ${row.model} | ${aggregate.sampleCount ?? 0} | ${aggregate.successfulCount ?? 0} | ${aggregate.passedCount ?? 0} | ${formatRatioPercent(aggregate.passRate)} | ${formatNumber(aggregate.reward)} | ${formatRatioPercent(aggregate.passFraction)} | ${formatNumber(aggregate.averageLatencyMs, 1)} | ${formatNumber(aggregate.medianLatencyMs, 1)} | ${formatNumber(aggregate.p95LatencyMs, 1)} | ${aggregate.failureCount ?? 0} |`;
+    }),
+    "",
+    "## Task results",
+    "",
+    "| Task | Model | Status | Verifier pass | Reward | Pass fraction | Tests passed | Tests total | Elapsed ms | Error |",
+    "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    ...taskRows.map(row => `| ${row.sampleId} | ${row.model} | ${row.status} | ${formatNumber(row.scores?.verifierPass)} | ${formatNumber(row.scores?.reward)} | ${formatRatioPercent(row.scores?.passFraction)} | ${formatNumber(row.scores?.testsPassed, 0)} | ${formatNumber(row.scores?.testsTotal, 0)} | ${formatNumber(row.metrics?.totalElapsedMs, 1)} | ${String(row.error ?? "").replace(/\|/gu, "\\|") || "-"} |`),
+    "",
+    "## Provenance",
+    "",
+    `- DeepSWE source: ${run.suite?.sourceUrls?.[0] ?? DEEPSWE_CATALOG_URL}`,
+    `- Dataset hash: ${run.datasetHash ?? "unknown"}`,
+    `- Selected task IDs: ${(run.selectedTaskIds ?? []).join(", ") || "none"}`,
+    `- Model endpoint: ${run.pier?.modelEndpoint ?? "not recorded"}`,
+    `- Timeout: ${run.pier?.timeoutMs ?? "not recorded"} ms`,
+    "",
+    "Published DeepSWE leaderboard results and local runs are not interchangeable: agent, model endpoint, task revision, sandbox, and verifier configuration must match before comparing them.",
+    ""
+  ];
+}
+
+const DEEPSWE_CATALOG_URL = "https://github.com/datacurve-ai/deep-swe";
+
+function renderDeepSWECsv(run) {
+  const headers = ["run_id", "run_scope", "benchmark", "model", "task_id", "status", "verifier_pass", "reward", "pass_fraction", "tests_passed", "tests_total", "elapsed_ms", "error", "task_toml_hash", "input_hash"];
+  const rows = [headers.join(",")];
+  for (const row of run.results ?? []) rows.push([
+    run.runId, run.runScope, run.criterion, row.model, row.sampleId, row.status,
+    row.scores?.verifierPass, row.scores?.reward, row.scores?.passFraction,
+    row.scores?.testsPassed, row.scores?.testsTotal, row.metrics?.totalElapsedMs,
+    row.error, row.metadata?.taskTomlHash, row.inputHash
+  ].map(csvEscape).join(","));
+  return `${rows.join("\n")}\n`;
+}
+
+function renderDeepSWEHtml(run) {
+  const escape = escapeHtml;
+  const rows = (run.results ?? []).map(row => `<tr><td>${escape(row.sampleId)}</td><td>${escape(row.model)}</td><td>${escape(row.status)}</td><td>${escape(row.scores?.verifierPass)}</td><td>${escape(row.scores?.reward)}</td><td>${escape(row.scores?.passFraction)}</td><td>${escape(row.metrics?.totalElapsedMs)}</td><td><pre>${escape(JSON.stringify({ reward: row.reward, verifier: row.verifier, error: row.error, metadata: row.metadata }, null, 2))}</pre></td></tr>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>DeepSWE Criterion review ${escape(run.runId)}</title><style>body{font-family:system-ui,sans-serif;max-width:1400px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.5rem;vertical-align:top}pre{white-space:pre-wrap;max-height:24rem;overflow:auto}</style></head><body><h1>DeepSWE Criterion review: ${escape(run.runId)}</h1><p>Verifier-scored external Pier/Harbor runs. Task logs and verifier artifacts remain under the ignored Criterion result directory.</p><table><thead><tr><th>Task</th><th>Model</th><th>Status</th><th>Verifier pass</th><th>Reward</th><th>Pass fraction</th><th>Elapsed ms</th><th>Evidence</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+}
+
 function promptAblationLines(run) {
   if (run?.experiment !== "prompt-ablation") return [];
   const verification = run.sourceVerification ?? {};
@@ -220,6 +291,7 @@ function recommendation(rows, run) {
 }
 
 export function renderRunMarkdown(run) {
+  if (isDeepSWERun(run)) return deepSWEReportLines(run).join("\n");
   const rows = run.aggregates ?? [];
   const lines = [
     `# Criterion run: ${run.runId}`,
@@ -292,6 +364,7 @@ export function renderRunMarkdown(run) {
 }
 
 export function renderRunCsv(run) {
+  if (isDeepSWERun(run)) return renderDeepSWECsv(run);
   const headers = ["run_id", "run_scope", "engine", "benchmark", "task", "model", "prompt_variant", "sample_id", "status", "accuracy", "rouge1", "rouge2", "rougeL", "schema_validity", "factual_accuracy", "completeness_percent", "conciseness_percent", "faithfulness_percent", "key_fact_count", "matched_key_fact_count", "summary_sentence_count", "atomic_claim_count", "supported_claim_count", "unsupported_claim_count", "contradiction_count", "unresolved_judge_count", "input_tokens", "output_tokens", "prompt_tokens_per_second", "generation_tokens_per_second", "latency_ms", "processing_latency_ms", "quality_per_second", "effective_think", "reasoning_mode", "failure", "skip_reason", "input_hash", "prompt_hash", "output_hash"];
   const rows = [headers.join(",")];
   for (const row of run.results ?? []) {
@@ -310,6 +383,7 @@ export function renderRunCsv(run) {
 }
 
 export function renderReviewHtml(run) {
+  if (isDeepSWERun(run)) return renderDeepSWEHtml(run);
   const rows = (run.results ?? []).filter(row => row.status === "ok").slice(0, 20);
   return `<!doctype html><html><head><meta charset="utf-8"><title>Criterion review ${escapeHtml(run.runId)}</title><style>body{font-family:system-ui,sans-serif;max-width:1200px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.5rem;vertical-align:top}pre{white-space:pre-wrap;max-height:20rem;overflow:auto}</style></head><body><h1>Criterion review: ${escapeHtml(run.criterion)}</h1><p>Run ${escapeHtml(run.runId)}. Review samples are selected deterministically from the run. Mode: ${escapeHtml(run.evaluationMode ?? "standard")}</p><table><thead><tr><th>Sample</th><th>Model</th><th>Prompt variant</th><th>Reference</th><th>Output</th><th>Scores</th><th>Fact evidence</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.sampleId)}</td><td>${escapeHtml(row.model)}</td><td>${escapeHtml(row.promptVariant ?? "")}</td><td><pre>${escapeHtml(row.reference)}</pre></td><td><pre>${escapeHtml(row.output)}</pre></td><td>${escapeHtml(JSON.stringify(row.scores))}</td><td><pre>${escapeHtml(JSON.stringify(row.factEvidence ?? null))}</pre></td></tr>`).join("")}</tbody></table></body></html>`;
 }

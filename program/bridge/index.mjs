@@ -161,7 +161,7 @@ function validateCeremonySequenceDeps(name) {
   }
 }
 
-export async function interpret(sentence) {
+export async function interpret(sentence, { runtimeContext = null } = {}) {
   if (!sentence) return;
   if (state.pendingCondition != null && sentence.mood !== "then") {
     const allowed = state.pendingCondition === true;
@@ -440,6 +440,7 @@ export async function interpret(sentence) {
         getDefinitionEntries,
         getDefinitionEntryBySignature
       },
+      runtimeContext,
       recordSandpitTrace,
       getDefinitionEntry,
       interpret
@@ -464,6 +465,7 @@ export async function interpret(sentence) {
         getDefinitionEntries,
         getDefinitionEntryBySignature
       },
+      runtimeContext,
       recordSandpitTrace,
       getDefinitionEntry,
       interpret

@@ -10,6 +10,28 @@ be nightmare do
 be reverie do
 ```
 
+When a Criterion run names an external model runtime, it uses the same
+provider/host/model vocabulary as `mind`:
+
+```text
+from filename <dataset>
+from state <backend>
+from space <runtime endpoint>
+via state <model>
+during state <criterion profile>
+ob text <benchmark>
+be criterion do
+```
+
+`from state` identifies the backend or external runner (`ollama`, `strata`, or
+`pier`), `from space`
+identifies that backend's endpoint, and `via state` identifies the model being
+tested. `during state` selects the Criterion profile so it does not collide
+with `via state`, which is normalized to the `as` case by the language parser.
+The legacy `as state <profile>` form remains readable when no model is named.
+Criterion keeps command-line/environment configuration as a compatibility path,
+but this sentence form is the canonical Pyash representation.
+
 The executable command adapter is `command/criterion.mjs`; the runtime is under `program/runtime/criterion/`. It uses the existing refinery/run/artifact/newspaper conventions and emits content-addressed evidence under `criterion/artifacts/`.
 
 ## Criterion
@@ -20,7 +42,10 @@ The adapters are MeetingBank, QMSum, AMI, ICSI, DialogSum, LongBench v1 summariz
 
 IFEval uses a deterministic built-in instruction contract for common list/JSON/length checks. An installed official verifier can be selected with `--ifeval-verifier`; the adapter sends one JSON sample to that configured executable and records its returned prompt/instruction scores.
 
-Ollama is called through `/api/chat` with one shared profile per comparison. The default profiles are:
+Ollama is called through `/api/chat` with one shared profile per comparison.
+Strata uses its OpenAI-compatible `/v1/chat/completions` endpoint and asks the
+existing GPU Housekeeper to prepare and discharge the `strata` runtime; Criterion
+does not own model residency or GPU lifecycle. The default profiles are:
 
 | Profile | Thinking | Temperature | top-p | top-k | Context |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -55,6 +80,53 @@ Datasets, private transcripts and GPQA files remain outside tracked source. Offi
 The `criterion baseline` command currently provides the MeetingBank `lead-3` baseline as `baseline:lead-3`. It selects three sentence boundaries from the normalized transcript and uses the ordinary Criterion checkpoint/artifact contract without a model request. Its processing latency is distinct from neural generation throughput.
 
 The `criterion run --engine huggingface` path keeps orchestration in Node and delegates model loading/generation to a persistent `criterion-huggingface` container through the existing Pyash GPU duty queue and `gpu-housekeeper`. The container embeds `program/runtime/criterion/huggingface_worker.py`, uses a private ignored Hugging Face cache on the CUDA host, and is registered as the managed `huggingface` runtime. Each row preserves model/tokenizer revision, model size, dtype, device, input limit, truncation, generation settings, load time and warm inference timing. Open fine-tuned MeetingBank models and zero-shot Ollama models remain separate evaluation conditions even when they share a scorer. The `baseline:lead-3` lane is deterministic CPU work and does not use GPU management.
+
+## DeepSWE external agent lane
+
+`criterion deepswe` is an adapter over the official DeepSWE task corpus and
+Pier runner. It is intentionally not a prompt-only model benchmark: each task
+contains a `task.toml`, an isolated environment, an instruction, a verifier and
+held-out solution material. Pier/Harbor owns the agent tool loop, sandbox,
+commit collection and verifier execution; Criterion owns deterministic task
+selection, model/runtime provenance, per-task checkpoints, reward mapping and
+reports.
+
+The smoke lane selects ten tasks using a recorded seed and runs them one at a
+time, model-major, so a model is not repeatedly loaded and discharged between
+tasks. Completed model/task rows are reused by `--resume`; failed rows remain
+retryable. Verifier evidence is read from `reward.json` and `ctrf.json`, while
+Pier stdout/stderr are retained under the ignored run result directory.
+
+Install the official runner and place a checked-out corpus outside tracked
+source before running:
+
+```bash
+git clone https://github.com/datacurve-ai/deep-swe "$PYA_BENCHMARK_CACHE/deep-swe"
+uv tool install datacurve-pier
+```
+
+For a Qwen endpoint, configure the endpoint understood by the selected Pier
+agent without putting model hosting inside Criterion:
+
+```bash
+PYA_DEEPSWE_MODEL_ENDPOINT="http://mriczo:11434/v1" \
+PYA_DEEPSWE_API_KEY="ollama" \
+node command/criterion.mjs deepswe \
+  --tasks "$PYA_BENCHMARK_CACHE/deep-swe/tasks" \
+  --model "qwen3.5:9b" \
+  --sample-seed 0 \
+  --smoke --resume --json
+```
+
+Criterion records the requested model tag as-is and supplies Pier's required
+provider-qualified form internally. A raw tag such as `qwen3.5:9b` is sent as
+`openai/qwen3.5:9b` to an OpenAI-compatible endpoint; use an explicit provider
+prefix such as `ollama/qwen3.5:9b` when the selected Pier agent should use a
+different provider contract.
+
+The full corpus removes `--smoke`; a run is resumable with
+`criterion again <run-id>`. DeepSWE reward/pass-fraction/verifier results are
+reported independently from ROUGE or ordinary summary quality metrics.
 
 ## Fact evaluation
 

@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -65,6 +66,14 @@ class DeviceExecutionGate:
         self.exclusive = False
       self.condition.notify_all()
 
+  def try_acquire_exclusive(self) -> bool:
+    """Acquire the device only when no managed job is using it."""
+    with self.condition:
+      if self.exclusive or self.shared:
+        return False
+      self.exclusive = True
+      return True
+
 
 _EXECUTION_GATES: Dict[str, DeviceExecutionGate] = {}
 
@@ -85,8 +94,8 @@ DEFAULT_RUNTIME_REGISTRY = {
     "beginAction": ["start", "ollama"],
     "stopAction": ["stop", "ollama"],
     "restartAction": ["restart", "ollama"],
-    "activityProbe": "provider-owned",
-    "dischargeKind": "",
+    "activityProbe": "ollama-access-log",
+    "dischargeKind": "ollama",
     "concurrencySafe": False,
     "modelStorePath": DEFAULT_OLLAMA_MODEL_STORE_PATH
   },
@@ -913,6 +922,24 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
         "error": "ollama-ensure-model jobSpec.payload must be map"
       }
 
+  if runtime_lower == "strata":
+    if not isinstance(job_spec, dict):
+      return {
+        "accepted": False,
+        "error": "strata jobSpec must be map"
+      }
+    kind = normalize_text(job_spec.get("kind")).lower()
+    if kind != "strata-chat":
+      return {
+        "accepted": False,
+        "error": "strata jobSpec.kind must be strata-chat"
+      }
+    if not isinstance(job_spec.get("payload"), dict):
+      return {
+        "accepted": False,
+        "error": "strata-chat jobSpec.payload must be map"
+      }
+
   if runtime_lower == "comfyui":
     if not isinstance(job_spec, dict):
       return {
@@ -1119,7 +1146,7 @@ def discharge(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dict
       else:
         return {"success": True, "profileName": profile_name, "discharged": False, "reason": "profile was not resident"}
       runtime_entry = runtime_registry.get(runtime_name)
-      if not runtime_entry or normalize_text(runtime_entry.get("dischargeKind")).lower() not in {"huggingface", "comfyui"}:
+      if not runtime_entry or normalize_text(runtime_entry.get("dischargeKind")).lower() not in {"huggingface", "comfyui", "strata"}:
         return {"success": True, "profileName": profile_name, "discharged": False, "reason": "runtime has no provider discharge hook"}
     else:
       for name in _PROFILES:
@@ -1217,6 +1244,40 @@ def parse_runtime_status(runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   runtime_name = normalize_text(runtime_entry.get("runtimeName"))
   container_name = normalize_text(runtime_entry.get("containerName"))
   gpu_expected = bool(runtime_entry.get("gpuExpected", False))
+
+  if normalize_text(runtime_entry.get("dischargeKind")).lower() == "strata":
+    try:
+      status = request_strata_json("/v1/status", None, timeout_sec=8)
+    except Exception as err:
+      return {
+        "runtimeName": runtime_name,
+        "status": "unknown",
+        "containerName": "",
+        "gpuExpected": gpu_expected,
+        "gpuObserved": None,
+        "loaded": None,
+        "message": normalize_text(err) or "Strata status probe failed"
+      }
+    if normalize_text(status.get("service")).lower() != "strata" or not isinstance(status.get("loaded"), bool):
+      return {
+        "runtimeName": runtime_name,
+        "status": "unknown",
+        "containerName": "",
+        "gpuExpected": gpu_expected,
+        "gpuObserved": None,
+        "loaded": None,
+        "message": "Strata status response is missing its service or loaded state"
+      }
+    loaded = status["loaded"]
+    return {
+      "runtimeName": runtime_name,
+      "status": "running",
+      "containerName": "",
+      "gpuExpected": gpu_expected,
+      "gpuObserved": loaded,
+      "loaded": loaded,
+      "message": "Strata model loaded" if loaded else "Strata API is running with its model unloaded"
+    }
 
   if not container_name:
     return {
@@ -1376,6 +1437,90 @@ def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -
     return base
 
   probe = normalize_text(runtime_entry.get("activityProbe")).lower()
+  if probe == "ollama-access-log":
+    with _LOCK:
+      active_jobs = [
+        job for job in _JOBS.values()
+        if normalize_text(job.get("runtimeName")).lower() == runtime_name
+        and normalize_text(job.get("status")).lower() in {"queued", "running"}
+      ]
+    if active_jobs:
+      base["state"] = "active"
+      base["reason"] = "GPU Housekeeper has queued or running Ollama work"
+      return base
+
+    grace = idle_grace_seconds()
+    since = f"{max(1, int(grace))}s"
+    logs = run_docker(["logs", "--since", since, "--tail", "2000", normalize_text(runtime_entry.get("containerName"))], timeout_sec=10)
+    if not logs.get("success"):
+      base["state"] = "unknown"
+      base["reason"] = normalize_text(logs.get("message")) or "Ollama access-log activity probe failed"
+      return base
+    inference_route = re.compile(
+      r'\b(?:POST|GET)\s+["\']?/(?:api/(?:generate|chat|embed|embeddings|rerank)|v1/(?:chat/completions|completions|embeddings))(?:["\'\s?]|$)',
+      re.IGNORECASE
+    )
+    recent = [line for line in normalize_text(logs.get("stdout")).splitlines() if inference_route.search(line)]
+    if recent:
+      base["state"] = "cooldown"
+      base["lastActivityAt"] = utc_now_iso()
+      base["reason"] = "Ollama inference request appeared in access logs within the idle grace"
+      return base
+    base["state"] = "idle"
+    base["idleSeconds"] = grace
+    base["reason"] = "no queued Ollama job or recent inference access log within the idle grace"
+    return base
+
+  if probe == "strata-status":
+    try:
+      status = request_strata_json("/v1/status", None, timeout_sec=8)
+    except Exception as err:
+      base["state"] = "unknown"
+      base["reason"] = f"Strata activity probe failed: {normalize_text(err)}"
+      return base
+    if normalize_text(status.get("service")).lower() != "strata" or status.get("loaded") is not True:
+      base["state"] = "unknown"
+      base["reason"] = "Strata did not confirm that its model is loaded"
+      return base
+    activity = status.get("activity")
+    if not isinstance(activity, dict) or "in_flight" not in activity:
+      base["state"] = "unknown"
+      base["reason"] = "Strata status lacks in-flight request telemetry"
+      return base
+    try:
+      in_flight = int(activity.get("in_flight"))
+    except (TypeError, ValueError):
+      base["state"] = "unknown"
+      base["reason"] = "Strata in-flight request telemetry is invalid"
+      return base
+    if in_flight > 0:
+      base["state"] = "active"
+      base["reason"] = f"Strata has {in_flight} in-flight request(s)"
+      return base
+
+    try:
+      last_request_at = float(activity.get("last_request_at") or 0)
+      started_at = float(status.get("started") or 0)
+    except (TypeError, ValueError):
+      base["state"] = "unknown"
+      base["reason"] = "Strata request activity timestamps are invalid"
+      return base
+    idle_since = last_request_at or started_at
+    if idle_since <= 0:
+      base["state"] = "unknown"
+      base["reason"] = "Strata has no usable last-request or startup timestamp"
+      return base
+    idle_seconds = max(0.0, time.time() - idle_since)
+    base["lastActivityAt"] = datetime.fromtimestamp(idle_since, timezone.utc).isoformat().replace("+00:00", "Z")
+    base["idleSeconds"] = round(idle_seconds, 3)
+    if idle_seconds >= idle_grace_seconds():
+      base["state"] = "idle"
+      base["reason"] = "Strata has no in-flight requests and its idle grace has elapsed"
+    else:
+      base["state"] = "cooldown"
+      base["reason"] = "Strata request idle grace has not elapsed"
+    return base
+
   if probe != "comfyui-queue":
     base["state"] = "unknown"
     base["reason"] = "runtime has no safe activity probe"
@@ -1519,15 +1664,20 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
 
   required = request["vramRequiredMb"]
   free_before = int(device.get("vramFreeMb") or 0)
+  total = int(device.get("vramTotalMb") or 0)
   common = {
     "requiredVramMb": required,
     "deviceId": device_id,
     "freeBeforeMb": free_before,
-    "totalMb": int(device.get("vramTotalMb") or 0),
+    "totalMb": total,
     "usedBeforeMb": int(device.get("vramUsedMb") or 0),
     "candidates": [],
     "candidateDiagnostics": []
   }
+  if total > 0 and required > total:
+    common["decision"] = "request-exceeds-device"
+    common["reason"] = f"requested VRAM ({required} MiB) exceeds device capacity ({total} MiB)"
+    return common
   # A warm target profile does not require another model allocation. This is
   # important for repeated Qwen requests: nvidia-smi reports the resident
   # model's full footprint as used VRAM, but the job will reuse that footprint
@@ -1541,6 +1691,14 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
       target_profile = normalize_text(payload.get("model"))
   with _LOCK:
     target_loaded = bool(target_profile and _PROFILES.get(target_profile, {}).get("loaded", False))
+  if not target_loaded and normalize_text(job.get("runtimeName")).lower() == "strata":
+    # Strata is external to the Housekeeper, so its residency record is
+    # intentionally in-memory. Reconcile provider state after a restart so a
+    # resident target is not treated as a new allocation.
+    try:
+      target_loaded = request_strata_json("/v1/status", None, timeout_sec=8).get("loaded") is True
+    except Exception:
+      target_loaded = False
   if target_loaded:
     common["decision"] = "fits"
     common["reason"] = "target profile is already warm; no additional VRAM is required"
@@ -1566,7 +1724,7 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
     discharge_kind = normalize_text(entry.get("dischargeKind")).lower()
     if not discharge_kind:
       continue
-    if not process_view.get("available"):
+    if not process_view.get("available") and discharge_kind != "strata":
       common["candidateDiagnostics"].append({
         "runtimeName": runtime_name,
         "state": "telemetry-unavailable",
@@ -1584,6 +1742,11 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
       continue
     usage = process_view.get("runtimes", {}).get(runtime_name, {})
     used_memory = int(usage.get("usedMemoryMb") or 0)
+    if discharge_kind == "strata" and activity.get("state") == "idle" and used_memory <= 0:
+      # Strata is a host process, so its host PID is intentionally not inferred
+      # from Docker container telemetry. Credit only the current deficit here;
+      # ensure_capacity_for_job always checks actual free VRAM after unloading.
+      used_memory = max(1, min(required - free_before, total - free_before))
     if used_memory <= 0:
       common["candidateDiagnostics"].append({
         "runtimeName": runtime_name,
@@ -1611,6 +1774,96 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
 
 def discharge_runtime(runtime_name: str, runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   kind = normalize_text(runtime_entry.get("dischargeKind")).lower()
+  if kind == "strata":
+    activity = observe_runtime_activity(runtime_name, runtime_entry)
+    if activity.get("state") != "idle":
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": "Strata is active or its idle state could not be verified before unload"
+      }
+    try:
+      before = request_strata_json("/v1/status", None, timeout_sec=8)
+      if before.get("loaded") is not True:
+        return {
+          "success": True,
+          "runtimeName": runtime_name,
+          "reason": "Strata model was already unloaded"
+        }
+      request_strata_json("/v1/unload", {}, timeout_sec=300)
+      after = request_strata_json("/v1/status", None, timeout_sec=8)
+    except Exception as err:
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": normalize_text(err) or "Strata unload request failed"
+      }
+    if after.get("loaded") is not False:
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": "Strata API did not confirm that its model was unloaded"
+      }
+    with _LOCK:
+      _RUNTIME_ACTIVITY[runtime_name] = {"lastActivityAt": "", "idleSince": time.time()}
+    return {
+      "success": True,
+      "runtimeName": runtime_name,
+      "reason": "idle Strata model unloaded and verified through its status API"
+    }
+  if kind == "ollama":
+    activity = observe_runtime_activity(runtime_name, runtime_entry)
+    if activity.get("state") != "idle":
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": "Ollama became active or its idle state could not be verified before discharge"
+      }
+    before = ollama_running_model_status()
+    if not before.get("available"):
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": before.get("error") or "Ollama model residency could not be checked"
+      }
+    try:
+      for model in before.get("models", []):
+        name = normalize_text(model.get("name"))
+        if not name:
+          continue
+        result = request_ollama_json("/api/generate", {
+          "model": name,
+          "prompt": "",
+          "stream": False,
+          "keep_alive": 0
+        }, timeout_sec=30)
+        if normalize_text(result.get("error")):
+          raise RuntimeError(normalize_text(result.get("error")))
+    except Exception as err:
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": normalize_text(err) or "Ollama refused model unload"
+      }
+    after = ollama_running_model_status()
+    if not after.get("available") or after.get("models"):
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": after.get("error") or "Ollama still reports resident models after unload"
+      }
+    with _LOCK:
+      for profile in _PROFILES.values():
+        if normalize_text(profile.get("runtimeName")).lower() == runtime_name:
+          profile["loaded"] = False
+          profile["gpuResident"] = False
+          profile["gpuResidencyReason"] = "model discharged for managed GPU capacity handoff"
+      _RUNTIME_ACTIVITY[runtime_name] = {"lastActivityAt": "", "idleSince": time.time()}
+    return {
+      "success": True,
+      "runtimeName": runtime_name,
+      "reason": "idle Ollama models unloaded through keep_alive=0 and verified absent from /api/ps"
+    }
   if kind == "huggingface":
     try:
       result = request_huggingface_json("/discharge", {}, timeout_sec=60)
@@ -1686,7 +1939,7 @@ def ensure_capacity_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
     return plan
   if decision == "telemetry-unavailable":
     raise RuntimeError(plan.get("reason") or "GPU capacity telemetry unavailable")
-  if decision in {"invalid-device", "discharge-disabled", "insufficient"}:
+  if decision in {"invalid-device", "request-exceeds-device", "discharge-disabled", "insufficient"}:
     raise RuntimeError(plan.get("reason") or "GPU capacity is insufficient")
 
   for candidate in plan.get("candidates", []):
@@ -1703,6 +1956,85 @@ def ensure_capacity_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
       return refreshed
 
   raise RuntimeError("GPU capacity remains insufficient after safe managed-runtime discharge")
+
+
+def prepare_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  """Prepare a one-shot external model load under the manager's device gate."""
+  runtime_name = normalize_text(payload.get("runtimeName")).lower()
+  if runtime_name != "strata":
+    return {"prepared": False, "error": "capacity preparation is reserved for the strata runtime"}
+  job_spec = payload.get("jobSpec")
+  if not isinstance(job_spec, dict):
+    return {"prepared": False, "error": "jobSpec must be a map"}
+  job = {
+    "runtimeName": runtime_name,
+    "profileName": normalize_text(payload.get("profileName")),
+    "deviceId": normalize_text(payload.get("deviceId")),
+    "dischargeAllowed": payload.get("dischargeAllowed", True) is not False,
+    "jobSpec": job_spec
+  }
+  try:
+    job_resource_request(job)
+  except RuntimeError as err:
+    return {"prepared": False, "error": normalize_text(err)}
+
+  telemetry = parse_nvidia_smi()
+  devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+  if not telemetry.get("available") or not devices:
+    return {"prepared": False, "error": "nvidia-smi memory telemetry unavailable"}
+  device_id = normalize_device_id(job.get("deviceId"), devices)
+  gate = execution_gate_for(device_id)
+  if not gate.try_acquire_exclusive():
+    return {"prepared": False, "busy": True, "deviceId": device_id, "error": "GPU Housekeeper has active managed GPU work"}
+  try:
+    capacity = ensure_capacity_for_job(job, runtime_registry)
+  except RuntimeError as err:
+    return {"prepared": False, "deviceId": device_id, "error": normalize_text(err)}
+  finally:
+    gate.release(shared=False)
+  return {"prepared": True, "deviceId": device_id, "capacity": capacity}
+
+
+def request_strata_json(pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_sec: int = 30) -> Dict[str, Any]:
+  """Reach loopback-only Strata through a short-lived host-network helper."""
+  base = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL")) or "http://127.0.0.1:8081"
+  helper_image = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE")) or "liberit/gpu-housekeeper:latest"
+  method = "GET" if payload is None else "POST"
+  body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+  helper_script = "\n".join([
+    "import json, os, sys, urllib.error, urllib.request",
+    "url, method, body = sys.argv[1:4]",
+    "headers = {'Content-Type': 'application/json'}",
+    "key = os.environ.get('STRATA_API_KEY', '').strip()",
+    "if key:",
+    "  headers['Authorization'] = 'Bearer ' + key",
+    "data = None if method == 'GET' else body.encode()",
+    "req = urllib.request.Request(url, data=data, headers=headers, method=method)",
+    "try:",
+    "  with urllib.request.urlopen(req, timeout=int(sys.argv[4])) as response:",
+    "    print(response.read().decode())",
+    "except urllib.error.HTTPError as err:",
+    "  print(json.dumps({'_httpStatus': err.code, '_httpBody': err.read().decode(errors='replace')}))",
+  ])
+  url = f"{base.rstrip('/')}/{pathname.lstrip('/')}"
+  args = ["run", "--rm", "--pull=never", "--network", "host", "--entrypoint", "python3"]
+  if normalize_text(os.environ.get("STRATA_API_KEY")):
+    args.extend(["-e", "STRATA_API_KEY"])
+  args.extend([helper_image, "-c", helper_script, url, method, body, str(max(1, int(timeout_sec)))])
+  result = run_docker(args, timeout_sec=max(10, int(timeout_sec) + 10))
+  if not result.get("success"):
+    raise RuntimeError(normalize_text(result.get("message")) or "Strata host-network helper failed")
+  try:
+    response = json.loads(result.get("stdout") or "{}")
+  except (TypeError, json.JSONDecodeError) as err:
+    raise RuntimeError("Strata host-network helper returned invalid JSON") from err
+  if not isinstance(response, dict):
+    raise RuntimeError("Strata API response must be a JSON object")
+  status = response.pop("_httpStatus", None)
+  if status is not None:
+    detail = normalize_text(response.pop("_httpBody", ""))
+    raise RuntimeError(f"Strata API request failed ({status}): {detail or 'HTTP error'}")
+  return response
 
 
 def preview_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -2578,6 +2910,38 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   return result
 
 
+def execute_strata_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  job_spec = job.get("jobSpec")
+  if not isinstance(job_spec, dict) or normalize_text(job_spec.get("kind")).lower() != "strata-chat":
+    raise RuntimeError("unsupported strata job kind")
+  payload = job_spec.get("payload")
+  if not isinstance(payload, dict):
+    raise RuntimeError("strata-chat payload must be a map")
+
+  status = parse_runtime_status(runtime_registry.get("strata") or {})
+  if runtime_is_stopped(status) or status.get("status") == "unknown":
+    raise RuntimeError(status.get("message") or "Strata runtime is unavailable")
+  if status.get("loaded") is not True:
+    request_strata_json("/v1/load", {}, timeout_sec=int(os.environ.get("STRATA_LOAD_TIMEOUT_SEC", "600")))
+    status = parse_runtime_status(runtime_registry.get("strata") or {})
+    if status.get("loaded") is not True:
+      raise RuntimeError(status.get("message") or "Strata model did not become ready after load")
+
+  request = dict(payload)
+  request["stream"] = False
+  timeout_sec = int(job_spec.get("timeoutSec") or os.environ.get("STRATA_RUNTIME_TIMEOUT_SEC", "1800"))
+  result = request_strata_json("/v1/chat/completions", request, timeout_sec=timeout_sec)
+  profile_name = normalize_text(job.get("profileName"))
+  if profile_name:
+    with _LOCK:
+      _PROFILES[profile_name] = {
+        "profileName": profile_name,
+        "runtimeName": "strata",
+        "loaded": True
+      }
+  return result
+
+
 def execute_huggingface_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   profile_name = normalize_text(job.get("profileName"))
@@ -2789,6 +3153,8 @@ def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]
   ensure_capacity_for_job(job, runtime_registry)
   if runtime_name == "ollama":
     return execute_ollama_job(job, runtime_registry)
+  if runtime_name == "strata":
+    return execute_strata_job(job, runtime_registry)
   if runtime_name == "comfyui":
     return execute_comfyui_job(job, runtime_registry)
   if runtime_name == "katago":
@@ -2824,25 +3190,38 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
     for item in entries:
       runtime_name = normalize_text(item.get("runtimeName")).lower()
       container_name = normalize_text(item.get("containerName"))
-      if not runtime_name or not container_name:
+      discharge_kind = normalize_text(item.get("dischargeKind")).lower()
+      external_strata = runtime_name == "strata" and discharge_kind == "strata"
+      if not runtime_name or (not container_name and not external_strata):
         continue
       registry[runtime_name] = {
         "runtimeName": runtime_name,
         "containerName": container_name,
         "gpuExpected": parse_bool_value(item.get("gpuExpected", True), True),
-        "beginAction": item.get("beginAction") if isinstance(item.get("beginAction"), list) else ["start", container_name],
-        "stopAction": item.get("stopAction") if isinstance(item.get("stopAction"), list) else ["stop", container_name],
-        "restartAction": item.get("restartAction") if isinstance(item.get("restartAction"), list) else ["restart", container_name],
+        "beginAction": item.get("beginAction") if isinstance(item.get("beginAction"), list) else (["start", container_name] if container_name else []),
+        "stopAction": item.get("stopAction") if isinstance(item.get("stopAction"), list) else (["stop", container_name] if container_name else []),
+        "restartAction": item.get("restartAction") if isinstance(item.get("restartAction"), list) else (["restart", container_name] if container_name else []),
         "activityProbe": normalize_text(item.get("activityProbe")) or "unknown",
-        "dischargeKind": normalize_text(item.get("dischargeKind")),
+        "dischargeKind": discharge_kind,
         "concurrencySafe": parse_bool_value(item.get("concurrencySafe", False), False),
         "modelStorePath": normalize_text(item.get("modelStorePath")) or DEFAULT_OLLAMA_MODEL_STORE_PATH
       }
 
-  if registry:
-    return registry
-
-  return {key: dict(value) for key, value in DEFAULT_RUNTIME_REGISTRY.items()}
+  if not registry:
+    registry = {key: dict(value) for key, value in DEFAULT_RUNTIME_REGISTRY.items()}
+  if normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL")):
+    registry.setdefault("strata", {
+      "runtimeName": "strata",
+      "containerName": "",
+      "gpuExpected": True,
+      "beginAction": [],
+      "stopAction": [],
+      "restartAction": [],
+      "activityProbe": "strata-status",
+      "dischargeKind": "strata",
+      "concurrencySafe": False
+    })
+  return registry
 
 
 def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
@@ -2993,6 +3372,12 @@ class Handler(BaseHTTPRequestHandler):
     if self.path == "/capacity/preview":
       payload = read_json_body(self)
       json_response(self, 200, preview_capacity(payload, self.runtime_registry))
+      return
+
+    if self.path == "/capacity/prepare":
+      payload = read_json_body(self)
+      result = prepare_capacity(payload, self.runtime_registry)
+      json_response(self, 200 if result.get("prepared") else (409 if result.get("busy") else 503), result)
       return
 
     if self.path == "/submit":

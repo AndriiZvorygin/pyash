@@ -1,4 +1,5 @@
 su name saddle tools be map def
+su name agent ob bool truth ya
 su name read be read from filename input can
 su name see be see from filename input can
 su name write be write ob text input to filename input can

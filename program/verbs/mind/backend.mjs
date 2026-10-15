@@ -1,5 +1,39 @@
 import { throwErrorSentence } from "../../error.mjs";
 
+const MIND_BACKEND_ALIASES = new Map([
+  ["ollama", "ollama command mind"],
+  ["litellm", "litellm command mind"],
+  ["openai", "openai command mind"],
+  ["openai-api", "openai command mind"],
+  ["openai-codex", "openai command mind"],
+  ["openrouter", "openrouter command mind"],
+  ["vllm", "vllm command mind"],
+  ["strata", "strata command mind"]
+]);
+
+function normalizeMindBackendName(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return MIND_BACKEND_ALIASES.get(text.toLowerCase()) ?? text;
+}
+
+function resolveMindBackendHost({
+  backendName = "",
+  runtimeHost = "",
+  configuredHost = "",
+  ollamaHost = "",
+  aiHost = ""
+} = {}) {
+  const runtime = String(runtimeHost ?? "").trim();
+  if (runtime) return runtime;
+  const configured = String(configuredHost ?? "").trim();
+  if (configured) return configured;
+  const backend = normalizeMindBackendName(backendName).toLowerCase();
+  const preferred = backend === "ollama command mind" ? ollamaHost : aiHost;
+  const fallback = backend === "ollama command mind" ? aiHost : ollamaHost;
+  return String(preferred ?? "").trim() || String(fallback ?? "").trim() || null;
+}
+
 async function resolveInterpret() {
   const mod = await import("../../bridge/index.mjs");
   return mod.interpret;
@@ -60,4 +94,10 @@ async function callMindBackendStream({ backendName, payload }) {
   });
 }
 
-export { resolveInterpret, callMindBackend, callMindBackendStream };
+export {
+  resolveInterpret,
+  callMindBackend,
+  callMindBackendStream,
+  normalizeMindBackendName,
+  resolveMindBackendHost
+};

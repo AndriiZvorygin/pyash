@@ -4,7 +4,8 @@ export const MIND_BACKEND_CHOICES = [
   { key: "openai-api", value: "openai command mind", label: "OpenAI API key" },
   { key: "openai-codex", value: "openai command mind", label: "OpenAI Codex OAuth" },
   { key: "openrouter", value: "openrouter command mind", label: "OpenRouter" },
-  { key: "vllm", value: "vllm command mind", label: "vLLM" }
+  { key: "vllm", value: "vllm command mind", label: "vLLM" },
+  { key: "strata", value: "strata command mind", label: "Strata (local, GPU-managed)" }
 ];
 
 export function canonicalizeMindBackend(raw) {
@@ -17,6 +18,7 @@ export function canonicalizeMindBackend(raw) {
   if (text === "litellm") return "litellm command mind";
   if (text === "openrouter") return "openrouter command mind";
   if (text === "vllm") return "vllm command mind";
+  if (text === "strata") return "strata command mind";
   return text;
 }
 
@@ -42,6 +44,95 @@ export async function fetchOllamaModels(host, { timeoutMs = 5000 } = {}) {
   } catch (err) {
     return { ok: false, error: String(err?.message || err), models: [] };
   }
+}
+
+export async function fetchStrataHealth(host, { timeoutMs = 5000 } = {}) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`${host.replace(/\/+$/, "")}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return { ok: false, error: `status ${res.status}` };
+    const health = await res.json();
+    return { ok: true, health };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+}
+
+export async function fetchStrataModels(host, { timeoutMs = 5000 } = {}) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`${String(host).replace(/\/+$/u, "")}/v1/models`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return { ok: false, error: `status ${res.status}`, models: [] };
+    const payload = await res.json();
+    const models = (Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : [])
+      .map((item) => item?.id ?? item?.name ?? item?.model)
+      .filter((name) => typeof name === "string" && name.trim());
+    return { ok: true, models: [...new Set(models)] };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err), models: [] };
+  }
+}
+
+function etaSecondsFromHealth(health = {}) {
+  for (const key of ["etaSeconds", "estimatedSecondsRemaining", "remainingSeconds"]) {
+    const value = Number(health?.[key]);
+    if (Number.isFinite(value) && value >= 0) return Math.ceil(value);
+  }
+  for (const key of ["estimatedReadyAt", "readyAt", "etaAt"]) {
+    const timestamp = Date.parse(String(health?.[key] ?? ""));
+    if (!Number.isFinite(timestamp)) continue;
+    return Math.max(0, Math.ceil((timestamp - Date.now()) / 1000));
+  }
+  return null;
+}
+
+export function classifyStrataRuntime({ modelsOk = false, healthOk = false, health = {} } = {}) {
+  const loaded = health?.loaded === true || health?.ready === true;
+  const loading = health?.loaded === false
+    || ["loading", "starting", "initializing", "warming"].includes(String(health?.status ?? "").toLowerCase());
+  const ready = Boolean(modelsOk && healthOk && loaded);
+  const status = ready ? "ready" : loading || modelsOk || healthOk ? "loading" : "unavailable";
+  return {
+    ready,
+    available: ready,
+    status,
+    etaSeconds: ready ? 0 : etaSecondsFromHealth(health),
+    statusMessage: ready
+      ? "ready"
+      : loading
+        ? "Strata runtime is loading"
+        : modelsOk || healthOk
+          ? "Strata readiness is not confirmed"
+          : "Strata runtime is unavailable"
+  };
+}
+
+export async function fetchStrataRuntime(host, { timeoutMs = 5000 } = {}) {
+  const [models, health] = await Promise.all([
+    fetchStrataModels(host, { timeoutMs }),
+    fetchStrataHealth(host, { timeoutMs })
+  ]);
+  const readiness = classifyStrataRuntime({
+    modelsOk: models.ok,
+    healthOk: health.ok,
+    health: health.health
+  });
+  return {
+    host,
+    ok: readiness.ready,
+    models: models.models,
+    health: health.health ?? null,
+    status: readiness.status,
+    ready: readiness.ready,
+    available: readiness.available,
+    etaSeconds: readiness.etaSeconds,
+    statusMessage: readiness.statusMessage,
+    error: [models.error, health.error].filter(Boolean).join("; ") || null
+  };
 }
 
 export async function fetchCodexModels({
@@ -205,6 +296,7 @@ export function suggestMindRelayName({ source = "", model = "", fallback = "defa
 
 export function defaultMindHostForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
+  if (key === "strata") return "http://127.0.0.1:8081";
   if (key === "openai-api" || key === "openai-codex") {
     return "https://api.openai.com";
   }
@@ -216,6 +308,7 @@ export function defaultMindHostForSource(source = "") {
 
 export function defaultMindModelForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
+  if (key === "strata") return "strata";
   if (key === "openai-api" || key === "openai-codex") return "gpt-5-codex";
   if (key === "openrouter") return "openrouter/auto";
   return "gpt-oss:latest";

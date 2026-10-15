@@ -60,6 +60,15 @@ test("work task contract accepts bounded lifecycle and rejects terminal rewrites
   const implementing = transitionWorkTask(planning, "implementing", {
     now: "2026-08-07T12:02:00.000Z"
   });
+  const reviewing = transitionWorkTask(implementing, "reviewing", {
+    now: "2026-08-07T12:02:30.000Z"
+  });
+  const replanned = transitionWorkTask(reviewing, "implementing", {
+    now: "2026-08-07T12:02:45.000Z",
+    message: "Sol supplied a replacement work order"
+  });
+  assert.equal(replanned.previousStatus, "reviewing");
+  assert.equal(replanned.message, "Sol supplied a replacement work order");
   const limited = transitionWorkTask(implementing, "usage-limited", {
     now: "2026-08-07T12:03:00.000Z",
     message: "wait for quota reset"

@@ -34,6 +34,7 @@ import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from ".
 import { resolveHistoryContext } from "./history_context.mjs";
 import { runToolChat } from "./tool_chat.mjs";
 import { runGenerate } from "./generate.mjs";
+import { normalizeMindBackendName, resolveMindBackendHost } from "./backend.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 import { consumeMindInterrupt } from "../../agent/interrupt.mjs";
@@ -53,6 +54,12 @@ function unescapeQuotedText(value) {
   return String(value ?? "")
     .replace(/\\\\/g, "\\")
     .replace(/\\"/g, "\"");
+}
+
+function mindCaseValue(value) {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+  return String(value.name ?? value.text ?? value.wo ?? value.filename ?? "").trim();
 }
 
 function extractAgentRuntimeMapText(text) {
@@ -502,8 +509,23 @@ export async function mind_to_name_text(sentence, {
   const runtimeBackend = agentRuntime?.backend ? String(agentRuntime.backend).trim() : null;
   const runtimeHost = agentRuntime?.host ? String(agentRuntime.host).trim() : null;
   const runtimeReasoningEffort = agentRuntime?.reasoningEffort ? String(agentRuntime.reasoningEffort).trim() : null;
-  const backendName = runtimeBackend || resolveConfigText("mind backend", { rememberFn: remember }) || null;
-  const ollamaHost = runtimeHost || resolveConfigText("ollama host", { rememberFn: remember }) || null;
+  const callBackend = mindCaseValue(sentence?.fromstate);
+  const configuredBackend = mindCaseValue(configSentence?.fromstate);
+  const backendName = normalizeMindBackendName(
+    callBackend
+      || runtimeBackend
+      || configuredBackend
+      || resolveConfigText("mind backend", { rememberFn: remember })
+      || ""
+  ) || null;
+  const callHost = mindCaseValue(sentence?.from);
+  const ollamaHost = resolveMindBackendHost({
+    backendName,
+    runtimeHost: callHost || runtimeHost,
+    configuredHost: mindCaseValue(configSentence?.from),
+    ollamaHost: resolveConfigText("ollama host", { rememberFn: remember }),
+    aiHost: resolveConfigText("ai host", { rememberFn: remember })
+  });
   const mindReasoningEffort = runtimeReasoningEffort || resolveConfigText("mind reasoning effort", { rememberFn: remember }) || null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
   const debugMind = (label, payload) => {
@@ -708,6 +730,16 @@ export async function mind_to_name_text(sentence, {
       reasoningEffort: mindReasoningEffort,
       modelTuning: effectiveModelTuning,
       maxToolCalls: configuredMaxToolCalls,
+      runtimeContext: {
+        model,
+        backend: backendName,
+        host: ollamaHost,
+        reasoningEffort: mindReasoningEffort,
+        modelTuning: effectiveModelTuning,
+        toolMap: toolMapName,
+        agentName: mindName,
+        probeProvider: true
+      },
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },

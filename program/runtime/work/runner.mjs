@@ -853,6 +853,7 @@ export async function runWorkBackgroundOnce({
   }
   const activeRuntime = eligible.some(({ task }) => ACTIVE_WORK_STATUSES.has(task.status));
   const selectedIsBlockerRepair = selected.kind === "blocker-repair";
+  let baselineDeferred = false;
   let baseline = {
     status: baselineSync
       ? (selectedIsBlockerRepair ? "skipped-blocker-repair" : activeRuntime ? "skipped-active-task" : "pending")
@@ -868,37 +869,35 @@ export async function runWorkBackgroundOnce({
         selected: selected.taskId
       }, { now });
     } catch (error) {
-      const reason = `automation baseline sync blocked: ${text(error?.message || error)}`;
-      await emitWorkEvent(onEvent, "technical-blocked", { reason, selected: selected.taskId }, { now });
+      const errorMessage = text(error?.message || error);
+      const reason = `automation baseline sync deferred: ${errorMessage}`;
+      baseline = {
+        status: "deferred",
+        error: errorMessage,
+        reason
+      };
+      baselineDeferred = true;
+      await emitWorkEvent(onEvent, "baseline-deferred", {
+        reason,
+        selected: selected.taskId,
+        branch: baseline.branch,
+        commit: baseline.commit
+      }, { now });
       await writeWorkSchedulerHealth(worldRoot, {
         ...baseHealth,
-        "last decision": reason,
-        "baseline status": "blocked",
-        "baseline error": text(error?.message || error),
-        "technical continuation unavailable wakes": String((Number(prior["technical continuation unavailable wakes"]) || 0) + 1)
+        "baseline status": "deferred",
+        "baseline error": reason,
+        "baseline deferred wakes": String((Number(prior["baseline deferred wakes"]) || 0) + 1)
       });
       await appendWorkSchedulerEvent(worldRoot, {
-        type: "technical-blocked",
+        type: "baseline-deferred",
         reason,
         capacity,
         pacing: admission.pacing,
         taskCount,
         selected: selected.taskId,
-        baseline: "blocked"
+        baseline: "deferred"
       }, { now });
-      return {
-        admitted: false,
-        reason,
-        capacity,
-        eligible: taskCount,
-        selected: selected.taskId,
-        baseline: { status: "blocked", error: text(error?.message || error) },
-        report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
-        queue: await queueDepth(worldRoot),
-        curation,
-        reconciliations,
-        blockerRepair: blockerRepairResult
-      };
     }
   }
   await updateWorkTaskCheckpoint(worldRoot, selected.taskId, {
@@ -959,6 +958,7 @@ export async function runWorkBackgroundOnce({
     "execution preflight observed at": preflight.observedAt || "",
     "baseline status": baseline.status,
     "baseline commit": baseline.commit || "",
+    "baseline deferred wakes": String((Number(prior["baseline deferred wakes"]) || 0) + (baselineDeferred ? 1 : 0)),
     "last admitted task": result.taskId || selected.taskId,
     "last completed task": ["accepted", "blocked", "failed"].includes(result.status) ? result.taskId || selected.taskId : prior["last completed task"] || "",
     "current task": ["accepted", "blocked", "failed", "idle"].includes(result.status) ? "" : result.taskId || selected.taskId,

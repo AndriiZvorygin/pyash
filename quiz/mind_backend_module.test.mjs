@@ -43,6 +43,23 @@ test("openai-style mind backend module exposes configured signature", async () =
   }
 });
 
+test("Strata mind backend module exposes configured signature", async () => {
+  forget();
+  process.env.PYA_COMMAND_RESPONSE = "{\"response\":\"strata module ok\"}";
+
+  try {
+    await run('from filename "./module/mind_strata.pya" ob name strata command mind be import do');
+    await run("exists su name mind backend be default ob name strata command mind ya");
+    await run("exists su name mind be mind ya");
+
+    const res = await run('su name prompt ob text "Hello" for name mind to name text out be write do');
+    assert.equal(res?.ob?.text, "strata module ok");
+  } finally {
+    delete process.env.PYA_COMMAND_RESPONSE;
+    forget();
+  }
+});
+
 
 test("katago mind backend module exposes configured signature", async () => {
   forget();

@@ -4,11 +4,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { enqueueInputEnvelope, queueDepth } from "../../../program/runtime/gpu/queue.mjs";
+import { enqueueInputEnvelope, claimOldestInputEnvelope, gpuQueuePaths, queueDepth } from "../../../program/runtime/gpu/queue.mjs";
 import { acquireGpuLease, releaseGpuLease } from "../../../program/runtime/gpu/lease.mjs";
-import { readGpuHandleStatus } from "../../../program/runtime/gpu/handle_status.mjs";
+import { readGpuHandleStatus, writeGpuHandleStatus } from "../../../program/runtime/gpu/handle_status.mjs";
 import {
   DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS,
+  reclaimStaleGpuRuntime,
   resolveGpuWorkerMaxPolls,
   resolveGpuQueueWaitTimeoutMs,
   runGpuWorkerBatch,
@@ -253,5 +254,98 @@ test("bounded GPU worker batch fans out independent duties through the existing 
   assert.equal(result.received, 2);
   assert.equal(result.handled, 2);
   assert.equal(maximum, 2);
+  assert.equal((await queueDepth(worldRoot)).total, 0);
+});
+
+test("GPU runtime GC protects a stale claim with a live lease", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-gc-live-"));
+  const worldRoot = path.join(root, "world");
+  await enqueueMind(worldRoot, { handleId: "gc-live" });
+  const claim = await claimOldestInputEnvelope(worldRoot, { workerTag: "gpu-worker-slot-0" });
+  const paths = gpuQueuePaths(worldRoot);
+  const oldMs = Date.now() - (2 * 60 * 60 * 1000);
+  await fs.utimes(claim.path, oldMs / 1000, oldMs / 1000);
+
+  const lease = await acquireGpuLease(worldRoot, {
+    gpuId: "dispatch:gpu-0:gc-live",
+    owner: "gpu-worker-slot-0",
+    handleId: "gc-live",
+    ttlMs: 300000
+  });
+  assert.equal(lease.acquired, true);
+
+  const result = await reclaimStaleGpuRuntime({ worldRoot, nowMs: Date.now() });
+
+  assert.equal(result.protected, 1);
+  assert.equal(result.reclaimed, 0);
+  assert.equal((await queueDepth(worldRoot)).runtime, 1);
+  await releaseGpuLease(worldRoot, {
+    gpuId: "dispatch:gpu-0:gc-live",
+    owner: "gpu-worker-slot-0",
+    handleId: "gc-live"
+  });
+});
+
+test("GPU runtime GC fails abandoned claims and releases stale leases", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-gc-stale-"));
+  const worldRoot = path.join(root, "world");
+  await enqueueMind(worldRoot, { handleId: "gc-stale" });
+  const claim = await claimOldestInputEnvelope(worldRoot, { workerTag: "gpu-worker-slot-0" });
+  const paths = gpuQueuePaths(worldRoot);
+  const oldMs = Date.now() - (2 * 60 * 60 * 1000);
+  await fs.utimes(claim.path, oldMs / 1000, oldMs / 1000);
+
+  const lease = await acquireGpuLease(worldRoot, {
+    gpuId: "dispatch:gpu-0:gc-stale",
+    owner: "gpu-worker-slot-0",
+    handleId: "gc-stale",
+    ttlMs: 1000
+  });
+  assert.equal(lease.acquired, true);
+
+  const result = await reclaimStaleGpuRuntime({
+    worldRoot,
+    nowMs: Date.now() + 5000
+  });
+
+  assert.equal(result.reclaimed, 1);
+  assert.equal((await queueDepth(worldRoot)).total, 0);
+  assert.equal((await fs.readdir(paths.produceFailDir)).length, 1);
+  assert.equal(await readGpuHandleStatus(worldRoot, "gc-stale").then((status) => status?.status), "fail");
+  assert.equal(await readGpuHandleStatus(worldRoot, "gc-stale").then((status) => status?.message.includes("stale GPU runtime claim")), true);
+  assert.equal(await releaseGpuLease(worldRoot, {
+    gpuId: "dispatch:gpu-0:gc-stale",
+    owner: "gpu-worker-slot-0",
+    handleId: "gc-stale"
+  }), false);
+});
+
+test("GPU runtime GC preserves an already successful terminal handle", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-gc-success-"));
+  const worldRoot = path.join(root, "world");
+  await enqueueMind(worldRoot, { handleId: "gc-success" });
+  const claim = await claimOldestInputEnvelope(worldRoot, { workerTag: "gpu-worker-slot-0" });
+  const paths = gpuQueuePaths(worldRoot);
+  const oldMs = Date.now() - (2 * 60 * 60 * 1000);
+  await fs.utimes(claim.path, oldMs / 1000, oldMs / 1000);
+  await writeGpuHandleStatus(worldRoot, "gc-success", {
+    status: "success",
+    agentName: "mind-ollama-runner",
+    gpuId: "gpu-0",
+    intent: "mind",
+    lane: "durable",
+    queuedAt: "2026-03-10T10:00:00.000Z",
+    finishedAt: "2026-03-10T10:01:00.000Z",
+    outcome: "success",
+    message: "completed",
+    result: "{}",
+    error: ""
+  });
+
+  const result = await reclaimStaleGpuRuntime({ worldRoot, nowMs: Date.now() });
+
+  assert.equal(result.completed, 1);
+  assert.equal(result.reclaimed, 0);
+  assert.equal((await fs.readdir(paths.produceSuccessDir)).length, 1);
   assert.equal((await queueDepth(worldRoot)).total, 0);
 });

@@ -167,6 +167,35 @@ test("mind invocation uses configured mind model when per-mind model is absent",
   }
 });
 
+test("mind declaration selects its backend, endpoint, and model with compositional cases", async () => {
+  forget();
+  const priorCommandResponse = process.env.PYA_COMMAND_RESPONSE;
+  const priorMindResponse = process.env.PYA_MIND_RESPONSE;
+  delete process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_COMMAND_RESPONSE = JSON.stringify({ response: "strata reply" });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(parse('from filename "./module/mind_strata.pya" ob name strata command mind be import do'));
+    await interpret(parse('exists su name mind backend be default ob name ollama command mind ya'));
+    await interpret(parse('exists su stratahelper be mind from state "strata" from space "http://127.0.0.1:8081" via state "qwen3.8-flash-next-iq2_xs" ya'));
+    const answer = await interpret(parse('su question ob text "Hello" for name stratahelper to name text helper-out be write do'));
+
+    const payload = decodeMindPayload(records, "stratahelper");
+    assert.equal(answer?.ob?.text, "strata reply");
+    assert.equal(payload.model, "qwen3.8-flash-next-iq2_xs");
+    assert.equal(payload.host, "http://127.0.0.1:8081");
+    assert.ok(records.length > 0, "expected request facts to be recorded through the selected mind");
+  } finally {
+    clearExchangeRecorder();
+    if (priorCommandResponse === undefined) delete process.env.PYA_COMMAND_RESPONSE;
+    else process.env.PYA_COMMAND_RESPONSE = priorCommandResponse;
+    if (priorMindResponse === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = priorMindResponse;
+  }
+});
+
 test("mind invocation consumes queued json fixture responses across calls", async () => {
   forget();
   resetMindLogs();

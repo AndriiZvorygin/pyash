@@ -252,6 +252,7 @@ export async function handleImperative({
   sentence,
   state,
   memory,
+  runtimeContext,
   recordSandpitTrace,
   getDefinitionEntry,
   interpret
@@ -669,7 +670,8 @@ export async function handleImperative({
   const result = await fn(callSentence, {
     remember: memory.remember,
     allRemember: memory.allRemember,
-    doRemember: memory.doRemember
+    doRemember: memory.doRemember,
+    runtimeContext
   });
 
   if (result?.mood && result?.be && result?.su) {

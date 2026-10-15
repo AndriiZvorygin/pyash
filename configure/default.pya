@@ -5,6 +5,7 @@ from filename "./module/mind_openai.pya" ob name openai command mind be import d
 from filename "./module/mind_openai.pya" ob name litellm command mind be import do
 from filename "./module/mind_openai.pya" ob name openrouter command mind be import do
 from filename "./module/mind_openai.pya" ob name vllm command mind be import do
+from filename "./module/mind_strata.pya" ob name strata command mind be import do
 from filename "./module/mind_katago.pya" ob name katago command mind be import do
 from filename "./module/mind_katago.pya" ob name katago analyze be import do
 from filename "./module/verify.pya" ob name verify be import do

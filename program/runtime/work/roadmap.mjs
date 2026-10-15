@@ -118,6 +118,36 @@ const ROADMAP_PACKAGES = Object.freeze([
     whyNow: "The timeout left meaningful implementation and tests, but focused validation still has three failures; it is partial retryable work."
   },
   {
+    taskId: "roadmap-pyash-coding-saddle-core",
+    title: "Build the Pyash interactive coding saddle",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Pyash interactive coding saddle",
+    whyMatters: "Gives a human a terminal-native coding workflow while keeping sessions, tools, policy, and provider lifecycle in Pyash.",
+    dependencies: ["Pyash-native agent workflows", "session replay hardening", "saddle tools"],
+    dependsOnTaskIds: ["roadmap-pyash-native-agent-workflows", "roadmap-session-replay-hardening"],
+    scope: "Raw ANSI interactive saddle over the existing mind/session/tool/runtime path, with model/backend status, multiline input, cancellation, bounded coding roots, and durable .pya session evidence.",
+    nonGoals: "A second agent framework, model host, GPU queue, terminal library dependency, or replacement for the existing web/Codex projections.",
+    acceptance: "A real terminal session submits work through existing saddle tools, preserves session/newspaper evidence, exposes provider/queue state, supports Enter submit and multiline input, and exits through existing interruption/discharge paths.",
+    priority: 74,
+    prompt: "Build the Pyash interactive coding saddle over existing mind, session, saddle-tools, command-policy, and provider lifecycle primitives; keep the terminal layer thin and auditable.",
+    whyNow: "The existing coding saddle examples and tools prove the runtime flow, but there is no human-facing terminal surface that uses them as a durable session."
+  },
+  {
+    taskId: "roadmap-pyash-coding-saddle-work-handoff",
+    title: "Connect coding saddle work to durable WorkTasks",
+    sourcePath: "documentation/roadmap.md",
+    sourceAnchor: "Pyash interactive coding saddle",
+    whyMatters: "Lets interactive coding work hand off into the same scheduler, review, checkpoint, and integration path as autonomous roadmap work.",
+    dependencies: ["coding saddle core", "durable WorkTask and checkpoint contract", "review and integration path"],
+    dependsOnTaskIds: ["roadmap-pyash-coding-saddle-core"],
+    scope: "Create or resume a WorkTask from a saddle session while preserving task identity, session, worktree, checkpoint, provenance, review, and automation/roadmap integration semantics.",
+    nonGoals: "A second task queue, automatic master merging, bypassing Sol/Luna review, or treating terminal text as authoritative task state.",
+    acceptance: "A bounded interactive request can become an existing WorkTask or a clearly linked new task, resume safely, pass the normal review/integration path, and remain replayable from Pyash records.",
+    priority: 68,
+    prompt: "Connect the coding saddle to existing WorkTask/checkpoint/review/integration machinery without creating a parallel queue or bypassing normal acceptance and baseline rules.",
+    whyNow: "After the terminal surface is stable, interactive coding should feed the same durable work system rather than becoming an isolated shell workflow."
+  },
+  {
     taskId: "roadmap-cli-language-ux",
     title: "Strengthen CLI language UX",
     sourcePath: "documentation/todo.md",
@@ -1015,7 +1045,12 @@ export async function buildAutonomousRoadmap({
     ? previous.packages?.filter((item) => item.taskId && item.sourcePath && item.sourceAnchor) || []
     : [];
   const canonicalById = new Map(ROADMAP_PACKAGES.map((item) => [item.taskId, item]));
-  const catalog = (persistedCatalog.length >= 5 ? persistedCatalog : ROADMAP_PACKAGES).map((item) => canonicalById.has(item.taskId)
+  const persistedOrCanonical = persistedCatalog.length >= 5 ? persistedCatalog : ROADMAP_PACKAGES;
+  const persistedIds = new Set(persistedOrCanonical.map((item) => item.taskId));
+  const catalog = [
+    ...persistedOrCanonical,
+    ...ROADMAP_PACKAGES.filter((item) => !persistedIds.has(item.taskId))
+  ].map((item) => canonicalById.has(item.taskId)
     ? { ...canonicalById.get(item.taskId), ...item, dependsOnTaskIds: dependencyIds(canonicalById.get(item.taskId).dependsOnTaskIds) }
     : item);
   const dependencyDefects = validateRoadmapDependencies(catalog);

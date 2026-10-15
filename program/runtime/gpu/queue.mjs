@@ -267,6 +267,49 @@ export async function ensureGpuQueueDirs(worldRoot) {
   return ensureHoldingLaneDirs(worldRoot, { lane: "gpu", migrateLegacyProduce: true });
 }
 
+export async function listGpuRuntimeEnvelopes(worldRoot) {
+  const paths = await ensureGpuQueueDirs(worldRoot);
+  const filenames = await listSpoolItemsOldestFirst(paths.runtimeDir);
+  const entries = [];
+  for (const filename of filenames) {
+    const targetPath = path.join(paths.runtimeDir, filename);
+    let mtimeMs = 0;
+    try {
+      const stat = await fs.stat(targetPath);
+      mtimeMs = Number(stat.mtimeMs || 0);
+    } catch (error) {
+      entries.push({
+        filename,
+        path: targetPath,
+        mtimeMs,
+        envelope: null,
+        error: String(error?.message || error)
+      });
+      continue;
+    }
+    try {
+      const envelope = await readEnvelopeFile(targetPath);
+      assertGpuQueueEnvelope(envelope);
+      entries.push({
+        filename,
+        path: targetPath,
+        mtimeMs,
+        envelope,
+        error: ""
+      });
+    } catch (error) {
+      entries.push({
+        filename,
+        path: targetPath,
+        mtimeMs,
+        envelope: null,
+        error: String(error?.message || error)
+      });
+    }
+  }
+  return entries;
+}
+
 export async function enqueueInputEnvelope(worldRoot, envelope = {}) {
   const paths = await ensureGpuQueueDirs(worldRoot);
   const normalized = buildGpuQueueEnvelope({
