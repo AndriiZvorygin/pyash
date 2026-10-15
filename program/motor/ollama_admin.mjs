@@ -41,12 +41,17 @@ export async function listWarmOllamaMinds({ rememberFn } = {}) {
   return out;
 }
 
-export async function dischargeOllamaMind(model, { rememberFn } = {}) {
+export async function dischargeOllamaMind(model, { rememberFn, timeoutMs = 0 } = {}) {
   const modelText = String(model ?? "").trim();
   if (!modelText) return false;
   const host = resolveOllamaHost({ rememberFn }).replace(/\/$/, "");
   let res;
   const endpoint = `${host}/api/generate`;
+  const controller = Number(timeoutMs) > 0 ? new AbortController() : null;
+  const timeout = controller
+    ? setTimeout(() => controller.abort(), Math.max(1, Number(timeoutMs)))
+    : null;
+  timeout?.unref?.();
   try {
     res = await fetch(endpoint, {
       method: "POST",
@@ -56,10 +61,13 @@ export async function dischargeOllamaMind(model, { rememberFn } = {}) {
         prompt: "",
         keep_alive: 0,
         stream: false
-      })
+      }),
+      ...(controller ? { signal: controller.signal } : {})
     });
   } catch (err) {
     throw new Error(`ollama discharge failed: fetch ${endpoint} (${err?.message ?? err})`);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
   if (!res.ok) {
     throw new Error(`ollama discharge failed: ${res.status} ${res.statusText ?? ""} (${endpoint})`.trim());
