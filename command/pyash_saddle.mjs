@@ -18,10 +18,13 @@ import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
+  discoverSaddleModels,
+  formatSaddleModelPicker,
   formatSaddleStatus,
   normalizeSaddleBackend,
   normalizeSaddleHost,
   normalizeSaddleModel,
+  resolveSaddleModelSelection,
   saddleToolEventLabel
 } from "../program/agent/coding_saddle.mjs";
 
@@ -153,15 +156,15 @@ function clearRenderedInput(rows) {
   process.stdout.write("\r");
 }
 
-function renderInput(state, { rows = 1, clear = true } = {}) {
+function renderInput(state, { rows = 1, clear = true, label = "pyash> " } = {}) {
   if (clear) clearRenderedInput(rows);
   const lines = String(state?.value ?? "").split("\n");
-  process.stdout.write(`pyash> ${lines.join("\n")}`);
+  process.stdout.write(`${label}${lines.join("\n")}`);
   const cursorLine = lines.length - 1;
   const cursorColumn = String(lines[cursorLine] ?? "").length;
   if (cursorLine > 0) process.stdout.write(`\u001b[${cursorLine}A`);
-  process.stdout.write(`\r\u001b[${"pyash> ".length + (cursorLine === 0 ? cursorColumn : 0)}C`);
-  if (cursorLine > 0) process.stdout.write(`\u001b[${cursorLine}B\r\u001b[${"pyash> ".length + cursorColumn}C`);
+  process.stdout.write(`\r\u001b[${label.length + (cursorLine === 0 ? cursorColumn : 0)}C`);
+  if (cursorLine > 0) process.stdout.write(`\u001b[${cursorLine}B\r\u001b[${label.length + cursorColumn}C`);
   return lines.length;
 }
 
@@ -178,14 +181,37 @@ async function main() {
   let host = config.host;
   let busy = false;
   let closing = false;
+  let modelPicker = null;
+  let promptLabel = "pyash> ";
   let renderedRows = 1;
 
   const showStatus = async () => {
     const queue = await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
     writeLine(formatSaddleStatus({ model, backend, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
   };
-  const prompt = ({ clear = true } = {}) => {
-    renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear });
+  const prompt = ({ clear = true, label = promptLabel } = {}) => {
+    promptLabel = label;
+    renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear, label });
+  };
+  const showModelPicker = async () => {
+    const fallbackModels = String(process.env.PYA_SADDLE_MODELS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const discovered = await discoverSaddleModels({
+      backend,
+      host,
+      currentModel: model,
+      fallbackModels
+    });
+    modelPicker = discovered.models;
+    if (!modelPicker.length) modelPicker = [model];
+    writeLine(formatSaddleModelPicker({
+      models: modelPicker,
+      currentModel: model,
+      error: discovered.available ? "" : discovered.error
+    }));
+    prompt({ clear: false, label: "select model> " });
   };
   const shutdown = async () => {
     if (closing) return;
@@ -213,14 +239,28 @@ async function main() {
       await shutdown();
       return;
     }
+    if (modelPicker) {
+      const selected = resolveSaddleModelSelection(input, modelPicker);
+      if (!selected) {
+        writeLine("invalid model selection");
+        prompt({ clear: false, label: "select model> " });
+        return;
+      }
+      modelPicker = null;
+      model = selected;
+      promptLabel = "pyash> ";
+      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      writeLine(`model: ${model}`);
+      prompt({ clear: false });
+      return;
+    }
     if (input.trim() === "/help") {
       writeLine("/status  /model <name>  /backend <name>  /host <url>  /discharge  /exit");
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/model") {
-      writeLine(`model: ${model}`);
-      prompt({ clear: false });
+      await showModelPicker();
       return;
     }
     if (input.trim() === "/status") {
@@ -308,7 +348,7 @@ async function main() {
     },
     onExit: () => { shutdown().catch(() => {}); },
     onChange: (state) => {
-      if (!busy && !closing) renderedRows = renderInput(state, { rows: renderedRows });
+      if (!busy && !closing) renderedRows = renderInput(state, { rows: renderedRows, label: promptLabel });
     }
   });
   process.stdin.on("data", (chunk) => decoder.feed(chunk));

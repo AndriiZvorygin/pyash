@@ -34,6 +34,76 @@ export function normalizeSaddleHost(value, fallback = "http://localhost:11434") 
   return normalizeText(value) || fallback;
 }
 
+export function resolveSaddleModelSelection(value, models = []) {
+  const input = normalizeText(value);
+  const choices = Array.isArray(models) ? models.map(normalizeText).filter(Boolean) : [];
+  if (/^\d+$/.test(input)) {
+    const index = Number.parseInt(input, 10);
+    return index >= 1 && index <= choices.length ? choices[index - 1] : "";
+  }
+  const exact = choices.find((model) => model === input);
+  if (exact) return exact;
+  const insensitive = choices.find((model) => model.toLowerCase() === input.toLowerCase());
+  return insensitive || "";
+}
+
+export async function discoverSaddleModels({
+  backend,
+  host,
+  currentModel = "",
+  fallbackModels = [],
+  fetchFn = globalThis.fetch,
+  timeoutMs = 4000
+} = {}) {
+  const normalizedBackend = normalizeSaddleBackend(backend);
+  const normalizedHost = normalizeSaddleHost(host);
+  const configured = [currentModel, ...fallbackModels].map(normalizeText).filter(Boolean);
+  if (typeof fetchFn !== "function") {
+    return { models: [...new Set(configured)], available: false, error: "model discovery is unavailable" };
+  }
+  const endpoint = normalizedBackend === "strata" ? "/v1/models" : "/api/tags";
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller && Number.isFinite(Number(timeoutMs))
+    ? setTimeout(() => controller.abort(), Number(timeoutMs))
+    : null;
+  try {
+    const response = await fetchFn(`${normalizedHost.replace(/\/+$/u, "")}${endpoint}`, {
+      signal: controller?.signal
+    });
+    if (!response?.ok) throw new Error(`model catalogue returned HTTP ${response?.status ?? "unknown"}`);
+    const payload = await response.json();
+    const entries = normalizedBackend === "strata"
+      ? (Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : [])
+      : (Array.isArray(payload?.models) ? payload.models : []);
+    const discovered = entries.map((entry) => {
+      if (typeof entry === "string") return entry;
+      return entry?.id ?? entry?.name ?? entry?.model ?? "";
+    }).map(normalizeText).filter(Boolean);
+    const models = [...new Set([...configured, ...discovered])];
+    return { models, available: true, error: models.length ? null : "no models are available" };
+  } catch (error) {
+    return {
+      models: [...new Set(configured)],
+      available: false,
+      error: String(error?.message ?? error)
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export function formatSaddleModelPicker({ models = [], currentModel = "", error = "" } = {}) {
+  const choices = Array.isArray(models) ? models.map(normalizeText).filter(Boolean) : [];
+  const lines = ["available models:"];
+  choices.forEach((model, index) => {
+    const marker = model === normalizeText(currentModel) ? " (current)" : "";
+    lines.push(`${index + 1}. ${model}${marker}`);
+  });
+  if (error) lines.push(`discovery: ${error}`);
+  lines.push("Enter a number or exact model name; Ctrl+C cancels.");
+  return lines.join("\n");
+}
+
 export function buildSaddleMindSentence({
   input,
   model,
