@@ -153,8 +153,8 @@ function clearRenderedInput(rows) {
   process.stdout.write("\r");
 }
 
-function renderInput(state, { rows = 1 } = {}) {
-  clearRenderedInput(rows);
+function renderInput(state, { rows = 1, clear = true } = {}) {
+  if (clear) clearRenderedInput(rows);
   const lines = String(state?.value ?? "").split("\n");
   process.stdout.write(`pyash> ${lines.join("\n")}`);
   const cursorLine = lines.length - 1;
@@ -184,8 +184,8 @@ async function main() {
     const queue = await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
     writeLine(formatSaddleStatus({ model, backend, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
   };
-  const prompt = () => {
-    renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows });
+  const prompt = ({ clear = true } = {}) => {
+    renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear });
   };
   const shutdown = async () => {
     if (closing) return;
@@ -206,7 +206,7 @@ async function main() {
   const submit = async (value) => {
     const input = String(value ?? "");
     if (!input.trim() || busy || closing) {
-      prompt();
+      prompt({ clear: false });
       return;
     }
     if (input.trim() === "/exit" || input.trim() === "/quit") {
@@ -215,17 +215,22 @@ async function main() {
     }
     if (input.trim() === "/help") {
       writeLine("/status  /model <name>  /backend <name>  /host <url>  /discharge  /exit");
-      prompt();
+      prompt({ clear: false });
+      return;
+    }
+    if (input.trim() === "/model") {
+      writeLine(`model: ${model}`);
+      prompt({ clear: false });
       return;
     }
     if (input.trim() === "/status") {
       await showStatus();
-      prompt();
+      prompt({ clear: false });
       return;
     }
     if (input.trim() === "/discharge") {
       await dischargeSaddleModel(model, backend).then(() => writeLine(`discharged: ${model}`)).catch((error) => writeLine(`discharge failed: ${error.message}`));
-      prompt();
+      prompt({ clear: false });
       return;
     }
     const modelMatch = input.trim().match(/^\/model\s+(.+)$/i);
@@ -233,7 +238,7 @@ async function main() {
       model = normalizeSaddleModel(modelMatch[1], model);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model}`);
-      prompt();
+      prompt({ clear: false });
       return;
     }
     const backendMatch = input.trim().match(/^\/backend\s+(.+)$/i);
@@ -242,7 +247,7 @@ async function main() {
       host = resolveSaddleHost(backend);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`backend: ${backend} (${host})`);
-      prompt();
+      prompt({ clear: false });
       return;
     }
     const hostMatch = input.trim().match(/^\/host\s+(.+)$/i);
@@ -250,7 +255,7 @@ async function main() {
       host = normalizeSaddleHost(hostMatch[1], host);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`host: ${host}`);
-      prompt();
+      prompt({ clear: false });
       return;
     }
 
@@ -276,7 +281,7 @@ async function main() {
       writeLine(`saddle error> ${error?.message ?? error}`);
     } finally {
       busy = false;
-      prompt();
+      prompt({ clear: false });
     }
   };
 
