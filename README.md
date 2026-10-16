@@ -114,6 +114,18 @@ Run a program:
 ./run examples/pyash/add-basic.pya
 ```
 
+## Downloading A Video For An Agent
+
+The `download-ytdlp.pya` example accepts the source URL and destination filename as positional inputs. It uses Pyash's `be download` video path, so `yt-dlp` handles the media transfer and creates destination directories as needed.
+
+```bash
+./run examples/pyash/download-ytdlp.pya \
+  'https://www.youtube.com/watch?v=VIDEO_ID' \
+  'artifacts/downloads/video.mp4' --verbose
+```
+
+The run result reports the exact destination filename. `yt-dlp` must be installed and available on `PATH`; the executing agent also needs the `PYA_NETWORK` permission. Quote the URL and path so shell characters are passed intact.
+
 Run a richer end-to-end example through multiple backends:
 
 ```bash
