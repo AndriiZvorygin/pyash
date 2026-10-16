@@ -3,10 +3,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { forget } from "../program/remember/index.mjs";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("download infers fromstate from URL and writes mock output", async () => {
   forget();
@@ -51,6 +55,41 @@ test("download video uses ytdlp path with mock response", async () => {
   } finally {
     if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
     else process.env.PYA_DOWNLOAD_RESPONSE = original;
+  }
+});
+
+test("download-ytdlp example accepts URL and destination as agent inputs", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-example-"));
+  const programPath = path.join(repoRoot, "examples", "pyash", "download-ytdlp.pya");
+  const runnerPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const runId = `download-example-${process.pid}`;
+  const outputPath = path.join(tmpDir, "nested", "agent-video.mp4");
+  const source = await fs.readFile(programPath, "utf8");
+  const originalResponse = process.env.PYA_DOWNLOAD_RESPONSE;
+  process.env.PYA_DOWNLOAD_RESPONSE = "agent video fixture";
+  try {
+    assert.match(source, /ob text text video_url be input ya/u);
+    assert.match(source, /ob filename text video_output be input ya/u);
+    assert.match(source, /from filename of video_url as wo video to filename of video_output/u);
+    assert.doesNotMatch(source, /BaW_jenozKc|examples\/out\/video\.mp4/u);
+
+    const result = spawnSync(process.execPath, [
+      runnerPath,
+      "--run-id", runId,
+      programPath,
+      "https://www.youtube.com/watch?v=agent-fixture",
+      outputPath,
+      "--verbose"
+    ], { cwd: tmpDir, encoding: "utf8", env: process.env });
+    assert.equal(result.status, 0, `expected agent download example to pass\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+    assert.match(`${result.stdout}\n${result.stderr}`, new RegExp(outputPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
+    assert.equal(await fs.readFile(outputPath, "utf8"), "agent video fixture");
+    const runResult = await fs.readFile(path.join(tmpDir, "artifacts", runId, "result.pya"), "utf8");
+    assert.match(runResult, new RegExp(outputPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
+  } finally {
+    if (originalResponse === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
+    else process.env.PYA_DOWNLOAD_RESPONSE = originalResponse;
+    await fs.rm(tmpDir, { recursive: true, force: true });
   }
 });
 
