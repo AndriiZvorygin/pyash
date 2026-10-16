@@ -5,11 +5,10 @@ function splitOversizedBlock(block = "", targetChars = 8000) {
   while (remaining.length > target) {
     const searchFloor = Math.floor(target * 0.6);
     const candidate = remaining.slice(0, target + 1);
-    const whitespaceAt = Math.max(
-      candidate.lastIndexOf("\n"),
-      candidate.lastIndexOf(" "),
-      candidate.lastIndexOf("\t"),
-    );
+    const lineBreakAt = candidate.lastIndexOf("\n");
+    const whitespaceAt = lineBreakAt >= searchFloor
+      ? lineBreakAt
+      : Math.max(candidate.lastIndexOf(" "), candidate.lastIndexOf("\t"));
     const splitAt = whitespaceAt >= searchFloor ? whitespaceAt : target;
     pieces.push(remaining.slice(0, splitAt).trim());
     remaining = remaining.slice(splitAt).trimStart();

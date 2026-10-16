@@ -28,6 +28,14 @@ test("Grey County stream titles map to the meeting date and combined bodies", ()
   }), false);
 });
 
+test("titles with ordinal dates use the YouTube upload year when the title omits it", () => {
+  assert.equal(dateIsoFromYoutubeTitle("Council and Committee of the Whole September 22nd"), "");
+  assert.equal(
+    dateIsoFromYoutubeTitle("Council and Committee of the Whole September 22nd", "2026"),
+    "2026-09-22",
+  );
+});
+
 test("stream discovery reads the official Live playlist", () => {
   const rows = discoverGreyCountyYoutubeStreams({
     execFileSyncImpl: (_command, args) => {
@@ -47,6 +55,37 @@ test("stream discovery reads the official Live playlist", () => {
     url: "https://www.youtube.com/watch?v=video1",
     date_iso: "2026-07-23",
   }]);
+});
+
+test("stream discovery resolves older title-only uploads through cached YouTube metadata", () => {
+  const calls = [];
+  const rows = discoverGreyCountyYoutubeStreams({
+    metadataCachePath: "",
+    execFileSyncImpl: (_command, args) => {
+      calls.push(args);
+      if (args.includes("--flat-playlist")) {
+        return JSON.stringify({
+          entries: [{
+            id: "old-video",
+            title: "Council & Committee of the Whole",
+            url: "https://www.youtube.com/watch?v=old-video",
+          }],
+        });
+      }
+      return JSON.stringify({
+        id: "old-video",
+        channel_id: "UCw_WmatPnvP6MqyUBlCAYpw",
+        upload_date: "20200423",
+      });
+    },
+  });
+  assert.deepEqual(rows, [{
+    id: "old-video",
+    title: "Council & Committee of the Whole",
+    url: "https://www.youtube.com/watch?v=old-video",
+    date_iso: "2020-04-23",
+  }]);
+  assert.equal(calls.length, 2);
 });
 
 test("duplicate or reconnected streams select the longest official recording", () => {

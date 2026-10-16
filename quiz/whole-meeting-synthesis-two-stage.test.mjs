@@ -15,6 +15,7 @@ import {
   governingBodyDefects,
   namedCouncilActorDefects,
   previewTemporalDefects,
+  rewriteChunkWithoutForbiddenActors,
   summarizeWholeMeetingArtifacts,
 } from "../program/library/reporter_shared/whole-meeting-synthesis.mjs";
 import { unsupportedNumericTokens } from "../program/library/reporter_shared/grounded-numeric-fidelity.mjs";
@@ -39,6 +40,10 @@ test("upcoming whole-meeting validation rejects completed-meeting framing", () =
   assert.deepEqual(
     previewTemporalDefects("The July 27 agenda says Council will consider the capital plan and shelter proposal."),
     [],
+  );
+  assert.deepEqual(
+    previewTemporalDefects("The Committee - Community Services approved the recommendation."),
+    ["Committee - Community Services approved"],
   );
 });
 
@@ -72,6 +77,33 @@ test("whole-meeting validation rejects acting-body substitution", () => {
       "The Operations Committee discussed the recommendation.",
     ),
     ["Committee approved"],
+  );
+});
+
+test("whole-meeting validation preserves explicitly sourced subordinate actions", () => {
+  const source = "Section 12.b Summary: The Operations Committee approved the recommendation before Council received its minutes.";
+  assert.deepEqual(
+    governingBodyDefects(
+      "The Operations Committee approved the recommendation.",
+      "Council Meeting - Regular",
+      source,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    governingBodyDefects(
+      "The Operations Committee approved the recommendation.",
+      "Council Meeting - Regular",
+    ),
+    ["Committee approved"],
+  );
+  assert.deepEqual(
+    governingBodyDefects(
+      "Committee approved the minutes.",
+      "Council Meeting - Regular",
+      "The Corporate Services Committee called the question in favor of approving the minutes, and the motion was carried.",
+    ),
+    [],
   );
 });
 
@@ -125,9 +157,30 @@ test("chunk retry guidance varies repeated actor-defect instructions", () => {
   assert.match(guidance, /third-pass repair/iu);
   assert.match(guidance, /Delete every listed named-actor occurrence/iu);
   assert.match(guidance, /Scan the full corrected draft/iu);
+  assert.match(guidance, /absolute output blocklist/iu);
   assert.match(guidance, /write a fresh summary from the grounded source/iu);
   assert.doesNotMatch(guidance, /Revise the rejected draft below/iu);
+  assert.doesNotMatch(guidance, /REJECTED_DRAFT:/u);
   assert.match(guidance, /Councillor Morgan/u);
+});
+
+test("actor rewrite uses a separate LLM-only blocklist pass", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let prompt = "";
+  globalThis.fetch = async (_url, options) => {
+    prompt = JSON.parse(options.body).messages[1].content;
+    return { ok: true, async json() { return { message: { content: "- 1 CALL TO ORDER: The chair opened the meeting." } }; } };
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const rewritten = await rewriteChunkWithoutForbiddenActors({
+    candidate: "- 1 CALL TO ORDER: Chair Dave opened the meeting.",
+    forbiddenNames: ["Chair Dave"],
+    coveredHeadings: ["1 CALL TO ORDER"],
+    bodyLabel: "River District Board of Management",
+  });
+  assert.equal(rewritten, "- 1 CALL TO ORDER: The chair opened the meeting.");
+  assert.match(prompt, /ABSOLUTE OUTPUT BLOCKLIST: Chair Dave/u);
+  assert.match(prompt, /Do not use any personal names/u);
 });
 
 test("chunk review adjudication checks an alleged outcome against literal evidence", async (t) => {
@@ -249,6 +302,25 @@ test("whole-meeting numeric grounding includes ranked source details exposed to 
   );
 });
 
+test("whole-meeting financial repairs preserve recap tense outside upcoming mode", () => {
+  const source = fs.readFileSync(
+    new URL("../program/library/reporter_shared/whole-meeting-synthesis.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /SUMMARY_TIME_MODE === "upcoming"\n\s*\? "FINAL REMINDER: the meeting has not happened/iu);
+  assert.match(source, /this is a recap of the completed meeting\. Preserve source-supported action and decision status/iu);
+  assert.doesNotMatch(source, /`REJECTION_REASON:[\s\S]{0,500}FINAL REMINDER: the meeting has not happened\. Use scheduled/u);
+});
+
+test("Owen whole-meeting child timeout scales with recording length", () => {
+  const source = fs.readFileSync(
+    new URL("../world/house/owen-sound-reporter/program/run-full-transcript-pipeline.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /timeoutMs: scaleTimeout\(35 \* 60 \* 1000, audioSeconds, 0\.8\)/u);
+  assert.match(source, /long complete meeting\n\s*\/\/ remains retryable instead of being SIGKILLed/u);
+});
+
 test("meeting-wide one-sentence generation retries the complete teaser contract", () => {
   const source = fs.readFileSync(
     new URL("../world/house/owen-sound-reporter/program/run-full-transcript-pipeline.mjs", import.meta.url),
@@ -261,9 +333,13 @@ test("meeting-wide one-sentence generation retries the complete teaser contract"
   assert.match(generator, /explainMalformedOneSentence\(candidate/u);
   assert.match(generator, /at most 4 commas/u);
   assert.match(generator, /If the reason is too_many_commas, rewrite from scratch with zero commas/u);
+  assert.match(generator, /missing_action_verb[\s\S]*?explicit finite action verb/u);
+  assert.match(generator, /Do not use only noun forms such as hearing, consideration, review, discussion, or passage/u);
   assert.match(generator, /Fresh repair contract: do not revise or quote the rejected sentence/u);
   assert.match(generator, /Math\.min\(3, blocks\.length\)/u);
   assert.match(generator, /all substantive recap items available for this short meeting/u);
+  assert.match(generator, /const singleSubstantiveMeeting = !allowProcedural[\s\S]*?blocks\.length === 1[\s\S]*?Number\(groundedSectionCount\) >= 2/u);
+  assert.doesNotMatch(generator, /Number\(groundedSectionCount\) >= 2[\s\S]*?>= 30/u);
   assert.match(generator, /Previous response contained \$\{lastWordCount\} words/u);
   assert.match(generator, /Return exactly 48-64 words/u);
   assert.match(generator, /Remove at least \$\{Math\.max\(1, lastWordCount - 64\)\} words/u);
@@ -271,6 +347,11 @@ test("meeting-wide one-sentence generation retries the complete teaser contract"
   assert.match(generator, /chosenBlocks\.map\(\(block\) => `\$\{String\(block\.heading \|\| ""\)\} \$\{String\(block\.summary \|\| ""\)\}`\)/u);
   assert.match(generator, /const authoritativeRoleConstraint = agendaRoleConstraint/u);
   assert.match(generator, /authoritativeRoleConstraint,/u);
+  assert.match(generator, /at least two distinctive words from its matching numbered recap item heading or summary/iu);
+  assert.match(generator, /REQUIRED PER-ITEM COVERAGE ANCHORS/iu);
+  assert.match(source, /function isStructuralAgendaParent/u);
+  assert.match(source, /Do not mention Public Forum, correspondence, minutes/u);
+  assert.match(source, /no \(questions\?|participants\?|speakers\?|submissions\?|audience members\?\)/u);
   assert.match(source, /const MEETING_TEASER_MAX_WORDS = 72/u);
   assert.match(source, /oneSentenceValidationContext = \{[\s\S]*?maxWords: MEETING_TEASER_MAX_WORDS/u);
 });

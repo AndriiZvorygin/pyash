@@ -4,6 +4,11 @@ import path from "node:path";
 
 import { selectCanonicalAgendaItemKeys } from "../program/library/reporter_shared/escribe-agenda-identity.mjs";
 import { extractHybridPdfText } from "../program/library/reporter_shared/hybrid-pdf-text.mjs";
+import {
+  closePdfBrowser,
+  downloadPdfThroughBrowser,
+  isEscribeUrl,
+} from "../program/library/reporter_shared/escribe-pdf-download.mjs";
 import { spawnSync } from "node:child_process";
 
 function normalizeSpaces(text) {
@@ -11,6 +16,14 @@ function normalizeSpaces(text) {
     .replace(/[\u00A0\u2007\u202F]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isPdfFile(filePath) {
+  try {
+    return fs.readFileSync(filePath).subarray(0, 5).toString("ascii") === "%PDF-";
+  } catch {
+    return false;
+  }
 }
 
 function slugify(input) {
@@ -66,6 +79,7 @@ async function extractAttachmentPdfSections({
   attachmentsByItem,
   existingSections,
   outputDir,
+  browserPageUrl = "",
 }) {
   const existingItems = new Set(
     (Array.isArray(existingSections) ? existingSections : [])
@@ -74,9 +88,11 @@ async function extractAttachmentPdfSections({
   );
   const sections = [];
   const diagnostics = [];
+  const browserState = { browser: null, page: null, pageUrl: "" };
   const attachmentDir = path.join(outputDir, "_attachments");
   fs.mkdirSync(attachmentDir, { recursive: true });
 
+  try {
   for (const [item, data] of attachmentsByItem.entries()) {
     const itemKey = String(item || "").toLowerCase();
     if (!itemKey) continue;
@@ -98,19 +114,28 @@ async function extractAttachmentPdfSections({
       const pdfPath = path.join(attachmentDir, `${stem}.pdf`);
       const textPath = path.join(attachmentDir, `${stem}.txt`);
       try {
-        const downloaded = spawnSync("curl", ["-fsSL", "--max-time", "60", "-o", pdfPath, url], {
-          encoding: "utf8",
-          timeout: 70_000,
-        });
-        if (downloaded.error) throw downloaded.error;
-        if (downloaded.status !== 0) {
-          throw new Error(`curl_exit_${downloaded.status}: ${String(downloaded.stderr || "").trim()}`);
+        if (!isPdfFile(pdfPath) && isEscribeUrl(url)) {
+          await downloadPdfThroughBrowser({ url, pdfPath, pageUrl: browserPageUrl, browserState });
+        } else if (!isPdfFile(pdfPath)) {
+          const downloaded = spawnSync("curl", ["-fsSL", "--max-time", "60", "-o", pdfPath, url], {
+            encoding: "utf8",
+            timeout: 70_000,
+          });
+          if (downloaded.error) throw downloaded.error;
+          if (downloaded.status !== 0) {
+            throw new Error(`curl_exit_${downloaded.status}: ${String(downloaded.stderr || "").trim()}`);
+          }
         }
-        const bytes = fs.readFileSync(pdfPath);
+        let bytes = fs.readFileSync(pdfPath);
         if (bytes.length < 8 || !bytes.subarray(0, 5).toString("ascii").startsWith("%PDF")) {
-          throw new Error("response_not_pdf");
+          if (isEscribeUrl(url)) {
+            await downloadPdfThroughBrowser({ url, pdfPath, pageUrl: browserPageUrl, browserState });
+            bytes = fs.readFileSync(pdfPath);
+          } else {
+            throw new Error("response_not_pdf");
+          }
         }
-        const hybrid = await extractHybridPdfText({ pdfPath, textPath });
+        const hybrid = await extractHybridPdfText({ pdfPath, textPath, allowImageOnly: true });
         const text = hybrid.text;
         const wordCount = normalizeSpaces(text).split(/\s+/u).filter(Boolean).length;
         if (!hasMeaningfulAttachmentText(text)) {
@@ -167,6 +192,9 @@ async function extractAttachmentPdfSections({
   }
 
   return { sections, diagnostics };
+  } finally {
+    await closePdfBrowser(browserState);
+  }
 }
 
 function inferBaseOriginFromAgendaHtml(htmlText, explicitBase = "") {
@@ -936,6 +964,7 @@ async function main() {
     attachmentsByItem,
     existingSections: [...sections, ...fallbackSections, ...fallbackSectionsFromAttachments],
     outputDir,
+    browserPageUrl: sourceBaseUrl,
   });
   const attachmentPdfSections = attachmentPdfResult.sections;
   const directItems = new Set(attachmentPdfSections.map((section) => String(section.item || "").toLowerCase()));

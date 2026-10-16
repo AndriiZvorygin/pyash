@@ -235,9 +235,14 @@ export async function requestManagedOllamaChat({
   if (!normalizedModel) throw new Error("managed Ollama requires a model");
   const base = stripApiPath(ollamaUrl || process.env.OLLAMA_HOST || "http://mriczo:11434");
   const explicitManager = text(managerUrl || process.env.PYA_GPU_HOUSEKEEPER_URL || process.env.GPU_HOUSEKEEPER_URL);
-  const resolvedManager = explicitManager
-    ? explicitManager.replace(/\/+$/u, "")
-    : (fetchImpl === DEFAULT_FETCH ? managerUrlFromOllama(base) : "");
+  // An explicit direct mode is useful for a single-flight recovery when the
+  // housekeeper control plane is healthy but its one-slot queue is wedged.
+  // Keep the opt-in guard here so ordinary reporter runs remain managed.
+  const resolvedManager = allowDirect
+    ? ""
+    : (explicitManager
+      ? explicitManager.replace(/\/+$/u, "")
+      : (fetchImpl === DEFAULT_FETCH ? managerUrlFromOllama(base) : ""));
   const payload = {
     model: normalizedModel,
     messages: Array.isArray(messages) ? messages : [],
@@ -245,7 +250,9 @@ export async function requestManagedOllamaChat({
     think: Boolean(think),
     keep_alive: keepAlive,
     options: { ...options },
-    ...(text(format) ? { format: text(format) } : {}),
+    ...(format && typeof format === "object"
+      ? { format }
+      : (text(format) ? { format: text(format) } : {})),
   };
 
   if (!resolvedManager) {

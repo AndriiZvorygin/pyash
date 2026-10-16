@@ -9,6 +9,7 @@ import { readPyaMapArtifact, writePyaMapArtifact } from "./agenda-stage-contract
 const CANDIDATES_ROOT = "agenda gross chunks artifact";
 const MATCHES_ROOT = "agenda matches artifact";
 const GROUNDING_ROOT = "agenda section grounding artifact";
+const BOUNDARY_RECOVERY_VERSION = "minutes_like_child_boundaries_v3";
 const ROLES = new Set([
   "procedural",
   "minutes",
@@ -43,6 +44,30 @@ function evidenceKey(value = "") {
 
 function itemKey(value = "") {
   return clean(value).toLowerCase().replace(/^item\s+/u, "").replace(/\.$/u, "");
+}
+
+export function shouldRecoverMissingCanonicalBoundary(entry = {}) {
+  const title = clean(entry.title);
+  const requiredChronologyHeading = entry.level === 1 && (
+    /^(?:public forum|by-?laws?|adjournment|matters postponed|motions? for which notice was previously given|discussion of additional business|additional business|notices? of motion)$/iu.test(title)
+  );
+  const transcriptBackedMinutes = entry.level > 1 && entry["minutes like"] === true;
+  // A non-procedural child can own a real deputation, presentation, or
+  // correspondence span without an attachment or long-source marker. Keep it
+  // eligible for evidence-gated recovery so an empty parent heading cannot
+  // absorb the child's complete chronology. The LLM/literal boundary gates
+  // still reject silent or merely previewed children.
+  const nonProceduralChild = entry.level > 1
+    && entry.procedural !== true
+    && entry["minutes like"] !== true
+    && /\b(?:presentation|deputation|delegation|correspondence|report|request|petition|submission|update)\b/iu.test(title);
+  return Boolean(
+    entry.substantive
+      || entry["long source"] === true
+      || transcriptBackedMinutes
+      || requiredChronologyHeading
+      || nonProceduralChild,
+  );
 }
 
 const SPOKEN_AGENDA_NUMBERS = new Map([
@@ -179,6 +204,9 @@ export function loadCanonicalAgenda(indexPath) {
       title,
       level: item.split(".").length,
       substantive: Boolean(Array.isArray(source?.attachments) && source.attachments.length),
+      "long source": Boolean(source?.long_source),
+      "minutes like": Boolean(source?.minutes_like),
+      procedural: Boolean(source?.procedural),
     });
   }
   if (!items.length) throw new Error(`agenda segmentation retryable: canonical agenda has no items: ${indexPath}`);
@@ -416,7 +444,7 @@ function structuredTitleHasLiteralSupport(title, transcriptSpan) {
 // later discussion repeats one generic word such as "review". Require an
 // exact phrase or at least two meaningful title terms for this stronger
 // ownership check; the permissive helper remains useful for ordinary audits.
-function structuredTitleHasStrongLiteralSupport(title, transcriptSpan) {
+export function structuredTitleHasStrongLiteralSupport(title, transcriptSpan) {
   const titleKey = evidenceKey(title);
   const spanKey = evidenceKey(transcriptSpan);
   if (!titleKey || !spanKey) return false;
@@ -427,9 +455,44 @@ function structuredTitleHasStrongLiteralSupport(title, transcriptSpan) {
   return terms.filter((term) => spanTerms.has(term)).length >= Math.min(2, terms.length);
 }
 
-function focusedRecoveryBoundaryHasDirectSupport(entry, unit) {
+export function structuredTitleHasDistinctiveLiteralSupport(title, transcriptSpan) {
+  const titleKey = evidenceKey(title);
+  const spanKey = evidenceKey(transcriptSpan);
+  if (!titleKey || !spanKey) return false;
+  if (spanKey.includes(titleKey)) return true;
+  const ignored = new Set([
+    "agenda", "business", "committee", "community", "communication", "corporate", "correspondence",
+    "discussion", "director", "district", "draft", "from", "input", "item", "meeting", "minutes",
+    "presentation", "report", "reports", "review", "river", "services", "staff", "the",
+    "allowance", "approvals", "avenue", "bylaw", "east", "final", "following", "issued", "number",
+    "portion", "purchase", "request", "road", "street", "west",
+  ]);
+  const terms = titleKey.split(" ").filter((term) => term.length >= 4 && !ignored.has(term));
+  const spanTerms = new Set(spanKey.split(" "));
+  return terms.filter((term) => spanTerms.has(term)).length >= Math.min(2, terms.length);
+}
+
+function structuredChildTitleHasDistinctiveLiteralSupport(title, transcriptSpan) {
+  const titleKey = evidenceKey(title);
+  const spanKey = evidenceKey(transcriptSpan);
+  if (!titleKey || !spanKey) return false;
+  if (spanKey.includes(titleKey)) return true;
+  const ignored = new Set([
+    "agenda", "business", "budget", "budgets", "capital", "committee", "community", "communication",
+    "continuity", "corporate", "correspondence", "discussion", "director", "district", "document",
+    "documents", "draft", "from", "input", "item", "meeting", "minutes", "only", "operating",
+    "presentation", "reference", "report", "reports", "reserve", "reserves", "review", "river",
+    "services", "staff", "the",
+  ]);
+  const terms = titleKey.split(" ")
+    .filter((term) => term.length >= 4 && !/^\d{4}$/u.test(term) && !ignored.has(term));
+  if (!terms.length) return false;
+  const spanTerms = new Set(spanKey.split(" "));
+  return terms.filter((term) => spanTerms.has(term)).length >= Math.min(2, terms.length);
+}
+
+export function spokenAgendaCodeMatchesItem(entry, unit) {
   if (!entry || !unit) return false;
-  if (structuredTitleHasLiteralSupport(entry.title, unit.text)) return true;
   const parts = itemKey(entry.item).split(".");
   if (!parts.length) return false;
   const numberWords = [...SPOKEN_AGENDA_NUMBERS.entries()]
@@ -456,19 +519,221 @@ function focusedRecoveryBoundaryHasDirectSupport(entry, unit) {
   return false;
 }
 
+export function standaloneAgendaCodeMatchesItem(entry, unit) {
+  if (!entry || !unit) return false;
+  const text = clean(unit.text).replace(/^[^:\n]{1,100}:\s*/u, "");
+  const tokens = evidenceKey(text)
+    .split(" ")
+    .filter((token) => token && !["item", "number", "agenda"].includes(token));
+  if (!tokens.length || tokens.length > 2) return false;
+  return spokenAgendaCodeMatchesItem(entry, { text });
+}
+
+export function isValidatedStandaloneSiblingBoundary(candidate, entry, unit) {
+  return candidate?.["standalone sibling boundary"] === true
+    && Boolean(entry)
+    && Boolean(unit)
+    && standaloneAgendaCodeMatchesItem(entry, unit);
+}
+
+export function isValidatedExplicitSiblingBoundary(candidate, entry, unit, canonical = {}) {
+  if (candidate?.["explicit sibling code candidate"] !== true
+    || !entry
+    || !unit
+    || !spokenAgendaCodeMatchesItem(entry, unit)) return false;
+  return !unitContainsMultipleCanonicalAgendaCodes(unit.text, canonical)
+    && !unitIsPriorItemAction(unit.text);
+}
+
+export function unitContainsMultipleCanonicalAgendaCodes(text, canonical) {
+  const terms = evidenceKey(text).split(" ").filter(Boolean);
+  const canonicalItems = new Set((canonical?.items || []).map((entry) => entry.item));
+  const found = new Set();
+  for (let start = 0; start < terms.length; start += 1) {
+    for (let length = 1; length <= 3 && start + length <= terms.length; length += 1) {
+      const key = itemKey(spokenAgendaItemKey(terms.slice(start, start + length).join(" ")));
+      if (canonicalItems.has(key) && key.includes(".")) found.add(key);
+    }
+  }
+  return found.size > 1;
+}
+
+export function unitIsPriorItemAction(text) {
+  return /\b(?:motion\s+to|defer(?:red|s)?|call\s+the\s+question|all\s+in\s+favo(?:u)?r|amendment|vote|carried|defeated)\b/iu.test(clean(text));
+}
+
+export function hasEarlierExplicitAgendaReturn(entry, candidate, units = []) {
+  if (!entry || !candidate) return false;
+  const index = units.findIndex((unit) => unit["atomic unit id"] === candidate["atomic unit id"]);
+  if (index < 0) return false;
+  return units.slice(0, index).some((unit) =>
+    spokenAgendaCodeMatchesItem(entry, unit)
+      && /\b(?:go|went|going)\s+back\s+to\b|\breturn(?:ed|ing)?\s+to\b/iu.test(clean(unit.text)),
+  );
+}
+
+export function isGroupedChildListPreview(entry, candidate, canonical, units) {
+  if (!entry?.substantive || !entry.item.includes(".")) return false;
+  const parent = entry.item.replace(/\.[^.]+$/u, "");
+  const siblings = (canonical?.items || []).filter((item) => item.item !== entry.item
+    && item.item.replace(/\.[^.]+$/u, "") === parent);
+  if (siblings.length < 1) return false;
+  const index = units.findIndex((unit) => unit["atomic unit id"] === candidate?.["atomic unit id"]);
+  if (index < 0) return false;
+  const context = units.slice(index, Math.min(units.length, index + 8))
+    .map((unit) => unit.text)
+    .join(" ");
+  const siblingTitles = siblings.filter((sibling) =>
+    structuredTitleHasDistinctiveLiteralSupport(sibling.title, context),
+  );
+  return siblingTitles.length >= 2;
+}
+
+function focusedRecoveryBoundaryHasDirectSupport(entry, unit) {
+  if (!entry || !unit) return false;
+  const attachmentBacked = Array.isArray(entry.attachments) && entry.attachments.length > 0;
+  const titleSupport = attachmentBacked
+    ? structuredTitleHasDistinctiveLiteralSupport(entry.title, unit.text)
+    : structuredTitleHasStrongLiteralSupport(entry.title, unit.text);
+  if (titleSupport) return true;
+  // A substantive attachment-backed item must not be recovered from a
+  // neighboring span that happens to share one generic title word such as
+  // "community" or "services". Silent or skipped items remain eligible for
+  // reconciliation; only a distinctive title match or an exact spoken item
+  // code may establish executable ownership.
+  if (!entry.substantive && entry["minutes like"] !== true
+    && structuredTitleHasLiteralSupport(entry.title, unit.text)) return true;
+  return spokenAgendaCodeMatchesItem(entry, unit);
+}
+
+function soleChildParentFor(entry, canonical) {
+  if (!entry?.item?.includes(".")) return null;
+  const parentItem = entry.item.split(".").slice(0, -1).join(".");
+  const parent = canonical?.items?.find((candidate) => candidate.item === parentItem);
+  if (!parent || parent.substantive === true) return null;
+  const children = canonical.items.filter((candidate) =>
+    candidate.level === parent.level + 1 && candidate.item.startsWith(`${parent.item}.`),
+  );
+  return children.length === 1 && children[0].item === entry.item ? parent : null;
+}
+
+function isSoleChildParentBoundary(entry, candidate, canonical) {
+  return candidate?.["sole child parent boundary"] === true
+    && Boolean(soleChildParentFor(entry, canonical));
+}
+
+export function candidateHasDirectStructuredSupport(entry, candidate, units = [], canonical = null) {
+  if (!entry) return false;
+  const index = units.findIndex((unit) => unit["atomic unit id"] === candidate?.["atomic unit id"]);
+  if (!Number.isInteger(index)) return false;
+  const parent = canonical?.items?.find((item) => item.item === entry.item.split(".").slice(0, -1).join("."));
+  const childOfSubstantiveParent = Boolean(parent?.substantive && !entry.substantive);
+  if (childOfSubstantiveParent) {
+    const context = units.slice(index, Math.min(units.length, index + 8))
+      .map((unit) => unit.text)
+      .join(" ");
+    // A child of an attachment-backed parent is a real executable boundary
+    // only when the transcript distinguishes that child by its own title or
+    // spoken code. Otherwise the parent's structured attachment owns the
+    // chronology and the child remains source context.
+    return spokenAgendaCodeMatchesItem(entry, units[index])
+      || structuredChildTitleHasDistinctiveLiteralSupport(entry.title, context);
+  }
+  if (!entry.substantive) return true;
+  if (candidate?.["sole child parent boundary"] === true
+    && (!canonical || soleChildParentFor(entry, canonical))) return true;
+  // A spoken "Item 10A" can be a reference nested inside a minutes item,
+  // rather than the executable boundary of canonical item 10.a.  Structured
+  // eScribe identity owns that distinction.  Require the target's own title
+  // to appear in the nearby transition before accepting a referenced code as
+  // an attachment-backed boundary.
+  if (isReferencedAgendaCodeBoundary(entry, candidate, units)) return false;
+  if (unitIsPriorItemAction(units[index].text)
+    && hasEarlierExplicitAgendaReturn(entry, candidate, units)) return false;
+  return focusedRecoveryBoundaryHasDirectSupport(entry, units[index]);
+}
+
+export function normalizeClippedRecordingHierarchyCandidates({ candidates = [], canonical, units = [], meetingScopeAudit = {} } = {}) {
+  const source = Array.isArray(candidates) ? candidates : [];
+  if (meetingScopeAudit["recording begins mid-meeting"] !== true || !units.length) return source;
+  const indexById = new Map(units.map((unit, index) => [unit["atomic unit id"], index]));
+  const canonicalByItem = new Map((canonical?.items || []).map((entry) => [entry.item, entry]));
+  const substantiveAncestors = (item) => {
+    const parts = String(item || "").split(".");
+    const ancestors = [];
+    for (let length = parts.length - 1; length > 0; length -= 1) {
+      const ancestor = canonicalByItem.get(parts.slice(0, length).join("."));
+      if (ancestor?.substantive) ancestors.push(ancestor);
+    }
+    return ancestors;
+  };
+  const ownerSet = new Map();
+  for (const candidate of source) {
+    for (const owner of substantiveAncestors(candidate["agenda item"])) ownerSet.set(owner.item, owner);
+  }
+  if (ownerSet.size !== 1) return source;
+  const owner = [...ownerSet.values()][0];
+  const scopeAtomicId = meetingScopeAudit["scope atomic start"] || units[0]["atomic unit id"];
+  const scopeIndex = indexById.get(scopeAtomicId);
+  if (!Number.isInteger(scopeIndex)) return source;
+  const normalized = [];
+  let ownerBoundary = source.find((candidate) => candidate["agenda item"] === owner.item);
+  if (!ownerBoundary) {
+    ownerBoundary = {
+      "agenda item": owner.item,
+      "announced topic": owner.title,
+      "atomic unit id": scopeAtomicId,
+      role: "other",
+      "evidence quote": units[scopeIndex].text,
+      confidence: Number(meetingScopeAudit.confidence || 0.95),
+      "meeting scope boundary": true,
+      "recording begins mid-meeting": true,
+      "semantic verification": `${meetingScopeAudit["verification method"] || "configured text model scope audit"}; structured attachment owner for clipped recording start`,
+    };
+  } else {
+    ownerBoundary = {
+      ...ownerBoundary,
+      "atomic unit id": scopeAtomicId,
+      "evidence quote": units[scopeIndex].text,
+      confidence: Math.max(Number(ownerBoundary.confidence || 0), Number(meetingScopeAudit.confidence || 0.95)),
+      "meeting scope boundary": true,
+      "recording begins mid-meeting": true,
+      "semantic verification": `${ownerBoundary["semantic verification"] || "configured text model boundary"}; structured attachment owner for clipped recording start`,
+    };
+  }
+  normalized.push(ownerBoundary);
+  for (const candidate of source) {
+    if (candidate === ownerBoundary || candidate["agenda item"] === owner.item) continue;
+    const entry = canonicalByItem.get(candidate["agenda item"]);
+    if (entry && substantiveAncestors(entry.item).some((ancestor) => ancestor.item === owner.item)
+      && !candidateHasDirectStructuredSupport(entry, candidate, units, canonical)) continue;
+    normalized.push(candidate);
+  }
+  return normalized.sort((left, right) => Number(left["atomic unit id"]?.slice(7) || 0) - Number(right["atomic unit id"]?.slice(7) || 0));
+}
+
+export function isReferencedAgendaCodeBoundary(entry, candidate, units = []) {
+  if (!entry?.substantive || !candidate) return false;
+  const index = units.findIndex((unit) => unit["atomic unit id"] === candidate["atomic unit id"]);
+  if (index < 0) return false;
+  const unitText = clean(units[index]?.text);
+  if (!/\bitem\b/iu.test(unitText) || !spokenAgendaCodeMatchesItem(entry, units[index])) return false;
+  const referencedContext = /\b(?:contained\s+within|within\s+(?:the\s+)?minutes?|from\s+(?:the\s+)?(?:minutes?|.+?\bmeeting)|brought\s+back\s+to\s+(?:the\s+)?(?:council|committee)\s+for\s+consideration|previously\s+(?:discussed|considered|heard))\b/iu.test(unitText);
+  if (!referencedContext) return false;
+  const context = units.slice(index, Math.min(units.length, index + 9))
+    .map((unit) => unit.text)
+    .join(" ");
+  return !structuredTitleHasStrongLiteralSupport(entry.title, context);
+}
+
 export function competingCanonicalIdentityHasDirectSupport({ target, competing, transcriptSpan } = {}) {
   if (!target || !competing || target.item === competing.item) return false;
-  const ignored = new Set([
-    "agenda", "business", "city", "committee", "correspondence", "council", "county", "discussion",
-    "item", "meeting", "minutes", "operations", "presentation", "regular", "report", "reports", "staff", "whole",
-  ]);
-  const meaningfulTerms = (title) => evidenceKey(title).split(" ").filter((term) => term.length >= 4 && !ignored.has(term));
-  const competingTerms = meaningfulTerms(competing.title);
-  if (!competingTerms.length) return false;
-  const spanTerms = new Set(evidenceKey(transcriptSpan).split(" "));
-  const competingDirect = competingTerms.some((term) => spanTerms.has(term));
-  const targetTerms = meaningfulTerms(target.title);
-  const targetDirect = targetTerms.some((term) => spanTerms.has(term));
+  // One generic title word must not steal an explicit item transition. For
+  // example, "Deputy Mayor" is common council language, not direct evidence
+  // of a report titled "Strong Mayor Powers". Keep exact title phrases valid,
+  // but require multiple distinctive title terms for a paraphrased identity.
+  const competingDirect = structuredTitleHasDistinctiveLiteralSupport(competing.title, transcriptSpan);
+  const targetDirect = structuredTitleHasDistinctiveLiteralSupport(target.title, transcriptSpan);
   return competingDirect && !targetDirect;
 }
 
@@ -527,6 +792,8 @@ function wholeChronologyPrompt(canonical, units) {
     "Return every major transition in order, including public forum, deputations, staff reports, additional business, notices, and adjournment.",
     "Keep consecutive canonical sibling items separate even when the same presenter continues. An explicit next item code, second part, next matter, or changed named subject begins the sibling at that transition.",
     "Ignore headings explicitly empty or skipped. Parent category headings do not own discussion when a named child item does.",
+    "A grouped consent/list preamble that names several reports is preview context, not the executable start of each pulled report. When the chair later returns to one listed item, keep the later explicit return/report transition as that item's occurrence and preserve it as a revisit rather than collapsing it into the list preamble.",
+    "When an item is revisited after intervening business, return both the earlier and later boundaries only when both are genuine transitions; never let a generic speaker name or one shared title word replace the later explicit item-code return.",
     "Each boundary must be the earliest exact atomic unit where the item starts, including the chair's transition.",
     "If the chronology shows a target-named quorum wait followed by a target-named no-quorum adjournment before any agenda discussion, treat this as an aborted meeting: return procedural boundaries for the opening/quorum item and the adjournment item when directly evidenced, and mark all intervening agenda items skipped during reconciliation. Do not collapse the whole recording into one boundary.",
     "Use only canonical agenda identities. Copy the complete literal text of the named atomic unit as evidence.",
@@ -543,12 +810,23 @@ export function buildMeetingScopeStartPrompt({
   meetingLabel = "",
   window,
   retryReason = "",
+  allowMidMeetingStart = false,
+  midMeetingItems = [],
 } = {}) {
   const label = clean(meetingLabel);
   // Scope windows are already bounded by buildOverlappingWindows. Keep the
   // complete bounded chronology on retry so an opening that omits formal
   // call-to-order wording can still be corroborated by later canonical items.
   const transcriptWindowText = window?.text || "";
+  const clippedRecordingRules = allowMidMeetingStart ? [
+    "This first captured window may begin in the middle of the target meeting after earlier procedural items were not recorded.",
+    "Use the distinctive structured substantive item evidence below to corroborate the target identity, but do not move the boundary forward to the first title mention.",
+    "For this clipped-recording retry, the absence of call to order, quorum, minutes, and other opening items is expected. Do not return found=false merely because the transcript contains only substantive discussion.",
+    "If no different live meeting is named and this is the first available atomic unit, return found=true for the earliest available atomic unit as the captured recording start. The first unit need not contain the substantive title; copy literal evidence from that same first unit and use later title evidence only for identity.",
+    "Mark the reason as a clipped or mid-meeting recording start. This does not claim that omitted earlier agenda business was recorded.",
+    "Return the additional field \"recording begins mid-meeting\":true for this case.",
+    `Distinctive structured substantive items echoed in this window:\n${agendaText(midMeetingItems)}`,
+  ] : [];
   return [
     `Locate where the ${label} meeting begins in this transcript window.`,
     "The recording may begin with a different council or committee meeting. Do not treat shared agenda vocabulary as proof that the target meeting has begun.",
@@ -563,6 +841,7 @@ export function buildMeetingScopeStartPrompt({
     "Opening-sequence evidence must include multiple distinct canonical items such as attendance, land acknowledgement, declarations, minutes, bylaws, or news; one generic phrase is insufficient.",
     "When the first in-scope units contain a call to order followed in order by recognizable canonical opening matters such as O Canada, roll call, land acknowledgement, declarations, and minutes, treat that earliest call-to-order unit as the target start unless those units explicitly name a different live meeting. Do not skip it merely because a later Committee of the Whole handoff appears in the same window.",
     "An interrupted or aborted meeting is an exception to the multi-item opening-sequence requirement only when the transcript directly names the target body in a quorum or no-quorum announcement and then records that meeting's adjournment. The earliest target-specific quorum-wait or no-quorum unit is the recording scope start even if no formal call to order or agenda item occurred; return found=true for that unit and do not require agenda discussion that never occurred.",
+    ...clippedRecordingRules,
     "Choose the exact call-to-order atomic unit when it is present. Copy a literal substring from that same unit.",
     "If a call-to-order phrase is split across short atomic units or followed immediately by declarations, minutes, or other opening matters, bind the meeting start to the first unit of the validated opening sequence rather than the later phrase or declaration unit.",
     "Return only {\"found\":true,\"atomic unit id\":\"atomic_000123\",\"evidence quote\":\"call to order this committee\",\"reason\":\"named target meeting begins\",\"confidence\":0.95}.",
@@ -576,10 +855,16 @@ export function buildMeetingScopeStartPrompt({
       "The complete bounded transcript window is supplied below; use later opening-item evidence in that window when the first few atomic units are only introductions or housekeeping.",
       "A later declaration, report introduction, or presenter handoff cannot be the meeting start when an earlier opening sequence is present.",
       "If the supplied chronology contains a target-named quorum wait followed by a target-named no-quorum adjournment, accept the earliest target-named quorum unit as the scope start even though the meeting never reached its agenda.",
+      ...(allowMidMeetingStart ? [
+        "The first captured audio may begin after the target meeting's opening. If the first available atomic unit is followed by distinctive structured substantive-item evidence and no different live meeting is named, accept that first available unit as the clipped recording start.",
+        "The absence of opening items is expected in this bounded retry: do not return found=false solely because the transcript begins with substantive presentation or report discussion.",
+        "Do not require the first evidence quote to contain the substantive title, and do not move the boundary to a later title mention.",
+      ] : []),
       `Previous rejection reason: ${retryReason}`,
     ].join("\n") : "",
     "Target canonical agenda:",
     agendaText(canonical?.items?.slice(0, 8) || []),
+    ...(midMeetingItems.length ? ["Distinctive substantive agenda evidence:", agendaText(midMeetingItems)] : []),
     `Transcript ${window?.["window id"] || ""}:`,
     transcriptWindowText,
   ].join("\n\n");
@@ -606,8 +891,13 @@ export async function locateCanonicalMeetingScopeStart({
     };
   }
   const windows = buildOverlappingWindows(units, {
-    maxWords: Number(process.env.AGENDA_SCOPE_WINDOW_WORDS || 1200),
-    overlapWords: Number(process.env.AGENDA_SCOPE_WINDOW_OVERLAP_WORDS || 250),
+    // Scope discovery is a small opening-identity task, not whole-meeting
+    // summarization. Keep the default window below the point where the local
+    // text model starts answering with a meeting summary instead of the
+    // requested boundary JSON. Later windows still cover a target that begins
+    // after a preceding meeting, while overlap preserves handoff evidence.
+    maxWords: Number(process.env.AGENDA_SCOPE_WINDOW_WORDS || 600),
+    overlapWords: Number(process.env.AGENDA_SCOPE_WINDOW_OVERLAP_WORDS || 180),
   });
   const unitIndex = new Map(units.map((unit, index) => [unit["atomic unit id"], index]));
   const canonicalAtomicId = (candidateId) => {
@@ -619,17 +909,41 @@ export async function locateCanonicalMeetingScopeStart({
     return unitIndex.has(normalized) ? normalized : exact;
   };
   for (const window of windows) {
+    const isFirstCapturedWindow = Number(window["atomic start"]) === 0;
+    const midMeetingItems = isFirstCapturedWindow
+      ? (canonical?.items || []).filter((entry) => entry.substantive
+        && structuredTitleHasDistinctiveLiteralSupport(entry.title, window.text))
+      : [];
+    const allowMidMeetingStart = midMeetingItems.length > 0;
     let retryReason = "";
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    for (let attempt = 1; attempt <= (allowMidMeetingStart ? 3 : 2); attempt += 1) {
       const parsed = scopeStartProvider
-        ? await scopeStartProvider({ canonical, units, meetingLabel: label, window, attempt, retryReason })
+        ? await scopeStartProvider({
+          canonical,
+          units,
+          meetingLabel: label,
+          window,
+          attempt,
+          retryReason,
+          allowMidMeetingStart,
+          midMeetingItems,
+        })
         : await callOllamaJson({
           ollamaUrl,
           llmModel,
           system: attempt === 1
             ? "You locate the exact start of one municipal meeting inside a possibly combined recording. Return strict JSON only."
-            : "You adjudicate a rejected municipal meeting-start decision against the complete chronology and authoritative canonical agenda. Return strict JSON only.",
-          prompt: buildMeetingScopeStartPrompt({ canonical, meetingLabel: label, window, retryReason }),
+            : attempt === 2
+              ? "You adjudicate a rejected municipal meeting-start decision against the complete chronology and authoritative canonical agenda. Return strict JSON only."
+              : "You adjudicate whether the first captured segment begins mid-meeting, using distinctive structured agenda evidence and literal chronology. Return strict JSON only.",
+          prompt: buildMeetingScopeStartPrompt({
+            canonical,
+            meetingLabel: label,
+            window,
+            retryReason,
+            allowMidMeetingStart,
+            midMeetingItems,
+          }),
           attempts: 3,
         });
       if (/^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_DEBUG || ""))) {
@@ -692,10 +1006,19 @@ export async function locateCanonicalMeetingScopeStart({
               `Proposed opening: ${atomicId}`,
               "Accept only if this unit begins the target meeting. Reject when the opening explicitly names a different live council or committee meeting, even if that other meeting uses overlapping item numbers or civic vocabulary.",
               "The target need not be named aloud: accept an unnamed opening when the immediate following units corroborate the target's canonical opening sequence. Do not reject a direct recording start merely because the formal meeting name is absent.",
+              "The structured eScribe agenda is authoritative for the target meeting identity. In a direct recording start, an ASR spelling or municipality-name substitution is not, by itself, evidence of a different live meeting; require an explicit separate-body handoff or a distinct meeting opening before rejecting the candidate.",
+              "Reject only when the chronology directly establishes a different live meeting before this candidate, such as that body's own named call to order or an explicit handoff. Do not reject solely because one ASR proper noun does not exactly match the generic target label.",
               "For a direct recording start, reject a proposed later first-agenda-item unit when earlier units are coherent welcome, introductions, quorum, or opening housekeeping for the same target and no different meeting is named; the scope anchor is the earliest coherent opening chronology, not the first literal agenda label.",
               "For an interrupted meeting, accept a target-specific shortened body reference such as an art-gallery committee when the same chronology contains the target's quorum wait and no-quorum adjournment; the structured meeting identity remains authoritative.",
+              ...(allowMidMeetingStart ? [
+                "This candidate is explicitly marked as a clipped recording start. The source may begin with substantive discussion after omitted opening business; accept the earliest captured unit when distinctive structured substantive evidence follows and no different live meeting is named.",
+              ] : []),
               "A later reference to, report from, or minutes of the target body does not make an earlier different meeting the target meeting.",
+              `Authoritative structured eScribe source type: ${clean(canonical?.sourceType) || "unknown"}; source reference: ${clean(canonical?.sourcePath) || "unknown"}. Treat this structured source as the identity authority when ASR proper nouns drift.`,
               `Target opening agenda items: ${agendaText(canonical?.items?.slice(0, 8) || [])}`,
+              ...(midMeetingItems.length ? [
+                `Distinctive substantive agenda evidence: ${agendaText(midMeetingItems)}`,
+              ] : []),
               "Return only {\"accepted\":true,\"confidence\":0.95,\"reason\":\"target identity is direct or corroborated by the opening sequence\"} or {\"accepted\":false,\"confidence\":0.95,\"reason\":\"different named meeting begins here\"}.",
               identityContext,
             ].join("\n\n"),
@@ -713,6 +1036,7 @@ export async function locateCanonicalMeetingScopeStart({
         "prefix atomic start": index ? units[0]["atomic unit id"] : "",
         "prefix atomic end": index ? units[index - 1]["atomic unit id"] : "",
         "out of scope": index > 0,
+        "recording begins mid-meeting": parsed?.["recording begins mid-meeting"] === true,
         reason,
         "evidence quote": evidenceQuote,
         confidence,
@@ -935,6 +1259,7 @@ function normalizeCandidate(raw, windowId) {
     "evidence quote": clean(raw?.["evidence quote"]),
     confidence: Number.isFinite(Number(raw?.confidence)) ? Number(raw.confidence) : 0.75,
     "agenda item raw": clean(raw?.["agenda item"]),
+    "sole child parent boundary": raw?.["sole child parent boundary"] === true,
     "window id": windowId,
   };
 }
@@ -947,7 +1272,11 @@ export function validateBoundaryCandidate(candidate, canonical, units) {
   if (index < 0) return "unknown atomic unit";
   if (!(candidate.confidence >= 0 && candidate.confidence <= 1)) return "invalid confidence";
   const quote = evidenceKey(candidate["evidence quote"]);
-  if (quote.length < 8 || !evidenceKey(units[index].text).includes(quote)) return "evidence quote is not literal in atomic unit";
+  const entry = canonical.items.find((item) => item.item === candidate["agenda item"]);
+  const shortStandaloneEvidence = isValidatedStandaloneSiblingBoundary(candidate, entry, units[index]);
+  if ((quote.length < 8 && !shortStandaloneEvidence) || !evidenceKey(units[index].text).includes(quote)) {
+    return "evidence quote is not literal in atomic unit";
+  }
   return "";
 }
 
@@ -1028,6 +1357,10 @@ export async function verifyCandidateSemantics({
   const accepted = [];
   for (const candidate of proposed) {
     const index = indexById.get(candidate["atomic unit id"]);
+    const targetEntry = canonical.items.find((entry) => entry.item === candidate["agenda item"]);
+    if (targetEntry?.substantive && isReferencedAgendaCodeBoundary(targetEntry, candidate, units)) {
+      continue;
+    }
     // Agenda introductions often span several short ASR rows: the chair names
     // the item type first, then the presenter or report title. Keep the exact
     // proposed atomic unit as the boundary while giving the semantic verifier
@@ -1074,7 +1407,6 @@ export async function verifyCandidateSemantics({
     }, canonical), units);
     const classifiedIndex = indexById.get(classified["atomic unit id"]);
     const priorOccurrenceIndex = indexById.get(candidate["prior occurrence atomic unit id"]);
-    const targetEntry = canonical.items.find((entry) => entry.item === candidate["agenda item"]);
     const movedEarlierWithoutDirectSupport = candidate["focused recovery candidate"] === true
       && targetEntry?.substantive === true
       && Number.isInteger(classifiedIndex)
@@ -1138,6 +1470,7 @@ export async function auditWholeChronologyCandidates({
       firstOccurrenceByItem.set(candidate["agenda item"], candidate);
     }
   }
+  const competingSelections = [];
   const audited = await verifyCandidateSemantics({
     proposed: chronologyCandidates,
     canonical,
@@ -1145,18 +1478,39 @@ export async function auditWholeChronologyCandidates({
     llmModel,
     ollamaUrl,
     log,
+    competingSelections,
   });
+  const retainedCompeting = competingSelections
+    .map((selection) => selection.classified)
+    .filter((candidate) => {
+      const entry = canonical.items.find((item) => item.item === candidate?.["agenda item"]);
+      if (!entry || validateBoundaryCandidate(candidate, canonical, units)) return false;
+      return !entry.substantive || candidateHasDirectStructuredSupport(entry, candidate, units, canonical);
+    })
+    .map((candidate) => ({
+      ...candidate,
+      "semantic verification": verificationMethod(llmModel, "complete-chronology blind reclassification with direct structured evidence"),
+    }));
+  if (retainedCompeting.length) {
+    log(`[agenda-boundaries] retained ${retainedCompeting.length} complete-chronology boundaries after blind identity reclassification`);
+  }
   // Keep an independently generated chronology boundary when the transcript
   // itself contains distinctive terms from a substantive structured-agenda
-  // title.  The blind audit is still authoritative for unrelated/ambiguous
-  // mentions (and therefore preserves the NONE rejection contract), but a
-  // terse chair transition can otherwise be discarded simply because the
-  // verifier's small context window does not include the later presenter
-  // name.  Requiring literal title support keeps this recovery evidence-based
-  // rather than acting as a deterministic agenda assignment.
+  // title or an exact spoken item code. The latter matters for revisited
+  // items: "go back to [item]" is often separated from the report title by
+  // several discussion units, so a small blind-audit context can otherwise
+  // discard the only boundary that protects the later occurrence. This is
+  // still evidence-based because the candidate came from the complete LLM
+  // chronology pass and the code/title evidence is literal in the transcript.
   const auditedKeys = new Set(audited.map((candidate) =>
     `${candidate["agenda item"]}|${candidate["atomic unit id"]}`,
   ));
+  const retainedScope = chronologyCandidates.filter((candidate) => {
+    const key = `${candidate["agenda item"]}|${candidate["atomic unit id"]}`;
+    return candidate["meeting scope boundary"] === true
+      && candidate["recording begins mid-meeting"] === true
+      && !auditedKeys.has(key);
+  });
   const retainedDirect = chronologyCandidates.filter((candidate) => {
     const key = `${candidate["agenda item"]}|${candidate["atomic unit id"]}`;
     if (auditedKeys.has(key)) return false;
@@ -1167,19 +1521,24 @@ export async function auditWholeChronologyCandidates({
     const context = units.slice(Math.max(0, index - 2), Math.min(units.length, index + 7))
       .map((unit) => unit.text)
       .join(" ");
-    return structuredTitleHasStrongLiteralSupport(entry.title, context);
+    return candidateHasDirectStructuredSupport(entry, candidate, units, canonical)
+      && structuredTitleHasStrongLiteralSupport(entry.title, context);
   });
   if (retainedDirect.length) {
     log(`[agenda-boundaries] retained ${retainedDirect.length} chronology boundaries with direct structured-title evidence after blind audit`);
   }
+  if (retainedScope.length) {
+    log(`[agenda-boundaries] retained ${retainedScope.length} validated clipped-recording first boundaries after blind audit`);
+  }
   const chronologySet = new Set(chronologyCandidates);
   const retained = source.filter((candidate) => !chronologySet.has(candidate));
   log(`[agenda-boundaries] independent blind audit retained ${audited.length}/${chronologyCandidates.length} complete-chronology candidates`);
-  return [...retained, ...audited, ...retainedDirect]
+  return [...retained, ...audited, ...retainedCompeting, ...retainedDirect, ...retainedScope]
     .sort((a, b) => Number(a["atomic unit id"]?.slice(7) || 0) - Number(b["atomic unit id"]?.slice(7) || 0));
 }
 
 async function verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl }) {
+  if (entry?.substantive && !candidateHasDirectStructuredSupport(entry, candidate, units)) return false;
   const index = units.findIndex((unit) => unit["atomic unit id"] === candidate["atomic unit id"]);
   const context = units.slice(Math.max(0, index - 5), Math.min(units.length, index + 6));
   const parsed = await callOllamaJson({
@@ -1192,6 +1551,15 @@ async function verifyTargetedRecovery({ candidate, entry, units, llmModel, ollam
       "Does the proposed atomic unit, read with the immediately following ASR fragments, begin this exact agenda item?",
       "ASR can split one chair transition across several very short units. Accept when the proposed unit and the next few fragments collectively announce the item now, even if the proposed fragment alone is grammatically incomplete.",
       "Accept a chair/new presenter introduction that starts the item now, an explicit statement that this exact item is empty, or a clear next-item/second-request/return-to-item transition that turns the discussion to this exact item (even when staff, rather than the chair, says the transition). Reject previews saying an item will happen later or in a minute, discussion inside the previous item, an ending/thank-you, a passing mention, or language merely related to the title.",
+      candidate["sole child parent boundary"] === true
+        ? "This candidate is explicitly marked as a sole-child parent boundary. The structured parent has exactly one child, so accept the earliest executed parent transition as the child start when the transcript continues that sole child and does not introduce a different sibling. The child title need not be repeated at that transition."
+        : "",
+      "When the exact spoken sibling code appears in a direct handoff such as 'hold on, ten D' and the immediately following units identify that item's presenter or report topic, accept that code unit as the executable boundary even if the code unit itself does not repeat the full structured title. Do not move it forward to a later recommendation, motion, or report detail.",
+      "Reject a grouped parent, consent, or list preamble that only enumerates several child subjects. That is preview context rather than the executable start; when the item is later pulled or revisited, accept only the later explicit return, presenter handoff, or report transition.",
+      "An item code embedded in a range, consent motion, receive/approve list, pull-or-except list, separate-vote request, or vote result is not by itself a boundary. Reject those list-only code mentions unless the same unit explicitly hands discussion to this exact item or begins its named report/presenter.",
+      candidate["explicit revisit candidate"] === true
+        ? "This candidate came from a complete-chronology explicit-code revisit scan. Treat a direct return such as 'go back to' or 'return to' this item as the later boundary, but reject a motion, deferral, amendment, vote, question, or result that merely repeats the code inside the prior item's discussion."
+        : "",
       "Reject a different explicitly spoken report code or title even when its subject is related to the canonical item.",
       "Return only {\"accepted\":true,\"confidence\":0.95} or {\"accepted\":false,\"confidence\":0.95}.",
       context.map((unit) => `[${unit["atomic unit id"]}] ${unit.speaker}: ${unit.text}`).join("\n"),
@@ -1220,6 +1588,7 @@ export async function refineFocusedRecoveryEarliest({
     words += clean(units[contextStart]?.text).split(/\s+/u).filter(Boolean).length;
   }
   const context = units.slice(contextStart, Math.min(units.length, proposedIndex + 9));
+  const soleChildParent = soleChildParentFor(entry, canonical);
   const initialCompeting = directlySupportedCompetingIdentity({
     target: entry,
     canonical,
@@ -1245,6 +1614,9 @@ export async function refineFocusedRecoveryEarliest({
         "The chronology can contain several earlier named reports. Do not return the start of a different report merely because it is the first report in the supplied text.",
         "A chair saying next, another, one further report, or equivalent handoff together with the target subject is stronger start evidence than the later formal recommendation.",
         "The provisional boundary may be a later recommendation, statistic, question, answer, or detail inside the item. Do not repeat it when an earlier introduction exists.",
+        soleChildParent
+          ? `This target is the sole child ${entry.item} of ${soleChildParent.item} (${soleChildParent.title}). If the parent transition is the earliest executed start and no sibling can own it, preserve that parent transition even when the child title is not repeated.`
+          : "",
         attempt > 1
           ? "Exclude the recommendation wording and scan earlier for the chair's handoff to the next/further report or the presenter's first background sentence. The boundary must precede substantive background and recommendation details."
           : "",
@@ -1277,7 +1649,9 @@ export async function refineFocusedRecoveryEarliest({
         semanticallyValid = await boundaryVerifier({ candidate: refined, entry, units });
       } else if (Number.isInteger(refinedIndex)
         && (refinedIndex < proposedIndex || initialCompeting)
-        && (refinedIndex >= proposedIndex || focusedRecoveryBoundaryHasDirectSupport(entry, units[refinedIndex]))) {
+        && (refinedIndex >= proposedIndex
+          || isSoleChildParentBoundary(entry, refined, canonical)
+          || focusedRecoveryBoundaryHasDirectSupport(entry, units[refinedIndex]))) {
         // The boundary itself still comes from Qwen. This literal structured-
         // title check only validates that an earlier proposed transition leads
         // directly into the target, avoiding a proposal-biased verifier that
@@ -1335,8 +1709,9 @@ export async function refineFocusedRecoveryEarliest({
   return best;
 }
 
-async function promoteSingleChildCandidates({ candidates, canonical, units, llmModel, ollamaUrl, log }) {
+export async function promoteSingleChildCandidates({ candidates, canonical, units, llmModel, ollamaUrl, log }) {
   const out = [];
+  const indexById = new Map(units.map((unit, index) => [unit["atomic unit id"], index]));
   for (const candidate of candidates) {
     const parent = canonical.items.find((entry) => entry.item === candidate["agenda item"]);
     const children = parent
@@ -1347,6 +1722,16 @@ async function promoteSingleChildCandidates({ candidates, canonical, units, llmM
       continue;
     }
     const child = children[0];
+    const candidateIndex = indexById.get(candidate["atomic unit id"]);
+    const candidateUnit = Number.isInteger(candidateIndex) ? units[candidateIndex] : null;
+    // A generic parent heading is not evidence that its sole substantive child
+    // has begun. Keep the parent boundary as context and let the ordinary
+    // structured-identity recovery locate the child's actual transcript start.
+    // This prevents a parent list or preview from stealing a later child span.
+    if (!candidateUnit || !focusedRecoveryBoundaryHasDirectSupport(child, candidateUnit)) {
+      out.push(candidate);
+      continue;
+    }
     out.push({
       ...candidate,
       "agenda item": child.item,
@@ -1376,6 +1761,32 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
     const candidateIndex = indexById.get(candidate["atomic unit id"]);
     const candidateUnit = Number.isInteger(candidateIndex) ? units[candidateIndex] : null;
     const canonicalEntry = canonical.items.find((entry) => entry.item === candidate["agenda item"]);
+    // A clipped recording can begin inside a substantive item before its
+    // structured title is spoken. The scope and complete-chronology LLM
+    // decisions jointly establish that first captured unit; do not move it
+    // into a later title mention or require ordinary direct-title evidence.
+    if (candidate["meeting scope boundary"] === true
+      && candidate["recording begins mid-meeting"] === true) {
+      refined.push(candidate);
+      continue;
+    }
+    // A validated standalone sibling code is already an executable transition
+    // even when the code unit does not repeat the structured report title. A
+    // blind refinement can otherwise classify the surrounding discussion as
+    // the preceding sibling and erase the recovered split before
+    // reconciliation.
+    if (isValidatedStandaloneSiblingBoundary(candidate, canonicalEntry, candidateUnit)) {
+      refined.push(candidate);
+      continue;
+    }
+    // A verified sibling transition may include a short lead-in around the
+    // spoken code (for example, "hold on, ten D"), so it is not necessarily a
+    // standalone two-token unit. Preserve this directly audited transition
+    // through start refinement just as the compact-code path is preserved.
+    if (isValidatedExplicitSiblingBoundary(candidate, canonicalEntry, candidateUnit, canonical)) {
+      refined.push(candidate);
+      continue;
+    }
     // A direct-attachment item whose boundary unit literally names the
     // structured report is already the strongest available identity evidence.
     // Do not let a later, generic refinement response move it into the report
@@ -1385,6 +1796,11 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
       canonicalEntry?.substantive
       && candidateUnit
       && structuredTitleHasStrongLiteralSupport(canonicalEntry.title, `${candidate["evidence quote"] || ""} ${candidateUnit.text || ""}`),
+    );
+    const preserveDirectStructuredBoundary = Boolean(
+      directAttachmentBoundary
+      && candidateUnit
+      && structuredTitleHasStrongLiteralSupport(canonicalEntry.title, candidateUnit.text || candidate["evidence quote"] || ""),
     );
     // A direct attachment can still be introduced in a spoken list preamble
     // immediately before the preceding sibling's discussion. Keep the strong
@@ -1562,7 +1978,12 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
                 : Number(candidate.confidence || 1),
             ),
           }, units);
+          const auditedHasDirectStructuredSupport = Number.isInteger(auditedIndex)
+            && structuredTitleHasStrongLiteralSupport(canonicalEntry.title, units[auditedIndex]?.text || "");
           if (Number.isInteger(auditedIndex)
+            && (!preserveDirectStructuredBoundary
+              || auditedId === candidate["atomic unit id"]
+              || auditedHasDirectStructuredSupport)
             && !validateBoundaryCandidate(audited, { items: [target] }, units)
             && await verifyTargetedRecovery({ candidate: audited, entry: target, units, llmModel, ollamaUrl })) {
             proposal = audited;
@@ -1620,6 +2041,12 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
             : rangePreviousRaw;
           const rangeTargetIndex = indexById.get(rangeTargetId);
           const rangePreviousIndex = indexById.get(rangePreviousId);
+          const rangeTargetContext = Number.isInteger(rangeTargetIndex)
+            ? units.slice(rangeTargetIndex, Math.min(units.length, rangeTargetIndex + 10)).map((unit) => unit.text).join(" ")
+            : "";
+          const keepDirectStructuredBoundary = directAttachmentBoundary
+            && structuredTitleHasStrongLiteralSupport(canonicalEntry.title, candidateUnit?.text || candidate["evidence quote"] || "")
+            && !structuredTitleHasStrongLiteralSupport(canonicalEntry.title, rangeTargetContext);
           const rangeCandidate = alignEvidenceToAtomicUnit({
             ...candidate,
             "agenda item": target.item,
@@ -1637,6 +2064,7 @@ async function refineCandidateStarts({ candidates, canonical, units, llmModel, o
           if (Number.isInteger(rangeTargetIndex)
             && Number.isInteger(rangePreviousIndex)
             && rangeTargetIndex > rangePreviousIndex
+            && !keepDirectStructuredBoundary
             && !validateBoundaryCandidate(rangeCandidate, { items: [target] }, units)
             && await verifyTargetedRecovery({ candidate: rangeCandidate, entry: target, units, llmModel, ollamaUrl })) {
             proposal = rangeCandidate;
@@ -1929,9 +2357,23 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
   // evidence-based and works for arbitrary agenda numbering and meeting
   // formats.
   const candidateHasDirectSupport = (entry, candidate) => {
-    if (!entry?.substantive) return true;
+    if (candidate?.["meeting scope boundary"] === true
+      && candidate?.["recording begins mid-meeting"] === true) return true;
+    if (isGroupedChildListPreview(entry, candidate, canonical, units)) return false;
+    if (isSoleChildParentBoundary(entry, candidate, canonical)) return true;
+    const requiredHeading = entry?.level === 1 && (
+      /^(?:public forum|by-?laws?|adjournment|matters postponed|motions? for which notice was previously given|discussion of additional business|additional business|notices? of motion)$/iu.test(clean(entry.title))
+    );
+    const requiresDirectSupport = entry?.substantive || entry?.["minutes like"] === true || requiredHeading;
+    if (requiredHeading && !requiredHeadingEvidenceIsLiteral(entry, candidate)) return false;
+    if (!requiresDirectSupport) return true;
     const index = units.findIndex((unit) => unit["atomic unit id"] === candidate?.["atomic unit id"]);
     if (index < 0) return false;
+    if (entry?.["minutes like"] === true) {
+      return focusedRecoveryBoundaryHasDirectSupport(entry, units[index]);
+    }
+    if (unitIsPriorItemAction(units[index].text)
+      && hasEarlierExplicitAgendaReturn(entry, candidate, units)) return false;
     const context = units.slice(index, Math.min(units.length, index + 7))
       .map((unit) => unit.text)
       .join(" ");
@@ -1945,26 +2387,99 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
     return owns && candidateHasDirectSupport(entry, candidate);
   });
   const requiredChronologyHeading = (entry) => entry.level === 1 && (
-    /^(?:public forum|by-?laws?|adjournment)$/iu.test(clean(entry.title))
+    /^(?:public forum|by-?laws?|adjournment|matters postponed|motions? for which notice was previously given|discussion of additional business|additional business|notices? of motion)$/iu.test(clean(entry.title))
   );
   const requiredHeadingEvidenceIsLiteral = (entry, candidate) => {
     const index = units.findIndex((unit) => unit["atomic unit id"] === candidate["atomic unit id"]);
     const context = units.slice(Math.max(0, index - 1), Math.min(units.length, index + 3))
       .map((unit) => clean(unit.text))
       .join(" ");
-    if (/^public forum$/iu.test(clean(entry.title))) return /\bpublic forum\b/iu.test(context);
+    if (/^public forum$/iu.test(clean(entry.title))) {
+      const unitText = clean(units[index]?.text);
+      return /\bpublic forum\b/iu.test(unitText)
+        && !/\b(?:during|in) the public forum\b/iu.test(unitText)
+        && !/\b(?:anyone else|wish to speak|speak during)\b/iu.test(unitText);
+    }
     if (/^by-?laws?$/iu.test(clean(entry.title))) return /\bby-?laws\b/iu.test(context);
     if (/^adjournment$/iu.test(clean(entry.title))) return /\badjourn(?:ed|ment|ing)?\b/iu.test(context);
+    if (/^matters postponed$/iu.test(clean(entry.title))) return /\b(?:no )?matters postponed\b/iu.test(context);
+    if (/^motions? for which notice was previously given$/iu.test(clean(entry.title))) {
+      return /\bmotions? for which notice was previously given\b/iu.test(context);
+    }
+    if (/^(?:discussion of additional business|additional business)$/iu.test(clean(entry.title))) return /\badditional business\b/iu.test(context);
+    if (/^notices? of motion$/iu.test(clean(entry.title))) return /\bnotices? of motion\b/iu.test(context);
     return true;
   };
+  for (let index = out.length - 1; index >= 0; index -= 1) {
+    const candidate = out[index];
+    const entry = canonical.items.find((item) => item.item === candidate["agenda item"]);
+    const requiresDirectSupport = entry?.substantive || entry?.["minutes like"] === true;
+    const candidateUnit = units.find((unit) => unit["atomic unit id"] === candidate["atomic unit id"]);
+    if (requiresDirectSupport && candidateUnit
+      && (unitContainsMultipleCanonicalAgendaCodes(candidateUnit.text, canonical)
+        || isGroupedChildListPreview(entry, candidate, canonical, units)
+        || (unitIsPriorItemAction(candidateUnit.text)
+          && hasEarlierExplicitAgendaReturn(entry, candidate, units)))) {
+      out.splice(index, 1);
+      log(`[agenda-boundaries] removed list-only multi-item code ownership: ${entry.item}@${candidate["atomic unit id"]}`);
+      continue;
+    }
+    if (requiresDirectSupport && !candidateHasDirectSupport(entry, candidate)) {
+      out.splice(index, 1);
+      log(`[agenda-boundaries] removed unsupported substantive ownership: ${entry.item}@${candidate["atomic unit id"]}`);
+    }
+  }
   for (let index = out.length - 1; index >= 0; index -= 1) {
     const entry = canonical.items.find((item) => item.item === out[index]["agenda item"]);
     if (entry && requiredChronologyHeading(entry) && !requiredHeadingEvidenceIsLiteral(entry, out[index])) {
       out.splice(index, 1);
     }
   }
+  // A later report can be named in the source before the chair announces its
+  // item code. If an earlier, independently audited code transition exists,
+  // recover that true sibling start and discard the later interior candidate.
+  // This is general chronology evidence: the exact code is mapped to the
+  // structured agenda and the local model still audits whether it begins the
+  // item, so no prose or meeting-specific exception is introduced.
+  for (const entry of canonical.items.filter((item) => item.substantive)) {
+    const existing = out
+      .filter((candidate) => candidate["agenda item"] === entry.item && candidateHasDirectSupport(entry, candidate))
+      .map((candidate) => ({
+        candidate,
+        index: units.findIndex((unit) => unit["atomic unit id"] === candidate["atomic unit id"]),
+      }))
+      .filter((value) => value.index >= 0)
+      .sort((left, right) => left.index - right.index);
+    const firstOwnedIndex = existing[0]?.index ?? Number.POSITIVE_INFINITY;
+    for (const [index, unit] of units.entries()) {
+      if (index >= firstOwnedIndex
+        || !spokenAgendaCodeMatchesItem(entry, unit)
+        || unitContainsMultipleCanonicalAgendaCodes(unit.text, canonical)
+        || unitIsPriorItemAction(unit.text)) continue;
+      const candidate = {
+        "agenda item": entry.item,
+        "announced topic": entry.title,
+        "atomic unit id": unit["atomic unit id"],
+        role: "other",
+        "evidence quote": unit.text,
+        confidence: 0.95,
+        "explicit sibling code candidate": true,
+        "semantic verification": verificationMethod(llmModel, "literal explicit-sibling-code recovery with targeted audit"),
+      };
+      if (!candidateHasDirectSupport(entry, candidate)
+        || !await verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl })) continue;
+      for (let outIndex = out.length - 1; outIndex >= 0; outIndex -= 1) {
+        if (out[outIndex]["agenda item"] !== entry.item) continue;
+        const existingIndex = units.findIndex((item) => item["atomic unit id"] === out[outIndex]["atomic unit id"]);
+        if (existingIndex > index) out.splice(outIndex, 1);
+      }
+      out.push(candidate);
+      log(`[agenda-boundaries] recovered earlier explicit sibling code: ${entry.item}@${unit["atomic unit id"]}`);
+      break;
+    }
+  }
   const missing = canonical.items.filter(
-    (entry) => (entry.substantive || requiredChronologyHeading(entry)) && !hasOwnedCandidate(entry),
+    (entry) => shouldRecoverMissingCanonicalBoundary(entry) && !hasOwnedCandidate(entry),
   );
   if (/^(1|true|yes)$/iu.test(String(process.env.AGENDA_BOUNDARY_DEBUG || ""))) {
     log(`[agenda-boundaries][debug] focused missing items: ${missing.map((entry) => entry.item).join(", ")}`);
@@ -1972,16 +2487,46 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
   // Focused recovery needs enough surrounding chronology to connect a generic
   // chair introduction ("we have a deputation") with a presenter or report
   // title spoken a few rows later. The ordinary discovery windows remain
-  // compact; recovery uses wider overlapping windows without omitting any part
-  // of the meeting.
+  // compact; recovery uses bounded overlapping windows without omitting any
+  // part of the meeting. Keep requests near the complete-chronology window
+  // size so the local text model can finish strict JSON instead of timing out
+  // on an oversized recovery context.
   const recoveryWindows = buildOverlappingWindows(units, {
-    maxWords: Number(process.env.AGENDA_BOUNDARY_RECOVERY_WINDOW_WORDS || 5000),
-    overlapWords: Number(process.env.AGENDA_BOUNDARY_RECOVERY_WINDOW_OVERLAP_WORDS || 600),
+    maxWords: Number(process.env.AGENDA_BOUNDARY_RECOVERY_WINDOW_WORDS || 2500),
+    overlapWords: Number(process.env.AGENDA_BOUNDARY_RECOVERY_WINDOW_OVERLAP_WORDS || 400),
   });
   // Two independent passes substantially reduce misses from a long report
   // overshadowing a short chair transition, while keeping the model and
   // evidence contract unchanged.
   const recoveryAttempts = Math.max(1, Number(process.env.AGENDA_BOUNDARY_RECOVERY_ATTEMPTS || 2));
+
+  // A short standalone code is an executable sibling transition, not a
+  // consent-list mention. Recover it before broad LLM searches so one long
+  // pulled-item span cannot absorb a later canonical report whose chair
+  // announces only the compact code (for example, "11E."). The normal
+  // targeted LLM audit still verifies the start and rejects a false code.
+  for (const entry of missing) {
+    if (hasOwnedCandidate(entry)) continue;
+    for (const unit of units) {
+      if (!standaloneAgendaCodeMatchesItem(entry, unit)) continue;
+      const candidate = {
+        "agenda item": entry.item,
+        "announced topic": entry.title,
+        "atomic unit id": unit["atomic unit id"],
+        role: "other",
+        "evidence quote": unit.text,
+        confidence: 0.95,
+        "explicit standalone code candidate": true,
+        "standalone sibling boundary": true,
+        "semantic verification": verificationMethod(llmModel, "literal standalone-code sibling recovery"),
+      };
+      if (!candidateHasDirectSupport(entry, candidate)
+        || !await verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl })) continue;
+      out.push(candidate);
+      log(`[agenda-boundaries] recovered standalone canonical code: ${entry.item}@${unit["atomic unit id"]}`);
+      break;
+    }
+  }
 
   // Search broad chronology windows for all currently unowned canonical
   // items together. This lets Qwen see neighbouring transitions and avoids a
@@ -1989,6 +2534,12 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
   // still passes the same literal-evidence and targeted-start audits below.
   const broadMissing = missing.filter((entry) => !hasOwnedCandidate(entry));
   const broadRecovered = [];
+  const soleChildMissing = broadMissing
+    .map((entry) => {
+      const parent = soleChildParentFor(entry, canonical);
+      return parent ? `${entry.item} is the sole child of ${parent.item} (${parent.title})` : "";
+    })
+    .filter(Boolean);
   for (const window of recoveryWindows) {
     if (!broadMissing.some((entry) => !broadRecovered.some((candidate) => candidate["agenda item"] === entry.item))) break;
     const parsed = await callOllamaJson({
@@ -2000,7 +2551,10 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
         "Return only directly evidenced transitions; do not assign an item merely because it is next in the printed agenda.",
         "A chair announcement, named report/presenter, explicit item code, or changed named subject is direct evidence.",
         "Copy a complete literal evidence quote from the named atomic unit.",
-        "Return {\"transitions\":[{\"agenda item\":\"6.a\",\"atomic unit id\":\"atomic_000123\",\"role\":\"staff_report\",\"evidence quote\":\"literal text\",\"confidence\":0.95}]}; return an empty array when none begin here.",
+        soleChildMissing.length
+          ? `For these sole-child targets, a validated transition into the non-substantive parent may be the executable child boundary when no sibling exists. Mark that result with \"sole child parent boundary\":true and choose the earliest such parent transition: ${soleChildMissing.join("; ")}.`
+          : "",
+        "Return {\"transitions\":[{\"agenda item\":\"6.a\",\"atomic unit id\":\"atomic_000123\",\"role\":\"staff_report\",\"evidence quote\":\"literal text\",\"confidence\":0.95,\"sole child parent boundary\":false}]}; return an empty array when none begin here.",
         `Missing canonical items:\n${agendaText(broadMissing.filter((entry) => !broadRecovered.some((candidate) => candidate["agenda item"] === entry.item)))}`,
         `Transcript ${window["window id"]}:`,
         window.text,
@@ -2025,6 +2579,7 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
   }
   for (const entry of missing) {
     if (hasOwnedCandidate(entry)) continue;
+    const soleChildParent = soleChildParentFor(entry, canonical);
     const entryIndex = canonical.items.findIndex((candidate) => candidate.item === entry.item);
     const entryTitleKey = evidenceKey(entry.title);
     const pairedCall = canonical.items.slice(0, entryIndex).find((candidate) => {
@@ -2059,8 +2614,8 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
         // complete-chronology pass has already established the neighbouring
         // boundaries, so dozens of compact retries only repeat the same
         // evidence and monopolize the overnight GPU queue.
-        maxWords: Number(process.env.AGENDA_BOUNDARY_BOUNDED_RECOVERY_WORDS || 7000),
-        overlapWords: Number(process.env.AGENDA_BOUNDARY_BOUNDED_RECOVERY_OVERLAP_WORDS || 900),
+        maxWords: Number(process.env.AGENDA_BOUNDARY_BOUNDED_RECOVERY_WORDS || 3200),
+        overlapWords: Number(process.env.AGENDA_BOUNDARY_BOUNDED_RECOVERY_OVERLAP_WORDS || 500),
       })
       : [];
     const windowsToSearch = boundedWindows.length
@@ -2071,24 +2626,30 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
       const parsed = await callOllamaJson({
         ollamaUrl,
         llmModel,
-        system: "You recover one exact substantive municipal agenda boundary. Return strict JSON only.",
+        system: "You recover one exact municipal agenda boundary. Return strict JSON only.",
         prompt: [
           `Locate the exact start of canonical agenda item ${entry.item}: ${entry.title} in this transcript window.`,
           "The item may be revisited out of canonical order. Accept a chair explicitly returning to the item or introducing its recommendation/report.",
           "A consecutive sibling item presented by the same person still begins at its explicit item code, second-part transition, next matter, or changed named subject; do not select a later detail from inside that item.",
           "A spoken numeric agenda code may be rendered as words or compact letters by ASR (for example, 'Eleven A', '11 A', or '8C1'); map that spoken code to the matching canonical item when the subject agrees.",
-          "For a substantive child item, a generic parent/category heading is not its executable boundary; choose the unit that directly names the child code or a distinctive title term.",
+          "For a child item, a generic parent/category heading is not its executable boundary; choose the unit that directly names the child code or a distinctive title term.",
           "When a generic parent heading is followed by a distinct child code, keep the heading as parent context and start the child at the later explicit code or title unit.",
+          soleChildParent
+            ? `This target is the sole child ${entry.item} of non-substantive parent ${soleChildParent.item} (${soleChildParent.title}). If the transcript enters that parent and continues the sole child without another sibling, the earliest parent transition is the executable target boundary even when the child title is not repeated. Return \"sole child parent boundary\":true for that evidence and do not move it forward to a later report detail.`
+            : "",
           pairedCall ? `Do not select the earlier ${pairedCall.item}: ${pairedCall.title}. This target is the later discussion/execution after intervening agenda business.` : "",
           "Choose the earliest atomic unit in the transition, including a lead-in such as 'that allows us to move to', when the item name follows in the next few units.",
           "The evidence quote must be the complete literal text of the chosen atomic unit and contain at least three words.",
-          "Return strict JSON {\"transitions\":[{\"agenda item\":\"ITEM CODE\",\"announced topic\":\"short topic\",\"atomic unit id\":\"atomic_000123\",\"role\":\"staff_report\",\"evidence quote\":\"short literal substring entirely within that exact atomic unit\",\"confidence\":0.95}]}. Return an empty array only if this exact item does not begin here.",
+          "Return strict JSON {\"transitions\":[{\"agenda item\":\"ITEM CODE\",\"announced topic\":\"short topic\",\"atomic unit id\":\"atomic_000123\",\"role\":\"staff_report\",\"evidence quote\":\"short literal substring entirely within that exact atomic unit\",\"confidence\":0.95,\"sole child parent boundary\":false}]}. Return an empty array only if this exact item does not begin here.",
           `Allowed roles: ${[...ROLES].join(", ")}.`,
           window.text,
         ].join("\n\n"),
         attempts: recoveryAttempts,
       });
     const proposed = [];
+    const requiresDirectSupport = entry.substantive
+      || entry["minutes like"] === true
+      || requiredChronologyHeading(entry);
     for (const raw of Array.isArray(parsed?.transitions) ? parsed.transitions : []) {
       const candidate = alignEvidenceToAtomicUnit(
         resolveCandidateAgendaIdentity(normalizeCandidate(raw, `substantive_${window["window id"]}`), canonical),
@@ -2097,8 +2658,9 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
       const validationError = validateBoundaryCandidate(candidate, canonical, units);
       const candidateIndex = units.findIndex((unit) => unit["atomic unit id"] === candidate["atomic unit id"]);
       let selectedCandidate = candidate;
-      let directSupport = !entry.substantive || (Number.isInteger(candidateIndex)
-        && focusedRecoveryBoundaryHasDirectSupport(entry, units[candidateIndex]));
+      let directSupport = !requiresDirectSupport || (Number.isInteger(candidateIndex)
+        && (isSoleChildParentBoundary(entry, candidate, canonical)
+          || focusedRecoveryBoundaryHasDirectSupport(entry, units[candidateIndex])));
       if (!validationError && candidate["agenda item"] === entry.item && !directSupport) {
         const repaired = await callOllamaJson({
           ollamaUrl,
@@ -2106,7 +2668,7 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
           system: "You repair one ambiguous substantive municipal agenda boundary. Return strict JSON only.",
           prompt: [
             `Canonical target agenda item: ${entry.item} — ${entry.title}.`,
-            `Previous proposal: ${candidate["atomic unit id"]}, ${JSON.stringify(candidate["evidence quote"])}. This unit lacks direct support for the substantive child.`,
+            `Previous proposal: ${candidate["atomic unit id"]}, ${JSON.stringify(candidate["evidence quote"])}. This unit lacks direct support for the target child item.`,
             "Inspect the adjacent transcript units and return the earliest unit that directly starts the target child.",
             "When a generic parent heading is followed by an explicit spoken child code or distinctive child title, keep the parent heading as context and choose the later child unit.",
             "Treat spoken numeric agenda codes such as Eleven A as the corresponding canonical code. Do not return the generic heading, a later discussion detail, or an unrelated sibling.",
@@ -2127,7 +2689,9 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
         if (!repairedError
           && repairedCandidate["agenda item"] === entry.item
           && Number.isInteger(repairedIndex)
-          && (!entry.substantive || focusedRecoveryBoundaryHasDirectSupport(entry, units[repairedIndex]))) {
+          && (!requiresDirectSupport
+            || isSoleChildParentBoundary(entry, repairedCandidate, canonical)
+            || focusedRecoveryBoundaryHasDirectSupport(entry, units[repairedIndex]))) {
           selectedCandidate = repairedCandidate;
           directSupport = true;
           log(`[agenda-boundaries] focused recovery repaired generic heading for ${entry.item}: ${candidate["atomic unit id"]} -> ${repairedCandidate["atomic unit id"]}`);
@@ -2152,6 +2716,18 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
       });
       for (const selection of competingSelections) {
         const competing = selection.classified;
+        const competingEntry = canonical.items.find((entry) => entry.item === competing["agenda item"]);
+        // A blind identity classification may notice a related title in the
+        // same neighbourhood, but it must not reintroduce a substantive
+        // candidate whose selected boundary lacks direct support.  Without
+        // this gate, focused recovery can correctly remove a late mention and
+        // then add the same unsupported identity back as a competing choice,
+        // recreating the shared-boundary failure at the final ownership pass.
+        if (competingEntry?.substantive
+          && !candidateHasDirectStructuredSupport(competingEntry, competing, units)) {
+          log(`[agenda-boundaries] discarded unsupported competing identity: ${competing["agenda item"]}@${competing["atomic unit id"]}`);
+          continue;
+        }
         if (!out.some((candidate) => candidate["agenda item"] === competing["agenda item"]
           && candidate["atomic unit id"] === competing["atomic unit id"])) {
           out.push(competing);
@@ -2201,12 +2777,15 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
             llmModel,
             ollamaUrl,
           });
-          if (entry.substantive) {
+          if (requiresDirectSupport) {
             const recoveredIndex = units.findIndex((unit) => unit["atomic unit id"] === recovered["atomic unit id"]);
-            if (!focusedRecoveryBoundaryHasDirectSupport(entry, units[recoveredIndex])) {
+            const recoveredHasDirectSupport = isSoleChildParentBoundary(entry, recovered, canonical)
+              || focusedRecoveryBoundaryHasDirectSupport(entry, units[recoveredIndex]);
+            if (!recoveredHasDirectSupport) {
               const directFallback = [...verified, ...proposed].find((candidate) => {
                 const index = units.findIndex((unit) => unit["atomic unit id"] === candidate["atomic unit id"]);
-                return focusedRecoveryBoundaryHasDirectSupport(entry, units[index]);
+                return isSoleChildParentBoundary(entry, candidate, canonical)
+                  || focusedRecoveryBoundaryHasDirectSupport(entry, units[index]);
               });
               if (directFallback) {
                 recovered = directFallback;
@@ -2216,6 +2795,16 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
                 continue;
               }
             }
+          }
+          if (requiresDirectSupport
+            && isGroupedChildListPreview(entry, recovered, canonical, units)) {
+            log(`[agenda-boundaries] focused recovery rejected grouped child-list preview for ${entry.item}@${recovered["atomic unit id"]}`);
+            continue;
+          }
+          if (requiresDirectSupport
+            && !await verifyTargetedRecovery({ candidate: recovered, entry, units, llmModel, ollamaUrl })) {
+            log(`[agenda-boundaries] focused recovery rejected preview or non-executable boundary for ${entry.item}@${recovered["atomic unit id"]}`);
+            continue;
           }
           const recoveredIndex = units.findIndex((unit) => unit["atomic unit id"] === recovered["atomic unit id"]);
           const recoveredContext = Number.isInteger(recoveredIndex) && recoveredIndex >= 0
@@ -2256,6 +2845,35 @@ async function recoverMissingCanonicalCandidates({ candidates, canonical, units,
         }
         log(`[agenda-boundaries] focused recovery rejected after blind start refinement: ${entry.item}@${verified[0]["atomic unit id"]}`);
       }
+    }
+  }
+  // A pulled substantive item can be explicitly revisited after one or more
+  // canonical sibling list entries. The bounded gap for the missing item ends
+  // at the next sibling, so search the complete in-scope chronology for a
+  // later spoken code and let the ordinary LLM transition audit decide whether
+  // it is a real return or only a passing mention. This preserves revisited
+  // reports without assigning a grouped list preamble their generated prose.
+  for (const entry of canonical.items.filter((item) => item.substantive && !hasOwnedCandidate(item))) {
+    for (const unit of units) {
+      if (!spokenAgendaCodeMatchesItem(entry, unit)
+        || unitContainsMultipleCanonicalAgendaCodes(unit.text, canonical)
+        || unitIsPriorItemAction(unit.text)) continue;
+      const candidate = {
+        "agenda item": entry.item,
+        "announced topic": entry.title,
+        "atomic unit id": unit["atomic unit id"],
+        role: "other",
+        "evidence quote": unit.text,
+        confidence: 0.95,
+        "explicit revisit candidate": true,
+        "explicit sibling code candidate": true,
+        "semantic verification": verificationMethod(llmModel, "complete-chronology explicit-code revisit recovery"),
+      };
+      if (!await verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl })) continue;
+      candidate["explicit revisit"] = true;
+      out.push(candidate);
+      log(`[agenda-boundaries] recovered explicit later item code: ${entry.item}@${unit["atomic unit id"]}`);
+      break;
     }
   }
   return out;
@@ -2389,7 +3007,7 @@ async function collectCandidates({ canonical, units, windows, llmModel, ollamaUr
     // remain eligible for skipped/empty reconciliation without forcing a
     // boundary when they have no evidence.
     const attachmentBacked = Array.isArray(entry.attachments) && entry.attachments.length > 0;
-    const recoverable = Boolean(entry.substantive || entry.long_source || attachmentBacked);
+    const recoverable = Boolean(shouldRecoverMissingCanonicalBoundary(entry) || attachmentBacked);
     if ((!prior && !next) || !recoverable) continue;
     const startAtomic = prior ? candidateAtomicIndex(prior) : 0;
     const endAtomic = next ? candidateAtomicIndex(next) : units.length - 1;
@@ -2423,7 +3041,8 @@ async function collectCandidates({ canonical, units, windows, llmModel, ollamaUr
       }
       recovered = null;
       for (const candidate of proposed) {
-        if (await verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl })) {
+        if (candidateHasDirectStructuredSupport(entry, candidate, units)
+          && await verifyTargetedRecovery({ candidate, entry, units, llmModel, ollamaUrl })) {
           recovered = candidate;
           break;
         }
@@ -2529,7 +3148,13 @@ function validateDispositionBatch(dispositions, expectedItems, units, validatedC
     if (!unit) return `unknown atomic unit for ${expectedItems[i].item}`;
     Object.assign(disposition, alignEvidenceToAtomicUnit(disposition, units));
     const quote = evidenceKey(disposition["evidence quote"]);
-    if (quote.length < 8 || !evidenceKey(unit.text).includes(quote)) return `non-literal evidence for ${expectedItems[i].item}`;
+    const shortStandaloneEvidence = allowedCandidates.some((candidate) =>
+      candidate["atomic unit id"] === disposition["atomic unit id"]
+        && isValidatedStandaloneSiblingBoundary(candidate, canonicalEntry, unit)
+    );
+    if ((quote.length < 8 && !shortStandaloneEvidence) || !evidenceKey(unit.text).includes(quote)) {
+      return `non-literal evidence for ${expectedItems[i].item}`;
+    }
     if (!(disposition.confidence >= 0.55 && disposition.confidence <= 1)) return `low confidence for ${expectedItems[i].item}`;
   }
   return "";
@@ -2610,7 +3235,9 @@ export function validateReconciledTimeline(dispositions, canonical, units, optio
     const scopeEvidence = disposition["meeting scope boundary"]
       && quote.length >= 8
       && evidenceKey(units.slice(index, Math.min(units.length, index + 4)).map((unit) => unit.text).join(" ")).includes(quote);
-    if (quote.length < 8 || (!localEvidence && !scopeEvidence)) {
+    const shortStandaloneEvidence = disposition["standalone sibling boundary"] === true
+      && standaloneAgendaCodeMatchesItem(canonical.items[i], units[index]);
+    if ((quote.length < 8 && !shortStandaloneEvidence) || (!localEvidence && !scopeEvidence)) {
       throw new Error(`agenda segmentation retryable: non-literal boundary evidence for ${expected} at ${disposition["atomic unit id"]} quote=${quote.slice(0, 80)} unit=${evidenceKey(units[index].text).slice(0, 120)}`);
     }
     const minimum = Number(options.minimumConfidence ?? process.env.AGENDA_BOUNDARY_MIN_CONFIDENCE ?? 0.55);
@@ -2629,7 +3256,13 @@ export function validateReconciledTimeline(dispositions, canonical, units, optio
     const chronologyText = units.map((unit) => unit.text).join(" ");
     const abortedMeeting = /\b(?:no quorum|quorum has not been reached|without quorum)\b/iu.test(chronologyText)
       && /\badjourn(?:ed|ment|s)?\b/iu.test(chronologyText);
-    if (coveredFraction >= 0.9 && durationSeconds >= 600 && !options.allowAbortedMeeting && !abortedMeeting) {
+    const substantiveItems = canonical.items.filter((item) => item.substantive);
+    const soleStructuredOwner = substantiveItems.length === 1
+      && boundaries[0]["agenda item"] === substantiveItems[0].item;
+    if (coveredFraction >= 0.9 && durationSeconds >= 600
+      && !soleStructuredOwner
+      && !options.allowAbortedMeeting
+      && !abortedMeeting) {
       throw new Error("agenda segmentation retryable: one boundary would absorb nearly the entire substantive meeting chronology");
     }
   }
@@ -2673,6 +3306,17 @@ export function resolveCanonicalHierarchyOwnership(dispositions) {
   for (const entry of dispositions) {
     if (!["executed", "empty"].includes(entry.status)) continue;
     if (!executedItems.some((item) => item.startsWith(`${entry["agenda item"]}.`))) continue;
+    // A parent heading may have its own validated boundary before an executed
+    // child begins. Keep that evidence for chronology ownership even though
+    // the child remains the substantive publisher for the shared hierarchy.
+    if (entry["atomic unit id"] && !entry["container boundary"]) {
+      entry["container boundary"] = {
+        "atomic unit id": entry["atomic unit id"],
+        role: entry.role,
+        "evidence quote": entry["evidence quote"],
+        confidence: entry.confidence,
+      };
+    }
     entry.status = "container";
     entry["atomic unit id"] = "";
     entry.role = "";
@@ -2725,16 +3369,35 @@ function chapterUnitsForSpan(span, unitId) {
   return chapters.length >= 2 ? chapters : [];
 }
 
-export function buildGroundedTimeline({ canonical, units, dispositions }) {
+export function buildGroundedTimeline({ canonical, units, dispositions, includeLeadingPrefix = false }) {
   const boundaries = validateReconciledTimeline(dispositions, canonical, units);
   const indexById = new Map(units.map((unit, index) => [unit["atomic unit id"], index]));
   const canonicalTitle = new Map(canonical.items.map((item) => [item.item, item.title]));
+  const timelineBoundaries = [
+    ...boundaries,
+    ...dispositions
+      .filter((entry) => entry.status === "container" && entry["container boundary"]?.["atomic unit id"])
+      .map((entry) => ({
+        "agenda item": entry["agenda item"],
+        status: "container",
+        role: entry["container boundary"].role || "container",
+        "evidence quote": entry["container boundary"]["evidence quote"] || "",
+        confidence: entry["container boundary"].confidence || 0,
+        "atomic unit id": entry["container boundary"]["atomic unit id"],
+      })),
+  ].sort((a, b) => Number(indexById.get(a["atomic unit id"])) - Number(indexById.get(b["atomic unit id"])));
   const grounded = [];
-  for (let i = 0; i < boundaries.length; i += 1) {
-    const boundary = boundaries[i];
+  for (let i = 0; i < timelineBoundaries.length; i += 1) {
+    const boundary = timelineBoundaries[i];
     const evidenceStart = indexById.get(boundary["atomic unit id"]);
-    const start = evidenceStart;
-    const nextStart = i + 1 < boundaries.length ? indexById.get(boundaries[i + 1]["atomic unit id"]) : units.length;
+    const start = i === 0 && includeLeadingPrefix ? 0 : evidenceStart;
+    const nextStart = i + 1 < timelineBoundaries.length
+      ? indexById.get(timelineBoundaries[i + 1]["atomic unit id"])
+      : units.length;
+    if (!Number.isInteger(start) || !Number.isInteger(nextStart)) {
+      throw new Error(`agenda segmentation retryable: unknown container boundary for ${boundary["agenda item"]}`);
+    }
+    if (nextStart <= start) continue;
     const span = units.slice(start, nextStart);
     if (!span.length) throw new Error(`agenda segmentation retryable: empty transcript span for ${boundary["agenda item"]}`);
     const unitId = `ground_${String(grounded.length + 1).padStart(3, "0")}`;
@@ -2760,7 +3423,9 @@ export function buildGroundedTimeline({ canonical, units, dispositions }) {
       "source words": excerpt.split(/\s+/u).filter(Boolean).length,
       "grounding confidence": boundary.confidence,
       "grounding status": "llm-evidence-grounded",
-      substantive: !["procedural"].includes(boundary.role) && boundary.status !== "empty",
+      substantive: boundary.status !== "container"
+        && !["procedural"].includes(boundary.role)
+        && boundary.status !== "empty",
       "child chapters": chapterUnitsForSpan(span, unitId),
     });
   }
@@ -2794,6 +3459,8 @@ export async function auditUnownedTranscriptPrefix({
   canonical,
   units,
   dispositions,
+  meetingScopeAudit = null,
+  allowLeadingPrefix = false,
   llmModel = "",
   ollamaUrl = "http://mriczo:11434/api/chat",
   log = () => {},
@@ -2813,6 +3480,22 @@ export async function auditUnownedTranscriptPrefix({
   }
 
   const prefixUnits = units.slice(0, firstBoundaryIndex);
+  // `units` has already been clipped to the independently validated target
+  // meeting scope. When that scope starts at its first unit, any earlier
+  // boundary inside `units` is still target-owned, including a clipped
+  // recording whose first captured words precede its first canonical item.
+  const targetStartsAtRecordingScope = meetingScopeAudit?.["scope atomic start"] === units[0]?.["atomic unit id"];
+  if (allowLeadingPrefix || targetStartsAtRecordingScope) {
+    return {
+      "prefix atomic units": firstBoundaryIndex,
+      "prefix atomic start": prefixUnits[0]?.["atomic unit id"] || "",
+      "prefix atomic end": prefixUnits.at(-1)?.["atomic unit id"] || "",
+      "out of scope": false,
+      reason: "opening units belong to the target meeting before its first canonical agenda boundary",
+      confidence: Number(meetingScopeAudit?.confidence || 1),
+      "verification method": verificationMethod(llmModel, "target meeting opening ownership audit"),
+    };
+  }
   const evidenceUnits = boundedPrefixEvidenceUnits(prefixUnits);
   const request = {
     canonical,
@@ -2988,12 +3671,29 @@ export async function runLlmAgendaSegmentation({
       ? await candidateProvider({ canonical, units, windows })
       : await collectCandidates({ canonical, units, windows, llmModel, ollamaUrl, log });
   }
+  const clippedRecordingStart = meetingScopeAudit["recording begins mid-meeting"] === true;
+  if (clippedRecordingStart) {
+    const scopeStartCandidates = (Array.isArray(collected?.candidates) ? collected.candidates : [])
+      .filter((candidate) => candidate["atomic unit id"] === meetingScopeAudit["scope atomic start"])
+      .filter((candidate) => canonical.items.find((entry) => entry.item === candidate["agenda item"])?.substantive);
+    for (const candidate of scopeStartCandidates) {
+      candidate["meeting scope boundary"] = true;
+      candidate["recording begins mid-meeting"] = true;
+      candidate["semantic verification"] = `${candidate["semantic verification"] || "LLM complete-chronology segmentation"}; validated clipped-recording first boundary`;
+    }
+    if (scopeStartCandidates.length) {
+      log(`[agenda-boundaries] preserved ${scopeStartCandidates.length} substantive clipped-recording first boundary candidate(s)`);
+    }
+  }
   const callToOrder = canonical.items.find((entry) => /^call to order$/iu.test(clean(entry.title)));
-  const scopeStartUnit = callToOrder && meetingScopeAudit["scope atomic start"]
+  const scopeStartCallToOrder = callToOrder
+    && meetingScopeAudit["scope atomic start"]
+    && !clippedRecordingStart;
+  const scopeStartUnit = scopeStartCallToOrder
     ? units.find((unit) => unit["atomic unit id"] === meetingScopeAudit["scope atomic start"])
     : null;
   const scopeStartEvidence = meetingScopeAudit["evidence quote"] || scopeStartUnit?.text || units[0]?.text || "";
-  if (callToOrder && meetingScopeAudit["scope atomic start"]) {
+  if (scopeStartCallToOrder) {
     collected.candidates = [
       ...(Array.isArray(collected?.candidates) ? collected.candidates : []),
       {
@@ -3038,14 +3738,20 @@ export async function runLlmAgendaSegmentation({
       log,
     });
   if (trustValidatedCandidates) log(`[agenda-boundaries] trusted same-input candidate checkpoint; skipped blind chronology re-audit`);
+  const hierarchyInitialCandidates = normalizeClippedRecordingHierarchyCandidates({
+    candidates: initialCandidates,
+    canonical,
+    units,
+    meetingScopeAudit,
+  });
   // A trusted same-input checkpoint has already passed the candidate contract.
   // Re-running broad missing-item recovery on that checkpoint is both
   // needlessly expensive and capable of manufacturing unrelated procedural
   // boundaries. New inputs still take the normal recovery path.
   const recoveredCandidates = trustValidatedCandidates
-    ? initialCandidates
+    ? hierarchyInitialCandidates
     : await recoverMissingCanonicalCandidates({
-      candidates: initialCandidates,
+      candidates: hierarchyInitialCandidates,
       canonical,
       units,
       windows,
@@ -3070,15 +3776,21 @@ export async function runLlmAgendaSegmentation({
     ollamaUrl,
     log,
   });
+  const hierarchyCandidates = normalizeClippedRecordingHierarchyCandidates({
+    candidates: promotedCandidates,
+    canonical,
+    units,
+    meetingScopeAudit,
+  });
   let candidates = await refineCandidateStarts({
-    candidates: dedupeCandidatesByAgendaItem(promotedCandidates, canonical),
+    candidates: dedupeCandidatesByAgendaItem(hierarchyCandidates, canonical),
     canonical,
     units,
     llmModel,
     ollamaUrl,
     log,
   });
-  if (callToOrder && meetingScopeAudit["scope atomic start"]) {
+  if (scopeStartCallToOrder) {
     candidates = [
       {
         "agenda item": callToOrder.item,
@@ -3093,6 +3805,16 @@ export async function runLlmAgendaSegmentation({
       },
       ...candidates.filter((candidate) => candidate["agenda item"] !== callToOrder.item),
     ].sort((a, b) => Number(a["atomic unit id"].slice(7)) - Number(b["atomic unit id"].slice(7)));
+  }
+  const unsupportedReferencedBoundaries = candidates.filter((candidate) => {
+    const entry = canonical.items.find((item) => item.item === candidate["agenda item"]);
+    return entry?.substantive
+      && !candidateHasDirectStructuredSupport(entry, candidate, units)
+      && !(candidate["meeting scope boundary"] === true && candidate["recording begins mid-meeting"] === true);
+  });
+  if (unsupportedReferencedBoundaries.length) {
+    candidates = candidates.filter((candidate) => !unsupportedReferencedBoundaries.includes(candidate));
+    log(`[agenda-boundaries] dropped ${unsupportedReferencedBoundaries.length} substantive boundaries that were nested agenda-code references without matching structured identity`);
   }
   // Refinement and conflict resolution may change a candidate's identity or
   // atomic start. Re-run the literal evidence contract immediately before
@@ -3129,7 +3851,7 @@ export async function runLlmAgendaSegmentation({
   } else {
     dispositions = await reconcileTimelineInBatches({ canonical, candidates, units, llmModel, ollamaUrl, log });
   }
-  if (callToOrder && meetingScopeAudit["scope atomic start"]) {
+  if (scopeStartCallToOrder) {
     const callDisposition = dispositions.find((entry) => entry["agenda item"] === callToOrder.item);
     if (callDisposition) {
       Object.assign(callDisposition, {
@@ -3173,6 +3895,9 @@ export async function runLlmAgendaSegmentation({
     if (candidate?.["evidence quote"]) {
       disposition["evidence quote"] = candidate["evidence quote"];
     }
+    if (candidate?.["standalone sibling boundary"] === true) {
+      disposition["standalone sibling boundary"] = true;
+    }
   }
   resolveCanonicalHierarchyOwnership(dispositions);
   resolveSharedBoundaryOwnership(dispositions, canonical);
@@ -3181,12 +3906,21 @@ export async function runLlmAgendaSegmentation({
     canonical,
     units,
     dispositions,
+    meetingScopeAudit,
+    allowLeadingPrefix: meetingScopeAudit["scope atomic start"] === units[0]?.["atomic unit id"]
+      || meetingScopeAudit["recording begins mid-meeting"] !== true,
     llmModel,
     ollamaUrl,
     log,
     scopeAuditProvider,
   });
-  const grounded = buildGroundedTimeline({ canonical, units, dispositions });
+  const grounded = buildGroundedTimeline({
+    canonical,
+    units,
+    dispositions,
+    includeLeadingPrefix: meetingScopeAudit["scope atomic start"] === units[0]?.["atomic unit id"]
+      || meetingScopeAudit["recording begins mid-meeting"] !== true,
+  });
   const generated = new Date().toISOString();
   const candidatesArtifact = {
     "schema version": "agenda_boundary_candidates_v2",
@@ -3202,7 +3936,8 @@ export async function runLlmAgendaSegmentation({
     "rejected candidates": Array.isArray(collected?.rejected) ? collected.rejected : [],
   };
   const matches = {
-    "schema version": "agenda_boundary_reconciliation_v2",
+    "schema version": "agenda_boundary_reconciliation_v3",
+    "boundary recovery version": BOUNDARY_RECOVERY_VERSION,
     "generated time": generated,
     "canonical source path": canonical.sourcePath,
     "canonical source type": canonical.sourceType,
@@ -3213,6 +3948,7 @@ export async function runLlmAgendaSegmentation({
   };
   const grounding = {
     "schema version": "agenda_section_grounding_v3",
+    "boundary recovery version": BOUNDARY_RECOVERY_VERSION,
     "generated time": generated,
     "canonical source path": canonical.sourcePath,
     "canonical source type": canonical.sourceType,

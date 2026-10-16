@@ -325,9 +325,31 @@ export function governingBodyDefects(mdText = "", bodyLabel = "", authoritativeS
   const source = String(authoritativeSource || "").toLowerCase();
   const body = String(bodyLabel || "").toLowerCase();
   const action = String.raw`(?:members?\s+)?(?:convened|met|heard|reviewed|considered|approved|adopted|voted|directed|received|discussed|deliberated|authorized|awarded|supported|expressed\s+support)`;
+  const sourceActionForms = {
+    approved: "(?:approved|approving|approval|approve|passed|carried|endorsed)",
+    adopted: "(?:adopted|adopting|adoption|passed|carried|endorsed)",
+    voted: "(?:voted|vote|voting|carried|approved|adopted)",
+    authorized: "(?:authorized|authorizing|authorization|approved|adopted|passed|carried)",
+    awarded: "(?:awarded|awarding|award|approved|passed|carried)",
+    supported: "(?:supported|supporting|support|endorsed|approving|approved)",
+    "expressed support": "(?:expressed\\s+support|supported|supporting|endorsed)",
+  };
   const defects = [];
+  const sourceSentences = source.split(/(?<=[.!?])\s+/u);
+  const sourceSupportsActingBody = (matchText) => {
+    const match = String(matchText || "").match(/\b(council|committee|board)\b[\s\S]*?\b(convened|met|heard|reviewed|considered|approved|adopted|voted|directed|received|discussed|deliberated|authorized|awarded|supported|expressed\s+support)\b/iu);
+    if (!match) return false;
+    const actingBody = match[1];
+    const verb = match[2];
+    const sourceVerb = sourceActionForms[verb.toLowerCase()] || verb;
+    const sentencePattern = new RegExp(
+      `\\b(?:[\\p{L}][\\p{L}'’-]*\\s+){0,5}${actingBody}\\b[^.!?\\n]{0,180}\\b${sourceVerb}\\b`,
+      "iu",
+    );
+    return sourceSentences.some((sentence) => sentencePattern.test(sentence));
+  };
   const collectUnsupported = (pattern) => Array.from(text.matchAll(pattern), (match) => match[0])
-    .filter((match) => !source.includes(match.toLowerCase()));
+    .filter((match) => !source.includes(match.toLowerCase()) && !sourceSupportsActingBody(match));
   if (!body.includes("council")) {
     defects.push(...collectUnsupported(new RegExp(String.raw`\bcouncil\s+${action}\b`, "giu")));
   }
@@ -343,7 +365,7 @@ export function governingBodyDefects(mdText = "", bodyLabel = "", authoritativeS
 export function previewTemporalDefects(mdText = "") {
   const text = String(mdText || "");
   const patterns = [
-    /\b(?:council|committee|board)(?: members)?\s+(?:convened|met|heard|reviewed|considered|approved|adopted|voted|directed|received|transitioned|discussed)\b/giu,
+    /\b(?:council|committee(?:\s*-\s*[a-z][a-z -]*)?|board(?:\s*-\s*[a-z][a-z -]*)?)(?: members)?\s+(?:called(?:\s+the\s+meeting)?\s+to\s+order|convened|met|heard|reviewed|considered|approved|adopted|voted|directed|received|confirmed|transitioned|discussed)\b/giu,
     /\b(?:the )?(?:meeting|session)\s+(?:convened|met|opened|prioritized|focused|heard|reviewed|considered|approved|adopted|transitioned|discussed)\b/giu,
     /\b(?:the )?(?:morning|afternoon|evening)\s+(?:also\s+)?saw\b/giu,
     /\bofficials\s+moved\s+forward\b/giu,
@@ -441,8 +463,11 @@ function toSectionSourceBlock(section = {}, sectionIndex = 1) {
     const title = String(chapter?.title || "").trim();
     const text = String(chapter?.text || "").trim();
     if (!title && !text) continue;
+    // Child summaries are useful for the agenda artifact, but they are a
+    // second generated prose layer and can repeat a neighboring or disputed
+    // outcome. Whole-meeting synthesis receives the independently audited
+    // parent section summary; retain child headings only as identity cues.
     lines.push(`Child topic: ${title || "(untitled)"}`);
-    if (text) lines.push(`Child summary: ${text}`);
   }
   return lines.join("\n");
 }
@@ -726,6 +751,8 @@ function buildFinalSummaryPrompt({
     "- When source summaries disagree about whether a motion or approval occurred, omit the outcome claim and describe the proposal, report, or discussion conservatively.",
     "- Preserve financial claim type and certainty: distinguish direct savings from combined savings, revenue, efficiencies, and future cost avoidance.",
     "- Attribute aggregate, projected, estimated, annualized, compounded, or disputed financial figures to the report or staff; do not present them as independently verified net reductions in City spending.",
+    "- Treat numeric grounding as a closed vocabulary: every digit, decimal, percentage, currency amount, year, date fragment, and numbered item in the recap must appear verbatim in CHUNK_SUMMARIES or RANKED_NEWS_CANDIDATES.",
+    "- Do not invent a decimal, section number, amount, date, count, or percentage to make a sentence specific. If a numeric detail is not explicitly supplied, omit it and use a non-numeric description.",
     "- If Council only received a report for information, do not imply that Council approved the report's financial result.",
     "- Preserve status and tense exactly: do not change cleared/completed/authorized into targeting/planned/pending, or change a proposal into a completed outcome.",
     "- When motion wording or its outcome is unclear, do not say an item was moved, seconded, carried, or defeated; report only the underlying topic.",
@@ -747,6 +774,8 @@ function buildFinalSummaryPrompt({
       ? [
         "- This is an upcoming agenda preview before the meeting occurs.",
         "- Write primarily in present/future tense.",
+        "- Do not repeat the meeting date or describe call to order, minutes confirmation, public forum, or adjournment as completed events.",
+        "- When a supporting report describes an earlier action, attribute it to the report or earlier meeting and do not present it as this meeting's decision.",
       ]
       : []),
     "",
@@ -758,6 +787,11 @@ function buildFinalSummaryPrompt({
     "",
     "CHUNK_SUMMARIES:",
     chunkSource,
+    ...(SUMMARY_TIME_MODE === "upcoming"
+      ? [
+        "FINAL UPCOMING-PREVIEW CHECK: the meeting has not happened. Do not write convened, called to order, reviewed, considered, approved, adopted, voted, directed, received, confirmed, transitioned, or discussed as an action by the governing body. Use scheduled, proposed, will consider, or staff recommend.",
+      ]
+      : []),
   ].join("\n");
 }
 
@@ -1038,8 +1072,9 @@ export function buildChunkRetryGuidance({
       "Use a third-pass repair strategy for the repeated actor defect.",
       "Delete every listed named-actor occurrence, then rewrite only the affected clause with a generic body, staff, presenter, or report attribution supported by the source.",
       "Scan the full corrected draft before returning it and ensure none of the listed occurrences remain outside an exact required heading.",
+      "The listed strings are an absolute output blocklist: do not copy or repeat them even when the source mentions an absent, former, quoted, or otherwise non-acting person.",
       freshActorRepair
-        ? "Do not edit the rejected sentences in place. Write a fresh summary from the grounded source using no personal names anywhere in prose."
+        ? "Do not edit or quote the rejected draft. Write a fresh summary from the grounded source using no personal names anywhere in prose."
         : "",
     ].join(" ")
     : "";
@@ -1051,8 +1086,41 @@ export function buildChunkRetryGuidance({
     forbiddenNames.length ? `Remove named councillors/movers: ${forbiddenNames.join(", ")}.` : "",
     wrongBody.length ? `Use only "${bodyLabel}" as the acting body: ${wrongBody.join(", ")}.` : "",
     semanticReview ? `SEMANTIC_RETRY:\n${semanticReview}` : "",
-    rejectedDraft ? `REJECTED_DRAFT:\n${rejectedDraft}` : "",
+    freshActorRepair ? "Do not include the rejected draft in the replacement." : (rejectedDraft ? `REJECTED_DRAFT:\n${rejectedDraft}` : ""),
   ].filter(Boolean).join("\n\n");
+}
+
+export async function rewriteChunkWithoutForbiddenActors({
+  candidate = "",
+  forbiddenNames = [],
+  coveredHeadings = [],
+  bodyLabel = "",
+} = {}) {
+  const blocked = [...new Set((Array.isArray(forbiddenNames) ? forbiddenNames : []).map((value) => String(value || "").trim()).filter(Boolean))];
+  const draft = String(candidate || "").trim();
+  if (!draft || !blocked.length) return draft;
+  return ask(
+    [
+      {
+        role: "system",
+        content: "You are a constrained civic-copy editor. Return only the rewritten summary text, with no analysis or code fences.",
+      },
+      {
+        role: "user",
+        content: [
+          "Rewrite this already source-grounded chunk summary only to remove forbidden named council actors.",
+          "Preserve the required heading bullets, topics, facts, amounts, dates, status, and tense. Do not add facts or change outcomes.",
+          `Governing body: ${bodyLabel || "the supplied governing body"}`,
+          `Required headings: ${(Array.isArray(coveredHeadings) ? coveredHeadings : []).join(" | ") || "(none)"}`,
+          `ABSOLUTE OUTPUT BLOCKLIST: ${blocked.join(" | ")}`,
+          "Do not repeat, quote, or partially repeat any blocklisted string. Use generic references such as the chair, the board, staff, the presenter, or the report. Do not use any personal names in the rewritten text.",
+          "Return the complete replacement summary text and nothing else.",
+          `CANDIDATE SUMMARY:\n${draft}`,
+        ].join("\n\n"),
+      },
+    ],
+    { numPredict: 700 },
+  );
 }
 
 async function synthesizeChunkSummaries({
@@ -1098,9 +1166,24 @@ async function synthesizeChunkSummaries({
         ],
         { numPredict: 700 },
       );
-      const candidate = String(summaryText || "").trim();
-      const forbiddenNames = namedCouncilActorDefects(candidate, u["covered headings"]);
+      let candidate = String(summaryText || "").trim();
+      let forbiddenNames = namedCouncilActorDefects(candidate, u["covered headings"]);
+      if (attempt >= 3 && forbiddenNames.length) {
+        const repaired = await rewriteChunkWithoutForbiddenActors({
+          candidate,
+          forbiddenNames: [...accumulatedForbiddenNames, ...forbiddenNames],
+          coveredHeadings: u["covered headings"],
+          bodyLabel,
+        });
+        if (repaired) {
+          candidate = String(repaired).trim();
+          forbiddenNames = namedCouncilActorDefects(candidate, u["covered headings"]);
+        }
+      }
       for (const name of forbiddenNames) accumulatedForbiddenNames.add(name);
+      // The canonical agenda-section summaries are the bounded source for
+      // this chunk. Preserve an explicitly sourced subordinate committee or
+      // board action while rejecting unsupported governing-body substitution.
       const wrongBody = governingBodyDefects(candidate, bodyLabel, u.source);
       let semanticReview = "";
       let semanticScore = 0;
@@ -1218,6 +1301,7 @@ async function synthesizeFinalMeetingSummary({
   let bestReview = "";
   let bestDiagnostics = "";
   let bestFinancialAudit = null;
+  let bestCoverageMissing = [];
 
   for (let i = 1; i <= MAX_ATTEMPTS; i += 1) {
     const draftRaw = await ask(
@@ -1324,6 +1408,7 @@ async function synthesizeFinalMeetingSummary({
       bestReview = review;
       bestDiagnostics = diagnostics;
       bestFinancialAudit = financialAudit;
+      bestCoverageMissing = coverageAudit.missing;
     }
     feedback = [
       review,
@@ -1334,6 +1419,356 @@ async function synthesizeFinalMeetingSummary({
       financialAudit.verdict !== "PASS" ? `FINANCIAL_CLAIM_RETRY: ${financialAudit.feedback}` : "",
     ].filter(Boolean).join("\n");
     if (score >= PASS_THRESHOLD) break;
+  }
+
+  if (!bestFinancialAudit || bestFinancialAudit.verdict !== "PASS") {
+    for (let financialRepairAttempt = 1; financialRepairAttempt <= 3; financialRepairAttempt += 1) {
+      const rejectedDraft = String(bestText || "").trim();
+      const repairedRaw = await ask(
+        [
+          { role: "system", content: "Write a fresh source-grounded whole-meeting civic recap after a financial-claim rejection. Return markdown only." },
+          {
+            role: "user",
+            content: [
+              `Financial repair attempt ${financialRepairAttempt}: start over from the literal chunk summaries and rewrite the complete markdown recap.`,
+              "The prior recap was rejected by a financial-claim audit. Preserve all required headings, substantive topic coverage, decision status, and explicit follow-ups while correcting only unsupported financial framing.",
+              "Classify each financial statement against the supplied chunks. Distinguish direct costs or transfers from combined savings, revenue, efficiencies, projected amounts, and future cost avoidance.",
+              "Attribute reported, projected, estimated, combined, or disputed figures to the report, staff, presenter, or agreement when the chunks support that attribution.",
+              "Treat numeric grounding as a closed vocabulary: do not introduce any digit, decimal, percentage, currency amount, year, date fragment, or numbered item absent from the supplied chunks.",
+              "Do not describe mixed financial items as direct savings, reduced funding, net savings, or a net reduction unless the chunks explicitly establish that exact net effect. If no net effect is established, state the concrete proposal or cost terms without a directional financial label.",
+              financialRepairAttempt === 1
+                ? "Use concrete source-supported proposal terms and amounts rather than evaluative financial language."
+                : financialRepairAttempt === 2
+                  ? "Use conservative institutional subjects and retain the source's uncertainty; do not repeat the rejected wording or a close variant."
+                  : "Write the shortest complete recap that preserves whole-meeting coverage and passes the financial audit.",
+              `REJECTION_REASON: ${bestFinancialAudit?.feedback || "Financial claim audit failed."}`,
+              `PRIOR_REJECTED_RECAP:\n${rejectedDraft}`,
+              "Return exactly these headings: # Whole Meeting Summary, ## Top Newsworthy Developments, ## Why It Matters, ## Watch Next.",
+              "CHUNK_SUMMARIES:",
+              chunkSource,
+              "RANKED_NEWS_CANDIDATES:",
+              (Array.isArray(priorityItems) ? priorityItems : [])
+                .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
+                .join("\n") || "(none)",
+              SUMMARY_TIME_MODE === "upcoming"
+                ? "FINAL REMINDER: the meeting has not happened. Use scheduled/proposed/will consider/staff recommend; never use convened, called to order, reviewed, considered, approved, adopted, voted, directed, received, confirmed, transitioned, or discussed for the governing body."
+                : "FINAL REMINDER: this is a recap of the completed meeting. Preserve source-supported action and decision status; do not invent approval, adoption, direction, unanimity, or a result that the chunk summaries do not state.",
+            ].join("\n\n"),
+          },
+        ],
+        { numPredict: 1400 },
+      );
+      const repairedDraft = normalizeRequiredSummaryHeadings(String(repairedRaw || "").trim());
+      const repairedFinancialAudit = await auditFinancialClaim({
+        ask,
+        sourceText: numericGroundingSource,
+        candidateText: repairedDraft,
+        context: `Whole-meeting ${SUMMARY_TIME_MODE === "upcoming" ? "preview" : "recap"} financial repair; preserve category, certainty, attribution, and decision status.`,
+      });
+      if (repairedFinancialAudit.verdict !== "PASS") {
+        continue;
+      }
+
+      const coverageAudit = await auditFinalChunkCoverage({
+        chunks: chunksArtifact?.chunks || [],
+        summaryMd: repairedDraft,
+      });
+      const repairedNumericDefects = unsupportedNumericTokens(repairedDraft, numericGroundingSource);
+      const repairedBodyDefects = governingBodyDefects(repairedDraft, bodyLabel, chunkSource);
+      const repairedTemporalDefects = SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(repairedDraft) : [];
+      const repairedReviews = [];
+      for (let reviewIndex = 0; reviewIndex < 3; reviewIndex += 1) {
+        repairedReviews.push(await ask(
+          [
+            { role: "system", content: "You are a strict semantic verifier for civic summaries. Judge only against the supplied sources." },
+            {
+              role: "user",
+              content: buildFinalScorePrompt({
+                chunkSource,
+                summaryMd: repairedDraft,
+                bodyLabel,
+                jurisdiction,
+                meetingDateIso,
+                meetingDateLong,
+                priorityItems,
+              }),
+            },
+          ],
+          { numPredict: 360 },
+        ));
+      }
+      const repairedReviewScores = repairedReviews.map(parseScore).sort((a, b) => a - b);
+      let repairedVerifierScore = repairedReviewScores[Math.floor(repairedReviewScores.length / 2)] || 0;
+      let repairedReview = repairedReviews.map((value, index) => `REVIEW_${index + 1}:\n${value}`).join("\n\n");
+      if (repairedVerifierScore < PASS_THRESHOLD
+        || (repairedReviewScores.at(-1) || 0) - (repairedReviewScores[0] || 0) >= 0.2) {
+        const adjudication = await adjudicateFinalReviews({
+          chunkSource,
+          summaryMd: repairedDraft,
+          bodyLabel,
+          jurisdiction,
+          reviews: repairedReviews,
+        });
+        repairedVerifierScore = adjudication.score;
+        repairedReview = [repairedReview, `ADJUDICATION:\n${adjudication.review}`].join("\n\n");
+      }
+      const completenessPenalty = hasCompleteRequiredSections(repairedDraft) ? 0 : 0.4;
+      const stylePenalty = synthesisPenalty(repairedDraft);
+      const temporalPenalty = repairedTemporalDefects.length ? 0.6 : 0;
+      const bodyPenalty = repairedBodyDefects.length ? 0.6 : 0;
+      const numericPenalty = repairedNumericDefects.length ? 0.6 : 0;
+      const coveragePenalty = coverageAudit.missing.length ? 1 : 0;
+      const repairedScore = Math.max(0, repairedVerifierScore - completenessPenalty - stylePenalty - temporalPenalty - bodyPenalty - numericPenalty - coveragePenalty);
+      const diagnostics = [
+        `financial_repair_attempt=${financialRepairAttempt}`,
+        `verifier=${repairedVerifierScore.toFixed(3)}`,
+        `completeness_penalty=${completenessPenalty.toFixed(3)}`,
+        `style_penalty=${stylePenalty.toFixed(3)}`,
+        `temporal_penalty=${temporalPenalty.toFixed(3)}`,
+        `body_penalty=${bodyPenalty.toFixed(3)}`,
+        `numeric_penalty=${numericPenalty.toFixed(3)}`,
+        `coverage_penalty=${coveragePenalty.toFixed(3)}`,
+        `score=${repairedScore.toFixed(3)}`,
+      ].join(" ");
+      log(`[meeting-summary][financial-repair] ${diagnostics}`);
+      if (repairedScore > bestScore || !bestFinancialAudit || bestFinancialAudit.verdict !== "PASS") {
+        bestText = repairedDraft;
+        bestScore = repairedScore;
+        bestReview = repairedReview;
+        bestDiagnostics = diagnostics;
+        bestFinancialAudit = repairedFinancialAudit;
+      }
+      if (bestFinancialAudit.verdict === "PASS" && bestScore >= PASS_THRESHOLD) break;
+    }
+  }
+
+  // Upcoming previews can inherit past-tense wording from historical reports
+  // embedded in agenda attachments. Give the model a dedicated repair pass so
+  // the temporal gate remains strict without falling back to deterministic
+  // sentence editing.
+  if (SUMMARY_TIME_MODE === "upcoming" && previewTemporalDefects(bestText).length) {
+    for (let temporalRepairAttempt = 1; temporalRepairAttempt <= 3; temporalRepairAttempt += 1) {
+      const temporalDefects = previewTemporalDefects(bestText);
+      const repairedRaw = await ask(
+        [
+          { role: "system", content: "Write a source-grounded upcoming civic agenda preview. Return markdown only." },
+          {
+            role: "user",
+            content: [
+              "Rewrite the complete whole-meeting preview from the supplied chunk summaries.",
+              "The meeting has not occurred yet. Use present or future framing for agenda items: is scheduled, will consider, the agenda proposes, or staff recommend.",
+              "Never state that the governing body reviewed, considered, approved, adopted, voted, directed, received, discussed, or acted on an upcoming item.",
+              "Historical actions inside supporting reports may remain only when explicitly attributed to the report, staff, presenter, or an earlier meeting.",
+              "Preserve all required headings and coverage of early, middle, and late chunks.",
+              "Treat numeric grounding as a closed vocabulary: do not introduce any digit, decimal, percentage, currency amount, year, date fragment, or numbered item absent from the supplied chunks.",
+              "Omit financial figures and disputed historical details unless they are essential, directly supported, and clearly attributed. Keep the complete preview under 350 words.",
+              `TEMPORAL_DEFECTS_TO_REMOVE: ${temporalDefects.join(", ")}`,
+              `REJECTED_PREVIEW:\n${String(bestText || "").trim()}`,
+              "Return exactly these headings: # Whole Meeting Summary, ## Top Newsworthy Developments, ## Why It Matters, ## Watch Next.",
+              "CHUNK_SUMMARIES:",
+              chunkSource,
+              "RANKED_NEWS_CANDIDATES:",
+              (Array.isArray(priorityItems) ? priorityItems : [])
+                .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
+                .join("\n") || "(none)",
+              SUMMARY_TIME_MODE === "upcoming"
+                ? "FINAL REMINDER: the meeting has not happened. Use scheduled/proposed/will consider/staff recommend; never use completed-meeting verbs for the governing body."
+                : "FINAL REMINDER: preserve source-supported status and attribution.",
+            ].join("\n\n"),
+          },
+        ],
+        { numPredict: 1400 },
+      );
+      const repairedDraft = normalizeRequiredSummaryHeadings(String(repairedRaw || "").trim());
+      const repairedTemporalDefects = previewTemporalDefects(repairedDraft);
+      const repairedNumericDefects = unsupportedNumericTokens(repairedDraft, numericGroundingSource);
+      const repairedBodyDefects = governingBodyDefects(repairedDraft, bodyLabel, chunkSource);
+      const repairedFinancialAudit = await auditFinancialClaim({
+        ask,
+        sourceText: numericGroundingSource,
+        candidateText: repairedDraft,
+        context: "Upcoming whole-meeting preview temporal repair; preserve financial category, certainty, attribution, and decision status.",
+      });
+      const coverageAudit = await auditFinalChunkCoverage({
+        chunks: chunksArtifact?.chunks || [],
+        summaryMd: repairedDraft,
+      });
+      const repairedReviews = [];
+      for (let reviewIndex = 0; reviewIndex < 3; reviewIndex += 1) {
+        repairedReviews.push(await ask(
+          [
+            { role: "system", content: "You are a strict semantic verifier for civic agenda previews. Judge only against the supplied sources." },
+            {
+              role: "user",
+              content: buildFinalScorePrompt({
+                chunkSource,
+                summaryMd: repairedDraft,
+                bodyLabel,
+                jurisdiction,
+                meetingDateIso,
+                meetingDateLong,
+                priorityItems,
+              }),
+            },
+          ],
+          { numPredict: 360 },
+        ));
+      }
+      const repairedReviewScores = repairedReviews.map(parseScore).sort((a, b) => a - b);
+      const repairedVerifierScore = repairedReviewScores[Math.floor(repairedReviewScores.length / 2)] || 0;
+      const repairedReview = repairedReviews.map((value, index) => `REVIEW_${index + 1}:\n${value}`).join("\n\n");
+      const completenessPenalty = hasCompleteRequiredSections(repairedDraft) ? 0 : 0.4;
+      const stylePenalty = synthesisPenalty(repairedDraft);
+      const temporalPenalty = repairedTemporalDefects.length ? 0.6 : 0;
+      const bodyPenalty = repairedBodyDefects.length ? 0.6 : 0;
+      const numericPenalty = repairedNumericDefects.length ? 0.6 : 0;
+      const coveragePenalty = coverageAudit.missing.length ? 1 : 0;
+      const financialPenalty = repairedFinancialAudit.verdict === "PASS" ? 0 : 0.7;
+      const repairedScore = Math.max(0, repairedVerifierScore - completenessPenalty - stylePenalty - temporalPenalty - bodyPenalty - numericPenalty - coveragePenalty - financialPenalty);
+      const diagnostics = [
+        `temporal_repair_attempt=${temporalRepairAttempt}`,
+        `verifier=${repairedVerifierScore.toFixed(3)}`,
+        `temporal_penalty=${temporalPenalty.toFixed(3)}`,
+        `numeric_penalty=${numericPenalty.toFixed(3)}`,
+        `financial_penalty=${financialPenalty.toFixed(3)}`,
+        `coverage_penalty=${coveragePenalty.toFixed(3)}`,
+        `score=${repairedScore.toFixed(3)}`,
+      ].join(" ");
+      log(`[meeting-summary][temporal-repair] ${diagnostics}`);
+      const repairedIsClean = repairedTemporalDefects.length === 0
+        && repairedNumericDefects.length === 0
+        && repairedBodyDefects.length === 0
+        && coverageAudit.missing.length === 0
+        && repairedFinancialAudit.verdict === "PASS";
+      if (repairedIsClean || repairedScore > bestScore) {
+        bestText = repairedDraft;
+        bestScore = repairedScore;
+        bestReview = repairedReview;
+        bestDiagnostics = diagnostics;
+        bestFinancialAudit = repairedFinancialAudit;
+      }
+      if (repairedScore >= PASS_THRESHOLD
+        && repairedTemporalDefects.length === 0
+        && repairedNumericDefects.length === 0
+        && repairedBodyDefects.length === 0
+        && coverageAudit.missing.length === 0
+        && repairedFinancialAudit.verdict === "PASS") {
+        break;
+      }
+    }
+  }
+
+  const qualityCoverageAudit = { missing: [...bestCoverageMissing] };
+  const qualityDefects = () => [
+    ...(SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(bestText) : []),
+    ...unsupportedNumericTokens(bestText, numericGroundingSource),
+    ...governingBodyDefects(bestText, bodyLabel, chunkSource),
+    ...(qualityCoverageAudit.missing || []).map((chunkId) => `missing ${chunkId}`),
+    ...(bestFinancialAudit?.verdict === "PASS" ? [] : ["financial claim audit failed"]),
+  ];
+  const qualityGateNeedsRepair = bestScore < PASS_THRESHOLD || qualityDefects().length;
+  if (qualityGateNeedsRepair) {
+    for (let qualityRepairAttempt = 1; qualityRepairAttempt <= 3; qualityRepairAttempt += 1) {
+      const defects = qualityDefects();
+      const repairedRaw = await ask(
+        [
+          { role: "system", content: "Write a fresh, complete, source-grounded civic meeting summary. Return markdown only." },
+          {
+            role: "user",
+            content: [
+              "Start over from the supplied chunk summaries and write a complete whole-meeting summary.",
+              "Preserve the exact four required headings and cover at least one substantive topic from every supplied chunk, including the first and last chunks.",
+              SUMMARY_TIME_MODE === "upcoming"
+                ? "This is an upcoming preview. Use scheduled/proposed/future wording; never say the governing body reviewed, considered, approved, adopted, voted, directed, received, confirmed, or discussed an upcoming item. Do not repeat the meeting date or describe call to order, minutes confirmation, public forum, or adjournment as completed events."
+                : "This is a recap. Preserve source-supported decision status and attribution.",
+              "Use only facts and numeric tokens present in the supplied chunks or ranked candidates. Omit unsupported numbers rather than guessing.",
+              "Omit financial figures and disputed historical details unless they are essential, directly supported, and clearly attributed.",
+              "Keep the complete summary under 350 words; omit uncertain detail instead of filling space.",
+              `REPAIR_DEFECTS: ${defects.join(", ") || "low quality score"}`,
+              "Return exactly these headings: # Whole Meeting Summary, ## Top Newsworthy Developments, ## Why It Matters, ## Watch Next.",
+              "CHUNK_SUMMARIES:",
+              chunkSource,
+              "RANKED_NEWS_CANDIDATES:",
+              (Array.isArray(priorityItems) ? priorityItems : [])
+                .map((it, idx) => `${idx + 1}. [${it.index}] ${it.heading}`)
+                .join("\n") || "(none)",
+              SUMMARY_TIME_MODE === "upcoming"
+                ? "FINAL REMINDER: the meeting has not happened. Use scheduled/proposed/will consider/staff recommend; never use completed-meeting verbs for the governing body."
+                : "FINAL REMINDER: preserve source-supported status and attribution.",
+            ].join("\n\n"),
+          },
+        ],
+        { numPredict: 1400 },
+      );
+      const repairedDraft = normalizeRequiredSummaryHeadings(String(repairedRaw || "").trim());
+      const repairedCoverageAudit = await auditFinalChunkCoverage({
+        chunks: chunksArtifact?.chunks || [],
+        summaryMd: repairedDraft,
+      });
+      const repairedTemporalDefects = SUMMARY_TIME_MODE === "upcoming" ? previewTemporalDefects(repairedDraft) : [];
+      const repairedNumericDefects = unsupportedNumericTokens(repairedDraft, numericGroundingSource);
+      const repairedBodyDefects = governingBodyDefects(repairedDraft, bodyLabel, chunkSource);
+      const repairedFinancialAudit = await auditFinancialClaim({
+        ask,
+        sourceText: numericGroundingSource,
+        candidateText: repairedDraft,
+        context: "Whole-meeting quality repair; preserve financial category, certainty, attribution, and decision status.",
+      });
+      const repairedReviews = [];
+      for (let reviewIndex = 0; reviewIndex < 3; reviewIndex += 1) {
+        repairedReviews.push(await ask(
+          [
+            { role: "system", content: "You are a strict semantic verifier for civic meeting summaries. Judge only against the supplied sources." },
+            {
+              role: "user",
+              content: buildFinalScorePrompt({
+                chunkSource,
+                summaryMd: repairedDraft,
+                bodyLabel,
+                jurisdiction,
+                meetingDateIso,
+                meetingDateLong,
+                priorityItems,
+              }),
+            },
+          ],
+          { numPredict: 360 },
+        ));
+      }
+      const repairedReviewScores = repairedReviews.map(parseScore).sort((a, b) => a - b);
+      const repairedVerifierScore = repairedReviewScores[Math.floor(repairedReviewScores.length / 2)] || 0;
+      const repairedReview = repairedReviews.map((value, index) => `REVIEW_${index + 1}:\n${value}`).join("\n\n");
+      const repairedPenalty = (hasCompleteRequiredSections(repairedDraft) ? 0 : 0.4)
+        + synthesisPenalty(repairedDraft)
+        + (repairedTemporalDefects.length ? 0.6 : 0)
+        + (repairedBodyDefects.length ? 0.6 : 0)
+        + (repairedNumericDefects.length ? 0.6 : 0)
+        + (repairedCoverageAudit.missing.length ? 1 : 0)
+        + (repairedFinancialAudit.verdict === "PASS" ? 0 : 0.7);
+      const repairedScore = Math.max(0, repairedVerifierScore - repairedPenalty);
+      log(`[meeting-summary][quality-repair] attempt=${qualityRepairAttempt} verifier=${repairedVerifierScore.toFixed(3)} score=${repairedScore.toFixed(3)} missing_chunks=${repairedCoverageAudit.missing.join(",") || "(none)"}`);
+      const repairedIsClean = repairedTemporalDefects.length === 0
+        && repairedNumericDefects.length === 0
+        && repairedBodyDefects.length === 0
+        && repairedCoverageAudit.missing.length === 0
+        && repairedFinancialAudit.verdict === "PASS";
+      if (repairedIsClean || repairedScore > bestScore) {
+        bestText = repairedDraft;
+        bestScore = repairedScore;
+        bestReview = repairedReview;
+        bestDiagnostics = `quality_repair_attempt=${qualityRepairAttempt} score=${repairedScore.toFixed(3)}`;
+        bestFinancialAudit = repairedFinancialAudit;
+        qualityCoverageAudit.missing = repairedCoverageAudit.missing;
+      }
+      if (repairedScore >= PASS_THRESHOLD
+        && repairedTemporalDefects.length === 0
+        && repairedNumericDefects.length === 0
+        && repairedBodyDefects.length === 0
+        && repairedCoverageAudit.missing.length === 0
+        && repairedFinancialAudit.verdict === "PASS") {
+        break;
+      }
+    }
   }
 
   if (SUMMARY_TIME_MODE === "upcoming") {
