@@ -57,18 +57,6 @@ const NAME_LOCK_WINDOW_SECONDS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_NAME_LOCK_WINDOW_SECONDS || 90);
   return Number.isFinite(raw) && raw > 0 ? raw : 90;
 })();
-const TURN_MAX_SECONDS = (() => {
-  const raw = Number(process.env.PYA_SPEAKER_TURN_MAX_SECONDS || 14);
-  return Number.isFinite(raw) && raw > 0 ? raw : 14;
-})();
-const TURN_MAX_WORDS = (() => {
-  const raw = Number(process.env.PYA_SPEAKER_TURN_MAX_WORDS || 80);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 80;
-})();
-const TURN_MAX_GAP_SECONDS = (() => {
-  const raw = Number(process.env.PYA_SPEAKER_TURN_MAX_GAP_SECONDS || 1.2);
-  return Number.isFinite(raw) && raw >= 0 ? raw : 1.2;
-})();
 const EDGE_PROBE_SECONDS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_EDGE_PROBE_SECONDS || 3.2);
   return Number.isFinite(raw) && raw > 0 ? raw : 3.2;
@@ -103,31 +91,13 @@ const MIN_NEW_SPEAKER_SIMILARITY = (() => {
   const raw = Number(process.env.PYA_SPEAKER_MIN_NEW_SIMILARITY || 0.55);
   return Number.isFinite(raw) ? raw : 0.55;
 })();
-const REASSIGN_PASS_ENABLED = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_REASSIGN_PASS || '0'));
-const RELABEL_MODE = String(process.env.PYA_SPEAKER_RELABEL_MODE || '').trim().toLowerCase();
-const EXPECTED_MAX_SPEAKERS = (() => {
-  const raw = Number(process.env.PYA_SPEAKER_EXPECTED_MAX || 0);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
-})();
-const TWO_SPEAKER_CUE_TURNS = (() => {
-  const raw = String(process.env.PYA_SPEAKER_TWO_SPEAKER_CUE_TURNS || '').trim();
-  if (/^(0|false|no)$/iu.test(raw)) return false;
-  if (/^(1|true|yes)$/iu.test(raw)) return true;
-  return EXPECTED_MAX_SPEAKERS === 2;
-})();
-// Keep the old variable as a compatibility alias, but expose a neutral
-// sentence-level switch for panels. Every cue is classified independently;
-// this prevents a long turn from forcing one voice across a handoff.
-const CUE_LEVEL_TURNS = (() => {
-  const raw = String(process.env.PYA_SPEAKER_CUE_LEVEL_TURNS || '').trim();
-  if (/^(0|false|no)$/iu.test(raw)) return false;
-  if (/^(1|true|yes)$/iu.test(raw)) return true;
-  return TWO_SPEAKER_CUE_TURNS;
-})();
-const REASSIGN_WINDOW_ROWS = (() => {
-  const raw = Number(process.env.PYA_SPEAKER_REASSIGN_WINDOW_ROWS || 12);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 12;
-})();
+// Speaker attribution is deliberately sentence/cue-level only. The former
+// aggregate-turn and small-panel reconciliation passes could merge a
+// moderator question with the following candidate answer when both shared a
+// raw embedding key. Keep accepting the old environment variables at the
+// wrapper boundary for compatibility, but ignore them here so no invocation
+// can re-enable aggregate relabeling.
+const CUE_LEVEL_TURNS = true;
 const BAD_SAMPLE_GUARD_ENABLED = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_BAD_SAMPLE_GUARD || '0'));
 const BAD_SAMPLE_MIN_SECONDS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_BAD_SAMPLE_MIN_SECONDS || 1.1);
@@ -1026,73 +996,6 @@ function applySmallPanelReassign(rows, { expectedMax, windowRows, sampleQualityB
   };
 }
 
-function isLikelyHandoff(prevText, curText) {
-  const prev = String(prevText || '').toLowerCase();
-  const cur = String(curText || '').toLowerCase();
-  if (!prev || !cur) return false;
-
-  // In interviews and small panels, a completed question is the strongest
-  // deterministic signal that the following cue may come from another voice.
-  // Splitting here is harmless when the same speaker answers rhetorically:
-  // the voice classifier will simply assign both turns to the same cluster.
-  if (/[?]\s*$/u.test(String(prevText || '').trim())) return true;
-
-  // Chair/moderator invitation markers.
-  const inviteRe = /\b(you(?:'| a)?re on|go ahead|the floor is yours|welcome[, ]|please proceed|can you start|can you begin|next speaker)\b/iu;
-  // Typical opening by a newly handed-off speaker.
-  const openRe = /\b(thank you|good (morning|afternoon|evening)|by way of introduction|my name is|through you|mr\.? chair|madam chair|your worship)\b/iu;
-  if (inviteRe.test(prev) && openRe.test(cur)) return true;
-
-  // Generic "thank you" transition from a tiny prior cue is often a handoff.
-  const prevWords = countWords(prevText);
-  const curWords = countWords(curText);
-  if (/\bthank you\b/iu.test(cur) && prevWords <= 6 && curWords <= 8) return true;
-
-  return false;
-}
-
-function buildTurnsFromCues(cues) {
-  const items = Array.isArray(cues) ? cues : [];
-  const turns = [];
-  if (!items.length) return turns;
-
-  let start = 0;
-  let accWords = countWords(items[0].text);
-  for (let i = 1; i < items.length; i += 1) {
-    const prev = items[i - 1];
-    const cur = items[i];
-    const turnSince = items[start].since;
-    const nextUntil = cur.until;
-    const gap = Math.max(0, cur.since - prev.until);
-    const nextDuration = Math.max(0.01, nextUntil - turnSince);
-    const nextWords = accWords + countWords(cur.text);
-    const shouldSplit = (
-      gap > TURN_MAX_GAP_SECONDS ||
-      nextDuration > TURN_MAX_SECONDS ||
-      nextWords > TURN_MAX_WORDS ||
-      isLikelyHandoff(prev.text, cur.text)
-    );
-    if (shouldSplit) {
-      turns.push({
-        since: items[start].since,
-        until: items[i - 1].until,
-        cues: items.slice(start, i),
-      });
-      start = i;
-      accWords = countWords(cur.text);
-      continue;
-    }
-    accWords = nextWords;
-  }
-
-  turns.push({
-    since: items[start].since,
-    until: items[items.length - 1].until,
-    cues: items.slice(start),
-  });
-  return turns;
-}
-
 function buildCueLevelTurns(cues) {
   return (Array.isArray(cues) ? cues : []).map((cue) => ({
     since: cue.since,
@@ -1218,7 +1121,6 @@ async function main() {
 
   const outSrt = path.join(transcriptDir, `${resolvedPrefix}.speaker.sentence.srt`);
   const outJson = path.join(transcriptDir, `${resolvedPrefix}.speaker.sentences.json`);
-  const outReassignReport = path.join(transcriptDir, `${resolvedPrefix}.speaker.reassign.report.json`);
 
   const cues = parseSrt(fs.readFileSync(mergedSrt, 'utf8'));
   if (!cues.length) throw new Error(`no cues parsed from ${mergedSrt}`);
@@ -1233,14 +1135,12 @@ async function main() {
   process.stdout.write(`[speaker-sentence] isolate voices: ${isolateVoices ? 'on' : 'off'}\n`);
   process.stdout.write(`[speaker-sentence] cues: ${cues.length}\n`);
   if (MAX_CUES > 0) process.stdout.write(`[speaker-sentence] cue limit: ${workCues.length}\n`);
-  const turns = CUE_LEVEL_TURNS ? buildCueLevelTurns(workCues) : buildTurnsFromCues(workCues);
+  const turns = buildCueLevelTurns(workCues);
   process.stdout.write(`[speaker-sentence] turns: ${turns.length}\n`);
   process.stdout.write(
-    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} turn_max_seconds=${TURN_MAX_SECONDS} turn_max_words=${TURN_MAX_WORDS} turn_max_gap=${TURN_MAX_GAP_SECONDS} cue_level_turns=${CUE_LEVEL_TURNS ? 'on' : 'off'} boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
+    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} sentence_level_turns=on boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
   );
-  process.stdout.write(
-    `[speaker-sentence] reassign: enabled=${REASSIGN_PASS_ENABLED ? 'on' : 'off'} mode=${RELABEL_MODE || 'default'} expected_max=${EXPECTED_MAX_SPEAKERS || 0}\n`
-  );
+  process.stdout.write('[speaker-sentence] aggregate relabel/reassign: disabled (sentence-level attribution is authoritative)\n');
   process.stdout.write(
     `[speaker-sentence] bad-sample-guard: ${BAD_SAMPLE_GUARD_ENABLED ? 'on' : 'off'} min_seconds=${BAD_SAMPLE_MIN_SECONDS} min_words=${BAD_SAMPLE_MIN_WORDS} low_density=${BAD_SAMPLE_LOW_SPEECH_DENSITY}\n`
   );
@@ -1618,30 +1518,9 @@ async function main() {
   }
 
   const metadataMap = loadSpeakerMetadataMap(voicesDir);
-  let reassignReport = null;
-  if (REASSIGN_PASS_ENABLED && RELABEL_MODE === 'small_panel' && EXPECTED_MAX_SPEAKERS > 0) {
-    reassignReport = applySmallPanelReassign(rows, {
-      expectedMax: EXPECTED_MAX_SPEAKERS,
-      windowRows: REASSIGN_WINDOW_ROWS,
-      sampleQualityBySpeaker: BAD_SAMPLE_GUARD_ENABLED ? sampleQualityBySpeaker : new Map(),
-      badSampleDetails: BAD_SAMPLE_GUARD_ENABLED ? badSampleDetails : [],
-    });
-    process.stdout.write(
-      `[speaker-sentence][reassign] keep=${reassignReport.keep.join(',')} lines_relabeled=${reassignReport.linesRelabeled} collapsed=${reassignReport.collapsedLabels.length}\n`
-    );
-    process.stdout.write(
-      `[speaker-sentence][reassign] low_conf_segments=${reassignReport.lowConfidenceSegments.length}\n`
-    );
-    fs.writeFileSync(outReassignReport, `${JSON.stringify({
-      generated_at: new Date().toISOString(),
-      mode: RELABEL_MODE,
-      enabled: true,
-      expected_max: EXPECTED_MAX_SPEAKERS,
-      window_rows: REASSIGN_WINDOW_ROWS,
-      ...reassignReport,
-    }, null, 2)}\n`, 'utf8');
-    process.stdout.write(`[speaker-sentence][reassign] wrote: ${outReassignReport}\n`);
-  }
+  // Deliberately no aggregate SpeechBrain/small-panel pass here. Any legacy
+  // reassign environment variables are ignored so a caller cannot silently
+  // switch this command back to block-level voice smoothing.
   const lockedSpeakerKeys = buildLockedSpeakerKeys(nameEvidenceBySpeaker);
   process.stdout.write(`[speaker-sentence] name-lock speakers: ${lockedSpeakerKeys.size}\n`);
   if (rows.length >= 2) {
@@ -1686,14 +1565,7 @@ async function main() {
       window_seconds: NAME_LOCK_WINDOW_SECONDS,
       speakers: [...lockedSpeakerKeys].sort(),
     },
-    reassign: reassignReport ? {
-      mode: RELABEL_MODE,
-      expected_max: EXPECTED_MAX_SPEAKERS,
-      lines_relabeled: reassignReport.linesRelabeled,
-      collapsed_labels: reassignReport.collapsedLabels,
-      low_conf_segments: reassignReport.lowConfidenceSegments.length,
-      report_path: outReassignReport,
-    } : null,
+    reassign: null,
     rows,
   }, null, 2)}\n`, 'utf8');
 

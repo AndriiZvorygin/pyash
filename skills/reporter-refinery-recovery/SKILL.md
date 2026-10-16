@@ -15,11 +15,55 @@ Use this skill only for incidents produced by `world/house/refinery-watchdog/` o
 
 For eScribe incidents, keep structured HTML identity authoritative: validate that the canonical item sequence is monotonic and do not let PDF-only inferred identities reorder it. Treat player metadata as a lead rather than proof that media exists; probe the embedded media URL before selecting an old meeting. If an ASR row is too large to preserve agenda transitions, an LLM may split it only into validated verbatim spans whose normalized concatenation exactly reproduces the source.
 
+When downloading eScribe attachments through a browser, canonicalize calendar-detail links to the meeting agenda route and reuse a valid cached `%PDF-` file before making another request; challenge HTML is not a PDF. For raster attachments, keep substantive scanned-document OCR strict, but let the configured vision-capable text model explicitly classify photograph-only pages so incidental signage does not turn an image-only bundle into a false partial-document failure.
+
 When Stage 3 fails after partial generation, check both transport availability and the grounding contract before rerunning. Model-specific generation retries should own Ollama availability; a separate single-shot `/api/tags` preflight can create a false-negative failure during a brief LAN flap. For agenda previews, split every oversized attachment block into bounded, lossless source chunks before Stage 3 and verify their normalized concatenation reproduces the complete source.
 
 When chronology segmentation repeatedly returns length-truncated JSON, do not retry the same oversized request unchanged. Keep the complete chronology, but split it into smaller overlapping LLM windows and retain strict literal-evidence validation; bounded output-token growth is a secondary retry, not a substitute for lossless input chunking.
 
+For parent/container agenda spans, stop at the first explicit child handoff and keep child codes, dates, committee/document identity, recommendations, reports, motions, and outcomes out of the parent prose.
+
+When adjacent agenda items share an item-owning committee or board identity, do not cut the current source at that shared identity; require a distinct next-item title or explicit handoff so the current item's own motion and vote remain in scope.
+
+When a transcript date conflicts with the authoritative structured eScribe date, use the structured date for identity or omit the date; do not repeat an ASR date discrepancy.
+
+When the source explicitly says it is returning to the next set or next item, keep the current item's preceding motion and disposition, and exclude all later-item material from that summary.
+
+When a structured parent/container source span includes preview text followed by a procedural handoff, scope Stage 3 at that first handoff before generation; a welcome, request, or proposed ordering is not evidence that the previewed report was presented. Keep this boundary rule generic and preserve the full child chronology in its own authoritative item.
+
 Numeric grounding must compare Arabic output with both Arabic and spoken-number source forms. At whole-meeting synthesis, validate against every source exposed to generation, including ranked candidates and authoritative meeting metadata. A bounded LLM retry loop must apply the complete downstream output contract before returning so malformed one-sentence prose remains retryable inside generation.
+
+After any downstream LLM repair regenerates prose, reapply every earlier output contract before the next audit, including transcript-speaker metadata removal; a repair that passes grounding but reintroduces forbidden metadata remains retryable.
+
+For minutes of another committee or board, distinguish the referenced body's identity from the current meeting's action: a current-meeting motion to move or approve those minutes followed by a carried vote belongs to the authoritative current meeting body unless the source explicitly places it in the earlier meeting.
+
+Keep minutes narrative separate from the current meeting's minutes motion. If the source says “move the minutes,” preserve that literal action rather than upgrading it to “approve,” and attach the carried vote only to that motion; recommendations or discussion inside the referenced minutes are not a carried current-meeting report outcome.
+
+For short procedural fragments, preserve literal self-reports as reported speech: “I've covered” and “No” may be summarized as what the speaker said or answered, but not upgraded to a formal agenda confirmation, approval, or minutes entry.
+
+For motion revisions, distinguish a substantive amendment to a bylaw or policy from an amendment to the motion. A motion to amend the named bylaw or policy can carry even when a proposed amendment to that motion does not; “no amendment was made to the motion” does not erase a separately stated substantive document amendment. A document-qualified statement that the body approved an amendment to the named bylaw is not the same as approving an amendment to the motion when the source states both levels. If both appear, use explicit wording such as “the motion to amend the named document carried” and “the proposed amendment to the motion was not accepted.” Preserve later nominations or acclamations as separate actions.
+
+For missing substantive items and non-procedural child presentations/deputations, require distinctive direct title evidence such as the report code, named subject, or multiple non-generic title terms, or an exact spoken item code before accepting a recovered transcript boundary. A neighboring span that shares only generic words such as “community,” “services,” “request,” “lands,” or “report” is not ownership; if no direct evidence exists, leave the item skipped rather than manufacturing a boundary or assigning another report's prose to it.
+
+When a motion to defer or postpone an item is defeated, do not write that the item was deferred or postponed; report the defeated motion and any later carried motion as separate dispositions.
+
+When the transcript says discussion is on a reconsideration motion only, calls the question, and then says that motion is carried before introducing a later recommendation, accept that explicit carried disposition without requiring a numeric vote count; keep the later recommendation separate.
+
+Do not bind a generic carried or approved outcome to every category in a list. A current category inherits an action only when the source explicitly identifies that category as the motion's subject.
+
+For bare agenda-category fragments, do not infer a staff report, speaker, motion subject, approval, or carried outcome from the label or neighboring categories; keep the generated description neutral to the bounded evidence.
+
+For a category-only fragment with no item-specific action, use fresh model prose that says the category was listed and no specific disposition is recorded; do not repeat a trailing generic “carried” phrase as the category's action.
+
+Treat categories in such a fragment as parallel agenda items. Do not introduce “under,” “within,” “part of,” or other unsupported hierarchy between the current category and neighboring categories.
+
+Keep reported historical actions separate from current receipt motions: a past approval by another body stays attributed to that body, while the current meeting may only be described as receiving the report unless it explicitly acts on the underlying matter.
+
+When the current meeting body is authoritative and the bounded source records a current-meeting motion and vote, a generic member of that body may be used even if the transcript exposes only an internal speaker label; do not use that role for an incomplete fragment without a disposition.
+
+Do not require the literal body name in the transcript for that contextual attribution: with an authoritative Council identity plus an explicit motion and carried vote, “a council member moved” is grounded even when the source exposes only an internal speaker label.
+
+Treat meeting labels such as “Council Meeting - Regular” as authoritative Council identity for this rule.
 
 Require an explicit semantic coverage check for every chronology chunk in whole-meeting output. An aggregate reviewer score alone can hide an omitted early or late topic.
 
@@ -62,3 +106,7 @@ Local reporter LLM work must use only the canonical text model declared in `.pya
 For corrected transcript-to-ASR timing, local word-count progression is not a safe alignment contract: an edited or removed passage can cause every later cue to drift, and consuming an unmatched sentence once while locating its start and again while locating its end doubles that error. Align corrected sentences with a monotonic chain of globally unique verbatim n-grams from the ASR word clock, retain exact ASR cue boundaries, and fail long inputs whose document-anchor coverage is too low. This deterministic evidence validation is for timestamps only; it must not replace LLM chronology segmentation or prose generation.
 
 When a recording proves that a named meeting waited for quorum and adjourned without reaching agenda business, let Qwen ground the scope at the target-specific quorum unit and preserve the complete procedural chronology without inventing substantive items. Generated procedural recaps remain publishable when non-empty; substantive-item gates must still reject empty or timed-out prose. For Stage 3 JSON retries, include the rejected malformed response and vary the repair instruction; bound repair output structurally rather than parsing or fabricating prose deterministically.
+
+Keep financial direction attached to the source category for every amount: additional funding, budget increases, repair or project costs, allowances, contingencies, estimates, and reserve draws are requests or costs, not savings. A separate efficiency saving, available reserve, or no-immediate-budget-impact statement must not be merged with a requested cost. Classify and repair these claims with the canonical local text model, then keep the non-empty source-faithful gate strict.
+
+Scale whole-meeting child-process timeouts with recording length when synthesis performs chunk reviews, coverage adjudication, and bounded source-grounded repairs. Recap-mode repairs must use completed-meeting action and decision status; upcoming-preview instructions must never leak into a completed transcript recap.
