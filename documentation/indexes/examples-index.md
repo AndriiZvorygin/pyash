@@ -7,3 +7,4 @@
 | Loops | `examples/core/until-loop.md` | `examples/pyash/insertion-sort.pya` |
 | Vectors | `examples/core/vector.md` | `examples/pyash/vector-write-index.pya` |
 | Ceremonies | `examples/core/ceremony-invoke.md` | `examples/pyash/ceremony-invoke.pya` |
+| Agent research workflow | bounded search, download, HTML-to-Markdown reading, typed session output, and newspaper evidence | `examples/pyash/agent-research-workflow.pya` |

@@ -1,5 +1,5 @@
 // bridge (formerly dispatcher)
-import { plus, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, chip, understand, read, mind, giant, tiny, equally } from "../verbs/index.mjs";
+import { plus, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, chip, understand, read, mind, giant, tiny, equally, headquarters, ratify } from "../verbs/index.mjs";
 import {
   remember,
   doRemember,
@@ -11,6 +11,7 @@ import {
   getDefinitionBody,
   pushMemoryContext,
   popMemoryContext,
+  hasMemoryContext,
   recordSandpitTrace
 } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
@@ -23,6 +24,7 @@ import { deriveSignatureFromDefinition, registerSignature, registerSignatureHand
 import { builtInSignatures } from "../verbs/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { applyEnvDefaults } from "../configure/env.mjs";
+import { isEvidenceSentence, normalizeClaimSentence, normalizeEvidence } from "../library/knowledge_core.mjs";
 
 function resolveFillCount(by, remember) {
   if (!by) return null;
@@ -365,6 +367,11 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
 
   if (mood === "ya" || mood === "def") {
     if (mood === "ya") {
+      if (isEvidenceSentence(sentence)) {
+        const normalized = normalizeClaimSentence(sentence);
+        normalizeEvidence(normalized);
+        Object.assign(sentence, normalized);
+      }
       const name = su?.name;
       if (name && !sentence.exists && sentence.be !== "export" && !remember(name)) {
         const pyash = sentenceToPyash(sentence);
@@ -410,7 +417,7 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
   }
 
   // --- Imperative ---
-  if (mood === "do") {
+  if (mood === "do" || (mood === "propose" && be === "command")) {
     if (sentence.exists) {
       throwErrorSentence({
         name: "exists defective",
@@ -428,6 +435,7 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
         allRemember,
         pushMemoryContext,
         popMemoryContext,
+        hasMemoryContext,
         getDefinition,
         getDefinitionEntries,
         getDefinitionEntryBySignature
@@ -452,6 +460,7 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
         allRemember,
         pushMemoryContext,
         popMemoryContext,
+        hasMemoryContext,
         getDefinition,
         getDefinitionEntries,
         getDefinitionEntryBySignature

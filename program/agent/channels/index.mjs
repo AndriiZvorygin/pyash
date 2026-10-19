@@ -11,6 +11,11 @@ import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
 import { loadImportPolicyWithGlobal } from "../import/policy.mjs";
 import { beginActiveMindRun, requestMindInterrupt } from "../interrupt.mjs";
 import { buildRouterProduceRequestSentence } from "../channel_core/contract.mjs";
+import { appendChannelOutcome } from "./outcome.mjs";
+import {
+  authorizeChannelAction,
+  channelCapabilityAllowed
+} from "./authorization.mjs";
 import {
   readChannelRuntimeState,
   writeChannelRuntimeState
@@ -19,6 +24,7 @@ import {
   enqueueInputEnvelope,
   enqueueProduceEnvelope,
   claimOldestInputEnvelope,
+  claimOldestRuntimeInputEnvelope,
   claimOldestProduceEnvelope,
   ackRuntimeEnvelopeSuccess,
   ackRuntimeEnvelopeFail,
@@ -773,7 +779,8 @@ async function dispatchChannelEvents({
   selfState,
   dedupLimit,
   debug,
-  outputMode = "direct"
+  outputMode = "direct",
+  propagateInterpretErrors = false
 }) {
   let received = 0;
   let handled = 0;
@@ -799,6 +806,7 @@ async function dispatchChannelEvents({
 
   for (const event of events) {
     received += 1;
+    const dedupKey = channelEventDedupKey(event, channelType);
     const listenerAgents = roomListenerAgents(channelConfig, event.channelId, agentName);
     const eventIsDmRoom = isDmEvent(event, dmRooms);
     const targetedByMention = resolveMentionTargets({
@@ -814,7 +822,7 @@ async function dispatchChannelEvents({
       ? (repliedToSelf ? listenerAgents : targetedByMention)
       : (targetedByMention.length ? targetedByMention : listenerAgents);
 
-    if (dedupIds.has(event.eventId)) {
+    if (dedupIds.has(dedupKey) || dedupIds.has(event.eventId)) {
       skippedDedup += 1;
       if (debug) {
         await appendTelemetry(agentHouse, {
@@ -833,8 +841,8 @@ async function dispatchChannelEvents({
       }
       continue;
     }
-    dedupIds.add(event.eventId);
-    dedupState.order.push(event.eventId);
+    dedupIds.add(dedupKey);
+    dedupState.order.push(dedupKey);
     while (dedupState.order.length > dedupLimit) {
       const removed = dedupState.order.shift();
       if (!removed) break;
@@ -965,7 +973,8 @@ async function dispatchChannelEvents({
       const targetAgentHouse = resolveTargetAgentHouse(worldRootResolved, targetAgent);
       const routedEvent = {
         ...event,
-        text: orchestratorDirective.payloadText || event.text
+        text: orchestratorDirective.payloadText || event.text,
+        routerPayloadId: orchestratorDirective.payloadId
       };
       if (typeof adapter?.downloadAttachments === "function" && event.attachments?.length) {
         const dayStamp = dateStampFromIso(event.timestamp);
@@ -1010,17 +1019,50 @@ async function dispatchChannelEvents({
         payloadId: orchestratorDirective.payloadId,
         agentCwd: targetAgentHouse
       });
+      const channelProcessingContext = buildChannelProcessingContext({
+        agentName: targetAgent,
+        event: routedEvent,
+        payloadId: orchestratorDirective.payloadId,
+        sessionName: orchestratorDirective.sessionName,
+        agentHouse: targetAgentHouse
+      });
       handled += 1;
       let responseText = "";
-      const includeToolSummary = shouldIncludeToolSummary({
-        channelConfig,
-        event,
-        dmRooms
-      });
-      const mindInputs = buildMindInputsFromAttachments(routedEvent.attachmentsSaved);
-      const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
-      let toolEventCount = 0;
-      const sendControlMessage = async (content) => {
+      const responseSuppressed = adapter?.suppressResponse === true;
+      let sendAuthorizationPromise = null;
+      const authorizeSend = async () => {
+        if (!sendAuthorizationPromise) {
+          sendAuthorizationPromise = authorizeChannelAction({
+            worldRoot: worldRootResolved,
+            agentName: targetAgent,
+            channelConfig,
+            action: "send",
+            proposal: {
+              subjectName: "channel email send",
+              toolName: `${channelType} channel send`
+            }
+          });
+        }
+        return sendAuthorizationPromise;
+      };
+      const sendResponse = async (content) => {
+        if (responseSuppressed) return false;
+        const authorization = await authorizeSend();
+        if (!authorization.allowed) {
+          try {
+            await appendChannelOutcome(agentHouse, {
+              channelType,
+              agentName: targetAgent,
+              area: "authorization",
+              stage: "send",
+              outcome: "fail",
+              message: `send blocked: ${authorization.reason}`
+            });
+          } catch {
+            // Channel outcome logging is best-effort.
+          }
+          return false;
+        }
         if (outputMode === "queue") {
           const produceRequest = buildRouterProduceRequestSentence({
             channelType,
@@ -1044,12 +1086,34 @@ async function dispatchChannelEvents({
             agentName: targetAgent,
             roomName: event.channelId,
             payloadId: orchestratorDirective.payloadId,
+            replyRecipient: event.replyRecipient,
+            channelIdentity: event.channelIdentity,
             payloadSentence: produceRequest
           });
           sent += 1;
-          return;
+          return true;
         }
-        const sendResult = await adapter.send({ config: channelConfig, event, content });
+        let sendResult;
+        try {
+          sendResult = await adapter.send({ config: channelConfig, event, content });
+        } catch (error) {
+          if (error?.ambiguous === true) {
+            try {
+              await appendChannelOutcome(agentHouse, {
+                channelType,
+                agentName: targetAgent,
+                area: "authorization",
+                stage: "send-reconcile",
+                outcome: "fail",
+                message: "provider send outcome is ambiguous; blocked for reconciliation"
+              });
+            } catch {
+              // Channel outcome logging is best-effort.
+            }
+            return false;
+          }
+          throw error;
+        }
         if (sendResult?.eventId) {
           selfEventIds.add(sendResult.eventId);
           selfState.order.push(sendResult.eventId);
@@ -1060,6 +1124,18 @@ async function dispatchChannelEvents({
           }
         }
         sent += 1;
+        return true;
+      };
+      const includeToolSummary = shouldIncludeToolSummary({
+        channelConfig,
+        event,
+        dmRooms
+      });
+      const mindInputs = buildMindInputsFromAttachments(routedEvent.attachmentsSaved);
+      const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
+      let toolEventCount = 0;
+      const sendControlMessage = async (content) => {
+        await sendResponse(content);
       };
       if (isStopCommand(routedEvent.text, targetAgent)) {
         const stopResult = await requestMindInterrupt({
@@ -1088,45 +1164,7 @@ async function dispatchChannelEvents({
         continue;
       }
       const sendChannelMessage = async (content) => {
-        if (outputMode === "queue") {
-          const produceRequest = buildRouterProduceRequestSentence({
-            channelType,
-            event,
-            sourceAgentName: targetAgent,
-            payloadId: orchestratorDirective.payloadId,
-            responseText: content
-          });
-          await routeChannelProduce({
-            routerInterpretFn,
-            channelType,
-            event,
-            sourceAgentName: targetAgent,
-            payloadId: orchestratorDirective.payloadId,
-            responseText: content
-          });
-          await enqueueProduceEnvelope(worldRootResolved, {
-            lane: "durable",
-            channelType,
-            identity: String(channelConfig?.user ?? "").trim(),
-            agentName: targetAgent,
-            roomName: event.channelId,
-            payloadId: orchestratorDirective.payloadId,
-            payloadSentence: produceRequest
-          });
-          sent += 1;
-          return;
-        }
-        const sendResult = await adapter.send({ config: channelConfig, event, content });
-        if (sendResult?.eventId) {
-          selfEventIds.add(sendResult.eventId);
-          selfState.order.push(sendResult.eventId);
-          while (selfState.order.length > dedupLimit) {
-            const removed = selfState.order.shift();
-            if (!removed) break;
-            selfEventIds.delete(removed);
-          }
-        }
-        sent += 1;
+        await sendResponse(content);
       };
       const onToolCall = includeToolSummary
         ? async (payload) => {
@@ -1167,7 +1205,7 @@ async function dispatchChannelEvents({
             if (interpretFn === bridgeInterpret) {
               return await mind_to_name_text(sentence, mindCallOptions);
             }
-            return await interpretFn(sentence);
+            return await interpretFn(sentence, { channelProcessingContext });
           } finally {
             if (typeof finishActiveRun === "function") await finishActiveRun();
           }
@@ -1207,7 +1245,7 @@ async function dispatchChannelEvents({
               if (interpretFn === bridgeInterpret) {
                 return await mind_to_name_text(retrySentence, retryCallOptions);
               }
-              return await interpretFn(retrySentence);
+              return await interpretFn(retrySentence, { channelProcessingContext });
             } finally {
               if (typeof finishRetryRun === "function") await finishRetryRun();
             }
@@ -1228,6 +1266,7 @@ async function dispatchChannelEvents({
           }
         }
       } catch (err) {
+        if (propagateInterpretErrors && interpretFn !== bridgeInterpret) throw err;
         if (isMindUnavailableError(err)) {
           responseText = noMindConfiguredFallback();
         } else if (isMindInterruptedError(err)) {
@@ -1273,35 +1312,7 @@ async function dispatchChannelEvents({
         }, { channelType, agentName });
       }
       if (!responseText) responseText = emptyMindFallback();
-      const produceRequest = buildRouterProduceRequestSentence({
-        channelType,
-        event,
-        sourceAgentName: targetAgent,
-        payloadId: orchestratorDirective.payloadId,
-        responseText
-      });
-      await routeChannelProduce({
-        routerInterpretFn,
-        channelType,
-        event,
-        sourceAgentName: targetAgent,
-        payloadId: orchestratorDirective.payloadId,
-        responseText
-      });
-      if (outputMode === "queue") {
-        await enqueueProduceEnvelope(worldRootResolved, {
-          lane: "durable",
-          channelType,
-          identity: String(channelConfig?.user ?? "").trim(),
-          agentName: targetAgent,
-          roomName: event.channelId,
-          payloadId: orchestratorDirective.payloadId,
-          payloadSentence: produceRequest
-        });
-        sent += 1;
-      } else {
-        await sendChannelMessage(responseText);
-      }
+      await sendChannelMessage(responseText);
     }
   }
 
@@ -1340,6 +1351,38 @@ export function buildChannelMindSentence({
   return sentence;
 }
 
+/**
+ * The serializable input contract supplied beside a channel mind sentence.
+ * @typedef {Object} ChannelProcessingContext
+ * @property {string} channelType
+ * @property {string} channelId
+ * @property {string} eventId
+ * @property {string} agentName
+ * @property {string} routerPayloadId
+ * @property {string} sessionName
+ * @property {string} agentHouse
+ * @property {Object} event
+ */
+export function buildChannelProcessingContext({
+  agentName,
+  event,
+  payloadId,
+  sessionName,
+  agentHouse
+} = {}) {
+  const normalizedEvent = cloneValue(event ?? {});
+  return {
+    channelType: String(normalizedEvent.channelType ?? "").trim(),
+    channelId: String(normalizedEvent.channelId ?? "").trim(),
+    eventId: String(normalizedEvent.eventId ?? "").trim(),
+    agentName: String(agentName ?? "").trim(),
+    routerPayloadId: String(payloadId ?? normalizedEvent.routerPayloadId ?? "").trim(),
+    sessionName: String(sessionName ?? "").trim(),
+    agentHouse: String(agentHouse ?? "").trim(),
+    event: normalizedEvent
+  };
+}
+
 function normalizeEvent(rawEvent, channelType) {
   if (!rawEvent || typeof rawEvent !== "object") return null;
   const eventId = String(rawEvent.eventId ?? "").trim();
@@ -1358,7 +1401,26 @@ function normalizeEvent(rawEvent, channelType) {
     timestamp: rawEvent.timestamp ? String(rawEvent.timestamp) : nowIso(),
     laneName: rawEvent.laneName ? String(rawEvent.laneName) : null,
     attachments: Array.isArray(rawEvent.attachments) ? rawEvent.attachments : [],
-    dmRoom: rawEvent.dmRoom === true || rawEvent.directRoom === true
+    dmRoom: rawEvent.dmRoom === true || rawEvent.directRoom === true,
+    provider: rawEvent.provider ? String(rawEvent.provider) : "",
+    account: rawEvent.account ? String(rawEvent.account) : "",
+    messageId: rawEvent.messageId ? String(rawEvent.messageId) : "",
+    rfcMessageId: rawEvent.rfcMessageId ? String(rawEvent.rfcMessageId) : "",
+    historyId: rawEvent.historyId ? String(rawEvent.historyId) : "",
+    replyRecipient: rawEvent.replyRecipient
+      ? String(rawEvent.replyRecipient)
+      : sender,
+    subject: rawEvent.subject ? String(rawEvent.subject) : "",
+    receivedAt: rawEvent.receivedAt ? String(rawEvent.receivedAt) : "",
+    domain: rawEvent.domain ? String(rawEvent.domain) : "",
+    deadline: rawEvent.deadline ? String(rawEvent.deadline) : "",
+    decisionRequired: rawEvent.decisionRequired === true,
+    draftResponseRequested: rawEvent.draftResponseRequested === true,
+    mutationRequested: rawEvent.mutationRequested === true,
+    sourceLocator: rawEvent.sourceLocator ? String(rawEvent.sourceLocator) : "",
+    channelIdentity: rawEvent.channelIdentity && typeof rawEvent.channelIdentity === "object"
+      ? cloneValue(rawEvent.channelIdentity)
+      : null
   };
 }
 
@@ -1380,6 +1442,12 @@ function eventFromQueueSentence(sentence) {
   } catch {
     return null;
   }
+}
+
+function channelEventDedupKey(event, channelType) {
+  return [channelType, event?.channelId, event?.eventId]
+    .map(value => String(value ?? "").trim())
+    .join("\u001f");
 }
 
 function parseChannelIdFromEndpoint(endpoint) {
@@ -1411,9 +1479,28 @@ export async function runChannelPollOnce({
   if (!agentHouse) throw new Error("runChannelPollOnce requires agentHouse");
   const worldRoot = worldRootFromAgentHouse(agentHouse);
   const lock = await acquireChannelInputLock({ worldRoot, agentName, channelType });
-  if (!lock) return { received: 0, enqueued: 0, skippedDedup: 0, durationMs: 0, queueDepth: 0, locked: true };
+  if (!lock) return { received: 0, enqueued: 0, queuedPaths: [], skippedDedup: 0, durationMs: 0, queueDepth: 0, locked: true };
 
   try {
+    if (!channelCapabilityAllowed(channelConfig, "receive")) {
+      await appendChannelOutcome(agentHouse, {
+        channelType,
+        agentName,
+        area: "authorization",
+        stage: "receive",
+        outcome: "fail",
+        message: "receive blocked: capability-deny"
+      });
+      return {
+        received: 0,
+        enqueued: 0,
+        queuedPaths: [],
+        skippedDedup: 0,
+        durationMs: 0,
+        queueDepth: 0,
+        blocked: true
+      };
+    }
     const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
     const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
       ? runtimeState.checkpoint
@@ -1424,7 +1511,7 @@ export async function runChannelPollOnce({
     const rawEvents = Array.isArray(recv?.events) ? recv.events : [];
     const events = rawEvents.map(event => normalizeEvent(event, channelType)).filter(Boolean);
     const newCheckpoint = recv?.checkpoint ?? checkpoint;
-    const checkpointText = String(checkpoint?.nextBatch ?? "").trim();
+    const checkpointText = String(checkpoint?.nextBatch ?? checkpoint?.historyId ?? "").trim();
     const shouldWarmStart = channelConfig?.warmStart === true
       && !checkpointText
       && Array.isArray(runtimeState?.dedupOrder)
@@ -1432,6 +1519,7 @@ export async function runChannelPollOnce({
       && Array.isArray(runtimeState?.selfOrder)
       && runtimeState.selfOrder.length === 0;
     let enqueued = 0;
+    const queuedPaths = [];
     let skippedDedup = 0;
     const debug = channelConfig?.debug === true;
 
@@ -1454,12 +1542,14 @@ export async function runChannelPollOnce({
         durationMs,
         received: 0,
         enqueued: 0,
+        queuedPaths: [],
         skippedDedup: 0,
         queueDepth: depth.total
       }, { channelType, agentName });
       return {
         received: 0,
         enqueued: 0,
+        queuedPaths: [],
         skippedDedup: 0,
         durationMs,
         queueDepth: depth.total,
@@ -1476,7 +1566,7 @@ export async function runChannelPollOnce({
           // best-effort only
         }
       }
-      await enqueueInputEnvelope(worldRoot, {
+      const queued = await enqueueInputEnvelope(worldRoot, {
         lane,
         channelType,
         identity: String(channelConfig?.user ?? "").trim(),
@@ -1485,6 +1575,7 @@ export async function runChannelPollOnce({
         eventId: event.eventId,
         payloadSentence: eventToQueueSentence(event)
       });
+      if (queued?.path) queuedPaths.push(queued.path);
       enqueued += 1;
     }
 
@@ -1505,6 +1596,7 @@ export async function runChannelPollOnce({
       durationMs,
       received: events.length,
       enqueued,
+      queuedPaths,
       skippedDedup,
       queueDepth: depth.total
     }, { channelType, agentName });
@@ -1519,6 +1611,7 @@ export async function runChannelPollOnce({
     return {
       received: events.length,
       enqueued,
+      queuedPaths,
       skippedDedup,
       durationMs,
       queueDepth: depth.total
@@ -1539,13 +1632,30 @@ export async function runChannelInputOnce({
   dedupLimit = 2000,
   maxItems = 10,
   concurrency = 2,
-  lane = "durable"
+  lane = "durable",
+  propagateInterpretErrors = false
 }) {
   if (!agentName) throw new Error("runChannelInputOnce requires agentName");
   if (!channelType) throw new Error("runChannelInputOnce requires channelType");
   if (typeof interpretFn !== "function") throw new Error("runChannelInputOnce requires interpretFn");
   if (!agentHouse) throw new Error("runChannelInputOnce requires agentHouse");
   const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const lock = await acquireChannelInputLock({ worldRoot, agentName, channelType });
+  if (!lock) {
+    return {
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      completedPaths: [],
+      skippedSelf: 0,
+      skippedMention: 0,
+      durationMs: 0,
+      queueDepth: 0,
+      locked: true
+    };
+  }
+  try {
   const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
   const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
     ? runtimeState.checkpoint
@@ -1553,10 +1663,18 @@ export async function runChannelInputOnce({
   const dedupState = { order: Array.isArray(runtimeState?.dedupOrder) ? [...runtimeState.dedupOrder] : [] };
   const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
   const dedupIds = new Set(dedupState.order);
+  const inFlightDedupIds = new Set();
   const selfEventIds = new Set(selfState.order);
   const claims = [];
   const limit = Math.max(1, Math.trunc(Number(maxItems) || 10));
+  const recovered = await claimOldestRuntimeInputEnvelope(worldRoot, {
+    channelType,
+    agentName,
+    lane
+  });
+  if (recovered) claims.push(recovered);
   for (let i = 0; i < limit; i += 1) {
+    if (claims.length >= limit) break;
     const claimed = await claimOldestInputEnvelope(worldRoot, {
       workerTag: `${agentName}-input`,
       channelType,
@@ -1576,7 +1694,8 @@ export async function runChannelInputOnce({
       skippedSelf: 0,
       skippedMention: 0,
       durationMs: 0,
-      queueDepth: depth.total
+      queueDepth: depth.total,
+      completedPaths: []
     };
   }
   const startMs = Date.now();
@@ -1590,6 +1709,7 @@ export async function runChannelInputOnce({
     skippedSelf: 0,
     skippedMention: 0
   };
+  const completedPaths = [];
   const processClaim = async (claim) => {
     const queuedEvent = eventFromQueueSentence(claim?.envelope?.payloadSentence);
     const event = normalizeEvent(queuedEvent, channelType);
@@ -1603,6 +1723,14 @@ export async function runChannelInputOnce({
       });
       return;
     }
+    const dedupKey = channelEventDedupKey(event, channelType);
+    const competingDedupIds = new Set(inFlightDedupIds);
+    const reservedDedupKey = !dedupIds.has(dedupKey)
+      && !dedupIds.has(event.eventId)
+      && !competingDedupIds.has(dedupKey);
+    if (reservedDedupKey) inFlightDedupIds.add(dedupKey);
+    const dispatchDedupIds = new Set([...dedupIds, ...competingDedupIds]);
+    const dispatchDedupState = { order: [...dedupState.order] };
     try {
       const dispatchResult = await dispatchChannelEvents({
         events: [event],
@@ -1614,13 +1742,14 @@ export async function runChannelInputOnce({
         routerInterpretFn,
         agentHouse,
         worldRoot,
-        dedupIds,
-        dedupState,
+        dedupIds: dispatchDedupIds,
+        dedupState: dispatchDedupState,
         selfEventIds,
         selfState,
         dedupLimit,
         debug: channelConfig?.debug === true,
-        outputMode: "queue"
+        outputMode: "queue",
+        propagateInterpretErrors
       });
       totals.received += Number(dispatchResult?.received ?? 0);
       totals.handled += Number(dispatchResult?.handled ?? 0);
@@ -1628,7 +1757,28 @@ export async function runChannelInputOnce({
       totals.skippedDedup += Number(dispatchResult?.skippedDedup ?? 0);
       totals.skippedSelf += Number(dispatchResult?.skippedSelf ?? 0);
       totals.skippedMention += Number(dispatchResult?.skippedMention ?? 0);
-      await ackRuntimeEnvelopeSuccess(worldRoot, { runtimePath: claim.path });
+      if (typeof adapter?.recordCompleted === "function" && dispatchResult?.skippedDedup === 0) {
+        try {
+          await adapter.recordCompleted({ config: channelConfig, event, agentName, worldRoot });
+        } catch {
+          // Channel outcome logging is best-effort.
+        }
+      }
+      const completed = await ackRuntimeEnvelopeSuccess(worldRoot, { runtimePath: claim.path });
+      const completedPath = typeof completed === "string" ? completed : completed?.path;
+      if (completedPath) completedPaths.push(completedPath);
+      if (reservedDedupKey) {
+        for (const committedKey of dispatchDedupState.order) {
+          if (dedupIds.has(committedKey)) continue;
+          dedupIds.add(committedKey);
+          dedupState.order.push(committedKey);
+        }
+        while (dedupState.order.length > dedupLimit) {
+          const removed = dedupState.order.shift();
+          if (!removed) break;
+          dedupIds.delete(removed);
+        }
+      }
     } catch {
       await ackRuntimeEnvelopeFail(worldRoot, {
         runtimePath: claim.path,
@@ -1636,6 +1786,8 @@ export async function runChannelInputOnce({
         maxRetries: 2,
         requeuePhase: "input"
       });
+    } finally {
+      if (reservedDedupKey) inFlightDedupIds.delete(dedupKey);
     }
   };
   const workers = Array.from({ length: Math.min(workerCount, claims.length) }, async () => {
@@ -1663,13 +1815,18 @@ export async function runChannelInputOnce({
     event: "input_dispatch",
     durationMs,
     ...totals,
-    queueDepth: depth.total
+    queueDepth: depth.total,
+    completedPaths
   }, { channelType, agentName });
   return {
     ...totals,
     durationMs,
-    queueDepth: depth.total
+    queueDepth: depth.total,
+    completedPaths
   };
+  } finally {
+    await releaseChannelInputLock(lock);
+  }
 }
 
 export async function runChannelProduceOnce({
@@ -1711,6 +1868,14 @@ export async function runChannelProduceOnce({
     const roomId = parseChannelIdFromEndpoint(payloadSentence?.to?.name);
     const sourceAgent = parseAgentNameFromEndpoint(payloadSentence?.from?.name) || agentName;
     const content = String(payloadSentence?.ob?.text ?? "").trim();
+    const event = {
+      channelType,
+      channelId: roomId,
+      replyRecipient: String(claim?.envelope?.replyRecipient ?? "").trim(),
+      ...(claim?.envelope?.channelIdentity && typeof claim.envelope.channelIdentity === "object"
+        ? cloneValue(claim.envelope.channelIdentity)
+        : {})
+    };
     if (!roomId || !content) {
       failed += 1;
       await ackRuntimeEnvelopeFail(worldRoot, {
@@ -1722,9 +1887,38 @@ export async function runChannelProduceOnce({
       continue;
     }
     try {
+      const authorization = await authorizeChannelAction({
+        worldRoot,
+        agentName: sourceAgent,
+        channelConfig,
+        action: "send",
+        proposal: { subjectName: "channel email send", toolName: `${channelType} channel send` }
+      });
+      if (!authorization.allowed) {
+        failed += 1;
+        try {
+          await appendChannelOutcome(agentHouse, {
+            channelType,
+            agentName: sourceAgent,
+            area: "authorization",
+            stage: "send",
+            outcome: "fail",
+            message: `send blocked: ${authorization.reason}`
+          });
+        } catch {
+          // Channel outcome logging is best-effort.
+        }
+        await ackRuntimeEnvelopeFail(worldRoot, {
+          runtimePath: claim.path,
+          retryCount,
+          maxRetries: 0,
+          requeuePhase: "produce"
+        });
+        continue;
+      }
       const sendResult = await adapter.send({
         config: channelConfig,
-        event: { channelType, channelId: roomId },
+        event,
         content
       });
       if (sendResult?.eventId) {
@@ -1741,12 +1935,26 @@ export async function runChannelProduceOnce({
         roomId,
         eventId: sendResult?.eventId ?? ""
       }, { channelType, agentName });
-    } catch {
+    } catch (error) {
       failed += 1;
+      if (error?.ambiguous === true) {
+        try {
+          await appendChannelOutcome(agentHouse, {
+            channelType,
+            agentName: sourceAgent,
+            area: "authorization",
+            stage: "send-reconcile",
+            outcome: "fail",
+            message: "provider send outcome is ambiguous; blocked for reconciliation"
+          });
+        } catch {
+          // Channel outcome logging is best-effort.
+        }
+      }
       await ackRuntimeEnvelopeFail(worldRoot, {
         runtimePath: claim.path,
-        retryCount: retryCount + 1,
-        maxRetries: 2,
+        retryCount: error?.ambiguous === true ? retryCount : retryCount + 1,
+        maxRetries: error?.ambiguous === true ? 0 : 2,
         requeuePhase: "produce"
       });
     }
@@ -1837,6 +2045,33 @@ export async function runChannelOnce({
   const dedupIds = new Set(dedupState.order);
   const selfEventIds = new Set(selfState.order);
 
+  if (!channelCapabilityAllowed(channelConfig, "receive")) {
+    try {
+      await appendChannelOutcome(agentHouse, {
+        channelType,
+        agentName,
+        area: "authorization",
+        stage: "receive",
+        outcome: "fail",
+        message: "receive blocked: capability-deny"
+      });
+    } catch {
+      // Channel outcome logging is best-effort.
+    }
+    return {
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0,
+      durationMs: 0,
+      lastInputAt: "",
+      queueDepth: 0,
+      blocked: true
+    };
+  }
+
   const startMs = Date.now();
   const recv = await adapter.receive({ config: channelConfig, checkpoint });
   const rawEvents = Array.isArray(recv?.events) ? recv.events : [];
@@ -1854,7 +2089,7 @@ export async function runChannelOnce({
     }, { channelType, agentName });
   }
 
-  const checkpointText = String(checkpoint?.nextBatch ?? "").trim();
+  const checkpointText = String(checkpoint?.nextBatch ?? checkpoint?.historyId ?? "").trim();
   const shouldWarmStart = channelConfig?.warmStart === true
     && !checkpointText
     && dedupState.order.length === 0

@@ -3,6 +3,8 @@ import { clearSignatureDefinitions, joinSignatureWords } from "../bridge/signatu
 import { state } from "../bridge/state.mjs";
 import { clearModuleCache } from "../bridge/modules.mjs";
 import { clearRefineries } from "../bridge/refinery.mjs";
+import { resetCommandIdentity } from "../bridge/command_identity.mjs";
+import { isEvidenceSentence } from "../library/knowledge_core.mjs";
 
 let memory = [];
 let history = []; // optional, for debugging / REPL
@@ -264,10 +266,12 @@ export function doRemember(sentence) {
   // shift definition indexes accordingly. New fact is appended to
   // preserve chronological order after the triggering command.
   const isDefinitionRecording = state.definitionStack.length > 0 && !state.executingBody;
-  if (!isSandpit && !isDefinitionRecording && subjName && !isDef && !isPrah && sentence.mood !== "then" && sentence.mood !== "do") {
+  const preserveEvidence = isEvidenceSentence(sentence);
+  if (!isSandpit && !isDefinitionRecording && !preserveEvidence && subjName && !isDef && !isPrah && sentence.mood !== "then" && sentence.mood !== "do") {
     for (let i = memory.length - 1; i >= 0; i--) {
       const existing = memory[i];
       if (existing.su?.name !== subjName) continue;
+      if (isEvidenceSentence(existing)) continue;
       if (existing.mood === "def" || existing.mood === "prah") break;
       if (existing.mood === "do") continue;
       if (isInsideDefinition(i)) continue; // protect entries recorded inside def/prah blocks
@@ -377,6 +381,7 @@ export function forget() {
   state.currentEvokeRef = null;
   state.executingBody = false;
   state.refineryScopeStack.length = 0;
+  resetCommandIdentity();
 }
 
 export function setDefault(name, sentence) {
@@ -400,6 +405,10 @@ export function popMemoryContext() {
     memory = ctx.memory;
     history = ctx.history;
   }
+}
+
+export function hasMemoryContext() {
+  return contextStack.length > 0;
 }
 
 export function recordSandpitTrace(trace) {

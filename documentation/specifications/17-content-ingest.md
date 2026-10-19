@@ -123,7 +123,163 @@ At minimum, a conforming adaptive chip refinery should expose:
 
 Implementation conforms when ingest outputs are deterministic, auditable, replayable, and shaped by an explicit chip contract rather than hidden helper heuristics.
 
-## 10. Related references
+## 10. Anchored document digestion v0.1
+
+The bounded digestion package is the sentence-native boundary between the
+existing `read`/artifact paths and later knowledge-core processing. Its first
+supported inputs are exact UTF-8 Markdown/plain-text bytes and exact UTF-8 CSV
+bytes. It does not perform OCR, autonomous truth adjudication, or model-guided
+claim rewriting.
+
+### 10.1 Source identity and registration
+
+The source identity is content-derived and independent of a filename or an
+artifact ordinal:
+
+`src-<full lowercase sha256 of exact UTF-8 bytes>`
+
+The hash covers every input byte, including a UTF-8 BOM and every `CR`, `LF`,
+or `CRLF` byte. Implementations MUST NOT normalize line endings or strip a BOM
+before hashing or calculating offsets. The source registration is the first
+record in the canonical digestion stream and has this shape:
+
+```text
+exists su name src-<sha256> ob text "<decoded source>" to filename "artifacts/document-digestion/src-<sha256>.<format>.source" as name source accordingto name sha256 fromtext text "<sha256>" by num <byte length> be artifact ya
+```
+
+The approved source-registration predicate is a fully materialized `be
+artifact` record with `as name source` and a deterministic source-derived
+locator. `be source` is not part of this contract. Replay validates this
+record through the normal artifact path; there is no source-registration
+replay exception.
+
+The source file and the canonical digest stream are also persisted through the
+existing artifact path when digestion is run from a filename. The digest
+artifact is stored under a source-derived locator and carries the stream hash.
+Artifact aliases and ordinal artifact names are operational records, not source
+identity.
+
+### 10.2 Anchor identity and spans
+
+Anchor IDs are deterministic ASCII-only identifiers accepted by the existing
+Knowledge Core source/anchor validator. They MUST begin with an ASCII letter
+or digit and contain only ASCII letters, digits, `.`, `_`, `:`, and `-`.
+
+Markdown/plain-text candidates are paragraph slices. A paragraph is a
+contiguous run of non-blank physical lines; an ATX heading starts the next
+sequential section and is not itself a candidate. Text before the first heading
+belongs to section `0001`. Each candidate receives an anchor ID encoding its
+sequential section/paragraph identity, inclusive 1-based line range, and
+zero-based half-open byte span:
+
+`section-<4-digit>-paragraph-<4-digit>-lines-<start>-<end>-bytes-<start>-<end>`
+
+For example, `section-0002-paragraph-0001-lines-4-5-bytes-62-104` means that
+`sourceBytes.slice(62, 104)` is the exact anchored paragraph and that it covers
+physical lines 4 through 5 inclusive. The span excludes the line terminator
+after the final line.
+
+CSV anchors include the header and each data row, but only data rows produce
+candidates. CSV logical rows may span
+multiple physical lines when a quoted field contains a line break. The header
+anchor is:
+
+`table-header-lines-<start>-<end>-bytes-<start>-<end>`
+
+Data rows use their one-based ordinal after the header:
+
+`table-row-<4-digit ordinal>-lines-<start>-<end>-bytes-<start>-<end>`
+
+CSV row spans refer to the original CSV row bytes, excluding its terminating
+line break. Quoting, commas, Unicode, BOM bytes, and line endings remain in the
+span exactly as supplied.
+
+Every emitted span MUST be in bounds, end no earlier than start, land on valid
+UTF-8 boundaries, and map back to the exact source bytes. A failed round-trip
+is a digestion defect, not a recoverable candidate.
+
+### 10.3 Canonical records and candidates
+
+The canonical digestion stream is ordered in source order:
+
+1. source registration;
+2. for each anchor in source order, its anchor marker;
+3. the candidate sentence for that anchor, when the anchor is a candidate.
+
+An anchor marker records the exact span and uses `be anchor`. Marker subjects
+are source-qualified as `<source-id>:<anchor-id>`. Candidate subjects are
+source-qualified as `<source-id>:candidate-<4-digit ordinal>`; their anchor is
+carried by the embedded clause. A candidate uses
+the propositive mood `pi7`, an embedded `fromtext` source/anchor clause,
+`accordingto name reported-evidential`, and `by num 1`:
+
+```text
+su name src-<sha256>:candidate-<4-digit ordinal> ob text "<candidate text>" fromtext la su name src-<sha256> ob text <anchor-id> be text ya ko accordingto name reported-evidential by num 1 be text pi7
+```
+
+The embedded `fromtext` clause itself has `mood: "ya"` (rendered as `be text
+ya` in canonical Pyash). This makes the source/anchor relation a complete
+record rather than an unqualified payload.
+
+`pi7` marks a high-recall extraction candidate; it does not assert that the
+candidate's claim is true. In this package, confidence (`by num`) means
+extraction and anchor fidelity, not claim truth. The initial bounded extractor
+therefore uses `1` only after the exact span round-trip succeeds.
+
+The candidate and marker IDs are derived from format and source order, never
+from an artifact ordinal or wall-clock value. Markdown candidate object text is
+the decoded exact span text; no line-ending or whitespace normalization is
+allowed inside the anchored span. A CSV marker object is the exact original
+row bytes. A CSV data-row candidate is the deterministic header-labelled
+narrative formed by pairing each header with its decoded field in order and
+joining pairs as `header: value; header: value`; the header itself never becomes
+a candidate.
+
+The Pyash entrypoint is an imperative sentence such as:
+
+```text
+su name principle from filename "policy.md" to name series principle be digestion do
+```
+
+The callable format forms use typed `wo` roles rather than an untyped name
+workaround. Filename and text inputs are both supported, for example:
+
+```text
+be digestion as wo csv from filename "table.csv" to name series rows do
+be digestion as wo csv from text "name,age\nAda,36\n" to name series rows do
+be digestion from filename "policy.md" fromstate wo markdown to name series policy do
+be digestion from text "A paragraph.\n" fromstate wo markdown to name series policy do
+```
+
+The Pyash orchestration module `module/documentation_digestion.pya` exposes the
+filename operation as typed `to name series produce` ceremonies for Markdown
+and CSV. Each ceremony first invokes the existing `be read` path, then passes
+the same filename through the typed digestion operation so the existing read
+and artifact paths remain in the orchestration. Strict byte decoding, hashing,
+physical line/byte accounting, and CSV parsing remain in the host substrate
+because those operations must preserve exact bytes. The orchestration surface
+remains Pyash-native.
+
+For the supported literal-input compile boundary, JavaScript materializes the
+same `series` value and C materializes a `pya_digest_series` containing the
+canonical stream, canonical record strings, and record count. Executed
+JavaScript and C outputs MUST hash to the same canonical stream. Dynamic
+digestion compilation is outside this bounded contract.
+
+### 10.4 Replay and rejection contract
+
+Identical bytes and format MUST produce byte-identical canonical record streams,
+including their canonical Pyash sentence rendering. A replay check uses the
+existing artifact hash verification path for the persisted stream and compares
+the canonical digestion stream (not timestamps, run folder aliases, or
+deprecated `--again` execution behavior). General `again` execution restoration
+remains outside this bounded package.
+
+The package MUST reject empty input, invalid UTF-8, malformed CSV, and any span
+that does not map back to the source bytes. It MUST fail before emitting a
+partial canonical stream when any of these guards fail.
+
+## 11. Related references
 
 - full draft reference: `documentation/recipes/spec-archive/17-content-ingest.full.md`
 - adaptive chip reference: `documentation/reference/chip-refinery.md`

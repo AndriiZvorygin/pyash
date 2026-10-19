@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { buildErrorSentence, surfaceErrorSentence } from "../program/error.mjs";
+import { commandResultIdentityProtocolSentence } from "../program/bridge/command_identity.mjs";
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;
@@ -118,6 +119,7 @@ async function run() {
 
   pushLine(`exists su name ${runId} from time ${runTime} be run ya`);
   pushLine(`ob filename "${runRoot}" be run root ya`);
+  pushLine(sentenceToPyash(commandResultIdentityProtocolSentence()));
   let evokeCounter = -1;
   for (const raw of sentences) {
     const line = raw.trim();

@@ -3,6 +3,7 @@ import { buildErrorSentence, surfaceErrorSentence, throwErrorSentence } from "..
 import { remember, doRemember, allRemember, pushMemoryContext, popMemoryContext } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { state } from "./state.mjs";
+import { normalizeSimulationContract, simulateRefinery } from "./refinery_simulation.mjs";
 
 const refineryRegistry = new Map();
 const refineryStack = [];
@@ -593,6 +594,7 @@ export function recordPlatform(sentence) {
   let actionSentence = null;
   if (sentence.from?.ve?.type === "name" && Array.isArray(sentence.from.ve.values)) {
     consumedDependencyVector = true;
+    hasExplicitDependency = true;
     const tokens = dependencyTokensFromVector(sentence.from.ve.values);
     for (const token of tokens) {
       let resolved = resolveDependencyToken(frame, token);
@@ -609,7 +611,6 @@ export function recordPlatform(sentence) {
           raw: { token }
         });
       }
-      hasExplicitDependency = true;
       assertDependencyTypeMatch({
         dependencyToken: token,
         expectedTypeWords,
@@ -797,7 +798,8 @@ export async function runRefinery({
   checkpointEnabled = true,
   retryConfig,
   runId,
-  resume
+  resume,
+  simulation
 } = {}) {
   if (!name) {
     throwErrorSentence({
@@ -813,6 +815,14 @@ export async function runRefinery({
       message: `refinery missing: ${name}`,
       from: { name: "interpret" }
     });
+  }
+  const simulationContract = simulation ? normalizeSimulationContract(simulation) : null;
+  if (simulationContract?.artificial) {
+    const result = simulateRefinery({ name, refinery, contract: simulationContract });
+    for (const record of result.records) {
+      if (onResult) onResult(record);
+    }
+    return result.records.find(record => record.be === "error") ?? null;
   }
   const completed = new Set();
   const pending = new Set(refinery.platforms.keys());

@@ -35,6 +35,75 @@ function list(value) {
   return Array.isArray(value) ? [...value] : [];
 }
 
+function uniqueTextList(value) {
+  const values = list(value).map((entry) => text(entry)).filter(Boolean);
+  return [...new Set(values)];
+}
+
+function normalizedValue(value) {
+  if (Array.isArray(value)) return value.map((entry) => normalizedValue(entry));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, normalizedValue(value[key])])
+  );
+}
+
+function approvalProposal(value) {
+  if (value == null || value === "") return {};
+  if (typeof value === "string") return { text: text(value) };
+  return normalizedValue(object(value));
+}
+
+function approvalHistoryRecord(value = {}) {
+  const source = object(value);
+  return {
+    state: text(source.state),
+    at: text(source.at || source.timestamp),
+    requestId: text(source.requestId),
+    action: text(source.action),
+    checkpointIdentity: text(source.checkpointIdentity),
+    decisionSource: text(source.decisionSource || source.source),
+    decisionValue: text(source.decisionValue || source.value),
+    actor: text(source.actor),
+    rationale: text(source.rationale),
+    resumeStatus: text(source.resumeStatus),
+    resumePhase: text(source.resumePhase)
+  };
+}
+
+export function buildWorkApproval(input = {}) {
+  const source = object(input);
+  const decidedAt = text(source.decidedAt || source.decisionTimestamp);
+  const approval = {
+    state: text(source.state),
+    taskId: text(source.taskId),
+    requestId: text(source.requestId),
+    action: text(source.action || source.canonicalAction),
+    proposal: approvalProposal(source.proposal || source.normalizedProposal),
+    resumeToken: text(source.resumeToken),
+    checkpointIdentity: text(source.checkpointIdentity),
+    resumeStatus: text(source.resumeStatus || source.recordedStatus),
+    resumePhase: text(source.resumePhase || source.recordedPhase),
+    policyMode: text(source.policyMode || source.mode),
+    policyKey: text(source.policyKey || source.matchedKey),
+    policyPath: text(source.policyPath),
+    requestedAt: text(source.requestedAt || source.requestTimestamp),
+    decidedAt,
+    decisionTimestamp: decidedAt,
+    decisionSource: text(source.decisionSource || source.source),
+    decisionActor: text(source.decisionActor || source.actor),
+    rationale: text(source.rationale),
+    resumedAt: text(source.resumedAt || source.resumedTimestamp),
+    resumedStatus: text(source.resumedStatus),
+    resumedPhase: text(source.resumedPhase),
+    resumeCount: Math.max(0, Math.trunc(Number(source.resumeCount) || 0)),
+    history: list(source.history).map((entry) => approvalHistoryRecord(entry))
+  };
+  return approval;
+}
+
 function turnResult(value) {
   const source = object(value);
   return {
@@ -141,6 +210,23 @@ function progressRecord(value = {}) {
   };
 }
 
+function compactContextRecord(value = {}) {
+  const source = object(value);
+  const version = Number(source.version);
+  return {
+    version: Number.isFinite(version) ? Math.max(0, Math.trunc(version)) : 0,
+    phase: text(source.phase),
+    role: text(source.role),
+    contextHash: text(source.contextHash || source.hash),
+    prompt: text(source.prompt || source.exactPrompt),
+    sourceRequestIds: uniqueTextList(source.sourceRequestIds || source.sourceRequestIDs),
+    sourceTurnIds: uniqueTextList(source.sourceTurnIds || source.sourceTurnIDs),
+    requestIdentity: text(source.requestIdentity),
+    activeThreadId: text(source.activeThreadId || source.threadId),
+    priorThreadIds: uniqueTextList(source.priorThreadIds || source.previousThreadIds)
+  };
+}
+
 function roleRecord(value = {}) {
   const source = object(value);
   return {
@@ -148,7 +234,7 @@ function roleRecord(value = {}) {
     model: text(source.model),
     reasoningEffort: text(source.reasoningEffort),
     threadId: text(source.threadId),
-    previousThreadIds: list(source.previousThreadIds)
+    previousThreadIds: uniqueTextList(source.previousThreadIds)
   };
 }
 
@@ -159,7 +245,7 @@ function reviewRecord(value = {}) {
     model: text(source.model),
     reasoningEffort: text(source.reasoningEffort),
     threadId: text(source.threadId),
-    previousThreadIds: list(source.previousThreadIds),
+    previousThreadIds: uniqueTextList(source.previousThreadIds),
     pass: Math.max(0, Math.trunc(Number(source.pass) || 0)),
     reviewedCommit: text(source.reviewedCommit),
     reviewedRevision: text(source.reviewedRevision),
@@ -200,13 +286,13 @@ export function buildWorkCheckpoint(input = {}) {
       model: text(manager.model),
       reasoningEffort: text(manager.reasoningEffort),
       threadId: text(manager.threadId),
-      previousThreadIds: list(manager.previousThreadIds)
+      previousThreadIds: uniqueTextList(manager.previousThreadIds)
     },
     worker: {
       model: text(worker.model),
       reasoningEffort: text(worker.reasoningEffort),
       threadId: text(worker.threadId),
-      previousThreadIds: list(worker.previousThreadIds)
+      previousThreadIds: uniqueTextList(worker.previousThreadIds)
     },
     reviewer: roleRecord(reviewer),
     escalationReviewer: roleRecord(escalationReviewer),
@@ -239,7 +325,7 @@ export function buildWorkCheckpoint(input = {}) {
       model: text(review.model),
       reasoningEffort: text(review.reasoningEffort),
       threadId: text(review.threadId),
-      previousThreadIds: list(review.previousThreadIds),
+      previousThreadIds: uniqueTextList(review.previousThreadIds),
       pass: Math.max(0, Math.trunc(Number(review.pass) || 0)),
       reviewedCommit: text(review.reviewedCommit),
       reviewedRevision: text(review.reviewedRevision),
@@ -316,6 +402,7 @@ export function buildWorkCheckpoint(input = {}) {
       lastTurnId: text(interruption.lastTurnId),
       workspaceEvidence: workspaceEvidence(interruption.workspaceEvidence)
     },
+    compactContext: compactContextRecord(input.compactContext || input.contextCheckpoint),
     activeTurn,
     turnHistory,
     blocker: text(input.blocker),
@@ -333,7 +420,8 @@ export function buildWorkCheckpoint(input = {}) {
       previousPhase: text(entry?.previousPhase),
       previousTurnId: text(entry?.previousTurnId),
       staleTurn: entry?.staleTurn === true
-    }))
+    })),
+    approval: buildWorkApproval(input.approval)
   };
 }
 
@@ -372,6 +460,9 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
       ? turnReconciliation(update.turnReconciliation)
       : current.turnReconciliation,
     interruption: { ...current.interruption, ...object(update.interruption) },
+    compactContext: Object.prototype.hasOwnProperty.call(update, "compactContext")
+      ? compactContextRecord(update.compactContext)
+      : current.compactContext,
     activeTurn: Object.prototype.hasOwnProperty.call(update, "activeTurn")
       ? turnRecord(update.activeTurn)
       : current.activeTurn,
@@ -389,7 +480,10 @@ export function mergeWorkCheckpoint(base = {}, patch = {}) {
       : current.lastAction,
     selectionReason: Object.prototype.hasOwnProperty.call(update, "selectionReason")
       ? text(update.selectionReason)
-      : current.selectionReason
+      : current.selectionReason,
+    approval: Object.prototype.hasOwnProperty.call(update, "approval")
+      ? buildWorkApproval({ ...current.approval, ...object(update.approval) })
+      : current.approval
   };
   if (Object.prototype.hasOwnProperty.call(update, "revisionCount")) {
     merged.revisionCount = Math.max(0, Math.trunc(Number(update.revisionCount) || 0));

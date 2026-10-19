@@ -28,6 +28,7 @@ Purpose: normative spec set for Pyash. This folder is intentionally compact: <=2
 19. `24-channel-contract.md` — channel/router input-produce-health contract.
 20. `25-teaching-video.md` — teaching-video refinery pipeline contract.
 21. `26-criterion.md` — benchmark, stress, simulation, and replayable result contracts.
+22. `26-headquarters-fixture-mail.md` — Headquarters fixture-mail vertical slice.
 
 ## Reference docs (non-normative)
 
@@ -48,6 +49,7 @@ Archived long-form drafts:
 - case ordering/grammar issue -> `01-sentence-and-grammar.md`
 - tool/MCP routing issue -> `08-tools-and-mcp.md`
 - scheduler/agent/session/memory issue -> `18-pyash-agent.md`
+- claim identity/evidence/resolver issue -> `18-pyash-agent.md` (bounded claim core)
 - command approval/sandbox issue -> `19-ops-safety.md`
 - channel routing issue -> `24-channel-contract.md`
 - android orchestration lane and executive lifecycle issue -> `documentation/reference/android-executive-lifecycle.md`

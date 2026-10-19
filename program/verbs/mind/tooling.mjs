@@ -269,7 +269,10 @@ export function buildToolSentence({ capability, args }) {
       continue;
     }
     if (hasName) {
-      call[caseKey] = { name: scalarArgValue(argValue) };
+      call[caseKey] = {
+        name: scalarArgValue(argValue),
+        ...(caseKey === "to" && typeWords.length > 1 ? { nameTypeWords: typeWords.slice(1) } : {})
+      };
       continue;
     }
     if (isNum) {

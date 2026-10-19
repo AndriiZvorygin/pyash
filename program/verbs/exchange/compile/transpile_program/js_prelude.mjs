@@ -4,7 +4,8 @@ import { mindToolHelperSource } from "../js/mind_tool_helper.mjs";
 import { csvRuntimeHelper, exchangeRuntimeHelper, jsonRuntimeHelper, newspaperRuntimeHelper, yamlRuntimeHelper, yamlStringifyHelper } from "../js/runtime_helpers.mjs";
 import { CSV_PARSE_RUNTIME_URL, YAML_RUNTIME_URL } from "../constants.mjs";
 import { boolHelperSource } from "./js_helpers/bool_helper.mjs";
-import { commandHelperSource } from "./js_helpers/command_helper.mjs";
+import { ceremonyErrorHelperSource, ceremonyHelperSource } from "./js_helpers/ceremony_helper.mjs";
+import { commandHelperSource, commandPolicyHelperSource } from "./js_helpers/command_helper.mjs";
 import { csvMapHelperSource } from "./js_helpers/csv_map_helper.mjs";
 import { dateHelperSource } from "./js_helpers/date_helper.mjs";
 import { interpretHelperSource } from "./js_helpers/interpret_helper.mjs";
@@ -13,13 +14,15 @@ import { loopHelperSource } from "./js_helpers/loop_helper.mjs";
 import { mapHelperSource } from "./js_helpers/map_helper.mjs";
 import { rememberHelperSource } from "./js_helpers/remember_helper.mjs";
 import { resolveHelperSource } from "./js_helpers/resolve_helper.mjs";
+import { knowledgeCoreHelperSource } from "./js_helpers/knowledge_core.mjs";
 
 export function applyJsPrelude(lines, {
   jsHelpers,
   usesRememberShim,
   usesMapShim,
   mindShim,
-  loopShim
+  loopShim,
+  commandPolicy
 } = {}) {
   const prelude = [lines[0]];
   if (jsHelpers.usesYamlRuntime) jsHelpers.usesJsonRuntime = true;
@@ -33,6 +36,9 @@ export function applyJsPrelude(lines, {
     if (!jsHelpers.usesExchange) {
       prelude.push(newspaperRuntimeHelper());
     }
+  }
+  if (jsHelpers.usesCommandPolicy) {
+    prelude.push(commandPolicyHelperSource({ policy: commandPolicy }));
   }
   if (jsHelpers.usesCommand) {
     prelude.push(commandHelperSource());
@@ -49,8 +55,15 @@ export function applyJsPrelude(lines, {
   if (jsHelpers.usesBoolHelper) {
     prelude.push(boolHelperSource());
   }
+  if (jsHelpers.usesCeremony) {
+    prelude.push(ceremonyHelperSource());
+    if (jsHelpers.usesCeremonyErrors) prelude.push(ceremonyErrorHelperSource());
+  }
   if (jsHelpers.usesDateMath) {
     prelude.push(dateHelperSource());
+  }
+  if (jsHelpers.usesKnowledgeCore) {
+    prelude.push(knowledgeCoreHelperSource());
   }
   if (usesMapShim) {
     prelude.push(mapHelperSource());
@@ -101,7 +114,7 @@ export function applyJsPrelude(lines, {
     prelude.splice(1, 0, `import YAML from ${JSON.stringify(YAML_RUNTIME_URL)};`);
   }
   if (loopShim?.used) {
-    prelude.push(loopHelperSource());
+    prelude.push(loopHelperSource({ propagateErrors: jsHelpers.usesCeremonyErrors }));
   }
   let nextLines = prelude.concat(lines.slice(1));
   if (mindShim?.used) {

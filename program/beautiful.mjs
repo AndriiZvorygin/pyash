@@ -1,28 +1,18 @@
 // beautiful.mjs
 
-import { compositionalGrid } from "./library/compositionalCases.mjs";
+import {
+  COMPOSITIONAL_AXIS_ORDER,
+  COMPOSITIONAL_CONTEXT_ORDER,
+  compositionalGrid
+} from "./library/compositionalCases.mjs";
 import { orderVyahModifiers } from "./library/grammar/vyah.mjs";
-
-const COMPOSITIONAL_CONTEXT_ORDER = [
-  "space",
-  "interior",
-  "surface",
-  "under",
-  "time",
-  "state",
-  "person",
-  "social",
-  "discourse",
-  "quantity",
-  "limit"
-];
 
 const COMPOSITIONAL_PREPS = [];
 for (const ctxKey of COMPOSITIONAL_CONTEXT_ORDER) {
   const ctx = compositionalGrid[ctxKey];
   if (!ctx) continue;
-  for (const axis of ["source", "way", "destination"]) {
-    const prep = ctx[axis]?.prep;
+  for (const axis of COMPOSITIONAL_AXIS_ORDER) {
+    const prep = ctx[axis]?.keyword;
     if (prep && !COMPOSITIONAL_PREPS.includes(prep)) COMPOSITIONAL_PREPS.push(prep);
   }
 }
@@ -49,6 +39,10 @@ export function npToPyash(np = {}) {
   if (np.hour !== undefined) return `hour ${np.hour}`;
   if (np.day !== undefined) return `day ${np.day}`;
   if (np.week !== undefined) return `week ${np.week}`;
+  if (np.line !== undefined) return `line ${np.line}`;
+  if (np.lines !== undefined) return `lines ${np.lines}`;
+  if (np.byte !== undefined) return `byte ${np.byte}`;
+  if (np.bytes !== undefined) return `bytes ${np.bytes}`;
   if (np.num !== undefined) return `num ${np.num}`;
   if (np.date !== undefined) return `date ${np.date}`;
   if (np.text !== undefined) {
@@ -70,7 +64,11 @@ export function npToPyash(np = {}) {
     }
     return `text ${JSON.stringify(np.text)}`;
   }
-  if (np.filename !== undefined) return `filename ${np.filename}`;
+  if (np.filename !== undefined) {
+    const filename = String(np.filename);
+    const alreadyQuoted = filename.startsWith("\"") && filename.endsWith("\"");
+    return `filename ${alreadyQuoted || !/\s/u.test(filename) ? filename : JSON.stringify(filename)}`;
+  }
   if (np.ve) {
     const type = np.ve.type || "num";
     const values = Array.isArray(np.ve.values) ? np.ve.values : [];
@@ -88,8 +86,30 @@ export function npToPyash(np = {}) {
   return ""; // can refine later
 }
 
+function mapSentenceToPyash(s) {
+  const name = s?.su?.name ?? "map";
+  const header = [`su name ${name}`];
+  if (s?.ob?.filename) header.push(`ob ${npToPyash({ filename: s.ob.filename })}`);
+  if (s?.ob?.text) header.push(`ob ${npToPyash({ text: s.ob.text })}`);
+  header.push("be map def");
+  const lines = [header.join(" ")];
+  for (const key of Object.keys(s?.ob?.map ?? {}).sort()) {
+    const value = s.ob.map[key];
+    if (value?.mood) {
+      lines.push(sentenceToPyash(value));
+    } else {
+      lines.push(`su name ${key} ob ${npToPyash(value)} ya`);
+    }
+  }
+  lines.push("prah");
+  return lines.join("\n");
+}
+
 // Render a full sentence object into surface Pyash
 export function sentenceToPyash(s = {}) {
+  if (s.be === "map" && s.ob?.map && typeof s.ob.map === "object") {
+    return mapSentenceToPyash(s);
+  }
   const parts = [];
 
   if (s.exists) {

@@ -1,0 +1,2 @@
+ob text "printf first" to filename "artifacts/command-result-identity/first.txt" be command do
+ob text "printf second" to filename "artifacts/command-result-identity/second.txt" be command do

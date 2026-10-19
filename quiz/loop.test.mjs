@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { forget, remember, allRemember } from "../program/remember/index.mjs";
+import { forget, remember, allRemember, dumpSandpits } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -47,6 +47,34 @@ test("ceremony repeats using fromindex/toindex aliases", async () => {
 
   assert.equal(counter.ob.num, 3, "counter should be incremented three times");
   assert.equal(invoke?.fromindex?.num ?? invoke?.fromindex, 0, "fromindex should count down to zero");
+});
+
+test("named ret cannot inherit stale target registers into the loop evoker", async () => {
+  forget();
+
+  await run("exists su name counter ob num 0 fromindex num 99 toindex num 99 by num 4 be number ya");
+  await run("su name increment to name num target fromindex num 0 toindex num 0 be ceremony def");
+  await run("ob num 1 to name counter be plus do");
+  await run("ob name counter ret");
+  await run("su name increment be ceremony prah");
+
+  await run("to name counter fromindex num 3 toindex num 0 be increment do");
+
+  const counter = remember("counter");
+  const sandpit = dumpSandpits().at(-1);
+  const evoker = sandpit?.[0];
+  const iterations = sandpit?.filter((sentence) => sentence.be === "plus" && sentence.mood === "do") ?? [];
+
+  assert.equal(counter?.ob?.num, 3, "stale target registers must not shorten the loop");
+  assert.equal(counter?.by?.num, 4, "loop write-back must preserve the target by role");
+  assert.equal(counter?.fromindex?.num ?? counter?.fromindex, 99, "target registers remain on the target fact");
+  assert.equal(counter?.toindex?.num ?? counter?.toindex, 99, "target registers do not become loop state");
+  // The trace includes the recorded definition body once before the three executed copies.
+  assert.equal(iterations.length - 1, 3, "the ceremony body should run three iterations");
+  assert.equal(evoker?.fromindex?.num ?? evoker?.fromindex, 0, "final evoker fromindex should be zero");
+  assert.equal(evoker?.toindex?.num ?? evoker?.toindex, 0, "final evoker toindex should be zero");
+  assert.equal(remember("fromindex"), undefined, "fromindex should not be stored as a separate register fact");
+  assert.equal(remember("toindex"), undefined, "toindex should not be stored as a separate register fact");
 });
 
 test("loop ceremony can apply a conditional update per iteration", async () => {

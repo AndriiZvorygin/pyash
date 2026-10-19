@@ -25,10 +25,55 @@ import { handleVectorElementRead } from "./transpile_sentence/vector_element_rea
 import { handleVectorMapAll } from "./transpile_sentence/vector_map_all.mjs";
 import { handleVectorLiteral } from "./transpile_sentence/vector_literal.mjs";
 import { handleDateLiteral, handleNumberLiteral, handleTextLiteral, handleFilenameLiteral, handleSentenceLiteral } from "./transpile_sentence/scalar_literals.mjs";
+import { handleKnowledgeSentence } from "./emit_knowledge.mjs";
+import { handleClaimSentence } from "./emit_claim.mjs";
+import fsSync from "node:fs";
+import { digestDocument } from "../../../library/document_digestion.mjs";
 
 const LANGUAGE_TYPES = new Set([
   "english"
 ]);
+
+function compileDocumentDigestion(sentence, { lang, declared, declaredTypes, cHelpers, cState } = {}) {
+  if (sentence?.mood !== "do" || !["digestion", "documentation digestion"].includes(sentence?.be)) return null;
+  if (lang !== "javascript" && lang !== "c") return null;
+  const targetName = sentence?.to?.name ?? sentence?.su?.name;
+  if (!targetName) return null;
+  const filename = sentence?.from?.filename;
+  const inlineText = sentence?.from?.text;
+  let bytes;
+  if (filename) {
+    bytes = fsSync.readFileSync(filename);
+  } else if (typeof inlineText === "string") {
+    bytes = Buffer.from(inlineText, "utf8");
+  } else {
+    return null;
+  }
+  const format = sentence?.as?.wo ?? sentence?.fromstate?.wo;
+  const result = digestDocument({ bytes, format, filename });
+  const value = {
+    mood: "ya",
+    su: { name: targetName },
+    be: "series",
+    ob: { series: result.records }
+  };
+  markDeclared(declared, targetName);
+  declaredTypes?.set(targetName, "series");
+  if (lang === "c") {
+    if (cHelpers) cHelpers.usesDocumentDigestion = true;
+    const safeName = sanitizeName(targetName);
+    const recordLiterals = result.canonicalRecords.map(record => JSON.stringify(record)).join(", ");
+    const declarations = [
+      `const char *${safeName}_digest_stream = ${JSON.stringify(result.stream)};`,
+      `const char *const ${safeName}_digest_records[] = { ${recordLiterals} };`,
+      `const pya_digest_series ${safeName} = { ${JSON.stringify(result.stream)}, ${safeName}_digest_records, ${result.records.length} };`
+    ];
+    if (cState?.preMain) cState.preMain.push(...declarations);
+    return "/* document digestion series materialized above */";
+  }
+  const safeName = sanitizeName(targetName);
+  return `const ${safeName} = ${JSON.stringify(value)};\nglobalThis[${JSON.stringify(targetName)}] = ${safeName};`;
+}
 
 export function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs } = {}) {
   const ob = sentence.ob ?? {};
@@ -41,8 +86,35 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
   const effectiveBe = baseBe || sentence.mood;
   const literalBe = LANGUAGE_TYPES.has(effectiveBe) ? "text" : effectiveBe;
 
-  const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers });
+  const documentDigestionResult = compileDocumentDigestion(sentence, { lang, declared, declaredTypes, cHelpers, cState });
+  if (documentDigestionResult) return documentDigestionResult;
+
+  const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers, jsHelpers });
   if (handledRet) return handledRet;
+
+  const claimResult = handleClaimSentence({
+    sentence,
+    lang,
+    locals,
+    localsTypes,
+    declared,
+    declaredTypes,
+    cHelpers,
+    jsHelpers
+  }, { markDeclared, sanitizeName });
+  if (claimResult) return claimResult;
+
+  const knowledgeResult = handleKnowledgeSentence({
+    sentence,
+    lang,
+    locals,
+    localsTypes,
+    declared,
+    declaredTypes,
+    cHelpers,
+    jsHelpers
+  }, { markDeclared, sanitizeName });
+  if (knowledgeResult) return knowledgeResult;
 
   const baseHandler = BASE_BE_HANDLERS.get(baseBe);
   if (baseHandler) {
@@ -391,6 +463,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     ceremonyReturnTypes,
     loopShim,
     cHelpers,
+    jsHelpers,
     cState,
     declared,
     declaredTypes,

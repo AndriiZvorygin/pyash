@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
@@ -14,7 +15,7 @@ async function run(line) {
 
 test("directory tools flow: directory, touch, copy, delete", async () => {
   forget();
-  const root = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "flow-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-flow-"));
   const dir = path.join(root, "nested");
   const original = path.join(dir, "note.txt");
   const copy = path.join(dir, "note-copy.txt");

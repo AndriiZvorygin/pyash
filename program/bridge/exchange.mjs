@@ -236,9 +236,25 @@ function nextArtifactNameForProducer(producer = "") {
   return `${base}-${String(count + 1).padStart(3, "0")}`;
 }
 
-export function recordArtifact({ locator, producer = "exchange", bytes, kind } = {}) {
+function resolveRequestIdentity({ requestIdentity, identity } = {}) {
+  const value = requestIdentity ?? identity;
+  if (!value) return null;
+  const text = typeof value === "object" ? value.name : value;
+  const normalized = String(text ?? "").trim();
+  return normalized || null;
+}
+
+function correlatedOb({ requestIdentity, fallback } = {}) {
+  const identity = resolveRequestIdentity({ requestIdentity });
+  if (identity) return { name: identity };
+  if (fallback) return fallback;
+  return undefined;
+}
+
+export function recordArtifact({ locator, producer = "exchange", bytes, kind, requestIdentity, identity } = {}) {
   if (!exchangeRecorder) return null;
   const normalized = normalizeLocator(locator);
+  const correlation = correlatedOb({ requestIdentity: requestIdentity ?? identity, fallback: exchangeSentenceId ? { name: exchangeSentenceId } : { text: normalized } });
   if (exchangeStrict && !bytes) {
     throwErrorSentence({
       name: "exchange defective",
@@ -275,7 +291,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
       exists: true,
       be: "artifact",
       su: { name: existing },
-      ob: exchangeSentenceId ? { name: exchangeSentenceId } : { text: normalized },
+      ob: correlation,
       to: { filename: normalized },
       from: { name: producer }
     };
@@ -285,7 +301,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     exists: true,
     be: "artifact",
     su: { name: nextArtifactNameForProducer(producer) },
-    ob: exchangeSentenceId ? { name: exchangeSentenceId } : { text: normalized },
+    ob: correlation,
     to: { filename: normalized },
     from: { name: producer }
   };
@@ -316,7 +332,7 @@ export function lookupArtifactLocator(name) {
   return artifactLocatorByName.get(key) ?? artifactLatestByProducer.get(key) ?? null;
 }
 
-export function recordExchange({ artifactName, op, producer = "exchange", sentence } = {}) {
+export function recordExchange({ artifactName, op, producer = "exchange", sentence, requestIdentity, identity } = {}) {
   if (!exchangeRecorder || !artifactName || !op) return null;
   const record = {
     mood: "ya",
@@ -328,6 +344,10 @@ export function recordExchange({ artifactName, op, producer = "exchange", senten
   };
   if (sentence) {
     record.ob = { la: sentence };
+  }
+  const correlation = resolveRequestIdentity({ requestIdentity: requestIdentity ?? identity });
+  if (correlation) {
+    record.ob = { name: correlation };
   }
   exchangeRecorder(record);
   return record;

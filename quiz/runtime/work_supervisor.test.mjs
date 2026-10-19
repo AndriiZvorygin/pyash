@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { parse } from "../../program/understand/index.mjs";
+import { splitSentences } from "../../program/library/sentenceSplitter.mjs";
 import {
   enqueueWorkTask,
   claimOldestWorkTask,
@@ -21,6 +23,7 @@ import {
   resolveWorkRoleConfig,
   runWorkSupervisorOnce
 } from "../../program/runtime/work/supervisor.mjs";
+import { projectWorkContext } from "../../program/runtime/work/context.mjs";
 
 test("default Luna launches use xhigh reasoning", () => {
   const roles = resolveWorkRoleConfig({}, {});
@@ -163,6 +166,30 @@ function task(taskId) {
     workSpec: { source: "quiz", bounded: true },
     retryMax: 1
   };
+}
+
+function parsedContextRecords(source) {
+  const records = [];
+  let current = null;
+  for (const line of splitSentences(source)) {
+    const sentence = parse(line);
+    if (sentence?.mood === "def" && sentence?.be === "map") {
+      current = { name: sentence.su?.name || "" };
+      continue;
+    }
+    if (sentence?.mood === "prah") {
+      if (current) records.push(current);
+      current = null;
+      continue;
+    }
+    if (current && sentence?.mood === "ya" && sentence.su?.name) {
+      current[sentence.su.name] = sentence.ob?.text
+        ?? sentence.ob?.num
+        ?? sentence.ob?.boolean
+        ?? sentence.ob?.name;
+    }
+  }
+  return records.filter((record) => record.name === "work task context checkpoint");
 }
 
 class FakeClient {
@@ -543,6 +570,298 @@ test("supervisor permits one REVISE loop before accepting", async () => {
   assert.equal(status.checkpoint.revisionCount, 1);
   assert.equal(status.checkpoint.review.decision, "ACCEPT");
   assert.equal((await queueDepth(worldRoot)).total, 0);
+});
+
+test("review-loop boundaries rotate fresh role threads, archive displaced ids, and record compact evidence", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-compaction-rotation-");
+  await enqueueWorkTask(worldRoot, task("rotation-task"));
+  const clients = new Map();
+  const starts = [];
+  const runs = [];
+  const appServerFactory = async ({ role }) => {
+    if (clients.has(role)) return clients.get(role);
+    let startCount = 0;
+    let turnCount = 0;
+    const client = {
+      async startThread(options) {
+        const id = `${role}-thread-${++startCount}`;
+        starts.push({ role, id, options });
+        return { thread: { id } };
+      },
+      async resumeThread(options) {
+        runs.push({ method: "resumeThread", role, threadId: options.threadId });
+      },
+      async runTurn(options) {
+        turnCount += 1;
+        runs.push({ method: "runTurn", role, threadId: options.threadId, requestIdentity: options.requestIdentity, input: options.input[0].text });
+        if (role === "planner" && turnCount === 1) {
+          return { turnId: "sol-plan", text: "SUMMARY: plan\nWORK ORDER: make the bounded change\nRISKS: opaque history" };
+        }
+        if (role === "reviewer") {
+          const decision = turnCount === 1 ? "REVISE" : "ACCEPT";
+          return { turnId: `sol-review-${turnCount}`, text: `DECISION: ${decision}\nRATIONALE: decision ${turnCount}\nCORRECTION: correction ${turnCount}` };
+        }
+        return {
+          turnId: `luna-implementation-${turnCount}`,
+          text: `SUMMARY: implementation ${turnCount}\nCHANGED FILES: hello.txt\nTESTS: node test.mjs passes\nBLOCKERS: none\nUNCERTAINTY: none\nCOMMIT: commit-${turnCount}`,
+          fileChanges: [{ path: "hello.txt", kind: "update", diff: `+${turnCount}` }]
+        };
+      },
+      async close() {}
+    };
+    clients.set(role, client);
+    return client;
+  };
+  const result = await runWorkSupervisorOnce({
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    appServerFactory,
+    workspaceFactory: async () => ({
+      repository: "/repo",
+      baseRevision: "base-1",
+      branch: "detached",
+      worktreePath: "/worktree/rotation-task",
+      mode: "git-worktree"
+    }),
+    evidenceFactory: async () => ({
+      diff: "diff --git a/hello.txt b/hello.txt\n+hello",
+      changedFiles: ["hello.txt"],
+      revision: "commit-2"
+    }),
+    now: () => "2026-08-28T12:01:00.000Z"
+  });
+  assert.equal(result.status, "accepted");
+  const status = await readWorkTaskStatus(worldRoot, "rotation-task");
+  assert.deepEqual(starts.map((entry) => entry.id), [
+    "planner-thread-1",
+    "implementer-thread-1",
+    "reviewer-thread-1",
+    "implementer-thread-2"
+  ]);
+  assert.deepEqual(status.checkpoint.manager.previousThreadIds, []);
+  assert.deepEqual(status.checkpoint.worker.previousThreadIds, ["implementer-thread-1"]);
+  assert.equal(status.checkpoint.manager.threadId, "planner-thread-1");
+  assert.equal(status.checkpoint.worker.threadId, "implementer-thread-2");
+  assert.equal(status.checkpoint.reviewer.threadId, "reviewer-thread-1");
+  assert.equal(status.checkpoint.reviewer.role, "reviewer");
+  assert.equal(status.checkpoint.escalationReviewer.role, "escalationReviewer");
+  assert.equal(status.checkpoint.compactContext.phase, "accepted");
+  assert.deepEqual(status.checkpoint.compactContext.sourceTurnIds, ["luna-implementation-2", "sol-review-2"]);
+  assert.equal(status.checkpoint.turnHistory.length, 5);
+  const newspaperDir = path.join(worldRoot, "newspaper");
+  const newspaperName = (await fs.readdir(newspaperDir)).find((name) => name.endsWith("work-rotation-task.pya"));
+  const records = parsedContextRecords(await fs.readFile(path.join(newspaperDir, newspaperName), "utf8"));
+  assert.equal(records.length, 6, "planning, implementation, review, revision, review, and ACCEPT snapshots are recorded");
+  assert.deepEqual(records.map((record) => record["active thread id"]), [
+    "planner-thread-1",
+    "implementer-thread-1",
+    "reviewer-thread-1",
+    "implementer-thread-2",
+    "reviewer-thread-1",
+    "reviewer-thread-1"
+  ]);
+  const reviewerPrompt = runs.find((entry) => entry.method === "runTurn" && entry.role === "reviewer");
+  assert.match(reviewerPrompt.input, /independent Pyash reviewer/iu);
+  assert.match(reviewerPrompt.input, /Latest completed Luna implementation evidence/iu);
+  assert.ok(Buffer.byteLength(reviewerPrompt.input, "utf8") <= 16000);
+  assert.doesNotMatch(reviewerPrompt.input, /Diff evidence:/iu);
+  assert.ok(runs.every((entry) => entry.method !== "runTurn" || entry.input.length < 5000));
+});
+
+test("combined role, timeout, policy, reconciliation, approval, and compact state survive status round-trip", async () => {
+  const worldRoot = await makeWorldRoot("pyash-supervisor-combined-state-");
+  await enqueueWorkTask(worldRoot, task("combined-state-task"));
+  await updateWorkTaskCheckpoint(worldRoot, "combined-state-task", {
+    manager: { role: "planner", threadId: "planner-thread", previousThreadIds: ["planner-old", "planner-old"] },
+    worker: { role: "implementer", threadId: "implementer-thread", previousThreadIds: ["implementer-old", "implementer-old"] },
+    reviewer: { role: "reviewer", model: "reviewer-model", threadId: "reviewer-thread" },
+    escalationReviewer: { role: "escalationReviewer", model: "sol-model", threadId: "escalation-thread" },
+    review: {
+      role: "reviewer",
+      previousThreadIds: ["reviewer-old", "reviewer-old"],
+      decision: "ESCALATE",
+      explanation: "routine review needs Sol"
+    },
+    routineReview: { role: "reviewer", decision: "ESCALATE", escalationReason: "semantic boundary" },
+    escalationReview: { role: "escalationReviewer", decision: "REVISE", workOrder: "make the bounded correction" },
+    timeoutPolicy: { policyVersion: "v2", activityAware: true, inactivityTimeoutMs: 120000, hardTimeoutMs: 900000 },
+    policyRevalidation: { migrationId: "migration-1", outcome: "revalidated", attempts: 1 },
+    turnReconciliation: { classification: "STALE", safeToResume: true, turnId: "turn-1" },
+    executionPreflight: {
+      status: "passed",
+      check: "workspace",
+      reason: "clean detached worktree",
+      observedAt: "2026-08-28T12:00:00.000Z",
+      worktree: "/worktree/combined-state-task",
+      threadSandbox: "thread-sandbox",
+      turnSandbox: "turn-sandbox"
+    },
+    approval: { state: "approved", requestId: "approval-1", history: [{ state: "approved", requestId: "approval-1" }] },
+    compactContext: {
+      version: 1,
+      phase: "review",
+      role: "reviewer",
+      contextHash: "hash-1",
+      prompt: "bounded projected prompt",
+      sourceRequestIds: ["request-1", "request-1"],
+      sourceTurnIds: ["turn-1", "turn-1"],
+      requestIdentity: "identity-1",
+      activeThreadId: "reviewer-thread",
+      priorThreadIds: ["reviewer-old", "reviewer-old"]
+    }
+  });
+  const stored = await readWorkTaskStatus(worldRoot, "combined-state-task");
+  assert.deepEqual(stored.checkpoint.manager.previousThreadIds, ["planner-old"]);
+  assert.deepEqual(stored.checkpoint.worker.previousThreadIds, ["implementer-old"]);
+  assert.equal(stored.checkpoint.reviewer.threadId, "reviewer-thread");
+  assert.equal(stored.checkpoint.escalationReviewer.threadId, "escalation-thread");
+  assert.equal(stored.checkpoint.routineReview.escalationReason, "semantic boundary");
+  assert.equal(stored.checkpoint.escalationReview.workOrder, "make the bounded correction");
+  assert.equal(stored.checkpoint.timeoutPolicy.hardTimeoutMs, 900000);
+  assert.equal(stored.checkpoint.policyRevalidation.migrationId, "migration-1");
+  assert.equal(stored.checkpoint.turnReconciliation.classification, "STALE");
+  assert.deepEqual(stored.checkpoint.review.previousThreadIds, ["reviewer-old"]);
+  assert.equal(stored.checkpoint.executionPreflight.status, "passed");
+  assert.equal(stored.checkpoint.executionPreflight.worktree, "/worktree/combined-state-task");
+  assert.equal(stored.checkpoint.approval.history[0].requestId, "approval-1");
+  assert.deepEqual(stored.checkpoint.compactContext.sourceTurnIds, ["turn-1"]);
+});
+
+async function seedRestartTask(worldRoot, taskId, status, checkpoint) {
+  await enqueueWorkTask(worldRoot, task(taskId));
+  await claimOldestWorkTask(worldRoot, { workerTag: "restart-test" });
+  if (status !== "ready") await transitionWorkTaskStatus(worldRoot, taskId, "planning");
+  if (["implementing", "reviewing"].includes(status)) await transitionWorkTaskStatus(worldRoot, taskId, "implementing");
+  if (status === "reviewing") await transitionWorkTaskStatus(worldRoot, taskId, "reviewing");
+  return updateWorkTaskCheckpoint(worldRoot, taskId, checkpoint);
+}
+
+function restartWorkspace() {
+  return {
+    repository: "/repo",
+    baseRevision: "base-1",
+    branch: "detached",
+    worktreePath: "/worktree/restart-task",
+    mode: "git-worktree"
+  };
+}
+
+function restartImplementationTurn({ captured = false } = {}) {
+  return {
+    phase: "implementation",
+    role: "worker",
+    threadId: "worker-old",
+    turnId: "worker-completed",
+    requestIdentity: "pyash-restart-task-implementation-0-0-0",
+    state: "completed",
+    startedAt: "2026-08-28T12:00:00.000Z",
+    completedAt: "2026-08-28T12:00:01.000Z",
+    resultCaptured: captured,
+    result: {
+      status: "completed",
+      text: "SUMMARY: recovered implementation\nCHANGED FILES: hello.txt\nTESTS: node test.mjs passes\nBLOCKERS: \nUNCERTAINTY: none",
+      fileChanges: [{ path: "hello.txt" }]
+    }
+  };
+}
+
+test("prepared, active, completed, and captured restart checkpoints do not duplicate threads or turns", async () => {
+  async function runRestartCase(kind) {
+    const worldRoot = await makeWorldRoot(`pyash-supervisor-restart-${kind}-`);
+    const checkpoint = {
+      workspace: restartWorkspace(),
+      manager: { threadId: kind === "captured" ? "manager-old" : "" },
+      worker: { threadId: "worker-old" },
+      plan: { workOrder: "make the change" },
+      implementation: { passes: 0 },
+      turnHistory: []
+    };
+    const status = kind === "captured" ? "reviewing" : "implementing";
+    if (kind === "prepared") {
+      const base = await seedRestartTask(worldRoot, "restart-task", status, checkpoint);
+      const context = projectWorkContext(base, { phase: "implementation", role: "worker" });
+      await updateWorkTaskCheckpoint(worldRoot, "restart-task", {
+        compactContext: {
+          ...context,
+          requestIdentity: "pyash-restart-task-implementation-0-0-0",
+          activeThreadId: "worker-old"
+        }
+      });
+    } else if (kind === "active") {
+      await seedRestartTask(worldRoot, "restart-task", status, {
+        ...checkpoint,
+        activeTurn: {
+          phase: "implementation",
+          role: "worker",
+          threadId: "worker-old",
+          requestIdentity: "pyash-restart-task-implementation-0-0-0",
+          state: "started",
+          startedAt: "2026-08-28T12:00:00.000Z"
+        }
+      });
+    } else if (kind === "completed") {
+      await seedRestartTask(worldRoot, "restart-task", status, {
+        ...checkpoint,
+        activeTurn: restartImplementationTurn()
+      });
+    } else {
+      await seedRestartTask(worldRoot, "restart-task", status, {
+        ...checkpoint,
+        turnHistory: [restartImplementationTurn({ captured: true })],
+        implementation: { passes: 1, summary: "recovered implementation", changedFiles: ["hello.txt"], tests: ["node test.mjs passes"] }
+      });
+    }
+    const calls = [];
+    let threadNumber = 0;
+    const result = await runWorkSupervisorOnce({
+      worldRoot,
+      repositoryRoot: "/repo",
+      owner: "background",
+      appServerFactory: async ({ role }) => ({
+        async startThread() {
+          const id = `${role}-fresh-${++threadNumber}`;
+          calls.push({ method: "startThread", role, id });
+          return { thread: { id } };
+        },
+        async resumeThread(options) {
+          calls.push({ method: "resumeThread", role, threadId: options.threadId });
+        },
+        async runTurn(options) {
+          calls.push({ method: "runTurn", role, requestIdentity: options.requestIdentity });
+          if (role === "implementer") {
+            return { turnId: "worker-retry", text: "SUMMARY: retry implementation\nCHANGED FILES: hello.txt\nTESTS: node test.mjs passes\nBLOCKERS: \nUNCERTAINTY: none" };
+          }
+          return { turnId: "review-after-restart", text: "DECISION: ACCEPT\nRATIONALE: recovered evidence is sufficient" };
+        },
+        async close() {}
+      }),
+      workspaceFactory: async () => restartWorkspace(),
+      evidenceFactory: async () => ({ diff: "+hello", changedFiles: ["hello.txt"] }),
+      now: () => "2026-08-28T12:01:00.000Z"
+    });
+    return { result, calls, status: await readWorkTaskStatus(worldRoot, "restart-task") };
+  }
+
+  const prepared = await runRestartCase("prepared");
+  assert.equal(prepared.result.status, "accepted");
+  assert.equal(prepared.calls.filter((call) => call.method === "startThread" && call.role === "implementer").length, 0);
+  assert.equal(prepared.calls.filter((call) => call.method === "runTurn" && call.role === "implementer").length, 1);
+
+  const active = await runRestartCase("active");
+  assert.equal(active.result.status, "blocked");
+  assert.equal(active.calls.filter((call) => call.method === "runTurn").length, 0);
+  assert.equal(active.calls.filter((call) => call.method === "startThread").length, 0);
+
+  const completed = await runRestartCase("completed");
+  assert.equal(completed.result.status, "accepted");
+  assert.equal(completed.calls.filter((call) => call.method === "runTurn" && call.role === "implementer").length, 0);
+  assert.equal(completed.status.checkpoint.turnHistory.filter((turn) => turn.turnId === "worker-completed").length, 1);
+
+  const captured = await runRestartCase("captured");
+  assert.equal(captured.result.status, "accepted");
+  assert.equal(captured.calls.filter((call) => call.method === "runTurn" && call.role === "implementer").length, 0);
+  assert.equal(captured.status.checkpoint.turnHistory.filter((turn) => turn.turnId === "worker-completed").length, 1);
 });
 
 test("the default revision bound checkpoints concrete work instead of creating a human block", async () => {
