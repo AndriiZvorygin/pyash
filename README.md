@@ -124,7 +124,7 @@ The `download-ytdlp.pya` example accepts the source URL and destination filename
   'artifacts/downloads/video.mp4' --verbose
 ```
 
-The run result reports the exact destination filename. `yt-dlp` must be installed and available on `PATH`; the executing agent also needs the `PYA_NETWORK` permission. Quote the URL and path so shell characters are passed intact.
+The run result reports the exact destination filename. Downloads run non-interactively with quiet output by default; stdin is detached and yt-dlp progress/status output is suppressed while errors remain visible. Explicit `download extra` options can override the quiet/progress defaults. `yt-dlp` must be installed and available on `PATH`; the executing agent also needs the `PYA_NETWORK` permission. Quote the URL and path so shell characters are passed intact.
 
 Run a richer end-to-end example through multiple backends:
 

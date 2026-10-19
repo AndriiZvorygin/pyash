@@ -9,8 +9,25 @@ import { spawnSync } from "node:child_process";
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { forget } from "../program/remember/index.mjs";
+import { buildYtDlpArgs } from "../program/verbs/download/runners.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+test("yt-dlp defaults to quiet headless output and allows explicit progress overrides", () => {
+  const defaults = buildYtDlpArgs({
+    url: "https://example.com/video",
+    outputPath: "video.mp4",
+    intent: "video"
+  });
+  assert.deepEqual(defaults.slice(0, 2), ["--quiet", "--no-progress"]);
+  assert.deepEqual(defaults.slice(-1), ["https://example.com/video"]);
+
+  const optedIn = buildYtDlpArgs({
+    url: "https://example.com/video",
+    extraArgs: ["--no-quiet", "--progress"]
+  });
+  assert.deepEqual(optedIn.slice(-3), ["--no-quiet", "--progress", "https://example.com/video"]);
+});
 
 test("download infers fromstate from URL and writes mock output", async () => {
   forget();
