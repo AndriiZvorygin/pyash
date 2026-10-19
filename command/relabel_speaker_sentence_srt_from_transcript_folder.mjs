@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { namedSpeakerIdentityEnabled } from '../program/library/reporter_shared/speaker-diarization-policy.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
+const NAMED_IDENTITY_OUTPUT_ENABLED = namedSpeakerIdentityEnabled(process.env);
+const ANONYMOUS_LABELS = new Map();
+const USED_ANONYMOUS_NUMBERS = new Set();
+let NEXT_ANONYMOUS_NUMBER = 1;
 
 function usage() {
   return [
@@ -123,6 +128,17 @@ function loadMeetingAssignmentsMap(reportPath) {
 function toDisplayLabelWithMeetingAssignments(speakerKey, metadataMap, meetingAssignments, lockedSpeakerKeys) {
   const key = String(speakerKey || '').trim();
   const m = key.match(/^speaker_(\d+)$/iu);
+  if (!NAMED_IDENTITY_OUTPUT_ENABLED) {
+    if (m) return `SPEAKER_${String(Number(m[1])).padStart(3, '0')}`;
+    if (key === 'speaker_unknown' || !key) return 'SPEAKER_UNKNOWN';
+    if (!ANONYMOUS_LABELS.has(key)) {
+      while (USED_ANONYMOUS_NUMBERS.has(NEXT_ANONYMOUS_NUMBER)) NEXT_ANONYMOUS_NUMBER += 1;
+      ANONYMOUS_LABELS.set(key, `SPEAKER_${String(NEXT_ANONYMOUS_NUMBER).padStart(3, '0')}`);
+      USED_ANONYMOUS_NUMBERS.add(NEXT_ANONYMOUS_NUMBER);
+      NEXT_ANONYMOUS_NUMBER += 1;
+    }
+    return ANONYMOUS_LABELS.get(key);
+  }
   if (m) {
     const meta = metadataMap.get(key) || {};
     const rawName = String(meta.name || '').trim();
@@ -292,6 +308,7 @@ async function main() {
 
   process.stdout.write(`[speaker-relabel] source: ${diarizeJson}\n`);
   process.stdout.write(`[speaker-relabel] voices dir: ${voicesDir}\n`);
+  process.stdout.write(`[speaker-relabel] named identity output: ${NAMED_IDENTITY_OUTPUT_ENABLED ? 'on' : 'off'}\n`);
   if (autoAssignReportPath) process.stdout.write(`[speaker-relabel] autoassign report: ${autoAssignReportPath}\n`);
   process.stdout.write(`[speaker-relabel] wrote: ${outSrt}\n`);
   process.stdout.write(`[speaker-relabel] updated: ${diarizeJson}\n`);

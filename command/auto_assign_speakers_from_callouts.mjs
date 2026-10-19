@@ -4,6 +4,7 @@ import path from 'node:path';
 import { readPyaTextValues } from './pya_lookup.mjs';
 import { requestManagedOllamaChat } from '../program/runtime/gpu/managed-ollama.mjs';
 import { resolveTextModel } from '../program/runtime/gpu/text-model.mjs';
+import { namedSpeakerIdentityEnabled } from '../program/library/reporter_shared/speaker-diarization-policy.mjs';
 
 const ROOT = '/home/htaf/pyac/pyash';
 const DEFAULT_VOICES = path.join(ROOT, 'world/voices');
@@ -32,6 +33,7 @@ const VERIFY_MIN_CONFIDENCE = (() => {
   const raw = Number(process.env.PYA_AUTOASSIGN_VERIFY_MIN_CONFIDENCE || 0.67);
   return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 0.67;
 })();
+const IDENTITY_LINKING_ENABLED = namedSpeakerIdentityEnabled(process.env);
 
 function usage() {
   return [
@@ -1120,7 +1122,18 @@ async function main() {
   const roster = parseRoster(rosterText);
   if (!roster.length) throw new Error(`no roster people parsed from ${rosterPath}`);
 
-  const { file: diarizeJson } = pickDiarizationJson(transcriptDir, prefixArg);
+  const { file: diarizeJson, resolvedPrefix } = pickDiarizationJson(transcriptDir, prefixArg);
+  if (!IDENTITY_LINKING_ENABLED) {
+    const reportPath = path.join(transcriptDir, `${resolvedPrefix}.speaker.autoassign.report.json`);
+    fs.writeFileSync(reportPath, `${JSON.stringify({
+      status: 'disabled',
+      reason: 'named speaker identity requires explicit verification opt-in',
+      assignments: [],
+      generated_at: new Date().toISOString(),
+    }, null, 2)}\n`, 'utf8');
+    process.stdout.write('[speaker-autoassign] disabled: raw speaker numbers remain authoritative\n');
+    return;
+  }
   const payload = JSON.parse(fs.readFileSync(diarizeJson, 'utf8'));
   const rows = Array.isArray(payload?.rows) ? payload.rows : [];
   if (!rows.length) throw new Error(`no rows in ${diarizeJson}`);
