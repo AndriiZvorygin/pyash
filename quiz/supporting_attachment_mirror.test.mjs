@@ -112,6 +112,56 @@ test("mirror plan fails when a canonical attachment has no retained local copy",
   }), /retained local copy/u);
 });
 
+test("mirror plan omits a canonical attachment with a recorded failed download", () => {
+  const fixture = fixtureMeeting();
+  const index = JSON.parse(fs.readFileSync(fixture.indexPath, "utf8"));
+  index.items[0].attachment_diagnostics[0] = {
+    label: "Presentation.pdf",
+    url: fixture.sourceUrl,
+    status: "download_exit_22",
+    local_file: "",
+  };
+  fs.unlinkSync(fixture.localFile);
+  fs.writeFileSync(fixture.indexPath, JSON.stringify(index), "utf8");
+  const plan = buildSupportingAttachmentMirrorPlan({
+    payloadDir: fixture.transcript,
+    attachmentIndexPath: fixture.indexPath,
+  });
+  assert.equal(plan.length, 0);
+  assert.deepEqual(plan.unavailable, [{
+    item: "7.a",
+    label: "Presentation.pdf",
+    sourceUrl: fixture.sourceUrl,
+    status: "download_exit_22",
+  }]);
+});
+
+test("mirror plan omits an invalid agenda package while retaining valid item attachments", () => {
+  const fixture = fixtureMeeting();
+  const packageUrl = "https://pub-owensound.escribemeetings.com/filestream.ashx?DocumentId=999";
+  const packageFile = path.join(fixture.root, "source", "agenda-01.pdf");
+  fs.mkdirSync(path.dirname(packageFile), { recursive: true });
+  fs.writeFileSync(packageFile, Buffer.from("not a pdf challenge response", "utf8"));
+  const plan = buildSupportingAttachmentMirrorPlan({
+    payloadDir: fixture.transcript,
+    attachmentIndexPath: fixture.indexPath,
+    sourceAttachments: [{
+      item: "agenda-source",
+      label: "Official agenda package",
+      url: packageUrl,
+      local_file: packageFile,
+    }],
+  });
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].sourceUrl, fixture.sourceUrl);
+  assert.deepEqual(plan.unavailable, [{
+    item: "agenda-source",
+    label: "Official agenda package",
+    sourceUrl: packageUrl,
+    status: "local_file_not_pdf",
+  }]);
+});
+
 test("mirror upload returns a rewrite mapping and persists a reusable manifest", async () => {
   const fixture = fixtureMeeting();
   const responsePath = path.join(fixture.transcript, "mirror-response.json");

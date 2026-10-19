@@ -32,6 +32,21 @@ test("agenda preview chunking retains a short final source span", () => {
   assert.equal(normalized(chunks.join(" ")), normalized(source));
 });
 
+test("agenda preview chunking keeps transcript rows intact when a line break is available", () => {
+  const source = [
+    `SPEAKER_1: ${"The report compared two assessment methods. ".repeat(12)}`,
+    `SPEAKER_2: ${"The next report should identify the methodology. ".repeat(12)}`,
+    `SPEAKER_3: ${"Because if there's a discrepancy, it should be explained. ".repeat(12)}`,
+    `SPEAKER_4: ${"The meeting then moved to the next agenda item. ".repeat(12)}`,
+  ].join("\n");
+
+  const chunks = chunkAgendaPreviewSource(source, { maxChars: 1800, targetChars: 1500 });
+
+  assert.ok(chunks.length >= 2);
+  assert.equal(chunks.every((chunk) => !/\n[^\n]*$/u.test(chunk) || chunk.endsWith(".")), true);
+  assert.equal(normalized(chunks.join(" ")), normalized(source));
+});
+
 test("agenda preview chunking does not turn uppercase slide headings into tiny chapters", () => {
   const slide = (heading, detail) => `${heading}\n\n${detail.repeat(18)}`;
   const source = [

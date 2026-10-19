@@ -463,9 +463,15 @@ function buildRuntimeEnv({ writerKey, map, adapter, args }) {
   const envPrefix = map.envPrefix;
 
   env.PYA_COMMAND_TIMEOUT_MS = env.PYA_COMMAND_TIMEOUT_MS || "28800000";
-  env.AGENDA_STAGE3_OLLAMA_ATTEMPTS = env.AGENDA_STAGE3_OLLAMA_ATTEMPTS || "2";
-  env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS = env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS || "90000";
-  env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS = env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS || "2500";
+  // Stage 3 prompts can include complete source-grounded agenda chapters.
+  // Keep the launcher contract aligned with the renderer so large civic items
+  // remain retryable without abandoning healthy in-flight model generations.
+  env.AGENDA_STAGE3_OLLAMA_ATTEMPTS = env.AGENDA_STAGE3_OLLAMA_ATTEMPTS || "9";
+  env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS = env.AGENDA_STAGE3_OLLAMA_TIMEOUT_MS || "300000";
+  env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS = env.AGENDA_STAGE3_OLLAMA_RETRY_DELAY_MS || "1500";
+  // Keep long source-grounded reports within a bounded number of sequential
+  // model calls. Stage 2 and Stage 3 both read this shared limit.
+  env.AGENDA_CHAPTER_MAX_SOURCE_CHARS = env.AGENDA_CHAPTER_MAX_SOURCE_CHARS || "12000";
 
   const skipRefresh = args.refresh ? "0" : "1";
   env.NEXT_STORY_SKIP_REFRESH = skipRefresh;

@@ -13,6 +13,13 @@ test("financial claim detection is generic and recognizes aggregate monetary wor
   assert.equal(containsFinancialClaimText("Cloud Permit Review"), false);
 });
 
+test("financial claim detection ignores generic implications paired with a year", () => {
+  assert.equal(
+    containsFinancialClaimText("The report notes no expected financial or staffing considerations in 2026."),
+    false,
+  );
+});
+
 test("financial audit parser accepts a qualified aggregate-benefits result", () => {
   const parsed = parseFinancialClaimAudit(JSON.stringify({
     verdict: "PASS",
@@ -57,4 +64,14 @@ test("financial audit prompt requires attribution for aggregate or projected cla
   assert.match(prompt, /forecast_or_target/u);
   assert.match(prompt, /require attribution/iu);
   assert.match(prompt, /presents an aggregate, projected, disputed, or merely reported figure as direct or approved savings/iu);
+});
+
+test("financial audit prompt preserves requested-cost direction separately from savings", () => {
+  const prompt = buildFinancialClaimAuditPrompt({
+    sourceText: "The report seeks additional funding for unforeseen repairs and says staff savings are expected elsewhere.",
+    candidateText: "The project produced savings from the requested repairs.",
+  });
+  assert.match(prompt, /requested_funding_or_cost/u);
+  assert.match(prompt, /repair or project cost.*not savings or reductions/iu);
+  assert.match(prompt, /does not turn a requested cost into a saving/iu);
 });

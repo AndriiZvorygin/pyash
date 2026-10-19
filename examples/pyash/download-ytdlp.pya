@@ -1,5 +1,7 @@
+su name note ob text "Download one video URL to the requested output file. Pass the URL first, then the destination filename." be write do
 su name example meta be map def
 su name required ob ve text "yt-dlp" "PYA_NETWORK" ya
 prah
-be directory ob filename "examples/out" do
-be download from filename "https://www.youtube.com/watch?v=BaW_jenozKc" as wo video to filename "examples/out/video.mp4" do
+ob text text video_url be input ya
+ob filename text video_output be input ya
+su name result fromstate https from filename of video_url as wo video to filename of video_output be download do

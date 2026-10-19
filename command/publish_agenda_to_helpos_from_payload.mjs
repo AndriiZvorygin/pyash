@@ -9,6 +9,7 @@ import {
   mirrorSupportingAttachments,
   rewriteSupportingAttachmentUrls,
 } from "../program/library/reporter_shared/supporting-attachment-mirror.mjs";
+import { canonicalMeetingRouteSlug } from "../program/library/reporter_shared/meeting-route.mjs";
 
 const DEFAULT_ENDPOINT = "https://helpos.ca/api/helpos/v1/agenda-publish";
 
@@ -147,7 +148,7 @@ function buildIdempotencyKey({ jurisdiction, body, dateIso, postTitle, postBody,
 }
 
 function toAgendaUrl(siteUrl, jurisdiction, body, dateIso) {
-  return `${String(siteUrl || "https://helpos.ca").replace(/\/+$/u, "")}/agendas/${slugify(jurisdiction)}/${slugify(body)}/${dateIso}`;
+  return `${String(siteUrl || "https://helpos.ca").replace(/\/+$/u, "")}/agendas/${slugify(jurisdiction)}/${canonicalMeetingRouteSlug(body)}/${dateIso}`;
 }
 
 function extractCanonicalHref(html) {

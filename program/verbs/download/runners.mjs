@@ -39,26 +39,31 @@ async function runCurl({ url, outputPath, extraArgs = [] }) {
   });
 }
 
+function buildYtDlpArgs({ url, outputPath, intent, extraArgs = [], multi = false, monthWindow = null }) {
+  const args = ["--quiet", "--no-progress"];
+  if (outputPath) {
+    args.push("-o", outputPath);
+  }
+  if (intent === "audio") {
+    args.push("-x", "--audio-format", "opus", "--audio-quality", "0");
+  }
+  if (multi) {
+    if (supportsYtDlpLazyPlaylist()) args.push("--lazy-playlist");
+    args.push("--break-on-reject");
+  }
+  if (monthWindow) {
+    args.push("--dateafter", formatMonthWindow(monthWindow));
+  }
+  if (extraArgs.length) {
+    args.push(...extraArgs);
+  }
+  args.push(url);
+  return args;
+}
+
 async function runYtDlp({ url, outputPath, intent, extraArgs = [], multi = false, monthWindow = null }) {
   return new Promise((resolve, reject) => {
-    const args = [];
-    if (outputPath) {
-      args.push("-o", outputPath);
-    }
-    if (intent === "audio") {
-      args.push("-x", "--audio-format", "opus", "--audio-quality", "0");
-    }
-    if (multi) {
-      if (supportsYtDlpLazyPlaylist()) args.push("--lazy-playlist");
-      args.push("--break-on-reject");
-    }
-    if (monthWindow) {
-      args.push("--dateafter", formatMonthWindow(monthWindow));
-    }
-    if (extraArgs.length) {
-      args.push(...extraArgs);
-    }
-    args.push(url);
+    const args = buildYtDlpArgs({ url, outputPath, intent, extraArgs, multi, monthWindow });
     const proc = spawn("yt-dlp", args, { stdio: ["ignore", "pipe", "pipe"] });
     proc.stdout.on("data", data => {
       process.stdout.write(data);
@@ -95,4 +100,4 @@ function supportsYtDlpLazyPlaylist() {
   }
 }
 
-export { missingBackend, recordDownloadArtifact, runCurl, runYtDlp };
+export { buildYtDlpArgs, missingBackend, recordDownloadArtifact, runCurl, runYtDlp };
