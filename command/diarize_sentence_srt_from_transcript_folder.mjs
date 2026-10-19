@@ -5,6 +5,10 @@ import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ensureStarted, identify, discharge, stop } from './speaker_runner.mjs';
+import {
+  SPEAKER_DIARIZATION_POLICY_VERSION,
+  namedSpeakerIdentityEnabled,
+} from '../program/library/reporter_shared/speaker-diarization-policy.mjs';
 
 let __speakerCleanupDone = false;
 async function cleanupSpeakerRunner(reason = '') {
@@ -61,7 +65,7 @@ const EDGE_PROBE_SECONDS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_EDGE_PROBE_SECONDS || 3.2);
   return Number.isFinite(raw) && raw > 0 ? raw : 3.2;
 })();
-const BOUNDARY_REFINE_ENABLED = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_BOUNDARY_REFINE || '1'));
+const BOUNDARY_REFINE_ENABLED = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_BOUNDARY_REFINE || '0'));
 const BOUNDARY_REFINE_WINDOW = (() => {
   const raw = Number(process.env.PYA_SPEAKER_BOUNDARY_REFINE_WINDOW || 1);
   return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 1;
@@ -98,7 +102,7 @@ const MIN_NEW_SPEAKER_SIMILARITY = (() => {
 // wrapper boundary for compatibility, but ignore them here so no invocation
 // can re-enable aggregate relabeling.
 const CUE_LEVEL_TURNS = true;
-const BAD_SAMPLE_GUARD_ENABLED = /^(1|true|yes)$/iu.test(String(process.env.PYA_SPEAKER_BAD_SAMPLE_GUARD || '0'));
+const BAD_SAMPLE_GUARD_ENABLED = !/^(0|false|no)$/iu.test(String(process.env.PYA_SPEAKER_BAD_SAMPLE_GUARD || '1'));
 const BAD_SAMPLE_MIN_SECONDS = (() => {
   const raw = Number(process.env.PYA_SPEAKER_BAD_SAMPLE_MIN_SECONDS || 1.1);
   return Number.isFinite(raw) && raw > 0 ? raw : 1.1;
@@ -112,6 +116,10 @@ const BAD_SAMPLE_LOW_SPEECH_DENSITY = (() => {
   return Number.isFinite(raw) && raw > 0 ? raw : 0.4;
 })();
 const UNKNOWN_SPEAKER_KEY = 'speaker_unknown';
+const NAMED_IDENTITY_OUTPUT_ENABLED = namedSpeakerIdentityEnabled(process.env);
+const ANONYMOUS_LABELS = new Map();
+const USED_ANONYMOUS_NUMBERS = new Set();
+let NEXT_ANONYMOUS_NUMBER = 1;
 
 function usage() {
   return [
@@ -262,13 +270,23 @@ function toDisplayLabel(speakerKey, metadataMap, lockedSpeakerKeys = null) {
   const rawName = String(meta.name || '').trim();
   const hasLocks = lockedSpeakerKeys instanceof Set && lockedSpeakerKeys.size > 0;
   const lockAllowed = !hasLocks || lockedSpeakerKeys.has(key);
-  if (lockAllowed && rawName && !/^speaker_\d+$/iu.test(rawName)) {
+  if (NAMED_IDENTITY_OUTPUT_ENABLED && lockAllowed && rawName && !/^speaker_\d+$/iu.test(rawName)) {
     return rawName.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
   }
   const m = key.match(/^speaker_(\d+)$/iu);
-  if (m) return `SPEAKER_${String(Number(m[1])).padStart(3, '0')}`;
-  if (rawName) return rawName.replace(/_/g, ' ');
-  return key || 'SPEAKER_UNKNOWN';
+  if (m) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0) USED_ANONYMOUS_NUMBERS.add(n);
+    return `SPEAKER_${String(n).padStart(3, '0')}`;
+  }
+  if (!key || key === UNKNOWN_SPEAKER_KEY) return 'SPEAKER_UNKNOWN';
+  if (!ANONYMOUS_LABELS.has(key)) {
+    while (USED_ANONYMOUS_NUMBERS.has(NEXT_ANONYMOUS_NUMBER)) NEXT_ANONYMOUS_NUMBER += 1;
+    ANONYMOUS_LABELS.set(key, `SPEAKER_${String(NEXT_ANONYMOUS_NUMBER).padStart(3, '0')}`);
+    USED_ANONYMOUS_NUMBERS.add(NEXT_ANONYMOUS_NUMBER);
+    NEXT_ANONYMOUS_NUMBER += 1;
+  }
+  return ANONYMOUS_LABELS.get(key);
 }
 
 function hasNamedMetadata(speakerKey, metadataMap) {
@@ -1138,7 +1156,7 @@ async function main() {
   const turns = buildCueLevelTurns(workCues);
   process.stdout.write(`[speaker-sentence] turns: ${turns.length}\n`);
   process.stdout.write(
-    `[speaker-sentence] policy: min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} sentence_level_turns=on boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW}\n`
+    `[speaker-sentence] policy=${SPEAKER_DIARIZATION_POLICY_VERSION} min_identify_seconds=${MIN_IDENTIFY_SECONDS} min_identify_words=${MIN_IDENTIFY_WORDS} same_threshold=${SAME_SPEAKER_THRESHOLD} known_threshold=${KNOWN_SPEAKER_THRESHOLD} name_lock_threshold=${NAME_LOCK_THRESHOLD} name_lock_min_windows=${NAME_LOCK_MIN_WINDOWS} name_lock_window_seconds=${NAME_LOCK_WINDOW_SECONDS} sentence_level_turns=on boundary_refine=${BOUNDARY_REFINE_ENABLED ? 'on' : 'off'} boundary_window=${BOUNDARY_REFINE_WINDOW} named_identity_output=${NAMED_IDENTITY_OUTPUT_ENABLED ? 'on' : 'off'}\n`
   );
   process.stdout.write('[speaker-sentence] aggregate relabel/reassign: disabled (sentence-level attribution is authoritative)\n');
   process.stdout.write(
@@ -1564,6 +1582,12 @@ async function main() {
       min_windows: NAME_LOCK_MIN_WINDOWS,
       window_seconds: NAME_LOCK_WINDOW_SECONDS,
       speakers: [...lockedSpeakerKeys].sort(),
+    },
+    speaker_policy: {
+      version: SPEAKER_DIARIZATION_POLICY_VERSION,
+      sentence_level: true,
+      aggregate_relabeling: false,
+      named_identity_output: NAMED_IDENTITY_OUTPUT_ENABLED,
     },
     reassign: null,
     rows,
