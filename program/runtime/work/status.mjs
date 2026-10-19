@@ -3,7 +3,8 @@ import path from "node:path";
 
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { parse } from "../../understand/index.mjs";
-import { ensureHoldingLaneDirs } from "../../agent/holding_lane/layout.mjs";
+import { compareUtf8Bytes } from "../../library/knowledge_core.mjs";
+import { ensureHoldingLaneDirs, holdingLanePaths } from "../../agent/holding_lane/layout.mjs";
 import {
   assertWorkTask,
   buildWorkTask,
@@ -42,12 +43,21 @@ function parseMap(text, name) {
   const out = {};
   if (!block) return out;
   for (const line of String(block[1] ?? "").split("\n")) {
-    const match = line.trim().match(/^su name (.+?) ob (text|num) (.+?) ya$/i);
+    const match = line.trim().match(/^su name (.+?) ob (ve text|text|num) (.+) ya$/i);
     if (!match) continue;
     const key = String(match[1]).trim();
-    out[key] = match[2].toLowerCase() === "num"
-      ? Number(match[3])
-      : parseQuoted(match[3]);
+    if (match[2].toLowerCase() === "ve text") {
+      try {
+        const sentence = parse(`su name item ob ve text ${match[3]} ya`);
+        out[key] = Array.isArray(sentence?.ob?.ve?.values) ? [...sentence.ob.ve.values] : [];
+      } catch {
+        out[key] = [];
+      }
+    } else {
+      out[key] = match[2].toLowerCase() === "num"
+        ? Number(match[3])
+        : parseQuoted(match[3]);
+    }
   }
   return out;
 }
@@ -65,6 +75,31 @@ function decodeJson(value, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function vectorText(values = []) {
+  return values.map((value) => quoteText(value)).join(" ");
+}
+
+function organizationEntries(task) {
+  return [
+    { key: "source", type: "text", value: quoteText(encodeJson(task.source)) },
+    { key: "source identity", type: "text", value: quoteText(task.source.identity) },
+    { key: "source kind", type: "text", value: quoteText(task.source.kind) },
+    { key: "source locator", type: "text", value: quoteText(task.source.locator) },
+    { key: "domain", type: "text", value: quoteText(task.domain) },
+    { key: "deadline", type: "text", value: quoteText(task.deadline) },
+    { key: "dependencies", type: "ve text", value: vectorText(task.dependencies) },
+    { key: "delegated by", type: "text", value: quoteText(task.delegatedBy) },
+    { key: "escalation", type: "text", value: quoteText(encodeJson(task.escalation)) },
+    { key: "escalation state", type: "text", value: quoteText(task.escalation.state) },
+    { key: "escalation target", type: "text", value: quoteText(task.escalation.target) },
+    { key: "escalation reason", type: "text", value: quoteText(task.escalation.reason) },
+    { key: "escalation timestamp", type: "text", value: quoteText(task.escalation.timestamp) },
+    { key: "escalation source identity", type: "text", value: quoteText(task.escalation.sourceIdentity) },
+    { key: "delegation events", type: "text", value: quoteText(encodeJson(task.delegationEvents)) },
+    { key: "delegation event types", type: "ve text", value: vectorText(task.delegationEvents.map((event) => event.type)) }
+  ];
 }
 
 function statusEntries(task) {
@@ -162,6 +197,7 @@ function checkpointBlocks(task) {
       { key: "model", type: "text", value: quoteText(checkpoint.review.model) },
       { key: "reasoning effort", type: "text", value: quoteText(checkpoint.review.reasoningEffort) },
       { key: "thread id", type: "text", value: quoteText(checkpoint.review.threadId) },
+      { key: "previous thread ids", type: "text", value: quoteText(encodeJson(checkpoint.review.previousThreadIds)) },
       { key: "pass", type: "num", value: checkpoint.review.pass },
       { key: "reviewed commit", type: "text", value: quoteText(checkpoint.review.reviewedCommit) },
       { key: "reviewed revision", type: "text", value: quoteText(checkpoint.review.reviewedRevision) },
@@ -205,6 +241,7 @@ function checkpointBlocks(task) {
       { key: "active turn", type: "text", value: quoteText(encodeJson(checkpoint.activeTurn)) },
       { key: "turn history", type: "text", value: quoteText(encodeJson(checkpoint.turnHistory)) },
       { key: "turn reconciliation", type: "text", value: quoteText(encodeJson(checkpoint.turnReconciliation)) },
+      { key: "execution preflight", type: "text", value: quoteText(encodeJson(checkpoint.executionPreflight)) },
       { key: "blocker", type: "text", value: quoteText(checkpoint.blocker) },
       { key: "human response", type: "text", value: quoteText(checkpoint.humanResponse) },
       { key: "last action", type: "text", value: quoteText(checkpoint.lastAction) },
@@ -214,8 +251,21 @@ function checkpointBlocks(task) {
       { key: "resume count", type: "num", value: checkpoint.resumeCount },
       { key: "recovery count", type: "num", value: checkpoint.recoveryCount },
       { key: "recovery history", type: "text", value: quoteText(encodeJson(checkpoint.recoveryHistory)) },
+      { key: "approval", type: "text", value: quoteText(encodeJson(checkpoint.approval)) },
       { key: "timeout policy", type: "text", value: quoteText(encodeJson(checkpoint.timeoutPolicy)) },
       { key: "policy revalidation", type: "text", value: quoteText(encodeJson(checkpoint.policyRevalidation)) }
+    ]),
+    mapBlock("work task compact context", [
+      { key: "version", type: "num", value: checkpoint.compactContext.version },
+      { key: "phase", type: "text", value: quoteText(checkpoint.compactContext.phase) },
+      { key: "role", type: "text", value: quoteText(checkpoint.compactContext.role) },
+      { key: "context hash", type: "text", value: quoteText(checkpoint.compactContext.contextHash) },
+      { key: "prompt", type: "text", value: quoteText(checkpoint.compactContext.prompt) },
+      { key: "source request ids", type: "text", value: quoteText(encodeJson(checkpoint.compactContext.sourceRequestIds)) },
+      { key: "source turn ids", type: "text", value: quoteText(encodeJson(checkpoint.compactContext.sourceTurnIds)) },
+      { key: "request identity", type: "text", value: quoteText(checkpoint.compactContext.requestIdentity) },
+      { key: "active thread id", type: "text", value: quoteText(checkpoint.compactContext.activeThreadId) },
+      { key: "prior thread ids", type: "text", value: quoteText(encodeJson(checkpoint.compactContext.priorThreadIds)) }
     ])
   ];
 }
@@ -223,8 +273,13 @@ function checkpointBlocks(task) {
 function statusToText(task) {
   return [
     mapBlock("work task status", statusEntries(task)),
+    mapBlock("work task organization", organizationEntries(task)),
     ...checkpointBlocks(task)
   ].join("\n") + "\n";
+}
+
+export function workTaskStatusText(task) {
+  return statusToText(buildWorkTask(task));
 }
 
 function statusFromText(text) {
@@ -238,6 +293,9 @@ function statusFromText(text) {
   const convergence = parseMap(text, "work task convergence");
   const integration = parseMap(text, "work task integration");
   const checkpoint = parseMap(text, "work task checkpoint");
+  const compactContext = parseMap(text, "work task compact context");
+  const organization = parseMap(text, "work task organization");
+  const storedEscalation = decodeJson(organization.escalation);
   let payloadSentence = null;
   const payloadText = String(source.payload ?? "").trim();
   if (payloadText) {
@@ -268,6 +326,32 @@ function statusFromText(text) {
     message: values.message,
     result: values.result,
     error: values.error,
+    source: {
+      identity: organization["source identity"],
+      kind: organization["source kind"],
+      locator: organization["source locator"],
+      provider: organization["source provider"],
+      eventId: organization["source event id"],
+      messageId: organization["source message id"],
+      sender: organization["source sender"],
+      subject: organization["source subject"],
+      receivedAt: organization["source received at"],
+      routerPayloadId: organization["source router payload id"],
+      ...decodeJson(organization.source, {})
+    },
+    domain: organization.domain,
+    deadline: organization.deadline,
+    dependencies: organization.dependencies,
+    delegatedBy: organization["delegated by"],
+    escalation: {
+      ...storedEscalation,
+      state: organization["escalation state"] ?? storedEscalation.state,
+      target: organization["escalation target"] ?? storedEscalation.target,
+      reason: organization["escalation reason"] ?? storedEscalation.reason,
+      timestamp: organization["escalation timestamp"] ?? storedEscalation.timestamp,
+      sourceIdentity: organization["escalation source identity"] ?? storedEscalation.sourceIdentity
+    },
+    delegationEvents: decodeJson(organization["delegation events"], []),
     workSpec: decodeJson(source["work spec"]),
     payloadSentence,
     checkpoint: {
@@ -328,6 +412,7 @@ function statusFromText(text) {
         model: review.model,
         reasoningEffort: review["reasoning effort"],
         threadId: review["thread id"],
+        previousThreadIds: decodeJson(review["previous thread ids"], []),
         pass: review.pass,
         reviewedCommit: review["reviewed commit"],
         reviewedRevision: review["reviewed revision"],
@@ -369,9 +454,22 @@ function statusFromText(text) {
         lastTurnId: checkpoint["last turn id"],
         workspaceEvidence: decodeJson(checkpoint["workspace evidence"])
       },
+      compactContext: {
+        version: compactContext.version,
+        phase: compactContext.phase,
+        role: compactContext.role,
+        contextHash: compactContext["context hash"],
+        prompt: compactContext.prompt,
+        sourceRequestIds: decodeJson(compactContext["source request ids"], []),
+        sourceTurnIds: decodeJson(compactContext["source turn ids"], []),
+        requestIdentity: compactContext["request identity"],
+        activeThreadId: compactContext["active thread id"],
+        priorThreadIds: decodeJson(compactContext["prior thread ids"], [])
+      },
       activeTurn: decodeJson(checkpoint["active turn"]),
       turnHistory: decodeJson(checkpoint["turn history"], []),
       turnReconciliation: decodeJson(checkpoint["turn reconciliation"]),
+      executionPreflight: decodeJson(checkpoint["execution preflight"]),
       blocker: checkpoint.blocker,
       humanResponse: checkpoint["human response"],
       lastAction: checkpoint["last action"],
@@ -381,31 +479,56 @@ function statusFromText(text) {
       resumeCount: checkpoint["resume count"],
       recoveryCount: checkpoint["recovery count"],
       recoveryHistory: decodeJson(checkpoint["recovery history"], []),
+      approval: decodeJson(checkpoint.approval, {}),
       timeoutPolicy: decodeJson(checkpoint["timeout policy"]),
       policyRevalidation: decodeJson(checkpoint["policy revalidation"])
     }
   });
 }
 
-async function statusDir(worldRoot) {
-  const paths = await ensureHoldingLaneDirs(worldRoot, { lane: "work", migrateLegacyProduce: true });
+async function statusDir(worldRoot, { create = true } = {}) {
+  const paths = create
+    ? await ensureHoldingLaneDirs(worldRoot, { lane: "work", migrateLegacyProduce: true })
+    : holdingLanePaths(worldRoot, { lane: "work" });
   const dir = path.join(paths.artifactsDir, "task");
-  await fs.mkdir(dir, { recursive: true });
+  if (create) await fs.mkdir(dir, { recursive: true });
   return dir;
 }
 
-export async function workTaskStatusDir(worldRoot) {
-  return statusDir(worldRoot);
+export async function workTaskStatusDir(worldRoot, { readOnly = false } = {}) {
+  return statusDir(worldRoot, { create: !readOnly });
 }
 
-async function statusPath(worldRoot, taskId) {
+async function statusPath(worldRoot, taskId, { readOnly = false } = {}) {
   const id = normalizeWorkTaskId(taskId);
   if (!id) return "";
-  return path.join(await statusDir(worldRoot), `${id}.pya`);
+  return path.join(await statusDir(worldRoot, { create: !readOnly }), `${id}.pya`);
+}
+
+export async function workTaskStatusPath(worldRoot, taskId, { readOnly = false } = {}) {
+  return statusPath(worldRoot, taskId, { readOnly });
 }
 
 function checkpointHasData(checkpoint) {
   return JSON.stringify(buildWorkCheckpoint(checkpoint)) !== JSON.stringify(buildWorkCheckpoint());
+}
+
+function organizationHasData(task) {
+  return Boolean(
+    task?.source?.identity
+      || task?.source?.kind
+      || task?.source?.locator
+      || task?.domain
+      || task?.deadline
+      || task?.dependencies?.length
+      || task?.delegatedBy
+      || task?.escalation?.state
+      || task?.escalation?.target
+      || task?.escalation?.reason
+      || task?.escalation?.timestamp
+      || task?.escalation?.sourceIdentity
+      || task?.delegationEvents?.length
+  );
 }
 
 async function mergeStoredTask(worldRoot, task) {
@@ -417,12 +540,19 @@ async function mergeStoredTask(worldRoot, task) {
     ...candidate,
     workSpec: Object.keys(candidate.workSpec).length ? candidate.workSpec : stored.workSpec,
     payloadSentence: candidate.payloadSentence || stored.payloadSentence,
+    source: organizationHasData(candidate) ? candidate.source : stored.source,
+    domain: organizationHasData(candidate) ? candidate.domain : stored.domain,
+    deadline: organizationHasData(candidate) ? candidate.deadline : stored.deadline,
+    dependencies: organizationHasData(candidate) ? candidate.dependencies : stored.dependencies,
+    delegatedBy: organizationHasData(candidate) ? candidate.delegatedBy : stored.delegatedBy,
+    escalation: organizationHasData(candidate) ? candidate.escalation : stored.escalation,
+    delegationEvents: organizationHasData(candidate) ? candidate.delegationEvents : stored.delegationEvents,
     checkpoint: checkpointHasData(candidate.checkpoint) ? candidate.checkpoint : stored.checkpoint
   });
 }
 
 export async function readWorkTaskStatus(worldRoot, taskId) {
-  const target = await statusPath(worldRoot, taskId);
+  const target = await statusPath(worldRoot, taskId, { readOnly: true });
   if (!target) return null;
   try {
     return statusFromText(await fs.readFile(target, "utf8"));
@@ -432,8 +562,11 @@ export async function readWorkTaskStatus(worldRoot, taskId) {
   }
 }
 
-export async function listWorkTaskStatuses(worldRoot, { includeTerminal = true } = {}) {
-  const dir = await statusDir(worldRoot);
+export async function listWorkTaskStatuses(worldRoot, {
+  includeTerminal = true,
+  readOnly = false
+} = {}) {
+  const dir = await statusDir(worldRoot, { create: !readOnly });
   let entries = [];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
@@ -458,7 +591,7 @@ export async function listWorkTaskStatuses(worldRoot, { includeTerminal = true }
     if (priority) return priority;
     const queued = Date.parse(left.queuedAt) - Date.parse(right.queuedAt);
     if (queued) return queued;
-    return left.taskId.localeCompare(right.taskId);
+    return compareUtf8Bytes(left.taskId, right.taskId);
   });
 }
 

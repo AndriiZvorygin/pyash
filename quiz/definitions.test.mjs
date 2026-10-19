@@ -148,6 +148,40 @@ test("ceremony def headers declare signature cases/types (new signature style)",
   assert.equal(bucket.ob.num, 2);
 });
 
-test.todo("ceremony with ret returns updated evoke registers to caller names");
+test("ceremony with ret returns updated evoke registers to caller names", async () => {
+  forget();
 
-test.todo("ceremony ret returns multiple registers (ob/fromindex/toindex) to caller names");
+  await run("exists su name caller ob num 5 be number ya");
+  await run("su name relay to name implementation be ceremony def");
+  await run("ob num 2 to name implementation be plus do");
+  await run("ob name implementation ret");
+  await run("su name relay be ceremony prah");
+
+  await run("to name caller be relay do");
+
+  const caller = remember("caller");
+  assert.equal(caller?.ob?.num, 7, "ret should return the caller value updated by the local binding");
+  assert.equal(remember("implementation"), undefined, "local ceremony binding should not leak to main memory");
+});
+
+test("named ret returns its payload without importing target control registers", async () => {
+  forget();
+
+  await run("exists su name caller ob num 5 fromindex num 99 toindex num 99 by num 4 be number ya");
+  await run("su name relay to name num implementation be ceremony def");
+  await run("ob num 2 to name implementation be plus do");
+  await run("ob name implementation ret");
+  await run("su name relay be ceremony prah");
+
+  await run("to name caller be relay do");
+
+  const caller = remember("caller");
+  const evoker = [...allRemember()].reverse().find((sentence) => sentence.mood === "do" && sentence.to?.name === "caller");
+  assert.equal(caller?.ob?.num, 7, "named ret should return the payload");
+  assert.equal(caller?.by?.num, 4, "named ret must preserve the target by role");
+  assert.equal(caller?.fromindex?.num ?? caller?.fromindex, 99, "named ret must preserve target registers on the target fact");
+  assert.equal(evoker?.fromindex, undefined, "named ret must not import fromindex from its source fact");
+  assert.equal(evoker?.toindex, undefined, "named ret must not import toindex from its source fact");
+  assert.equal(remember("fromindex"), undefined, "fromindex should not be stored as a separate register fact");
+  assert.equal(remember("toindex"), undefined, "toindex should not be stored as a separate register fact");
+});

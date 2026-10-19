@@ -33,6 +33,7 @@ function resolveStateValue(value) {
   if (!value) return "";
   if (typeof value === "string") return value;
   if (value?.wo) return String(value.wo);
+  if (value?.text) return String(value.text);
   if (value?.name) return String(value.name);
   return "";
 }
@@ -70,6 +71,50 @@ export function handleReadSentence(context, helpers) {
   const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
   const sourceState = resolveStateValue(sentence?.fromstate).toLowerCase();
   const becomeState = resolveStateValue(sentence?.become).toLowerCase();
+  if (!sourceState && (becomeState === "text" || !becomeState)) {
+    const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+    const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+    if (!sourceFilename) return null;
+    const safeName = sanitizeName(targetName);
+    const alreadyDeclared = declared?.has(targetName);
+    markDeclared(declared, targetName);
+    if (declaredTypes) declaredTypes.set(targetName, "text");
+    if (lang !== "c") {
+      if (jsHelpers) {
+        jsHelpers.usesFs = true;
+        jsHelpers.usesExchange = true;
+      }
+      const readExpr = `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)})`;
+      const assignLine = alreadyDeclared
+        ? `${safeName} = { su: { name: ${JSON.stringify(targetName)} }, ob: { text: ${readExpr} }, be: "text", mood: "ya" };`
+        : `const ${safeName} = { su: { name: ${JSON.stringify(targetName)} }, ob: { text: ${readExpr} }, be: "text", mood: "ya" };`;
+      return [
+        assignLine,
+        `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
+      ].join("\n");
+    }
+    if (cHelpers) {
+      cHelpers.usesExchange = true;
+      cHelpers.usesPrintf = true;
+      cHelpers.usesString = true;
+      cHelpers.usesStdlib = true;
+    }
+    const lines = [];
+    const needsDecl = !locals?.has(safeName) && !alreadyDeclared;
+    if (needsDecl) lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
+    const readNonce = cState?.fileCounter ?? 0;
+    if (cState) cState.fileCounter += 1;
+    const fileVar = `read_file_${readNonce}`;
+    const sizeVar = `read_size_${readNonce}`;
+    lines.push(`size_t ${sizeVar} = 0;`);
+    lines.push(`FILE *${fileVar} = fopen(${JSON.stringify(sourceFilename)}, "r");`);
+    lines.push(`if (!${fileVar}) { fprintf(stderr, "read defective\\n"); exit(1); }`);
+    lines.push(`${sizeVar} = fread(${safeName}, 1, PYA_TEXT_CAP - 1, ${fileVar});`);
+    lines.push(`${safeName}[${sizeVar}] = '\\0';`);
+    lines.push(`fclose(${fileVar});`);
+    lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`);
+    return lines.join("\n");
+  }
   if (sourceState === "html" || sourceState === "pdf") {
     const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
     const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;

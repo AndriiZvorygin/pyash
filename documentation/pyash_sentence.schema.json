@@ -11,7 +11,7 @@
     "mood": {
       "type": "string",
       "description": "Sentence mood.",
-      "enum": ["ya", "def", "do", "que", "then", "ret", "error"]
+      "enum": ["ya", "def", "do", "que", "then", "ret", "error", "pi7"]
     },
     "be": {
       "type": "string",

@@ -1,0 +1,8 @@
+su name tools be map def
+su name agent ob bool truth ya
+su name command be command ob text input to name text answer can
+su name session name ob text "command workflow" ya
+prah
+
+exists su name agent be mind via state "qwen3.5:9b" from discourse "Command only when needed. Answer in one brief sentence after success." ya
+su name question ob text "Run exactly node --version with the command. After success, answer in one brief sentence confirming the Node version." for name agent with name tools be session do

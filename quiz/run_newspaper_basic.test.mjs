@@ -38,10 +38,11 @@ test("run writes run newspaper with evoke/result", async () => {
 
   assert.equal(lines[0], "exists su name run-1 since name 2025-01-01T00:00:00Z be run ya");
   assert.ok(lines[1].startsWith("ob filename "));
-  assert.equal(lines[2], "exists su name evoke-0 ob la exists su name alpha ob num 1 be number ya ko be evoke ya");
-  assert.equal(lines[3], "exists su name alpha ob num 1 be number ya");
-  assert.equal(lines[4], "su name run start time ob text \"2025-01-01T00:00:00Z\" be text ya");
-  assert.match(lines[5], /^su name run end time ob text \".+\" be text ya$/);
-  assert.match(lines[6], /^su name run duration ms ob num \d+ be number ya$/);
-  assert.equal(lines[7], "exists su name run-1 be end ya");
+  assert.equal(lines[2], "exists su name command result identity protocol ob text \"v1\" be text ya");
+  assert.equal(lines[3], "exists su name evoke-0 ob la exists su name alpha ob num 1 be number ya ko be evoke ya");
+  assert.equal(lines[4], "exists su name alpha ob num 1 be number ya");
+  assert.equal(lines[5], "su name run start time ob text \"2025-01-01T00:00:00Z\" be text ya");
+  assert.match(lines[6], /^su name run end time ob text \".+\" be text ya$/);
+  assert.match(lines[7], /^su name run duration ms ob num \d+ be number ya$/);
+  assert.equal(lines[8], "exists su name run-1 be end ya");
 });

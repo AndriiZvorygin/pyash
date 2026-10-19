@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-node command/run_pya_program.mjs "$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec node "$SCRIPT_DIR/command/cli_language.mjs" run "$@"

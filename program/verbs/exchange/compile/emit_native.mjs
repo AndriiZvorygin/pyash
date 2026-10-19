@@ -8,6 +8,8 @@ import { handleNativeCopy } from "./emit_native/copy.mjs";
 import { handleNativeDirectory } from "./emit_native/directory.mjs";
 import { handleNativeDelete } from "./emit_native/delete.mjs";
 import { handleNativePathJoin } from "./emit_native/path_join.mjs";
+import { handleNativeTouch } from "./emit_native/touch.mjs";
+import { handleNativeRename } from "./emit_native/rename.mjs";
 
 export function handleNativeSentence(context, helpers) {
   const existsResult = handleNativeExists(context, helpers);
@@ -30,6 +32,12 @@ export function handleNativeSentence(context, helpers) {
 
   const copyResult = handleNativeCopy(context, helpers);
   if (copyResult) return copyResult;
+
+  const touchResult = handleNativeTouch(context, helpers);
+  if (touchResult) return touchResult;
+
+  const renameResult = handleNativeRename(context, helpers);
+  if (renameResult) return renameResult;
 
   const directoryResult = handleNativeDirectory(context, helpers);
   if (directoryResult) return directoryResult;

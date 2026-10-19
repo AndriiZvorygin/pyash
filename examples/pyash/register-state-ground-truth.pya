@@ -1,0 +1,7 @@
+exists su name count ob num 0 fromindex num 99 toindex num 99 be number ya
+su name plus count to name num input fromindex num 0 toindex num 0 be ceremony def
+ob num 1 to name count be plus do
+ob name count ret
+su name plus count be ceremony prah
+to name count fromindex num 3 toindex num 0 be plus count do
+ob name count be write do

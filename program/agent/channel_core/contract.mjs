@@ -3,6 +3,50 @@ function normalizeText(value) {
   return String(value).trim();
 }
 
+function cloneIdentity(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const identity = {};
+  for (const key of [
+    "provider",
+    "account",
+    "channelId",
+    "eventId",
+    "historyId",
+    "messageId",
+    "threadId",
+    "rfcMessageId",
+    "sourceLocator"
+  ]) {
+    const text = normalizeText(value[key]);
+    if (text) identity[key] = text;
+  }
+  return Object.keys(identity).length ? identity : null;
+}
+
+function attachIdentity(sentence, identity) {
+  if (!identity) return sentence;
+  Object.defineProperty(sentence, "channelIdentity", {
+    value: identity,
+    enumerable: false,
+    configurable: true
+  });
+  return sentence;
+}
+
+export function channelIdentityFromEvent(event = {}) {
+  return cloneIdentity(event?.channelIdentity ?? {
+    provider: event?.provider,
+    account: event?.account,
+    channelId: event?.channelId,
+    eventId: event?.eventId,
+    historyId: event?.historyId,
+    messageId: event?.messageId,
+    threadId: event?.threadId,
+    rfcMessageId: event?.rfcMessageId,
+    sourceLocator: event?.sourceLocator
+  });
+}
+
 export const ROUTER_OPERATION_INPUT = "input";
 export const ROUTER_OPERATION_PRODUCE = "produce";
 export const ROUTER_OPERATION_HEALTH = "health";
@@ -26,7 +70,8 @@ export function eventToSentence({
   toEndpoint,
   payloadText,
   targetAgentName,
-  sessionId
+  sessionId,
+  channelIdentity
 } = {}) {
   const sentence = {
     mood: "ya",
@@ -38,11 +83,11 @@ export function eventToSentence({
   };
   if (normalizeText(targetAgentName)) sentence.for = { text: normalizeText(targetAgentName) };
   if (normalizeText(sessionId)) sentence.fromtext = { text: normalizeText(sessionId) };
-  return sentence;
+  return attachIdentity(sentence, cloneIdentity(channelIdentity));
 }
 
 export function eventFromSentence(sentence) {
-  return {
+  const event = {
     payloadId: normalizeText(sentence?.su?.name),
     fromEndpoint: normalizeText(sentence?.from?.name),
     toEndpoint: normalizeText(sentence?.to?.name),
@@ -50,6 +95,9 @@ export function eventFromSentence(sentence) {
     targetAgentName: normalizeText(sentence?.for?.text),
     sessionId: normalizeText(sentence?.fromtext?.text)
   };
+  const identity = cloneIdentity(sentence?.channelIdentity);
+  if (identity) event.channelIdentity = identity;
+  return event;
 }
 
 export function ackToSentence({
@@ -57,9 +105,10 @@ export function ackToSentence({
   fromEndpoint,
   toEndpoint,
   payloadId,
-  success = true
+  success = true,
+  channelIdentity
 } = {}) {
-  return {
+  const sentence = {
     mood: "ya",
     su: { name: normalizeText(messageId) },
     vyah: { ve: { type: "name", values: [success ? "success" : "fail"] } },
@@ -68,17 +117,21 @@ export function ackToSentence({
     accordingto: { text: normalizeText(payloadId) },
     be: ROUTER_OPERATION_PRODUCE
   };
+  return attachIdentity(sentence, cloneIdentity(channelIdentity));
 }
 
 export function ackFromSentence(sentence) {
   const successValues = sentence?.vyah?.ve?.values;
-  return {
+  const ack = {
     messageId: normalizeText(sentence?.su?.name),
     fromEndpoint: normalizeText(sentence?.from?.name),
     toEndpoint: normalizeText(sentence?.to?.name),
     payloadId: normalizeText(sentence?.accordingto?.text),
     success: Array.isArray(successValues) ? successValues.includes("success") : false
   };
+  const identity = cloneIdentity(sentence?.channelIdentity);
+  if (identity) ack.channelIdentity = identity;
+  return ack;
 }
 
 export function healthToSentence({
@@ -152,7 +205,7 @@ export function buildRouterInputRequestSentence({
   targetAgentName,
   sessionName
 } = {}) {
-  return {
+  const sentence = {
     mood: "do",
     su: { name: "router" },
     as: { wo: ROUTER_OPERATION_INPUT, text: ROUTER_OPERATION_INPUT },
@@ -162,6 +215,7 @@ export function buildRouterInputRequestSentence({
     fromtext: sessionName ? { text: String(sessionName) } : undefined,
     be: "router"
   };
+  return attachIdentity(sentence, channelIdentityFromEvent(event));
 }
 
 export function buildRouterProduceRequestSentence({
@@ -171,7 +225,7 @@ export function buildRouterProduceRequestSentence({
   payloadId,
   responseText
 } = {}) {
-  return {
+  const sentence = {
     mood: "do",
     su: { name: "router" },
     as: { wo: ROUTER_OPERATION_PRODUCE, text: ROUTER_OPERATION_PRODUCE },
@@ -181,4 +235,5 @@ export function buildRouterProduceRequestSentence({
     ob: { text: String(responseText ?? "") },
     be: "router"
   };
+  return attachIdentity(sentence, channelIdentityFromEvent(event));
 }

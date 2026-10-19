@@ -1,4 +1,4 @@
-const BASE_MOODS = new Set(["ya", "def", "do", "que", "prah", "ret", "can"]);
+const BASE_MOODS = new Set(["ya", "def", "do", "que", "prah", "ret", "can", "pi7"]);
 
 export function splitSentences(text, { includeThen = false } = {}) {
   const moods = includeThen ? new Set([...BASE_MOODS, "then"]) : BASE_MOODS;

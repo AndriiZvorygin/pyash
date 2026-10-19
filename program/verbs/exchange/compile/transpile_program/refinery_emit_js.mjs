@@ -16,6 +16,7 @@ export function emitRefineryJs({
   cState,
   mapDefs,
   effectiveRetryConfig,
+  sourceRefineryInvocations,
   transpileSentence,
   usesRememberShim,
   usesMapShim
@@ -49,7 +50,15 @@ export function emitRefineryJs({
     usesRememberShim = result.usesRememberShim;
     usesMapShim = result.usesMapShim;
   }
+  const sourceCalls = (sourceRefineryInvocations ?? []).map(({ refineryName, conductName, conduct }) => ({
+    refineryName,
+    conduct: conductName && conduct && Object.prototype.hasOwnProperty.call(conduct, "artificial")
+      ? conduct
+      : null
+  }));
+  lines.push(`const __pyaSourceRefineryCalls = ${JSON.stringify(sourceCalls)};`);
+  lines.push("for (const __pyaCall of __pyaSourceRefineryCalls) __pyaRunRefinery(__pyaCall.refineryName, __pyaCall.conduct);");
   lines.push("const __pyaRefineryName = (typeof process !== \"undefined\" ? process.env?.PYA_REFINERY : undefined) || (typeof globalThis !== \"undefined\" ? globalThis.PYA_REFINERY : undefined);");
-  lines.push("if (__pyaRefineryName) __pyaRunRefinery(__pyaRefineryName);");
+  lines.push("if (__pyaSourceRefineryCalls.length === 0 && __pyaRefineryName) __pyaRunRefinery(__pyaRefineryName);");
   return { lines, usesRememberShim, usesMapShim };
 }

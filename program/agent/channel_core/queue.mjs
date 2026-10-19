@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { parse } from "../../understand/index.mjs";
@@ -10,6 +11,7 @@ import {
   completeSpoolItem,
   failSpoolItem
 } from "../../library/spool.mjs";
+import { compareUtf8Bytes } from "../../library/knowledge_core.mjs";
 import { holdingLanePaths, ensureHoldingLaneDirs } from "../holding_lane/layout.mjs";
 
 function quotePyashText(value) {
@@ -137,6 +139,20 @@ function envelopeToText(envelope = {}) {
     { key: "room name", type: "text", value: quotePyashText(String(envelope.roomName ?? "")) },
     { key: "payload", type: "text", value: quotePyashText(payloadSentenceText) }
   ];
+  if (envelope.replyRecipient) {
+    entries.push({
+      key: "reply recipient",
+      type: "text",
+      value: quotePyashText(String(envelope.replyRecipient))
+    });
+  }
+  if (envelope.channelIdentity && typeof envelope.channelIdentity === "object") {
+    entries.push({
+      key: "channel identity",
+      type: "text",
+      value: quotePyashText(JSON.stringify(envelope.channelIdentity))
+    });
+  }
   if (envelope.payloadId) {
     entries.push({ key: "payload id", type: "text", value: quotePyashText(String(envelope.payloadId)) });
   }
@@ -160,6 +176,8 @@ function envelopeFromText(text) {
     roomName: "",
     payloadId: "",
     eventId: "",
+    replyRecipient: "",
+    channelIdentity: null,
     payloadSentence: null
   };
   for (const entry of entries) {
@@ -173,6 +191,17 @@ function envelopeFromText(text) {
     if (entry.key === "room name") out.roomName = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "payload id") out.payloadId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "event id") out.eventId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
+    if (entry.key === "reply recipient") {
+      out.replyRecipient = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
+    }
+    if (entry.key === "channel identity") {
+      try {
+        const parsed = JSON.parse(String(parsePyashQuotedText(entry.valueRaw) ?? ""));
+        out.channelIdentity = parsed && typeof parsed === "object" ? parsed : null;
+      } catch {
+        out.channelIdentity = null;
+      }
+    }
     if (entry.key === "payload") {
       const payloadText = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
       if (payloadText) {
@@ -230,6 +259,126 @@ async function readEnvelopeFile(targetPath) {
   return envelopeFromText(text);
 }
 
+export async function readChannelEnvelope(targetPath) {
+  return readEnvelopeFile(targetPath);
+}
+
+async function readOnlyEnvelopeFiles(directory, location) {
+  let entries = [];
+  try {
+    entries = await fs.readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const filenames = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".pya"))
+    .map((entry) => entry.name)
+    .sort(compareUtf8Bytes);
+  const envelopes = [];
+  for (const filename of filenames) {
+    const targetPath = path.join(directory, filename);
+    try {
+      const envelope = await readEnvelopeFile(targetPath);
+      envelopes.push({
+        location,
+        filename,
+        path: targetPath,
+        envelope
+      });
+    } catch {
+      continue;
+    }
+  }
+  return envelopes;
+}
+
+/**
+ * List channel envelopes without preparing or changing the channel spool.
+ * Queue lifecycle helpers intentionally remain separate because they ensure
+ * directories and may claim, acknowledge, migrate, or requeue files.
+ */
+export async function listChannelEnvelopes(worldRoot, {
+  includeCompleted = true,
+  includeFailed = true
+} = {}) {
+  const paths = channelQueuePaths(worldRoot);
+  const locations = [
+    ["input", paths.inputDir],
+    ["runtime", paths.runtimeDir],
+    ["produce-waiting", paths.produceDir]
+  ];
+  if (includeCompleted) locations.push(["produce-success", paths.produceSuccessDir]);
+  if (includeFailed) locations.push(["produce-fail", paths.produceFailDir]);
+  const listed = [];
+  for (const [location, directory] of locations) {
+    listed.push(...await readOnlyEnvelopeFiles(directory, location));
+  }
+  return listed.sort((left, right) => (
+    compareUtf8Bytes(left.envelope?.queuedAt, right.envelope?.queuedAt)
+      || compareUtf8Bytes(left.location, right.location)
+      || compareUtf8Bytes(left.envelope?.channelType, right.envelope?.channelType)
+      || compareUtf8Bytes(left.envelope?.agentName, right.envelope?.agentName)
+      || compareUtf8Bytes(left.envelope?.identity, right.envelope?.identity)
+      || compareUtf8Bytes(left.filename, right.filename)
+      || compareUtf8Bytes(left.path, right.path)
+  ));
+}
+
+function queueLexicalCompare(left, right) {
+  return compareUtf8Bytes(left, right);
+}
+
+/**
+ * List only the active channel backlog without creating lanes or migrating
+ * legacy files. Queue lifecycle helpers remain responsible for those writes.
+ */
+export async function listChannelQueueEnvelopes(worldRoot, {
+  includeRuntime = true
+} = {}) {
+  const paths = channelQueuePaths(worldRoot);
+  const locations = [
+    { phase: "input", directory: paths.inputDir },
+    ...(includeRuntime ? [{ phase: "runtime", directory: paths.runtimeDir }] : []),
+    { phase: "produce", directory: paths.produceDir }
+  ];
+  const legacyProduceDir = path.join(paths.root, "produce");
+  if (legacyProduceDir !== paths.produceDir) {
+    locations.push({ phase: "produce", directory: legacyProduceDir });
+  }
+  const entries = [];
+  for (const location of locations) {
+    let filenames = [];
+    try {
+      filenames = (await fs.readdir(location.directory, { withFileTypes: true }))
+        .filter(entry => entry.isFile() && entry.name.endsWith(".pya"))
+        .map(entry => entry.name)
+        .sort(queueLexicalCompare);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const filename of filenames) {
+      const targetPath = path.join(location.directory, filename);
+      try {
+        const envelope = await readEnvelopeFile(targetPath);
+        if (!["input", "produce"].includes(envelope.phase)) continue;
+        entries.push({
+          phase: location.phase,
+          filename,
+          path: targetPath,
+          envelope
+        });
+      } catch {
+        // Malformed spool items remain the channel runtime's responsibility.
+      }
+    }
+  }
+  return entries.sort((left, right) => (
+    queueLexicalCompare(`${left.envelope.queuedAt}\u0000${left.path}`, `${right.envelope.queuedAt}\u0000${right.path}`)
+  ));
+}
+
 export async function claimOldestInputEnvelope(
   worldRoot,
   { workerTag = "", channelType = "", agentName = "", lane = "" } = {}
@@ -251,6 +400,23 @@ export async function claimOldestInputEnvelope(
       continue;
     }
     return { ...claim, envelope };
+  }
+  return null;
+}
+
+export async function claimOldestRuntimeInputEnvelope(
+  worldRoot,
+  { channelType = "", agentName = "", lane = "" } = {}
+) {
+  const paths = await ensureChannelQueueDirs(worldRoot);
+  const runtime = await listSpoolItemsOldestFirst(paths.runtimeDir);
+  for (const filename of runtime) {
+    if (!filenameMatchesScope(filename, { channelType, agentName })) continue;
+    const targetPath = `${paths.runtimeDir}/${filename}`;
+    const envelope = await readEnvelopeFile(targetPath);
+    if (envelope.phase !== "input") continue;
+    if (!envelopeMatchesScope(envelope, { channelType, agentName }) || !laneMatches(envelope, lane)) continue;
+    return { path: targetPath, filename, envelope };
   }
   return null;
 }

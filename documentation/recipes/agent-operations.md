@@ -94,6 +94,18 @@ Notes:
 - `su name <tool-function-name>` matches exact tool call name.
 - `su name default` is fallback.
 - `truth` allows; `lie` denies.
+- Headquarters may add canonical action entries without changing legacy keys:
+
+```pyash
+su name action send ob text allow ya
+su name action delete ob text ask ya
+su name default ob text deny ya
+```
+
+The initial actions are exactly `send`, `delete`, `purchase`, `publish`, and
+`calendar-mutation`. Resolution checks the explicit action key, then subject,
+tool, signature, and `default`. Headquarters has an `ask` fallback for a
+missing match; existing non-Headquarters callers keep safe deny.
 
 ## 6. Where to look when behavior is wrong
 

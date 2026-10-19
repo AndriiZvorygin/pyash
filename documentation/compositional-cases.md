@@ -1,376 +1,66 @@
-### Compositional case system
+# Compositional case system
 
-Pyash treats cases as **compositional** rather than as one big flat list.
+Pyash models a compositional case as an axis in a context:
 
-Every case is understood as:
+> `source | way | destination` × context
 
-> **axis × context**, realised by a single 16-bit case code.
+The canonical contract is [`program/library/compositionalCases.mjs`](../program/library/compositionalCases.mjs). It owns the context order, axis order, 12×3 keyword grid, lexicon identities, parser keyword maps, formatter order, and reverse indexes.
 
-* The **axis** tells you *what role* the marked phrase plays:
+## Canonical grid
 
-  * **SOURCE** → “from-like” (origins, sources)
-  * **WAY** → “via / at / with-like” (paths, manners, modes)
-  * **DESTINATION** → “to / into / for-like” (goals, targets, endpoints)
+The contexts are ordered as follows:
 
-* The **context** tells you *in what domain* that relation lives:
+`space`, `interior`, `surface`, `under`, `time`, `state`, `person`, `social`, `discourse`, `quantity`, `limit`, `sequence`.
 
-  * **space** – default physical / path domain
-* **interior** – in / out of something
-* **surface** – on / off a surface
-  * **under** – underneath or below
-  * **time** – before / during / until
-  * **state** – type, representation, condition
-  * **person** – individual people
-  * **social** – groups, communities
-  * **discourse** – text, speech, documents
-* **quantity** – counts, rates, loop registers (`times`/`per`)
-* **limit** – bounds and exact limits (`atleast` / `exactly` / `atmost`)
-* **sequence** – ordered positions / indices (`fromindex` / `atindex` / `toindex`)
+The axes are ordered `source`, `way`, `destination`. Their 36 keyword mappings are:
 
-The **hex value** of the case (the `hnuc` field) is the official ID.  
-The `(axis, context)` reading is provided by lookup tables.
+| Context | Source | Way | Destination |
+| --- | --- | --- | --- |
+| `space` | `from` | `at` | `to` |
+| `interior` | `outof` | `in` | `into` |
+| `surface` | `offof` | `on` | `onto` |
+| `under` | `fromunder` | `under` | `beneath` |
+| `time` | `since` | `during` | `until` |
+| `state` | `fromstate` | `as` | `become` |
+| `person` | `fromperson` | `with` | `for` |
+| `social` | `fromgroup` | `among` | `intogroup` |
+| `discourse` | `fromtext` | `accordingto` | `totext` |
+| `quantity` | `times` | `by` | `per` |
+| `limit` | `atleast` | `exactly` | `atmost` |
+| `sequence` | `fromindex` | `atindex` | `toindex` |
 
-So for example (semantically):
+Every cell parses in the form `from|via|to <context> num N`; `via` selects the `way` axis. The parser stores the resulting canonical keyword (`during`, `times`, `fromindex`, and so on), and signature derivation uses that keyword with the `num` type.
 
-* “from file” is **SOURCE + space**
-* “to file” is **DESTINATION + space**
-* “as C” is **WAY + state** (official keyword `via`)
-* “into LLVM IR” is **DESTINATION + state** (official keyword `become`)
+## HNUC and lexicon status
 
-All of those are backed by specific case codes, but the system thinks of them as part of a regular grid.
+Assigned cells select a trailing-underscore grammatical lexeme from `program/library/pyashWords.json`. The validator requires exact agreement for its `case`, `hnuc`, and `pya` fields. `hnuc` must be an assigned 16-bit hexadecimal identity; `0x0000` is never valid.
 
----
+The following eight axis cells are intentionally unassigned and are represented by `status: "unassigned"` with `case`, `hnuc`, and `pya` set to `null`:
 
-### `library/pyashWords.json`
+| Context | Unassigned cells |
+| --- | --- |
+| `quantity` | `way`, `destination` |
+| `limit` | `source`, `way`, `destination` |
+| `sequence` | `source`, `way`, `destination` |
 
-This file is the **raw dictionary of words** that Pyash knows, including all the human-style case names and context names.
+The context identities for `quantity`, `limit`, and `sequence` are also not allocated yet. These eleven known unassigned identities are deterministic warnings, not successful fabricated mappings. Authoritative HNUC allocation and lexicon additions remain a later bounded tranche.
 
-Each entry looks like:
+## Reverse lookup
 
-```json
-{"en":"source_case_",       "hnuc":"0x313E", "pya":"so"}
-{"en":"way_case_",          "hnuc":"0x265E", "pya":"ga"}
-{"en":"destination_case_",  "hnuc":"0x243E", "pya":"ma"}
+`compositionalByHnuc` maps a lowercase HNUC to an array of mappings. A grammatical morpheme may be reused: for example, `0x313E` / `source_case_` occurs in the `space`, `person`, `social`, and `discourse` source cells, while `0x495F` / `perlative_case_` occurs in the `interior`, `surface`, and `under` way cells.
 
-{"en":"space_context_",     "hnuc":"0x315E", "pya":"to"}
-{"en":"time_context_",      "hnuc":"0x2D3E", "pya":"se"}
-{"en":"state_context_",     "hnuc":"0x31DE", "pya":"ro"}
-````
+The array is intentional. A HNUC identifies the grammatical morpheme, but a reused morpheme cannot uniquely recover the context. Reuse is accepted only when all mappings identify the same lexicon morpheme; conflicting lexicon identities are validation errors.
 
-* `en`   → English-ish name of the word (used as a stable key).
-* `hnuc` → 16-bit code in hex, the official symbol ID in the language.
-* `pya`  → the Pyash phonological shape (syllable / cluster).
+## Validation and operator workflow
 
-There are two versions of most cases:
+`program/library/compositional_case_validation.mjs` is a pure host-side validator. It accepts injected grid and lexicon inputs for deterministic defect tests and returns `{ ok, errors, warnings, summary }`. Its report lines have stable `SEVERITY CODE context.axis: explanation` form.
 
-* `nominative_case` / `nominative_case_`
-* `genitive_case` / `genitive_case_`, etc.
+The vocabulary-valid built-in sentence is:
 
-The version with a trailing `_` is the **pure grammatical morpheme**. That is the one used in the compositional grid.
-
-`pyashWords.json` itself does **not** know about SOURCE / WAY / DESTINATION or contexts.
-It is just the base lexicon. The compositional meaning is layered on top.
-
----
-
-### `library/compositionalCases.mjs`
-
-This module explains *how the cases combine*.
-
-It exports three main things:
-
-1. `compositionalGrid`
-2. `compositionalByHnuc`
-3. `contextKeywords`
-
-and the keyword grid for axis + context + object.
-
----
-
-#### `compositionalGrid`
-
-This is the **primary specification** of the compositional system.
-
-It is a table:
-
-* **rows** = contexts (`space`, `interior`, `surface`, `under`, `time`, `state`, `person`, `social`, `discourse`, `quantity`, `limit`, `sequence`)
-* **columns** = axes (`source`, `way`, `destination`)
-
-Each cell chooses a official `*_case_` word from `pyashWords.json` and ties it to:
-
-* its `hnuc` hex,
-* its `pya` syllable,
-* a single-token English-ish **keyword** used by the keyword layer (no spaces).
-
-Example (space and state rows, shortened):
-
-```js
-export const compositionalGrid = {
-  space: {
-    context: { name: "space_context_", hnuc: "0x315E", pya: "to" },
-
-    source: {
-      axis: "source",
-      case: "source_case_",
-      hnuc: "0x313E",
-      pya: "so",
-      keyword: "from",   // SOURCE + space
-    },
-
-    way: {
-      axis: "way",
-      case: "way_case_",
-      hnuc: "0x265E",
-      pya: "ga",
-      keyword: "at",     // WAY + space
-    },
-
-    destination: {
-      axis: "destination",
-      case: "destination_case_",
-      hnuc: "0x243E",
-      pya: "ma",
-      keyword: "to",     // DEST + space
-    },
-  },
-
-  state: {
-    context: { name: "state_context_", hnuc: "0x31DE", pya: "ro" },
-
-    source: {
-      axis: "source",
-      case: "fromstate_case_",       // exessive family
-      hnuc: "0x4757",
-      pya: "txih",
-      keyword: "fromstate",          // SOURCE + state
-    },
-
-    way: {
-      axis: "way",
-      case: "essive_case_",
-      hnuc: "0x414F",
-      pya: "swih",
-      keyword: "as",                 // WAY + state (semantically “as”)
-    },
-
-    destination: {
-      axis: "destination",
-      case: "to_case_",
-      hnuc: "0x5F17",
-      pya: "kxeh",
-      keyword: "become",             // DEST + state (semantically “into (being)”)
-    },
-  },
-
-  // other contexts...
-};
+```pyash
+be verify hnuc grammar do
 ```
 
-This grid is **compositional first**:
+It returns deterministic counts and the known unassigned list on success. If a contract or lexicon defect is found, it raises the sentence-shaped `hnuc grammar defective` error with the readable report. The runnable example is [`examples/pyash/verify-hnuc-grammar.pya`](../examples/pyash/verify-hnuc-grammar.pya).
 
-* it treats “space vs time vs state vs discourse” as the main choice,
-* then SOURCE / WAY / DESTINATION on top of that,
-* and only then picks a specific hex case code.
-
-The old human-style case names (elative, illative, essive, etc.) are used as building blocks *inside* this grid.
-
----
-
-#### Axis + context keyword table (current implementation)
-
-For the keyword layer and JSON encoding, we use a regular grid of **single-token keywords** per `(axis, context)` plus an **object slot** per context.
-
-Columns:
-
-* `source` keyword (SOURCE axis)
-* `way` keyword (WAY axis)
-* `destination` keyword (DESTINATION axis)
-* `object` slot name (for `ob …` payloads)
-* aliases: `inside` → `in`, `along` → `on`
-
-Rows:
-
-* contexts.
-
-```text
-| context     | source       | way          | destination |
-|------------|--------------|-------------|-------------|
-| space      | from         | at          | to          |
-| interior   | outof        | in          | into        |
-| surface    | offof        | on          | onto        |
-| under      | fromunder    | under       | beneath     |
-| time       | since        | during      | until       |
-| state      | fromstate    | as          | become      |
-| person     | fromperson   | with        | for         |
-| social     | fromgroup    | among       | intogroup   |
-| discourse  | fromtext     | accordingto | totext      |
-| quantity   | times        | by          | per         |
-| limit      | atleast      | exactly     | atmost      |
-| sequence   | fromindex    | atindex     | toindex     |
-```
-
-Usage patterns (current runtime):
-
-* axis keywords (for adverbials etc.):
-
-  * `from state draft`, `as state final`, `become state json`
-  * `fromtext "prompt"`, `accordingto doc`, `totext output`
-
-The object-slot column is not used in the current parser; `ob` is taken as the payload.
-
-```js
-export const axisContextToKeyword = {
-  space:     { source: "from",      way: "at",          destination: "to" },
-  interior:  { source: "outof",     way: "in",          destination: "into" },
-  surface:   { source: "offof",     way: "on",          destination: "onto" },
-  under:     { source: "fromunder", way: "under",       destination: "beneath" },
-  time:      { source: "since",     way: "during",      destination: "until" },
-  state:     { source: "fromstate", way: "as",          destination: "become" },
-  person:    { source: "fromperson",way: "with",        destination: "for" },
-  social:    { source: "fromgroup", way: "among",       destination: "intogroup" },
-  discourse: { source: "fromtext",  way: "accordingto", destination: "totext" },
-  limit:     { source: "atleast",   way: "exactly",     destination: "atmost" },
-  sequence:  { source: "fromindex", way: "atindex",     destination: "toindex" },
-};
-
-export const keywordToAxisContext = {
-  // source
-  from:        { axis: "source", context: "space" },
-  outof:       { axis: "source", context: "interior" },
-  offof:       { axis: "source", context: "surface" },
-  fromunder:   { axis: "source", context: "under" },
-  since:       { axis: "source", context: "time" },
-  fromstate:   { axis: "source", context: "state" },
-  fromperson:  { axis: "source", context: "person" },
-  fromgroup:   { axis: "source", context: "social" },
-  fromtext:    { axis: "source", context: "discourse" },
-  atleast:     { axis: "source", context: "limit" },
-  fromindex:   { axis: "source", context: "sequence" },
-
-  // way
-  at:          { axis: "way",    context: "space" },
-  in:          { axis: "way",    context: "interior" },
-  on:          { axis: "way",    context: "surface" },
-  under:       { axis: "way",    context: "under" },
-  during:      { axis: "way",    context: "time" },
-  as:          { axis: "way",    context: "state" },
-  with:        { axis: "way",    context: "person" },
-  among:       { axis: "way",    context: "social" },
-  accordingto: { axis: "way",    context: "discourse" },
-  exactly:     { axis: "way",    context: "limit" },
-  atindex:     { axis: "way",    context: "sequence" },
-
-  // destination
-  to:          { axis: "destination", context: "space" },
-  into:        { axis: "destination", context: "interior" },
-  onto:        { axis: "destination", context: "surface" },
-  beneath:     { axis: "destination", context: "under" },
-  until:       { axis: "destination", context: "time" },
-  become:      { axis: "destination", context: "state" },
-  for:         { axis: "destination", context: "person" },
-  intogroup:   { axis: "destination", context: "social" },
-  totext:      { axis: "destination", context: "discourse" },
-  atmost:      { axis: "destination", context: "limit" },
-  toindex:     { axis: "destination", context: "sequence" },
-};
-```
-
----
-
-#### `compositionalByHnuc`
-
-This is the **reverse lookup** built from the grid.
-
-It maps directly from the hex string to compositional meaning:
-
-```js
-export const compositionalByHnuc = {
-  "0x313e": {
-    context: "space",
-    axis: "source",
-    case: "source_case_",
-    pya: "so",
-    keyword: "from",
-  },
-  "0x5f17": {
-    context: "state",
-    axis: "destination",
-    case: "to_case_",
-    pya: "kxeh",
-    keyword: "become",
-  },
-  // ...
-};
-```
-
-This is what the Node code and Codex should use when they see a case hex coming out of a Pyash sentence:
-
-1. Look up `hnuc` in `compositionalByHnuc`.
-2. Recover:
-
-   * which **context** it belongs to,
-   * which **axis** it expresses,
-   * and which official **keyword** it corresponds to.
-
----
-
-#### `contextKeywords`
-
-This is a small helper map that ties together:
-
-* the internal context key (`"space"`, `"time"`, `"state"`, etc.),
-* the corresponding `*_context_` word in `pyashWords.json`,
-* and a few keyword hints that Codex can use when deciding which context to choose.
-
-Example:
-
-```js
-export const contextKeywords = {
-  space: {
-    key: "space",
-    contextWord: "space_context_",
-    hints: ["space", "spatial", "path", "location", "place", "motion"],
-    default: true,
-  },
-  time: {
-    key: "time",
-    contextWord: "time_context_",
-    hints: ["time", "before", "during", "after", "until", "when"],
-  },
-  state: {
-    key: "state",
-    contextWord: "state_context_",
-    hints: ["state", "condition", "mode", "type", "representation"],
-  },
-  discourse: {
-    key: "discourse",
-    contextWord: "discourse_context_",
-    hints: ["text", "prompt", "quote", "document", "corpus", "message"],
-  },
-  // others...
-};
-```
-
----
-
-### How Codex should think about it
-
-When generating or modifying Pyash-related code:
-
-1. **Pick context + axis first.**
-   Use `contextKeywords` + `axisContextToKeyword` to choose the right combination.
-
-2. **Use `compositionalGrid` / `compositionalByHnuc` for case codes.**
-   The hex `hnuc` is the official identity of a case.
-
-3. **Use the object keywords for multi-object sentences.**
-   Map:
-
-   * `ob discourse X` → `obtext: X`
-   * `ob interior Y` → `obin: Y`
-   * etc.
-
-4. **Treat `space` as the default context**
-   when nothing else is specified.
-
-```
+Conformance requires the canonical grid to cover all 12 contexts and all three axes, every cell keyword to parse and derive signatures deterministically, and the validator to reject missing/invalid mappings, malformed or zero HNUCs, absent lexemes, and lexicon mismatches. This is a parser/signature guard; it does not allocate missing HNUCs or alter `pyashWords.json`.

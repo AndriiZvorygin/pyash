@@ -1,0 +1,12 @@
+su name headquarters approval policy be map def
+  su name supported actions ob ve text "send" "delete" "purchase" "publish" "calendar-mutation" ya
+  su name action send ob text "sensitive" ya
+  su name action delete ob text "sensitive" ya
+  su name action purchase ob text "sensitive" ya
+  su name action publish ob text "sensitive" ya
+  su name action calendar-mutation ob text "sensitive" ya
+  su name unsupported action ob text "defective" ya
+  su name default sensitivity ob text "sensitive" ya
+prah
+
+exists su name headquarters approval policy be export ya

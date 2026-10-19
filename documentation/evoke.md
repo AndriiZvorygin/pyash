@@ -89,6 +89,12 @@ Meaning:
 
 3. Mark the ceremony as finished; the **final evoke sentence** is the return value. Registers (e.g., `fromindex`, `toindex`, `to`) travel on the evoke sentence; no extra register facts are required, and returning does not materialize standalone `fromindex`/`toindex` facts.
 
+A named return supplies the payload and value roles from its source fact; it does
+not import `fromindex`, `toindex`, `atindex`, or register-form `by` from that
+fact into the call frame. Those registers belong to the active evoking sentence.
+To change one explicitly, return the role on `this`, such as
+`this fromindex num 0 ret`.
+
 So a complete ceremony flow for “plus two” in Pyash surface form looks like:
 
 ```pyash
@@ -118,6 +124,9 @@ ob num 7 to name result be plus two do
 ## 5. Loops with `fromindex` (multiplicative register)
 
 Looping uses the same idea: `fromindex` (and `toindex`, if present) live on the **evoke** as registers.
+The active evoke is the sole source of loop progression and recorded invocation
+state. Target facts may carry payloads or stale register-shaped fields, but
+target seeding and named returns do not make those fields call-frame state.
 
 * Example evoke:
 

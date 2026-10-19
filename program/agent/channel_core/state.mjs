@@ -110,6 +110,11 @@ export async function readChannelRuntimeState({
         if (value) checkpoint.nextBatch = String(value);
         continue;
       }
+      if (entry.key === "checkpoint history id") {
+        const value = parsePyashQuotedText(entry.valueRaw);
+        if (value) checkpoint.historyId = String(value);
+        continue;
+      }
       if (entry.key === "dedup event") {
         const value = parsePyashQuotedText(entry.valueRaw);
         const textValue = String(value ?? "").trim();
@@ -150,6 +155,14 @@ export async function writeChannelRuntimeState({
     type: "text",
     value: quotePyashText(nextBatch)
   });
+  const historyId = String(checkpoint?.historyId ?? "").trim();
+  if (historyId) {
+    entries.push({
+      key: "checkpoint history id",
+      type: "text",
+      value: quotePyashText(historyId)
+    });
+  }
   const dedupValues = Array.isArray(dedupOrder) ? dedupOrder : [];
   for (const value of dedupValues) {
     const text = String(value ?? "").trim();

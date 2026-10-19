@@ -12,7 +12,7 @@
 ## Gaps / needs
 - hnuc/code validation for compositional cases against `compositionalCases.mjs`.
 - Mind reply mapping for assistant/thinking/time fields; streaming behaviour.
-- Additional verb coverage for other noun classes hinted in specs (files/models/pipeline nodes beyond current verbs).
+- Additional verb coverage for models and pipeline nodes.
 - More REPL-level integration quizzes (typing sentences and inspecting memory output order).
 - Error-path quizzes for missing handlers or malformed inputs in dynamic verbs.
 
