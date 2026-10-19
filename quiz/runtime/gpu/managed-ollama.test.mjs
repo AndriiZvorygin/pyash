@@ -35,6 +35,7 @@ test("remote Ollama requests submit to the GPU housekeeper with Qwen resource de
   const result = await requestManagedOllamaChat({
     ollamaUrl: "http://mriczo:11434/api/chat",
     managerUrl: "http://mriczo:8090",
+    hostId: "debtcollecting",
     messages: [{ role: "user", content: "Say ok" }],
     fetchImpl,
     pollIntervalMs: 1,
@@ -44,6 +45,12 @@ test("remote Ollama requests submit to the GPU housekeeper with Qwen resource de
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "http://mriczo:8090/submit");
   assert.equal(calls[0].body.runtimeName, "ollama");
+  assert.equal(calls[0].body.hostId, "debtcollecting");
+  assert.deepEqual(calls[0].body.source, {
+    hostId: "debtcollecting",
+    workerId: "pyash-managed-ollama",
+    processId: process.pid,
+  });
   assert.equal(calls[0].body.profileName, DEFAULT_TEXT_MODEL);
   assert.equal(calls[0].body.jobSpec.kind, "ollama-chat");
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 12000);
@@ -102,6 +109,7 @@ test("generic ComfyUI jobs use the same manager queue and return the remote resu
     profileName: "qwen3-asr",
     providerUrl: "http://mriczo:8188",
     managerUrl: "http://mriczo:8090",
+    hostId: "debtcollecting",
     jobSpec: { kind: "comfyui-hear", prompt: { "1": { class_type: "LoadAudio", inputs: {} } } },
     fetchImpl,
     pollIntervalMs: 1,
@@ -110,6 +118,12 @@ test("generic ComfyUI jobs use the same manager queue and return the remote resu
   assert.equal(result.remoteJobId, "job-comfy");
   assert.equal(calls[0].url, "http://mriczo:8090/submit");
   assert.equal(calls[0].body.runtimeName, "comfyui");
+  assert.equal(calls[0].body.hostId, "debtcollecting");
+  assert.deepEqual(calls[0].body.source, {
+    hostId: "debtcollecting",
+    workerId: "pyash-managed-gpu-client",
+    processId: process.pid,
+  });
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 12000);
 });
 
@@ -135,6 +149,12 @@ test("Ollama model provisioning uses one exact queued housekeeper job", async ()
 
   assert.equal(result.state, "available");
   assert.equal(calls[0].body.runtimeName, "ollama");
+  assert.equal(calls[0].body.hostId, os.hostname());
+  assert.deepEqual(calls[0].body.source, {
+    hostId: os.hostname(),
+    workerId: "pyash-managed-gpu-client",
+    processId: process.pid,
+  });
   assert.equal(calls[0].body.profileName, "qwen3.5:9b");
   assert.equal(calls[0].body.jobSpec.kind, "ollama-ensure-model");
   assert.equal(calls[0].body.jobSpec.payload.model, "qwen3.5:9b");
