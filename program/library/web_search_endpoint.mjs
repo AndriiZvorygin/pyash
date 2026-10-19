@@ -36,4 +36,3 @@ export function resolveSearchMotor(value, env = process.env) {
     ? explicit
     : resolveExternalSearchMotor(env);
 }
-

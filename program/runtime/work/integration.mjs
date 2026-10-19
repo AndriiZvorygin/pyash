@@ -25,6 +25,34 @@ function output(result) {
   return text(result?.stdout);
 }
 
+function revisionName(value) {
+  return text(value).replace(/^refs\/heads\//u, "");
+}
+
+function countPair(value) {
+  const [left, right] = text(value).split(/\s+/u).map((item) => Number(item));
+  return {
+    left: Number.isFinite(left) ? left : 0,
+    right: Number.isFinite(right) ? right : 0
+  };
+}
+
+async function commitLog(repository, range, gitRunner) {
+  const source = output(await git({
+    cwd: repository,
+    args: ["log", "--format=%H%x09%P%x09%s", range],
+    gitRunner
+  }));
+  return source.split("\n").filter(Boolean).map((line) => {
+    const [revision, parents, ...subject] = line.split("\t");
+    return {
+      revision,
+      parents: parents ? parents.split(" ").filter(Boolean) : [],
+      subject: subject.join("\t")
+    };
+  });
+}
+
 async function removeWorktree(repository, worktree, gitRunner) {
   try {
     await git({ cwd: repository, args: ["worktree", "remove", "--force", worktree], gitRunner });
@@ -60,6 +88,183 @@ async function updateBranchRef({ repositoryRoot, branch, nextRevision, expectedR
   const args = ["update-ref", `refs/heads/${branch}`, nextRevision];
   if (expectedRevision) args.push(expectedRevision);
   await git({ cwd: repositoryRoot, args, gitRunner });
+}
+
+export async function auditAutomationBranch({
+  repositoryRoot,
+  branch = "automation/roadmap",
+  masterRef = "master",
+  gitRunner = null
+} = {}) {
+  const repository = text(repositoryRoot);
+  const targetBranch = revisionName(branch) || "automation/roadmap";
+  const sourceRef = text(masterRef) || "master";
+  if (!repository) throw new Error("automation branch audit requires a repository");
+  const branchRevision = output(await git({ cwd: repository, args: ["rev-parse", `refs/heads/${targetBranch}`], gitRunner }));
+  const masterRevision = output(await git({ cwd: repository, args: ["rev-parse", sourceRef], gitRunner }));
+  if (!branchRevision || !masterRevision) throw new Error("automation branch audit could not resolve both branches");
+  const mergeBase = output(await git({
+    cwd: repository,
+    args: ["merge-base", masterRevision, branchRevision],
+    gitRunner
+  }));
+  const counts = countPair(output(await git({
+    cwd: repository,
+    args: ["rev-list", "--left-right", "--count", `${masterRevision}...${branchRevision}`],
+    gitRunner
+  })));
+  const masterOnlyCommits = await commitLog(repository, `${branchRevision}..${masterRevision}`, gitRunner);
+  const automationOnlyCommits = await commitLog(repository, `${masterRevision}..${branchRevision}`, gitRunner);
+  const same = masterRevision === branchRevision;
+  const masterAncestor = mergeBase === masterRevision;
+  const branchAncestor = mergeBase === branchRevision;
+  let mergeable = same || masterAncestor || branchAncestor;
+  let mergeError = "";
+  if (!mergeable) {
+    try {
+      await git({
+        cwd: repository,
+        args: ["merge-tree", "--write-tree", "--merge-base", mergeBase, masterRevision, branchRevision],
+        gitRunner
+      });
+      mergeable = true;
+    } catch (error) {
+      mergeError = text(error?.stderr || error?.stdout || error?.message || error);
+    }
+  }
+  const status = same
+    ? "aligned"
+    : branchAncestor
+      ? "automation-behind"
+      : masterAncestor
+        ? "automation-ahead"
+        : "diverged";
+  return {
+    branch: targetBranch,
+    masterRef: sourceRef,
+    branchRevision,
+    masterRevision,
+    mergeBase,
+    status,
+    mergeable,
+    mergeError,
+    masterOnlyCount: counts.left,
+    automationOnlyCount: counts.right,
+    masterOnlyCommits,
+    automationOnlyCommits
+  };
+}
+
+export async function promoteAutomationBranch({
+  repositoryRoot,
+  branch = "automation/roadmap",
+  masterRef = "master",
+  push = false,
+  pushRemotes = ["origin", "github"],
+  gitRunner = null,
+  now = () => new Date()
+} = {}) {
+  const repository = text(repositoryRoot);
+  const targetBranch = revisionName(branch) || "automation/roadmap";
+  const sourceRef = text(masterRef) || "master";
+  const mainlineBranch = revisionName(sourceRef) || "master";
+  const audit = await auditAutomationBranch({
+    repositoryRoot: repository,
+    branch: targetBranch,
+    masterRef: sourceRef,
+    gitRunner
+  });
+  if (audit.status === "aligned") {
+    return {
+      ...audit,
+      status: "already-aligned",
+      commit: audit.masterRevision,
+      promotedAt: iso(now),
+      pushed: false,
+      remotes: []
+    };
+  }
+  if (!audit.mergeable) {
+    const error = new Error(`automation promotion has merge conflicts: ${audit.mergeError || "merge simulation failed"}`);
+    error.audit = audit;
+    throw error;
+  }
+  let promotionRevision = audit.masterRevision;
+  let mainlineChanged = false;
+  let branchChanged = false;
+  if (audit.status === "automation-ahead") {
+    promotionRevision = audit.branchRevision;
+    await updateBranchRef({
+      repositoryRoot: repository,
+      branch: mainlineBranch,
+      nextRevision: promotionRevision,
+      expectedRevision: audit.masterRevision,
+      gitRunner
+    });
+    mainlineChanged = true;
+  } else if (audit.status === "automation-behind") {
+    await updateBranchRef({
+      repositoryRoot: repository,
+      branch: targetBranch,
+      nextRevision: audit.masterRevision,
+      expectedRevision: audit.branchRevision,
+      gitRunner
+    });
+    promotionRevision = audit.masterRevision;
+    branchChanged = true;
+  } else {
+    promotionRevision = await mergeOrCherryPickIntoBranch({
+      repositoryRoot: repository,
+      branchRevision: audit.masterRevision,
+      sourceRevision: audit.branchRevision,
+      operation: ["merge", "--no-edit", audit.branchRevision],
+      gitRunner
+    });
+    await updateBranchRef({
+      repositoryRoot: repository,
+      branch: mainlineBranch,
+      nextRevision: promotionRevision,
+      expectedRevision: audit.masterRevision,
+      gitRunner
+    });
+    mainlineChanged = true;
+    await updateBranchRef({
+      repositoryRoot: repository,
+      branch: targetBranch,
+      nextRevision: promotionRevision,
+      expectedRevision: audit.branchRevision,
+      gitRunner
+    });
+    branchChanged = true;
+  }
+  const pushed = [];
+  if (push) {
+    for (const remote of pushRemotes) {
+      if (mainlineChanged) {
+        await git({
+          cwd: repository,
+          args: ["push", remote, `refs/heads/${mainlineBranch}:refs/heads/${mainlineBranch}`],
+          gitRunner
+        });
+      }
+      if (branchChanged) {
+        await git({
+          cwd: repository,
+          args: ["push", remote, `refs/heads/${targetBranch}:refs/heads/${targetBranch}`],
+          gitRunner
+        });
+      }
+      pushed.push(remote);
+    }
+  }
+  return {
+    ...audit,
+    status: "promoted",
+    commit: promotionRevision,
+    promotedAt: iso(now),
+    pushed: pushed.length > 0,
+    remotes: pushed
+  };
 }
 
 export async function synchronizeAutomationBranch({

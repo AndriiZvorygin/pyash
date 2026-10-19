@@ -18,7 +18,7 @@ su name <subject> <cases...> be <verb> <mood>
 | `to*` | destination axis | where output/result is stored/sent |
 | `for` | target actor/consumer | who should receive/perform work |
 | `with` | companion/tool binding | attached helper/tool set |
-| `evidential` | evidence/provenance qualifier | source quality and claim basis |
+| `accordingto` | evidence/provenance qualifier | source quality and claim basis |
 | `as` | mode/typing qualifier | execution/read/write mode marker |
 | `become` | conversion target | output state/format transformation |
 | `during` | temporal bound | duration/validity window |
@@ -50,7 +50,7 @@ Alias notes:
 - `along` aliases to `on`
 
 Common non-compositional/high-frequency cases:
-- `su`, `ob`, `be`, `vyah`, `evidential`
+- `su`, `ob`, `be`, `vyah`, `accordingto`
 
 ## 4. Common case meaning table
 
@@ -65,7 +65,7 @@ Common non-compositional/high-frequency cases:
 | `fromstate` | source-state qualifier | `fromstate wo web` |
 | `for` | target actor/recipient | `for name helper` |
 | `with` | companion/tool binding | `with name saddle tools` |
-| `evidential` | evidence/provenance qualifier | `evidential text "direct"` |
+| `accordingto` | evidential/provenance qualifier | `accordingto name direct-evidential` |
 | `under` | policy/conduct context | `under name verify loop configure` |
 | `as` | way/state qualifier | `as wo web` |
 | `become` | destination-state transform | `become wo markdown` |
@@ -85,15 +85,18 @@ Common non-compositional/high-frequency cases:
 | --- | --- | --- |
 | `do` | execute | `ob num 1 by num 2 be plus do` |
 | `ya` | surfaced fact/value | `su name total ob num 3 be plus ya` |
+| `pi7` | propositive candidate | `su name candidate ob text "draft" be text pi7` |
 | `def ... prah` | definition block | `su name flow be refinery def ... prah` |
 | `ko` | embedded clause boundary | `ob la ... ko` |
 
 ## 6. Evidentials and provenance carriage
 
-Evidential is a first-class sentence case for provenance/evidence semantics.
+Evidential data is carried by the canonical discourse way case, `accordingto`.
+The vocabulary lexeme `nwah` is the `accordingto` cell in the compositional
+grid; it is not a second parser field.
 
 Canonical case keyword:
-- `evidential`
+- `accordingto`
 
 Canonical evidential categories in active specs:
 
@@ -101,21 +104,30 @@ Canonical evidential categories in active specs:
 | --- | --- | --- |
 | `direct` | primary/authoritative or directly observed source | `see`/`hear` direct capture; primary documents |
 | `reported` | secondary reporting/retelling source | news, quoted retellings |
-| `factive` | corroborated across independent sources | promotion step after corroboration |
+| `inferential` | derived or model-supported source | inference from observed/reporting material |
 
 Carriage rules:
-- evidential case data should be carried with the `evidential` case,
+- evidential data should be carried with the `accordingto` case,
 - evidentials must be preserved when sentences are emitted, logged, or replayed,
 - evidentials must not be encoded as `vyah` modifiers.
 
 Examples:
 
 ```pyash
-su name finding ob text "result summary" evidential text "direct; primary source https://example.org/source" be text ya
+su name finding ob text "result summary" accordingto name direct-evidential fromtext text "source-1 paragraph-1" be text ya
 ```
 
 ```pyash
-su name finding ob la su name source ob text "wire report" ya ko evidential text "reported" be text ya
+su name finding ob la su name source ob text "wire report" ya ko accordingto name reported-evidential fromtext text "wire-1 paragraph-1" be text ya
+```
+
+The bounded claim core uses either a timeless identity or an exact date window:
+`since date YYYY-MM-DD until date YYYY-MM-DD`. Partial windows, `during` as a
+window start, and timestamp-shaped values are defective. Evidence claims also
+require `by num <0..1>` confidence and an embedded source anchor, for example:
+
+```pyash
+exists su name weather ob text "clear" since date 2026-01-01 until date 2026-01-31 fromtext la su name weather-report-1 ob text paragraph-2 be text ya ko accordingto name direct-evidential by num 0.75 be text ya
 ```
 
 Normative linkage:
@@ -123,8 +135,9 @@ Normative linkage:
 - memory provenance/evidential policy: `documentation/recipes/spec-archive/22-memory-and-remember.full.md`
 
 Compatibility note:
-- some current runtime paths still carry evidential-like data through `accordingto`.
-- this spec defines target canonical form as `evidential` case (do not treat `fromtext` as evidential).
+- current runtime paths carry evidential/provenance data through `accordingto`.
+- do not add a top-level `evidential` parser case; `fromtext` identifies source
+  material and `accordingto` identifies its evidential basis.
 
 ## 7. Canonical ordering and normalization
 
@@ -176,6 +189,8 @@ Implementation conforms when it:
 - surfaces sentence-shaped errors.
 - preserves evidential/provenance carriage when present.
 - keeps the common-case table in this chapter updated when new high-frequency signatures/cases are introduced.
+
+Compositional conformance additionally requires the canonical 12-context × 3-axis grid and its parser/signature projections to remain in parity. The host-side validator in `program/library/compositional_case_validation.mjs` is the deterministic check: it validates coverage, canonical keyword tokens, assigned 16-bit HNUCs, and exact `case`/`hnuc`/`pya` agreement with `program/library/pyashWords.json`. Known unassigned identities are explicit warnings and must not be fabricated as valid codes. The operator-facing Pyash entry point is `be verify hnuc grammar do`; see `documentation/compositional-cases.md` for the grid and allocation boundary.
 
 ## 12. Full draft reference
 

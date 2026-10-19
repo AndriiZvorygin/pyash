@@ -157,7 +157,8 @@ function routeInput(sentence, { rememberFn = remember } = {}) {
     toEndpoint,
     payloadText: payload,
     targetAgentName: resolvedAgent,
-    sessionId
+    sessionId,
+    channelIdentity: sentence?.channelIdentity
   });
 }
 
@@ -174,7 +175,8 @@ function routeProduce(sentence, { rememberFn = remember } = {}) {
     fromEndpoint,
     toEndpoint,
     payloadId,
-    success: true
+    success: true,
+    channelIdentity: sentence?.channelIdentity
   });
 }
 

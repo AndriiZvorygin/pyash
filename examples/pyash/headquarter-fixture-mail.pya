@@ -1,0 +1,3 @@
+exists su name world tools ob bool truth ya
+exists su name world root ob filename "world" be default ya
+be headquarters from filename "../examples/fixtures/headquarters/fixture-mail.pya" with filename "../module/headquarters-fixture-mail.pya" for text "correspondence worker" as text "hq-inbox" to name map result do

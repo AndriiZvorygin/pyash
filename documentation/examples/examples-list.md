@@ -26,6 +26,7 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Map + Ceremony Demo | `examples/pyash/map-ceremony-demo.pya` |
 | Modules | `examples/pyash/module-import-full.pya`, `examples/pyash/module-import-full-paths.pya` |
 | Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-interpret-tool.pya`, `examples/pyash/mind-parity.pya`, `examples/pyash/mind-session.pya` |
+| Agent command workflow | `examples/pyash/agent-command-workflow.pya` |
 | Download | `examples/pyash/download-ytdlp.pya` |
 | Android control | `examples/pyash/android-smoke-verify.pya`, `examples/pyash/android-wakeup-home.pya`, `examples/pyash/android-open-youtube.pya`, `examples/pyash/android-upload-short-step-1.pya` |
 | Tool envelope / newspaper replay | `examples/pyash/again-demo.pya`, `examples/pyash/again-newspaper.pya` |

@@ -1,0 +1,420 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import path from "node:path";
+import fs from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { doRemember, forget } from "../program/remember/index.mjs";
+import { resolveConfigMapBool, resolveConfigMapNum } from "../program/configure/env.mjs";
+import {
+  appendSessionEntry,
+  beginSessionTurn,
+  completeSessionTurn,
+  ensureSessionFile,
+  readSessionMessagesWithFallback,
+  readSessionReplay
+} from "../program/agent/session.mjs";
+import {
+  buildSessionCheckpointSentence,
+  buildSessionTurnSentence,
+  buildCompactSessionSnapshot,
+  canonicalRequestHash,
+  deriveTurnIdentity,
+  projectSessionReplay
+} from "../program/agent/session_replay.mjs";
+import { setExchangeRecorder, clearExchangeRecorder, setExchangeRunId, setExchangeSentenceId } from "../program/bridge/exchange.mjs";
+
+const execFileAsync = promisify(execFile);
+
+async function makeSession(name) {
+  const root = path.resolve(`/tmp/pyash-agent-session-replay-${name}`);
+  await fs.rm(root, { recursive: true, force: true });
+  await fs.mkdir(root, { recursive: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: root,
+    sessionName: name,
+    systemPrompt: "system",
+    model: "model"
+  });
+  return { root, sessionFile };
+}
+
+test("session policy resolves from the canonical Pyash configure map", () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "session configure" },
+    be: "map",
+    ob: {
+      map: {
+        "history window": { su: { name: "history window" }, ob: { num: 3 } },
+        "snapshot enabled": { su: { name: "snapshot enabled" }, ob: { boolean: false } }
+      }
+    }
+  });
+  assert.equal(resolveConfigMapNum("session configure", "history window"), 3);
+  assert.equal(resolveConfigMapBool("session configure", "snapshot enabled"), false);
+  forget();
+});
+
+test("turn identity ignores timestamps and prefers inbound payload or exchange ids", () => {
+  assert.equal(
+    canonicalRequestHash({ prompt: "hello", timestamp: "2026-01-01T00:00:00.000Z" }),
+    canonicalRequestHash({ prompt: "hello", timestamp: "2030-04-05T06:07:08.000Z" })
+  );
+  const payloadIdentity = deriveTurnIdentity({
+    payloadId: "news-17",
+    sessionOrdinal: 9,
+    request: { prompt: "hello" }
+  });
+  const exchangeIdentity = deriveTurnIdentity({
+    exchangeSentenceId: "exchange-17",
+    sessionOrdinal: 9,
+    request: { prompt: "hello" }
+  });
+  const ordinalIdentity = deriveTurnIdentity({
+    sessionOrdinal: 9,
+    request: { prompt: "hello", timestamp: "2026-01-01T00:00:00.000Z" }
+  });
+  assert.match(payloadIdentity.turnId, /news-17/);
+  assert.match(exchangeIdentity.turnId, /exchange-17/);
+  assert.match(ordinalIdentity.turnId, /000009/);
+  assert.equal(ordinalIdentity.requestHash, deriveTurnIdentity({
+    sessionOrdinal: 9,
+    request: { prompt: "hello", timestamp: "2030-04-05T06:07:08.000Z" }
+  }).requestHash);
+});
+
+test("session turn sentences use typed fields without JSON metadata blobs", () => {
+  const sentence = buildSessionTurnSentence({
+    role: "user",
+    content: "typed request",
+    turnId: "turn-payload-typed",
+    requestHash: "a".repeat(64),
+    ordinal: 3,
+    metadata: { sender: "sender", channelId: "room", channelType: "matrix" }
+  });
+  const rendered = sentenceToPyash(sentence);
+  assert.equal(sentence.be, "write");
+  assert.equal(sentence.su.name, "user");
+  assert.match(rendered, /accordingto text "turn-payload-typed"/);
+  assert.match(rendered, /fromtext text "a{64}"/);
+  assert.doesNotMatch(rendered, /\{"record"/);
+  assert.doesNotMatch(rendered, /session turn/);
+});
+
+test("session turn identity falls back to the active exchange sentence id", async () => {
+  const { sessionFile } = await makeSession("exchange-id");
+  setExchangeSentenceId("evoke-exchange-42");
+  try {
+    const started = await beginSessionTurn({
+      sessionFile,
+      userContent: "exchange request",
+      request: { prompt: "exchange request" }
+    });
+    assert.match(started.turnId, /exchange-evoke-exchange-42/);
+  } finally {
+    setExchangeSentenceId(null);
+  }
+});
+
+test("replay projector rejects conflicting evidence for one turn id", async () => {
+  const { sessionFile } = await makeSession("conflict");
+  const metadata = { turnId: "turn-conflict", requestHash: canonicalRequestHash({ prompt: "one" }) };
+  await appendSessionEntry({ sessionFile, role: "user", content: "one", metadata });
+  await appendSessionEntry({ sessionFile, role: "user", content: "different", metadata });
+
+  await assert.rejects(
+    () => readSessionReplay({ sessionFile }),
+    (error) => error?.message.startsWith("session replay defective")
+  );
+});
+
+test("replay projector rejects a checkpoint that disagrees with its assistant record", () => {
+  const sentences = [
+    { su: { name: "user" }, ob: { text: "request" }, accordingto: { text: "turn-conflict" }, fromtext: { text: JSON.stringify({ requestHash: canonicalRequestHash({ prompt: "request" }) }) }, be: "session turn", mood: "ya" },
+    { su: { name: "agent" }, ob: { text: "assistant answer" }, accordingto: { text: "turn-conflict" }, be: "session turn", mood: "ya" },
+    { su: { name: "session turn checkpoint" }, ob: { text: "different answer" }, accordingto: { text: "turn-conflict" }, vyah: { ve: { type: "name", values: ["success"] } }, be: "checkpoint", mood: "ya" }
+  ];
+  assert.throws(
+    () => projectSessionReplay({ sentences }),
+    (error) => error?.message.startsWith("session replay defective")
+  );
+});
+
+test("legacy adjacent turns project with synthetic ids without rewriting the transcript", async () => {
+  const { sessionFile } = await makeSession("legacy");
+  await appendSessionEntry({ sessionFile, role: "user", content: "old question", metadata: { timestamp: "2026-01-01T00:00:00.000Z" } });
+  await appendSessionEntry({ sessionFile, role: "agent", content: "old answer", metadata: { timestamp: "2026-01-01T00:00:01.000Z" } });
+  const before = await fs.readFile(sessionFile, "utf8");
+  const first = await readSessionReplay({ sessionFile, historyWindow: 10 });
+  const second = await readSessionReplay({ sessionFile, historyWindow: 10 });
+  const after = await fs.readFile(sessionFile, "utf8");
+
+  assert.equal(first.messages.length, 2);
+  assert.equal(first.turns.length, 1);
+  assert.equal(first.turns[0].legacy, true);
+  assert.deepEqual(first.acceptedEvidence, []);
+  assert.equal(first.turns[0].turnId, second.turns[0].turnId);
+  assert.equal(after, before);
+});
+
+test("legacy non-adjacent records are rejected instead of being permissively paired", () => {
+  const sentences = [
+    { su: { name: "user" }, ob: { text: "old question" }, mood: "ya" },
+    { su: { name: "user" }, ob: { text: "new request" }, accordingto: { text: "turn-new" }, be: "session turn", mood: "ya" },
+    { su: { name: "agent" }, ob: { text: "old answer" }, mood: "ya" }
+  ];
+  assert.throws(
+    () => projectSessionReplay({ sentences }),
+    (error) => error?.message.startsWith("session replay defective")
+  );
+});
+
+test("compaction keeps only complete recent pairs while retaining checkpoint evidence", () => {
+  const sentences = [
+    { su: { name: "user" }, ob: { text: "first" }, accordingto: { text: "turn-1" }, be: "session turn", mood: "ya" },
+    { su: { name: "agent" }, ob: { text: "one" }, accordingto: { text: "turn-1" }, be: "session turn", mood: "ya" },
+    { su: { name: "session turn checkpoint" }, ob: { text: "one" }, accordingto: { text: "turn-1" }, vyah: { ve: { type: "name", values: ["success", "accept"] } }, be: "checkpoint", mood: "ya" },
+    { su: { name: "user" }, ob: { text: "incomplete" }, accordingto: { text: "turn-2" }, be: "session turn", mood: "ya" },
+    { su: { name: "user" }, ob: { text: "third" }, accordingto: { text: "turn-3" }, be: "session turn", mood: "ya" },
+    { su: { name: "agent" }, ob: { text: "three" }, accordingto: { text: "turn-3" }, be: "session turn", mood: "ya" },
+    { su: { name: "session turn checkpoint" }, ob: { text: "three" }, accordingto: { text: "turn-3" }, vyah: { ve: { type: "name", values: ["success", "accept"] } }, be: "checkpoint", mood: "ya" }
+  ];
+  const projected = projectSessionReplay({ sentences, historyWindow: 1 });
+  assert.deepEqual(projected.messages.map((message) => message.content), ["first", "three"]);
+  assert.deepEqual(projected.pendingTurns.map((turn) => turn.turnId), ["turn-2"]);
+  assert.deepEqual(projected.acceptedEvidence.map((entry) => entry.turnId), ["turn-1", "turn-3"]);
+  assert.equal(projected.snapshotHash, projectSessionReplay({ sentences, historyWindow: 1 }).snapshotHash);
+  const withDifferentTimes = sentences.map((sentence, index) => ({
+    ...sentence,
+    during: { date: `203${index}-04-05T06:07:08.000Z` }
+  }));
+  assert.equal(projected.snapshotHash, projectSessionReplay({ sentences: withDifferentTimes, historyWindow: 1 }).snapshotHash);
+  assert.equal(sentenceToPyash(sentences[0]).includes("during"), false);
+});
+
+test("golden projection keeps the original task and latest explicitly accepted generator/verifier evidence", () => {
+  const requestHash = canonicalRequestHash({ prompt: "task" });
+  const sentences = [
+    buildSessionTurnSentence({ role: "user", content: "original task", turnId: "turn-1", requestHash, ordinal: 1 }),
+    buildSessionTurnSentence({ role: "agent", content: "ordinary answer", turnId: "turn-1", requestHash, ordinal: 1 }),
+    buildSessionCheckpointSentence({ turnId: "turn-1", requestHash, responseText: "ordinary answer", ordinal: 1 }),
+    buildSessionTurnSentence({ role: "user", content: "retry task", turnId: "turn-2", requestHash, ordinal: 2 }),
+    buildSessionTurnSentence({ role: "agent", content: "accepted draft", turnId: "turn-2", requestHash, ordinal: 2 }),
+    buildSessionCheckpointSentence({
+      turnId: "turn-2",
+      requestHash,
+      responseText: "accepted draft",
+      ordinal: 2,
+      metadata: {
+        accepted: true,
+        generatorName: "generator",
+        verifierName: "verifier",
+        verifierText: "PASS"
+      }
+    })
+  ];
+  const projected = projectSessionReplay({ sentences, historyWindow: 10 });
+  assert.deepEqual(projected.acceptedEvidence.map((entry) => entry.turnId), ["turn-2"]);
+  assert.equal(projected.goldenProjection.originalTask, "original task");
+  assert.equal(projected.goldenProjection.latestAcceptedGenerator.content, "accepted draft");
+  assert.equal(projected.goldenProjection.latestAcceptedVerifier.content, "PASS");
+  assert.deepEqual(projected.messages.map((entry) => entry.content), ["original task", "accepted draft", "PASS"]);
+  assert.doesNotMatch(buildCompactSessionSnapshot(projected), /ordinary answer/);
+});
+
+test("live projection keeps the original task beside the bounded latest pair without duplication", () => {
+  const sentences = [];
+  for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
+    const requestHash = canonicalRequestHash({ prompt: `task-${ordinal}` });
+    const turnId = `live-turn-${ordinal}`;
+    sentences.push(buildSessionTurnSentence({ role: "user", content: `task-${ordinal}`, turnId, requestHash, ordinal }));
+    sentences.push(buildSessionTurnSentence({ role: "agent", content: `answer-${ordinal}`, turnId, requestHash, ordinal }));
+    sentences.push(buildSessionCheckpointSentence({ turnId, requestHash, responseText: `answer-${ordinal}`, ordinal }));
+  }
+  const projected = projectSessionReplay({ sentences, historyWindow: 1 });
+  assert.deepEqual(projected.messages.map((entry) => entry.content), ["task-1", "task-3", "answer-3"]);
+  assert.equal(projected.messages.filter((entry) => entry.content === "task-1").length, 1);
+});
+
+test("verify loop promotes its successful verifier disposition into the generator session ledger", async () => {
+  forget();
+  const originalResponse = process.env.PYA_MIND_RESPONSE;
+  const root = path.resolve("/tmp/pyash-agent-session-verify-loop-acceptance");
+  await fs.rm(root, { recursive: true, force: true });
+  await fs.mkdir(root, { recursive: true });
+  doRemember({ mood: "ya", be: "root", su: { name: "world root" }, ob: { filename: root } });
+  process.env.PYA_MIND_RESPONSE = JSON.stringify(["draft answer", "Verifier evidence\nPASS"]);
+
+  try {
+    await interpret(parse('exists su name generator be mind as name "qwen3-vl:8b-instruct" ya'));
+    await interpret(parse('exists su name verifier be mind as name "qwen3-vl:8b-instruct" ya'));
+
+    await interpret(parse('ob text "Task." for name generator by name verifier with wo tools to name text result be verify loop do'));
+
+    const sessionDir = path.join(root, "house", "generator", "session");
+    const files = (await fs.readdir(sessionDir)).filter((name) => name.endsWith(".pya"));
+    assert.equal(files.length, 1);
+    const replay = await readSessionReplay({ sessionFile: path.join(sessionDir, files[0]), historyWindow: 1 });
+    assert.equal(replay.acceptedEvidence.length, 1);
+    assert.equal(replay.acceptedEvidence[0].generatorName, "generator");
+    assert.equal(replay.acceptedEvidence[0].verifierName, "verifier");
+    assert.equal(replay.acceptedEvidence[0].verifierText, "Verifier evidence\nPASS");
+    assert.match(await fs.readFile(path.join(sessionDir, files[0]), "utf8"), /vyah success accept/);
+  } finally {
+    if (originalResponse === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = originalResponse;
+    forget();
+  }
+});
+
+test("verify loop accepts only the exact passing retry turn", async () => {
+  forget();
+  const originalResponse = process.env.PYA_MIND_RESPONSE;
+  const root = path.resolve("/tmp/pyash-agent-session-verify-loop-retry");
+  await fs.rm(root, { recursive: true, force: true });
+  await fs.mkdir(root, { recursive: true });
+  doRemember({ mood: "ya", be: "root", su: { name: "world root" }, ob: { filename: root } });
+  process.env.PYA_MIND_RESPONSE = JSON.stringify([
+    { message: { content: "same draft" } },
+    { message: { content: "evidence\nPASS" } }
+  ]);
+
+  try {
+    const oldSessionDir = path.join(root, "house", "generator", "session");
+    const oldSessionFile = await ensureSessionFile({
+      sessionDir: oldSessionDir,
+      sessionName: "000000-old",
+      systemPrompt: "system",
+      model: "model"
+    });
+    const oldTurn = await beginSessionTurn({
+      sessionFile: oldSessionFile,
+      userContent: "Task.",
+      request: { prompt: "Task." },
+      metadata: { payloadId: "old-session-payload" }
+    });
+    await completeSessionTurn({ sessionFile: oldSessionFile, turn: oldTurn, responseText: "same draft" });
+
+    await interpret(parse('exists su name generator be mind as name "qwen3-vl:8b-instruct" ya'));
+    await interpret(parse('exists su name verifier be mind as name "qwen3-vl:8b-instruct" ya'));
+
+    await interpret(parse('ob text "Task." for name generator by name verifier atleast num 0.8 atmost num 2 with wo tools to name text result be verify loop do'));
+
+    const files = (await fs.readdir(oldSessionDir)).filter((name) => name.endsWith(".pya")).sort();
+    assert.equal(files.length, 2);
+    const replays = await Promise.all(files.map((name) => readSessionReplay({
+      sessionFile: path.join(oldSessionDir, name),
+      historyWindow: 10
+    })));
+    const generatedReplay = replays.find((replay) => replay.turns.length === 2);
+    const oldReplay = replays.find((replay) => replay.turns.length === 1);
+    assert.ok(generatedReplay);
+    assert.ok(oldReplay);
+    assert.equal(oldReplay.acceptedEvidence.length, 0);
+    assert.equal(generatedReplay.acceptedEvidence.length, 1);
+    assert.equal(generatedReplay.turns[0].accepted, false);
+    assert.equal(generatedReplay.turns[1].accepted, true);
+    assert.equal(generatedReplay.acceptedEvidence[0].turnId, generatedReplay.turns[1].turnId);
+    assert.equal(generatedReplay.acceptedEvidence[0].generatorName, "generator");
+    assert.equal(generatedReplay.acceptedEvidence[0].verifierName, "verifier");
+    assert.equal(generatedReplay.acceptedEvidence[0].verifierText, "evidence\nPASS");
+  } finally {
+    if (originalResponse === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = originalResponse;
+    forget();
+  }
+});
+
+test("named-session fallback deduplicates stable turns before projecting the window", async () => {
+  const root = path.resolve("/tmp/pyash-agent-session-replay-fallback");
+  await fs.rm(root, { recursive: true, force: true });
+  const sessionDir = path.join(root, "session");
+  await fs.mkdir(sessionDir, { recursive: true });
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const yesterday = yesterdayDate.toISOString().slice(0, 10).replace(/-/g, "");
+  const oldFile = await ensureSessionFile({ sessionDir, sessionName: `${yesterday}-named`, systemPrompt: "system", model: "model" });
+  const todayFile = await ensureSessionFile({ sessionDir, sessionName: `${today}-named`, systemPrompt: "system", model: "model" });
+  const request = { prompt: "shared turn" };
+  const oldTurn = await beginSessionTurn({ sessionFile: oldFile, userContent: "shared turn", request, metadata: { payloadId: "shared-turn" } });
+  await completeSessionTurn({ sessionFile: oldFile, turn: oldTurn, responseText: "shared answer" });
+  const todayTurn = await beginSessionTurn({ sessionFile: todayFile, userContent: "shared turn", request, metadata: { payloadId: "shared-turn" } });
+  await completeSessionTurn({ sessionFile: todayFile, turn: todayTurn, responseText: "shared answer" });
+  const fallback = await readSessionMessagesWithFallback({ sessionDir, baseName: "named", historyWindow: 10 });
+  assert.deepEqual(fallback.messages.map((entry) => entry.content), ["shared turn", "shared answer"]);
+});
+
+test("long-run projection remains deterministic across the 200-turn boundary", () => {
+  const sentences = [];
+  for (let ordinal = 1; ordinal <= 205; ordinal += 1) {
+    const requestHash = canonicalRequestHash({ ordinal, prompt: `task-${ordinal}` });
+    const turnId = `turn-${String(ordinal).padStart(6, "0")}`;
+    sentences.push(buildSessionTurnSentence({ role: "user", content: `task-${ordinal}`, turnId, requestHash, ordinal }));
+    sentences.push(buildSessionTurnSentence({ role: "agent", content: `answer-${ordinal}`, turnId, requestHash, ordinal }));
+    sentences.push(buildSessionCheckpointSentence({ turnId, requestHash, responseText: `answer-${ordinal}`, ordinal }));
+  }
+  const first = projectSessionReplay({ sentences, historyWindow: 8 });
+  const second = projectSessionReplay({ sentences, historyWindow: 8 });
+  assert.equal(first.turns.length, 205);
+  assert.equal(first.messages.length, 17);
+  assert.equal(first.snapshotHash, second.snapshotHash);
+  assert.equal(first.messages[0].content, "task-1");
+  assert.equal(first.messages.at(-1).content, "answer-205");
+});
+
+test("session snapshot artifact replays successfully and rejects tampering", async () => {
+  const root = path.resolve("/tmp/pyash-agent-session-replay-artifact");
+  await fs.rm(root, { recursive: true, force: true });
+  await fs.mkdir(root, { recursive: true });
+  const sessionFile = await ensureSessionFile({ sessionDir: root, sessionName: "artifact", systemPrompt: "system", model: "model" });
+  const newspaper = [];
+  setExchangeRecorder({
+    runRoot: root,
+    record: (sentence) => newspaper.push(sentenceToPyash(sentence))
+  });
+  setExchangeRunId("session-artifact");
+  let artifactLine = "";
+  try {
+    const started = await beginSessionTurn({
+      sessionFile,
+      userContent: "artifact request",
+      request: { prompt: "artifact request" },
+      metadata: { payloadId: "artifact-payload" }
+    });
+    const completed = await completeSessionTurn({ sessionFile, turn: started, responseText: "artifact response" });
+    assert.ok(completed.snapshotArtifact?.hash);
+    artifactLine = newspaper.find((line) => line.includes("be artifact"));
+    assert.ok(artifactLine);
+    assert.ok(newspaper.some((line) => line.includes("be checkpoint") && line.includes(started.turnId)));
+  } finally {
+    clearExchangeRecorder();
+    setExchangeRunId(null);
+  }
+  const newspaperDir = path.join(root, "newspaper");
+  await fs.mkdir(newspaperDir, { recursive: true });
+  await fs.writeFile(path.join(newspaperDir, "session-artifact.pya"), `${newspaper.join("\n")}\n`, "utf8");
+  const replayPath = path.resolve("command/replay_newspaper.mjs");
+  const success = await execFileAsync(process.execPath, [replayPath, "--run-id", "session-artifact", "--run-root", root], {
+    cwd: path.resolve(".")
+  });
+  assert.match(success.stdout, /be replay ya/);
+  const hash = artifactLine.match(/fromtext text "([a-f0-9]+)"/)?.[1];
+  const locatorMatch = artifactLine.match(/to filename (?:"([^"]+)"|([^ ]+))/);
+  const locator = locatorMatch?.[1] || locatorMatch?.[2];
+  assert.ok(hash);
+  assert.ok(locator);
+  const contentAddressed = path.join(root, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}${path.extname(locator)}`);
+  await fs.writeFile(contentAddressed, "tampered snapshot\n", "utf8");
+  await assert.rejects(
+    () => execFileAsync(process.execPath, [replayPath, "--run-id", "session-artifact", "--run-root", root], { cwd: path.resolve(".") }),
+    /hash inconsistency/
+  );
+});

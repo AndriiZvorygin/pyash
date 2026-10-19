@@ -125,7 +125,7 @@ test("a deferred baseline sync remains visible to the bounded repair lane", asyn
   assert.match(result.candidate.blocker, /automation baseline sync deferred/iu);
 });
 
-test("blocker repair bypasses a failing baseline sync without mutating the source task", async () => {
+test("blocker repair remains selectable when baseline sync fails", async () => {
   const worldRoot = await makeWorldRoot();
   const now = "2026-10-04T12:00:00.000Z";
   await writeWorkSchedulerHealth(worldRoot, {
@@ -157,7 +157,7 @@ test("blocker repair bypasses a failing baseline sync without mutating the sourc
   });
   assert.equal(result.admitted, true);
   assert.equal(result.selected, "blocker-repair-automation-baseline-sync-2026-10-04");
-  assert.equal(baselineCalls, 0);
+  assert.equal(baselineCalls, 1);
   assert.equal(supervisorCalls, 1);
   assert.equal(result.blockerRepair.created, true);
 });

@@ -1,6 +1,6 @@
 import { remember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
-import { throwErrorSentence, surfaceErrorSentence } from "../../error.mjs";
+import { buildErrorSentence, throwErrorSentence, surfaceErrorSentence } from "../../error.mjs";
 import { resolveInterpret, callMindBackend } from "./backend.mjs";
 import { mapDefChainFromName } from "./map_helpers.mjs";
 import { mapSentenceToPyash } from "../exchange/json_map.mjs";
@@ -9,6 +9,7 @@ import { appendLog } from "./history.mjs";
 import { buildToolSentence } from "./tooling.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
+import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
 
 function buildPromptText(messages) {
   if (!Array.isArray(messages)) return "";
@@ -58,6 +59,136 @@ function buildToolUseDirective(tools = []) {
   ].join("\n");
 }
 
+function toolNames(tools = [], toolMap = null) {
+  const names = new Set(
+    (Array.isArray(tools) ? tools : [])
+      .map((entry) => String(entry?.function?.name ?? "").trim())
+      .filter(Boolean)
+  );
+  if (toolMap instanceof Map) {
+    for (const name of toolMap.keys()) {
+      const text = String(name ?? "").trim();
+      if (text) names.add(text);
+    }
+  }
+  return names;
+}
+
+function parseJsonValue(value) {
+  if (typeof value !== "string") return value;
+  const text = value.trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeTextToolCall(value, allowedNames, index = 0) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (Array.isArray(value.tool_calls)) {
+    return value.tool_calls
+      .map((entry, childIndex) => normalizeTextToolCall(entry, allowedNames, childIndex))
+      .filter(Boolean);
+  }
+
+  const nested = value.function && typeof value.function === "object" ? value.function : value;
+  const name = String(
+    nested.name ??
+    value.tool ??
+    value.tool_name ??
+    value.function_name ??
+    ""
+  ).trim();
+  if (!name || !allowedNames.has(name)) return null;
+  const rawArguments = nested.arguments ?? value.arguments ?? value.args ?? {};
+  const parsedArguments = typeof rawArguments === "string" ? parseJsonValue(rawArguments) : rawArguments;
+  if (!parsedArguments || typeof parsedArguments !== "object" || Array.isArray(parsedArguments)) return null;
+  return {
+    id: String(value.id ?? `text-tool-call-${index + 1}`).trim(),
+    type: "function",
+    function: {
+      name,
+      arguments: JSON.stringify(parsedArguments)
+    }
+  };
+}
+
+function balancedJsonAt(text, start) {
+  const opening = text[start];
+  if (opening !== "{" && opening !== "[") return null;
+  const stack = [opening === "{" ? "}" : "]"];
+  let quoted = false;
+  let escaped = false;
+  for (let index = start + 1; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') {
+      quoted = true;
+      continue;
+    }
+    if (character === "{" || character === "[") {
+      stack.push(character === "{" ? "}" : "]");
+      continue;
+    }
+    if (character !== stack[stack.length - 1]) continue;
+    stack.pop();
+    if (stack.length === 0) return text.slice(start, index + 1);
+  }
+  return null;
+}
+
+function explicitToolCallValues(content) {
+  const text = String(content ?? "");
+  const values = [];
+  const tagged = /(?:<tool_call>|<\|tool_call\|>)([\s\S]*?)(?:<\/tool_call>|<\|end\|>)/gi;
+  for (const match of text.matchAll(tagged)) values.push(match[1]);
+  const fenced = /```(?:json|tool_call)?\s*([\s\S]*?)```/gi;
+  for (const match of text.matchAll(fenced)) values.push(match[1]);
+  if (!values.length && text.trim()) values.push(text.trim());
+  return values;
+}
+
+function explicitFunctionCallValues(content, allowedNames) {
+  const text = String(content ?? "");
+  const values = [];
+  const namePattern = /\b([A-Za-z_][A-Za-z0-9_-]*)\s*\(\s*(\{|\[)/g;
+  for (const match of text.matchAll(namePattern)) {
+    if (!allowedNames.has(match[1])) continue;
+    const json = balancedJsonAt(text, match.index + match[0].lastIndexOf(match[2]));
+    if (!json) continue;
+    values.push(JSON.stringify({ name: match[1], arguments: parseJsonValue(json) }));
+  }
+  return values;
+}
+
+export function extractExplicitToolCalls(content, tools = [], toolMap = null) {
+  const allowedNames = toolNames(tools, toolMap);
+  if (!allowedNames.size) return [];
+  const calls = [];
+  const add = (value, index) => {
+    const parsed = parseJsonValue(value);
+    const candidates = Array.isArray(parsed) ? parsed : [parsed];
+    for (const candidate of candidates) {
+      const normalized = normalizeTextToolCall(candidate, allowedNames, index);
+      const entries = Array.isArray(normalized) ? normalized : [normalized];
+      for (const entry of entries) {
+        if (!entry) continue;
+        calls.push(entry);
+      }
+    }
+  };
+  explicitToolCallValues(content).forEach(add);
+  explicitFunctionCallValues(content, allowedNames).forEach(add);
+  return calls;
+}
+
 export async function runToolChat({
   sentence,
   ob,
@@ -74,6 +205,7 @@ export async function runToolChat({
   ollamaHost,
   reasoningEffort,
   modelTuning,
+  maxToolCalls,
   runtimeContext,
   mindDebug,
   debugMind,
@@ -137,15 +269,20 @@ export async function runToolChat({
 
   const interpret = await resolveInterpret();
   const maxToolTurns = 6;
+  const effectiveMaxToolCalls = Number.isFinite(Number(maxToolCalls))
+    ? Math.max(0, Math.trunc(Number(maxToolCalls)))
+    : 3;
+  let toolCallsUsed = 0;
   let turns = 0;
   let lastResponse = null;
   let lastToolText = "";
 
-  const buildRatifySentence = ({ capability, toolName, decision, raw, matchedKey }) => ({
+  const buildRatifySentence = ({ capability, toolName, decision, mode, raw, matchedKey }) => ({
     mood: "ya",
     be: "ratify",
     su: { name: capability?.su?.name ?? toolName ?? "tool approval" },
-    ob: { boolean: decision === "truth" },
+    ob: mode === "ask" ? { text: "ask" } : { boolean: decision === "truth" },
+    mode: mode ?? (decision === "truth" ? "allow" : "deny"),
     totext: { text: raw ?? decision },
     fromtext: { text: matchedKey ? `policy ${matchedKey}` : "policy unanswered" }
   });
@@ -217,7 +354,13 @@ export async function runToolChat({
       }
     }
 
-    const toolCalls = lastResponse?.message?.tool_calls;
+    const nativeToolCalls = lastResponse?.message?.tool_calls;
+    const textToolCalls = (!Array.isArray(nativeToolCalls) || nativeToolCalls.length === 0)
+      ? extractExplicitToolCalls(lastResponse?.message?.content ?? "", tools, toolMap)
+      : [];
+    const toolCalls = Array.isArray(nativeToolCalls) && nativeToolCalls.length > 0
+      ? nativeToolCalls
+      : textToolCalls;
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
       responseText = lastResponse?.message?.content ?? "";
       break;
@@ -225,7 +368,7 @@ export async function runToolChat({
 
     const assistantMessage = {
       role: "assistant",
-      content: lastResponse?.message?.content ?? "",
+      content: textToolCalls.length > 0 ? "" : lastResponse?.message?.content ?? "",
       tool_calls: toolCalls
     };
     messages.push(assistantMessage);
@@ -253,6 +396,41 @@ export async function runToolChat({
       const toolSignatureWords = deriveSignatureFromCall(capability, { remember });
       const toolSignature = joinSignatureWords(toolSignatureWords);
       await emitToolCall({ stage: "call", toolName, toolSentence, toolCall: call });
+      submitRunToolEvent({ stage: "call", toolName, toolSentence, toolCall: call });
+      if (toolCallsUsed >= effectiveMaxToolCalls) {
+        const limitError = buildErrorSentence({
+          name: "mind tool call limit exceeded",
+          message: `mind tool call limit exceeded: maximum ${effectiveMaxToolCalls} tool calls`,
+          from: { name: "mind" },
+          raw: {
+            maxToolCalls: effectiveMaxToolCalls,
+            attemptedToolCall: toolCallsUsed + 1,
+            toolName
+          }
+        });
+        const surfacedLimitError = surfaceErrorSentence(limitError);
+        const limitText = sentenceToPyash(surfacedLimitError);
+        await emitToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText: limitText });
+        submitRunToolEvent({
+          stage: "result",
+          toolName,
+          toolSentence,
+          toolCall: call,
+          resultSentence: surfacedLimitError,
+          toolText: limitText
+        });
+        throwErrorSentence({
+          name: "mind tool call limit exceeded",
+          message: `mind tool call limit exceeded: maximum ${effectiveMaxToolCalls} tool calls`,
+          from: { name: "mind" },
+          raw: {
+            maxToolCalls: effectiveMaxToolCalls,
+            attemptedToolCall: toolCallsUsed + 1,
+            toolName
+          }
+        });
+      }
+      toolCallsUsed += 1;
       if (capability?.be === "read" && !toolSentence.to) {
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
       }
@@ -266,12 +444,14 @@ export async function runToolChat({
           rememberFn: remember
         });
         const decision = ratify?.decision ?? "lie";
+        const mode = ratify?.mode ?? (decision === "truth" ? "allow" : "deny");
         const raw = ratify?.raw ?? "unanswered";
         const matchedKey = ratify?.matchedKey ?? "default";
         const ratifySentence = buildRatifySentence({
           capability,
           toolName,
           decision,
+          mode,
           raw,
           matchedKey
         });
@@ -294,6 +474,14 @@ export async function runToolChat({
       }
       const surfacedTool = (() => {
         if (toolResult && toolResult.mood) return toolResult;
+        if (toolResult && toolResult.be) {
+          return {
+            mood: "ya",
+            su: toolResult.su ?? { name: "result" },
+            be: toolResult.be,
+            ob: toolResult.ob ?? {}
+          };
+        }
         if (toolResult && typeof toolResult === "object" && toolResult.result && typeof toolResult.result === "object") {
           return {
             mood: "ya",
@@ -330,6 +518,14 @@ export async function runToolChat({
         toolText = String(surfacedTool ?? "");
       }
       await emitToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText });
+      submitRunToolEvent({
+        stage: "result",
+        toolName,
+        toolSentence,
+        toolCall: call,
+        resultSentence: surfacedTool,
+        toolText
+      });
       const toolMessage = { role: "tool", content: toolText };
       if (toolCallId) toolMessage.tool_call_id = toolCallId;
       toolMessage.tool_name = toolName;

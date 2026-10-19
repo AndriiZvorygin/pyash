@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember, remember } from "../program/remember/index.mjs";
 import { readServiceControls } from "../program/agent/scheduler_service_control.mjs";
+import { readAgentOrganization } from "../program/agent/admin.mjs";
 
 function setWorldRoot(worldRoot) {
   doRemember({
@@ -71,4 +72,68 @@ test("house begin/stop/restart toggles agent services", async () => {
   const restartRes = await interpret(parse("su name parity coder be restart from wo house do"));
   assert.equal(restartRes?.value?.boolean, true);
   assert.equal(remember("result")?.be, "restart");
+});
+
+test("house establish accepts a with name map organization declaration", async () => {
+  forget();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-surface-"));
+  const worldRoot = path.join(tmpRoot, "world");
+  await fs.mkdir(worldRoot, { recursive: true });
+  setWorldRoot(worldRoot);
+
+  doRemember({
+    mood: "ya",
+    su: { name: "chief of staff organization" },
+    ob: {
+      map: {
+        role: { text: "Chief of Staff" },
+        supervisor: { text: "" },
+        responsibilities: { ve: { type: "text", values: ["coordinate work", "review escalations"] } },
+        domains: { ve: { type: "text", values: ["headquarters", "operations"] } }
+      }
+    },
+    be: "map"
+  });
+
+  const established = await interpret(parse(
+    'su name chief of staff ob text "Coordinate Headquarters work." with name map chief of staff organization be establish do'
+  ));
+  assert.equal(established?.value?.boolean, true);
+  assert.deepEqual(await readAgentOrganization({ worldRoot, agentName: "chief of staff" }), {
+    role: "Chief of Staff",
+    supervisor: "",
+    responsibilities: ["coordinate work", "review escalations"],
+    domains: ["headquarters", "operations"]
+  });
+
+  doRemember({
+    mood: "ya",
+    su: { name: "correspondence worker organization" },
+    ob: {
+      map: {
+        role: { text: "Correspondence Worker" },
+        supervisor: { text: "chief of staff" },
+        responsibilities: { ve: { type: "text", values: ["classify correspondence"] } },
+        domains: { ve: { type: "text", values: ["correspondence"] } }
+      }
+    },
+    be: "map"
+  });
+  const workerEstablished = await interpret(parse(
+    'su name correspondence worker ob text "Handle correspondence." with name map correspondence worker organization be establish do'
+  ));
+  assert.equal(workerEstablished?.value?.boolean, true);
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "correspondence worker" })).role, "Correspondence Worker");
+
+  const reestablished = await interpret(parse(
+    'su name chief of staff ob text "Coordinate Headquarters work." be establish do'
+  ));
+  assert.equal(reestablished?.value?.boolean, true);
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "chief of staff" })).role, "Chief of Staff");
+  const workerReestablished = await interpret(parse(
+    'su name correspondence worker ob text "Handle correspondence." be establish do'
+  ));
+  assert.equal(workerReestablished?.value?.boolean, true);
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "correspondence worker" })).role, "Correspondence Worker");
+  assert.equal((await readAgentOrganization({ worldRoot, agentName: "correspondence worker" })).supervisor, "chief of staff");
 });

@@ -170,6 +170,8 @@ function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
     }
   }
   if (typeof ob.text === "string") return ob.text;
+  if (typeof ob.filename === "string") return ob.filename;
+  if (typeof ob.bool === "boolean") return ob.bool ? "truth" : "lie";
   if (typeof ob.num === "number") return ob.num;
   if (typeof ob.date === "string") return ob.date;
   if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
@@ -223,6 +225,8 @@ function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
     if (fact?.ob?.la) return sentenceToPyash(fact);
     if (fact?.ob?.ve?.values) return sentenceToPyash(fact);
     if (fact?.ob?.text !== undefined) return fact.ob.text;
+    if (fact?.ob?.filename !== undefined) return fact.ob.filename;
+    if (typeof fact?.ob?.bool === "boolean") return fact.ob.bool ? "truth" : "lie";
     if (fact?.ob?.num !== undefined) return fact.ob.num;
     if (fact?.ob?.date !== undefined) return fact.ob.date;
     if (fact?.ob?.boolean !== undefined) return fact.ob.boolean ? "truth" : "lie";

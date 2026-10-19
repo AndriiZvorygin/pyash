@@ -19,6 +19,7 @@ from filename "./module/read_pdf_html.pya" ob name read to name read be import d
 from filename "./module/read_pdf_markdown.pya" ob name read to name read be import do
 from filename "./module/read_pdf_markdown_plain.pya" ob name read to name read be import do
 from filename "./module/read_auto.pya" ob name read to name read be import do
+from filename "./module/documentation_digestion.pya" ob name documentation digestion to name documentation digestion be import do
 from filename "./module/read_html.pya" ob name read to name read html be import do
 from filename "./module/read_pdf.pya" ob name read to name read pdf be import do
 from filename "./module/read_html_markdown.pya" ob name read to name read html markdown be import do
@@ -45,6 +46,7 @@ exists su name mind model ob text "qwen3.5:9b" be default ya
 exists su name katago profile ob text "default" be default ya
 su name mind configure be map def
   su name think ob bool lie ya
+  su name max tool calls ob num 3 ya
 prah
 exists su name draw host ob text "http://mriczo:8188" be default ya
 exists su name say host ob text "http://localhost:8188" be default ya
@@ -85,6 +87,10 @@ exists su name provider auto discharge settle ms ob num 3000 be default ya
 exists su name newspaper enabled ob bool truth be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
+su name session configure be map def
+  su name history window ob num 8 ya
+  su name snapshot enabled ob bool truth ya
+prah
 exists su name keyboard bin ob text "xdotool" be default ya
 exists su name keyboard enabled ob bool truth be default ya
 exists su name web search motor ob filename "https://tsoc.liberit.ca/" be default ya

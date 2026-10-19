@@ -18,9 +18,25 @@ su name glider ob text "glide" as wo verb ya
 su name scroll-bar ob text "scroll" as wo verb ya
 su name waiting ob text "wait" as wo verb ya
 su name identity ob text "identify" as wo verb ya
+su name account ob text "briefing" as wo noun ya
+su name boundary ob text "maximum" as wo noun ya
+su name list ob text "items" as wo noun ya
+su name upcoming ob text "imminent" as wo adjective ya
+su name rank ob text "category" as wo noun ya
+su name rank ob text "precedence" as wo noun ya
+su name done ob text "terminal" as wo adjective ya
+su name done ob text "statuses" as wo noun ya
+su name done ob text "states" as wo noun ya
+su name public ob text "audience" as wo noun ya
+su name tie ob text "tie-break" as wo noun ya
+su name witness ob text "evidence" as wo noun ya
+su name witness ob text "source" as wo noun ya
+su name absence ob text "excluded" as wo adjective ya
+su name coordinate ob text "integration" as wo noun ya
+su name conduct ob text "policy" as wo noun ya
+su name staff ob text "headquarters" as wo noun ya
+su name instrument ob text "fixture" as wo noun ya
+su name consequence ob text "result" as wo noun ya
+su name base ob text "root" as wo noun ya
 prah
-
-
-
-
 
