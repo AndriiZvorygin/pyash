@@ -1998,6 +1998,7 @@ class HousekeeperSourceTraceTests(unittest.TestCase):
       "hostId": "legacy-host-field",
       "source": {
         "hostId": "debtcollecting",
+        "username": "htaf",
         "workerId": "pyash-gpu-worker",
         "processId": 4321
       },
@@ -2012,16 +2013,19 @@ class HousekeeperSourceTraceTests(unittest.TestCase):
 
     self.assertTrue(accepted["accepted"])
     self.assertEqual(accepted["source"]["hostId"], "debtcollecting")
+    self.assertEqual(accepted["source"]["username"], "htaf")
     queue = server.queue_view()
     self.assertEqual(queue["queuedCount"], 1)
     self.assertEqual(queue["runningCount"], 0)
     queued = next(job for job in queue["jobs"] if job["remoteJobId"] == accepted["remoteJobId"])
     self.assertEqual(queued["status"], "queued")
+    self.assertEqual(queued["source"]["username"], "htaf")
     self.assertEqual(queued["source"]["workerId"], "pyash-gpu-worker")
     self.assertEqual(queued["source"]["peerAddress"], "192.0.2.41")
 
     details = server.job_status(accepted["remoteJobId"])
     self.assertEqual(details["source"]["hostId"], "debtcollecting")
+    self.assertEqual(details["source"]["username"], "htaf")
     self.assertEqual(details["executionHostId"], "mriczo")
 
   def test_federation_preserves_source_identity(self):
@@ -2033,6 +2037,7 @@ class HousekeeperSourceTraceTests(unittest.TestCase):
 
     source = {
       "hostId": "debtcollecting",
+      "username": "htaf",
       "workerId": "pyash-gpu-worker",
       "processId": 4321,
       "peerAddress": "192.0.2.41"

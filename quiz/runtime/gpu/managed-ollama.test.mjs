@@ -48,6 +48,7 @@ test("remote Ollama requests submit to the GPU housekeeper with Qwen resource de
   assert.equal(calls[0].body.hostId, "debtcollecting");
   assert.deepEqual(calls[0].body.source, {
     hostId: "debtcollecting",
+    username: os.userInfo().username,
     workerId: "pyash-managed-ollama",
     processId: process.pid,
   });
@@ -121,6 +122,7 @@ test("generic ComfyUI jobs use the same manager queue and return the remote resu
   assert.equal(calls[0].body.hostId, "debtcollecting");
   assert.deepEqual(calls[0].body.source, {
     hostId: "debtcollecting",
+    username: os.userInfo().username,
     workerId: "pyash-managed-gpu-client",
     processId: process.pid,
   });
@@ -152,6 +154,7 @@ test("Ollama model provisioning uses one exact queued housekeeper job", async ()
   assert.equal(calls[0].body.hostId, os.hostname());
   assert.deepEqual(calls[0].body.source, {
     hostId: os.hostname(),
+    username: os.userInfo().username,
     workerId: "pyash-managed-gpu-client",
     processId: process.pid,
   });
