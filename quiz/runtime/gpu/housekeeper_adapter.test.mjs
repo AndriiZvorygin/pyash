@@ -113,7 +113,12 @@ test("housekeeper adapter submitJob posts expected payload", async () => {
         runtimeName: "ollama",
         profileName: "qwen2.5",
         jobSpec: { prompt: "hello" },
-        hostId: "renderbox"
+        hostId: "renderbox",
+        source: {
+          hostId: "renderbox",
+          workerId: "pyash-gpu-worker",
+          processId: process.pid
+        }
       });
       assert.deepEqual(result, { remoteJobId: "job-abc", accepted: true });
     }
@@ -147,7 +152,12 @@ test("housekeeper adapter forwards optional capacity controls", async () => {
           kind: "huggingface-generate",
           resourceRequest: { vramRequiredMb: 22000 }
         },
-        hostId: "renderbox"
+        hostId: "renderbox",
+        source: {
+          hostId: "renderbox",
+          workerId: "pyash-gpu-worker",
+          processId: process.pid
+        }
       });
     }
   );
