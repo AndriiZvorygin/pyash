@@ -11,6 +11,10 @@ import {
   runChannelProduceOnce,
   buildChannelMindSentence
 } from "../program/agent/channels/index.mjs";
+import {
+  enqueueInputEnvelope,
+  claimOldestInputEnvelope
+} from "../program/agent/channel_core/queue.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
@@ -93,6 +97,85 @@ test("channel runtime routes to session lane and deduplicates by event id", asyn
   });
   assert.equal(second.handled, 0);
   assert.equal(second.skippedDedup, 2);
+});
+
+test("channel input resumes a stranded runtime claim before fresh input and is single-writer", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-runtime-recovery-"));
+  const worldRoot = path.join(root, "world");
+  const agentHouse = path.join(worldRoot, "house", "correspondence-worker");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const makePayload = (eventId, text) => ({
+    mood: "ya",
+    su: { name: eventId },
+    be: "channel queued event",
+    ob: { text: JSON.stringify({
+      channelType: "fixture-mail",
+      channelId: "inbox-main",
+      eventId,
+      sender: "alice@example.test",
+      text,
+      timestamp: "2026-08-23T18:40:00.000Z"
+    }) }
+  });
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt: "2026-08-23T18:40:00.000Z",
+    channelType: "fixture-mail",
+    identity: "inbox-main",
+    agentName: "correspondence-worker",
+    roomName: "inbox-main",
+    eventId: "fixture-event-recovered-1",
+    payloadSentence: makePayload("fixture-event-recovered-1", "recover me")
+  });
+  const stranded = await claimOldestInputEnvelope(worldRoot, {
+    workerTag: "crashed-router",
+    channelType: "fixture-mail",
+    agentName: "correspondence-worker"
+  });
+  assert.ok(stranded?.path);
+
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt: "2026-08-23T18:39:00.000Z",
+    channelType: "fixture-mail",
+    identity: "inbox-main",
+    agentName: "correspondence-worker",
+    roomName: "inbox-main",
+    eventId: "fixture-event-fresh-1",
+    payloadSentence: makePayload("fixture-event-fresh-1", "fresh")
+  });
+
+  const processed = [];
+  const interpretFn = async (sentence) => {
+    processed.push(String(sentence?.ob?.text ?? ""));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    return { ob: { text: "handled" } };
+  };
+  const options = {
+    agentName: "correspondence-worker",
+    channelType: "fixture-mail",
+    channelConfig: { user: "inbox-main", publicTagAnswer: false, roomLanes: {} },
+    interpretFn,
+    routerInterpretFn: async sentence => sentence?.as?.wo === "produce"
+      ? {
+        ...sentence,
+        su: { name: "fixture-ack" },
+        vyah: { ve: { type: "name", values: ["success"] } },
+        be: "produce"
+      }
+      : { ...sentence, be: "input" },
+    agentHouse,
+    maxItems: 2,
+    concurrency: 1
+  };
+  const [first, second] = await Promise.all([
+    runChannelInputOnce(options),
+    runChannelInputOnce(options)
+  ]);
+  assert.equal([first, second].filter(result => result.locked === true).length, 1);
+  assert.equal(processed.length, 2);
+  assert.match(processed[0], /recover me/);
+  assert.match(processed[1], /fresh/);
+  assert.equal((first.handled ?? 0) + (second.handled ?? 0), 2);
 });
 
 test("channel runtime lock prevents duplicate handling across concurrent polls", async () => {

@@ -1,6 +1,7 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { sentenceToPyash } from "../beautiful.mjs";
+import { doRemember } from "../remember/index.mjs";
 import { mind_to_name_text } from "./mind/mind.mjs";
 
 function normalizeInputs(values) {
@@ -56,7 +57,8 @@ export async function session(sentence, { inputs = [] } = {}) {
     with: toolMapIsDefault ? { wo: "tools" } : (toolMapName ? { name: toolMapName } : undefined),
     at: sentence?.at,
     fromtext: sentence?.fromtext,
-    accordingto: sentence?.accordingto
+    accordingto: sentence?.accordingto,
+    to: sentence?.to
   };
 
   const scripted = [
@@ -66,6 +68,8 @@ export async function session(sentence, { inputs = [] } = {}) {
   if (sentence?.ob?.text) scripted.unshift(String(sentence.ob.text));
 
   const onToolCall = buildToolCallLogger();
+  const outputName = sentence?.to?.name ?? null;
+  let finalResponseText = "";
 
   const runTurn = async (line) => {
     const trimmed = line.trim();
@@ -76,7 +80,8 @@ export async function session(sentence, { inputs = [] } = {}) {
       ob: { text: trimmed }
     };
     const result = await mind_to_name_text(callSentence, { onToolCall });
-    const responseText = result?.ob?.text ?? "";
+    const responseText = String(result?.ob?.text ?? "");
+    finalResponseText = responseText;
     if (responseText) output.write(`${responseText}\n`);
     return { done: false };
   };
@@ -87,7 +92,16 @@ export async function session(sentence, { inputs = [] } = {}) {
       const { done } = await runTurn(String(line ?? ""));
       if (done) return { be: "session" };
     }
-    if (!canReadInteractive) return { be: "session" };
+    if (!canReadInteractive) {
+      const result = {
+        mood: "ya",
+        su: { name: outputName ?? "result" },
+        be: "text",
+        ob: { text: finalResponseText }
+      };
+      doRemember(result);
+      return result;
+    }
   }
 
   const rl = readline.createInterface({ input, output });
@@ -106,19 +120,31 @@ export async function session(sentence, { inputs = [] } = {}) {
 
 export default session;
 
-export const signatures = [
-  { signatureWords: ["be", "session", "for", "name", "mind"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "ob", "text"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "ob", "text"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "ob", "text", "with", "name", "map"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "at", "filename"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "at", "filename", "ob", "text"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "at", "filename"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "at", "filename", "ob", "text"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "wo", "tools"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "wo", "tools", "ob", "text"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "ob", "text", "with", "wo", "tools"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "wo", "tools", "at", "filename"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "wo", "tools", "at", "filename", "ob", "text"], handler: session }
+const sessionCaseSets = [
+  [["for", ["name", "mind"]]],
+  [["for", ["name", "mind"]], ["ob", ["text"]]],
+  [["for", ["name", "mind"]], ["with", ["name", "map"]]],
+  [["for", ["name", "mind"]], ["with", ["name", "map"]], ["ob", ["text"]]],
+  [["for", ["name", "mind"]], ["at", ["filename"]]],
+  [["for", ["name", "mind"]], ["at", ["filename"]], ["ob", ["text"]]],
+  [["for", ["name", "mind"]], ["at", ["filename"]], ["with", ["name", "map"]]],
+  [["for", ["name", "mind"]], ["at", ["filename"]], ["with", ["name", "map"]], ["ob", ["text"]]],
+  [["for", ["name", "mind"]], ["with", ["wo", "tools"]]],
+  [["for", ["name", "mind"]], ["with", ["wo", "tools"]], ["ob", ["text"]]],
+  [["for", ["name", "mind"]], ["at", ["filename"]], ["with", ["wo", "tools"]]],
+  [["for", ["name", "mind"]], ["at", ["filename"]], ["with", ["wo", "tools"]], ["ob", ["text"]]]
 ];
+
+function sessionSignatureWords(cases) {
+  const sorted = [...cases].sort(([left], [right]) => left.localeCompare(right));
+  return ["be", "session", ...sorted.flatMap(([caseName, typeWords]) => [caseName, ...typeWords])];
+}
+
+const baseSessionSignatures = sessionCaseSets.map(sessionSignatureWords);
+const outputSessionSignatures = sessionCaseSets.map((cases) => sessionSignatureWords([
+  ...cases,
+  ["to", ["name", "text"]]
+]));
+
+export const signatures = [...baseSessionSignatures, ...outputSessionSignatures]
+  .map((signatureWords) => ({ signatureWords, handler: session }));

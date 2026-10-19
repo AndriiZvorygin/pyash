@@ -243,6 +243,8 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "bool"], handler: write },
   { signatureWords: ["be", "write", "ob", "hollow"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "text"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "filename"], handler: write },
+  { signatureWords: ["be", "write", "ob", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "num"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "date"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "bool"], handler: write },

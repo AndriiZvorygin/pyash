@@ -21,6 +21,7 @@ export function handleCWriteOutput({
     || wantCsv
     || wantYaml
     || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "date" || declaredTypes?.get(ob.name) === "sentence" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
+    || (ob.name && declaredTypes?.get(ob.name) === "filename")
     || (ob.name && (localsTypes?.get(sanitizeName(ob.name)) === "text" || localsTypes?.get(sanitizeName(ob.name)) === "date"))
     || (ob.name && !declaredTypes?.has(ob.name) && !(locals?.has(sanitizeName(ob.name)) || declared?.has(sanitizeName(ob.name)) || declared?.has(ob.name)));
   const fmt = (wantCsv || wantYaml) ? "%s" : (isText ? "%s" : "%g");

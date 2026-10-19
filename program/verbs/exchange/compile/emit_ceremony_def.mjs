@@ -38,7 +38,7 @@ function collectSequenceDeps(sentences) {
   return deps;
 }
 
-export function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, cHelpers, jsHelpers, cState, throwErrorSentence, deriveSignatureFromDefinition, joinSignatureWords, sanitizeName, transpileSentence }) {
+export function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, loopShim, cHelpers, jsHelpers, cState, throwErrorSentence, deriveSignatureFromDefinition, joinSignatureWords, sanitizeName, transpileSentence }) {
   const seqDeps = collectSequenceDeps(bodySentences);
   for (const reg of seqDeps) {
     if (!defSentence?.[reg]) {
@@ -58,6 +58,14 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
   const fnName = sanitizeName(fnBaseName);
 
   const bodyLines = [];
+  if (lang !== "c" && bodySentences.some((bodySentence) => bodySentence?.be === "error")) {
+    jsHelpers.usesCeremony = true;
+    jsHelpers.usesCeremonyErrors = true;
+  }
+  if (lang !== "c" && signatureWords && signatureWords.length > 2) {
+    jsHelpers.usesCeremony = true;
+    bodyLines.push(`pyaAssertCeremonySignature(sentence, ${JSON.stringify(joinSignatureWords(signatureWords))});`);
+  }
   let hasReturn = false;
   const locals = new Set();
   const localsTypes = new Map();
@@ -122,13 +130,17 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
       declaredVectorTypes,
       ceremonyFns,
       ceremonyReturnTypes,
+      loopShim,
       cHelpers,
       jsHelpers,
       cState
     });
     if (line) {
       bodyLines.push(line);
-      if (line.includes("return")) {
+      // Only an unconditional source `ret` ends a ceremony body. Generated
+      // error guards also contain `return`, but must leave later source
+      // sentences available for the successful path.
+      if (s?.mood === "ret") {
         hasReturn = true;
         break; // stop emitting after first return
       }
@@ -167,6 +179,7 @@ export function handleCeremonyDefinition(context, helpers) {
     declaredVectorTypes,
     ceremonyFns,
     ceremonyReturnTypes,
+    loopShim,
     cHelpers,
     jsHelpers,
     cState
@@ -196,6 +209,7 @@ export function handleCeremonyDefinition(context, helpers) {
     declaredTypes,
     declaredVectorTypes,
     ceremonyFns,
+    loopShim,
     cHelpers,
     jsHelpers,
     cState,

@@ -42,6 +42,40 @@ Download web page:
 from filename "https://example.com" to filename "example.html" as wo web be download do
 ```
 
+Filename mutation contract (v0.1):
+
+The canonical filename mutation signatures are:
+
+```text
+["be","touch","ob","filename"]
+["be","touch","ob","name","filename"]
+["be","copy","ob","filename","to","filename"]
+["be","copy","ob","name","filename","to","filename"]
+["be","copy","ob","filename","to","name","filename"]
+["be","copy","ob","name","filename","to","name","filename"]
+["be","rename","ob","filename","to","filename"]
+["be","rename","ob","name","filename","to","filename"]
+["be","rename","ob","filename","to","name","filename"]
+["be","rename","ob","name","filename","to","name","filename"]
+["be","delete","as","wo","file","ob","filename"]
+["be","delete","as","wo","file","ob","name","filename"]
+```
+
+`filename` remains the noun type. The `file` word above is only the `wo` mode
+for file-only deletion; it is not a type. Existing text-path aliases remain
+legacy compatibility forms and are not part of this canonical matrix.
+
+The operations are regular-file operations. `touch` creates missing parents,
+preserves existing bytes, and updates modification time. `copy` creates
+destination parents, overwrites a regular-file destination, and treats an
+identical source and destination as a successful no-op. `rename` creates
+destination parents, overwrites an existing regular-file destination, and
+fails when the source is missing. `delete as wo file` deletes only a regular
+file and rejects directories and missing paths. Successful operations expose
+the resolved target as the filename-shaped `result` fact. Stable failures are
+`<verb> target missing`, `copy source missing`, `copy source defective`,
+`delete target defective`, and `<verb> defective`.
+
 ## 3. Determinism and safety
 
 - sentence-shaped I/O only,

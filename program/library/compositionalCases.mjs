@@ -3,6 +3,47 @@
 // Contexts + (source, way, destination) axes → canonical *_case_ hex
 // plus single-token keyword glosses for each (axis, context).
 
+export const COMPOSITIONAL_CONTEXT_ORDER = Object.freeze([
+  "space",
+  "interior",
+  "surface",
+  "under",
+  "time",
+  "state",
+  "person",
+  "social",
+  "discourse",
+  "quantity",
+  "limit",
+  "sequence"
+]);
+
+export const COMPOSITIONAL_AXIS_ORDER = Object.freeze([
+  "source",
+  "way",
+  "destination"
+]);
+
+// Short aliases keep consumers readable while the longer names document scope.
+export const CONTEXT_ORDER = COMPOSITIONAL_CONTEXT_ORDER;
+export const AXIS_ORDER = COMPOSITIONAL_AXIS_ORDER;
+
+const unassigned = (keyword, axis) => ({
+  axis,
+  keyword,
+  status: "unassigned",
+  case: null,
+  hnuc: null,
+  pya: null
+});
+
+const unassignedContext = name => ({
+  name,
+  status: "unassigned",
+  hnuc: null,
+  pya: null
+});
+
 export const compositionalGrid = {
   // Default context: if nothing is marked, assume "space".
   space: {
@@ -13,7 +54,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "from", // SOURCE + space
+      keyword: "from", // SOURCE + space
     },
 
     way: {
@@ -21,7 +62,7 @@ export const compositionalGrid = {
       case: "way_case_",
       hnuc: "0x265E",
       pya: "ga",
-      prep: "at",   // WAY + space
+      keyword: "at",   // WAY + space
     },
 
     destination: {
@@ -29,7 +70,7 @@ export const compositionalGrid = {
       case: "destination_case_",
       hnuc: "0x243E",
       pya: "ma",
-      prep: "to",   // DEST + space
+      keyword: "to",   // DEST + space
     },
   },
 
@@ -41,7 +82,7 @@ export const compositionalGrid = {
       case: "elative_case_",
       hnuc: "0x4957",
       pya: "twah",
-      prep: "outof", // SOURCE + interior
+      keyword: "outof", // SOURCE + interior
     },
 
     way: {
@@ -49,7 +90,7 @@ export const compositionalGrid = {
       case: "perlative_case_",
       hnuc: "0x495F",
       pya: "lwah",
-      prep: "in", // WAY + interior
+      keyword: "in", // WAY + interior
     },
 
     destination: {
@@ -57,7 +98,7 @@ export const compositionalGrid = {
       case: "illative_case_",
       hnuc: "0x4157",
       pya: "twih",
-      prep: "into",   // DEST + interior
+      keyword: "into",   // DEST + interior
     },
   },
 
@@ -69,7 +110,7 @@ export const compositionalGrid = {
       case: "delative_case_",
       hnuc: "0x415F",
       pya: "lwih",
-      prep: "offof", // SOURCE + surface
+      keyword: "offof", // SOURCE + surface
     },
 
     way: {
@@ -77,7 +118,7 @@ export const compositionalGrid = {
       case: "perlative_case_",
       hnuc: "0x495F",
       pya: "lwah",
-      prep: "on", // WAY + surface
+      keyword: "on", // WAY + surface
     },
 
     destination: {
@@ -85,7 +126,7 @@ export const compositionalGrid = {
       case: "sublative_case_",
       hnuc: "0x594F",
       pya: "sweh",
-      prep: "onto",  // DEST + surface
+      keyword: "onto",  // DEST + surface
     },
   },
 
@@ -97,7 +138,7 @@ export const compositionalGrid = {
       case: "ablative_case_",
       hnuc: "0x4127",
       pya: "pwih",
-      prep: "fromunder", // SOURCE + under
+      keyword: "fromunder", // SOURCE + under
     },
 
     way: {
@@ -105,7 +146,7 @@ export const compositionalGrid = {
       case: "perlative_case_",
       hnuc: "0x495F",
       pya: "lwah",
-      prep: "under",     // WAY + under
+      keyword: "under",     // WAY + under
     },
 
     destination: {
@@ -113,7 +154,7 @@ export const compositionalGrid = {
       case: "subessive_case_",
       hnuc: "0x5C8F",
       pya: "bveh",
-      prep: "beneath",   // DEST + under
+      keyword: "beneath",   // DEST + under
     },
   },
 
@@ -125,7 +166,7 @@ export const compositionalGrid = {
       case: "antessive_case_",
       hnuc: "0x8257",
       pya: "tsi7h",
-      prep: "since", // SOURCE + time (before/since)
+      keyword: "since", // SOURCE + time (before/since)
     },
 
     way: {
@@ -133,7 +174,7 @@ export const compositionalGrid = {
       case: "temporal_case_",
       hnuc: "0x480F",
       pya: "myah",
-      prep: "during", // WAY + time
+      keyword: "during", // WAY + time
     },
 
     destination: {
@@ -141,7 +182,7 @@ export const compositionalGrid = {
       case: "terminative_case_",
       hnuc: "0x5957",
       pya: "tweh",
-      prep: "until", // DEST + time
+      keyword: "until", // DEST + time
     },
   },
 
@@ -153,7 +194,7 @@ export const compositionalGrid = {
       case: "exessive_case_",
       hnuc: "0x4757",
       pya: "txih",
-      prep: "fromstate", // SOURCE + state
+      keyword: "fromstate", // SOURCE + state
     },
 
     way: {
@@ -161,7 +202,7 @@ export const compositionalGrid = {
       case: "essive_case_",
       hnuc: "0x414F",
       pya: "swih",
-      prep: "as",       // WAY + state (semantically “as”)
+      keyword: "as",       // WAY + state (semantically “as”)
     },
 
     destination: {
@@ -169,7 +210,7 @@ export const compositionalGrid = {
       case: "to_case_",
       hnuc: "0x5F17",
       pya: "kxeh",
-      prep: "become",    // DEST + state (into being)
+      keyword: "become",    // DEST + state (into being)
     },
   },
 
@@ -181,7 +222,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "fromperson", // SOURCE + person
+      keyword: "fromperson", // SOURCE + person
     },
 
     way: {
@@ -189,7 +230,7 @@ export const compositionalGrid = {
       case: "comitative_case_",
       hnuc: "0x490F",
       pya: "mwah",
-      prep: "with",       // WAY + person
+      keyword: "with",       // WAY + person
     },
 
     destination: {
@@ -197,7 +238,7 @@ export const compositionalGrid = {
       case: "dative_case_",
       hnuc: "0x207E",
       pya: "yi",
-      prep: "for",        // DEST + person
+      keyword: "for",        // DEST + person
     },
   },
 
@@ -209,7 +250,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "fromgroup", // SOURCE + social
+      keyword: "fromgroup", // SOURCE + social
     },
 
     way: {
@@ -217,7 +258,7 @@ export const compositionalGrid = {
       case: "associative_case_",
       hnuc: "0x453E",
       pya: "sa7",
-      prep: "among",     // WAY + social
+      keyword: "among",     // WAY + social
     },
 
     destination: {
@@ -225,7 +266,7 @@ export const compositionalGrid = {
       case: "benefactive_case_",
       hnuc: "0x4927",
       pya: "pwah",
-      prep: "intogroup", // DEST + social (for/as part of group)
+      keyword: "intogroup", // DEST + social (for/as part of group)
     },
   },
 
@@ -237,7 +278,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "fromtext",   // SOURCE + discourse (from this text/source)
+      keyword: "fromtext",   // SOURCE + discourse (from this text/source)
     },
 
     way: {
@@ -245,7 +286,7 @@ export const compositionalGrid = {
       case: "evidential_case_",
       hnuc: "0x4937",
       pya: "nwah",
-      prep: "accordingto", // WAY + discourse
+      keyword: "accordingto", // WAY + discourse
     },
 
     destination: {
@@ -253,156 +294,138 @@ export const compositionalGrid = {
       case: "quotative_case_",
       hnuc: "0x6157",
       pya: "twoh",
-      prep: "totext",      // DEST + discourse (as text/quote)
+      keyword: "totext",      // DEST + discourse (as text/quote)
     },
   },
 
   quantity: {
-    context: { name: "quantity_context_", hnuc: "0x0000", pya: "qty" },
+    context: unassignedContext("quantity_context_"),
 
     source: {
       axis: "source",
       case: "multiplicative_case_",
       hnuc: "0x6357",
       pya: "fromindex",
-      prep: "times",       // SOURCE + quantity (loop/multiplicative register)
+      keyword: "times",       // SOURCE + quantity (loop/multiplicative register)
     },
 
     way: {
       axis: "way",
       case: "quantity_way_case_",
-      hnuc: "0x0000",
-      pya: "by",
-      prep: "by",         // WAY + quantity (step/stride)
+      ...unassigned("by", "way"),
+      // WAY + quantity (step/stride)
     },
 
     destination: {
       axis: "destination",
       case: "quantity_destination_case_",
-      hnuc: "0x0000",
-      pya: "per",
-      prep: "per",        // DEST + quantity (per-unit target)
+      ...unassigned("per", "destination"),
+      // DEST + quantity (per-unit target)
     },
   },
 
   limit: {
-    context: { name: "limit_context_", hnuc: "0x0000", pya: "limit" },
+    context: unassignedContext("limit_context_"),
 
     source: {
       axis: "source",
       case: "limit_source_case_",
-      hnuc: "0x0000",
-      pya: "atleast",
-      prep: "atleast",     // SOURCE + limit (lower bound)
+      ...unassigned("atleast", "source"),
+      // SOURCE + limit (lower bound)
     },
 
     way: {
       axis: "way",
       case: "limit_way_case_",
-      hnuc: "0x0000",
-      pya: "exactly",
-      prep: "exactly",     // WAY + limit (exact match)
+      ...unassigned("exactly", "way"),
+      // WAY + limit (exact match)
     },
 
     destination: {
       axis: "destination",
       case: "limit_destination_case_",
-      hnuc: "0x0000",
-      pya: "atmost",
-      prep: "atmost",      // DEST + limit (upper bound)
+      ...unassigned("atmost", "destination"),
+      // DEST + limit (upper bound)
     },
   },
-};
 
-// Canonical context keywords for Pyash compositional cases.
-// Used by Codex and helpers to map high-level prompts or comments
-// to the internal context keys used in compositionalGrid.
+  sequence: {
+    context: unassignedContext("sequence_context_"),
 
-export const contextKeywords = {
-  space: {
-    key: "space",
-    contextWord: "space_context_",        // from pyashWords.json
-    hints: ["space", "spatial", "path", "location", "place", "motion"],
-    default: true,                        // default context if none is specified
-  },
-
-  interior: {
-    key: "interior",
-    contextWord: "interior_context_",
-    hints: ["inside", "interior", "in", "inward", "room", "container"],
-  },
-
-  surface: {
-    key: "surface",
-    contextWord: "surface_context_",
-    hints: ["surface", "on", "top", "table", "floor", "wall"],
-  },
-
-  under: {
-    key: "under",
-    contextWord: "under_context_",
-    hints: ["under", "below", "beneath", "subsurface"],
-  },
-
-  time: {
-    key: "time",
-    contextWord: "time_context_",
-    hints: ["time", "before", "during", "after", "toindex", "when"],
-  },
-
-  state: {
-    key: "state",
-    contextWord: "state_context_",
-    hints: ["state", "condition", "mode", "type", "representation"],
-  },
-
-  person: {
-    key: "person",
-    contextWord: "person_context_",
-    hints: ["person", "agent", "speaker", "listener", "user"],
-  },
-
-  social: {
-    key: "social",
-    contextWord: "social_context_",
-    hints: ["group", "community", "social", "organisation", "team"],
-  },
-
-  discourse: {
-    key: "discourse",
-    contextWord: "discourse_context_",
-    hints: ["text", "discourse", "quote", "source", "document", "corpus"],
-  },
-
-  quantity: {
-    key: "quantity",
-    contextWord: "quantity_context_",
-    hints: ["quantity", "count", "per", "by", "rate", "times"],
-  },
-
-  limit: {
-    key: "limit",
-    contextWord: "limit_context_",
-    hints: ["limit", "bound", "range", "atleast", "exactly", "atmost"],
+    source: unassigned("fromindex", "source"),
+    way: unassigned("atindex", "way"),
+    destination: unassigned("toindex", "destination"),
   },
 };
 
-// Reverse lookup: hex → (context, axis, case, pya, keyword).
+// Context hints are derived against the canonical context rows below.
+
+const CONTEXT_HINTS = {
+  space: ["space", "spatial", "path", "location", "place", "motion"],
+  interior: ["inside", "interior", "in", "inward", "room", "container"],
+  surface: ["surface", "on", "top", "table", "floor", "wall"],
+  under: ["under", "below", "beneath", "subsurface"],
+  time: ["time", "before", "during", "after", "until", "when"],
+  state: ["state", "condition", "mode", "type", "representation"],
+  person: ["person", "agent", "speaker", "listener", "user"],
+  social: ["group", "community", "social", "organisation", "team"],
+  discourse: ["text", "discourse", "quote", "source", "document", "corpus"],
+  quantity: ["quantity", "count", "per", "by", "rate", "times"],
+  limit: ["limit", "bound", "range", "atleast", "exactly", "atmost"],
+  sequence: ["sequence", "index", "ordered", "position", "fromindex", "toindex"]
+};
+
+export const contextKeywords = Object.fromEntries(
+  COMPOSITIONAL_CONTEXT_ORDER.map(context => {
+    const entry = {
+      key: context,
+      contextWord: compositionalGrid[context].context.name,
+      hints: CONTEXT_HINTS[context]
+    };
+    if (context === "space") entry.default = true;
+    return [context, entry];
+  })
+);
+
+// Reverse lookup is one-to-many: a reused morpheme identifies the grammatical
+// morpheme, but not the context in which the grid used it.
 export const compositionalByHnuc = Object.fromEntries(
-  Object.entries(compositionalGrid).flatMap(([contextKey, ctx]) => {
-    return ["source", "way", "destination"].map((axis) => {
-      const info = ctx[axis];
-      if (!info?.hnuc) return null;
-      return [
-        info.hnuc.toLowerCase(),
-        {
-          context: contextKey,   // "space", "time", "state", ...
-          axis: info.axis,       // "source" | "way" | "destination"
-          case: info.case,       // e.g. "source_case_"
-          pya: info.pya,
-          prep: info.prep,       // canonical keyword ("from", "via", "become", etc.)
-        },
-      ];
-    });
-  }).filter(Boolean)
+  COMPOSITIONAL_CONTEXT_ORDER.reduce((entries, context) => {
+    for (const axis of COMPOSITIONAL_AXIS_ORDER) {
+      const info = compositionalGrid[context][axis];
+      if (!info?.hnuc || info.status === "unassigned") continue;
+      const key = info.hnuc.toLowerCase();
+      const mapping = {
+        context,
+        axis: info.axis,
+        case: info.case,
+        pya: info.pya,
+        keyword: info.keyword,
+        prep: info.keyword
+      };
+      const current = entries.get(key) ?? [];
+      current.push(mapping);
+      entries.set(key, current);
+    }
+    return entries;
+  }, new Map())
+);
+
+export const axisContextToKeyword = Object.fromEntries(
+  COMPOSITIONAL_CONTEXT_ORDER.map(context => [
+    context,
+    Object.fromEntries(COMPOSITIONAL_AXIS_ORDER.map(axis => [
+      axis,
+      compositionalGrid[context][axis].keyword
+    ]))
+  ])
+);
+
+export const keywordToAxisContext = Object.fromEntries(
+  COMPOSITIONAL_CONTEXT_ORDER.flatMap(context => (
+    COMPOSITIONAL_AXIS_ORDER.map(axis => [
+      compositionalGrid[context][axis].keyword,
+      { axis, context }
+    ])
+  ))
 );

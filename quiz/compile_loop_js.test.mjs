@@ -24,12 +24,38 @@ test("compile ceremony loop to javascript and run", async () => {
   js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
 
   const logs = [];
-  vm.runInNewContext(js, {
+  const sandbox = {
     console: {
       log: (...args) => logs.push(args.join(" "))
     }
-  });
+  };
+  vm.runInNewContext(`${js}\nglobalThis.__testEvoker = runLoop({ mood: "do", be: "loop_body", ob: { num: 0 }, fromindex: 1, toindex: 0 }, (frame) => ({ ...frame, ob: { num: 1 } }));`, sandbox);
 
+  assert.deepEqual(logs.map(String), ["3"]);
+  assert.equal(Object.prototype.propertyIsEnumerable.call(sandbox.__testEvoker, "ob"), true, "compiled evoker ob should remain enumerable");
+  assert.doesNotThrow(() => JSON.stringify(sandbox.__testEvoker), "compiled evoker should remain JSON-serializable");
+});
+
+test("compile named-return loop ignores stale target registers", async () => {
+  forget();
+
+  const pyash = [
+    "exists su name count ob num 0 fromindex num 99 toindex num 99 be number ya",
+    "su name plus count to name num input fromindex num 0 toindex num 0 be ceremony def",
+    "ob num 1 to name count be plus do",
+    "ob name count ret",
+    "su name plus count be ceremony prah",
+    "to name count fromindex num 3 toindex num 0 be plus count do",
+    "ob name count be write do"
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
+  const result = await interpret(sentence);
+  let js = result?.ob?.text ?? result?.value?.text ?? "";
+  js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const logs = [];
+  vm.runInNewContext(js, { console: { log: (...args) => logs.push(args.join(" ")) } });
   assert.deepEqual(logs.map(String), ["3"]);
 });
 

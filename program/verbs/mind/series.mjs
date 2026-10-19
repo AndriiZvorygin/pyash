@@ -3,7 +3,7 @@ import { appendLog, historyDialogueName, nextAnswerName } from "./history.mjs";
 import { getMindLog } from "./session.mjs";
 import { normalizeMindReply, rememberReplyMetadata, replyMetadataName, replySentence } from "./reply.mjs";
 
-function appendSeriesEntries({ seriesName, callPrompt, envelope, responseText, metadataName }) {
+function appendSeriesEntries({ seriesName, callPrompt, envelope, responseText, metadataName, sessionFile }) {
   if (!seriesName) return;
   const fact = remember(seriesName);
   if (!fact || fact.be !== "series" || !Array.isArray(fact.ob?.series)) return;
@@ -17,13 +17,15 @@ function appendSeriesEntries({ seriesName, callPrompt, envelope, responseText, m
     });
   }
   if (envelope || responseText !== undefined) {
-    entries.push(replySentence({
+    const answer = replySentence({
       envelope: envelope ?? normalizeMindReply({ response: responseText }),
       answerName: "assistant",
       metadataName,
       role: "assistant",
       be: "answer"
-    }));
+    });
+    if (sessionFile) answer.at = { filename: String(sessionFile) };
+    entries.push(answer);
   }
   doRemember({
     ...fact,
@@ -46,7 +48,7 @@ function buildSeriesEntriesFromLog(log) {
         be: "write"
       };
     }
-    return replySentence({
+    const answer = replySentence({
       envelope: normalizeMindReply({
         response: entry?.content ?? "",
         ...(entry?.metadata && typeof entry.metadata === "object" ? entry.metadata : {}),
@@ -60,6 +62,8 @@ function buildSeriesEntriesFromLog(log) {
       role: entry?.role ?? "assistant",
       be: "answer"
     });
+    if (entry?.sessionFile) answer.at = { filename: String(entry.sessionFile) };
+    return answer;
   });
 }
 
@@ -93,7 +97,7 @@ function syncSessionFacts({ dialogue }) {
   });
 }
 
-function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, envelope, outputName, historySeriesName }) {
+function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, envelope, outputName, historySeriesName, sessionTurn = null }) {
   const reply = envelope ?? normalizeMindReply({ response: responseText });
   const { count, name: answerName } = nextAnswerName(mindName, dialogue);
   const metadataName = Object.keys(reply.metadata ?? {}).length > 0
@@ -116,6 +120,7 @@ function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, envelo
     fromName: mindName,
     metadataName
   });
+  if (sessionTurn?.sessionFile) answerSentence.at = { filename: String(sessionTurn.sessionFile) };
   doRemember(answerSentence);
   doRemember({
     ...answerSentence,
@@ -127,12 +132,14 @@ function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, envelo
       su: { name: outputName }
     });
   }
-  doRemember(replySentence({
+  const historyAnswer = replySentence({
     envelope: reply,
     answerName: `${mindName} ${dialogue} answer ${count}`,
     fromName: mindName,
     metadataName
-  }));
+  });
+  if (sessionTurn?.sessionFile) historyAnswer.at = { filename: String(sessionTurn.sessionFile) };
+  doRemember(historyAnswer);
   appendLog(dialogue, {
     role: "assistant",
     content: reply.text,
@@ -140,13 +147,20 @@ function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, envelo
     metadataName,
     thinking: reply.thinking,
     createdAt: reply.createdAt,
-    model: reply.model
+    model: reply.model,
+    sessionFile: sessionTurn?.sessionFile
   });
   if (historySeriesName) {
-    appendSeriesEntries({ seriesName: historySeriesName, callPrompt, envelope: reply, metadataName });
+    appendSeriesEntries({
+      seriesName: historySeriesName,
+      callPrompt,
+      envelope: reply,
+      metadataName,
+      sessionFile: sessionTurn?.sessionFile
+    });
   }
   syncSessionFacts({ dialogue });
-  return { ...answerSentence, envelope: reply, metadataName };
+  return { ...answerSentence, envelope: reply, metadataName, sessionTurn };
 }
 
 export {

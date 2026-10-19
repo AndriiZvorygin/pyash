@@ -10,6 +10,7 @@ import {
   enqueueInputEnvelope,
   enqueueProduceEnvelope,
   claimOldestInputEnvelope,
+  claimOldestRuntimeInputEnvelope,
   claimOldestProduceEnvelope,
   ackRuntimeEnvelopeSuccess,
   ackRuntimeEnvelopeFail,
@@ -108,6 +109,58 @@ test("channel queue preserves explicit lane metadata", async () => {
 
   const claim = await claimOldestInputEnvelope(worldRoot, { workerTag: "router", lane: "fast" });
   assert.equal(claim?.envelope?.lane, "fast");
+});
+
+test("channel queue recovers scoped input claims already in runtime", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-queue-recovery-"));
+  const worldRoot = path.join(root, "world");
+  const payload = eventToSentence({
+    payloadId: "news-recovery-1",
+    fromEndpoint: "channel fixture-mail room inbox-main",
+    toEndpoint: "agent correspondence-worker",
+    payloadText: "recover me",
+    targetAgentName: "correspondence-worker",
+    sessionId: "session name fixture_mail"
+  });
+
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt: "2026-08-23T18:35:10.000Z",
+    lane: "durable",
+    channelType: "fixture-mail",
+    identity: "inbox-main",
+    agentName: "correspondence-worker",
+    roomName: "inbox-main",
+    eventId: "fixture-event-recovery-1",
+    payloadSentence: payload
+  });
+  const stranded = await claimOldestInputEnvelope(worldRoot, {
+    workerTag: "crashed-router",
+    channelType: "fixture-mail",
+    agentName: "correspondence-worker",
+    lane: "durable"
+  });
+  assert.ok(stranded?.path);
+
+  const wrongAgent = await claimOldestRuntimeInputEnvelope(worldRoot, {
+    channelType: "fixture-mail",
+    agentName: "chief-of-staff",
+    lane: "durable"
+  });
+  assert.equal(wrongAgent, null);
+  const wrongLane = await claimOldestRuntimeInputEnvelope(worldRoot, {
+    channelType: "fixture-mail",
+    agentName: "correspondence-worker",
+    lane: "fast"
+  });
+  assert.equal(wrongLane, null);
+
+  const recovered = await claimOldestRuntimeInputEnvelope(worldRoot, {
+    channelType: "fixture-mail",
+    agentName: "correspondence-worker",
+    lane: "durable"
+  });
+  assert.equal(recovered?.path, stranded.path);
+  assert.equal(recovered?.envelope?.eventId, "fixture-event-recovery-1");
 });
 
 test("channel queue supports produce queue claims and success/fail transitions", async () => {

@@ -1,4 +1,8 @@
-import { buildWorkTask, transitionWorkTask } from "./contract.mjs";
+import {
+  appendWorkTaskDelegationEvent,
+  buildWorkTask,
+  transitionWorkTask
+} from "./contract.mjs";
 import {
   ackWorkTaskTerminalFailure,
   enqueueWorkTask,
@@ -35,6 +39,11 @@ async function mutateTask(worldRoot, taskId, mutate) {
   if (envelope) await updateWorkTaskEnvelope(worldRoot, envelope, next);
   else await writeWorkTaskStatus(worldRoot, next);
   return next;
+}
+
+export async function mutateWorkTask(worldRoot, taskId, mutate) {
+  if (typeof mutate !== "function") throw new Error("work task mutation requires a function");
+  return mutateTask(worldRoot, taskId, mutate);
 }
 
 export async function addWorkTask(worldRoot, input = {}) {
@@ -133,6 +142,46 @@ export async function reconcileCompletedSplitParent(worldRoot, taskId, {
   });
 }
 
+export async function recordWorkTaskDelegationEvent(worldRoot, taskId, event, { now = new Date() } = {}) {
+  return mutateTask(worldRoot, taskId, (current) => appendWorkTaskDelegationEvent(current, event, { now }));
+}
+
+export async function ensureWorkTaskDelegationEvent(worldRoot, taskId, event, {
+  escalation = null,
+  now = new Date()
+} = {}) {
+  return mutateTask(worldRoot, taskId, (current) => {
+    let next = current;
+    const sourceIdentity = current.source.identity;
+    const eventType = text(event?.type).toLowerCase();
+    const alreadyRecorded = current.delegationEvents.some((candidate) => (
+      candidate.type === eventType
+      && candidate.sourceIdentity === (text(event?.sourceIdentity) || sourceIdentity)
+      && candidate.recipient === text(event?.recipient)
+    ));
+    if (!alreadyRecorded) {
+      next = appendWorkTaskDelegationEvent(next, {
+        ...event,
+        sourceIdentity: text(event?.sourceIdentity) || sourceIdentity
+      }, { now });
+    }
+    if (escalation && typeof escalation === "object") {
+      const nextEscalation = {
+        state: text(escalation.state),
+        target: text(escalation.target),
+        reason: text(escalation.reason),
+        timestamp: text(escalation.timestamp) || iso(now),
+        sourceIdentity: text(escalation.sourceIdentity) || sourceIdentity
+      };
+      const sameEscalation = Object.keys(nextEscalation).every((key) => (
+        next.escalation[key] === nextEscalation[key]
+      ));
+      if (!sameEscalation) next = { ...next, escalation: nextEscalation };
+    }
+    return next;
+  });
+}
+
 export async function archiveWorkTask(worldRoot, taskId, reason, {
   supersededBy = "",
   now = new Date()
@@ -212,6 +261,9 @@ export async function resumeWorkTask(worldRoot, taskId, humanResponse, { now = n
   if (!response) throw new Error("resume context is required");
   return mutateTask(worldRoot, taskId, (current) => {
     if (current.status === "accepted") throw new Error("accepted work tasks are terminal");
+    if (["pending", "denied"].includes(current.checkpoint.approval.state)) {
+      throw new Error("approval bypass defective: use the Headquarters approval decision path");
+    }
     if (current.status !== "blocked" && current.status !== "usage-limited") {
       throw new Error(`work task is not resumable from ${current.status}`);
     }
@@ -244,6 +296,9 @@ export async function resumeExternalEvidenceTask(worldRoot, taskId, probeReason,
   const reason = text(probe.reason || probeReason) || "external dependency probe passed";
   const envelope = await findWorkTaskEnvelope(worldRoot, taskId);
   return mutateTask(worldRoot, taskId, (current) => {
+    if (["pending", "denied"].includes(current.checkpoint.approval.state)) {
+      throw new Error("approval bypass defective: use the Headquarters approval decision path");
+    }
     if (current.status !== "blocked" && current.status !== "failed") return current;
     const checks = Array.isArray(probe.checks)
       ? probe.checks

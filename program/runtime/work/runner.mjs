@@ -410,6 +410,50 @@ export async function runWorkBackgroundOnce({
       }, { now });
     }
   }
+  let baselinePreflight = null;
+  let baselinePreflightError = "";
+  if (typeof baselineSync === "function") {
+    const existingTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+    const activeRuntime = existingTasks
+      .filter((task) => !owner || task.owner === owner)
+      .some((task) => ACTIVE_WORK_STATUSES.has(task.status));
+    if (activeRuntime) {
+      baselinePreflight = { status: "skipped-active-task" };
+    } else {
+      try {
+        baselinePreflight = await baselineSync({ repositoryRoot, selected: null, phase: "preselection", now });
+        await emitWorkEvent(onEvent, "baseline-synced", {
+          status: baselinePreflight.status,
+          branch: baselinePreflight.branch,
+          commit: baselinePreflight.commit,
+          phase: "preselection"
+        }, { now });
+      } catch (error) {
+        baselinePreflightError = text(error?.message || error);
+        baselinePreflight = {
+          status: "deferred",
+          error: baselinePreflightError,
+          reason: `automation baseline sync deferred: ${baselinePreflightError}`
+        };
+        const health = await readWorkSchedulerHealth(worldRoot);
+        await writeWorkSchedulerHealth(worldRoot, {
+          ...health,
+          "baseline status": "deferred",
+          "baseline error": baselinePreflight.reason
+        });
+        await emitWorkEvent(onEvent, "baseline-deferred", {
+          reason: baselinePreflight.reason,
+          phase: "preselection"
+        }, { now });
+        await appendWorkSchedulerEvent(worldRoot, {
+          type: "baseline-deferred",
+          reason: baselinePreflight.reason,
+          baseline: "deferred",
+          preflight: "preselection"
+        }, { now });
+      }
+    }
+  }
   let blockerRepairResult = null;
   if (blockerRepair) {
     try {
@@ -464,13 +508,13 @@ export async function runWorkBackgroundOnce({
     capacity,
     admission
   } = inspection;
-  if (curate && curation?.proposed?.length && !curation.created?.length && !inspectedCandidates.length) {
+  if (curate && !curation?.created?.length && !inspectedCandidates.length) {
     const materialized = await curateWorkBacklog({
       worldRoot,
       repositoryRoot,
       owner,
       threshold: 0,
-      maxTasks: curation.proposed.length,
+      maxTasks: policy.curationMaxTasks ?? DEFAULT_BACKGROUND_POLICY.curationMaxTasks,
       forceCandidates: true,
       staleTurnMs: policy.staleOperationalTurnMs,
       maxRecoveryCount: policy.maxOperationalRecoveries,
@@ -561,10 +605,13 @@ export async function runWorkBackgroundOnce({
     "blocker repair source": blockerRepairResult?.candidate?.sourceTaskId || prior["blocker repair source"] || ""
   };
   if (!admission.admit) {
+    const baselineUnavailable = admission.reason === "no eligible work" && Boolean(baselinePreflightError);
     const externalOnly = admission.reason === "no eligible work" && externalEvidence.length > 0;
     const technicalUnavailable = admission.reason === "no eligible work" && temporarilyUnexecutableTechnical.length > 0;
     const dependencyWaiting = admission.reason === "no eligible work" && dependencyBlocked.length > 0;
-    const reason = externalOnly
+    const reason = baselineUnavailable
+      ? `automation baseline sync deferred: ${baselinePreflightError}`
+      : externalOnly
       ? "awaiting external evidence"
       : technicalUnavailable ? "technical continuation unavailable"
       : dependencyWaiting ? "roadmap dependency waiting" : admission.reason;
@@ -587,6 +634,7 @@ export async function runWorkBackgroundOnce({
         + (admission.reason === "capacity telemetry unavailable" ? 1 : 0)),
       "provider usage-limited wakes": String((Number(prior["provider usage-limited wakes"]) || 0)
         + (admission.reason === "provider usage-limited" ? 1 : 0)),
+      "baseline deferred wakes": String((Number(prior["baseline deferred wakes"]) || 0) + (baselineUnavailable ? 1 : 0)),
       "blocked before model wakes": String((Number(prior["blocked before model wakes"]) || 0)
         + (externalOnly || technicalUnavailable || admission.reason === "capacity telemetry unavailable" ? 1 : 0))
     };
@@ -666,6 +714,44 @@ export async function runWorkBackgroundOnce({
       capacity,
       eligible: taskCount,
       temporarilySkipped,
+      report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
+      queue: await queueDepth(worldRoot),
+      curation,
+      reconciliations,
+      blockerRepair: blockerRepairResult
+    };
+  }
+  if (baselinePreflightError && selected.kind !== "blocker-repair") {
+    const reason = `automation baseline sync deferred: ${baselinePreflightError}`;
+    await emitWorkEvent(onEvent, "deferred", {
+      reason,
+      selected: selected.taskId,
+      baseline: "deferred"
+    }, { now });
+    const health = await readWorkSchedulerHealth(worldRoot);
+    await writeWorkSchedulerHealth(worldRoot, {
+      ...health,
+      "last decision": reason,
+      "baseline status": "deferred",
+      "baseline error": reason,
+      "baseline deferred wakes": String((Number(health["baseline deferred wakes"]) || 0) + 1)
+    });
+    await appendWorkSchedulerEvent(worldRoot, {
+      type: "deferred",
+      reason,
+      capacity,
+      pacing: admission.pacing,
+      taskCount,
+      selected: selected.taskId,
+      baseline: "deferred"
+    }, { now });
+    return {
+      admitted: false,
+      reason,
+      capacity,
+      eligible: taskCount,
+      selected: selected.taskId,
+      baseline: baselinePreflight,
       report: renderWorkDeferredReport({ result: { reason, eligible: taskCount }, capacity }),
       queue: await queueDepth(worldRoot),
       curation,
@@ -853,53 +939,12 @@ export async function runWorkBackgroundOnce({
   }
   const activeRuntime = eligible.some(({ task }) => ACTIVE_WORK_STATUSES.has(task.status));
   const selectedIsBlockerRepair = selected.kind === "blocker-repair";
-  let baselineDeferred = false;
-  let baseline = {
+  const baseline = baselinePreflight || {
     status: baselineSync
-      ? (selectedIsBlockerRepair ? "skipped-blocker-repair" : activeRuntime ? "skipped-active-task" : "pending")
+      ? (selectedIsBlockerRepair ? "skipped-blocker-repair" : activeRuntime ? "skipped-active-task" : "not-attempted")
       : "not-configured"
   };
-  if (baselineSync && !activeRuntime && !selectedIsBlockerRepair) {
-    try {
-      baseline = await baselineSync({ repositoryRoot, selected, now });
-      await emitWorkEvent(onEvent, "baseline-synced", {
-        status: baseline.status,
-        branch: baseline.branch,
-        commit: baseline.commit,
-        selected: selected.taskId
-      }, { now });
-    } catch (error) {
-      const errorMessage = text(error?.message || error);
-      const reason = `automation baseline sync deferred: ${errorMessage}`;
-      baseline = {
-        status: "deferred",
-        error: errorMessage,
-        reason
-      };
-      baselineDeferred = true;
-      await emitWorkEvent(onEvent, "baseline-deferred", {
-        reason,
-        selected: selected.taskId,
-        branch: baseline.branch,
-        commit: baseline.commit
-      }, { now });
-      await writeWorkSchedulerHealth(worldRoot, {
-        ...baseHealth,
-        "baseline status": "deferred",
-        "baseline error": reason,
-        "baseline deferred wakes": String((Number(prior["baseline deferred wakes"]) || 0) + 1)
-      });
-      await appendWorkSchedulerEvent(worldRoot, {
-        type: "baseline-deferred",
-        reason,
-        capacity,
-        pacing: admission.pacing,
-        taskCount,
-        selected: selected.taskId,
-        baseline: "deferred"
-      }, { now });
-    }
-  }
+  const baselineDeferred = baseline.status === "deferred";
   await updateWorkTaskCheckpoint(worldRoot, selected.taskId, {
     selectionReason: admission.reason,
     lastAction: "admitted by background runner"

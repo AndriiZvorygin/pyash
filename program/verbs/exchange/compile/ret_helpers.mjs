@@ -31,26 +31,45 @@ function wrapRetValue(expr, kind, lang) {
   return `return pya_value_num(${expr});`;
 }
 
-function handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers } = {}) {
+function handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers, jsHelpers } = {}) {
   if (sentence.mood !== "ret") return null;
+  if (sentence.be === "error") {
+    if (lang === "c") {
+      // Structured error returns are intentionally deferred with the C ABI.
+      return null;
+    }
+    return `return ${JSON.stringify({ ...sentence, mood: "do" })};`;
+  }
   const sourceName = sentence?.ret?.name || sentence?.ob?.name || sentence?.su?.name;
   if (lang === "c" && cHelpers) cHelpers.usesCeremonyValue = true;
   if (sourceName) {
     const sourceVar = sanitizeName(sourceName);
+    const sourceRef = sourceName === "result" ? "globalThis.result" : sourceVar;
     const kind = inferRetKind({ name: sourceName }, { localsTypes, declaredTypes });
+    if (lang !== "c") {
+      const errorGuard = jsHelpers?.usesCeremonyErrors
+        ? `if (${sourceRef}?.be === "error") return { ...${sourceRef}, mood: "do" };\n`
+        : "";
+      return `${errorGuard}sentence.ob = ${sourceRef}?.ob ?? ${sourceRef};\nreturn sentence;`;
+    }
     return wrapRetValue(sourceVar, kind, lang);
   }
   if (sentence.ob?.genitive) {
     const expr = pathFromGenitive(sentence.ob.genitive, sentenceArg, { locals, declared, allowCGlobals: lang === "c" });
     if (expr) {
       const kind = inferRetKind(sentence.ob, { localsTypes, declaredTypes });
+      if (lang !== "c") {
+        return `sentence.ob = ${expr};\nreturn sentence;`;
+      }
       return wrapRetValue(expr, kind, lang);
     }
   }
   if (sentence.ob?.num !== undefined) {
+    if (lang !== "c") return `sentence.ob = { num: ${Number(sentence.ob.num) || 0} };\nreturn sentence;`;
     return wrapRetValue(`${Number(sentence.ob.num) || 0}`, "number", lang);
   }
   if (typeof sentence.ob?.text === "string") {
+    if (lang !== "c") return `sentence.ob = { text: ${JSON.stringify(sentence.ob.text)} };\nreturn sentence;`;
     return wrapRetValue(JSON.stringify(sentence.ob.text), "text", lang);
   }
   if (lang === "c") return "return pya_value_from_this();";

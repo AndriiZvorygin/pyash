@@ -286,7 +286,9 @@ export function handleSayOrWrite({
           if (jsHelpers) jsHelpers.usesVectorFormat = true;
           expr = `formatSentence(${name})`;
         } else {
-          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num ?? ${name}.ob?.date`;
+          expr = declaredTypes?.get(ob.name) === "filename"
+            ? `${name}.ob?.filename`
+            : `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num ?? ${name}.ob?.date`;
         }
       } else if (!isJsonMap && !isMap && !isCsvMap && declared?.has(name)) {
         if (declaredTypes?.get(ob.name) === "vector") {
@@ -296,7 +298,9 @@ export function handleSayOrWrite({
           if (jsHelpers) jsHelpers.usesVectorFormat = true;
           expr = `formatSentence(${name})`;
         } else {
-          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num ?? ${name}.ob?.date`;
+          expr = declaredTypes?.get(ob.name) === "filename"
+            ? `${name}.ob?.filename`
+            : `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num ?? ${name}.ob?.date`;
         }
       } else if (!isJsonMap && !isMap && !isCsvMap && isSentence) {
         if (jsHelpers) jsHelpers.usesVectorFormat = true;

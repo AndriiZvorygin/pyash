@@ -108,7 +108,9 @@ export async function runGenerate({
   aspect,
   inputText,
   inputs = [],
-  checkInterrupted
+  checkInterrupted,
+  onComplete,
+  sessionTurn = null
 } = {}) {
   const applySampling = (payload) => {
     if (!payload || typeof payload !== "object") return;
@@ -174,7 +176,7 @@ export async function runGenerate({
     const recordStreamAnswer = (envelope) => {
       const prior = remember(streamName);
       const index = prior?.be === "stream" ? (prior.ob?.index ?? 0) : 0;
-      recordMindAnswer({ mindName, dialogue, callPrompt, envelope, outputName, historySeriesName });
+      recordMindAnswer({ mindName, dialogue, callPrompt, envelope, outputName, historySeriesName, sessionTurn });
       doRemember(makeStream({
         name: streamName,
         state: "done",
@@ -213,6 +215,7 @@ export async function runGenerate({
             console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: finalText.length })}`);
           }
           recordStreamAnswer(envelope);
+          if (typeof onComplete === "function") await onComplete(finalText);
           writeStreamTerminal(streamOutputPath, { envelope });
           writeStreamEnd(streamOutputPath);
         } else if (backendName) {
@@ -260,6 +263,7 @@ export async function runGenerate({
             console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: envelope.text.length })}`);
           }
           recordStreamAnswer(envelope);
+          if (typeof onComplete === "function") await onComplete(envelope.text);
           writeStreamTerminal(streamOutputPath, { envelope });
           writeStreamEnd(streamOutputPath);
           signalFirstRecord?.();

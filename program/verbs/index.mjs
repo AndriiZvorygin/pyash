@@ -84,6 +84,7 @@ import establish, { signatures as establishSignatures } from "./establish.mjs";
 import improve, { signatures as improveSignatures } from "./improve.mjs";
 import router, { signatures as routerSignatures } from "./router.mjs";
 import verify, { signatures as verifySignatures } from "./verify.mjs";
+import verifyHnucGrammar, { signatures as verifyHnucGrammarSignatures } from "./verify_hnuc_grammar.mjs";
 import concatenateFilename, { signatures as concatenateFilenameSignatures } from "./path_join.mjs";
 import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
@@ -91,6 +92,10 @@ import android, { signatures as androidSignatures } from "./android.mjs";
 import gpu, { signatures as gpuSignatures } from "./gpu.mjs";
 import extract, { signatures as extractSignatures } from "./extract.mjs";
 import speakerIdentity, { signatures as speakerIdentitySignatures } from "./speaker_identity.mjs";
+import headquarters, { signatures as headquartersSignatures } from "./headquarters.mjs";
+import ratify, { signatures as ratifySignatures } from "./ratify.mjs";
+import { claimIdentify, claimChoose, signatures as claimSignatures } from "./claim.mjs";
+import documentDigestion, { signatures as documentDigestionSignatures } from "./document_digest.mjs";
 import criterion, { signatures as criterionSignatures } from "./criterion.mjs";
 import nightmare, { signatures as nightmareSignatures } from "./nightmare.mjs";
 import reverie, { signatures as reverieSignatures } from "./reverie.mjs";
@@ -169,6 +174,7 @@ export {
   improve,
   router,
   verify,
+  verifyHnucGrammar,
   concatenateFilename,
   itineraryMedia,
   drawTextImage,
@@ -176,6 +182,11 @@ export {
   gpu,
   extract,
   speakerIdentity,
+  headquarters,
+  ratify,
+  claimIdentify,
+  claimChoose,
+  documentDigestion,
   criterion,
   nightmare,
   reverie
@@ -268,6 +279,7 @@ export const builtInSignatures = [
   ...improveSignatures,
   ...routerSignatures,
   ...verifySignatures,
+  ...verifyHnucGrammarSignatures,
   ...concatenateFilenameSignatures,
   ...itineraryMediaSignatures,
   ...drawTextImageSignatures,
@@ -275,6 +287,10 @@ export const builtInSignatures = [
   ...gpuSignatures,
   ...extractSignatures,
   ...speakerIdentitySignatures,
+  ...headquartersSignatures,
+  ...ratifySignatures,
+  ...claimSignatures,
+  ...documentDigestionSignatures,
   ...criterionSignatures,
   ...nightmareSignatures,
   ...reverieSignatures,

@@ -1,8 +1,19 @@
 import { CJSON_HEADER, CJSON_SOURCE } from "../constants.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, TOOL_CAPTURE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER, DATE_MATH_HELPER } from "../c/helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, TOOL_CAPTURE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, commandPolicyCSource, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER, DATE_MATH_HELPER } from "../c/helpers_c.mjs";
+import { KNOWLEDGE_CORE_HELPER } from "./c_helpers_knowledge_core.mjs";
 
-export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
+export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolicy } = {}) {
   if (!cHelpers) return lines;
+  if (cHelpers.usesDocumentDigestion) {
+    lines.unshift("typedef struct { const char *stream; const char *const *records; unsigned long count; } pya_digest_series;");
+  }
+  if (cHelpers.usesCommandPolicy) {
+    cHelpers.usesTextHelper = true;
+    cHelpers.usesString = true;
+    cHelpers.usesStdlib = true;
+    cHelpers.usesPrintf = true;
+    cHelpers.usesExchange = true;
+  }
   if (cHelpers.usesExchange) {
     cHelpers.usesTextHelper = true;
     cHelpers.usesString = true;
@@ -29,7 +40,7 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   headers.push("#pragma GCC diagnostic ignored \"-Wformat-truncation\"");
   headers.push("#pragma GCC diagnostic ignored \"-Wformat-overflow\"");
   headers.push("#endif");
-  if (cHelpers.usesCommand || cHelpers.usesExchange) {
+  if (cHelpers.usesCommand || cHelpers.usesExchange || cHelpers.usesFilesystem) {
     headers.push("#define _POSIX_C_SOURCE 200809L");
   }
   if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
@@ -40,11 +51,12 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   if (cHelpers.usesExchange) headers.push("#include <unistd.h>");
   if (cHelpers.usesExchange) headers.push("#include <sys/stat.h>");
   if (cHelpers.usesExchange) headers.push("#include <errno.h>");
-  if (cHelpers.usesExchange || cHelpers.usesDateMath) headers.push("#include <time.h>");
+  if (cHelpers.usesExchange || cHelpers.usesDateMath || cHelpers.usesFilesystem) headers.push("#include <time.h>");
   if (needsDirentHeader) headers.push("#include <dirent.h>");
   if (cHelpers.usesSysStat) headers.push("#include <sys/stat.h>");
   if (cHelpers.usesErrno) headers.push("#include <errno.h>");
   if (cHelpers.usesFilesystem) headers.push("#include <unistd.h>");
+  if (cHelpers.usesFilesystem) headers.push("#include <fcntl.h>");
   if (needsRunRoot) headers.push("#include <unistd.h>");
   if (needsYamlRuntime) headers.push("#include <strings.h>");
   if (needsYamlRuntime) headers.push("#include <yaml.h>");
@@ -93,11 +105,17 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   if (cHelpers.usesListPrinter) cPrelude.push(LIST_PRINT_HELPER);
   if (cHelpers.usesFilesystem) cPrelude.push(FILESYSTEM_HELPER);
   if (cHelpers.usesDateMath) cPrelude.push(DATE_MATH_HELPER);
+  if (cHelpers.usesKnowledgeCore) cPrelude.push(KNOWLEDGE_CORE_HELPER);
   if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
   if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
   if (cHelpers.usesToolCapture) cPrelude.push(TOOL_CAPTURE_HELPER);
   if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);
-  if (cHelpers.usesCommand) cPrelude.push(COMMAND_HELPER);
+  if (cHelpers.usesCommand) {
+    cPrelude.push(COMMAND_HELPER);
+  }
+  if (cHelpers.usesCommandPolicy) {
+    cPrelude.push(commandPolicyCSource({ policy: commandPolicy }));
+  }
   if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);
   if (needsYamlStringify) cPrelude.push(YAML_STRINGIFY_HELPER);
   if (needsCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);

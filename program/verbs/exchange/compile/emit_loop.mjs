@@ -8,6 +8,7 @@ export function handleDoSentence(context, helpers) {
     ceremonyReturnTypes,
     loopShim,
     cHelpers,
+    jsHelpers,
     cState,
     declared,
     declaredTypes,
@@ -20,6 +21,8 @@ export function handleDoSentence(context, helpers) {
     pathFromGenitive,
     markDeclared
   } = helpers;
+  const ceremonyErrors = Boolean(jsHelpers?.usesCeremonyErrors);
+  const nestedCeremony = Boolean(sentenceArg);
 
   const mood = sentence?.mood;
   if (mood !== "do") return null;
@@ -41,11 +44,18 @@ export function handleDoSentence(context, helpers) {
         lines.push(`const _call = ${evokerLiteral};`);
         if (genFromExpr) lines.push(`_call.fromindex = { num: ${genFromExpr} };`);
         if (genToExpr) lines.push(`_call.toindex = { num: ${genToExpr} };`);
-        lines.push(`runLoop(_call, ${fn});`);
+        if (ceremonyErrors && nestedCeremony) {
+          lines.push(`const _loop_result = runLoop(_call, ${fn});`, "if (_loop_result?.be === \"error\") return _loop_result;");
+        } else {
+          lines.push(ceremonyErrors ? `pyaSurfaceCeremonyError(runLoop(_call, ${fn}));` : `runLoop(_call, ${fn});`);
+        }
         lines.push("}");
         return lines.join("\n");
       }
-      return `runLoop(${evokerLiteral}, ${fn});`;
+      if (ceremonyErrors && nestedCeremony) {
+        return `{\n  const _loop_result = runLoop(${evokerLiteral}, ${fn});\n  if (_loop_result?.be === "error") return _loop_result;\n}`;
+      }
+      return ceremonyErrors ? `pyaSurfaceCeremonyError(runLoop(${evokerLiteral}, ${fn}));` : `runLoop(${evokerLiteral}, ${fn});`;
     }
     if (fn) {
       const inlineSet = new Set([...(declared || []), ...(locals || [])]);
@@ -59,7 +69,8 @@ export function handleDoSentence(context, helpers) {
       if (sentence.to?.name) {
         const targetVar = sanitizeName(sentence.to.name);
         const lines = [];
-        if (!locals?.has(targetVar) && !declared?.has(targetVar)) {
+        const targetExists = locals?.has(targetVar) || declared?.has(targetVar);
+        if (!targetExists) {
           lines.push(`let ${targetVar};`);
           locals?.add(targetVar);
         }
@@ -72,10 +83,56 @@ export function handleDoSentence(context, helpers) {
           if (genByExpr) {
             lines.push(`_call.by = { num: ${genByExpr} };`);
           }
-          lines.push(`${targetVar} = ${fn}(_call);`);
+          const resultVar = `_pya_ceremony_result_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
+          lines.push(`const ${resultVar} = ${fn}(_call);`);
+          if (ceremonyErrors && nestedCeremony) {
+            lines.push(`if (${resultVar}?.be === "error") return ${resultVar};`);
+            if (targetExists) {
+              lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+            } else {
+              lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+            }
+          } else if (ceremonyErrors) {
+            const surfacedVar = `${resultVar}_surfaced`;
+            lines.push(`const ${surfacedVar} = pyaSurfaceCeremonyError(${resultVar});`);
+            lines.push(`if (${surfacedVar}?.be !== "error") {`);
+            if (targetExists) {
+              lines.push(`  ${targetVar}.ob = ${surfacedVar}?.ob ?? ${surfacedVar};`);
+            } else {
+              lines.push(`  ${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${surfacedVar}?.ob ?? ${surfacedVar}, be: ${surfacedVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+            }
+            lines.push("}");
+          } else if (targetExists) {
+            lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+          } else {
+            lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+          }
           lines.push("}");
         } else {
-          lines.push(`${targetVar} = ${fn}(${arg});`);
+          const resultVar = `_pya_ceremony_result_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
+          lines.push(`const ${resultVar} = ${fn}(${arg});`);
+          if (ceremonyErrors && nestedCeremony) {
+            lines.push(`if (${resultVar}?.be === "error") return ${resultVar};`);
+            if (targetExists) {
+              lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+            } else {
+              lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+            }
+          } else if (ceremonyErrors) {
+            const surfacedVar = `${resultVar}_surfaced`;
+            lines.push(`const ${surfacedVar} = pyaSurfaceCeremonyError(${resultVar});`);
+            lines.push(`if (${surfacedVar}?.be !== "error") {`);
+            if (targetExists) {
+              lines.push(`  ${targetVar}.ob = ${surfacedVar}?.ob ?? ${surfacedVar};`);
+            } else {
+              lines.push(`  ${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${surfacedVar}?.ob ?? ${surfacedVar}, be: ${surfacedVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+            }
+            lines.push("}");
+          } else if (targetExists) {
+            lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+          } else {
+            lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+          }
         }
         return lines.join("\n");
       }
@@ -83,10 +140,18 @@ export function handleDoSentence(context, helpers) {
         const lines = ["{", `  const _call = ${arg};`];
         if (genObjExpr) lines.push(`  _call.ob = { num: ${genObjExpr} };`);
         if (genByExpr) lines.push(`  _call.by = { num: ${genByExpr} };`);
-        lines.push(`  ${fn}(_call);`, "}");
+        if (ceremonyErrors && nestedCeremony) {
+          lines.push(`  const _nested_result = ${fn}(_call);`, "  if (_nested_result?.be === \"error\") return _nested_result;");
+        } else {
+          lines.push(ceremonyErrors ? `  pyaSurfaceCeremonyError(${fn}(_call));` : `  ${fn}(_call);`);
+        }
+        lines.push("}");
         return lines.join("\n");
       }
-      return `${fn}(${arg});`;
+      if (ceremonyErrors && nestedCeremony) {
+        return `{\n  const _nested_result = ${fn}(${arg});\n  if (_nested_result?.be === "error") return _nested_result;\n}`;
+      }
+      return ceremonyErrors ? `pyaSurfaceCeremonyError(${fn}(${arg}));` : `${fn}(${arg});`;
     }
     return null;
   }
@@ -224,15 +289,42 @@ export function handleDoSentence(context, helpers) {
     if (sentence.to?.name) {
       const targetVar = sanitizeName(sentence.to.name);
       const lines = [];
-      if (!declared?.has(targetVar)) {
+      const targetExists = declared?.has(targetVar) || locals?.has(targetVar);
+      if (!targetExists) {
         lines.push(`let ${targetVar};`);
         markDeclared(declared, sentence.to.name);
       }
-      lines.push(`${targetVar} = ${fn}(${arg});`);
+      const resultVar = `_pya_ceremony_result_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
+      lines.push(`const ${resultVar} = ${fn}(${arg});`);
+      if (ceremonyErrors && nestedCeremony) {
+        lines.push(`if (${resultVar}?.be === "error") return ${resultVar};`);
+        if (targetExists) {
+          lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+        } else {
+          lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+        }
+      } else if (ceremonyErrors) {
+        const surfacedVar = `${resultVar}_surfaced`;
+        lines.push(`const ${surfacedVar} = pyaSurfaceCeremonyError(${resultVar});`);
+        lines.push(`if (${surfacedVar}?.be !== "error") {`);
+        if (targetExists) {
+          lines.push(`  ${targetVar}.ob = ${surfacedVar}?.ob ?? ${surfacedVar};`);
+        } else {
+          lines.push(`  ${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${surfacedVar}?.ob ?? ${surfacedVar}, be: ${surfacedVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+        }
+        lines.push("}");
+      } else if (targetExists) {
+        lines.push(`${targetVar}.ob = ${resultVar}?.ob ?? ${resultVar};`);
+      } else {
+        lines.push(`${targetVar} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: ${resultVar}?.ob ?? ${resultVar}, be: ${resultVar}?.be ?? ${JSON.stringify(baseBe)}, mood: "ya" };`);
+      }
       lines.push(`globalThis["${sentence.to.name}"] = ${targetVar};`);
       return lines.join("\n");
     }
-    return `${fn}(${arg});`;
+    if (ceremonyErrors && nestedCeremony) {
+      return `{\n  const _nested_result = ${fn}(${arg});\n  if (_nested_result?.be === "error") return _nested_result;\n}`;
+    }
+    return ceremonyErrors ? `pyaSurfaceCeremonyError(${fn}(${arg}));` : `${fn}(${arg});`;
   }
 
   return null;

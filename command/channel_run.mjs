@@ -11,6 +11,7 @@ import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs
 import { loadChannelPolicyWithGlobal } from "../program/agent/channels/policy.mjs";
 import { runChannelOnce, runChannelPollOnce, runChannelInputOnce } from "../program/agent/channels/index.mjs";
 import { createMatrixAdapter } from "../program/agent/channels/matrix.mjs";
+import { createGmailAdapter } from "../program/agent/channels/gmail.mjs";
 import { createCliAdapter } from "../program/agent/channels/cli.mjs";
 import { loadSchedulePolicyWithGlobal, createScheduler } from "../program/agent/scheduler.mjs";
 import { hydrateMatrixRuntimeConfig } from "../program/agent/channels/matrix_runtime.mjs";
@@ -59,6 +60,7 @@ async function ensureWorldChannelSeed(worldRoot) {
 
 function createAdapter(channelType, { worldRoot, agentName } = {}) {
   if (channelType === "matrix") return createMatrixAdapter();
+  if (channelType === "gmail" || channelType === "email") return createGmailAdapter();
   if (channelType === "cli") return createCliAdapter({ worldRoot, agentName });
   throw new Error(`unsupported channel type: ${channelType}`);
 }

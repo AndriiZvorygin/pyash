@@ -6,7 +6,7 @@ import { runAtAll } from "./map.mjs";
 import compileHandler from "../verbs/exchange/compile.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { resolveThisValue } from "../library/thisBinding.mjs";
-import { throwErrorSentence, surfaceErrorSentence } from "../error.mjs";
+import { throwErrorSentence, rememberSurfacedError } from "../error.mjs";
 import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir, registerModuleAlias, isModuleExecuting, pushModuleExecution, popModuleExecution } from "./modules.mjs";
 import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signature.mjs";
 import { handleLifecycleAspect } from "./runtime.mjs";
@@ -220,7 +220,7 @@ function guardSourceFilenames(sentence, { rememberFn } = {}) {
   if (sentence?.mood !== "do") return;
   const be = sentence?.be ?? "";
   if (be === "import") return;
-  if (be === "exists" || be === "touch" || be === "directory" || be === "text" || be === "filename") return;
+  if (be === "exists" || be === "touch" || be === "copy" || be === "rename" || be === "delete" || be === "directory" || be === "text" || be === "filename") return;
   if (be === "download") return;
   if (be === "read" && (sentence?.ob?.wo === "tail" || sentence?.ob?.text === "tail")) return;
   const slots = [
@@ -270,7 +270,8 @@ export async function handleImperative({
   }
 
   const { mood } = sentence;
-  if (mood !== "do") return null;
+  const isCommandProposal = mood === "propose" && sentence?.be === "command";
+  if (mood !== "do" && !isCommandProposal) return null;
 
   resolveIoGenitives(sentence, { state, memory });
   resolveTypedGenitives(sentence, { state, memory });
@@ -423,16 +424,10 @@ export async function handleImperative({
 
   const lifecycleResult = handleLifecycleAspect(sentence, { remember: memory.remember, doRemember: memory.doRemember });
   if (lifecycleResult) {
-    const surfaced = surfaceErrorSentence(lifecycleResult);
+    const surfaced = rememberSurfacedError(lifecycleResult, memory.doRemember);
     if (surfaced?.mood && surfaced?.be) {
-      if (surfaced.ob !== undefined) {
-        memory.doRemember({
-          su: { name: "result" },
-          ob: surfaced.ob,
-          be: surfaced.be,
-          mood: "ya"
-        });
-      }
+      // rememberSurfacedError retains the canonical error sentence and its
+      // complete compatibility result alias, including source context.
     }
     return surfaced;
   }
@@ -587,6 +582,7 @@ export async function handleImperative({
         interpret,
         recordSandpitTrace
       });
+      if (lastResult?.mood && lastResult?.be) return lastResult;
       return { invoked: be, result: lastResult };
     }
 
@@ -671,23 +667,30 @@ export async function handleImperative({
     by: sentence.by
   };
 
-  const result = await fn(callSentence, { remember: memory.remember, runtimeContext });
+  const result = await fn(callSentence, {
+    remember: memory.remember,
+    allRemember: memory.allRemember,
+    doRemember: memory.doRemember,
+    runtimeContext
+  });
 
   if (result?.mood && result?.be && result?.su) {
-    const surfaced = surfaceErrorSentence(result);
+    const surfaced = rememberSurfacedError(result, memory.doRemember);
     if (surfaced.be !== "chip") {
-      memory.doRemember(surfaced);
+      if (!surfaced?.be || surfaced.be !== "error") memory.doRemember(surfaced);
     }
     if (surfaced.ob !== undefined) {
       const priorResult = memory.remember("result");
       if (surfaced.be === "stream" && priorResult?.be && priorResult.be !== "stream") {
         return surfaced;
       }
-      memory.doRemember({
-        ...surfaced,
-        su: { name: "result" },
-        mood: "ya"
-      });
+      if (surfaced.be !== "error") {
+        memory.doRemember({
+          ...surfaced,
+          su: { name: "result" },
+          mood: "ya"
+        });
+      }
     }
     return surfaced;
   }
