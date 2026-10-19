@@ -403,7 +403,7 @@ test("background baseline sync skips active work and runs before a new task", as
   assert.equal(syncCalls, 1);
 });
 
-test("a baseline conflict defers control-plane sync without starving an executable task", async () => {
+test("a baseline conflict defers before starting work on a stale automation baseline", async () => {
   const worldRoot = await makeWorldRoot("pyash-work-baseline-deferred-");
   await enqueueWorkTask(worldRoot, task("independent-roadmap-task", 120));
   let supervisorCalls = 0;
@@ -437,13 +437,14 @@ test("a baseline conflict defers control-plane sync without starving an executab
     onEvent: async (event) => events.push(event),
     now: () => "2026-08-07T12:01:00.000Z"
   });
-  assert.equal(result.admitted, true);
+  assert.equal(result.admitted, false);
+  assert.match(result.reason, /automation baseline sync deferred/u);
   assert.equal(result.selected, "independent-roadmap-task");
   assert.equal(result.baseline.status, "deferred");
   assert.match(result.baseline.error, /merge conflict/u);
-  assert.equal(supervisorCalls, 1);
+  assert.equal(supervisorCalls, 0);
   assert.ok(events.some((event) => event.type === "baseline-deferred"));
-  assert.ok(events.some((event) => event.type === "implementation-started"));
+  assert.ok(!events.some((event) => event.type === "implementation-started"));
   const health = await readWorkSchedulerHealth(worldRoot);
   assert.equal(health["technical continuation unavailable wakes"] || "0", "0");
   assert.equal(health["baseline status"], "deferred");

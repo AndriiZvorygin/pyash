@@ -10,6 +10,7 @@ import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs"
 import { renderWorkTaskReport } from "./report.mjs";
 import { deriveImplementationProgress } from "./progress.mjs";
 import { buildAutonomousRoadmap, hasCredibleRoadmapWork, isRetryableWorkBlock, isAwaitingExternalEvidence, technicalRetryableItems } from "./roadmap.mjs";
+import { auditAutomationBranch } from "./integration.mjs";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -47,6 +48,18 @@ function mapBlock(name, entries) {
     "prah",
     ""
   ].join("\n");
+}
+
+async function safeAutomationAudit(repositoryRoot, automationBranch) {
+  try {
+    return await auditAutomationBranch({
+      repositoryRoot,
+      branch: automationBranch,
+      masterRef: "master"
+    });
+  } catch {
+    return null;
+  }
 }
 
 function parseState(source, name = "work daily digest state") {
@@ -360,6 +373,7 @@ export function renderWorkDailyDigest({
   blockerRepair = {},
   roadmap = null,
   automationBranch = "automation/roadmap",
+  automationAudit = null,
   reportingGap = null,
   health = {},
   digestHealth = {}
@@ -636,7 +650,17 @@ export function renderWorkDailyDigest({
     lines.push("Awaiting external evidence:", ...(externalPackages.length ? externalPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
     lines.push("Needs decision:", ...(blockedPackages.length ? blockedPackages.slice(0, 4).map((item) => `  ${item.title || item.taskId}: ${compactBlocker(item.blocker || item.progress)}`) : ["  (none)"]));
   }
-  lines.push("", "Automation branch", "-----------------", automationBranch, `Commits integrated this window: ${completed.filter((task) => task.checkpoint?.integration?.status === "integrated").length}`);
+  lines.push("", "Automation branch", "-----------------", automationBranch);
+  if (automationAudit) {
+    lines.push(
+      `Status: ${automationAudit.status}`,
+      `Mainline: ${automationAudit.masterRevision}`,
+      `Automation: ${automationAudit.branchRevision}`,
+      `Ahead/behind: ${automationAudit.automationOnlyCount}/${automationAudit.masterOnlyCount}`,
+      `Mergeable: ${automationAudit.mergeable ? "yes" : "no"}`
+    );
+  }
+  lines.push(`Commits integrated this window: ${completed.filter((task) => task.checkpoint?.integration?.status === "integrated").length}`);
   lines.push("", `Digest status: ${status.toUpperCase()}`, `Subject: ${subject}`, "");
   return { subject, status, report: lines.join("\n") };
 }
@@ -664,14 +688,15 @@ async function buildWorkDailyDigestInternal({
       previousAt: previousReportAt
     }
     : null;
-  const [capacity, tasks, events, curation, blockerRepair, storedHealth, storedDigestHealth] = await Promise.all([
+  const [capacity, tasks, events, curation, blockerRepair, storedHealth, storedDigestHealth, automationAudit] = await Promise.all([
     capacitySource({ now: end }),
     listWorkTasks(worldRoot, { includeTerminal: true }),
     readWorkSchedulerEvents(worldRoot, { since: start.toISOString(), until: end.toISOString() }),
     curateWorkBacklog({ worldRoot, repositoryRoot, owner, threshold: policy.curationThreshold, maxTasks: policy.curationMaxTasks, dryRun: true, now: end }),
     prepareBlockerRepair({ worldRoot, owner, now: end, dryRun: true }),
     readWorkSchedulerHealth(worldRoot),
-    readWorkDailyDigestHealth(worldRoot)
+    readWorkDailyDigestHealth(worldRoot),
+    safeAutomationAudit(repositoryRoot, automationBranch)
   ]);
   const effectiveHealth = capacity.weekly?.identified === true
     && Number.isFinite(Number(capacity.weekly.usedPercent))
@@ -704,6 +729,7 @@ async function buildWorkDailyDigestInternal({
     blockerRepair,
     roadmap,
     automationBranch,
+    automationAudit,
     reportingGap,
     health: effectiveHealth,
     digestHealth: digestHealthWindow(storedDigestHealth, start.toISOString(), end.toISOString(), {

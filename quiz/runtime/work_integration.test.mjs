@@ -10,6 +10,10 @@ import { enqueueWorkTask } from "../../program/runtime/work/queue.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "../../program/runtime/work/status.mjs";
 import { inspectWorkBackground } from "../../program/runtime/work/runner.mjs";
 import { runWorkIntegrationReconciliationOnce } from "../../program/runtime/work/integration_runner.mjs";
+import {
+  auditAutomationBranch,
+  promoteAutomationBranch
+} from "../../program/runtime/work/integration.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,6 +51,37 @@ function capacity() {
     }
   };
 }
+
+test("automation branch audit and promotion preserve both divergent histories", async () => {
+  const { root, repositoryRoot } = await world("pyash-automation-promotion-");
+  const automationWorktree = path.join(root, "automation-worktree");
+  await git(repositoryRoot, "worktree", "add", "--detach", automationWorktree, "automation/roadmap");
+  await fs.writeFile(path.join(automationWorktree, "AUTOMATION.md"), "autonomous\n");
+  await git(automationWorktree, "add", "AUTOMATION.md");
+  await git(automationWorktree, "commit", "-qm", "accepted autonomous change");
+  const automationRevision = (await git(automationWorktree, "rev-parse", "HEAD")).stdout.trim();
+  await git(repositoryRoot, "branch", "--force", "automation/roadmap", automationRevision);
+  await fs.writeFile(path.join(repositoryRoot, "MAINLINE.md"), "mainline\n");
+  await git(repositoryRoot, "add", "MAINLINE.md");
+  await git(repositoryRoot, "commit", "-qm", "human mainline change");
+
+  const audit = await auditAutomationBranch({ repositoryRoot });
+  assert.equal(audit.status, "diverged");
+  assert.equal(audit.mergeable, true);
+  assert.equal(audit.masterOnlyCount, 1);
+  assert.equal(audit.automationOnlyCount, 1);
+
+  const promoted = await promoteAutomationBranch({
+    repositoryRoot,
+    now: "2026-10-19T12:00:00.000Z"
+  });
+  assert.equal(promoted.status, "promoted");
+  const master = (await git(repositoryRoot, "rev-parse", "master")).stdout.trim();
+  const automation = (await git(repositoryRoot, "rev-parse", "automation/roadmap")).stdout.trim();
+  assert.equal(master, automation);
+  assert.equal((await git(repositoryRoot, "show", "master:AUTOMATION.md")).stdout, "autonomous\n");
+  assert.equal((await git(repositoryRoot, "show", "master:MAINLINE.md")).stdout, "mainline\n");
+});
 
 function blockedTask(taskId, title, priority, blocker, integrationStatus = "") {
   return {
