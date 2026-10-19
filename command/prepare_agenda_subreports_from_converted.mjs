@@ -19,6 +19,14 @@ function usage() {
   ].join("\n");
 }
 
+function isPdfFile(filePath) {
+  try {
+    return fs.readFileSync(filePath).subarray(0, 5).toString("ascii") === "%PDF-";
+  } catch {
+    return false;
+  }
+}
+
 function runWithStreaming({ cmd, args, cwd = PYASH_ROOT, timeoutMs = 10 * 60 * 1000, label = "stage" }) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
@@ -74,7 +82,7 @@ async function main() {
   if (!agendaMdPath || !fs.existsSync(agendaMdPath) || agendaMdSize <= 0) {
     const sourceDir = path.join(path.dirname(convertedDir), "source");
     const richestAgendaPdf = pickRichestAgendaPdfPathFromSourceDir(sourceDir);
-    if (richestAgendaPdf && fs.existsSync(richestAgendaPdf)) {
+    if (richestAgendaPdf && fs.existsSync(richestAgendaPdf) && isPdfFile(richestAgendaPdf)) {
       const fallbackMdPath = path.join(convertedDir, "agenda-99-from-pdf.md");
       process.stdout.write(`[agenda-subreports] markdown missing/empty; extracting from PDF: ${richestAgendaPdf}\n`);
       try {
@@ -97,7 +105,8 @@ async function main() {
       }
     }
   }
-  if (!agendaMdPath || !fs.existsSync(agendaMdPath) || agendaMdSize <= 0) {
+  const hasAgendaHtml = Boolean(agendaHtmlPath && fs.existsSync(path.resolve(agendaHtmlPath)));
+  if ((!agendaMdPath || !fs.existsSync(agendaMdPath) || agendaMdSize <= 0) && !hasAgendaHtml) {
     process.stdout.write("[agenda-subreports] no usable agenda markdown found; skipping subreport extraction\n");
     process.exit(0);
   }
@@ -109,14 +118,19 @@ async function main() {
   process.stdout.write(`[agenda-subreports] selected agenda markdown: ${agendaMdPath}\n`);
   process.stdout.write(`[agenda-subreports] selected size bytes: ${agendaMdSize}\n`);
 
-  const prunedPath = agendaMdPath.replace(/\.md$/iu, ".pruned.md");
-  await runWithStreaming({
-    cmd: "node",
-    args: [pruneScript, agendaMdPath, prunedPath],
-    cwd: PYASH_ROOT,
-    timeoutMs: 2 * 60 * 1000,
-    label: "prune-agenda",
-  });
+  let prunedPath = "";
+  if (agendaMdPath && agendaMdSize > 0) {
+    prunedPath = agendaMdPath.replace(/\.md$/iu, ".pruned.md");
+    await runWithStreaming({
+      cmd: "node",
+      args: [pruneScript, agendaMdPath, prunedPath],
+      cwd: PYASH_ROOT,
+      timeoutMs: 2 * 60 * 1000,
+      label: "prune-agenda",
+    });
+  } else {
+    process.stdout.write("[agenda-subreports] using structured eScribe HTML without a usable package PDF\n");
+  }
 
   const canonicalExtractor = String(
     process.env.AGENDA_CANONICAL_EXTRACTOR

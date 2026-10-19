@@ -142,7 +142,8 @@ test("Codex prompt carries general repair and publishing guardrails", () => {
     artifactDir: "/tmp/artifacts",
     reporters: [{ reporter: "owen" }, { reporter: "grey" }],
   });
-  assert.match(prompt, /qwen3\.5:9b/u);
+  assert.match(prompt, /text model declared in the repository's \.pya configuration/u);
+  assert.doesNotMatch(prompt, /qwen3\.5:9b/u);
   assert.match(prompt, /Affected reporters: owen, grey/u);
   assert.match(prompt, /Do not create meeting-specific/u);
   assert.match(prompt, /complete meeting chronology/u);

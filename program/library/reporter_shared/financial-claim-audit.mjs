@@ -5,7 +5,11 @@ const FINANCIAL_TERMS = [
   "expenditure", "spending", "funding", "surplus", "deficit",
 ];
 
-const FINANCIAL_AMOUNT_RE = /(?:\$|\b\d[\d,]*(?:\.\d+)?\b|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million|billion)\b)/iu;
+// A bare year, section number, or agenda number is not a monetary amount.
+// Keep amount detection tied to currency or an amount unit so generic
+// phrases such as "no expected financial implications in 2026" do not send
+// an otherwise non-financial summary through the LLM audit.
+const FINANCIAL_AMOUNT_RE = /(?:[$€£]\s*\d[\d,]*(?:\.\d+)?\b|\b(?:x|\d[\d,]*(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million|billion)\s*(?:thousand|million|billion|dollars?| euros?|pounds?|percent|%)\b)/iu;
 
 function normalize(text = "") {
   return String(text || "").replace(/\s+/gu, " ").trim();
@@ -38,13 +42,17 @@ export function buildFinancialClaimAuditPrompt({ sourceText = "", candidateText 
     "Return strict JSON only; do not include markdown or explanation outside the JSON object.",
     "",
     "Classify the candidate's financial claim as exactly one of:",
-    "direct_savings, aggregate_benefits, revenue, efficiency, cost_avoidance, forecast_or_target, disputed_or_uncertain, none.",
+    "direct_savings, requested_funding_or_cost, aggregate_benefits, revenue, efficiency, cost_avoidance, forecast_or_target, disputed_or_uncertain, none.",
     "",
     "Rules:",
     "- A direct saving is an explicit reduction in a budget line, spending, fee, or tax burden.",
+    "- Use requested_funding_or_cost when the source describes additional funding, a budget increase, a repair or project cost, an allowance, a contingency, an estimate, or a reserve draw. Those are requests or costs, not savings or reductions.",
     "- Use aggregate_benefits when the source combines savings with revenue, staff-time efficiencies, soft savings, or future cost avoidance.",
     "- Use forecast_or_target for projected, expected, estimated, annualized, compounded, or original-target amounts.",
     "- Use disputed_or_uncertain when the source itself qualifies the amount, lacks a net calculation, or presents conflicting interpretations.",
+    "- Preserve financial direction per amount. Do not attach a separate staff-efficiency saving, available reserve, or no-budget-impact statement to a requested funding amount or repair cost.",
+    "- Preserve conditional and hypothetical language exactly: if, would, could, may, proposed, or pending future decisions must remain conditional. Do not rewrite a possible reserve-funded reduction as a direct saving, approved reduction, or completed outcome.",
+    "- Available funds, a reserve source, or no immediate budget impact does not turn a requested cost into a saving or an approved reduction.",
     "- An unqualified headline saying savings or saved is misleading for aggregate_benefits, forecast_or_target, or disputed_or_uncertain.",
     "- Those claims require attribution (for example report cites or staff reported) and, when applicable, a category qualifier such as combined benefits, revenue and cost avoidance.",
     "- Do not treat Council receiving a report for information as approval of the reported financial result.",
@@ -52,7 +60,7 @@ export function buildFinancialClaimAuditPrompt({ sourceText = "", candidateText 
     "- REVISE when the candidate presents an aggregate, projected, disputed, or merely reported figure as direct or approved savings.",
     "",
     "Return exactly this shape:",
-    '{"verdict":"PASS|REVISE","claim_type":"direct_savings|aggregate_benefits|revenue|efficiency|cost_avoidance|forecast_or_target|disputed_or_uncertain|none","source_support":"direct|qualified|unsupported","needs_attribution":true,"needs_category_qualifier":true,"feedback":"one short evidence-based sentence"}',
+    '{"verdict":"PASS|REVISE","claim_type":"direct_savings|requested_funding_or_cost|aggregate_benefits|revenue|efficiency|cost_avoidance|forecast_or_target|disputed_or_uncertain|none","source_support":"direct|qualified|unsupported","needs_attribution":true,"needs_category_qualifier":true,"feedback":"one short evidence-based sentence"}',
     "",
     context ? `CONTEXT:\n${boundSource(context, 8000)}` : "",
     "SOURCE:",
@@ -79,7 +87,7 @@ function parseJsonObject(text = "") {
 }
 
 const CLAIM_TYPES = new Set([
-  "direct_savings", "aggregate_benefits", "revenue", "efficiency",
+  "direct_savings", "requested_funding_or_cost", "aggregate_benefits", "revenue", "efficiency",
   "cost_avoidance", "forecast_or_target", "disputed_or_uncertain", "none",
 ]);
 

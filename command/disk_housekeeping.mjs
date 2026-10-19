@@ -12,8 +12,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const POLICY_KEYS = [
   "disk housekeeping enabled",
   "disk housekeeping roots",
+  "disk housekeeping fresh cache roots",
   "disk housekeeping video max age days",
   "disk housekeeping part max age days",
+  "disk housekeeping temporary max age days",
   "disk housekeeping fresh cache max bytes",
   "disk warning free gb",
   "disk minimum free gb",
@@ -27,8 +29,10 @@ function usage() {
     "Policy is inactive unless configure/policy.pya or configure/secret.pya explicitly sets:",
     '  su name disk housekeeping enabled ob text "true" ya',
     '  su name disk housekeeping roots ob text "/home/htaf/pyash/artifacts:/home/htaf/pyash/world/house/owen-sound-reporter/artifacts" ya',
+    '  su name disk housekeeping fresh cache roots ob text "/home/htaf/pyash/world/library/fresh:/home/htaf/pyash/world/house/owen-sound-reporter/world/library/fresh" ya',
     '  su name disk warning free gb ob text "10" ya',
     '  su name disk minimum free gb ob text "10" ya',
+    '  su name disk housekeeping temporary max age days ob text "1" ya',
   ].join("\n");
 }
 
@@ -96,8 +100,10 @@ function parseNumber(value) {
 function parseRoots(value) {
   return String(value || "")
     .split(/[:\n,]/u)
-    .map((p) => path.resolve(p.trim()))
-    .filter((p) => p && p.startsWith(os.homedir()) && fs.existsSync(p));
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => path.resolve(p))
+    .filter((p) => p.startsWith(os.homedir()) && fs.existsSync(p));
 }
 
 function loadPolicy() {
@@ -105,8 +111,10 @@ function loadPolicy() {
   const enabled = parseBool(values["disk housekeeping enabled"]);
   const preDownloadEnabled = parseBool(values["disk download preflight enabled"]);
   const roots = parseRoots(values["disk housekeeping roots"]);
+  const freshCacheRoots = parseRoots(values["disk housekeeping fresh cache roots"]);
   const videoMaxAgeDays = parseNumber(values["disk housekeeping video max age days"]);
   const partMaxAgeDays = parseNumber(values["disk housekeeping part max age days"]);
+  const temporaryMaxAgeDays = parseNumber(values["disk housekeeping temporary max age days"]);
   const freshCacheMaxBytes = parseNumber(values["disk housekeeping fresh cache max bytes"]);
   const warningFreeGb = parseNumber(values["disk warning free gb"]);
   const minimumFreeGb = parseNumber(values["disk minimum free gb"]);
@@ -116,8 +124,12 @@ function loadPolicy() {
     preDownloadActive: preDownloadEnabled === true,
     loaded,
     roots,
+    freshCacheRoots: freshCacheRoots.length > 0
+      ? freshCacheRoots
+      : [path.join(ROOT, "world", "library", "fresh")].filter((p) => fs.existsSync(p)),
     videoMaxAgeDays: videoMaxAgeDays !== null && videoMaxAgeDays >= 0 ? videoMaxAgeDays : null,
     partMaxAgeDays: partMaxAgeDays !== null && partMaxAgeDays >= 0 ? partMaxAgeDays : null,
+    temporaryMaxAgeDays: temporaryMaxAgeDays !== null && temporaryMaxAgeDays >= 0 ? temporaryMaxAgeDays : null,
     freshCacheMaxBytes: freshCacheMaxBytes !== null && freshCacheMaxBytes >= 0 ? freshCacheMaxBytes : null,
     warningFreeGb: warningFreeGb !== null && warningFreeGb >= 0 ? warningFreeGb : null,
     minimumFreeGb: minimumFreeGb !== null && minimumFreeGb >= 0 ? minimumFreeGb : null,
@@ -191,18 +203,77 @@ function cleanupFiles({ roots, regex, maxAgeDays }) {
   return { count, bytes };
 }
 
-function cleanupFreshCache(maxBytes) {
+function directoryBytes(dirPath) {
+  let bytes = 0;
+  walkFiles(dirPath, (filePath) => {
+    try {
+      bytes += Number(fs.statSync(filePath).size || 0);
+    } catch {
+      // A concurrent cleanup or transient file is not a housekeeping failure.
+    }
+  });
+  return bytes;
+}
+
+/** Remove only stale direct children created by reporter temporary stages. */
+export function cleanupStaleTemporaryDirectories({ roots = [], maxAgeDays = null, nowMs = Date.now() } = {}) {
+  if (maxAgeDays === null) return { count: 0, bytes: 0 };
+  const cutoff = Number(nowMs) - Math.floor(maxAgeDays * 24 * 60 * 60 * 1000);
+  let count = 0;
+  let bytes = 0;
+  for (const root of roots) {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+      // Keep permanent directories such as world/temporary/speaker untouched.
+      if (!/(?:qwen-predecode|speaker-sentence)-/iu.test(entry.name)) continue;
+      const dirPath = path.join(root, entry.name);
+      let stat;
+      try {
+        stat = fs.statSync(dirPath);
+      } catch {
+        continue;
+      }
+      if (Number(stat.mtimeMs || 0) > cutoff) continue;
+      const size = directoryBytes(dirPath);
+      try {
+        fs.rmSync(dirPath, { recursive: true, force: true });
+      } catch {
+        continue;
+      }
+      count += 1;
+      bytes += size;
+    }
+  }
+  return { count, bytes };
+}
+
+function cleanupFreshCache(roots, maxBytes) {
   if (maxBytes === null) return { ran: false };
-  const res = spawnSync("node", [
-    path.join(ROOT, "command/cleanup-library-fresh-cache.mjs"),
-    "--max-age-days", "30",
-    "--max-bytes", String(Math.floor(maxBytes)),
-  ], { cwd: ROOT, encoding: "utf8" });
+  const cacheRoots = roots.length > 0 ? roots : [path.join(ROOT, "world", "library", "fresh")];
+  const results = cacheRoots.map((dir) => {
+    const res = spawnSync("node", [
+      path.join(ROOT, "command/cleanup-library-fresh-cache.mjs"),
+      "--dir", dir,
+      "--max-age-days", "30",
+      "--max-bytes", String(Math.floor(maxBytes)),
+    ], { cwd: ROOT, encoding: "utf8" });
+    return {
+      dir,
+      status: res.status,
+      stdout: String(res.stdout || "").trim(),
+      stderr: String(res.stderr || "").trim(),
+    };
+  });
   return {
     ran: true,
-    status: res.status,
-    stdout: String(res.stdout || "").trim(),
-    stderr: String(res.stderr || "").trim(),
+    roots: cacheRoots,
+    results,
   };
 }
 
@@ -222,9 +293,13 @@ function runHousekeeping({ policy, mount }) {
     regex: /\.(part|tmp)$/iu,
     maxAgeDays: policy.partMaxAgeDays,
   });
-  const fresh = cleanupFreshCache(policy.freshCacheMaxBytes);
+  const temporary = cleanupStaleTemporaryDirectories({
+    roots: policy.roots,
+    maxAgeDays: policy.temporaryMaxAgeDays,
+  });
+  const fresh = cleanupFreshCache(policy.freshCacheRoots, policy.freshCacheMaxBytes);
   const afterFree = diskFreeBytes(mount);
-  return { beforeFree, afterFree, video, partial, fresh };
+  return { beforeFree, afterFree, video, partial, temporary, fresh };
 }
 
 function main() {
@@ -267,15 +342,17 @@ function main() {
     const cleanup = result.cleanup;
     process.stdout.write(
       `[disk-housekeeping] active=${result.active ? "yes" : "no"} free=${formatGb(result.free_bytes)}GiB`
-      + (cleanup ? ` video_deleted=${cleanup.video.count}/${cleanup.video.bytes} partial_deleted=${cleanup.partial.count}/${cleanup.partial.bytes}` : "")
+      + (cleanup ? ` video_deleted=${cleanup.video.count}/${cleanup.video.bytes} partial_deleted=${cleanup.partial.count}/${cleanup.partial.bytes} temporary_deleted=${cleanup.temporary.count}/${cleanup.temporary.bytes}` : "")
       + "\n",
     );
   }
 }
 
-try {
-  main();
-} catch (err) {
-  process.stderr.write(`[disk-housekeeping] error ${String(err?.message || err)}\n`);
-  process.exit(1);
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
+  try {
+    main();
+  } catch (err) {
+    process.stderr.write(`[disk-housekeeping] error ${String(err?.message || err)}\n`);
+    process.exit(1);
+  }
 }

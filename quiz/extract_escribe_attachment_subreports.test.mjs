@@ -10,6 +10,11 @@ import {
   buildCanonicalAgendaEvidence,
   selectCanonicalAgendaItemKeys,
 } from "../program/library/reporter_shared/escribe-agenda-identity.mjs";
+import { canonicalEscribeMeetingPageUrl } from "../program/library/reporter_shared/escribe-pdf-download.mjs";
+import {
+  extractHybridPdfText,
+  isPaginationOnlyPageText,
+} from "../program/library/reporter_shared/hybrid-pdf-text.mjs";
 
 function runNode(args, cwd, env = {}) {
   return new Promise((resolve, reject) => {
@@ -108,6 +113,143 @@ test("structured eScribe agenda identity excludes PDF-only inferred items", () =
     ),
     ["11.a", "12"],
   );
+});
+
+test("eScribe browser downloads use the agenda route instead of the calendar detail route", () => {
+  assert.equal(
+    canonicalEscribeMeetingPageUrl("https://pub-owensound.escribemeetings.com/MeetingsCalendarView.aspx/Meeting?Id=abc&foo=ignored"),
+    "https://pub-owensound.escribemeetings.com/Meeting.aspx?Id=abc&Agenda=Agenda&lang=English",
+  );
+  assert.equal(
+    canonicalEscribeMeetingPageUrl("https://pub-owensound.escribemeetings.com/Meeting.aspx?Id=abc&Agenda=Agenda&lang=English"),
+    "https://pub-owensound.escribemeetings.com/Meeting.aspx?Id=abc&Agenda=Agenda&lang=English",
+  );
+});
+
+test("hybrid PDF keeps short scan fragments retryable unless the complete attachment is image-only", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-hybrid-image-only-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const ps = path.join(root, "photo.ps");
+  const pdf = path.join(root, "photo.pdf");
+  fs.writeFileSync(ps, [
+    "%!PS",
+    "newpath 72 72 moveto 72 72 lineto 360 72 lineto 360 360 lineto 72 360 lineto closepath fill",
+    "showpage",
+  ].join("\n"), "utf8");
+  execFileSync("ps2pdf", [ps, pdf]);
+  const priorFixture = process.env.PDF_OCR_QWEN_FIXTURE;
+  process.env.PDF_OCR_QWEN_FIXTURE = JSON.stringify({ 1: "G" });
+  t.after(() => {
+    if (priorFixture === undefined) delete process.env.PDF_OCR_QWEN_FIXTURE;
+    else process.env.PDF_OCR_QWEN_FIXTURE = priorFixture;
+  });
+  await assert.rejects(() => extractHybridPdfText({ pdfPath: pdf }), /no usable transcription/u);
+  const result = await extractHybridPdfText({ pdfPath: pdf, allowImageOnly: true });
+  assert.equal(result.text, "");
+  assert.deepEqual(result.unusableScannedPages.map((entry) => entry.page), [1]);
+
+  process.env.PDF_OCR_QWEN_FIXTURE = JSON.stringify({ 1: "[[IMAGE ONLY PAGE]]" });
+  const classified = await extractHybridPdfText({ pdfPath: pdf });
+  assert.equal(classified.text, "");
+  assert.deepEqual(classified.imageOnlyPages, [1]);
+});
+
+test("hybrid PDF accepts a repeated two-word scan transcription as verified page text", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-hybrid-short-ocr-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const image = path.join(root, "slide.png");
+  const pdf = path.join(root, "slide.pdf");
+  execFileSync("convert", ["-size", "800x500", "xc:white", "-fill", "black", "-pointsize", "72", "-gravity", "center", "-draw", "text 0,0 'Thank You'", image]);
+  const ppm = execFileSync("pngtopnm", [image], { maxBuffer: 8 * 1024 * 1024 });
+  const ps = execFileSync("pnmtops", [], { input: ppm, maxBuffer: 8 * 1024 * 1024 });
+  execFileSync("ps2pdf", ["-", pdf], { input: ps });
+  const priorFixture = process.env.PDF_OCR_QWEN_FIXTURE;
+  process.env.PDF_OCR_QWEN_FIXTURE = JSON.stringify({ 1: { responses: ["Thank You", "Thank You"] } });
+  t.after(() => {
+    if (priorFixture === undefined) delete process.env.PDF_OCR_QWEN_FIXTURE;
+    else process.env.PDF_OCR_QWEN_FIXTURE = priorFixture;
+  });
+  const result = await extractHybridPdfText({ pdfPath: pdf });
+  assert.equal(result.text, "Thank You");
+  assert.deepEqual(result.verifiedShortOcrPages, [1]);
+});
+
+test("hybrid PDF treats zero-padded printed page numbers as pagination", () => {
+  assert.equal(isPaginationOnlyPageText("005", 5, 87), true);
+  assert.equal(isPaginationOnlyPageText("087", 87, 87), true);
+  assert.equal(isPaginationOnlyPageText("005", 6, 87), false);
+});
+
+test("structured HTML still builds canonical bundles when a PDF response is not a PDF", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-escribe-response-"));
+  const challenge = "<!doctype html><title>challenge</title><p>enable javascript</p>";
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end(challenge);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+
+  const port = server.address().port;
+  const agendaMd = path.join(root, "agenda.md");
+  const agendaHtml = path.join(root, "agenda.html");
+  const outputDir = path.join(root, "subreports");
+  const indexPath = path.join(root, "index.json");
+  fs.writeFileSync(agendaMd, "CALL TO ORDER\n\nADJOURNMENT\n", "utf8");
+  fs.writeFileSync(agendaHtml, [
+    '<div class="AgendaItem AgendaItem11">',
+    '<div class="AgendaItemCounter">8.a</div>',
+    '<div class="AgendaItemTitle"><a tabindex="0">Harrison Park Marker Tree</a></div>',
+    `<div class="AgendaItemAttachment AgendaItemAttachment11"><a href="http://127.0.0.1:${port}/challenge.pdf"><span>Marker Tree report.pdf</span></a></div>`,
+    '</div>',
+  ].join("\n"), "utf8");
+
+  await runNode([
+    path.join(process.cwd(), "world/house/grey-county-reporter/program/extract-escribe-agenda-items.mjs"),
+    agendaMd,
+    outputDir,
+    indexPath,
+    agendaHtml,
+    "https://example.test/meeting",
+  ], process.cwd());
+
+  const [item] = JSON.parse(fs.readFileSync(indexPath, "utf8")).items;
+
+  assert.equal(item.attachment_diagnostics[0].status, "response_not_pdf");
+  assert.equal(item.extraction_method, "direct_attachments");
+  assert.equal(item.has_page_slice, false);
+  assert.ok(item.file);
+  assert.match(fs.readFileSync(item.file, "utf8"), /Harrison Park Marker Tree/u);
+});
+
+test("structured HTML remains usable when the agenda package conversion is empty", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-escribe-html-only-"));
+  const convertedDir = path.join(root, "converted");
+  const subreportDir = path.join(convertedDir, "subreports");
+  const indexPath = path.join(convertedDir, "subreports.index.json");
+  const agendaHtml = path.join(root, "agenda.html");
+  fs.mkdirSync(convertedDir, { recursive: true });
+  fs.writeFileSync(agendaHtml, [
+    '<div class="AgendaItem AgendaItem11">',
+    '<div class="AgendaItemCounter">8.a</div>',
+    '<div class="AgendaItemTitle"><a tabindex="0">Harrison Park Marker Tree</a></div>',
+    '</div>',
+  ].join("\n"), "utf8");
+
+  await runNode([
+    path.join(process.cwd(), "command/prepare_agenda_subreports_from_converted.mjs"),
+    convertedDir,
+    subreportDir,
+    indexPath,
+    path.join(process.cwd(), "world/house/owen-sound-reporter/program/prune-owen-sound-agenda.mjs"),
+    agendaHtml,
+    "https://example.test/meeting",
+  ], process.cwd());
+
+  const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+  assert.equal(index.authoritative_source, agendaHtml);
+  assert.deepEqual(index.items.map((item) => item.item), ["8.a"]);
+  assert.match(fs.readFileSync(index.items[0].file, "utf8"), /Harrison Park Marker Tree/u);
 });
 
 test("structured eScribe evidence carries parent roles and attachment ownership to child items", () => {

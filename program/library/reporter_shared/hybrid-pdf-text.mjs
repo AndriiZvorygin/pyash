@@ -14,10 +14,16 @@ function wordCount(value = "") {
   return normalize(value).split(/\s+/u).filter(Boolean).length;
 }
 
+function isImageOnlyPageText(value = "") {
+  return normalize(value).toUpperCase() === "[[IMAGE ONLY PAGE]]";
+}
+
 export function isPaginationOnlyPageText(value = "", page = 0, totalPages = 0) {
   const text = normalize(value);
   if (!text || !Number.isInteger(page) || page < 1) return false;
   const total = Number.isInteger(totalPages) && totalPages >= page ? totalPages : 0;
+  const printedPage = text.match(/^0*(\d{1,4})$/u);
+  if (printedPage && Number(printedPage[1]) === page) return true;
   return text === String(page)
     || text.toLowerCase() === `page ${page}`
     || (total > 0 && (
@@ -113,7 +119,8 @@ async function qwenTranscribePage({ pdfPath, page, ollamaHost, timeoutMs, attemp
             "Transcribe every visible word on this document page exactly.",
             "Preserve headings, numbered clauses, bullets, names, dates, and resolution wording.",
             "Do not summarize, explain, correct, or invent text.",
-            "For a page that is mostly a photograph, return only legible captions, labels, or words printed in the image; do not describe the photograph.",
+            "If the page is a photograph or other image-only visual with no substantive document text, return exactly [[IMAGE ONLY PAGE]]; incidental signs, logos, and room labels do not count as substantive document text and should not be transcribed.",
+            "If the page is an image of a document, form, plan, report, or slide, transcribe it and do not use the image-only marker.",
             "Return plain text only. If the page contains no readable words, return exactly [[BLANK PAGE]].",
             attempt > 1
               ? attempt % 2 === 0
@@ -133,9 +140,10 @@ async function qwenTranscribePage({ pdfPath, page, ollamaHost, timeoutMs, attemp
 
 /**
  * Extract a PDF page-by-page, retaining native text and using the configured
- * text model only
- * for pages whose text layer is absent. A failed scanned-page transcription is
- * fatal so an attachment can never be silently published with trailing pages cut off.
+ * text model only for pages whose text layer is absent. The model may classify
+ * photograph-only pages explicitly; substantive scanned-document pages remain
+ * strict so an attachment can never be silently published with trailing pages
+ * cut off.
  */
 export async function extractHybridPdfText({
   pdfPath,
@@ -143,6 +151,7 @@ export async function extractHybridPdfText({
   ollamaHost = "",
   timeoutMs = 300_000,
   minimumNativeWords = 8,
+  allowImageOnly = false,
 } = {}) {
   const totalPages = pageCount(pdfPath);
   if (!totalPages) throw new Error(`could not determine PDF page count for ${pdfPath}`);
@@ -151,7 +160,10 @@ export async function extractHybridPdfText({
   const ocrPages = [];
   const blankPages = [];
   const paginationOnlyPages = [];
+  const imageOnlyPages = [];
   const verifiedShortNativePages = [];
+  const verifiedShortOcrPages = [];
+  const unusableScannedPages = [];
   for (let page = 1; page <= totalPages; page += 1) {
     const nativeText = nativePageText(pdfPath, page);
     if (wordCount(nativeText) >= minimumNativeWords) {
@@ -175,6 +187,9 @@ export async function extractHybridPdfText({
     let shortNativeAgreements = 0;
     let shortNativeCandidate = "";
     let shortNativeVerifiedText = "";
+    let shortOcrAgreements = 0;
+    let shortOcrCandidate = "";
+    let shortOcrVerifiedText = "";
     const maxAttempts = Math.max(
       3,
       Number.parseInt(String(process.env.PDF_OCR_QWEN_ATTEMPTS || "6"), 10) || 6,
@@ -190,6 +205,11 @@ export async function extractHybridPdfText({
       try {
         transcribed = await qwenTranscribePage({ pdfPath, page, ollamaHost, timeoutMs, attempt });
         if (normalize(transcribed) === "[[BLANK PAGE]]") break;
+        if (isImageOnlyPageText(transcribed)) {
+          imageOnlyPages.push(page);
+          transcribed = "";
+          break;
+        }
         if (wordCount(transcribed) >= 4) break;
         const normalizedNative = normalize(nativeText).toLowerCase();
         const normalizedTranscribed = normalize(transcribed).toLowerCase();
@@ -205,6 +225,15 @@ export async function extractHybridPdfText({
           }
         }
         if (agreesWithNative) shortNativeCandidate = normalizedTranscribed;
+        const normalizedShort = normalize(transcribed).toLowerCase();
+        if (wordCount(transcribed) >= 2 && normalizedShort === shortOcrCandidate) {
+          shortOcrAgreements += 1;
+          if (shortOcrAgreements >= 2) {
+            shortOcrVerifiedText = transcribed;
+            break;
+          }
+        }
+        if (wordCount(transcribed) >= 2) shortOcrCandidate = normalizedShort;
         lastError = "empty or shorter than four words";
       } catch (error) {
         lastError = String(error?.message || error);
@@ -215,21 +244,31 @@ export async function extractHybridPdfText({
       blankPages.push(page);
       continue;
     }
+    if (imageOnlyPages.includes(page)) continue;
     if (shortNativeAgreements >= 2) {
       pages.push(shortNativeVerifiedText || nativeText);
       verifiedShortNativePages.push(page);
       continue;
     }
+    if (shortOcrAgreements >= 2) {
+      pages.push(shortOcrVerifiedText);
+      verifiedShortOcrPages.push(page);
+      continue;
+    }
     if (wordCount(transcribed) < 4) {
-      throw new Error(
-        `configured text model returned no usable transcription for scanned PDF page ${page} of ${totalPages}`
-        + (lastError ? ` after ${maxAttempts} attempts (${lastError})` : ` after ${maxAttempts} attempts`),
-      );
+      const reason = `configured text model returned no usable transcription for scanned PDF page ${page} of ${totalPages}`
+        + (lastError ? ` after ${maxAttempts} attempts (${lastError})` : ` after ${maxAttempts} attempts`);
+      if (!allowImageOnly) throw new Error(reason);
+      unusableScannedPages.push({ page, reason });
+      continue;
     }
     pages.push(transcribed);
     ocrPages.push(page);
   }
 
+  if (unusableScannedPages.length && pages.length) {
+    throw new Error(unusableScannedPages[0].reason);
+  }
   const text = pages.join("\n\n\f\n\n").trim();
   if (textPath) fs.writeFileSync(textPath, text ? `${text}\n` : "", "utf8");
   return {
@@ -238,7 +277,10 @@ export async function extractHybridPdfText({
     ocrPages,
     blankPages,
     paginationOnlyPages,
+    imageOnlyPages,
     verifiedShortNativePages,
+    verifiedShortOcrPages,
+    unusableScannedPages,
     model: ocrPages.length ? resolveTextModel() : "native_text",
   };
 }

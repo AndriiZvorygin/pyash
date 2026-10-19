@@ -375,7 +375,7 @@ function enforcePreviewVerbTense(hook) {
   return sanitizeHook(words.join(' '));
 }
 
-function isGenericPreviewHook(text) {
+export function isGenericPreviewHook(text) {
   const n = normalizeForMatch(text);
   return n.includes('council considers agenda items')
     || n.includes('considers agenda items')
@@ -385,6 +385,9 @@ function isGenericPreviewHook(text) {
     || n.includes('city matters')
     || n.includes('committee considers declaration')
     || n.includes('considers declaration')
+    || n.endsWith('committee agenda')
+    || n.endsWith('meeting agenda')
+    || n.endsWith('agenda')
     || n.includes('updates')
     || n === 'council considers agenda items';
 }
@@ -677,8 +680,85 @@ function hookSourcePolarityUnsupported(hook, sourceSummary) {
   const hookUsesPositiveVerb = positiveServiceVerbs.some((t) => hookNorm.includes(t));
   if (!hookUsesPositiveVerb) return false;
 
-  const sourceHasExplicitPositiveEvidence = explicitPositiveEvidence.some((t) => sourceNorm.includes(t));
-  return !sourceHasExplicitPositiveEvidence;
+  // The verifier source includes the full transcript, so an unrelated access
+  // complaint must not invalidate a hook about a separate positive development.
+  // Compare polarity within source segments that share a concrete hook topic.
+  const subjectTerms = extractHookContentTerms(hookNorm)
+    .filter((term) => !positiveServiceVerbs.some((verb) => term === verb || term.startsWith(`${verb}s`)))
+    .filter((term) => term.length >= 4);
+  const sourceSegments = String(sourceSummary || '')
+    .split(/[.!?\n]+/u)
+    .map((segment) => normalizeForMatch(segment))
+    .filter(Boolean);
+  const relevantSegments = sourceSegments.filter((segment) => subjectTerms.some((term) => segment.includes(term)));
+  const relevantNegative = relevantSegments.some((segment) => negativeServiceSignals.some((term) => segment.includes(term)));
+  if (!relevantNegative) return false;
+  const relevantPositive = relevantSegments.some((segment) => explicitPositiveEvidence.some((term) => segment.includes(term)));
+  return !relevantPositive;
+}
+
+export async function rewriteHookWithoutPolarityFlip({
+  askFn = ask,
+  sourceSummary = "",
+  candidateHook = "",
+  feedback = "",
+  jurisdiction = "",
+  body = "",
+} = {}) {
+  const raw = await askFn([
+    {
+      role: "system",
+      content: "You are a precise civic headline editor. Return only one short title-case hook.",
+    },
+    {
+      role: "user",
+      content: [
+        "Rewrite the rejected hook as a compact 4-6 word title grounded only in SOURCE_SUMMARY.",
+        "Preserve the source polarity exactly. If the source describes barriers, denials, exclusion, or lack of access, name that concrete problem; do not recast it as service expansion, improvement, or positive availability.",
+        "Use concrete issue nouns from the source and choose one coherent development.",
+        "Do not use a jurisdiction, governing-body name, speaker name, report code, date, year, month, or a sentence fragment.",
+        `REJECTED_HOOK: ${String(candidateHook || "").trim()}`,
+        `VERIFIER_FEEDBACK: ${String(feedback || "").trim()}`,
+        `JURISDICTION: ${String(jurisdiction || "").trim() || "(none)"}`,
+        `BODY: ${String(body || "").trim() || "(none)"}`,
+        `SOURCE_SUMMARY:\n${String(sourceSummary || "").trim()}`,
+        "Return only the replacement hook text.",
+      ].join("\n\n"),
+    },
+  ], { numPredict: 64 });
+  return sanitizeChapterStyleHook(sanitizeHook(raw), { jurisdiction, body });
+}
+
+export async function rewriteHookWithoutFinancialClaim({
+  askFn = ask,
+  sourceSummary = "",
+  candidateHook = "",
+  feedback = "",
+  jurisdiction = "",
+  body = "",
+} = {}) {
+  const raw = await askFn([
+    {
+      role: "system",
+      content: "You are a precise civic headline editor. Return only one short title-case hook.",
+    },
+    {
+      role: "user",
+      content: [
+        "Rewrite the rejected hook as a compact 4-6 word title grounded only in SOURCE_SUMMARY.",
+        "Remove financial claims entirely: do not use savings, revenue, costs, fees, taxes, budget, funding, surplus, deficit, spending, or dollar amounts.",
+        "Choose one concrete non-financial topic, public concern, service issue, project, policy, or operational change from the source.",
+        "Do not use a jurisdiction, governing-body name, speaker name, report code, date, year, or month.",
+        `REJECTED_HOOK: ${String(candidateHook || "").trim()}`,
+        `VERIFIER_FEEDBACK: ${String(feedback || "").trim()}`,
+        `JURISDICTION: ${String(jurisdiction || "").trim() || "(none)"}`,
+        `BODY: ${String(body || "").trim() || "(none)"}`,
+        `SOURCE_SUMMARY:\n${String(sourceSummary || "").trim()}`,
+        "Return only the replacement hook text.",
+      ].join("\n\n"),
+    },
+  ], { numPredict: 64 });
+  return sanitizeChapterStyleHook(sanitizeHook(raw), { jurisdiction, body });
 }
 
 function fallbackHookFromSummary(summaryText) {
@@ -1126,6 +1206,55 @@ async function generateHook({ sourceSummary, verifierSourceText, topNewsHeadings
     }
     feedback = review;
     if (score >= PASS_THRESHOLD && isKeywordHookReady(draft, sourceSummary, hookMode)) break;
+  }
+
+  if (bestHook && containsFinancialClaimText(bestHook) && bestFinancialAudit?.verdict !== "PASS") {
+    for (let repairAttempt = 1; repairAttempt <= 3; repairAttempt += 1) {
+      const repairedHook = await rewriteHookWithoutFinancialClaim({
+        sourceSummary,
+        candidateHook: bestHook,
+        feedback: bestReview,
+        jurisdiction,
+        body,
+      });
+      if (!repairedHook || containsFinancialClaimText(repairedHook)) continue;
+      const repairedReview = await ask([
+        { role: 'system', content: 'You are a strict semantic verifier.' },
+        { role: 'user', content: buildScorePrompt({ sourceSummary, hook: repairedHook, jurisdiction, body, hookMode }) },
+      ], { numPredict: 180 });
+      const repairedScore = parseScore(repairedReview);
+      if (repairedScore > bestScore) {
+        bestHook = repairedHook;
+        bestScore = repairedScore;
+        bestReview = repairedReview;
+        bestFinancialAudit = null;
+      }
+      if (repairedScore >= PASS_THRESHOLD && isKeywordHookReady(repairedHook, sourceSummary, hookMode)) break;
+    }
+  }
+
+  if (bestHook && hookSourcePolarityUnsupported(bestHook, verifierSource)) {
+    for (let repairAttempt = 1; repairAttempt <= 3; repairAttempt += 1) {
+      const repairedHook = await rewriteHookWithoutPolarityFlip({
+        sourceSummary: verifierSource,
+        candidateHook: bestHook,
+        feedback: bestReview,
+        jurisdiction,
+        body,
+      });
+      if (!repairedHook || hookSourcePolarityUnsupported(repairedHook, verifierSource)) continue;
+      const repairedReview = await ask([
+        { role: 'system', content: 'You are a strict semantic verifier.' },
+        { role: 'user', content: buildScorePrompt({ sourceSummary: verifierSource, hook: repairedHook, jurisdiction, body, hookMode }) },
+      ], { numPredict: 180 });
+      const repairedScore = parseScore(repairedReview);
+      if (repairedScore > bestScore) {
+        bestHook = repairedHook;
+        bestScore = repairedScore;
+        bestReview = repairedReview;
+      }
+      if (repairedScore >= PASS_THRESHOLD && isKeywordHookReady(repairedHook, sourceSummary, hookMode)) break;
+    }
   }
 
   if (!bestHook || bestScore < PASS_THRESHOLD) {

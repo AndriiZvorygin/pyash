@@ -114,6 +114,18 @@ function findRetainedAttachment({
   return "";
 }
 
+function isUsableRetainedFile(localPath = "") {
+  const resolved = path.resolve(String(localPath || ""));
+  if (!resolved || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) return false;
+  if (path.extname(resolved).toLowerCase() !== ".pdf") return true;
+  return fs.readFileSync(resolved).subarray(0, 5).toString("ascii") === "%PDF-";
+}
+
+function isKnownUnavailableDiagnostic(diagnostic = {}) {
+  const status = String(diagnostic?.status || "").trim().toLowerCase();
+  return Boolean(status) && /(?:download|response|missing|error|fail|not[_ -]?pdf|unavailable|exit[_ -]?\d+)/u.test(status);
+}
+
 function mirrorableLocalPath(localPath = "") {
   const resolved = path.resolve(String(localPath || ""));
   const stat = fs.statSync(resolved);
@@ -217,6 +229,7 @@ export function buildSupportingAttachmentMirrorPlan({
       }));
   const attachmentDirs = attachmentDirectoryCandidates(indexPath, index);
   const plan = [];
+  const unavailable = [];
   const seenUrls = new Set();
 
   for (const item of items) {
@@ -233,9 +246,32 @@ export function buildSupportingAttachmentMirrorPlan({
         index,
       });
       if (!localPath) {
+        if (isKnownUnavailableDiagnostic(diagnostics[index])) {
+          unavailable.push({
+            item: String(item?.item || ""),
+            label: normalizeText(attachment?.label || ""),
+            sourceUrl,
+            status: String(diagnostics[index]?.status || "unavailable"),
+          });
+          seenUrls.add(sourceUrl);
+          continue;
+        }
         throw new Error(
           `supporting attachment has no retained local copy: item=${String(item?.item || "")} url=${sourceUrl}`,
         );
+      }
+      if (!isUsableRetainedFile(localPath)) {
+        if (isKnownUnavailableDiagnostic(diagnostics[index])) {
+          unavailable.push({
+            item: String(item?.item || ""),
+            label: normalizeText(attachment?.label || ""),
+            sourceUrl,
+            status: String(diagnostics[index]?.status || "unavailable"),
+          });
+          seenUrls.add(sourceUrl);
+          continue;
+        }
+        throw new Error(`supporting attachment is not a valid retained document: item=${String(item?.item || "")} url=${sourceUrl}`);
       }
       const mirrorPath = mirrorableLocalPath(localPath);
       const bytes = fs.readFileSync(mirrorPath);
@@ -260,6 +296,16 @@ export function buildSupportingAttachmentMirrorPlan({
     if (!localPath || !fs.existsSync(localPath) || !fs.statSync(localPath).isFile()) {
       throw new Error(`agenda source document has no retained local copy: url=${sourceUrl}`);
     }
+    if (!isUsableRetainedFile(localPath)) {
+      unavailable.push({
+        item: String(source?.item || "agenda-source"),
+        label: normalizeText(source?.label || path.basename(localPath)),
+        sourceUrl,
+        status: "local_file_not_pdf",
+      });
+      seenUrls.add(sourceUrl);
+      continue;
+    }
     const mirrorPath = mirrorableLocalPath(localPath);
     const bytes = fs.readFileSync(mirrorPath);
     plan.push({
@@ -274,6 +320,7 @@ export function buildSupportingAttachmentMirrorPlan({
     });
     seenUrls.add(sourceUrl);
   }
+  plan.unavailable = unavailable;
   return plan;
 }
 

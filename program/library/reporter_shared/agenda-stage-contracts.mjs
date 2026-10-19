@@ -430,21 +430,35 @@ export function validateAgendaSummaryStrict(sectionGrounding = {}, summary = {})
     const chapters = Array.isArray(s.chapters) ? s.chapters : [];
     const sourceUnit = units.find((u) => String(u["unit id"] || "") === unitId) || {};
     const expectedChapters = Array.isArray(sourceUnit["child chapters"]) ? sourceUnit["child chapters"] : [];
-    if (chapters.length !== expectedChapters.length) {
-      throw new Error(`stage3 defective: chapter count mismatch for section=${i + 1} expected=${expectedChapters.length} actual=${chapters.length}`);
+    if (!expectedChapters.length && chapters.length) {
+      throw new Error(`stage3 defective: chapter count mismatch for section=${i + 1} expected=0 actual=${chapters.length}`);
     }
+    const expectedById = new Map(expectedChapters.map((chapter) => [String(chapter?.["chapter id"] || ""), chapter]));
+    const generatedBaseCounts = new Map();
     for (let ci = 0; ci < chapters.length; ci += 1) {
       const ch = chapters[ci] || {};
       assertNoSnakeCaseKeys(ch, `stage3 chapter ${i + 1}.${ci + 1}`);
-      const expected = expectedChapters[ci] || {};
+      const chapterId = String(ch["chapter id"] || "");
+      const baseId = chapterId.replace(/_part_\d+$/u, "");
+      const expected = expectedById.get(chapterId) || expectedById.get(baseId) || {};
       if (String(ch["parent unit id"] || "") !== unitId) {
         throw new Error(`stage3 defective: chapter parent mismatch at section=${i + 1} chapter=${ci + 1}`);
       }
-      if (String(ch["chapter id"] || "") !== String(expected["chapter id"] || "")) {
+      if (!expected["chapter id"] || (chapterId !== String(expected["chapter id"] || "") && !/^.+_part_\d+$/u.test(chapterId))) {
         throw new Error(`stage3 defective: chapter id mismatch at section=${i + 1} chapter=${ci + 1}`);
       }
+      if (chapterId.endsWith(baseId) && !expectedById.has(chapterId) && !expectedById.has(baseId)) {
+        throw new Error(`stage3 defective: unknown split chapter id at section=${i + 1} chapter=${ci + 1}`);
+      }
+      generatedBaseCounts.set(baseId, Number(generatedBaseCounts.get(baseId) || 0) + 1);
       if (!String(ch.title || "").trim()) {
         throw new Error(`stage3 defective: empty chapter title at section=${i + 1} chapter=${ci + 1}`);
+      }
+    }
+    for (const expected of expectedChapters) {
+      const expectedId = String(expected?.["chapter id"] || "");
+      if (!generatedBaseCounts.has(expectedId)) {
+        throw new Error(`stage3 defective: missing chapter for section=${i + 1} chapter=${expectedId}`);
       }
     }
   }
