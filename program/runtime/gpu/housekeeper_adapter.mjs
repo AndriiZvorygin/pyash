@@ -1,4 +1,4 @@
-import { hostname } from "node:os";
+import { resolveGpuSourceIdentity } from "./source_identity.mjs";
 
 function normalizeText(value) {
   if (value == null) return "";
@@ -49,9 +49,9 @@ async function requestJson({ baseUrl = "", pathname = "", method = "GET", body }
   return parseJsonOrThrow(response);
 }
 
-export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) {
+export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", username = "" } = {}) {
   const rootUrl = normalizeBaseUrl(baseUrl);
-  const defaultHostId = normalizeText(hostId) || hostname();
+  const sourceIdentity = resolveGpuSourceIdentity({ hostId, username });
 
   return {
     async getHealth() {
@@ -92,9 +92,9 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) 
         runtimeName: normalizeText(runtimeName),
         profileName: normalizeText(profileName),
         jobSpec,
-        hostId: defaultHostId,
+        hostId: sourceIdentity.hostId,
         source: {
-          hostId: defaultHostId,
+          ...sourceIdentity,
           workerId: "pyash-gpu-worker",
           processId: process.pid
         }
@@ -142,7 +142,7 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) 
         method: "POST",
         body: {
           profileName: normalizeText(profileName),
-          hostId: defaultHostId
+          hostId: sourceIdentity.hostId
         }
       });
     }

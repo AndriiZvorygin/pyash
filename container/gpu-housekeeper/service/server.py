@@ -457,6 +457,10 @@ def normalize_job_source(payload: Dict[str, Any], peer_address: str = "") -> Dic
     or normalize_text(routing.get("originHostId"))
     or "unknown"
   )
+  source_username = (
+    normalize_text(source.get("username"))
+    or normalize_text(payload.get("username"))
+  )
   worker_id = normalize_text(source.get("workerId"))
   try:
     process_id = max(0, int(source.get("processId") or 0))
@@ -470,6 +474,8 @@ def normalize_job_source(payload: Dict[str, Any], peer_address: str = "") -> Dic
     source_peer = normalize_text(peer_address)
 
   normalized = {"hostId": source_host}
+  if source_username:
+    normalized["username"] = source_username
   if worker_id:
     normalized["workerId"] = worker_id
   if process_id:

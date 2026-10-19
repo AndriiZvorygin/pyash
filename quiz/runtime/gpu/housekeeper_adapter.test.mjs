@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
 
 import { createGpuHousekeeperAdapter } from "../../../program/runtime/gpu/housekeeper_adapter.mjs";
 
@@ -96,7 +97,11 @@ test("housekeeper adapter submitJob posts expected payload", async () => {
   await withMockFetch(
     async () => makeJsonResponse({ body: { remoteJobId: "job-abc", accepted: true } }),
     async (calls) => {
-      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090", hostId: "renderbox" });
+      const adapter = createGpuHousekeeperAdapter({
+        baseUrl: "http://housekeeper:8090",
+        hostId: "renderbox",
+        username: "htaf"
+      });
       const result = await adapter.submitJob({
         handleId: "h-1",
         runtimeName: "ollama",
@@ -116,6 +121,7 @@ test("housekeeper adapter submitJob posts expected payload", async () => {
         hostId: "renderbox",
         source: {
           hostId: "renderbox",
+          username: "htaf",
           workerId: "pyash-gpu-worker",
           processId: process.pid
         }
@@ -155,6 +161,7 @@ test("housekeeper adapter forwards optional capacity controls", async () => {
         hostId: "renderbox",
         source: {
           hostId: "renderbox",
+          username: os.userInfo().username,
           workerId: "pyash-gpu-worker",
           processId: process.pid
         }
