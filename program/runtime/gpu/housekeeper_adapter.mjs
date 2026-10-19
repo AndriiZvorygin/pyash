@@ -1,3 +1,5 @@
+import { hostname } from "node:os";
+
 function normalizeText(value) {
   if (value == null) return "";
   return String(value).trim();
@@ -49,7 +51,7 @@ async function requestJson({ baseUrl = "", pathname = "", method = "GET", body }
 
 export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) {
   const rootUrl = normalizeBaseUrl(baseUrl);
-  const defaultHostId = normalizeText(hostId);
+  const defaultHostId = normalizeText(hostId) || hostname();
 
   return {
     async getHealth() {
@@ -89,9 +91,14 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) 
         handleId: normalizeText(handleId),
         runtimeName: normalizeText(runtimeName),
         profileName: normalizeText(profileName),
-      jobSpec,
-      hostId: defaultHostId
-    };
+        jobSpec,
+        hostId: defaultHostId,
+        source: {
+          hostId: defaultHostId,
+          workerId: "pyash-gpu-worker",
+          processId: process.pid
+        }
+      };
       if (normalizeText(deviceId)) body.deviceId = normalizeText(deviceId);
       if (typeof dischargeAllowed === "boolean") body.dischargeAllowed = dischargeAllowed;
       if (routing && typeof routing === "object" && !Array.isArray(routing)) body.routing = { ...routing };
