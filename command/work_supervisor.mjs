@@ -37,7 +37,12 @@ import {
   refreshAutonomousRoadmap,
   renderAutonomousRoadmapReport
 } from "../program/runtime/work/roadmap.mjs";
-import { synchronizeAutomationBranch } from "../program/runtime/work/integration.mjs";
+import {
+  auditAutomationBranch,
+  promoteAutomationBranch,
+  synchronizeAutomationBranch
+} from "../program/runtime/work/integration.mjs";
+import { appendWorkSchedulerEvent } from "../program/runtime/work/history.mjs";
 import { inspectWorkExecutionPreflight } from "../program/runtime/work/preflight.mjs";
 import { runSandboxSmoke } from "../program/runtime/work/sandbox_smoke.mjs";
 import { reconcileOperationalWorkTasks } from "../program/runtime/work/turn_reconciliation.mjs";
@@ -75,6 +80,25 @@ function jsonValue(args, flag, fallback = {}) {
 function positive(valueText, fallback) {
   const parsed = Number(valueText);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function collectCommitEvidence(value, output = new Set()) {
+  if (!value || typeof value !== "object") return output;
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "string" && /commit/iu.test(key) && /^[0-9a-f]{7,40}$/iu.test(item.trim())) {
+      output.add(item.trim());
+    }
+    if (item && typeof item === "object") collectCommitEvidence(item, output);
+  }
+  return output;
+}
+
+function taskCommitEvidence(tasks = []) {
+  return tasks.map((task) => ({
+    taskId: task.taskId,
+    status: task.status,
+    commits: [...collectCommitEvidence(task.checkpoint)]
+  })).filter((entry) => entry.commits.length > 0);
 }
 
 function codexSandboxOptions(env = process.env) {
@@ -244,6 +268,8 @@ function usage() {
     "  node command/work_supervisor.mjs roadmap [--json]",
     "  node command/work_supervisor.mjs roadmap refresh [--if-needed] [--json]",
     "  node command/work_supervisor.mjs roadmap sync-baseline [--json]",
+    "  node command/work_supervisor.mjs roadmap audit [--json]",
+    "  node command/work_supervisor.mjs roadmap promote [--json]",
     "",
     "Without a subcommand, the legacy one-shot supervisor behaviour is used."
   ].join("\n");
@@ -325,6 +351,36 @@ try {
         pushRemotes: String(process.env.PYA_AUTOMATION_PUSH_REMOTES || "origin,github").split(",").map((item) => item.trim()).filter(Boolean)
       });
       result = { kind: "baseline", ...sync };
+    } else if (args[1] === "audit") {
+      const audit = await auditAutomationBranch({
+        repositoryRoot,
+        branch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap",
+        masterRef: process.env.PYA_AUTOMATION_MASTER_REF || "master"
+      });
+      result = {
+        kind: "branch-audit",
+        ...audit,
+        taskEvidence: taskCommitEvidence(await listWorkTasks(worldRoot, { includeTerminal: true }))
+      };
+    } else if (args[1] === "promote") {
+      const promotion = await promoteAutomationBranch({
+        repositoryRoot,
+        branch: process.env.PYA_AUTOMATION_BRANCH || "automation/roadmap",
+        masterRef: process.env.PYA_AUTOMATION_MASTER_REF || "master",
+        push: truthy(process.env.PYA_AUTOMATION_PUSH_PROMOTION),
+        pushRemotes: String(process.env.PYA_AUTOMATION_PUSH_REMOTES || "origin,github").split(",").map((item) => item.trim()).filter(Boolean)
+      });
+      await appendWorkSchedulerEvent(worldRoot, {
+        type: "automation-promoted",
+        reason: promotion.status,
+        baseline: promotion.commit,
+        branchRevision: promotion.branchRevision,
+        masterRevision: promotion.masterRevision,
+        mergeBase: promotion.mergeBase,
+        promotionStatus: promotion.status,
+        pushed: promotion.pushed === true
+      });
+      result = { kind: "branch-promotion", ...promotion };
     } else {
       const roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot });
       result = { kind: "roadmap", roadmap, report: renderAutonomousRoadmapReport(roadmap) };
