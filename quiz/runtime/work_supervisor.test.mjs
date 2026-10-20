@@ -27,15 +27,15 @@ import { projectWorkContext } from "../../program/runtime/work/context.mjs";
 
 test("all default autonomous roles use Luna xhigh reasoning", () => {
   const roles = resolveWorkRoleConfig({}, {});
-  assert.equal(DEFAULT_WORK_ROLE_CONFIG.worker.model, "gpt-5.6-luna");
+  assert.equal(DEFAULT_WORK_ROLE_CONFIG.worker.model, "gpt-6-luna");
   assert.equal(roles.worker.reasoningEffort, "xhigh");
-  assert.equal(roles.planner.model, "gpt-5.6-luna");
+  assert.equal(roles.planner.model, "gpt-6-luna");
   assert.equal(roles.planner.reasoningEffort, "xhigh");
-  assert.equal(roles.implementer.model, "gpt-5.6-luna");
+  assert.equal(roles.implementer.model, "gpt-6-luna");
   assert.equal(roles.implementer.reasoningEffort, "xhigh");
-  assert.equal(roles.reviewer.model, "gpt-5.6-luna");
+  assert.equal(roles.reviewer.model, "gpt-6-luna");
   assert.equal(roles.reviewer.reasoningEffort, "xhigh");
-  assert.equal(roles.escalationReviewer.model, "gpt-5.6-luna");
+  assert.equal(roles.escalationReviewer.model, "gpt-6-luna");
   assert.equal(roles.escalationReviewer.reasoningEffort, "xhigh");
   const overridden = resolveWorkRoleConfig({}, {
     PYA_CODEX_REVIEWER_MODEL: "reviewer-override",

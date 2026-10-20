@@ -17,8 +17,8 @@ function task(status = "accepted") {
     startedAt: "2026-08-08T12:00:00.000Z",
     finishedAt: status === "accepted" ? "2026-08-08T12:10:00.000Z" : "",
     checkpoint: {
-      manager: { model: "gpt-5.6-luna" },
-      worker: { model: "gpt-5.6-luna" },
+      manager: { model: "gpt-6-luna" },
+      worker: { model: "gpt-6-luna" },
       plan: {
         summary: "Add the missing parity assertion.",
         workOrder: "Update the test and run the focused quiz."
@@ -51,13 +51,13 @@ test("work report identifies the independent Luna reviewer", () => {
   const reviewed = task();
   reviewed.checkpoint.reviewer = {
     role: "reviewer",
-    model: "gpt-5.6-luna",
+    model: "gpt-6-luna",
     reasoningEffort: "xhigh",
     threadId: "reviewer-thread"
   };
   reviewed.checkpoint.review = {
     role: "reviewer",
-    model: "gpt-5.6-luna",
+    model: "gpt-6-luna",
     reasoningEffort: "xhigh",
     threadId: "reviewer-thread",
     reviewedCommit: "task-commit",
@@ -65,7 +65,7 @@ test("work report identifies the independent Luna reviewer", () => {
     explanation: "Independent verification passed."
   };
   const report = renderWorkTaskReport(reviewed);
-  assert.match(report, /Reviewer:\n  gpt-5\.6-luna \(Luna routine reviewer\)/u);
+  assert.match(report, /Reviewer:\n  gpt-6-luna \(Luna routine reviewer\)/u);
   assert.match(report, /Luna routine reviewer:\n  ACCEPT/u);
   assert.match(report, /Reviewed implementation: task-commit/u);
 });

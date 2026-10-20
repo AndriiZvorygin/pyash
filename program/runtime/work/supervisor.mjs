@@ -39,7 +39,7 @@ import {
   threadIdFromResponse
 } from "../codex/app_server.mjs";
 
-const DEFAULT_LUNA_ROLE = Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "xhigh" });
+const DEFAULT_LUNA_ROLE = Object.freeze({ model: "gpt-6-luna", reasoningEffort: "xhigh" });
 const DEFAULT_PLANNER = DEFAULT_LUNA_ROLE;
 const DEFAULT_IMPLEMENTER = DEFAULT_LUNA_ROLE;
 const DEFAULT_REVIEWER = DEFAULT_LUNA_ROLE;
