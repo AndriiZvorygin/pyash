@@ -77,8 +77,8 @@ export function renderWorkTaskReport(task) {
   const reviewerLabel = reviewerRole === "reviewer"
     ? "Luna routine reviewer"
     : reviewerRole === "escalationReviewer"
-      ? "Sol escalation reviewer"
-      : "Sol review";
+      ? "Luna escalation reviewer"
+      : "Luna review";
   const reconciliation = checkpoint.integration?.reconciliation || {};
   const progress = deriveImplementationProgress(checkpoint);
   const changedFiles = list(implementation.changedFiles)
@@ -108,17 +108,17 @@ export function renderWorkTaskReport(task) {
     `  ${text(worker.model) || "(unknown)"}`,
     "",
     "Reviewer:",
-    `  ${text((reviewerRole === "escalationReviewer" ? routineReviewer : reviewer).model) || "(unknown)"} (${reviewerRole === "manager" ? "Sol review" : "Luna routine reviewer"})`,
+    `  ${text((reviewerRole === "escalationReviewer" ? routineReviewer : reviewer).model) || "(unknown)"} (${reviewerRole === "manager" ? "Luna review" : "Luna routine reviewer"})`,
     ...(reviewerRole === "escalationReviewer" ? [
       "",
       "Escalation reviewer:",
-      `  ${text(escalationReviewer.model || reviewer.model) || "(unknown)"} (Sol escalation reviewer)`
+      `  ${text(escalationReviewer.model || reviewer.model) || "(unknown)"} (Luna escalation reviewer)`
     ] : []),
     "",
-    "Sol plan:",
+    "Planner plan:",
     indent(explicitText(checkpoint.plan?.summary || checkpoint.plan?.workOrder), "  ", 1200),
     "",
-    "Sol work order:",
+    "Planner work order:",
     indent(explicitText(checkpoint.plan?.workOrder), "  ", 1800),
     "",
     "Luna implementation:",

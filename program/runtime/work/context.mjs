@@ -228,8 +228,8 @@ function dutyFields(task, checkpoint) {
     promptField("Objective", task?.promptText, { priority: 80, preferredBytes: 1200, minimumBytes: 96 }),
     promptField("Acceptance criteria", task?.acceptanceText, { priority: 80, preferredBytes: 1200, minimumBytes: 96 }),
     promptField("Context", task?.contextText, { priority: 70, preferredBytes: 1000, minimumBytes: 96 }),
-    promptField("Sol work order", checkpoint?.plan?.workOrder, { priority: 90, preferredBytes: 1400, minimumBytes: 96 }),
-    promptField("Sol risks", checkpoint?.plan?.risks, { priority: 60, preferredBytes: 900, minimumBytes: 64 }),
+    promptField("Planner work order", checkpoint?.plan?.workOrder, { priority: 90, preferredBytes: 1400, minimumBytes: 96 }),
+    promptField("Planner risks", checkpoint?.plan?.risks, { priority: 60, preferredBytes: 900, minimumBytes: 64 }),
     promptField("Repository", checkpoint?.workspace?.repository, { priority: 30, preferredBytes: 500, minimumBytes: 32 }),
     promptField("Worktree", checkpoint?.workspace?.worktreePath, { priority: 30, preferredBytes: 700, minimumBytes: 32 })
   ];
@@ -272,7 +272,7 @@ function compactCounterFields(checkpoint) {
     promptField("  Consecutive no-progress passes", Number(implementation.consecutiveNoProgressPasses || progress.consecutiveNoProgressPasses || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
     promptField("  Commits produced", Number(implementation.commitsProduced || progress.commitsProduced || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
     promptField("  Acceptance checks closed", Number(implementation.acceptanceChecksClosed || progress.acceptanceChecksClosed || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 }),
-    promptField("  Sol review count", Number(checkpoint?.convergence?.reviewCount || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 })
+    promptField("  Review count", Number(checkpoint?.convergence?.reviewCount || 0), { priority: 70, preferredBytes: 100, minimumBytes: 16 })
   ];
 }
 
@@ -282,16 +282,16 @@ function roleOpening(phase, role) {
   if (phase === "review" && normalizedRole === "reviewer") {
     return "You are Luna, the independent Pyash reviewer. You did not implement this change and must not modify files.";
   }
-  if (phase === "review") return "You are Sol reviewing Luna's latest completed implementation in the Pyash worktree.";
+  if (phase === "review") return "You are Luna reviewing the latest completed implementation in the Pyash worktree.";
   if (phase === "planning" || ["planner", "manager"].includes(normalizedRole)) {
-    return "You are Sol, the Pyash planner and architect, preparing a bounded implementation work order for Luna.";
+    return "You are Luna, the Pyash planner and architect, preparing a bounded implementation work order.";
   }
   if (phase === "escalation-review" || phase === "convergence-review" || normalizedRole === "escalationreviewer") {
     return phase === "convergence-review"
-      ? "You are Sol performing a focused convergence review for a technical Pyash task."
-      : "You are Sol, the escalation reviewer for a Pyash roadmap task.";
+      ? "You are Luna performing a focused convergence review for a technical Pyash task."
+      : "You are Luna, the escalation reviewer for a Pyash roadmap task.";
   }
-  if (phase === "revision") return "You are Luna applying Sol's immediately preceding technical correction in the Pyash worktree.";
+  if (phase === "revision") return "You are Luna applying the immediately preceding technical correction in the Pyash worktree.";
   return "You are Luna, the Pyash implementation worker, continuing the bounded work order.";
 }
 
@@ -314,13 +314,13 @@ function promptForPhase(task, { phase, role, correction = "" } = {}) {
     segments.push(
       "Implement the bounded work order and run relevant tests.",
       "Use exact headings: SUMMARY:, CHANGED FILES:, TESTS:, BLOCKERS:, UNCERTAINTY:.",
-      "Include REVIEW READY: yes only when the acceptance criteria are sufficiently implemented for Sol to review."
+      "Include REVIEW READY: yes only when the acceptance criteria are sufficiently implemented for the independent Luna reviewer to review."
     );
   } else if (phase === "review") {
     if (text(role).toLowerCase() === "reviewer") {
       segments.push(
         "Return exactly one decision using the heading DECISION: ACCEPT, DECISION: REVISE, or DECISION: ESCALATE.",
-        "ACCEPT only when every acceptance criterion is satisfied. REVISE only for a bounded technical correction. ESCALATE only for architectural ambiguity, contradictory semantics, safety concerns, non-converging disagreement, or a work order that needs Sol's judgment.",
+        "ACCEPT only when every acceptance criterion is satisfied. REVISE only for a bounded technical correction. ESCALATE only for architectural ambiguity, contradictory semantics, safety concerns, non-converging disagreement, or a question that needs escalation-review judgment.",
         "Also provide RATIONALE: and, when revising, CORRECTION:. When escalating, provide ESCALATION REASON:."
       );
     } else {

@@ -78,8 +78,8 @@ function promptIntegration(task, checkpoint, workspace, branch, reconciliation) 
     `Original objective: ${task.promptText}`,
     `Acceptance criteria: ${task.acceptanceText}`,
     `Original context: ${task.contextText || "none"}`,
-    `Original Sol work order: ${checkpoint.plan.workOrder || "not recorded"}`,
-    `Original Sol risks: ${checkpoint.plan.risks || "none reported"}`,
+    `Original planner work order: ${checkpoint.plan.workOrder || "not recorded"}`,
+    `Original planner risks: ${checkpoint.plan.risks || "none reported"}`,
     `Original task worktree: ${checkpoint.workspace.worktreePath || "not recorded"}`,
     `Original task base revision: ${checkpoint.workspace.baseRevision || "not recorded"}`,
     `Original task tip: ${reconciliation.taskCommit || checkpoint.implementation.commit || "not recorded"}`,
@@ -99,10 +99,10 @@ function promptIntegrationReview(task, checkpoint, workspace, branch, reconcilia
     "This is an integration review, not a new planning turn.",
     "Return exactly one decision using DECISION: ACCEPT, DECISION: REVISE, or DECISION: ESCALATE.",
     "Also provide RATIONALE: and, when revising, CORRECTION:.",
-    "Use ESCALATE only for a genuine semantic, product, architecture, safety, policy, or unresolved acceptance question that requires Sol judgment. A Git conflict alone is not an escalation.",
+    "Use ESCALATE only for a genuine semantic, product, architecture, safety, policy, or unresolved acceptance question that requires escalation-review judgment. A Git conflict alone is not an escalation.",
     `Original objective: ${task.promptText}`,
     `Acceptance criteria: ${task.acceptanceText}`,
-    `Original Sol work order: ${checkpoint.plan.workOrder || "not recorded"}`,
+    `Original planner work order: ${checkpoint.plan.workOrder || "not recorded"}`,
     `Original reviewed implementation evidence: ${checkpoint.implementation.summary || "not recorded"}`,
     `Original task tip: ${reconciliation.taskCommit || checkpoint.implementation.commit || "not recorded"}`,
     `Current automation branch: ${branch}`,
@@ -118,13 +118,13 @@ function promptIntegrationReview(task, checkpoint, workspace, branch, reconcilia
 
 function promptIntegrationEscalation(task, checkpoint, workspace, branch, reconciliation, routineReview) {
   return [
-    "You are Sol, the escalation reviewer for a Pyash integration reconciliation.",
+    "You are Luna, the escalation reviewer for a Pyash integration reconciliation.",
     "Routine independent Luna review could not safely resolve the question below.",
     "Return exactly one decision: DECISION: ACCEPT, DECISION: REVISE, DECISION: REPLAN, or DECISION: BLOCK.",
     "BLOCK / NEEDS_DECISION is only for a genuine product, semantic, architectural, safety, policy, or required external decision.",
     `Original objective: ${task.promptText}`,
     `Acceptance criteria: ${task.acceptanceText}`,
-    `Original Sol work order: ${checkpoint.plan.workOrder || "not recorded"}`,
+    `Original planner work order: ${checkpoint.plan.workOrder || "not recorded"}`,
     `Current automation branch: ${branch}`,
     `Reconciliation worktree: ${workspace.worktreePath}`,
     `Reconciled files: ${reconciliation.changedFiles.join(", ") || "none reported"}`,
@@ -140,7 +140,7 @@ function promptIntegrationEscalation(task, checkpoint, workspace, branch, reconc
 
 function promptIntegrationConvergence(task, checkpoint, reconciliation) {
   return [
-    "You are Sol performing a focused convergence review of integration reconciliation.",
+    "You are Luna performing a focused convergence review of integration reconciliation.",
     "Do not request another broad rewrite. Choose exactly one: DECISION: CONTINUE, DECISION: SPLIT, or DECISION: BLOCK.",
     "CONTINUE must provide one narrower executable correction. SPLIT must identify a coherent dependent follow-up while preserving completed work. BLOCK requires a genuine semantic or human decision.",
     `Task: ${task.title}`,
@@ -483,7 +483,7 @@ export async function runWorkIntegrationReconciliationOnce({
           }
         },
         blocker,
-        lastAction: nextStatus === "revision" ? "integration convergence correction recorded" : "integration reconciliation blocked by Sol"
+        lastAction: nextStatus === "revision" ? "integration convergence correction recorded" : "integration reconciliation blocked by escalation review"
       }, { message: blocker, error: "" });
       if (task.status !== "blocked") task = await move("blocked", { message: blocker, error: "" });
       await emit("integration-convergence", { decision: convergence.decision, correction: convergence.correction, reason: convergence.rationale, retryable: nextStatus === "revision" });
@@ -491,7 +491,7 @@ export async function runWorkIntegrationReconciliationOnce({
     }
 
     const attempt = reconciliation.attempts;
-    if (task.status === "ready") task = await move("planning", { message: "integration reconciliation starting without new Sol planning" });
+    if (task.status === "ready") task = await move("planning", { message: "integration reconciliation starting without a new planner turn" });
     if (task.status !== "implementing") task = await move("implementing", { message: "integration reconciliation Luna implementation" });
     const workerThreadId = reconciliation.workerThreadId || "";
     workerClient = await appServerFactory({ role: "implementer", model: roleSettings.implementer.model, reasoningEffort: roleSettings.implementer.reasoningEffort, cwd: workspace.worktreePath, approvalPolicy });
@@ -701,7 +701,7 @@ export async function runWorkIntegrationReconciliationOnce({
           threadId: escalationThreadId
         },
         integration: { reconciliation: { escalationReviewerThreadId: escalationThreadId } },
-        lastAction: "integration reconciliation Sol escalation review started"
+        lastAction: "integration reconciliation Luna escalation review started"
       });
       await emit("integration-escalation-review-started", { role: "escalationReviewer", model: roleSettings.escalationReviewer.model, threadId: escalationThreadId, phase: "integration-escalation-review", reason: routineReview.escalationReason || routineReview.explanation });
       const escalationReviewIdentity = `${reviewIdentity}-escalation`;
@@ -752,7 +752,7 @@ export async function runWorkIntegrationReconciliationOnce({
           error: reviewBlocker,
           reconciliation: { lastReviewDecision: review.decision, lastReviewExplanation: review.explanation, revisionInstructions: review.revisionInstructions }
         },
-        lastAction: review.decision === "BLOCK" ? "integration reconciliation blocked by Sol" : "integration reconciliation revision requested"
+        lastAction: review.decision === "BLOCK" ? "integration reconciliation blocked by escalation review" : "integration reconciliation revision requested"
       }, { message: reviewBlocker, error: "" });
       await emit(review.decision === "BLOCK" ? "integration-blocked" : "integration-revision", { reason: reviewBlocker, correction: review.revisionInstructions, retryable: review.decision !== "BLOCK" });
       return { claimed: true, taskId: task.taskId, status: task.status, message: reviewBlocker, queue: await queueDepth(worldRoot) };

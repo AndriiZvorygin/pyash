@@ -217,8 +217,8 @@ test("daily digest aggregates scheduler events and durable task progress", async
     now: "2026-08-09T23:00:00.000Z"
   });
   assert.match(digest.report, /Complete a substantial parity tranche/u);
-  assert.match(digest.report, /Sol plan: Plan the tranche\./u);
-  assert.match(digest.report, /Sol review: ACCEPT Evidence is sufficient\./u);
+  assert.match(digest.report, /Planner plan: Plan the tranche\./u);
+  assert.match(digest.report, /Luna review: ACCEPT Evidence is sufficient\./u);
   assert.match(digest.report, /Admitted: 1/u);
   assert.match(digest.report, /ROADMAP/u);
   assert.match(digest.report, /Complete the higher-level translation parity tranche/u);
@@ -228,7 +228,7 @@ test("daily digest aggregates scheduler events and durable task progress", async
   assert.match(digest.report, /ROADMAP WORK REMAINS|READY QUEUE EMPTY|Current pacing floor/iu);
 });
 
-test("daily digest counts routine Luna reviews separately from Sol escalations", () => {
+test("daily digest counts routine and escalation Luna reviews separately", () => {
   const report = renderWorkDailyDigest({
     date: "2026-09-12",
     since: "2026-09-12T00:00:00.000Z",
@@ -241,7 +241,7 @@ test("daily digest counts routine Luna reviews separately from Sol escalations",
     ]
   }).report;
   assert.match(report, /Routine Luna reviews: 1/u);
-  assert.match(report, /Sol review escalations: 1/u);
+  assert.match(report, /Luna review escalations: 1/u);
 });
 
 test("daily digest reports material progress and deduplicates duplicate recovery records", async () => {
@@ -534,7 +534,7 @@ test("technical blocked wakes are not reported as idle and blocker rationale sta
   assert.match(digest.report, /Technical continuation unavailable: 1/u);
   assert.match(digest.report, /Idle \/ no work: 0/u);
   assert.match(digest.report, /correction required: compiled streaming duplicates output and loses reply metadata/u);
-  assert.doesNotMatch(digest.report, /Sol review:.*full rationale/iu);
+  assert.doesNotMatch(digest.report, /Luna review:.*full rationale/iu);
 });
 
 test("digest uses one canonical Next package for runnable and roadmap sections", () => {

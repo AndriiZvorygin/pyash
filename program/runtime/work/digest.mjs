@@ -202,19 +202,19 @@ function compactReport(task) {
   const reviewLabel = review.role === "reviewer"
     ? "Luna review"
     : review.role === "escalationReviewer"
-      ? "Sol escalation review"
-      : "Sol review";
+      ? "Luna escalation review"
+      : "Luna review";
   const roleLines = review.role === "escalationReviewer"
     ? [
       `Reviewer: ${(checkpoint.reviewer?.model || "(unknown)")} (Luna routine reviewer)`,
-      `Escalation reviewer: ${(checkpoint.escalationReviewer?.model || reviewer.model || "(unknown)")} (Sol escalation reviewer)`
+      `Escalation reviewer: ${(checkpoint.escalationReviewer?.model || reviewer.model || "(unknown)")} (Luna escalation reviewer)`
     ]
     : [`Reviewer: ${reviewer.model || "(unknown)"} (${reviewLabel})`];
   return [
     `Task: ${task.title}`,
     `Task ID: ${task.taskId}`,
     `Result: ${String(task.status).toUpperCase()}`,
-    `Sol plan: ${excerpt(checkpoint.plan?.summary || checkpoint.plan?.workOrder) || "(not recorded)"}`,
+    `Planner plan: ${excerpt(checkpoint.plan?.summary || checkpoint.plan?.workOrder) || "(not recorded)"}`,
     `Luna implementation: ${excerpt(checkpoint.implementation?.summary) || "(not recorded)"}`,
     `Implementation passes: ${progress.implementationPasses}`,
     `Material-progress passes: ${progress.materialProgressPasses}`,
@@ -431,7 +431,7 @@ export function renderWorkDailyDigest({
   blockedBeforeModel.push(...admitted.filter((event) => !bool(event.workStarted)));
   const recovered = uniqueRecoveryEvents(events.filter((event) => event.action === "recovered"));
   const routineReviews = events.filter((event) => event.action === "review-completed" && event.role === "reviewer");
-  const solEscalations = events.filter((event) => event.action === "escalation-review-completed"
+  const escalationReviews = events.filter((event) => event.action === "escalation-review-completed"
     && event.role === "escalationReviewer");
   const roadmapWork = hasCredibleRoadmapWork(roadmap || {});
   const humanDecisions = roadmap?.needsDecision || [];
@@ -528,7 +528,7 @@ export function renderWorkDailyDigest({
     `Idle / no work: ${idle.length}`,
     `Operational recoveries: ${recovered.length}`,
     `Routine Luna reviews: ${routineReviews.length}`,
-    `Sol review escalations: ${new Set(solEscalations.map((event) => `${event.taskId}:${event.reviewPass || event.at || ""}`)).size}`,
+    `Luna review escalations: ${new Set(escalationReviews.map((event) => `${event.taskId}:${event.reviewPass || event.at || ""}`)).size}`,
     "",
     "Completed work",
     "--------------"

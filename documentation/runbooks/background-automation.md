@@ -2,7 +2,7 @@
 
 Pyash's unattended roadmap lane is deliberately separate from `master`.
 Hourly work starts from `automation/roadmap`, follows weekly Codex pacing, and
-can advance only that branch after Sol accepts a task. The daily digest is the
+can advance only that branch after the configured Luna reviewer accepts a task. The daily digest is the
 only routine email.
 
 ## Private configuration
@@ -87,9 +87,9 @@ node command/work_supervisor.mjs roadmap
 node command/work_supervisor.mjs roadmap --json
 ```
 
-Packages are grouped as `ACTIVE`, `QUEUED`, `CANDIDATE`, `BLOCKED / NEEDS DECISION`, or `COMPLETE`. The active package is enriched from its durable task checkpoint, including Sol's plan, Luna's pass count, worktree, commit, and blocker. The catalog is intentionally limited to substantial roadmap increments.
+Packages are grouped as `ACTIVE`, `QUEUED`, `CANDIDATE`, `BLOCKED / NEEDS DECISION`, or `COMPLETE`. The active package is enriched from its durable task checkpoint, including the planner's work order, Luna's pass count, worktree, commit, and blocker. The catalog is intentionally limited to substantial roadmap increments.
 
-Sol roadmap review is explicit and occasional, not part of every hourly wake:
+Luna roadmap review is explicit and occasional, not part of every hourly wake:
 
 ```bash
 node command/work_supervisor.mjs roadmap refresh
@@ -114,12 +114,11 @@ The daily digest includes a compact roadmap section showing active work, the nex
 
 ## Codex role topology
 
-The default execution path uses Sol-high for architecture and planning, Luna-xhigh
-for implementation and testing, and a separate Luna-xhigh thread for routine
-verification. Routine review returns `ACCEPT`, `REVISE`, or `ESCALATE`; only the
-last outcome invokes the Sol-high escalation reviewer. The reviewer never shares
-the implementer's conversational thread, even though both are Luna roles. The
-role models and reasoning levels can be overridden privately with
+The default execution path uses separate Luna-xhigh threads for planning,
+implementation, routine verification, and escalation review. Routine review
+returns `ACCEPT`, `REVISE`, or `ESCALATE`; escalation remains a distinct review
+thread and uses the same Luna-xhigh role as every other autonomous turn. The reviewer never shares
+the implementer's conversational thread. The role models and reasoning levels can be overridden privately with
 `PYA_CODEX_PLANNER_*`, `PYA_CODEX_IMPLEMENTER_*`,
 `PYA_CODEX_REVIEWER_*`, and `PYA_CODEX_ESCALATION_REVIEWER_*` settings.
 

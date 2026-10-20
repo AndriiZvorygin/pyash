@@ -25,14 +25,18 @@ import {
 } from "../../program/runtime/work/supervisor.mjs";
 import { projectWorkContext } from "../../program/runtime/work/context.mjs";
 
-test("default Luna launches use xhigh reasoning", () => {
+test("all default autonomous roles use Luna xhigh reasoning", () => {
   const roles = resolveWorkRoleConfig({}, {});
   assert.equal(DEFAULT_WORK_ROLE_CONFIG.worker.model, "gpt-5.6-luna");
   assert.equal(roles.worker.reasoningEffort, "xhigh");
-  assert.equal(roles.planner.model, "gpt-5.6-sol");
+  assert.equal(roles.planner.model, "gpt-5.6-luna");
+  assert.equal(roles.planner.reasoningEffort, "xhigh");
   assert.equal(roles.implementer.model, "gpt-5.6-luna");
+  assert.equal(roles.implementer.reasoningEffort, "xhigh");
   assert.equal(roles.reviewer.model, "gpt-5.6-luna");
-  assert.equal(roles.escalationReviewer.model, "gpt-5.6-sol");
+  assert.equal(roles.reviewer.reasoningEffort, "xhigh");
+  assert.equal(roles.escalationReviewer.model, "gpt-5.6-luna");
+  assert.equal(roles.escalationReviewer.reasoningEffort, "xhigh");
   const overridden = resolveWorkRoleConfig({}, {
     PYA_CODEX_REVIEWER_MODEL: "reviewer-override",
     PYA_CODEX_REVIEWER_REASONING: "medium",
@@ -296,7 +300,7 @@ test("supervisor observer reports the useful lifecycle without token noise", asy
   assert.equal(events.find((event) => event.type === "review-completed").decision, "ACCEPT");
 });
 
-test("routine review uses an independent Luna thread and accepts without Sol escalation", async () => {
+test("routine review uses an independent Luna thread and accepts without escalation", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-independent-review-");
   await enqueueWorkTask(worldRoot, task("independent-review-task"));
   const events = [];
@@ -323,7 +327,7 @@ test("routine review uses an independent Luna thread and accepts without Sol esc
   assert.equal(clients.has("escalationReviewer"), false);
 });
 
-test("routine Luna REVISE reuses independent reviewer and implementer without invoking Sol escalation", async () => {
+test("routine Luna REVISE reuses independent reviewer and implementer without invoking escalation", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-luna-revise-");
   await enqueueWorkTask(worldRoot, task("luna-revise-task"));
   const clients = new Map();
@@ -343,7 +347,7 @@ test("routine Luna REVISE reuses independent reviewer and implementer without in
   assert.notEqual(status.checkpoint.reviewer.threadId, status.checkpoint.worker.threadId);
 });
 
-test("routine Luna ESCALATE invokes a distinct Sol escalation reviewer", async () => {
+test("routine Luna ESCALATE invokes a distinct Luna escalation reviewer", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-escalation-");
   await enqueueWorkTask(worldRoot, task("escalation-task"));
   const events = [];
@@ -529,12 +533,12 @@ test("background supervisor checkpoints Luna and reuses the same thread before r
   assert.equal(status.checkpoint.implementation.passes, 2);
   assert.equal(status.checkpoint.manager.threadId, "planner-thread");
   assert.equal(status.checkpoint.worker.threadId, "implementer-thread");
-  assert.equal(clients.get("planner").turns, 1, "Sol plans once");
+  assert.equal(clients.get("planner").turns, 1, "Luna plans once");
   assert.equal(clients.get("reviewer").turns, 1, "independent Luna reviews after implementation is ready");
   assert.equal(clients.get("implementer").turns, 2, "Luna continues across wakes");
 });
 
-test("supervisor persists Sol plan, Luna evidence, and ACCEPT review", async () => {
+test("supervisor persists Luna plan, implementation evidence, and ACCEPT review", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-accept-");
   await enqueueWorkTask(worldRoot, task("accept-task"));
   const result = await runFake(worldRoot, ["ACCEPT"]);
@@ -681,7 +685,7 @@ test("combined role, timeout, policy, reconciliation, approval, and compact stat
       role: "reviewer",
       previousThreadIds: ["reviewer-old", "reviewer-old"],
       decision: "ESCALATE",
-      explanation: "routine review needs Sol"
+      explanation: "routine review needs escalation"
     },
     routineReview: { role: "reviewer", decision: "ESCALATE", escalationReason: "semantic boundary" },
     escalationReview: { role: "escalationReviewer", decision: "REVISE", workOrder: "make the bounded correction" },
@@ -879,7 +883,7 @@ test("the default revision bound checkpoints concrete work instead of creating a
   assert.match(status.checkpoint.review.revisionInstructions, /missing assertion/iu);
 });
 
-test("two no-progress passes trigger focused Sol convergence before another Luna pass", async () => {
+test("two no-progress passes trigger focused Luna convergence before another pass", async () => {
   const worldRoot = await makeWorldRoot("pyash-supervisor-convergence-");
   await enqueueWorkTask(worldRoot, task("convergence-task"));
   await claimOldestWorkTask(worldRoot, { workerTag: "test" });

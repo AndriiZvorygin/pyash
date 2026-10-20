@@ -312,7 +312,7 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
       } : {},
       recoveryHistory: [...(current.checkpoint?.recoveryHistory || []), record],
       lastAction: continuation
-        ? "recovered technical revision; continuing concrete Sol correction"
+        ? "recovered technical revision; continuing concrete reviewer correction"
         : integration
           ? "entered automation integration reconciliation"
           : reason,

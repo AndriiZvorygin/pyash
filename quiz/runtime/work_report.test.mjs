@@ -17,7 +17,7 @@ function task(status = "accepted") {
     startedAt: "2026-08-08T12:00:00.000Z",
     finishedAt: status === "accepted" ? "2026-08-08T12:10:00.000Z" : "",
     checkpoint: {
-      manager: { model: "gpt-5.6-sol" },
+      manager: { model: "gpt-5.6-luna" },
       worker: { model: "gpt-5.6-luna" },
       plan: {
         summary: "Add the missing parity assertion.",
@@ -38,11 +38,11 @@ function task(status = "accepted") {
 test("work report renders durable plan, evidence, review, and diff stat", () => {
   const report = renderWorkTaskReport(task());
   assert.match(report, /Result: ACCEPTED/);
-  assert.match(report, /Sol plan:\n  Add the missing parity assertion\./);
-  assert.match(report, /Sol work order:\n  Update the test and run the focused quiz\./);
+  assert.match(report, /Planner plan:\n  Add the missing parity assertion\./);
+  assert.match(report, /Planner work order:\n  Update the test and run the focused quiz\./);
   assert.match(report, /quiz\/parity\.test\.mjs/);
   assert.match(report, /node --test quiz\/parity\.test\.mjs: PASS/);
-  assert.match(report, /Sol review:\n  ACCEPT/);
+  assert.match(report, /Luna review:\n  ACCEPT/);
   assert.match(report, /Diff: 1 file changed, \+1 -1/);
   assert.match(report, /Worktree: \/tmp\/worktrees\/report-task/);
 });
@@ -80,7 +80,7 @@ test("work report clips long explicit output at a readable boundary", () => {
     }
   });
   assert.doesNotMatch(report, /WORK ORDER:\n  should not be mixed/);
-  assert.match(report, /Sol work order:\n  Run the focused quiz\./);
+  assert.match(report, /Planner work order:\n  Run the focused quiz\./);
   assert.match(report, /\.\.\. \[truncated\]/);
 });
 

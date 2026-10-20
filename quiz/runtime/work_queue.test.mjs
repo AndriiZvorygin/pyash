@@ -139,7 +139,7 @@ test("work status retains structured checkpoint data across a claimed runtime it
       worktreePath: "/tmp/worktree/checkpoint-task",
       mode: "git-worktree"
     },
-    manager: { model: "gpt-5.6-sol", threadId: "sol-thread" },
+    manager: { model: "gpt-5.6-luna", threadId: "legacy-planner-thread" },
     plan: { workOrder: "make the change" },
     implementation: { changedFiles: ["file.txt"], tests: ["node --test"], diff: "+file" },
     review: { decision: "ACCEPT", explanation: "meets criteria" },
@@ -148,7 +148,7 @@ test("work status retains structured checkpoint data across a claimed runtime it
   const recovered = await readWorkTaskStatus(worldRoot, "checkpoint-task");
   assert.equal(recovered.workSpec.source, "roadmap");
   assert.equal(recovered.checkpoint.workspace.baseRevision, "abc123");
-  assert.equal(recovered.checkpoint.manager.threadId, "sol-thread");
+  assert.equal(recovered.checkpoint.manager.threadId, "legacy-planner-thread");
   assert.deepEqual(recovered.checkpoint.implementation.changedFiles, ["file.txt"]);
   assert.equal(recovered.checkpoint.review.decision, "ACCEPT");
   assert.equal(recovered.checkpoint.revisionCount, 1);

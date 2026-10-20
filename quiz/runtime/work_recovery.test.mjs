@@ -82,7 +82,7 @@ test("technical blockers are recoverable while semantic decisions are not", asyn
   }, { now }), false);
   assert.equal(isRecoverableOperationalWorkTask({
     ...task,
-    checkpoint: { blocker: "Sol review BLOCK: human decision required", activeTurn: {} }
+    checkpoint: { blocker: "review BLOCK: human decision required", activeTurn: {} }
   }, { now }), false);
   assert.equal(isRecoverableOperationalWorkTask({
     ...task,
@@ -90,15 +90,15 @@ test("technical blockers are recoverable while semantic decisions are not", asyn
   }, { now }), true);
   assert.equal(isRecoverableOperationalWorkTask({
     ...task,
-    checkpoint: { blocker: "revision limit reached: Sol requested another pass", activeTurn: {} }
+    checkpoint: { blocker: "revision limit reached: reviewer requested another pass", activeTurn: {} }
   }, { now }), true);
   assert.equal(isRetryableWorkBlock({
     ...task,
-    checkpoint: { blocker: "revision limit reached: Sol requested another pass", activeTurn: {} }
+    checkpoint: { blocker: "revision limit reached: reviewer requested another pass", activeTurn: {} }
   }), true);
   assert.equal(isHumanDecisionBlock({
     ...task,
-    checkpoint: { blocker: "Sol review BLOCK: human decision required", activeTurn: {} }
+    checkpoint: { blocker: "review BLOCK: human decision required", activeTurn: {} }
   }), true);
   assert.equal(isHumanDecisionBlock({
     ...task,
@@ -110,11 +110,11 @@ test("technical blockers are recoverable while semantic decisions are not", asyn
   }, { now }), false);
 });
 
-test("concrete Sol correction resumes in revision phase and preserves the review thread", async () => {
+test("concrete reviewer correction resumes in revision phase and preserves the review thread", async () => {
   const worldRoot = await world("pyash-work-recovery-revision-");
   await blockedTask(worldRoot, {
     taskId: "roadmap-concrete-correction",
-    blocker: "revision limit reached: Sol requested another pass",
+    blocker: "revision limit reached: reviewer requested another pass",
     activeTurn: {}
   });
   const current = await readWorkTaskStatus(worldRoot, "roadmap-concrete-correction");
@@ -138,7 +138,7 @@ test("concrete Sol correction resumes in revision phase and preserves the review
   assert.equal(recovered.task.checkpoint.continuationCount, 1);
 });
 
-test("a focused Sol BLOCK for an unavailable required backend is not replayed as Luna work", async () => {
+test("a focused review BLOCK for an unavailable required backend is not replayed as Luna work", async () => {
   const worldRoot = await world("pyash-work-recovery-convergence-block-");
   await blockedTask(worldRoot, {
     taskId: "roadmap-convergence-block",
@@ -485,7 +485,7 @@ test("policy revalidation excludes current-policy, external, human, ambiguous, a
   }, { currentPolicy }), false);
   assert.equal(isEligibleForTimeoutPolicyRevalidation({
     ...base,
-    checkpoint: { ...base.checkpoint, blocker: "Sol review BLOCK: human decision required" }
+    checkpoint: { ...base.checkpoint, blocker: "review BLOCK: human decision required" }
   }, { currentPolicy }), false);
   assert.equal(isEligibleForTimeoutPolicyRevalidation({
     ...base,

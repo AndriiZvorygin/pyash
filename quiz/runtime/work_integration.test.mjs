@@ -92,7 +92,7 @@ function blockedTask(taskId, title, priority, blocker, integrationStatus = "") {
     priority,
     status: "blocked",
     queuedAt: "2026-08-17T00:00:00.000Z",
-    acceptanceText: "The focused tests pass and Sol reviews the result.",
+    acceptanceText: "The focused tests pass and Luna reviews the result.",
     promptText: "Preserve the intended capability on the current automation baseline.",
     contextText: "Existing accepted implementation evidence is recorded in the task checkpoint.",
     workSpec: { granularity: "substantial" },
@@ -183,7 +183,7 @@ test("a live integration turn makes the next package the fallback candidate", as
   assert.equal(inspected.selected.taskId, "roadmap-register-state-ground-truth");
 });
 
-test("Luna reconciliation on the current automation baseline integrates after Sol ACCEPT", async () => {
+test("Luna reconciliation on the current automation baseline integrates after Luna ACCEPT", async () => {
   const { worldRoot, repositoryRoot, baseRevision } = await world("pyash-integration-run-");
   const taskId = "roadmap-ceremony-error-propagation";
   await enqueueWorkTask(worldRoot, {
