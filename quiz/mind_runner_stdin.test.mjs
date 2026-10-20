@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import http from "node:http";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -126,6 +127,80 @@ test("mind ollama runner enqueues non-streaming payload when GPU queue mode is e
   });
   assert.equal(closed, 0, stderr);
   assert.deepEqual(JSON.parse(stdout.trim()), { response: "queued hello" });
+});
+
+test("manager-required mind calls submit to the GPU Housekeeper without contacting Ollama directly", async () => {
+  const calls = [];
+  const manager = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString("utf8");
+    calls.push({ method: req.method, path: req.url, body: body ? JSON.parse(body) : null });
+    res.setHeader("content-type", "application/json");
+    if (req.method === "POST" && req.url === "/submit") {
+      res.end(JSON.stringify({ remoteJobId: "web-chat-job" }));
+      return;
+    }
+    if (req.method === "GET" && req.url === "/job/web-chat-job") {
+      res.end(JSON.stringify({ status: "success", result: { message: { role: "assistant", content: "managed reply" } } }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise((resolve) => manager.listen(0, "127.0.0.1", resolve));
+  const address = manager.address();
+  const usageDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-managed-usage-"));
+  try {
+    const payload = JSON.stringify({
+      mode: "chat",
+      model: "qwen3.5:9b",
+      host: "http://127.0.0.1:1",
+      messages: [{ role: "user", content: "hello" }],
+      tools: [{ type: "function", function: { name: "be_search" } }]
+    });
+    const result = await runWithStdin("command/mind_ollama_runner.mjs", payload, {
+      PYA_GPU_MANAGER_REQUIRED: "true",
+      PYA_GPU_HOUSEKEEPER_URL: `http://127.0.0.1:${address.port}`,
+      PYA_GPU_MANAGER_POLL_MS: "1",
+      PYA_OLLAMA_USAGE_DIR: usageDir
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), { message: { role: "assistant", content: "managed reply" } });
+    assert.deepEqual(calls.map(({ method, path: requestPath }) => `${method} ${requestPath}`), [
+      "POST /submit",
+      "GET /job/web-chat-job"
+    ]);
+    assert.equal(calls[0].body.runtimeName, "ollama");
+    assert.equal(calls[0].body.profileName, "qwen3.5:9b");
+    assert.equal(calls[0].body.jobSpec.kind, "ollama-chat");
+    assert.equal(calls[0].body.jobSpec.payload.tools[0].function.name, "be_search");
+    assert.equal(calls[0].body.jobSpec.payload.model, "qwen3.5:9b");
+  } finally {
+    await new Promise((resolve) => manager.close(resolve));
+    await fs.rm(usageDir, { recursive: true, force: true });
+  }
+});
+
+test("manager-required streaming fails closed instead of bypassing the GPU Housekeeper", async () => {
+  const usageDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-managed-stream-usage-"));
+  const result = await runWithStdin("command/mind_ollama_runner.mjs", JSON.stringify({
+    mode: "chat",
+    model: "qwen3.5:9b",
+    stream: true,
+    host: "http://127.0.0.1:1",
+    messages: [{ role: "user", content: "hello" }]
+  }), {
+    PYA_GPU_MANAGER_REQUIRED: "true",
+    PYA_GPU_HOUSEKEEPER_URL: "http://127.0.0.1:1",
+    PYA_OLLAMA_USAGE_DIR: usageDir
+  });
+  try {
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /streaming cannot bypass the required GPU Housekeeper queue/u);
+  } finally {
+    await fs.rm(usageDir, { recursive: true, force: true });
+  }
 });
 
 test("mind ollama queued wait scales to requests already ahead in the durable queue", async () => {

@@ -5,7 +5,7 @@ The Pyash web assistant is a private browser gateway over the existing Pyash run
 The gateway provides:
 
 - durable Pyash-backed chat sessions, with history selectable from the browser;
-- an explicit model selector populated from the configured Ollama host;
+- a model selector populated by the GPU Housekeeper's runtime model catalogs;
 - a `duty` surface for durable coding conversations assigned to online host workers and configured repository directories;
 - allowlisted web search, download, read, listing, and existence tools;
 - a read-only `runtime status` tool that reports the effective model and turn settings to the assistant;
@@ -41,7 +41,7 @@ The deployment mounts only the Pyash `world` directory for durable sessions, que
 
 - `GET /healthz` checks the gateway process.
 - `GET /api/tools` lists the public read/search tool subset.
-- `GET /api/models` lists the installed/allowed Ollama model tags and any discovered/configured Strata models. Non-Ollama targets use an explicit `strata::model` value so the browser cannot accidentally route them through Ollama.
+- `GET /api/models` lists installed/allowed Ollama tags and Strata model IDs reported by the GPU Housekeeper. Non-Ollama targets use an explicit `strata::model` value so the browser cannot accidentally route them through Ollama.
 - `GET /api/sessions` lists dated Pyash session records.
 - `GET /api/sessions/<id>` reads one session's persisted conversation history.
 - `POST /api/chat` accepts `{ "message": "...", "session": "...", "model": "..." }` and returns the answer, tool event names, and discovered source URLs.
@@ -60,19 +60,15 @@ Media jobs are intentionally narrow in this first release. Their `jobSpec` must 
 
 Useful environment values are:
 
-- `OLLAMA_HOST`: Ollama endpoint used by the configured Pyash mind backend;
+- `OLLAMA_HOST`: provider endpoint carried as backend configuration; the web assistant does not call it directly;
 - `PYA_WEB_MODEL`: optional model override for the web assistant;
-- `PYA_WEB_MODELS`: optional comma-separated allowlist of Ollama tags exposed by the model selector; when absent, installed tags from `/api/tags` are offered;
+- `PYA_WEB_MODELS`: optional comma-separated allowlist of Ollama tags exposed by the model selector; when absent, installed tags reported by the GPU Housekeeper's `/runtime/ollama/models` catalog are offered;
 - `PYA_WEB_BACKEND`: optional default web backend (`ollama` or `strata`);
-- `PYA_WEB_STRATA_HOST`: optional Strata OpenAI-compatible host, defaulting to `http://127.0.0.1:8081`;
-- `PYA_WEB_STRATA_HOSTS`: optional comma-separated Strata hosts when multiple model servers are available; each discovered model retains its serving host;
-- `PYA_WEB_STRATA_TARGETS`: optional comma-separated `model@host` targets for deployments where each Strata process serves one known model, such as Flash and Coder;
-- `PYA_WEB_STRATA_MODELS`: optional comma-separated Strata model allowlist; when absent, the gateway discovers `/v1/models` from Strata;
 - `PYA_WEB_HOST` and `PYA_WEB_PORT`: local listener settings;
 - `PYA_DUTY_WORKER_TOKENS`: semicolon-separated `worker-id=token` credentials accepted by the worker protocol; keep them in the deployment's secret environment;
-- `PYA_GPU_HOUSEKEEPER_URL`: existing housekeeper configuration used by Pyash workers.
+- `PYA_GPU_HOUSEKEEPER_URL`: existing Housekeeper control-plane URL used for model catalogs, runtime availability, queued inference, capacity, residency, and discharge.
 
-Strata entries are only model IDs advertised by the configured Strata hosts (or explicitly allowlisted names); this does not make arbitrary Ollama models available through Strata. Authentication, TLS, and public exposure belong to Caddy. Rotate the existing Basic Auth credential through the host's normal Caddy configuration process rather than adding credentials to this repository.
+The GPU Housekeeper is the authority for model availability. It reads Ollama tags from Ollama and Strata model IDs from Strata, then exposes those catalogs to the web gateway through `/runtime/ollama/models` and `/runtime/strata/models`. The web application does not probe either model provider or maintain a second Strata model list. A reported Strata target can be queued while its model is unloaded; the Housekeeper owns loading and capacity decisions. The web deployment sets `PYA_GPU_MANAGER_REQUIRED=true`, so an unavailable manager fails closed rather than falling back to direct provider HTTP. Authentication, TLS, and public exposure belong to Caddy. Rotate the existing Basic Auth credential through the host's normal Caddy configuration process rather than adding credentials to this repository.
 
 Session history is stored in the existing dated `.pya` files under the web assistant's Pyash house. Selecting another session changes the `session name` supplied to the normal mind path; it does not create a browser-only transcript store. The selected model is passed as an explicit per-request model override and must be present in the discovered/allowed Ollama catalog.
 

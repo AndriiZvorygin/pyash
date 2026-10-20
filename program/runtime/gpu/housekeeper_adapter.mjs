@@ -24,13 +24,14 @@ async function parseJsonOrThrow(response) {
   }
 }
 
-async function requestJson({ baseUrl = "", pathname = "", method = "GET", body } = {}) {
+async function requestJson({ baseUrl = "", pathname = "", method = "GET", body, timeoutMs = 30000 } = {}) {
   const url = `${normalizeBaseUrl(baseUrl)}${normalizePath(pathname)}`;
   const options = {
     method: String(method || "GET").toUpperCase(),
     headers: {
       "content-type": "application/json"
-    }
+    },
+    signal: AbortSignal.timeout(Math.max(1000, Number(timeoutMs) || 30000))
   };
   if (body !== undefined) {
     options.body = JSON.stringify(body);
@@ -78,10 +79,28 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", usernam
       });
     },
 
-    async getOllamaModels() {
+    async getOllamaModels({ timeoutMs = 5000 } = {}) {
       return requestJson({
         baseUrl: rootUrl,
         pathname: "/runtime/ollama/models",
+        method: "GET",
+        timeoutMs
+      });
+    },
+
+    async getStrataModels({ timeoutMs = 5000 } = {}) {
+      return requestJson({
+        baseUrl: rootUrl,
+        pathname: "/runtime/strata/models",
+        method: "GET",
+        timeoutMs
+      });
+    },
+
+    async getRuntimes() {
+      return requestJson({
+        baseUrl: rootUrl,
+        pathname: "/runtime",
         method: "GET"
       });
     },

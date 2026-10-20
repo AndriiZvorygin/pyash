@@ -8,6 +8,7 @@ import { enqueueInputEnvelope, queueDepth } from "../program/runtime/gpu/queue.m
 import { readGpuHandleStatus, writeGpuHandleStatus, isTerminalHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import { resolveGpuQueueWaitTimeoutMs } from "../program/runtime/gpu/worker.mjs";
 import { buildOllamaUsageRecord, makeOllamaCallId, sha256Text, stableJson, writeOllamaUsageRecord } from "../program/library/ollama_usage.mjs";
+import { requestManagedOllamaChat, submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 
 function requestTimeoutMs() {
   const raw = Number(process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS);
@@ -440,19 +441,75 @@ async function recordUsage({ payload, response, callId, startedAt, queueManaged,
   }
 }
 
-async function runGenerate(payload) {
-  const base = resolveHost(payload);
-  const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
-  const body = { model: payload.model, prompt: payload.prompt, stream: !!payload.stream };
+function ollamaOptions(payload) {
   const options = {};
   if (Number.isFinite(Number(payload?.temperature))) options.temperature = Number(payload.temperature);
   if (Number.isFinite(Number(payload?.topP))) options.top_p = Number(payload.topP);
   if (Number.isFinite(Number(payload?.topK))) options.top_k = Number(payload.topK);
   if (Number.isFinite(Number(payload?.minP))) options.min_p = Number(payload.minP);
   if (Number.isFinite(Number(payload?.presencePenalty))) options.presence_penalty = Number(payload.presencePenalty);
-  if (payload?.options && typeof payload.options === "object") {
-    Object.assign(options, payload.options);
+  if (payload?.options && typeof payload.options === "object") Object.assign(options, payload.options);
+  return options;
+}
+
+async function runHousekeeperManagedMind(payload) {
+  if (payload?.stream) {
+    throw new Error("mind_ollama_runner: streaming cannot bypass the required GPU Housekeeper queue");
   }
+  const managerUrl = String(process.env.PYA_GPU_HOUSEKEEPER_URL ?? "").trim();
+  if (!managerUrl) throw new Error("mind_ollama_runner: GPU Housekeeper is required but PYA_GPU_HOUSEKEEPER_URL is missing");
+  const model = String(payload?.model ?? "").trim();
+  if (!model) throw new Error("mind_ollama_runner: model is required");
+  const options = ollamaOptions(payload);
+  const timeoutMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || "1800000"), 10) || 1800000;
+  const pollIntervalMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_POLL_MS || "500"), 10) || 500;
+
+  if (payload?.mode === "chat") {
+    const { messages, images } = await normalizeChatMessages(payload.messages);
+    const extraImages = Array.isArray(payload.images) ? payload.images : [];
+    const ollamaMessages = attachImagesToMessages(messages, [...images, ...extraImages]);
+    return requestManagedOllamaChat({
+      model,
+      messages: ollamaMessages,
+      tools: payload.tools,
+      options,
+      format: payload.format,
+      think: payload.think,
+      keepAlive: payload.keep_alive ?? 300,
+      ollamaUrl: resolveHost(payload),
+      managerUrl,
+      timeoutMs,
+      pollIntervalMs,
+      env: { ...process.env, PYA_GPU_MANAGER_REQUIRED: "true", PYA_GPU_MANAGER_ALLOW_DIRECT: "false" }
+    });
+  }
+
+  const request = {
+    model,
+    prompt: payload.prompt,
+    stream: false,
+    options,
+    ...(payload.format !== undefined ? { format: payload.format } : {}),
+    ...(payload.think !== undefined ? { think: payload.think } : {}),
+    ...(payload.keep_alive !== undefined ? { keep_alive: payload.keep_alive } : {})
+  };
+  return submitManagedGpuJob({
+    runtimeName: "ollama",
+    profileName: model,
+    managerUrl,
+    providerUrl: resolveHost(payload),
+    timeoutMs,
+    pollIntervalMs,
+    vramRequiredMb: Number.parseInt(String(process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || "12000"), 10) || 12000,
+    jobSpec: { kind: "ollama-generate", payload: request }
+  });
+}
+
+async function runGenerate(payload) {
+  const base = resolveHost(payload);
+  const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
+  const body = { model: payload.model, prompt: payload.prompt, stream: !!payload.stream };
+  const options = ollamaOptions(payload);
   if (Object.keys(options).length > 0) body.options = options;
   if (payload.think !== undefined) body.think = payload.think;
   if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
@@ -474,15 +531,7 @@ async function runChat(payload) {
     messages: ollamaMessages,
     stream: !!payload.stream
   };
-  const options = {};
-  if (Number.isFinite(Number(payload?.temperature))) options.temperature = Number(payload.temperature);
-  if (Number.isFinite(Number(payload?.topP))) options.top_p = Number(payload.topP);
-  if (Number.isFinite(Number(payload?.topK))) options.top_k = Number(payload.topK);
-  if (Number.isFinite(Number(payload?.minP))) options.min_p = Number(payload.minP);
-  if (Number.isFinite(Number(payload?.presencePenalty))) options.presence_penalty = Number(payload.presencePenalty);
-  if (payload?.options && typeof payload.options === "object") {
-    Object.assign(options, payload.options);
-  }
+  const options = ollamaOptions(payload);
   if (Object.keys(options).length > 0) body.options = options;
   if (payload.think !== undefined) body.think = payload.think;
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
@@ -542,13 +591,17 @@ async function main() {
   if (payload.stream === undefined) payload.stream = false;
   if (args.stream && !payload.stream) payload.stream = true;
   const mode = payload?.mode ?? "generate";
+  const requireHousekeeper = truthyEnv(process.env.PYA_GPU_MANAGER_REQUIRED);
   const useGpuQueue = truthyEnv(process.env.PYA_GPU_MIND_QUEUE) && !payload?.stream;
+  const queueManaged = requireHousekeeper || useGpuQueue;
   const callId = makeOllamaCallId();
   const startedAt = new Date();
   let response;
   try {
-    response = useGpuQueue
-      ? await runQueuedGpuMind(payload)
+    response = requireHousekeeper
+      ? await runHousekeeperManagedMind(payload)
+      : useGpuQueue
+        ? await runQueuedGpuMind(payload)
       : (mode === "chat" ? await runChat(payload) : await runGenerate(payload));
   } catch (error) {
     await recordUsage({
@@ -556,7 +609,7 @@ async function main() {
       response: {},
       callId,
       startedAt,
-      queueManaged: useGpuQueue,
+      queueManaged,
       status: "failed",
       failureKind: "transport",
       error: error?.message ?? String(error)
@@ -569,7 +622,7 @@ async function main() {
       response,
       callId,
       startedAt,
-      queueManaged: false,
+      queueManaged,
       status: "failed",
       failureKind: "transport",
       error: response.error?.message ?? "mind stream failed"
@@ -580,7 +633,7 @@ async function main() {
       response,
       callId,
       startedAt,
-      queueManaged: useGpuQueue,
+      queueManaged,
       status: response?.error ? "failed" : "completed",
       failureKind: response?.error ? "model" : "",
       error: response?.error?.message ?? response?.error ?? ""

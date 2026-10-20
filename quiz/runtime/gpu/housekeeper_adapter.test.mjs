@@ -93,6 +93,36 @@ test("housekeeper adapter reads the exact Ollama model catalog", async () => {
   );
 });
 
+test("housekeeper adapter reads Strata model availability from the manager", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { available: true, models: [{ name: "qwen3.8-flash-next-coder-iq1_m" }] } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090" });
+      const result = await adapter.getStrataModels();
+
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, "http://housekeeper:8090/runtime/strata/models");
+      assert.equal(calls[0].options.method, "GET");
+      assert.equal(result.models[0].name, "qwen3.8-flash-next-coder-iq1_m");
+    }
+  );
+});
+
+test("housekeeper adapter reads managed runtime status", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { runtimes: [{ runtimeName: "strata", status: "running", loaded: false }] } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:8090" });
+      const result = await adapter.getRuntimes();
+
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, "http://housekeeper:8090/runtime");
+      assert.equal(calls[0].options.method, "GET");
+      assert.equal(result.runtimes[0].runtimeName, "strata");
+    }
+  );
+});
+
 test("housekeeper adapter submitJob posts expected payload", async () => {
   await withMockFetch(
     async () => makeJsonResponse({ body: { remoteJobId: "job-abc", accepted: true } }),

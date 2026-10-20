@@ -33,7 +33,7 @@ import {
   readDutySessionText
 } from "../program/agent/coding_duty.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
-import { fetchStrataRuntime } from "./pyash/mind_backend_helpers.mjs";
+import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import {
@@ -321,40 +321,6 @@ function configuredWebModels() {
     .filter(Boolean);
 }
 
-function configuredStrataModels() {
-  return String(process.env.PYA_WEB_STRATA_MODELS ?? process.env.PYA_STRATA_MODELS ?? "")
-    .split(",")
-    .map(normalizeModelId)
-    .filter(Boolean);
-}
-
-function configuredStrataHosts() {
-  const hosts = String(process.env.PYA_WEB_STRATA_HOSTS ?? "")
-    .split(",")
-    .map((host) => host.trim().replace(/\/+$/u, ""))
-    .filter(Boolean);
-  if (hosts.length) return [...new Set(hosts)];
-  const host = String(
-    process.env.PYA_WEB_STRATA_HOST
-      || process.env.STRATA_HOST
-      || "http://127.0.0.1:8081"
-  ).trim().replace(/\/+$/u, "");
-  return host ? [host] : [];
-}
-
-function configuredStrataTargets() {
-  return String(process.env.PYA_WEB_STRATA_TARGETS ?? "")
-    .split(",")
-    .map((entry) => {
-      const separator = entry.indexOf("@");
-      if (separator <= 0) return null;
-      const model = normalizeModelId(entry.slice(0, separator));
-      const host = entry.slice(separator + 1).trim().replace(/\/+$/u, "");
-      return model && host ? { model, host } : null;
-    })
-    .filter(Boolean);
-}
-
 function normalizeBackendId(value) {
   const backend = String(value ?? "").trim().toLowerCase();
   return backend.includes("strata") ? "strata" : "ollama";
@@ -441,6 +407,7 @@ function normalizeModelCatalog(catalog, { defaultBackend = "ollama", defaultMode
 
 async function fetchOllamaModels(defaultModel) {
   const configured = configuredWebModels();
+  const housekeeperUrl = webGpuHousekeeperUrl();
   const host = String(
     resolveConfigText("ollama host")
       || process.env.OLLAMA_HOST
@@ -448,20 +415,20 @@ async function fetchOllamaModels(defaultModel) {
       || "http://localhost:11434"
   ).replace(/\/$/u, "");
   try {
-    const response = await fetch(`${host}/api/tags`, { signal: AbortSignal.timeout(4000) });
-    if (!response.ok) throw new Error(`Ollama tags returned HTTP ${response.status}`);
-    const payload = await response.json();
+    const payload = await createGpuHousekeeperAdapter({ baseUrl: housekeeperUrl })
+      .getOllamaModels({ timeoutMs: 4000 });
     const installed = (Array.isArray(payload?.models) ? payload.models : [])
-      .map((entry) => normalizeModelId(entry?.name ?? entry?.model))
+      .map((entry) => normalizeModelId(typeof entry === "string" ? entry : entry?.name ?? entry?.model))
       .filter(Boolean);
     const allowed = configured.length ? installed.filter((name) => configured.includes(name)) : installed;
+    const available = payload?.available !== false && allowed.length > 0;
     return {
       host,
-      available: true,
-      ready: true,
-      status: "ready",
+      available,
+      ready: available,
+      status: available ? "ready" : "unavailable",
       models: allowed.length ? allowed : (configured.length ? configured : [defaultModel]),
-      error: allowed.length ? null : "no configured web models are installed"
+      error: payload?.error || (allowed.length ? null : "no configured web models are installed on the GPU Housekeeper")
     };
   } catch (error) {
     return {
@@ -470,48 +437,59 @@ async function fetchOllamaModels(defaultModel) {
       ready: false,
       status: "unavailable",
       models: configured.length ? configured : [defaultModel],
-      error: String(error?.message ?? error)
+      error: `GPU Housekeeper model catalog unavailable: ${String(error?.message ?? error)}`
+    };
+  }
+}
+
+function webGpuHousekeeperUrl() {
+  return String(
+    process.env.PYA_GPU_HOUSEKEEPER_URL
+      || resolveConfigText("gpu housekeeper url")
+      || "http://localhost:8090"
+  ).replace(/\/+$/u, "");
+}
+
+async function fetchStrataModels() {
+  try {
+    const payload = await createGpuHousekeeperAdapter({ baseUrl: webGpuHousekeeperUrl() })
+      .getStrataModels({ timeoutMs: 5000 });
+    return {
+      available: payload?.available === true,
+      models: Array.isArray(payload?.models) ? payload.models : [],
+      runtime: payload?.runtime ?? null,
+      error: payload?.error || null
+    };
+  } catch (error) {
+    return {
+      available: false,
+      models: [],
+      runtime: null,
+      error: `GPU Housekeeper runtime status unavailable: ${String(error?.message ?? error)}`
     };
   }
 }
 
 export async function fetchWebModels(defaultModel, defaultBackend = "ollama") {
-  const strataHosts = configuredStrataHosts();
-  const configuredTargets = configuredStrataTargets();
-  const [ollama, strataRuntimes] = await Promise.all([
+  const [ollama, strata] = await Promise.all([
     fetchOllamaModels(defaultBackend === "ollama" ? defaultModel : ""),
-    Promise.all(strataHosts.map((host) => fetchStrataRuntime(host)))
+    fetchStrataModels()
   ]);
-  const configured = configuredStrataModels();
-  const discoveredStrataModels = strataRuntimes.flatMap((runtime) => {
-    const models = configured.length
-      ? (runtime.models.length ? runtime.models.filter((name) => configured.includes(name)) : configured)
-      : runtime.models;
-    return models.map((model) => ({
+  const strataRuntimeStatus = String(strata.runtime?.status ?? "").toLowerCase();
+  const strataLoading = ["starting", "loading", "initializing"].includes(strataRuntimeStatus);
+  const strataModels = strata.models.map((entry) => {
+    const model = normalizeModelId(typeof entry === "string" ? entry : entry?.name ?? entry?.id ?? entry?.model);
+    return modelOption({
+      backend: "strata",
       model,
-      host: runtime.host,
-      available: runtime.available,
-      ready: runtime.ready,
-      status: runtime.status,
-      etaSeconds: runtime.etaSeconds,
-      statusMessage: runtime.statusMessage
-    }));
-  });
-  const strataModels = configuredTargets.length
-    ? configuredTargets.map(({ model, host }) => {
-      const runtime = strataRuntimes.find((entry) => entry.host === host);
-      const modelInstalled = Boolean(runtime?.models.includes(model));
-      return {
-        model,
-        host,
-        available: Boolean(runtime?.available && modelInstalled),
-        ready: Boolean(runtime?.ready && modelInstalled),
-        status: runtime?.status || "unavailable",
-        etaSeconds: runtime?.etaSeconds ?? null,
-        statusMessage: runtime?.statusMessage || "Strata target is unavailable"
-      };
-    })
-    : discoveredStrataModels;
+      available: strata.available,
+      ready: strata.available,
+      status: strata.available ? "ready" : strataLoading ? "loading" : "unavailable",
+      statusMessage: strata.available
+        ? "Available through the GPU Housekeeper queue; model loading is managed on submission"
+        : (strata.error || strata.runtime?.message || "Strata model is unavailable in the GPU Housekeeper catalog")
+    });
+  }).filter((entry) => entry.model);
   const modelOptions = [
     ...(ollama.models || []).filter(Boolean).map((model) => modelOption({
       backend: "ollama",
@@ -519,38 +497,15 @@ export async function fetchWebModels(defaultModel, defaultBackend = "ollama") {
       host: ollama.host,
       available: ollama.available
     })),
-    ...strataModels.map(({ model, host, available, ready, status, etaSeconds, statusMessage }) => modelOption({
-      backend: "strata",
-      model,
-      host,
-      available,
-      ready,
-      status,
-      etaSeconds,
-      statusMessage
-    }))
+    ...strataModels
   ];
-  if (!modelOptions.length && defaultBackend === "strata" && defaultModel) {
-    modelOptions.push(modelOption({
-      backend: "strata",
-      model: defaultModel,
-      host: strataHosts[0],
-      available: false,
-      ready: false,
-      status: "unavailable",
-      statusMessage: "Strata target is unavailable"
-    }));
-  }
   return {
-    available: ollama.available || strataRuntimes.some((runtime) => runtime.ok),
+    available: ollama.available || strata.available,
     models: modelOptions.map((entry) => entry.value),
     modelOptions,
     errors: {
       ollama: ollama.error ?? null,
-      strata: strataRuntimes
-        .filter((runtime) => runtime.error)
-        .map((runtime) => `${runtime.host}: ${runtime.error}`)
-        .join("; ") || null
+      strata: strata.available ? null : (strata.error || strata.runtime?.message || "Strata model catalog is unavailable in the GPU Housekeeper")
     }
   };
 }
@@ -781,11 +736,11 @@ export async function createWebServer({
         const requestedTarget = normalizeModelId(body.model) || modelTargetValue(backend, model);
         const selected = catalog.modelOptions.find((entry) => entry.value === requestedTarget)
           || catalog.modelOptions.find((entry) => entry.model === requestedTarget && entry.backend === backend);
-        if (catalog.modelOptions.length && !selected) {
+        if (!selected) {
           errorResponse(res, 400, `model is not available: ${requestedTarget}`, "model_unavailable");
           return;
         }
-        if (selected && !selected.ready) {
+        if (!selected.ready) {
           errorResponse(res, 409, `${selected.label} is not ready`, "model_not_ready", {
             model: selected.model,
             backend: selected.backend,
@@ -794,13 +749,7 @@ export async function createWebServer({
           });
           return;
         }
-        const target = selected || modelOption({
-          backend,
-          model,
-          host: backend === "strata"
-            ? process.env.PYA_WEB_STRATA_HOST || process.env.STRATA_HOST || "http://127.0.0.1:8081"
-            : resolveConfigText("ollama host") || process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://localhost:11434"
-        });
+        const target = selected;
         const dutyId = `duty-${crypto.randomUUID()}`;
         const sessionFile = path.join(sessionDir, `${dutyId}.pya`);
         const dutyPrompt = [
@@ -1049,17 +998,11 @@ export async function createWebServer({
         const selectedOption = catalog.modelOptions.find((entry) => entry.value === requestedTarget)
           || catalog.modelOptions.find((entry) => entry.model === requestedTarget && entry.backend === backend)
           || catalog.modelOptions.find((entry) => entry.model === requestedTarget);
-        if (catalog.models.length && !selectedOption) {
+        if (!selectedOption) {
           errorResponse(res, 400, `model is not available to this web assistant: ${requestedTarget}`, "model_unavailable");
           return;
         }
-        const selected = selectedOption || modelOption({
-          backend,
-          model,
-          host: backend === "strata"
-            ? process.env.PYA_WEB_STRATA_HOST || process.env.STRATA_HOST || "http://127.0.0.1:8081"
-            : resolveConfigText("ollama host") || process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://localhost:11434"
-        });
+        const selected = selectedOption;
         if (!selected.ready) {
           const loading = selected.status === "loading";
           const eta = selected.etaSeconds == null ? "" : ` ETA about ${selected.etaSeconds}s.`;

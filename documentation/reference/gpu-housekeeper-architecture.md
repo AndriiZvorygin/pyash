@@ -102,6 +102,7 @@ needs a larger recovery window.
 - `GET /runtime`
 - `GET /runtime/<runtimeName>`
 - `GET /runtime/ollama/models`
+- `GET /runtime/strata/models`
 - `POST /capacity/preview`
 - `POST /capacity/prepare` (Strata pre-load admission and idle-runtime handoff)
 - `POST /submit`
