@@ -142,6 +142,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const installRoot = path.resolve(path.dirname(__filename), "..", "..");
 const runProgramPath = path.join(installRoot, "command", "run_pya_program.mjs");
+const saddlePath = path.join(installRoot, "command", "pyash_saddle.mjs");
 const replPath = path.join(installRoot, "program", "main.mjs");
 const codexAccountPath = path.join(installRoot, "command", "codex_account.mjs");
 
@@ -478,6 +479,14 @@ export async function main() {
   const first=args[0] ?? "";
   if (!first || first === "--help" || first === "-h" || first === "help") return void textOut(usage());
   if (first === "run") return void process.exit(await runNodeScript(runProgramPath, args.slice(1)));
+  if (first === "resume") {
+    if (!args[1]) {
+      textOut("Usage: pyash resume <duty-id>");
+      process.exitCode = 2;
+      return;
+    }
+    return void process.exit(await runNodeScript(saddlePath, ["resume", args[1]]));
+  }
   if (first === "repl") return void process.exit(await runNodeScript(replPath, []));
   if (first === "configure") return void await configureMenu(args.slice(1));
   if (first === "calendar") return void await calendarCommand(args.slice(1));

@@ -9,7 +9,7 @@ import {
   updateWorkTaskEnvelope
 } from "./queue.mjs";
 import { mergeWorkCheckpoint } from "./checkpoint.mjs";
-import { listWorkTasks } from "./operator.mjs";
+import { listAutonomousWorkTasks } from "./operator.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "./status.mjs";
 import { collectGitEvidence } from "./workspace.mjs";
 
@@ -567,7 +567,7 @@ export async function reconcileOperationalWorkTasks(worldRoot, {
   owner = "",
   ...options
 } = {}) {
-  const tasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+  const tasks = await listAutonomousWorkTasks(worldRoot, { includeTerminal: true });
   const candidates = tasks
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => !["accepted", "failed"].includes(task.status))

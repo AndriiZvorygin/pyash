@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { addWorkTask, listWorkTasks } from "./operator.mjs";
+import { addWorkTask, listAutonomousWorkTasks } from "./operator.mjs";
 import { findPolicyRevalidationWorkTasks, findRecoverableOperationalWorkTasks } from "./recovery.mjs";
 import {
   autonomousRoadmapPackages,
@@ -135,7 +135,7 @@ export async function curateWorkBacklog({
   maxRecoveryCount,
   now = () => new Date()
 } = {}) {
-  const tasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+  const tasks = await listAutonomousWorkTasks(worldRoot, { includeTerminal: true });
   const active = tasks.filter((task) => !["accepted", "failed", "blocked"].includes(task.status));
   const candidates = autonomousRoadmapPackages();
   const dependencyDefects = validateRoadmapDependencies(candidates);

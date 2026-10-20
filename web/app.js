@@ -7,12 +7,28 @@ const sessionSelect = document.querySelector("#session-select");
 const modelSelect = document.querySelector("#model-select");
 const sendButton = chatForm.querySelector("button[type=submit]");
 const newSessionButton = document.querySelector("#new-session");
+const assistantModeButton = document.querySelector("#assistant-mode");
+const dutyModeButton = document.querySelector("#duty-mode");
+const dutySelect = document.querySelector("#duty-select");
+const dutyWorkerSelect = document.querySelector("#duty-worker");
+const dutyRepositorySelect = document.querySelector("#duty-repository");
+const dutyTitleInput = document.querySelector("#duty-title");
+const dutyObjectiveInput = document.querySelector("#duty-objective");
+const createDutyButton = document.querySelector("#create-duty");
+const acceptDutyButton = document.querySelector("#accept-duty");
+const dutyState = document.querySelector("#duty-state");
+const refreshDutiesButton = document.querySelector("#refresh-duties");
 const jobForm = document.querySelector("#job-form");
 const jobIntent = document.querySelector("#job-intent");
 const jobSpec = document.querySelector("#job-spec");
 const jobState = document.querySelector("#job-state");
 let currentSession = localStorage.getItem("pyash-session") || "web";
+let currentDuty = localStorage.getItem("pyash-duty") || "";
+let conversationMode = localStorage.getItem("pyash-mode") === "duty" ? "duty" : "assistant";
 let modelCatalog = null;
+let dutyCatalog = [];
+let dutyWorkers = [];
+let dutyPollGeneration = 0;
 
 function setSelectOptions(select, values, selectedValue, format = (value) => value) {
   select.textContent = "";
@@ -42,6 +58,30 @@ function selectedModelOption() {
 }
 
 function updateChatReadiness() {
+  if (conversationMode === "duty") {
+    const duty = dutyCatalog.find((entry) => entry.id === currentDuty);
+    if (!duty) {
+      chatState.textContent = "Select or create a duty";
+      sendButton.disabled = true;
+      return;
+    }
+    if (["accepted", "failed"].includes(duty.status)) {
+      chatState.textContent = `Duty ${duty.status}`;
+      sendButton.disabled = true;
+      return;
+    }
+    if (duty.status === "blocked") {
+      chatState.textContent = "Duty blocked · send an instruction to resume";
+      sendButton.disabled = false;
+      return;
+    }
+    const queued = duty.messages?.some((entry) => entry.role === "user" && ["pending", "running"].includes(entry.state));
+    chatState.textContent = duty.active
+      ? "Duty running · next instruction queues"
+      : queued ? "Instruction queued" : "Duty ready";
+    sendButton.disabled = false;
+    return;
+  }
   const selected = selectedModelOption();
   if (!selected) {
     chatState.textContent = "Select a ready model";
@@ -58,6 +98,17 @@ function updateChatReadiness() {
   }
   chatState.textContent = `Ready · ${selected.model}`;
   sendButton.disabled = false;
+}
+
+function setConversationMode(mode) {
+  conversationMode = mode === "duty" ? "duty" : "assistant";
+  localStorage.setItem("pyash-mode", conversationMode);
+  assistantModeButton.setAttribute("aria-pressed", String(conversationMode === "assistant"));
+  dutyModeButton.setAttribute("aria-pressed", String(conversationMode === "duty"));
+  sessionSelect.disabled = conversationMode === "duty";
+  newSessionButton.disabled = conversationMode === "duty";
+  messageInput.placeholder = conversationMode === "duty" ? "Send an instruction to this duty..." : "Ask Pyash...";
+  updateChatReadiness();
 }
 
 function clearMessages() {
@@ -178,6 +229,183 @@ async function loadSessions() {
   }
 }
 
+function updateRepositoryOptions() {
+  const worker = dutyWorkers.find((entry) => entry.id === dutyWorkerSelect.value);
+  const repositories = worker?.repositories || [];
+  setSelectOptions(
+    dutyRepositorySelect,
+    repositories.map((entry) => ({ value: entry.id, label: entry.label || entry.id })),
+    dutyRepositorySelect.value,
+    (entry) => entry.label
+  );
+  if (!repositories.length) {
+    setSelectOptions(dutyRepositorySelect, [{ value: "", label: "No directories available" }], "", (entry) => entry.label);
+  }
+}
+
+async function loadDutyCatalog({ forceSelection = false } = {}) {
+  try {
+    const [workersData, dutiesData] = await Promise.all([
+      requestJson("/api/duty-workers"),
+      requestJson("/api/duties")
+    ]);
+    dutyWorkers = workersData.workers || [];
+    dutyCatalog = dutiesData.duties || [];
+    setSelectOptions(
+      dutyWorkerSelect,
+      dutyWorkers.map((worker) => ({
+        value: worker.id,
+        label: `${worker.label || worker.id} · ${worker.repositories.length} directories`
+      })),
+      dutyWorkerSelect.value,
+      (entry) => entry.label
+    );
+    if (!dutyWorkers.length) {
+      setSelectOptions(dutyWorkerSelect, [{ value: "", label: "No worker online" }], "", (entry) => entry.label);
+    }
+    updateRepositoryOptions();
+    const choices = dutyCatalog.map((duty) => ({
+      value: duty.id,
+      label: `${duty.title} · ${duty.status}`
+    }));
+    if (currentDuty && !dutyCatalog.some((entry) => entry.id === currentDuty)) {
+      currentDuty = "";
+      localStorage.removeItem("pyash-duty");
+    }
+    setSelectOptions(dutySelect, choices, currentDuty, (entry) => entry.label);
+    if (!dutyCatalog.length) {
+      setSelectOptions(dutySelect, [{ value: "", label: "No duties yet" }], "", (entry) => entry.label);
+    }
+    dutyState.textContent = dutyWorkers.length
+      ? `${dutyWorkers.length} worker${dutyWorkers.length === 1 ? "" : "s"} online`
+      : "No coding workers online";
+    if (forceSelection && currentDuty) await loadDuty(currentDuty);
+    else updateChatReadiness();
+  } catch (error) {
+    dutyState.textContent = `Duty service unavailable: ${error.message}`;
+  }
+}
+
+function renderDutyMessages(duty) {
+  clearMessages();
+  for (const message of duty.messages || []) {
+    if (message.role === "user") addMessage("user", message.text);
+    else addMessage("assistant", message.text, { html: message.html });
+  }
+  messages.scrollTop = messages.scrollHeight;
+}
+
+async function loadDuty(dutyId) {
+  currentDuty = dutyId;
+  localStorage.setItem("pyash-duty", currentDuty);
+  if (!currentDuty) {
+    clearMessages();
+    dutyState.textContent = "Select or create a duty";
+    updateChatReadiness();
+    return null;
+  }
+  setConversationMode("duty");
+  try {
+    const data = await requestJson(`/api/duties/${encodeURIComponent(currentDuty)}`);
+    const duty = data.duty;
+    dutyCatalog = [duty, ...dutyCatalog.filter((entry) => entry.id !== duty.id)];
+    renderDutyMessages(duty);
+    dutyState.textContent = `${duty.status} · ${duty.workerId} · ${duty.repositoryId} · ${duty.backend}:${duty.model}`;
+    acceptDutyButton.disabled = duty.status !== "implementing" || duty.active
+      || duty.messages?.some((entry) => entry.role === "user" && ["pending", "running"].includes(entry.state));
+    updateChatReadiness();
+    return duty;
+  } catch (error) {
+    dutyState.textContent = error.message;
+    return null;
+  }
+}
+
+async function waitForDutyReply(dutyId, userMessageId) {
+  const generation = ++dutyPollGeneration;
+  for (let attempt = 0; attempt < 600 && generation === dutyPollGeneration; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    let duty;
+    try {
+      duty = (await requestJson(`/api/duties/${encodeURIComponent(dutyId)}`)).duty;
+      dutyCatalog = [duty, ...dutyCatalog.filter((entry) => entry.id !== duty.id)];
+      renderDutyMessages(duty);
+      dutyState.textContent = `${duty.status} · ${duty.workerId} · ${duty.repositoryId} · ${duty.backend}:${duty.model}`;
+      acceptDutyButton.disabled = duty.status !== "implementing" || duty.active
+        || duty.messages?.some((entry) => entry.role === "user" && ["pending", "running"].includes(entry.state));
+      updateChatReadiness();
+    } catch {
+      return;
+    }
+    const reply = duty.messages?.find((entry) => entry.role === "assistant" && entry.parentId === userMessageId);
+    if (reply) {
+      chatState.textContent = "Duty response received";
+      updateChatReadiness();
+      return;
+    }
+    chatState.textContent = duty.active ? "Duty is working..." : "Instruction queued for its worker...";
+  }
+}
+
+async function createDuty() {
+  const workerId = dutyWorkerSelect.value;
+  const repositoryId = dutyRepositorySelect.value;
+  const title = dutyTitleInput.value.trim();
+  const initialMessage = dutyObjectiveInput.value.trim();
+  if (!workerId || !repositoryId || !title || !initialMessage) {
+    dutyState.textContent = "Choose a worker and directory, then enter a title and instruction.";
+    return;
+  }
+  createDutyButton.disabled = true;
+  dutyState.textContent = "Creating duty...";
+  try {
+    const data = await requestJson("/api/duties", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workerId, repositoryId, title, initialMessage, model: modelSelect.value })
+    });
+    dutyTitleInput.value = "";
+    dutyObjectiveInput.value = "";
+    currentDuty = data.duty.id;
+    localStorage.setItem("pyash-duty", currentDuty);
+    await loadDutyCatalog();
+    dutySelect.value = currentDuty;
+    await loadDuty(currentDuty);
+    const firstUser = data.duty.messages?.find((entry) => entry.role === "user");
+    if (firstUser) waitForDutyReply(currentDuty, firstUser.id);
+  } catch (error) {
+    dutyState.textContent = error.message;
+  } finally {
+    createDutyButton.disabled = false;
+  }
+}
+
+async function acceptDuty() {
+  if (!currentDuty) return;
+  acceptDutyButton.disabled = true;
+  try {
+    await requestJson(`/api/duties/${encodeURIComponent(currentDuty)}/accept`, { method: "POST" });
+    await loadDutyCatalog({ forceSelection: true });
+    dutyState.textContent = "Duty accepted";
+  } catch (error) {
+    dutyState.textContent = error.message;
+    acceptDutyButton.disabled = false;
+  }
+}
+
+async function submitDutyMessage(message) {
+  const dutyId = currentDuty;
+  dutyPollGeneration += 1;
+  const data = await requestJson(`/api/duties/${encodeURIComponent(dutyId)}/messages`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ message })
+  });
+  const latestUser = [...(data.duty.messages || [])].reverse().find((entry) => entry.role === "user");
+  await loadDuty(dutyId);
+  if (latestUser) void waitForDutyReply(dutyId, latestUser.id);
+}
+
 async function loadSession(sessionId) {
   currentSession = sessionId;
   localStorage.setItem("pyash-session", currentSession);
@@ -195,6 +423,25 @@ async function loadSession(sessionId) {
 }
 
 sessionSelect.addEventListener("change", () => loadSession(sessionSelect.value));
+assistantModeButton.addEventListener("click", () => {
+  dutyPollGeneration += 1;
+  setConversationMode("assistant");
+  loadSession(currentSession);
+});
+dutyModeButton.addEventListener("click", async () => {
+  setConversationMode("duty");
+  await loadDutyCatalog();
+  if (currentDuty) await loadDuty(currentDuty);
+  else clearMessages();
+});
+dutySelect.addEventListener("change", () => {
+  dutyPollGeneration += 1;
+  loadDuty(dutySelect.value);
+});
+dutyWorkerSelect.addEventListener("change", updateRepositoryOptions);
+createDutyButton.addEventListener("click", createDuty);
+acceptDutyButton.addEventListener("click", acceptDuty);
+refreshDutiesButton.addEventListener("click", () => loadDutyCatalog({ forceSelection: true }));
 modelSelect.addEventListener("change", () => {
   if (modelSelect.value) {
     localStorage.setItem("pyash-model", modelSelect.value);
@@ -225,6 +472,11 @@ chatForm.addEventListener("submit", async (event) => {
   messageInput.disabled = true;
   chatState.textContent = "Working...";
   try {
+    if (conversationMode === "duty") {
+      await submitDutyMessage(message);
+      chatState.textContent = "Instruction queued";
+      return;
+    }
     const data = await requestJson("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -291,7 +543,16 @@ document.querySelector("#refresh-status").addEventListener("click", refreshStatu
 refreshStatus();
 loadTools();
 loadModels();
-loadSessions().then(() => loadSession(currentSession));
+loadSessions().then(async () => {
+  if (conversationMode === "duty") {
+    setConversationMode("duty");
+    await loadDutyCatalog();
+    if (currentDuty) await loadDuty(currentDuty);
+  } else {
+    setConversationMode("assistant");
+    await loadSession(currentSession);
+  }
+});
 setInterval(() => {
   refreshStatus();
   loadModels({ force: true });

@@ -6,6 +6,7 @@ The gateway provides:
 
 - durable Pyash-backed chat sessions, with history selectable from the browser;
 - an explicit model selector populated from the configured Ollama host;
+- a `duty` surface for durable coding conversations assigned to online host workers and configured repository directories;
 - allowlisted web search, download, read, listing, and existence tools;
 - a read-only `runtime status` tool that reports the effective model and turn settings to the assistant;
 - status for the existing GPU queue;
@@ -34,7 +35,7 @@ docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
 docker compose restart caddy
 ```
 
-The deployment mounts only the Pyash `world` directory for durable sessions, queue state, and the web assistant workspace at `world/house/web-assistant/workspace`. Downloads and derived files should stay in that workspace. It does not mount the host filesystem or expose arbitrary shell, JavaScript interpretation, write, compile, repair, or model-management tools to the browser.
+The deployment mounts only the Pyash `world` directory for durable sessions, queue state, duty records, and the web assistant workspace at `world/house/web-assistant/workspace`. It does not mount worker checkouts into the web container. Ordinary Assistant chat exposes only the existing read/search tool subset. Duty turns run in a separate host worker, and only in a directory explicitly configured on that worker; the existing `saddle_tools.pya` command and file policy still applies. See [Pyash Coding Saddle](pyash-coding-saddle.md) for worker and allowlist setup.
 
 ## HTTP surface
 
@@ -44,6 +45,9 @@ The deployment mounts only the Pyash `world` directory for durable sessions, que
 - `GET /api/sessions` lists dated Pyash session records.
 - `GET /api/sessions/<id>` reads one session's persisted conversation history.
 - `POST /api/chat` accepts `{ "message": "...", "session": "...", "model": "..." }` and returns the answer, tool event names, and discovered source URLs.
+- `GET /api/duty-workers` and `GET /api/duties` list online workers and durable duties for the authenticated UI.
+- `POST /api/duties` assigns a new duty to one worker and one advertised directory; `/api/duties/<id>` reads it, `/messages` queues another instruction, and `/accept` records operator acceptance when idle.
+- `POST /api/duty-workers/{heartbeat,claim,result,failure}` is the HTTPS worker protocol, authenticated with a per-worker bearer token.
 - `GET /api/gpu` reports queue depth.
 - `POST /api/jobs` accepts a validated prepared `comfyui-draw` or `comfyui-hear` job specification and returns a durable handle.
 - `GET /api/jobs/<handle>` reads an existing Pyash GPU handle status.
@@ -65,6 +69,7 @@ Useful environment values are:
 - `PYA_WEB_STRATA_TARGETS`: optional comma-separated `model@host` targets for deployments where each Strata process serves one known model, such as Flash and Coder;
 - `PYA_WEB_STRATA_MODELS`: optional comma-separated Strata model allowlist; when absent, the gateway discovers `/v1/models` from Strata;
 - `PYA_WEB_HOST` and `PYA_WEB_PORT`: local listener settings;
+- `PYA_DUTY_WORKER_TOKENS`: semicolon-separated `worker-id=token` credentials accepted by the worker protocol; keep them in the deployment's secret environment;
 - `PYA_GPU_HOUSEKEEPER_URL`: existing housekeeper configuration used by Pyash workers.
 
 Strata entries are only model IDs advertised by the configured Strata hosts (or explicitly allowlisted names); this does not make arbitrary Ollama models available through Strata. Authentication, TLS, and public exposure belong to Caddy. Rotate the existing Basic Auth credential through the host's normal Caddy configuration process rather than adding credentials to this repository.

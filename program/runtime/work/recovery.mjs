@@ -5,7 +5,7 @@ import {
   updateWorkTaskEnvelope
 } from "./queue.mjs";
 import { mergeWorkCheckpoint } from "./checkpoint.mjs";
-import { listWorkTasks } from "./operator.mjs";
+import { listAutonomousWorkTasks } from "./operator.mjs";
 import {
   isAwaitingExternalEvidence,
   isHumanDecisionBlock,
@@ -341,7 +341,7 @@ export async function findRecoverableOperationalWorkTasks(worldRoot, {
   staleTurnMs = DEFAULT_STALE_OPERATIONAL_TURN_MS,
   maxRecoveryCount = DEFAULT_MAX_OPERATIONAL_RECOVERIES
 } = {}) {
-  const tasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+  const tasks = await listAutonomousWorkTasks(worldRoot, { includeTerminal: true });
   return tasks
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isRecoverableOperationalWorkTask(task, { now, staleTurnMs, maxRecoveryCount }))
@@ -368,7 +368,7 @@ export async function findPolicyRevalidationWorkTasks(worldRoot, {
   currentPolicy = currentTimeoutPolicy(),
   migrationId = TIMEOUT_POLICY_MIGRATION_ID
 } = {}) {
-  const tasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+  const tasks = await listAutonomousWorkTasks(worldRoot, { includeTerminal: true });
   return tasks
     .filter((task) => !owner || task.owner === owner)
     .filter((task) => isEligibleForTimeoutPolicyRevalidation(task, {

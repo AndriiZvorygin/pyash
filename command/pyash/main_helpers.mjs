@@ -7,6 +7,7 @@ export function usage({ DEFAULT_MATRIX_APPSERVICE_REGISTRATION }) {
     "  pyash run <file.pya> [run flags...]",
     "  pyash <file.pya> [run flags...]",
     "  pyash repl",
+    "  pyash resume <duty-id>",
     "  pyash configure",
     "  pyash configure intro [--root <path>] [--json]",
     "  pyash configure orchestrator [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--mode <container|local>] [--host <hostname>] [--port <n>] [--autostart <truth|lie>] [--health-rhythm-minute <n>]",

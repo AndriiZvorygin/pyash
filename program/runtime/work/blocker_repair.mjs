@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { appendWorkSchedulerEvent, readWorkSchedulerEvents } from "./history.mjs";
-import { addWorkTask, listWorkTasks } from "./operator.mjs";
+import { addWorkTask, listAutonomousWorkTasks } from "./operator.mjs";
 import { readWorkTaskStatus } from "./status.mjs";
 import { isAwaitingExternalEvidence, isRetryableWorkBlock } from "./roadmap.mjs";
 import { readWorkSchedulerHealth } from "./health.mjs";
@@ -202,7 +202,7 @@ export async function prepareBlockerRepair({
   const end = dateValue(typeof now === "function" ? now() : now);
   const [events, tasks, health] = await Promise.all([
     readWorkSchedulerEvents(worldRoot, { since: new Date(end.getTime() - windowMs).toISOString(), until: end.toISOString() }),
-    listWorkTasks(worldRoot, { includeTerminal: true }),
+    listAutonomousWorkTasks(worldRoot, { includeTerminal: true }),
     readWorkSchedulerHealth(worldRoot)
   ]);
   const productivity = assessPriorDayProductivity(events, { now: end, windowMs });

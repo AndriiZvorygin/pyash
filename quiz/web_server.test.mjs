@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { forget } from "../program/remember/index.mjs";
+import { workTaskStatusPath } from "../program/runtime/work/status.mjs";
 import {
   buildChatSentence,
   createWebServer,
@@ -347,6 +348,107 @@ test("web chat refuses a Strata request until the runtime is ready", async () =>
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await fs.rm(root, { recursive: true, force: true });
+    forget();
+  }
+});
+
+test("coding duties persist on the hub and only assigned authenticated workers can claim them", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-web-duty-"));
+  const priorTokens = process.env.PYA_DUTY_WORKER_TOKENS;
+  process.env.PYA_DUTY_WORKER_TOKENS = "worker-a=worker-secret";
+  const { server } = await createWebServer({
+    root,
+    assets: path.resolve(process.cwd(), "web"),
+    runtime: { tools: [] },
+    modelsFn: async () => ({
+      available: true,
+      modelOptions: [{
+        value: "qwen3.5:9b",
+        backend: "ollama",
+        model: "qwen3.5:9b",
+        host: "http://ollama.test",
+        ready: true
+      }]
+    })
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+  const workerHeaders = { authorization: "Bearer worker-secret", "content-type": "application/json" };
+  try {
+    const unauthenticated = await fetch(`${base}/api/duty-workers/heartbeat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workerId: "worker-a", repositories: [{ id: "pyash", root: "/srv/pyash" }] })
+    });
+    assert.equal(unauthenticated.status, 401);
+
+    const heartbeat = await fetch(`${base}/api/duty-workers/heartbeat`, {
+      method: "POST",
+      headers: workerHeaders,
+      body: JSON.stringify({
+        workerId: "worker-a",
+        label: "Development host",
+        repositories: [{ id: "pyash", label: "Pyash", root: "/srv/pyash" }]
+      })
+    });
+    assert.equal(heartbeat.status, 200);
+    const worker = (await heartbeat.json()).worker;
+    assert.equal(worker.repositories[0].id, "pyash");
+    assert.equal("root" in worker.repositories[0], false);
+
+    const createdResponse = await fetch(`${base}/api/duties`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workerId: "worker-a",
+        repositoryId: "pyash",
+        title: "Inspect the saddle",
+        initialMessage: "Inspect the existing implementation and summarize it.",
+        model: "qwen3.5:9b"
+      })
+    });
+    assert.equal(createdResponse.status, 201);
+    const created = (await createdResponse.json()).duty;
+    assert.equal(created.status, "implementing");
+    const id = created.id;
+    await fs.access(await workTaskStatusPath(path.join(root, "world"), id, { readOnly: true }));
+
+    const claim = await fetch(`${base}/api/duty-workers/claim`, {
+      method: "POST",
+      headers: workerHeaders,
+      body: JSON.stringify({ workerId: "worker-a" })
+    });
+    assert.equal(claim.status, 200, JSON.stringify(await claim.clone().json()));
+    const assignment = (await claim.json()).assignment;
+    assert.equal(assignment.duty.id, id);
+    assert.match(assignment.sessionText, /coding saddle/u);
+
+    const result = await fetch(`${base}/api/duty-workers/result`, {
+      method: "POST",
+      headers: workerHeaders,
+      body: JSON.stringify({
+        workerId: "worker-a",
+        dutyId: id,
+        messageId: assignment.message.id,
+        claimId: assignment.claimId,
+        text: "The existing saddle is persisted on the hub.",
+        sessionText: assignment.sessionText
+      })
+    });
+    assert.equal(result.status, 200);
+    const completed = (await result.json()).duty;
+    assert.equal(completed.messages.at(-1).parentId, assignment.message.id);
+    assert.match(completed.messages.at(-1).html, /persisted on the hub/u);
+
+    const accepted = await fetch(`${base}/api/duties/${encodeURIComponent(id)}/accept`, { method: "POST" });
+    assert.equal(accepted.status, 200);
+    assert.equal((await accepted.json()).duty.status, "accepted");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await fs.rm(root, { recursive: true, force: true });
+    if (priorTokens === undefined) delete process.env.PYA_DUTY_WORKER_TOKENS;
+    else process.env.PYA_DUTY_WORKER_TOKENS = priorTokens;
     forget();
   }
 });

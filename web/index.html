@@ -14,6 +14,10 @@
           <h1>Pyash</h1>
         </div>
         <div class="topbar-actions">
+          <div class="segmented" role="group" aria-label="Conversation mode">
+            <button id="assistant-mode" type="button" aria-pressed="true">Assistant</button>
+            <button id="duty-mode" type="button" aria-pressed="false">Duty</button>
+          </div>
           <label class="compact-control">
             <span>Session</span>
             <select id="session-select" aria-label="Session"></select>
@@ -75,6 +79,28 @@
               <button type="submit" class="secondary">Queue job</button>
               <p id="job-state" class="muted">Jobs use the existing Pyash GPU queue.</p>
             </form>
+          </section>
+
+          <section class="side-section duty-section" aria-label="Coding duties">
+            <div class="section-heading">
+              <h2>Duty</h2>
+              <button id="refresh-duties" class="icon-button" type="button" title="Refresh duties and workers" aria-label="Refresh duties and workers">&#8635;</button>
+            </div>
+            <label for="duty-select">Open duty</label>
+            <select id="duty-select" aria-label="Open duty"><option value="">No duty selected</option></select>
+            <div class="duty-create">
+              <label for="duty-worker">Worker</label>
+              <select id="duty-worker" aria-label="Worker"><option value="">No worker online</option></select>
+              <label for="duty-repository">Directory</label>
+              <select id="duty-repository" aria-label="Directory"><option value="">Select a worker first</option></select>
+              <label for="duty-title">Duty title</label>
+              <input id="duty-title" maxlength="160" placeholder="Short objective">
+              <label for="duty-objective">First instruction</label>
+              <textarea id="duty-objective" rows="4" maxlength="32000" placeholder="Describe the coding outcome"></textarea>
+              <button id="create-duty" class="secondary" type="button">Create duty</button>
+            </div>
+            <button id="accept-duty" class="secondary" type="button" disabled>Accept duty</button>
+            <p id="duty-state" class="muted" aria-live="polite">Workers connect from their configured hosts.</p>
           </section>
 
           <section class="side-section tools-section">

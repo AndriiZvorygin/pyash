@@ -2,6 +2,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
+import readline from "node:readline/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -15,6 +16,7 @@ import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
 import { fetchWebModels } from "./pyash_web_server.mjs";
+import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
@@ -49,7 +51,7 @@ async function importSaddleTools() {
   await interpret(sentence);
 }
 
-function configureSaddle({ cwd, model, backend, host, systemPrompt }) {
+function configureSaddle({ cwd, worldRoot = path.join(cwd, "world"), model, backend, host, systemPrompt }) {
   const toolMap = remember(TOOL_MAP_NAME);
   if (toolMap?.be === "map") {
     doRemember({
@@ -61,7 +63,7 @@ function configureSaddle({ cwd, model, backend, host, systemPrompt }) {
     mood: "ya",
     su: { name: "world root" },
     be: "root",
-    ob: { filename: path.join(cwd, "world") }
+    ob: { filename: path.resolve(worldRoot) }
   });
   doRemember({
     mood: "ya",
@@ -82,21 +84,26 @@ function configureSaddle({ cwd, model, backend, host, systemPrompt }) {
 
 export async function prepareSaddle({
   cwd = process.cwd(),
+  runtimeRoot = cwd,
+  worldRoot = path.join(runtimeRoot, "world"),
   model = process.env.PYA_SADDLE_MODEL,
   backend = process.env.PYA_SADDLE_BACKEND,
   host = process.env.PYA_SADDLE_HOST,
   systemPrompt = DEFAULT_CODING_SADDLE_SYSTEM_PROMPT
 } = {}) {
   const resolvedCwd = path.resolve(cwd);
+  const resolvedRuntimeRoot = path.resolve(runtimeRoot);
+  const resolvedWorldRoot = path.resolve(worldRoot);
   setEntryModulePath(resolvedCwd);
   forget();
-  await loadDefaultConfig({ cwd: resolvedCwd, interpretFn: interpret, entryPath: path.join(resolvedCwd, "saddle.pya") });
+  await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
   await importSaddleTools();
   const resolvedBackend = normalizeSaddleBackend(backend || configValue("mind backend", "ollama"));
   const resolvedModel = normalizeSaddleModel(model || configValue("mind model", "qwen3.5:9b"));
   const resolvedHost = normalizeSaddleHost(host || resolveSaddleHost(resolvedBackend));
   configureSaddle({
     cwd: resolvedCwd,
+    worldRoot: resolvedWorldRoot,
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
@@ -106,6 +113,8 @@ export async function prepareSaddle({
   await ensureAgentDirs(agentHouse);
   return {
     cwd: resolvedCwd,
+    runtimeRoot: resolvedRuntimeRoot,
+    worldRoot: resolvedWorldRoot,
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
@@ -119,6 +128,9 @@ export async function runSaddleTurn({
   model,
   backend,
   host,
+  sessionName = SESSION_NAME,
+  sessionFile = "",
+  sessionUserMetadata = null,
   onToolCall,
   mindFn = mind_to_name_text
 } = {}) {
@@ -129,11 +141,13 @@ export async function runSaddleTurn({
     host,
     mindName: AGENT_NAME,
     toolMapName: TOOL_MAP_NAME,
-    sessionName: SESSION_NAME
+    sessionName,
+    sessionFile
   });
   return mindFn(sentence, {
     onToolCall,
-    sessionUserContent: String(input ?? "")
+    sessionUserContent: String(input ?? ""),
+    sessionUserMetadata
   });
 }
 
@@ -169,7 +183,78 @@ function renderInput(state, { rows = 1, clear = true, label = "pyash> " } = {}) 
   return lines.length;
 }
 
+async function resumeDuty(dutyId) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("resuming a duty requires an interactive terminal");
+  }
+  const id = String(dutyId ?? "").trim();
+  if (!/^duty-[a-z0-9._-]+$/iu.test(id)) throw new Error("provide a duty ID, for example duty-...");
+  const hub = resolveCodingDutyHub();
+  const route = `/api/duties/${encodeURIComponent(id)}`;
+  const showDuty = async () => (await requestCodingDutyHub(hub, route)).duty;
+  const duty = await showDuty();
+  process.stdout.write(`Pyash duty: ${duty.title}\n`);
+  process.stdout.write(`Directory: ${duty.repositoryId} · Worker: ${duty.workerId} · ${duty.status}\n`);
+  process.stdout.write("History:\n");
+  for (const message of duty.messages || []) {
+    process.stdout.write(`${message.role === "user" ? "you" : "pyash"}> ${message.text}\n`);
+  }
+  process.stdout.write("Enter sends an instruction; /refresh reloads; /accept accepts an idle duty; /exit leaves it running.\n");
+
+  const terminal = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const printedReplies = new Set((duty.messages || []).filter((message) => message.role === "assistant").map((message) => message.id));
+  let refreshing = false;
+  const refresh = async () => {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      const latest = await showDuty();
+      for (const message of latest.messages || []) {
+        if (message.role !== "assistant" || printedReplies.has(message.id)) continue;
+        printedReplies.add(message.id);
+        process.stdout.write(`\npyash> ${message.text}\n`);
+      }
+    } catch (error) {
+      process.stdout.write(`\nduty status unavailable: ${error.message}\n`);
+    } finally {
+      refreshing = false;
+    }
+  };
+  const watcher = setInterval(refresh, 2000);
+  watcher.unref?.();
+  try {
+    while (true) {
+      const input = (await terminal.question("you> ")).trim();
+      if (!input) continue;
+      if (input === "/exit" || input === "/quit") break;
+      if (input === "/refresh") {
+        const latest = await showDuty();
+        process.stdout.write(`duty ${latest.status}${latest.active ? " · worker active" : ""}\n`);
+        continue;
+      }
+      if (input === "/accept") {
+        const result = await requestCodingDutyHub(hub, `${route}/accept`, { method: "POST" });
+        process.stdout.write(`duty ${result.duty.status}\n`);
+        continue;
+      }
+      const queued = await requestCodingDutyHub(hub, `${route}/messages`, {
+        method: "POST",
+        body: { message: input }
+      });
+      process.stdout.write(`duty ${queued.duty.status} · instruction queued\n`);
+      void refresh();
+    }
+  } finally {
+    clearInterval(watcher);
+    terminal.close();
+  }
+}
+
 async function main() {
+  if (process.argv[2] === "resume") {
+    await resumeDuty(process.argv[3]);
+    return;
+  }
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     writeLine("pyash saddle requires an interactive terminal");
     process.exitCode = 1;
@@ -391,4 +476,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   });
 }
 
-export { main };
+export { main, resumeDuty };
