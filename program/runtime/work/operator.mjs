@@ -58,6 +58,11 @@ export async function listWorkTasks(worldRoot, options = {}) {
   return listWorkTaskStatuses(worldRoot, options);
 }
 
+export async function listAutonomousWorkTasks(worldRoot, options = {}) {
+  const tasks = await listWorkTasks(worldRoot, options);
+  return tasks.filter((task) => task.kind !== "coding-duty");
+}
+
 export async function showWorkTask(worldRoot, taskId) {
   const task = await readWorkTaskStatus(worldRoot, taskId);
   if (!task) throw new Error(`work task not found: ${taskId}`);

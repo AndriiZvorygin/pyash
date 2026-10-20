@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { pyaFileToJson } from "../../library/pya_to_json.mjs";
-import { listWorkTasks } from "./operator.mjs";
+import { listAutonomousWorkTasks } from "./operator.mjs";
 import { isStaleTurnResumable } from "./checkpoint.mjs";
 import { resolveWorkRoleConfig } from "./supervisor.mjs";
 import {
@@ -1039,7 +1039,8 @@ export async function buildAutonomousRoadmap({
   persist = true,
   architect = null
 } = {}) {
-  const allTasks = tasks || await listWorkTasks(worldRoot, { includeTerminal: true });
+  const allTasks = (tasks || await listAutonomousWorkTasks(worldRoot, { includeTerminal: true }))
+    .filter((task) => task.kind !== "coding-duty");
   const previous = await readAutonomousRoadmap(worldRoot);
   const persistedCatalog = previous?.schema === ROADMAP_SCHEMA
     ? previous.packages?.filter((item) => item.taskId && item.sourcePath && item.sourceAnchor) || []
@@ -1210,7 +1211,7 @@ export async function refreshAutonomousRoadmap({
       : await runCodexTurn(client, { threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] });
     const proposal = parseArchitectResponse(result?.text || result?.output || "");
     const packages = proposal.packages.map(normalizeArchitectPackage);
-    const refreshedTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+    const refreshedTasks = await listAutonomousWorkTasks(worldRoot, { includeTerminal: true });
     const refreshed = await buildAutonomousRoadmap({
       worldRoot,
       repositoryRoot,

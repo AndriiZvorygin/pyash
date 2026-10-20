@@ -1,0 +1,17 @@
+[Unit]
+Description=Pyash coding duty worker (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/pyash/duty-worker-%i.env
+WorkingDirectory=%h/pyash
+ExecStart=/usr/bin/env node command/pyash_duty_worker.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

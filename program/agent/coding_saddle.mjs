@@ -133,7 +133,8 @@ export function buildSaddleMindSentence({
   host,
   mindName = "coding saddle",
   toolMapName = "saddle tools",
-  sessionName = "coding"
+  sessionName = "coding",
+  sessionFile = ""
 } = {}) {
   return {
     mood: "do",
@@ -144,7 +145,9 @@ export function buildSaddleMindSentence({
     with: { name: normalizeText(toolMapName) || "saddle tools" },
     fromstate: { text: normalizeSaddleBackend(backend) },
     from: { text: normalizeSaddleHost(host) },
-    fromtext: { name: `session name ${normalizeText(sessionName) || "coding"}` },
+    fromtext: sessionFile
+      ? { filename: path.resolve(String(sessionFile)) }
+      : { name: `session name ${normalizeText(sessionName) || "coding"}` },
     by: { num: 50 },
     // The model is persisted in the mind configuration fact; the sentence stays canonical Pyash shape.
   };

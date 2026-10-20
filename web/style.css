@@ -23,6 +23,9 @@ button { cursor: pointer; }
 .shell { min-height: 100vh; max-width: 1440px; margin: 0 auto; padding: 24px; }
 .topbar { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
 .topbar-actions { display: flex; align-items: end; justify-content: flex-end; gap: 9px; }
+.segmented { display: flex; border: 1px solid var(--line); align-self: end; }
+.segmented button { border: 0; background: transparent; color: var(--muted); padding: 7px 10px; }
+.segmented button[aria-pressed="true"] { background: var(--accent-dark); color: var(--text); }
 .compact-control { display: grid; gap: 3px; color: var(--muted); font-size: 11px; }
 .compact-control select { min-width: 150px; padding: 7px 9px; }
 .model-control select { max-width: 265px; }
@@ -75,6 +78,11 @@ textarea:focus, input:focus, select:focus { border-color: var(--accent); }
 .job-form { display: grid; gap: 8px; margin-top: 14px; }
 .job-form label { color: var(--muted); font-size: 12px; }
 .job-form textarea { font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.duty-section > label, .duty-create label { display: block; color: var(--muted); font-size: 12px; margin: 12px 0 5px; }
+.duty-create { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 3px; }
+.duty-create textarea { resize: vertical; min-height: 92px; }
+.duty-section button.secondary { width: 100%; margin-top: 10px; }
+.duty-section p { margin: 10px 0 0; }
 .muted { color: var(--muted); font-size: 13px; }
 .events, .sources, .tool-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .events span, .tool-list span { color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); padding: 3px 7px; font-size: 11px; }
@@ -84,6 +92,7 @@ textarea:focus, input:focus, select:focus { border-color: var(--accent); }
   .shell { padding: 12px; }
   .topbar { align-items: stretch; flex-direction: column; gap: 12px; }
   .topbar-actions { align-items: end; justify-content: flex-start; flex-wrap: wrap; }
+  .segmented { order: -1; }
   .model-control { flex: 1 1 220px; }
   .model-control select { max-width: none; }
   .workspace { grid-template-columns: 1fr; }
@@ -91,4 +100,5 @@ textarea:focus, input:focus, select:focus { border-color: var(--accent); }
   .side-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .side-section { border-bottom: 0; margin-bottom: 0; }
   .tools-section { grid-column: 1 / -1; }
+  .duty-section { grid-column: 1 / -1; }
 }

@@ -37,11 +37,15 @@ launched repository is the default bounded coding root, while the canonical
 session remains under the coding-saddle agent house as `.pya` state. Existing
 tools enforce the repository command and file policy.
 
-The follow-on package,
-`roadmap-pyash-coding-saddle-work-handoff`, connects an interactive request to
-the existing durable `WorkTask`, review, checkpoint, and
-`automation/roadmap` integration path. It must preserve task/session/worktree
-identity and never bypass the normal Sol/Luna acceptance or integration rules.
+The interactive work-handoff slice exposes the Pyash-native **duty** concept
+through the existing durable `WorkTask` status artifact. The authenticated web
+surface assigns a duty to an allowlisted repository on an online host worker;
+the same conversation can be resumed from a browser or `pyash resume <duty-id>`.
+It preserves duty/session identity and uses the existing mind, provider, and
+tool-policy paths. This operator-driven coding lane does not claim the
+autonomous Sol/Luna planner, reviewer, or `automation/roadmap` integration
+contract; those remain separate and must be explicitly connected through their
+existing lifecycle if a later tranche requires it.
 
 Launch with `node command/pyash_saddle.mjs`. The terminal surface is kept
 dependency-free so the same Pyash provider and GPU lifecycle remain in charge

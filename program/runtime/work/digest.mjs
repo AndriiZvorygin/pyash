@@ -4,7 +4,7 @@ import path from "node:path";
 import { readCodexCapacity, calculateWeeklyPacing, DEFAULT_BACKGROUND_POLICY } from "./capacity.mjs";
 import { buildExecutableSupply, curateWorkBacklog } from "./curator.mjs";
 import { prepareBlockerRepair } from "./blocker_repair.mjs";
-import { listWorkTasks } from "./operator.mjs";
+import { listAutonomousWorkTasks } from "./operator.mjs";
 import { readWorkSchedulerEvents } from "./history.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
 import { renderWorkTaskReport } from "./report.mjs";
@@ -690,7 +690,7 @@ async function buildWorkDailyDigestInternal({
     : null;
   const [capacity, tasks, events, curation, blockerRepair, storedHealth, storedDigestHealth, automationAudit] = await Promise.all([
     capacitySource({ now: end }),
-    listWorkTasks(worldRoot, { includeTerminal: true }),
+    listAutonomousWorkTasks(worldRoot, { includeTerminal: true }),
     readWorkSchedulerEvents(worldRoot, { since: start.toISOString(), until: end.toISOString() }),
     curateWorkBacklog({ worldRoot, repositoryRoot, owner, threshold: policy.curationThreshold, maxTasks: policy.curationMaxTasks, dryRun: true, now: end }),
     prepareBlockerRepair({ worldRoot, owner, now: end, dryRun: true }),

@@ -11,9 +11,27 @@ import { remember, doRemember } from "../program/remember/index.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import {
   ensureAgentDirs,
+  ensureSessionFileAtPath,
   listSessionFiles,
   readSessionMessages
 } from "../program/agent/session.mjs";
+import {
+  acceptCodingDuty,
+  addCodingDutyMessage,
+  claimCodingDutyMessage,
+  codingDutyView,
+  completeCodingDutyMessage,
+  createCodingDuty,
+  dutyWorkerTokenMatches,
+  failCodingDutyMessage,
+  heartbeatCodingDuty,
+  listCodingDuties,
+  parseDutyWorkerTokens,
+  publicCodingDutyMessage,
+  publicDutyWorker,
+  readCodingDuty,
+  readDutySessionText
+} from "../program/agent/coding_duty.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import { fetchStrataRuntime } from "./pyash/mind_backend_helpers.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
@@ -29,6 +47,8 @@ const DEFAULT_PORT = 8787;
 const DEFAULT_TOOLS_MAP = "agent tools";
 const MAX_CHAT_BYTES = 64 * 1024;
 const MAX_JOB_BYTES = 2 * 1024 * 1024;
+const MAX_DUTY_BYTES = 5 * 1024 * 1024;
+const DUTY_WORKER_TTL_MS = 45000;
 const SAFE_JOB_INTENTS = new Map([
   ["draw", "comfyui-draw"],
   ["hear", "comfyui-hear"]
@@ -76,6 +96,39 @@ function parseArgs(argv) {
     toolsMap: readArgValue(args, "--tools-map", DEFAULT_TOOLS_MAP),
     assets: path.resolve(readArgValue(args, "--assets", path.resolve(process.cwd(), "web")))
   };
+}
+
+function workerIdForRequest(req, tokens, requestedId = "") {
+  const authorization = String(req.headers.authorization ?? "");
+  const match = authorization.match(/^Bearer\s+(.+)$/iu);
+  if (!match) return "";
+  const wanted = String(requestedId ?? "").trim();
+  if (wanted) {
+    const expected = tokens.get(wanted);
+    return expected && dutyWorkerTokenMatches(expected, match[1]) ? wanted : "";
+  }
+  for (const [workerId, expected] of tokens) {
+    if (dutyWorkerTokenMatches(expected, match[1])) return workerId;
+  }
+  return "";
+}
+
+function normalizedWorkerRepositories(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const repositories = [];
+  for (const entry of value) {
+    const id = String(entry?.id ?? "").trim();
+    const root = String(entry?.root ?? "").trim();
+    if (!/^[a-zA-Z0-9._-]{1,80}$/u.test(id) || !root || seen.has(id)) continue;
+    seen.add(id);
+    repositories.push({
+      id,
+      root: path.resolve(root),
+      label: String(entry?.label ?? id).trim().slice(0, 120) || id
+    });
+  }
+  return repositories;
 }
 
 function normalizeSessionId(raw = "web") {
@@ -167,6 +220,17 @@ export function filterPublicTools(tools = []) {
 
 export function renderAssistantMarkdown(text = "") {
   return markdown.render(String(text ?? ""));
+}
+
+function renderDuty(duty) {
+  if (!duty) return null;
+  return {
+    ...duty,
+    messages: (duty.messages || []).map((message) => ({
+      ...message,
+      html: message.role === "assistant" ? renderAssistantMarkdown(message.text) : null
+    }))
+  };
 }
 
 export function buildChatSentence({
@@ -632,9 +696,18 @@ export async function createWebServer({
 
   const publicTools = filterPublicTools(runtime.tools || toolListFromSchemas([]));
   const runExclusive = makeMutex();
+  const dutyExclusive = makeMutex();
+  const dutyWorldRoot = path.join(resolvedRoot, "world");
   const sessionDir = path.join(agentHouse, "session");
+  const dutyWorkerTokens = parseDutyWorkerTokens(process.env.PYA_DUTY_WORKER_TOKENS);
+  const dutyWorkers = new Map();
   let modelCatalog = null;
   let modelCatalogAt = 0;
+
+  function activeDutyWorker(workerId) {
+    const worker = dutyWorkers.get(workerId);
+    return worker && Date.now() - Date.parse(worker.lastSeen) <= DUTY_WORKER_TTL_MS ? worker : null;
+  }
 
   async function getModelCatalog({ force = false } = {}) {
     if (!force && modelCatalog && Date.now() - modelCatalogAt < 30000) return modelCatalog;
@@ -672,6 +745,261 @@ export async function createWebServer({
           error: catalog.error ?? null
         });
         return;
+      }
+      if (req.method === "GET" && pathname === "/api/duty-workers") {
+        const workers = [...dutyWorkers.values()]
+          .filter((worker) => activeDutyWorker(worker.id))
+          .map(publicDutyWorker)
+          .sort((left, right) => left.id.localeCompare(right.id));
+        jsonResponse(res, 200, { ok: true, workers });
+        return;
+      }
+      if (req.method === "GET" && pathname === "/api/duties") {
+        jsonResponse(res, 200, { ok: true, duties: (await listCodingDuties(dutyWorldRoot)).map(renderDuty) });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/duties") {
+        const body = await readJsonBody(req, MAX_DUTY_BYTES);
+        const title = String(body.title ?? "").trim();
+        const initialMessage = String(body.initialMessage ?? "").trim();
+        if (!title || title.length > 160 || !initialMessage || initialMessage.length > 32000) {
+          errorResponse(res, 400, "duty title and first instruction are required and must fit their limits", "invalid_duty");
+          return;
+        }
+        const workerId = String(body.workerId ?? "").trim();
+        const repositoryId = String(body.repositoryId ?? "").trim();
+        const worker = activeDutyWorker(workerId);
+        if (!worker) {
+          errorResponse(res, 409, "selected worker is offline", "duty_worker_offline");
+          return;
+        }
+        if (!worker.repositories.some((repository) => repository.id === repositoryId)) {
+          errorResponse(res, 400, "selected directory is not available on that worker", "duty_directory_unavailable");
+          return;
+        }
+        const catalog = await getModelCatalog({ force: true });
+        const requestedTarget = normalizeModelId(body.model) || modelTargetValue(backend, model);
+        const selected = catalog.modelOptions.find((entry) => entry.value === requestedTarget)
+          || catalog.modelOptions.find((entry) => entry.model === requestedTarget && entry.backend === backend);
+        if (catalog.modelOptions.length && !selected) {
+          errorResponse(res, 400, `model is not available: ${requestedTarget}`, "model_unavailable");
+          return;
+        }
+        if (selected && !selected.ready) {
+          errorResponse(res, 409, `${selected.label} is not ready`, "model_not_ready", {
+            model: selected.model,
+            backend: selected.backend,
+            status: selected.status,
+            etaSeconds: selected.etaSeconds
+          });
+          return;
+        }
+        const target = selected || modelOption({
+          backend,
+          model,
+          host: backend === "strata"
+            ? process.env.PYA_WEB_STRATA_HOST || process.env.STRATA_HOST || "http://127.0.0.1:8081"
+            : resolveConfigText("ollama host") || process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://localhost:11434"
+        });
+        const dutyId = `duty-${crypto.randomUUID()}`;
+        const sessionFile = path.join(sessionDir, `${dutyId}.pya`);
+        const dutyPrompt = [
+          "You are the Pyash coding saddle working on one durable duty.",
+          `Repository directory: ${repositoryId}.`,
+          "Use only the configured repository tools and preserve the duty's session continuity.",
+          "Do not claim that code changed unless a tool result confirms it.",
+          "Before reporting a completed change, run an appropriate focused check and report the evidence."
+        ].join("\n");
+        await ensureSessionFileAtPath({
+          sessionFile,
+          sessionName: dutyId,
+          systemPrompt: dutyPrompt,
+          model: target.model
+        });
+        const task = await dutyExclusive(() => createCodingDuty(dutyWorldRoot, {
+          id: dutyId,
+          title,
+          initialMessage,
+          workerId,
+          repositoryId,
+          model: target.model,
+          backend: target.backend,
+          host: target.host,
+          sessionName: dutyId,
+          sessionFile
+        }));
+        jsonResponse(res, 201, { ok: true, duty: renderDuty(codingDutyView(task)) });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/duty-workers/heartbeat") {
+        const body = await readJsonBody(req, 64 * 1024);
+        const workerId = String(body.workerId ?? "").trim();
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId)) {
+          errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
+          return;
+        }
+        const repositories = normalizedWorkerRepositories(body.repositories);
+        if (!repositories.length) {
+          errorResponse(res, 400, "worker must advertise at least one configured directory", "duty_worker_invalid");
+          return;
+        }
+        const worker = {
+          id: workerId,
+          label: String(body.label ?? workerId).trim().slice(0, 120) || workerId,
+          repositories,
+          lastSeen: new Date().toISOString()
+        };
+        dutyWorkers.set(workerId, worker);
+        if (body.dutyId && body.messageId && body.claimId) {
+          await dutyExclusive(() => heartbeatCodingDuty(
+            dutyWorldRoot,
+            body.dutyId,
+            workerId,
+            body.messageId,
+            body.claimId
+          ));
+        }
+        jsonResponse(res, 200, { ok: true, worker: publicDutyWorker(worker) });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/duty-workers/claim") {
+        const body = await readJsonBody(req, 64 * 1024);
+        const workerId = String(body.workerId ?? "").trim();
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId)) {
+          errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
+          return;
+        }
+        const worker = activeDutyWorker(workerId);
+        if (!worker) {
+          errorResponse(res, 409, "worker must heartbeat before claiming a duty", "duty_worker_offline");
+          return;
+        }
+        worker.lastSeen = new Date().toISOString();
+        const claimed = await dutyExclusive(() => claimCodingDutyMessage(dutyWorldRoot, workerId, {
+          repositoryIds: worker.repositories.map((repository) => repository.id)
+        }));
+        if (!claimed) {
+          jsonResponse(res, 200, { ok: true, assignment: null });
+          return;
+        }
+        const duty = codingDutyView(claimed.task, { includeMessages: false });
+        const assignedRepository = worker.repositories.find((entry) => entry.id === duty.repositoryId);
+        if (!assignedRepository) {
+          await dutyExclusive(() => failCodingDutyMessage(
+            dutyWorldRoot,
+            duty.id,
+            workerId,
+            claimed.message.id,
+            claimed.task.workSpec.codingDuty.claim.claimId,
+            "assigned directory is no longer configured",
+            { retry: false }
+          ));
+          errorResponse(res, 409, "assigned directory is no longer configured on this worker", "duty_directory_unavailable");
+          return;
+        }
+        jsonResponse(res, 200, {
+          ok: true,
+          assignment: {
+            duty,
+            message: publicCodingDutyMessage(claimed.message),
+            claimId: claimed.task.workSpec.codingDuty.claim.claimId,
+            repositoryLabel: assignedRepository.label,
+            sessionText: await readDutySessionText(claimed.task)
+          }
+        });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/duty-workers/result") {
+        const body = await readJsonBody(req, MAX_DUTY_BYTES);
+        const workerId = String(body.workerId ?? "").trim();
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId)) {
+          errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
+          return;
+        }
+        if (Buffer.byteLength(String(body.sessionText ?? ""), "utf8") > 4 * 1024 * 1024) {
+          errorResponse(res, 413, "duty session exceeds the synchronization limit", "duty_session_too_large");
+          return;
+        }
+        const duty = await dutyExclusive(async () => {
+          return completeCodingDutyMessage(
+            dutyWorldRoot,
+            body.dutyId,
+            workerId,
+            body.messageId,
+            body.claimId,
+            body.text,
+            { sessionText: body.sessionText }
+          );
+        });
+        if (!duty) {
+          errorResponse(res, 404, "duty not found", "duty_not_found");
+          return;
+        }
+        jsonResponse(res, 200, { ok: true, duty: renderDuty(codingDutyView(duty)) });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/duty-workers/failure") {
+        const body = await readJsonBody(req, 64 * 1024);
+        const workerId = String(body.workerId ?? "").trim();
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId)) {
+          errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
+          return;
+        }
+        const duty = await dutyExclusive(() => failCodingDutyMessage(
+          dutyWorldRoot,
+          body.dutyId,
+          workerId,
+          body.messageId,
+          body.claimId,
+          body.error
+        ));
+        if (!duty) {
+          errorResponse(res, 404, "duty not found", "duty_not_found");
+          return;
+        }
+        jsonResponse(res, 200, { ok: true, duty: renderDuty(codingDutyView(duty)) });
+        return;
+      }
+      const dutyRoute = pathname.match(/^\/api\/duties\/([^/]+)(?:\/(messages|accept))?$/u);
+      if (dutyRoute) {
+        const dutyId = decodeURIComponent(dutyRoute[1]);
+        const action = dutyRoute[2] || "show";
+        if (req.method === "GET" && action === "show") {
+          const task = await readCodingDuty(dutyWorldRoot, dutyId);
+          if (!task) {
+            errorResponse(res, 404, "duty not found", "duty_not_found");
+            return;
+          }
+          jsonResponse(res, 200, { ok: true, duty: renderDuty(codingDutyView(task)) });
+          return;
+        }
+        if (req.method === "POST" && action === "messages") {
+          const body = await readJsonBody(req, MAX_CHAT_BYTES);
+          const task = await dutyExclusive(() => addCodingDutyMessage(dutyWorldRoot, dutyId, body.message));
+          if (!task) {
+            errorResponse(res, 404, "duty not found", "duty_not_found");
+            return;
+          }
+          jsonResponse(res, 202, { ok: true, duty: renderDuty(codingDutyView(task)), queued: true });
+          return;
+        }
+        if (req.method === "POST" && action === "accept") {
+          const accepted = await dutyExclusive(async () => {
+            const task = await readCodingDuty(dutyWorldRoot, dutyId);
+            if (!task) return null;
+            const state = task.workSpec.codingDuty;
+            if (state.claim || state.messages.some((message) => message.role === "user" && ["pending", "running"].includes(message.state))) {
+              throw Object.assign(new Error("duty has unfinished input or active work"), { statusCode: 409 });
+            }
+            return acceptCodingDuty(dutyWorldRoot, dutyId, { actor: "web operator" });
+          });
+          if (!accepted) {
+            errorResponse(res, 404, "duty not found", "duty_not_found");
+            return;
+          }
+          jsonResponse(res, 200, { ok: true, duty: renderDuty(codingDutyView(accepted)) });
+          return;
+        }
       }
       if (req.method === "GET" && pathname === "/api/sessions") {
         jsonResponse(res, 200, {

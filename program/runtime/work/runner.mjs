@@ -1,7 +1,7 @@
 import { probeWorkTaskAvailability, runWorkSupervisorOnce } from "./supervisor.mjs";
 import { runWorkIntegrationReconciliationOnce } from "./integration_runner.mjs";
 import { listQueuedWorkTasks, listRuntimeWorkTasks, queueDepth } from "./queue.mjs";
-import { listWorkTasks, resumeExternalEvidenceTask } from "./operator.mjs";
+import { listAutonomousWorkTasks, resumeExternalEvidenceTask } from "./operator.mjs";
 import { readCodexCapacity, admitBackgroundWork, DEFAULT_BACKGROUND_POLICY } from "./capacity.mjs";
 import { appendWorkOutcome } from "./outcome.mjs";
 import { readWorkSchedulerHealth, writeWorkSchedulerHealth } from "./health.mjs";
@@ -223,7 +223,7 @@ export async function inspectWorkBackground({
       staleTurnMs: policy.staleOperationalTurnMs,
       maxRecoveryCount: policy.maxOperationalRecoveries
     });
-  let allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+  let allTasks = await listAutonomousWorkTasks(worldRoot, { includeTerminal: true });
   let roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
   let dependencyFilter = selectIndependentWorkCandidates(eligible, allTasks, roadmap);
   let recoveryDependencyFilter = selectIndependentWorkCandidates(
@@ -281,7 +281,7 @@ export async function inspectWorkBackground({
         maxRecoveryCount: policy.maxOperationalRecoveries,
         currentPolicy: timeoutPolicy
       });
-      allTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+      allTasks = await listAutonomousWorkTasks(worldRoot, { includeTerminal: true });
       roadmap = await buildAutonomousRoadmap({ worldRoot, repositoryRoot, tasks: allTasks, now, persist: false });
       dependencyFilter = selectIndependentWorkCandidates(eligible, allTasks, roadmap);
       recoveryDependencyFilter = selectIndependentWorkCandidates(
@@ -413,7 +413,7 @@ export async function runWorkBackgroundOnce({
   let baselinePreflight = null;
   let baselinePreflightError = "";
   if (typeof baselineSync === "function") {
-    const existingTasks = await listWorkTasks(worldRoot, { includeTerminal: true });
+    const existingTasks = await listAutonomousWorkTasks(worldRoot, { includeTerminal: true });
     const activeRuntime = existingTasks
       .filter((task) => !owner || task.owner === owner)
       .some((task) => ACTIVE_WORK_STATUSES.has(task.status));
