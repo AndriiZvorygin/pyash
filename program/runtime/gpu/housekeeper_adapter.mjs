@@ -1,3 +1,5 @@
+import { resolveGpuSourceIdentity } from "./source_identity.mjs";
+
 function normalizeText(value) {
   if (value == null) return "";
   return String(value).trim();
@@ -47,9 +49,9 @@ async function requestJson({ baseUrl = "", pathname = "", method = "GET", body }
   return parseJsonOrThrow(response);
 }
 
-export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) {
+export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", username = "" } = {}) {
   const rootUrl = normalizeBaseUrl(baseUrl);
-  const defaultHostId = normalizeText(hostId);
+  const sourceIdentity = resolveGpuSourceIdentity({ hostId, username });
 
   return {
     async getHealth() {
@@ -89,9 +91,14 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) 
         handleId: normalizeText(handleId),
         runtimeName: normalizeText(runtimeName),
         profileName: normalizeText(profileName),
-      jobSpec,
-      hostId: defaultHostId
-    };
+        jobSpec,
+        hostId: sourceIdentity.hostId,
+        source: {
+          ...sourceIdentity,
+          workerId: "pyash-gpu-worker",
+          processId: process.pid
+        }
+      };
       if (normalizeText(deviceId)) body.deviceId = normalizeText(deviceId);
       if (typeof dischargeAllowed === "boolean") body.dischargeAllowed = dischargeAllowed;
       if (routing && typeof routing === "object" && !Array.isArray(routing)) body.routing = { ...routing };
@@ -135,7 +142,7 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "" } = {}) 
         method: "POST",
         body: {
           profileName: normalizeText(profileName),
-          hostId: defaultHostId
+          hostId: sourceIdentity.hostId
         }
       });
     }

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { resolveTextModel } from "./text-model.mjs";
+import { resolveGpuSourceIdentity } from "./source_identity.mjs";
 
 export { DEFAULT_TEXT_MODEL } from "./text-model.mjs";
 
@@ -9,6 +10,18 @@ const DEFAULT_FETCH = globalThis.fetch;
 
 function text(value) {
   return String(value ?? "").trim();
+}
+
+function sourceFields({ hostId = "", username = "", workerId = "pyash-managed-gpu" } = {}) {
+  const identity = resolveGpuSourceIdentity({ hostId, username });
+  return {
+    hostId: identity.hostId,
+    source: {
+      ...identity,
+      workerId: text(workerId) || "pyash-managed-gpu",
+      processId: process.pid,
+    },
+  };
 }
 
 function stripApiPath(value) {
@@ -104,6 +117,9 @@ export async function submitManagedGpuJob({
   managerUrl = "",
   providerUrl = "",
   deviceId = process.env.PYA_GPU_DEVICE_ID || "",
+  hostId = process.env.PYA_GPU_HOST_ID || "",
+  username = process.env.PYA_GPU_USERNAME || "",
+  workerId = "pyash-managed-gpu-client",
   dischargeAllowed = true,
   handleId = "",
   fetchImpl = globalThis.fetch,
@@ -136,6 +152,7 @@ export async function submitManagedGpuJob({
     timeoutMs,
     body: {
       handleId: text(handleId) || `managed-${normalizedRuntime}-${Date.now().toString(36)}`,
+      ...sourceFields({ hostId, username, workerId }),
       runtimeName: normalizedRuntime,
       profileName: normalizedProfile,
       dischargeAllowed: dischargeAllowed !== false,
@@ -226,6 +243,9 @@ export async function requestManagedOllamaChat({
   pollIntervalMs = Number.parseInt(String(env.PYA_GPU_MANAGER_POLL_MS || process.env.PYA_GPU_MANAGER_POLL_MS || "500"), 10) || 500,
   vramRequiredMb = Number.parseInt(String(env.PYA_OLLAMA_VRAM_REQUIRED_MB || process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || "12000"), 10) || 12000,
   deviceId = env.PYA_GPU_DEVICE_ID || process.env.PYA_GPU_DEVICE_ID || "",
+  hostId = env.PYA_GPU_HOST_ID || process.env.PYA_GPU_HOST_ID || "",
+  username = env.PYA_GPU_USERNAME || process.env.PYA_GPU_USERNAME || "",
+  workerId = "pyash-managed-ollama",
   dischargeAllowed = true,
   requireManager = envFlag(env.PYA_GPU_MANAGER_REQUIRED, false),
   allowDirect = envFlag(env.PYA_GPU_MANAGER_ALLOW_DIRECT, false),
@@ -276,6 +296,7 @@ export async function requestManagedOllamaChat({
     timeoutMs,
     body: {
       handleId: defaultHandleId(normalizedModel, payload.messages),
+      ...sourceFields({ hostId, username, workerId }),
       runtimeName: "ollama",
       profileName: normalizedModel,
       dischargeAllowed: dischargeAllowed !== false,

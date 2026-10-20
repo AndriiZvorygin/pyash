@@ -420,16 +420,69 @@ def minimal_jobs() -> List[Dict[str, Any]]:
   values.sort(key=lambda item: item.get("submittedAt") or "")
   out = []
   for job in values:
-    if job.get("status") != "running":
+    if job.get("status") not in {"queued", "running"}:
       continue
     out.append({
       "remoteJobId": job.get("remoteJobId"),
       "handleId": job.get("handleId"),
       "runtimeName": job.get("runtimeName"),
       "profileName": job.get("profileName"),
-      "status": job.get("status")
+      "status": job.get("status"),
+      "submittedAt": job.get("submittedAt") or "",
+      "startedAt": job.get("startedAt") or "",
+      "executionHostId": job.get("executionHostId") or "",
+      "source": job.get("source") or {"hostId": "unknown"},
+      "forwarded": bool(job.get("forwarded", False))
     })
   return out
+
+
+def queue_view() -> Dict[str, Any]:
+  jobs = minimal_jobs()
+  return {
+    "queueDepth": queue_depth(),
+    "queuedCount": sum(1 for job in jobs if job.get("status") == "queued"),
+    "runningCount": sum(1 for job in jobs if job.get("status") == "running"),
+    "jobs": jobs
+  }
+
+
+def normalize_job_source(payload: Dict[str, Any], peer_address: str = "") -> Dict[str, Any]:
+  source = payload.get("source") if isinstance(payload.get("source"), dict) else {}
+  routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+  source_host = (
+    normalize_text(source.get("hostId"))
+    or normalize_text(payload.get("sourceHostId"))
+    or normalize_text(payload.get("hostId"))
+    or normalize_text(routing.get("originHostId"))
+    or "unknown"
+  )
+  source_username = (
+    normalize_text(source.get("username"))
+    or normalize_text(payload.get("username"))
+  )
+  worker_id = normalize_text(source.get("workerId"))
+  try:
+    process_id = max(0, int(source.get("processId") or 0))
+  except (TypeError, ValueError):
+    process_id = 0
+
+  # On the first hop, record the TCP peer seen by this manager. Forwarded hops
+  # preserve that original address rather than replacing it with a peer manager.
+  source_peer = normalize_text(source.get("peerAddress"))
+  if route_forward_depth(payload) == 0 and peer_address:
+    source_peer = normalize_text(peer_address)
+
+  normalized = {"hostId": source_host}
+  if source_username:
+    normalized["username"] = source_username
+  if worker_id:
+    normalized["workerId"] = worker_id
+  if process_id:
+    normalized["processId"] = process_id
+  if source_peer:
+    normalized["peerAddress"] = source_peer
+  return normalized
 
 
 def parse_bool_env(name: str, default: bool = False) -> bool:
@@ -839,6 +892,7 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
     "jobSpec": job["jobSpec"],
     "deviceId": job.get("deviceId", ""),
     "dischargeAllowed": job.get("dischargeAllowed", True),
+    "source": job.get("source") or {"hostId": "unknown"},
     "routing": {
       "originHostId": origin,
       "forwardDepth": route_forward_depth(payload) + 1,
@@ -873,11 +927,17 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
     "remoteJobId": job["remoteJobId"],
     "forwarded": True,
     "executionHostId": job["executionHostId"],
-    "route": job["route"]
+    "route": job["route"],
+    "source": job.get("source") or {"hostId": "unknown"}
   }
 
 
-def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None, host_id: str = "") -> Dict[str, Any]:
+def submit_job(
+  payload: Dict[str, Any],
+  runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None,
+  host_id: str = "",
+  source_address: str = ""
+) -> Dict[str, Any]:
   handle_id = normalize_text(payload.get("handleId"))
   runtime_name = normalize_text(payload.get("runtimeName"))
   profile_name = normalize_text(payload.get("profileName"))
@@ -998,6 +1058,7 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
 
   runtime_registry = runtime_registry or Handler.runtime_registry
   selected_host = normalize_text(host_id) or normalize_text(Handler.host_id)
+  source = normalize_job_source(payload, source_address)
   if route_forward_depth(payload) > 0 and not parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True):
     return {
       "accepted": False,
@@ -1019,6 +1080,7 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
     "submittedAt": now,
     "startedAt": "",
     "finishedAt": "",
+    "source": source,
     "executionHostId": selected_host,
     "forwarded": False,
     "route": {
@@ -1073,7 +1135,8 @@ def submit_job(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dic
     "accepted": True,
     "forwarded": False,
     "executionHostId": selected_host,
-    "route": job["route"]
+    "route": job["route"],
+    "source": source
   }
 
 
@@ -1122,13 +1185,19 @@ def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
     if not job:
       return None
     return {
+      "remoteJobId": job.get("remoteJobId") or remote_job_id,
+      "handleId": job.get("handleId") or "",
+      "runtimeName": job.get("runtimeName") or "",
+      "profileName": job.get("profileName") or "",
       "status": job.get("status") or "queued",
       "message": job.get("message") or "",
       "result": job.get("result"),
       "error": job.get("error"),
+      "submittedAt": job.get("submittedAt") or "",
       "startedAt": job.get("startedAt") or "",
       "finishedAt": job.get("finishedAt") or "",
       "executionHostId": job.get("executionHostId") or "",
+      "source": job.get("source") or {"hostId": "unknown"},
       "route": job.get("route") or {},
       "forwarded": bool(job.get("forwarded", False))
     }
@@ -3326,10 +3395,7 @@ class Handler(BaseHTTPRequestHandler):
       return
 
     if self.path == "/queue":
-      json_response(self, 200, {
-        "queueDepth": queue_depth(),
-        "jobs": minimal_jobs()
-      })
+      json_response(self, 200, queue_view())
       return
 
     if self.path == "/runtime":
@@ -3382,7 +3448,7 @@ class Handler(BaseHTTPRequestHandler):
 
     if self.path == "/submit":
       payload = read_json_body(self)
-      result = submit_job(payload, self.runtime_registry, self.host_id)
+      result = submit_job(payload, self.runtime_registry, self.host_id, self.client_address[0])
       if result.get("accepted"):
         if not result.get("forwarded"):
           start_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)

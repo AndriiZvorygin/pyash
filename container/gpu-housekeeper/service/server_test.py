@@ -5,6 +5,7 @@ import pathlib
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 SERVER_PATH = pathlib.Path(__file__).with_name("server.py")
 spec = importlib.util.spec_from_file_location("gpu_housekeeper_server", SERVER_PATH)
@@ -1980,6 +1981,85 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertTrue(result["accepted"])
     self.assertFalse(result["forwarded"])
     self.assertEqual(result["executionHostId"], "mriczo")
+
+
+class HousekeeperSourceTraceTests(unittest.TestCase):
+  def setUp(self):
+    server._JOBS.clear()
+
+  def tearDown(self):
+    server._JOBS.clear()
+
+  def test_queue_and_job_status_expose_the_submitting_worker(self):
+    payload = {
+      "handleId": "trace-handle",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "hostId": "legacy-host-field",
+      "source": {
+        "hostId": "debtcollecting",
+        "username": "htaf",
+        "workerId": "pyash-gpu-worker",
+        "processId": 4321
+      },
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen-test", "prompt": "hello"}}
+    }
+    with patch.object(server, "configured_peers", return_value={}), patch.object(
+      server,
+      "local_route_state",
+      return_value={"hostId": "mriczo", "available": True, "immediate": True, "score": 10}
+    ):
+      accepted = server.submit_job(payload, {"ollama": {}}, "mriczo", source_address="192.0.2.41")
+
+    self.assertTrue(accepted["accepted"])
+    self.assertEqual(accepted["source"]["hostId"], "debtcollecting")
+    self.assertEqual(accepted["source"]["username"], "htaf")
+    queue = server.queue_view()
+    self.assertEqual(queue["queuedCount"], 1)
+    self.assertEqual(queue["runningCount"], 0)
+    queued = next(job for job in queue["jobs"] if job["remoteJobId"] == accepted["remoteJobId"])
+    self.assertEqual(queued["status"], "queued")
+    self.assertEqual(queued["source"]["username"], "htaf")
+    self.assertEqual(queued["source"]["workerId"], "pyash-gpu-worker")
+    self.assertEqual(queued["source"]["peerAddress"], "192.0.2.41")
+
+    details = server.job_status(accepted["remoteJobId"])
+    self.assertEqual(details["source"]["hostId"], "debtcollecting")
+    self.assertEqual(details["source"]["username"], "htaf")
+    self.assertEqual(details["executionHostId"], "mriczo")
+
+  def test_federation_preserves_source_identity(self):
+    forwarded_payloads = []
+
+    def fake_peer_request(_url, _path, payload, **_kwargs):
+      forwarded_payloads.append(payload)
+      return {"accepted": True, "remoteJobId": "peer-job"}
+
+    source = {
+      "hostId": "debtcollecting",
+      "username": "htaf",
+      "workerId": "pyash-gpu-worker",
+      "processId": 4321,
+      "peerAddress": "192.0.2.41"
+    }
+    job = {
+      "remoteJobId": "local-job",
+      "handleId": "trace-handle",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen-test", "prompt": "hello"}},
+      "source": source
+    }
+    with patch.object(server, "peer_request_json", side_effect=fake_peer_request):
+      result = server.forward_job_to_peer(
+        {"routing": {"originHostId": "mriczo", "forwardDepth": 0, "visitedHosts": []}},
+        job,
+        {"selected": {"hostId": "swac", "url": "http://swac:8090", "score": 20}}
+      )
+
+    self.assertTrue(result["accepted"])
+    self.assertEqual(forwarded_payloads[0]["source"], source)
+    self.assertEqual(result["route"]["originHostId"], "mriczo")
 
 
 if __name__ == "__main__":
