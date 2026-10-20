@@ -1,3 +1,5 @@
+import { orderModelsByRecency, rememberRecentModel } from "/model_recency.js";
+
 const messages = document.querySelector("#messages");
 const chatForm = document.querySelector("#chat-form");
 const messageInput = document.querySelector("#message");
@@ -51,6 +53,24 @@ function formatModelOption(entry) {
   }
   if (entry.status && entry.status !== "ready") return `${entry.label} (${entry.status})`;
   return entry.label;
+}
+
+function recentModelValues() {
+  try {
+    const values = JSON.parse(localStorage.getItem("pyash-recent-models") || "[]");
+    return Array.isArray(values) ? values.filter((value) => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordModelUse(value) {
+  const recent = rememberRecentModel(recentModelValues(), value);
+  localStorage.setItem("pyash-recent-models", JSON.stringify(recent));
+  if (!modelCatalog?.modelOptions) return;
+  modelCatalog.modelOptions = orderModelsByRecency(modelCatalog.modelOptions, recent);
+  modelCatalog.models = modelCatalog.modelOptions.map((entry) => entry.value);
+  setSelectOptions(modelSelect, modelCatalog.modelOptions, value, formatModelOption);
 }
 
 function selectedModelOption() {
@@ -196,7 +216,12 @@ async function loadModels({ force = false } = {}) {
   try {
     const data = await requestJson(`/api/models${force ? "?refresh=1" : ""}`);
     modelCatalog = data;
-    const models = data.modelOptions || (data.models || []).map((name) => ({ value: name, label: name }));
+    const models = orderModelsByRecency(
+      data.modelOptions || (data.models || []).map((name) => ({ value: name, label: name })),
+      recentModelValues()
+    );
+    data.modelOptions = models;
+    data.models = models.map((entry) => entry.value);
     setSelectOptions(modelSelect, models, localStorage.getItem("pyash-model") || data.selected, formatModelOption);
     if (modelSelect.value) localStorage.setItem("pyash-model", modelSelect.value);
     updateChatReadiness();
@@ -477,11 +502,13 @@ chatForm.addEventListener("submit", async (event) => {
       chatState.textContent = "Instruction queued";
       return;
     }
+    const requestedModel = modelSelect.value;
     const data = await requestJson("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message, session: currentSession, model: modelSelect.value })
+      body: JSON.stringify({ message, session: currentSession, model: requestedModel })
     });
+    recordModelUse(requestedModel);
     addMessage("assistant", data.text || "No answer returned.", { html: data.html, events: data.toolEvents, sources: data.sources });
     currentSession = data.session || currentSession;
     localStorage.setItem("pyash-session", currentSession);

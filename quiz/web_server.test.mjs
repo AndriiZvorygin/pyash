@@ -228,6 +228,13 @@ test("web routes use injected runtime without starting a model", async () => {
     assert.equal(health.status, 200);
     assert.equal((await health.json()).ok, true);
 
+    const app = await fetch(`${base}/app.js`);
+    assert.equal(app.status, 200);
+    assert.ok((await app.text()).includes('from "/model_recency.js"'));
+    const modelRecency = await fetch(`${base}/model_recency.js`);
+    assert.equal(modelRecency.status, 200);
+    assert.match(modelRecency.headers.get("content-type"), /javascript/u);
+
     const tools = await fetch(`${base}/api/tools`);
     assert.deepEqual((await tools.json()).tools.map((tool) => tool.name), ["be_search"]);
 
