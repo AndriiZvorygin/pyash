@@ -40,7 +40,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     nonGoals: "Inventing new compositional keywords or replacing the canonical case table.",
     acceptance: "The validator checks the canonical compositional grid and catches missing/invalid axis-context mappings with deterministic tests and operator-readable output.",
     priority: 125,
-    prompt: "Finish the existing HNUC/code validation worktree, preserve the explicit unassigned identity warnings, and obtain focused Sol-reviewed acceptance.",
+    prompt: "Finish the existing HNUC/code validation worktree, preserve the explicit unassigned identity warnings, and obtain focused independent Luna-reviewed acceptance.",
     whyNow: "The isolated worktree has a real validator and 28 passing focused tests; recover and review it before starting unrelated work."
   },
   {
@@ -55,7 +55,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     nonGoals: "A new exception system, undocumented error names, or broad compiler redesign.",
     acceptance: "Ceremony and sandpit errors become truthful Pyash error sentences, propagate through supported paths, and focused nested/returned error tests pass.",
     priority: 120,
-    prompt: "Finish the existing ceremony error-propagation worktree and obtain Sol review; retain the supported interpreter/JavaScript boundary and do not broaden into a new exception system.",
+    prompt: "Finish the existing ceremony error-propagation worktree and obtain independent Luna review; retain the supported interpreter/JavaScript boundary and do not broaden into a new exception system.",
     whyNow: "The timeout left a focused implementation with 7 passing tests in its worktree, so this is retryable correctness work rather than a direction question."
   },
   {
@@ -70,7 +70,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     nonGoals: "Removing legitimate result facts or changing the public loop vocabulary.",
     acceptance: "Loop and ceremony paths no longer depend on stale separate register facts; existing loop behavior and backend parity remain green.",
     priority: 115,
-    prompt: "Finish the existing register-state worktree and obtain Sol review, preserving evoking-sentence authority and the current loop vocabulary.",
+    prompt: "Finish the existing register-state worktree and obtain independent Luna review, preserving evoking-sentence authority and the current loop vocabulary.",
     whyNow: "The isolated worktree has passing interpreter/JavaScript/C loop regressions and documentation changes; it is valid retryable WIP."
   },
   {
@@ -85,7 +85,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     nonGoals: "New providers, multi-host scheduling, UI work, and fixture-only behavior.",
     acceptance: "Mind replies preserve text, metadata, and streaming behavior through supported runtime paths; focused success/failure tests pass without fixture-only backends.",
     priority: 110,
-    prompt: "Finish the existing mind reply/streaming worktree, fix the failing delayed-terminal streaming assertion, and obtain focused Sol review without re-planning.",
+    prompt: "Finish the existing mind reply/streaming worktree, fix the failing delayed-terminal streaming assertion, and obtain focused independent Luna review without re-planning.",
     whyNow: "The timeout left a substantial reply module and tests; one focused streaming test still fails, so the package is partial and retryable."
   },
   {
@@ -100,7 +100,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     nonGoals: "Replacing the supervisor, adding parallel workers, or inventing a second agent framework.",
     acceptance: "A bounded agent workflow is expressed in Pyash where reasonable, runs through supported runtime primitives, records durable evidence, and has zero-quota tests.",
     priority: 105,
-    prompt: "Recover the existing accepted-looking native agent workflow commit, verify its durable example and zero-quota tests, then obtain Sol review before integration.",
+    prompt: "Recover the existing accepted-looking native agent workflow commit, verify its durable example and zero-quota tests, then obtain independent Luna review before integration.",
     whyNow: "The worktree contains commit 65325b78 and passing agent workflow tests, but the durable task record missed the result because the turn timed out."
   },
   {
@@ -114,7 +114,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     nonGoals: "A speculative standard library expansion or untested vocabulary aliases.",
     acceptance: "Touch, copy, rename, and file-mode delete have matching interpreter/JS/C behavior, guards, signatures, and focused parity tests.",
     priority: 100,
-    prompt: "Recover the filename mutation worktree, fix the three reported parity/code-generation failures, and obtain Sol review without broadening the noun family.",
+    prompt: "Recover the filename mutation worktree, fix the three reported parity/code-generation failures, and obtain independent Luna review without broadening the noun family.",
     whyNow: "The timeout left meaningful implementation and tests, but focused validation still has three failures; it is partial retryable work."
   },
   {
@@ -141,7 +141,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     dependencies: ["coding saddle core", "durable WorkTask and checkpoint contract", "review and integration path"],
     dependsOnTaskIds: ["roadmap-pyash-coding-saddle-core"],
     scope: "Create or resume a WorkTask from a saddle session while preserving task identity, session, worktree, checkpoint, provenance, review, and automation/roadmap integration semantics.",
-    nonGoals: "A second task queue, automatic master merging, bypassing Sol/Luna review, or treating terminal text as authoritative task state.",
+    nonGoals: "A second task queue, automatic master merging, bypassing independent Luna review, or treating terminal text as authoritative task state.",
     acceptance: "A bounded interactive request can become an existing WorkTask or a clearly linked new task, resume safely, pass the normal review/integration path, and remain replayable from Pyash records.",
     priority: 68,
     prompt: "Connect the coding saddle to existing WorkTask/checkpoint/review/integration machinery without creating a parallel queue or bypassing normal acceptance and baseline rules.",
@@ -158,7 +158,7 @@ const ROADMAP_PACKAGES = Object.freeze([
     nonGoals: "A new CLI framework or a broad flag/alias compatibility layer.",
     acceptance: "The documented CLI forms work from a clean checkout, focused smoke tests cover success and error paths, and command contracts are clear.",
     priority: 95,
-    prompt: "Recover the CLI language UX worktree and obtain Sol review for the existing wrapper documentation and 8 passing smoke tests.",
+    prompt: "Recover the CLI language UX worktree and obtain independent Luna review for the existing wrapper documentation and 8 passing smoke tests.",
     whyNow: "The isolated worktree has a complete-looking command helper and passing focused tests, but no durable review result was captured."
   },
   {
@@ -422,7 +422,7 @@ const COMPLETED_PACKAGES = Object.freeze([
     dependencies: [],
     scope: "Single-register ceremony ret propagation and focused interpreter regression coverage.",
     nonGoals: "Higher-level translation, nested ceremonies, and broader return refactoring.",
-    acceptance: "The Sol-reviewed focused regression passes and the accepted task commit is available for automation history.",
+    acceptance: "The independently Luna-reviewed focused regression passes and the accepted task commit is available for automation history.",
     priority: 131
   }
 ]);
@@ -583,7 +583,7 @@ function progressForTask(task) {
   const checkpoint = task.checkpoint || {};
   const passes = Number(checkpoint.implementation?.passes || 0);
   const action = text(checkpoint.lastAction || checkpoint.interruption?.reason);
-  if (task.status === "accepted") return `accepted; Sol review ${text(checkpoint.review?.decision) || "complete"}`;
+  if (task.status === "accepted") return `accepted; Luna review ${text(checkpoint.review?.decision) || "complete"}`;
   if (task.status === "blocked" || task.status === "failed") {
     const reason = text(checkpoint.blocker || task.message || task.error) || task.status;
     const liveness = text(checkpoint.turnReconciliation?.classification).toUpperCase();
@@ -897,7 +897,7 @@ export function renderAutonomousRoadmapMarkdown(roadmap = {}) {
       output.push("");
     }
   }
-  if (roadmap.architect?.summary) output.push("## Last Sol Roadmap Review", "", roadmap.architect.summary, "");
+  if (roadmap.architect?.summary) output.push("## Last Luna Roadmap Review", "", roadmap.architect.summary, "");
   if (roadmap.architect?.decisions?.length) output.push("### Decisions Needed", "", ...roadmap.architect.decisions.map((item) => `- ${item}`), "");
   return output.join("\n");
 }
@@ -1130,10 +1130,10 @@ function parseArchitectResponse(output) {
   const raw = text(output);
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("Sol roadmap refresh did not return a JSON object");
+  if (start < 0 || end <= start) throw new Error("Luna roadmap refresh did not return a JSON object");
   const parsed = JSON.parse(raw.slice(start, end + 1));
   if (!Array.isArray(parsed.packages) || parsed.packages.length < 5 || parsed.packages.length > 8) {
-    throw new Error("Sol roadmap refresh must return 5 to 8 substantial packages");
+    throw new Error("Luna roadmap refresh must return 5 to 8 substantial packages");
   }
   return parsed;
 }
@@ -1143,7 +1143,7 @@ function normalizeArchitectPackage(item, index) {
   return {
     taskId,
     title: text(item.title) || taskId,
-    source: text(item.source) || "Sol roadmap review",
+    source: text(item.source) || "Luna roadmap review",
     sourcePath: text(item.sourcePath),
     sourceAnchor: text(item.sourceAnchor),
     whyMatters: text(item.whyMatters || item.whyNow),
@@ -1160,7 +1160,7 @@ function normalizeArchitectPackage(item, index) {
 
 function roadmapRefreshPrompt(roadmap, repositoryRoot) {
   return [
-    "You are Sol, the occasional Pyash roadmap architect.",
+    "You are Luna, the Pyash roadmap architect.",
     "Inspect the repository, current specs, TODO, tests, and durable work state before proposing the next substantial packages.",
     "Return JSON only with this shape: {summary, decisions, packages:[{taskId,title,source,whyMatters,dependencies,dependsOnTaskIds,scope,nonGoals,acceptance,priority,prompt,whyNow}] }.",
     "Return 5 to 8 packages. Keep only the first 2 or 3 ready-worthy; the rest are candidates. Prefer coherent language/runtime/parity increments over micro-fixes.",
@@ -1204,7 +1204,7 @@ export async function refreshAutonomousRoadmap({
         : await startCodexThread(client, { cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, sandbox: threadSandbox });
       threadId = threadIdFromResponse(started);
     }
-    if (!threadId) throw new Error("Sol roadmap refresh returned no planner thread id");
+    if (!threadId) throw new Error("Luna roadmap refresh returned no planner thread id");
     const result = typeof client.runTurn === "function"
       ? await client.runTurn({ threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] })
       : await runCodexTurn(client, { threadId, cwd: repositoryRoot, model: roles.planner.model, reasoningEffort: roles.planner.reasoningEffort, requestIdentity: `pyash-autonomous-roadmap-refresh-${Date.now()}`, input: [{ type: "text", text: roadmapRefreshPrompt(current, repositoryRoot) }] });
@@ -1225,7 +1225,7 @@ export async function refreshAutonomousRoadmap({
     });
     refreshed.packages = packages.map((item) => normalizePackage(item, refreshedTasks.find((task) => task.taskId === item.taskId)));
     refreshed.refreshNeeded = false;
-    refreshed.refreshReason = "last Sol roadmap refresh returned a bounded package set";
+    refreshed.refreshReason = "last Luna roadmap refresh returned a bounded package set";
     const roadmap = await writeAutonomousRoadmap(worldRoot, refreshed);
     return { status: "refreshed", roadmap, proposal };
   } finally {

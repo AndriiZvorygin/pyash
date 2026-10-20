@@ -39,10 +39,11 @@ import {
   threadIdFromResponse
 } from "../codex/app_server.mjs";
 
-const DEFAULT_PLANNER = Object.freeze({ model: "gpt-5.6-sol", reasoningEffort: "high" });
-const DEFAULT_IMPLEMENTER = Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "xhigh" });
-const DEFAULT_REVIEWER = Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "xhigh" });
-const DEFAULT_ESCALATION_REVIEWER = Object.freeze({ model: "gpt-5.6-sol", reasoningEffort: "high" });
+const DEFAULT_LUNA_ROLE = Object.freeze({ model: "gpt-5.6-luna", reasoningEffort: "xhigh" });
+const DEFAULT_PLANNER = DEFAULT_LUNA_ROLE;
+const DEFAULT_IMPLEMENTER = DEFAULT_LUNA_ROLE;
+const DEFAULT_REVIEWER = DEFAULT_LUNA_ROLE;
+const DEFAULT_ESCALATION_REVIEWER = DEFAULT_LUNA_ROLE;
 
 export const DEFAULT_WORK_ROLE_CONFIG = Object.freeze({
   planner: DEFAULT_PLANNER,
@@ -1390,7 +1391,7 @@ export async function runWorkSupervisorOnce({
     const requestedAt = isoText(nowValue(now));
     await save({
       convergence: { status: "reviewing", requestedAt },
-      lastAction: "focused Sol convergence review started"
+      lastAction: "focused Luna convergence review started"
     });
     const context = projectWorkContext(task, { phase: "convergence-review", role: "escalationReviewer" });
     const { client, threadId } = await getEscalationReviewer({
@@ -1462,7 +1463,7 @@ export async function runWorkSupervisorOnce({
       contextText: [
         task.contextText,
         `Split from ${task.taskId}. Preserve the completed portion in ${workspace.worktreePath}.`,
-        `Sol rationale: ${convergence.rationale}`
+        `Reviewer rationale: ${convergence.rationale}`
       ].filter(Boolean).join("\n"),
       workSpec: {
         ...task.workSpec,
@@ -1536,7 +1537,7 @@ export async function runWorkSupervisorOnce({
     if (status === "blocked") {
       task = await save({
         blocker: message,
-        lastAction: "blocked by Sol review"
+        lastAction: "blocked by review"
       });
     }
     if (status === "accepted") {
@@ -1589,10 +1590,10 @@ export async function runWorkSupervisorOnce({
           await save({
             convergence: { status: "applied" },
             implementation: { consecutiveNoProgressPasses: 0 },
-            lastAction: "focused Sol correction accepted; resuming Luna"
+            lastAction: "focused reviewer correction accepted; resuming Luna"
           });
           correction = focused.correction;
-          await move("implementing", { message: "focused Sol correction" });
+          await move("implementing", { message: "focused reviewer correction" });
           continue;
         }
         if (focused.decision === "SPLIT") {
@@ -1615,11 +1616,11 @@ export async function runWorkSupervisorOnce({
           });
           return { claimed: true, taskId: task.taskId, status: task.status, queue: await queueDepth(worldRoot) };
         }
-        return await finish("blocked", focused.rationale || "Sol identified a genuine decision blocker");
+        return await finish("blocked", focused.rationale || "Reviewer identified a genuine decision blocker");
       }
       if (task.status === "revision") {
         correction = task.checkpoint.review.revisionInstructions;
-        await move("implementing", { message: "applying Sol revision request" });
+        await move("implementing", { message: "applying reviewer revision request" });
       }
       if (task.status === "implementing") {
         if (!hasCapturedTurn("implementation")) await doImplementation(correction);
@@ -1664,7 +1665,7 @@ export async function runWorkSupervisorOnce({
       if (review.decision === "ACCEPT") return await finish("accepted", review.explanation);
       if (review.decision === "BLOCK") return await finish("blocked", review.explanation);
       if (review.decision === "REPLAN") {
-        if (!review.workOrder) return await finish("blocked", review.explanation || "Sol escalation review did not provide a replacement work order");
+        if (!review.workOrder) return await finish("blocked", review.explanation || "Escalation review did not provide a replacement work order");
         await save({
           plan: {
             summary: review.explanation,
@@ -1672,9 +1673,9 @@ export async function runWorkSupervisorOnce({
             risks: task.checkpoint.plan.risks
           },
           implementation: { passes: 0, reviewReady: false },
-          lastAction: "Sol escalation review supplied a replacement work order"
+          lastAction: "Escalation review supplied a replacement work order"
         });
-        await move("implementing", { message: "continuing from Sol replacement work order" });
+        await move("implementing", { message: "continuing from reviewer replacement work order" });
         continue;
       }
       if (task.checkpoint.revisionCount >= maxRevisions) {
@@ -1685,12 +1686,12 @@ export async function runWorkSupervisorOnce({
           interruption: {
             phase: "reviewing",
             at: continuationAt,
-            reason: "concrete Sol correction remains; continuing on a later eligible wake",
+            reason: "concrete reviewer correction remains; continuing on a later eligible wake",
             lastTurnId: task.checkpoint.turnHistory.at(-1)?.turnId || ""
           },
-          lastAction: "technical revision checkpoint; continuing concrete Sol correction"
+          lastAction: "technical revision checkpoint; continuing concrete reviewer correction"
         });
-        await move("revision", { message: "technical revision checkpoint; continuing concrete Sol correction" });
+        await move("revision", { message: "technical revision checkpoint; continuing concrete reviewer correction" });
         await emit("revision-requested", {
           phase: "revision",
           correction: review.revisionInstructions,
@@ -1703,7 +1704,7 @@ export async function runWorkSupervisorOnce({
           claimed: true,
           taskId: task.taskId,
           status: "revision",
-          message: "technical revision checkpoint; continuing concrete Sol correction",
+          message: "technical revision checkpoint; continuing concrete reviewer correction",
           queue: await queueDepth(worldRoot)
         };
       }
