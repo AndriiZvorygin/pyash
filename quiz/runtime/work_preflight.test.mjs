@@ -38,6 +38,7 @@ test("execution preflight checks the worktree without starting a model turn", as
   assert.equal(result.checks.threadId, "preflight-thread");
   assert.equal(result.checks.node.startsWith("v"), true);
   assert.equal(calls.length, 1);
+  assert.equal(calls[0].model, "gpt-6-luna");
   assert.equal(calls[0].sandbox, "workspace-write");
 });
 

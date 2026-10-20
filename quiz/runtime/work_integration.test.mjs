@@ -236,7 +236,7 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
   assert.equal(task.checkpoint.integration.reconciliation.materialAttempts, 1);
   assert.equal(task.checkpoint.integration.reconciliation.conflictsResolved, 1);
   assert.equal(task.checkpoint.review.role, "reviewer");
-  assert.equal(task.checkpoint.review.model, "gpt-5.6-luna");
+  assert.equal(task.checkpoint.review.model, "gpt-6-luna");
   assert.equal(task.checkpoint.integration.reconciliation.reviewerThreadId, "reviewer-thread");
   assert.equal(clients.has("manager"), false);
   assert.equal(clients.has("implementer"), true);

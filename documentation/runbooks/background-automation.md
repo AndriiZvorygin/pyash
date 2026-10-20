@@ -114,11 +114,11 @@ The daily digest includes a compact roadmap section showing active work, the nex
 
 ## Codex role topology
 
-The default execution path uses separate Luna-xhigh threads for planning,
-implementation, routine verification, and escalation review. Routine review
-returns `ACCEPT`, `REVISE`, or `ESCALATE`; escalation remains a distinct review
-thread and uses the same Luna-xhigh role as every other autonomous turn. The reviewer never shares
-the implementer's conversational thread. The role models and reasoning levels can be overridden privately with
+The default execution path assigns `gpt-6-luna` at `xhigh` to planning,
+implementation, routine verification, and escalation review. Each role uses a
+separate thread. Routine review returns `ACCEPT`, `REVISE`, or `ESCALATE`;
+escalation remains a distinct review thread. The reviewer never shares the
+implementer's conversational thread. Role models and reasoning levels can be overridden privately with
 `PYA_CODEX_PLANNER_*`, `PYA_CODEX_IMPLEMENTER_*`,
 `PYA_CODEX_REVIEWER_*`, and `PYA_CODEX_ESCALATION_REVIEWER_*` settings.
 
