@@ -30,6 +30,12 @@ _OLLAMA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
   "models": [],
   "error": "not observed"
 }
+_STRATA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
+  "observedAt": 0.0,
+  "available": False,
+  "models": [],
+  "error": "not observed"
+}
 
 
 class DeviceExecutionGate:
@@ -2304,6 +2310,70 @@ def reset_ollama_model_catalog_cache() -> None:
     })
 
 
+def strata_model_catalog(runtime_registry: Dict[str, Dict[str, Any]], force: bool = False) -> Dict[str, Any]:
+  now = time.monotonic()
+  try:
+    ttl = max(0.0, min(300.0, float(os.environ.get("GPU_HOUSEKEEPER_STRATA_CATALOG_TTL_SEC", "15"))))
+  except (TypeError, ValueError):
+    ttl = 15.0
+  with _LOCK:
+    cached = dict(_STRATA_MODEL_CATALOG_CACHE)
+  if not force and cached.get("observedAt") and now - float(cached.get("observedAt") or 0) <= ttl:
+    return cached
+
+  entry = runtime_registry.get("strata")
+  status = parse_runtime_status(entry) if entry else {"status": "missing", "message": "Strata runtime is not registered"}
+  try:
+    if not entry or normalize_text(status.get("status")).lower() not in {"running", "ready", "available"}:
+      raise RuntimeError(normalize_text(status.get("message")) or "Strata runtime is unavailable")
+    payload = request_strata_json("/v1/models", timeout_sec=5)
+    raw_models = payload.get("data", payload.get("models"))
+    if not isinstance(raw_models, list):
+      raise RuntimeError("Strata model catalog response was malformed")
+    models = []
+    seen = set()
+    for item in raw_models:
+      name = normalize_text(item if isinstance(item, str) else (
+        item.get("id") or item.get("name") or item.get("model") if isinstance(item, dict) else ""
+      ))
+      if not name or name in seen:
+        continue
+      seen.add(name)
+      models.append({"name": name})
+    if not models:
+      raise RuntimeError("Strata model catalog contains no model IDs")
+    result = {
+      "observedAt": now,
+      "available": True,
+      "models": models,
+      "runtime": status,
+      "error": ""
+    }
+  except Exception as err:
+    result = {
+      "observedAt": now,
+      "available": False,
+      "models": [],
+      "runtime": status,
+      "error": normalize_text(err) or "Strata model catalog unavailable"
+    }
+  with _LOCK:
+    _STRATA_MODEL_CATALOG_CACHE.clear()
+    _STRATA_MODEL_CATALOG_CACHE.update(result)
+  return dict(result)
+
+
+def reset_strata_model_catalog_cache() -> None:
+  with _LOCK:
+    _STRATA_MODEL_CATALOG_CACHE.clear()
+    _STRATA_MODEL_CATALOG_CACHE.update({
+      "observedAt": 0.0,
+      "available": False,
+      "models": [],
+      "error": "not observed"
+    })
+
+
 def ollama_model_entry(model_name: str, catalog: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
   wanted = normalize_text(model_name)
   source = catalog if isinstance(catalog, dict) else ollama_model_catalog()
@@ -3406,6 +3476,10 @@ class Handler(BaseHTTPRequestHandler):
 
     if self.path == "/runtime/ollama/models":
       json_response(self, 200, ollama_model_catalog())
+      return
+
+    if self.path == "/runtime/strata/models":
+      json_response(self, 200, strata_model_catalog(self.runtime_registry))
       return
 
     if self.path.startswith("/runtime/"):

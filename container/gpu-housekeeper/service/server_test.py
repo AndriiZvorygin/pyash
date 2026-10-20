@@ -31,6 +31,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server._PROFILES.clear()
     server._JOBS.clear()
     server.reset_ollama_model_catalog_cache()
+    server.reset_strata_model_catalog_cache()
 
   def tearDown(self):
     server.parse_nvidia_smi = self.orig_parse_nvidia_smi
@@ -59,8 +60,43 @@ class HousekeeperOllamaTests(unittest.TestCase):
     else:
       os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC"] = self.original_watchdog_interval_env
     server.reset_ollama_model_catalog_cache()
+    server.reset_strata_model_catalog_cache()
     server._PROFILES.clear()
     server._JOBS.clear()
+
+  def test_strata_catalog_reports_only_models_returned_by_managed_runtime(self):
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "runtimeName": "strata", "status": "running", "loaded": False
+    }
+    def fake_request(pathname, payload=None, timeout_sec=30):
+      calls.append((pathname, payload, timeout_sec))
+      return {"object": "list", "data": [
+        {"id": "qwen3.8-flash-next-coder-iq1_m", "object": "model"},
+        {"id": "qwen3.8-flash-next-coder-iq1_m", "object": "model"}
+      ]}
+    server.request_strata_json = fake_request
+
+    result = server.strata_model_catalog({"strata": {"runtimeName": "strata"}}, force=True)
+
+    self.assertTrue(result["available"])
+    self.assertEqual(result["models"], [{"name": "qwen3.8-flash-next-coder-iq1_m"}])
+    self.assertFalse(result["runtime"]["loaded"])
+    self.assertEqual(calls, [("/v1/models", None, 5)])
+
+  def test_strata_catalog_fails_closed_when_runtime_is_not_running(self):
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "runtimeName": "strata", "status": "stopped", "message": "not running"
+    }
+    server.request_strata_json = lambda *args, **kwargs: calls.append(args) or {"data": [{"id": "should-not-appear"}]}
+
+    result = server.strata_model_catalog({"strata": {"runtimeName": "strata"}}, force=True)
+
+    self.assertFalse(result["available"])
+    self.assertEqual(result["models"], [])
+    self.assertEqual(result["error"], "not running")
+    self.assertEqual(calls, [])
 
   def test_submit_accepts_ollama_generate_and_chat_jobs(self):
     server.parse_nvidia_smi = lambda: {

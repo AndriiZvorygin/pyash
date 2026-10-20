@@ -65,80 +65,94 @@ test("chat sentence carries an explicit Strata backend and endpoint", () => {
   assert.equal(sentence.ob.model, "qwen3.8:27b");
 });
 
-test("web model discovery keeps separate Strata hosts for advertised models", async () => {
+test("web model availability comes from the GPU Housekeeper catalogs", async () => {
   const originalFetch = globalThis.fetch;
-  const originalHosts = process.env.PYA_WEB_STRATA_HOSTS;
-  delete process.env.PYA_WEB_STRATA_HOST;
-  delete process.env.STRATA_HOST;
-  process.env.PYA_WEB_STRATA_HOSTS = "http://host:18082,http://host:18083";
+  const originalManager = process.env.PYA_GPU_HOUSEKEEPER_URL;
+  process.env.PYA_GPU_HOUSEKEEPER_URL = "http://housekeeper:8090";
   globalThis.fetch = async (url) => {
     const target = String(url);
-    if (target.endsWith("/api/tags")) {
-      return { ok: true, async json() { return { models: [{ name: "qwen3.5:9b" }] }; } };
+    if (target === "http://housekeeper:8090/runtime/ollama/models") {
+      return { ok: true, async json() { return { available: true, models: [{ name: "qwen3.5:9b" }] }; } };
     }
-    if (target === "http://host:18082/v1/models") {
-      return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-iq2_xs" }] }; } };
+    if (target === "http://housekeeper:8090/runtime/strata/models") {
+      return { ok: true, async json() { return {
+        available: true,
+        models: [{ name: "qwen3.8-flash-next-coder-iq1_m" }],
+        runtime: { status: "running", loaded: false }
+      }; } };
     }
-    if (target === "http://host:18083/v1/models") {
-      return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-coder-iq1_m" }] }; } };
-    }
-    if (target === "http://host:18082/health" || target === "http://host:18083/health") {
-      return { ok: true, async json() { return { status: "ok", loaded: true }; } };
-    }
-    throw new Error(`unexpected model discovery URL: ${target}`);
+    throw new Error(`unexpected model availability URL: ${target}`);
   };
   try {
     const catalog = await fetchWebModels("qwen3.5:9b");
     assert.deepEqual(catalog.modelOptions.map(({ value, host }) => ({ value, host })), [
       { value: "qwen3.5:9b", host: "http://localhost:11434" },
-      { value: "strata::qwen3.8-flash-next-iq2_xs", host: "http://host:18082" },
-      { value: "strata::qwen3.8-flash-next-coder-iq1_m", host: "http://host:18083" }
+      { value: "strata::qwen3.8-flash-next-coder-iq1_m", host: "" }
     ]);
+    assert.equal(catalog.modelOptions[1].ready, true);
+    assert.match(catalog.modelOptions[1].statusMessage, /GPU Housekeeper queue/u);
   } finally {
     globalThis.fetch = originalFetch;
-    if (originalHosts === undefined) delete process.env.PYA_WEB_STRATA_HOSTS;
-    else process.env.PYA_WEB_STRATA_HOSTS = originalHosts;
+    if (originalManager === undefined) delete process.env.PYA_GPU_HOUSEKEEPER_URL;
+    else process.env.PYA_GPU_HOUSEKEEPER_URL = originalManager;
   }
 });
 
-test("configured Strata targets remain visible while one runtime is initializing", async () => {
+test("web does not advertise Strata models absent from the Housekeeper catalog", async () => {
   const originalFetch = globalThis.fetch;
-  const originalHosts = process.env.PYA_WEB_STRATA_HOSTS;
-  const originalTargets = process.env.PYA_WEB_STRATA_TARGETS;
-  process.env.PYA_WEB_STRATA_HOSTS = "http://host:18082,http://host:18083";
-  process.env.PYA_WEB_STRATA_TARGETS =
-    "qwen3.8-flash-next-iq2_xs@http://host:18082,qwen3.8-flash-next-coder-iq1_m@http://host:18083";
+  const originalManager = process.env.PYA_GPU_HOUSEKEEPER_URL;
+  process.env.PYA_GPU_HOUSEKEEPER_URL = "http://housekeeper:8090";
   globalThis.fetch = async (url) => {
     const target = String(url);
-    if (target.endsWith("/api/tags")) {
-      return { ok: true, async json() { return { models: [] }; } };
+    if (target === "http://housekeeper:8090/runtime/ollama/models") {
+      return { ok: true, async json() { return { available: true, models: [] }; } };
     }
-    if (target === "http://host:18082/v1/models") {
-      return { ok: false, status: 503, async json() { return {}; } };
+    if (target === "http://housekeeper:8090/runtime/strata/models") {
+      return { ok: true, async json() { return {
+        available: false,
+        models: [],
+        runtime: { status: "starting", loaded: false, message: "warming" },
+        error: "warming"
+      }; } };
     }
-    if (target === "http://host:18083/v1/models") {
-      return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-coder-iq1_m" }] }; } };
-    }
-    if (target === "http://host:18082/health") {
-      return { ok: true, async json() { return { status: "loading", loaded: false, etaSeconds: 42 }; } };
-    }
-    if (target === "http://host:18083/health") {
-      return { ok: true, async json() { return { status: "ok", loaded: true }; } };
-    }
-    throw new Error(`unexpected model discovery URL: ${target}`);
+    throw new Error(`unexpected model availability URL: ${target}`);
   };
   try {
     const catalog = await fetchWebModels("", "strata");
-    assert.deepEqual(catalog.modelOptions.map(({ value, available, status, etaSeconds }) => ({ value, available, status, etaSeconds })), [
-      { value: "strata::qwen3.8-flash-next-iq2_xs", available: false, status: "loading", etaSeconds: 42 },
-      { value: "strata::qwen3.8-flash-next-coder-iq1_m", available: true, status: "ready", etaSeconds: 0 }
-    ]);
+    assert.deepEqual(catalog.modelOptions, []);
+    assert.equal(catalog.errors.strata, "warming");
   } finally {
     globalThis.fetch = originalFetch;
-    if (originalHosts === undefined) delete process.env.PYA_WEB_STRATA_HOSTS;
-    else process.env.PYA_WEB_STRATA_HOSTS = originalHosts;
-    if (originalTargets === undefined) delete process.env.PYA_WEB_STRATA_TARGETS;
-    else process.env.PYA_WEB_STRATA_TARGETS = originalTargets;
+    if (originalManager === undefined) delete process.env.PYA_GPU_HOUSEKEEPER_URL;
+    else process.env.PYA_GPU_HOUSEKEEPER_URL = originalManager;
+  }
+});
+
+test("web model discovery contacts only GPU Housekeeper catalog endpoints", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalManager = process.env.PYA_GPU_HOUSEKEEPER_URL;
+  process.env.PYA_GPU_HOUSEKEEPER_URL = "http://housekeeper:8090";
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    if (String(url) === "http://housekeeper:8090/runtime/ollama/models") {
+      return { ok: true, async json() { return { available: true, models: [{ name: "qwen3.5:9b" }] }; } };
+    }
+    if (String(url) === "http://housekeeper:8090/runtime/strata/models") {
+      return { ok: true, async json() { return { available: false, models: [], error: "runtime not registered" }; } };
+    }
+    throw new Error(`unexpected model discovery request: ${url}`);
+  };
+  try {
+    const catalog = await fetchWebModels("qwen3.5:9b");
+    assert.deepEqual(catalog.models, ["qwen3.5:9b"]);
+    assert.ok(calls.includes("http://housekeeper:8090/runtime/ollama/models"));
+    assert.ok(calls.includes("http://housekeeper:8090/runtime/strata/models"));
+    assert.equal(calls.some((url) => /:(?:11434|18082|18083)\//u.test(url)), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalManager === undefined) delete process.env.PYA_GPU_HOUSEKEEPER_URL;
+    else process.env.PYA_GPU_HOUSEKEEPER_URL = originalManager;
   }
 });
 
@@ -344,6 +358,39 @@ test("web chat refuses a Strata request until the runtime is ready", async () =>
     assert.equal(chat.status, 409);
     assert.equal(body.error.code, "model_loading");
     assert.equal(body.error.etaSeconds, 37);
+    assert.equal(mindCalls, 0);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await fs.rm(root, { recursive: true, force: true });
+    forget();
+  }
+});
+
+test("web chat fails closed when the Housekeeper has no matching model", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-web-no-housekeeper-model-"));
+  let mindCalls = 0;
+  const { server } = await createWebServer({
+    root,
+    assets: path.resolve(process.cwd(), "web"),
+    runtime: { tools: [] },
+    modelsFn: async () => ({ available: false, models: [], modelOptions: [] }),
+    mindFn: async () => {
+      mindCalls += 1;
+      return { ob: { text: "must not call a provider directly" } };
+    }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const base = `http://127.0.0.1:${address.port}`;
+  try {
+    const chat = await fetch(`${base}/api/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: "hello", model: "strata::unknown-model" })
+    });
+    const body = await chat.json();
+    assert.equal(chat.status, 400);
+    assert.equal(body.error.code, "model_unavailable");
     assert.equal(mindCalls, 0);
   } finally {
     await new Promise((resolve) => server.close(resolve));

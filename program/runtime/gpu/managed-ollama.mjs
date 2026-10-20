@@ -232,6 +232,7 @@ export async function requestManagedOllamaChat({
   cwd = process.cwd(),
   env = process.env,
   messages = [],
+  tools = [],
   options = {},
   format = "",
   think = false,
@@ -266,6 +267,7 @@ export async function requestManagedOllamaChat({
   const payload = {
     model: normalizedModel,
     messages: Array.isArray(messages) ? messages : [],
+    ...(Array.isArray(tools) && tools.length ? { tools } : {}),
     stream: false,
     think: Boolean(think),
     keep_alive: keepAlive,
