@@ -123,6 +123,18 @@ forwarded only to peers that advertise `ollamaModelProvisioning`, so an older
 peer cannot receive an unsupported `ollama-ensure-model` job.
 Different physical devices can execute concurrently without sharing a gate.
 
+`/queue` lists queued and running jobs with `source` metadata and the selected
+`executionHostId`; `/job/<id>` includes the same source record plus the Pyash
+handle and runtime/profile. `source.hostId` and `source.workerId` are reported
+by the submitting worker; `source.username` is the submitting OS account, and
+`source.peerAddress` is the TCP peer address observed by the first housekeeper.
+The username defaults to the current OS account and can be explicitly set with
+`PYA_GPU_USERNAME`. The source record is preserved when a job is federated.
+`route.originHostId` describes the housekeeper federation route, not the
+submitting Pyash host. Source identity is diagnostic metadata, not an
+authentication claim. For compatibility, `queueDepth` retains its existing
+running-job count; `queuedCount` and `runningCount` provide explicit counts.
+
 The default managed runtimes are:
 
 - `ollama`
