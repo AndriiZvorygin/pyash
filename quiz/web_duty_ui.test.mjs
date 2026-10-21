@@ -46,6 +46,7 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
   let dom;
   const errors = [];
   const uiRequests = [];
+  const failedInitialRequests = new Set();
   try {
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -81,8 +82,18 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
           const headers = new Headers(options.headers || {});
           headers.set("x-pyash-user", "ui");
           headers.set("x-pyash-proxy-token", "ui-proxy-secret");
-          const response = await fetch(new URL(url, base), { ...options, headers });
-          uiRequests.push({ path: new URL(url, base).pathname, status: response.status });
+          const target = new URL(url, base);
+          if (["/api/duty-workers", "/api/duties", "/api/models"].includes(target.pathname)
+            && !failedInitialRequests.has(target.pathname)) {
+            failedInitialRequests.add(target.pathname);
+            uiRequests.push({ path: target.pathname, status: 503 });
+            return new Response(JSON.stringify({ ok: false, error: { message: "temporary restart" } }), {
+              status: 503,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          const response = await fetch(target, { ...options, headers });
+          uiRequests.push({ path: target.pathname, status: response.status });
           return response;
         };
         window.localStorage.setItem("pyash-mode", "duty");
@@ -91,10 +102,15 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
     dom.window.eval(appSource);
     await waitFor(
       () => dom.window.document.querySelector("#duty-worker")?.value === "ui-worker",
-      3000,
+      8000,
       () => `${dom.window.document.querySelector("#duty-state")?.textContent}; ${dom.window.document.querySelector("#duty-worker")?.innerHTML}; ${JSON.stringify(uiRequests)}`
     );
     const document = dom.window.document;
+    assert.equal(document.querySelector("#model-select").value, "qwen3.5:9b");
+    assert.ok(uiRequests.some((entry) => entry.path === "/api/duty-workers" && entry.status === 503));
+    assert.ok(uiRequests.some((entry) => entry.path === "/api/duty-workers" && entry.status === 200));
+    assert.ok(uiRequests.some((entry) => entry.path === "/api/models" && entry.status === 503));
+    assert.ok(uiRequests.some((entry) => entry.path === "/api/models" && entry.status === 200));
     document.querySelector("#duty-title").value = "UI smoke duty";
     document.querySelector("#duty-objective").value = "Inspect this checkout and report its state.";
     document.querySelector("#create-duty").click();
