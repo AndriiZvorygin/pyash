@@ -73,6 +73,7 @@ const markdown = new MarkdownIt({
   linkify: true,
   typographer: true
 });
+markdown.linkify.set({ fuzzyLink: false });
 
 const WEB_SYSTEM_PROMPT = [
   "You are the Pyash private web assistant.",

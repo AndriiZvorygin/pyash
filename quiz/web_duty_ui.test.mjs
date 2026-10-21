@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { JSDOM, VirtualConsole } from "jsdom";
 
-import { createWebServer } from "../command/pyash_web_server.mjs";
+import { createWebServer, renderAssistantMarkdown } from "../command/pyash_web_server.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { orderModelsByRecency, rememberRecentModel } from "../web/model_recency.js";
 import { displaySessionName, normalizeSessionName } from "../web/session_name.js";
@@ -25,6 +25,15 @@ function waitFor(predicate, timeoutMs = 3000, describe = () => "") {
     poll();
   });
 }
+
+test("assistant Markdown leaves bare filenames unlinked but keeps explicit URLs clickable", () => {
+  const html = renderAssistantMarkdown("Read AGENTS.md and `documentation/AGENTS.md`; source: https://example.com/docs.");
+
+  assert.match(html, /Read AGENTS\.md/u);
+  assert.match(html, /<code>documentation\/AGENTS\.md<\/code>/u);
+  assert.doesNotMatch(html, /href="http:\/\/(?:www\.)?agents\.md"/iu);
+  assert.match(html, /href="https:\/\/example\.com\/docs"/u);
+});
 
 test("Duty UI discovers workers, creates a durable duty, and renders its instruction", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-duty-ui-"));
