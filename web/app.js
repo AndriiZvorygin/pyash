@@ -37,6 +37,7 @@ let sessionCatalog = [];
 let dutyCatalog = [];
 let dutyWorkers = [];
 let dutyPollGeneration = 0;
+let modelLoadSequence = 0;
 
 function setSelectOptions(select, values, selectedValue, format = (value) => value) {
   select.textContent = "";
@@ -222,8 +223,10 @@ async function loadTools() {
 }
 
 async function loadModels({ force = false } = {}) {
+  const sequence = ++modelLoadSequence;
   try {
     const data = await requestJson(`/api/models${force ? "?refresh=1" : ""}`);
+    if (sequence !== modelLoadSequence) return;
     modelCatalog = data;
     const models = orderModelsByRecency(
       data.modelOptions || (data.models || []).map((name) => ({ value: name, label: name })),
@@ -235,6 +238,7 @@ async function loadModels({ force = false } = {}) {
     if (modelSelect.value) localStorage.setItem("pyash-model", modelSelect.value);
     updateChatReadiness();
   } catch (error) {
+    if (sequence !== modelLoadSequence) return;
     modelCatalog = null;
     modelSelect.textContent = "";
     const option = document.createElement("option");
@@ -651,4 +655,5 @@ loadSessions().then(async () => {
 setInterval(() => {
   refreshStatus();
   loadModels({ force: true });
+  if (conversationMode === "duty") loadDutyCatalog();
 }, 5000);
