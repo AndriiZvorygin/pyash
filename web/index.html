@@ -7,7 +7,19 @@
     <link rel="stylesheet" href="/style.css">
   </head>
   <body>
-    <main class="shell">
+    <section id="login-screen" class="login-screen" aria-labelledby="login-title">
+      <form id="login-form" class="login-form">
+        <p class="eyebrow">PRIVATE WORKSPACE</p>
+        <h1 id="login-title">Sign in to Pyash</h1>
+        <label for="login-username">Username</label>
+        <input id="login-username" name="username" autocomplete="username" required>
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+        <p id="login-error" class="login-error" role="status" hidden></p>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+    </section>
+    <main class="shell" hidden>
       <header class="topbar">
         <div>
           <p class="eyebrow">PRIVATE WORKSPACE</p>
@@ -28,6 +40,7 @@
             <select id="model-select" aria-label="Model"></select>
           </label>
           <div id="health" class="health" aria-live="polite">Connecting</div>
+          <button id="sign-out" class="secondary sign-out" type="button">Sign out</button>
         </div>
       </header>
 

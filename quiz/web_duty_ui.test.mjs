@@ -80,8 +80,10 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
         window.normalizeSessionName = normalizeSessionName;
         window.fetch = async (url, options = {}) => {
           const headers = new Headers(options.headers || {});
-          headers.set("x-pyash-user", "ui");
-          headers.set("x-pyash-proxy-token", "ui-proxy-secret");
+          if (headers.get("authorization") === `Basic ${Buffer.from("ui:ui-password").toString("base64")}`) {
+            headers.set("x-pyash-user", "ui");
+            headers.set("x-pyash-proxy-token", "ui-proxy-secret");
+          }
           const target = new URL(url, base);
           if (["/api/duty-workers", "/api/duties", "/api/models"].includes(target.pathname)
             && !failedInitialRequests.has(target.pathname)) {
@@ -100,12 +102,23 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
       }
     });
     dom.window.eval(appSource);
-    await waitFor(
-      () => dom.window.document.querySelector("#duty-worker")?.value === "ui-worker",
-      8000,
-      () => `${dom.window.document.querySelector("#duty-state")?.textContent}; ${dom.window.document.querySelector("#duty-worker")?.innerHTML}; ${JSON.stringify(uiRequests)}`
-    );
     const document = dom.window.document;
+    assert.equal(document.querySelector("#login-screen").hidden, false);
+    assert.equal(document.querySelector(".shell").hidden, true);
+    document.querySelector("#login-username").value = "ui";
+    document.querySelector("#login-password").value = "wrong-password";
+    document.querySelector("#login-form").dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(() => document.querySelector("#login-error").textContent.includes("Sign-in failed"));
+    assert.equal(document.querySelector(".shell").hidden, true);
+    document.querySelector("#login-password").value = "ui-password";
+    document.querySelector("#login-form").dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(
+      () => document.querySelector("#duty-worker")?.value === "ui-worker",
+      8000,
+      () => `${document.querySelector("#duty-state")?.textContent}; ${document.querySelector("#duty-worker")?.innerHTML}; ${JSON.stringify(uiRequests)}`
+    );
+    assert.equal(document.querySelector("#login-screen").hidden, true);
+    assert.equal(document.querySelector(".shell").hidden, false);
     assert.equal(document.querySelector("#model-select").value, "qwen3.5:9b");
     assert.ok(uiRequests.some((entry) => entry.path === "/api/duty-workers" && entry.status === 503));
     assert.ok(uiRequests.some((entry) => entry.path === "/api/duty-workers" && entry.status === 200));

@@ -29,6 +29,13 @@ const jobForm = document.querySelector("#job-form");
 const jobIntent = document.querySelector("#job-intent");
 const jobSpec = document.querySelector("#job-spec");
 const jobState = document.querySelector("#job-state");
+const appShell = document.querySelector(".shell");
+const loginScreen = document.querySelector("#login-screen");
+const loginForm = document.querySelector("#login-form");
+const loginUsername = document.querySelector("#login-username");
+const loginPassword = document.querySelector("#login-password");
+const loginError = document.querySelector("#login-error");
+const signOutButton = document.querySelector("#sign-out");
 let currentSession = localStorage.getItem("pyash-session") || "web";
 let currentDuty = localStorage.getItem("pyash-duty") || "";
 let conversationMode = localStorage.getItem("pyash-mode") === "duty" ? "duty" : "assistant";
@@ -38,6 +45,8 @@ let dutyCatalog = [];
 let dutyWorkers = [];
 let dutyPollGeneration = 0;
 let modelLoadSequence = 0;
+let authorizationHeader = "";
+let appStarted = false;
 
 function setSelectOptions(select, values, selectedValue, format = (value) => value) {
   select.textContent = "";
@@ -186,7 +195,12 @@ function addMessage(kind, text, details = {}) {
 }
 
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const requestPath = new URL(url, window.location.href).pathname;
+  const headers = new Headers(options.headers || {});
+  if (authorizationHeader && requestPath.startsWith("/api/") && !requestPath.startsWith("/api/duty-workers/")) {
+    headers.set("authorization", authorizationHeader);
+  }
+  const response = await fetch(url, { ...options, headers });
   const data = await response.json().catch(() => ({ ok: false, error: { message: response.statusText } }));
   if (!response.ok || data.ok === false) throw new Error(data.error?.message || response.statusText);
   return data;
@@ -639,21 +653,57 @@ jobForm.addEventListener("submit", async (event) => {
 });
 
 document.querySelector("#refresh-status").addEventListener("click", refreshStatus);
-refreshStatus();
-loadTools();
-loadModels();
-loadSessions().then(async () => {
-  if (conversationMode === "duty") {
-    setConversationMode("duty");
-    await loadDutyCatalog();
-    if (currentDuty) await loadDuty(currentDuty);
-  } else {
-    setConversationMode("assistant");
-    await loadSession(currentSession);
+function startApp() {
+  if (appStarted) return;
+  appStarted = true;
+  refreshStatus();
+  loadTools();
+  loadModels();
+  loadSessions().then(async () => {
+    if (conversationMode === "duty") {
+      setConversationMode("duty");
+      await loadDutyCatalog();
+      if (currentDuty) await loadDuty(currentDuty);
+    } else {
+      setConversationMode("assistant");
+      await loadSession(currentSession);
+    }
+  });
+  setInterval(() => {
+    refreshStatus();
+    loadModels({ force: true });
+    if (conversationMode === "duty") loadDutyCatalog();
+  }, 5000);
+}
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submitButton = loginForm.querySelector("button[type=submit]");
+  const credentials = `${loginUsername.value.trim()}:${loginPassword.value}`;
+  const candidate = `Basic ${window.btoa(credentials)}`;
+  submitButton.disabled = true;
+  loginError.hidden = true;
+  try {
+    const response = await fetch("/api/gpu", { headers: { authorization: candidate } });
+    if (!response.ok) {
+      loginError.textContent = response.status === 401
+        ? "Sign-in failed. Check your username and password."
+        : "Pyash could not verify your sign-in. Try again shortly.";
+      loginError.hidden = false;
+      return;
+    }
+    authorizationHeader = candidate;
+    loginPassword.value = "";
+    loginScreen.hidden = true;
+    appShell.hidden = false;
+    startApp();
+    messageInput.focus();
+  } catch {
+    loginError.textContent = "Could not reach Pyash. Check the connection and try again.";
+    loginError.hidden = false;
+  } finally {
+    submitButton.disabled = false;
   }
 });
-setInterval(() => {
-  refreshStatus();
-  loadModels({ force: true });
-  if (conversationMode === "duty") loadDutyCatalog();
-}, 5000);
+
+signOutButton.addEventListener("click", () => window.location.reload());
