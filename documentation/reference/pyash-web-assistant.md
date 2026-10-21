@@ -6,7 +6,7 @@ The gateway provides:
 
 - durable Pyash-backed chat sessions, named when created and selectable from the browser;
 - a model selector populated by the GPU Housekeeper's runtime model catalogs;
-- a Coding surface for durable work assigned to online host workers and configured repository directories;
+- a Duty surface for durable work assigned to online host workers and configured repository directories;
 - allowlisted web search, download, read, listing, and existence tools;
 - a read-only `runtime status` tool that reports the effective model and turn settings to the assistant;
 - status for the existing GPU queue;
@@ -35,13 +35,13 @@ docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
 docker compose restart caddy
 ```
 
-The deployment mounts only the Pyash `world` directory for durable sessions, queue state, duty records, and the web assistant workspace at `world/house/web-assistant/workspace`. It does not mount worker checkouts into the web container. Ordinary Assistant chat exposes only the existing read/search tool subset. Coding tasks run in a separate host worker, and only in a directory explicitly configured on that worker; the existing `saddle_tools.pya` command and file policy still applies. See [Pyash Coding Saddle](pyash-coding-saddle.md) for worker and allowlist setup.
+The deployment mounts only the Pyash `world` directory for durable sessions, queue state, duty records, and the web assistant workspace at `world/house/web-assistant/workspace`. It does not mount worker checkouts into the web container. Ordinary Assistant chat exposes only the existing read/search tool subset. Duties run in a separate host worker, and only in a directory explicitly configured on that worker; the existing `saddle_tools.pya` command and file policy still applies. See [Pyash Coding Saddle](pyash-coding-saddle.md) for worker and allowlist setup.
 
 ## Sessions and coding tasks
 
 Use the `+` beside Sessions to name a new conversation. Names become lowercase, underscore-separated Pyash session identities, and the conversation appears in the selector after its first message. Existing names are preserved; to continue one, select it from Sessions.
 
-Assistant mode is for direct chat, questions, and research. Coding mode creates a durable task for a configured host agent: choose an online agent and one of its project directories, enter a task name and first instruction, then start the task. Follow-up messages in the chat composer continue that same task. When it is finished and idle, review the result and use **Accept completed work** to record your acceptance. Coding requires a host worker to be connected; it runs in the selected directory on that host, not inside the web container.
+Assistant mode is for direct chat, questions, and research. Duty mode shows saved duties and the controls to create one. Choose an online host worker and one of its advertised folders, enter a duty name and first instruction, then create it. Follow-up messages in the chat composer continue that same duty. When it is finished and idle, review the result and use **Accept duty** to record your acceptance. Folders come from the separate Pyash duty-worker service on each host; the GPU Housekeeper is not the duty worker.
 
 ## HTTP surface
 

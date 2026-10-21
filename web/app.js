@@ -8,6 +8,7 @@ const chatState = document.querySelector("#chat-state");
 const health = document.querySelector("#health");
 const sessionSelect = document.querySelector("#session-select");
 const modelSelect = document.querySelector("#model-select");
+const workspace = document.querySelector(".workspace");
 const sendButton = chatForm.querySelector("button[type=submit]");
 const newSessionButton = document.querySelector("#new-session");
 const assistantModeButton = document.querySelector("#assistant-mode");
@@ -83,12 +84,12 @@ function updateChatReadiness() {
   if (conversationMode === "duty") {
     const duty = dutyCatalog.find((entry) => entry.id === currentDuty);
     if (!duty) {
-      chatState.textContent = "Select or create a coding task";
+      chatState.textContent = "Select or create a duty";
       sendButton.disabled = true;
       return;
     }
     if (["accepted", "failed"].includes(duty.status)) {
-      chatState.textContent = `Coding task ${duty.status}`;
+      chatState.textContent = `Duty ${duty.status}`;
       sendButton.disabled = true;
       return;
     }
@@ -100,7 +101,7 @@ function updateChatReadiness() {
     const queued = duty.messages?.some((entry) => entry.role === "user" && ["pending", "running"].includes(entry.state));
     chatState.textContent = duty.active
       ? "Task running · follow-up queues"
-      : queued ? "Follow-up queued" : "Coding task ready";
+      : queued ? "Follow-up queued" : "Duty ready";
     sendButton.disabled = false;
     return;
   }
@@ -127,15 +128,16 @@ function setConversationMode(mode) {
   localStorage.setItem("pyash-mode", conversationMode);
   assistantModeButton.setAttribute("aria-pressed", String(conversationMode === "assistant"));
   dutyModeButton.setAttribute("aria-pressed", String(conversationMode === "duty"));
+  workspace.dataset.mode = conversationMode;
   sessionSelect.disabled = conversationMode === "duty";
   newSessionButton.disabled = conversationMode === "duty";
-  messageInput.placeholder = conversationMode === "duty" ? "Send a follow-up to this coding task..." : "Ask Pyash...";
+  messageInput.placeholder = conversationMode === "duty" ? "Send a follow-up to this duty..." : "Ask Pyash...";
   updateChatReadiness();
 }
 
 function clearMessages() {
   messages.innerHTML = conversationMode === "duty"
-    ? '<div class="empty-state">Choose a coding task or start one from the Coding panel.</div>'
+    ? '<div class="empty-state">Choose a saved duty or create one in the Duty panel.</div>'
     : '<div class="empty-state">Ask a question, request a search, or bring a task into the queue.</div>';
 }
 
@@ -269,8 +271,9 @@ function updateRepositoryOptions() {
     (entry) => entry.label
   );
   if (!repositories.length) {
-    setSelectOptions(dutyRepositorySelect, [{ value: "", label: "No directories available" }], "", (entry) => entry.label);
+    setSelectOptions(dutyRepositorySelect, [{ value: "", label: "No folders advertised" }], "", (entry) => entry.label);
   }
+  dutyRepositorySelect.disabled = repositories.length === 0;
 }
 
 async function loadDutyCatalog({ forceSelection = false } = {}) {
@@ -291,8 +294,9 @@ async function loadDutyCatalog({ forceSelection = false } = {}) {
       (entry) => entry.label
     );
     if (!dutyWorkers.length) {
-      setSelectOptions(dutyWorkerSelect, [{ value: "", label: "No worker online" }], "", (entry) => entry.label);
+      setSelectOptions(dutyWorkerSelect, [{ value: "", label: "No host worker online" }], "", (entry) => entry.label);
     }
+    dutyWorkerSelect.disabled = dutyWorkers.length === 0;
     updateRepositoryOptions();
     const choices = dutyCatalog.map((duty) => ({
       value: duty.id,
@@ -304,15 +308,15 @@ async function loadDutyCatalog({ forceSelection = false } = {}) {
     }
     setSelectOptions(dutySelect, choices, currentDuty, (entry) => entry.label);
     if (!dutyCatalog.length) {
-      setSelectOptions(dutySelect, [{ value: "", label: "No coding tasks yet" }], "", (entry) => entry.label);
+      setSelectOptions(dutySelect, [{ value: "", label: "No duties yet" }], "", (entry) => entry.label);
     }
     dutyState.textContent = dutyWorkers.length
-      ? `${dutyWorkers.length} host worker${dutyWorkers.length === 1 ? "" : "s"} online`
-      : "No host worker online · connect a configured Pyash worker";
+      ? `${dutyWorkers.length} host worker${dutyWorkers.length === 1 ? "" : "s"} online · folders come from its worker configuration`
+      : "No host worker is online. Start a configured Pyash duty worker; its folders will appear here.";
     if (forceSelection && currentDuty) await loadDuty(currentDuty);
     else updateChatReadiness();
   } catch (error) {
-    dutyState.textContent = `Coding service unavailable: ${error.message}`;
+    dutyState.textContent = `Duty service unavailable: ${error.message}`;
   }
 }
 
@@ -383,11 +387,11 @@ async function createDuty() {
   const title = dutyTitleInput.value.trim();
   const initialMessage = dutyObjectiveInput.value.trim();
   if (!workerId || !repositoryId || !title || !initialMessage) {
-    dutyState.textContent = "Choose an online agent and project directory, then enter a task name and instruction.";
+    dutyState.textContent = "Choose an online host worker and its folder, then enter a duty name and first instruction.";
     return;
   }
   createDutyButton.disabled = true;
-  dutyState.textContent = "Starting coding task...";
+  dutyState.textContent = "Creating duty...";
   try {
     const data = await requestJson("/api/duties", {
       method: "POST",
@@ -416,7 +420,7 @@ async function acceptDuty() {
   try {
     await requestJson(`/api/duties/${encodeURIComponent(currentDuty)}/accept`, { method: "POST" });
     await loadDutyCatalog({ forceSelection: true });
-    dutyState.textContent = "Completed work accepted";
+    dutyState.textContent = "Duty accepted";
   } catch (error) {
     dutyState.textContent = error.message;
     acceptDutyButton.disabled = false;
@@ -516,7 +520,7 @@ chatForm.addEventListener("submit", async (event) => {
   try {
     if (conversationMode === "duty") {
       await submitDutyMessage(message);
-      chatState.textContent = "Follow-up sent to coding task";
+      chatState.textContent = "Follow-up sent to duty";
       return;
     }
     const requestedModel = modelSelect.value;
