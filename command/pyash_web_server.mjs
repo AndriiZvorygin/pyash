@@ -19,6 +19,7 @@ import {
   acceptCodingDuty,
   addCodingDutyMessage,
   claimCodingDutyMessage,
+  codingDutyOwner,
   codingDutyView,
   completeCodingDutyMessage,
   createCodingDuty,
@@ -26,11 +27,15 @@ import {
   failCodingDutyMessage,
   heartbeatCodingDuty,
   listCodingDuties,
+  parseDutyWorkerHomeAccess,
   parseDutyWorkerTokens,
+  parseDutyWorkerUsers,
+  parseDutyWebUsers,
   publicCodingDutyMessage,
   publicDutyWorker,
   readCodingDuty,
-  readDutySessionText
+  readDutySessionText,
+  setCodingDutyPermission
 } from "../program/agent/coding_duty.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
@@ -98,6 +103,14 @@ function parseArgs(argv) {
   };
 }
 
+export function assertWebBindSecurity(host, proxyToken) {
+  const normalizedHost = String(host ?? "").trim().replace(/^\[|\]$/gu, "").toLowerCase();
+  const loopback = normalizedHost === "localhost" || normalizedHost === "127.0.0.1" || normalizedHost === "::1";
+  if (!loopback && !String(proxyToken ?? "").trim()) {
+    throw new Error("PYA_WEB_PROXY_TOKEN is required when the web server binds outside loopback");
+  }
+}
+
 function workerIdForRequest(req, tokens, requestedId = "") {
   const authorization = String(req.headers.authorization ?? "");
   const match = authorization.match(/^Bearer\s+(.+)$/iu);
@@ -111,6 +124,14 @@ function workerIdForRequest(req, tokens, requestedId = "") {
     if (dutyWorkerTokenMatches(expected, match[1])) return workerId;
   }
   return "";
+}
+
+function dutyUserForRequest(req, proxyToken, webUsers) {
+  if (!proxyToken) return "local";
+  const suppliedToken = String(req.headers["x-pyash-proxy-token"] ?? "");
+  if (!proxyToken || !dutyWorkerTokenMatches(proxyToken, suppliedToken)) return "";
+  const loginId = String(req.headers["x-pyash-user"] ?? "").trim().toLowerCase();
+  return webUsers.get(loginId) || "";
 }
 
 function normalizedWorkerRepositories(value) {
@@ -619,14 +640,20 @@ export async function createWebServer({
   mindFn = mind_to_name_text,
   readStatusFn = readGpuHandleStatus,
   queueDepthFn = queueDepth,
-  modelsFn = null
+  modelsFn = null,
+  proxyToken = process.env.PYA_WEB_PROXY_TOKEN ?? "",
+  webUsers: configuredWebUsers = process.env.PYA_WEB_AUTH_USERS ?? "",
+  defaultWebUser = process.env.PYA_WEB_DEFAULT_USER ?? "local",
+  workerTokens = process.env.PYA_DUTY_WORKER_TOKENS ?? "",
+  workerUsers = process.env.PYA_DUTY_WORKER_USERS ?? "",
+  workerHomeAccess = process.env.PYA_DUTY_WORKER_HOME_ACCESS ?? ""
 } = {}) {
   const resolvedRoot = path.resolve(root);
   const runtime = providedRuntime || await buildRuntime({ root: resolvedRoot, toolsMap });
   const agentHouse = path.join(resolvedRoot, "world", "house", "web-assistant");
   await ensureAgentDirs(agentHouse);
-  const workspaceDir = path.join(agentHouse, "workspace");
-  await fs.mkdir(workspaceDir, { recursive: true });
+  const defaultWorkspaceDir = path.join(agentHouse, "workspace");
+  await fs.mkdir(defaultWorkspaceDir, { recursive: true });
   const configuredMind = remember("mind model");
   const configuredMindBackend = remember("mind backend");
   const model = String(process.env.PYA_WEB_MODEL ?? configuredMind?.as?.name ?? "qwen3.5:9b").trim();
@@ -638,8 +665,8 @@ export async function createWebServer({
   );
   const webSystemPrompt = [
     WEB_SYSTEM_PROMPT,
-    `Use ${workspaceDir} as the persistent working directory for downloaded or processed files.`,
-    "Keep temporary inputs and derived outputs under that directory; do not assume unrelated repository paths are available."
+    "Use only the private workspace assigned to this authenticated user for downloaded or processed files.",
+    "Keep temporary inputs and derived outputs under that workspace; do not assume unrelated repository paths are available."
   ].join("\n");
   doRemember({
     mood: "ya",
@@ -653,8 +680,10 @@ export async function createWebServer({
   const runExclusive = makeMutex();
   const dutyExclusive = makeMutex();
   const dutyWorldRoot = path.join(resolvedRoot, "world");
-  const sessionDir = path.join(agentHouse, "session");
-  const dutyWorkerTokens = parseDutyWorkerTokens(process.env.PYA_DUTY_WORKER_TOKENS);
+  const dutyWorkerTokens = parseDutyWorkerTokens(workerTokens);
+  const dutyWorkerUsers = parseDutyWorkerUsers(workerUsers);
+  const dutyWorkerHomeAccess = parseDutyWorkerHomeAccess(workerHomeAccess);
+  const webUsers = parseDutyWebUsers(configuredWebUsers);
   const dutyWorkers = new Map();
   let modelCatalog = null;
   let modelCatalogAt = 0;
@@ -662,6 +691,26 @@ export async function createWebServer({
   function activeDutyWorker(workerId) {
     const worker = dutyWorkers.get(workerId);
     return worker && Date.now() - Date.parse(worker.lastSeen) <= DUTY_WORKER_TTL_MS ? worker : null;
+  }
+
+  async function userContext(userId) {
+    const userHouse = userId === "local" || userId === defaultWebUser
+      ? agentHouse
+      : path.join(agentHouse, "users", userId);
+    await ensureAgentDirs(userHouse);
+    const workspaceDir = path.join(userHouse, "workspace");
+    await fs.mkdir(workspaceDir, { recursive: true });
+    return { agentHouse: userHouse, workspaceDir, sessionDir: path.join(userHouse, "session") };
+  }
+
+  function configureWebMind(workspaceDir) {
+    doRemember({
+      mood: "ya",
+      su: { name: "web assistant" },
+      be: "mind",
+      as: { name: model },
+      fromtext: { text: [webSystemPrompt, `Private user workspace: ${workspaceDir}.`].join("\n") }
+    });
   }
 
   async function getModelCatalog({ force = false } = {}) {
@@ -681,6 +730,12 @@ export async function createWebServer({
     try {
       if (req.method === "GET" && pathname === "/healthz") {
         jsonResponse(res, 200, { ok: true, service: "pyash-web", model });
+        return;
+      }
+      const isWorkerRequest = pathname.startsWith("/api/duty-workers/");
+      const ownerId = isWorkerRequest ? "" : dutyUserForRequest(req, proxyToken, webUsers);
+      if (pathname.startsWith("/api/") && !isWorkerRequest && !ownerId) {
+        errorResponse(res, 401, "authenticated user identity is unavailable", "duty_user_unauthorized");
         return;
       }
       if (req.method === "GET" && pathname === "/api/tools") {
@@ -703,14 +758,14 @@ export async function createWebServer({
       }
       if (req.method === "GET" && pathname === "/api/duty-workers") {
         const workers = [...dutyWorkers.values()]
-          .filter((worker) => activeDutyWorker(worker.id))
+          .filter((worker) => activeDutyWorker(worker.id) && worker.ownerId === ownerId)
           .map(publicDutyWorker)
           .sort((left, right) => left.id.localeCompare(right.id));
         jsonResponse(res, 200, { ok: true, workers });
         return;
       }
       if (req.method === "GET" && pathname === "/api/duties") {
-        jsonResponse(res, 200, { ok: true, duties: (await listCodingDuties(dutyWorldRoot)).map(renderDuty) });
+        jsonResponse(res, 200, { ok: true, duties: (await listCodingDuties(dutyWorldRoot, { ownerId })).map(renderDuty) });
         return;
       }
       if (req.method === "POST" && pathname === "/api/duties") {
@@ -723,13 +778,18 @@ export async function createWebServer({
         }
         const workerId = String(body.workerId ?? "").trim();
         const repositoryId = String(body.repositoryId ?? "").trim();
+        const permissionScope = String(body.permissionScope ?? "project").trim().toLowerCase();
         const worker = activeDutyWorker(workerId);
-        if (!worker) {
+        if (!worker || worker.ownerId !== ownerId) {
           errorResponse(res, 409, "selected worker is offline", "duty_worker_offline");
           return;
         }
         if (!worker.repositories.some((repository) => repository.id === repositoryId)) {
           errorResponse(res, 400, "selected directory is not available on that worker", "duty_directory_unavailable");
+          return;
+        }
+        if (!worker.permissionScopes.includes(permissionScope)) {
+          errorResponse(res, 400, "selected permission scope is unavailable on that worker", "duty_permission_unavailable");
           return;
         }
         const catalog = await getModelCatalog({ force: true });
@@ -751,10 +811,12 @@ export async function createWebServer({
         }
         const target = selected;
         const dutyId = `duty-${crypto.randomUUID()}`;
-        const sessionFile = path.join(sessionDir, `${dutyId}.pya`);
+        const dutyUserContext = await userContext(ownerId);
+        const sessionFile = path.join(dutyUserContext.sessionDir, `${dutyId}.pya`);
         const dutyPrompt = [
           "You are the Pyash coding saddle working on one durable duty.",
           `Repository directory: ${repositoryId}.`,
+          `Filesystem permission scope: ${permissionScope}.`,
           "Use only the configured repository tools and preserve the duty's session continuity.",
           "Do not claim that code changed unless a tool result confirms it.",
           "Before reporting a completed change, run an appropriate focused check and report the evidence."
@@ -767,10 +829,12 @@ export async function createWebServer({
         });
         const task = await dutyExclusive(() => createCodingDuty(dutyWorldRoot, {
           id: dutyId,
+          ownerId,
           title,
           initialMessage,
           workerId,
           repositoryId,
+          permissionScope,
           model: target.model,
           backend: target.backend,
           host: target.host,
@@ -783,7 +847,8 @@ export async function createWebServer({
       if (req.method === "POST" && pathname === "/api/duty-workers/heartbeat") {
         const body = await readJsonBody(req, 64 * 1024);
         const workerId = String(body.workerId ?? "").trim();
-        if (!workerIdForRequest(req, dutyWorkerTokens, workerId)) {
+        const ownerId = dutyWorkerUsers.get(workerId);
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId) || !ownerId) {
           errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
           return;
         }
@@ -794,8 +859,10 @@ export async function createWebServer({
         }
         const worker = {
           id: workerId,
+          ownerId,
           label: String(body.label ?? workerId).trim().slice(0, 120) || workerId,
           repositories,
+          permissionScopes: ["project", ...(dutyWorkerHomeAccess.has(workerId) ? ["home"] : [])],
           lastSeen: new Date().toISOString()
         };
         dutyWorkers.set(workerId, worker);
@@ -805,7 +872,8 @@ export async function createWebServer({
             body.dutyId,
             workerId,
             body.messageId,
-            body.claimId
+            body.claimId,
+            { ownerId }
           ));
         }
         jsonResponse(res, 200, { ok: true, worker: publicDutyWorker(worker) });
@@ -814,7 +882,8 @@ export async function createWebServer({
       if (req.method === "POST" && pathname === "/api/duty-workers/claim") {
         const body = await readJsonBody(req, 64 * 1024);
         const workerId = String(body.workerId ?? "").trim();
-        if (!workerIdForRequest(req, dutyWorkerTokens, workerId)) {
+        const ownerId = dutyWorkerUsers.get(workerId);
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId) || !ownerId) {
           errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
           return;
         }
@@ -825,7 +894,8 @@ export async function createWebServer({
         }
         worker.lastSeen = new Date().toISOString();
         const claimed = await dutyExclusive(() => claimCodingDutyMessage(dutyWorldRoot, workerId, {
-          repositoryIds: worker.repositories.map((repository) => repository.id)
+          repositoryIds: worker.repositories.map((repository) => repository.id),
+          ownerId
         }));
         if (!claimed) {
           jsonResponse(res, 200, { ok: true, assignment: null });
@@ -841,7 +911,7 @@ export async function createWebServer({
             claimed.message.id,
             claimed.task.workSpec.codingDuty.claim.claimId,
             "assigned directory is no longer configured",
-            { retry: false }
+            { retry: false, ownerId }
           ));
           errorResponse(res, 409, "assigned directory is no longer configured on this worker", "duty_directory_unavailable");
           return;
@@ -861,7 +931,8 @@ export async function createWebServer({
       if (req.method === "POST" && pathname === "/api/duty-workers/result") {
         const body = await readJsonBody(req, MAX_DUTY_BYTES);
         const workerId = String(body.workerId ?? "").trim();
-        if (!workerIdForRequest(req, dutyWorkerTokens, workerId)) {
+        const ownerId = dutyWorkerUsers.get(workerId);
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId) || !ownerId) {
           errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
           return;
         }
@@ -877,7 +948,7 @@ export async function createWebServer({
             body.messageId,
             body.claimId,
             body.text,
-            { sessionText: body.sessionText }
+            { sessionText: body.sessionText, ownerId }
           );
         });
         if (!duty) {
@@ -890,7 +961,8 @@ export async function createWebServer({
       if (req.method === "POST" && pathname === "/api/duty-workers/failure") {
         const body = await readJsonBody(req, 64 * 1024);
         const workerId = String(body.workerId ?? "").trim();
-        if (!workerIdForRequest(req, dutyWorkerTokens, workerId)) {
+        const ownerId = dutyWorkerUsers.get(workerId);
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId) || !ownerId) {
           errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
           return;
         }
@@ -900,7 +972,8 @@ export async function createWebServer({
           workerId,
           body.messageId,
           body.claimId,
-          body.error
+          body.error,
+          { ownerId }
         ));
         if (!duty) {
           errorResponse(res, 404, "duty not found", "duty_not_found");
@@ -909,7 +982,7 @@ export async function createWebServer({
         jsonResponse(res, 200, { ok: true, duty: renderDuty(codingDutyView(duty)) });
         return;
       }
-      const dutyRoute = pathname.match(/^\/api\/duties\/([^/]+)(?:\/(messages|accept))?$/u);
+      const dutyRoute = pathname.match(/^\/api\/duties\/([^/]+)(?:\/(messages|accept|permissions))?$/u);
       if (dutyRoute) {
         const dutyId = decodeURIComponent(dutyRoute[1]);
         const action = dutyRoute[2] || "show";
@@ -919,12 +992,20 @@ export async function createWebServer({
             errorResponse(res, 404, "duty not found", "duty_not_found");
             return;
           }
+          if (codingDutyOwner(task) !== ownerId) {
+            errorResponse(res, 404, "duty not found", "duty_not_found");
+            return;
+          }
           jsonResponse(res, 200, { ok: true, duty: renderDuty(codingDutyView(task)) });
           return;
         }
         if (req.method === "POST" && action === "messages") {
           const body = await readJsonBody(req, MAX_CHAT_BYTES);
-          const task = await dutyExclusive(() => addCodingDutyMessage(dutyWorldRoot, dutyId, body.message));
+          const task = await dutyExclusive(async () => {
+            const current = await readCodingDuty(dutyWorldRoot, dutyId);
+            if (!current || codingDutyOwner(current) !== ownerId) return null;
+            return addCodingDutyMessage(dutyWorldRoot, dutyId, body.message);
+          });
           if (!task) {
             errorResponse(res, 404, "duty not found", "duty_not_found");
             return;
@@ -932,10 +1013,28 @@ export async function createWebServer({
           jsonResponse(res, 202, { ok: true, duty: renderDuty(codingDutyView(task)), queued: true });
           return;
         }
+        if (req.method === "POST" && action === "permissions") {
+          const body = await readJsonBody(req, 16 * 1024);
+          const task = await dutyExclusive(async () => {
+            const current = await readCodingDuty(dutyWorldRoot, dutyId);
+            if (!current || codingDutyOwner(current) !== ownerId) return null;
+            const workerId = current.workSpec.codingDuty.workerId;
+            return setCodingDutyPermission(dutyWorldRoot, dutyId, body.permissionScope, {
+              ownerId,
+              homeAllowed: dutyWorkerHomeAccess.has(workerId)
+            });
+          });
+          if (!task) {
+            errorResponse(res, 404, "duty not found", "duty_not_found");
+            return;
+          }
+          jsonResponse(res, 200, { ok: true, duty: renderDuty(codingDutyView(task)) });
+          return;
+        }
         if (req.method === "POST" && action === "accept") {
           const accepted = await dutyExclusive(async () => {
             const task = await readCodingDuty(dutyWorldRoot, dutyId);
-            if (!task) return null;
+            if (!task || codingDutyOwner(task) !== ownerId) return null;
             const state = task.workSpec.codingDuty;
             if (state.claim || state.messages.some((message) => message.role === "user" && ["pending", "running"].includes(message.state))) {
               throw Object.assign(new Error("duty has unfinished input or active work"), { statusCode: 409 });
@@ -951,16 +1050,18 @@ export async function createWebServer({
         }
       }
       if (req.method === "GET" && pathname === "/api/sessions") {
+        const context = await userContext(ownerId);
         jsonResponse(res, 200, {
           ok: true,
           selected: "web",
-          sessions: await readWebSessions(sessionDir)
+          sessions: await readWebSessions(context.sessionDir)
         });
         return;
       }
       if (req.method === "GET" && pathname.startsWith("/api/sessions/")) {
         const sessionId = normalizeSessionId(decodeURIComponent(pathname.slice("/api/sessions/".length)));
-        jsonResponse(res, 200, { ok: true, session: await readWebSession(sessionDir, sessionId) });
+        const context = await userContext(ownerId);
+        jsonResponse(res, 200, { ok: true, session: await readWebSession(context.sessionDir, sessionId) });
         return;
       }
       if (req.method === "GET" && pathname === "/api/gpu") {
@@ -1021,26 +1122,30 @@ export async function createWebServer({
           return;
         }
         const session = normalizeSessionId(body.session);
+        const context = await userContext(ownerId);
         const toolEvents = [];
         const sentence = buildChatSentence({
           message,
           root: resolvedRoot,
-          agentHouse,
+          agentHouse: context.agentHouse,
           session,
           model: selected.model,
           backend: selected.backend,
           host: selected.host
         });
-        const answer = await runExclusive(() => mindFn(sentence, {
-          onToolCall: async (event) => {
-            const safe = {
-              stage: String(event?.stage ?? "").trim(),
-              toolName: String(event?.toolName ?? "").trim(),
-              toolText: String(event?.toolText ?? "").slice(0, 12000)
-            };
-            if (safe.stage && safe.toolName) toolEvents.push(safe);
-          }
-        }));
+        const answer = await runExclusive(async () => {
+          configureWebMind(context.workspaceDir);
+          return mindFn(sentence, {
+            onToolCall: async (event) => {
+              const safe = {
+                stage: String(event?.stage ?? "").trim(),
+                toolName: String(event?.toolName ?? "").trim(),
+                toolText: String(event?.toolText ?? "").slice(0, 12000)
+              };
+              if (safe.stage && safe.toolName) toolEvents.push(safe);
+            }
+          });
+        });
         const serialized = serializeResult(answer);
         jsonResponse(res, 200, {
           ok: true,
@@ -1087,11 +1192,12 @@ export async function createWebServer({
   }
 
   const server = http.createServer(handleRequest);
-  return { server, runtime, agentHouse, workspaceDir };
+  return { server, runtime, agentHouse, workspaceDir: defaultWorkspaceDir };
 }
 
 async function main() {
   const config = parseArgs(process.argv);
+  assertWebBindSecurity(config.host, process.env.PYA_WEB_PROXY_TOKEN);
   const { server } = await createWebServer(config);
   server.listen(config.port, config.host, () => {
     process.stdout.write(`pyash web listening on http://${config.host}:${config.port}\n`);

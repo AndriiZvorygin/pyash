@@ -8,15 +8,20 @@ import {
   acceptCodingDuty,
   addCodingDutyMessage,
   claimCodingDutyMessage,
+  codingDutyOwner,
   completeCodingDutyMessage,
   createCodingDuty,
   dutyWorkerTokenMatches,
   failCodingDutyMessage,
   listCodingDuties,
   parseDutyRepositories,
+  parseDutyWebUsers,
   parseDutyWorkerTokens,
+  parseDutyWorkerHomeAccess,
+  parseDutyWorkerUsers,
   readCodingDuty,
-  readDutySessionText
+  readDutySessionText,
+  setCodingDutyPermission
 } from "../program/agent/coding_duty.mjs";
 import { addWorkTask, listAutonomousWorkTasks, listWorkTasks } from "../program/runtime/work/operator.mjs";
 
@@ -37,6 +42,7 @@ async function makeDuty(root, overrides = {}) {
     id: "duty-test-1",
     title: "Refine this repository",
     initialMessage: "Inspect the code and report a focused improvement.",
+    ownerId: "htaf",
     workerId: "worker-a",
     repositoryId: "pyash",
     model: "qwen3.5:9b",
@@ -130,6 +136,47 @@ test("worker credentials and repository mappings are parsed without exposing roo
   assert.deepEqual(parseDutyRepositories("pyash=/srv/pyash;bad id=/tmp/no"), [
     { id: "pyash", root: "/srv/pyash" }
   ]);
+  assert.deepEqual([...parseDutyWorkerUsers("zvorygin-htaf=htaf")], [["zvorygin-htaf", "htaf"]]);
+  assert.deepEqual([...parseDutyWorkerHomeAccess("zvorygin-htaf,other")], ["zvorygin-htaf", "other"]);
+  assert.deepEqual([...parseDutyWebUsers("pyash=htaf;alice=alice;bad user=oops")], [["pyash", "htaf"], ["alice", "alice"]]);
+});
+
+test("duties are private to their authenticated owner and permission scope changes only while idle", async () => {
+  await withWorld(async (root) => {
+    const created = await makeDuty(root);
+    assert.equal(codingDutyOwner(created), "htaf");
+    assert.deepEqual((await listCodingDuties(root, { ownerId: "alice" })).length, 0);
+    assert.equal((await listCodingDuties(root, { ownerId: "htaf" })).length, 1);
+    assert.equal(await claimCodingDutyMessage(root, "worker-a", { ownerId: "alice" }), null);
+    await assert.rejects(() => setCodingDutyPermission(root, created.taskId, "home", {
+      ownerId: "htaf",
+      homeAllowed: true
+    }), /work is active/u);
+    assert.equal(await setCodingDutyPermission(root, created.taskId, "home", {
+      ownerId: "alice",
+      homeAllowed: true
+    }), null);
+    const claim = await claimCodingDutyMessage(root, "worker-a", { ownerId: "htaf" });
+    await completeCodingDutyMessage(
+      root,
+      created.taskId,
+      "worker-a",
+      claim.message.id,
+      claim.task.workSpec.codingDuty.claim.claimId,
+      "Idle again.",
+      { ownerId: "htaf", sessionText: "completed session\n" }
+    );
+    await assert.rejects(() => setCodingDutyPermission(root, created.taskId, "home", {
+      ownerId: "htaf",
+      homeAllowed: false
+    }), /not configured/u);
+    const changed = await setCodingDutyPermission(root, created.taskId, "home", {
+      ownerId: "htaf",
+      homeAllowed: true
+    });
+    assert.equal(changed.workSpec.codingDuty.permissionScope, "home");
+    assert.equal(changed.taskId, created.taskId);
+  });
 });
 
 test("interactive coding duties stay in WorkTask listings but not autonomous backlog supply", async () => {

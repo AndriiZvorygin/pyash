@@ -16,6 +16,9 @@ const dutyModeButton = document.querySelector("#duty-mode");
 const dutySelect = document.querySelector("#duty-select");
 const dutyWorkerSelect = document.querySelector("#duty-worker");
 const dutyRepositorySelect = document.querySelector("#duty-repository");
+const dutyCreatePermissionSelect = document.querySelector("#duty-create-permission");
+const dutyCurrentPermissionSelect = document.querySelector("#duty-current-permission");
+const updateDutyPermissionButton = document.querySelector("#update-duty-permission");
 const dutyTitleInput = document.querySelector("#duty-title");
 const dutyObjectiveInput = document.querySelector("#duty-objective");
 const createDutyButton = document.querySelector("#create-duty");
@@ -41,7 +44,7 @@ function setSelectOptions(select, values, selectedValue, format = (value) => val
     const option = document.createElement("option");
     option.value = value.value ?? value;
     option.textContent = format(value);
-    option.disabled = value.ready === false;
+    option.disabled = value.ready === false || value.disabled === true;
     select.append(option);
   }
   if (selectedValue && values.some((value) => (value.value ?? value) === selectedValue)) {
@@ -274,6 +277,24 @@ function updateRepositoryOptions() {
     setSelectOptions(dutyRepositorySelect, [{ value: "", label: "No folders advertised" }], "", (entry) => entry.label);
   }
   dutyRepositorySelect.disabled = repositories.length === 0;
+  setPermissionOptions(dutyCreatePermissionSelect, worker, "project");
+}
+
+function setPermissionOptions(select, worker, selectedScope) {
+  const allowsHome = worker?.permissionScopes?.includes("home") === true;
+  setSelectOptions(select, [
+    { value: "project", label: "Selected project folder" },
+    { value: "home", label: allowsHome ? "Full home directory" : "Full home directory (not enabled)", disabled: !allowsHome }
+  ], selectedScope, (entry) => entry.label);
+}
+
+function syncCurrentPermission(duty) {
+  const worker = dutyWorkers.find((entry) => entry.id === duty?.workerId);
+  setPermissionOptions(dutyCurrentPermissionSelect, worker, duty?.permissionScope || "project");
+  const pending = duty?.active || duty?.messages?.some((entry) => entry.role === "user" && ["pending", "running"].includes(entry.state));
+  dutyCurrentPermissionSelect.disabled = !duty || Boolean(pending);
+  updateDutyPermissionButton.disabled = !duty || Boolean(pending)
+    || dutyCurrentPermissionSelect.value === (duty?.permissionScope || "project");
 }
 
 async function loadDutyCatalog({ forceSelection = false } = {}) {
@@ -335,6 +356,8 @@ async function loadDuty(dutyId) {
   if (!currentDuty) {
     clearMessages();
     dutyState.textContent = "Select or create a duty";
+    dutyCurrentPermissionSelect.disabled = true;
+    updateDutyPermissionButton.disabled = true;
     updateChatReadiness();
     return null;
   }
@@ -344,7 +367,8 @@ async function loadDuty(dutyId) {
     const duty = data.duty;
     dutyCatalog = [duty, ...dutyCatalog.filter((entry) => entry.id !== duty.id)];
     renderDutyMessages(duty);
-    dutyState.textContent = `${duty.status} · ${duty.workerId} · ${duty.repositoryId} · ${duty.backend}:${duty.model}`;
+    dutyState.textContent = `${duty.status} · ${duty.workerId} · ${duty.repositoryId} · ${duty.permissionScope || "project"} access · ${duty.backend}:${duty.model}`;
+    syncCurrentPermission(duty);
     acceptDutyButton.disabled = duty.status !== "implementing" || duty.active
       || duty.messages?.some((entry) => entry.role === "user" && ["pending", "running"].includes(entry.state));
     updateChatReadiness();
@@ -364,7 +388,8 @@ async function waitForDutyReply(dutyId, userMessageId) {
       duty = (await requestJson(`/api/duties/${encodeURIComponent(dutyId)}`)).duty;
       dutyCatalog = [duty, ...dutyCatalog.filter((entry) => entry.id !== duty.id)];
       renderDutyMessages(duty);
-      dutyState.textContent = `${duty.status} · ${duty.workerId} · ${duty.repositoryId} · ${duty.backend}:${duty.model}`;
+      dutyState.textContent = `${duty.status} · ${duty.workerId} · ${duty.repositoryId} · ${duty.permissionScope || "project"} access · ${duty.backend}:${duty.model}`;
+      syncCurrentPermission(duty);
       acceptDutyButton.disabled = duty.status !== "implementing" || duty.active
         || duty.messages?.some((entry) => entry.role === "user" && ["pending", "running"].includes(entry.state));
       updateChatReadiness();
@@ -390,13 +415,15 @@ async function createDuty() {
     dutyState.textContent = "Choose an online host worker and its folder, then enter a duty name and first instruction.";
     return;
   }
+  const permissionScope = dutyCreatePermissionSelect.value || "project";
+  if (permissionScope === "home" && !window.confirm("Allow this duty's model tools to access the entire worker account home directory? This is not an OS sandbox; readable personal files may be exposed.")) return;
   createDutyButton.disabled = true;
   dutyState.textContent = "Creating duty...";
   try {
     const data = await requestJson("/api/duties", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ workerId, repositoryId, title, initialMessage, model: modelSelect.value })
+      body: JSON.stringify({ workerId, repositoryId, permissionScope, title, initialMessage, model: modelSelect.value })
     });
     dutyTitleInput.value = "";
     dutyObjectiveInput.value = "";
@@ -424,6 +451,24 @@ async function acceptDuty() {
   } catch (error) {
     dutyState.textContent = error.message;
     acceptDutyButton.disabled = false;
+  }
+}
+
+async function updateDutyPermission() {
+  if (!currentDuty) return;
+  const permissionScope = dutyCurrentPermissionSelect.value || "project";
+  if (permissionScope === "home" && !window.confirm("Allow this duty's model tools to access the entire worker account home directory? This is not an OS sandbox; readable personal files may be exposed.")) return;
+  updateDutyPermissionButton.disabled = true;
+  try {
+    await requestJson(`/api/duties/${encodeURIComponent(currentDuty)}/permissions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ permissionScope })
+    });
+    await loadDuty(currentDuty);
+  } catch (error) {
+    dutyState.textContent = error.message;
+    updateDutyPermissionButton.disabled = false;
   }
 }
 
@@ -473,8 +518,10 @@ dutySelect.addEventListener("change", () => {
   loadDuty(dutySelect.value);
 });
 dutyWorkerSelect.addEventListener("change", updateRepositoryOptions);
+dutyCurrentPermissionSelect.addEventListener("change", () => syncCurrentPermission(dutyCatalog.find((entry) => entry.id === currentDuty)));
 createDutyButton.addEventListener("click", createDuty);
 acceptDutyButton.addEventListener("click", acceptDuty);
+updateDutyPermissionButton.addEventListener("click", updateDutyPermission);
 refreshDutiesButton.addEventListener("click", () => loadDutyCatalog({ forceSelection: true }));
 modelSelect.addEventListener("change", () => {
   if (modelSelect.value) {

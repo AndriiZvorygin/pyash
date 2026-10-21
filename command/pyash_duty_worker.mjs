@@ -23,6 +23,14 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function safeIdentityPart(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9._-]+/gu, "-").replace(/^-+|-+$/gu, "");
+}
+
+function enabled(value) {
+  return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
+}
+
 function sessionFileForDuty(stateRoot, sessionName) {
   const safeName = String(sessionName ?? "").replace(/[^a-zA-Z0-9._-]/g, "-");
   if (!safeName || safeName.includes("..")) throw new Error("worker received invalid duty session name");
@@ -64,7 +72,10 @@ async function postJson(url, body, { token, timeoutMs = 15000, fetchFn = fetch }
 
 export function resolveDutyWorkerConfig(envValue = process.env) {
   const hubUrl = String(envValue.PYA_DUTY_HUB_URL ?? "").trim().replace(/\/+$/u, "");
-  const workerId = String(envValue.PYA_DUTY_WORKER_ID ?? "").trim();
+  const account = String(envValue.USER ?? envValue.LOGNAME ?? os.userInfo().username).trim();
+  const hostName = String(envValue.PYA_DUTY_WORKER_HOSTNAME ?? os.hostname()).trim();
+  const workerId = String(envValue.PYA_DUTY_WORKER_ID ?? `${safeIdentityPart(hostName)}-${safeIdentityPart(account)}`).trim();
+  const label = String(envValue.PYA_DUTY_WORKER_LABEL ?? `${hostName} (${account})`).trim();
   const token = String(envValue.PYA_DUTY_WORKER_TOKEN ?? "").trim();
   const repositories = parseDutyRepositories(envValue.PYA_DUTY_REPOSITORIES ?? "");
   const stateRoot = path.resolve(String(envValue.PYA_DUTY_STATE_ROOT ?? path.join(os.homedir(), ".local", "state", "pyash-duty")));
@@ -75,7 +86,7 @@ export function resolveDutyWorkerConfig(envValue = process.env) {
   if (parsed.protocol !== "https:" && !["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)) {
     throw new Error("duty hub must use HTTPS outside loopback");
   }
-  return { hubUrl, workerId, token, repositories, stateRoot };
+  return { hubUrl, workerId, label, token, repositories, stateRoot, homeAccess: enabled(envValue.PYA_DUTY_HOME_ACCESS) };
 }
 
 async function canonicalRepositories(config) {
@@ -115,13 +126,19 @@ export async function processDutyAssignment(config, repositories, assignment, {
   const message = assignment.message;
   const repository = repositories.find((entry) => entry.id === duty.repositoryId);
   if (!repository) throw new Error(`duty requests unconfigured directory ${duty.repositoryId}`);
+  const permissionScope = String(duty.permissionScope ?? "project").trim().toLowerCase();
+  if (!["project", "home"].includes(permissionScope)) throw new Error("duty has an invalid permission scope");
+  if (permissionScope === "home" && config.homeAccess !== true) {
+    throw new Error("worker is not configured to allow full home-directory access");
+  }
+  const workingRoot = permissionScope === "home" ? os.homedir() : repository.root;
   const localSessionFile = sessionFileForDuty(config.stateRoot, duty.sessionName);
   const session = await syncSessionBeforeTurn({ assignment, localSessionFile });
   let output = completedAssistantText(session.existing);
   let heartbeatTimer = null;
   if (!output) {
     await prepareFn({
-      cwd: repository.root,
+      cwd: workingRoot,
       runtimeRoot: pyashRoot,
       worldRoot: path.join(config.stateRoot, "world"),
       model: duty.model,
@@ -131,7 +148,7 @@ export async function processDutyAssignment(config, repositories, assignment, {
     heartbeatTimer = setInterval(() => {
       postJson(`${config.hubUrl}/api/duty-workers/heartbeat`, {
         workerId: config.workerId,
-        label: config.workerId,
+        label: config.label || config.workerId,
         repositories: repositories.map(({ id, label, root }) => ({ id, label, root })),
         dutyId: duty.id,
         messageId: message.id,
@@ -180,7 +197,7 @@ export async function runDutyWorker({
     try {
       const heartbeat = await postJson(`${config.hubUrl}/api/duty-workers/heartbeat`, {
         workerId: config.workerId,
-        label: config.workerId,
+        label: config.label || config.workerId,
         repositories: repositories.map(({ id, label, root }) => ({ id, label, root }))
       }, { token: config.token, fetchFn });
       if (!heartbeat.ok) throw new Error("hub rejected worker heartbeat");

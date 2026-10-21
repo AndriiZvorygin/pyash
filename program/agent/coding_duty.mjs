@@ -16,6 +16,16 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
+function ownerId(value) {
+  const normalized = text(value).toLowerCase();
+  return /^[a-z0-9][a-z0-9._-]{0,79}$/u.test(normalized) ? normalized : "";
+}
+
+function permissionScope(value = "project") {
+  const normalized = text(value).toLowerCase() || "project";
+  return ["project", "home"].includes(normalized) ? normalized : "";
+}
+
 function dutyError(message, statusCode = 400) {
   return Object.assign(new Error(message), { statusCode });
 }
@@ -56,6 +66,10 @@ export function isCodingDuty(task) {
   return Boolean(codingDutyOf(task));
 }
 
+export function codingDutyOwner(task) {
+  return ownerId(codingDutyOf(task)?.ownerId);
+}
+
 export function codingDutyView(task, { includeMessages = true } = {}) {
   const duty = codingDutyOf(task);
   if (!duty) return null;
@@ -65,6 +79,7 @@ export function codingDutyView(task, { includeMessages = true } = {}) {
     status: task.status,
     workerId: duty.workerId,
     repositoryId: duty.repositoryId,
+    permissionScope: permissionScope(duty.permissionScope) || "project",
     model: duty.model,
     backend: duty.backend,
     host: duty.host,
@@ -81,8 +96,10 @@ export async function createCodingDuty(worldRoot, {
   id = newId(),
   title,
   initialMessage,
+  ownerId: requestedOwner,
   workerId,
   repositoryId,
+  permissionScope: requestedPermissionScope = "project",
   model,
   backend,
   host,
@@ -93,7 +110,11 @@ export async function createCodingDuty(worldRoot, {
   const dutyId = normalizeWorkTaskId(id);
   const objective = text(title);
   const prompt = String(initialMessage ?? "").trim();
+  const owner = ownerId(requestedOwner);
+  const scope = permissionScope(requestedPermissionScope);
   if (!dutyId || !dutyId.startsWith("duty-")) throw new Error("duty defective: invalid duty identity");
+  if (!owner) throw dutyError("duty owner is missing or invalid");
+  if (!scope) throw dutyError("duty permission scope must be project or home");
   if (!objective || objective.length > MAX_TITLE_LENGTH) throw dutyError("duty title is missing or too long");
   if (!prompt || prompt.length > MAX_MESSAGE_LENGTH) throw new Error("duty defective: initial message is missing or too long");
   if (!text(workerId) || !text(repositoryId)) throw new Error("duty defective: worker and directory are required");
@@ -114,8 +135,10 @@ export async function createCodingDuty(worldRoot, {
     workSpec: {
       codingDuty: {
         version: DUTY_VERSION,
+        ownerId: owner,
         workerId: text(workerId),
         repositoryId: text(repositoryId),
+        permissionScope: scope,
         model: text(model),
         backend: text(backend),
         host: text(host),
@@ -143,9 +166,41 @@ export async function createCodingDuty(worldRoot, {
   return writeWorkTaskStatus(worldRoot, task);
 }
 
-export async function listCodingDuties(worldRoot, { includeTerminal = true } = {}) {
+export async function listCodingDuties(worldRoot, { includeTerminal = true, ownerId: requestedOwner = "" } = {}) {
+  const owner = ownerId(requestedOwner);
   const tasks = await listWorkTaskStatuses(worldRoot, { includeTerminal });
-  return tasks.filter(isCodingDuty).map((task) => codingDutyView(task));
+  return tasks.filter((task) => isCodingDuty(task) && (!owner || codingDutyOwner(task) === owner))
+    .map((task) => codingDutyView(task));
+}
+
+export async function setCodingDutyPermission(worldRoot, dutyId, requestedScope, {
+  ownerId: requestedOwner,
+  homeAllowed = false,
+  now = new Date()
+} = {}) {
+  const task = await readCodingDuty(worldRoot, dutyId);
+  if (!task || codingDutyOwner(task) !== ownerId(requestedOwner)) return null;
+  const scope = permissionScope(requestedScope);
+  if (!scope) throw dutyError("permission scope must be project or home");
+  if (scope === "home" && homeAllowed !== true) {
+    throw dutyError("this worker is not configured to allow home access", 409);
+  }
+  const duty = codingDutyOf(task);
+  if (!["implementing", "blocked"].includes(task.status)) {
+    throw dutyError(`duty permissions cannot change while ${task.status}`, 409);
+  }
+  if (duty.claim || duty.messages.some((message) => message.role === "user" && ["pending", "running"].includes(message.state))) {
+    throw dutyError("duty permissions cannot change while work is active", 409);
+  }
+  const timestamp = iso(now);
+  return writeWorkTaskStatus(worldRoot, {
+    ...task,
+    workSpec: {
+      ...task.workSpec,
+      codingDuty: { ...duty, permissionScope: scope, updatedAt: timestamp }
+    },
+    checkpoint: { ...task.checkpoint, lastAction: `duty permission scope set to ${scope}` }
+  });
 }
 
 export async function readCodingDuty(worldRoot, dutyId) {
@@ -209,15 +264,18 @@ function leaseIsLive(claim, nowMs) {
 export async function claimCodingDutyMessage(worldRoot, workerId, {
   now = new Date(),
   leaseMs = 60000,
-  repositoryIds = null
+  repositoryIds = null,
+  ownerId: requestedOwner = ""
 } = {}) {
   const worker = text(workerId);
+  const owner = ownerId(requestedOwner);
   const nowDate = now instanceof Date ? now : new Date(now);
   const nowMs = nowDate.getTime();
   const tasks = await listWorkTaskStatuses(worldRoot, { includeTerminal: false });
   for (const task of tasks) {
     const duty = codingDutyOf(task);
     if (!duty || duty.workerId !== worker || task.status !== "implementing") continue;
+    if (owner && codingDutyOwner(task) !== owner) continue;
     if (Array.isArray(repositoryIds) && !repositoryIds.includes(duty.repositoryId)) continue;
     if (leaseIsLive(duty.claim, nowMs)) continue;
     const message = duty.messages.find((entry) => entry.role === "user" && entry.state === "pending")
@@ -266,11 +324,13 @@ export async function claimCodingDutyMessage(worldRoot, workerId, {
 
 export async function heartbeatCodingDuty(worldRoot, dutyId, workerId, messageId, claimId, {
   now = new Date(),
-  leaseMs = 60000
+  leaseMs = 60000,
+  ownerId: requestedOwner = ""
 } = {}) {
   const task = await readCodingDuty(worldRoot, dutyId);
   if (!task) return false;
   const duty = codingDutyOf(task);
+  if (ownerId(requestedOwner) && codingDutyOwner(task) !== ownerId(requestedOwner)) return false;
   if (duty.claim?.workerId !== text(workerId)
     || duty.claim?.messageId !== text(messageId)
     || duty.claim?.claimId !== text(claimId)) return false;
@@ -289,11 +349,12 @@ export async function heartbeatCodingDuty(worldRoot, dutyId, workerId, messageId
   return true;
 }
 
-function assertDutyClaim(task, workerId, messageId, claimId) {
+function assertDutyClaim(task, workerId, messageId, claimId, requestedOwner = "") {
   const duty = codingDutyOf(task);
   if (!duty || duty.claim?.workerId !== text(workerId)
     || duty.claim?.messageId !== text(messageId)
-    || duty.claim?.claimId !== text(claimId)) {
+    || duty.claim?.claimId !== text(claimId)
+    || (ownerId(requestedOwner) && codingDutyOwner(task) !== ownerId(requestedOwner))) {
     throw dutyError("duty claim does not match active worker", 409);
   }
   return duty;
@@ -301,15 +362,19 @@ function assertDutyClaim(task, workerId, messageId, claimId) {
 
 export async function completeCodingDutyMessage(worldRoot, dutyId, workerId, messageId, claimId, response, {
   sessionText = "",
+  ownerId: requestedOwner = "",
   now = new Date()
 } = {}) {
   const task = await readCodingDuty(worldRoot, dutyId);
   if (!task) return null;
   const storedDuty = codingDutyOf(task);
+  if (ownerId(requestedOwner) && codingDutyOwner(task) !== ownerId(requestedOwner)) {
+    throw dutyError("duty claim does not match active worker", 409);
+  }
   const currentMessage = storedDuty.messages.find((entry) => entry.id === text(messageId));
   const priorResponse = storedDuty.messages.find((entry) => entry.role === "assistant" && entry.parentId === text(messageId));
   if (currentMessage?.state === "complete" && priorResponse) return task;
-  const duty = assertDutyClaim(task, workerId, messageId, claimId);
+  const duty = assertDutyClaim(task, workerId, messageId, claimId, requestedOwner);
   const output = String(response ?? "").trim();
   if (!output || output.length > MAX_MESSAGE_LENGTH) throw new Error("duty response is missing or too long");
   const storedSessionPath = text(duty.sessionFile);
@@ -352,11 +417,12 @@ export async function completeCodingDutyMessage(worldRoot, dutyId, workerId, mes
 
 export async function failCodingDutyMessage(worldRoot, dutyId, workerId, messageId, claimId, error, {
   now = new Date(),
-  retry = true
+  retry = true,
+  ownerId: requestedOwner = ""
 } = {}) {
   const task = await readCodingDuty(worldRoot, dutyId);
   if (!task) return null;
-  const duty = assertDutyClaim(task, workerId, messageId, claimId);
+  const duty = assertDutyClaim(task, workerId, messageId, claimId, requestedOwner);
   const timestamp = iso(now);
   const message = duty.messages.find((entry) => entry.id === text(messageId));
   const canRetry = retry && Number(message?.attempts || 0) < MAX_ATTEMPTS;
@@ -444,6 +510,36 @@ export function parseDutyWorkerTokens(value = "") {
   return entries;
 }
 
+export function parseDutyWorkerUsers(value = "") {
+  const entries = new Map();
+  for (const item of String(value ?? "").split(";")) {
+    const separator = item.indexOf("=");
+    if (separator <= 0) continue;
+    const workerId = text(item.slice(0, separator));
+    const userId = ownerId(item.slice(separator + 1));
+    if (/^[a-zA-Z0-9._-]{1,80}$/u.test(workerId) && userId) entries.set(workerId, userId);
+  }
+  return entries;
+}
+
+export function parseDutyWebUsers(value = "") {
+  const entries = new Map();
+  for (const item of String(value ?? "").split(";")) {
+    const separator = item.indexOf("=");
+    if (separator <= 0) continue;
+    const loginId = ownerId(item.slice(0, separator));
+    const userId = ownerId(item.slice(separator + 1));
+    if (loginId && userId) entries.set(loginId, userId);
+  }
+  return entries;
+}
+
+export function parseDutyWorkerHomeAccess(value = "") {
+  return new Set(String(value ?? "").split(/[;,]/u)
+    .map(text)
+    .filter((workerId) => /^[a-zA-Z0-9._-]{1,80}$/u.test(workerId)));
+}
+
 export function parseDutyRepositories(value = "") {
   const repositories = [];
   for (const item of String(value ?? "").split(";")) {
@@ -463,6 +559,7 @@ export function publicDutyWorker(worker) {
     label: worker.label || worker.id,
     online: true,
     lastSeen: worker.lastSeen,
+    permissionScopes: Array.isArray(worker.permissionScopes) ? [...worker.permissionScopes] : ["project"],
     repositories: worker.repositories.map(({ id, label }) => ({ id, label: label || id }))
   };
 }
