@@ -51,7 +51,7 @@ async function importSaddleTools() {
   await interpret(sentence);
 }
 
-function configureSaddle({ cwd, worldRoot = path.join(cwd, "world"), model, backend, host, systemPrompt }) {
+function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "world"), model, backend, host, systemPrompt }) {
   const toolMap = remember(TOOL_MAP_NAME);
   if (toolMap?.be === "map") {
     doRemember({
@@ -59,6 +59,12 @@ function configureSaddle({ cwd, worldRoot = path.join(cwd, "world"), model, back
       at: { filename: cwd }
     });
   }
+  doRemember({
+    mood: "ya",
+    su: { name: "run root" },
+    be: "default",
+    ob: { filename: path.resolve(runtimeRoot) }
+  });
   doRemember({
     mood: "ya",
     su: { name: "world root" },
@@ -103,6 +109,7 @@ export async function prepareSaddle({
   const resolvedHost = normalizeSaddleHost(host || resolveSaddleHost(resolvedBackend));
   configureSaddle({
     cwd: resolvedCwd,
+    runtimeRoot: resolvedRuntimeRoot,
     worldRoot: resolvedWorldRoot,
     model: resolvedModel,
     backend: resolvedBackend,
