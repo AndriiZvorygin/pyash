@@ -16,7 +16,7 @@
         <div class="topbar-actions">
           <div class="segmented" role="group" aria-label="Conversation mode">
             <button id="assistant-mode" type="button" aria-pressed="true">Assistant</button>
-            <button id="duty-mode" type="button" aria-pressed="false">Coding</button>
+            <button id="duty-mode" type="button" aria-pressed="false">Duty</button>
           </div>
           <label class="compact-control">
             <span>Session</span>
@@ -32,7 +32,7 @@
       </header>
 
       <section class="workspace">
-        <section class="chat-panel" aria-label="Assistant chat">
+        <section class="chat-panel" aria-label="Pyash conversation">
           <div id="messages" class="messages" aria-live="polite">
             <div class="empty-state">Ask a question, request a search, or bring a task into the queue.</div>
           </div>
@@ -81,26 +81,26 @@
             </form>
           </section>
 
-          <section class="side-section duty-section" aria-label="Coding tasks">
+          <section class="side-section duty-section" aria-label="Duty management">
             <div class="section-heading">
-              <h2>Coding task</h2>
-              <button id="refresh-duties" class="icon-button" type="button" title="Refresh coding tasks and workers" aria-label="Refresh coding tasks and workers">&#8635;</button>
+              <h2>Duties</h2>
+              <button id="refresh-duties" class="icon-button" type="button" title="Refresh duties and workers" aria-label="Refresh duties and workers">&#8635;</button>
             </div>
-            <label for="duty-select">Open task</label>
-            <select id="duty-select" aria-label="Open coding task"><option value="">No task selected</option></select>
+            <label for="duty-select">Duty sessions</label>
+            <select id="duty-select" aria-label="Duty sessions"><option value="">No duties yet</option></select>
             <div class="duty-create">
-              <label for="duty-worker">Host agent</label>
-              <select id="duty-worker" aria-label="Host agent"><option value="">No host agent online</option></select>
-              <label for="duty-repository">Project directory</label>
-              <select id="duty-repository" aria-label="Project directory"><option value="">Select an agent first</option></select>
-              <label for="duty-title">Task name</label>
+              <label for="duty-worker">Host worker</label>
+              <select id="duty-worker" aria-label="Host worker"><option value="">No host worker online</option></select>
+              <label for="duty-repository">Folder</label>
+              <select id="duty-repository" aria-label="Folder"><option value="">Start a worker to advertise folders</option></select>
+              <label for="duty-title">Duty name</label>
               <input id="duty-title" maxlength="160" placeholder="Short objective">
               <label for="duty-objective">First instruction</label>
               <textarea id="duty-objective" rows="4" maxlength="32000" placeholder="Describe the coding outcome"></textarea>
-              <button id="create-duty" class="secondary" type="button">Start coding task</button>
+              <button id="create-duty" class="secondary" type="button">Create duty</button>
             </div>
-            <button id="accept-duty" class="secondary" type="button" disabled>Accept completed work</button>
-            <p id="duty-state" class="muted" aria-live="polite">No host worker online · connect a configured Pyash worker.</p>
+            <button id="accept-duty" class="secondary" type="button" disabled>Accept duty</button>
+            <p id="duty-state" class="muted" aria-live="polite">No host worker is online. Start a configured Pyash duty worker; its folders will appear here.</p>
           </section>
 
           <section class="side-section tools-section">

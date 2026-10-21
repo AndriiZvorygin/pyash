@@ -228,11 +228,24 @@ test("web routes use injected runtime without starting a model", async () => {
     assert.equal(health.status, 200);
     assert.equal((await health.json()).ok, true);
 
+    const index = await fetch(base);
+    assert.equal(index.status, 200);
+    const indexSource = await index.text();
+    assert.match(indexSource, /id="duty-mode"[^>]*>Duty</u);
+    assert.match(indexSource, /aria-label="Duty sessions"/u);
+    assert.match(indexSource, /aria-label="Host worker"/u);
+    assert.match(indexSource, /aria-label="Folder"/u);
+
+    const style = await fetch(`${base}/style.css`);
+    assert.equal(style.status, 200);
+    assert.match(await style.text(), /workspace\[data-mode="duty"\].*side-panel/su);
+
     const app = await fetch(`${base}/app.js`);
     assert.equal(app.status, 200);
     const appSource = await app.text();
     assert.ok(appSource.includes('from "/model_recency.js"'));
     assert.ok(appSource.includes('from "/session_name.js"'));
+    assert.ok(appSource.includes('workspace.dataset.mode = conversationMode'));
     const modelRecency = await fetch(`${base}/model_recency.js`);
     assert.equal(modelRecency.status, 200);
     assert.match(modelRecency.headers.get("content-type"), /javascript/u);
