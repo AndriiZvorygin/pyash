@@ -1,4 +1,5 @@
 import { orderModelsByRecency, rememberRecentModel } from "/model_recency.js";
+import { displaySessionName, normalizeSessionName } from "/session_name.js";
 
 const messages = document.querySelector("#messages");
 const chatForm = document.querySelector("#chat-form");
@@ -28,6 +29,7 @@ let currentSession = localStorage.getItem("pyash-session") || "web";
 let currentDuty = localStorage.getItem("pyash-duty") || "";
 let conversationMode = localStorage.getItem("pyash-mode") === "duty" ? "duty" : "assistant";
 let modelCatalog = null;
+let sessionCatalog = [];
 let dutyCatalog = [];
 let dutyWorkers = [];
 let dutyPollGeneration = 0;
@@ -81,24 +83,24 @@ function updateChatReadiness() {
   if (conversationMode === "duty") {
     const duty = dutyCatalog.find((entry) => entry.id === currentDuty);
     if (!duty) {
-      chatState.textContent = "Select or create a duty";
+      chatState.textContent = "Select or create a coding task";
       sendButton.disabled = true;
       return;
     }
     if (["accepted", "failed"].includes(duty.status)) {
-      chatState.textContent = `Duty ${duty.status}`;
+      chatState.textContent = `Coding task ${duty.status}`;
       sendButton.disabled = true;
       return;
     }
     if (duty.status === "blocked") {
-      chatState.textContent = "Duty blocked · send an instruction to resume";
+      chatState.textContent = "Task paused · send a follow-up to resume";
       sendButton.disabled = false;
       return;
     }
     const queued = duty.messages?.some((entry) => entry.role === "user" && ["pending", "running"].includes(entry.state));
     chatState.textContent = duty.active
-      ? "Duty running · next instruction queues"
-      : queued ? "Instruction queued" : "Duty ready";
+      ? "Task running · follow-up queues"
+      : queued ? "Follow-up queued" : "Coding task ready";
     sendButton.disabled = false;
     return;
   }
@@ -127,12 +129,14 @@ function setConversationMode(mode) {
   dutyModeButton.setAttribute("aria-pressed", String(conversationMode === "duty"));
   sessionSelect.disabled = conversationMode === "duty";
   newSessionButton.disabled = conversationMode === "duty";
-  messageInput.placeholder = conversationMode === "duty" ? "Send an instruction to this duty..." : "Ask Pyash...";
+  messageInput.placeholder = conversationMode === "duty" ? "Send a follow-up to this coding task..." : "Ask Pyash...";
   updateChatReadiness();
 }
 
 function clearMessages() {
-  messages.innerHTML = '<div class="empty-state">Ask a question, request a search, or bring a task into the queue.</div>';
+  messages.innerHTML = conversationMode === "duty"
+    ? '<div class="empty-state">Choose a coding task or start one from the Coding panel.</div>'
+    : '<div class="empty-state">Ask a question, request a search, or bring a task into the queue.</div>';
 }
 
 function addMessage(kind, text, details = {}) {
@@ -241,16 +245,17 @@ async function loadModels({ force = false } = {}) {
 async function loadSessions() {
   try {
     const data = await requestJson("/api/sessions");
-    const sessions = (data.sessions || []).map((session) => ({
+    sessionCatalog = data.sessions || [];
+    const sessions = sessionCatalog.map((session) => ({
       value: session.id,
-      label: `${session.id} (${session.messageCount})`
+      label: `${displaySessionName(session.id)} · ${session.messageCount} messages`
     }));
     if (!sessions.some((session) => session.value === currentSession)) {
-      sessions.unshift({ value: currentSession, label: `${currentSession} (new)` });
+      sessions.unshift({ value: currentSession, label: `${displaySessionName(currentSession)} · new` });
     }
     setSelectOptions(sessionSelect, sessions, currentSession, (entry) => entry.label);
   } catch (error) {
-    setSelectOptions(sessionSelect, [{ value: currentSession, label: currentSession }], currentSession, (entry) => entry.label);
+    setSelectOptions(sessionSelect, [{ value: currentSession, label: displaySessionName(currentSession) }], currentSession, (entry) => entry.label);
   }
 }
 
@@ -299,15 +304,15 @@ async function loadDutyCatalog({ forceSelection = false } = {}) {
     }
     setSelectOptions(dutySelect, choices, currentDuty, (entry) => entry.label);
     if (!dutyCatalog.length) {
-      setSelectOptions(dutySelect, [{ value: "", label: "No duties yet" }], "", (entry) => entry.label);
+      setSelectOptions(dutySelect, [{ value: "", label: "No coding tasks yet" }], "", (entry) => entry.label);
     }
     dutyState.textContent = dutyWorkers.length
-      ? `${dutyWorkers.length} worker${dutyWorkers.length === 1 ? "" : "s"} online`
-      : "No coding workers online";
+      ? `${dutyWorkers.length} host worker${dutyWorkers.length === 1 ? "" : "s"} online`
+      : "No host worker online · connect a configured Pyash worker";
     if (forceSelection && currentDuty) await loadDuty(currentDuty);
     else updateChatReadiness();
   } catch (error) {
-    dutyState.textContent = `Duty service unavailable: ${error.message}`;
+    dutyState.textContent = `Coding service unavailable: ${error.message}`;
   }
 }
 
@@ -378,11 +383,11 @@ async function createDuty() {
   const title = dutyTitleInput.value.trim();
   const initialMessage = dutyObjectiveInput.value.trim();
   if (!workerId || !repositoryId || !title || !initialMessage) {
-    dutyState.textContent = "Choose a worker and directory, then enter a title and instruction.";
+    dutyState.textContent = "Choose an online agent and project directory, then enter a task name and instruction.";
     return;
   }
   createDutyButton.disabled = true;
-  dutyState.textContent = "Creating duty...";
+  dutyState.textContent = "Starting coding task...";
   try {
     const data = await requestJson("/api/duties", {
       method: "POST",
@@ -411,7 +416,7 @@ async function acceptDuty() {
   try {
     await requestJson(`/api/duties/${encodeURIComponent(currentDuty)}/accept`, { method: "POST" });
     await loadDutyCatalog({ forceSelection: true });
-    dutyState.textContent = "Duty accepted";
+    dutyState.textContent = "Completed work accepted";
   } catch (error) {
     dutyState.textContent = error.message;
     acceptDutyButton.disabled = false;
@@ -475,7 +480,19 @@ modelSelect.addEventListener("change", () => {
 });
 
 newSessionButton.addEventListener("click", async () => {
-  currentSession = `chat-${Date.now().toString(36)}`;
+  const enteredName = window.prompt("Name this session");
+  if (enteredName === null) return;
+  const sessionName = normalizeSessionName(enteredName);
+  if (!sessionName) {
+    chatState.textContent = "Enter a session name with at least one letter or number.";
+    return;
+  }
+  await loadSessions();
+  if (sessionCatalog.some((session) => session.id === sessionName)) {
+    chatState.textContent = `“${displaySessionName(sessionName)}” already exists; select it from Sessions.`;
+    return;
+  }
+  currentSession = sessionName;
   localStorage.setItem("pyash-session", currentSession);
   await loadSessions();
   sessionSelect.value = currentSession;
@@ -499,7 +516,7 @@ chatForm.addEventListener("submit", async (event) => {
   try {
     if (conversationMode === "duty") {
       await submitDutyMessage(message);
-      chatState.textContent = "Instruction queued";
+      chatState.textContent = "Follow-up sent to coding task";
       return;
     }
     const requestedModel = modelSelect.value;
