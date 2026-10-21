@@ -194,12 +194,12 @@ async function resumeDuty(dutyId) {
   const showDuty = async () => (await requestCodingDutyHub(hub, route)).duty;
   const duty = await showDuty();
   process.stdout.write(`Pyash duty: ${duty.title}\n`);
-  process.stdout.write(`Directory: ${duty.repositoryId} · Worker: ${duty.workerId} · ${duty.status}\n`);
+  process.stdout.write(`Directory: ${duty.repositoryId} · Access: ${duty.permissionScope || "project"} · Worker: ${duty.workerId} · ${duty.status}\n`);
   process.stdout.write("History:\n");
   for (const message of duty.messages || []) {
     process.stdout.write(`${message.role === "user" ? "you" : "pyash"}> ${message.text}\n`);
   }
-  process.stdout.write("Enter sends an instruction; /refresh reloads; /accept accepts an idle duty; /exit leaves it running.\n");
+  process.stdout.write("Enter sends an instruction; /permissions shows or changes access; /refresh reloads; /accept accepts an idle duty; /exit leaves it running.\n");
 
   const terminal = readline.createInterface({ input: process.stdin, output: process.stdout });
   const printedReplies = new Set((duty.messages || []).filter((message) => message.role === "assistant").map((message) => message.id));
@@ -229,7 +229,29 @@ async function resumeDuty(dutyId) {
       if (input === "/exit" || input === "/quit") break;
       if (input === "/refresh") {
         const latest = await showDuty();
-        process.stdout.write(`duty ${latest.status}${latest.active ? " · worker active" : ""}\n`);
+        process.stdout.write(`duty ${latest.status} · ${latest.permissionScope || "project"} access${latest.active ? " · worker active" : ""}\n`);
+        continue;
+      }
+      if (input === "/permissions") {
+        const latest = await showDuty();
+        process.stdout.write(`Filesystem access: ${latest.permissionScope || "project"}. Project scope is Pyash tool-root policy, not an OS jail. Commands run as the worker account.\n`);
+        process.stdout.write("Use /permissions project or /permissions home to change an idle duty. Home access may expose all files readable by the worker account.\n");
+        continue;
+      }
+      if (input === "/permissions project" || input === "/permissions home") {
+        const permissionScope = input.endsWith("home") ? "home" : "project";
+        if (permissionScope === "home") {
+          const confirmation = (await terminal.question("This permits access to the worker account's entire home directory. Type yes to confirm: ")).trim().toLowerCase();
+          if (confirmation !== "yes") {
+            process.stdout.write("Home access unchanged.\n");
+            continue;
+          }
+        }
+        const result = await requestCodingDutyHub(hub, `${route}/permissions`, {
+          method: "POST",
+          body: { permissionScope }
+        });
+        process.stdout.write(`Filesystem access set to ${result.duty.permissionScope}.\n`);
         continue;
       }
       if (input === "/accept") {

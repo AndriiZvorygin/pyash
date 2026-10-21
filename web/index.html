@@ -93,11 +93,25 @@
               <select id="duty-worker" aria-label="Host worker"><option value="">No host worker online</option></select>
               <label for="duty-repository">Folder</label>
               <select id="duty-repository" aria-label="Folder"><option value="">Start a worker to advertise folders</option></select>
+              <label for="duty-create-permission">Filesystem access</label>
+              <select id="duty-create-permission" aria-label="Filesystem access">
+                <option value="project">Selected project folder</option>
+                <option value="home" disabled>Full home directory</option>
+              </select>
+              <p class="muted">Project scope is Pyash tool-root policy, not an OS jail. Commands run as the worker account. Full home access can expose any files that account can read.</p>
               <label for="duty-title">Duty name</label>
               <input id="duty-title" maxlength="160" placeholder="Short objective">
               <label for="duty-objective">First instruction</label>
               <textarea id="duty-objective" rows="4" maxlength="32000" placeholder="Describe the coding outcome"></textarea>
               <button id="create-duty" class="secondary" type="button">Create duty</button>
+            </div>
+            <div class="duty-permissions">
+              <label for="duty-current-permission">Current duty access</label>
+              <select id="duty-current-permission" aria-label="Current duty access" disabled>
+                <option value="project">Selected project folder</option>
+                <option value="home" disabled>Full home directory</option>
+              </select>
+              <button id="update-duty-permission" class="secondary" type="button" disabled>Apply access</button>
             </div>
             <button id="accept-duty" class="secondary" type="button" disabled>Accept duty</button>
             <p id="duty-state" class="muted" aria-live="polite">No host worker is online. Start a configured Pyash duty worker; its folders will appear here.</p>

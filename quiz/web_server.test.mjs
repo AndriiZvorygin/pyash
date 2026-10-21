@@ -9,6 +9,7 @@ import { workTaskStatusPath } from "../program/runtime/work/status.mjs";
 import {
   buildChatSentence,
   createWebServer,
+  assertWebBindSecurity,
   fetchWebModels,
   filterPublicTools,
   renderAssistantMarkdown,
@@ -21,6 +22,13 @@ test("assistant markdown renders common structure without raw HTML", () => {
   assert.match(html, /<strong>Ready<\/strong>/);
   assert.match(html, /<code>safe<\/code>/);
   assert.doesNotMatch(html, /<script>/);
+});
+
+test("public web binds require reverse-proxy identity while loopback development stays local", () => {
+  assert.doesNotThrow(() => assertWebBindSecurity("127.0.0.1", ""));
+  assert.doesNotThrow(() => assertWebBindSecurity("::1", ""));
+  assert.doesNotThrow(() => assertWebBindSecurity("0.0.0.0", "proxy-secret"));
+  assert.throws(() => assertWebBindSecurity("0.0.0.0", ""), /PYA_WEB_PROXY_TOKEN is required/u);
 });
 
 test("web gateway exposes only read/search-oriented tools", () => {
@@ -235,6 +243,9 @@ test("web routes use injected runtime without starting a model", async () => {
     assert.match(indexSource, /aria-label="Duty sessions"/u);
     assert.match(indexSource, /aria-label="Host worker"/u);
     assert.match(indexSource, /aria-label="Folder"/u);
+    assert.match(indexSource, /id="duty-create-permission"/u);
+    assert.match(indexSource, /id="duty-current-permission"/u);
+    assert.match(indexSource, /not an OS jail/u);
 
     const style = await fetch(`${base}/style.css`);
     assert.equal(style.status, 200);
@@ -426,12 +437,15 @@ test("web chat fails closed when the Housekeeper has no matching model", async (
 
 test("coding duties persist on the hub and only assigned authenticated workers can claim them", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-web-duty-"));
-  const priorTokens = process.env.PYA_DUTY_WORKER_TOKENS;
-  process.env.PYA_DUTY_WORKER_TOKENS = "worker-a=worker-secret";
   const { server } = await createWebServer({
     root,
     assets: path.resolve(process.cwd(), "web"),
     runtime: { tools: [] },
+    proxyToken: "proxy-secret",
+    webUsers: "pyash=htaf;alice=alice",
+    workerTokens: "worker-a=worker-secret",
+    workerUsers: "worker-a=htaf",
+    workerHomeAccess: "worker-a",
     modelsFn: async () => ({
       available: true,
       modelOptions: [{
@@ -447,6 +461,7 @@ test("coding duties persist on the hub and only assigned authenticated workers c
   const address = server.address();
   const base = `http://127.0.0.1:${address.port}`;
   const workerHeaders = { authorization: "Bearer worker-secret", "content-type": "application/json" };
+  const userHeaders = { "x-pyash-user": "pyash", "x-pyash-proxy-token": "proxy-secret" };
   try {
     const unauthenticated = await fetch(`${base}/api/duty-workers/heartbeat`, {
       method: "POST",
@@ -467,11 +482,17 @@ test("coding duties persist on the hub and only assigned authenticated workers c
     assert.equal(heartbeat.status, 200);
     const worker = (await heartbeat.json()).worker;
     assert.equal(worker.repositories[0].id, "pyash");
+    assert.deepEqual(worker.permissionScopes, ["project", "home"]);
     assert.equal("root" in worker.repositories[0], false);
+
+    const forgedIdentity = await fetch(`${base}/api/duties`, {
+      headers: { "x-pyash-user": "pyash" }
+    });
+    assert.equal(forgedIdentity.status, 401);
 
     const createdResponse = await fetch(`${base}/api/duties`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { ...userHeaders, "content-type": "application/json" },
       body: JSON.stringify({
         workerId: "worker-a",
         repositoryId: "pyash",
@@ -483,6 +504,7 @@ test("coding duties persist on the hub and only assigned authenticated workers c
     assert.equal(createdResponse.status, 201);
     const created = (await createdResponse.json()).duty;
     assert.equal(created.status, "implementing");
+    assert.equal(created.permissionScope, "project");
     const id = created.id;
     await fs.access(await workTaskStatusPath(path.join(root, "world"), id, { readOnly: true }));
 
@@ -513,14 +535,86 @@ test("coding duties persist on the hub and only assigned authenticated workers c
     assert.equal(completed.messages.at(-1).parentId, assignment.message.id);
     assert.match(completed.messages.at(-1).html, /persisted on the hub/u);
 
-    const accepted = await fetch(`${base}/api/duties/${encodeURIComponent(id)}/accept`, { method: "POST" });
+    const ownDuties = await fetch(`${base}/api/duties`, { headers: userHeaders });
+    assert.equal((await ownDuties.json()).duties.length, 1);
+    const otherUserHeaders = { "x-pyash-user": "alice", "x-pyash-proxy-token": "proxy-secret" };
+    const otherDuties = await fetch(`${base}/api/duties`, { headers: otherUserHeaders });
+    assert.equal((await otherDuties.json()).duties.length, 0);
+    const otherWorkers = await fetch(`${base}/api/duty-workers`, { headers: otherUserHeaders });
+    assert.equal((await otherWorkers.json()).workers.length, 0);
+    const privateDuty = await fetch(`${base}/api/duties/${encodeURIComponent(id)}`, { headers: otherUserHeaders });
+    assert.equal(privateDuty.status, 404);
+    const privateMessage = await fetch(`${base}/api/duties/${encodeURIComponent(id)}/messages`, {
+      method: "POST",
+      headers: { ...otherUserHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ message: "unauthorized" })
+    });
+    assert.equal(privateMessage.status, 404);
+
+    const permission = await fetch(`${base}/api/duties/${encodeURIComponent(id)}/permissions`, {
+      method: "POST",
+      headers: { ...userHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ permissionScope: "home" })
+    });
+    assert.equal(permission.status, 200, JSON.stringify(await permission.clone().json()));
+    assert.equal((await permission.json()).duty.permissionScope, "home");
+
+    const accepted = await fetch(`${base}/api/duties/${encodeURIComponent(id)}/accept`, {
+      method: "POST",
+      headers: userHeaders
+    });
     assert.equal(accepted.status, 200);
     assert.equal((await accepted.json()).duty.status, "accepted");
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await fs.rm(root, { recursive: true, force: true });
-    if (priorTokens === undefined) delete process.env.PYA_DUTY_WORKER_TOKENS;
-    else process.env.PYA_DUTY_WORKER_TOKENS = priorTokens;
+    forget();
+  }
+});
+
+test("authenticated web users receive separate private chat histories and working roots", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-web-users-"));
+  let lastSentence = null;
+  const { server } = await createWebServer({
+    root,
+    assets: path.resolve(process.cwd(), "web"),
+    runtime: { tools: [] },
+    proxyToken: "proxy-secret",
+    webUsers: "pyash=htaf;alice=alice",
+    defaultWebUser: "htaf",
+    modelsFn: async () => ({ available: true, models: ["qwen3.5:9b"], modelOptions: [{
+      value: "qwen3.5:9b", backend: "ollama", model: "qwen3.5:9b", ready: true
+    }] }),
+    mindFn: async (sentence) => {
+      lastSentence = sentence;
+      return { ob: { text: "private response" } };
+    }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const headersFor = (user) => ({ "x-pyash-proxy-token": "proxy-secret", "x-pyash-user": user });
+  try {
+    const filename = path.join(root, "world", "house", "web-assistant", "session", "20261020-private.pya");
+    await fs.writeFile(filename, 'su name 20261020-private since date 2026-10-20 be series def\nsu name user ob text "htaf secret" ya\n', "utf8");
+    const untrusted = await fetch(`${base}/api/sessions`, { headers: { "x-pyash-user": "pyash" } });
+    assert.equal(untrusted.status, 401);
+
+    const ownerSessions = await fetch(`${base}/api/sessions`, { headers: headersFor("pyash") });
+    assert.equal((await ownerSessions.json()).sessions[0].id, "private");
+    const otherSessions = await fetch(`${base}/api/sessions`, { headers: headersFor("alice") });
+    assert.equal((await otherSessions.json()).sessions.length, 0);
+
+    const chat = await fetch(`${base}/api/chat`, {
+      method: "POST",
+      headers: { ...headersFor("alice"), "content-type": "application/json" },
+      body: JSON.stringify({ message: "hello", session: "alice-session", model: "qwen3.5:9b" })
+    });
+    assert.equal(chat.status, 200);
+    assert.equal(lastSentence.at.filename, path.join(root, "world", "house", "web-assistant", "users", "alice"));
+    await fs.access(path.join(lastSentence.at.filename, "workspace"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await fs.rm(root, { recursive: true, force: true });
     forget();
   }
 });

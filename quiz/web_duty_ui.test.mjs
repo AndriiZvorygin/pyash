@@ -7,6 +7,8 @@ import { JSDOM, VirtualConsole } from "jsdom";
 
 import { createWebServer } from "../command/pyash_web_server.mjs";
 import { forget } from "../program/remember/index.mjs";
+import { orderModelsByRecency, rememberRecentModel } from "../web/model_recency.js";
+import { displaySessionName, normalizeSessionName } from "../web/session_name.js";
 
 function waitFor(predicate, timeoutMs = 3000, describe = () => "") {
   const started = Date.now();
@@ -32,6 +34,9 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
     root,
     assets: path.resolve(process.cwd(), "web"),
     runtime: { tools: [] },
+    proxyToken: "ui-proxy-secret",
+    webUsers: "ui=ui-user",
+    workerUsers: "ui-worker=ui-user",
     modelsFn: async () => ({
       available: true,
       modelOptions: [{ value: "qwen3.5:9b", backend: "ollama", model: "qwen3.5:9b", host: "http://ollama.test", ready: true }]
@@ -40,6 +45,7 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
   });
   let dom;
   const errors = [];
+  const uiRequests = [];
   try {
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -52,22 +58,41 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
       })
     });
     assert.equal(heartbeat.status, 200);
+    const catalogResponse = await fetch(`${base}/api/duty-workers`, {
+      headers: { "x-pyash-user": "ui", "x-pyash-proxy-token": "ui-proxy-secret" }
+    });
+    assert.equal(catalogResponse.status, 200, JSON.stringify(await catalogResponse.clone().json()));
+    assert.equal((await catalogResponse.json()).workers[0].id, "ui-worker");
     const virtualConsole = new VirtualConsole();
     virtualConsole.on("jsdomError", (error) => errors.push(error.message));
+    const appSource = (await fs.readFile(path.join(process.cwd(), "web", "app.js"), "utf8"))
+      .replace(/^import \{[^}]+\} from "[^"]+";\n/gmu, "");
     dom = await JSDOM.fromURL(base, {
       resources: "usable",
       runScripts: "dangerously",
       pretendToBeVisual: true,
       virtualConsole,
       beforeParse(window) {
-        window.fetch = (url, options) => fetch(new URL(url, base), options);
+        window.orderModelsByRecency = orderModelsByRecency;
+        window.rememberRecentModel = rememberRecentModel;
+        window.displaySessionName = displaySessionName;
+        window.normalizeSessionName = normalizeSessionName;
+        window.fetch = async (url, options = {}) => {
+          const headers = new Headers(options.headers || {});
+          headers.set("x-pyash-user", "ui");
+          headers.set("x-pyash-proxy-token", "ui-proxy-secret");
+          const response = await fetch(new URL(url, base), { ...options, headers });
+          uiRequests.push({ path: new URL(url, base).pathname, status: response.status });
+          return response;
+        };
         window.localStorage.setItem("pyash-mode", "duty");
       }
     });
+    dom.window.eval(appSource);
     await waitFor(
       () => dom.window.document.querySelector("#duty-worker")?.value === "ui-worker",
       3000,
-      () => `${dom.window.document.querySelector("#duty-state")?.textContent}; ${dom.window.document.querySelector("#duty-worker")?.innerHTML}`
+      () => `${dom.window.document.querySelector("#duty-state")?.textContent}; ${dom.window.document.querySelector("#duty-worker")?.innerHTML}; ${JSON.stringify(uiRequests)}`
     );
     const document = dom.window.document;
     document.querySelector("#duty-title").value = "UI smoke duty";
@@ -82,11 +107,18 @@ test("Duty UI discovers workers, creates a durable duty, and renders its instruc
     assert.equal(document.querySelector("#accept-duty").disabled, true);
     document.querySelector("#message").value = "Keep the same checkout and session.";
     document.querySelector("#chat-form").dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
-    await waitFor(() => document.querySelector("#chat-state").textContent === "Instruction queued");
-    const duties = await fetch(`${base}/api/duties`).then((response) => response.json());
+    await waitFor(
+      () => uiRequests.some((entry) => entry.path.endsWith("/messages") && entry.status === 202),
+      3000,
+      () => `${document.querySelector("#chat-state").textContent}; ${JSON.stringify(uiRequests)}`
+    );
+    const duties = await fetch(`${base}/api/duties`, {
+      headers: { "x-pyash-user": "ui", "x-pyash-proxy-token": "ui-proxy-secret" }
+    }).then((response) => response.json());
     assert.equal(duties.duties.length, 1);
     assert.equal(duties.duties[0].title, "UI smoke duty");
     assert.equal(duties.duties[0].messages.filter((message) => message.role === "user").length, 2);
+    assert.ok(uiRequests.some((entry) => entry.path === "/api/duty-workers" && entry.status === 200));
     assert.deepEqual(errors, []);
   } finally {
     dom?.window.close();
