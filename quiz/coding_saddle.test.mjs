@@ -1,6 +1,11 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { forget, remember } from "../program/remember/index.mjs";
 import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
@@ -10,7 +15,7 @@ import {
   resolveSaddleModelOption,
   resolveSaddleModelSelection
 } from "../program/agent/coding_saddle.mjs";
-import { runSaddleTurn } from "../command/pyash_saddle.mjs";
+import { prepareSaddle, runSaddleTurn } from "../command/pyash_saddle.mjs";
 
 test("coding saddle submits Enter and keeps newline input separate", async () => {
   const submitted = [];
@@ -75,6 +80,29 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   assert.equal(observed.sentence.ob.text, "run the focused test");
   assert.equal(observed.sentence.fromstate.text, "ollama");
   assert.equal(observed.options.sessionUserContent, "run the focused test");
+});
+
+test("duty saddle keeps runtime root separate from its persistent world root", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-roots-"));
+  const cwd = path.join(root, "project");
+  const worldRoot = path.join(root, "state", "world");
+  const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  await fs.mkdir(cwd, { recursive: true });
+  try {
+    await prepareSaddle({
+      cwd,
+      runtimeRoot,
+      worldRoot,
+      model: "qwen3.5:9b",
+      backend: "ollama",
+      host: "http://localhost:11434"
+    });
+    assert.equal(remember("run root")?.ob?.filename, runtimeRoot);
+    assert.equal(remember("world root")?.ob?.filename, worldRoot);
+  } finally {
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("coding saddle status exposes provider and queue state", () => {
