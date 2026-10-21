@@ -16,13 +16,13 @@
         <div class="topbar-actions">
           <div class="segmented" role="group" aria-label="Conversation mode">
             <button id="assistant-mode" type="button" aria-pressed="true">Assistant</button>
-            <button id="duty-mode" type="button" aria-pressed="false">Duty</button>
+            <button id="duty-mode" type="button" aria-pressed="false">Coding</button>
           </div>
           <label class="compact-control">
             <span>Session</span>
             <select id="session-select" aria-label="Session"></select>
           </label>
-          <button id="new-session" class="icon-button" type="button" title="New session" aria-label="New session">+</button>
+          <button id="new-session" class="icon-button" type="button" title="New named session" aria-label="New named session">+</button>
           <label class="compact-control model-control">
             <span>Model</span>
             <select id="model-select" aria-label="Model"></select>
@@ -81,26 +81,26 @@
             </form>
           </section>
 
-          <section class="side-section duty-section" aria-label="Coding duties">
+          <section class="side-section duty-section" aria-label="Coding tasks">
             <div class="section-heading">
-              <h2>Duty</h2>
-              <button id="refresh-duties" class="icon-button" type="button" title="Refresh duties and workers" aria-label="Refresh duties and workers">&#8635;</button>
+              <h2>Coding task</h2>
+              <button id="refresh-duties" class="icon-button" type="button" title="Refresh coding tasks and workers" aria-label="Refresh coding tasks and workers">&#8635;</button>
             </div>
-            <label for="duty-select">Open duty</label>
-            <select id="duty-select" aria-label="Open duty"><option value="">No duty selected</option></select>
+            <label for="duty-select">Open task</label>
+            <select id="duty-select" aria-label="Open coding task"><option value="">No task selected</option></select>
             <div class="duty-create">
-              <label for="duty-worker">Worker</label>
-              <select id="duty-worker" aria-label="Worker"><option value="">No worker online</option></select>
-              <label for="duty-repository">Directory</label>
-              <select id="duty-repository" aria-label="Directory"><option value="">Select a worker first</option></select>
-              <label for="duty-title">Duty title</label>
+              <label for="duty-worker">Host agent</label>
+              <select id="duty-worker" aria-label="Host agent"><option value="">No host agent online</option></select>
+              <label for="duty-repository">Project directory</label>
+              <select id="duty-repository" aria-label="Project directory"><option value="">Select an agent first</option></select>
+              <label for="duty-title">Task name</label>
               <input id="duty-title" maxlength="160" placeholder="Short objective">
               <label for="duty-objective">First instruction</label>
               <textarea id="duty-objective" rows="4" maxlength="32000" placeholder="Describe the coding outcome"></textarea>
-              <button id="create-duty" class="secondary" type="button">Create duty</button>
+              <button id="create-duty" class="secondary" type="button">Start coding task</button>
             </div>
-            <button id="accept-duty" class="secondary" type="button" disabled>Accept duty</button>
-            <p id="duty-state" class="muted" aria-live="polite">Workers connect from their configured hosts.</p>
+            <button id="accept-duty" class="secondary" type="button" disabled>Accept completed work</button>
+            <p id="duty-state" class="muted" aria-live="polite">No host worker online · connect a configured Pyash worker.</p>
           </section>
 
           <section class="side-section tools-section">
