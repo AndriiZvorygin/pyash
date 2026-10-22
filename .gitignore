@@ -96,5 +96,6 @@ container/whisperx/service/__pycache__/
 container/whisperx/service/*.pyc
 container/speaker/cache/
 container/criterion-huggingface/cache/
+container/gpu-housekeeper/service/state/
 __pycache__/
 *.pyc
