@@ -54,6 +54,35 @@ to the algorithm. A claim of a serious QRNG advantage should be demonstrated
 with a controlled experiment rather than inferred from the physical origin of
 the bits.
 
+## Reported numerical differences
+
+The clearest matched QRNG-versus-PRNG percentages found in the reviewed
+literature were from a soft-computing study, not a pure evolutionary-programming
+benchmark. The study used 25 PRNG and 25 QRNG runs per comparison:
+
+| Task | PRNG | QRNG | Reported difference |
+| --- | ---: | ---: | ---: |
+| EEG classification mean | 63.84% | 66.45% | +2.61 percentage points, about +4.09% relative |
+| EEG best result | 65.35% | 68.17% | +2.82 points, about +4.32% relative |
+| CIFAR-10 best result | 74.43% | 75.35% | +0.92 points, about +1.24% relative |
+| Accent classification mean | 98.73% | 98.80% | +0.07 points |
+| Accent best result | 98.80% | 98.90% | +0.10 points |
+| MNIST final best | 98.64% | 98.64% | 0 points |
+
+These are classification-accuracy percentage points; the relative figures are
+calculated against the PRNG result. The same study reported QRNG losses in
+other models, including random-tree and random-forest comparisons. See [Bird,
+Ekárt, and Faria (2019)](https://pure.aston.ac.uk/ws/portalfiles/portal/35518871/Bird2019_Article_OnTheEffectsOfPseudorandomAndQ.pdf).
+
+For evolutionary algorithms specifically, the reviewed QRNG genetic-algorithm
+paper did not report a valid QRNG-versus-PRNG percentage: it compared a
+QRNG-based GA with tabu search instead. The computational-creativity study
+reported fewer statistical outliers when QRNG was used for 15% of random
+operations, but did not report a percentage improvement. See [A Genetic
+Algorithm with Quantum Random Number Generator](https://doi.org/10.3390/su13158381)
+and [The Effects of Quantum Randomness on a System Exhibiting Computational
+Creativity](https://arxiv.org/abs/2008.11545).
+
 ## Direct-QRNG policy for Pyash experiments
 
 If the workload policy rejects PRNG expansion, the implementation should use:
