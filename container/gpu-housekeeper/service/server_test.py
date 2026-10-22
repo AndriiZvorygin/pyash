@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import tempfile
 import threading
 import time
 import unittest
@@ -15,6 +16,9 @@ spec.loader.exec_module(server)
 
 class HousekeeperOllamaTests(unittest.TestCase):
   def setUp(self):
+    self.original_pya_dir = os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")
+    self.observation_dir = tempfile.TemporaryDirectory()
+    os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.observation_dir.name
     self.orig_parse_nvidia_smi = server.parse_nvidia_smi
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
@@ -34,6 +38,11 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.reset_strata_model_catalog_cache()
 
   def tearDown(self):
+    if self.original_pya_dir is None:
+      os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
+    self.observation_dir.cleanup()
     server.parse_nvidia_smi = self.orig_parse_nvidia_smi
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
@@ -304,7 +313,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       if payload.get("prompt") == "":
         self.assertEqual(payload.get("keep_alive"), 300)
         loaded["gpu"] = True
-        return {"response": ""}
+        return {"response": "", "load_duration": 12_500_000_000}
       self.assertTrue(loaded["gpu"], "real prompt must wait for verified GPU residency")
       return {"response": "answer"}
 
@@ -317,6 +326,12 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     self.assertEqual(result, {"response": "answer"})
     self.assertEqual([payload["prompt"] for payload in calls], ["", "teach this"])
+    observations = server.model_loading_observations()
+    self.assertEqual(len(observations), 1)
+    self.assertEqual(observations[0]["runtime name"], "ollama")
+    self.assertEqual(observations[0]["model name"], model)
+    self.assertEqual(observations[0]["loading seconds"], 12.5)
+    self.assertEqual(observations[0]["load source"], "ollama load_duration")
 
   def test_cold_cpu_model_is_restarted_without_sending_real_prompt(self):
     actions = []
@@ -1308,18 +1323,25 @@ class HousekeeperCapacityTests(unittest.TestCase):
 
     server.parse_runtime_status = fake_status
     server.request_strata_json = fake_request
-    result = server.execute_strata_job({
-      "runtimeName": "strata",
-      "profileName": "qwen3.8:27b",
-      "jobSpec": {
-        "kind": "strata-chat",
-        "payload": {"model": "qwen3.8:27b", "messages": [], "stream": False}
-      }
-    }, registry)
+    with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {"GPU_HOUSEKEEPER_PYA_DIR": observation_dir}):
+      result = server.execute_strata_job({
+        "runtimeName": "strata",
+        "profileName": "qwen3.8:27b",
+        "jobSpec": {
+          "kind": "strata-chat",
+          "payload": {"model": "qwen3.8:27b", "messages": [], "stream": False}
+        }
+      }, registry)
+      records = server.model_loading_observations()
 
     self.assertEqual(result["choices"][0]["message"]["content"], "queued strata reply")
     self.assertEqual([item[0] for item in calls], ["/v1/load", "/v1/chat/completions"])
     self.assertTrue(server._PROFILES["qwen3.8:27b"]["loaded"])
+    self.assertEqual(len(records), 1)
+    self.assertEqual(records[0]["runtime name"], "strata")
+    self.assertEqual(records[0]["model name"], "qwen3.8:27b")
+    self.assertEqual(records[0]["load source"], "strata /v1/load elapsed")
+    self.assertGreater(records[0]["loading seconds"], 0)
 
   def test_explicit_profile_discharge_dispatches_to_strata_hook(self):
     entry = {
@@ -1632,12 +1654,20 @@ class HousekeeperKatagoTests(unittest.TestCase):
 
 class HousekeeperHuggingFaceTests(unittest.TestCase):
   def setUp(self):
+    self.original_pya_dir = os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")
+    self.observation_dir = tempfile.TemporaryDirectory()
+    os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.observation_dir.name
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_request_huggingface_json = server.request_huggingface_json
     server._PROFILES.clear()
     server._JOBS.clear()
 
   def tearDown(self):
+    if self.original_pya_dir is None:
+      os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
+    self.observation_dir.cleanup()
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.request_huggingface_json = self.orig_request_huggingface_json
     server._PROFILES.clear()
@@ -1675,8 +1705,12 @@ class HousekeeperHuggingFaceTests(unittest.TestCase):
       calls.append((pathname, payload, timeout_sec))
       return {
         "text": "summary",
-        "timing": {"outputTokens": 4},
-        "metadata": {"device": "cuda"}
+        "timing": {"outputTokens": 4, "loadTimeMs": 2500},
+        "metadata": {"device": "cuda"},
+        "metadataRecord": {
+          "modelDigest": "revision-abc",
+          "loadedAt": "2026-10-22T12:00:00Z"
+        }
       }
 
     server.request_huggingface_json = fake_request
@@ -1694,6 +1728,21 @@ class HousekeeperHuggingFaceTests(unittest.TestCase):
     self.assertEqual(calls[0][1]["model"], "model-one")
     self.assertEqual(calls[0][2], 44)
     self.assertTrue(server._PROFILES["model-one"]["loaded"])
+    observations = server.model_loading_observations()
+    self.assertEqual(len(observations), 1)
+    self.assertEqual(observations[0]["loading seconds"], 2.5)
+    self.assertEqual(observations[0]["model digest"], "revision-abc")
+    self.assertEqual(observations[0]["observed timestamp"], "2026-10-22T12:00:00Z")
+    server._PROFILES.clear()
+    server.execute_huggingface_job({
+      "runtimeName": "huggingface",
+      "profileName": "model-one",
+      "jobSpec": {
+        "kind": "huggingface-generate",
+        "payload": {"model": "model-one", "input": "hello", "timeoutSec": 44}
+      }
+    }, {"huggingface": {"runtimeName": "huggingface", "containerName": "criterion-huggingface", "gpuExpected": True}})
+    self.assertEqual(len(server.model_loading_observations()), 1)
 
 
 class HousekeeperFederationTests(unittest.TestCase):
@@ -1811,6 +1860,108 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertTrue(candidate["available"])
     self.assertTrue(candidate["busy"])
     self.assertFalse(candidate["immediate"])
+
+  def test_peer_route_includes_its_model_load_estimate(self):
+    responses = iter([
+      {
+        "capabilities": {"ollamaGpuResidencyGuard": True},
+        "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+        "ollamaRunningModels": {"available": True, "models": []},
+        "ollamaModelCatalog": {"available": False, "models": []},
+        "profiles": [],
+        "modelLoadEstimates": [{
+          "runtimeName": "ollama", "modelName": "qwen", "sampleCount": 3,
+          "medianLoadSeconds": 18.5, "lastObservedAt": "2026-10-22T10:00:00Z"
+        }],
+        "executionSlots": [],
+        "devices": [{"deviceId": "gpu0"}],
+        "queueDepth": 0,
+      },
+      {"feasible": True, "decision": "fits"},
+    ])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "swac", "http://swac:8090",
+      {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {
+        "kind": "ollama-chat", "payload": {"model": "qwen", "messages": []}
+      }}
+    )
+
+    self.assertEqual(candidate["estimatedLoadSeconds"], 18.5)
+    self.assertEqual(candidate["loadEstimateSamples"], 3)
+
+  def test_route_prefers_shorter_measured_load_when_candidates_are_otherwise_equal(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True,
+      "score": 30, "warm": False, "estimatedLoadSeconds": 42.0
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True,
+      "score": 30, "warm": False, "estimatedLoadSeconds": 11.0
+    }
+
+    route = server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
+    )
+
+    self.assertTrue(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "swac")
+
+  def test_pya_load_observations_are_durable_and_estimate_median(self):
+    with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {"GPU_HOUSEKEEPER_PYA_DIR": observation_dir}):
+      server.record_model_loading(
+        host_id="mriczo", runtime_name="strata", model_name="swift-qwen3.8:27b",
+        loading_seconds=42, load_source="strata /v1/load elapsed", observed_at="2026-10-20T00:00:00Z"
+      )
+      server.record_model_loading(
+        host_id="mriczo", runtime_name="strata", model_name="swift-qwen3.8:27b",
+        loading_seconds=18, load_source="strata /v1/load elapsed", observed_at="2026-10-21T00:00:00Z"
+      )
+      server.record_model_loading(
+        host_id="mriczo", runtime_name="strata", model_name="swift-qwen3.8:27b",
+        loading_seconds=30, load_source="strata /v1/load elapsed", observed_at="2026-10-22T00:00:00Z"
+      )
+      self.assertIsNone(server.record_model_loading(
+        host_id="mriczo", runtime_name="strata", model_name="", loading_seconds=8,
+        load_source="invalid"
+      ))
+      records = server.model_loading_observations()
+      estimate = server.model_loading_estimate("strata", "swift-qwen3.8:27b")
+      files = list(pathlib.Path(observation_dir).glob("loading-*.pya"))
+      artifact_text = files[0].read_text(encoding="utf-8")
+
+    self.assertEqual(len(records), 3)
+    self.assertEqual(len(files), 3)
+    self.assertEqual(estimate["sampleCount"], 3)
+    self.assertEqual(estimate["medianLoadSeconds"], 30)
+    self.assertEqual(records[0]["loading state"], "cold")
+    self.assertEqual(records[0]["schema version"], 1)
+    self.assertTrue(records[0]["observed timestamp"].startswith("2026-10-"))
+    self.assertIn("be json map def", artifact_text)
+
+  def test_live_strata_status_restores_only_the_latest_persisted_resident_profile(self):
+    profiles = [
+      {"profileName": "qwen-old", "runtimeName": "strata", "loaded": True, "gpuResident": True},
+      {"profileName": "qwen-new", "runtimeName": "strata", "loaded": False, "gpuResident": False},
+    ]
+    observations = [
+      {"runtime name": "strata", "model name": "qwen-new"},
+      {"runtime name": "strata", "model name": "qwen-old"},
+    ]
+
+    live = server.project_strata_profile_residency(
+      profiles, [{"runtimeName": "strata", "loaded": True}], observations
+    )
+    unloaded = server.project_strata_profile_residency(
+      live, [{"runtimeName": "strata", "loaded": False}], observations
+    )
+
+    self.assertFalse(next(item for item in live if item["profileName"] == "qwen-old")["loaded"])
+    self.assertTrue(next(item for item in live if item["profileName"] == "qwen-new")["loaded"])
+    self.assertTrue(all(item["loaded"] is False for item in unloaded))
 
   def test_ollama_peer_without_residency_guard_is_rejected(self):
     server.peer_request_json = lambda *_args, **_kwargs: {

@@ -375,6 +375,38 @@ The key scheduling goal is not even load distribution. The key scheduling goal i
 
 Prefer the host/GPU where the requested runtime and profile are already warm. Avoid unloading useful warm services just to chase short-term utilization.
 
+Cold model loads produce immutable Pyash `gpu runtime loading observation`
+`.pya` records in the Housekeeper's persistent data directory. Ollama's
+reported `load_duration`, Strata's managed `/v1/load` elapsed time, and the
+existing Hugging Face `loadTimeMs` are recorded with host, runtime, model,
+optional digest, timestamp, and measurement source. `/snapshot` exposes a
+rolling median per host/runtime/model. When otherwise-equivalent immediate
+routes have comparable timing observations, the entry Housekeeper prefers the
+shorter measured load; missing timing remains unknown and never blocks a route.
+For Strata, a live loaded status is paired with the latest durable load
+observation to restore the resident model profile after a Housekeeper restart;
+timing evidence alone never claims that a model is currently loaded.
+Compose persists these records under `container/gpu-housekeeper/service/state`
+by default; deployments may set `GPU_HOUSEKEEPER_DATA_DIR` to another durable
+host directory.
+
+The record is a small schema-versioned Pyash map, for example:
+
+```pya
+su name gpu runtime loading observation be json map def
+su name schema version ob num 1 ya
+su name observation id ob text "..." ya
+su name host id ob text "mriczo" ya
+su name runtime name ob text "strata" ya
+su name model name ob text "swift-qwen3.8:27b" ya
+su name model digest ob text "..." ya
+su name loading state ob text "cold" ya
+su name loading seconds ob num 42.7 ya
+su name load source ob text "strata /v1/load elapsed" ya
+su name observed timestamp ob text "2026-10-22T12:00:00Z" ya
+prah
+```
+
 ### 6.1 Forwarding Rule
 
 Forwarding should be at most one hop in v1.
