@@ -57,6 +57,9 @@ function buildYtDlpArgs({ url, outputPath, intent, extraArgs = [], multi = false
   if (extraArgs.length) {
     args.push(...extraArgs);
   }
+  // Third-party yt-dlp plugins can start visible browsers (for example, PO-token
+  // providers). Pyash downloads must remain headless even when callers add args.
+  args.push("--no-plugin-dirs");
   args.push(url);
   return args;
 }
