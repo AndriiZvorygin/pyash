@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 
 
 MODEL_DEFAULTS = {
@@ -154,6 +155,7 @@ def load_state(request):
             "tokenizerRevision": getattr(tokenizer, "_commit_hash", None) or effective_revision,
             "requestedRevision": revision,
             "modelDigest": effective_revision,
+            "loadedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "tokenizerName": getattr(tokenizer, "name_or_path", model_id),
             "parameterCount": parameters,
             "dtype": str(next(model.parameters()).dtype),

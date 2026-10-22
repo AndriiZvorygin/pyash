@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import math
 import os
 import re
 import subprocess
 import threading
 import time
 import uuid
+from pathlib import Path
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional
@@ -90,6 +92,8 @@ DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
 DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
+DEFAULT_PYA_LOADING_DIR = "/var/lib/pyash/gpu-housekeeper"
+MODEL_LOADING_OBSERVATION_ROOT = "gpu runtime loading observation"
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -149,6 +153,176 @@ def normalize_text(value: Any) -> str:
   if value is None:
     return ""
   return str(value).strip()
+
+
+def pya_loading_dir() -> Path:
+  return Path(normalize_text(os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")) or DEFAULT_PYA_LOADING_DIR)
+
+
+def read_loading_observation(path: Path) -> Optional[Dict[str, Any]]:
+  fields: Dict[str, Any] = {}
+  try:
+    lines = path.read_text(encoding="utf-8").splitlines()
+  except OSError:
+    return None
+  if not lines or lines[0].strip() != f"su name {MODEL_LOADING_OBSERVATION_ROOT} be json map def":
+    return None
+  for line in lines[1:]:
+    if line.strip() == "prah":
+      break
+    match = re.fullmatch(r'su name (.+?) ob (text|num|bool) (.+) ya', line.strip())
+    if not match:
+      continue
+    key, kind, raw = match.groups()
+    try:
+      value = json.loads(raw) if kind == "text" else (float(raw) if kind == "num" else raw == "truth")
+    except (TypeError, ValueError, json.JSONDecodeError):
+      return None
+    fields[key] = value
+  if fields.get("schema version") != 1 or not fields.get("model name") or not fields.get("runtime name"):
+    return None
+  try:
+    seconds = float(fields.get("loading seconds"))
+  except (TypeError, ValueError):
+    return None
+  if not math.isfinite(seconds) or seconds <= 0 or fields.get("loading state") != "cold":
+    return None
+  return fields
+
+
+def model_loading_observations(limit: int = 500) -> List[Dict[str, Any]]:
+  root = pya_loading_dir()
+  try:
+    paths = sorted(root.glob("loading-*.pya"), key=lambda item: item.name, reverse=True)[:max(1, int(limit))]
+  except OSError:
+    return []
+  return [record for path in paths if (record := read_loading_observation(path))]
+
+
+def record_model_loading(
+  *,
+  host_id: str,
+  runtime_name: str,
+  model_name: str,
+  loading_seconds: Any,
+  load_source: str,
+  model_digest: str = "",
+  load_identity: str = "",
+  observed_at: str = ""
+) -> Optional[Dict[str, Any]]:
+  try:
+    seconds = float(loading_seconds)
+  except (TypeError, ValueError):
+    return None
+  if not math.isfinite(seconds) or seconds <= 0 or not normalize_text(model_name):
+    return None
+  runtime = normalize_text(runtime_name).lower()
+  model = normalize_text(model_name)
+  digest = normalize_text(model_digest)
+  identity = normalize_text(load_identity)
+  if identity and any(
+    normalize_text(item.get("runtime name")).lower() == runtime
+    and normalize_text(item.get("model name")) == model
+    and normalize_text(item.get("load identity")) == identity
+    for item in model_loading_observations()
+  ):
+    return None
+  record = {
+    "schema version": 1,
+    "observation id": str(uuid.uuid4()),
+    "host id": normalize_text(host_id),
+    "runtime name": runtime,
+    "model name": model,
+    "model digest": digest,
+    "load identity": identity,
+    "loading state": "cold",
+    "loading seconds": seconds,
+    "load source": normalize_text(load_source),
+    "observed timestamp": normalize_text(observed_at) or utc_now_iso()
+  }
+  lines = [f"su name {MODEL_LOADING_OBSERVATION_ROOT} be json map def"]
+  for key, value in record.items():
+    if isinstance(value, bool):
+      encoded = "truth" if value else "false"
+      kind = "bool"
+    elif isinstance(value, (int, float)):
+      encoded = repr(value)
+      kind = "num"
+    else:
+      encoded = json.dumps(str(value), ensure_ascii=False)
+      kind = "text"
+    lines.append(f"su name {key} ob {kind} {encoded} ya")
+  lines.extend(["prah", ""])
+  root = pya_loading_dir()
+  root.mkdir(parents=True, exist_ok=True)
+  stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+  path = root / f"loading-{stamp}-{record['observation id']}.pya"
+  with path.open("x", encoding="utf-8") as stream:
+    stream.write("\n".join(lines))
+    stream.flush()
+    os.fsync(stream.fileno())
+  return record
+
+
+def model_loading_estimates(observations: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+  grouped: Dict[tuple, List[Dict[str, Any]]] = {}
+  for record in observations if isinstance(observations, list) else model_loading_observations():
+    key = (normalize_text(record.get("runtime name")).lower(), normalize_text(record.get("model name")))
+    grouped.setdefault(key, []).append(record)
+  estimates = []
+  for (runtime_name, model_name), records in grouped.items():
+    samples = sorted(float(record["loading seconds"]) for record in records[:20])
+    middle = len(samples) // 2
+    median = samples[middle] if len(samples) % 2 else (samples[middle - 1] + samples[middle]) / 2
+    estimates.append({
+      "runtimeName": runtime_name,
+      "modelName": model_name,
+      "sampleCount": len(samples),
+      "medianLoadSeconds": median,
+      "lastObservedAt": max(normalize_text(record.get("observed timestamp")) for record in records)
+    })
+  return sorted(estimates, key=lambda item: (item["runtimeName"], item["modelName"]))
+
+
+def model_loading_estimate(runtime_name: str, model_name: str, estimates: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+  runtime = normalize_text(runtime_name).lower()
+  model = normalize_text(model_name)
+  source = estimates if isinstance(estimates, list) else model_loading_estimates()
+  return next((item for item in source if normalize_text(item.get("runtimeName")).lower() == runtime and normalize_text(item.get("modelName")) == model), None)
+
+
+def project_strata_profile_residency(
+  profiles: List[Dict[str, Any]],
+  runtime_statuses: List[Dict[str, Any]],
+  observations: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+  projected = [dict(item) for item in profiles]
+  status = next((item for item in runtime_statuses if normalize_text(item.get("runtimeName")).lower() == "strata"), None)
+  if not isinstance(status, dict) or not isinstance(status.get("loaded"), bool):
+    return projected
+  strata_profiles = [item for item in projected if normalize_text(item.get("runtimeName")).lower() == "strata"]
+  if status["loaded"] is False:
+    for item in strata_profiles:
+      item["loaded"] = False
+      item["gpuResident"] = False
+    return projected
+  latest = next((item for item in observations if normalize_text(item.get("runtime name")).lower() == "strata"), None)
+  if not latest:
+    return projected
+  model_name = normalize_text(latest.get("model name"))
+  match = next((item for item in strata_profiles if normalize_text(item.get("profileName")) == model_name), None)
+  for item in strata_profiles:
+    item["loaded"] = normalize_text(item.get("profileName")) == model_name
+    item["gpuResident"] = item["loaded"]
+  if not match and model_name:
+    projected.append({
+      "profileName": model_name,
+      "runtimeName": "strata",
+      "loaded": True,
+      "gpuResident": True,
+      "gpuResidencyReason": "live Strata status matched the latest durable load observation"
+    })
+  return projected
 
 
 def json_response(handler: BaseHTTPRequestHandler, code: int, payload: Dict[str, Any]) -> None:
@@ -412,6 +586,7 @@ def profile_list() -> List[Dict[str, Any]]:
     return [
       {
         "profileName": name,
+        "runtimeName": normalize_text(_PROFILES.get(name, {}).get("runtimeName")),
         "loaded": bool(_PROFILES.get(name, {}).get("loaded", False)),
         "gpuResident": bool(_PROFILES.get(name, {}).get("gpuResident", False)),
         "gpuResidencyReason": normalize_text(_PROFILES.get(name, {}).get("gpuResidencyReason"))
@@ -569,17 +744,22 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
   devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
   if not isinstance(devices, list):
     devices = []
-  model_name = ollama_model_for_job(job) if runtime_name == "ollama" else ""
+  ollama_model = ollama_model_for_job(job) if runtime_name == "ollama" else ""
+  model_name = ollama_model
+  if not model_name:
+    job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+    payload = job_spec.get("payload") if isinstance(job_spec.get("payload"), dict) else job_spec
+    model_name = normalize_text(payload.get("model")) or normalize_text(job.get("profileName"))
   running_models = ollama_running_model_status() if runtime_name == "ollama" else {"available": True, "models": []}
   if runtime_name == "ollama" and running_models.get("available"):
     sync_ollama_profiles(running_models.get("models", []))
-  target_residency = ollama_model_residency(model_name, running_models.get("models", [])) if model_name else None
+  target_residency = ollama_model_residency(ollama_model, running_models.get("models", [])) if ollama_model else None
   model_cpu_resident = bool(target_residency and target_residency.get("loaded") and not target_residency.get("gpuResident"))
-  model_catalog = ollama_model_catalog() if model_name else {}
+  model_catalog = ollama_model_catalog() if ollama_model else {}
   model_missing = bool(
-    model_name
+    ollama_model
     and model_catalog.get("available")
-    and not ollama_model_entry(model_name, model_catalog)
+    and not ollama_model_entry(ollama_model, model_catalog)
   )
   candidates = []
   for device_id in device_candidates_for_job(job, devices):
@@ -605,6 +785,18 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
     with _LOCK:
       profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
       warm = bool(profile.get("loaded", False))
+    if runtime_name == "strata":
+      runtime_status = parse_runtime_status(runtime_registry[runtime_name])
+      observations = model_loading_observations()
+      projected = project_strata_profile_residency(
+        profile_list(), [runtime_status], observations
+      )
+      warm = any(
+        normalize_text(item.get("profileName")) == normalize_text(job.get("profileName"))
+        and item.get("loaded") is True
+        for item in projected
+      )
+    load_estimate = model_loading_estimate(runtime_name, model_name)
     busy = local_execution_slot_busy(candidate_job, runtime_registry)
     score = 0
     if warm:
@@ -623,6 +815,9 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "busy": busy,
       "queueDepth": queue_depth(),
       "warm": warm,
+      "modelName": model_name,
+      "estimatedLoadSeconds": 0 if warm else (load_estimate.get("medianLoadSeconds") if load_estimate else None),
+      "loadEstimateSamples": load_estimate.get("sampleCount", 0) if load_estimate else 0,
       "score": score,
       "capacity": capacity,
       "reason": (
@@ -750,6 +945,10 @@ def peer_route_candidate(
   profiles = snapshot.get("profiles") if isinstance(snapshot.get("profiles"), list) else []
   target_profile = normalize_text(job.get("profileName"))
   warm = any(normalize_text(item.get("profileName")) == target_profile and item.get("loaded") is True for item in profiles)
+  payload = job_spec.get("payload") if isinstance(job_spec.get("payload"), dict) else job_spec
+  model_name = normalize_text(payload.get("model")) or target_profile
+  peer_estimates = snapshot.get("modelLoadEstimates") if isinstance(snapshot.get("modelLoadEstimates"), list) else []
+  load_estimate = model_loading_estimate(runtime_name, model_name, peer_estimates)
   target_safe = bool(runtime.get("concurrencySafe", False))
   execution_slots_view = snapshot.get("executionSlots")
   devices = snapshot.get("devices") if isinstance(snapshot.get("devices"), list) else []
@@ -802,6 +1001,9 @@ def peer_route_candidate(
       "busy": busy,
       "queueDepth": int(snapshot.get("queueDepth") or 0),
       "warm": warm,
+      "modelName": model_name,
+      "estimatedLoadSeconds": 0 if warm else (load_estimate.get("medianLoadSeconds") if load_estimate else None),
+      "loadEstimateSamples": load_estimate.get("sampleCount", 0) if load_estimate else 0,
       "score": score,
       "preview": preview,
       "reason": "peer execution slot occupied" if busy else "peer candidate"
@@ -839,7 +1041,15 @@ def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry:
 
   immediate = [item for item in candidates if item.get("available") and item.get("immediate")]
   if immediate:
-    selected = max(immediate, key=lambda item: (int(item.get("score") or 0), item.get("hostId") == host_id))
+    load_comparable = len(immediate) > 1 and all(
+      item.get("warm") is True or isinstance(item.get("estimatedLoadSeconds"), (int, float))
+      for item in immediate
+    )
+    selected = max(immediate, key=lambda item: (
+      int(item.get("score") or 0),
+      -float(item.get("estimatedLoadSeconds") or 0) if load_comparable else 0,
+      item.get("hostId") == host_id
+    ))
     return {"selected": selected, "candidates": candidates, "forwarded": selected.get("hostId") != host_id}
   if local.get("available"):
     return {"selected": local, "candidates": candidates, "forwarded": False, "reason": "no peer has an immediate free slot"}
@@ -856,6 +1066,9 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
   ollama_residency = ollama_running_model_status()
   if ollama_residency.get("available"):
     sync_ollama_profiles(ollama_residency.get("models", []))
+  runtime_statuses = list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else []
+  loading_observations = model_loading_observations()
+  profiles = project_strata_profile_residency(profile_list(), runtime_statuses, loading_observations)
   return {
     "hostId": host_id,
     "capabilities": {
@@ -864,10 +1077,11 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     },
     "queueDepth": queue_depth(),
     "devices": telemetry["devices"],
-    "profiles": profile_list(),
+    "profiles": profiles,
+    "modelLoadEstimates": model_loading_estimates(loading_observations),
     "ollamaRunningModels": ollama_residency,
     "ollamaModelCatalog": ollama_model_catalog(),
-    "runtimes": list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else [],
+    "runtimes": runtime_statuses,
     "gpuProcesses": process_view,
     "executionSlotBusy": local_execution_slot_busy(),
     "executionSlots": execution_slots(Handler.runtime_registry) if "Handler" in globals() else execution_slots(),
@@ -2759,7 +2973,7 @@ def discharge_warm_ollama_models(target_model: str, warm_models: Optional[List[s
       continue
 
 
-def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
+def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
   """Load a cold model with an empty prompt, then verify placement before real inference."""
   model = normalize_text(model_name)
   grace = ollama_gpu_startup_grace_seconds()
@@ -2769,7 +2983,7 @@ def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str
 
   residency = ollama_model_residency(model, status.get("models", []))
   if residency and residency.get("gpuResident"):
-    return
+    return None
   if residency:
     reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
     restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, model, reason)
@@ -2778,6 +2992,7 @@ def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str
 
   # Ollama loads on the first generate call. Keep the real prompt out of that
   # cold-load window, where /api/ps can briefly report zero GPU VRAM.
+  load_started = time.monotonic()
   try:
     load_result = request_ollama_json("/api/generate", {
       "model": model,
@@ -2789,6 +3004,16 @@ def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str
     raise RuntimeError(f"Ollama GPU model load failed for {model}: {normalize_text(err)}")
   if normalize_text(load_result.get("error")):
     raise RuntimeError(f"Ollama GPU model load failed for {model}: {normalize_text(load_result.get('error'))}")
+  reported_ns = load_result.get("load_duration")
+  try:
+    reported_seconds = float(reported_ns) / 1_000_000_000
+  except (TypeError, ValueError):
+    reported_seconds = 0
+  observed_seconds = max(0, time.monotonic() - load_started)
+  load_sample = {
+    "loadingSeconds": reported_seconds if math.isfinite(reported_seconds) and reported_seconds > 0 else observed_seconds,
+    "loadSource": "ollama load_duration" if reported_seconds > 0 else "ollama cold-load request elapsed"
+  }
 
   deadline = time.monotonic() + grace
   while True:
@@ -2797,7 +3022,7 @@ def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str
       residency = ollama_model_residency(model, status.get("models", []))
       if residency and residency.get("gpuResident"):
         sync_ollama_profiles(status.get("models", []))
-        return
+        return load_sample
       if residency:
         reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
         restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, model, reason)
@@ -3015,8 +3240,9 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
     raise RuntimeError(f"Ollama GPU guard refused CPU/partial-offload model before inference ({restart_state}): {reason}")
   warm_models = [item["name"] for item in running_models if item.get("gpuResident")]
   discharge_warm_ollama_models(target_model, warm_models)
+  loading_sample = None
   if gpu_expected and not (target_residency and target_residency.get("gpuResident")):
-    ensure_ollama_model_gpu_resident(target_model, runtime_registry)
+    loading_sample = ensure_ollama_model_gpu_resident(target_model, runtime_registry)
 
   endpoint = "/api/chat" if kind == "ollama-chat" else "/api/generate"
   timeout_sec = int(os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900"))
@@ -3046,6 +3272,19 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
       "gpuResident": loaded if gpu_expected else False,
       "gpuResidencyReason": "model residency verified" if loaded else "model not currently GPU resident"
     }
+  if loading_sample:
+    try:
+      metadata = ollama_model_entry(target_model, ollama_model_catalog()) or {}
+      record_model_loading(
+        host_id=normalize_text(Handler.host_id) if "Handler" in globals() else "",
+        runtime_name=runtime_name,
+        model_name=target_model,
+        model_digest=normalize_text(metadata.get("digest")),
+        loading_seconds=loading_sample.get("loadingSeconds"),
+        load_source=loading_sample.get("loadSource", "ollama")
+      )
+    except Exception as err:
+      print(f"gpu housekeeper could not persist Ollama load observation: {normalize_text(err)}", flush=True)
   return result
 
 
@@ -3060,8 +3299,11 @@ def execute_strata_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   status = parse_runtime_status(runtime_registry.get("strata") or {})
   if runtime_is_stopped(status) or status.get("status") == "unknown":
     raise RuntimeError(status.get("message") or "Strata runtime is unavailable")
+  loading_seconds = None
   if status.get("loaded") is not True:
+    load_started = time.monotonic()
     request_strata_json("/v1/load", {}, timeout_sec=int(os.environ.get("STRATA_LOAD_TIMEOUT_SEC", "600")))
+    loading_seconds = max(0, time.monotonic() - load_started)
     status = parse_runtime_status(runtime_registry.get("strata") or {})
     if status.get("loaded") is not True:
       raise RuntimeError(status.get("message") or "Strata model did not become ready after load")
@@ -3078,6 +3320,18 @@ def execute_strata_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
         "runtimeName": "strata",
         "loaded": True
       }
+  if loading_seconds is not None:
+    payload_model = normalize_text(payload.get("model")) or profile_name
+    try:
+      record_model_loading(
+        host_id=normalize_text(Handler.host_id) if "Handler" in globals() else "",
+        runtime_name="strata",
+        model_name=payload_model,
+        loading_seconds=loading_seconds,
+        load_source="strata /v1/load elapsed"
+      )
+    except Exception as err:
+      print(f"gpu housekeeper could not persist Strata load observation: {normalize_text(err)}", flush=True)
   return result
 
 
@@ -3097,6 +3351,8 @@ def execute_huggingface_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
   payload.pop("resourceRequest", None)
   payload.pop("resource_request", None)
 
+  with _LOCK:
+    was_loaded = bool(_PROFILES.get(profile_name, {}).get("loaded", False))
   ensure_runtime_ready(runtime_registry, runtime_name)
   result = request_huggingface_json(
     "/generate",
@@ -3111,6 +3367,27 @@ def execute_huggingface_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
       "runtimeName": runtime_name,
       "loaded": True
     }
+  if not was_loaded:
+    try:
+      timing = result.get("timing") if isinstance(result.get("timing"), dict) else {}
+      metadata = result.get("metadataRecord") if isinstance(result.get("metadataRecord"), dict) else {}
+      load_ms = float(timing.get("loadTimeMs"))
+      if math.isfinite(load_ms) and load_ms > 0:
+        loaded_at = normalize_text(metadata.get("loadedAt"))
+        record_model_loading(
+          host_id=normalize_text(Handler.host_id) if "Handler" in globals() else "",
+          runtime_name=runtime_name,
+          model_name=normalize_text(payload.get("model")) or profile_name,
+          model_digest=normalize_text(metadata.get("modelDigest")),
+          load_identity=loaded_at,
+          observed_at=loaded_at,
+          loading_seconds=load_ms / 1000,
+          load_source="criterion-huggingface loadTimeMs"
+        )
+    except (TypeError, ValueError):
+      pass
+    except Exception as err:
+      print(f"gpu housekeeper could not persist Hugging Face load observation: {normalize_text(err)}", flush=True)
   return result
 
 
