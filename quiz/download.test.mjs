@@ -13,20 +13,22 @@ import { buildYtDlpArgs } from "../program/verbs/download/runners.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-test("yt-dlp defaults to quiet headless output and allows explicit progress overrides", () => {
+test("yt-dlp stays headless by disabling plugins while allowing progress overrides", () => {
   const defaults = buildYtDlpArgs({
     url: "https://example.com/video",
     outputPath: "video.mp4",
     intent: "video"
   });
   assert.deepEqual(defaults.slice(0, 2), ["--quiet", "--no-progress"]);
+  assert.ok(defaults.includes("--no-plugin-dirs"));
   assert.deepEqual(defaults.slice(-1), ["https://example.com/video"]);
 
   const optedIn = buildYtDlpArgs({
     url: "https://example.com/video",
-    extraArgs: ["--no-quiet", "--progress"]
+    extraArgs: ["--no-quiet", "--progress", "--plugin-dirs", "default"]
   });
-  assert.deepEqual(optedIn.slice(-3), ["--no-quiet", "--progress", "https://example.com/video"]);
+  assert.deepEqual(optedIn.slice(-4), ["--plugin-dirs", "default", "--no-plugin-dirs", "https://example.com/video"]);
+  assert.ok(optedIn.indexOf("--plugin-dirs") < optedIn.lastIndexOf("--no-plugin-dirs"));
 });
 
 test("download infers fromstate from URL and writes mock output", async () => {
