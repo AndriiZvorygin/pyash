@@ -8,6 +8,7 @@ import {
   ENGLISH30K_DEFAULT_PATH,
   buildEnglish30kCompoundCoverage,
   buildEnglish30kCoverage,
+  loadDefaultEnglish30kCoverage,
   loadEnglish30k,
   lookupEnglish30kCoverage,
   parseEnglish30kText,
@@ -20,6 +21,10 @@ import {
   loadEnglishLemmaCatalog,
   parseEnglishLemmaCatalog
 } from "../program/verbs/exchange/translation/english_lemmas.mjs";
+import {
+  buildEnglishDictionaryAliases,
+  parseEnglishDictionaryBlacklist
+} from "../program/verbs/exchange/translation/english_dictionary_aliases.mjs";
 
 test("English30k parser preserves rank, score, and missing source ranks", () => {
   const source = parseEnglish30kText([
@@ -70,6 +75,7 @@ test("English30k coverage classifies atoms, aliases, grammar, and compounds", ()
     alias: 1,
     grammar: 1,
     compound: 1,
+    "dictionary-alias": 0,
     lemma: 0,
     unresolved: 1
   });
@@ -239,6 +245,63 @@ test("vocab_suggest reports a ranked surface form through its lemma", async () =
   });
   assert.equal(result.exitCode, 0);
   assert.match(lines.join("\n"), /walked: lemma walk -> pfin \(English30k rank 647\)/u);
+});
+
+test("dictionary blacklist aliases accept only one existing Pyash target", () => {
+  const dictionary = parseEnglishDictionaryBlacklist({
+    en: {
+      blacklist: {
+        Xalpha: "one",
+        Xambiguous: "one, two",
+        Xgrammar: "conditional_mood_"
+      }
+    }
+  });
+  const resolved = buildEnglishDictionaryAliases({
+    dictionary,
+    atomicEntries: [
+      { en: "one", pya: "hyik" },
+      { en: "two", pya: "hwi7" },
+      { en: "conditional_mood_", pya: "cu" }
+    ]
+  });
+  assert.equal(resolved.aliases.get("alpha"), "one");
+  assert.equal(resolved.aliases.get("grammar"), "conditional_mood_");
+  assert.equal(resolved.aliases.has("ambiguous"), false);
+  assert.equal(resolved.records.length, 2);
+});
+
+test("dictionary alias coverage is distinct from ordinary anchors", () => {
+  const source = parseEnglish30kText([
+    "1\the\t100",
+    "2\tthe\t90"
+  ].join("\n"), { cutoff: 2 });
+  const coverage = buildEnglish30kCoverage({
+    source,
+    atomicEntries: [{ en: "it", pya: "htit" }],
+    dictionaryAliases: new Map([["he", "it"]])
+  });
+  assert.equal(coverage.records[0].coverageType, "dictionary-alias");
+  assert.equal(coverage.records[0].aliasOf, "it");
+  assert.equal(coverage.records[1].coverageType, "unresolved");
+});
+
+test("default English30k coverage uses the repository dictionary blacklist", async () => {
+  const coverage = await loadDefaultEnglish30kCoverage({ atomicEntries: pyashWords });
+  const he = lookupEnglish30kCoverage(coverage, "he");
+  assert.equal(he.coverageType, "dictionary-alias");
+  assert.equal(he.canonicalEnglish, "it");
+  assert.equal(he.pyashSequence[0], "htit");
+  assert.ok(coverage.counts["dictionary-alias"] > 6000);
+});
+
+test("vocab_suggest reports a unique dictionary alias", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["he"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.match(lines.join("\n"), /he: dictionary alias it -> htit \(English30k rank 10\)/u);
 });
 
 test("ambiguous regular forms remain Housekeeper candidates", () => {

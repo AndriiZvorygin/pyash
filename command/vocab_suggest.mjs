@@ -397,6 +397,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const acceptedCompounds = new Map();
   const foundCompounds = new Map();
   const rankedCoverage = new Map();
+  const dictionaryMatches = new Map();
   const lemmaMatches = new Map();
   const okTextTokens = new Set();
   const files = [];
@@ -440,7 +441,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         continue;
       }
       const ranked = await findEnglish30kCoverage(token);
-      if (ranked?.coverageType && ranked.coverageType !== "unresolved") continue;
+      if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
+        if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
+        continue;
+      }
       if (ranked) rankedCoverage.set(token, ranked);
       const lines = await queryRyan(token);
       if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
@@ -469,6 +473,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     const ranked = await findEnglish30kCoverage(token);
     if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
       if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
+      else if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
       else okTextTokens.add(token);
       continue;
     }
@@ -540,6 +545,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
 
   for (const [token, ranked] of [...lemmaMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     report(`${token}: lemma ${ranked.lemma} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+  }
+
+  for (const [token, ranked] of [...dictionaryMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    report(`${token}: dictionary alias ${ranked.aliasOf} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
   }
 
   if (mapPath) {
