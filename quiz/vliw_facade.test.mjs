@@ -6,7 +6,8 @@ import {
   decodeCodelet,
   executeCodelets,
   lowerParagraph,
-  lowerSentence
+  lowerSentence,
+  renderPyashCodelet
 } from "../program/library/vliw/index.mjs";
 import { VliwCodeletError } from "../program/library/vliw/codelets.mjs";
 
@@ -40,4 +41,11 @@ test("VLIW facade preserves the numeric-plus lowering contract", () => {
   assert.equal(codelets.length, 1);
   assert.deepEqual(Array.from(codelets[0].words.slice(0, 3)), [0x0149, 0x881d, 4]);
   assert.equal(codelets[0].usedWords, 9);
+});
+
+test("VLIW facade renders a supported codelet back to canonical Pyash", () => {
+  const source = "ob num 1 to num 1 be plus do";
+  const [codelet] = lowerSentence(parse(source));
+
+  assert.equal(renderPyashCodelet(codelet.words), source);
 });
