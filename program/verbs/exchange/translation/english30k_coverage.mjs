@@ -215,6 +215,7 @@ export function buildEnglish30kCoverage({
   aliases = new Map(),
   dictionaryAliases = new Map(),
   grammarMappings = DEFAULT_GRAMMAR_MAPPINGS,
+  grammarOverrides = new Map(),
   compoundRecords = [],
   lemmaEntries = [],
   lemmaIndex = null
@@ -241,6 +242,11 @@ export function buildEnglish30kCoverage({
       english30kLookupVariants(surface).map((variant) => [variant, normalizeMapping(mapping)])
     ))
   ) : new Map();
+  const grammarOverrideLookup = grammarOverrides instanceof Map ? new Map(
+    [...grammarOverrides.entries()].flatMap(([surface, mapping]) => (
+      english30kLookupVariants(surface).map((variant) => [variant, normalizeMapping(mapping)])
+    ))
+  ) : new Map();
   const compounds = buildCompoundLookup(compoundRecords);
   const withLemma = (record) => {
     const resolved = resolvedLemmaIndex.resolve(rowWord(record));
@@ -258,6 +264,16 @@ export function buildEnglish30kCoverage({
   const rowWord = (record) => record?.word ?? record?.normalizedWord ?? "";
   const records = source.rows.map((row) => {
     const variants = english30kLookupVariants(row.normalizedWord);
+    const grammarOverride = variants.map((variant) => grammarOverrideLookup.get(variant)).find(Boolean);
+    if (grammarOverride) {
+      return withLemma({
+        id: makeIdentity(row),
+        ...row,
+        coverageType: "grammar",
+        status: "covered-grammar",
+        pyashSequence: grammarOverride
+      });
+    }
     const exact = variants.map((variant) => atomicLookup.get(variant)).find(Boolean);
     if (exact) {
       return withLemma({
@@ -467,6 +483,7 @@ export async function loadDefaultEnglish30kCoverage({
     aliases: formsToAnchor,
     dictionaryAliases: resolvedDictionaryAliases,
     grammarMappings: resolvedGrammarMappings,
+    grammarOverrides: grammarIndex.mappings,
     compoundRecords,
     lemmaEntries: resolvedLemmaEntries
   });
