@@ -292,6 +292,31 @@ The prayer benchmark currently maps `heaven`, `name`, `holy`, `come`, `today`,
 `bread`, `temptation`, `evil`, and `glory`; unresolved terms remain recorded
 for the next vocabulary pass.
 
+### Lord's Prayer Greek source policy
+
+The durable source policy is recorded in
+`program/verbs/exchange/translation/lord_prayer_sources.pya` for Matthew
+6:9-13. The project uses three explicitly separated layers:
+
+- **Canonical Greek text:** Nestle-Aland 28 (NA28), edited by the Institute for
+  New Testament Textual Research. The [INTF NA28 edition page](https://intf.uni-muenster.de/NA28/en.html)
+  is the source locator.
+- **Critical comparison text:** the freely available SBL Greek New Testament
+  (SBLGNT), a critically edited alternative whose [editorial introduction](https://www.sblgnt.com/about/introduction/)
+  documents its comparison with Westcott-Hort, Tregelles, the NIV Greek text,
+  and the Robinson-Pierpont Byzantine Textform.
+- **Received-Text comparison:** the Received Text/Textus Receptus tradition,
+  retained because Young's Literal Translation follows the generally
+  recognized Received Text. Young's [1898 preface](https://www.ccel.org/bible/ylt/ylt.htm)
+  states that source policy directly. YLT remains a literal English gloss and
+  comparison layer rather than the canonical Greek source.
+
+Edition differences remain named variants. The translation workflow never
+silently merges critical, Byzantine, and Received-Text readings. Greek token
+and morphology mapping comes after this source selection; YLT helps inspect
+literal tense, article, case, and word-order decisions without replacing the
+Greek evidence.
+
 ### Ranked English30k coverage
 
 The ranked lexical target is the Gutenberg-derived source

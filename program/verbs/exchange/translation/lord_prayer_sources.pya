@@ -1,0 +1,15 @@
+su name translation_lord_prayer_sources be map def
+su text "format" ob text "lord-prayer-source-v1" ya
+su text "reference" ob text "Matthew 6:9-13" ya
+su text "canonical-text" ob text "Nestle-Aland 28 (NA28)" ya
+su text "canonical-editor" ob text "Institute for New Testament Textual Research, Munster" ya
+su text "critical-companion" ob text "SBL Greek New Testament (SBLGNT)" ya
+su text "received-text" ob text "Received Text (Textus Receptus tradition)" ya
+su text "ylt-source" ob text "Received Text (Textus Receptus tradition)" ya
+su text "ylt-role" ob text "literal English comparison and gloss; separate from the canonical Greek source" ya
+su text "source-policy" ob text "NA28 drives the main translation; SBLGNT compares critical readings; Received Text and YLT remain explicit comparison layers." ya
+su text "variant-policy" ob text "retain edition differences as named variants; never merge readings silently" ya
+su text "na28-locator" ob text "https://intf.uni-muenster.de/NA28/en.html" ya
+su text "sblgnt-locator" ob text "https://www.sblgnt.com/about/introduction/" ya
+su text "ylt-locator" ob text "https://www.ccel.org/bible/ylt/ylt.htm" ya
+prah

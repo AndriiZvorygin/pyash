@@ -141,3 +141,22 @@ test("committed Lord's Prayer analysis preserves source hashes and mapped gaps",
   assert.equal(JSON.parse(heaven.ob.text).directTargets[0], "cyak");
   assert.equal(JSON.parse(father.ob.text).status, "unresolved");
 });
+
+test("Lord's Prayer source manifest separates canonical, critical, and YLT layers", async () => {
+  const source = await fs.readFile(
+    new URL("../program/verbs/exchange/translation/lord_prayer_sources.pya", import.meta.url),
+    "utf8"
+  );
+  const program = buildProgram(source);
+  const facts = new Map(
+    program.sentences
+      .filter((sentence) => sentence?.mood === "ya" && typeof sentence.su?.text === "string")
+      .map((sentence) => [sentence.su.text, sentence.ob?.text ?? ""])
+  );
+  assert.equal(facts.get("format"), "lord-prayer-source-v1");
+  assert.equal(facts.get("reference"), "Matthew 6:9-13");
+  assert.equal(facts.get("canonical-text"), "Nestle-Aland 28 (NA28)");
+  assert.equal(facts.get("critical-companion"), "SBL Greek New Testament (SBLGNT)");
+  assert.equal(facts.get("ylt-source"), "Received Text (Textus Receptus tradition)");
+  assert.match(facts.get("variant-policy"), /never merge readings silently/u);
+});
