@@ -96,6 +96,24 @@ optional recorded result. A mismatch raises a stable database error. A
 supported codelet produces the same sentence-shaped result as the reference
 interpreter adapter.
 
+The reference command wrapper is `command/pyac_database.mjs`. It keeps the
+database interface positional and delegates to the APIs above:
+
+```text
+node command/pyac_database.mjs build source.pya catalog.pya codelets.pyac
+node command/pyac_database.mjs query catalog.pya codelets.pyac semantic numeric-plus
+node command/pyac_database.mjs replay catalog.pya codelets.pyac [record-id]
+```
+
+Build input is a canonical Pyash source file. Structural `def` and `prah`
+sentences are omitted from the codelet corpus; semantic sentences remain as
+executable or explicitly unsupported catalog rows. Query and replay reopen
+both files and verify the catalog-to-pack hash before returning results.
+
+The committed starter corpus is
+`examples/pyash/pyac-corpus.pya`. It contains executable numeric-plus rows and
+unsupported rows so the database keeps both compatibility outcomes visible.
+
 ## 5. Translation and compound words
 
 Translation remains a separate front end:
@@ -108,11 +126,18 @@ human text
   -> VLIW lowering
 ```
 
-Chinese compound words provide a useful morphology experiment. A future
-compound lexicon should store the surface compound, ordered morphemes,
-canonical Pyash target, optional English gloss, provenance, and confidence.
+Chinese compound words provide a small morphology corpus at
+`program/verbs/exchange/translation/compound_lexicon_chinese.pya`. It stores
+the surface compound, ordered morphemes, canonical Pyash target, optional
+English gloss, provenance, confidence, and lowering status in parser-readable
+map rows. The loader and query helpers live in
+`program/verbs/exchange/translation/compound_lexicon.mjs` and are re-exported
+by the Chinese translation adapter.
+
 The compound surface is evidence for translation; canonical Pyash identity
-remains the execution authority. Automatic HNUC allocation is outside this
+remains the execution authority. Current entries are searchable and retain an
+`unlowered` status because the current VLIW semantic facade has no codelet
+mapping for those name values. Automatic HNUC allocation remains outside this
 contract.
 
 ## 6. Rust compatibility boundary

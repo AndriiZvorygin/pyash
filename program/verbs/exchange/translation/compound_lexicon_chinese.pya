@@ -1,0 +1,4 @@
+su name translation_compounds_chinese be map def
+su text "数据库" ob text "{\"surface\":\"数据库\",\"morphemes\":[\"数据\",\"库\"],\"target\":\"database\",\"gloss\":\"database\",\"provenance\":\"caterer/pyac/lyac/kwon_zh.json\",\"confidence\":\"lexical\",\"status\":\"unlowered\"}" ya
+su text "语言" ob text "{\"surface\":\"语言\",\"morphemes\":[\"语\",\"言\"],\"target\":\"language\",\"gloss\":\"language\",\"provenance\":\"caterer/pyac/lyac/kwon_zh.json\",\"confidence\":\"lexical\",\"status\":\"unlowered\"}" ya
+prah

@@ -1,0 +1,4 @@
+ob num 4 to num 6 be plus do
+ob num 8 to num 9 be plus do
+ob text "opaque" to name collector be plus do
+ob text "different" to name collector be plus do
