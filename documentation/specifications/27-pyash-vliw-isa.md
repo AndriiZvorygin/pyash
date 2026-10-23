@@ -400,7 +400,7 @@ locator, line index, sentence index, and original text.
   while rejecting unresolved references and duplicate writers.
 
 The facade currently supports numeric `plus`, scalar `subtract`, `multiply`,
-`divide`, `remains`, and `xor`, anonymous and named numeric/text/boolean
+ `divide`, and `xor`, anonymous and named numeric/text/boolean
 literals, multi-word legacy names, and paragraph-letter text values that fit
 one codelet. Decoded instructions expose stable read/write effects for catalog
 queries and dependency scheduling. A valid but unrecognized codelet is
