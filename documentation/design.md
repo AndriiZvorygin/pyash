@@ -124,6 +124,13 @@ Conventions:
 
 Compiled ceremonies and the interpreter can therefore be swapped or composed while respecting the same data model.
 
+The sentence/paragraph ABI is also the semantic boundary for the planned
+Pyash VLIW backend. Lowering is sentence-first and must preserve canonical
+cases, values, moods, dependencies, and effects before emitting the exact
+legacy `lwonprom` 16-bit word/codelet encoding. The encoding and execution
+contract is specified in [`27-pyash-vliw-isa.md`](specifications/27-pyash-vliw-isa.md);
+it does not introduce a second source IR or change the current interpreter.
+
 ---
 
 ## Modules
