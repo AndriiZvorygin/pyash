@@ -5,3 +5,4 @@ import { translateNameToRussian } from "./russian_parts/isv.mjs";
 export { sentenceToRussian, russianLineToSentence, translateNameToRussian };
 
 export { loadRussianCompoundLexicon } from "./compound_lexicons.mjs";
+export { resolveDerivedCompound } from "./compound_coverage.mjs";

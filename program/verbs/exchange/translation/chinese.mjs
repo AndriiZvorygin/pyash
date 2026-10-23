@@ -458,3 +458,5 @@ export {
   parsePyacComplexityLayers,
   rankPyacCompoundCandidates
 } from "./pyac_complexity.mjs";
+
+export { resolveDerivedCompound } from "./compound_coverage.mjs";

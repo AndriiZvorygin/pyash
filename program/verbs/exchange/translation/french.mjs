@@ -378,3 +378,4 @@ function parseVectorToken(type, token) {
 export { sentenceToFrench, frenchLineToSentence };
 
 export { loadFrenchCompoundLexicon } from "./compound_lexicons.mjs";
+export { resolveDerivedCompound } from "./compound_coverage.mjs";
