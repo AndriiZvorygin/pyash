@@ -11,7 +11,7 @@ import {
   renderDerivedCompoundCoverageRowPya
 } from "../program/verbs/exchange/translation/compound_coverage.mjs";
 import {
-  createDefaultMindCompoundVerifier,
+  createDefaultQueuedMindCompoundVerifier,
   verifyCompoundCoverage
 } from "../program/verbs/exchange/translation/compound_verification.mjs";
 
@@ -75,7 +75,9 @@ export async function runCompoundCoverageVerification(args = process.argv.slice(
     });
     configureVerifierMind(mindName);
     const coverage = await loadCoverage();
-    const invoke = await createDefaultMindCompoundVerifier({ mindName });
+    const invoke = await createDefaultQueuedMindCompoundVerifier({
+      timeoutMs: Number(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || 1800000)
+    });
     const checkpoint = outputPath ? await createCheckpointWriter(outputPath) : null;
     const result = await verifyCompoundCoverage(coverage.records, {
       invoke,

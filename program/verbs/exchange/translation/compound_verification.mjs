@@ -487,6 +487,37 @@ export function createMindCompoundVerifier({
   };
 }
 
+function queuedCompoundHandle({ record, phase = "verify", attempt = 1 } = {}) {
+  const candidate = candidateId(record).replace(/[^a-z0-9._-]+/giu, "-");
+  return `compound-verifier-${candidate}-${phase}-${Math.max(1, Math.trunc(Number(attempt) || 1))}`;
+}
+
+export function createQueuedMindCompoundVerifier({
+  interpret,
+  parse,
+  timeoutMs = 1800000
+} = {}) {
+  if (typeof interpret !== "function") throw invalid("queued compound verifier requires interpret");
+  if (typeof parse !== "function") throw invalid("queued compound verifier requires parse");
+  const waitMs = Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000));
+  return async ({ prompt, record, phase = "verify", attempt = 1 } = {}) => {
+    const handleId = queuedCompoundHandle({ record, phase, attempt });
+    const start = await interpret(parse(
+      `su name ${JSON.stringify(handleId)} ob text ${JSON.stringify(String(prompt ?? ""))} vyah start future be gpu mind do`
+    ));
+    if (String(start?.ob?.text ?? "").trim() !== "queued") {
+      throw invalid("queued compound verifier did not receive a queued duty", { handleId, start });
+    }
+    const completed = await interpret(parse(
+      `accordingto text ${JSON.stringify(handleId)} during num ${waitMs} vyah await be gpu do`
+    ));
+    if (String(completed?.ob?.text ?? "").trim() !== "success") {
+      throw invalid("queued compound verifier duty did not complete successfully", { handleId, completed });
+    }
+    return String(completed?.result?.text ?? "");
+  };
+}
+
 export async function createDefaultMindCompoundVerifier(options = {}) {
   const [{ interpret }, { remember }] = await Promise.all([
     import("../../../bridge/index.mjs"),
@@ -495,6 +526,18 @@ export async function createDefaultMindCompoundVerifier(options = {}) {
   return createMindCompoundVerifier({
     interpret,
     readText: (name) => remember(name)?.ob?.text ?? "",
+    ...options
+  });
+}
+
+export async function createDefaultQueuedMindCompoundVerifier(options = {}) {
+  const [{ interpret }, { parse }] = await Promise.all([
+    import("../../../bridge/index.mjs"),
+    import("../../../understand/index.mjs")
+  ]);
+  return createQueuedMindCompoundVerifier({
+    interpret,
+    parse,
     ...options
   });
 }
