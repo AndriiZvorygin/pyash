@@ -396,12 +396,14 @@ locator, line index, sentence index, and original text.
   a supported semantic adapter; and
 - `executeCodelets(codelets)` executes supported codelets sequentially and
   returns the existing Pyash result records.
+- scheduleCodeletDependencies(instructions) returns a stable dependency order
+  while rejecting unresolved references and duplicate writers.
 
 The facade currently supports numeric `plus`, scalar `subtract`, `multiply`,
 `divide`, `remains`, and `xor`, anonymous and named numeric/text/boolean
 literals, multi-word legacy names, and paragraph-letter text values that fit
 one codelet. Decoded instructions expose stable read/write effects for catalog
-queries and future dependency scheduling. A valid but unrecognized codelet is
+queries and dependency scheduling. A valid but unrecognized codelet is
 decoded losslessly, then rejected by the semantic facade with an explicit
 unsupported-codelet error. Vector and date values remain explicit unsupported
 catalog rows until their exact legacy layouts receive golden fixtures.
