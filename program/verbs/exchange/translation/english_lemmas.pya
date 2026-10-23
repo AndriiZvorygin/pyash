@@ -1,0 +1,65 @@
+su name translation_english30k_lemmas be map def
+su text "format" ob text "english-lemma-v1" ya
+su text "source" ob text "/home/htaf/pyachso2n/English30k.txt" ya
+su text "source-hash" ob text "436ba126fe7cab2e12c860ce89832ce0d3c1fceb4505cb2ff353bdc1b2124b88" ya
+su text "cutoff" ob num 30000 ya
+su text "am" ob text "{\"surface\":\"am\",\"lemma\":\"be\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English present-tense be form\"}" ya
+su text "are" ob text "{\"surface\":\"are\",\"lemma\":\"be\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English present-tense be form\"}" ya
+su text "been" ob text "{\"surface\":\"been\",\"lemma\":\"be\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of be\"}" ya
+su text "being" ob text "{\"surface\":\"being\",\"lemma\":\"be\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English present participle of be\"}" ya
+su text "bought" ob text "{\"surface\":\"bought\",\"lemma\":\"buy\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of buy\"}" ya
+su text "brought" ob text "{\"surface\":\"brought\",\"lemma\":\"bring\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of bring\"}" ya
+su text "came" ob text "{\"surface\":\"came\",\"lemma\":\"come\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of come\"}" ya
+su text "children" ob text "{\"surface\":\"children\",\"lemma\":\"child\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English irregular plural of child\"}" ya
+su text "chosen" ob text "{\"surface\":\"chosen\",\"lemma\":\"choose\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of choose\"}" ya
+su text "did" ob text "{\"surface\":\"did\",\"lemma\":\"do\",\"canonicalEnglish\":\"done\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of do; Pyash atom is done\"}" ya
+su text "done" ob text "{\"surface\":\"done\",\"lemma\":\"do\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of do\"}" ya
+su text "drank" ob text "{\"surface\":\"drank\",\"lemma\":\"drink\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of drink\"}" ya
+su text "driven" ob text "{\"surface\":\"driven\",\"lemma\":\"drive\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of drive\"}" ya
+su text "drove" ob text "{\"surface\":\"drove\",\"lemma\":\"drive\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of drive\"}" ya
+su text "eaten" ob text "{\"surface\":\"eaten\",\"lemma\":\"eat\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of eat\"}" ya
+su text "felt" ob text "{\"surface\":\"felt\",\"lemma\":\"feel\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of feel\"}" ya
+su text "flew" ob text "{\"surface\":\"flew\",\"lemma\":\"fly\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of fly\"}" ya
+su text "found" ob text "{\"surface\":\"found\",\"lemma\":\"find\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of find\"}" ya
+su text "gave" ob text "{\"surface\":\"gave\",\"lemma\":\"give\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of give\"}" ya
+su text "given" ob text "{\"surface\":\"given\",\"lemma\":\"give\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of give\"}" ya
+su text "gone" ob text "{\"surface\":\"gone\",\"lemma\":\"go\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of go\"}" ya
+su text "had" ob text "{\"surface\":\"had\",\"lemma\":\"have\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of have\"}" ya
+su text "heard" ob text "{\"surface\":\"heard\",\"lemma\":\"hear\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of hear\"}" ya
+su text "held" ob text "{\"surface\":\"held\",\"lemma\":\"hold\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of hold\"}" ya
+su text "knew" ob text "{\"surface\":\"knew\",\"lemma\":\"know\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of know\"}" ya
+su text "known" ob text "{\"surface\":\"known\",\"lemma\":\"know\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of know\"}" ya
+su text "left" ob text "{\"surface\":\"left\",\"lemma\":\"leave\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of leave\"}" ya
+su text "made" ob text "{\"surface\":\"made\",\"lemma\":\"make\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of make\"}" ya
+su text "met" ob text "{\"surface\":\"met\",\"lemma\":\"meet\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of meet\"}" ya
+su text "mice" ob text "{\"surface\":\"mice\",\"lemma\":\"mouse\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English irregular plural of mouse\"}" ya
+su text "men" ob text "{\"surface\":\"men\",\"lemma\":\"man\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English irregular plural of man\"}" ya
+su text "people" ob text "{\"surface\":\"people\",\"lemma\":\"person\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English plural of person\"}" ya
+su text "ran" ob text "{\"surface\":\"ran\",\"lemma\":\"run\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of run\"}" ya
+su text "said" ob text "{\"surface\":\"said\",\"lemma\":\"say\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of say\"}" ya
+su text "sang" ob text "{\"surface\":\"sang\",\"lemma\":\"sing\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of sing\"}" ya
+su text "seen" ob text "{\"surface\":\"seen\",\"lemma\":\"see\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of see\"}" ya
+su text "saw" ob text "{\"surface\":\"saw\",\"lemma\":\"see\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of see\"}" ya
+su text "spoke" ob text "{\"surface\":\"spoke\",\"lemma\":\"speak\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of speak\"}" ya
+su text "spoken" ob text "{\"surface\":\"spoken\",\"lemma\":\"speak\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of speak\"}" ya
+su text "swam" ob text "{\"surface\":\"swam\",\"lemma\":\"swim\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of swim\"}" ya
+su text "swum" ob text "{\"surface\":\"swum\",\"lemma\":\"swim\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of swim\"}" ya
+su text "taught" ob text "{\"surface\":\"taught\",\"lemma\":\"teach\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of teach\"}" ya
+su text "told" ob text "{\"surface\":\"told\",\"lemma\":\"tell\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of tell\"}" ya
+su text "took" ob text "{\"surface\":\"took\",\"lemma\":\"take\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of take\"}" ya
+su text "threw" ob text "{\"surface\":\"threw\",\"lemma\":\"throw\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of throw\"}" ya
+su text "thought" ob text "{\"surface\":\"thought\",\"lemma\":\"think\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of think\"}" ya
+su text "understood" ob text "{\"surface\":\"understood\",\"lemma\":\"understand\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of understand\"}" ya
+su text "went" ob text "{\"surface\":\"went\",\"lemma\":\"go\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of go\"}" ya
+su text "were" ob text "{\"surface\":\"were\",\"lemma\":\"be\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past-tense be form\"}" ya
+su text "was" ob text "{\"surface\":\"was\",\"lemma\":\"be\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past-tense be form\"}" ya
+su text "wrote" ob text "{\"surface\":\"wrote\",\"lemma\":\"write\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of write\"}" ya
+su text "written" ob text "{\"surface\":\"written\",\"lemma\":\"write\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of write\"}" ya
+su text "doing" ob text "{\"surface\":\"doing\",\"lemma\":\"do\",\"canonicalEnglish\":\"done\",\"kind\":\"inflectional\",\"status\":\"accepted-curated\",\"evidence\":\"English present participle of do; Pyash atom is done\"}" ya
+su text "does" ob text "{\"surface\":\"does\",\"lemma\":\"do\",\"canonicalEnglish\":\"done\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English third-person form of do; Pyash atom is done\"}" ya
+su text "goes" ob text "{\"surface\":\"goes\",\"lemma\":\"go\",\"kind\":\"inflectional\",\"status\":\"accepted-curated\",\"evidence\":\"English third-person form of go\"}" ya
+su text "running" ob text "{\"surface\":\"running\",\"lemma\":\"run\",\"canonicalEnglish\":\"running\",\"kind\":\"inflectional\",\"status\":\"accepted-curated\",\"evidence\":\"English present participle; Pyash atom is running\"}" ya
+su text "walking" ob text "{\"surface\":\"walking\",\"lemma\":\"walk\",\"canonicalEnglish\":\"walking\",\"kind\":\"inflectional\",\"status\":\"accepted-curated\",\"evidence\":\"English present participle; Pyash atom is walking\"}" ya
+su text "walked" ob text "{\"surface\":\"walked\",\"lemma\":\"walk\",\"canonicalEnglish\":\"walking\",\"kind\":\"inflectional\",\"status\":\"accepted-curated\",\"evidence\":\"English past form; Pyash atom is walking\"}" ya
+su text "walks" ob text "{\"surface\":\"walks\",\"lemma\":\"walk\",\"canonicalEnglish\":\"walking\",\"kind\":\"inflectional\",\"status\":\"accepted-curated\",\"evidence\":\"English third-person form; Pyash atom is walking\"}" ya
+prah

@@ -397,6 +397,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const acceptedCompounds = new Map();
   const foundCompounds = new Map();
   const rankedCoverage = new Map();
+  const lemmaMatches = new Map();
   const okTextTokens = new Set();
   const files = [];
   for (const root of roots) {
@@ -467,7 +468,8 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
     const ranked = await findEnglish30kCoverage(token);
     if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
-      okTextTokens.add(token);
+      if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
+      else okTextTokens.add(token);
       continue;
     }
     if (ranked) rankedCoverage.set(token, ranked);
@@ -534,6 +536,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     for (const token of [...okTextTokens].sort((a, b) => a.localeCompare(b))) {
       report(`${token}: ok`);
     }
+  }
+
+  for (const [token, ranked] of [...lemmaMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    report(`${token}: lemma ${ranked.lemma} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
   }
 
   if (mapPath) {
