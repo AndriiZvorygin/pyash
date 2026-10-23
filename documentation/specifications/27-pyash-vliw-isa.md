@@ -268,3 +268,21 @@ The reference implementation lives at
 `quiz/vliw_plus_semantics.test.mjs`. Rust lowering, GPU scheduling, paragraph
 codelets, and compiler-command integration follow after this exact fixture and
 round-trip contract are stable.
+
+## 10. Quote descriptors and legacy surface rendering
+
+The legacy quote-denote is `0x001D`. Its assigned quote classes include
+`0x881D` for numeric values, `0x081D` for letters, and `0x0E1D` for
+paragraph-letter values. A numeric quote consumes one following 16-bit payload
+word in the MVP decoder, so `0x881D 0001` is the typed value `1`.
+
+Quote markers describe value representation. Lexical Pyash spellings remain
+HNUC table entries. The shared quote decoder uses the HNUC table for grammar
+and verb words, then combines the typed value with its case marker. The plus
+golden vector therefore renders as `hyikdoyu hyikdoka plustu` while its
+canonical semantic form remains `ob num 1 to num 1 be plus do`.
+
+The structured decoder accepts numeric unsigned 16-bit payloads. Surface
+number-word rendering currently covers the legacy zero-through-twenty table;
+larger numeric values remain available in structured form while compound
+surface composition is added in a later slice.
