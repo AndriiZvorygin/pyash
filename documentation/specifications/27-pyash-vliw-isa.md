@@ -286,3 +286,17 @@ The structured decoder accepts numeric unsigned 16-bit payloads. Surface
 number-word rendering currently covers the legacy zero-through-twenty table;
 larger numeric values remain available in structured form while compound
 surface composition is added in a later slice.
+
+## 11. Generic fixed-slot codelet decoding
+
+`program/library/vliw/codelets.mjs` provides lossless decoding for the existing
+16-word codelet slot. It walks the used prefix in order, delegates quote words
+to the shared quote decoder, and resolves known lexical words through the HNUC
+table. Unknown non-quote words remain raw words so decoding never invents a
+lexical meaning. The first standalone zero marks the used-word boundary; every
+following slot must also be zero.
+
+This layer exposes typed items and the used-word count. It does not infer
+arbitrary grammar or execute unknown codelets. Numeric-plus remains the first
+semantic adapter: it validates its marker sequence from the generic items and
+then delegates execution to the existing Pyash `plus` handler.

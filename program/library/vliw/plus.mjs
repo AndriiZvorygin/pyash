@@ -1,12 +1,16 @@
 import { plus_obj_num_to_name_num } from "../../verbs/mathematics/plus.mjs";
 import {
   LEGACY_NUMERIC_PLUS_WORDS,
-  NUMBER_QUOTE_WORD,
-  decodeQuote
+  NUMBER_QUOTE_WORD
 } from "./quotes.mjs";
+import {
+  CODELET_WORD_COUNT,
+  decodeLegacyCodelet,
+  VliwCodeletError
+} from "./codelets.mjs";
 
-export const CODELET_WORD_COUNT = 16;
 export const NUMERIC_PLUS_USED_WORD_COUNT = 9;
+export { CODELET_WORD_COUNT } from "./codelets.mjs";
 
 const HEAD_WORD = LEGACY_NUMERIC_PLUS_WORDS.head;
 const INSTRUMENTAL_CASE_WORD = LEGACY_NUMERIC_PLUS_WORDS.instrumentalCase;
@@ -82,52 +86,41 @@ function wordsToBytes(words) {
   return bytes;
 }
 
-function normalizeWords(words) {
-  if (!(words instanceof Uint16Array) && !Array.isArray(words)) {
-    throw encodingError("malformed-codelet", "numeric-plus codelet must be a 16-word array");
-  }
-  if (words.length !== CODELET_WORD_COUNT) {
-    throw encodingError("malformed-codelet", "numeric-plus codelet must contain exactly 16 words", {
-      length: words.length
-    });
-  }
-
-  const values = Array.from(words);
-  for (const [index, value] of values.entries()) {
-    if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
-      throw encodingError("malformed-codelet", "numeric-plus codelet contains an invalid word", { index, value });
-    }
-  }
-  return new Uint16Array(values);
-}
-
-function validateCodeletMarkers(words) {
+function validateCodeletMarkers(decoded) {
   const markers = [
     [0, HEAD_WORD, "head"],
-    [1, NUMBER_QUOTE_WORD, "first number quote"],
     [3, INSTRUMENTAL_CASE_WORD, "instrumental case"],
-    [4, NUMBER_QUOTE_WORD, "second number quote"],
     [6, ACCUSATIVE_CASE_WORD, "accusative case"],
     [7, PLUS_WORD, "plus verb"],
     [8, DEONTIC_MOOD_WORD, "deontic mood"]
   ];
   for (const [index, expected, name] of markers) {
-    if (words[index] !== expected) {
+    const item = decoded.items.find((candidate) => candidate.offset === index);
+    if (item?.kind !== "word" || item.word !== expected) {
       throw encodingError("malformed-codelet", `numeric-plus codelet has an invalid ${name} word`, {
         index,
         expected,
-        actual: words[index]
+        actual: item?.word
       });
     }
   }
-  for (let index = NUMERIC_PLUS_USED_WORD_COUNT; index < CODELET_WORD_COUNT; index += 1) {
-    if (words[index] !== 0) {
-      throw encodingError("malformed-codelet", "numeric-plus codelet has a nonzero unassigned tail", {
-        index,
-        actual: words[index]
-      });
-    }
+  if (decoded.usedWords !== NUMERIC_PLUS_USED_WORD_COUNT) {
+    throw encodingError("malformed-codelet", "numeric-plus codelet has an invalid used-word boundary", {
+      expected: NUMERIC_PLUS_USED_WORD_COUNT,
+      actual: decoded.usedWords
+    });
   }
+}
+
+function decodeNumericQuote(decoded, offset, role) {
+  const item = decoded.items.find((candidate) => candidate.offset === offset);
+  if (item?.kind !== "quote" || item.quote.word !== NUMBER_QUOTE_WORD) {
+    throw encodingError("malformed-codelet", `numeric-plus codelet has an invalid ${role} quote`, {
+      offset,
+      actual: item?.quote?.word ?? item?.word
+    });
+  }
+  return item.quote;
 }
 
 export function lowerNumericPlusSentence(sentence) {
@@ -153,28 +146,29 @@ export function lowerNumericPlusSentence(sentence) {
 }
 
 export function decodeNumericPlusCodelet(input) {
-  const words = normalizeWords(input);
-  validateCodeletMarkers(words);
-  let first;
-  let second;
   try {
-    first = decodeQuote(words, 1);
-    second = decodeQuote(words, 4);
+    const decoded = decodeLegacyCodelet(input);
+    validateCodeletMarkers(decoded);
+    const first = decodeNumericQuote(decoded, 1, "first number");
+    const second = decodeNumericQuote(decoded, 4, "second number");
+    if (first.nextOffset !== 3 || second.nextOffset !== 6) {
+      throw encodingError("malformed-codelet", "numeric-plus quote boundaries are invalid");
+    }
+    return {
+      mood: "do",
+      ob: { num: first.value },
+      to: { num: second.value },
+      be: "plus"
+    };
   } catch (error) {
-    throw encodingError("malformed-codelet", error.message, {
-      cause: error.code,
-      details: error.details
-    });
+    if (error instanceof VliwCodeletError) {
+      throw encodingError("malformed-codelet", error.message, {
+        cause: error.code,
+        details: error.details
+      });
+    }
+    throw error;
   }
-  if (first.nextOffset !== 3 || second.nextOffset !== 6) {
-    throw encodingError("malformed-codelet", "numeric-plus quote boundaries are invalid");
-  }
-  return {
-    mood: "do",
-    ob: { num: first.value },
-    to: { num: second.value },
-    be: "plus"
-  };
 }
 
 export async function executeNumericPlusCodelet(input) {
