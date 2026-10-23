@@ -22,8 +22,11 @@ This specification revives the encoding and execution model in the
 sidecar format is defined here. Any implementation that cannot prove
 compatibility with that encoding MUST reject the value.
 
-This is an encoding and execution contract. It does not specify a compiler
-optimizer, a GPU runtime, a model of host memory, or a new Pyash command.
+This is an encoding and execution contract. The searchable catalog and
+compiled `.pyac` container built on this contract are defined in
+`documentation/reference/pyac-vliw-database.md`. This document does not
+specify a compiler optimizer, a GPU runtime, a model of host memory, or a new
+Pyash command.
 
 ## 2. Terms
 
@@ -231,10 +234,12 @@ adapter and one unsupported-value rejection.
 
 ## 8. Non-goals
 
-This specification does not add HNUCs, alter parser vocabulary, define a new
-binary file format, require a GPU, introduce a model server or queue, or
-connect codelet execution to WorkTask/review/integration machinery. It also
-does not replace the current sentence/paragraph interpreter. The only
+This specification does not add HNUCs, alter parser vocabulary, define the
+catalog/container database, require a GPU, introduce a model server or queue,
+or connect codelet execution to WorkTask/review/integration machinery. The
+database contract is defined in
+`documentation/reference/pyac-vliw-database.md`. This specification also does
+not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
 

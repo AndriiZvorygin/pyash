@@ -53,3 +53,22 @@ export async function executeCodelets(codelets) {
   }
   return results;
 }
+
+export {
+  PYAC_MAGIC,
+  PYAC_FORMAT_VERSION,
+  PYAC_WORD_BITS,
+  PYAC_WORDS_PER_CODELET,
+  PYAC_HEADER_BYTES,
+  PYAC_CODELET_BYTES,
+  PyacDatabaseError,
+  encodePyacPack,
+  decodePyacPack,
+  buildVliwDatabase,
+  queryVliwCatalog,
+  replayVliwDatabase,
+  renderVliwCatalogPya,
+  parseVliwCatalogPya,
+  writeVliwDatabaseFiles,
+  readVliwDatabaseFiles
+} from "./database.mjs";

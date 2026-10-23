@@ -29,6 +29,7 @@ Current chapter set:
 - `19-ops-safety.md`
 - `23-configure.md`
 - `24-channel-contract.md`
+- `27-pyash-vliw-isa.md`
 
 ### `documentation/reference/`
 
@@ -36,6 +37,7 @@ Non-normative quick lookup documents:
 - cheat sheet
 - index map
 - implementation map
+- `pyac-vliw-database.md` — searchable catalog and executable `.pyac` design.
 
 ### `documentation/recipes/spec-archive/`
 
