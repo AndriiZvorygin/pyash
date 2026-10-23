@@ -190,10 +190,11 @@ Vector quote payloads now decode losslessly for the recovered fixed-width
 16-bit numeric/letter header families. Vector sentence values remain cataloged
 as explicit unsupported semantic rows: the legacy source exposes vector-width
 bit fields, yet the recovered encoder has no sentence-level `be vector` golden
-fixture or matching execution handler. Dates likewise have vocabulary and
-current runtime values but no recovered legacy date encoding or execution
-handler. The structural continuation decoder is available for lossless
-multi-vector evidence; it does not promote either domain to execution.
+fixture or matching execution handler, and those rows carry the stable
+`unsupported-vector` reason. Dates likewise have vocabulary and current runtime
+values but no recovered legacy date encoding or execution handler; their rows
+carry `unsupported-date`. The structural continuation decoder is available for
+lossless multi-vector evidence; it does not promote either domain to execution.
 
 ## 8. Conformance
 
