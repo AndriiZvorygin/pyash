@@ -62,6 +62,13 @@ function normalizeEntry(payload, surface, index, language) {
   if (payload.gloss !== undefined && typeof payload.gloss !== "string") {
     throw invalid("compound row gloss must be text", { index, surface });
   }
+  if (payload.sourceMorphemes !== undefined && (
+    !Array.isArray(payload.sourceMorphemes) ||
+    payload.sourceMorphemes.length === 0 ||
+    payload.sourceMorphemes.some((item) => typeof item !== "string" || !item)
+  )) {
+    throw invalid("compound source morphemes must be a non-empty ordered list", { index, surface });
+  }
   if (payload.componentGlosses !== undefined && (
     !Array.isArray(payload.componentGlosses) ||
     payload.componentGlosses.length !== payload.morphemes.length ||
@@ -97,6 +104,35 @@ function normalizeEntry(payload, surface, index, language) {
   if (payload.evidence !== undefined && (typeof payload.evidence !== "string" || !payload.evidence)) {
     throw invalid("compound evidence must be text", { index, surface });
   }
+  if (payload.head !== undefined && (
+    typeof payload.head !== "string" ||
+    payload.head !== payload.componentGlosses?.at(-1)
+  )) {
+    throw invalid("compound head must be the final semantic component", { index, surface });
+  }
+  if (payload.sourceSurfaces !== undefined && (
+    !payload.sourceSurfaces ||
+    typeof payload.sourceSurfaces !== "object" ||
+    Array.isArray(payload.sourceSurfaces) ||
+    Object.entries(payload.sourceSurfaces).some(([language, value]) => (
+      !language || typeof value !== "string" || !value
+    ))
+  )) {
+    throw invalid("compound source surfaces must be a language map", { index, surface });
+  }
+  if (payload.sourceMorphemesByLanguage !== undefined && (
+    !payload.sourceMorphemesByLanguage ||
+    typeof payload.sourceMorphemesByLanguage !== "object" ||
+    Array.isArray(payload.sourceMorphemesByLanguage) ||
+    Object.entries(payload.sourceMorphemesByLanguage).some(([language, parts]) => (
+      !language ||
+      !Array.isArray(parts) ||
+      parts.length === 0 ||
+      parts.some((part) => typeof part !== "string" || !part)
+    ))
+  )) {
+    throw invalid("compound source morphemes by language must be a language map", { index, surface });
+  }
   if (payload.rejectedCandidates !== undefined && (
     !Array.isArray(payload.rejectedCandidates) ||
     payload.rejectedCandidates.some((candidate) => (
@@ -123,11 +159,25 @@ function normalizeEntry(payload, surface, index, language) {
     morphemes: [...payload.morphemes],
     target: payload.target,
     ...(payload.gloss === undefined ? {} : { gloss: payload.gloss }),
+    ...(payload.sourceMorphemes === undefined ? {} : { sourceMorphemes: [...payload.sourceMorphemes] }),
     ...(payload.componentGlosses === undefined ? {} : { componentGlosses: [...payload.componentGlosses] }),
     ...(payload.pyashSequence === undefined ? {} : { pyashSequence: [...payload.pyashSequence] }),
     ...(payload.componentLayers === undefined ? {} : { componentLayers: [...payload.componentLayers] }),
     ...(payload.maxLayer === undefined ? {} : { maxLayer: payload.maxLayer }),
     ...(payload.evidence === undefined ? {} : { evidence: payload.evidence }),
+    ...(payload.head === undefined ? {} : { head: payload.head }),
+    ...(payload.sourceSurfaces === undefined ? {} : {
+      sourceSurfaces: Object.fromEntries(
+        Object.entries(payload.sourceSurfaces).sort(([left], [right]) => left.localeCompare(right))
+      )
+    }),
+    ...(payload.sourceMorphemesByLanguage === undefined ? {} : {
+      sourceMorphemesByLanguage: Object.fromEntries(
+        Object.entries(payload.sourceMorphemesByLanguage)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([language, parts]) => [language, [...parts]])
+      )
+    }),
     ...(payload.rejectedCandidates === undefined ? {} : {
       rejectedCandidates: payload.rejectedCandidates.map((candidate) => ({
         pyashSequence: [...candidate.pyashSequence],
@@ -232,11 +282,15 @@ export function canonicalCompoundPayload(entry) {
     morphemes: entry.morphemes,
     target: entry.target,
     gloss: entry.gloss ?? null,
+    sourceMorphemes: entry.sourceMorphemes ?? null,
     componentGlosses: entry.componentGlosses ?? null,
     pyashSequence: entry.pyashSequence ?? null,
     componentLayers: entry.componentLayers ?? null,
     maxLayer: entry.maxLayer ?? null,
     evidence: entry.evidence ?? null,
+    head: entry.head ?? null,
+    sourceSurfaces: entry.sourceSurfaces ?? null,
+    sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage ?? null,
     rejectedCandidates: entry.rejectedCandidates ?? null,
     provenance: entry.provenance,
     confidence: entry.confidence,

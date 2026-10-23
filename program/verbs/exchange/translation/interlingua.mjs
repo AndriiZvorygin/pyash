@@ -450,3 +450,4 @@ export {
 };
 
 export { loadInterlinguaCompoundLexicon } from "./compound_lexicons.mjs";
+export { resolveDerivedCompound } from "./compound_coverage.mjs";

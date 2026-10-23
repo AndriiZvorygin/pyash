@@ -205,6 +205,31 @@ keeps translation evidence separate from automatic morphology inference.
 Every current external-language sample lowers through the same canonical Pyac
 words and records the higher-layer atomic alternative in `rejectedCandidates`.
 
+Broader derived coverage uses
+`program/verbs/exchange/translation/compound_coverage.mjs` and the durable
+curated decompositions in
+`program/verbs/exchange/translation/compound_coverage_curated.pya`. The
+current source projection finds 7,830 existing atomic targets, 393 accepted
+derived compounds, and 411 closed-compound candidates across the Chinese,
+French, Russian, Hindi, and Interlingua dictionaries. Existing atomic targets
+remain in the atomic vocabulary; derived records cover terms that gain a
+sequence from existing words.
+
+Pyash compound order is head-final. The final component is the semantic head
+and earlier components are modifiers:
+
+```text
+snake bird -> [snake, bird]
+bird snake -> [bird, snake]
+```
+
+Source-language order and morpheme boundaries remain in provenance. A source
+language may place the head first, use a linking word, or fuse the surface;
+the resolver emits the semantic Pyash sequence separately. The resolver is
+re-exported by the translation adapters and the shared multilingual compound
+module. Closed-word candidates retain review status until a semantic
+decomposition is recorded.
+
 The first external compound analysis uses the historical `hkestlat` source
 shapes `mwonkwon.json` and `chinese_dictionary_stems.json`. The host-side
 normalizer is `program/verbs/exchange/translation/hkestlat_compound_analysis.mjs`.

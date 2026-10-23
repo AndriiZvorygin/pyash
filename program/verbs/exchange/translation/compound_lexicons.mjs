@@ -4,6 +4,13 @@ import {
   parseCompoundLexicon,
   queryCompoundLexicon
 } from "./compound_lexicon.mjs";
+export {
+  buildDerivedCompoundCoverage,
+  loadCuratedCompoundDecompositions,
+  renderDerivedCompoundCoveragePya,
+  resolveDerivedCompound,
+  sourceTermsFromDictionaryRows
+} from "./compound_coverage.mjs";
 
 const sources = Object.freeze({
   french: "compound_lexicon_french.pya",
