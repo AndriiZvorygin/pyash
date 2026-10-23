@@ -381,6 +381,24 @@ responses as review evidence. The live review command is
 `node command/english30k_lemma_verify.mjs summary`; its `pya` mode emits a
 parser-readable `translation_english30k_lemma_review` catalog.
 
+### English sentence morphology
+
+Word analysis supplies lexical roots and grammatical particle candidates. The
+sentence layer in
+`program/verbs/exchange/translation/english_sentence.mjs` uses plain English
+context to select finite tense and aspect. Its first supported slice covers
+simple finite forms and progressive auxiliaries. For example, the durable
+catalog records `walked` as `pfin ki`, `walks` as `pfin ra`, and the contextual
+participle candidate `walking` as `pfin pfih`; `I am walking` resolves to
+`pfin pfih ra`.
+
+Standalone `vocab_suggest` output keeps the lexical lemma line and adds a
+morphology candidate line. A sentence with unresolved candidates can be sent
+through `english_sentence_verification.mjs`, which uses the existing future
+GPU duty and await path, one bounded repair attempt, and retained review
+evidence for uncertain results. The English translation adapter uses the
+sentence layer after its established command-style parser.
+
 ## 6. Rust compatibility boundary
 
 The initial Rust boundary is `rust/pyac`. It implements the established

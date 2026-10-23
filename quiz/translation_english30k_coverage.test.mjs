@@ -226,6 +226,15 @@ test("durable lemma catalog parses source metadata and explicit irregular forms"
     ].join("\n")),
     (error) => error.code === "invalid-english-lemma"
   );
+  assert.throws(
+    () => parseEnglishLemmaCatalog([
+      "su name translation_english30k_lemmas be map def",
+      "su text \"format\" ob text \"english-lemma-v1\" ya",
+      "su text \"walked\" ob text \"{\\\"surface\\\":\\\"walked\\\",\\\"lemma\\\":\\\"walk\\\",\\\"kind\\\":\\\"inflectional\\\",\\\"status\\\":\\\"accepted-curated\\\",\\\"morphology\\\":{\\\"kind\\\":\\\"finite-past\\\",\\\"markerNames\\\":[],\\\"markerSequence\\\":[],\\\"evidence\\\":\\\"fixture\\\"},\\\"evidence\\\":\\\"fixture\\\"}\" ya",
+      "prah"
+    ].join("\n")),
+    (error) => error.code === "invalid-english-lemma"
+  );
 });
 
 test("lemma coverage remains separate from atomic and compound coverage", () => {
@@ -273,6 +282,18 @@ test("vocab_suggest reports a ranked surface form through its lemma", async () =
   });
   assert.equal(result.exitCode, 0);
   assert.match(lines.join("\n"), /walked: lemma walk -> pfin \(English30k rank 647\)/u);
+  assert.match(lines.join("\n"), /walked: morphology walk \+ past_tense_ -> pfin ki \(deterministic; English30k rank 647\)/u);
+});
+
+test("durable lemma morphology keeps lexical roots separate from particles", async () => {
+  const catalog = await loadEnglishLemmaCatalog();
+  const index = buildEnglishLemmaIndex({ atomicEntries: pyashWords, catalogEntries: catalog.entries });
+  assert.deepEqual(index.resolve("walked")?.pyashSequence, ["pfin"]);
+  assert.deepEqual(index.resolve("walked")?.morphology?.markerNames, ["past_tense_"]);
+  assert.deepEqual(index.resolve("walked")?.morphology?.markerSequence, ["ki"]);
+  assert.equal(index.resolve("walked")?.morphology?.certainty, "deterministic");
+  assert.deepEqual(index.resolve("walking")?.morphology?.markerSequence, ["pfih"]);
+  assert.equal(index.resolve("walking")?.morphology?.certainty, "contextual");
 });
 
 test("dictionary blacklist aliases accept only one existing Pyash target", () => {

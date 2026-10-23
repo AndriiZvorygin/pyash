@@ -54,3 +54,19 @@ test("translation from English conditional back to Pyash sentences", async () =>
   assert.match(out.text, /su name total ob num 0 be number ya/);
   assert.match(out.text, /ob num 3 from num 5 be tiny then ob num 1 to name total be plus do/);
 });
+
+test("English sentence translation lowers tense and aspect particles after lexical roots", async () => {
+  forget();
+
+  const sentence = parse(
+    'from text "I walked\\nI am walking" from state english to state pyash to name output be translation do'
+  );
+  const result = await interpret(sentence);
+  const out = result?.ob ?? result?.value;
+
+  assert.equal(out.sentences.length, 2);
+  assert.equal(out.sentences[0].be, "pfin ki");
+  assert.equal(out.sentences[1].be, "pfin pfih ra");
+  assert.match(out.text, /su name mi be pfin ki ya/u);
+  assert.match(out.text, /su name mi be pfin pfih ra ya/u);
+});

@@ -258,7 +258,14 @@ export function buildEnglish30kCoverage({
       lemmaStatus: resolved.status,
       lemmaRule: resolved.rule,
       lemmaEvidence: resolved.evidence,
-      lemmaPyashSequence: [...resolved.pyashSequence]
+      lemmaPyashSequence: [...resolved.pyashSequence],
+      ...(resolved.morphology ? {
+        morphology: {
+          ...resolved.morphology,
+          markerNames: [...resolved.morphology.markerNames],
+          markerSequence: [...resolved.morphology.markerSequence]
+        }
+      } : {})
     };
   };
   const rowWord = (record) => record?.word ?? record?.normalizedWord ?? "";
@@ -371,7 +378,14 @@ export function buildEnglish30kCoverage({
       lemmaStatus: resolved.status,
       lemmaRule: resolved.rule,
       lemmaEvidence: resolved.evidence,
-      lemmaPyashSequence: [...resolved.pyashSequence]
+      lemmaPyashSequence: [...resolved.pyashSequence],
+      ...(resolved.morphology ? {
+        morphology: {
+          ...resolved.morphology,
+          markerNames: [...resolved.morphology.markerNames],
+          markerSequence: [...resolved.morphology.markerSequence]
+        }
+      } : {})
     };
   });
   const counts = Object.fromEntries(
