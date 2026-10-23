@@ -27,10 +27,12 @@ each semantic item.
 
 The JavaScript reference path exposes
 `buildVliwDatabaseFromTranslation(lines, options)`. It resolves an adapter
-from the existing translation registry, translates one source line into one
-canonical sentence, and attaches language, locator, line index, and source
-text to the existing catalog provenance field. The resulting database uses the
-same `.pya` catalog and `.pyac` pack contracts as canonical Pyash input.
+from the existing translation registry, translates ordered non-empty source
+lines into canonical sentences, and attaches language, locator, line index,
+sentence index, and source text to the existing catalog provenance field.
+Blank source lines are ignored while their original line positions remain
+available in provenance. The resulting database uses the same `.pya` catalog
+and `.pyac` pack contracts as canonical Pyash input.
 
 ## 2. `.pyac` container
 
@@ -94,8 +96,9 @@ renderVliwCatalogPya(database)
 ```
 
 Queries may select record identity, status, semantic adapter, mood, verb,
-case, legacy word, literal value, source language, content hash, or canonical
-sentence text. Unsupported records remain queryable and retain their error
+case, legacy word, literal value, source language, locator, source line or
+sentence, content hash, canonical sentence text, and derived read/write
+references. Unsupported records remain queryable and retain their error
 identity; they never become executable by inference.
 
 Replay validates the pack hash, each codelet hash, semantic decoding, and the
@@ -108,11 +111,13 @@ database interface positional and delegates to the APIs above:
 
 ```text
 node command/pyac_database.mjs build source.pya catalog.pya codelets.pyac
+node command/pyac_database.mjs build-translation english source.txt catalog.pya codelets.pyac
 node command/pyac_database.mjs query catalog.pya codelets.pyac semantic numeric-plus
 node command/pyac_database.mjs replay catalog.pya codelets.pyac [record-id]
 ```
 
-Build input is a canonical Pyash source file. Structural `def` and `prah`
+Build input is a canonical Pyash source file. Translation builds use a
+registered source adapter and preserve source-line provenance. Structural `def` and `prah`
 sentences are omitted from the codelet corpus; semantic sentences remain as
 executable or explicitly unsupported catalog rows. Query and replay reopen
 both files and verify the catalog-to-pack hash before returning results.

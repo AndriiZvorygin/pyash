@@ -334,20 +334,22 @@ Both forms use the five-word compact prefix:
 ```
 
 The numeric vector uses `0x881D` and an unsigned 16-bit payload. The single
-letter vector uses `0x081D` and one UTF-16 code unit. Eleven zero words complete
-the fixed 16-word codelet. Decoding returns the canonical `ya` sentence and
-execution returns that same typed fact. A named fact, multi-code-unit text, or
-another quote width remains an explicit unsupported boundary until a matching
-legacy vector is established.
+letter vector uses `0x081D` and one UTF-16 code unit. A paragraph-letter quote
+uses `0x0E1D`, an explicit length, and UTF-16 payload words; it supports up to
+ten code units for an anonymous fact and up to nine code units for a named
+fact within one fixed codelet. Decoding returns the canonical `ya` sentence and
+execution returns that same typed fact.
 
 The reference implementation lives at
-`program/library/vliw/literal.mjs`; its source fixture is
-`examples/pyash/vliw-typed-literals.pya`. The focused conformance quiz is
-`quiz/vliw_literal_semantics.test.mjs`.
+`program/library/vliw/literal.mjs`; its source fixtures are
+`examples/pyash/vliw-typed-literals.pya` and
+`examples/pyash/vliw-extended-values.pya`. The focused conformance quizzes are
+`quiz/vliw_literal_semantics.test.mjs` and
+`quiz/vliw_extended_values.test.mjs`.
 
 ## 13. MVP semantic slice: named scalar facts
 
-The next executable slice covers one-word named scalar facts whose legacy
+The next executable slice covers named scalar facts whose legacy
 result layout is emitted by the named arithmetic interpreters:
 
 ```pyash
@@ -364,18 +366,19 @@ case, typed quote and payload, accusative case, and realis mood:
 ```
 
 The name resolves through the existing legacy vocabulary table. The reference
-adapter supports one legacy vocabulary word per name, unsigned 16-bit numeric
-payloads, and one UTF-16 text unit. Unknown names, multi-word names, wider
-text, and other quote widths retain explicit rejection reasons. The adapter
+adapter supports one or more legacy vocabulary words per name, unsigned
+16-bit numeric payloads, and paragraph-letter text that fits the fixed slot.
+Unknown names, wider text, and other quote widths retain explicit rejection
+reasons. The adapter
 lives at `program/library/vliw/named_literal.mjs`; its runnable Pyash example
 is `examples/pyash/vliw-named-literals.pya`.
 
 The translation-fed database entry point is
 `buildVliwDatabaseFromTranslation(lines, options)`. It resolves an existing
-translation registry adapter, preserves one source record per input line, and
-passes the resulting canonical sentences through the existing catalog, pack,
-query, and replay contracts. Source records retain language, locator, line
-index, and original text.
+translation registry adapter, preserves one source record per translated
+sentence, and passes the resulting canonical sentences through the existing
+catalog, pack, query, and replay contracts. Source records retain language,
+locator, line index, sentence index, and original text.
 
 ## 14. Reference semantic facade
 
@@ -389,8 +392,11 @@ index, and original text.
 - `executeCodelets(codelets)` executes supported codelets sequentially and
   returns the existing Pyash result records.
 
-The facade currently supports numeric `plus`, anonymous typed literals, and
-one-word named scalar literals. A valid but unrecognized codelet is decoded
-losslessly, then rejected by the semantic facade with an explicit
-unsupported-codelet error. This keeps representation coverage ahead of
-semantic execution without silently assigning meaning to legacy words.
+The facade currently supports numeric `plus`, scalar `subtract`, `multiply`,
+`divide`, `remains`, and `xor`, anonymous and named numeric/text/boolean
+literals, multi-word legacy names, and paragraph-letter text values that fit
+one codelet. Decoded instructions expose stable read/write effects for catalog
+queries and future dependency scheduling. A valid but unrecognized codelet is
+decoded losslessly, then rejected by the semantic facade with an explicit
+unsupported-codelet error. Vector and date values remain explicit unsupported
+catalog rows until their exact legacy layouts receive golden fixtures.

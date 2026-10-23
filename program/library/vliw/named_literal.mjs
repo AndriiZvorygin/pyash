@@ -7,7 +7,8 @@ import {
   lookupLegacyName,
   lookupLegacyWord,
   LETTER_QUOTE_WORD,
-  NUMBER_QUOTE_WORD
+  NUMBER_QUOTE_WORD,
+  PARAGRAPH_LETTER_QUOTE_WORD
 } from "./quotes.mjs";
 import { VliwEncodingError } from "./plus.mjs";
 
@@ -23,6 +24,7 @@ export const namedLiteralCompatibility = Object.freeze({
   nominativeCase: NOMINATIVE_CASE_WORD,
   numberQuote: NUMBER_QUOTE_WORD,
   letterQuote: LETTER_QUOTE_WORD,
+  paragraphLetterQuote: PARAGRAPH_LETTER_QUOTE_WORD,
   accusativeCase: ACCUSATIVE_CASE_WORD,
   realisMood: REALIS_MOOD_WORD,
   usedWords: NAMED_LITERAL_USED_WORD_COUNT
@@ -68,15 +70,19 @@ function normalizeName(value) {
     throw encodingError("unrepresentable-name", "named literals require a name", { name: value });
   }
   const name = value.name.trim();
-  const entry = lookupLegacyName(name);
-  if (!entry) {
+  const parts = name.split(/\s+/u).filter(Boolean);
+  const entries = parts.map((part) => lookupLegacyName(part));
+  if (entries.some((entry) => !entry)) {
     throw encodingError(
       "unrepresentable-name",
-      "named literal requires one legacy vocabulary name",
+      "named literal requires legacy vocabulary words for every name part",
       { name }
     );
   }
-  return { name: entry.en, word: Number.parseInt(entry.hnuc, 16) };
+  return {
+    name: entries.map((entry) => entry.en).join(" "),
+    words: entries.map((entry) => Number.parseInt(entry.hnuc, 16))
+  };
 }
 
 function normalizeNamedLiteralSentence(sentence) {
@@ -102,15 +108,15 @@ function normalizeNamedLiteralSentence(sentence) {
       su: { name: name.name },
       ob: { num: readNumber(sentence.ob.num) },
       be: "number",
-      nameWord: name.word
+      nameWords: name.words
     };
   }
 
   exactKeys(sentence.ob, ["text"], "named text literal object");
-  if (typeof sentence.ob.text !== "string" || sentence.ob.text.length !== 1) {
+  if (typeof sentence.ob.text !== "string" || sentence.ob.text.length === 0 || sentence.ob.text.length > 9) {
     throw encodingError(
       "literal-width",
-      "the proven named letter vector accepts exactly one UTF-16 code unit",
+      "the proven named text vectors accept between one and nine UTF-16 code units",
       { length: sentence.ob.text?.length ?? null }
     );
   }
@@ -119,7 +125,7 @@ function normalizeNamedLiteralSentence(sentence) {
     su: { name: name.name },
     ob: { text: sentence.ob.text },
     be: "text",
-    nameWord: name.word
+    nameWords: name.words
   };
 }
 
@@ -155,19 +161,45 @@ export function isNamedLiteralSentence(sentence) {
 export function lowerNamedLiteralSentence(sentence) {
   const normalized = normalizeNamedLiteralSentence(sentence);
   const words = new Uint16Array(CODELET_WORD_COUNT);
-  const quoteWord = normalized.be === "number" ? NUMBER_QUOTE_WORD : LETTER_QUOTE_WORD;
-  const payload = normalized.be === "number"
-    ? normalized.ob.num
-    : normalized.ob.text.charCodeAt(0);
-  words.set([
-    NAMED_LITERAL_HEAD_WORD,
-    normalized.nameWord,
-    NOMINATIVE_CASE_WORD,
-    quoteWord,
-    payload,
-    ACCUSATIVE_CASE_WORD,
-    REALIS_MOOD_WORD
-  ]);
+  if (normalized.be === "number") {
+    words.set([
+      NAMED_LITERAL_HEAD_WORD,
+      ...normalized.nameWords,
+      NOMINATIVE_CASE_WORD,
+      NUMBER_QUOTE_WORD,
+      normalized.ob.num,
+      ACCUSATIVE_CASE_WORD,
+      REALIS_MOOD_WORD
+    ]);
+  } else if (normalized.ob.text.length === 1) {
+    words.set([
+      NAMED_LITERAL_HEAD_WORD,
+      ...normalized.nameWords,
+      NOMINATIVE_CASE_WORD,
+      LETTER_QUOTE_WORD,
+      normalized.ob.text.charCodeAt(0),
+      ACCUSATIVE_CASE_WORD,
+      REALIS_MOOD_WORD
+    ]);
+  } else {
+    const chars = Array.from(
+      { length: normalized.ob.text.length },
+      (_, index) => normalized.ob.text.charCodeAt(index)
+    );
+    words.set([
+      NAMED_LITERAL_HEAD_WORD,
+      ...normalized.nameWords,
+      NOMINATIVE_CASE_WORD,
+      PARAGRAPH_LETTER_QUOTE_WORD,
+      chars.length,
+      ...chars,
+      ACCUSATIVE_CASE_WORD,
+      REALIS_MOOD_WORD
+    ]);
+  }
+  const usedWords = normalized.be === "number" || normalized.ob.text.length === 1
+    ? normalized.nameWords.length + 6
+    : normalized.ob.text.length + normalized.nameWords.length + 6;
   return {
     sentence: {
       mood: normalized.mood,
@@ -177,43 +209,48 @@ export function lowerNamedLiteralSentence(sentence) {
     },
     words,
     bytes: wordsToBytes(words),
-    usedWords: NAMED_LITERAL_USED_WORD_COUNT
+    usedWords
   };
 }
 
 export function decodeNamedLiteralCodelet(input) {
   const decoded = decodeLegacy(input);
-  if (decoded.usedWords !== NAMED_LITERAL_USED_WORD_COUNT) {
-    throw encodingError("malformed-codelet", "named literal codelet has an invalid used-word boundary", {
-      expected: NAMED_LITERAL_USED_WORD_COUNT,
-      actual: decoded.usedWords
-    });
-  }
   markerAt(decoded, 0, NAMED_LITERAL_HEAD_WORD, "head");
-  markerAt(decoded, 2, NOMINATIVE_CASE_WORD, "nominative case");
-  markerAt(decoded, 5, ACCUSATIVE_CASE_WORD, "accusative case");
-  markerAt(decoded, 6, REALIS_MOOD_WORD, "realis mood");
 
-  const nameItem = decoded.items.find((candidate) => candidate.offset === 1);
-  if (nameItem?.kind !== "word" || !lookupLegacyWord(nameItem.word)?.en) {
+  const nominativeOffset = decoded.items.find((candidate) => (
+    candidate.kind === "word" && candidate.word === NOMINATIVE_CASE_WORD && candidate.offset > 0
+  ))?.offset;
+  if (nominativeOffset === undefined || nominativeOffset < 2) {
+    throw encodingError("malformed-codelet", "named literal codelet has no name phrase");
+  }
+  const nameItems = decoded.items.filter((candidate) => (
+    candidate.kind === "word" && candidate.offset > 0 && candidate.offset < nominativeOffset
+  ));
+  if (nameItems.length !== nominativeOffset - 1 || nameItems.some((item) => !lookupLegacyWord(item.word)?.en)) {
     throw encodingError("malformed-codelet", "named literal codelet has an unknown name word", {
-      actual: nameItem?.word
+      actual: nameItems.map((item) => item.word)
     });
   }
 
-  const quoteItem = decoded.items.find((candidate) => candidate.offset === 3);
-  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD].includes(quoteItem.quote.word)) {
+  const quoteItem = decoded.items.find((candidate) => candidate.offset === nominativeOffset + 1);
+  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word)) {
     throw encodingError("malformed-codelet", "named literal codelet has an unsupported quote", {
       actual: quoteItem?.quote?.word ?? quoteItem?.word
     });
   }
-  if (quoteItem.quote.nextOffset !== 5) {
-    throw encodingError("malformed-codelet", "named literal quote boundary is invalid", {
-      nextOffset: quoteItem.quote.nextOffset
+  const accusativeOffset = quoteItem.quote.nextOffset;
+  const realisOffset = accusativeOffset + 1;
+  markerAt(decoded, accusativeOffset, ACCUSATIVE_CASE_WORD, "accusative case");
+  markerAt(decoded, realisOffset, REALIS_MOOD_WORD, "realis mood");
+  const expectedUsedWords = realisOffset + 1;
+  if (decoded.usedWords !== expectedUsedWords) {
+    throw encodingError("malformed-codelet", "named literal codelet has an invalid used-word boundary", {
+      expected: expectedUsedWords,
+      actual: decoded.usedWords
     });
   }
 
-  const name = lookupLegacyWord(nameItem.word).en;
+  const name = nameItems.map((item) => lookupLegacyWord(item.word).en).join(" ");
   if (quoteItem.quote.word === NUMBER_QUOTE_WORD) {
     return {
       mood: "ya",
@@ -222,8 +259,8 @@ export function decodeNamedLiteralCodelet(input) {
       be: "number"
     };
   }
-  if (typeof quoteItem.quote.value !== "string" || quoteItem.quote.value.length !== 1) {
-    throw encodingError("literal-width", "named letter quote must contain one UTF-16 code unit", {
+  if (typeof quoteItem.quote.value !== "string" || quoteItem.quote.value.length === 0) {
+    throw encodingError("literal-width", "named text quote must contain UTF-16 code units", {
       length: quoteItem.quote.value?.length ?? null
     });
   }

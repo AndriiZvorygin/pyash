@@ -61,13 +61,23 @@ test("named literal lowering keeps name and width boundaries explicit", () => {
     "unrepresentable-name"
   );
   assert.equal(
-    errorCode(() => lowerSentence(parse("su name collector answer ob num 7 be number ya"))),
+    errorCode(() => lowerSentence(parse("su name collector unassigned-name ob num 7 be number ya"))),
     "unrepresentable-name"
   );
   assert.equal(
-    errorCode(() => lowerSentence(parse('su name collector ob text "AB" be text ya'))),
+    errorCode(() => lowerSentence(parse('su name collector ob text "ABCDEFGHIJ" be text ya'))),
     "literal-width"
   );
+});
+
+test("named literals preserve multi-word legacy names", async () => {
+  const sentence = parse("su name collector answer ob num 7 be number ya");
+  const lowered = lowerSentence(sentence)[0];
+  assert.deepEqual(Array.from(lowered.words.slice(0, 8)), [
+    0x0065, 0xab02, 0x4930, 0x24de, 0x881d, 0x0007, 0x245e, 0x217e
+  ]);
+  assert.equal(lowered.usedWords, 8);
+  assert.deepEqual(await executeCodelets([lowered]), [sentence]);
 });
 
 test("named literal decoding rejects malformed markers and noisy tails", () => {
@@ -101,12 +111,14 @@ test("named literals are cataloged and replayed with translation provenance", as
       language: "chinese",
       locator: "fixtures/chinese-lines.txt",
       lineIndex: 0,
+      sentenceIndex: 0,
       text: "collector 是 数 7."
     },
     {
       language: "chinese",
       locator: "fixtures/chinese-lines.txt",
       lineIndex: 1,
+      sentenceIndex: 0,
       text: "collector 是 文本 \"A\"."
     }
   ]);

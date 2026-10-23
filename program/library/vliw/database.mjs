@@ -160,6 +160,7 @@ function makeExecutableRecord({ sentence, decoded, codelet, inputIndex, partInde
     words: Array.from(words),
     wordsHex: bytesToHex(bytes),
     usedWords: codelet?.usedWords ?? decoded.usedWords ?? null,
+    effects: cloneSerializable(decoded.effects ?? null),
     codeletHash: sha256(bytes),
     source,
     ...(expected === undefined ? {} : { expected: cloneSerializable(expected) })
@@ -383,13 +384,14 @@ export function buildVliwDatabaseFromTranslation(lines, options = {}) {
   const sentences = [];
   const sources = [];
   for (const [lineIndex, line] of lines.entries()) {
-    if (typeof line !== "string" || !line.trim()) {
+    if (typeof line !== "string") {
       fail("translation-failed", "translation input lines must contain source text", {
         language,
         lineIndex,
         line
       });
     }
+    if (!line.trim()) continue;
     let sentence;
     try {
       sentence = adapter.toPyash(line);
@@ -408,13 +410,29 @@ export function buildVliwDatabaseFromTranslation(lines, options = {}) {
         line
       });
     }
-    sentences.push(sentence);
-    sources.push({
-      ...(options.source && typeof options.source === "object" ? cloneSerializable(options.source) : {}),
-      language,
-      locator: options.locator ?? null,
-      lineIndex,
-      text: line
+    const translated = Array.isArray(sentence)
+      ? sentence
+      : Array.isArray(sentence.sentences)
+        ? sentence.sentences
+        : [sentence];
+    translated.forEach((item, sentenceIndex) => {
+      if (!item || typeof item !== "object") {
+        fail("translation-failed", "translation adapter produced an invalid canonical sentence", {
+          language,
+          lineIndex,
+          sentenceIndex,
+          line
+        });
+      }
+      sentences.push(item);
+      sources.push({
+        ...(options.source && typeof options.source === "object" ? cloneSerializable(options.source) : {}),
+        language,
+        locator: options.locator ?? null,
+        lineIndex,
+        sentenceIndex,
+        text: line
+      });
     });
   }
 
@@ -449,6 +467,11 @@ function recordMatches(record, criteria) {
   if (criteria.hnuc !== undefined && record.hnuc !== criteria.hnuc) return false;
   if (criteria.codeletHash !== undefined && record.codeletHash !== criteria.codeletHash) return false;
   if (criteria.sourceLanguage !== undefined && record.source?.language !== criteria.sourceLanguage) return false;
+  if (criteria.sourceLocator !== undefined && record.source?.locator !== criteria.sourceLocator) return false;
+  if (criteria.sourceLine !== undefined && record.source?.lineIndex !== criteria.sourceLine) return false;
+  if (criteria.sourceSentence !== undefined && record.source?.sentenceIndex !== criteria.sourceSentence) return false;
+  if (criteria.reads !== undefined && !record.effects?.reads?.includes(criteria.reads)) return false;
+  if (criteria.writes !== undefined && !record.effects?.writes?.includes(criteria.writes)) return false;
   if (criteria.canonicalIncludes !== undefined && !record.canonicalSentence.includes(criteria.canonicalIncludes)) {
     return false;
   }
