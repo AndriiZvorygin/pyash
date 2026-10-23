@@ -227,8 +227,21 @@ Source-language order and morpheme boundaries remain in provenance. A source
 language may place the head first, use a linking word, or fuse the surface;
 the resolver emits the semantic Pyash sequence separately. The resolver is
 re-exported by the translation adapters and the shared multilingual compound
-module. Closed-word candidates retain review status until a semantic
-decomposition is recorded.
+module. Closed-word candidates are emitted by
+`node command/compound_coverage.mjs uncertain` as the bounded LLM
+verification batch. Verification receives only existing candidate
+decompositions, selects by stable id, and gets one repair attempt when its
+response violates the contract. Outcomes use `accepted-llm`, `repaired-llm`,
+`uncertain-llm`, or `rejected-llm`; the original coverage status remains in
+`coverageStatus`. Verification evidence and attempt counts remain in the same
+`.pya` record.
+
+For a configured Pyash mind, the executable verifier is
+`node command/compound_coverage_verify.mjs pya <mind-name>`. It runs the
+deterministic records through without a model call and sends only the
+uncertain batch through the existing `be write for name <mind>` path. The
+default output is a summary; `pya` emits the verified catalog for parser-backed
+inspection.
 
 The first external compound analysis uses the historical `hkestlat` source
 shapes `mwonkwon.json` and `chinese_dictionary_stems.json`. The host-side
