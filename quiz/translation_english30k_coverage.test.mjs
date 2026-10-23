@@ -303,10 +303,18 @@ test("default English30k coverage uses the repository dictionary blacklist", asy
 test("lwonprom-derived English grammar composes possessive and plural noun phrases", async () => {
   const catalog = await loadEnglishGrammarCatalog();
   const grammar = buildEnglishGrammarIndex({ catalogEntries: catalog.entries });
-  assert.deepEqual(grammar.resolve("our")?.pyashSequence, ["hwam", "ti"]);
-  assert.deepEqual(grammar.resolve("your")?.pyashSequence, ["hnan", "ti"]);
+  assert.deepEqual(grammar.resolve("our")?.components, ["us_", "possessive_marker_"]);
+  assert.deepEqual(grammar.resolve("our")?.pyashSequence, ["nyah", "ye"]);
+  assert.deepEqual(grammar.resolve("your")?.components, ["you_", "possessive_marker_"]);
+  assert.deepEqual(grammar.resolve("your")?.pyashSequence, ["sa", "ye"]);
+  assert.deepEqual(grammar.resolve("my")?.pyashSequence, ["mi", "ye"]);
+  assert.deepEqual(grammar.resolve("ours")?.pyashSequence, ["nyah", "ye"]);
   assert.deepEqual(grammar.resolve("plural")?.pyashSequence, ["pu"]);
   assert.deepEqual(grammar.resolve("possessive")?.pyashSequence, ["ye"]);
+
+  assert.equal(pyashWords.find((entry) => entry.en === "us")?.pya, "hwam");
+  assert.equal(grammar.resolve("our")?.pyashSequence.includes("hwam"), false);
+  assert.equal(grammar.resolve("your")?.pyashSequence.includes("hnan"), false);
 
   const coverage = await loadDefaultEnglish30kCoverage({ atomicEntries: pyashWords });
   const father = lookupEnglish30kCoverage(coverage, "father");
@@ -321,7 +329,7 @@ test("lwonprom-derived English grammar composes possessive and plural noun phras
     resolve: (word) => lookupEnglish30kCoverage(coverage, word)
   });
   assert.equal(phrase.status, "composed");
-  assert.deepEqual(phrase.pyashSequence, ["hwam", "ti", "hpap", "pu"]);
+  assert.deepEqual(phrase.pyashSequence, ["nyah", "ye", "hpap", "pu"]);
 
   const alreadyPlural = composeEnglishNounPhrase({
     head: "father",
@@ -347,7 +355,7 @@ test("vocab_suggest reports an English grammatical construction", async () => {
     report: (line) => lines.push(String(line))
   });
   assert.equal(result.exitCode, 0);
-  assert.match(lines.join("\n"), /our: grammar -> hwam ti \(English30k rank 66\)/u);
+  assert.match(lines.join("\n"), /our: grammar -> nyah ye \(English30k rank 66\)/u);
 });
 
 test("ambiguous regular forms remain Housekeeper candidates", () => {

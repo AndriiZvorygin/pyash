@@ -156,9 +156,11 @@ English grammatical words that have a direct PyAC construction use the durable
 catalog `program/verbs/exchange/translation/english_grammar.pya`. The catalog
 keeps lexical heads separate from grammar markers:
 
-- `our` is the first-person plural possessor followed by genitive `ti`, so a
-  phrase such as “our father” lowers as `hwam ti <father>`.
-- `your` and `my` use the same genitive construction with `hnan` and `hman`.
+- `our` is the grammar us particle `nyah` followed by the possessive marker
+  `ye`, so a phrase such as “our father” lowers as `nyah ye <father>`.
+- `your` and `my` use the same possessive construction with `sa` and `mi`.
+- The lexical roots `hwam`, `hnan`, and `hman` remain available for compound
+  words; they are separate from the short grammar particles used here.
 - `plural` is the noun suffix `pu`; a composed plural phrase appends `pu` to
   the resolved head.
 - `possessive` is the possessive marker `ye`, while `genitive` is the linking
