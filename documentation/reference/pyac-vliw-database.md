@@ -177,6 +177,12 @@ continues to cover the public `decode_numeric_plus_codelet` adapter. Rust
 semantic coverage remains deliberately limited to proven adapters; the
 JavaScript facade remains the broader reference executor.
 
+The recovered legacy C arithmetic boundary is also preserved: plus saturates
+as a `uint16_t`, while subtract, multiply, divide, and xor produce `uint64_t`
+values (`lwonprom-pre-oct-2025/program/math.c`). Rust therefore returns `u64`
+for the general arithmetic executor and does not invent a narrower multiply
+result width.
+
 `execute_numeric_arithmetic_pack` applies that boundary to every codelet in a
 decoded `.pyac` pack and reports the failing codelet index with the stable
 semantic error code. It executes numeric arithmetic packs only; typed literals,
