@@ -22,6 +22,7 @@ import {
 import {
   classifyCompoundCoverage,
   createDefaultMindCompoundVerifier,
+  createQueuedMindCompoundVerifier,
   createMindCompoundVerifier,
   parseCompoundVerificationResponse,
   verifyCompoundCoverage
@@ -501,4 +502,26 @@ test("default compound verifier delegates through the existing mind runtime", as
     if (previousResponse === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = previousResponse;
   }
+});
+
+test("queued compound verifier expresses future GPU work through Pyash", async () => {
+  const calls = [];
+  const invoke = createQueuedMindCompoundVerifier({
+    timeoutMs: 9000,
+    parse: (source) => source,
+    interpret: async (sentence) => {
+      calls.push(sentence);
+      if (sentence.includes("vyah start future be gpu mind do")) return { ob: { text: "queued" } };
+      return { ob: { text: "success" }, result: { text: "{\"verdict\":\"uncertain\"}" } };
+    }
+  });
+  const response = await invoke({
+    prompt: "verify a compound",
+    record: { id: "candidate-acid-rain", target: "acid-rain", pyashSequence: ["flat", "myic"] }
+  });
+  assert.equal(response, '{"verdict":"uncertain"}');
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /vyah start future be gpu mind do/u);
+  assert.match(calls[1], /vyah await be gpu do/u);
+  assert.match(calls[1], /during num 9000/u);
 });

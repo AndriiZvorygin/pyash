@@ -257,14 +257,17 @@ For a configured Pyash mind, the executable verifier is
 `configure/default.pya` and host-local `configure/secret.pya` configuration,
 then runs the
 deterministic records through without a model call and sends only the
-uncertain batch through the existing `be write for name <mind>` path. The
-default output is a summary; `pya` emits the verified catalog for parser-backed
-inspection. When `gpu housekeeper url` is configured, the command supplies that
-existing managed GPU path to the mind runner while preserving the configured
-`ollama host` as the provider endpoint. A third positional argument in `pya`
-mode writes each verified record incrementally to that `.pya` path and closes
-the map with `prah` on success; an interrupted run leaves a parser-readable
-partial checkpoint in place.
+uncertain batch through the existing Pyash `vyah start future be gpu mind do`
+and `vyah await be gpu do` path. The GPU worker submits those durable duties to
+the configured housekeeper; the verifier has no direct provider fallback. Start
+the worker with `node command/gpu_worker.mjs --world world` while the verifier
+runs. The default output is a summary; `pya` emits the verified catalog for
+parser-backed inspection. When `gpu housekeeper url` is configured, the worker
+uses that existing managed GPU path while preserving the configured `ollama
+host` as the provider endpoint. A third positional argument in `pya` mode
+writes each verified record incrementally to that `.pya` path and closes the map
+with `prah` on success; an interrupted run leaves a parser-readable partial
+checkpoint in place.
 
 The first external compound analysis uses the historical `hkestlat` source
 shapes `mwonkwon.json` and `chinese_dictionary_stems.json`. The host-side
