@@ -183,8 +183,8 @@ sentence.
 
 ## 6. Conceptual interfaces
 
-These signatures describe the boundary; they are not a request to add runtime
-JavaScript in this tranche:
+These signatures describe the semantic boundary. The JavaScript reference
+facade below implements the currently proven subset:
 
 ```text
 lowerSentence(sentence) -> Codelet[] | EncodingError
@@ -197,7 +197,9 @@ executeCodelets(codelets, inputs) -> Paragraph | ExecutionError
 the compatibility table. `decodeCodelet` MUST validate all index, quote,
 continuation, HNUC, type, and dependency metadata. `executeCodelets` MUST
 return sentence/paragraph-shaped results and preserve the same semantic
-effects as interpreted execution. The host language, OpenCL, or another
+effects as interpreted execution. The current JavaScript reference facade
+implements these interfaces for the proven numeric-plus adapter and rejects
+other semantic codelets explicitly. The host language, OpenCL, or another
 backend is an implementation choice behind this boundary.
 
 ## 7. Compatibility examples
@@ -266,15 +268,19 @@ The reference implementation lives at
 `program/library/vliw/plus.mjs`; its source fixture is
 `examples/pyash/vliw-numeric-plus.pya`. The focused conformance quiz is
 `quiz/vliw_plus_semantics.test.mjs`. Rust lowering, GPU scheduling, paragraph
-codelets, and compiler-command integration follow after this exact fixture and
-round-trip contract are stable.
+codelets, and compiler-command integration remain outside the current
+reference adapter.
 
 ## 10. Quote descriptors and legacy surface rendering
 
 The legacy quote-denote is `0x001D`. Its assigned quote classes include
 `0x881D` for numeric values, `0x081D` for letters, and `0x0E1D` for
-paragraph-letter values. A numeric quote consumes one following 16-bit payload
-word in the MVP decoder, so `0x881D 0001` is the typed value `1`.
+paragraph-letter values. `decodeQuoteHeader` exposes the legacy region,
+pointed, sequence, vector-width, scalar-width, and sort fields. A numeric or
+letter quote consumes one following 16-bit payload word in the reference
+decoder, so `0x881D 0001` is the typed value `1` and `0x081D 0041` is the
+letter `A`. A paragraph-letter quote consumes an explicit vector length word
+followed by that many character words.
 
 Quote markers describe value representation. Lexical Pyash spellings remain
 HNUC table entries. The shared quote decoder uses the HNUC table for grammar
@@ -282,10 +288,11 @@ and verb words, then combines the typed value with its case marker. The plus
 golden vector therefore renders as `hyikdoyu hyikdoka plustu` while its
 canonical semantic form remains `ob num 1 to num 1 be plus do`.
 
-The structured decoder accepts numeric unsigned 16-bit payloads. Surface
-number-word rendering currently covers the legacy zero-through-twenty table;
-larger numeric values remain available in structured form while compound
-surface composition is added in a later slice.
+The structured decoder accepts unsigned numeric payloads, single-character
+payloads, and paragraph-letter payloads. Surface number-word rendering
+currently covers the legacy zero-through-twenty table; larger numeric values
+remain available in structured form while compound surface composition is
+added in a later slice.
 
 ## 11. Generic fixed-slot codelet decoding
 
@@ -294,9 +301,28 @@ surface composition is added in a later slice.
 to the shared quote decoder, and resolves known lexical words through the HNUC
 table. Unknown non-quote words remain raw words so decoding never invents a
 lexical meaning. The first standalone zero marks the used-word boundary; every
-following slot must also be zero.
+following slot must also be zero. `renderLegacyCodelet` exposes a diagnostic
+surface that preserves raw words and renders supported typed values without
+claiming that arbitrary codelets are executable Pyash.
 
 This layer exposes typed items and the used-word count. It does not infer
 arbitrary grammar or execute unknown codelets. Numeric-plus remains the first
 semantic adapter: it validates its marker sequence from the generic items and
 then delegates execution to the existing Pyash `plus` handler.
+
+## 12. Reference semantic facade
+
+`program/library/vliw/index.mjs` provides the reference boundary:
+
+- `lowerSentence(sentence)` returns one lowered codelet for a supported
+  canonical sentence;
+- `lowerParagraph(paragraph)` lowers sentences in source order;
+- `decodeCodelet(words)` returns the decoded items and canonical sentence for
+  a supported semantic adapter; and
+- `executeCodelets(codelets)` executes supported codelets sequentially and
+  returns the existing Pyash result records.
+
+The facade currently supports numeric `plus` only. A valid but unrecognized
+codelet is decoded losslessly, then rejected by the semantic facade with an
+explicit unsupported-codelet error. This keeps representation coverage ahead
+of semantic execution without silently assigning meaning to legacy words.

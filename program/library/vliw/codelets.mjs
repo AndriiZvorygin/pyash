@@ -95,3 +95,26 @@ export function decodeLegacyCodelet(input) {
 
   return { words, items, usedWords: words.length };
 }
+
+function renderQuote(quote) {
+  if (quote.family === "number") {
+    return `num ${quote.value.toString()}`;
+  }
+  if (quote.family === "letter") {
+    return `letter ${JSON.stringify(quote.value)}`;
+  }
+  if (quote.family === "paragraph-letter") {
+    return `text ${JSON.stringify(quote.value)}`;
+  }
+  throw codeletError("unsupported-quote", `cannot render ${quote.family} quote`);
+}
+
+export function renderLegacyCodelet(input) {
+  const decoded = decodeLegacyCodelet(input);
+  return decoded.items.map((item) => {
+    if (item.kind === "quote") {
+      return renderQuote(item.quote);
+    }
+    return item.entry?.pya ?? `0x${item.word.toString(16).padStart(4, "0")}`;
+  }).join(" ");
+}
