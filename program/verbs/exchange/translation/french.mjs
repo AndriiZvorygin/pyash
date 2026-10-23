@@ -376,3 +376,5 @@ function parseVectorToken(type, token) {
 }
 
 export { sentenceToFrench, frenchLineToSentence };
+
+export { loadFrenchCompoundLexicon } from "./compound_lexicons.mjs";

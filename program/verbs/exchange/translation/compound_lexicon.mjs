@@ -5,6 +5,14 @@ import { buildProgram } from "../../../program.mjs";
 
 export const CHINESE_COMPOUND_LEXICON_NAME = "translation_compounds_chinese";
 
+export const COMPOUND_LEXICON_NAMES = Object.freeze({
+  chinese: CHINESE_COMPOUND_LEXICON_NAME,
+  french: "translation_compounds_french",
+  russian: "translation_compounds_russian",
+  hindi: "translation_compounds_hindi",
+  interlingua: "translation_compounds_interlingua"
+});
+
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
   if (value && typeof value === "object") {
@@ -36,7 +44,7 @@ function invalid(message, details = {}) {
   return error;
 }
 
-function normalizeEntry(payload, surface, index) {
+function normalizeEntry(payload, surface, index, language) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw invalid("compound row payload must be an object", { index });
   }
@@ -110,7 +118,7 @@ function normalizeEntry(payload, surface, index) {
   }
   const entry = {
     id: compoundId(payload),
-    language: "chinese",
+    language,
     surface,
     morphemes: [...payload.morphemes],
     target: payload.target,
@@ -135,13 +143,15 @@ function normalizeEntry(payload, surface, index) {
   return entry;
 }
 
-export function parseChineseCompoundLexicon(source) {
+export function parseCompoundLexicon(source, { name, language } = {}) {
   if (typeof source !== "string") throw invalid("compound lexicon source must be text");
+  if (typeof name !== "string" || !name) throw invalid("compound lexicon requires a map name");
+  if (typeof language !== "string" || !language) throw invalid("compound lexicon requires a language");
   const sentences = buildProgram(source).sentences;
   const header = sentences.find((sentence) => (
     sentence?.mood === "def" &&
     sentence?.be === "map" &&
-    sentence?.su?.name === CHINESE_COMPOUND_LEXICON_NAME
+    sentence?.su?.name === name
   ));
   if (!header) throw invalid("compound lexicon has no canonical map header");
 
@@ -158,7 +168,7 @@ export function parseChineseCompoundLexicon(source) {
     } catch (error) {
       throw invalid("compound row JSON payload is malformed", { index, cause: error.message });
     }
-    const entry = normalizeEntry(payload, sentence.su.text, index);
+    const entry = normalizeEntry(payload, sentence.su.text, index, language);
     if (seen.has(entry.surface)) throw invalid("compound surface is duplicated", { surface: entry.surface });
     seen.add(entry.surface);
     entries.push(entry);
@@ -167,12 +177,32 @@ export function parseChineseCompoundLexicon(source) {
   return entries;
 }
 
-export async function loadChineseCompoundLexicon({ url = new URL("./compound_lexicon_chinese.pya", import.meta.url) } = {}) {
-  return parseChineseCompoundLexicon(await fs.readFile(url, "utf8"));
+export function parseChineseCompoundLexicon(source) {
+  return parseCompoundLexicon(source, {
+    name: CHINESE_COMPOUND_LEXICON_NAME,
+    language: "chinese"
+  });
 }
 
-export function queryChineseCompoundLexicon(entries, criteria = {}) {
-  const rows = typeof entries === "string" ? parseChineseCompoundLexicon(entries) : entries;
+export async function loadCompoundLexicon({ url, name, language } = {}) {
+  if (!(url instanceof URL) && typeof url !== "string") {
+    throw invalid("compound lexicon requires a source URL");
+  }
+  return parseCompoundLexicon(await fs.readFile(url, "utf8"), { name, language });
+}
+
+export async function loadChineseCompoundLexicon({ url = new URL("./compound_lexicon_chinese.pya", import.meta.url) } = {}) {
+  return loadCompoundLexicon({
+    url,
+    name: CHINESE_COMPOUND_LEXICON_NAME,
+    language: "chinese"
+  });
+}
+
+export function queryCompoundLexicon(entries, criteria = {}, options = {}) {
+  const rows = typeof entries === "string"
+    ? parseCompoundLexicon(entries, options)
+    : entries;
   if (!Array.isArray(rows)) throw invalid("compound query requires parsed rows");
   return rows.filter((entry) => {
     if (criteria.id !== undefined && entry.id !== criteria.id) return false;
@@ -186,6 +216,13 @@ export function queryChineseCompoundLexicon(entries, criteria = {}) {
     if (criteria.pyashWord !== undefined && !entry.pyashSequence?.includes(criteria.pyashWord)) return false;
     if (criteria.maxLayer !== undefined && entry.maxLayer !== criteria.maxLayer) return false;
     return true;
+  });
+}
+
+export function queryChineseCompoundLexicon(entries, criteria = {}) {
+  return queryCompoundLexicon(entries, criteria, {
+    name: CHINESE_COMPOUND_LEXICON_NAME,
+    language: "chinese"
   });
 }
 
