@@ -15,8 +15,18 @@ import {
   lowerTypedLiteralSentence,
   typedLiteralCompatibility
 } from "./literal.mjs";
+import {
+  decodeNamedLiteralCodelet,
+  executeNamedLiteralCodelet,
+  isNamedLiteralSentence,
+  lowerNamedLiteralSentence,
+  namedLiteralCompatibility
+} from "./named_literal.mjs";
 
 export function lowerSentence(sentence) {
+  if (isNamedLiteralSentence(sentence)) {
+    return [lowerNamedLiteralSentence(sentence)];
+  }
   if (isTypedLiteralSentence(sentence)) {
     return [lowerTypedLiteralSentence(sentence)];
   }
@@ -32,6 +42,24 @@ export function lowerParagraph(paragraph) {
 
 export function decodeCodelet(input) {
   const decoded = decodeLegacyCodelet(input);
+  if (decoded.words[0] === namedLiteralCompatibility.head) {
+    try {
+      return {
+        ...decoded,
+        semantic: "named-literal",
+        sentence: decodeNamedLiteralCodelet(decoded.words)
+      };
+    } catch (error) {
+      if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
+        throw new VliwCodeletError("unsupported-codelet", "named literal codelet is malformed", {
+          cause: error.code,
+          details: error.details,
+          items: decoded.items
+        });
+      }
+      throw error;
+    }
+  }
   if (decoded.words[0] === typedLiteralCompatibility.head) {
     try {
       return {
@@ -77,7 +105,9 @@ export async function executeCodelets(codelets) {
   for (const codelet of codelets) {
     const words = codelet?.words ?? codelet;
     const decoded = decodeCodelet(words);
-    if (decoded.semantic === "typed-literal") {
+    if (decoded.semantic === "named-literal") {
+      results.push(await executeNamedLiteralCodelet(words));
+    } else if (decoded.semantic === "typed-literal") {
       results.push(await executeTypedLiteralCodelet(words));
     } else {
       results.push(await executeNumericPlusCodelet(words));
@@ -97,6 +127,7 @@ export {
   encodePyacPack,
   decodePyacPack,
   buildVliwDatabase,
+  buildVliwDatabaseFromTranslation,
   queryVliwCatalog,
   replayVliwDatabase,
   renderVliwCatalogPya,
