@@ -205,6 +205,13 @@ queue lifecycle for model work; it does not execute PyAC codelets. Adding an
 OpenCL backend therefore waits for a kernel ABI, codelet result ABI, device
 admission, and conformance fixtures.
 
+For supported semantic codelets, `renderPyashCodelet(words)` performs the
+reverse projection from fixed-width PyAC VLIW to canonical Pyash text by
+decoding the semantic sentence and using the existing Pyash renderer. The
+legacy numeric-plus surface remains available as `hyikdoyu hyikdoka plustu`;
+unknown codelets continue to expose diagnostic words rather than invented
+semantics.
+
 Vector quote payloads now decode losslessly for the recovered fixed-width
 16-bit numeric/letter header families. Vector sentence values remain cataloged
 as explicit unsupported semantic rows: the legacy source exposes vector-width

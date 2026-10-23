@@ -37,6 +37,7 @@ import {
   lowerNumericArithmeticSentence,
   numericArithmeticCompatibility
 } from "./arithmetic.mjs";
+import { sentenceToPyash } from "../../beautiful.mjs";
 import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
 
 function semanticDecode(decoded, semantic, sentence) {
@@ -222,6 +223,11 @@ export function decodeCodelet(input) {
     }
     throw error;
   }
+}
+
+export function renderPyashCodelet(input) {
+  const decoded = decodeCodelet(input);
+  return sentenceToPyash(decoded.sentence);
 }
 
 export async function executeCodelets(codelets) {
