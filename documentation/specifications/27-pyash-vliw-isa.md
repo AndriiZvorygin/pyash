@@ -345,7 +345,39 @@ The reference implementation lives at
 `examples/pyash/vliw-typed-literals.pya`. The focused conformance quiz is
 `quiz/vliw_literal_semantics.test.mjs`.
 
-## 13. Reference semantic facade
+## 13. MVP semantic slice: named scalar facts
+
+The next executable slice covers one-word named scalar facts whose legacy
+result layout is emitted by the named arithmetic interpreters:
+
+```pyash
+su name collector ob num 7 be number ya
+su name collector ob text "A" be text ya
+```
+
+The fixed vector uses the legacy index word followed by the name, nominative
+case, typed quote and payload, accusative case, and realis mood:
+
+```text
+0065 name 24DE 881D value 245E 217E
+0065 name 24DE 081D code-unit 245E 217E
+```
+
+The name resolves through the existing legacy vocabulary table. The reference
+adapter supports one legacy vocabulary word per name, unsigned 16-bit numeric
+payloads, and one UTF-16 text unit. Unknown names, multi-word names, wider
+text, and other quote widths retain explicit rejection reasons. The adapter
+lives at `program/library/vliw/named_literal.mjs`; its runnable Pyash example
+is `examples/pyash/vliw-named-literals.pya`.
+
+The translation-fed database entry point is
+`buildVliwDatabaseFromTranslation(lines, options)`. It resolves an existing
+translation registry adapter, preserves one source record per input line, and
+passes the resulting canonical sentences through the existing catalog, pack,
+query, and replay contracts. Source records retain language, locator, line
+index, and original text.
+
+## 14. Reference semantic facade
 
 `program/library/vliw/index.mjs` provides the reference boundary:
 
@@ -357,8 +389,8 @@ The reference implementation lives at
 - `executeCodelets(codelets)` executes supported codelets sequentially and
   returns the existing Pyash result records.
 
-The facade currently supports numeric `plus` and anonymous typed literals. A
-valid but unrecognized codelet is decoded losslessly, then rejected by the
-semantic facade with an explicit unsupported-codelet error. This keeps
-representation coverage ahead of semantic execution without silently assigning
-meaning to legacy words.
+The facade currently supports numeric `plus`, anonymous typed literals, and
+one-word named scalar literals. A valid but unrecognized codelet is decoded
+losslessly, then rejected by the semantic facade with an explicit
+unsupported-codelet error. This keeps representation coverage ahead of
+semantic execution without silently assigning meaning to legacy words.

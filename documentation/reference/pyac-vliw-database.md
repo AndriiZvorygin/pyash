@@ -25,6 +25,13 @@ translation adapter. It becomes executable after the adapter produces a
 canonical Pyash sentence or paragraph and the VLIW compatibility table accepts
 each semantic item.
 
+The JavaScript reference path exposes
+`buildVliwDatabaseFromTranslation(lines, options)`. It resolves an adapter
+from the existing translation registry, translates one source line into one
+canonical sentence, and attaches language, locator, line index, and source
+text to the existing catalog provenance field. The resulting database uses the
+same `.pya` catalog and `.pyac` pack contracts as canonical Pyash input.
+
 ## 2. `.pyac` container
 
 The reference container is little-endian and has no timestamps, addresses,
@@ -136,10 +143,10 @@ map rows. The loader and query helpers live in
 by the Chinese translation adapter.
 
 The compound surface is evidence for translation; canonical Pyash identity
-remains the execution authority. Current entries are searchable and retain an
-`unlowered` status because the current VLIW semantic facade has no codelet
-mapping for those name values. Automatic HNUC allocation remains outside this
-contract.
+remains the execution authority. Compound rows remain searchable morphology
+metadata. A translated sentence becomes executable when its canonical name
+and value fit a proven VLIW adapter; automatic HNUC allocation remains outside
+this contract.
 
 ## 6. Rust compatibility boundary
 

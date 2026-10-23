@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 
 import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
+import { resolveTranslationSource } from "../../verbs/exchange/translation/registry.mjs";
 import {
   decodeCodelet,
   executeCodelets,
@@ -365,6 +366,63 @@ export function buildVliwDatabase(sentences, options = {}) {
     pack,
     records: records.map((record) => ({ ...record }))
   };
+}
+
+export function buildVliwDatabaseFromTranslation(lines, options = {}) {
+  if (!Array.isArray(lines)) {
+    fail("invalid-translation-lines", "translated PyAC input must be an array of source lines");
+  }
+  const language = String(options.language ?? "").trim().toLowerCase();
+  const adapter = resolveTranslationSource(language);
+  if (!adapter) {
+    fail("translation-adapter", "no Pyash translation adapter is registered for the source language", {
+      language
+    });
+  }
+
+  const sentences = [];
+  const sources = [];
+  for (const [lineIndex, line] of lines.entries()) {
+    if (typeof line !== "string" || !line.trim()) {
+      fail("translation-failed", "translation input lines must contain source text", {
+        language,
+        lineIndex,
+        line
+      });
+    }
+    let sentence;
+    try {
+      sentence = adapter.toPyash(line);
+    } catch (error) {
+      fail("translation-failed", "translation adapter rejected a source line", {
+        language,
+        lineIndex,
+        line,
+        cause: error?.message ?? String(error)
+      });
+    }
+    if (!sentence) {
+      fail("translation-failed", "translation adapter produced no canonical sentence", {
+        language,
+        lineIndex,
+        line
+      });
+    }
+    sentences.push(sentence);
+    sources.push({
+      ...(options.source && typeof options.source === "object" ? cloneSerializable(options.source) : {}),
+      language,
+      locator: options.locator ?? null,
+      lineIndex,
+      text: line
+    });
+  }
+
+  const database = buildVliwDatabase(sentences, {
+    sources,
+    ...(Array.isArray(options.expectedResults) ? { expectedResults: options.expectedResults } : {})
+  });
+  return { ...database, sentences, sources };
 }
 
 function databasePack(database) {

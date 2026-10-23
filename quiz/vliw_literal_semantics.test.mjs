@@ -91,7 +91,7 @@ test("PyAC catalogs index, pack, and replay typed literal codelets", async () =>
   const database = buildVliwDatabase([
     parse("ob num 7 be number ya"),
     parse('ob text "A" be text ya'),
-    parse("su name answer ob num 7 be number ya")
+    parse("su name unassigned-name ob num 7 be number ya")
   ]);
 
   assert.equal(database.catalog.executableCount, 2);

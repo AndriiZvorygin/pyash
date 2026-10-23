@@ -252,6 +252,12 @@ export function lookupLegacyWord(word) {
   return entry ? { en: entry.en, hnuc: entry.hnuc, pya: entry.pya } : null;
 }
 
+export function lookupLegacyName(name) {
+  if (typeof name !== "string" || !name.trim() || /\s/u.test(name.trim())) return null;
+  const entry = legacyEntriesByEnglish.get(name.trim().toLowerCase());
+  return entry ? { en: entry.en, hnuc: entry.hnuc, pya: entry.pya } : null;
+}
+
 function legacyNumberWord(value) {
   if (!Number.isInteger(value) || value < 0 || value >= legacyNumberWords.length) {
     throw quoteError("surface-range", "legacy numeric surface rendering supports values 0 through 20", { value });
