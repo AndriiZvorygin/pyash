@@ -1,8 +1,13 @@
 #![forbid(unsafe_code)]
 
 pub mod catalog;
+pub mod semantic;
 
 pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
+pub use semantic::{
+    NumericPlusInstruction, SemanticError, decode_numeric_plus, execute_numeric_plus,
+    execute_numeric_plus_codelet,
+};
 
 use std::fmt::{Display, Formatter};
 
