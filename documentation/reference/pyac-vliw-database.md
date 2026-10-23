@@ -213,7 +213,9 @@ current source projection finds 7,830 existing atomic targets, 393 accepted
 derived compounds, and 411 closed-compound candidates across the Chinese,
 French, Russian, Hindi, and Interlingua dictionaries. Existing atomic targets
 remain in the atomic vocabulary; derived records cover terms that gain a
-sequence from existing words.
+sequence from existing words. The morphology boundary guard identifies 44 of
+those candidates as ending-boundary rejections before provider review, leaving
+367 candidates for the bounded model batch.
 
 Pyash compound order is head-final. The final component is the semantic head
 and earlier components are modifiers:
@@ -235,6 +237,20 @@ response violates the contract. Outcomes use `accepted-llm`, `repaired-llm`,
 `uncertain-llm`, or `rejected-llm`; the original coverage status remains in
 `coverageStatus`. Verification evidence and attempt counts remain in the same
 `.pya` record.
+
+Closed-word review also carries morphology metadata from
+`program/verbs/exchange/translation/compound_morphology.pya` and the
+underscore-marked affix rows in `program/library/pyashWords.json`. Each record
+stores `componentRoles`, `morphologyStatus`, and `morphologySignals`. An
+ending that matches a component, such as `ant` in `acceptant`, receives an
+explicit `component` signal; an ending embedded in a component, such as `ing`
+in the candidate `king` for `zincking`, receives an `inside-component` signal.
+An exact ending boundary in a closed-word candidate is rejected by the
+deterministic guard. An ending embedded in a lexical component remains a
+semantic-review signal. The verifier must return `headKind: "lexical-head"`
+before an accepted response enters the catalog; a derivational or grammatical
+classification remains rejected evidence, even when the ending also exists as
+an atomic English word.
 
 For a configured Pyash mind, the executable verifier is
 `node command/compound_coverage_verify.mjs pya mind`. It loads the standard

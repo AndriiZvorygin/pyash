@@ -1,0 +1,21 @@
+su name translation_compound_morphology be map def
+su text "able" ob text "{\"surface\":\"able\",\"kind\":\"derivational-ending\",\"evidence\":\"English derivational ending\"}" ya
+su text "al" ob text "{\"surface\":\"al\",\"kind\":\"derivational-ending\",\"evidence\":\"English derivational ending\"}" ya
+su text "ant" ob text "{\"surface\":\"ant\",\"kind\":\"derivational-ending\",\"evidence\":\"English agentive or adjectival ending\"}" ya
+su text "ed" ob text "{\"surface\":\"ed\",\"kind\":\"grammatical-ending\",\"evidence\":\"English past or participial ending\"}" ya
+su text "ent" ob text "{\"surface\":\"ent\",\"kind\":\"derivational-ending\",\"evidence\":\"English agentive or adjectival ending\"}" ya
+su text "er" ob text "{\"surface\":\"er\",\"kind\":\"derivational-ending\",\"evidence\":\"English comparative or agentive ending\"}" ya
+su text "ible" ob text "{\"surface\":\"ible\",\"kind\":\"derivational-ending\",\"evidence\":\"English derivational ending\"}" ya
+su text "ing" ob text "{\"surface\":\"ing\",\"kind\":\"grammatical-ending\",\"evidence\":\"English progressive or participial ending\"}" ya
+su text "ion" ob text "{\"surface\":\"ion\",\"kind\":\"derivational-ending\",\"evidence\":\"English nominalizing ending\"}" ya
+su text "ism" ob text "{\"surface\":\"ism\",\"kind\":\"derivational-ending\",\"evidence\":\"English nominalizing ending\"}" ya
+su text "ist" ob text "{\"surface\":\"ist\",\"kind\":\"derivational-ending\",\"evidence\":\"English agentive or group-member ending\"}" ya
+su text "ity" ob text "{\"surface\":\"ity\",\"kind\":\"derivational-ending\",\"evidence\":\"English nominalizing ending\"}" ya
+su text "ive" ob text "{\"surface\":\"ive\",\"kind\":\"derivational-ending\",\"evidence\":\"English adjectival ending\"}" ya
+su text "ize" ob text "{\"surface\":\"ize\",\"kind\":\"derivational-ending\",\"evidence\":\"English verbalizing ending\"}" ya
+su text "less" ob text "{\"surface\":\"less\",\"kind\":\"derivational-ending\",\"evidence\":\"English privative ending\"}" ya
+su text "ly" ob text "{\"surface\":\"ly\",\"kind\":\"derivational-ending\",\"evidence\":\"English adverbial ending\"}" ya
+su text "ment" ob text "{\"surface\":\"ment\",\"kind\":\"derivational-ending\",\"evidence\":\"English nominalizing ending\"}" ya
+su text "ness" ob text "{\"surface\":\"ness\",\"kind\":\"derivational-ending\",\"evidence\":\"English nominalizing ending\"}" ya
+su text "ous" ob text "{\"surface\":\"ous\",\"kind\":\"derivational-ending\",\"evidence\":\"English adjectival ending\"}" ya
+prah
