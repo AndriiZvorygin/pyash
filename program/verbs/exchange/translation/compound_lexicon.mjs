@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 
 import { buildProgram } from "../../../program.mjs";
+import { COMPOUND_VERIFICATION_STATUSES } from "./compound_verification.mjs";
 
 export const CHINESE_COMPOUND_LEXICON_NAME = "translation_compounds_chinese";
 
@@ -133,6 +134,43 @@ function normalizeEntry(payload, surface, index, language) {
   )) {
     throw invalid("compound source morphemes by language must be a language map", { index, surface });
   }
+  if (payload.coverageStatus !== undefined && (typeof payload.coverageStatus !== "string" || !payload.coverageStatus)) {
+    throw invalid("compound coverage status must be text", { index, surface });
+  }
+  if (payload.verificationStatus !== undefined && (
+    !COMPOUND_VERIFICATION_STATUSES.includes(payload.verificationStatus)
+  )) {
+    throw invalid("compound verification status must be text", { index, surface });
+  }
+  if (payload.certainty !== undefined && !["deterministic", "llm"].includes(payload.certainty)) {
+    throw invalid("compound certainty must be deterministic or llm", { index, surface });
+  }
+  if (payload.certaintyScore !== undefined && (
+    typeof payload.certaintyScore !== "number" ||
+    !Number.isFinite(payload.certaintyScore) ||
+    payload.certaintyScore < 0 ||
+    payload.certaintyScore > 1
+  )) {
+    throw invalid("compound certainty score must be between zero and one", { index, surface });
+  }
+  if (payload.deterministicChecks !== undefined && (
+    !payload.deterministicChecks ||
+    typeof payload.deterministicChecks !== "object" ||
+    Array.isArray(payload.deterministicChecks) ||
+    Object.values(payload.deterministicChecks).some((value) => typeof value !== "boolean")
+  )) {
+    throw invalid("compound deterministic checks must be a boolean map", { index, surface });
+  }
+  if (payload.verificationAttempts !== undefined && (
+    !Number.isInteger(payload.verificationAttempts) || payload.verificationAttempts < 0
+  )) {
+    throw invalid("compound verification attempts must be a non-negative integer", { index, surface });
+  }
+  for (const field of ["verifier", "verificationRationale", "verificationEvidence"]) {
+    if (payload[field] !== undefined && (typeof payload[field] !== "string" || !payload[field])) {
+      throw invalid(`compound ${field} must be non-empty text`, { index, surface });
+    }
+  }
   if (payload.rejectedCandidates !== undefined && (
     !Array.isArray(payload.rejectedCandidates) ||
     payload.rejectedCandidates.some((candidate) => (
@@ -178,6 +216,19 @@ function normalizeEntry(payload, surface, index, language) {
           .map(([language, parts]) => [language, [...parts]])
       )
     }),
+    ...(payload.coverageStatus === undefined ? {} : { coverageStatus: payload.coverageStatus }),
+    ...(payload.verificationStatus === undefined ? {} : { verificationStatus: payload.verificationStatus }),
+    ...(payload.certainty === undefined ? {} : { certainty: payload.certainty }),
+    ...(payload.certaintyScore === undefined ? {} : { certaintyScore: payload.certaintyScore }),
+    ...(payload.deterministicChecks === undefined ? {} : {
+      deterministicChecks: Object.fromEntries(
+        Object.entries(payload.deterministicChecks).sort(([left], [right]) => left.localeCompare(right))
+      )
+    }),
+    ...(payload.verificationAttempts === undefined ? {} : { verificationAttempts: payload.verificationAttempts }),
+    ...(payload.verifier === undefined ? {} : { verifier: payload.verifier }),
+    ...(payload.verificationRationale === undefined ? {} : { verificationRationale: payload.verificationRationale }),
+    ...(payload.verificationEvidence === undefined ? {} : { verificationEvidence: payload.verificationEvidence }),
     ...(payload.rejectedCandidates === undefined ? {} : {
       rejectedCandidates: payload.rejectedCandidates.map((candidate) => ({
         pyashSequence: [...candidate.pyashSequence],
@@ -291,6 +342,15 @@ export function canonicalCompoundPayload(entry) {
     head: entry.head ?? null,
     sourceSurfaces: entry.sourceSurfaces ?? null,
     sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage ?? null,
+    coverageStatus: entry.coverageStatus ?? null,
+    verificationStatus: entry.verificationStatus ?? null,
+    certainty: entry.certainty ?? null,
+    certaintyScore: entry.certaintyScore ?? null,
+    deterministicChecks: entry.deterministicChecks ?? null,
+    verificationAttempts: entry.verificationAttempts ?? null,
+    verifier: entry.verifier ?? null,
+    verificationRationale: entry.verificationRationale ?? null,
+    verificationEvidence: entry.verificationEvidence ?? null,
     rejectedCandidates: entry.rejectedCandidates ?? null,
     provenance: entry.provenance,
     confidence: entry.confidence,

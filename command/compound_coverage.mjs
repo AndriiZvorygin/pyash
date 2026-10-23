@@ -9,6 +9,7 @@ import {
   renderDerivedCompoundCoveragePya,
   sourceTermsFromDictionaryRows
 } from "../program/verbs/exchange/translation/compound_coverage.mjs";
+import { classifyCompoundCoverage } from "../program/verbs/exchange/translation/compound_verification.mjs";
 import {
   loadPyacComplexityLayers,
   loadPyacWordLayerIndex
@@ -24,7 +25,7 @@ const languageSources = [
   ["interlingua", "ia"]
 ];
 
-async function loadCoverage() {
+export async function loadCoverage() {
   const sourceTerms = [];
   for (const [language, field] of languageSources) {
     const filename = `dictionary_${field}.json`;
@@ -55,18 +56,36 @@ async function loadCoverage() {
   });
 }
 
-const mode = process.argv[2] ?? "summary";
-const coverage = await loadCoverage();
-if (mode === "pya") {
-  process.stdout.write(renderDerivedCompoundCoveragePya(coverage.records));
-} else if (mode === "summary") {
-  process.stdout.write(`${JSON.stringify({
-    atomicTargets: coverage.existingAtomic.length,
-    derivedRecords: coverage.records.length,
-    accepted: coverage.accepted.length,
-    candidates: coverage.candidates.length,
-    rejected: coverage.rejected.length
-  }, null, 2)}\n`);
-} else {
+export async function runCompoundCoverage(args = process.argv.slice(2)) {
+  const mode = args[0] ?? "summary";
+  const coverage = await loadCoverage();
+  if (mode === "pya") {
+    return renderDerivedCompoundCoveragePya(coverage.records);
+  }
+  if (mode === "uncertain") {
+    const classified = classifyCompoundCoverage(coverage.records);
+    return renderDerivedCompoundCoveragePya(classified.verificationCandidates);
+  }
+  if (mode === "summary") {
+    const classified = classifyCompoundCoverage(coverage.records);
+    return `${JSON.stringify({
+      atomicTargets: coverage.existingAtomic.length,
+      derivedRecords: coverage.records.length,
+      accepted: coverage.accepted.length,
+      candidates: coverage.candidates.length,
+      deterministic: classified.deterministic.filter((record) => record.verificationStatus === "accepted-deterministic").length,
+      llmCandidates: classified.verificationCandidates.length,
+      rejected: coverage.rejected.length
+    }, null, 2)}\n`;
+  }
   throw new Error(`unknown compound coverage mode: ${mode}`);
+}
+
+if (import.meta.url === new URL(process.argv[1], "file://").href) {
+  runCompoundCoverage().then((output) => {
+    process.stdout.write(output);
+  }).catch((error) => {
+    console.error(error?.message || String(error));
+    process.exitCode = 1;
+  });
 }

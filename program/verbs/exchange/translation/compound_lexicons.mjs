@@ -11,6 +11,15 @@ export {
   resolveDerivedCompound,
   sourceTermsFromDictionaryRows
 } from "./compound_coverage.mjs";
+export {
+  buildCompoundVerificationPrompt,
+  classifyCompoundCertainty,
+  classifyCompoundCoverage,
+  createDefaultMindCompoundVerifier,
+  createMindCompoundVerifier,
+  parseCompoundVerificationResponse,
+  verifyCompoundCoverage
+} from "./compound_verification.mjs";
 
 const sources = Object.freeze({
   french: "compound_lexicon_french.pya",

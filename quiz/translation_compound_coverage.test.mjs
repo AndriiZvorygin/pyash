@@ -1,6 +1,9 @@
 import fs from "node:fs/promises";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget } from "../program/remember/index.mjs";
 
 import {
   buildDerivedCompoundCoverage,
@@ -15,6 +18,13 @@ import {
   loadPyacComplexityLayers,
   loadPyacWordLayerIndex
 } from "../program/verbs/exchange/translation/pyac_complexity.mjs";
+import {
+  classifyCompoundCoverage,
+  createDefaultMindCompoundVerifier,
+  createMindCompoundVerifier,
+  parseCompoundVerificationResponse,
+  verifyCompoundCoverage
+} from "../program/verbs/exchange/translation/compound_verification.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { parseCompoundLexicon } from "../program/verbs/exchange/translation/compound_lexicon.mjs";
 
@@ -191,4 +201,169 @@ test("current dictionaries produce broad derived coverage", async (t) => {
   assert.equal(blueprint.head, "print");
   assert.equal(blueprint.sourceSurfaces.chinese, "蓝图");
   assert.deepEqual(blueprint.sourceMorphemesByLanguage.french, ["plan"]);
+});
+
+test("deterministic compounds bypass the LLM and closed candidates enter verification", async () => {
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries,
+    layerIndex,
+    sourceTerms: [
+      { target: "blueprint", sourceSurfaces: { chinese: "蓝图" } },
+      { target: "blackbird", sourceSurfaces: { chinese: "黑鸟" } }
+    ],
+    curatedDecompositions: [{
+      target: "blueprint",
+      componentGlosses: ["blue", "print"]
+    }]
+  });
+  const classified = classifyCompoundCoverage(coverage.records);
+  assert.equal(classified.deterministic.length, 1);
+  assert.equal(classified.verificationCandidates.length, 1);
+  assert.equal(classified.deterministic[0].verificationStatus, "accepted-deterministic");
+  assert.equal(classified.verificationCandidates[0].verificationStatus, "uncertain-llm");
+
+  const calls = [];
+  const verified = await verifyCompoundCoverage(coverage.records, {
+    invoke: async ({ phase }) => {
+      calls.push(phase);
+      return JSON.stringify({
+        verdict: "uncertain",
+        rationale: "closed-word semantics remain uncertain"
+      });
+    }
+  });
+  assert.deepEqual(calls, ["verify"]);
+  assert.equal(verified.accepted.length, 1);
+  assert.equal(verified.uncertain.length, 1);
+});
+
+test("uncertain compound verification gets one bounded repair and accepts only a supplied candidate", async () => {
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries,
+    layerIndex,
+    sourceTerms: [{ target: "blackbird", sourceSurfaces: { chinese: "黑鸟" } }]
+  });
+  const candidate = coverage.records[0];
+  const calls = [];
+  const verified = await verifyCompoundCoverage(coverage.records, {
+    verifierName: "fixture compound verifier",
+    invoke: async ({ phase }) => {
+      calls.push(phase);
+      if (phase === "verify") return "model noise without a JSON decision";
+      return JSON.stringify({
+        verdict: "accept",
+        candidateId: candidate.id,
+        rationale: "the supplied components describe a bird modified by black"
+      });
+    }
+  });
+  assert.deepEqual(calls, ["verify", "repair"]);
+  assert.equal(verified.accepted.length, 1);
+  assert.equal(verified.accepted[0].status, "repaired-llm");
+  assert.equal(verified.accepted[0].verificationAttempts, 2);
+  assert.equal(verified.accepted[0].verifier, "fixture compound verifier");
+  const parsed = parseCompoundLexicon(renderDerivedCompoundCoveragePya(verified.records, {
+    name: "translation_compounds_verified"
+  }), {
+    name: "translation_compounds_verified",
+    language: "canonical"
+  });
+  assert.equal(parsed[0].status, "repaired-llm");
+  assert.equal(parsed[0].verificationAttempts, 2);
+  assert.equal(parsed[0].verificationStatus, "repaired-llm");
+  assert.equal(parsed[0].coverageStatus, "candidate-closed");
+  assert.equal(parsed[0].deterministicChecks.semanticHead, true);
+  assert.deepEqual(
+    parseCompoundVerificationResponse(JSON.stringify({
+      verdict: "accept",
+      candidateId: "outside-candidate",
+      rationale: "invented"
+    }), { candidates: [candidate] }),
+    { valid: false, reason: "response candidateId is outside the supplied candidate set" }
+  );
+  const noisy = parseCompoundVerificationResponse(
+    `model preamble\n${JSON.stringify({
+      verdict: "accept",
+      candidateId: candidate.id,
+      rationale: "the supplied candidate is grounded"
+    })}\nmodel tail`,
+    { candidates: [candidate] }
+  );
+  assert.equal(noisy.valid, true);
+  assert.equal(noisy.verdict, "accept");
+});
+
+test("compound mind verifier uses the existing Pyash mind write shape", async () => {
+  const calls = [];
+  const invoke = createMindCompoundVerifier({
+    mindName: "compound verifier",
+    outputName: "compound verifier output",
+    maxTokens: 240,
+    interpret: async (sentence) => calls.push(sentence),
+    readText: () => "{\"verdict\":\"uncertain\",\"rationale\":\"needs more evidence\"}"
+  });
+  const output = await invoke({ prompt: "verify this compound" });
+  assert.equal(output, "{\"verdict\":\"uncertain\",\"rationale\":\"needs more evidence\"}");
+  assert.deepEqual(calls, [{
+    mood: "do",
+    be: "write",
+    for: { name: "compound verifier" },
+    ob: { text: "verify this compound" },
+    to: { name: "compound verifier output", nameTypeWords: ["text"] },
+    by: { num: 0 },
+    atmost: { num: 240 }
+  }]);
+});
+
+test("ambiguous candidate decompositions share one LLM decision", async () => {
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries,
+    layerIndex,
+    sourceTerms: [{ target: "blackbird", sourceSurfaces: { chinese: "黑鸟" } }]
+  });
+  const base = coverage.records[0];
+  const candidates = [
+    { ...base, id: "candidate-blackbird-a", pyashSequence: ["hkis", "bird"] },
+    { ...base, id: "candidate-blackbird-b", pyashSequence: ["black", "bird"] }
+  ];
+  const calls = [];
+  const verified = await verifyCompoundCoverage(candidates, {
+    invoke: async ({ phase, candidates: supplied }) => {
+      calls.push({ phase, count: supplied.length });
+      return JSON.stringify({
+        verdict: "accept",
+        candidateId: "candidate-blackbird-b",
+        rationale: "the second supplied interpretation matches the target"
+      });
+    }
+  });
+  assert.deepEqual(calls, [{ phase: "verify", count: 2 }]);
+  assert.equal(verified.accepted.length, 1);
+  assert.equal(verified.accepted[0].id, "candidate-blackbird-b");
+  assert.equal(verified.rejected.length, 1);
+  assert.equal(verified.rejected[0].id, "candidate-blackbird-a");
+});
+
+test("default compound verifier delegates through the existing mind runtime", async () => {
+  const previousResponse = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = JSON.stringify({
+    message: { content: JSON.stringify({
+      verdict: "uncertain",
+      rationale: "fixture response reached the configured mind"
+    }) }
+  });
+  forget();
+  try {
+    await interpret(parse('exists su name compound verifier be mind via state "qwen3:8b" ya'));
+    const invoke = await createDefaultMindCompoundVerifier({
+      mindName: "compound verifier",
+      outputName: "compound verifier fixture output"
+    });
+    const response = await invoke({ prompt: "verify a compound" });
+    assert.match(response, /fixture response reached the configured mind/u);
+  } finally {
+    forget();
+    if (previousResponse === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = previousResponse;
+  }
 });
