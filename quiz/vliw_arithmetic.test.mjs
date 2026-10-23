@@ -61,6 +61,20 @@ test("numeric arithmetic keeps named stateful forms explicit", () => {
 test("vocabulary-only remains stays explicitly unsupported", () => {
   assert.throws(
     () => lowerSentence(parse("ob num 9 from num 4 be remains do")),
-    (error) => error.code === "unsupported-sentence"
+    (error) => error.code === "unsupported-remains"
   );
+});
+
+test("unproven unary arithmetic remains explicitly unsupported", () => {
+  const cases = [
+    ["ob num 2 be invert do", "unsupported-invert"],
+    ["ob num 2 from num 3 be exponential do", "unsupported-exponential"]
+  ];
+
+  for (const [source, code] of cases) {
+    assert.throws(
+      () => lowerSentence(parse(source)),
+      (error) => error.code === code
+    );
+  }
 });
