@@ -16,7 +16,6 @@ const OPERATOR_WORDS = Object.freeze({
   subtract: 0xabd2,
   multiply: 0xec90,
   divide: 0x8893,
-  remains: 0xe82a,
   xor: 0xa810
 });
 
@@ -207,10 +206,6 @@ function calculate(be, left, right) {
   if (be === "divide") {
     if (right === 0) throw encodingError("division-by-zero", "numeric division cannot divide by zero");
     return Math.trunc(left / right);
-  }
-  if (be === "remains") {
-    if (right === 0) throw encodingError("division-by-zero", "numeric remainder cannot divide by zero");
-    return left % right;
   }
   if (be === "xor") return left ^ right;
   throw encodingError("unsupported-operator", `numeric operator ${be} is unsupported`);

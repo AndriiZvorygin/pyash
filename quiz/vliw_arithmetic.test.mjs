@@ -12,7 +12,6 @@ const cases = [
   ["subtract", "ob num 9 from num 4 be subtract do", 5, 0xabd2],
   ["multiply", "ob num 3 with num 4 be multiply do", 12, 0xec90],
   ["divide", "ob num 8 with num 2 be divide do", 4, 0x8893],
-  ["remains", "ob num 9 from num 4 be remains do", 1, 0xe82a],
   ["xor", "ob num 7 to num 3 be xor do", 4, 0xa810]
 ];
 
@@ -55,6 +54,13 @@ test("numeric arithmetic rejects division by zero during execution", async () =>
 test("numeric arithmetic keeps named stateful forms explicit", () => {
   assert.throws(
     () => lowerSentence(parse("ob num 2 from name total be subtract do")),
+    (error) => error.code === "unsupported-sentence"
+  );
+});
+
+test("vocabulary-only remains stays explicitly unsupported", () => {
+  assert.throws(
+    () => lowerSentence(parse("ob num 9 from num 4 be remains do")),
     (error) => error.code === "unsupported-sentence"
   );
 });
