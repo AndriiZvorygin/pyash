@@ -219,7 +219,8 @@ export async function executeCodelets(codelets) {
 
 export {
   analyzeCodeletDependencies,
-  deriveSentenceEffects
+  deriveSentenceEffects,
+  scheduleCodeletDependencies
 } from "./effects.mjs";
 export {
   PYAC_MAGIC,
