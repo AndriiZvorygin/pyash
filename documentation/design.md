@@ -129,7 +129,10 @@ Pyash VLIW backend. Lowering is sentence-first and must preserve canonical
 cases, values, moods, dependencies, and effects before emitting the exact
 legacy `lwonprom` 16-bit word/codelet encoding. The encoding and execution
 contract is specified in [`27-pyash-vliw-isa.md`](specifications/27-pyash-vliw-isa.md);
-it does not introduce a second source IR or change the current interpreter.
+the searchable catalog and executable `.pyac` projection are specified in
+[`pyac-vliw-database.md`](reference/pyac-vliw-database.md).
+This boundary does not introduce a second source IR or change the current
+interpreter.
 
 ---
 
