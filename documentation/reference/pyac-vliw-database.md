@@ -162,6 +162,28 @@ metadata. A translated sentence becomes executable when its canonical name
 and value fit a proven VLIW adapter; automatic HNUC allocation remains outside
 this contract.
 
+Compound lowering follows the cumulative Pyac word layers recorded in
+`program/verbs/exchange/translation/pyac_complexity_layers.pya`. The source
+inventories are `pyachso2n`'s `16GlyphWordList.txt`, `19GlyphWordList.txt`,
+`24GlyphWordList.txt`, `28GlyphWordList.txt`, and `32GlyphWordList.txt`.
+Candidates are ranked progressively from layer 16 through layer 32, with exact
+word-list membership and source hashes retained in the manifest. The current
+Chinese database candidate is:
+
+```text
+数据库 / database
+  data + storehouse
+  number + shed
+  hnuc + cren
+  component layers: 16 + 19; compound layer: 19
+```
+
+The existing atomic `database` word remains `hdes` at layer 24. The existing
+`data_mining` word `dxak` is layer 28, so it remains a recorded higher-layer
+word rather than a preferred database component. The durable row is in
+`program/verbs/exchange/translation/compound_lexicon_chinese.pya`; its
+`evidence` field records the curated Kwon decomposition.
+
 The first external compound analysis uses the historical `hkestlat` source
 shapes `mwonkwon.json` and `chinese_dictionary_stems.json`. The host-side
 normalizer is `program/verbs/exchange/translation/hkestlat_compound_analysis.mjs`.
