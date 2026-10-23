@@ -1,0 +1,10 @@
+su name pyac codelet catalog be series def
+  su name format ob text "pyac-catalog-v1" be catalog metadata ya
+  su name pack format ob text "pyac-vliw-1" be catalog metadata ya
+  su name pack hash ob text "0ad8ae8dfea0b6efeef1981d7757571bddf85de643cbe77c14ed7023094001da" be catalog metadata ya
+  su name record count ob num 1 be catalog metadata ya
+  su name executable count ob num 1 be catalog metadata ya
+  su name unsupported count ob num 0 be catalog metadata ya
+  su name pack locator ob text "fixture.pyac" be catalog metadata ya
+  su name codelet-9de6a21d49806fe53d368092 ob text "{\"id\":\"codelet-9de6a21d49806fe53d368092\",\"inputIndex\":0,\"partIndex\":0,\"packIndex\":0,\"status\":\"executable\",\"semantic\":\"numeric-plus\",\"mood\":\"do\",\"verb\":\"plus\",\"cases\":[\"ob\",\"to\"],\"canonicalSentence\":\"ob num 1 to num 1 be plus do\",\"sentence\":{\"be\":\"plus\",\"mood\":\"do\",\"ob\":{\"num\":1},\"to\":{\"num\":1}},\"words\":[329,34845,1,10366,34845,1,9310,35428,10590,0,0,0,0,0,0,0],\"wordsHex\":\"49011d8801007e281d8801005e24648a5e290000000000000000000000000000\",\"usedWords\":9,\"effects\":{\"reads\":[],\"sideEffect\":false,\"writes\":[]},\"codeletHash\":\"00042a5f9005592017f657e5cf86f899c2f6f26be7cf861fda88255931a9eb18\",\"source\":{\"language\":\"pyash\",\"locator\":\"fixture.pya\"}}" be codelet ya
+prah

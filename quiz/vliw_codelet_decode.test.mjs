@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   CODELET_WORD_COUNT,
   decodeLegacyCodelet,
+  decodeLegacyCodeletSequence,
   renderLegacyCodelet,
   VliwCodeletError
 } from "../program/library/vliw/codelets.mjs";
@@ -16,6 +17,14 @@ import {
 const onePlusOneWords = [
   0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64,
   0x295e, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
+];
+
+const legacyContinuationFixture = [
+  [
+    0xb6b6, 0x881d, 0x0001, 0x4127, 0x881d, 0x0003, 0x245e, 0x69b3,
+    0x29be, 0x881d, 0x0001, 0x245e, 0x881d, 0x0003, 0x287e, 0x8a64
+  ],
+  [0x0003, 0x295e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 ];
 
 function errorCode(action) {
@@ -109,4 +118,24 @@ test("generic decoding rejects invalid codelet shape and word values", () => {
   const invalidWord = [...onePlusOneWords];
   invalidWord[0] = -1;
   assert.equal(errorCode(() => decodeLegacyCodelet(invalidWord)), "invalid-word");
+});
+
+test("continuation decoding preserves the legacy two-vector fixture", () => {
+  const decoded = decodeLegacyCodeletSequence(legacyContinuationFixture);
+
+  assert.equal(decoded.vectorCount, 2);
+  assert.equal(decoded.continued, true);
+  assert.equal(decoded.complete, true);
+  assert.deepEqual(decoded.indexWords, [0xb6b6, 0x0003]);
+  assert.equal(decoded.words.length, 31);
+  assert.equal(decoded.items.at(-1).word, 0x295e);
+});
+
+test("continuation decoding rejects missing and trailing vectors", () => {
+  const partial = legacyContinuationFixture.map((vector) => [...vector]);
+  partial[1][0] = 0x0002;
+  assert.equal(errorCode(() => decodeLegacyCodeletSequence(partial)), "missing-continuation");
+
+  const trailing = [...legacyContinuationFixture, new Array(CODELET_WORD_COUNT).fill(0)];
+  assert.equal(errorCode(() => decodeLegacyCodeletSequence(trailing)), "trailing-continuation");
 });

@@ -91,6 +91,17 @@ test("letter and paragraph-letter quotes decode their character payloads", () =>
   assert.equal(paragraph.nextOffset, 5);
 });
 
+test("fixed-width legacy vector quotes decode without promoting sentence semantics", () => {
+  const numberVector = decodeQuote([0x891d, 7, 9], 0);
+  assert.equal(numberVector.valueType, "uint16-vector");
+  assert.equal(numberVector.payloadWords, 2);
+  assert.deepEqual(numberVector.value, [7, 9]);
+
+  const letterVector = decodeQuote([0x091d, 0x0061, 0x0062], 0);
+  assert.equal(letterVector.valueType, "letter-vector");
+  assert.equal(letterVector.value, "ab");
+});
+
 test("legacy HNUC lookup returns Pyash spellings", () => {
   assert.equal(lookupLegacyWord(0x287e)?.pya, "yu");
   assert.equal(lookupLegacyWord(0x245e)?.pya, "ka");

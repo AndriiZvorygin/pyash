@@ -54,6 +54,23 @@ test("PyAC catalogs retain executable and unsupported semantic records", () => {
   assert.match(database.catalog.records[1].error.message, /numeric-plus/iu);
 });
 
+test("PyAC keeps vector and date sentences explicitly unsupported", () => {
+  const database = buildVliwDatabase([
+    parse("exists su name values ob ve num 1 2 3 be vector ya"),
+    parse("exists su name start ob date 2025-05-01 be date ya")
+  ]);
+
+  assert.deepEqual(database.catalog.records.map((record) => record.status), [
+    "unsupported",
+    "unsupported"
+  ]);
+  assert.deepEqual(database.catalog.records.map((record) => record.verb), ["vector", "date"]);
+  assert.deepEqual(database.catalog.records.map((record) => record.error.code), [
+    "unsupported-sentence",
+    "unsupported-sentence"
+  ]);
+});
+
 test("PyAC queries select semantic, case, word, and value indexes", () => {
   const database = buildVliwDatabase([
     plusSentence(4, 6),
