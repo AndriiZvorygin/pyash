@@ -5,8 +5,9 @@ pub mod semantic;
 
 pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
 pub use semantic::{
-    NumericPlusInstruction, SemanticError, decode_numeric_plus, execute_numeric_plus,
-    execute_numeric_plus_codelet,
+    NumericArithmeticInstruction, NumericOperator, NumericPlusInstruction, SemanticError,
+    decode_numeric_arithmetic, decode_numeric_plus, execute_numeric_arithmetic,
+    execute_numeric_arithmetic_codelet, execute_numeric_plus, execute_numeric_plus_codelet,
 };
 
 use std::fmt::{Display, Formatter};

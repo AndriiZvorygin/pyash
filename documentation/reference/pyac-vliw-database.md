@@ -169,9 +169,11 @@ it does not define a second catalog schema. The shared fixture is
 `rust/pyac/tests/fixture_catalog.pya`, and the JavaScript renderer remains the
 authority for producing parser-backed `.pya` text and semantic replay.
 
-The Rust boundary also decodes and executes the proven numeric-plus codelet
-through `decode_numeric_plus_codelet`. Its marker layout, zero-tail check, and
-`u16` saturation behavior are covered by the shared one-plus fixture. Rust
+The Rust boundary also decodes and executes the proven numeric arithmetic
+codelets through `decode_numeric_arithmetic_codelet`. Its marker layout,
+zero-tail check, operator words, saturation/floor/division rules, and explicit
+divide-by-zero error match the JavaScript facade. The shared one-plus fixture
+continues to cover the public `decode_numeric_plus_codelet` adapter. Rust
 semantic coverage remains deliberately limited to proven adapters; the
 JavaScript facade remains the broader reference executor.
 
