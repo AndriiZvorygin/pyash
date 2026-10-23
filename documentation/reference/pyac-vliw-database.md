@@ -148,13 +148,26 @@ human text
   -> VLIW lowering
 ```
 
-Chinese compound words provide a small morphology corpus at
-`program/verbs/exchange/translation/compound_lexicon_chinese.pya`. It stores
+Chinese compound words provide the first morphology corpus at
+`program/verbs/exchange/translation/compound_lexicon_chinese.pya`. The same
+layer-aware catalog contract now covers bounded compound samples from French,
+Russian, Hindi, and Interlingua at:
+
+```text
+program/verbs/exchange/translation/compound_lexicon_french.pya
+program/verbs/exchange/translation/compound_lexicon_russian.pya
+program/verbs/exchange/translation/compound_lexicon_hindi.pya
+program/verbs/exchange/translation/compound_lexicon_interlingua.pya
+```
+
+Each catalog stores
 the surface compound, ordered morphemes, canonical Pyash target, optional
 English gloss, provenance, confidence, and lowering status in parser-readable
 map rows. The loader and query helpers live in
-`program/verbs/exchange/translation/compound_lexicon.mjs` and are re-exported
-by the Chinese translation adapter.
+`program/verbs/exchange/translation/compound_lexicon.mjs`; the shared
+language-specific loaders live in
+`program/verbs/exchange/translation/compound_lexicons.mjs` and are re-exported
+by the Chinese, French, Russian, Hindi, and Interlingua translation adapters.
 
 The compound surface is evidence for translation; canonical Pyash identity
 remains the execution authority. Compound rows remain searchable morphology
@@ -183,6 +196,14 @@ The existing atomic `database` word remains `hdes` at layer 24. The existing
 word rather than a preferred database component. The durable row is in
 `program/verbs/exchange/translation/compound_lexicon_chinese.pya`; its
 `evidence` field records the curated Kwon decomposition.
+
+The external-language rows use curated English target decompositions such as
+`light + house`, `doll + house`, `water + fall`, and `water + line`. A source
+language may lexicalize one of these targets as one word, so its row retains
+the source surface and marks the semantic decomposition in `evidence`. This
+keeps translation evidence separate from automatic morphology inference.
+Every current external-language sample lowers through the same canonical Pyac
+words and records the higher-layer atomic alternative in `rejectedCandidates`.
 
 The first external compound analysis uses the historical `hkestlat` source
 shapes `mwonkwon.json` and `chinese_dictionary_stems.json`. The host-side

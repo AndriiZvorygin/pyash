@@ -448,3 +448,5 @@ export {
   interlinguaLineToSentence,
   translateNameToInterlingua
 };
+
+export { loadInterlinguaCompoundLexicon } from "./compound_lexicons.mjs";

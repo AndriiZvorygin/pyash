@@ -455,3 +455,5 @@ export {
   hindiLineToSentence,
   translateNameToHindi
 };
+
+export { loadHindiCompoundLexicon } from "./compound_lexicons.mjs";
