@@ -303,9 +303,13 @@ contains 29,999 parseable rows.
 
 `program/verbs/exchange/translation/english30k_coverage.mjs` preserves source
 rank and frequency score and classifies each target as `atomic`, `alias`,
-`grammar`, `compound`, or `unresolved`. Only executable Pyash lowerings count
-as covered. Exact atomic mappings take precedence over aliases and compounds;
-accepted compounds retain their ordered, head-final Pyash sequence.
+`grammar`, `compound`, `dictionary-alias`, `lemma`, or `unresolved`. Only
+executable Pyash lowerings count as covered. Exact atomic mappings take
+precedence over aliases and compounds. The dictionary-alias layer reads the
+existing `caterer/pyac/lyac/dictionary_en.json` blacklist and accepts a row only
+when its alternatives resolve to exactly one existing Pyash target; ambiguous
+alternatives remain unresolved. Accepted compounds retain their ordered,
+head-final Pyash sequence.
 
 The operator report is:
 
@@ -314,11 +318,11 @@ node command/english30k_coverage.mjs summary
 ```
 
 It reports the current coverage counts and ordered source gap. The current
-baseline is 5,730 atomic mappings, 31 aliases, 63 grammar mappings, 30
-accepted compounds, 1,462 lemma mappings, and 22,683 unresolved entries, for
-7,316 covered rows (24.387%). This is a
+projection is 5,730 atomic mappings, 31 aliases, 63 grammar mappings, 30
+accepted compounds, 7,056 unique dictionary aliases, 996 lemma mappings, and
+16,093 unresolved entries, for 13,906 covered rows (46.355%). This is a
 measurement and resolver over the existing catalogs; it does not create a
-second JSON vocabulary or count unresolved dictionary presence as coverage.
+second JSON vocabulary or count ambiguous dictionary presence as coverage.
 Candidates requiring semantic judgment continue through the existing queued
 GPU/housekeeper compound verifier before entering the accepted catalog.
 
@@ -340,9 +344,10 @@ inspection command is:
 node command/english30k_coverage.mjs lemmas
 ```
 
-The current report contains 1,462 lemma-resolved rows, 7,316 covered rows in
-total, 5,778 unique canonical lemmas, and 22,683 unresolved rows. The lemma
-count is a surface-row count.
+The current report contains 996 lemma-resolved rows, 13,906 covered rows in
+total, 5,778 unique canonical lemmas, and 16,093 unresolved rows. The lemma
+count is a surface-row count; dictionary aliases are reported separately
+before this layer.
 Ambiguous inflection candidates use
 `program/verbs/exchange/translation/english_lemma_verification.mjs`; its
 default verifier submits through the existing future GPU duty and await path,

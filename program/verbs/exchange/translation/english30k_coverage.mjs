@@ -14,6 +14,10 @@ import {
   loadEnglishLemmaCatalog
 } from "./english_lemmas.mjs";
 import {
+  buildEnglishDictionaryAliases,
+  loadEnglishDictionaryBlacklist
+} from "./english_dictionary_aliases.mjs";
+import {
   loadPyacComplexityLayers,
   loadPyacWordLayerIndex
 } from "./pyac_complexity.mjs";
@@ -153,6 +157,12 @@ function mapLookupEntries(entries, valueOf) {
   return result;
 }
 
+function variantsForAtomic(value, atomicLookup) {
+  return english30kLookupVariants(value)
+    .map((variant) => atomicLookup.get(variant))
+    .find(Boolean) ?? null;
+}
+
 function makeIdentity(row) {
   return `english30k-${String(row.rank).padStart(5, "0")}-${sha256(row.normalizedWord).slice(0, 16)}`;
 }
@@ -199,6 +209,7 @@ export function buildEnglish30kCoverage({
   source,
   atomicEntries = [],
   aliases = new Map(),
+  dictionaryAliases = new Map(),
   grammarMappings = DEFAULT_GRAMMAR_MAPPINGS,
   compoundRecords = [],
   lemmaEntries = [],
@@ -213,6 +224,11 @@ export function buildEnglish30kCoverage({
   const atomicLookup = mapLookupEntries(atomicEntries, (entry) => entry?.en);
   const aliasLookup = aliases instanceof Map ? new Map(
     [...aliases.entries()].flatMap(([surface, anchor]) => (
+      english30kLookupVariants(surface).map((variant) => [variant, anchor])
+    ))
+  ) : new Map();
+  const dictionaryAliasLookup = dictionaryAliases instanceof Map ? new Map(
+    [...dictionaryAliases.entries()].flatMap(([surface, anchor]) => (
       english30kLookupVariants(surface).map((variant) => [variant, anchor])
     ))
   ) : new Map();
@@ -252,7 +268,7 @@ export function buildEnglish30kCoverage({
     }
     const alias = variants.map((variant) => aliasLookup.get(variant)).find(Boolean);
     if (alias) {
-      const anchor = atomicLookup.get(english30kLookupVariants(alias)[0]);
+      const anchor = variantsForAtomic(alias, atomicLookup);
       if (anchor) {
         return withLemma({
           id: makeIdentity(row),
@@ -299,6 +315,22 @@ export function buildEnglish30kCoverage({
         lemmaPyashSequence: [...compound.pyashSequence]
       };
     }
+    const dictionaryAlias = variants.map((variant) => dictionaryAliasLookup.get(variant)).find(Boolean);
+    if (dictionaryAlias) {
+      const anchor = variantsForAtomic(dictionaryAlias, atomicLookup);
+      if (anchor) {
+        return withLemma({
+          id: makeIdentity(row),
+          ...row,
+          coverageType: "dictionary-alias",
+          status: "covered-dictionary-alias",
+          canonicalEnglish: anchor.en,
+          aliasOf: dictionaryAlias,
+          pyashSequence: [anchor.pya],
+          hnuc: anchor.hnuc
+        });
+      }
+    }
     const unresolved = {
       id: makeIdentity(row),
       ...row,
@@ -323,7 +355,7 @@ export function buildEnglish30kCoverage({
     };
   });
   const counts = Object.fromEntries(
-    ["atomic", "alias", "grammar", "compound", "lemma", "unresolved"].map((type) => [
+    ["atomic", "alias", "grammar", "compound", "dictionary-alias", "lemma", "unresolved"].map((type) => [
       type,
       records.filter((record) => record.coverageType === type).length
     ])
@@ -402,12 +434,16 @@ export async function loadDefaultEnglish30kCoverage({
   atomicEntries = [],
   compoundRecords = [],
   grammarMappings = DEFAULT_GRAMMAR_MAPPINGS,
-  lemmaEntries = null
+  lemmaEntries = null,
+  dictionaryAliases = null
 } = {}) {
   const source = await loadEnglish30k({ path });
   const { formsToAnchor } = await loadAnchorWordForms();
   const catalog = lemmaEntries === null ? await loadEnglishLemmaCatalog() : null;
   const resolvedLemmaEntries = lemmaEntries ?? catalog?.entries ?? [];
+  const dictionary = dictionaryAliases === null ? await loadEnglishDictionaryBlacklist() : null;
+  const resolvedDictionaryAliases = dictionaryAliases
+    ?? buildEnglishDictionaryAliases({ dictionary, atomicEntries }).aliases;
   if (catalog?.sourceHash && catalog.sourceHash !== source.sourceHash) {
     throw invalid("English lemma source hash does not match English30k source", {
       expected: source.sourceHash,
@@ -418,6 +454,7 @@ export async function loadDefaultEnglish30kCoverage({
     source,
     atomicEntries,
     aliases: formsToAnchor,
+    dictionaryAliases: resolvedDictionaryAliases,
     grammarMappings,
     compoundRecords,
     lemmaEntries: resolvedLemmaEntries
