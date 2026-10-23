@@ -292,6 +292,36 @@ The prayer benchmark currently maps `heaven`, `name`, `holy`, `come`, `today`,
 `bread`, `temptation`, `evil`, and `glory`; unresolved terms remain recorded
 for the next vocabulary pass.
 
+### Ranked English30k coverage
+
+The ranked lexical target is the Gutenberg-derived source
+`/home/htaf/pyachso2n/English30k.txt`. The durable source contract is recorded
+in `program/verbs/exchange/translation/english30k_coverage.pya`: the cutoff is
+ranks 1 through 30,000, the source hash is retained, and rank 6,897 is absent
+from the source. The file contains 36,662 rows overall; the selected cutoff
+contains 29,999 parseable rows.
+
+`program/verbs/exchange/translation/english30k_coverage.mjs` preserves source
+rank and frequency score and classifies each target as `atomic`, `alias`,
+`grammar`, `compound`, or `unresolved`. Only executable Pyash lowerings count
+as covered. Exact atomic mappings take precedence over aliases and compounds;
+accepted compounds retain their ordered, head-final Pyash sequence.
+
+The operator report is:
+
+```text
+node command/english30k_coverage.mjs summary
+```
+
+It reports the current coverage counts and ordered source gap. The current
+baseline is 5,730 atomic mappings, 31 aliases, 63 grammar mappings, 30
+accepted compounds, and 24,145 unresolved entries, for 5,854 covered rows
+(19.514%). This is a
+measurement and resolver over the existing catalogs; it does not create a
+second JSON vocabulary or count unresolved dictionary presence as coverage.
+Candidates requiring semantic judgment continue through the existing queued
+GPU/housekeeper compound verifier before entering the accepted catalog.
+
 ## 6. Rust compatibility boundary
 
 The initial Rust boundary is `rust/pyac`. It implements the established

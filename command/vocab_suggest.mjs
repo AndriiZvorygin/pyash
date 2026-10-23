@@ -1,7 +1,12 @@
 import fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildProgram } from "../program/program.mjs";
+import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { loadCoverage } from "./compound_coverage.mjs";
+import {
+  loadDefaultEnglish30kCoverage,
+  lookupEnglish30kCoverage
+} from "../program/verbs/exchange/translation/english30k_coverage.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
 import {
@@ -39,6 +44,7 @@ function parseArgs(args) {
 
 const checked = new Map();
 let acceptedCoveragePromise = null;
+let english30kCoveragePromise = null;
 
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
 const PYASH_QUOTED_START = "quoted.pyash.";
@@ -159,12 +165,33 @@ async function loadDefaultAcceptedCompounds() {
   return acceptedCoveragePromise;
 }
 
+async function loadDefaultEnglish30kCoverageSafe() {
+  if (!english30kCoveragePromise) {
+    english30kCoveragePromise = loadDefaultAcceptedCompounds()
+      .then((acceptedCompounds) => loadDefaultEnglish30kCoverage({
+        atomicEntries: pyashWords,
+        compoundRecords: [...acceptedCompounds.values()].flat()
+      }))
+      .catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+  }
+  return english30kCoveragePromise;
+}
+
+async function findEnglish30kCoverage(token) {
+  const coverage = await loadDefaultEnglish30kCoverageSafe();
+  return coverage ? lookupEnglish30kCoverage(coverage, token) : null;
+}
+
 function isCompoundCatalog(program) {
   return (program?.sentences ?? []).some((sentence) => (
     sentence?.mood === "def" &&
     sentence?.be === "map" &&
     typeof sentence.su?.name === "string" &&
-    sentence.su.name.toLowerCase().includes("compound")
+    (sentence.su.name.toLowerCase().includes("compound")
+      || sentence.su.name.toLowerCase().includes("english30k"))
   ));
 }
 
@@ -369,6 +396,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const occurrences = new Map();
   const acceptedCompounds = new Map();
   const foundCompounds = new Map();
+  const rankedCoverage = new Map();
   const okTextTokens = new Set();
   const files = [];
   for (const root of roots) {
@@ -410,6 +438,9 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         registerFoundCompound(foundCompounds, knownCompounds, file);
         continue;
       }
+      const ranked = await findEnglish30kCoverage(token);
+      if (ranked?.coverageType && ranked.coverageType !== "unresolved") continue;
+      if (ranked) rankedCoverage.set(token, ranked);
       const lines = await queryRyan(token);
       if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
         missing += 1;
@@ -434,6 +465,12 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       registerFoundCompound(foundCompounds, knownCompounds, "input");
       continue;
     }
+    const ranked = await findEnglish30kCoverage(token);
+    if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
+      okTextTokens.add(token);
+      continue;
+    }
+    if (ranked) rankedCoverage.set(token, ranked);
     const lines = await queryRyan(token);
     const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
     if (
@@ -484,7 +521,11 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       if (blacklistValue !== null) {
         report(`${token} blocked, instead: ${blacklistValue}.${locationSuffix}`);
       } else {
-        report(`${token}: ${preview || "no suggestions"}${locationSuffix}`);
+        const ranked = rankedCoverage.get(token);
+        const rankSuffix = ranked
+          ? `; English30k rank ${ranked.rank} remains unresolved`
+          : "";
+        report(`${token}: ${preview || "no suggestions"}${rankSuffix}${locationSuffix}`);
       }
     }
   }

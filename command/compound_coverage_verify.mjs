@@ -57,13 +57,15 @@ async function createCheckpointWriter(outputPath) {
   };
 }
 
-export async function runCompoundCoverageVerification(args = process.argv.slice(2)) {
-  const mode = args[0] ?? "summary";
-  const mindName = args[1] ?? "mind";
-  const outputPath = args[2] ?? "";
+export async function verifyCompoundRecords(records, {
+  mode = "summary",
+  mindName = "mind",
+  outputPath = ""
+} = {}) {
   if (outputPath && mode !== "pya") {
     throw new Error("compound verification output path requires pya mode");
   }
+  if (!Array.isArray(records)) throw new Error("compound verification records must be an array");
   const previousHousekeeper = process.env.PYA_GPU_HOUSEKEEPER_URL;
   const previousManagerRequired = process.env.PYA_GPU_MANAGER_REQUIRED;
   forget();
@@ -74,12 +76,11 @@ export async function runCompoundCoverageVerification(args = process.argv.slice(
       entryPath: process.cwd()
     });
     configureVerifierMind(mindName);
-    const coverage = await loadCoverage();
     const invoke = await createDefaultQueuedMindCompoundVerifier({
       timeoutMs: Number(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || 1800000)
     });
     const checkpoint = outputPath ? await createCheckpointWriter(outputPath) : null;
-    const result = await verifyCompoundCoverage(coverage.records, {
+    const result = await verifyCompoundCoverage(records, {
       invoke,
       verifierName: mindName,
       onRecord: checkpoint ? ({ record }) => checkpoint.append(record) : undefined
@@ -109,6 +110,14 @@ export async function runCompoundCoverageVerification(args = process.argv.slice(
     else process.env.PYA_GPU_MANAGER_REQUIRED = previousManagerRequired;
     forget();
   }
+}
+
+export async function runCompoundCoverageVerification(args = process.argv.slice(2)) {
+  const mode = args[0] ?? "summary";
+  const mindName = args[1] ?? "mind";
+  const outputPath = args[2] ?? "";
+  const coverage = await loadCoverage();
+  return verifyCompoundRecords(coverage.records, { mode, mindName, outputPath });
 }
 
 if (import.meta.url === new URL(process.argv[1], "file://").href) {
