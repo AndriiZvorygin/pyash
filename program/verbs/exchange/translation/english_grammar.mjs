@@ -6,6 +6,8 @@ export const ENGLISH_GRAMMAR_FORMAT = "english-grammar-v1";
 export const ENGLISH_GRAMMAR_NAME = "translation_english_grammar";
 
 const GRAMMAR_KINDS = new Set([
+  "pronoun",
+  "conjunction",
   "possessive-determiner",
   "possessive-pronoun",
   "case-marker",

@@ -91,6 +91,29 @@ test("English30k coverage classifies atoms, aliases, grammar, and compounds", ()
   assert.equal(summarizeEnglish30kCoverage(coverage).uniqueCanonicalLemmas, 3);
 });
 
+test("explicit grammar catalog mappings override same-surface lexical roots", () => {
+  const source = parseEnglish30kText("1\tus\t100\n2\tand\t90", { cutoff: 2 });
+  const coverage = buildEnglish30kCoverage({
+    source,
+    atomicEntries: [
+      { en: "us", pya: "hwam" },
+      { en: "and", pya: "hwan" }
+    ],
+    grammarMappings: new Map([
+      ["us", ["nyah"]],
+      ["and", ["wa"]]
+    ]),
+    grammarOverrides: new Map([
+      ["us", ["nyah"]],
+      ["and", ["wa"]]
+    ])
+  });
+  assert.equal(coverage.records[0].coverageType, "grammar");
+  assert.deepEqual(coverage.records[0].pyashSequence, ["nyah"]);
+  assert.equal(coverage.records[1].coverageType, "grammar");
+  assert.deepEqual(coverage.records[1].pyashSequence, ["wa"]);
+});
+
 test("repository English30k source is ranked and measurable", async (t) => {
   let source;
   try {
@@ -300,19 +323,33 @@ test("default English30k coverage uses the repository dictionary blacklist", asy
   assert.ok(coverage.counts["dictionary-alias"] > 6000);
 });
 
-test("lwonprom-derived English grammar composes possessive and plural noun phrases", async () => {
+test("lwonprom-derived English grammar keeps particles separate from lexical roots", async () => {
   const catalog = await loadEnglishGrammarCatalog();
   const grammar = buildEnglishGrammarIndex({ catalogEntries: catalog.entries });
+  assert.deepEqual(grammar.resolve("i")?.pyashSequence, ["mi"]);
+  assert.deepEqual(grammar.resolve("me")?.pyashSequence, ["mi"]);
+  assert.deepEqual(grammar.resolve("we")?.pyashSequence, ["nyah"]);
+  assert.deepEqual(grammar.resolve("us")?.pyashSequence, ["nyah"]);
+  assert.deepEqual(grammar.resolve("you")?.pyashSequence, ["sa"]);
   assert.deepEqual(grammar.resolve("our")?.components, ["us_", "possessive_marker_"]);
   assert.deepEqual(grammar.resolve("our")?.pyashSequence, ["nyah", "ye"]);
   assert.deepEqual(grammar.resolve("your")?.components, ["you_", "possessive_marker_"]);
   assert.deepEqual(grammar.resolve("your")?.pyashSequence, ["sa", "ye"]);
   assert.deepEqual(grammar.resolve("my")?.pyashSequence, ["mi", "ye"]);
   assert.deepEqual(grammar.resolve("ours")?.pyashSequence, ["nyah", "ye"]);
+  assert.deepEqual(grammar.resolve("yours")?.pyashSequence, ["sa", "ye"]);
+  assert.deepEqual(grammar.resolve("and")?.pyashSequence, ["wa"]);
+  assert.deepEqual(grammar.resolve("also")?.pyashSequence, ["pcah"]);
+  assert.deepEqual(grammar.resolve("but")?.pyashSequence, ["pyuh"]);
   assert.deepEqual(grammar.resolve("plural")?.pyashSequence, ["pu"]);
   assert.deepEqual(grammar.resolve("possessive")?.pyashSequence, ["ye"]);
 
+  assert.equal(pyashWords.find((entry) => entry.en === "me")?.pya, "hman");
   assert.equal(pyashWords.find((entry) => entry.en === "us")?.pya, "hwam");
+  assert.equal(pyashWords.find((entry) => entry.en === "you")?.pya, "hnan");
+  assert.equal(pyashWords.find((entry) => entry.en === "and")?.pya, "hwan");
+  assert.equal(pyashWords.find((entry) => entry.en === "also")?.pya, "hyac");
+  assert.equal(pyashWords.find((entry) => entry.en === "but")?.pya, "hlan");
   assert.equal(grammar.resolve("our")?.pyashSequence.includes("hwam"), false);
   assert.equal(grammar.resolve("your")?.pyashSequence.includes("hnan"), false);
 
@@ -356,6 +393,24 @@ test("vocab_suggest reports an English grammatical construction", async () => {
   });
   assert.equal(result.exitCode, 0);
   assert.match(lines.join("\n"), /our: grammar -> nyah ye \(English30k rank 66\)/u);
+});
+
+test("vocab_suggest reports Lord's Prayer pronouns and conjunctions through grammar particles", async () => {
+  const expected = new Map([
+    ["us", "nyah"],
+    ["yours", "sa ye"],
+    ["and", "wa"],
+    ["also", "pcah"],
+    ["but", "pyuh"]
+  ]);
+  for (const [surface, sequence] of expected) {
+    const lines = [];
+    const result = await runVocabSuggest([surface], {
+      report: (line) => lines.push(String(line))
+    });
+    assert.equal(result.exitCode, 0);
+    assert.match(lines.join("\n"), new RegExp(`${surface}: grammar -> ${sequence}`, "u"));
+  }
 });
 
 test("ambiguous regular forms remain Housekeeper candidates", () => {

@@ -156,11 +156,18 @@ English grammatical words that have a direct PyAC construction use the durable
 catalog `program/verbs/exchange/translation/english_grammar.pya`. The catalog
 keeps lexical heads separate from grammar markers:
 
+- Person words use the short grammar particles: `i`/`me` -> `mi`, `we`/`us`
+  -> `nyah`, and `you` -> `sa`.
 - `our` is the grammar us particle `nyah` followed by the possessive marker
   `ye`, so a phrase such as “our father” lowers as `nyah ye <father>`.
-- `your` and `my` use the same possessive construction with `sa` and `mi`.
+- `your` and `my` use the same possessive construction with `sa` and `mi`, and
+  standalone `yours` lowers as `sa ye`.
+- Conjunctions use their grammar particles: `and` -> `wa`, `also` -> `pcah`,
+  and `but` -> `pyuh`.
 - The lexical roots `hwam`, `hnan`, and `hman` remain available for compound
-  words; they are separate from the short grammar particles used here.
+  words, while `hwan`, `hyac`, and `hlan` remain available for lexical
+  compounds. These roots are separate from the short grammar particles used
+  in phrases.
 - `plural` is the noun suffix `pu`; a composed plural phrase appends `pu` to
   the resolved head.
 - `possessive` is the possessive marker `ye`, while `genitive` is the linking
@@ -168,7 +175,10 @@ keeps lexical heads separate from grammar markers:
 
 These entries come from the lwonprom noun-phrase and grammatical-case
 construction. The catalog is evidence for composition; it does not replace the
-canonical English lemma, alias, or compound indexes.
+canonical English lemma, alias, or compound indexes. When an explicit catalog
+surface overlaps a lexical root, its grammar sequence is the deliberate
+translation override; ordinary default grammar keywords retain the normal
+atomic-first coverage order.
 
 ---
 
