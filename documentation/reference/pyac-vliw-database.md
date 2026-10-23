@@ -315,12 +315,41 @@ node command/english30k_coverage.mjs summary
 
 It reports the current coverage counts and ordered source gap. The current
 baseline is 5,730 atomic mappings, 31 aliases, 63 grammar mappings, 30
-accepted compounds, and 24,145 unresolved entries, for 5,854 covered rows
-(19.514%). This is a
+accepted compounds, 1,462 lemma mappings, and 22,683 unresolved entries, for
+7,316 covered rows (24.387%). This is a
 measurement and resolver over the existing catalogs; it does not create a
 second JSON vocabulary or count unresolved dictionary presence as coverage.
 Candidates requiring semantic judgment continue through the existing queued
 GPU/housekeeper compound verifier before entering the accepted catalog.
+
+### English lemma coverage
+
+The lemma layer keeps ranked surface rows and adds a canonical English lookup
+over them. Its durable Pyash catalog is
+`program/verbs/exchange/translation/english_lemmas.pya`, with the same
+English30k source hash and cutoff as the coverage manifest. Runtime indexing
+lives in `program/verbs/exchange/translation/english_lemmas.mjs`.
+
+Exact atoms remain identity mappings. Existing anchor forms and curated
+irregular forms resolve to their canonical Pyash sequence. Regular
+inflectional forms resolve only when one existing atom gives a unique result;
+derivational endings and lexical compounds remain separate concepts. The
+inspection command is:
+
+```text
+node command/english30k_coverage.mjs lemmas
+```
+
+The current report contains 1,462 lemma-resolved rows, 7,316 covered rows in
+total, 5,778 unique canonical lemmas, and 22,683 unresolved rows. The lemma
+count is a surface-row count.
+Ambiguous inflection candidates use
+`program/verbs/exchange/translation/english_lemma_verification.mjs`; its
+default verifier submits through the existing future GPU duty and await path,
+accepts one bounded repair response, and retains malformed or uncertain
+responses as review evidence. The live review command is
+`node command/english30k_lemma_verify.mjs summary`; its `pya` mode emits a
+parser-readable `translation_english30k_lemma_review` catalog.
 
 ## 6. Rust compatibility boundary
 

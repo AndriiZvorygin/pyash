@@ -14,6 +14,12 @@ import {
   renderEnglish30kCoveragePya,
   summarizeEnglish30kCoverage
 } from "../program/verbs/exchange/translation/english30k_coverage.mjs";
+import {
+  buildEnglishLemmaCandidates,
+  buildEnglishLemmaIndex,
+  loadEnglishLemmaCatalog,
+  parseEnglishLemmaCatalog
+} from "../program/verbs/exchange/translation/english_lemmas.mjs";
 
 test("English30k parser preserves rank, score, and missing source ranks", () => {
   const source = parseEnglish30kText([
@@ -64,12 +70,14 @@ test("English30k coverage classifies atoms, aliases, grammar, and compounds", ()
     alias: 1,
     grammar: 1,
     compound: 1,
+    lemma: 0,
     unresolved: 1
   });
   assert.equal(lookupEnglish30kCoverage(coverage.records, "blue_print").coverageType, "compound");
   assert.equal(coverage.records.find((record) => record.word === "unknown").status, "unresolved");
   assert.match(renderEnglish30kCoveragePya(coverage), /english30k-coverage-v1/u);
   assert.equal(summarizeEnglish30kCoverage(coverage).targetRows, 5);
+  assert.equal(summarizeEnglish30kCoverage(coverage).uniqueCanonicalLemmas, 3);
 });
 
 test("repository English30k source is ranked and measurable", async (t) => {
@@ -141,4 +149,107 @@ test("durable English30k manifest records the source contract", async () => {
   assert.match(manifest, /source-hash/u);
   assert.match(manifest, /cutoff.*30000/u);
   assert.match(manifest, /missing-rank.*6897/u);
+});
+
+test("lemma index resolves regular forms only to existing atoms", () => {
+  const index = buildEnglishLemmaIndex({
+    atomicEntries: [
+      { en: "run", pya: "hkin" },
+      { en: "story", pya: "ksis" },
+      { en: "walking", pya: "pfin" }
+    ],
+    catalogEntries: [{
+      surface: "walked",
+      lemma: "walk",
+      canonicalEnglish: "walking",
+      kind: "inflectional",
+      status: "accepted-curated",
+      evidence: "fixture surface mapped to the existing walking atom"
+    }]
+  });
+
+  assert.equal(index.resolve("running").lemma, "run");
+  assert.equal(index.resolve("running").rule, "present-participle-ing-doubled");
+  assert.equal(index.resolve("stories").lemma, "story");
+  assert.equal(index.resolve("walked").lemma, "walk");
+  assert.equal(index.resolve("walked").pyashSequence[0], "pfin");
+  assert.equal(index.resolve("acceptant"), null);
+  assert.equal(index.resolve("zincking"), null);
+});
+
+test("durable lemma catalog parses source metadata and explicit irregular forms", async () => {
+  const catalog = await loadEnglishLemmaCatalog();
+  assert.equal(catalog.format, "english-lemma-v1");
+  assert.equal(catalog.cutoff, 30000);
+  assert.equal(catalog.sourceHash, "436ba126fe7cab2e12c860ce89832ce0d3c1fceb4505cb2ff353bdc1b2124b88");
+  assert.equal(catalog.entries.some((entry) => entry.surface === "went" && entry.lemma === "go"), true);
+  assert.throws(
+    () => parseEnglishLemmaCatalog([
+      "su name translation_english30k_lemmas be map def",
+      "su text \"format\" ob text \"english-lemma-v1\" ya",
+      "su text \"went\" ob text \"{\\\"surface\\\":\\\"other\\\",\\\"lemma\\\":\\\"go\\\",\\\"kind\\\":\\\"irregular\\\",\\\"evidence\\\":\\\"fixture\\\"}\" ya",
+      "prah"
+    ].join("\n")),
+    (error) => error.code === "invalid-english-lemma"
+  );
+});
+
+test("lemma coverage remains separate from atomic and compound coverage", () => {
+  const source = parseEnglish30kText([
+    "1\trunning\t100",
+    "2\twent\t90",
+    "3\tblue-print\t80",
+    "4\tunknown\t70"
+  ].join("\n"), { cutoff: 4 });
+  const coverage = buildEnglish30kCoverage({
+    source,
+    atomicEntries: [
+      { en: "run", pya: "hkin" },
+      { en: "go", pya: "hkat" },
+      { en: "blue", pya: "plun" },
+      { en: "print", pya: "trat" }
+    ],
+    compoundRecords: [{
+      target: "blue-print",
+      componentGlosses: ["blue", "print"],
+      pyashSequence: ["plun", "trat"],
+      status: "accepted-curated",
+      provenance: "fixture"
+    }],
+    lemmaEntries: [{
+      surface: "went",
+      lemma: "go",
+      kind: "irregular",
+      status: "accepted-curated",
+      evidence: "fixture irregular form"
+    }]
+  });
+  assert.equal(coverage.records.find((record) => record.word === "running").coverageType, "lemma");
+  assert.equal(coverage.records.find((record) => record.word === "running").lemma, "run");
+  assert.equal(coverage.records.find((record) => record.word === "went").coverageType, "lemma");
+  assert.equal(coverage.records.find((record) => record.word === "blue-print").coverageType, "compound");
+  assert.equal(coverage.records.find((record) => record.word === "unknown").coverageType, "unresolved");
+  assert.equal(coverage.counts.lemma, 2);
+});
+
+test("vocab_suggest reports a ranked surface form through its lemma", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["walked"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.match(lines.join("\n"), /walked: lemma walk -> pfin \(English30k rank 647\)/u);
+});
+
+test("ambiguous regular forms remain Housekeeper candidates", () => {
+  const candidates = buildEnglishLemmaCandidates({
+    sourceRows: [{ rank: 1, word: "leaves", score: 100 }],
+    atomicEntries: [
+      { en: "leaf", pya: "leaf" },
+      { en: "leave", pya: "leave" }
+    ]
+  });
+  assert.deepEqual(candidates.map((row) => row.lemma), ["leaf", "leave"]);
+  assert.equal(candidates.every((row) => row.status === "candidate"), true);
+  assert.equal(new Set(candidates.map((row) => row.id)).size, 2);
 });

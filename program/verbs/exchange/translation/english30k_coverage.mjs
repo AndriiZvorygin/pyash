@@ -10,6 +10,10 @@ import {
 } from "./compound_coverage.mjs";
 import { loadCompoundMorphology } from "./compound_morphology.mjs";
 import {
+  buildEnglishLemmaIndex,
+  loadEnglishLemmaCatalog
+} from "./english_lemmas.mjs";
+import {
   loadPyacComplexityLayers,
   loadPyacWordLayerIndex
 } from "./pyac_complexity.mjs";
@@ -196,9 +200,16 @@ export function buildEnglish30kCoverage({
   atomicEntries = [],
   aliases = new Map(),
   grammarMappings = DEFAULT_GRAMMAR_MAPPINGS,
-  compoundRecords = []
+  compoundRecords = [],
+  lemmaEntries = [],
+  lemmaIndex = null
 } = {}) {
   if (!source?.rows || !Array.isArray(source.rows)) throw invalid("English30k coverage requires parsed source rows");
+  const resolvedLemmaIndex = lemmaIndex ?? buildEnglishLemmaIndex({
+    atomicEntries,
+    aliases,
+    catalogEntries: lemmaEntries
+  });
   const atomicLookup = mapLookupEntries(atomicEntries, (entry) => entry?.en);
   const aliasLookup = aliases instanceof Map ? new Map(
     [...aliases.entries()].flatMap(([surface, anchor]) => (
@@ -211,11 +222,25 @@ export function buildEnglish30kCoverage({
     ))
   ) : new Map();
   const compounds = buildCompoundLookup(compoundRecords);
+  const withLemma = (record) => {
+    const resolved = resolvedLemmaIndex.resolve(rowWord(record));
+    if (!resolved) return record;
+    return {
+      ...record,
+      lemma: resolved.lemma,
+      lemmaKind: resolved.kind,
+      lemmaStatus: resolved.status,
+      lemmaRule: resolved.rule,
+      lemmaEvidence: resolved.evidence,
+      lemmaPyashSequence: [...resolved.pyashSequence]
+    };
+  };
+  const rowWord = (record) => record?.word ?? record?.normalizedWord ?? "";
   const records = source.rows.map((row) => {
     const variants = english30kLookupVariants(row.normalizedWord);
     const exact = variants.map((variant) => atomicLookup.get(variant)).find(Boolean);
     if (exact) {
-      return {
+      return withLemma({
         id: makeIdentity(row),
         ...row,
         coverageType: "atomic",
@@ -223,13 +248,13 @@ export function buildEnglish30kCoverage({
         canonicalEnglish: exact.en,
         pyashSequence: [exact.pya],
         hnuc: exact.hnuc
-      };
+      });
     }
     const alias = variants.map((variant) => aliasLookup.get(variant)).find(Boolean);
     if (alias) {
       const anchor = atomicLookup.get(english30kLookupVariants(alias)[0]);
       if (anchor) {
-        return {
+        return withLemma({
           id: makeIdentity(row),
           ...row,
           coverageType: "alias",
@@ -238,22 +263,22 @@ export function buildEnglish30kCoverage({
           aliasOf: alias,
           pyashSequence: [anchor.pya],
           hnuc: anchor.hnuc
-        };
+        });
       }
     }
     const grammar = variants.map((variant) => grammarLookup.get(variant)).find(Boolean);
     if (grammar) {
-      return {
+      return withLemma({
         id: makeIdentity(row),
         ...row,
         coverageType: "grammar",
         status: "covered-grammar",
         pyashSequence: grammar
-      };
+      });
     }
     const compound = variants.map((variant) => compounds.get(variant)).find(Boolean);
     if (compound) {
-      return {
+      const compoundRecord = {
         id: makeIdentity(row),
         ...row,
         coverageType: "compound",
@@ -264,16 +289,41 @@ export function buildEnglish30kCoverage({
         maxLayer: compound.maxLayer,
         provenance: compound.provenance
       };
+      return {
+        ...compoundRecord,
+        lemma: normalizeEnglish30kWord(row.word),
+        lemmaKind: "compound",
+        lemmaStatus: compound.status,
+        lemmaRule: "",
+        lemmaEvidence: compound.provenance,
+        lemmaPyashSequence: [...compound.pyashSequence]
+      };
     }
-    return {
+    const unresolved = {
       id: makeIdentity(row),
       ...row,
       coverageType: "unresolved",
       status: "unresolved"
     };
+    const resolved = resolvedLemmaIndex.resolve(row.word);
+    if (!resolved) return unresolved;
+    return {
+      ...unresolved,
+      coverageType: "lemma",
+      status: "covered-lemma",
+      canonicalEnglish: resolved.canonicalEnglish,
+      pyashSequence: [...resolved.pyashSequence],
+      hnuc: resolved.hnuc,
+      lemma: resolved.lemma,
+      lemmaKind: resolved.kind,
+      lemmaStatus: resolved.status,
+      lemmaRule: resolved.rule,
+      lemmaEvidence: resolved.evidence,
+      lemmaPyashSequence: [...resolved.pyashSequence]
+    };
   });
   const counts = Object.fromEntries(
-    ["atomic", "alias", "grammar", "compound", "unresolved"].map((type) => [
+    ["atomic", "alias", "grammar", "compound", "lemma", "unresolved"].map((type) => [
       type,
       records.filter((record) => record.coverageType === type).length
     ])
@@ -306,6 +356,11 @@ export function lookupEnglish30kCoverage(recordsOrCoverage, word) {
 }
 
 export function summarizeEnglish30kCoverage(coverage) {
+  const uniqueCanonicalLemmas = new Set(
+    coverage.records
+      .map((record) => record.lemma)
+      .filter((lemma) => typeof lemma === "string" && lemma)
+  ).size;
   return {
     format: coverage.format,
     source: coverage.source.path,
@@ -315,6 +370,7 @@ export function summarizeEnglish30kCoverage(coverage) {
     targetRows: coverage.records.length,
     missingRanks: coverage.source.missingRanks,
     ...coverage.counts,
+    uniqueCanonicalLemmas,
     covered: coverage.covered.length,
     coveragePercent: Number((coverage.coveragePercent * 100).toFixed(3))
   };
@@ -345,16 +401,26 @@ export async function loadDefaultEnglish30kCoverage({
   path = ENGLISH30K_DEFAULT_PATH,
   atomicEntries = [],
   compoundRecords = [],
-  grammarMappings = DEFAULT_GRAMMAR_MAPPINGS
+  grammarMappings = DEFAULT_GRAMMAR_MAPPINGS,
+  lemmaEntries = null
 } = {}) {
   const source = await loadEnglish30k({ path });
   const { formsToAnchor } = await loadAnchorWordForms();
+  const catalog = lemmaEntries === null ? await loadEnglishLemmaCatalog() : null;
+  const resolvedLemmaEntries = lemmaEntries ?? catalog?.entries ?? [];
+  if (catalog?.sourceHash && catalog.sourceHash !== source.sourceHash) {
+    throw invalid("English lemma source hash does not match English30k source", {
+      expected: source.sourceHash,
+      actual: catalog.sourceHash
+    });
+  }
   return buildEnglish30kCoverage({
     source,
     atomicEntries,
     aliases: formsToAnchor,
     grammarMappings,
-    compoundRecords
+    compoundRecords,
+    lemmaEntries: resolvedLemmaEntries
   });
 }
 

@@ -66,6 +66,12 @@ export async function runEnglish30kCoverage(args = process.argv.slice(2), { repo
     }
     return coverage;
   }
+  if (mode === "lemmas") {
+    for (const record of coverage.records.filter((row) => row.lemma)) {
+      report(`${record.rank}\t${record.word}\t${record.lemma}\t${record.lemmaKind}\t${record.pyashSequence.join(" ")}`);
+    }
+    return coverage;
+  }
   if (mode === "pya") {
     report(renderEnglish30kCoveragePya(coverage).trimEnd());
     return coverage;

@@ -120,6 +120,7 @@ Use the vocab helpers before introducing new verbs, files, directory names, or e
 - `node command/vocab_suggest.mjs "new verb name"` checks a proposed token or phrase without touching files.
 - `node command/vocab_check.mjs examples/pyash` enforces that every token is already in the dictionaries.
 - `node command/english30k_coverage.mjs summary` measures executable coverage of ranks 1–30,000 from the Gutenberg-derived `English30k.txt` source; unresolved rows remain visible and do not count as covered.
+- `node command/english30k_coverage.mjs lemmas` shows ranked surface forms resolved through the canonical lemma layer stored in `program/verbs/exchange/translation/english_lemmas.pya`.
 
 These helpers use the `caterer/pyac/lyac` dictionaries via `command/ryan.mjs`.
 
