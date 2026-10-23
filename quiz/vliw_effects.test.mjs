@@ -6,6 +6,7 @@ import {
   analyzeCodeletDependencies,
   decodeCodelet,
   deriveSentenceEffects,
+  executeCodelets,
   lowerSentence,
   scheduleCodeletDependencies
 } from "../program/library/vliw/index.mjs";
@@ -76,5 +77,18 @@ test("dependency scheduling preserves observable side-effect order", () => {
   assert.deepEqual(
     scheduleCodeletDependencies([first, second]).map((entry) => entry.index),
     [0, 1]
+  );
+});
+
+test("facade execution validates writers and returns source order", async () => {
+  const first = lowerSentence({ mood: "ya", su: { name: "collector" }, ob: { num: 1 }, be: "number" })[0];
+  const second = lowerSentence({ mood: "ya", su: { name: "answer" }, ob: { num: 2 }, be: "number" })[0];
+  assert.deepEqual(await executeCodelets([second, first]), [
+    { mood: "ya", su: { name: "answer" }, ob: { num: 2 }, be: "number" },
+    { mood: "ya", su: { name: "collector" }, ob: { num: 1 }, be: "number" }
+  ]);
+  assert.rejects(
+    () => executeCodelets([first, first]),
+    (error) => error.code === "duplicate-writer"
   );
 });
