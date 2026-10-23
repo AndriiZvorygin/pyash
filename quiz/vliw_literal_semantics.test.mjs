@@ -116,7 +116,7 @@ test("typed literal lowering keeps unsupported names and widths explicit", () =>
     "unrepresentable-name"
   );
   assert.equal(
-    errorCode(() => lowerTypedLiteralSentence(parse('ob text "AB" be text ya'))),
+    errorCode(() => lowerTypedLiteralSentence(parse('ob text "ABCDEFGHIJK" be text ya'))),
     "literal-width"
   );
   assert.equal(

@@ -110,7 +110,8 @@ test("PyAC replay verifies catalog expectations and preserves unsupported outcom
   assert.equal(outcomes[0].status, "replayed");
   assert.equal(outcomes[0].verified, true);
   assert.deepEqual(outcomes[0].result.ob, { num: 10 });
-  assert.equal(outcomes[1].status, "unsupported");
+  assert.equal(outcomes[1].status, "replayed");
+  assert.equal(outcomes[1].result.ob.num, -1);
 });
 
 test("PyAC rejects noisy, malformed, and tampered binary output", async () => {

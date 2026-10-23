@@ -5,7 +5,8 @@ import {
 } from "./codelets.mjs";
 import {
   LETTER_QUOTE_WORD,
-  NUMBER_QUOTE_WORD
+  NUMBER_QUOTE_WORD,
+  PARAGRAPH_LETTER_QUOTE_WORD
 } from "./quotes.mjs";
 import { VliwEncodingError } from "./plus.mjs";
 
@@ -19,6 +20,7 @@ export const typedLiteralCompatibility = Object.freeze({
   head: TYPED_LITERAL_HEAD_WORD,
   numberQuote: NUMBER_QUOTE_WORD,
   letterQuote: LETTER_QUOTE_WORD,
+  paragraphLetterQuote: PARAGRAPH_LETTER_QUOTE_WORD,
   accusativeCase: ACCUSATIVE_CASE_WORD,
   realisMood: REALIS_MOOD_WORD,
   usedWords: TYPED_LITERAL_USED_WORD_COUNT
@@ -93,10 +95,10 @@ function normalizeTypedLiteralSentence(sentence) {
   }
 
   exactKeys(sentence.ob, ["text"], "text literal object");
-  if (typeof sentence.ob.text !== "string" || sentence.ob.text.length !== 1) {
+  if (typeof sentence.ob.text !== "string" || sentence.ob.text.length === 0 || sentence.ob.text.length > 10) {
     throw encodingError(
       "literal-width",
-      "the proven letter vector accepts exactly one UTF-16 code unit",
+      "the proven text vectors accept between one and ten UTF-16 code units",
       { length: sentence.ob.text?.length ?? null }
     );
   }
@@ -139,46 +141,66 @@ export function isTypedLiteralSentence(sentence) {
 export function lowerTypedLiteralSentence(sentence) {
   const normalized = normalizeTypedLiteralSentence(sentence);
   const words = new Uint16Array(CODELET_WORD_COUNT);
-  const quoteWord = normalized.be === "number" ? NUMBER_QUOTE_WORD : LETTER_QUOTE_WORD;
-  const payload = normalized.be === "number"
-    ? normalized.ob.num
-    : normalized.ob.text.charCodeAt(0);
-  words.set([
-    TYPED_LITERAL_HEAD_WORD,
-    quoteWord,
-    payload,
-    ACCUSATIVE_CASE_WORD,
-    REALIS_MOOD_WORD
-  ]);
+  if (normalized.be === "number") {
+    words.set([
+      TYPED_LITERAL_HEAD_WORD,
+      NUMBER_QUOTE_WORD,
+      normalized.ob.num,
+      ACCUSATIVE_CASE_WORD,
+      REALIS_MOOD_WORD
+    ]);
+  } else if (normalized.ob.text.length === 1) {
+    words.set([
+      TYPED_LITERAL_HEAD_WORD,
+      LETTER_QUOTE_WORD,
+      normalized.ob.text.charCodeAt(0),
+      ACCUSATIVE_CASE_WORD,
+      REALIS_MOOD_WORD
+    ]);
+  } else {
+    const chars = Array.from(
+      { length: normalized.ob.text.length },
+      (_, index) => normalized.ob.text.charCodeAt(index)
+    );
+    words.set([
+      TYPED_LITERAL_HEAD_WORD,
+      PARAGRAPH_LETTER_QUOTE_WORD,
+      chars.length,
+      ...chars,
+      ACCUSATIVE_CASE_WORD,
+      REALIS_MOOD_WORD
+    ]);
+  }
+  const usedWords = normalized.be === "number" || normalized.ob.text.length === 1
+    ? TYPED_LITERAL_USED_WORD_COUNT
+    : normalized.ob.text.length + 5;
   return {
     sentence: normalized,
     words,
     bytes: wordsToBytes(words),
-    usedWords: TYPED_LITERAL_USED_WORD_COUNT
+    usedWords
   };
 }
 
 export function decodeTypedLiteralCodelet(input) {
   const decoded = decodeLegacy(input);
-  if (decoded.usedWords !== TYPED_LITERAL_USED_WORD_COUNT) {
-    throw encodingError("malformed-codelet", "typed literal codelet has an invalid used-word boundary", {
-      expected: TYPED_LITERAL_USED_WORD_COUNT,
-      actual: decoded.usedWords
-    });
-  }
   markerAt(decoded, 0, TYPED_LITERAL_HEAD_WORD, "head");
-  markerAt(decoded, 3, ACCUSATIVE_CASE_WORD, "accusative case");
-  markerAt(decoded, 4, REALIS_MOOD_WORD, "realis mood");
 
   const quoteItem = decoded.items.find((candidate) => candidate.offset === 1);
-  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD].includes(quoteItem.quote.word)) {
+  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word)) {
     throw encodingError("malformed-codelet", "typed literal codelet has an unsupported quote", {
       actual: quoteItem?.quote?.word ?? quoteItem?.word
     });
   }
-  if (quoteItem.quote.nextOffset !== 3) {
-    throw encodingError("malformed-codelet", "typed literal quote boundary is invalid", {
-      nextOffset: quoteItem.quote.nextOffset
+  const accusativeOffset = quoteItem.quote.nextOffset;
+  const realisOffset = accusativeOffset + 1;
+  markerAt(decoded, accusativeOffset, ACCUSATIVE_CASE_WORD, "accusative case");
+  markerAt(decoded, realisOffset, REALIS_MOOD_WORD, "realis mood");
+  const expectedUsedWords = realisOffset + 1;
+  if (decoded.usedWords !== expectedUsedWords) {
+    throw encodingError("malformed-codelet", "typed literal codelet has an invalid used-word boundary", {
+      expected: expectedUsedWords,
+      actual: decoded.usedWords
     });
   }
 
@@ -189,8 +211,8 @@ export function decodeTypedLiteralCodelet(input) {
       be: "number"
     };
   }
-  if (typeof quoteItem.quote.value !== "string" || quoteItem.quote.value.length !== 1) {
-    throw encodingError("literal-width", "typed letter quote must contain one UTF-16 code unit", {
+  if (typeof quoteItem.quote.value !== "string" || quoteItem.quote.value.length === 0) {
+    throw encodingError("literal-width", "typed text quote must contain UTF-16 code units", {
       length: quoteItem.quote.value?.length ?? null
     });
   }
