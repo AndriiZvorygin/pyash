@@ -9,6 +9,7 @@ import {
   renderDerivedCompoundCoveragePya,
   sourceTermsFromDictionaryRows
 } from "../program/verbs/exchange/translation/compound_coverage.mjs";
+import { loadCompoundMorphology } from "../program/verbs/exchange/translation/compound_morphology.mjs";
 import { classifyCompoundCoverage } from "../program/verbs/exchange/translation/compound_verification.mjs";
 import {
   loadPyacComplexityLayers,
@@ -52,6 +53,7 @@ export async function loadCoverage() {
     atomicEntries: pyashWords,
     sourceTerms,
     curatedDecompositions: await loadCuratedCompoundDecompositions(),
+    morphologyEntries: await loadCompoundMorphology(),
     layerIndex: { ...layerIndex, englishToPyash }
   });
 }

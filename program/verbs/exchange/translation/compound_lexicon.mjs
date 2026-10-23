@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 
 import { buildProgram } from "../../../program.mjs";
 import { COMPOUND_VERIFICATION_STATUSES } from "./compound_verification.mjs";
+import { COMPOUND_MORPHOLOGY_KINDS } from "./compound_morphology.mjs";
 
 export const CHINESE_COMPOUND_LEXICON_NAME = "translation_compounds_chinese";
 
@@ -13,6 +14,12 @@ export const COMPOUND_LEXICON_NAMES = Object.freeze({
   hindi: "translation_compounds_hindi",
   interlingua: "translation_compounds_interlingua"
 });
+
+const COMPONENT_ROLES = new Set([
+  "lexeme",
+  "lexeme-or-ending",
+  ...COMPOUND_MORPHOLOGY_KINDS
+]);
 
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
@@ -76,6 +83,36 @@ function normalizeEntry(payload, surface, index, language) {
     payload.componentGlosses.some((item) => typeof item !== "string" || !item)
   )) {
     throw invalid("compound component glosses must match ordered morphemes", { index, surface });
+  }
+  if (payload.componentRoles !== undefined && (
+    !Array.isArray(payload.componentRoles) ||
+    payload.componentRoles.length !== payload.morphemes.length ||
+    payload.componentRoles.some((item) => !COMPONENT_ROLES.has(item))
+  )) {
+    throw invalid("compound component roles must match ordered morphemes", { index, surface });
+  }
+  if (payload.morphologyStatus !== undefined && ![
+    "lexical-compound",
+    "ending-overlap-review"
+  ].includes(payload.morphologyStatus)) {
+    throw invalid("compound morphology status is unsupported", { index, surface });
+  }
+  if (payload.morphologySignals !== undefined && (
+    !Array.isArray(payload.morphologySignals) ||
+    payload.morphologySignals.some((signal) => (
+      !signal ||
+      typeof signal !== "object" ||
+      typeof signal.ending !== "string" ||
+      !signal.ending ||
+      !COMPOUND_MORPHOLOGY_KINDS.includes(signal.kind) ||
+      typeof signal.component !== "string" ||
+      !signal.component ||
+      !["component", "inside-component"].includes(signal.boundary) ||
+      typeof signal.evidence !== "string" ||
+      !signal.evidence
+    ))
+  )) {
+    throw invalid("compound morphology signals are malformed", { index, surface });
   }
   if (payload.pyashSequence !== undefined && (
     !Array.isArray(payload.pyashSequence) ||
@@ -142,6 +179,14 @@ function normalizeEntry(payload, surface, index, language) {
   )) {
     throw invalid("compound verification status must be text", { index, surface });
   }
+  if (payload.verificationHeadKind !== undefined && ![
+    "lexical-head",
+    "derivational-ending",
+    "grammatical-ending",
+    "uncertain"
+  ].includes(payload.verificationHeadKind)) {
+    throw invalid("compound verification head kind is unsupported", { index, surface });
+  }
   if (payload.certainty !== undefined && !["deterministic", "llm"].includes(payload.certainty)) {
     throw invalid("compound certainty must be deterministic or llm", { index, surface });
   }
@@ -199,11 +244,16 @@ function normalizeEntry(payload, surface, index, language) {
     ...(payload.gloss === undefined ? {} : { gloss: payload.gloss }),
     ...(payload.sourceMorphemes === undefined ? {} : { sourceMorphemes: [...payload.sourceMorphemes] }),
     ...(payload.componentGlosses === undefined ? {} : { componentGlosses: [...payload.componentGlosses] }),
+    ...(payload.componentRoles === undefined ? {} : { componentRoles: [...payload.componentRoles] }),
     ...(payload.pyashSequence === undefined ? {} : { pyashSequence: [...payload.pyashSequence] }),
     ...(payload.componentLayers === undefined ? {} : { componentLayers: [...payload.componentLayers] }),
     ...(payload.maxLayer === undefined ? {} : { maxLayer: payload.maxLayer }),
     ...(payload.evidence === undefined ? {} : { evidence: payload.evidence }),
     ...(payload.head === undefined ? {} : { head: payload.head }),
+    ...(payload.morphologyStatus === undefined ? {} : { morphologyStatus: payload.morphologyStatus }),
+    ...(payload.morphologySignals === undefined ? {} : {
+      morphologySignals: payload.morphologySignals.map((signal) => ({ ...signal }))
+    }),
     ...(payload.sourceSurfaces === undefined ? {} : {
       sourceSurfaces: Object.fromEntries(
         Object.entries(payload.sourceSurfaces).sort(([left], [right]) => left.localeCompare(right))
@@ -218,6 +268,7 @@ function normalizeEntry(payload, surface, index, language) {
     }),
     ...(payload.coverageStatus === undefined ? {} : { coverageStatus: payload.coverageStatus }),
     ...(payload.verificationStatus === undefined ? {} : { verificationStatus: payload.verificationStatus }),
+    ...(payload.verificationHeadKind === undefined ? {} : { verificationHeadKind: payload.verificationHeadKind }),
     ...(payload.certainty === undefined ? {} : { certainty: payload.certainty }),
     ...(payload.certaintyScore === undefined ? {} : { certaintyScore: payload.certaintyScore }),
     ...(payload.deterministicChecks === undefined ? {} : {
@@ -335,15 +386,19 @@ export function canonicalCompoundPayload(entry) {
     gloss: entry.gloss ?? null,
     sourceMorphemes: entry.sourceMorphemes ?? null,
     componentGlosses: entry.componentGlosses ?? null,
+    componentRoles: entry.componentRoles ?? null,
     pyashSequence: entry.pyashSequence ?? null,
     componentLayers: entry.componentLayers ?? null,
     maxLayer: entry.maxLayer ?? null,
     evidence: entry.evidence ?? null,
     head: entry.head ?? null,
+    morphologyStatus: entry.morphologyStatus ?? null,
+    morphologySignals: entry.morphologySignals ?? null,
     sourceSurfaces: entry.sourceSurfaces ?? null,
     sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage ?? null,
     coverageStatus: entry.coverageStatus ?? null,
     verificationStatus: entry.verificationStatus ?? null,
+    verificationHeadKind: entry.verificationHeadKind ?? null,
     certainty: entry.certainty ?? null,
     certaintyScore: entry.certaintyScore ?? null,
     deterministicChecks: entry.deterministicChecks ?? null,

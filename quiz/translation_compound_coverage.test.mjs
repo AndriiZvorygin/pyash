@@ -14,6 +14,7 @@ import {
   segmentDelimitedCompound,
   sourceTermsFromDictionaryRows
 } from "../program/verbs/exchange/translation/compound_coverage.mjs";
+import { buildCompoundMorphologyIndex, loadCompoundMorphology } from "../program/verbs/exchange/translation/compound_morphology.mjs";
 import {
   loadPyacComplexityLayers,
   loadPyacWordLayerIndex
@@ -108,6 +109,76 @@ test("compound coverage separates delimited use from accidental closed splits", 
   assert.deepEqual(segmentClosedCompound("meatus", atoms), []);
 });
 
+test("compound morphology keeps lexical heads separate from marked endings", async () => {
+  const morphology = await loadCompoundMorphology();
+  const index = buildCompoundMorphologyIndex({
+    atomicEntries: pyashWords,
+    morphologyEntries: morphology
+  });
+  assert.equal(index.get("ing").some((entry) => entry.kind === "derivational-ending"), true);
+  assert.equal(index.get("ant").some((entry) => entry.kind === "derivational-ending"), true);
+
+  const morphologyAtomicEntries = [
+    ...atomicEntries,
+    { en: "accept", pya: "akse" },
+    { en: "ant", pya: "mrim" },
+    { en: "zinc", pya: "zyik" },
+    { en: "king", pya: "hyap" }
+  ];
+  const morphologyLayerIndex = {
+    englishToPyash: new Map([
+      ...layerIndex.englishToPyash,
+      ["accept", "akse"], ["ant", "mrim"], ["zinc", "zyik"], ["king", "hyap"]
+    ]),
+    byWord: new Map([
+      ...layerIndex.byWord,
+      ["akse", 19], ["mrim", 19], ["zyik", 16], ["hyap", 24]
+    ])
+  };
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries: morphologyAtomicEntries,
+    layerIndex: morphologyLayerIndex,
+    morphologyEntries: [
+      { surface: "ant", kind: "derivational-ending", evidence: "agentive or adjectival ending" },
+      { surface: "ing", kind: "grammatical-ending", evidence: "English progressive or participial ending" }
+    ],
+    sourceTerms: [
+      { target: "acceptant", sourceSurfaces: { french: "acceptant" } },
+      { target: "zincking", sourceSurfaces: { interlingua: "zincage" } }
+    ]
+  });
+  const acceptant = coverage.records.find((record) => record.target === "acceptant");
+  const zincking = coverage.records.find((record) => record.target === "zincking");
+  assert.deepEqual(acceptant.componentGlosses, ["accept", "ant"]);
+  assert.equal(acceptant.morphologyStatus, "ending-overlap-review");
+  assert.equal(acceptant.morphologySignals[0].ending, "ant");
+  assert.equal(acceptant.morphologySignals[0].boundary, "component");
+  assert.deepEqual(zincking.componentGlosses, ["zinc", "king"]);
+  assert.equal(zincking.morphologyStatus, "ending-overlap-review");
+  assert.equal(zincking.morphologySignals[0].ending, "ing");
+  assert.equal(zincking.morphologySignals[0].boundary, "inside-component");
+
+  const calls = [];
+  const verified = await verifyCompoundCoverage([acceptant, zincking], {
+    invoke: async ({ candidates }) => {
+      calls.push(candidates[0].target);
+      return JSON.stringify({
+        verdict: "accept",
+        candidateId: candidates[0].id,
+        headKind: "derivational-ending",
+        rationale: "the final spelling is an ending rather than a semantic subtype"
+      });
+    }
+  });
+  assert.equal(verified.accepted.length, 0);
+  assert.deepEqual(
+    verified.rejected.map((record) => record.target).sort(),
+    ["acceptant", "zincking"]
+  );
+  assert.deepEqual(calls, ["zincking"]);
+  assert.equal(verified.rejected.find((record) => record.target === "acceptant").verificationStatus, "rejected-deterministic");
+});
+
 test("compound resolver returns only usable records and preserves source order", () => {
   const coverage = buildDerivedCompoundCoverage({
     atomicEntries,
@@ -146,6 +217,8 @@ test("compound coverage renders a parser-readable durable catalog", () => {
   });
   assert.equal(parsed.length, 1);
   assert.equal(parsed[0].head, "print");
+  assert.deepEqual(parsed[0].componentRoles, ["lexeme", "lexeme"]);
+  assert.equal(parsed[0].morphologyStatus, "lexical-compound");
   assert.equal(parsed[0].sourceSurfaces.chinese, "蓝图");
   assert.deepEqual(parsed[0].sourceMorphemesByLanguage.chinese, ["蓝图"]);
 });
@@ -191,6 +264,7 @@ test("current dictionaries produce broad derived coverage", async (t) => {
     atomicEntries: pyashWords,
     sourceTerms,
     curatedDecompositions: await loadCuratedCompoundDecompositions(),
+    morphologyEntries: await loadCompoundMorphology(),
     layerIndex: { ...layerIndex, englishToPyash }
   });
   assert.equal(coverage.existingAtomic.length, 7830);
@@ -201,6 +275,12 @@ test("current dictionaries produce broad derived coverage", async (t) => {
   assert.equal(blueprint.head, "print");
   assert.equal(blueprint.sourceSurfaces.chinese, "蓝图");
   assert.deepEqual(blueprint.sourceMorphemesByLanguage.french, ["plan"]);
+  const acceptant = coverage.candidates.find((entry) => entry.target === "acceptant");
+  const zincking = coverage.candidates.find((entry) => entry.target === "zincking");
+  assert.equal(acceptant.morphologyStatus, "ending-overlap-review");
+  assert.equal(acceptant.morphologySignals.some((signal) => signal.ending === "ant"), true);
+  assert.equal(zincking.morphologyStatus, "ending-overlap-review");
+  assert.equal(zincking.morphologySignals.some((signal) => signal.ending === "ing"), true);
 });
 
 test("deterministic compounds bypass the LLM and closed candidates enter verification", async () => {
@@ -261,6 +341,7 @@ test("uncertain compound verification gets one bounded repair and accepts only a
       return JSON.stringify({
         verdict: "accept",
         candidateId: candidate.id,
+        headKind: "lexical-head",
         rationale: "the supplied components describe a bird modified by black"
       });
     }
@@ -279,12 +360,14 @@ test("uncertain compound verification gets one bounded repair and accepts only a
   assert.equal(parsed[0].status, "repaired-llm");
   assert.equal(parsed[0].verificationAttempts, 2);
   assert.equal(parsed[0].verificationStatus, "repaired-llm");
+  assert.equal(parsed[0].verificationHeadKind, "lexical-head");
   assert.equal(parsed[0].coverageStatus, "candidate-closed");
   assert.equal(parsed[0].deterministicChecks.semanticHead, true);
   assert.deepEqual(
     parseCompoundVerificationResponse(JSON.stringify({
       verdict: "accept",
       candidateId: "outside-candidate",
+      headKind: "lexical-head",
       rationale: "invented"
     }), { candidates: [candidate] }),
     { valid: false, reason: "response candidateId is outside the supplied candidate set" }
@@ -293,6 +376,7 @@ test("uncertain compound verification gets one bounded repair and accepts only a
     `model preamble\n${JSON.stringify({
       verdict: "accept",
       candidateId: candidate.id,
+      headKind: "lexical-head",
       rationale: "the supplied candidate is grounded"
     })}\nmodel tail`,
     { candidates: [candidate] }
@@ -305,6 +389,7 @@ test("uncertain compound verification gets one bounded repair and accepts only a
         content: JSON.stringify({
           verdict: "accept",
           candidateId: candidate.id,
+          headKind: "lexical-head",
           rationale: "bounded provider envelope"
         })
       }
@@ -313,6 +398,32 @@ test("uncertain compound verification gets one bounded repair and accepts only a
   );
   assert.equal(providerEnvelope.valid, true);
   assert.equal(providerEnvelope.verdict, "accept");
+});
+
+test("compound verification rejects an accepted response whose head is an ending", async () => {
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries,
+    layerIndex,
+    sourceTerms: [{ target: "blackbird", sourceSurfaces: { chinese: "黑鸟" } }]
+  });
+  const candidate = coverage.records[0];
+  const verified = await verifyCompoundCoverage(coverage.records, {
+    invoke: async () => JSON.stringify({
+      verdict: "accept",
+      candidateId: candidate.id,
+      headKind: "derivational-ending",
+      rationale: "the spelling appears at the end"
+    })
+  });
+  assert.equal(verified.accepted.length, 0);
+  assert.equal(verified.rejected.length, 1);
+  assert.equal(verified.rejected[0].verificationHeadKind, "derivational-ending");
+  assert.match(verified.rejected[0].verificationRationale, /final component classified/u);
+  assert.equal(parseCompoundVerificationResponse(JSON.stringify({
+    verdict: "accept",
+    candidateId: candidate.id,
+    rationale: "missing head classification"
+  }), { candidates: [candidate] }).valid, false);
 });
 
 test("compound mind verifier uses the existing Pyash mind write shape", async () => {
@@ -355,6 +466,7 @@ test("ambiguous candidate decompositions share one LLM decision", async () => {
       return JSON.stringify({
         verdict: "accept",
         candidateId: "candidate-blackbird-b",
+        headKind: "lexical-head",
         rationale: "the second supplied interpretation matches the target"
       });
     }
@@ -371,6 +483,7 @@ test("default compound verifier delegates through the existing mind runtime", as
   process.env.PYA_MIND_RESPONSE = JSON.stringify({
     message: { content: JSON.stringify({
       verdict: "uncertain",
+      headKind: "uncertain",
       rationale: "fixture response reached the configured mind"
     }) }
   });

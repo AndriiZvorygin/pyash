@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
 import { loadCompoundLexicon } from "./compound_lexicon.mjs";
+import {
+  analyzeCompoundMorphology,
+  buildCompoundMorphologyIndex
+} from "./compound_morphology.mjs";
 import { choosePyacCompoundCandidate } from "./pyac_complexity.mjs";
 
 export const DERIVED_COMPOUND_LEXICON_NAME = "translation_compounds_derived";
@@ -209,13 +213,21 @@ function makeRecord({
   confidence,
   evidence,
   provenance,
-  layerIndex
+  layerIndex,
+  morphologyIndex,
+  atomicEntries
 }) {
   const pyashWords = componentGlosses.map((gloss) => layerIndex?.englishToPyash?.get(gloss) ?? null);
   const selected = pyashWords.every(Boolean)
     ? choosePyacCompoundCandidate([{ pyashSequence: pyashWords }], layerIndex)
     : null;
   if (!selected) return null;
+  const morphology = analyzeCompoundMorphology({
+    target,
+    componentGlosses,
+    morphologyIndex,
+    atomicEntries
+  });
   const record = {
     language: "canonical",
     surface: target,
@@ -228,6 +240,7 @@ function makeRecord({
     maxLayer: selected.maxLayer,
     head: componentGlosses.at(-1),
     modifiers: componentGlosses.slice(0, -1),
+    ...morphology,
     sourceSurfaces: normalizeSourceSurfaces(sourceSurfaces),
     sourceMorphemesByLanguage: normalizeSourceMorphemesByLanguage(sourceMorphemesByLanguage),
     confidence,
@@ -242,12 +255,14 @@ export function buildDerivedCompoundCoverage({
   atomicEntries,
   sourceTerms = [],
   curatedDecompositions = [],
+  morphologyEntries = [],
   layerIndex
 } = {}) {
   if (!layerIndex?.englishToPyash || !layerIndex?.byWord) {
     throw invalid("compound coverage requires English and Pyash layer indexes");
   }
   const atoms = atomicMap(atomicEntries);
+  const morphologyIndex = buildCompoundMorphologyIndex({ atomicEntries, morphologyEntries });
   const sources = mergeSourceTerms(sourceTerms);
   const curated = curatedMap(curatedDecompositions);
   const targets = new Set([...sources.keys(), ...curated.keys()]);
@@ -279,7 +294,9 @@ export function buildDerivedCompoundCoverage({
         confidence: curatedEntry.confidence,
         evidence: curatedEntry.evidence,
         provenance: [...source.provenance].sort().join("; ") || "compound-coverage-curated.pya",
-        layerIndex
+        layerIndex,
+        morphologyIndex,
+        atomicEntries
       });
       if (record) records.push(record);
       else rejected.push({ target, status: "rejected-missing-component", evidence: curatedEntry.evidence });
@@ -299,7 +316,9 @@ export function buildDerivedCompoundCoverage({
         confidence: "derived-boundary",
         evidence: "exact source delimiter and existing atomic components",
         provenance: [...source.provenance].sort().join("; ") || "derived-compound-coverage",
-        layerIndex
+        layerIndex,
+        morphologyIndex,
+        atomicEntries
       });
       if (record) records.push(record);
       else rejected.push({ target, status: "rejected-missing-component" });
@@ -319,7 +338,9 @@ export function buildDerivedCompoundCoverage({
         confidence: "orthographic-candidate",
         evidence: "closed-word segmentation requires semantic review",
         provenance: [...source.provenance].sort().join("; ") || "derived-compound-coverage",
-        layerIndex
+        layerIndex,
+        morphologyIndex,
+        atomicEntries
       });
       if (record) records.push(record);
     }
@@ -367,8 +388,12 @@ function renderDerivedCompoundCoverageRow(entry) {
     head: entry.head,
     sourceSurfaces: entry.sourceSurfaces,
     sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage,
+    componentRoles: entry.componentRoles,
+    morphologyStatus: entry.morphologyStatus,
+    morphologySignals: entry.morphologySignals,
     coverageStatus: entry.coverageStatus,
     verificationStatus: entry.verificationStatus,
+    verificationHeadKind: entry.verificationHeadKind,
     certainty: entry.certainty,
     certaintyScore: entry.certaintyScore,
     deterministicChecks: entry.deterministicChecks,

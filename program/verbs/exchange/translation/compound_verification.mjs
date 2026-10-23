@@ -11,6 +11,12 @@ export const COMPOUND_VERIFICATION_STATUSES = Object.freeze([
 ]);
 
 const RESPONSE_VERDICTS = new Set(["accept", "reject", "uncertain"]);
+const RESPONSE_HEAD_KINDS = new Set([
+  "lexical-head",
+  "derivational-ending",
+  "grammatical-ending",
+  "uncertain"
+]);
 const MAX_RESPONSE_CHARS = 12000;
 const MAX_RATIONALE_CHARS = 2000;
 
@@ -52,6 +58,12 @@ function isValidSemanticShape(record) {
     record.componentGlosses.every((gloss) => normalizeText(gloss)) &&
     normalizeText(record.head) === normalizeText(record.componentGlosses.at(-1))
   );
+}
+
+function endsAtKnownMorphologyMarker(record) {
+  return record?.status === "candidate-closed" &&
+    Array.isArray(record?.morphologySignals) &&
+    record.morphologySignals.some((signal) => signal?.boundary === "component");
 }
 
 function deterministicChecks(record) {
@@ -114,6 +126,15 @@ export function classifyCompoundCertainty(record) {
     };
   }
   if (UNCERTAIN_STATUSES.has(record.status)) {
+    if (endsAtKnownMorphologyMarker(record)) {
+      return {
+        certainty: "deterministic",
+        certaintyScore: score,
+        verificationStatus: "rejected-deterministic",
+        deterministicChecks: checks,
+        reasons: ["closed-word segmentation terminates at a known derivational or grammatical ending"]
+      };
+    }
     return {
       certainty: "llm",
       certaintyScore: score,
@@ -156,6 +177,9 @@ function jsonForPrompt(value) {
     pyashSequence: value.pyashSequence ?? [],
     head: value.head ?? "",
     modifiers: value.modifiers ?? [],
+    componentRoles: value.componentRoles ?? [],
+    morphologyStatus: value.morphologyStatus ?? "",
+    morphologySignals: value.morphologySignals ?? [],
     componentLayers: value.componentLayers ?? [],
     evidence: value.evidence ?? "",
     deterministicChecks: value.deterministicChecks ?? {}
@@ -173,9 +197,12 @@ export function buildCompoundVerificationPrompt({ record, candidates = [record] 
     "Choose only one candidate id supplied below.",
     "Use the source evidence to judge whether the components compose the target meaning.",
     "Pyash order is head-final: the final component is the semantic head.",
+    "Spelling overlap is not a semantic boundary. Classify the final component as lexical-head only when the target denotes a kind of that component.",
+    "A derivational or grammatical ending is a separate morphology signal, even when it matches an atomic English word.",
+    "For example, acceptant is not a kind of ant, and zincking is not a kind of king.",
     "Return one JSON object with exactly these useful fields:",
-    '{"verdict":"accept|reject|uncertain","candidateId":"...","rationale":"..."}',
-    "A valid accept must use a supplied candidateId and preserve its component sequence.",
+    '{"verdict":"accept|reject|uncertain","candidateId":"...","headKind":"lexical-head|derivational-ending|grammatical-ending|uncertain","rationale":"..."}',
+    "A valid accept must use a supplied candidateId, preserve its component sequence, and set headKind to lexical-head.",
     "\nTARGET RECORD:",
     jsonForPrompt(record),
     "\nCANDIDATES:",
@@ -262,11 +289,19 @@ export function parseCompoundVerificationResponse(text, { candidates = [] } = {}
       return { valid: false, reason: "accepted response must select a supplied candidateId" };
     }
   }
+  const headKind = normalizeText(payload.headKind ?? payload.head_kind).toLowerCase();
+  if (verdict === "accept" && !RESPONSE_HEAD_KINDS.has(headKind)) {
+    return { valid: false, reason: "accepted response must classify the final component as lexical-head, derivational-ending, or grammatical-ending" };
+  }
+  if (headKind && !RESPONSE_HEAD_KINDS.has(headKind)) {
+    return { valid: false, reason: "response headKind is unsupported" };
+  }
   return {
     valid: true,
     verdict,
     candidate: selectedId ? candidateMap.get(selectedId) : null,
     candidateId: selectedId,
+    headKind: headKind || "uncertain",
     rationale,
     raw: String(text ?? "")
   };
@@ -292,6 +327,7 @@ function applyVerification(record, classification, response, {
     verificationAttempts: attempts,
     verifier: verifierName,
     verificationRationale: response.rationale,
+    verificationHeadKind: response.headKind,
     ...(response.raw ? { verificationEvidence: response.raw } : {})
   };
 }
@@ -308,6 +344,7 @@ function retainUncertain(record, classification, response, { verifierName, attem
     verificationAttempts: attempts,
     verifier: verifierName,
     verificationRationale: response?.rationale ?? response?.reason ?? "bounded verification did not establish a decision",
+    ...(response?.headKind ? { verificationHeadKind: response.headKind } : {}),
     ...(response?.raw ? { verificationEvidence: response.raw } : {})
   };
 }
@@ -324,6 +361,7 @@ function retainRejected(record, classification, response, { verifierName, attemp
     verificationAttempts: attempts,
     verifier: verifierName,
     verificationRationale: response?.rationale ?? response?.reason ?? "candidate rejected by bounded verification",
+    ...(response?.headKind ? { verificationHeadKind: response.headKind } : {}),
     ...(response?.raw ? { verificationEvidence: response.raw } : {})
   };
 }
@@ -393,11 +431,18 @@ export async function verifyCompoundCoverage(records, {
     for (const candidate of candidates) {
       const candidateClassification = { ...candidate, ...classifyCompoundCertainty(candidate) };
       if (response.verdict === "accept" && response.candidateId === candidateId(candidate)) {
-        await emit(applyVerification(candidate, candidateClassification, response, {
-          verifierName,
-          attempts,
-          repaired
-        }));
+        if (response.headKind === "lexical-head") {
+          await emit(applyVerification(candidate, candidateClassification, response, {
+            verifierName,
+            attempts,
+            repaired
+          }));
+        } else {
+          await emit(retainRejected(candidate, candidateClassification, {
+            ...response,
+            rationale: `final component classified as ${response.headKind}: ${response.rationale}`
+          }, { verifierName, attempts }));
+        }
       } else if (response.verdict === "accept") {
         await emit(retainRejected(candidate, candidateClassification, {
           ...response,
