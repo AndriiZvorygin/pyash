@@ -191,7 +191,8 @@ function isCompoundCatalog(program) {
     sentence?.be === "map" &&
     typeof sentence.su?.name === "string" &&
     (sentence.su.name.toLowerCase().includes("compound")
-      || sentence.su.name.toLowerCase().includes("english30k"))
+      || sentence.su.name.toLowerCase().includes("english30k")
+      || sentence.su.name.toLowerCase().includes("english_grammar"))
   ));
 }
 
@@ -399,6 +400,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const rankedCoverage = new Map();
   const dictionaryMatches = new Map();
   const lemmaMatches = new Map();
+  const grammarMatches = new Map();
   const okTextTokens = new Set();
   const files = [];
   for (const root of roots) {
@@ -443,6 +445,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       const ranked = await findEnglish30kCoverage(token);
       if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
         if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
+        else if (ranked.coverageType === "grammar") grammarMatches.set(token, ranked);
         continue;
       }
       if (ranked) rankedCoverage.set(token, ranked);
@@ -474,6 +477,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
       if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
       else if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
+      else if (ranked.coverageType === "grammar") grammarMatches.set(token, ranked);
       else okTextTokens.add(token);
       continue;
     }
@@ -549,6 +553,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
 
   for (const [token, ranked] of [...dictionaryMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     report(`${token}: dictionary alias ${ranked.aliasOf} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+  }
+
+  for (const [token, ranked] of [...grammarMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    report(`${token}: grammar -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
   }
 
   if (mapPath) {

@@ -18,6 +18,10 @@ import {
   loadEnglishDictionaryBlacklist
 } from "./english_dictionary_aliases.mjs";
 import {
+  buildEnglishGrammarIndex,
+  loadEnglishGrammarCatalog
+} from "./english_grammar.mjs";
+import {
   loadPyacComplexityLayers,
   loadPyacWordLayerIndex
 } from "./pyac_complexity.mjs";
@@ -435,7 +439,8 @@ export async function loadDefaultEnglish30kCoverage({
   compoundRecords = [],
   grammarMappings = DEFAULT_GRAMMAR_MAPPINGS,
   lemmaEntries = null,
-  dictionaryAliases = null
+  dictionaryAliases = null,
+  grammarCatalog = null
 } = {}) {
   const source = await loadEnglish30k({ path });
   const { formsToAnchor } = await loadAnchorWordForms();
@@ -444,6 +449,12 @@ export async function loadDefaultEnglish30kCoverage({
   const dictionary = dictionaryAliases === null ? await loadEnglishDictionaryBlacklist() : null;
   const resolvedDictionaryAliases = dictionaryAliases
     ?? buildEnglishDictionaryAliases({ dictionary, atomicEntries }).aliases;
+  const grammarCatalogResolved = grammarCatalog === null ? await loadEnglishGrammarCatalog() : grammarCatalog;
+  const grammarIndex = buildEnglishGrammarIndex({ catalogEntries: grammarCatalogResolved?.entries ?? [] });
+  const resolvedGrammarMappings = new Map(grammarMappings instanceof Map ? grammarMappings : []);
+  for (const [surface, mapping] of grammarIndex.mappings) {
+    resolvedGrammarMappings.set(surface, mapping);
+  }
   if (catalog?.sourceHash && catalog.sourceHash !== source.sourceHash) {
     throw invalid("English lemma source hash does not match English30k source", {
       expected: source.sourceHash,
@@ -455,7 +466,7 @@ export async function loadDefaultEnglish30kCoverage({
     atomicEntries,
     aliases: formsToAnchor,
     dictionaryAliases: resolvedDictionaryAliases,
-    grammarMappings,
+    grammarMappings: resolvedGrammarMappings,
     compoundRecords,
     lemmaEntries: resolvedLemmaEntries
   });

@@ -1,0 +1,11 @@
+su name translation_english_grammar be map def
+su text "format" ob text "english-grammar-v1" ya
+su text "source" ob text "lwonprom/documentation/grammaticalCase.tex and lwonprom/program/pyashWords.h" ya
+su text "our" ob text "{\"surface\":\"our\",\"kind\":\"possessive-determiner\",\"components\":[\"us\",\"genitive_case_\"],\"pyashSequence\":[\"hwam\",\"ti\"],\"position\":\"prefix\",\"evidence\":\"lwonprom genitive-case construction: possessor precedes the possessed noun through ti; current Pyash atomic us is hwam and grammar genitive_case_ is ti\"}" ya
+su text "your" ob text "{\"surface\":\"your\",\"kind\":\"possessive-determiner\",\"components\":[\"you\",\"genitive_case_\"],\"pyashSequence\":[\"hnan\",\"ti\"],\"position\":\"prefix\",\"evidence\":\"lwonprom standard genitive form alias ti; current Pyash atomic you is hnan\"}" ya
+su text "my" ob text "{\"surface\":\"my\",\"kind\":\"possessive-determiner\",\"components\":[\"me\",\"genitive_case_\"],\"pyashSequence\":[\"hman\",\"ti\"],\"position\":\"prefix\",\"evidence\":\"lwonprom standard genitive form alias ti; current Pyash atomic me is hman\"}" ya
+su text "ours" ob text "{\"surface\":\"ours\",\"kind\":\"possessive-pronoun\",\"components\":[\"us\",\"genitive_case_\"],\"pyashSequence\":[\"hwam\",\"ti\"],\"position\":\"prefix\",\"evidence\":\"same first-person plural genitive construction as our\"}" ya
+su text "plural" ob text "{\"surface\":\"plural\",\"kind\":\"number-marker\",\"components\":[\"plural_number_\"],\"pyashSequence\":[\"pu\"],\"position\":\"suffix\",\"evidence\":\"lwonprom noun phrase grammar uses plural-number as the noun suffix; current grammar marker is pu\"}" ya
+su text "possessive" ob text "{\"surface\":\"possessive\",\"kind\":\"case-marker\",\"components\":[\"possessive_marker_\"],\"pyashSequence\":[\"ye\"],\"position\":\"suffix\",\"evidence\":\"current Pyash grammar marker possessive_marker_ is ye\"}" ya
+su text "genitive" ob text "{\"surface\":\"genitive\",\"kind\":\"case-marker\",\"components\":[\"genitive_case_\"],\"pyashSequence\":[\"ti\"],\"position\":\"link\",\"evidence\":\"lwonprom grammaticalCase.tex assigns genitive case to ti\"}" ya
+prah
