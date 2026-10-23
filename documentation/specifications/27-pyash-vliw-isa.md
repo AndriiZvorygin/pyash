@@ -258,6 +258,11 @@ current `to` is the legacy accusative operand. This preserves the legacy
 operation: add the instrumental value to the accusative value and produce the
 result.
 
+The reference execution keeps the recovered legacy arithmetic boundaries:
+numeric plus saturates at 0xFFFF, numeric subtract floors at zero, and numeric
+divide returns the integer quotient. Division by zero is an explicit execution
+error.
+
 The backend emits one fixed 16-word codelet. Its nine-word compact prefix is:
 
 ```text
