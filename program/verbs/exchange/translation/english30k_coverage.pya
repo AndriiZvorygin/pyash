@@ -1,0 +1,7 @@
+su name translation_english30k_coverage be map def
+su text "format" ob text "english30k-coverage-v1" ya
+su text "source" ob text "/home/htaf/pyachso2n/English30k.txt" ya
+su text "source-hash" ob text "436ba126fe7cab2e12c860ce89832ce0d3c1fceb4505cb2ff353bdc1b2124b88" ya
+su text "cutoff" ob num 30000 ya
+su text "missing-rank" ob num 6897 ya
+prah

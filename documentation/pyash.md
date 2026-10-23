@@ -119,6 +119,7 @@ Use the vocab helpers before introducing new verbs, files, directory names, or e
 - Accepted coverage is derived from the atomic vocabulary and `program/verbs/exchange/translation/compound_coverage_curated.pya`, so direct checks such as `node command/vocab_suggest.mjs blueprint` use the current accepted compound set; add another accepted `.pya` catalog when checking generated verified rows.
 - `node command/vocab_suggest.mjs "new verb name"` checks a proposed token or phrase without touching files.
 - `node command/vocab_check.mjs examples/pyash` enforces that every token is already in the dictionaries.
+- `node command/english30k_coverage.mjs summary` measures executable coverage of ranks 1–30,000 from the Gutenberg-derived `English30k.txt` source; unresolved rows remain visible and do not count as covered.
 
 These helpers use the `caterer/pyac/lyac` dictionaries via `command/ryan.mjs`.
 
