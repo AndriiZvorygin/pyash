@@ -37,3 +37,20 @@ test("vocab_suggest recognizes accepted compound targets from a supplied Pyash c
     await fs.rm(directory, { recursive: true, force: true });
   }
 });
+
+test("vocab_suggest recognizes repository accepted compounds for direct token checks", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["blueprint"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.deepEqual(result.foundCompounds, [{
+    target: "blueprint",
+    components: ["blue", "print"],
+    pyash: ["plun", "trat"],
+    status: "accepted-curated",
+    locations: ["input"]
+  }]);
+  assert.match(lines.join("\n"), /blueprint: found compound blue \+ print -> plun trat \(accepted-curated\)/u);
+});

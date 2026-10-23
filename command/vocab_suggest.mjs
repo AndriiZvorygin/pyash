@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildProgram } from "../program/program.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
@@ -71,6 +72,17 @@ const ACCEPTED_COMPOUND_STATUSES = new Set([
   "accepted-llm",
   "repaired-llm"
 ]);
+const COMPOUND_STATUS_RANK = new Map([
+  ["accepted-delimited", 1],
+  ["accepted-curated", 2],
+  ["accepted-deterministic", 3],
+  ["accepted-llm", 4],
+  ["repaired-llm", 4]
+]);
+const DEFAULT_ACCEPTED_COMPOUND_CATALOG = fileURLToPath(new URL(
+  "../program/verbs/exchange/translation/compound_coverage_curated.pya",
+  import.meta.url
+));
 
 function isApprovedContractNameToken(token) {
   const lower = String(token ?? "").toLowerCase();
@@ -141,6 +153,9 @@ function isCompoundCatalog(program) {
 function registerFoundCompound(foundCompounds, rows, location) {
   for (const row of rows) {
     const current = foundCompounds.get(row.target) ?? { row, locations: new Set() };
+    if ((COMPOUND_STATUS_RANK.get(row.status) ?? 0) > (COMPOUND_STATUS_RANK.get(current.row.status) ?? 0)) {
+      current.row = row;
+    }
     if (location) current.locations.add(location);
     foundCompounds.set(row.target, current);
   }
@@ -150,7 +165,12 @@ function mergeCompoundRows(target, source) {
   for (const [compound, rows] of source.entries()) {
     const current = target.get(compound) ?? [];
     for (const row of rows) {
-      if (!current.some((candidate) => candidate.identity === row.identity)) current.push(row);
+      const existingIndex = current.findIndex((candidate) => candidate.identity === row.identity);
+      if (existingIndex === -1) {
+        current.push(row);
+      } else if ((COMPOUND_STATUS_RANK.get(row.status) ?? 0) > (COMPOUND_STATUS_RANK.get(current[existingIndex].status) ?? 0)) {
+        current[existingIndex] = row;
+      }
     }
     target.set(compound, current);
   }
@@ -336,6 +356,9 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   for (const root of roots) {
     await collectFiles(root, files);
   }
+
+  const defaultCatalogText = await fs.readFile(DEFAULT_ACCEPTED_COMPOUND_CATALOG, "utf8");
+  mergeCompoundRows(acceptedCompounds, parseAcceptedCompoundRows(buildProgram(defaultCatalogText)));
 
   const parsedFiles = [];
   for (const file of files) {

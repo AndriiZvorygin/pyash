@@ -116,7 +116,7 @@ The goal is to make the codebase read like controlled natural language, reducing
 Use the vocab helpers before introducing new verbs, files, directory names, or example words.
 
 - `node command/vocab_suggest.mjs examples/pyash` scans `.pya` files for non-Pyash tokens and suggests replacements.
-- Add an accepted compound catalog as another input to recognize compound targets and report their decomposition, for example `node command/vocab_suggest.mjs examples/pyash program/verbs/exchange/translation/compound_coverage_curated.pya`.
+- The accepted catalog at `program/verbs/exchange/translation/compound_coverage_curated.pya` is loaded for direct token checks such as `node command/vocab_suggest.mjs blueprint`; add another accepted `.pya` catalog when checking generated verified rows.
 - `node command/vocab_suggest.mjs "new verb name"` checks a proposed token or phrase without touching files.
 - `node command/vocab_check.mjs examples/pyash` enforces that every token is already in the dictionaries.
 
