@@ -1,4 +1,3 @@
-import { plus_obj_num_to_name_num } from "../../verbs/mathematics/plus.mjs";
 import {
   LEGACY_NUMERIC_PLUS_WORDS,
   NUMBER_QUOTE_WORD
@@ -173,11 +172,10 @@ export function decodeNumericPlusCodelet(input) {
 
 export async function executeNumericPlusCodelet(input) {
   const sentence = decodeNumericPlusCodelet(input);
-  const result = await plus_obj_num_to_name_num(sentence, { remember: undefined });
   return {
     su: { name: "result" },
-    ob: result.be === "number" ? { num: result.ob } : result.ob,
-    be: result.be,
+    ob: { num: Math.min(sentence.ob.num + sentence.to.num, 0xffff) },
+    be: "number",
     mood: "ya"
   };
 }

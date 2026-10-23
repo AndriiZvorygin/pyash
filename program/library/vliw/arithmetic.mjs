@@ -202,11 +202,11 @@ export function decodeNumericArithmeticCodelet(input) {
 
 function calculate(be, left, right) {
   if (be === "plus") return left + right;
-  if (be === "subtract") return left - right;
+  if (be === "subtract") return Math.max(left - right, 0);
   if (be === "multiply") return left * right;
   if (be === "divide") {
     if (right === 0) throw encodingError("division-by-zero", "numeric division cannot divide by zero");
-    return left / right;
+    return Math.trunc(left / right);
   }
   if (be === "remains") {
     if (right === 0) throw encodingError("division-by-zero", "numeric remainder cannot divide by zero");

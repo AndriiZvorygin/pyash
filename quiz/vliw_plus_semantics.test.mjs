@@ -70,6 +70,17 @@ test("decoded numeric plus executes with the existing interpreter result shape",
   assert.deepEqual(backendResult, interpretedRecord);
 });
 
+test("decoded numeric plus preserves the legacy saturation boundary", async () => {
+  const sentence = parse("ob num 65535 to num 1 be plus do");
+  const backendResult = await executeNumericPlusCodelet(lowerNumericPlusSentence(sentence).words);
+  assert.deepEqual(backendResult, {
+    su: { name: "result" },
+    ob: { num: 0xffff },
+    be: "number",
+    mood: "ya"
+  });
+});
+
 test("numeric plus rejects unsupported sentence shapes and values", () => {
   assert.equal(errorCode(() => lowerNumericPlusSentence(parse("ob text x to num 1 be plus do"))), "numeric-range");
   assert.equal(errorCode(() => lowerNumericPlusSentence(parse("ob num 1 to num 1 be subtract do"))), "unsupported-sentence");
