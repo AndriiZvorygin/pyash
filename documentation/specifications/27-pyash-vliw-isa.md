@@ -201,8 +201,9 @@ the compatibility table. `decodeCodelet` MUST validate all index, quote,
 continuation, HNUC, type, and dependency metadata. `executeCodelets` MUST
 return sentence/paragraph-shaped results and preserve the same semantic
 effects as interpreted execution. The current JavaScript reference facade
-implements these interfaces for the proven numeric-plus adapter and rejects
-other semantic codelets explicitly. The host language, OpenCL, or another
+implements these interfaces for the proven numeric-plus and typed-literal
+adapters and rejects other semantic codelets explicitly. The host language,
+OpenCL, or another
 backend is an implementation choice behind this boundary.
 
 ## 7. Compatibility examples
@@ -311,11 +312,40 @@ surface that preserves raw words and renders supported typed values without
 claiming that arbitrary codelets are executable Pyash.
 
 This layer exposes typed items and the used-word count. It does not infer
-arbitrary grammar or execute unknown codelets. Numeric-plus remains the first
-semantic adapter: it validates its marker sequence from the generic items and
-then delegates execution to the existing Pyash `plus` handler.
+arbitrary grammar or execute unknown codelets. Numeric-plus and the proven
+typed-literal adapter validate their marker sequences from the generic items;
+unknown codelets remain explicit unsupported records.
 
-## 12. Reference semantic facade
+## 12. MVP semantic slice: typed literals
+
+The second executable slice covers anonymous scalar facts whose legacy vectors
+are proven by `lwonprom/program/interpret.c` and its encoding quizzes:
+
+```pyash
+ob num 7 be number ya
+ob text "A" be text ya
+```
+
+Both forms use the five-word compact prefix:
+
+```text
+0019 881D value 245E 217E
+0019 081D code-unit 245E 217E
+```
+
+The numeric vector uses `0x881D` and an unsigned 16-bit payload. The single
+letter vector uses `0x081D` and one UTF-16 code unit. Eleven zero words complete
+the fixed 16-word codelet. Decoding returns the canonical `ya` sentence and
+execution returns that same typed fact. A named fact, multi-code-unit text, or
+another quote width remains an explicit unsupported boundary until a matching
+legacy vector is established.
+
+The reference implementation lives at
+`program/library/vliw/literal.mjs`; its source fixture is
+`examples/pyash/vliw-typed-literals.pya`. The focused conformance quiz is
+`quiz/vliw_literal_semantics.test.mjs`.
+
+## 13. Reference semantic facade
 
 `program/library/vliw/index.mjs` provides the reference boundary:
 
@@ -327,7 +357,8 @@ then delegates execution to the existing Pyash `plus` handler.
 - `executeCodelets(codelets)` executes supported codelets sequentially and
   returns the existing Pyash result records.
 
-The facade currently supports numeric `plus` only. A valid but unrecognized
-codelet is decoded losslessly, then rejected by the semantic facade with an
-explicit unsupported-codelet error. This keeps representation coverage ahead
-of semantic execution without silently assigning meaning to legacy words.
+The facade currently supports numeric `plus` and anonymous typed literals. A
+valid but unrecognized codelet is decoded losslessly, then rejected by the
+semantic facade with an explicit unsupported-codelet error. This keeps
+representation coverage ahead of semantic execution without silently assigning
+meaning to legacy words.

@@ -22,6 +22,8 @@ test("PyAC database command builds deterministic catalog and pack files", async 
   const source = [
     "ob num 4 to num 6 be plus do",
     "ob num 8 to num 9 be plus do",
+    "ob num 7 be number ya",
+    "ob text \"A\" be text ya",
     "ob text \"opaque\" to name collector be plus do",
     "ob text \"different\" to name collector be plus do",
     "prah"
@@ -31,8 +33,8 @@ test("PyAC database command builds deterministic catalog and pack files", async 
   const firstBuild = await runPyacDatabase(["build", first.source, first.catalog, first.pack], { report: () => {} });
   const firstCatalog = readFileSync(first.catalog);
   const firstPack = readFileSync(first.pack);
-  assert.equal(firstBuild.sentenceCount, 4);
-  assert.equal(firstBuild.executableCount, 2);
+  assert.equal(firstBuild.sentenceCount, 6);
+  assert.equal(firstBuild.executableCount, 4);
   assert.equal(firstBuild.unsupportedCount, 2);
 
   const secondBuild = await runPyacDatabase(["build", first.source, first.catalog, first.pack], { report: () => {} });
@@ -46,11 +48,11 @@ test("PyAC database command builds deterministic catalog and pack files", async 
     { report: () => {} }
   );
   assert.equal(semanticQuery.count, 2);
-  assert.equal(parsed.catalog.records.length, 4);
+  assert.equal(parsed.catalog.records.length, 6);
 
   const replay = await runPyacDatabase(["replay", first.catalog, first.pack], { report: () => {} });
-  assert.equal(replay.count, 4);
-  assert.equal(replay.outcomes.filter((outcome) => outcome.status === "replayed").length, 2);
+  assert.equal(replay.count, 6);
+  assert.equal(replay.outcomes.filter((outcome) => outcome.status === "replayed").length, 4);
   assert.equal(replay.outcomes.filter((outcome) => outcome.status === "unsupported").length, 2);
 });
 
