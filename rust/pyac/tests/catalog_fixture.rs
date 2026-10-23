@@ -40,6 +40,30 @@ fn executes_words_recovered_from_the_catalog_fixture() {
 }
 
 #[test]
+fn executes_the_corpus_numeric_pack_in_source_order() {
+    fn arithmetic_codelet(ob: u16, to: u16, operator: u16) -> [u16; WORDS_PER_CODELET] {
+        [
+            0x0149, 0x881d, ob, 0x287e, 0x881d, to, 0x245e, operator, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+        ]
+    }
+
+    let codelets = [
+        arithmetic_codelet(1, 1, 0x8a64),
+        arithmetic_codelet(9, 4, 0xabd2),
+        arithmetic_codelet(3, 4, 0xec90),
+        arithmetic_codelet(8, 2, 0x8893),
+        arithmetic_codelet(7, 3, 0xa810),
+    ];
+    let bytes = encode_pack(&codelets).expect("corpus numeric pack fits");
+    let pack = decode_pack(&bytes).expect("corpus numeric pack is valid");
+
+    assert_eq!(
+        execute_numeric_arithmetic_pack(&pack),
+        Ok(vec![2, 5, 12, 4, 4])
+    );
+}
+
+#[test]
 fn rejects_noisy_catalog_rows_with_a_stable_error() {
     let noisy = CATALOG.replace("be codelet ya", "be codelet noise");
     let error = parse_catalog_pya(&noisy).expect_err("noisy row must be rejected");

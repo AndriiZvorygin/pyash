@@ -122,10 +122,19 @@ sentences are omitted from the codelet corpus; semantic sentences remain as
 executable or explicitly unsupported catalog rows. Query and replay reopen
 both files and verify the catalog-to-pack hash before returning results.
 
-The committed starter corpus is
-`examples/pyash/pyac-corpus.pya`. It contains executable numeric-plus and
-typed-literal rows plus unsupported rows so the database keeps both
-compatibility outcomes visible.
+The committed round-trip corpus is
+`examples/pyash/pyac-corpus.pya`. It contains all five supported numeric
+operators, anonymous and named scalar literals, and explicit unsupported rows.
+`quiz/pyac_roundtrip_corpus.test.mjs` builds that source into a catalog and
+pack, verifies the historical numeric-plus text surface, renders every
+executable codelet back to canonical Pyash, replays the pack, and checks the
+unsupported error identities.
+
+This file is a lowering corpus for `command/pyac_database.mjs`. Its anonymous
+numeric arithmetic shapes preserve the fixed VLIW operand layout and are not
+ordinary interpreter commands; use the PyAC database builder/replay path for
+this fixture rather than `command/read_pya_trace.mjs` or
+`command/pya_to_json.mjs`.
 
 ## 5. Translation and compound words
 
