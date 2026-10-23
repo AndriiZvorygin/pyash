@@ -162,6 +162,29 @@ metadata. A translated sentence becomes executable when its canonical name
 and value fit a proven VLIW adapter; automatic HNUC allocation remains outside
 this contract.
 
+The first external compound analysis uses the historical `hkestlat` source
+shapes `mwonkwon.json` and `chinese_dictionary_stems.json`. The host-side
+normalizer is `program/verbs/exchange/translation/hkestlat_compound_analysis.mjs`.
+It hashes the source files, normalizes Unicode and row ordering, joins direct
+Chinese/English/Pyash candidates with ordered component hints, and gives every
+mapping a content-derived identity. Duplicate targets remain
+`ambiguous-target`; rows without a direct Pyash target remain unresolved. The
+stem row's target is evidence and cannot silently override conflicting direct
+dictionary candidates.
+
+The committed benchmark is
+`examples/pyash/lord-prayer-compound-analysis.pya`. It records the World
+English Bible text for Matthew 6:9-13, source hashes, stable verse locators,
+and mapped or unresolved vocabulary terms. It is an analysis and provenance
+artifact; translation-registry integration and executable PyAC lowering remain
+subsequent steps. The focused regression is
+`quiz/translation_hkestlat_compound_analysis.test.mjs`.
+At the recorded source hashes it contains 7,353 normalized rows: 7,157 direct
+mappings, 164 mapped compounds, 31 ambiguous targets, and one missing target.
+The prayer benchmark currently maps `heaven`, `name`, `holy`, `come`, `today`,
+`bread`, `temptation`, `evil`, and `glory`; unresolved terms remain recorded
+for the next vocabulary pass.
+
 ## 6. Rust compatibility boundary
 
 The initial Rust boundary is `rust/pyac`. It implements the established
