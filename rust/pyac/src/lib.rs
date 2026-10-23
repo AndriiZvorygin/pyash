@@ -51,6 +51,30 @@ pub enum PyacError {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NumericPackExecutionError {
+    pub index: usize,
+    pub source: SemanticError,
+}
+
+impl NumericPackExecutionError {
+    pub fn code(&self) -> &'static str {
+        self.source.code()
+    }
+}
+
+impl Display for NumericPackExecutionError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "numeric codelet {} failed: {}",
+            self.index, self.source
+        )
+    }
+}
+
+impl std::error::Error for NumericPackExecutionError {}
+
 impl PyacError {
     pub fn code(&self) -> &'static str {
         match self {
@@ -237,6 +261,19 @@ pub fn decode_pack(bytes: &[u8]) -> Result<PyacPack, PyacError> {
     })
 }
 
+pub fn execute_numeric_arithmetic_pack(
+    pack: &PyacPack,
+) -> Result<Vec<u32>, NumericPackExecutionError> {
+    pack.codelets
+        .iter()
+        .enumerate()
+        .map(|(index, codelet)| {
+            execute_numeric_arithmetic_codelet(codelet)
+                .map_err(|source| NumericPackExecutionError { index, source })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,5 +352,29 @@ mod tests {
             decode_pack(&bad_length).unwrap_err().code(),
             "truncated-pack"
         );
+    }
+
+    #[test]
+    fn executes_numeric_codelets_after_pack_decode() {
+        let mut subtract = ONE_PLUS;
+        subtract[2] = 2;
+        subtract[5] = 9;
+        subtract[7] = 0xabd2;
+        let bytes = encode_pack(&[ONE_PLUS, subtract]).expect("fixtures fit");
+        let pack = decode_pack(&bytes).expect("valid pack");
+
+        assert_eq!(execute_numeric_arithmetic_pack(&pack), Ok(vec![2, 0]));
+    }
+
+    #[test]
+    fn preserves_the_failed_codelet_index() {
+        let mut malformed = ONE_PLUS;
+        malformed[7] = 0xe82a;
+        let bytes = encode_pack(&[ONE_PLUS, malformed]).expect("fixtures fit");
+        let pack = decode_pack(&bytes).expect("valid pack");
+        let error = execute_numeric_arithmetic_pack(&pack).expect_err("unknown operator");
+
+        assert_eq!(error.index, 1);
+        assert_eq!(error.code(), "unsupported-operator");
     }
 }

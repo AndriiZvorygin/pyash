@@ -177,6 +177,11 @@ continues to cover the public `decode_numeric_plus_codelet` adapter. Rust
 semantic coverage remains deliberately limited to proven adapters; the
 JavaScript facade remains the broader reference executor.
 
+`execute_numeric_arithmetic_pack` applies that boundary to every codelet in a
+decoded `.pyac` pack and reports the failing codelet index with the stable
+semantic error code. It executes numeric arithmetic packs only; typed literals,
+unsupported catalog rows, and unproven domains remain outside this adapter.
+
 Run both Rust checks with:
 
 ```text
