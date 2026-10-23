@@ -10,6 +10,7 @@ const GRAMMAR_KINDS = new Set([
   "conjunction",
   "possessive-determiner",
   "possessive-pronoun",
+  "negation",
   "case-marker",
   "number-marker"
 ]);

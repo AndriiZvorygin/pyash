@@ -387,10 +387,14 @@ Word analysis supplies lexical roots and grammatical particle candidates. The
 sentence layer in
 `program/verbs/exchange/translation/english_sentence.mjs` uses plain English
 context to select finite tense and aspect. Its first supported slice covers
-simple finite forms and progressive auxiliaries. For example, the durable
-catalog records `walked` as `pfin ki`, `walks` as `pfin ra`, and the contextual
-participle candidate `walking` as `pfin pfih`; `I am walking` resolves to
-`pfin pfih ra`.
+simple finite forms, progressive auxiliaries, and the first noun-phrase
+grammar layer. For example, the durable catalog records `walked` as `pfin ki`,
+`walks` as `pfin ra`, and the contextual participle candidate `walking` as
+`pfin pfih`; `I am walking` resolves to `pfin pfih ra`. Sentence composition
+keeps grammar particles separate from lexical roots: `our houses` becomes
+`nyah ye hcas pu`, `and` becomes `wa`, `thy` becomes `sa ye`, and `not`
+becomes `no`. Imperative clauses use the understood second-person subject and
+remain contextual predicate candidates for Housekeeper review.
 
 Standalone `vocab_suggest` output keeps the lexical lemma line and adds a
 morphology candidate line. A sentence with unresolved candidates can be sent

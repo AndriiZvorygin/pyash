@@ -10,7 +10,7 @@ su text "being" ob text "{\"surface\":\"being\",\"lemma\":\"be\",\"kind\":\"irre
 su text "bought" ob text "{\"surface\":\"bought\",\"lemma\":\"buy\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of buy\"}" ya
 su text "brought" ob text "{\"surface\":\"brought\",\"lemma\":\"bring\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of bring\"}" ya
 su text "came" ob text "{\"surface\":\"came\",\"lemma\":\"come\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of come\"}" ya
-su text "children" ob text "{\"surface\":\"children\",\"lemma\":\"child\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English irregular plural of child\"}" ya
+su text "children" ob text "{\"surface\":\"children\",\"lemma\":\"child\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"grammaticalNumber\":\"plural\",\"evidence\":\"English irregular plural of child\"}" ya
 su text "chosen" ob text "{\"surface\":\"chosen\",\"lemma\":\"choose\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of choose\"}" ya
 su text "did" ob text "{\"surface\":\"did\",\"lemma\":\"do\",\"canonicalEnglish\":\"done\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of do; Pyash atom is done\"}" ya
 su text "done" ob text "{\"surface\":\"done\",\"lemma\":\"do\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of do\"}" ya
@@ -32,9 +32,9 @@ su text "known" ob text "{\"surface\":\"known\",\"lemma\":\"know\",\"kind\":\"ir
 su text "left" ob text "{\"surface\":\"left\",\"lemma\":\"leave\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of leave\"}" ya
 su text "made" ob text "{\"surface\":\"made\",\"lemma\":\"make\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of make\"}" ya
 su text "met" ob text "{\"surface\":\"met\",\"lemma\":\"meet\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of meet\"}" ya
-su text "mice" ob text "{\"surface\":\"mice\",\"lemma\":\"mouse\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English irregular plural of mouse\"}" ya
-su text "men" ob text "{\"surface\":\"men\",\"lemma\":\"man\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English irregular plural of man\"}" ya
-su text "people" ob text "{\"surface\":\"people\",\"lemma\":\"person\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English plural of person\"}" ya
+su text "mice" ob text "{\"surface\":\"mice\",\"lemma\":\"mouse\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"grammaticalNumber\":\"plural\",\"evidence\":\"English irregular plural of mouse\"}" ya
+su text "men" ob text "{\"surface\":\"men\",\"lemma\":\"man\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"grammaticalNumber\":\"plural\",\"evidence\":\"English irregular plural of man\"}" ya
+su text "people" ob text "{\"surface\":\"people\",\"lemma\":\"person\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"grammaticalNumber\":\"plural\",\"evidence\":\"English plural of person\"}" ya
 su text "ran" ob text "{\"surface\":\"ran\",\"lemma\":\"run\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of run\"}" ya
 su text "said" ob text "{\"surface\":\"said\",\"lemma\":\"say\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of say\"}" ya
 su text "sang" ob text "{\"surface\":\"sang\",\"lemma\":\"sing\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of sing\"}" ya

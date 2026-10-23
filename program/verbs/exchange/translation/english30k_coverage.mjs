@@ -265,7 +265,8 @@ export function buildEnglish30kCoverage({
           markerNames: [...resolved.morphology.markerNames],
           markerSequence: [...resolved.morphology.markerSequence]
         }
-      } : {})
+      } : {}),
+      ...(resolved.grammaticalNumber ? { grammaticalNumber: resolved.grammaticalNumber } : {})
     };
   };
   const rowWord = (record) => record?.word ?? record?.normalizedWord ?? "";
@@ -385,7 +386,8 @@ export function buildEnglish30kCoverage({
           markerNames: [...resolved.morphology.markerNames],
           markerSequence: [...resolved.morphology.markerSequence]
         }
-      } : {})
+      } : {}),
+      ...(resolved.grammaticalNumber ? { grammaticalNumber: resolved.grammaticalNumber } : {})
     };
   });
   const counts = Object.fromEntries(

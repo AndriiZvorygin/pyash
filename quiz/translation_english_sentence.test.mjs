@@ -77,6 +77,41 @@ test("sentence context selects progressive aspect plus present tense", () => {
   assert.deepEqual(result.verbPhrase.markerNames, ["progressive_aspect_", "present_tense_"]);
 });
 
+test("sentence subjects compose possessive noun phrases and regular plurals", async () => {
+  const result = await analyzeDefaultEnglishSentence("our houses walked");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.pyash, "su name nyah ye hcas pu be pfin ki ya");
+  assert.deepEqual(result.subject.pyashSequence, ["nyah", "ye", "hcas", "pu"]);
+});
+
+test("sentence objects preserve possessives, plural markers, and conjunction links", async () => {
+  const result = await analyzeDefaultEnglishSentence("I walked our houses and your names");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.pyash, "su name mi ob name nyah ye hcas pu wa sa ye hnim pu be pfin ki ya");
+});
+
+test("sentence grammar maps thy and negation while leaving the lexical predicate contextual", async () => {
+  const result = await analyzeDefaultEnglishSentence("thy names lead us not into temptation");
+  assert.equal(result.status, "review");
+  assert.deepEqual(result.subject.pyashSequence, ["sa", "ye", "hnim", "pu"]);
+  assert.deepEqual(result.verbPhrase.pyashSequence, ["tyip", "ra", "no"]);
+  assert.equal(result.unresolved.length, 0);
+  const resolved = await resolveEnglishSentence("thy names lead us not into temptation", {
+    analyze: async () => result,
+    verify: async ({ candidates }) => ({ verdict: "accept", candidateId: candidates[0].id })
+  });
+  assert.equal(resolved.status, "resolved");
+  assert.equal(resolved.pyash, "su name sa ye hnim pu ob name nyah into hyoc be tyip ra no ya");
+});
+
+test("imperative Lord's Prayer clause supplies the second-person subject", async () => {
+  const result = await analyzeDefaultEnglishSentence("lead us not into temptation");
+  assert.equal(result.status, "review");
+  assert.deepEqual(result.subject.pyashSequence, ["sa"]);
+  assert.equal(result.verbPhrase.phrase, "lead");
+  assert.equal(result.unresolved.length, 0);
+});
+
 test("standalone participle remains a contextual candidate", async () => {
   const result = await analyzeDefaultEnglishSentence("walking");
   assert.equal(result.status, "review");

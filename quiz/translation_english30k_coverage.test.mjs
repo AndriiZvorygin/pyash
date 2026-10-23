@@ -217,6 +217,7 @@ test("durable lemma catalog parses source metadata and explicit irregular forms"
   assert.equal(catalog.cutoff, 30000);
   assert.equal(catalog.sourceHash, "436ba126fe7cab2e12c860ce89832ce0d3c1fceb4505cb2ff353bdc1b2124b88");
   assert.equal(catalog.entries.some((entry) => entry.surface === "went" && entry.lemma === "go"), true);
+  assert.equal(catalog.entries.find((entry) => entry.surface === "children")?.grammaticalNumber, "plural");
   assert.throws(
     () => parseEnglishLemmaCatalog([
       "su name translation_english30k_lemmas be map def",
@@ -231,6 +232,15 @@ test("durable lemma catalog parses source metadata and explicit irregular forms"
       "su name translation_english30k_lemmas be map def",
       "su text \"format\" ob text \"english-lemma-v1\" ya",
       "su text \"walked\" ob text \"{\\\"surface\\\":\\\"walked\\\",\\\"lemma\\\":\\\"walk\\\",\\\"kind\\\":\\\"inflectional\\\",\\\"status\\\":\\\"accepted-curated\\\",\\\"morphology\\\":{\\\"kind\\\":\\\"finite-past\\\",\\\"markerNames\\\":[],\\\"markerSequence\\\":[],\\\"evidence\\\":\\\"fixture\\\"},\\\"evidence\\\":\\\"fixture\\\"}\" ya",
+      "prah"
+    ].join("\n")),
+    (error) => error.code === "invalid-english-lemma"
+  );
+  assert.throws(
+    () => parseEnglishLemmaCatalog([
+      "su name translation_english30k_lemmas be map def",
+      "su text \"format\" ob text \"english-lemma-v1\" ya",
+      "su text \"children\" ob text \"{\\\"surface\\\":\\\"children\\\",\\\"lemma\\\":\\\"child\\\",\\\"kind\\\":\\\"irregular\\\",\\\"grammaticalNumber\\\":\\\"dual\\\",\\\"evidence\\\":\\\"fixture\\\"}\" ya",
       "prah"
     ].join("\n")),
     (error) => error.code === "invalid-english-lemma"
@@ -356,6 +366,8 @@ test("lwonprom-derived English grammar keeps particles separate from lexical roo
   assert.deepEqual(grammar.resolve("our")?.pyashSequence, ["nyah", "ye"]);
   assert.deepEqual(grammar.resolve("your")?.components, ["you_", "possessive_marker_"]);
   assert.deepEqual(grammar.resolve("your")?.pyashSequence, ["sa", "ye"]);
+  assert.deepEqual(grammar.resolve("thy")?.pyashSequence, ["sa", "ye"]);
+  assert.deepEqual(grammar.resolve("thine")?.pyashSequence, ["sa", "ye"]);
   assert.deepEqual(grammar.resolve("my")?.pyashSequence, ["mi", "ye"]);
   assert.deepEqual(grammar.resolve("ours")?.pyashSequence, ["nyah", "ye"]);
   assert.deepEqual(grammar.resolve("yours")?.pyashSequence, ["sa", "ye"]);
@@ -364,6 +376,7 @@ test("lwonprom-derived English grammar keeps particles separate from lexical roo
   assert.deepEqual(grammar.resolve("but")?.pyashSequence, ["pyuh"]);
   assert.deepEqual(grammar.resolve("plural")?.pyashSequence, ["pu"]);
   assert.deepEqual(grammar.resolve("possessive")?.pyashSequence, ["ye"]);
+  assert.deepEqual(grammar.resolve("not")?.pyashSequence, ["no"]);
 
   assert.equal(pyashWords.find((entry) => entry.en === "me")?.pya, "hman");
   assert.equal(pyashWords.find((entry) => entry.en === "us")?.pya, "hwam");
