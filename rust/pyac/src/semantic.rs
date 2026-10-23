@@ -179,18 +179,18 @@ pub fn execute_numeric_plus(instruction: &NumericPlusInstruction) -> u16 {
 
 pub fn execute_numeric_arithmetic(
     instruction: &NumericArithmeticInstruction,
-) -> Result<u32, SemanticError> {
+) -> Result<u64, SemanticError> {
     match instruction.operator {
-        NumericOperator::Plus => Ok(u32::from(instruction.ob.saturating_add(instruction.to))),
-        NumericOperator::Subtract => Ok(u32::from(instruction.ob.saturating_sub(instruction.to))),
-        NumericOperator::Multiply => Ok(u32::from(instruction.ob) * u32::from(instruction.to)),
+        NumericOperator::Plus => Ok(u64::from(instruction.ob.saturating_add(instruction.to))),
+        NumericOperator::Subtract => Ok(u64::from(instruction.ob.saturating_sub(instruction.to))),
+        NumericOperator::Multiply => Ok(u64::from(instruction.ob) * u64::from(instruction.to)),
         NumericOperator::Divide => {
             if instruction.to == 0 {
                 return Err(SemanticError::DivisionByZero);
             }
-            Ok(u32::from(instruction.ob / instruction.to))
+            Ok(u64::from(instruction.ob / instruction.to))
         }
-        NumericOperator::Xor => Ok(u32::from(instruction.ob ^ instruction.to)),
+        NumericOperator::Xor => Ok(u64::from(instruction.ob ^ instruction.to)),
     }
 }
 
@@ -203,7 +203,7 @@ pub fn execute_numeric_plus_codelet(
 
 pub fn execute_numeric_arithmetic_codelet(
     words: &[u16; WORDS_PER_CODELET],
-) -> Result<u32, SemanticError> {
+) -> Result<u64, SemanticError> {
     let instruction = decode_numeric_arithmetic(words)?;
     execute_numeric_arithmetic(&instruction)
 }
@@ -271,10 +271,10 @@ mod tests {
         assert_eq!(
             execute_numeric_arithmetic_codelet(&arithmetic_codelet(
                 NumericOperator::Multiply,
-                3,
-                4
+                u16::MAX,
+                u16::MAX
             )),
-            Ok(12)
+            Ok(4_294_836_225)
         );
         assert_eq!(
             execute_numeric_arithmetic_codelet(&arithmetic_codelet(NumericOperator::Divide, 5, 2)),

@@ -263,7 +263,7 @@ pub fn decode_pack(bytes: &[u8]) -> Result<PyacPack, PyacError> {
 
 pub fn execute_numeric_arithmetic_pack(
     pack: &PyacPack,
-) -> Result<Vec<u32>, NumericPackExecutionError> {
+) -> Result<Vec<u64>, NumericPackExecutionError> {
     pack.codelets
         .iter()
         .enumerate()
