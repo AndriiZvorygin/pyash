@@ -309,12 +309,91 @@ For a new parser, encoder, interpreter, or VLIW operation:
 7. add a focused quiz and keep the complexity check passing; and
 8. document any new invariant beside the function or header contract.
 
-Avoid generic modernizations that would obscure the language model: a large
-AST class hierarchy, hidden heap ownership, string-based case dispatch, or a
-single “process everything” function would be less compatible with both the
-C style and Pyash’s compositional design.
+Avoid generic modernizations that obscure the language model. Preserve the
+sentence-shaped ABI, visible role flow, bounded transformations, and semantic
+names as the primary design surface.
 
-## 8. Snapshot and recovery conclusion
+## 8. Portable implementation profile
+
+The style can become a portable implementation contract for C, Rust, and
+VLIW. The semantic source remains Pyash; the historical C code supplies
+compatibility evidence; Rust supplies a memory-safe implementation laboratory;
+and VLIW supplies the compact execution representation.
+
+### 8.1 Three layers
+
+**Semantic style** keeps sentences and paragraphs canonical, cases/moods/verbs
+explicit, and operations sentence-shaped. `knowledge`, `input`, and `produce`
+remain visible dataflow roles. Each operation owns one semantic family and
+composes with adjacent operations under an explicit complexity budget.
+
+**Representation ABI** maps `Phrase` to a bounded sentence view, `Page` to
+sentence storage, `begin`/`length` to validated slice boundaries, grammar
+words to typed role identities, and `produce` to a derived fact or paragraph.
+Read/write effects become explicit metadata for VLIW scheduling. Fixed-width
+`u16` words and sixteen-word codelets preserve exact lowering bytes.
+
+**Target lowering** follows one direction:
+
+```text
+Pyash sentence
+  -> canonical semantic operation
+  -> validated role/effect representation
+  -> C function, Rust function, or VLIW codelet
+```
+
+### 8.2 Translation matrix
+
+| Pyash | C | Rust | VLIW |
+| --- | --- | --- | --- |
+| sentence | `struct Phrase` | `Sentence` / `Phrase<'a>` | codelet |
+| paragraph | `struct Paragraph` | `Paragraph` | ordered codelets |
+| case | grammar word | `Case` enum | role word |
+| mood | perspective word | `Mood` enum | mood word/index |
+| ceremony | function family | `fn` or trait operation | dependency group |
+| `ya` result | produced phrase | returned value | output reference |
+| `do` operation | interpreter helper | typed operation | executable instruction |
+| `guarantee` | invariant macro | `Result`/validation | decoder guard |
+| `knowledge` | paragraph memory | session/frame | dependency state |
+
+The matrix preserves semantic identity while allowing each target to use its
+strongest representation.
+
+### 8.3 Rust as a compatible implementation path
+
+Rust can express the existing discipline with explicit types and ownership:
+
+- `Sentence`, `Phrase`, `Paragraph`, `Case`, `Mood`, and `WordClass` become
+  named types;
+- `Phrase<'a>` borrows a validated `&[u16]` region;
+- encoding and decoding return `Result<T, EncodingError>`;
+- a codelet uses `[u16; 16]`;
+- `#[repr(C)]` preserves interoperation with C structures and functions; and
+- traits separate semantic operations from C, OpenCL, and VLIW emission.
+
+The Rust layer should preserve the semantic topology of the C prototype while
+making page ownership, slice bounds, and error propagation explicit. The
+legacy C vectors and the documented VLIW golden bytes remain compatibility
+fixtures for the Rust implementation.
+
+### 8.4 Fidelity contract
+
+Every portable implementation should prove:
+
+1. the same canonical Pyash sentence produces the same semantic operation;
+2. equivalent C and Rust operations produce equivalent sentence/paragraph
+   results;
+3. supported operations lower to the same legacy 16-bit words;
+4. VLIW execution preserves the declared read/write effects and dependency
+   order; and
+5. complexity refactors preserve public semantic signatures and golden
+   behavior.
+
+This turns style into a measurable translation contract. A future
+implementation can compare semantic sentences, typed intermediate values,
+C/Rust results, and exact VLIW bytes at each boundary.
+
+## 9. Snapshot and recovery conclusion
 
 There is no local evidence that a post-October-2025 GPT coding pass was
 committed and then lost. `master` and `origin/master` remain at the 2022
