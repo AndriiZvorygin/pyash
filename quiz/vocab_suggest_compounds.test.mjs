@@ -54,3 +54,20 @@ test("vocab_suggest recognizes repository accepted compounds for direct token ch
   }]);
   assert.match(lines.join("\n"), /blueprint: found compound blue \+ print -> plun trat \(accepted-curated\)/u);
 });
+
+test("vocab_suggest derives the expanded deterministic compound set", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["acid-rain"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.deepEqual(result.foundCompounds, [{
+    target: "acid-rain",
+    components: ["acid", "rain"],
+    pyash: ["flat", "myic"],
+    status: "accepted-delimited",
+    locations: ["input"]
+  }]);
+  assert.match(lines.join("\n"), /acid-rain: found compound acid \+ rain -> flat myic \(accepted-delimited\)/u);
+});

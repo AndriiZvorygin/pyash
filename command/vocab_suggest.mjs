@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { buildProgram } from "../program/program.mjs";
+import { loadCoverage } from "./compound_coverage.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
 import {
@@ -38,6 +38,7 @@ function parseArgs(args) {
 }
 
 const checked = new Map();
+let acceptedCoveragePromise = null;
 
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
 const PYASH_QUOTED_START = "quoted.pyash.";
@@ -79,11 +80,6 @@ const COMPOUND_STATUS_RANK = new Map([
   ["accepted-llm", 4],
   ["repaired-llm", 4]
 ]);
-const DEFAULT_ACCEPTED_COMPOUND_CATALOG = fileURLToPath(new URL(
-  "../program/verbs/exchange/translation/compound_coverage_curated.pya",
-  import.meta.url
-));
-
 function isApprovedContractNameToken(token) {
   const lower = String(token ?? "").toLowerCase();
   return APPROVED_CONTRACT_NAME_TOKENS.has(lower)
@@ -106,6 +102,35 @@ function normalizeCompoundTarget(value) {
   return typeof value === "string" ? value.normalize("NFC").trim().toLowerCase() : "";
 }
 
+function acceptedCompoundRow(payload) {
+  const target = normalizeCompoundTarget(payload?.target ?? payload?.surface);
+  const components = Array.isArray(payload?.componentGlosses)
+    ? payload.componentGlosses.filter((component) => typeof component === "string" && component.trim())
+    : [];
+  const pyash = Array.isArray(payload?.pyashSequence)
+    ? payload.pyashSequence.filter((word) => typeof word === "string" && word.trim())
+    : [];
+  const status = payload?.verificationStatus ?? payload?.status;
+  if (!target || components.length < 2 || pyash.length !== components.length || !ACCEPTED_COMPOUND_STATUSES.has(status)) return null;
+  return {
+    target,
+    components,
+    pyash,
+    status,
+    identity: `${components.join("\u0001")}\u0000${pyash.join("\u0001")}`
+  };
+}
+
+function addAcceptedCompoundRow(compounds, payload) {
+  const row = acceptedCompoundRow(payload);
+  if (!row) return;
+  const rows = compounds.get(row.target) ?? [];
+  const existingIndex = rows.findIndex((candidate) => candidate.identity === row.identity);
+  if (existingIndex === -1) rows.push(row);
+  else if ((COMPOUND_STATUS_RANK.get(row.status) ?? 0) > (COMPOUND_STATUS_RANK.get(rows[existingIndex].status) ?? 0)) rows[existingIndex] = row;
+  compounds.set(row.target, rows);
+}
+
 function parseAcceptedCompoundRows(program) {
   const compounds = new Map();
   for (const sentence of program?.sentences ?? []) {
@@ -116,29 +141,22 @@ function parseAcceptedCompoundRows(program) {
     } catch {
       continue;
     }
-    const target = normalizeCompoundTarget(payload?.target ?? payload?.surface);
-    const components = Array.isArray(payload?.componentGlosses)
-      ? payload.componentGlosses.filter((component) => typeof component === "string" && component.trim())
-      : [];
-    const pyash = Array.isArray(payload?.pyashSequence)
-      ? payload.pyashSequence.filter((word) => typeof word === "string" && word.trim())
-      : [];
-    const status = payload?.verificationStatus ?? payload?.status;
-    if (!target || components.length < 2 || pyash.length !== components.length || !ACCEPTED_COMPOUND_STATUSES.has(status)) continue;
-    const rows = compounds.get(target) ?? [];
-    const identity = `${components.join("\u0001")}\u0000${pyash.join("\u0001")}`;
-    if (!rows.some((row) => row.identity === identity)) {
-      rows.push({
-        target,
-        components,
-        pyash,
-        status,
-        identity
-      });
-    }
-    compounds.set(target, rows);
+    addAcceptedCompoundRow(compounds, payload);
   }
   return compounds;
+}
+
+function parseAcceptedCompoundRecords(records) {
+  const compounds = new Map();
+  for (const record of records ?? []) addAcceptedCompoundRow(compounds, record);
+  return compounds;
+}
+
+async function loadDefaultAcceptedCompounds() {
+  if (!acceptedCoveragePromise) {
+    acceptedCoveragePromise = loadCoverage().then((coverage) => parseAcceptedCompoundRecords(coverage.accepted));
+  }
+  return acceptedCoveragePromise;
 }
 
 function isCompoundCatalog(program) {
@@ -357,8 +375,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     await collectFiles(root, files);
   }
 
-  const defaultCatalogText = await fs.readFile(DEFAULT_ACCEPTED_COMPOUND_CATALOG, "utf8");
-  mergeCompoundRows(acceptedCompounds, parseAcceptedCompoundRows(buildProgram(defaultCatalogText)));
+  mergeCompoundRows(acceptedCompounds, await loadDefaultAcceptedCompounds());
 
   const parsedFiles = [];
   for (const file of files) {
