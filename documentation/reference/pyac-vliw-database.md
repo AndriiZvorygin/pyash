@@ -155,11 +155,20 @@ this contract.
 
 ## 6. Rust compatibility boundary
 
-Rust implementation begins after the JavaScript/Pyash reference writer,
-reader, query behavior, and golden fixtures are stable. Rust consumes the same
-`.pya` catalog and `.pyac` bytes, then preserves the same result and error
-identities. It does not introduce a second semantic vocabulary or database
-schema.
+The initial Rust boundary is `rust/pyac`. It implements the established
+`.pyac` fixed-width pack header, little-endian 16-bit codelets, stable layout
+errors, and the one-plus-one golden fixture. It uses only the Rust standard
+library and does not introduce a second semantic vocabulary or database schema.
+
+Run its checks with:
+
+```text
+cargo test --manifest-path rust/pyac/Cargo.toml
+```
+
+The parser-backed `.pya` catalog and semantic replay remain owned by the
+JavaScript/Pyash reference path. Rust catalog reading begins after that
+contract receives an explicit cross-language fixture set.
 
 ## 7. Conformance
 
