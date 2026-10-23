@@ -235,3 +235,36 @@ connect codelet execution to WorkTask/review/integration machinery. It also
 does not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
+
+## 9. MVP semantic slice: numeric plus
+
+The first executable slice uses the current canonical sentence:
+
+```pyash
+ob num 1 to num 1 be plus do
+```
+
+The JavaScript reference backend accepts `ob num A to num B be plus do` for
+unsigned 16-bit integers. Current `ob` is the legacy instrumental operand and
+current `to` is the legacy accusative operand. This preserves the legacy
+operation: add the instrumental value to the accusative value and produce the
+result.
+
+The backend emits one fixed 16-word codelet. Its nine-word compact prefix is:
+
+```text
+0149 881D A 287E 881D B 245E 8A64 295E
+```
+
+Seven zero words complete the 256-bit codelet. For `A = 1` and `B = 1`, this
+retains the lwonprom README vector exactly. Decoding validates every marker,
+the two numeric quote fields, and the zero tail before returning the canonical
+Pyash sentence. Execution returns the same `result` number record produced by
+the existing numeric `plus` handler.
+
+The reference implementation lives at
+`program/library/vliw/plus.mjs`; its source fixture is
+`examples/pyash/vliw-numeric-plus.pya`. The focused conformance quiz is
+`quiz/vliw_plus_semantics.test.mjs`. Rust lowering, GPU scheduling, paragraph
+codelets, and compiler-command integration follow after this exact fixture and
+round-trip contract are stable.
