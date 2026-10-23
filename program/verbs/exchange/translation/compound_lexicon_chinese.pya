@@ -1,4 +1,4 @@
 su name translation_compounds_chinese be map def
-su text "数据库" ob text "{\"surface\":\"数据库\",\"morphemes\":[\"数据\",\"库\"],\"target\":\"database\",\"gloss\":\"database\",\"provenance\":\"caterer/pyac/lyac/kwon_zh.json\",\"confidence\":\"lexical\",\"status\":\"unlowered\"}" ya
+su text "数据库" ob text "{\"surface\":\"数据库\",\"morphemes\":[\"数据\",\"库\"],\"target\":\"database\",\"gloss\":\"database\",\"componentGlosses\":[\"data\",\"storehouse\"],\"pyashSequence\":[\"hnuc\",\"cren\"],\"componentLayers\":[16,19],\"maxLayer\":19,\"evidence\":\"Kwon semantic decomposition: data -> number; storehouse -> shed\",\"rejectedCandidates\":[{\"pyashSequence\":[\"dxak\"],\"componentLayers\":[28],\"maxLayer\":28,\"reason\":\"higher-layer-than-selected\"}],\"provenance\":\"caterer/pyac/lyac/kwon_zh.json\",\"confidence\":\"curated-layered\",\"status\":\"lowered-compound\"}" ya
 su text "语言" ob text "{\"surface\":\"语言\",\"morphemes\":[\"语\",\"言\"],\"target\":\"language\",\"gloss\":\"language\",\"provenance\":\"caterer/pyac/lyac/kwon_zh.json\",\"confidence\":\"lexical\",\"status\":\"unlowered\"}" ya
 prah

@@ -448,3 +448,13 @@ export {
   queryChineseCompoundLexicon,
   canonicalCompoundPayload
 } from "./compound_lexicon.mjs";
+
+export {
+  buildPyacWordLayerIndex,
+  choosePyacCompoundCandidate,
+  classifyPyacWord,
+  loadPyacComplexityLayers,
+  loadPyacWordLayerIndex,
+  parsePyacComplexityLayers,
+  rankPyacCompoundCandidates
+} from "./pyac_complexity.mjs";

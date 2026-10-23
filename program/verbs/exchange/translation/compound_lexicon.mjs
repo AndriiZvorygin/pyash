@@ -54,6 +54,60 @@ function normalizeEntry(payload, surface, index) {
   if (payload.gloss !== undefined && typeof payload.gloss !== "string") {
     throw invalid("compound row gloss must be text", { index, surface });
   }
+  if (payload.componentGlosses !== undefined && (
+    !Array.isArray(payload.componentGlosses) ||
+    payload.componentGlosses.length !== payload.morphemes.length ||
+    payload.componentGlosses.some((item) => typeof item !== "string" || !item)
+  )) {
+    throw invalid("compound component glosses must match ordered morphemes", { index, surface });
+  }
+  if (payload.pyashSequence !== undefined && (
+    !Array.isArray(payload.pyashSequence) ||
+    payload.pyashSequence.length !== payload.morphemes.length ||
+    payload.pyashSequence.some((item) => typeof item !== "string" || !item)
+  )) {
+    throw invalid("compound Pyash sequence must match ordered morphemes", { index, surface });
+  }
+  if (payload.componentLayers !== undefined && (
+    !Array.isArray(payload.componentLayers) ||
+    payload.componentLayers.length !== payload.morphemes.length ||
+    payload.componentLayers.some((item) => !Number.isInteger(item) || item < 1)
+  )) {
+    throw invalid("compound component layers must match ordered morphemes", { index, surface });
+  }
+  if ((payload.pyashSequence === undefined) !== (payload.componentLayers === undefined)) {
+    throw invalid("compound Pyash sequence and component layers must be paired", { index, surface });
+  }
+  if (payload.maxLayer !== undefined && (
+    !Number.isInteger(payload.maxLayer) ||
+    payload.maxLayer < 1 ||
+    payload.componentLayers === undefined ||
+    payload.maxLayer !== Math.max(...payload.componentLayers)
+  )) {
+    throw invalid("compound max layer must match component layers", { index, surface });
+  }
+  if (payload.evidence !== undefined && (typeof payload.evidence !== "string" || !payload.evidence)) {
+    throw invalid("compound evidence must be text", { index, surface });
+  }
+  if (payload.rejectedCandidates !== undefined && (
+    !Array.isArray(payload.rejectedCandidates) ||
+    payload.rejectedCandidates.some((candidate) => (
+      !candidate ||
+      typeof candidate !== "object" ||
+      !Array.isArray(candidate.pyashSequence) ||
+      candidate.pyashSequence.length === 0 ||
+      candidate.pyashSequence.some((item) => typeof item !== "string" || !item) ||
+      !Array.isArray(candidate.componentLayers) ||
+      candidate.componentLayers.length !== candidate.pyashSequence.length ||
+      candidate.componentLayers.some((item) => !Number.isInteger(item) || item < 1) ||
+      !Number.isInteger(candidate.maxLayer) ||
+      candidate.maxLayer !== Math.max(...candidate.componentLayers) ||
+      typeof candidate.reason !== "string" ||
+      !candidate.reason
+    ))
+  )) {
+    throw invalid("compound rejected candidates are malformed", { index, surface });
+  }
   const entry = {
     id: compoundId(payload),
     language: "chinese",
@@ -61,6 +115,19 @@ function normalizeEntry(payload, surface, index) {
     morphemes: [...payload.morphemes],
     target: payload.target,
     ...(payload.gloss === undefined ? {} : { gloss: payload.gloss }),
+    ...(payload.componentGlosses === undefined ? {} : { componentGlosses: [...payload.componentGlosses] }),
+    ...(payload.pyashSequence === undefined ? {} : { pyashSequence: [...payload.pyashSequence] }),
+    ...(payload.componentLayers === undefined ? {} : { componentLayers: [...payload.componentLayers] }),
+    ...(payload.maxLayer === undefined ? {} : { maxLayer: payload.maxLayer }),
+    ...(payload.evidence === undefined ? {} : { evidence: payload.evidence }),
+    ...(payload.rejectedCandidates === undefined ? {} : {
+      rejectedCandidates: payload.rejectedCandidates.map((candidate) => ({
+        pyashSequence: [...candidate.pyashSequence],
+        componentLayers: [...candidate.componentLayers],
+        maxLayer: candidate.maxLayer,
+        reason: candidate.reason
+      }))
+    }),
     provenance: payload.provenance,
     confidence: payload.confidence,
     status: payload.status
@@ -116,6 +183,8 @@ export function queryChineseCompoundLexicon(entries, criteria = {}) {
     if (criteria.confidence !== undefined && entry.confidence !== criteria.confidence) return false;
     if (criteria.provenance !== undefined && entry.provenance !== criteria.provenance) return false;
     if (criteria.glossIncludes !== undefined && !entry.gloss?.includes(criteria.glossIncludes)) return false;
+    if (criteria.pyashWord !== undefined && !entry.pyashSequence?.includes(criteria.pyashWord)) return false;
+    if (criteria.maxLayer !== undefined && entry.maxLayer !== criteria.maxLayer) return false;
     return true;
   });
 }
@@ -126,6 +195,12 @@ export function canonicalCompoundPayload(entry) {
     morphemes: entry.morphemes,
     target: entry.target,
     gloss: entry.gloss ?? null,
+    componentGlosses: entry.componentGlosses ?? null,
+    pyashSequence: entry.pyashSequence ?? null,
+    componentLayers: entry.componentLayers ?? null,
+    maxLayer: entry.maxLayer ?? null,
+    evidence: entry.evidence ?? null,
+    rejectedCandidates: entry.rejectedCandidates ?? null,
     provenance: entry.provenance,
     confidence: entry.confidence,
     status: entry.status
