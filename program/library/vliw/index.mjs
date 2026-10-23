@@ -49,6 +49,18 @@ function semanticDecode(decoded, semantic, sentence) {
 }
 
 function rejectUnprovenSemanticSentence(sentence) {
+  const unsupportedVerb = {
+    remains: "unsupported-remains",
+    invert: "unsupported-invert",
+    exponential: "unsupported-exponential"
+  }[sentence?.be];
+  if (sentence?.mood === "do" && unsupportedVerb) {
+    throw new VliwEncodingError(
+      unsupportedVerb,
+      `${sentence.be} sentence lowering requires a recovered legacy sentence fixture`,
+      { sentence }
+    );
+  }
   if (sentence?.be === "vector" && sentence?.ob?.ve !== undefined) {
     throw new VliwEncodingError(
       "unsupported-vector",

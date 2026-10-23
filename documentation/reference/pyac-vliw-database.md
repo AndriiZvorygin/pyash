@@ -215,6 +215,11 @@ values but no recovered legacy date encoding or execution handler; their rows
 carry `unsupported-date`. The structural continuation decoder is available for
 lossless multi-vector evidence; it does not promote either domain to execution.
 
+Unary `invert`, `exponential`, and vocabulary-only `remains` sentences also
+remain outside the proven adapter set. Catalog rows preserve the stable
+`unsupported-invert`, `unsupported-exponential`, and `unsupported-remains`
+reasons rather than falling through to numeric-plus lowering.
+
 ## 8. Conformance
 
 An implementation conforms when it emits deterministic pack bytes, rejects
