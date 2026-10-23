@@ -48,7 +48,25 @@ function semanticDecode(decoded, semantic, sentence) {
   };
 }
 
+function rejectUnprovenSemanticSentence(sentence) {
+  if (sentence?.be === "vector" && sentence?.ob?.ve !== undefined) {
+    throw new VliwEncodingError(
+      "unsupported-vector",
+      "vector sentence lowering requires a recovered legacy sentence fixture",
+      { sentence }
+    );
+  }
+  if (sentence?.be === "date" && sentence?.ob?.date !== undefined) {
+    throw new VliwEncodingError(
+      "unsupported-date",
+      "date sentence lowering requires a recovered legacy date encoding",
+      { sentence }
+    );
+  }
+}
+
 export function lowerSentence(sentence) {
+  rejectUnprovenSemanticSentence(sentence);
   if (isBooleanLiteralSentence(sentence)) {
     return [lowerBooleanLiteralSentence(sentence)];
   }

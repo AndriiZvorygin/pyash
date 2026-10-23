@@ -66,8 +66,8 @@ test("PyAC keeps vector and date sentences explicitly unsupported", () => {
   ]);
   assert.deepEqual(database.catalog.records.map((record) => record.verb), ["vector", "date"]);
   assert.deepEqual(database.catalog.records.map((record) => record.error.code), [
-    "unsupported-sentence",
-    "unsupported-sentence"
+    "unsupported-vector",
+    "unsupported-date"
   ]);
 });
 
