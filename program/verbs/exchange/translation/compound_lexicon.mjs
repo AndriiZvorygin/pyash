@@ -1,0 +1,133 @@
+import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
+
+import { buildProgram } from "../../../program.mjs";
+
+export const CHINESE_COMPOUND_LEXICON_NAME = "translation_compounds_chinese";
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, stableValue(value[key])])
+    );
+  }
+  return value;
+}
+
+function stableJson(value) {
+  return JSON.stringify(stableValue(value));
+}
+
+function compoundId(entry) {
+  const identity = [
+    entry.surface,
+    entry.morphemes.join("\u0001"),
+    entry.target,
+    entry.provenance
+  ].join("\u0000");
+  return `compound-${createHash("sha256").update(identity).digest("hex").slice(0, 24)}`;
+}
+
+function invalid(message, details = {}) {
+  const error = new Error(message);
+  error.code = "invalid-compound-lexicon";
+  error.details = details;
+  return error;
+}
+
+function normalizeEntry(payload, surface, index) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw invalid("compound row payload must be an object", { index });
+  }
+  if (payload.surface !== surface) {
+    throw invalid("compound row surface must match its Pyash key", { index, surface });
+  }
+  if (!Array.isArray(payload.morphemes) || payload.morphemes.length < 2 || payload.morphemes.some((item) => typeof item !== "string" || !item)) {
+    throw invalid("compound row requires at least two ordered morphemes", { index, surface });
+  }
+  for (const field of ["target", "provenance", "confidence", "status"]) {
+    if (typeof payload[field] !== "string" || !payload[field]) {
+      throw invalid(`compound row requires ${field}`, { index, surface });
+    }
+  }
+  if (payload.gloss !== undefined && typeof payload.gloss !== "string") {
+    throw invalid("compound row gloss must be text", { index, surface });
+  }
+  const entry = {
+    id: compoundId(payload),
+    language: "chinese",
+    surface,
+    morphemes: [...payload.morphemes],
+    target: payload.target,
+    ...(payload.gloss === undefined ? {} : { gloss: payload.gloss }),
+    provenance: payload.provenance,
+    confidence: payload.confidence,
+    status: payload.status
+  };
+  return entry;
+}
+
+export function parseChineseCompoundLexicon(source) {
+  if (typeof source !== "string") throw invalid("compound lexicon source must be text");
+  const sentences = buildProgram(source).sentences;
+  const header = sentences.find((sentence) => (
+    sentence?.mood === "def" &&
+    sentence?.be === "map" &&
+    sentence?.su?.name === CHINESE_COMPOUND_LEXICON_NAME
+  ));
+  if (!header) throw invalid("compound lexicon has no canonical map header");
+
+  const seen = new Set();
+  const entries = [];
+  for (const [index, sentence] of sentences.entries()) {
+    if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
+    if (typeof sentence.ob?.text !== "string") {
+      throw invalid("compound row requires a JSON text payload", { index });
+    }
+    let payload;
+    try {
+      payload = JSON.parse(sentence.ob.text);
+    } catch (error) {
+      throw invalid("compound row JSON payload is malformed", { index, cause: error.message });
+    }
+    const entry = normalizeEntry(payload, sentence.su.text, index);
+    if (seen.has(entry.surface)) throw invalid("compound surface is duplicated", { surface: entry.surface });
+    seen.add(entry.surface);
+    entries.push(entry);
+  }
+  if (!entries.length) throw invalid("compound lexicon has no rows");
+  return entries;
+}
+
+export async function loadChineseCompoundLexicon({ url = new URL("./compound_lexicon_chinese.pya", import.meta.url) } = {}) {
+  return parseChineseCompoundLexicon(await fs.readFile(url, "utf8"));
+}
+
+export function queryChineseCompoundLexicon(entries, criteria = {}) {
+  const rows = typeof entries === "string" ? parseChineseCompoundLexicon(entries) : entries;
+  if (!Array.isArray(rows)) throw invalid("compound query requires parsed rows");
+  return rows.filter((entry) => {
+    if (criteria.id !== undefined && entry.id !== criteria.id) return false;
+    if (criteria.surface !== undefined && entry.surface !== criteria.surface) return false;
+    if (criteria.morpheme !== undefined && !entry.morphemes.includes(criteria.morpheme)) return false;
+    if (criteria.target !== undefined && entry.target !== criteria.target) return false;
+    if (criteria.status !== undefined && entry.status !== criteria.status) return false;
+    if (criteria.confidence !== undefined && entry.confidence !== criteria.confidence) return false;
+    if (criteria.provenance !== undefined && entry.provenance !== criteria.provenance) return false;
+    if (criteria.glossIncludes !== undefined && !entry.gloss?.includes(criteria.glossIncludes)) return false;
+    return true;
+  });
+}
+
+export function canonicalCompoundPayload(entry) {
+  return stableJson({
+    surface: entry.surface,
+    morphemes: entry.morphemes,
+    target: entry.target,
+    gloss: entry.gloss ?? null,
+    provenance: entry.provenance,
+    confidence: entry.confidence,
+    status: entry.status
+  });
+}

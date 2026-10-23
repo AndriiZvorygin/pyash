@@ -441,3 +441,10 @@ export {
   chineseLineToSentence,
   translateNameToChinese
 };
+
+export {
+  loadChineseCompoundLexicon,
+  parseChineseCompoundLexicon,
+  queryChineseCompoundLexicon,
+  canonicalCompoundPayload
+} from "./compound_lexicon.mjs";
