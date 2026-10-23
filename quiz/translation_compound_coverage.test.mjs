@@ -223,6 +223,7 @@ test("deterministic compounds bypass the LLM and closed candidates enter verific
   assert.equal(classified.verificationCandidates[0].verificationStatus, "uncertain-llm");
 
   const calls = [];
+  const checkpoints = [];
   const verified = await verifyCompoundCoverage(coverage.records, {
     invoke: async ({ phase }) => {
       calls.push(phase);
@@ -230,11 +231,17 @@ test("deterministic compounds bypass the LLM and closed candidates enter verific
         verdict: "uncertain",
         rationale: "closed-word semantics remain uncertain"
       });
+    },
+    onRecord: async ({ record, records, total }) => {
+      checkpoints.push({ id: record.id, count: records.length, total });
     }
   });
   assert.deepEqual(calls, ["verify"]);
   assert.equal(verified.accepted.length, 1);
   assert.equal(verified.uncertain.length, 1);
+  assert.equal(checkpoints.length, coverage.records.length);
+  assert.deepEqual(checkpoints.map(({ id }) => id), verified.records.map(({ id }) => id));
+  assert.equal(checkpoints.at(-1).count, checkpoints.at(-1).total);
 });
 
 test("uncertain compound verification gets one bounded repair and accepts only a supplied candidate", async () => {
@@ -247,6 +254,7 @@ test("uncertain compound verification gets one bounded repair and accepts only a
   const calls = [];
   const verified = await verifyCompoundCoverage(coverage.records, {
     verifierName: "fixture compound verifier",
+    maxRepairAttempts: 99,
     invoke: async ({ phase }) => {
       calls.push(phase);
       if (phase === "verify") return "model noise without a JSON decision";
@@ -291,6 +299,20 @@ test("uncertain compound verification gets one bounded repair and accepts only a
   );
   assert.equal(noisy.valid, true);
   assert.equal(noisy.verdict, "accept");
+  const providerEnvelope = parseCompoundVerificationResponse(
+    JSON.stringify({
+      message: {
+        content: JSON.stringify({
+          verdict: "accept",
+          candidateId: candidate.id,
+          rationale: "bounded provider envelope"
+        })
+      }
+    }),
+    { candidates: [candidate] }
+  );
+  assert.equal(providerEnvelope.valid, true);
+  assert.equal(providerEnvelope.verdict, "accept");
 });
 
 test("compound mind verifier uses the existing Pyash mind write shape", async () => {
