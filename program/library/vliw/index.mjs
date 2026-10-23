@@ -36,7 +36,7 @@ import {
   lowerNumericArithmeticSentence,
   numericArithmeticCompatibility
 } from "./arithmetic.mjs";
-import { deriveSentenceEffects } from "./effects.mjs";
+import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
 
 function semanticDecode(decoded, semantic, sentence) {
   return {
@@ -198,21 +198,25 @@ export async function executeCodelets(codelets) {
     throw new VliwEncodingError("invalid-program", "VLIW execution requires an array of codelets");
   }
 
-  const results = [];
-  for (const codelet of codelets) {
+  const scheduled = scheduleCodeletDependencies(codelets);
+  const results = new Array(codelets.length);
+  for (const entry of scheduled) {
+    const codelet = entry.instruction;
     const words = codelet?.words ?? codelet;
     const decoded = decodeCodelet(words);
+    let result;
     if (decoded.semantic === "named-literal") {
-      results.push(await executeNamedLiteralCodelet(words));
+      result = await executeNamedLiteralCodelet(words);
     } else if (decoded.semantic === "boolean-literal") {
-      results.push(await executeBooleanLiteralCodelet(words));
+      result = await executeBooleanLiteralCodelet(words);
     } else if (decoded.semantic === "typed-literal") {
-      results.push(await executeTypedLiteralCodelet(words));
+      result = await executeTypedLiteralCodelet(words);
     } else if (decoded.semantic === "numeric-arithmetic") {
-      results.push(await executeNumericArithmeticCodelet(words));
+      result = await executeNumericArithmeticCodelet(words);
     } else {
-      results.push(await executeNumericPlusCodelet(words));
+      result = await executeNumericPlusCodelet(words);
     }
+    results[entry.index] = result;
   }
   return results;
 }
