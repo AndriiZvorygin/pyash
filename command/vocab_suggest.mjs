@@ -64,6 +64,13 @@ const APPROVED_CONTRACT_NAME_TOKENS = new Set(["source", "sha256"]);
 const APPROVED_CONTRACT_NAME_PATTERNS = [
   /^src-[0-9a-f]{64}(?::[A-Za-z0-9._:-]+)?$/u
 ];
+const ACCEPTED_COMPOUND_STATUSES = new Set([
+  "accepted-curated",
+  "accepted-delimited",
+  "accepted-deterministic",
+  "accepted-llm",
+  "repaired-llm"
+]);
 
 function isApprovedContractNameToken(token) {
   const lower = String(token ?? "").toLowerCase();
@@ -81,6 +88,72 @@ function tokenizeName(name) {
     .map(token => token.trim())
     .filter(Boolean)
     .filter(token => NAME_TOKEN_REGEX.test(token));
+}
+
+function normalizeCompoundTarget(value) {
+  return typeof value === "string" ? value.normalize("NFC").trim().toLowerCase() : "";
+}
+
+function parseAcceptedCompoundRows(program) {
+  const compounds = new Map();
+  for (const sentence of program?.sentences ?? []) {
+    if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string" || typeof sentence.ob?.text !== "string") continue;
+    let payload;
+    try {
+      payload = JSON.parse(sentence.ob.text);
+    } catch {
+      continue;
+    }
+    const target = normalizeCompoundTarget(payload?.target ?? payload?.surface);
+    const components = Array.isArray(payload?.componentGlosses)
+      ? payload.componentGlosses.filter((component) => typeof component === "string" && component.trim())
+      : [];
+    const pyash = Array.isArray(payload?.pyashSequence)
+      ? payload.pyashSequence.filter((word) => typeof word === "string" && word.trim())
+      : [];
+    const status = payload?.verificationStatus ?? payload?.status;
+    if (!target || components.length < 2 || pyash.length !== components.length || !ACCEPTED_COMPOUND_STATUSES.has(status)) continue;
+    const rows = compounds.get(target) ?? [];
+    const identity = `${components.join("\u0001")}\u0000${pyash.join("\u0001")}`;
+    if (!rows.some((row) => row.identity === identity)) {
+      rows.push({
+        target,
+        components,
+        pyash,
+        status,
+        identity
+      });
+    }
+    compounds.set(target, rows);
+  }
+  return compounds;
+}
+
+function isCompoundCatalog(program) {
+  return (program?.sentences ?? []).some((sentence) => (
+    sentence?.mood === "def" &&
+    sentence?.be === "map" &&
+    typeof sentence.su?.name === "string" &&
+    sentence.su.name.toLowerCase().includes("compound")
+  ));
+}
+
+function registerFoundCompound(foundCompounds, rows, location) {
+  for (const row of rows) {
+    const current = foundCompounds.get(row.target) ?? { row, locations: new Set() };
+    if (location) current.locations.add(location);
+    foundCompounds.set(row.target, current);
+  }
+}
+
+function mergeCompoundRows(target, source) {
+  for (const [compound, rows] of source.entries()) {
+    const current = target.get(compound) ?? [];
+    for (const row of rows) {
+      if (!current.some((candidate) => candidate.identity === row.identity)) current.push(row);
+    }
+    target.set(compound, current);
+  }
 }
 
 function collectTokensFromSentence(sentence, out) {
@@ -256,10 +329,20 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const { inputs, textInputs, mapPath } = parseArgs(args);
   const { roots, tokens: resolvedTextInputs } = await resolveRootsAndTokens(inputs, textInputs);
   const occurrences = new Map();
+  const acceptedCompounds = new Map();
+  const foundCompounds = new Map();
   const okTextTokens = new Set();
   const files = [];
   for (const root of roots) {
     await collectFiles(root, files);
+  }
+
+  const parsedFiles = [];
+  for (const file of files) {
+    const text = await fs.readFile(file, "utf8");
+    const program = buildProgram(text);
+    mergeCompoundRows(acceptedCompounds, parseAcceptedCompoundRows(program));
+    parsedFiles.push({ file, text, program });
   }
 
   let missing = 0;
@@ -267,10 +350,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   for (const input of resolvedTextInputs) {
     for (const token of tokenizeName(input)) textTokens.add(token);
   }
-  for (const file of files) {
-    const text = await fs.readFile(file, "utf8");
+  for (const { file, text, program } of parsedFiles) {
     const tokens = new Set();
-    const program = buildProgram(text);
+    const compoundCatalog = isCompoundCatalog(program);
+    if (compoundCatalog) continue;
     for (const sentence of program.sentences) {
       collectTokensFromSentence(sentence, tokens);
     }
@@ -282,6 +365,11 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
     for (const token of tokens) {
       if (isGrammarKeyword(token)) continue;
+      const knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
+      if (knownCompounds?.length) {
+        registerFoundCompound(foundCompounds, knownCompounds, file);
+        continue;
+      }
       const lines = await queryRyan(token);
       if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
         missing += 1;
@@ -301,6 +389,11 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       okTextTokens.add(token);
       continue;
     }
+    const knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
+    if (knownCompounds?.length) {
+      registerFoundCompound(foundCompounds, knownCompounds, "input");
+      continue;
+    }
     const lines = await queryRyan(token);
     const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
     if (
@@ -315,6 +408,15 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     } else {
       okTextTokens.add(token);
     }
+  }
+
+  for (const [target, found] of [...foundCompounds.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    const locationSuffix = [...found.locations]
+      .map(name => name.replace(`${process.cwd()}/`, ""))
+      .filter(Boolean)
+      .join(", ");
+    const row = found.row;
+    report(`${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${locationSuffix ? ` (${locationSuffix})` : ""}`);
   }
 
   if (occurrences.size > 0) {
@@ -362,11 +464,28 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         files: [...filesForToken]
       };
     }
+    for (const [target, found] of foundCompounds.entries()) {
+      map[target] = {
+        foundCompound: {
+          components: found.row.components,
+          pyash: found.row.pyash,
+          status: found.row.status
+        },
+        files: [...found.locations]
+      };
+    }
     await fs.writeFile(mapPath, JSON.stringify(map, null, 2));
   }
 
   const exitCode = missing > 0 ? 1 : 0;
-  return { exitCode, missing };
+  return {
+    exitCode,
+    missing,
+    foundCompounds: [...foundCompounds.values()].map(({ row, locations }) => {
+      const { identity, ...publicRow } = row;
+      return { ...publicRow, locations: [...locations] };
+    })
+  };
 }
 
 if (import.meta.url === new URL(process.argv[1], "file://").href) {
