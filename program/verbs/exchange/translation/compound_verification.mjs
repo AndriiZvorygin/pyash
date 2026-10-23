@@ -232,8 +232,17 @@ export function parseCompoundVerificationResponse(text, { candidates = [] } = {}
   if (String(text ?? "").length > MAX_RESPONSE_CHARS) {
     return { valid: false, reason: "response exceeds the bounded character limit" };
   }
-  const payload = extractJsonObject(text);
+  let payload = extractJsonObject(text);
   if (!payload) return { valid: false, reason: "response did not contain one JSON object" };
+  const nestedContent = payload.verdict === undefined && typeof payload.message?.content === "string"
+    ? payload.message.content
+    : payload.verdict === undefined && typeof payload.response === "string"
+      ? payload.response
+      : "";
+  if (nestedContent && nestedContent.length <= MAX_RESPONSE_CHARS) {
+    const nested = extractJsonObject(nestedContent);
+    if (nested) payload = nested;
+  }
   const verdict = normalizeText(payload.verdict ?? payload.status).toLowerCase();
   if (!RESPONSE_VERDICTS.has(verdict)) {
     return { valid: false, reason: "response verdict must be accept, reject, or uncertain" };
@@ -326,17 +335,27 @@ function candidateGroupKey(record) {
 export async function verifyCompoundCoverage(records, {
   invoke,
   verifierName = "compound verifier",
-  maxRepairAttempts = 1
+  maxRepairAttempts = 1,
+  onRecord
 } = {}) {
   const classification = classifyCompoundCoverage(records);
   if (classification.verificationCandidates.length > 0 && typeof invoke !== "function") {
     throw invalid("compound verification requires an invoke function for uncertain records");
   }
+  const repairLimit = Math.min(1, Math.max(0, Number.isFinite(Number(maxRepairAttempts))
+    ? Math.trunc(Number(maxRepairAttempts))
+    : 1));
   const verified = [];
   const handledGroups = new Set();
+  const emit = async (record) => {
+    verified.push(record);
+    if (typeof onRecord === "function") {
+      await onRecord({ record, records: [...verified], total: classification.records.length });
+    }
+  };
   for (const record of classification.records) {
     if (record.certainty !== "llm") {
-      verified.push(record);
+      await emit(record);
       continue;
     }
     const groupKey = candidateGroupKey(record);
@@ -348,7 +367,7 @@ export async function verifyCompoundCoverage(records, {
     let raw = await invoke({ phase: "verify", prompt, record, candidates, attempt: attempts });
     let response = parseCompoundVerificationResponse(raw, { candidates });
     let repaired = false;
-    while (!response.valid && repaired === false && maxRepairAttempts > 0) {
+    while (!response.valid && repaired === false && repairLimit > 0) {
       repaired = true;
       attempts += 1;
       const repairPrompt = [
@@ -364,7 +383,7 @@ export async function verifyCompoundCoverage(records, {
     }
     if (!response.valid) {
       for (const candidate of candidates) {
-        verified.push(retainUncertain(candidate, { ...candidate, ...classifyCompoundCertainty(candidate) }, {
+        await emit(retainUncertain(candidate, { ...candidate, ...classifyCompoundCertainty(candidate) }, {
           reason: response.reason,
           raw: String(raw ?? "")
         }, { verifierName, attempts }));
@@ -374,20 +393,20 @@ export async function verifyCompoundCoverage(records, {
     for (const candidate of candidates) {
       const candidateClassification = { ...candidate, ...classifyCompoundCertainty(candidate) };
       if (response.verdict === "accept" && response.candidateId === candidateId(candidate)) {
-        verified.push(applyVerification(candidate, candidateClassification, response, {
+        await emit(applyVerification(candidate, candidateClassification, response, {
           verifierName,
           attempts,
           repaired
         }));
       } else if (response.verdict === "accept") {
-        verified.push(retainRejected(candidate, candidateClassification, {
+        await emit(retainRejected(candidate, candidateClassification, {
           ...response,
           rationale: `alternative candidate not selected: ${response.rationale}`
         }, { verifierName, attempts }));
       } else if (response.verdict === "reject") {
-        verified.push(retainRejected(candidate, candidateClassification, response, { verifierName, attempts }));
+        await emit(retainRejected(candidate, candidateClassification, response, { verifierName, attempts }));
       } else {
-        verified.push(retainUncertain(candidate, candidateClassification, response, { verifierName, attempts }));
+        await emit(retainUncertain(candidate, candidateClassification, response, { verifierName, attempts }));
       }
     }
   }

@@ -353,6 +353,42 @@ export function resolveDerivedCompound(records, { language, surface, target } = 
   return null;
 }
 
+function renderDerivedCompoundCoverageRow(entry) {
+  const payload = {
+    surface: entry.target,
+    morphemes: entry.sourceMorphemes,
+    sourceMorphemes: entry.sourceMorphemes,
+    target: entry.target,
+    gloss: entry.target,
+    componentGlosses: entry.componentGlosses,
+    pyashSequence: entry.pyashSequence,
+    componentLayers: entry.componentLayers,
+    maxLayer: entry.maxLayer,
+    head: entry.head,
+    sourceSurfaces: entry.sourceSurfaces,
+    sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage,
+    coverageStatus: entry.coverageStatus,
+    verificationStatus: entry.verificationStatus,
+    certainty: entry.certainty,
+    certaintyScore: entry.certaintyScore,
+    deterministicChecks: entry.deterministicChecks,
+    verificationAttempts: entry.verificationAttempts,
+    verifier: entry.verifier,
+    verificationRationale: entry.verificationRationale,
+    verificationEvidence: entry.verificationEvidence,
+    evidence: entry.evidence,
+    provenance: entry.provenance,
+    confidence: entry.confidence,
+    status: entry.status
+  };
+  return `su text ${JSON.stringify(entry.target)} ob text ${JSON.stringify(JSON.stringify(payload))} ya`;
+}
+
+export function renderDerivedCompoundCoverageRowPya(entry) {
+  if (!entry || typeof entry !== "object") throw invalid("compound row renderer requires a record");
+  return renderDerivedCompoundCoverageRow(entry);
+}
+
 export function renderDerivedCompoundCoveragePya(
   records,
   { name = DERIVED_COMPOUND_LEXICON_NAME } = {}
@@ -362,35 +398,6 @@ export function renderDerivedCompoundCoveragePya(
   const rows = records
     .slice()
     .sort((left, right) => left.target.localeCompare(right.target) || left.id.localeCompare(right.id))
-    .map((entry) => {
-      const payload = {
-        surface: entry.target,
-        morphemes: entry.sourceMorphemes,
-        sourceMorphemes: entry.sourceMorphemes,
-        target: entry.target,
-        gloss: entry.target,
-        componentGlosses: entry.componentGlosses,
-        pyashSequence: entry.pyashSequence,
-        componentLayers: entry.componentLayers,
-        maxLayer: entry.maxLayer,
-        head: entry.head,
-        sourceSurfaces: entry.sourceSurfaces,
-        sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage,
-        coverageStatus: entry.coverageStatus,
-        verificationStatus: entry.verificationStatus,
-        certainty: entry.certainty,
-        certaintyScore: entry.certaintyScore,
-        deterministicChecks: entry.deterministicChecks,
-        verificationAttempts: entry.verificationAttempts,
-        verifier: entry.verifier,
-        verificationRationale: entry.verificationRationale,
-        verificationEvidence: entry.verificationEvidence,
-        evidence: entry.evidence,
-        provenance: entry.provenance,
-        confidence: entry.confidence,
-        status: entry.status
-      };
-      return `su text ${JSON.stringify(entry.target)} ob text ${JSON.stringify(JSON.stringify(payload))} ya`;
-    });
+    .map(renderDerivedCompoundCoverageRow);
   return [`su name ${name} be map def`, ...rows, "prah", ""].join("\n");
 }
