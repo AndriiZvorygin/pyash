@@ -19,6 +19,7 @@
 - `documentation/reference/music-module.md` — reference profile for `music video` and `music say` contracts.
 - `documentation/reference/speaker-identification.md` — reference profile for persistent speaker identification/enrollment from audio.
 - `documentation/reference/quantum-randomness-and-evolutionary-computing.md` — evidence and direct-QRNG policy for evolutionary-computing experiments.
+- `documentation/reference/lwonprom-c-pyash-style-analysis.md` — relationship between the lwonprom C implementation, Pyash composition, and complexity discipline.
 - `documentation/release-preview-0.1.md` — initial release gate, smoke route, and known limits.
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
 - `documentation/pyac.txt` — broader 2019 language/spec background.
