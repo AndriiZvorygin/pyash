@@ -25,6 +25,11 @@ import {
   buildEnglishDictionaryAliases,
   parseEnglishDictionaryBlacklist
 } from "../program/verbs/exchange/translation/english_dictionary_aliases.mjs";
+import {
+  buildEnglishGrammarIndex,
+  composeEnglishNounPhrase,
+  loadEnglishGrammarCatalog
+} from "../program/verbs/exchange/translation/english_grammar.mjs";
 
 test("English30k parser preserves rank, score, and missing source ranks", () => {
   const source = parseEnglish30kText([
@@ -295,6 +300,38 @@ test("default English30k coverage uses the repository dictionary blacklist", asy
   assert.ok(coverage.counts["dictionary-alias"] > 6000);
 });
 
+test("lwonprom-derived English grammar composes possessive and plural noun phrases", async () => {
+  const catalog = await loadEnglishGrammarCatalog();
+  const grammar = buildEnglishGrammarIndex({ catalogEntries: catalog.entries });
+  assert.deepEqual(grammar.resolve("our")?.pyashSequence, ["hwam", "ti"]);
+  assert.deepEqual(grammar.resolve("your")?.pyashSequence, ["hnan", "ti"]);
+  assert.deepEqual(grammar.resolve("plural")?.pyashSequence, ["pu"]);
+  assert.deepEqual(grammar.resolve("possessive")?.pyashSequence, ["ye"]);
+
+  const coverage = await loadDefaultEnglish30kCoverage({ atomicEntries: pyashWords });
+  const father = lookupEnglish30kCoverage(coverage, "father");
+  assert.equal(father?.coverageType, "dictionary-alias");
+  assert.deepEqual(father?.pyashSequence, ["hpap"]);
+
+  const phrase = composeEnglishNounPhrase({
+    possessor: "our",
+    head: "father",
+    plural: true,
+    grammarIndex: grammar,
+    resolve: (word) => lookupEnglish30kCoverage(coverage, word)
+  });
+  assert.equal(phrase.status, "composed");
+  assert.deepEqual(phrase.pyashSequence, ["hwam", "ti", "hpap", "pu"]);
+
+  const alreadyPlural = composeEnglishNounPhrase({
+    head: "father",
+    plural: true,
+    grammarIndex: grammar,
+    resolve: () => ({ pyashSequence: ["hpap", "pu"] })
+  });
+  assert.deepEqual(alreadyPlural.pyashSequence, ["hpap", "pu"]);
+});
+
 test("vocab_suggest reports a unique dictionary alias", async () => {
   const lines = [];
   const result = await runVocabSuggest(["he"], {
@@ -302,6 +339,15 @@ test("vocab_suggest reports a unique dictionary alias", async () => {
   });
   assert.equal(result.exitCode, 0);
   assert.match(lines.join("\n"), /he: dictionary alias it -> htit \(English30k rank 10\)/u);
+});
+
+test("vocab_suggest reports an English grammatical construction", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["our"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.match(lines.join("\n"), /our: grammar -> hwam ti \(English30k rank 66\)/u);
 });
 
 test("ambiguous regular forms remain Housekeeper candidates", () => {

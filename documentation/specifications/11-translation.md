@@ -150,9 +150,27 @@ to be interpreted as Pyash without explicit `be translation do`.
 
 See `examples/pyash/translation-fallback-mixed.pya`.
 
+## 5.1 English grammatical composition
+
+English grammatical words that have a direct PyAC construction use the durable
+catalog `program/verbs/exchange/translation/english_grammar.pya`. The catalog
+keeps lexical heads separate from grammar markers:
+
+- `our` is the first-person plural possessor followed by genitive `ti`, so a
+  phrase such as “our father” lowers as `hwam ti <father>`.
+- `your` and `my` use the same genitive construction with `hnan` and `hman`.
+- `plural` is the noun suffix `pu`; a composed plural phrase appends `pu` to
+  the resolved head.
+- `possessive` is the possessive marker `ye`, while `genitive` is the linking
+  marker `ti`.
+
+These entries come from the lwonprom noun-phrase and grammatical-case
+construction. The catalog is evidence for composition; it does not replace the
+canonical English lemma, alias, or compound indexes.
+
 ---
 
-## 5.1 Reverse pairs and template matching (implementation notes)
+## 5.2 Reverse pairs and template matching (implementation notes)
 
 Implementation lives in `program/verbs/exchange/translation/reverse_pairs.mjs`.
 
