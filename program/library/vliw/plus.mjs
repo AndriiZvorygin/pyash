@@ -1,14 +1,18 @@
 import { plus_obj_num_to_name_num } from "../../verbs/mathematics/plus.mjs";
+import {
+  LEGACY_NUMERIC_PLUS_WORDS,
+  NUMBER_QUOTE_WORD,
+  decodeQuote
+} from "./quotes.mjs";
 
 export const CODELET_WORD_COUNT = 16;
 export const NUMERIC_PLUS_USED_WORD_COUNT = 9;
 
-const HEAD_WORD = 0x0149;
-const NUMBER_QUOTE_WORD = 0x881d;
-const INSTRUMENTAL_CASE_WORD = 0x287e;
-const ACCUSATIVE_CASE_WORD = 0x245e;
-const PLUS_WORD = 0x8a64;
-const DEONTIC_MOOD_WORD = 0x295e;
+const HEAD_WORD = LEGACY_NUMERIC_PLUS_WORDS.head;
+const INSTRUMENTAL_CASE_WORD = LEGACY_NUMERIC_PLUS_WORDS.instrumentalCase;
+const ACCUSATIVE_CASE_WORD = LEGACY_NUMERIC_PLUS_WORDS.accusativeCase;
+const PLUS_WORD = LEGACY_NUMERIC_PLUS_WORDS.plus;
+const DEONTIC_MOOD_WORD = LEGACY_NUMERIC_PLUS_WORDS.deonticMood;
 
 export const numericPlusCompatibility = Object.freeze({
   head: HEAD_WORD,
@@ -151,10 +155,24 @@ export function lowerNumericPlusSentence(sentence) {
 export function decodeNumericPlusCodelet(input) {
   const words = normalizeWords(input);
   validateCodeletMarkers(words);
+  let first;
+  let second;
+  try {
+    first = decodeQuote(words, 1);
+    second = decodeQuote(words, 4);
+  } catch (error) {
+    throw encodingError("malformed-codelet", error.message, {
+      cause: error.code,
+      details: error.details
+    });
+  }
+  if (first.nextOffset !== 3 || second.nextOffset !== 6) {
+    throw encodingError("malformed-codelet", "numeric-plus quote boundaries are invalid");
+  }
   return {
     mood: "do",
-    ob: { num: words[2] },
-    to: { num: words[5] },
+    ob: { num: first.value },
+    to: { num: second.value },
     be: "plus"
   };
 }
