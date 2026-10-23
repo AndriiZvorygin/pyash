@@ -85,6 +85,12 @@ function normalizeEntry(payload, surface, index) {
     throw invalid("English lemma row rule must be text", { index, surface });
   }
   const morphology = normalizeMorphology(payload.morphology, normalizedSurface, index);
+  const grammaticalNumber = payload.grammaticalNumber === undefined
+    ? ""
+    : String(payload.grammaticalNumber).trim().toLowerCase();
+  if (grammaticalNumber && !["singular", "plural"].includes(grammaticalNumber)) {
+    throw invalid("English lemma grammatical number is unsupported", { index, surface, grammaticalNumber });
+  }
   return {
     surface: normalizedSurface,
     lemma,
@@ -94,6 +100,7 @@ function normalizeEntry(payload, surface, index) {
     rule: payload.rule?.trim() ?? "",
     evidence: payload.evidence.trim(),
     ...(morphology ? { morphology } : {}),
+    ...(grammaticalNumber ? { grammaticalNumber } : {}),
     ...(Number.isInteger(payload.rank) ? { rank: payload.rank } : {})
   };
 }
@@ -260,6 +267,7 @@ function addExplicitRows(lookup, entries, atomicLookup, aliases) {
           markerSequence: [...entry.morphology.markerSequence]
         }
       } : {}),
+      ...(entry.grammaticalNumber ? { grammaticalNumber: entry.grammaticalNumber } : {}),
       ...(entry.rank === undefined ? {} : { rank: entry.rank })
     };
     for (const variant of englishLemmaLookupVariants(entry.surface)) lookup.set(variant, row);
@@ -377,6 +385,7 @@ export function renderEnglishLemmaCatalogPya({ source, entries }, {
         status: entry.status ?? "accepted-deterministic",
         ...(entry.rule ? { rule: entry.rule } : {}),
         ...(entry.morphology ? { morphology: entry.morphology } : {}),
+        ...(entry.grammaticalNumber ? { grammaticalNumber: entry.grammaticalNumber } : {}),
         evidence: entry.evidence ?? ""
       }))} ya`),
     "prah"

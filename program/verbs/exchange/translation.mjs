@@ -89,7 +89,9 @@ export async function translation_from_text_to_name_text(sentence) {
       }
       const parsed = sourceAdapter.toPyash(line);
       if (parsed) {
-        sentences.push(normalizeAnchorSentence(parsed, anchorForms));
+        sentences.push(sourceAdapter.name === "whisper-english"
+          ? parsed
+          : normalizeAnchorSentence(parsed, anchorForms));
         continue;
       }
       if (sourceAdapter.name === "english") {
