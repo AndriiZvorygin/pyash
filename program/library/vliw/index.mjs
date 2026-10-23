@@ -1,5 +1,6 @@
 import {
   decodeLegacyCodelet,
+  decodeLegacyCodeletSequence,
   VliwCodeletError
 } from "./codelets.mjs";
 import {
@@ -221,6 +222,11 @@ export async function executeCodelets(codelets) {
   return results;
 }
 
+export {
+  decodeLegacyCodelet,
+  decodeLegacyCodeletSequence,
+  VliwCodeletError
+};
 export {
   analyzeCodeletDependencies,
   deriveSentenceEffects,

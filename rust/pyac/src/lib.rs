@@ -1,5 +1,9 @@
 #![forbid(unsafe_code)]
 
+pub mod catalog;
+
+pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
+
 use std::fmt::{Display, Formatter};
 
 pub const MAGIC: &[u8; 8] = b"PYACVLIW";

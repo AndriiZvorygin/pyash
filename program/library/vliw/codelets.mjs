@@ -39,6 +39,25 @@ function normalizeCodeletWords(words) {
   return new Uint16Array(values);
 }
 
+function normalizeCodeletSequence(input) {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw codeletError("invalid-sequence", "codelet sequence must contain one or more 16-word vectors");
+  }
+  return input.map((vector, index) => {
+    try {
+      return normalizeCodeletWords(vector);
+    } catch (error) {
+      if (error instanceof VliwCodeletError) {
+        throw codeletError(error.code, "codelet sequence contains an invalid vector", {
+          vector: index,
+          details: error.details
+        });
+      }
+      throw error;
+    }
+  });
+}
+
 function decodeQuoteItem(words, offset) {
   try {
     return decodeQuote(words, offset);
@@ -65,8 +84,7 @@ function validateZeroTail(words, offset) {
   }
 }
 
-export function decodeLegacyCodelet(input) {
-  const words = normalizeCodeletWords(input);
+function decodeWordSequence(words) {
   const items = [];
   let offset = 0;
 
@@ -94,6 +112,44 @@ export function decodeLegacyCodelet(input) {
   }
 
   return { words, items, usedWords: words.length };
+}
+
+export function decodeLegacyCodelet(input) {
+  return decodeWordSequence(normalizeCodeletWords(input));
+}
+
+export function decodeLegacyCodeletSequence(input) {
+  const vectors = normalizeCodeletSequence(input);
+  const indexWords = vectors.map((vector) => vector[0]);
+  const finalVector = indexWords.findIndex((word) => (word & 0x0001) === 1);
+
+  if (finalVector === -1) {
+    throw codeletError("missing-continuation", "codelet sequence has no final vector", {
+      vectorCount: vectors.length,
+      indexWords
+    });
+  }
+  if (finalVector !== vectors.length - 1) {
+    throw codeletError("trailing-continuation", "codelet sequence contains data after its final vector", {
+      finalVector,
+      vectorCount: vectors.length,
+      indexWords
+    });
+  }
+
+  const flattened = [vectors[0][0]];
+  for (const vector of vectors) {
+    flattened.push(...vector.slice(1));
+  }
+  const decoded = decodeWordSequence(new Uint16Array(flattened));
+  return {
+    ...decoded,
+    vectors,
+    indexWords,
+    vectorCount: vectors.length,
+    continued: vectors.length > 1,
+    complete: true
+  };
 }
 
 function renderQuote(quote) {

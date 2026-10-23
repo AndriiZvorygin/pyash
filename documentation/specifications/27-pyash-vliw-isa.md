@@ -119,13 +119,15 @@ The index has two required properties from the legacy VM:
   completion state.
 
 When a value or clause exceeds one vector, the index marks a partial codelet.
-The decoder collects the preceding/following vectors in codelet order until a
-final index is reached, then validates the complete phrase and sentence before
-execution. It MUST reject a missing continuation, an impossible boundary, a
-non-zero unassigned tail, or an invalid quote length. It MUST NOT infer missing
-words from source text.
+The structural decoder collects the preceding/following vectors in codelet order
+until a final index is reached, preserves the vector and index-word evidence,
+and validates the flattened word sequence. It MUST reject a missing
+continuation, an impossible boundary, a non-zero unassigned tail, or an invalid
+quote length. Semantic adapters still require a sentence-specific golden
+fixture before execution. The decoder MUST NOT infer missing words from source
+text.
 
-The legacy layout is intentionally fixed: one codelet is sixteen words, each
+The legacy layout is intentionally fixed: one codelet vector is sixteen words, each
 word is 16 bits, the head comes first, and byte emission is little-endian per
 word. A future physical transport MAY batch codelets, but batching MUST NOT
 change codelet bytes or their sentence order.

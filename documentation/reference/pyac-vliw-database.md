@@ -157,20 +157,45 @@ this contract.
 
 The initial Rust boundary is `rust/pyac`. It implements the established
 `.pyac` fixed-width pack header, little-endian 16-bit codelets, stable layout
-errors, and the one-plus-one golden fixture. It uses only the Rust standard
-library and does not introduce a second semantic vocabulary or database schema.
+errors, and the one-plus-one golden fixture. Its catalog reader uses the small
+`serde_json` dependency already required to decode the existing JSON-shaped
+row payload; it does not introduce a second semantic vocabulary or database
+schema.
 
-Run its checks with:
+Rust now reads the existing generated catalog subset with
+`parse_catalog_pya`. It validates the series/header/footer shape, the six
+required metadata rows, optional pack locator, and JSON-shaped codelet rows;
+it does not define a second catalog schema. The shared fixture is
+`rust/pyac/tests/fixture_catalog.pya`, and the JavaScript renderer remains the
+authority for producing parser-backed `.pya` text and semantic replay.
+
+Run both Rust checks with:
 
 ```text
+cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
 cargo test --manifest-path rust/pyac/Cargo.toml
 ```
 
-The parser-backed `.pya` catalog and semantic replay remain owned by the
-JavaScript/Pyash reference path. Rust catalog reading begins after that
-contract receives an explicit cross-language fixture set.
+## 7. Backend status
 
-## 7. Conformance
+The current executable reference backend is the JavaScript semantic facade.
+The archived pre-October `lwonprom` source contains an OpenCL VM design and
+hardware helpers, but the current repository has no PyAC OpenCL compiler,
+kernel, or device execution contract. `program/runtime/gpu` owns provider and
+queue lifecycle for model work; it does not execute PyAC codelets. Adding an
+OpenCL backend therefore waits for a kernel ABI, codelet result ABI, device
+admission, and conformance fixtures.
+
+Vector quote payloads now decode losslessly for the recovered fixed-width
+16-bit numeric/letter header families. Vector sentence values remain cataloged
+as explicit unsupported semantic rows: the legacy source exposes vector-width
+bit fields, yet the recovered encoder has no sentence-level `be vector` golden
+fixture or matching execution handler. Dates likewise have vocabulary and
+current runtime values but no recovered legacy date encoding or execution
+handler. The structural continuation decoder is available for lossless
+multi-vector evidence; it does not promote either domain to execution.
+
+## 8. Conformance
 
 An implementation conforms when it emits deterministic pack bytes, rejects
 malformed or tampered input, preserves unsupported records, supports catalog

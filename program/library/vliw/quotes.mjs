@@ -137,12 +137,37 @@ function wordKey(word) {
 
 export function decodeQuoteWord(word) {
   validateWord(word);
-  const descriptor = quoteDescriptorByWord.get(word);
+  const descriptor = quoteDescriptorByWord.get(word) ?? dynamicQuoteDescriptor(word);
   if (!descriptor) {
     const code = (word & 0x001f) === QUOTE_DENOTE ? "unknown-quote" : "not-quote";
     throw quoteError(code, `unsupported quote word ${wordKey(word)}`, { word });
   }
   return { ...descriptor };
+}
+
+function dynamicQuoteDescriptor(word) {
+  if ((word & 0x001f) !== QUOTE_DENOTE) return null;
+  const header = decodeQuoteHeader(word);
+  if (header.vectorWords === null || header.scalarBytes !== 2) return null;
+  if (header.sortName === "uint") {
+    return {
+      word,
+      family: "number",
+      payloadWords: header.vectorWords,
+      valueType: "uint16-vector",
+      supported: true
+    };
+  }
+  if (header.sortName === "letter") {
+    return {
+      word,
+      family: "letter",
+      payloadWords: header.vectorWords,
+      valueType: "letter-vector",
+      supported: true
+    };
+  }
+  return null;
 }
 
 export function decodeQuoteHeader(word) {
@@ -235,6 +260,8 @@ export function decodeQuote(words, offset = 0) {
     value = textValue(payload);
   } else if (descriptor.family === "number" && header.scalarBytes > 2) {
     value = unsignedValue(payload, header.scalarBytes);
+  } else if (descriptor.family === "number" && header.vectorWords > 1) {
+    value = payload;
   }
   return {
     ...descriptor,
