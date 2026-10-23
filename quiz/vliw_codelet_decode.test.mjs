@@ -4,9 +4,14 @@ import assert from "node:assert/strict";
 import {
   CODELET_WORD_COUNT,
   decodeLegacyCodelet,
+  renderLegacyCodelet,
   VliwCodeletError
 } from "../program/library/vliw/codelets.mjs";
-import { LETTER_QUOTE_WORD, NUMBER_QUOTE_WORD } from "../program/library/vliw/quotes.mjs";
+import {
+  LETTER_QUOTE_WORD,
+  NUMBER_QUOTE_WORD,
+  PARAGRAPH_LETTER_QUOTE_WORD
+} from "../program/library/vliw/quotes.mjs";
 
 const onePlusOneWords = [
   0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64,
@@ -46,6 +51,25 @@ test("generic codelet decoding preserves words, quotes, and lexical lookup", () 
   assert.equal(decoded.items[3].quote.nextOffset, 6);
 });
 
+test("generic rendering exposes a lossless diagnostic Pyash-like surface", () => {
+  assert.equal(
+    renderLegacyCodelet(onePlusOneWords),
+    "0x0149 num 1 yu num 1 ka plus tu"
+  );
+});
+
+test("generic codelets retain letter and paragraph quote boundaries", () => {
+  const letterWords = [0x0149, LETTER_QUOTE_WORD, 0x0041, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const paragraphWords = new Array(CODELET_WORD_COUNT).fill(0);
+  paragraphWords.splice(0, 5, 0x0149, PARAGRAPH_LETTER_QUOTE_WORD, 2, 0x0041, 0x0042);
+
+  assert.equal(decodeLegacyCodelet(letterWords).items[1].quote.value, "A");
+  assert.equal(decodeLegacyCodelet(paragraphWords).items[1].quote.nextOffset, 5);
+  const quote = String.fromCharCode(34);
+  assert.equal(renderLegacyCodelet(letterWords), `0x0149 letter ${quote}A${quote}`);
+  assert.equal(renderLegacyCodelet(paragraphWords), `0x0149 text ${quote}AB${quote}`);
+});
+
 test("generic decoding keeps zero-valued quote payloads inside the used prefix", () => {
   const words = [...onePlusOneWords];
   words[2] = 0;
@@ -72,7 +96,7 @@ test("generic decoding rejects malformed quotes and nonzero padding", () => {
   assert.equal(errorCode(() => decodeLegacyCodelet(truncated)), "malformed-quote");
 
   const unsupported = [...onePlusOneWords];
-  unsupported[1] = LETTER_QUOTE_WORD;
+  unsupported[1] = 0x001d;
   assert.equal(errorCode(() => decodeLegacyCodelet(unsupported)), "malformed-quote");
 
   const nonzeroTail = [...onePlusOneWords];

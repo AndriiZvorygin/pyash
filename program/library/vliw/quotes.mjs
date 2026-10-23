@@ -5,6 +5,32 @@ export const NUMBER_QUOTE_WORD = 0x881d;
 export const LETTER_QUOTE_WORD = 0x081d;
 export const PARAGRAPH_LETTER_QUOTE_WORD = 0x0e1d;
 
+const NAME_LITERAL_MASK = 0x0020;
+const POINTED_MASK = 0x0040;
+const SEQUENCE_MASK = 0x0080;
+const VECTOR_THICK_MASK = 0x0700;
+const SCALAR_THICK_MASK = 0x1800;
+const SORT_DENOTE_MASK = 0xe000;
+
+const scalarByteWidths = [1, 2, 4, 8];
+const vectorWordCounts = new Map([
+  [0, 1],
+  [1, 2],
+  [2, 4],
+  [3, 8],
+  [4, 16],
+  [7, 3]
+]);
+const quoteSortNames = new Map([
+  [0, "letter"],
+  [1, "word"],
+  [2, "short-term"],
+  [3, "binary"],
+  [4, "uint"],
+  [5, "int"],
+  [6, "float"]
+]);
+
 export const LEGACY_NUMERIC_PLUS_WORDS = Object.freeze({
   head: 0x0149,
   instrumentalCase: 0x287e,
@@ -32,16 +58,16 @@ const quoteDescriptorList = [
   {
     word: LETTER_QUOTE_WORD,
     family: "letter",
-    payloadWords: null,
+    payloadWords: 1,
     valueType: "letter",
-    supported: false
+    supported: true
   },
   {
     word: PARAGRAPH_LETTER_QUOTE_WORD,
     family: "paragraph-letter",
     payloadWords: null,
     valueType: "paragraph-letter",
-    supported: false
+    supported: true
   }
 ];
 
@@ -119,6 +145,46 @@ export function decodeQuoteWord(word) {
   return { ...descriptor };
 }
 
+export function decodeQuoteHeader(word) {
+  validateWord(word);
+  if ((word & 0x001f) !== QUOTE_DENOTE) {
+    throw quoteError("not-quote", `word ${wordKey(word)} is not a quote header`, { word });
+  }
+
+  const scalarThick = (word & SCALAR_THICK_MASK) >> 11;
+  const vectorThick = (word & VECTOR_THICK_MASK) >> 8;
+  const sort = (word & SORT_DENOTE_MASK) >> 13;
+  const scalarBytes = scalarByteWidths[scalarThick] ?? null;
+  const vectorWords = vectorWordCounts.get(vectorThick) ?? null;
+
+  return {
+    word,
+    quoteDenote: word & 0x001f,
+    region: (word & NAME_LITERAL_MASK) === 0 ? "literal" : "name",
+    pointed: (word & POINTED_MASK) !== 0,
+    sequence: (word & SEQUENCE_MASK) !== 0,
+    vectorThick,
+    scalarThick,
+    sort,
+    sortName: quoteSortNames.get(sort) ?? null,
+    scalarBytes,
+    vectorWords,
+    explicitVectorLength: vectorThick === 6
+  };
+}
+
+function unsignedValue(payload, scalarBytes) {
+  const value = payload.reduce(
+    (value, word, index) => value + (BigInt(word) << BigInt(index * 16)),
+    0n
+  );
+  return scalarBytes <= 4 ? Number(value) : value;
+}
+
+function textValue(payload) {
+  return String.fromCharCode(...payload);
+}
+
 export function decodeQuote(words, offset = 0) {
   const values = normalizeWords(words);
   if (!Number.isInteger(offset) || offset < 0 || offset >= values.length) {
@@ -132,20 +198,50 @@ export function decodeQuote(words, offset = 0) {
       family: descriptor.family
     });
   }
-  const end = offset + 1 + descriptor.payloadWords;
-  if (end > values.length) {
-    throw quoteError("truncated-quote", `${descriptor.family} quote payload is truncated`, {
-      offset,
-      requiredWords: descriptor.payloadWords,
-      availableWords: values.length - offset - 1
+  const header = decodeQuoteHeader(values[offset]);
+  if (header.scalarBytes === null || header.vectorThick === 5) {
+    throw quoteError("unsupported-quote", `${descriptor.family} quote has an unsupported width`, {
+      word: values[offset],
+      scalarThick: header.scalarThick,
+      vectorThick: header.vectorThick
     });
   }
 
-  const payload = values.slice(offset + 1, end);
+  let payloadOffset = offset + 1;
+  let payloadWords = descriptor.payloadWords;
+  let lengthWord;
+  if (header.explicitVectorLength) {
+    if (payloadOffset >= values.length) {
+      throw quoteError("truncated-quote", `${descriptor.family} quote is missing its vector length`, {
+        offset
+      });
+    }
+    lengthWord = values[payloadOffset];
+    payloadOffset += 1;
+    payloadWords = lengthWord;
+  }
+  const end = payloadOffset + payloadWords;
+  if (end > values.length) {
+    throw quoteError("truncated-quote", `${descriptor.family} quote payload is truncated`, {
+      offset,
+      requiredWords: payloadWords,
+      availableWords: values.length - payloadOffset
+    });
+  }
+
+  const payload = values.slice(payloadOffset, end);
+  let value = payload[0];
+  if (descriptor.family === "letter" || descriptor.family === "paragraph-letter") {
+    value = textValue(payload);
+  } else if (descriptor.family === "number" && header.scalarBytes > 2) {
+    value = unsignedValue(payload, header.scalarBytes);
+  }
   return {
     ...descriptor,
+    payloadWords,
     payload,
-    value: payload[0],
+    value,
+    lengthWord,
     nextOffset: end
   };
 }
