@@ -6,6 +6,14 @@ import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
 import { loadAnchorWordForms } from "./translation/anchor_words.mjs";
 import { normalizeAnchorSentence, applyTemplatePairs } from "./translation/helpers.mjs";
 import {
+  analyzeDefaultEnglishSentence,
+  resolveEnglishSentence
+} from "./translation/english_sentence.mjs";
+import {
+  createDefaultQueuedMindEnglishSentenceVerifier,
+  verifyEnglishSentenceCandidates
+} from "./translation/english_sentence_verification.mjs";
+import {
   loadEnglishTranslationPairs,
   loadRussianTranslationPairs,
   loadFrenchTranslationPairs,
@@ -19,6 +27,21 @@ import {
   loadInterlinguaTranslationTemplates,
   loadHindiTranslationTemplates
 } from "./translation/pairs.mjs";
+
+let englishSentenceVerifierPromise = null;
+
+async function resolveDefaultEnglishSentence(source) {
+  const analysis = await analyzeDefaultEnglishSentence(source);
+  if (analysis.status === "resolved" || analysis.candidates.length === 0) return analysis;
+  if (!englishSentenceVerifierPromise) {
+    englishSentenceVerifierPromise = createDefaultQueuedMindEnglishSentenceVerifier();
+  }
+  const invoke = await englishSentenceVerifierPromise;
+  return resolveEnglishSentence(source, {
+    analyze: async () => analysis,
+    verify: (request) => verifyEnglishSentenceCandidates({ ...request, invoke })
+  });
+}
 
 export async function translation_from_text_to_name_text(sentence) {
   const sourceName = sentence?.ob?.name ?? sentence?.from?.name;
@@ -45,26 +68,35 @@ export async function translation_from_text_to_name_text(sentence) {
     } catch {
       anchorForms = null;
     }
-    sentences = sourceText
+    const sourceLines = sourceText
       .replaceAll("\\n", "\n")
       .split("\n")
       .map(l => l.trim())
-      .filter(Boolean)
-      .flatMap((line) => {
-        const useReverse = sourceAdapter.name !== "russian"
-          && sourceAdapter.name !== "chinese"
-          && sourceAdapter.name !== "interlingua"
-          && sourceAdapter.name !== "hindi"
-          && sourceAdapter.name !== "javascript"
-          && sourceAdapter.name !== "whisper-english";
-        const matched = useReverse ? matchGlossToPyash(line, { language: sourceAdapter.name }) : null;
-        if (matched) {
-          const program = buildProgram(matched);
-          return program.sentences.map((sentence) => normalizeAnchorSentence(sentence, anchorForms));
-        }
-        const parsed = sourceAdapter.toPyash(line);
-        return parsed ? [normalizeAnchorSentence(parsed, anchorForms)] : [];
-      });
+      .filter(Boolean);
+    sentences = [];
+    for (const line of sourceLines) {
+      const useReverse = sourceAdapter.name !== "russian"
+        && sourceAdapter.name !== "chinese"
+        && sourceAdapter.name !== "interlingua"
+        && sourceAdapter.name !== "hindi"
+        && sourceAdapter.name !== "javascript"
+        && sourceAdapter.name !== "whisper-english";
+      const matched = useReverse ? matchGlossToPyash(line, { language: sourceAdapter.name }) : null;
+      if (matched) {
+        const program = buildProgram(matched);
+        sentences.push(...program.sentences.map((sentence) => normalizeAnchorSentence(sentence, anchorForms)));
+        continue;
+      }
+      const parsed = sourceAdapter.toPyash(line);
+      if (parsed) {
+        sentences.push(normalizeAnchorSentence(parsed, anchorForms));
+        continue;
+      }
+      if (sourceAdapter.name === "english") {
+        const analyzed = await resolveDefaultEnglishSentence(line);
+        if (analyzed.sentence) sentences.push(analyzed.sentence);
+      }
+    }
     translation = sentences
       .map(s => sentenceToPyash(s) ?? JSON.stringify(s))
       .join("\n");

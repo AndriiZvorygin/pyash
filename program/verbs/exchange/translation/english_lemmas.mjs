@@ -8,6 +8,15 @@ export const ENGLISH_LEMMA_NAME = "translation_english30k_lemmas";
 
 const ACCEPTED_STATUSES = new Set(["accepted-deterministic", "accepted-curated", "accepted-llm", "repaired-llm"]);
 const MAPPING_KINDS = new Set(["irregular", "inflectional", "anchor"]);
+const MORPHOLOGY_KINDS = new Set([
+  "finite-past",
+  "finite-present",
+  "progressive",
+  "participle",
+  "perfective",
+  "completive"
+]);
+const MORPHOLOGY_CERTAINTIES = new Set(["deterministic", "contextual"]);
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -75,6 +84,7 @@ function normalizeEntry(payload, surface, index) {
   if (payload.rule !== undefined && (typeof payload.rule !== "string" || !payload.rule.trim())) {
     throw invalid("English lemma row rule must be text", { index, surface });
   }
+  const morphology = normalizeMorphology(payload.morphology, normalizedSurface, index);
   return {
     surface: normalizedSurface,
     lemma,
@@ -83,7 +93,41 @@ function normalizeEntry(payload, surface, index) {
     status,
     rule: payload.rule?.trim() ?? "",
     evidence: payload.evidence.trim(),
+    ...(morphology ? { morphology } : {}),
     ...(Number.isInteger(payload.rank) ? { rank: payload.rank } : {})
+  };
+}
+
+function normalizeMorphology(payload, surface, index) {
+  if (payload === undefined) return null;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw invalid("English lemma morphology must be an object", { index, surface });
+  }
+  if (!MORPHOLOGY_KINDS.has(payload.kind)) {
+    throw invalid("English lemma morphology kind is unsupported", { index, surface, kind: payload.kind });
+  }
+  const markerNames = Array.isArray(payload.markerNames)
+    ? payload.markerNames.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
+    : [];
+  const markerSequence = Array.isArray(payload.markerSequence)
+    ? payload.markerSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
+    : [];
+  if (markerNames.length === 0 || markerNames.length !== markerSequence.length) {
+    throw invalid("English lemma morphology requires paired marker names and sequence", { index, surface });
+  }
+  const certainty = String(payload.certainty ?? "deterministic").trim().toLowerCase();
+  if (!MORPHOLOGY_CERTAINTIES.has(certainty)) {
+    throw invalid("English lemma morphology certainty is unsupported", { index, surface, certainty });
+  }
+  if (typeof payload.evidence !== "string" || !payload.evidence.trim()) {
+    throw invalid("English lemma morphology requires evidence", { index, surface });
+  }
+  return {
+    kind: payload.kind,
+    markerNames,
+    markerSequence,
+    certainty,
+    evidence: payload.evidence.trim()
   };
 }
 
@@ -209,6 +253,13 @@ function addExplicitRows(lookup, entries, atomicLookup, aliases) {
       status: entry.status,
       rule: entry.rule,
       evidence: entry.evidence,
+      ...(entry.morphology ? {
+        morphology: {
+          ...entry.morphology,
+          markerNames: [...entry.morphology.markerNames],
+          markerSequence: [...entry.morphology.markerSequence]
+        }
+      } : {}),
       ...(entry.rank === undefined ? {} : { rank: entry.rank })
     };
     for (const variant of englishLemmaLookupVariants(entry.surface)) lookup.set(variant, row);
@@ -325,6 +376,7 @@ export function renderEnglishLemmaCatalogPya({ source, entries }, {
         kind: entry.kind,
         status: entry.status ?? "accepted-deterministic",
         ...(entry.rule ? { rule: entry.rule } : {}),
+        ...(entry.morphology ? { morphology: entry.morphology } : {}),
         evidence: entry.evidence ?? ""
       }))} ya`),
     "prah"

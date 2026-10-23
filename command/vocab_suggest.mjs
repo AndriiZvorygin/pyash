@@ -401,6 +401,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const dictionaryMatches = new Map();
   const lemmaMatches = new Map();
   const grammarMatches = new Map();
+  const morphologyMatches = new Map();
   const okTextTokens = new Set();
   const files = [];
   for (const root of roots) {
@@ -444,7 +445,9 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       }
       const ranked = await findEnglish30kCoverage(token);
       if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
-        if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
+        if (ranked.morphology?.markerSequence?.length) morphologyMatches.set(token, ranked);
+        if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
+        else if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
         else if (ranked.coverageType === "grammar") grammarMatches.set(token, ranked);
         continue;
       }
@@ -475,6 +478,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
     const ranked = await findEnglish30kCoverage(token);
     if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
+      if (ranked.morphology?.markerSequence?.length) morphologyMatches.set(token, ranked);
       if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
       else if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
       else if (ranked.coverageType === "grammar") grammarMatches.set(token, ranked);
@@ -549,6 +553,13 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
 
   for (const [token, ranked] of [...lemmaMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     report(`${token}: lemma ${ranked.lemma} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+  }
+
+  for (const [token, ranked] of [...morphologyMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    const morphology = ranked.morphology;
+    const markers = morphology.markerNames.join(" + ");
+    const sequence = [...ranked.pyashSequence, ...morphology.markerSequence].join(" ");
+    report(`${token}: morphology ${ranked.lemma} + ${markers} -> ${sequence} (${morphology.certainty}; English30k rank ${ranked.rank})`);
   }
 
   for (const [token, ranked] of [...dictionaryMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
