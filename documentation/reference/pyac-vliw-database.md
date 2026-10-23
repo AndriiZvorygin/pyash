@@ -111,8 +111,9 @@ executable or explicitly unsupported catalog rows. Query and replay reopen
 both files and verify the catalog-to-pack hash before returning results.
 
 The committed starter corpus is
-`examples/pyash/pyac-corpus.pya`. It contains executable numeric-plus rows and
-unsupported rows so the database keeps both compatibility outcomes visible.
+`examples/pyash/pyac-corpus.pya`. It contains executable numeric-plus and
+typed-literal rows plus unsupported rows so the database keeps both
+compatibility outcomes visible.
 
 ## 5. Translation and compound words
 
