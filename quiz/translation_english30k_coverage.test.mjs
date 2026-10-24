@@ -376,6 +376,8 @@ test("lwonprom-derived English grammar keeps particles separate from lexical roo
   assert.deepEqual(grammar.resolve("but")?.pyashSequence, ["pyuh"]);
   assert.deepEqual(grammar.resolve("plural")?.pyashSequence, ["pu"]);
   assert.deepEqual(grammar.resolve("possessive")?.pyashSequence, ["ye"]);
+  assert.deepEqual(grammar.resolve("genitive")?.pyashSequence, ["ti"]);
+  assert.deepEqual(grammar.resolve("of")?.pyashSequence, ["ti"]);
   assert.deepEqual(grammar.resolve("not")?.pyashSequence, ["no"]);
 
   assert.equal(pyashWords.find((entry) => entry.en === "me")?.pya, "hman");

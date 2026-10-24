@@ -13,6 +13,7 @@ const SUBJECT_GRAMMAR_KINDS = new Set(["pronoun", "possessive-pronoun"]);
 const NEGATION_GRAMMAR_KIND = "negation";
 const PRESENT_TENSE_MARKER = "ra";
 const PRESENT_TENSE_NAME = "present_tense_";
+const NOMINATIVE_MARKER = "na";
 
 let defaultResourcesPromise = null;
 
@@ -189,6 +190,16 @@ function makeSubjectPhrase(records, verbIndex) {
   };
 }
 
+function addNominativeCase(subject) {
+  if (!subject?.pyashSequence?.length || subject.pyashSequence.at(-1) === NOMINATIVE_MARKER) {
+    return subject;
+  }
+  return {
+    ...subject,
+    pyashSequence: [...subject.pyashSequence, NOMINATIVE_MARKER]
+  };
+}
+
 function hasNegation(records, verbIndex) {
   return records.some((record, index) => index > verbIndex && record.grammar?.kind === NEGATION_GRAMMAR_KIND);
 }
@@ -332,7 +343,7 @@ export function analyzeEnglishSentence(source, {
     subjectBoundary = progressiveIndex - 1;
     while (subjectBoundary >= 0 && records[subjectBoundary]?.grammar?.kind === NEGATION_GRAMMAR_KIND) subjectBoundary -= 1;
   }
-  const subject = makeSubjectPhrase(records, subjectBoundary);
+  const subject = addNominativeCase(makeSubjectPhrase(records, subjectBoundary));
   const subjectRecords = subjectBoundary > 0 ? records.slice(0, subjectBoundary) : [];
   const subjectRecordsReady = subjectRecords.every((record) => record.pyashSequence.length > 0);
   const subjectReady = subject.pyashSequence.length > 0

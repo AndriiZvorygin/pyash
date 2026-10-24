@@ -84,8 +84,9 @@ test("English translation uses the shared resources and retains unresolved vocab
   });
 
   assert.deepEqual(result.counts, { resolved: 1, provisional: 1, unresolved: 0 });
-  assert.equal(result.records[0].pyash, "su name nyah ye hcas pu be pfin ki ya");
-  assert.equal(result.records[0].pyashSurface, "nyahye hcaspu pfinkiya");
+  assert.equal(result.records[0].pyash, "su name nyah ye hcas pu na be pfin ki ya");
+  assert.equal(result.records[0].pyac, "nyahye hcaspuna pfinkiya");
+  assert.equal(result.records[0].pyashSurface, "nyahye hcaspuna pfinkiya");
   assert.equal(result.records[0].canonical, "our houses walked.");
   assert.equal(result.records[1].status, "provisional");
   assert.equal(result.resourceHashes.english30k.length, 64);
@@ -96,6 +97,17 @@ test("English translation uses the shared resources and retains unresolved vocab
   assert.equal(result.vocabularyCandidates[0].surface, "blorf");
   assert.equal(result.vocabularyCandidates[0].status, "queued");
   assert.equal(result.vocabularyCandidates[0].sourceRecordId, result.records[1].id);
+});
+
+test("English subject nominative lowers to the fused Pyac form", async () => {
+  const result = await translateDocument({
+    language: "english",
+    text: "I walked our houses."
+  });
+  assert.equal(result.records[0].canonical, "I walked our houses.");
+  assert.equal(result.records[0].pyash, "su name mi na ob name nyah ye hcas pu be pfin ki ya");
+  assert.equal(result.records[0].pyac, "mina nyahye hcaspu pfinkiya");
+  assert.equal(result.records[0].pyashSurface, "mina nyahye hcaspu pfinkiya");
 });
 
 test("sentence verification can resolve a contextual candidate through the pipeline", async () => {
@@ -116,7 +128,7 @@ test("sentence verification can resolve a contextual candidate through the pipel
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].context, ["I walking."]);
   assert.equal(result.records[0].status, "resolved");
-  assert.equal(result.records[0].pyash, "su name mi be pfin pfih ya");
+  assert.equal(result.records[0].pyash, "su name mi na be pfin pfih ya");
 });
 
 test("registered structured adapters share the document pipeline", async () => {

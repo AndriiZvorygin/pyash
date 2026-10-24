@@ -40,13 +40,15 @@ function ending(sequence, ...markers) {
 
 function clause(index, components) {
   const [locator, source] = CLAUSE_SOURCES[index];
+  const pyac = renderPyashSurface(components.join(" "));
   return {
     id: `lord-prayer-${locator.toLowerCase().replace(/[^a-z0-9]+/gu, "-")}`,
     locator,
     canonical: source,
     source,
     components: [...components],
-    pyash: renderPyashSurface(components.join(" "))
+    pyac,
+    pyash: pyac
   };
 }
 
