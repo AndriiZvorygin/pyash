@@ -7,6 +7,7 @@ import {
   applyEnglishSentenceCandidate,
   resolveEnglishSentence
 } from "../program/verbs/exchange/translation/english_sentence.mjs";
+import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
 import {
   buildEnglishSentenceVerificationPrompt,
   createQueuedMindEnglishSentenceVerifier,
@@ -49,7 +50,7 @@ function fixtureResolver() {
 test("sentence analysis selects simple past and emits the root plus tense particle", () => {
   const result = analyzeEnglishSentence("I walked", { resolveWord: fixtureResolver() });
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name mi be pfin ki ya");
+  assert.equal(result.pyash, "su name mi na be pfin ki ya");
   assert.deepEqual(result.verbPhrase.pyashSequence, ["pfin", "ki"]);
   assert.deepEqual(result.verbPhrase.markerNames, ["past_tense_"]);
 });
@@ -73,27 +74,43 @@ test("sentence context selects progressive aspect plus present tense", () => {
     }]
   });
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name mi be pfin pfih ra ya");
+  assert.equal(result.pyash, "su name mi na be pfin pfih ra ya");
   assert.deepEqual(result.verbPhrase.markerNames, ["progressive_aspect_", "present_tense_"]);
 });
 
 test("sentence subjects compose possessive noun phrases and regular plurals", async () => {
   const result = await analyzeDefaultEnglishSentence("our houses walked");
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name nyah ye hcas pu be pfin ki ya");
-  assert.deepEqual(result.subject.pyashSequence, ["nyah", "ye", "hcas", "pu"]);
+  assert.equal(result.pyash, "su name nyah ye hcas pu na be pfin ki ya");
+  assert.deepEqual(result.subject.pyashSequence, ["nyah", "ye", "hcas", "pu", "na"]);
 });
 
 test("sentence objects preserve possessives, plural markers, and conjunction links", async () => {
   const result = await analyzeDefaultEnglishSentence("I walked our houses and your names");
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name mi ob name nyah ye hcas pu wa sa ye hnim pu be pfin ki ya");
+  assert.equal(result.pyash, "su name mi na ob name nyah ye hcas pu wa sa ye hnim pu be pfin ki ya");
+});
+
+test("English of-relations use genitive ti while possessive determiners keep ye", async () => {
+  const grammar = await loadEnglishGrammarCatalog();
+  const grammarIndex = buildEnglishGrammarIndex({ catalogEntries: grammar.entries });
+  const base = fixtureResolver();
+  const rows = new Map([
+    ["house", { coverageType: "lemma", pyashSequence: ["hcas"] }],
+    ["god", { coverageType: "lemma", pyashSequence: ["tlan"] }]
+  ]);
+  const result = analyzeEnglishSentence("I walked house of God", {
+    grammarIndex,
+    resolveWord: (word) => rows.get(word) ?? base(word)
+  });
+  assert.equal(result.status, "resolved");
+  assert.equal(result.pyash, "su name mi na ob name hcas ti tlan be pfin ki ya");
 });
 
 test("sentence grammar maps thy and negation while leaving the lexical predicate contextual", async () => {
   const result = await analyzeDefaultEnglishSentence("thy names lead us not into temptation");
   assert.equal(result.status, "review");
-  assert.deepEqual(result.subject.pyashSequence, ["sa", "ye", "hnim", "pu"]);
+  assert.deepEqual(result.subject.pyashSequence, ["sa", "ye", "hnim", "pu", "na"]);
   assert.deepEqual(result.verbPhrase.pyashSequence, ["tyip", "ra", "no"]);
   assert.equal(result.unresolved.length, 0);
   const resolved = await resolveEnglishSentence("thy names lead us not into temptation", {
@@ -101,13 +118,13 @@ test("sentence grammar maps thy and negation while leaving the lexical predicate
     verify: async ({ candidates }) => ({ verdict: "accept", candidateId: candidates[0].id })
   });
   assert.equal(resolved.status, "resolved");
-  assert.equal(resolved.pyash, "su name sa ye hnim pu ob name nyah into hyoc be tyip ra no ya");
+  assert.equal(resolved.pyash, "su name sa ye hnim pu na ob name nyah into hyoc be tyip ra no ya");
 });
 
 test("imperative Lord's Prayer clause supplies the second-person subject", async () => {
   const result = await analyzeDefaultEnglishSentence("lead us not into temptation");
   assert.equal(result.status, "review");
-  assert.deepEqual(result.subject.pyashSequence, ["sa"]);
+  assert.deepEqual(result.subject.pyashSequence, ["sa", "na"]);
   assert.equal(result.verbPhrase.phrase, "lead");
   assert.equal(result.unresolved.length, 0);
 });
@@ -172,7 +189,7 @@ test("sentence resolution applies a Housekeeper-selected contextual candidate", 
     verify: async ({ candidates }) => ({ verdict: "accept", candidateId: candidates[0].id })
   });
   assert.equal(resolved.status, "resolved");
-  assert.equal(resolved.pyash, "su name mi be pfin pfih ya");
+  assert.equal(resolved.pyash, "su name mi na be pfin pfih ya");
 });
 
 test("queued sentence verifier uses the existing future GPU duty and await path", async () => {

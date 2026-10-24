@@ -79,6 +79,11 @@ export function renderPyashSentenceSurface(sentence) {
   return renderPyashSurface(parts.join(" "));
 }
 
+// Pyac is the VLIW-compatible word form. Keep the older export names as
+// compatibility aliases for callers that adopted the first pipeline pass.
+export const renderPyacSurface = renderPyashSurface;
+export const renderPyacSentenceSurface = renderPyashSentenceSurface;
+
 export const PYASH_SURFACE_FUSED_ENDINGS = Object.freeze([...FUSED_ENDINGS]);
 export const PYASH_SURFACE_SENTENCE_PARTICLES = Object.freeze([...SENTENCE_PARTICLES]);
 export const PYASH_SURFACE_FUSED_MOODS = Object.freeze([...FUSED_MOODS]);

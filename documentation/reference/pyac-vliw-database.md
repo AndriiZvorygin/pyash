@@ -1,4 +1,4 @@
-# PyAC VLIW codelet database
+# Pyac VLIW codelet database
 
 Status: design and reference implementation contract. This document defines
 the searchable catalog and compiled VLIW container built on the sentence-first
@@ -6,8 +6,13 @@ lowering contract in `documentation/specifications/27-pyash-vliw-isa.md`.
 
 ## 1. Purpose and boundary
 
-Pyash sentences and paragraphs remain the canonical semantic source. A PyAC
+Pyash sentences and paragraphs remain the canonical semantic source. A Pyac
 database stores two projections of that source:
+
+In the language terminology, Pyash is the English-oriented form, such as
+`su me be happy ya`. Pyac is the VLIW-compatible word form, such as
+`mina nyahye hcaspu pfinkiya`; Pyac is a language form, while `.pyac` names
+the corresponding packed artifact.
 
 ```text
 canonical Pyash `.pya` sentences
@@ -424,11 +429,12 @@ contextual predicate candidates for Housekeeper review.
 
 Resolved translation records carry three useful projections: `canonical` keeps
 the English source/gloss, `pyash` preserves the structural `su`/`ob`/`be` form
-for replay and PyAC lowering, and `pyashSurface` renders the spoken Pyash word
-order. The surface form fuses noun, adjective, case, voice, tense, aspect, and
-final mood words into complete phrases. For example, `I walked our houses`
-has the canonical English form `I walked our houses.` and the spoken Pyash
-surface `mi nyahye hcaspu pfinkiya`. The reusable surface renderer is
+for replay, and `pyac` renders the VLIW-compatible word order. The
+`pyashSurface` field remains a compatibility alias for `pyac`. The Pyac form
+fuses noun, adjective, case, voice, tense, aspect, and final mood words into
+complete phrases. For example, `I walked our houses` has the canonical English
+form `I walked our houses.` and the Pyac form `mina nyahye hcaspu pfinkiya`.
+The reusable surface renderer is
 `program/verbs/exchange/translation/pyash_surface.mjs`. The bounded Greek
 Lord's Prayer pilot uses it through
 `program/verbs/exchange/translation/lord_prayer_translation.mjs`; its daily

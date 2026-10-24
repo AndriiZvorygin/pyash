@@ -67,6 +67,6 @@ test("English sentence translation lowers tense and aspect particles after lexic
   assert.equal(out.sentences.length, 2);
   assert.equal(out.sentences[0].be, "pfin ki");
   assert.equal(out.sentences[1].be, "pfin pfih ra");
-  assert.match(out.text, /su name mi be pfin ki ya/u);
-  assert.match(out.text, /su name mi be pfin pfih ra ya/u);
+  assert.match(out.text, /su name mi na be pfin ki ya/u);
+  assert.match(out.text, /su name mi na be pfin pfih ra ya/u);
 });

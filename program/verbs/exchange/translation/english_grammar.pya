@@ -21,4 +21,5 @@ su text "never" ob text "{\"surface\":\"never\",\"kind\":\"negation\",\"componen
 su text "plural" ob text "{\"surface\":\"plural\",\"kind\":\"number-marker\",\"components\":[\"plural_number_\"],\"pyashSequence\":[\"pu\"],\"position\":\"suffix\",\"evidence\":\"lwonprom noun phrase grammar uses plural-number as the noun suffix; current grammar marker is pu\"}" ya
 su text "possessive" ob text "{\"surface\":\"possessive\",\"kind\":\"case-marker\",\"components\":[\"possessive_marker_\"],\"pyashSequence\":[\"ye\"],\"position\":\"suffix\",\"evidence\":\"current Pyash grammar marker possessive_marker_ is ye\"}" ya
 su text "genitive" ob text "{\"surface\":\"genitive\",\"kind\":\"case-marker\",\"components\":[\"genitive_case_\"],\"pyashSequence\":[\"ti\"],\"position\":\"link\",\"evidence\":\"lwonprom grammaticalCase.tex assigns genitive case to ti\"}" ya
+su text "of" ob text "{\"surface\":\"of\",\"kind\":\"case-marker\",\"components\":[\"genitive_case_\"],\"pyashSequence\":[\"ti\"],\"position\":\"link\",\"evidence\":\"English of-phrases use the lwonprom genitive case marker ti unless the source explicitly marks possession\"}" ya
 prah
