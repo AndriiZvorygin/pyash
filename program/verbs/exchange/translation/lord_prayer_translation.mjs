@@ -1,4 +1,4 @@
-import { renderPyashSurface } from "./pyash_surface.mjs";
+import { renderPyacSurface } from "./pyash_surface.mjs";
 
 export const LORD_PRAYER_TRANSLATION_FORMAT = "lord-prayer-translation-v1";
 
@@ -40,15 +40,17 @@ function ending(sequence, ...markers) {
 
 function clause(index, components) {
   const [locator, source] = CLAUSE_SOURCES[index];
-  const pyac = renderPyashSurface(components.join(" "));
+  const pyash = components.join(" ");
+  const pyac = renderPyacSurface(pyash);
   return {
     id: `lord-prayer-${locator.toLowerCase().replace(/[^a-z0-9]+/gu, "-")}`,
     locator,
     canonical: source,
     source,
     components: [...components],
+    pyash,
     pyac,
-    pyash: pyac
+    pyashSurface: pyac
   };
 }
 
