@@ -27,7 +27,7 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
   const prayerOpening = decodePyacSentence("nyahye hpapwu cyakte saye hnimna swutpyohjwih");
   assert.equal(
     prayerOpening.englishPyash,
-    "O our dad in heaven, su your name be holy jwih"
+    "O our dad in heaven, su your name be holy may"
   );
   assert.equal(prayerOpening.english, "Our dad in heaven, may your name be holy.");
 

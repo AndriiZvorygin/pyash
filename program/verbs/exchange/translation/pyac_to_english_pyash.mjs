@@ -30,6 +30,9 @@ for (const entry of pyashWords) {
 }
 
 const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
+const ENGLISH_MOOD_GLOSSES = new Map([
+  ["jwih", "may"]
+]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],
   ["te", "in"],
@@ -350,7 +353,7 @@ function decodedPart(token, glosses) {
 
 function renderEnglishPyash(sentence, tokens, decoded, glosses) {
   const parts = phraseParts(decoded);
-  const mood = sentence.mood === "ya" ? "ya" : sentence.mood;
+  const mood = ENGLISH_MOOD_GLOSSES.get(sentence.mood) ?? sentence.mood;
   if (parts.phrases.length === 0) {
     const standalone = renderPhrase(parts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true });
     return [standalone, mood].filter(Boolean).join(" ");
