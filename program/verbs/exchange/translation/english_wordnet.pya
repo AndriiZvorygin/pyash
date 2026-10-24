@@ -1,0 +1,6 @@
+su name translation_english_wordnet be map def
+su text "format" ob text "english-wordnet-core-v1" ya
+su text "source" ob text "/home/htaf/pyachso2n/wordnet-core.txt" ya
+su text "source-hash" ob text "857797681af15401ebba799f0797ed6e8f463ffcf5ce55d15d2a92ff6e08c90d" ya
+su text "mode" ob text "read-only semantic evidence" ya
+prah

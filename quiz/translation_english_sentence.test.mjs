@@ -9,6 +9,7 @@ import {
   resolveEnglishSentence
 } from "../program/verbs/exchange/translation/english_sentence.mjs";
 import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
+import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
 import {
   buildEnglishSentenceVerificationPrompt,
   createQueuedMindEnglishSentenceVerifier,
@@ -52,6 +53,7 @@ test("English sentence resources expose a staged source index before full covera
   const resources = await loadEnglishSentenceResources();
   assert.equal(resources.coverage, undefined);
   assert.equal(resources.source.cutoff, 30000);
+  assert.ok(resources.wordnet.rows.length > 4000);
   assert.equal(resources.sourceByVariant.get("walked").word, "walked");
   assert.deepEqual(resources.grammarIndex.resolve("our").pyashSequence, ["nyah", "ye"]);
 });
@@ -195,6 +197,102 @@ test("English compositional relations lower to phrase-final case markers", async
   const from = await analyzeDefaultEnglishSentence("I walked from houses");
   assert.equal(from.status, "resolved");
   assert.equal(from.pyash, "su name mi na ob name hcas pu so be pfin ki ya");
+});
+
+test("deterministic plural recovery uses an existing root and retains WordNet sense evidence", async () => {
+  const result = await analyzeDefaultEnglishSentence("there are reactions");
+  const reaction = result.tokens.find((token) => token.surface === "reactions");
+  assert.deepEqual(reaction.pyashSequence, ["ryak", "pu"]);
+  assert.equal(reaction.coverageType, "atomic");
+  assert.deepEqual(reaction.wordnet.partsOfSpeech, ["n"]);
+  assert.equal(reaction.wordnet.senses.length, 3);
+});
+
+test("sentence context distinguishes distal that from a relative-clause that", async () => {
+  const distal = await analyzeDefaultEnglishSentence("that house walked");
+  assert.deepEqual(distal.tokens.find((token) => token.surface === "that").pyashSequence, ["tsuh"]);
+  assert.equal(distal.tokens.find((token) => token.surface === "that").grammar.kind, "pronoun");
+
+  const relative = await analyzeDefaultEnglishSentence("brain that can be triggered");
+  const that = relative.tokens.find((token) => token.surface === "that");
+  assert.deepEqual(that.pyashSequence, ["la"]);
+  assert.equal(that.grammar.kind, "dependent-clause");
+  assert.match(that.evidence, /relative-clause/u);
+  assert.equal(relative.tokens.find((token) => token.surface === "be").construction.kind, "passive-auxiliary");
+  assert.equal(relative.tokens.find((token) => token.surface === "be").copula, true);
+  assert.deepEqual(relative.unresolved, ["brain"]);
+});
+
+test("WordNet evidence yields bounded synonym candidates without auto-selecting a sense", () => {
+  const wordnet = buildEnglishWordNetIndex({
+    rows: [{
+      id: "v:fond%2:37:04::",
+      pos: "v",
+      synset: "fond%2:37:04::",
+      senseKey: "fond%2:37:04::",
+      lemma: "florp",
+      gloss: "be fond of",
+    }, {
+      id: "v:fond%2:37:04::like",
+      pos: "v",
+      synset: "fond%2:37:04::",
+      senseKey: "fond%2:37:04::",
+      lemma: "like",
+      gloss: "be fond of",
+    }, {
+      id: "v:fond%2:37:05::",
+      pos: "v",
+      synset: "fond%2:37:05::",
+      senseKey: "fond%2:37:05::",
+      lemma: "florp",
+      gloss: "be attached to",
+    }]
+  });
+  const result = analyzeEnglishSentence("I florp", {
+    wordnetIndex: wordnet,
+    resolveWord: (word) => word === "i"
+      ? { coverageType: "grammar", pyashSequence: ["mi"] }
+      : word === "like"
+        ? { coverageType: "atomic", pyashSequence: ["pyan"] }
+        : null
+  });
+  const token = result.tokens.find((candidate) => candidate.surface === "florp");
+  assert.equal(result.status, "review");
+  assert.equal(token.semanticCandidates.length, 1);
+  assert.deepEqual(token.semanticCandidates[0].pyashSequence, ["pyan"]);
+  assert.deepEqual(token.wordnet.partsOfSpeech, ["v"]);
+});
+
+test("WordNet auto-resolves only when every available sense agrees on one existing atom", () => {
+  const wordnet = buildEnglishWordNetIndex({
+    rows: [{
+      id: "v:fond%2:37:04::",
+      pos: "v",
+      synset: "fond%2:37:04::",
+      senseKey: "fond%2:37:04::",
+      lemma: "glorp",
+      gloss: "be fond of"
+    }, {
+      id: "v:fond%2:37:04::like",
+      pos: "v",
+      synset: "fond%2:37:04::",
+      senseKey: "fond%2:37:04::",
+      lemma: "like",
+      gloss: "be fond of"
+    }]
+  });
+  const result = analyzeEnglishSentence("I glorp", {
+    wordnetIndex: wordnet,
+    resolveWord: (word) => word === "i"
+      ? { coverageType: "grammar", pyashSequence: ["mi"] }
+      : word === "like"
+        ? { coverageType: "atomic", pyashSequence: ["pyan"] }
+        : null
+  });
+  const token = result.tokens.find((candidate) => candidate.surface === "glorp");
+  assert.equal(token.coverageType, "semantic-wordnet");
+  assert.deepEqual(token.pyashSequence, ["pyan"]);
+  assert.deepEqual(token.semanticCandidates, []);
 });
 
 test("sentence grammar maps thy and negation while leaving the lexical predicate contextual", async () => {

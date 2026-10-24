@@ -90,7 +90,13 @@ function cloneSequence(value) {
 }
 
 function tokenEvidence(token) {
-  return text(token?.evidence ?? token?.lemmaEvidence ?? token?.provenance);
+  return [
+    token?.evidence,
+    token?.lemmaEvidence,
+    token?.provenance,
+    token?.construction?.evidence,
+    token?.wordnet?.evidence
+  ].map(text).find(Boolean) ?? "";
 }
 
 function normalizeAnalysis(value, sourceText) {
@@ -130,11 +136,20 @@ function contextFor(segments, index, radius) {
 
 function vocabularyCandidates({ recordId, language, sourceText, context, analysis }) {
   const unresolvedTokens = analysis.tokens.length > 0
-    ? analysis.tokens.filter((token) => cloneSequence(token?.pyashSequence).length === 0)
+    ? analysis.tokens.filter((token) => (
+      cloneSequence(token?.pyashSequence).length === 0
+      && !token?.copula
+      && !token?.grammar
+    ))
     : [{ surface: sourceText, coverageType: "unresolved", evidence: analysis.reason ?? "" }];
   return unresolvedTokens.map((token, tokenIndex) => {
     const surface = text(token.surface ?? sourceText);
-    const candidateSequences = analysis.candidates
+    const candidateSequences = [
+      ...analysis.candidates.filter((candidate) => (
+        String(candidate?.phrase ?? "").toLowerCase().split(/\s+/u).includes(surface.toLowerCase())
+      )),
+      ...(Array.isArray(token?.semanticCandidates) ? token.semanticCandidates : [])
+    ]
       .map((candidate) => cloneSequence(candidate?.pyashSequence))
       .filter((sequence) => sequence.length > 0);
     return {
