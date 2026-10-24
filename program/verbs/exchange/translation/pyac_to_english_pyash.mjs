@@ -31,6 +31,7 @@ for (const entry of pyashWords) {
 
 const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
 const ENGLISH_MOOD_GLOSSES = new Map([
+  ["pcih", "do"],
   ["jwih", "may"]
 ]);
 const CASE_PREPOSITIONS = new Map([
@@ -353,7 +354,8 @@ function decodedPart(token, glosses) {
 
 function renderEnglishPyash(sentence, tokens, decoded, glosses) {
   const parts = phraseParts(decoded);
-  const mood = ENGLISH_MOOD_GLOSSES.get(sentence.mood) ?? sentence.mood;
+  const sourceMood = sentence.mood;
+  const mood = ENGLISH_MOOD_GLOSSES.get(sourceMood) ?? sourceMood;
   if (parts.phrases.length === 0) {
     const standalone = renderPhrase(parts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true });
     return [standalone, mood].filter(Boolean).join(" ");
@@ -363,7 +365,7 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
     && !parts.trailing.some((part) => part.kind === "root");
   const subject = nominalPredicate
     ? renderPhrase(parts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true })
-    : isImperative(mood) && !subjectPhrase
+    : isImperative(sourceMood) && !subjectPhrase
       ? "you"
       : renderPhrase(subjectPhrase.tokens.map((token) => decodedPart(token, glosses)), { subject: true });
   const vocativePhrases = parts.phrases.filter((phrase) => phrase.case === "wu");
