@@ -42,7 +42,10 @@ The command automatically submits one deduplicated vocabulary-review duty throug
 `vyah start future be gpu mind do` path. The returned handle and candidate queue state are written
 into the translation catalog. The translation catalog remains the evidence record. Only resolved
 canonical sentences are passed to Pyac lowering; unresolved vocabulary stays available for later
-catalog expansion. The queued LLM proposes review evidence and never edits the lexicon directly.
+catalog expansion. The queued LLM receives a bounded slice of `pyashWords.json` plus the grammar
+catalog, returns schema-constrained review evidence, and never edits the lexicon directly. A
+worker result is durable at the returned GPU handle; accepting it into the lexicon remains a
+separate evidence-backed catalog change.
 
 To regenerate the English pairs from `examples/pyash/*.pya`:
 
