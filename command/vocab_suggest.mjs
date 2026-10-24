@@ -9,9 +9,21 @@ import pyashWords from "../program/library/pyashWords.json" with { type: "json" 
 import { loadCoverage } from "./compound_coverage.mjs";
 import { renderPyacSurface } from "../program/verbs/exchange/translation/pyash_surface.mjs";
 import {
+  buildEnglishDictionaryAliases,
+  loadEnglishDictionaryBlacklist
+} from "../program/verbs/exchange/translation/english_dictionary_aliases.mjs";
+import {
+  buildEnglishLemmaIndex,
+  loadEnglishLemmaCatalog
+} from "../program/verbs/exchange/translation/english_lemmas.mjs";
+import { loadAnchorWordForms } from "../program/verbs/exchange/translation/anchor_words.mjs";
+import {
   loadDefaultEnglish30kCoverage,
+  loadEnglish30k,
+  english30kLookupVariants,
   lookupEnglish30kCoverage
 } from "../program/verbs/exchange/translation/english30k_coverage.mjs";
+import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
 import {
@@ -49,7 +61,13 @@ function parseArgs(args) {
 
 const checked = new Map();
 let acceptedCoveragePromise = null;
+let curatedAcceptedCoveragePromise = null;
 let english30kCoveragePromise = null;
+let english30kSourcePromise = null;
+let englishGrammarIndexPromise = null;
+let extendedEnglishResourcesPromise = null;
+let anchorWordFormsPromise = null;
+let fastAtomicIndex = null;
 
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
 const PYASH_QUOTED_START = "quoted.pyash.";
@@ -170,6 +188,19 @@ async function loadDefaultAcceptedCompounds() {
   return acceptedCoveragePromise;
 }
 
+async function loadDefaultCuratedAcceptedCompounds() {
+  if (!curatedAcceptedCoveragePromise) {
+    curatedAcceptedCoveragePromise = fs
+      .readFile(new URL("../program/verbs/exchange/translation/compound_coverage_curated.pya", import.meta.url), "utf8")
+      .then((source) => parseAcceptedCompoundRows(buildProgram(source)))
+      .catch((error) => {
+        if (error?.code === "ENOENT") return new Map();
+        throw error;
+      });
+  }
+  return curatedAcceptedCoveragePromise;
+}
+
 async function loadDefaultEnglish30kCoverageSafe() {
   if (!english30kCoveragePromise) {
     english30kCoveragePromise = loadDefaultAcceptedCompounds()
@@ -188,6 +219,248 @@ async function loadDefaultEnglish30kCoverageSafe() {
 async function findEnglish30kCoverage(token) {
   const coverage = await loadDefaultEnglish30kCoverageSafe();
   return coverage ? lookupEnglish30kCoverage(coverage, token) : null;
+}
+
+function buildFastAtomicIndex() {
+  if (fastAtomicIndex) return fastAtomicIndex;
+  fastAtomicIndex = new Map();
+  for (const entry of pyashWords) {
+    if (typeof entry?.en !== "string" || typeof entry?.pya !== "string") continue;
+    for (const variant of english30kLookupVariants(entry.en)) {
+      if (!fastAtomicIndex.has(variant)) fastAtomicIndex.set(variant, entry);
+    }
+  }
+  return fastAtomicIndex;
+}
+
+async function loadDefaultEnglish30kSourceSafe() {
+  if (!english30kSourcePromise) {
+    english30kSourcePromise = loadEnglish30k()
+      .then((source) => {
+        const byVariant = new Map();
+        for (const row of source.rows) {
+          for (const variant of english30kLookupVariants(row.normalizedWord)) {
+            if (!byVariant.has(variant)) byVariant.set(variant, row);
+          }
+        }
+        return { source, byVariant };
+      })
+      .catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+  }
+  return english30kSourcePromise;
+}
+
+async function loadDefaultEnglishGrammarIndexSafe() {
+  if (!englishGrammarIndexPromise) {
+    englishGrammarIndexPromise = loadEnglishGrammarCatalog()
+      .then((catalog) => buildEnglishGrammarIndex({ catalogEntries: catalog.entries }))
+      .catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+  }
+  return englishGrammarIndexPromise;
+}
+
+async function loadExtendedEnglishResourcesSafe() {
+  if (!extendedEnglishResourcesPromise) {
+    extendedEnglishResourcesPromise = Promise.all([
+      loadEnglishLemmaCatalog(),
+      loadEnglishDictionaryBlacklist()
+    ])
+      .then(([lemmaCatalog, dictionary]) => ({
+        lemmaIndex: buildEnglishLemmaIndex({
+          atomicEntries: pyashWords,
+          catalogEntries: lemmaCatalog.entries
+        }),
+        dictionaryAliases: buildEnglishDictionaryAliases({
+          dictionary,
+          atomicEntries: pyashWords
+        })
+      }))
+      .catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+  }
+  return extendedEnglishResourcesPromise;
+}
+
+async function loadDefaultAnchorWordFormsSafe() {
+  if (!anchorWordFormsPromise) {
+    anchorWordFormsPromise = loadAnchorWordForms()
+      .catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+  }
+  return anchorWordFormsPromise;
+}
+
+function sourceRowForToken(source, token) {
+  if (!source?.byVariant) return null;
+  return english30kLookupVariants(token)
+    .map((variant) => source.byVariant.get(variant))
+    .find(Boolean) ?? null;
+}
+
+function hasKnownAtomicSplit(token) {
+  const normalized = normalizeCompoundTarget(token);
+  if (!/^[a-z0-9]+$/u.test(normalized)) return false;
+  const atomic = buildFastAtomicIndex();
+  for (let split = 3; split <= normalized.length - 3; split += 1) {
+    const left = english30kLookupVariants(normalized.slice(0, split));
+    const right = english30kLookupVariants(normalized.slice(split));
+    if (left.some((variant) => atomic.has(variant)) && right.some((variant) => atomic.has(variant))) return true;
+  }
+  return false;
+}
+
+function mayNeedCompoundCoverage(token) {
+  const normalized = normalizeCompoundTarget(token);
+  return /[-_ ]/u.test(normalized) || hasKnownAtomicSplit(normalized);
+}
+
+function directDelimitedCompoundRow(token) {
+  const target = normalizeCompoundTarget(token);
+  const components = target.split(/[-_ ]+/u).filter(Boolean);
+  if (components.length < 2) return null;
+  const atomic = buildFastAtomicIndex();
+  const entries = components.map((component) => (
+    english30kLookupVariants(component)
+      .map((variant) => atomic.get(variant))
+      .find(Boolean) ?? null
+  ));
+  if (entries.some((entry) => !entry)) return null;
+  const pyash = entries.map((entry) => entry.pya);
+  return {
+    target,
+    components,
+    pyash,
+    status: "accepted-delimited",
+    identity: `${components.join("\u0001")}\u0000${pyash.join("\u0001")}`
+  };
+}
+
+function directRecordId(row) {
+  return `english30k-${String(row.rank).padStart(5, "0")}-${row.normalizedWord}`;
+}
+
+async function findFastEnglishCoverage(token) {
+  const grammarIndex = await loadDefaultEnglishGrammarIndexSafe();
+  const grammar = grammarIndex?.resolve(token) ?? null;
+  const atomic = english30kLookupVariants(token)
+    .map((variant) => buildFastAtomicIndex().get(variant))
+    .find(Boolean) ?? null;
+  if (!grammar && !atomic) return null;
+
+  const source = await loadDefaultEnglish30kSourceSafe();
+  const row = sourceRowForToken(source, token);
+  if (!row) return null;
+
+  return {
+    id: directRecordId(row),
+    ...row,
+    coverageType: grammar ? "grammar" : "atomic",
+    status: grammar ? "covered-grammar" : "covered-atomic",
+    ...(atomic ? { canonicalEnglish: atomic.en, hnuc: atomic.hnuc } : {}),
+    pyashSequence: grammar ? [...grammar.pyashSequence] : [atomic.pya]
+  };
+}
+
+async function findExtendedEnglishCoverage(token) {
+  const source = await loadDefaultEnglish30kSourceSafe();
+  const row = sourceRowForToken(source, token);
+  if (!row) return null;
+
+  const resources = await loadExtendedEnglishResourcesSafe();
+  if (!resources) return {
+    id: directRecordId(row),
+    ...row,
+    coverageType: "unresolved",
+    status: "unresolved"
+  };
+
+  const variants = english30kLookupVariants(token);
+  const atomicIndex = buildFastAtomicIndex();
+  const dictionaryAlias = variants
+    .map((variant) => resources.dictionaryAliases.aliases.get(variant))
+    .find(Boolean);
+  if (dictionaryAlias) {
+    const target = english30kLookupVariants(dictionaryAlias)
+      .map((variant) => atomicIndex.get(variant))
+      .find(Boolean);
+    if (target) {
+      return {
+        id: directRecordId(row),
+        ...row,
+        coverageType: "dictionary-alias",
+        status: "covered-dictionary-alias",
+        canonicalEnglish: target.en,
+        aliasOf: dictionaryAlias,
+        pyashSequence: [target.pya],
+        hnuc: target.hnuc
+      };
+    }
+  }
+
+  const resolved = resources.lemmaIndex.resolve(token);
+  if (resolved) {
+    return {
+      id: directRecordId(row),
+      ...row,
+      coverageType: "lemma",
+      status: "covered-lemma",
+      canonicalEnglish: resolved.canonicalEnglish,
+      pyashSequence: [...resolved.pyashSequence],
+      hnuc: resolved.hnuc,
+      lemma: resolved.lemma,
+      lemmaKind: resolved.kind,
+      lemmaStatus: resolved.status,
+      lemmaRule: resolved.rule,
+      lemmaEvidence: resolved.evidence,
+      ...(resolved.morphology ? {
+        morphology: {
+          ...resolved.morphology,
+          markerNames: [...resolved.morphology.markerNames],
+          markerSequence: [...resolved.morphology.markerSequence]
+        }
+      } : {}),
+      ...(resolved.grammaticalNumber ? { grammaticalNumber: resolved.grammaticalNumber } : {})
+    };
+  }
+
+  const anchors = await loadDefaultAnchorWordFormsSafe();
+  const anchor = variants
+    .map((variant) => anchors?.formsToAnchor.get(variant))
+    .find(Boolean);
+  if (anchor) {
+    const target = english30kLookupVariants(anchor)
+      .map((variant) => atomicIndex.get(variant))
+      .find(Boolean);
+    if (target) {
+      return {
+        id: directRecordId(row),
+        ...row,
+        coverageType: "alias",
+        status: "covered-alias",
+        canonicalEnglish: target.en,
+        aliasOf: anchor,
+        pyashSequence: [target.pya],
+        hnuc: target.hnuc
+      };
+    }
+  }
+
+  return {
+    id: directRecordId(row),
+    ...row,
+    coverageType: "unresolved",
+    status: "unresolved"
+  };
 }
 
 function isCompoundCatalog(program) {
@@ -409,11 +682,23 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const morphologyMatches = new Map();
   const okTextTokens = new Set();
   const files = [];
+  let curatedAcceptedCompoundsLoaded = false;
+  let defaultAcceptedCompoundsLoaded = false;
+  const ensureCuratedAcceptedCompounds = async () => {
+    if (curatedAcceptedCompoundsLoaded) return;
+    mergeCompoundRows(acceptedCompounds, await loadDefaultCuratedAcceptedCompounds());
+    curatedAcceptedCompoundsLoaded = true;
+  };
+  const ensureDefaultAcceptedCompounds = async () => {
+    if (defaultAcceptedCompoundsLoaded) return;
+    mergeCompoundRows(acceptedCompounds, await loadDefaultAcceptedCompounds());
+    defaultAcceptedCompoundsLoaded = true;
+  };
   for (const root of roots) {
     await collectFiles(root, files);
   }
 
-  mergeCompoundRows(acceptedCompounds, await loadDefaultAcceptedCompounds());
+  if (roots.length > 0) await ensureDefaultAcceptedCompounds();
 
   const parsedFiles = [];
   for (const file of files) {
@@ -443,7 +728,13 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
     for (const token of tokens) {
       if (isGrammarKeyword(token)) continue;
-      const knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
+      let knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
+      if (knownCompounds?.length) {
+        registerFoundCompound(foundCompounds, knownCompounds, file);
+        continue;
+      }
+      await ensureDefaultAcceptedCompounds();
+      knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
       if (knownCompounds?.length) {
         registerFoundCompound(foundCompounds, knownCompounds, file);
         continue;
@@ -476,12 +767,30 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       okTextTokens.add(token);
       continue;
     }
-    const knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
-    if (knownCompounds?.length) {
-      registerFoundCompound(foundCompounds, knownCompounds, "input");
-      continue;
+    const fastRanked = await findFastEnglishCoverage(token);
+    let ranked = fastRanked;
+    if (!ranked) {
+      await ensureCuratedAcceptedCompounds();
+      let knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
+      if (knownCompounds?.length) {
+        registerFoundCompound(foundCompounds, knownCompounds, "input");
+        continue;
+      }
+      const directCompound = directDelimitedCompoundRow(token);
+      if (directCompound) {
+        registerFoundCompound(foundCompounds, [directCompound], "input");
+        continue;
+      }
+      ranked = await findExtendedEnglishCoverage(token);
+      if ((!ranked || ranked.coverageType === "unresolved") && mayNeedCompoundCoverage(token)) {
+        await ensureDefaultAcceptedCompounds();
+        knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
+        if (knownCompounds?.length) {
+          registerFoundCompound(foundCompounds, knownCompounds, "input");
+          continue;
+        }
+      }
     }
-    const ranked = await findEnglish30kCoverage(token);
     if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
       if (ranked.morphology?.markerSequence?.length) morphologyMatches.set(token, ranked);
       if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
