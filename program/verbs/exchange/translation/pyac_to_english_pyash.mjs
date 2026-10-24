@@ -275,20 +275,23 @@ function pronounForm(part, role) {
   return PRONOUN_FORMS.get(part.pya)?.[role] ?? part.english;
 }
 
-function phraseCase(parts) {
-  const last = parts.at(-1);
-  return last?.kind === "case" ? last.pya : null;
-}
-
-function renderCasePreposition(caseName, words, parts, { vocativeMarker = false } = {}) {
-  if (!caseName || !words) return "";
-  if (caseName === "yi" && parts.some(isPronoun)) return "";
-  if (caseName === "myah" && words === "today") return "";
-  if (caseName === "myah" && words === "forever") return "";
-  if (caseName === "wu") return vocativeMarker ? "O" : "";
-  if (caseName === "na" || caseName === "ka") return "";
-  return CASE_PREPOSITIONS.get(caseName)
-    ?? (caseName === "yi" ? "to" : CASE_NAMES.get(caseName) ?? "");
+function renderCasePrepositions(parts, words, { vocativeMarker = false } = {}) {
+  if (!words) return [];
+  const caseNames = parts.filter((part) => part.kind === "case").map((part) => part.pya);
+  const prepositions = [];
+  for (const caseName of [...caseNames].reverse()) {
+    if (caseName === "yi" && parts.some(isPronoun)) continue;
+    if (caseName === "myah" && (words === "today" || words === "forever")) continue;
+    if (caseName === "wu") {
+      if (vocativeMarker) prepositions.push("O");
+      continue;
+    }
+    if (caseName === "na" || caseName === "ka") continue;
+    const preposition = CASE_PREPOSITIONS.get(caseName)
+      ?? (caseName === "yi" ? "to" : CASE_NAMES.get(caseName) ?? "");
+    if (preposition) prepositions.push(preposition);
+  }
+  return prepositions;
 }
 
 function rootEnglish(part) {
@@ -365,9 +368,10 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       : `${words.at(-1)}'s`;
   }
   const rendered = words.join(" ");
-  return [renderCasePreposition(phraseCase(parts), rendered, parts, { vocativeMarker }), rendered]
-    .filter(Boolean)
-    .join(" ");
+  const prepositions = renderCasePrepositions(parts, rendered, { vocativeMarker });
+  const conjunction = words[0] === "and" || words[0] === "also" ? words.shift() : "";
+  const content = words.join(" ");
+  return [conjunction, ...prepositions, content].filter(Boolean).join(" ");
 }
 
 function decodedPart(token, glosses) {

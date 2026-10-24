@@ -240,7 +240,10 @@ export function renderVliwPyac(decoded) {
 }
 
 export function phraseParts(decoded) {
-  const ends = [...decoded.phraseEnds];
+  const ends = [...decoded.phraseEnds].filter((end) => (
+    end + 1 >= decoded.tokens.length
+    || !PHRASE_CASE_WORDS.has(decoded.tokens[end + 1].pya)
+  ));
   const phrases = [];
   let start = 0;
   for (const end of ends) {
