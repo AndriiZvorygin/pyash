@@ -60,7 +60,9 @@ endings. Its implementation is
 The English projection reads phrase roles from the decoded VLIW head: the
 nominative phrase supplies `su`, remaining case phrases supply `ob`, and
 case endings become English prepositions (`te` → `in`, `so` → `from`, `ma` →
-`to`, and `twih` → `into`). Possessive, plural, negation, conjunction,
+`to`, and `twih` → `into`); vocative `wu` becomes an `O` address prefix.
+The complete case inventory comes from vocabulary entries ending in
+`_case_`. Possessive, plural, negation, conjunction,
 imperative, tense, aspect, passive, and mood markers are applied during this
 projection. English Pyash keeps the `su`/`ob`/`be` sentence shape while using
 English words inside those phrases. The Lord's Prayer clauses use this same

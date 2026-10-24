@@ -4,6 +4,7 @@ import { PYASH_SURFACE_FUSED_MOODS } from "./pyash_surface.mjs";
 import {
   decodePhraseVliw,
   lowerPhraseVliw,
+  PHRASE_CASE_WORDS,
   phraseParts
 } from "../../../library/vliw/phrase.mjs";
 
@@ -22,18 +23,59 @@ const CASE_NAMES = new Map([
   ["myah", "temporal"],
   ["twih", "illative"]
 ]);
+for (const entry of pyashWords) {
+  if (typeof entry?.en === "string" && entry.en.endsWith("_case_")) {
+    CASE_NAMES.set(entry.pya, entry.en.replace(/_case_$/u, "").replaceAll("_", " "));
+  }
+}
 
 const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
-const CASE_WORDS = new Set([
-  "na", "ka", "ti", "te", "ma", "so", "yi", "wu", "ta", "myah", "twih"
-]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],
   ["te", "in"],
   ["ma", "to"],
   ["so", "from"],
   ["ta", "on"],
-  ["twih", "into"]
+  ["twih", "into"],
+  ["yu", "with"],
+  ["mwah", "with"],
+  ["pwah", "for"],
+  ["swih", "as"],
+  ["ga", "via"],
+  ["pwih", "from"],
+  ["twah", "out of"],
+  ["lwah", "through"],
+  ["lwih", "off"],
+  ["tweh", "until"],
+  ["nweh", "in"],
+  ["lweh", "to"],
+  ["we", "via"],
+  ["ksih", "because of"],
+  ["nwah", "according to"],
+  ["nyeh", "from"],
+  ["sweh", "onto"],
+  ["txih", "beyond"],
+  ["ryoh", "through"],
+  ["pxeh", "of"],
+  ["pxoh", "through"],
+  ["dxoh", "by"],
+  ["greh", "around"],
+  ["rweh", "about"],
+  ["lwoh", "at"],
+  ["bvah", "without"],
+  ["dvah", "at"],
+  ["je", "by"],
+  ["gveh", "by"],
+  ["vwih", "away from"],
+  ["bveh", "under"],
+  ["dzih", "with"],
+  ["tsi7h", "before"],
+  ["vyah", "as"],
+  ["gvah", "toward"],
+  ["zreh", "outside"],
+  ["psuh", "over"],
+  ["sa7", "with"],
+  ["ta7", "to"]
 ]);
 const PRONOUN_FORMS = new Map([
   ["mi", { subject: "I", object: "me", possessive: "my", standalone: "mine" }],
@@ -259,12 +301,13 @@ function phraseCase(parts) {
   return last?.kind === "case" ? last.pya : null;
 }
 
-function renderCasePreposition(caseName, words, parts) {
+function renderCasePreposition(caseName, words, parts, { vocativeMarker = false } = {}) {
   if (!caseName || !words) return "";
   if (caseName === "yi" && parts.some(isPronoun)) return "";
   if (caseName === "myah" && words === "today") return "";
   if (caseName === "myah" && words === "forever") return "";
-  if (caseName === "wu" || caseName === "na" || caseName === "ka") return "";
+  if (caseName === "wu") return vocativeMarker ? "O" : "";
+  if (caseName === "na" || caseName === "ka") return "";
   return CASE_PREPOSITIONS.get(caseName) ?? (caseName === "yi" ? "to" : "");
 }
 
@@ -290,12 +333,12 @@ function inflectVerb(parts) {
   return base;
 }
 
-function renderPhrase(parts, { subject = false, standalone = false } = {}) {
+function renderPhrase(parts, { subject = false, standalone = false, vocativeMarker = false } = {}) {
   const phraseGloss = ENGLISH_PHRASE_GLOSSES.get(
     parts.filter((part) => part.kind !== "case").map((part) => part.pya).join(" ")
   );
   if (phraseGloss) {
-    return [renderCasePreposition(phraseCase(parts), phraseGloss, parts), phraseGloss]
+    return [renderCasePreposition(phraseCase(parts), phraseGloss, parts, { vocativeMarker }), phraseGloss]
       .filter(Boolean)
       .join(" ");
   }
@@ -347,7 +390,7 @@ function renderPhrase(parts, { subject = false, standalone = false } = {}) {
       : `${words.at(-1)}'s`;
   }
   const rendered = words.join(" ");
-  return [renderCasePreposition(phraseCase(parts), rendered, parts), rendered]
+  return [renderCasePreposition(phraseCase(parts), rendered, parts, { vocativeMarker }), rendered]
     .filter(Boolean)
     .join(" ");
 }
@@ -355,7 +398,7 @@ function renderPhrase(parts, { subject = false, standalone = false } = {}) {
 function decodedPart(token, glosses) {
   return {
     pya: token.pya,
-    kind: CASE_WORDS.has(token.pya)
+    kind: PHRASE_CASE_WORDS.has(token.pya)
       ? "case"
       : token.en.endsWith("_") ? "grammar" : "root",
     english: glosses.get(token.pya) ?? token.en.replace(/_$/u, "")
@@ -377,11 +420,24 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
     : isImperative(mood) && !subjectPhrase
       ? "you"
       : renderPhrase(subjectPhrase.tokens.map((token) => decodedPart(token, glosses)), { subject: true });
+  const vocativePhrases = parts.phrases.filter((phrase) => phrase.case === "wu");
+  const addressPhrases = vocativePhrases.length > 0
+    ? parts.phrases.filter((phrase) => {
+      const phraseIndex = parts.phrases.indexOf(phrase);
+      const subjectIndex = parts.phrases.indexOf(subjectPhrase);
+      return phraseIndex < subjectIndex && ["wu", "te"].includes(phrase.case);
+    })
+    : [];
   const argumentPhrases = nominalPredicate
     ? parts.phrases
-    : parts.phrases.filter((phrase) => phrase !== subjectPhrase);
+    : parts.phrases.filter((phrase) => (
+      phrase !== subjectPhrase && !addressPhrases.includes(phrase)
+    ));
   const objectText = argumentPhrases
-    .map((phrase) => renderPhrase(phrase.tokens.map((token) => decodedPart(token, glosses))))
+    .map((phrase) => renderPhrase(
+      phrase.tokens.map((token) => decodedPart(token, glosses)),
+      { vocativeMarker: true }
+    ))
     .filter(Boolean)
     .join(" ");
   const verb = nominalPredicate
@@ -393,7 +449,15 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
   const rendered = ["su", subject];
   if (objectText) rendered.push("ob", "name", ...objectText.split(/\s+/u));
   rendered.push("be", renderedVerb, mood);
-  return rendered.join(" ");
+  if (addressPhrases.length === 0) return rendered.join(" ");
+  const address = addressPhrases
+    .map((phrase) => renderPhrase(
+      phrase.tokens.map((token) => decodedPart(token, glosses)),
+      { vocativeMarker: true }
+    ))
+    .filter(Boolean)
+    .join(" ");
+  return `${address}, ${rendered.join(" ")}`;
 }
 
 function renderEnglish(sentence, tokens, decoded, glosses) {

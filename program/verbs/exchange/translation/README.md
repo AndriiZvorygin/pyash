@@ -55,6 +55,7 @@ Word numbers come from the lwonprom-compatible algorithm in
 `program/library/vliw/word_code.mjs`; the vocabulary remains the membership
 and gloss source. English-Pyash keeps composed noun and prepositional phrases
 as visible words (`ob name us from evil`) rather than collapsing them into a
-quoted text literal.
+quoted text literal. Vocative phrases render as an address prefix (`O ...`);
+the remaining case inventory is derived from the vocabulary's `_case_` entries.
 The `translation` verb accepts `from state pyac` with `to state pyash` or
 `to state english`; unknown or unsegmentable Pyac tokens remain hard errors.
