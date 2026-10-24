@@ -105,9 +105,9 @@ test("English subject nominative lowers to the fused Pyac form", async () => {
     text: "I walked our houses."
   });
   assert.equal(result.records[0].canonical, "I walked our houses.");
-  assert.equal(result.records[0].pyash, "su name mi na ob name nyah ye hcas pu be pfin ki ya");
-  assert.equal(result.records[0].pyac, "mina nyahye hcaspu pfinkiya");
-  assert.equal(result.records[0].pyashSurface, "mina nyahye hcaspu pfinkiya");
+  assert.equal(result.records[0].pyash, "su name mi na ob name nyah ye hcas pu ka be pfin ki ya");
+  assert.equal(result.records[0].pyac, "mina nyahye hcaspuka pfinkiya");
+  assert.equal(result.records[0].pyashSurface, "mina nyahye hcaspuka pfinkiya");
 });
 
 test("sentence verification can resolve a contextual candidate through the pipeline", async () => {

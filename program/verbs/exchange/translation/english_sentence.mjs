@@ -6,6 +6,7 @@ import {
 } from "./english30k_coverage.mjs";
 import { loadEnglishGrammarCatalog, buildEnglishGrammarIndex } from "./english_grammar.mjs";
 import { loadEnglishLemmaCatalog } from "./english_lemmas.mjs";
+import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 
 export const ENGLISH_SENTENCE_FORMAT = "english-sentence-v1";
 
@@ -14,6 +15,13 @@ const NEGATION_GRAMMAR_KIND = "negation";
 const PRESENT_TENSE_MARKER = "ra";
 const PRESENT_TENSE_NAME = "present_tense_";
 const NOMINATIVE_MARKER = "na";
+const ACCUSATIVE_MARKER = "ka";
+const COMPOSITIONAL_KEYWORDS = new Set(
+  Object.values(compositionalGrid)
+    .flatMap((context) => ["source", "way", "destination"]
+      .map((axis) => context[axis]?.keyword)
+      .filter(Boolean))
+);
 
 let defaultResourcesPromise = null;
 
@@ -166,7 +174,14 @@ function makeSentence(subject, verbPhrase, objectRecords) {
     be: verbPhrase.pyashSequence.join(" ")
   };
   if (objectRecords.length > 0) {
-    sentence.ob = { name: objectRecords.flatMap((record) => record.pyashSequence).join(" ") };
+    const objectSequence = objectRecords.flatMap((record) => record.pyashSequence);
+    const locationMarked = objectRecords.some((record) => (
+      record.pyashSequence ?? []
+    ).some((word) => COMPOSITIONAL_KEYWORDS.has(word)));
+    if (!locationMarked && objectSequence.at(-1) !== ACCUSATIVE_MARKER) {
+      objectSequence.push(ACCUSATIVE_MARKER);
+    }
+    sentence.ob = { name: objectSequence.join(" ") };
   }
   return sentence;
 }

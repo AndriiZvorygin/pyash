@@ -88,7 +88,7 @@ test("sentence subjects compose possessive noun phrases and regular plurals", as
 test("sentence objects preserve possessives, plural markers, and conjunction links", async () => {
   const result = await analyzeDefaultEnglishSentence("I walked our houses and your names");
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name mi na ob name nyah ye hcas pu wa sa ye hnim pu be pfin ki ya");
+  assert.equal(result.pyash, "su name mi na ob name nyah ye hcas pu wa sa ye hnim pu ka be pfin ki ya");
 });
 
 test("English of-relations use genitive ti while possessive determiners keep ye", async () => {
@@ -104,7 +104,7 @@ test("English of-relations use genitive ti while possessive determiners keep ye"
     resolveWord: (word) => rows.get(word) ?? base(word)
   });
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name mi na ob name hcas ti tlan be pfin ki ya");
+  assert.equal(result.pyash, "su name mi na ob name hcas ti tlan ka be pfin ki ya");
 });
 
 test("sentence grammar maps thy and negation while leaving the lexical predicate contextual", async () => {

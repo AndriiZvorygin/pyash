@@ -11,7 +11,7 @@ database stores two projections of that source:
 
 In the language terminology, Pyash is the English-oriented form, such as
 `su me be happy ya`. Pyac is the VLIW-compatible word form, such as
-`mina nyahye hcaspu pfinkiya`; Pyac is a language form, while `.pyac` names
+`mina nyahye hcaspuka pfinkiya`; Pyac is a language form, while `.pyac` names
 the corresponding packed artifact.
 
 ```text
@@ -433,7 +433,7 @@ for replay, and `pyac` renders the VLIW-compatible word order. The
 `pyashSurface` field remains a compatibility alias for `pyac`. The Pyac form
 fuses noun, adjective, case, voice, tense, aspect, and final mood words into
 complete phrases. For example, `I walked our houses` has the canonical English
-form `I walked our houses.` and the Pyac form `mina nyahye hcaspu pfinkiya`.
+form `I walked our houses.` and the Pyac form `mina nyahye hcaspuka pfinkiya`.
 The reusable surface renderer is
 `program/verbs/exchange/translation/pyash_surface.mjs`. The bounded Greek
 Lord's Prayer pilot uses it through
