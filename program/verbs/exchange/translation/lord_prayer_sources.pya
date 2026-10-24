@@ -14,4 +14,7 @@ su text "variant-policy" ob text "retain edition differences as named variants; 
 su text "na28-locator" ob text "https://intf.uni-muenster.de/NA28/en.html" ya
 su text "sblgnt-locator" ob text "https://www.sblgnt.com/about/introduction/" ya
 su text "ylt-locator" ob text "https://www.ccel.org/bible/ylt/ylt.htm" ya
+su text "syriac-comparison" ob text "Syriac Peshitta; attested translation witness, while exact Galilean wording remains reconstructed" ya
+su text "syriac-role" ob text "Aramaic/Syriac comparison for the kingdom/reign noun and possessive form" ya
+su text "syriac-locator" ob text "https://peshitta.eu/nt/matthew/6.html" ya
 prah

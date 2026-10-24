@@ -317,6 +317,15 @@ and morphology mapping comes after this source selection; YLT helps inspect
 literal tense, article, case, and word-order decisions without replacing the
 Greek evidence.
 
+The same manifest records the Syriac Peshitta form for Matthew 6:10,
+`ܡܰܠܟܽܘܬܳܟ` (`malkūthākh`), as Aramaic/Syriac comparison evidence. The
+Peshitta is an attested translation witness; the exact Galilean wording remains
+a reconstruction. For the English gloss, **kingdom** emphasizes the royal
+realm or domain, while **reign** emphasizes the active exercise of royal rule.
+Both belong to the semantic range of Greek `βασιλεία` and Syriac
+`malkūthā`, so the lexicon retains `king country`, `king domain`, and `king
+government` as review candidates rather than selecting one automatically.
+
 The bounded Matthew 6:9-13 lexical pilot is stored in
 `program/verbs/exchange/translation/lord_prayer_lexicon.pya`, linked from the
 source manifest. It records 26 source terms with Greek lemmas and inflected
