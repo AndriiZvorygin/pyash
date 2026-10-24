@@ -55,7 +55,7 @@ const ACCEPTED_COMPOUND_STATUSES = new Set([
   "repaired-llm"
 ]);
 
-const DEFAULT_GRAMMAR_MAPPINGS = new Map(
+export const DEFAULT_GRAMMAR_MAPPINGS = new Map(
   [...new Set([
     ...MOODS,
     ...ROLE_KEYS,
