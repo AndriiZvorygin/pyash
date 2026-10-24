@@ -28,9 +28,18 @@ sentences. Exact pairs always win; templates are a fallback before the formatter
 language and a sentence-aware document, preserves source offsets, resolves deterministic lexical
 and grammar evidence, and emits resolved, provisional, or unresolved records. Provisional records
 retain token evidence and queued vocabulary candidates without entering executable Pyac output.
-English uses the English30k, lemma, grammar, compound, and sentence resources; the other
+English uses the English30k, lemma, grammar, compound, WordNet, and sentence resources; the other
 registered adapters use their existing structured line parsers until free-text analyzers are
 added. A caller may supply the existing Housekeeper verifier for contextual candidates.
+
+The English analyzer is deterministic-first. It applies the grammar catalog, existing atomic
+and accepted compound vocabulary, conservative inflection, and sentence constructions before
+consulting semantic evidence. The read-only WordNet slice is configured by
+`english_wordnet.pya` and loaded from `/home/htaf/pyachso2n/wordnet-core.txt`; each unresolved
+token retains its part of speech, synset, gloss, and bounded same-synset Pyash candidates.
+WordNet evidence can narrow a review candidate, but a lexical mapping is auto-selected only
+when the existing Pyash evidence leaves one deterministic result. Ambiguity remains queued for
+the existing Housekeeper/LLM verifier, which may choose only from supplied candidates.
 
 The durable command writes the translation evidence catalog and the existing Pyac catalog/pack:
 

@@ -14,6 +14,7 @@ import {
 } from "./english_dictionary_aliases.mjs";
 import { loadEnglishGrammarCatalog, buildEnglishGrammarIndex } from "./english_grammar.mjs";
 import { buildEnglishLemmaIndex, loadEnglishLemmaCatalog } from "./english_lemmas.mjs";
+import { loadEnglishWordNet } from "./english_wordnet.mjs";
 import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 
 export const ENGLISH_SENTENCE_FORMAT = "english-sentence-v1";
@@ -24,6 +25,7 @@ const PRESENT_TENSE_MARKER = "ra";
 const PRESENT_TENSE_NAME = "present_tense_";
 const NOMINATIVE_MARKER = "na";
 const ACCUSATIVE_MARKER = "ka";
+const COPULA_SURFACES = new Set(["be", "am", "is", "are", "was", "were", "been", "being"]);
 const COMPOSITIONAL_CASE_INDEX = new Map(
   Object.values(compositionalGrid)
     .flatMap((context) => ["source", "way", "destination"]
@@ -78,9 +80,45 @@ function pluralBaseCandidates(surface) {
   return [...new Set(candidates.filter((candidate) => candidate.length > 1))];
 }
 
-function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex } = {}) {
+function wordNetLookupVariants(surface) {
   const normalized = surface.toLowerCase();
-  const coverage = typeof resolveWord === "function" ? resolveWord(normalized) : null;
+  return [
+    normalized,
+    ...pluralBaseCandidates(normalized),
+    ...(normalized.endsWith("ed") ? [normalized.slice(0, -2)] : []),
+    ...(normalized.endsWith("ing") ? [normalized.slice(0, -3), `${normalized.slice(0, -3)}e`] : [])
+  ].filter((value, index, values) => value.length > 1 && values.indexOf(value) === index);
+}
+
+function wordNetMetadata(surface, wordnetIndex) {
+  if (!wordnetIndex?.lookup) return null;
+  const variants = wordNetLookupVariants(surface);
+  const rowsByVariant = variants.map((variant) => wordnetIndex.lookup(variant));
+  const inflectionRows = rowsByVariant.slice(1).flat();
+  const preferInflectedVerb = surface.toLowerCase().endsWith("ing")
+    && inflectionRows.some((row) => row.pos === "v");
+  const rows = (preferInflectedVerb
+    ? rowsByVariant[0].concat(inflectionRows.filter((row) => row.pos === "v"))
+    : rowsByVariant.flat())
+    .filter((row, index, matches) => matches.findIndex((candidate) => candidate.id === row.id) === index);
+  if (rows.length === 0) return null;
+  const senses = rows.map((row) => ({
+    pos: row.pos,
+    synset: row.synset,
+    lemma: row.lemma,
+    gloss: row.gloss,
+    lemmas: wordnetIndex.bySynset?.get(`${row.pos}:${row.synset}`)?.map((candidate) => candidate.lemma) ?? [row.lemma]
+  }));
+  return {
+    partsOfSpeech: [...new Set(rows.map((row) => row.pos))],
+    senses,
+    evidence: senses.map((sense) => `${sense.pos}:${sense.synset}${sense.gloss ? ` ${sense.gloss}` : ""}`).join("; ")
+  };
+}
+
+function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex, wordnetIndex } = {}) {
+  const normalized = surface.toLowerCase();
+  let coverage = typeof resolveWord === "function" ? resolveWord(normalized) : null;
   const lemma = lemmaBySurface?.get(normalized) ?? null;
   const catalogGrammar = grammarIndex?.resolve(normalized) ?? null;
   const compositionalCase = COMPOSITIONAL_CASE_INDEX.get(normalized)
@@ -100,14 +138,22 @@ function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex } = {})
       : [];
   const morphology = cloneMorphology(coverage?.morphology ?? lemma?.morphology);
   let grammaticalNumber = coverage?.grammaticalNumber ?? lemma?.grammaticalNumber ?? "";
-  if (!grammar && !morphology && grammaticalNumber !== "plural" && pyashSequence.length > 0 && normalized.endsWith("s")) {
+  if (!grammar && !morphology && grammaticalNumber !== "plural" && normalized.endsWith("s")) {
     const singular = pluralBaseCandidates(normalized)
       .map((candidate) => ({ candidate, coverage: typeof resolveWord === "function" ? resolveWord(candidate) : null }))
-      .find((row) => row.coverage?.pyashSequence?.length);
+      .find((row) => row.coverage?.pyashSequence?.length
+        && row.coverage.coverageType !== "dictionary-alias");
     if (singular) {
+      coverage = singular.coverage;
       pyashSequence = [...singular.coverage.pyashSequence, "pu"];
       grammaticalNumber = "plural";
     }
+  }
+  const wordnet = wordNetMetadata(normalized, wordnetIndex);
+  if (coverage?.coverageType === "dictionary-alias" && wordnet?.senses?.length > 1) {
+    coverage = null;
+    pyashSequence = [];
+    grammaticalNumber = "";
   }
   if (grammaticalNumber === "plural" && !pyashSequence.includes("pu")) pyashSequence.push("pu");
   return {
@@ -116,6 +162,7 @@ function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex } = {})
     lemma: coverage?.lemma ?? lemma?.lemma ?? "",
     pyashSequence,
     morphology,
+    copula: COPULA_SURFACES.has(normalized),
     grammaticalNumber,
     compositionalCase,
     grammar: grammar ? {
@@ -123,6 +170,7 @@ function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex } = {})
       components: [...grammar.components],
       position: grammar.position
     } : null,
+    wordnet,
     evidence: coverage?.lemmaEvidence ?? coverage?.provenance ?? lemma?.evidence ?? grammar?.evidence ?? ""
   };
 }
@@ -135,6 +183,7 @@ function isSubject(record) {
 function findVerbIndex(records) {
   for (let index = 1; index < records.length; index += 1) {
     const morphology = records[index].morphology;
+    if (records[index].copula) continue;
     if (morphology?.kind === "finite-past" || morphology?.kind === "finite-present") return index;
   }
   return -1;
@@ -156,11 +205,93 @@ function subjectPredicateStart(records) {
 function findLexicalVerbIndex(records, startIndex = subjectPredicateStart(records)) {
   for (let index = startIndex; index < records.length; index += 1) {
     const record = records[index];
-    if (!record?.pyashSequence?.length || record.grammar) continue;
+    if (!record?.pyashSequence?.length || record.grammar || record.copula) continue;
     if (record.morphology?.kind === "progressive") continue;
     return index;
   }
   return -1;
+}
+
+function applyContextualEnglishGrammar(records) {
+  return records.map((record, index) => {
+    if (record.copula) {
+      const following = records[index + 1];
+      const passiveParticiple = following
+        && following.pyashSequence.length > 0
+        && following.morphology?.kind !== "progressive"
+        && (following.morphology?.kind === "participle"
+          || /(?:ed|en)$/u.test(following.surface)
+          || following.wordnet?.partsOfSpeech?.includes("v"));
+      if (passiveParticiple) {
+        return {
+          ...record,
+          construction: {
+            kind: "passive-auxiliary",
+            evidence: "copula plus a participial predicate is a passive-voice construction"
+          }
+        };
+      }
+    }
+    if (record.surface === "that") {
+      const previous = records[index - 1];
+      const following = records.slice(index + 1, index + 5);
+      const firstFollowing = following.find((candidate) => (
+        candidate.grammar?.kind !== "negation"
+        && !candidate.copula
+      ));
+      const hasFollowingPredicate = Boolean(firstFollowing && (
+        firstFollowing.morphology?.kind === "finite-past"
+        || firstFollowing.morphology?.kind === "finite-present"
+        || firstFollowing.morphology?.kind === "progressive"
+        || firstFollowing.wordnet?.partsOfSpeech?.includes("v")
+        || ["can", "could", "may", "might", "shall", "should", "will", "would", "must"].includes(firstFollowing.surface)
+      ));
+      const hasFollowingVerbEvidence = following.some((candidate) => (
+        candidate.morphology?.kind === "finite-past"
+        || candidate.morphology?.kind === "finite-present"
+        || candidate.morphology?.kind === "progressive"
+        || candidate.wordnet?.partsOfSpeech?.includes("v")
+      ));
+      const hasNominalHead = previous && !previous.grammar && !previous.copula;
+      if (hasNominalHead && (hasFollowingPredicate || (!firstFollowing && hasFollowingVerbEvidence))) {
+        return {
+          ...record,
+          coverageType: "grammar",
+          pyashSequence: ["la"],
+          grammar: {
+            kind: "dependent-clause",
+            components: ["dependent_clause_"],
+            position: "link"
+          },
+          evidence: "contextual English relative-clause marker maps to dependent_clause_ la"
+        };
+      }
+      const next = following.find((candidate) => candidate.pyashSequence.length > 0 && !candidate.grammar);
+      if (next) {
+        return {
+          ...record,
+          coverageType: "grammar",
+          pyashSequence: ["tsuh"],
+          grammar: {
+            kind: "pronoun",
+            components: ["distal_demonstrative_"],
+            position: "standalone"
+          },
+          evidence: "contextual English distal demonstrative maps to distal_demonstrative_ tsuh"
+        };
+      }
+    }
+    if (record.surface === "such" && records[index + 1]?.surface === "as") {
+      return {
+        ...record,
+        construction: {
+          kind: "exemplification",
+          evidence: "such as is a contextual exemplification construction; lexical mapping remains unresolved"
+        }
+      };
+    }
+    return record;
+  });
 }
 
 function findImperativeVerbIndex(records) {
@@ -200,6 +331,51 @@ function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, mar
     evidence,
     pyashSequence
   };
+}
+
+function wordNetSenseCandidates(record, resolveWord) {
+  if (record?.pyashSequence?.length || !record?.wordnet?.senses || typeof resolveWord !== "function") return [];
+  return record.wordnet.senses.map((sense) => {
+    const candidates = new Map();
+    for (const lemma of sense.lemmas ?? []) {
+      if (!lemma || lemma === record.surface) continue;
+      const coverage = resolveWord(lemma);
+      if (!coverage?.pyashSequence?.length || coverage.coverageType === "dictionary-alias") continue;
+      const candidate = makeCandidate({
+        phrase: record.surface,
+        lemma,
+        lexicalSequence: coverage.pyashSequence,
+        morphologySequence: [],
+        markerNames: [],
+        certainty: "contextual",
+        evidence: `WordNet ${sense.pos}:${sense.synset} synonym ${lemma}${sense.gloss ? `; ${sense.gloss}` : ""}`
+      });
+      candidates.set(candidate.id, candidate);
+    }
+    return [...candidates.values()];
+  });
+}
+
+function addWordNetCandidates(records, resolveWord) {
+  return records.map((record) => {
+    const candidateSets = wordNetSenseCandidates(record, resolveWord);
+    const candidates = candidateSets.flat();
+    const uniqueSequences = new Map(candidates.map((candidate) => [candidate.pyashSequence.join(" "), candidate]));
+    if (candidateSets.length > 0
+      && candidateSets.every((set) => set.length === 1)
+      && uniqueSequences.size === 1) {
+      const candidate = [...uniqueSequences.values()][0];
+      return {
+        ...record,
+        coverageType: "semantic-wordnet",
+        lemma: candidate.lemma,
+        pyashSequence: [...candidate.lexicalSequence],
+        evidence: `deterministic WordNet sense agreement; ${candidate.evidence}`,
+        semanticCandidates: []
+      };
+    }
+    return { ...record, semanticCandidates: candidates };
+  });
 }
 
 function makeSentence(subject, verbPhrase, objectRecords) {
@@ -274,7 +450,8 @@ function objectRecordsAfter(records, verbIndex) {
 export function analyzeEnglishSentence(source, {
   resolveWord,
   lemmaEntries = [],
-  grammarIndex
+  grammarIndex,
+  wordnetIndex
 } = {}) {
   const tokens = tokenizeEnglishSentence(source);
   if (tokens.length === 0) {
@@ -285,7 +462,12 @@ export function analyzeEnglishSentence(source, {
       .filter((entry) => entry?.surface)
       .map((entry) => [entry.surface.toLowerCase(), entry])
   );
-  const records = tokens.map((token) => wordRecord(token, { resolveWord, lemmaBySurface, grammarIndex }));
+  const records = addWordNetCandidates(applyContextualEnglishGrammar(tokens.map((token) => wordRecord(token, {
+    resolveWord,
+    lemmaBySurface,
+    grammarIndex,
+    wordnetIndex
+  }))), resolveWord);
   const progressiveIndex = findProgressiveIndex(records);
   const finiteIndex = findVerbIndex(records);
   const imperativeIndex = progressiveIndex < 0 && finiteIndex < 0 ? findImperativeVerbIndex(records) : -1;
@@ -395,14 +577,18 @@ export function analyzeEnglishSentence(source, {
   const unresolved = records
     .filter((record, index) => (
       record.pyashSequence.length === 0
-      && !consumedIndexes.has(index)
+      && (!consumedIndexes.has(index) || (!record.copula && !record.grammar))
       && record.grammar?.kind !== NEGATION_GRAMMAR_KIND
+      && !record.copula
     ))
     .map((record) => record.surface);
   let subjectBoundary = verbIndex;
   if (progressiveIndex >= 0) {
     subjectBoundary = progressiveIndex - 1;
     while (subjectBoundary >= 0 && records[subjectBoundary]?.grammar?.kind === NEGATION_GRAMMAR_KIND) subjectBoundary -= 1;
+  } else if (verbIndex >= 0) {
+    const copulaIndex = records.findIndex((record, index) => index < verbIndex && record.copula);
+    if (copulaIndex >= 0) subjectBoundary = copulaIndex;
   }
   const subject = addNominativeCase(makeSubjectPhrase(records, subjectBoundary));
   const subjectRecords = subjectBoundary > 0 ? records.slice(0, subjectBoundary) : [];
@@ -458,8 +644,9 @@ export async function loadEnglishSentenceResources() {
       loadEnglishLemmaCatalog(),
       loadEnglishGrammarCatalog(),
       loadEnglishDictionaryBlacklist(),
-      loadAnchorWordForms()
-    ]).then(([source, lemmaCatalog, grammarCatalog, dictionary, anchors]) => {
+      loadAnchorWordForms(),
+      loadEnglishWordNet()
+    ]).then(([source, lemmaCatalog, grammarCatalog, dictionary, anchors, wordnet]) => {
       const grammarIndex = buildEnglishGrammarIndex({ catalogEntries: grammarCatalog.entries });
       const aliases = anchors.formsToAnchor;
       const dictionaryAliases = buildEnglishDictionaryAliases({
@@ -504,7 +691,8 @@ export async function loadEnglishSentenceResources() {
         aliases,
         lemmaIndex,
         sourceByVariant,
-        atomicByVariant
+        atomicByVariant,
+        wordnet
       };
     });
   }
@@ -514,11 +702,16 @@ export async function loadEnglishSentenceResources() {
 function stagedEnglishCoverage(resources, word) {
   const variants = english30kLookupVariants(word);
   const row = variants.map((variant) => resources.sourceByVariant.get(variant)).find(Boolean);
-  if (!row) return null;
+  const sourceRow = row ?? {
+    word,
+    normalizedWord: word.toLowerCase(),
+    rank: null,
+    score: null
+  };
   const grammarOverride = variants.map((variant) => resources.grammarOverrides.get(variant)).find(Boolean);
   if (grammarOverride) {
     return {
-      ...row,
+      ...sourceRow,
       coverageType: "grammar",
       status: "covered-grammar",
       pyashSequence: [...grammarOverride]
@@ -527,7 +720,7 @@ function stagedEnglishCoverage(resources, word) {
   const exact = variants.map((variant) => resources.atomicByVariant.get(variant)).find(Boolean);
   if (exact) {
     return {
-      ...row,
+      ...sourceRow,
       coverageType: "atomic",
       status: "covered-atomic",
       canonicalEnglish: exact.en,
@@ -535,6 +728,7 @@ function stagedEnglishCoverage(resources, word) {
       hnuc: exact.hnuc
     };
   }
+  if (!row) return null;
   const alias = variants.map((variant) => resources.aliases.get(variant)).find(Boolean);
   if (alias) {
     const anchor = english30kLookupVariants(alias)
@@ -619,15 +813,18 @@ export async function analyzeDefaultEnglishSentence(source) {
   const analysis = analyzeEnglishSentence(source, {
     resolveWord: (word) => stagedEnglishCoverage(resources, word),
     lemmaEntries: resources.lemmaCatalog.entries,
-    grammarIndex: resources.grammarIndex
+    grammarIndex: resources.grammarIndex,
+    wordnetIndex: resources.wordnet?.index
   });
   if (!needsFullCoverage(analysis)) return analysis;
 
   const fullResources = await loadDefaultEnglishSentenceResources();
   return analyzeEnglishSentence(source, {
-    resolveWord: (word) => lookupEnglish30kCoverage(fullResources.coverage, word),
+    resolveWord: (word) => lookupEnglish30kCoverage(fullResources.coverage, word)
+      ?? stagedEnglishCoverage(resources, word),
     lemmaEntries: fullResources.lemmaCatalog.entries,
-    grammarIndex: fullResources.grammarIndex
+    grammarIndex: fullResources.grammarIndex,
+    wordnetIndex: fullResources.wordnet?.index
   });
 }
 

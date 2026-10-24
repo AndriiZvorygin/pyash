@@ -14,6 +14,16 @@ Define the translation pipeline for Pyash text ↔ natural language, including:
 
 This spec documents current behavior so future changes remain consistent and low-churn.
 
+English source analysis is deterministic-first. Grammar surfaces, conservative morphology,
+existing Pyash atoms/compounds, and sentence constructions are applied before semantic review.
+The read-only WordNet evidence resource is configured in
+`program/verbs/exchange/translation/english_wordnet.pya` and records the source path and hash.
+It supplies part-of-speech, synset, gloss, and same-synset evidence for unresolved terms; it
+does not create vocabulary. A term is auto-resolved only when the existing Pyash inventory and
+sentence context leave one result. Multiple senses or missing inventory evidence remain
+unresolved and can enter the existing bounded Housekeeper verifier, whose response is limited
+to supplied candidate ids.
+
 ---
 
 ## 2. Translation verb (normative)
