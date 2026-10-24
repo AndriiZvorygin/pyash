@@ -86,6 +86,8 @@ class DeviceExecutionGate:
 _EXECUTION_GATES: Dict[str, DeviceExecutionGate] = {}
 
 DEFAULT_IDLE_GRACE_SECONDS = 300
+DEFAULT_CAPACITY_WAIT_SECONDS = 1800
+DEFAULT_CAPACITY_POLL_SECONDS = 2
 DEFAULT_PEER_TIMEOUT_MS = 1500
 DEFAULT_PEER_FAILURE_LIMIT = 3
 DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
@@ -450,6 +452,36 @@ def queue_depth() -> int:
   return running
 
 
+def capacity_wait_seconds(job: Optional[Dict[str, Any]] = None) -> float:
+  job_spec = (job or {}).get("jobSpec") if isinstance((job or {}).get("jobSpec"), dict) else {}
+  raw = job_spec.get("capacityWaitSec") or job_spec.get("capacity_wait_sec")
+  if raw is None:
+    raw = os.environ.get("GPU_HOUSEKEEPER_CAPACITY_WAIT_SEC", str(DEFAULT_CAPACITY_WAIT_SECONDS))
+  try:
+    return max(0.0, float(raw))
+  except (TypeError, ValueError):
+    return float(DEFAULT_CAPACITY_WAIT_SECONDS)
+
+
+def capacity_poll_seconds() -> float:
+  raw = os.environ.get("GPU_HOUSEKEEPER_CAPACITY_POLL_SEC", str(DEFAULT_CAPACITY_POLL_SECONDS))
+  try:
+    return max(0.1, float(raw))
+  except (TypeError, ValueError):
+    return float(DEFAULT_CAPACITY_POLL_SECONDS)
+
+
+def capacity_waitable_error(error: BaseException) -> bool:
+  message = normalize_text(error).lower()
+  return any(token in message for token in (
+    "gpu capacity remains insufficient",
+    "free vram is insufficient",
+    "telemetry unavailable",
+    "runtime is active",
+    "provider became active",
+  ))
+
+
 def execution_device_id(job: Optional[Dict[str, Any]] = None) -> str:
   value = normalize_text((job or {}).get("deviceId"))
   if not value and isinstance((job or {}).get("jobSpec"), dict):
@@ -777,11 +809,11 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       continue
     # Submission remains durable even when telemetry is temporarily unavailable;
     # final execution admission still fails closed in ensure_capacity_for_job.
+    waitable_capacity = capacity.get("decision") == "insufficient" and bool(job.get("dischargeAllowed", True))
     feasible = (
       capacity.get("decision") in {"not-requested", "fits", "reclaim-available", "telemetry-unavailable"}
-      and not model_missing
-      and not model_cpu_resident
-    )
+      or waitable_capacity
+    ) and not model_missing and not model_cpu_resident
     with _LOCK:
       profile = _PROFILES.get(normalize_text(job.get("profileName")), {})
       warm = bool(profile.get("loaded", False))
@@ -811,7 +843,8 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "hostId": host_id,
       "deviceId": device_id,
       "available": feasible,
-      "immediate": feasible and not busy,
+      "immediate": feasible and not busy and not waitable_capacity,
+      "deferable": waitable_capacity,
       "busy": busy,
       "queueDepth": queue_depth(),
       "warm": warm,
@@ -826,7 +859,11 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
         else (
           target_residency.get("reason", "Ollama model is not GPU resident")
           if model_cpu_resident
-          else ("local execution slot occupied" if busy else capacity.get("reason", "local candidate"))
+          else (
+            "queued until GPU capacity is available"
+            if waitable_capacity
+            else ("local execution slot occupied" if busy else capacity.get("reason", "local candidate"))
+          )
         )
       )
     })
@@ -3604,7 +3641,19 @@ def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]
   job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
   if runtime_name == "ollama" and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model":
     return execute_ollama_ensure_model(job, runtime_registry)
-  ensure_capacity_for_job(job, runtime_registry)
+  deadline = time.time() + capacity_wait_seconds(job)
+  while True:
+    try:
+      ensure_capacity_for_job(job, runtime_registry)
+      break
+    except RuntimeError as err:
+      if not capacity_waitable_error(err) or time.time() >= deadline:
+        raise
+      with _LOCK:
+        current = _JOBS.get(normalize_text(job.get("remoteJobId")))
+        if current:
+          current["message"] = "waiting for GPU capacity"
+      time.sleep(min(capacity_poll_seconds(), max(0.1, deadline - time.time())))
   if runtime_name == "ollama":
     return execute_ollama_job(job, runtime_registry)
   if runtime_name == "strata":
