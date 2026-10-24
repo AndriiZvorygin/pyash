@@ -10,6 +10,7 @@ su text "ylt-role" ob text "literal English comparison and gloss; separate from 
 su text "greek-lexicon" ob text "program/verbs/exchange/translation/lord_prayer_lexicon.pya" ya
 su text "greek-lexicon-format" ob text "lord-prayer-lexicon-v1" ya
 su text "source-policy" ob text "NA28 drives the main translation; SBLGNT compares critical readings; Received Text and YLT remain explicit comparison layers." ya
+su text "emitted-text" ob text "NA28 main-text output ends at Matthew 6:13b; Received Text and YLT doxology and Amen remain comparison evidence only." ya
 su text "variant-policy" ob text "retain edition differences as named variants; never merge readings silently" ya
 su text "na28-locator" ob text "https://intf.uni-muenster.de/NA28/en.html" ya
 su text "sblgnt-locator" ob text "https://www.sblgnt.com/about/introduction/" ya

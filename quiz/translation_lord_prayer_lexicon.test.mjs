@@ -99,6 +99,9 @@ test("Greek pilot index and renderer retain stable candidate identities", async 
 
 test("Lord's Prayer translation fuses grammar endings and emits clause moods", async () => {
   const translation = buildLordPrayerTranslation({ lexicon: await loadLordPrayerLexicon() });
+  assert.equal(translation.format, "lord-prayer-translation-v2");
+  assert.equal(translation.clauses.length, 8);
+  assert.equal(translation.clauses.at(-1).locator, "Matthew 6:13b");
   assert.equal(translation.clauses[0].canonical, "Our Father in heaven, may your name be kept holy.");
   assert.equal(translation.clauses[0].pyac, "nyahye hpapwu cyakte saye hnimna swutpyohjwih");
   assert.equal(translation.clauses[0].pyash, "nyah ye hpap wu cyak te sa ye hnim na swut pyoh jwih");
@@ -114,8 +117,6 @@ test("Lord's Prayer translation fuses grammar endings and emits clause moods", a
     "do su you be give ob us today our daily bread."
   );
   assert.equal(translation.clauses[5].pyac, "nyahna pcah nyahye hdef hgenpuka hsonrali");
-  assert.equal(translation.clauses[8].pyac, "hyap syunna wa htafna wa nyamna hnispumyah sayeli");
-  assert.equal(translation.clauses[9].pyac, "hretli");
 });
 
 test("Lord's Prayer renders every text form from decoded VLIW", async () => {
@@ -127,10 +128,8 @@ test("Lord's Prayer renders every text form from decoded VLIW", async () => {
     assert.ok(clause.englishPyash.length > 0, clause.locator);
     assert.ok(clause.english.length > 0, clause.locator);
   }
-  assert.equal(translation.clauses[8].englishPyash, "ya su yours be is ob king government and strength and glory during ages.");
-  assert.equal(translation.clauses[8].english, "Yours is king government and strength and glory during ages.");
-  assert.equal(translation.clauses[9].englishPyash, "ya firmly.");
-  assert.equal(translation.clauses[9].english, "Firmly.");
+  assert.equal(translation.clauses.at(-1).englishPyash, "do su you be rescue ob us from evil.");
+  assert.equal(translation.clauses.at(-1).english, "But rescue us from evil.");
 });
 
 test("Lord's Prayer analysis links dictionary evidence to Greek pilot records", async () => {

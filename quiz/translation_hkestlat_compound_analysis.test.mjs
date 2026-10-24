@@ -156,6 +156,10 @@ test("Lord's Prayer source manifest separates canonical, critical, and YLT layer
   assert.equal(facts.get("format"), "lord-prayer-source-v1");
   assert.equal(facts.get("reference"), "Matthew 6:9-13");
   assert.equal(facts.get("canonical-text"), "Nestle-Aland 28 (NA28)");
+  assert.equal(
+    facts.get("emitted-text"),
+    "NA28 main-text output ends at Matthew 6:13b; Received Text and YLT doxology and Amen remain comparison evidence only."
+  );
   assert.equal(facts.get("critical-companion"), "SBL Greek New Testament (SBLGNT)");
   assert.equal(facts.get("ylt-source"), "Received Text (Textus Receptus tradition)");
   assert.equal(facts.get("greek-lexicon"), "program/verbs/exchange/translation/lord_prayer_lexicon.pya");

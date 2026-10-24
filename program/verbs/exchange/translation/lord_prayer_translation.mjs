@@ -6,7 +6,7 @@ import {
 } from "../../../library/vliw/phrase.mjs";
 import { renderEnglishFromVliw } from "./pyac_to_english_pyash.mjs";
 
-export const LORD_PRAYER_TRANSLATION_FORMAT = "lord-prayer-translation-v1";
+export const LORD_PRAYER_TRANSLATION_FORMAT = "lord-prayer-translation-v2";
 
 const CLAUSE_SOURCES = Object.freeze([
   ["Matthew 6:9a", "Our Father in heaven, may your name be kept holy."],
@@ -16,9 +16,7 @@ const CLAUSE_SOURCES = Object.freeze([
   ["Matthew 6:12a", "Forgive us our debts."],
   ["Matthew 6:12b", "As we also forgive our debtors."],
   ["Matthew 6:13a", "Bring us not into temptation."],
-  ["Matthew 6:13b", "But deliver us from the evil one."],
-  ["Matthew 6:13c", "For yours is the Kingdom, the power, and the glory forever."],
-  ["Matthew 6:13d", "Amen."]
+  ["Matthew 6:13b", "But deliver us from the evil one."]
 ]);
 
 function invalid(message, details = {}) {
@@ -52,9 +50,7 @@ const LORD_PRAYER_VLIW_SIGNATURES = Object.freeze([
   "nyah yi nyah ye hdef pu ka hson pcih",
   "nyah na pcah nyah ye hdef hgen pu ka hson ra li",
   "nyah yi no hyoc ma tlak pcih",
-  "pyuh nyah yi cwak so hxuc pcih",
-  "hyap syun na wa htaf na wa nyam na hnis pu myah sa ye li",
-  "hret li"
+  "pyuh nyah yi cwak so hxuc pcih"
 ]);
 
 export function renderLordPrayerClauseFromVliw(input) {
@@ -162,18 +158,7 @@ export function buildLordPrayerTranslation({ lexicon } = {}) {
       ...ending(us, "yi"),
       ...ending(selected(lexicon, "evil"), "so"),
       ...selected(lexicon, "deliver"), "pcih"
-    ]),
-    clause(8, [
-      ...ending(kingdom, "na"),
-      "wa",
-      ...ending(selected(lexicon, "power"), "na"),
-      "wa",
-      ...ending(selected(lexicon, "glory"), "na"),
-      ...ending(selected(lexicon, "forever"), "pu", "myah"),
-      ...yours,
-      "li"
-    ]),
-    clause(9, [...selected(lexicon, "amen"), "li"])
+    ])
   ];
 
   return {
