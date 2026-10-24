@@ -94,6 +94,24 @@ test("sentence subjects compose possessive noun phrases and regular plurals", as
   assert.deepEqual(result.subject.pyashSequence, ["nyah", "ye", "hcas", "pu", "na"]);
 });
 
+test("English surface grammar resolves pro-forms, demonstratives, and within as a case", async () => {
+  const it = await analyzeDefaultEnglishSentence("it walked");
+  assert.equal(it.status, "resolved");
+  assert.equal(it.pyash, "su name ya na be pfin ki ya");
+
+  const things = await analyzeDefaultEnglishSentence("things walked");
+  assert.equal(things.status, "resolved");
+  assert.equal(things.pyash, "su name ya pu na be pfin ki ya");
+
+  const thisThing = await analyzeDefaultEnglishSentence("this walked");
+  assert.equal(thisThing.status, "resolved");
+  assert.equal(thisThing.pyash, "su name tsah na be pfin ki ya");
+
+  const within = await analyzeDefaultEnglishSentence("I walked within houses");
+  assert.equal(within.status, "resolved");
+  assert.equal(within.pyash, "su name mi na ob name hcas pu lwah be pfin ki ya");
+});
+
 test("sentence objects preserve possessives, plural markers, and conjunction links", async () => {
   const result = await analyzeDefaultEnglishSentence("I walked our houses and your names");
   assert.equal(result.status, "resolved");

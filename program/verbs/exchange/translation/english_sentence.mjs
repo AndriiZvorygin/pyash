@@ -36,6 +36,9 @@ const COMPOSITIONAL_CASE_INDEX = new Map(
         pya: entry.pya
       }]))
 );
+const COMPOSITIONAL_CASE_ALIASES = new Map([
+  ["within", "in"]
+]);
 
 let defaultResourcesPromise = null;
 let sentenceResourcesPromise = null;
@@ -74,7 +77,9 @@ function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex } = {})
   const coverage = typeof resolveWord === "function" ? resolveWord(normalized) : null;
   const lemma = lemmaBySurface?.get(normalized) ?? null;
   const catalogGrammar = grammarIndex?.resolve(normalized) ?? null;
-  const compositionalCase = COMPOSITIONAL_CASE_INDEX.get(normalized) ?? null;
+  const compositionalCase = COMPOSITIONAL_CASE_INDEX.get(normalized)
+    ?? COMPOSITIONAL_CASE_INDEX.get(COMPOSITIONAL_CASE_ALIASES.get(normalized))
+    ?? null;
   const grammar = catalogGrammar ?? (compositionalCase ? {
     kind: "case-marker",
     components: [compositionalCase.case],
