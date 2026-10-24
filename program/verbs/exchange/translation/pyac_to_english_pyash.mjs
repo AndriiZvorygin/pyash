@@ -424,9 +424,9 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
     .filter((part) => part.kind !== "mood"));
   const negative = decoded.tokens.some((token) => token.pya === "no");
   const renderedVerb = negative ? `not ${verb}` : verb;
-  const rendered = ["su", subject];
+  const rendered = ["su", subject, "be", renderedVerb];
   if (objectText) rendered.push("ob", ...objectText.split(/\s+/u));
-  rendered.push("be", renderedVerb, mood);
+  rendered.push(mood);
   if (addressPhrases.length === 0) return rendered.join(" ");
   const address = addressPhrases
     .map((phrase) => renderPhrase(

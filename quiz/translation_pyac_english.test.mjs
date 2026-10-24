@@ -9,7 +9,7 @@ import {
 test("Pyac decoder expands fused grammar into structural Pyash and English Pyash", () => {
   const result = decodePyacSentence("mina nyahye hcaspuka pfinkiya");
   assert.equal(result.pyash, "su name mi na ob name nyah ye hcas pu ka be pfin ki ya");
-  assert.equal(result.englishPyash, "su I ob our houses be walked ya");
+  assert.equal(result.englishPyash, "su I be walked ob our houses ya");
   assert.equal(result.english, "I walked our houses.");
   assert.deepEqual(
     result.tokens.map((token) => token.parts.map((part) => part.pya)),
@@ -34,7 +34,7 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
   const negativeImperative = decodePyacSentence("nyahyi no hyocma tlakpcih");
   assert.equal(
     negativeImperative.englishPyash,
-    "su you ob us to temptation be not bring do"
+    "su you be not bring ob us to temptation do"
   );
   assert.equal(negativeImperative.english, "Do not bring us to temptation.");
 });
@@ -42,8 +42,8 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
 test("Pyac document translation keeps one record per input line", () => {
   const result = translatePyacToEnglishPyash("mina hcaspuka pfinkiya\nmina hpupka kwinpcih");
   assert.equal(result.records.length, 2);
-  assert.match(result.englishPyash, /su I ob houses be walked ya/u);
-  assert.match(result.englishPyash, /su I ob bread be give do/u);
+  assert.match(result.englishPyash, /su I be walked ob houses ya/u);
+  assert.match(result.englishPyash, /su I be give ob bread do/u);
 });
 
 test("Pyac decoder rejects vocabulary that cannot be segmented", () => {
@@ -57,6 +57,6 @@ test("Pyac decoder takes lexical English from the dictionary", () => {
   const result = decodePyacSentence("pyuh nyahyi cwakso hxucpcih");
   const hxuc = result.tokens.at(-1).parts.find((part) => part.pya === "hxuc");
   assert.equal(hxuc.english, "rescuing");
-  assert.equal(result.englishPyash, "su you ob us from evil be rescue do");
+  assert.equal(result.englishPyash, "su you be rescue ob us from evil do");
   assert.equal(result.english, "But rescue us from evil.");
 });
