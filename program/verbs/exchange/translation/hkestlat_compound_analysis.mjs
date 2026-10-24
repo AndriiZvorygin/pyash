@@ -313,7 +313,7 @@ export async function loadHkestlatSources({ dictionaryUrl, stemsUrl } = {}) {
   };
 }
 
-function prayerTermRecord(term, locator, dictionaryIndex, compoundBySurface) {
+function prayerTermRecord(term, locator, dictionaryIndex, compoundBySurface, lexiconIndex = null) {
   const candidates = dictionaryIndex.byEnglish.get(term) ?? [];
   const directTargets = uniqueSorted(candidates.map((candidate) => candidate.pyash).filter(Boolean));
   const surfaces = uniqueSorted(candidates.map((candidate) => candidate.surface));
@@ -336,6 +336,20 @@ function prayerTermRecord(term, locator, dictionaryIndex, compoundBySurface) {
     relatedCompounds,
     status
   };
+  const lexiconEntry = lexiconIndex?.get(term) ?? null;
+  if (lexiconEntry) {
+    payload.lexicon = {
+      greekLemma: lexiconEntry.greekLemma,
+      greekForms: [...lexiconEntry.greekForms],
+      yltSurfaces: [...lexiconEntry.yltSurfaces],
+      kjvSurfaces: [...lexiconEntry.kjvSurfaces],
+      semanticCandidates: lexiconEntry.semanticCandidates.map((candidate) => ({
+        ...candidate,
+        pyashSequence: [...candidate.pyashSequence]
+      })),
+      selectedCandidateId: lexiconEntry.selectedCandidateId
+    };
+  }
   return {
     id: identity("prayer-term", payload),
     ...payload
@@ -346,7 +360,9 @@ export function buildLordPrayerAnalysis({
   dictionaryRows,
   stemRows,
   sourceHashes = {},
-  clauses = WORLD_ENGLISH_BIBLE_MATTHEW_6_9_13
+  clauses = WORLD_ENGLISH_BIBLE_MATTHEW_6_9_13,
+  lexicon = null,
+  lexiconEntries = []
 } = {}) {
   requireRows(dictionaryRows, "dictionaryRows");
   requireRows(stemRows, "stemRows");
@@ -359,6 +375,12 @@ export function buildLordPrayerAnalysis({
   for (const record of compoundAnalysis.records) {
     if (!compoundBySurface.has(record.surface)) compoundBySurface.set(record.surface, record);
   }
+  const resolvedLexiconEntries = lexicon?.entries ?? lexiconEntries;
+  const lexiconIndex = new Map(
+    (Array.isArray(resolvedLexiconEntries) ? resolvedLexiconEntries : [])
+      .filter((entry) => entry?.term)
+      .map((entry) => [entry.term, entry])
+  );
   const normalizedClauses = clauses.map((clause) => ({
     locator: text(clause?.locator),
     text: text(clause?.text)
@@ -367,7 +389,7 @@ export function buildLordPrayerAnalysis({
     fail("invalid-prayer-source", "Lord's Prayer clauses require locator and text");
   }
   const terms = LORD_PRAYER_TERMS.map(({ term, locator }) => (
-    prayerTermRecord(term, locator, dictionaryIndex, compoundBySurface)
+    prayerTermRecord(term, locator, dictionaryIndex, compoundBySurface, lexiconIndex)
   ));
   return {
     format: HKESTLAT_COMPOUND_ANALYSIS_FORMAT,

@@ -317,6 +317,17 @@ and morphology mapping comes after this source selection; YLT helps inspect
 literal tense, article, case, and word-order decisions without replacing the
 Greek evidence.
 
+The bounded Matthew 6:9-13 lexical pilot is stored in
+`program/verbs/exchange/translation/lord_prayer_lexicon.pya`, linked from the
+source manifest. It records 26 source terms with Greek lemmas and inflected
+forms, YLT/KJV comparison surfaces, stable semantic candidate identities, and
+accepted-existing, review, or unresolved Pyash targets. The runtime parser and
+renderer are `lord_prayer_lexicon.mjs`; `hkestlat_compound_analysis.mjs` can
+attach the lexical evidence to its existing prayer records. This is a
+source-specific pilot, not yet a general Greek translation adapter. A complete
+New Testament path remains a later scope that will add sentence-level Greek
+morphology and clause resolution after this evidence contract is extended.
+
 ### Ranked English30k coverage
 
 The ranked lexical target is the Gutenberg-derived source

@@ -158,5 +158,7 @@ test("Lord's Prayer source manifest separates canonical, critical, and YLT layer
   assert.equal(facts.get("canonical-text"), "Nestle-Aland 28 (NA28)");
   assert.equal(facts.get("critical-companion"), "SBL Greek New Testament (SBLGNT)");
   assert.equal(facts.get("ylt-source"), "Received Text (Textus Receptus tradition)");
+  assert.equal(facts.get("greek-lexicon"), "program/verbs/exchange/translation/lord_prayer_lexicon.pya");
+  assert.equal(facts.get("greek-lexicon-format"), "lord-prayer-lexicon-v1");
   assert.match(facts.get("variant-policy"), /never merge readings silently/u);
 });
