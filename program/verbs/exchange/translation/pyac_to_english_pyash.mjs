@@ -368,10 +368,17 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       : `${words.at(-1)}'s`;
   }
   const rendered = words.join(" ");
-  const prepositions = renderCasePrepositions(parts, rendered, { vocativeMarker });
+  const caseParts = parts.filter((part) => part.kind === "case");
+  const trailingComparison = caseParts.length > 1 && caseParts.at(-1)?.pya === "swih";
+  const prepositionParts = trailingComparison
+    ? parts.filter((part) => part.pya !== "swih")
+    : parts;
+  const prepositions = renderCasePrepositions(prepositionParts, rendered, { vocativeMarker });
   const conjunction = words[0] === "and" || words[0] === "also" ? words.shift() : "";
   const content = words.join(" ");
-  return [conjunction, ...prepositions, content].filter(Boolean).join(" ");
+  return [conjunction, ...prepositions, content, trailingComparison ? "as" : ""]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function decodedPart(token, glosses) {
