@@ -1,5 +1,3 @@
-import { sentenceToPyash } from "../../../beautiful.mjs";
-
 // These are the short grammatical endings used by the lwonprom grammar.
 // Sentence moods remain separate final particles; noun, adjective, case,
 // voice, tense, and aspect endings join the word immediately before them.
@@ -49,8 +47,25 @@ export function renderPyashSurface(value, {
   return rendered.join(" ");
 }
 
+function phraseSurface(value) {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return "";
+  if (typeof value.name === "string") return value.name;
+  if (typeof value.text === "string") return JSON.stringify(value.text);
+  if (typeof value.num === "number") return String(value.num);
+  if (typeof value.bool === "boolean") return value.bool ? "truth" : "lie";
+  return "";
+}
+
 export function renderPyashSentenceSurface(sentence) {
-  return renderPyashSurface(sentenceToPyash(sentence));
+  if (!sentence || typeof sentence !== "object") return "";
+  const parts = [
+    phraseSurface(sentence.su),
+    phraseSurface(sentence.ob),
+    typeof sentence.be === "string" ? sentence.be : "",
+    typeof sentence.mood === "string" ? sentence.mood : ""
+  ].filter(Boolean);
+  return renderPyashSurface(parts.join(" "));
 }
 
 export const PYASH_SURFACE_FUSED_ENDINGS = Object.freeze([...FUSED_ENDINGS]);

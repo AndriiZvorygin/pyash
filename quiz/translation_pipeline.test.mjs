@@ -36,7 +36,16 @@ test("Pyash sentence surface rendering keeps canonical sentence structure availa
       be: "pfin ki",
       mood: "ya"
     }),
-    "su name nyahye hcaspu be pfinki ya"
+    "nyahye hcaspu pfinki ya"
+  );
+  assert.equal(
+    renderPyashSentenceSurface({
+      su: { name: "mi" },
+      ob: { name: "nyah ye hcas pu" },
+      be: "pfin ki",
+      mood: "ya"
+    }),
+    "mi nyahye hcaspu pfinki ya"
   );
 });
 
@@ -76,7 +85,8 @@ test("English translation uses the shared resources and retains unresolved vocab
 
   assert.deepEqual(result.counts, { resolved: 1, provisional: 1, unresolved: 0 });
   assert.equal(result.records[0].pyash, "su name nyah ye hcas pu be pfin ki ya");
-  assert.equal(result.records[0].pyashSurface, "su name nyahye hcaspu be pfinki ya");
+  assert.equal(result.records[0].pyashSurface, "nyahye hcaspu pfinki ya");
+  assert.equal(result.records[0].gloss, "our houses walked.");
   assert.equal(result.records[1].status, "provisional");
   assert.equal(result.resourceHashes.english30k.length, 64);
   assert.equal(result.resourceHashes.englishLemmas.length, 64);

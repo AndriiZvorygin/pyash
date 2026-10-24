@@ -420,11 +420,13 @@ canonical component sequence `nyah ye hcas pu`, while its spoken surface is
 `not` remains `no`. Imperative clauses use the understood second-person
 subject and remain contextual predicate candidates for Housekeeper review.
 
-Resolved translation records carry both projections: `pyash` preserves
-space-delimited grammar components for replay and PyAC lowering, while
-`pyashSurface` fuses noun, adjective, case, voice, tense, and aspect endings
-into spoken words and leaves sentence-final moods as particles. The reusable
-surface renderer is
+Resolved translation records carry three useful projections: `pyash` preserves
+the structural `su`/`ob`/`be` form for replay and PyAC lowering, `gloss` keeps
+the English SVO source phrase, and `pyashSurface` renders the spoken Pyash word
+order. The surface form fuses noun, adjective, case, voice, tense, and aspect
+endings into spoken words and leaves sentence-final moods as particles. For
+example, `I walked our houses` has the gloss `I walked our houses.` and the
+spoken surface `mi nyahye hcaspu pfinki ya`. The reusable surface renderer is
 `program/verbs/exchange/translation/pyash_surface.mjs`. The bounded Greek
 Lord's Prayer pilot uses it through
 `program/verbs/exchange/translation/lord_prayer_translation.mjs`; its daily
