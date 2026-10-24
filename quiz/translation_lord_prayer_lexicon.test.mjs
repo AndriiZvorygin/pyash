@@ -114,7 +114,7 @@ test("Lord's Prayer renders every text form from decoded VLIW", async () => {
     assert.ok(clause.englishPyash.length > 0, clause.locator);
     assert.ok(clause.english.length > 0, clause.locator);
   }
-  assert.equal(translation.clauses[8].englishPyash, "su yours ob name kingdom and power and glory forever be is li");
+  assert.equal(translation.clauses[8].englishPyash, "su yours ob kingdom and power and glory forever be is li");
   assert.equal(translation.clauses[8].english, "Yours is kingdom and power and glory forever.");
   assert.equal(translation.clauses[9].englishPyash, "amen li");
   assert.equal(translation.clauses[9].english, "Amen.");
