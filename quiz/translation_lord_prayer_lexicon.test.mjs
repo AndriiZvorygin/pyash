@@ -51,7 +51,7 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
     ["forgive", "pardon"],
     ["bring", "existing-bring"],
     ["evil", "evil"],
-    ["will", "willpower"],
+    ["will", "purpose"],
     ["earth", "floor"],
     ["power", "strength"],
     ["forever", "age"]
