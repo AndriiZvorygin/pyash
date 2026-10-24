@@ -323,10 +323,11 @@ Peshitta is an attested translation witness; the exact Galilean wording remains
 a reconstruction. For the English gloss, **kingdom** emphasizes the royal
 realm or domain, while **reign** emphasizes the active exercise of royal rule.
 Both belong to the semantic range of Greek `βασιλεία` and Syriac
-`malkūthā`, so the lexicon retains `king country`, `king domain`, and `king
-government` as lexical review candidates. It also records `dwa2n syun`
-(`god-king government`) as a contextual divine-rule candidate, with the
-prayer's possessive context supplying the divine subject.
+`malkūthā`; the current lexical selection is `hyap syun` (`king government`).
+The lexicon retains `king country` and `king domain` as alternate review
+candidates. It also records `dwa2n syun` (`god-king government`) as a
+contextual divine-rule expansion, with the prayer's possessive context
+supplying the divine subject.
 
 The bounded Matthew 6:9-13 lexical pilot is stored in
 `program/verbs/exchange/translation/lord_prayer_lexicon.pya`, linked from the
