@@ -322,6 +322,11 @@ and morphology mapping comes after this source selection; YLT helps inspect
 literal tense, article, case, and word-order decisions without replacing the
 Greek evidence.
 
+The executable Lord's Prayer translation emits the NA28 main text and ends at
+Matthew 6:13b, after `ἀπὸ τοῦ πονηροῦ`. The Received-Text/YLT doxology
+(`ὅτι σοῦ ἐστιν...`) and `ἀμήν` remain available as named comparison evidence
+in the lexical pilot and source analysis.
+
 The same manifest records the Syriac Peshitta form for Matthew 6:10,
 `ܡܰܠܟܽܘܬܳܟ` (`malkūthākh`), as Aramaic/Syriac comparison evidence. The
 Peshitta is an attested translation witness; the exact Galilean wording remains
@@ -336,7 +341,7 @@ supplying the divine subject.
 
 The bounded Matthew 6:9-13 lexical pilot is stored in
 `program/verbs/exchange/translation/lord_prayer_lexicon.pya`, linked from the
-source manifest. It records 26 source terms with Greek lemmas and inflected
+source manifest. It records 27 source terms with Greek lemmas and inflected
 forms, YLT/KJV comparison surfaces, stable semantic candidate identities, and
 accepted-existing, review, or unresolved Pyash targets. The runtime parser and
 renderer are `lord_prayer_lexicon.mjs`; `hkestlat_compound_analysis.mjs` can
