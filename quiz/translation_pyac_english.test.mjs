@@ -34,7 +34,7 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
   const negativeImperative = decodePyacSentence("nyahyi no hyocma tlakpcih");
   assert.equal(
     negativeImperative.englishPyash,
-    "su you ob us to temptation be not bring pcih"
+    "su you ob us to temptation be not bring do"
   );
   assert.equal(negativeImperative.english, "Do not bring us to temptation.");
 });
@@ -43,7 +43,7 @@ test("Pyac document translation keeps one record per input line", () => {
   const result = translatePyacToEnglishPyash("mina hcaspuka pfinkiya\nmina hpupka kwinpcih");
   assert.equal(result.records.length, 2);
   assert.match(result.englishPyash, /su I ob houses be walked ya/u);
-  assert.match(result.englishPyash, /su I ob bread be give pcih/u);
+  assert.match(result.englishPyash, /su I ob bread be give do/u);
 });
 
 test("Pyac decoder rejects vocabulary that cannot be segmented", () => {
@@ -57,6 +57,6 @@ test("Pyac decoder takes lexical English from the dictionary", () => {
   const result = decodePyacSentence("pyuh nyahyi cwakso hxucpcih");
   const hxuc = result.tokens.at(-1).parts.find((part) => part.pya === "hxuc");
   assert.equal(hxuc.english, "rescuing");
-  assert.equal(result.englishPyash, "su you ob us from evil be rescue pcih");
+  assert.equal(result.englishPyash, "su you ob us from evil be rescue do");
   assert.equal(result.english, "But rescue us from evil.");
 });
