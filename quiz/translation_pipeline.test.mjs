@@ -200,3 +200,28 @@ test("translation document command writes durable evidence and Pyac outputs", as
   assert.equal(readFileSync(pack).length > 32, true);
   assert.equal(reports.length, 1);
 });
+
+test("translation catalogs keep repeated vocabulary gaps replayable", async () => {
+  const source = readFileSync("examples/translation/simple-english-wikipedia-love.txt", "utf8");
+  const result = await translateDocument({
+    language: "english",
+    text: source,
+    locator: "https://simple.wikipedia.org/wiki/Love#Beginning"
+  });
+  const ids = result.vocabularyCandidates.map((candidate) => candidate.id);
+  assert.equal(new Set(ids).size, ids.length);
+  const parsed = parseTranslationPipelinePya(renderTranslationPipelinePya(result));
+  assert.equal(parsed.records.length, 4);
+  assert.equal(parsed.vocabularyCandidates.length, result.vocabularyCandidates.length);
+});
+
+test("English prose with an is-clause stays in sentence review", async () => {
+  const result = await translateDocument({
+    language: "english",
+    text: "Love is a mix of feelings and actions.",
+    locator: "https://simple.wikipedia.org/wiki/Love#Beginning"
+  });
+  assert.equal(result.records[0].status, "provisional");
+  assert.equal(result.records[0].sentence, undefined);
+  assert.deepEqual(result.records[0].unresolved, ["feelings", "actions"]);
+});

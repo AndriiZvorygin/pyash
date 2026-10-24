@@ -132,13 +132,13 @@ function vocabularyCandidates({ recordId, language, sourceText, context, analysi
   const unresolvedTokens = analysis.tokens.length > 0
     ? analysis.tokens.filter((token) => cloneSequence(token?.pyashSequence).length === 0)
     : [{ surface: sourceText, coverageType: "unresolved", evidence: analysis.reason ?? "" }];
-  return unresolvedTokens.map((token) => {
+  return unresolvedTokens.map((token, tokenIndex) => {
     const surface = text(token.surface ?? sourceText);
     const candidateSequences = analysis.candidates
       .map((candidate) => cloneSequence(candidate?.pyashSequence))
       .filter((sequence) => sequence.length > 0);
     return {
-      id: stableId(["vocabulary", language, recordId, surface]),
+      id: stableId(["vocabulary", language, recordId, String(tokenIndex), surface]),
       language,
       surface,
       kind: token.grammar ? "grammar-gap" : "lexical-gap",

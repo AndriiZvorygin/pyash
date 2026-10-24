@@ -278,7 +278,7 @@ function englishLineToSentence(line) {
   }
 
   // Expect format: "<name> is <be> <value>."
-  const match = trimmed.match(/^([A-Za-z0-9_]+) is ([A-Za-z0-9_ ]+?)(?: "([^"]*)")?(?: ([0-9.+-]+))?\.?$/);
+  const match = trimmed.match(/^([A-Za-z0-9_]+) is ([A-Za-z0-9_]+)(?: "([^"]*)")?(?: ([0-9.+-]+))?\.?$/);
   if (!match) return null;
 
   const [, name, bePart, textVal, numVal] = match;
