@@ -5,9 +5,12 @@ import { decodePyacWord, encodePyacWord } from "./word_code.mjs";
 export const PHRASE_VLIW_FORMAT = "pyac-vliw-phrase-v1";
 export const PHRASE_VLIW_WORDS_PER_VECTOR = 16;
 
-const CASE_WORDS = new Set([
-  "na", "ka", "ti", "te", "ma", "so", "yi", "wu", "ta", "myah", "twih"
-]);
+export const PHRASE_CASE_WORDS = new Set(
+  pyashWords
+    .filter((entry) => typeof entry?.en === "string" && entry.en.endsWith("_case_"))
+    .map((entry) => entry.pya)
+    .filter(Boolean)
+);
 const MOOD_WORDS = new Set([
   "ya", "do", "def", "prah", "ret", "que", "can", "pe", "pi7", "li", "tu", "cu",
   "si", "ri", "di", "tcih", "lo", "cyih", "dwih", "pcih", "psih", "tseh", "twuh",
@@ -92,7 +95,7 @@ function headForChunk(tokens, complete) {
   let head = complete ? 1 : 0;
   tokens.forEach((pya, index) => {
     const slot = index + 1;
-    if (CASE_WORDS.has(pya) || MOOD_WORDS.has(pya)) head |= 1 << slot;
+    if (PHRASE_CASE_WORDS.has(pya) || MOOD_WORDS.has(pya)) head |= 1 << slot;
   });
   return head;
 }
@@ -141,7 +144,7 @@ export function lowerPhraseVliw({ tokens } = {}) {
     bytes: wordsToBytes(vectors),
     usedWords: values.length + vectors.length,
     phraseEnds: normalized
-      .map((pya, index) => CASE_WORDS.has(pya) ? index : null)
+      .map((pya, index) => PHRASE_CASE_WORDS.has(pya) ? index : null)
       .filter((index) => index !== null),
     moodIndex: normalized.findLastIndex((pya) => MOOD_WORDS.has(pya))
   };
@@ -210,7 +213,7 @@ export function decodePhraseVliw(input) {
         hnuc
       });
       if ((head & (1 << slot)) !== 0) {
-        if (CASE_WORDS.has(entry.pya)) phraseEnds.push(absolute);
+        if (PHRASE_CASE_WORDS.has(entry.pya)) phraseEnds.push(absolute);
         if (MOOD_WORDS.has(entry.pya)) moodIndex = absolute;
       }
       absolute += 1;

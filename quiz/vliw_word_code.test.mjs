@@ -8,6 +8,7 @@ import {
 import {
   decodePhraseVliw,
   lowerPhraseVliw,
+  PHRASE_CASE_WORDS,
   renderVliwPyac
 } from "../program/library/vliw/phrase.mjs";
 
@@ -53,4 +54,14 @@ test("phrase VLIW uses continuation vectors without losing word order", () => {
   assert.equal(decoded.vectors[0][0] & 1, 0);
   assert.equal(decoded.vectors[1][0] & 1, 1);
   assert.deepEqual(decoded.tokens.map((token) => token.pya), tokens);
+});
+
+test("phrase VLIW derives case boundaries from the vocabulary inventory", () => {
+  for (const pya of ["wu", "yu", "mwah", "je", "gveh", "lwoh"]) {
+    assert.equal(PHRASE_CASE_WORDS.has(pya), true, pya);
+  }
+  const decoded = decodePhraseVliw(lowerPhraseVliw({
+    tokens: "hcaswu hcasyu pfin ya"
+  }).vectors);
+  assert.deepEqual(decoded.phraseEnds, [1, 3]);
 });
