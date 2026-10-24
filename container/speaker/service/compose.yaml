@@ -1,6 +1,7 @@
 services:
   speaker:
     container_name: speaker
+    restart: unless-stopped
     build:
       context: ../../..
       dockerfile: container/speaker/Dockerfile
