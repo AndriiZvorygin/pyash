@@ -48,7 +48,11 @@ node -e "import fs from 'node:fs/promises'; import path from 'node:path'; import
 ```
 
 The reverse Pyac slice is `pyac_to_english_pyash.mjs`. It expands fused Pyac
-roots and grammar endings through the existing vocabulary, returns structural
-Pyash evidence, and provides readable English-Pyash and English projections.
+roots and grammar endings, lowers the expanded words through
+`program/library/vliw/phrase.mjs`, and returns structural Pyash evidence plus
+readable English-Pyash and English projections from the decoded VLIW phrase.
+Word numbers come from the lwonprom-compatible algorithm in
+`program/library/vliw/word_code.mjs`; the vocabulary remains the membership
+and gloss source.
 The `translation` verb accepts `from state pyac` with `to state pyash` or
 `to state english`; unknown or unsegmentable Pyac tokens remain hard errors.

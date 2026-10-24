@@ -46,8 +46,14 @@ English Pyash: su I ob name "our houses" be walked ya
 English gloss: I walked our houses.
 ```
 
-The decoder is bounded by the existing `pyashWords.json` inventory and rejects
-an input token that cannot be segmented into known roots and grammatical
+Translation now lowers the selected Pyac words to the VLIW phrase codelet
+first. The same decoded codelet produces the fused Pyac surface, readable
+English Pyash, and English gloss. The word number is calculated by the
+lwonprom-compatible algorithm in `program/library/vliw/word_code.mjs`;
+`pyashWords.json` supplies vocabulary membership and glosses. The phrase
+head carries case/mood boundaries, and continuation vectors preserve longer
+clauses. The reverse adapter remains bounded by the vocabulary and rejects an
+input token that cannot be segmented into known roots and grammatical
 endings. Its implementation is
 `program/verbs/exchange/translation/pyac_to_english_pyash.mjs`.
 

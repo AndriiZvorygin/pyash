@@ -318,6 +318,15 @@ following slot must also be zero. `renderLegacyCodelet` exposes a diagnostic
 surface that preserves raw words and renders supported typed values without
 claiming that arbitrary codelets are executable Pyash.
 
+The word-number layer is algorithmic. `program/library/vliw/word_code.mjs`
+ports lwonprom's `neo_word_code_encode` shape: word class is selected from
+glyph length and placement, then consonant, vowel, tone, and final-consonant
+codes are packed into the legacy bit fields. Its inverse decodes those fields
+back to Pyac spelling. `pyashWords.json` supplies vocabulary membership and
+English glosses; it is not the source of the HNUC calculation. Phrase codelets
+use this layer through `program/library/vliw/phrase.mjs`, with the first word
+holding the phrase-end and final-mood index bits.
+
 This layer exposes typed items and the used-word count. It does not infer
 arbitrary grammar or execute unknown codelets. Numeric-plus and the proven
 typed-literal adapter validate their marker sequences from the generic items;
