@@ -33,7 +33,8 @@ for (const entry of pyashWords) {
 const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
 const ENGLISH_MOOD_GLOSSES = new Map([
   ["pcih", "do"],
-  ["jwih", "may"]
+  ["jwih", "may"],
+  ["li", "ya"]
 ]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],
