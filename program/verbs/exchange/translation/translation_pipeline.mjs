@@ -192,7 +192,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     : unresolved.length > 0 && analysis.candidates.length > 0
       ? "provisional"
       : "unresolved";
-  const gloss = language === "english" && sentence ? segment.text : "";
+  const canonical = language === "english" && sentence ? segment.text : "";
   const record = {
     id: recordId,
     language,
@@ -209,7 +209,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     status,
     ...(sentence ? { sentence, pyash: pyashPreview } : {}),
     ...(pyashSurface ? { pyashSurface } : {}),
-    ...(gloss ? { gloss } : {}),
+    ...(canonical ? { canonical } : {}),
     ...(pyashPreview && !sentence ? { pyashPreview } : {}),
     ...(unresolved.length > 0 ? { unresolved } : {}),
     ...(analysis.candidates.length > 0 ? { candidates: analysis.candidates } : {}),

@@ -414,23 +414,25 @@ simple finite forms, progressive auxiliaries, and the first noun-phrase
 grammar layer. For example, the durable catalog records `walked` as `pfin ki`,
 `walks` as `pfin ra`, and the contextual participle candidate `walking` as
 `pfin pfih`; `I am walking` resolves to `pfin pfih ra`. Sentence composition
-keeps grammar particles separate from lexical roots: `our houses` keeps the
-canonical component sequence `nyah ye hcas pu`, while its spoken surface is
-`nyahye hcaspu`; `and` remains `wa`, `thy` has the spoken surface `saye`, and
-`not` remains `no`. Imperative clauses use the understood second-person
-subject and remain contextual predicate candidates for Housekeeper review.
+keeps grammar particles separate from lexical roots in the evidence structure,
+then fuses each complete noun or verb phrase for the spoken form: `our houses`
+keeps the component sequence `nyah ye hcas pu`, while its spoken surface is
+`nyahye hcaspu`; `and` remains `wa`, `thy` has the spoken surface `saye`, and a
+final mood attaches to the verb phrase, so `pfin ki ya` renders as `pfinkiya`.
+Imperative clauses use the understood second-person subject and remain
+contextual predicate candidates for Housekeeper review.
 
-Resolved translation records carry three useful projections: `pyash` preserves
-the structural `su`/`ob`/`be` form for replay and PyAC lowering, `gloss` keeps
-the English SVO source phrase, and `pyashSurface` renders the spoken Pyash word
-order. The surface form fuses noun, adjective, case, voice, tense, and aspect
-endings into spoken words and leaves sentence-final moods as particles. For
-example, `I walked our houses` has the gloss `I walked our houses.` and the
-spoken surface `mi nyahye hcaspu pfinki ya`. The reusable surface renderer is
+Resolved translation records carry three useful projections: `canonical` keeps
+the English source/gloss, `pyash` preserves the structural `su`/`ob`/`be` form
+for replay and PyAC lowering, and `pyashSurface` renders the spoken Pyash word
+order. The surface form fuses noun, adjective, case, voice, tense, aspect, and
+final mood words into complete phrases. For example, `I walked our houses`
+has the canonical English form `I walked our houses.` and the spoken Pyash
+surface `mi nyahye hcaspu pfinkiya`. The reusable surface renderer is
 `program/verbs/exchange/translation/pyash_surface.mjs`. The bounded Greek
 Lord's Prayer pilot uses it through
 `program/verbs/exchange/translation/lord_prayer_translation.mjs`; its daily
-bread clause renders as `nyahyi trenmyah nyahye dlatci hpupka kwin pcih`.
+bread clause renders as `nyahyi trenmyah nyahye dlatci hpupka kwinpcih`.
 
 Standalone `vocab_suggest` output keeps the lexical lemma line and adds a
 morphology candidate line. A sentence with unresolved candidates can be sent

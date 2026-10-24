@@ -21,11 +21,11 @@ import {
 test("Pyash surface rendering fuses endings and preserves sentence-final moods", () => {
   assert.equal(
     renderPyashSurface("hpap wu cyak te sa ye hnim na swut pyoh jwih"),
-    "hpapwu cyakte saye hnimna swutpyoh jwih"
+    "hpapwu cyakte saye hnimna swutpyohjwih"
   );
   assert.equal(
     renderPyashSurface("nyah yi tren myah nyah ye dlat ci hpup ka kwin pcih"),
-    "nyahyi trenmyah nyahye dlatci hpupka kwin pcih"
+    "nyahyi trenmyah nyahye dlatci hpupka kwinpcih"
   );
 });
 
@@ -36,7 +36,7 @@ test("Pyash sentence surface rendering keeps canonical sentence structure availa
       be: "pfin ki",
       mood: "ya"
     }),
-    "nyahye hcaspu pfinki ya"
+    "nyahye hcaspu pfinkiya"
   );
   assert.equal(
     renderPyashSentenceSurface({
@@ -45,7 +45,7 @@ test("Pyash sentence surface rendering keeps canonical sentence structure availa
       be: "pfin ki",
       mood: "ya"
     }),
-    "mi nyahye hcaspu pfinki ya"
+    "mi nyahye hcaspu pfinkiya"
   );
 });
 
@@ -85,8 +85,8 @@ test("English translation uses the shared resources and retains unresolved vocab
 
   assert.deepEqual(result.counts, { resolved: 1, provisional: 1, unresolved: 0 });
   assert.equal(result.records[0].pyash, "su name nyah ye hcas pu be pfin ki ya");
-  assert.equal(result.records[0].pyashSurface, "nyahye hcaspu pfinki ya");
-  assert.equal(result.records[0].gloss, "our houses walked.");
+  assert.equal(result.records[0].pyashSurface, "nyahye hcaspu pfinkiya");
+  assert.equal(result.records[0].canonical, "our houses walked.");
   assert.equal(result.records[1].status, "provisional");
   assert.equal(result.resourceHashes.english30k.length, 64);
   assert.equal(result.resourceHashes.englishLemmas.length, 64);

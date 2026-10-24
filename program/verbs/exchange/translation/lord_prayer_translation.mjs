@@ -43,6 +43,7 @@ function clause(index, components) {
   return {
     id: `lord-prayer-${locator.toLowerCase().replace(/[^a-z0-9]+/gu, "-")}`,
     locator,
+    canonical: source,
     source,
     components: [...components],
     pyash: renderPyashSurface(components.join(" "))

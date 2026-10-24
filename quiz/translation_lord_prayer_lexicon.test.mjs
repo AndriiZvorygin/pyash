@@ -93,12 +93,13 @@ test("Greek pilot index and renderer retain stable candidate identities", async 
 
 test("Lord's Prayer translation fuses grammar endings and emits clause moods", async () => {
   const translation = buildLordPrayerTranslation({ lexicon: await loadLordPrayerLexicon() });
-  assert.equal(translation.clauses[0].pyash, "hpapwu cyakte saye hnimna swutpyoh jwih");
-  assert.equal(translation.clauses[2].pyash, "saye hmucna cyakte tlapta tcun jwih");
-  assert.equal(translation.clauses[3].pyash, "nyahyi trenmyah nyahye dlatci hpupka kwin pcih");
-  assert.equal(translation.clauses[5].pyash, "nyahna pcah nyahye hdef hgenpuka hsonra li");
-  assert.equal(translation.clauses[8].pyash, "hyap syunna wa htafna wa nyamna hnispumyah saye li");
-  assert.equal(translation.clauses[9].pyash, "hret li");
+  assert.equal(translation.clauses[0].canonical, "Our Father in heaven, may your name be kept holy.");
+  assert.equal(translation.clauses[0].pyash, "hpapwu cyakte saye hnimna swutpyohjwih");
+  assert.equal(translation.clauses[2].pyash, "saye hmucna cyakte tlapta tcunjwih");
+  assert.equal(translation.clauses[3].pyash, "nyahyi trenmyah nyahye dlatci hpupka kwinpcih");
+  assert.equal(translation.clauses[5].pyash, "nyahna pcah nyahye hdef hgenpuka hsonrali");
+  assert.equal(translation.clauses[8].pyash, "hyap syunna wa htafna wa nyamna hnispumyah sayeli");
+  assert.equal(translation.clauses[9].pyash, "hretli");
 });
 
 test("Lord's Prayer analysis links dictionary evidence to Greek pilot records", async () => {
