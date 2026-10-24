@@ -424,6 +424,9 @@ then fuses each complete noun or verb phrase for the spoken form: `our houses`
 keeps the component sequence `nyah ye hcas pu`, while its spoken surface is
 `nyahye hcaspu`; `and` remains `wa`, `thy` has the spoken surface `saye`, and a
 final mood attaches to the verb phrase, so `pfin ki ya` renders as `pfinkiya`.
+When a verb phrase must finish before a later phrase, the verb-affix `vi`
+closes it: `pfin ki vi` renders as `pfinkivi`; the sentence mood still closes
+the whole sentence.
 Imperative clauses use the understood second-person subject and remain
 contextual predicate candidates for Housekeeper review.
 
