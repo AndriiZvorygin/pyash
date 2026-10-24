@@ -29,6 +29,12 @@ const FUSED_MOODS = new Set([
   "ksuh", "t6", "zlih", "n6", "gyih", "si2"
 ]);
 
+// Quantifier grammar attaches to a noun/pro-form head in the Pyac surface.
+// Keep the structural sequence available for decoding while rendering these
+// noun phrases as one spoken word.
+const FUSED_NOUN_GRAMMAR_HEADS = new Set(["cyah", "clah", "ya"]);
+const FUSED_NOUN_GRAMMAR_SUFFIXES = new Set(["tlih", "tlah", "wi", "no"]);
+
 function tokens(value) {
   if (typeof value !== "string") return [];
   return value.match(/"[^"\n]*"|\S+/gu) ?? [];
@@ -43,10 +49,13 @@ export function renderPyashSurface(value, {
   const inputTokens = tokens(value);
   for (const [index, token] of inputTokens.entries()) {
     const clean = token.replace(/[.,;:]+$/u, "");
+    const previous = inputTokens[index - 1]?.replace(/[.,;:]+$/u, "");
+    const nounGrammarSuffix = FUSED_NOUN_GRAMMAR_SUFFIXES.has(clean)
+      && FUSED_NOUN_GRAMMAR_HEADS.has(previous);
     const mood = fusedMoods.has(clean) && index === inputTokens.length - 1;
     if (
       rendered.length > 0 &&
-      (fusedEndings.has(clean) || mood) &&
+      (fusedEndings.has(clean) || nounGrammarSuffix || mood) &&
       (!sentenceParticles.has(clean) || mood) &&
       !/^"/u.test(token)
     ) {
@@ -87,3 +96,5 @@ export const renderPyacSentenceSurface = renderPyashSentenceSurface;
 export const PYASH_SURFACE_FUSED_ENDINGS = Object.freeze([...FUSED_ENDINGS]);
 export const PYASH_SURFACE_SENTENCE_PARTICLES = Object.freeze([...SENTENCE_PARTICLES]);
 export const PYASH_SURFACE_FUSED_MOODS = Object.freeze([...FUSED_MOODS]);
+export const PYASH_SURFACE_FUSED_NOUN_GRAMMAR_HEADS = Object.freeze([...FUSED_NOUN_GRAMMAR_HEADS]);
+export const PYASH_SURFACE_FUSED_NOUN_GRAMMAR_SUFFIXES = Object.freeze([...FUSED_NOUN_GRAMMAR_SUFFIXES]);
