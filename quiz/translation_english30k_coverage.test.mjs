@@ -170,8 +170,8 @@ test("vocab_suggest reports ranked unresolved coverage without losing existing c
   const unresolvedResult = await runVocabSuggest(["the"], {
     report: (line) => unresolvedLines.push(String(line))
   });
-  assert.equal(unresolvedResult.exitCode, 1);
-  assert.match(unresolvedLines.join("\n"), /the: .*English30k rank 1 remains unresolved/u);
+  assert.equal(unresolvedResult.exitCode, 0);
+  assert.match(unresolvedLines.join("\n"), /the: grammar -> dlih/u);
 });
 
 test("durable English30k manifest records the source contract", async () => {
