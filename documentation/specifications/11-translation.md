@@ -31,6 +31,25 @@ Common forms:
   ```
   from text quoted.pyash.<english>.pyash.quoted from state english to state pyash to name output be translation do
   ```
+- Pyac → English Pyash:
+  ```
+  from text "mina nyahye hcaspuka pfinkiya" from state pyac to state pyash to name output be translation do
+  ```
+
+The Pyac reverse slice expands fused vocabulary and grammar into structural
+Pyash evidence, then emits the readable English-Pyash surface:
+
+```text
+Pyac:          mina nyahye hcaspuka pfinkiya
+structural:    su name mi na ob name nyah ye hcas pu ka be pfin ki ya
+English Pyash: su I ob name "our houses" be walked ya
+English gloss: I walked our houses.
+```
+
+The decoder is bounded by the existing `pyashWords.json` inventory and rejects
+an input token that cannot be segmented into known roots and grammatical
+endings. Its implementation is
+`program/verbs/exchange/translation/pyac_to_english_pyash.mjs`.
 
 The result is stored under `to name <output>` with:
 ```

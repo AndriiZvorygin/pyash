@@ -74,3 +74,22 @@ test("translation Pyash -> English -> Pyash roundtrip", async () => {
   assert.equal(sentences[1].ob?.num, 2);
   assert.equal(sentences[1].to?.name, "alpha");
 });
+
+test("translation decodes Pyac into English Pyash and English text", async () => {
+  forget();
+
+  const toPyash = parse(
+    'from text "mina nyahye hcaspuka pfinkiya" from state pyac to state pyash to name pyash_out be translation do'
+  );
+  const pyashResult = await interpret(toPyash);
+  const pyashText = pyashResult?.ob?.text ?? pyashResult?.value?.text;
+  assert.equal(pyashText, 'su I ob name "our houses" be walked ya');
+  assert.equal(pyashResult?.ob?.sentences?.[0]?.be ?? pyashResult?.value?.sentences?.[0]?.be, "pfin ki");
+
+  const toEnglish = parse(
+    'from text "mina nyahye hcaspuka pfinkiya" from state pyac to state english to name english_out be translation do'
+  );
+  const englishResult = await interpret(toEnglish);
+  const englishText = englishResult?.ob?.text ?? englishResult?.value?.text;
+  assert.equal(englishText, "I walked our houses.");
+});

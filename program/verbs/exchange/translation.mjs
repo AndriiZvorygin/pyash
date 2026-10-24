@@ -3,6 +3,7 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
 import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
+import { translatePyacToEnglishPyash } from "./translation/pyac_to_english_pyash.mjs";
 import { loadAnchorWordForms } from "./translation/anchor_words.mjs";
 import { normalizeAnchorSentence, applyTemplatePairs } from "./translation/helpers.mjs";
 import {
@@ -61,7 +62,17 @@ export async function translation_from_text_to_name_text(sentence) {
   let translation = "";
   let sentences = [];
 
-  if (sourceAdapter) {
+  if (sourceLang === "pyac") {
+    const decoded = translatePyacToEnglishPyash(sourceText);
+    sentences = decoded.records.map((record) => record.sentence);
+    if (targetLang === "pyash") {
+      translation = decoded.englishPyash;
+    } else if (targetLang === "english" || !targetLang) {
+      translation = decoded.english;
+    } else {
+      throw new Error(`translation: Pyac source supports english or pyash targets, got ${targetLang}`);
+    }
+  } else if (sourceAdapter) {
     let anchorForms = null;
     try {
       anchorForms = await loadAnchorWordForms();
@@ -228,6 +239,22 @@ export async function translation_from_text_to_name_text(sentence) {
 export default translation_from_text_to_name_text;
 
 export const signatures = [
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "pyac", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "pyac", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "english", "from", "text", "fromstate", "name", "pyac", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "english", "from", "text", "fromstate", "name", "pyac", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
   {
     signatureWords: ["be", "translation", "become", "name", "text", "from", "text", "fromstate", "name", "text", "to", "name", "text"],
     handler: translation_from_text_to_name_text

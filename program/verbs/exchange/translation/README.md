@@ -46,3 +46,9 @@ To regenerate the English pairs from `examples/pyash/*.pya`:
 ```
 node -e "import fs from 'node:fs/promises'; import path from 'node:path'; import { buildProgram } from './program/program.mjs'; import { sentenceToPyash } from './program/beautiful.mjs'; import { sentenceToEnglish } from './program/verbs/exchange/translation/english.mjs'; const dir='examples/pyash'; const entries=new Map(); const files=(await fs.readdir(dir)).filter(f=>f.endsWith('.pya')); for (const file of files){ const text=await fs.readFile(path.join(dir,file),'utf8'); const program=buildProgram(text); for (const sentence of program.sentences){ if (!sentence) continue; const pyash=sentenceToPyash(sentence); if (!pyash || entries.has(pyash)) continue; entries.set(pyash, sentenceToEnglish(sentence)); } } const keys=[...entries.keys()].sort(); let out='su name translation_pairs_english be map def\\n'; for (const key of keys){ const val=entries.get(key) ?? ''; out+=`su text ${JSON.stringify(key)} ob text ${JSON.stringify(val)} ya\\n`; } out+='prah\\n'; await fs.writeFile('program/verbs/exchange/translation/pairs_english.pya', out, 'utf8');"
 ```
+
+The reverse Pyac slice is `pyac_to_english_pyash.mjs`. It expands fused Pyac
+roots and grammar endings through the existing vocabulary, returns structural
+Pyash evidence, and provides readable English-Pyash and English projections.
+The `translation` verb accepts `from state pyac` with `to state pyash` or
+`to state english`; unknown or unsegmentable Pyac tokens remain hard errors.
