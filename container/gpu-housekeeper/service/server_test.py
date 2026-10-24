@@ -888,6 +888,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.orig_run_docker = server.run_docker
     self.orig_observe_runtime_activity = server.observe_runtime_activity
     self.orig_idle_grace_seconds = server.idle_grace_seconds
+    self.orig_discharge_runtime = server.discharge_runtime
     server._RUNTIME_ACTIVITY.clear()
     server._PROFILES.clear()
     server._JOBS.clear()
@@ -904,6 +905,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     server.run_docker = self.orig_run_docker
     server.observe_runtime_activity = self.orig_observe_runtime_activity
     server.idle_grace_seconds = self.orig_idle_grace_seconds
+    server.discharge_runtime = self.orig_discharge_runtime
     server._RUNTIME_ACTIVITY.clear()
     server._PROFILES.clear()
     server._JOBS.clear()
@@ -1169,6 +1171,31 @@ class HousekeeperCapacityTests(unittest.TestCase):
     server.ollama_running_model_status = lambda: self.fail("must not inspect/unload after unknown activity")
     result = server.discharge_runtime("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
     self.assertFalse(result["success"])
+
+  def test_explicit_profile_discharge_uses_ollama_provider_hook(self):
+    server._PROFILES["qwen-test"] = {
+      "profileName": "qwen-test",
+      "runtimeName": "ollama",
+      "loaded": True,
+    }
+    calls = []
+    server.discharge_runtime = lambda runtime_name, runtime_entry: calls.append((runtime_name, runtime_entry)) or {
+      "success": True,
+      "runtimeName": runtime_name,
+      "reason": "unloaded",
+    }
+
+    result = server.discharge({
+      "profileName": "qwen-test",
+    }, {
+      "ollama": {
+        "runtimeName": "ollama",
+        "dischargeKind": "ollama",
+      },
+    })
+
+    self.assertTrue(result["discharged"])
+    self.assertEqual(calls[0][0], "ollama")
 
   def test_strata_capacity_admission_reclaims_idle_ollama_through_housekeeper(self):
     telemetry = iter([
@@ -1462,6 +1489,7 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
     self.orig_request_comfyui_json = server.request_comfyui_json
+    self.orig_poll_comfyui_history = server.poll_comfyui_history
     server._PROFILES.clear()
     server._JOBS.clear()
 
@@ -1469,6 +1497,7 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_comfyui_json = self.orig_request_comfyui_json
+    server.poll_comfyui_history = self.orig_poll_comfyui_history
     server._PROFILES.clear()
     server._JOBS.clear()
 
@@ -1554,6 +1583,58 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     }, {"comfyui": {"runtimeName": "comfyui", "gpuExpected": True}})
 
     self.assertEqual(actions, [("comfyui", "beginAction")])
+
+  def test_comfyui_cuda_context_error_restarts_idle_provider_and_retries(self):
+    actions = []
+    prompt_ids = iter(["prompt-first", "prompt-retry"])
+    poll_count = {"value": 0}
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running",
+    }
+    server.runtime_action = lambda _registry, runtime_name, action_key: actions.append((runtime_name, action_key)) or {
+      "success": True,
+      "status": "running",
+      "message": "restarted",
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/prompt":
+        return {"prompt_id": next(prompt_ids)}
+      if pathname == "/queue":
+        return {"queue_running": [], "queue_pending": []}
+      raise AssertionError(pathname)
+
+    def fake_poll(_prompt_id, _timeout_sec=None, **_kwargs):
+      poll_count["value"] += 1
+      if poll_count["value"] == 1:
+        raise RuntimeError("CUDA error: operation not permitted")
+      return {"outputs": {"9": {"audio": [{"filename": "voice.wav"}]}}}
+
+    server.request_comfyui_json = fake_request
+    server.poll_comfyui_history = fake_poll
+    result = server.execute_comfyui_job({
+      "runtimeName": "comfyui",
+      "profileName": "qwen-say",
+      "jobSpec": {
+        "kind": "comfyui-say",
+        "prompt": {"1": {"inputs": {"text": "hello"}}},
+      },
+    }, {
+      "comfyui": {
+        "runtimeName": "comfyui",
+        "containerName": "comfyui",
+        "gpuExpected": True,
+        "activityProbe": "comfyui-queue",
+        "dischargeKind": "comfyui",
+      },
+    })
+
+    self.assertEqual(result["promptId"], "prompt-retry")
+    self.assertEqual(actions, [("comfyui", "restartAction")])
+    self.assertEqual(poll_count["value"], 2)
 
 
 class HousekeeperKatagoTests(unittest.TestCase):
