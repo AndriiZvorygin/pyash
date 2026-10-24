@@ -9,7 +9,7 @@ import {
 } from "../../../library/vliw/phrase.mjs";
 import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 
-export const PYAC_TO_ENGLISH_PYASH_FORMAT = "pyac-to-english-pyash-v1";
+export const PYAC_TO_ENGLISH_PYASH_FORMAT = "pyac-to-english-pyash-v2";
 
 const CASE_NAMES = new Map([
   ["na", "nominative"],
@@ -381,6 +381,10 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
     .join(" ");
 }
 
+function finishEnglishPyash(mood, body) {
+  return `${[mood, body].filter(Boolean).join(" ")}.`;
+}
+
 function decodedPart(token, glosses) {
   const grammar = token.en.endsWith("_");
   return {
@@ -400,7 +404,7 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
   const mood = ENGLISH_MOOD_GLOSSES.get(sourceMood) ?? sourceMood;
   if (parts.phrases.length === 0) {
     const standalone = renderPhrase(parts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true });
-    return [standalone, mood].filter(Boolean).join(" ");
+    return finishEnglishPyash(mood, standalone);
   }
   const subjectPhrase = selectSubjectPhrase(parts);
   const nominalPredicate = parts.trailing.some((part) => ["ye", "sa", "mi", "nyah", "ya"].includes(part.pya))
@@ -438,16 +442,16 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
   const renderedVerb = negative ? `not ${verb}` : verb;
   const rendered = ["su", subject, "be", renderedVerb];
   if (objectText) rendered.push("ob", ...objectText.split(/\s+/u));
-  rendered.push(mood);
-  if (addressPhrases.length === 0) return rendered.join(" ");
-  const address = addressPhrases
-    .map((phrase) => renderPhrase(
-      phrase.tokens.map((token) => decodedPart(token, glosses)),
-      { vocativeMarker: true }
-    ))
-    .filter(Boolean)
-    .join(" ");
-  return `${address}, ${rendered.join(" ")}`;
+  const body = addressPhrases.length === 0
+    ? rendered.join(" ")
+    : `${addressPhrases
+      .map((phrase) => renderPhrase(
+        phrase.tokens.map((token) => decodedPart(token, glosses)),
+        { vocativeMarker: true }
+      ))
+      .filter(Boolean)
+      .join(" ")}, ${rendered.join(" ")}`;
+  return finishEnglishPyash(mood, body);
 }
 
 function renderEnglish(sentence, tokens, decoded, glosses) {
