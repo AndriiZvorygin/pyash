@@ -1,9 +1,14 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import { buildProgram } from "../../../program.mjs";
 
 export const ENGLISH_GRAMMAR_FORMAT = "english-grammar-v1";
 export const ENGLISH_GRAMMAR_NAME = "translation_english_grammar";
+
+function sourceHash(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
 
 const GRAMMAR_KINDS = new Set([
   "pronoun",
@@ -121,7 +126,7 @@ export function parseEnglishGrammarCatalog(source, {
     format: ENGLISH_GRAMMAR_FORMAT,
     name,
     source: metadata.source ?? "",
-    sourceHash: metadata["source-hash"] ?? "",
+    sourceHash: metadata["source-hash"] ?? sourceHash(source),
     entries
   };
 }

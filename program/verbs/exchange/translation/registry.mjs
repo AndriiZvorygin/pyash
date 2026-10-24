@@ -1,4 +1,5 @@
 import { englishLineToSentence, sentenceToEnglish } from "./english.mjs";
+import { analyzeDefaultEnglishSentence } from "./english_sentence.mjs";
 import { chineseLineToSentence, sentenceToChinese } from "./chinese.mjs";
 import { frenchLineToSentence, sentenceToFrench } from "./french.mjs";
 import { hindiLineToSentence, sentenceToHindi } from "./hindi.mjs";
@@ -44,6 +45,7 @@ registerTranslationAdapter({
   name: "english",
   aliases: ["en"],
   toPyash: englishLineToSentence,
+  analyzeSentence: analyzeDefaultEnglishSentence,
   fromPyash: sentenceToEnglish
 });
 

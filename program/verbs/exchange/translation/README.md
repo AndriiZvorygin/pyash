@@ -22,6 +22,25 @@ Template pairs live alongside exact pairs:
 Templates use placeholders like `[name of su]` and `[num of ob]` so a single entry covers many
 sentences. Exact pairs always win; templates are a fallback before the formatter.
 
+## Document pipeline
+
+`translation_pipeline.mjs` is the shared source-text path. It accepts an explicit registered
+language and a sentence-aware document, preserves source offsets, resolves deterministic lexical
+and grammar evidence, and emits resolved, provisional, or unresolved records. Provisional records
+retain token evidence and queued vocabulary candidates without entering executable Pyac output.
+English uses the English30k, lemma, grammar, compound, and sentence resources; the other
+registered adapters use their existing structured line parsers until free-text analyzers are
+added. A caller may supply the existing Housekeeper verifier for contextual candidates.
+
+The durable command writes the translation evidence catalog and the existing Pyac catalog/pack:
+
+```
+node command/translate_document.mjs english source.txt translation.pya catalog.pya pack.pyac
+```
+
+The translation catalog remains the evidence record. Only resolved canonical sentences are passed
+to Pyac lowering; unresolved vocabulary stays available for later catalog expansion.
+
 To regenerate the English pairs from `examples/pyash/*.pya`:
 
 ```
