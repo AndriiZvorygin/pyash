@@ -100,6 +100,10 @@ test("Lord's Prayer translation fuses grammar endings and emits clause moods", a
   assert.equal(translation.clauses[0].pyashSurface, translation.clauses[0].pyac);
   assert.equal(translation.clauses[2].pyac, "saye hmucna cyakte tlapta tcunjwih");
   assert.equal(translation.clauses[3].pyac, "nyahyi trenmyah nyahye dlatci hpupka kwinpcih");
+  assert.equal(
+    translation.clauses[3].englishPyash,
+    "su you ob us today our hodiernal_tense adj bread be give do"
+  );
   assert.equal(translation.clauses[5].pyac, "nyahna pcah nyahye hdef hgenpuka hsonrali");
   assert.equal(translation.clauses[8].pyac, "hyap syunna wa htafna wa nyamna hnispumyah sayeli");
   assert.equal(translation.clauses[9].pyac, "hretli");
