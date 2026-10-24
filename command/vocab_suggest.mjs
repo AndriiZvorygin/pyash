@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { buildProgram } from "../program/program.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { loadCoverage } from "./compound_coverage.mjs";
+import { renderPyacSurface } from "../program/verbs/exchange/translation/pyash_surface.mjs";
 import {
   loadDefaultEnglish30kCoverage,
   lookupEnglish30kCoverage
@@ -571,7 +572,8 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   }
 
   for (const [token, ranked] of [...grammarMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-    report(`${token}: grammar -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+    const pyac = renderPyacSurface(ranked.pyashSequence.join(" "));
+    report(`${token}: grammar -> ${pyac} (English30k rank ${ranked.rank})`);
   }
 
   if (mapPath) {

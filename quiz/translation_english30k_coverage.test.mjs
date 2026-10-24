@@ -450,13 +450,13 @@ test("vocab_suggest reports an English grammatical construction", async () => {
     report: (line) => lines.push(String(line))
   });
   assert.equal(result.exitCode, 0);
-  assert.match(lines.join("\n"), /our: grammar -> nyah ye \(English30k rank 66\)/u);
+  assert.match(lines.join("\n"), /our: grammar -> nyahye \(English30k rank 66\)/u);
 });
 
 test("vocab_suggest reports Lord's Prayer pronouns and conjunctions through grammar particles", async () => {
   const expected = new Map([
     ["us", "nyah"],
-    ["yours", "sa ye"],
+    ["yours", "saye"],
     ["and", "wa"],
     ["also", "pcah"],
     ["but", "pyuh"]

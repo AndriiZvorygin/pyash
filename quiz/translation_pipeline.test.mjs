@@ -31,6 +31,11 @@ test("Pyash surface rendering fuses endings and preserves sentence-final moods",
     renderPyashSurface("pfin ki vi hcas pu ka"),
     "pfinkivi hcaspuka"
   );
+  assert.equal(renderPyashSurface("cyah tlih"), "cyahtlih");
+  assert.equal(renderPyashSurface("cyah tlah"), "cyahtlah");
+  assert.equal(renderPyashSurface("ya no"), "yano");
+  assert.equal(renderPyashSurface("clah tlih"), "clahtlih");
+  assert.equal(renderPyashSurface("pfin ra no ya"), "pfinra noya");
 });
 
 test("Pyash sentence surface rendering keeps canonical sentence structure available", () => {
