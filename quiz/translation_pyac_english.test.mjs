@@ -23,6 +23,22 @@ test("Pyac decoder restores phrase-final location cases", () => {
   assert.equal(result.english, "I walked into houses.");
 });
 
+test("Pyac decoder derives English roles and prepositions from VLIW grammar", () => {
+  const prayerOpening = decodePyacSentence("nyahye hpapwu cyakte saye hnimna swutpyohjwih");
+  assert.equal(
+    prayerOpening.englishPyash,
+    'su your name ob name "our father in heaven" be holy jwih'
+  );
+  assert.equal(prayerOpening.english, "Our father in heaven, may your name be holy.");
+
+  const negativeImperative = decodePyacSentence("nyahyi no hyocma tlakpcih");
+  assert.equal(
+    negativeImperative.englishPyash,
+    'su you ob name "us to temptation" be not bring pcih'
+  );
+  assert.equal(negativeImperative.english, "Do not bring us to temptation.");
+});
+
 test("Pyac document translation keeps one record per input line", () => {
   const result = translatePyacToEnglishPyash("mina hcaspuka pfinkiya\nmina hpupka kwinpcih");
   assert.equal(result.records.length, 2);
