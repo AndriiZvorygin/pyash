@@ -8,6 +8,7 @@ import {
   loadDefaultEnglishSentenceResources,
   resolveEnglishSentence
 } from "./english_sentence.mjs";
+import { renderPyashSentenceSurface } from "./pyash_surface.mjs";
 import { resolveTranslationSource } from "./registry.mjs";
 
 export const TRANSLATION_PIPELINE_FORMAT = "translation-pipeline-v1";
@@ -182,6 +183,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
   const pyashPreview = sentence
     ? sentenceToPyash(sentence)
     : text(analysis.pyash ?? analysis.verbPhrase?.pyashSequence?.join(" "));
+  const pyashSurface = sentence ? renderPyashSentenceSurface(sentence) : "";
   const unresolved = analysis.unresolved.length > 0
     ? [...new Set(analysis.unresolved.map(text).filter(Boolean))]
     : sentence ? [] : [segment.text];
@@ -205,6 +207,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     context: [...context],
     status,
     ...(sentence ? { sentence, pyash: pyashPreview } : {}),
+    ...(pyashSurface ? { pyashSurface } : {}),
     ...(pyashPreview && !sentence ? { pyashPreview } : {}),
     ...(unresolved.length > 0 ? { unresolved } : {}),
     ...(analysis.candidates.length > 0 ? { candidates: analysis.candidates } : {}),

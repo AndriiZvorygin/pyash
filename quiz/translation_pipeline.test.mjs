@@ -13,6 +13,32 @@ import {
   segmentTranslationDocument,
   translateDocument
 } from "../program/verbs/exchange/translation/translation_pipeline.mjs";
+import {
+  renderPyashSentenceSurface,
+  renderPyashSurface
+} from "../program/verbs/exchange/translation/pyash_surface.mjs";
+
+test("Pyash surface rendering fuses endings and preserves sentence-final moods", () => {
+  assert.equal(
+    renderPyashSurface("hpap wu cyak te sa ye hnim na swut pyoh jwih"),
+    "hpapwu cyakte saye hnimna swutpyoh jwih"
+  );
+  assert.equal(
+    renderPyashSurface("nyah yi tren myah nyah ye dlat ci hpup ka kwin pcih"),
+    "nyahyi trenmyah nyahye dlatci hpupka kwin pcih"
+  );
+});
+
+test("Pyash sentence surface rendering keeps canonical sentence structure available", () => {
+  assert.equal(
+    renderPyashSentenceSurface({
+      su: { name: "nyah ye hcas pu" },
+      be: "pfin ki",
+      mood: "ya"
+    }),
+    "su name nyahye hcaspu be pfinki ya"
+  );
+});
 
 test("translation segmentation preserves sentence text and source offsets", () => {
   const source = "I walked.\nYou ran! 世界。";
@@ -50,6 +76,7 @@ test("English translation uses the shared resources and retains unresolved vocab
 
   assert.deepEqual(result.counts, { resolved: 1, provisional: 1, unresolved: 0 });
   assert.equal(result.records[0].pyash, "su name nyah ye hcas pu be pfin ki ya");
+  assert.equal(result.records[0].pyashSurface, "su name nyahye hcaspu be pfinki ya");
   assert.equal(result.records[1].status, "provisional");
   assert.equal(result.resourceHashes.english30k.length, 64);
   assert.equal(result.resourceHashes.englishLemmas.length, 64);
