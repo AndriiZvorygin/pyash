@@ -28,7 +28,10 @@ import {
   verifyCompoundCoverage
 } from "../program/verbs/exchange/translation/compound_verification.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
-import { parseCompoundLexicon } from "../program/verbs/exchange/translation/compound_lexicon.mjs";
+import {
+  loadCompoundLexicon,
+  parseCompoundLexicon
+} from "../program/verbs/exchange/translation/compound_lexicon.mjs";
 
 const atomicEntries = [
   { en: "snake", pya: "snak" },
@@ -100,6 +103,30 @@ test("compound coverage keeps Pyash compounds head-final", () => {
   assert.equal(snakeBird.sourceSurfaces.chinese, "蛇鸟");
   assert.equal(coverage.accepted.some((entry) => entry.target === "newspaper"), false);
   assert.equal(coverage.existingAtomic.some((entry) => entry.target === "newspaper"), true);
+});
+
+test("curated prayer constructions enter the shared compound catalog", async () => {
+  const entries = await loadCompoundLexicon({
+    url: new URL("../program/verbs/exchange/translation/compound_coverage_curated.pya", import.meta.url),
+    name: "translation_compounds_derived_curated",
+    language: "canonical"
+  });
+  const kingdom = entries.find((entry) => entry.surface === "kingdom");
+  const debtor = entries.find((entry) => entry.surface === "debtor");
+
+  assert.ok(kingdom);
+  assert.deepEqual(kingdom.morphemes, ["king", "government"]);
+  assert.deepEqual(kingdom.pyashSequence, ["hyap", "syun"]);
+  assert.equal(kingdom.head, "government");
+  assert.deepEqual(kingdom.componentRoles, ["lexeme", "lexeme"]);
+  assert.equal(kingdom.provenance, "lord_prayer_lexicon.pya");
+
+  assert.ok(debtor);
+  assert.deepEqual(debtor.morphemes, ["debit", "agent"]);
+  assert.deepEqual(debtor.pyashSequence, ["hdef", "hgen"]);
+  assert.equal(debtor.head, "agent");
+  assert.deepEqual(debtor.componentRoles, ["lexeme", "lexeme"]);
+  assert.equal(debtor.provenance, "lord_prayer_lexicon.pya");
 });
 
 test("compound coverage separates delimited use from accidental closed splits", () => {
@@ -269,7 +296,7 @@ test("current dictionaries produce broad derived coverage", async (t) => {
     layerIndex: { ...layerIndex, englishToPyash }
   });
   assert.equal(coverage.existingAtomic.length, 7830);
-  assert.equal(coverage.accepted.length, 393);
+  assert.equal(coverage.accepted.length, 395);
   assert.equal(coverage.candidates.length, 411);
   const blueprint = coverage.accepted.find((entry) => entry.target === "blueprint");
   assert.deepEqual(blueprint.pyashSequence, ["plun", "trat"]);
