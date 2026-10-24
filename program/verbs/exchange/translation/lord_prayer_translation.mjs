@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import {
   decodePhraseVliw,
   lowerPhraseVliw,
@@ -5,19 +7,14 @@ import {
   renderVliwStructuralPyash
 } from "../../../library/vliw/phrase.mjs";
 import { renderEnglishFromVliw } from "./pyac_to_english_pyash.mjs";
+import { parseLordPrayerLowering } from "./lord_prayer_lowering.mjs";
 
 export const LORD_PRAYER_TRANSLATION_FORMAT = "lord-prayer-translation-v2";
 
-const CLAUSE_SOURCES = Object.freeze([
-  ["Matthew 6:9a", "Our Father in heaven, may your name be kept holy."],
-  ["Matthew 6:10a", "Let your Kingdom come."],
-  ["Matthew 6:10b", "Let your will be done, as in heaven, so on earth."],
-  ["Matthew 6:11", "Give us today our daily bread."],
-  ["Matthew 6:12a", "Forgive us our debts."],
-  ["Matthew 6:12b", "As we also forgive our debtors."],
-  ["Matthew 6:13a", "Bring us not into temptation."],
-  ["Matthew 6:13b", "But deliver us from the evil one."]
-]);
+const DEFAULT_LOWERING = parseLordPrayerLowering(readFileSync(
+  new URL("./lord_prayer_lowering.pya", import.meta.url),
+  "utf8"
+));
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -35,28 +32,10 @@ function selected(lexicon, term) {
   return [...candidate.pyashSequence];
 }
 
-function ending(sequence, ...markers) {
-  const result = [...sequence];
-  if (result.length === 0) throw invalid("Lord's Prayer phrase has no lexical head");
-  result.push(...markers);
-  return result;
-}
-
-const LORD_PRAYER_VLIW_SIGNATURES = Object.freeze([
-  "nyah ye hpap wu cyak te sa ye hnim na swut pyoh jwih",
-  "sa ye hyap syun na hlam jwih",
-  "sa ye hmuc na cyak te swih tlap ta tcun jwih",
-  "nyah yi tren myah nyah ye dlat ci hpup ka kwin pcih",
-  "nyah yi nyah ye hdef pu ka hson pcih",
-  "nyah na pcah nyah ye hdef hgen pu ka hson ra li",
-  "nyah yi no hyoc ma tlak pcih",
-  "pyuh nyah yi cwak so hxuc pcih"
-]);
-
-export function renderLordPrayerClauseFromVliw(input) {
+export function renderLordPrayerClauseFromVliw(input, { signatures = [] } = {}) {
   const decoded = decodePhraseVliw(input);
   const pyash = renderVliwStructuralPyash(decoded);
-  const index = LORD_PRAYER_VLIW_SIGNATURES.indexOf(pyash);
+  const index = signatures.indexOf(pyash);
   if (index < 0) {
     throw invalid("Lord's Prayer VLIW clause has no semantic projection", { pyash });
   }
@@ -79,10 +58,30 @@ export function renderLordPrayerClauseFromVliw(input) {
   };
 }
 
-function clause(index, components) {
-  const [locator, source] = CLAUSE_SOURCES[index];
+function lowerSequence(sequence, lexicon) {
+  return sequence.flatMap((item) => {
+    if (item.term) {
+      const selectedSequence = selected(lexicon, item.term);
+      if (item.take !== undefined && item.take > selectedSequence.length) {
+        throw invalid("Lord's Prayer lowering take exceeds selected term sequence", {
+          term: item.term,
+          take: item.take,
+          length: selectedSequence.length
+        });
+      }
+      return [
+        ...selectedSequence.slice(0, item.take ?? selectedSequence.length),
+        ...item.markers
+      ];
+    }
+    return [item.pya];
+  });
+}
+
+function clause(index, loweringClause, components, signatures) {
   const lowered = lowerPhraseVliw({ tokens: components });
-  const projection = renderLordPrayerClauseFromVliw(lowered.vectors);
+  const projection = renderLordPrayerClauseFromVliw(lowered.vectors, { signatures });
+  const { locator, source } = loweringClause;
   if (projection.index !== index) {
     throw invalid("Lord's Prayer clause order does not match its VLIW projection", { locator, index, actual: projection.index });
   }
@@ -96,74 +95,27 @@ function clause(index, components) {
   };
 }
 
-export function buildLordPrayerTranslation({ lexicon } = {}) {
+export function buildLordPrayerTranslation({ lexicon, lowering = DEFAULT_LOWERING } = {}) {
   if (!lexicon || !Array.isArray(lexicon.entries)) {
     throw invalid("Lord's Prayer translation requires a parsed lexicon");
   }
-
-  const our = selected(lexicon, "our");
-  const us = our.slice(0, 1);
-  const yours = selected(lexicon, "yours");
-  const kingdom = selected(lexicon, "kingdom");
-  const comparison = selected(lexicon, "as");
-  const clauses = [
-    clause(0, [
-      ...our,
-      ...ending(selected(lexicon, "father"), "wu"),
-      ...ending(selected(lexicon, "heaven"), "te"),
-      ...yours,
-      ...ending(selected(lexicon, "name"), "na"),
-      ...selected(lexicon, "holy"), "pyoh", "jwih"
-    ]),
-    clause(1, [
-      ...yours,
-      ...ending(kingdom, "na"),
-      ...selected(lexicon, "come"), "jwih"
-    ]),
-    clause(2, [
-      ...yours,
-      ...ending(selected(lexicon, "will"), "na"),
-      ...ending(selected(lexicon, "heaven"), "te", ...comparison),
-      ...ending(selected(lexicon, "earth"), "ta"),
-      "tcun", "jwih"
-    ]),
-    clause(3, [
-      ...ending(us, "yi"),
-      ...ending(selected(lexicon, "today"), "myah"),
-      ...our,
-      ...selected(lexicon, "daily"),
-      ...selected(lexicon, "give"), "pcih"
-    ]),
-    clause(4, [
-      ...ending(us, "yi"),
-      ...our,
-      ...ending(selected(lexicon, "debts"), "ka"),
-      ...selected(lexicon, "forgive"), "pcih"
-    ]),
-    clause(5, [
-      ...ending(us, "na"),
-      "pcah",
-      ...our,
-      ...ending(selected(lexicon, "debtors"), "ka"),
-      ...selected(lexicon, "forgive"), "ra", "li"
-    ]),
-    clause(6, [
-      ...ending(us, "yi"),
-      "no",
-      ...ending(selected(lexicon, "temptation"), "ma"),
-      ...selected(lexicon, "bring"), "pcih"
-    ]),
-    clause(7, [
-      "pyuh",
-      ...ending(us, "yi"),
-      ...ending(selected(lexicon, "evil"), "so"),
-      ...selected(lexicon, "deliver"), "pcih"
-    ])
-  ];
+  if (!lowering || !Array.isArray(lowering.clauses) || lowering.clauses.length === 0) {
+    throw invalid("Lord's Prayer translation requires parsed lowering data");
+  }
+  const prepared = lowering.clauses.map((loweringClause) => ({
+    loweringClause,
+    components: lowerSequence(loweringClause.sequence, lexicon)
+  }));
+  const signatures = prepared.map(({ components }) => renderVliwStructuralPyash(
+    decodePhraseVliw(lowerPhraseVliw({ tokens: components }).vectors)
+  ));
+  const clauses = prepared.map(({ loweringClause, components }, index) => (
+    clause(index, loweringClause, components, signatures)
+  ));
 
   return {
     format: LORD_PRAYER_TRANSLATION_FORMAT,
-    reference: "Matthew 6:9-13",
+    reference: lowering.metadata.reference,
     clauses
   };
 }
