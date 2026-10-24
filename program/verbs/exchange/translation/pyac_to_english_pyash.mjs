@@ -7,6 +7,7 @@ import {
   PHRASE_CASE_WORDS,
   phraseParts
 } from "../../../library/vliw/phrase.mjs";
+import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 
 export const PYAC_TO_ENGLISH_PYASH_FORMAT = "pyac-to-english-pyash-v1";
 
@@ -81,6 +82,21 @@ const CASE_PREPOSITIONS = new Map([
   ["sa7", "with"],
   ["ta7", "to"]
 ]);
+for (const context of Object.values(compositionalGrid)) {
+  for (const entry of Object.values(context)) {
+    if (!entry?.axis || !entry.pya || !entry.keyword || CASE_PREPOSITIONS.has(entry.pya)) continue;
+    CASE_PREPOSITIONS.set(entry.pya, entry.keyword
+      .replaceAll("outof", "out of")
+      .replaceAll("fromunder", "from under")
+      .replaceAll("fromstate", "from state")
+      .replaceAll("fromperson", "from person")
+      .replaceAll("fromgroup", "from group")
+      .replaceAll("fromtext", "from text")
+      .replaceAll("intogroup", "into group")
+      .replaceAll("accordingto", "according to")
+      .replaceAll("totext", "to text"));
+  }
+}
 const PRONOUN_FORMS = new Map([
   ["mi", { subject: "I", object: "me", possessive: "my", standalone: "mine" }],
   ["sa", { subject: "you", object: "you", possessive: "your", standalone: "yours" }],
@@ -113,7 +129,9 @@ function englishWord(entry) {
 
 function englishGrammarWord(value) {
   const word = text(value).replace(/_$/u, "").replaceAll("_", " ");
-  return word === "adjective" ? "adj" : word;
+  if (word === "adjective") return "adj";
+  if (word === "hodiernal tense") return "today";
+  return word;
 }
 
 function buildInventory(entries = pyashWords) {
@@ -268,11 +286,13 @@ function renderCasePreposition(caseName, words, parts, { vocativeMarker = false 
   if (caseName === "myah" && words === "forever") return "";
   if (caseName === "wu") return vocativeMarker ? "O" : "";
   if (caseName === "na" || caseName === "ka") return "";
-  return CASE_PREPOSITIONS.get(caseName) ?? (caseName === "yi" ? "to" : "");
+  return CASE_PREPOSITIONS.get(caseName)
+    ?? (caseName === "yi" ? "to" : CASE_NAMES.get(caseName) ?? "");
 }
 
 function rootEnglish(part) {
-  return part.english.replace(/_$/u, "");
+  const word = part.english.replace(/_$/u, "");
+  return word === "hodiernal_tense" ? "today" : word;
 }
 
 function inflectVerb(parts) {
@@ -306,7 +326,8 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
     if (part.kind === "root" || isPronoun(part)) {
-      let word = rootEnglish(part);
+      const adjective = parts[index + 1]?.pya === "ci";
+      let word = part.pya === "dlat" && adjective ? "daily" : rootEnglish(part);
       if (isPronoun(part)) word = pronounForm(part, subject ? "subject" : "object");
       if (possessive) {
         const owner = PRONOUN_FORMS.get(possessivePya);
@@ -316,6 +337,7 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
         possessivePya = null;
       }
       words.push(word);
+      if (adjective) index += 1;
       continue;
     }
     if (part.pya === "ye") {
