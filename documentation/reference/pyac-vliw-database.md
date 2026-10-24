@@ -350,6 +350,14 @@ source-specific pilot, not yet a general Greek translation adapter. A complete
 New Testament path remains a later scope that will add sentence-level Greek
 morphology and clause resolution after this evidence contract is extended.
 
+The executable NA28 clause lowering is stored separately in
+`program/verbs/exchange/translation/lord_prayer_lowering.pya`. Each clause row
+contains its source locator and ordered term/marker sequence; the JavaScript
+adapter resolves selected lexicon candidates, lowers those sequences through
+the shared VLIW phrase encoder, and derives the structural signatures from the
+same data. Expected Pyac, Pyash, and English-Pyash forms live in the quizzes as
+assertions.
+
 ### Ranked English30k coverage
 
 The ranked lexical target is the Gutenberg-derived source

@@ -14,6 +14,10 @@ import {
   renderLordPrayerAnalysisPya
 } from "../program/verbs/exchange/translation/hkestlat_compound_analysis.mjs";
 import { buildLordPrayerTranslation } from "../program/verbs/exchange/translation/lord_prayer_translation.mjs";
+import {
+  loadLordPrayerLowering,
+  parseLordPrayerLowering
+} from "../program/verbs/exchange/translation/lord_prayer_lowering.mjs";
 import { decodePhraseVliw, renderVliwPyac } from "../program/library/vliw/phrase.mjs";
 
 function fixtureSources() {
@@ -96,6 +100,30 @@ test("Greek pilot index and renderer retain stable candidate identities", async 
   const program = buildProgram(source);
   assert.ok(program.sentences.some((sentence) => sentence?.su?.text === "term:daily"));
 });
+
+test("Lord's Prayer lowering is parser-backed and NA28 bounded", async () => {
+  const lowering = await loadLordPrayerLowering();
+  assert.equal(lowering.format, "lord-prayer-lowering-v1");
+  assert.equal(lowering.clauses.length, 8);
+  assert.equal(lowering.clauses.at(-1).locator, "Matthew 6:13b");
+  assert.deepEqual(lowering.clauses[2].sequence[2], {
+    term: "heaven",
+    markers: ["te", "swih"]
+  });
+  assert.deepEqual(parseLordPrayerLowering(renderLoweringFixture(lowering)).clauses, lowering.clauses);
+});
+
+function renderLoweringFixture(lowering) {
+  const lines = [
+    "su name translation_lord_prayer_lowering be map def",
+    `su text "format" ob text ${JSON.stringify(lowering.format)} ya`,
+    ...lowering.clauses.map((clause) => (
+      `su text ${JSON.stringify(`clause:${clause.locator}`)} ob text ${JSON.stringify(JSON.stringify(clause))} ya`
+    )),
+    "prah"
+  ];
+  return `${lines.join("\n")}\n`;
+}
 
 test("Lord's Prayer translation fuses grammar endings and emits clause moods", async () => {
   const translation = buildLordPrayerTranslation({ lexicon: await loadLordPrayerLexicon() });
