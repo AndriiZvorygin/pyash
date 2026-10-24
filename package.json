@@ -36,6 +36,8 @@
   },
   "bin": {
     "pyash": "command/pyash.mjs",
+    "wordsuggest": "command/vocab_suggest.mjs",
+    "kwon": "command/vocab_suggest.mjs",
     "print-audit": "command/print_audit_report.mjs",
     "print-audit-reconcile": "command/print_audit_reconcile.mjs"
   },

@@ -413,6 +413,28 @@ test("lwonprom-derived English grammar keeps particles separate from lexical roo
   assert.deepEqual(alreadyPlural.pyashSequence, ["hpap", "pu"]);
 });
 
+test("indefinite English pronouns use lwonprom grammar quantifiers", async () => {
+  const catalog = await loadEnglishGrammarCatalog();
+  const grammar = buildEnglishGrammarIndex({ catalogEntries: catalog.entries });
+  const expected = new Map([
+    ["someone", ["cyah", "tlih"]],
+    ["anyone", ["cyah", "tlah"]],
+    ["everyone", ["cyah", "wi"]],
+    ["nobody", ["cyah", "no"]],
+    ["something", ["ya", "tlih"]],
+    ["anything", ["ya", "tlah"]],
+    ["everything", ["ya", "wi"]],
+    ["nothing", ["ya", "no"]],
+    ["other", ["clah"]],
+    ["another", ["clah", "tlih"]]
+  ]);
+  for (const [surface, sequence] of expected) {
+    assert.deepEqual(grammar.resolve(surface)?.pyashSequence, sequence, surface);
+  }
+  assert.deepEqual(grammar.resolve("someone")?.components, ["person_", "assertive_quantifier_"]);
+  assert.deepEqual(grammar.resolve("anything")?.components, ["it_", "elective_quantifier_"]);
+});
+
 test("vocab_suggest reports a unique dictionary alias", async () => {
   const lines = [];
   const result = await runVocabSuggest(["he"], {

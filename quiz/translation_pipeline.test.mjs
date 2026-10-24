@@ -247,7 +247,7 @@ test("translation document submits vocabulary review through the injected queue"
   );
   assert.equal(submissions.length, 1);
   assert.match(submissions[0].prompt, /Pyash vocabulary review worker/u);
-  assert.equal(reports[0].vocabularySubmitted, 3);
+  assert.equal(reports[0].vocabularySubmitted, 2);
   assert.equal(output.translation.vocabularyQueue.status, "queued");
   assert.equal(output.translation.vocabularyCandidates.every((candidate) => candidate.queue?.handleId), true);
   const parsed = parseTranslationPipelinePya(readFileSync(translation, "utf8"));
