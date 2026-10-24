@@ -324,7 +324,9 @@ a reconstruction. For the English gloss, **kingdom** emphasizes the royal
 realm or domain, while **reign** emphasizes the active exercise of royal rule.
 Both belong to the semantic range of Greek `βασιλεία` and Syriac
 `malkūthā`, so the lexicon retains `king country`, `king domain`, and `king
-government` as review candidates rather than selecting one automatically.
+government` as lexical review candidates. It also records `dwa2n syun`
+(`god-king government`) as a contextual divine-rule candidate, with the
+prayer's possessive context supplying the divine subject.
 
 The bounded Matthew 6:9-13 lexical pilot is stored in
 `program/verbs/exchange/translation/lord_prayer_lexicon.pya`, linked from the
