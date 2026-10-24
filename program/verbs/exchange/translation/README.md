@@ -38,8 +38,11 @@ The durable command writes the translation evidence catalog and the existing Pya
 node command/translate_document.mjs english source.txt translation.pya catalog.pya pack.pyac
 ```
 
-The translation catalog remains the evidence record. Only resolved canonical sentences are passed
-to Pyac lowering; unresolved vocabulary stays available for later catalog expansion.
+The command automatically submits one deduplicated vocabulary-review duty through the existing
+`vyah start future be gpu mind do` path. The returned handle and candidate queue state are written
+into the translation catalog. The translation catalog remains the evidence record. Only resolved
+canonical sentences are passed to Pyac lowering; unresolved vocabulary stays available for later
+catalog expansion. The queued LLM proposes review evidence and never edits the lexicon directly.
 
 To regenerate the English pairs from `examples/pyash/*.pya`:
 

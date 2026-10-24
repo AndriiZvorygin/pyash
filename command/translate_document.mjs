@@ -7,7 +7,13 @@ import {
   renderTranslationPipelinePya,
   translateDocument
 } from "../program/verbs/exchange/translation/translation_pipeline.mjs";
+import {
+  createDefaultQueuedMindTranslationVocabularySubmitter,
+  submitTranslationVocabularyCandidates
+} from "../program/verbs/exchange/translation/translation_vocabulary_queue.mjs";
 import { writeVliwDatabaseFiles } from "../program/library/vliw/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
 function usageError(message) {
   const error = new Error(`${message}\nusage: node command/translate_document.mjs <language> <source.txt> <translation.pya> <catalog.pya> <pack.pyac>`);
@@ -15,7 +21,10 @@ function usageError(message) {
   return error;
 }
 
-export async function runTranslationDocument(args = process.argv.slice(2), { report = console.log } = {}) {
+export async function runTranslationDocument(args = process.argv.slice(2), {
+  report = console.log,
+  queueVocabulary = null
+} = {}) {
   if (args.length !== 5) throw usageError("translate_document requires language, source, translation catalog, PyAC catalog, and PyAC pack");
   const [language, sourcePath, translationPath, catalogPath, packPath] = args;
   const paths = {
@@ -30,34 +39,48 @@ export async function runTranslationDocument(args = process.argv.slice(2), { rep
     text: source,
     locator: paths.source
   });
-  fs.writeFileSync(paths.translation, renderTranslationPipelinePya(translation), "utf8");
-  const database = lowerTranslationToPyac(translation);
+  const queued = queueVocabulary
+    ? await submitTranslationVocabularyCandidates({
+      result: translation,
+      sourceText: source,
+      submit: queueVocabulary
+    })
+    : { result: translation, submitted: false, submittedCount: 0, handleId: "" };
+  const finalTranslation = queued.result;
+  fs.writeFileSync(paths.translation, renderTranslationPipelinePya(finalTranslation), "utf8");
+  const database = lowerTranslationToPyac(finalTranslation);
   writeVliwDatabaseFiles(database, {
     catalogPath: paths.catalog,
     packPath: paths.pack
   });
   const result = {
     command: "translate-document",
-    language: translation.language,
+    language: finalTranslation.language,
     source: paths.source,
     translation: paths.translation,
     catalog: paths.catalog,
     pack: paths.pack,
-    records: translation.records.length,
-    resolved: translation.counts.resolved,
-    provisional: translation.counts.provisional,
-    unresolved: translation.counts.unresolved,
-    vocabularyCandidates: translation.vocabularyCandidates.length,
+    records: finalTranslation.records.length,
+    resolved: finalTranslation.counts.resolved,
+    provisional: finalTranslation.counts.provisional,
+    unresolved: finalTranslation.counts.unresolved,
+    vocabularyCandidates: finalTranslation.vocabularyCandidates.length,
+    vocabularySubmitted: queued.submittedCount,
+    vocabularyQueueHandle: queued.handleId || null,
     executable: database.catalog.executableCount,
     unsupported: database.catalog.unsupportedCount,
     packHash: database.catalog.packHash
   };
   report(JSON.stringify(result, null, 2));
-  return { translation, database, result };
+  return { translation: finalTranslation, database, result };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  runTranslationDocument().catch((error) => {
+  (async () => {
+    await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret, entryPath: process.cwd() });
+    const queueVocabulary = await createDefaultQueuedMindTranslationVocabularySubmitter();
+    return runTranslationDocument(process.argv.slice(2), { queueVocabulary });
+  })().catch((error) => {
     console.error(error?.message || String(error));
     process.exitCode = 1;
   });

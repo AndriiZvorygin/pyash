@@ -225,3 +225,31 @@ test("English prose with an is-clause stays in sentence review", async () => {
   assert.equal(result.records[0].sentence, undefined);
   assert.deepEqual(result.records[0].unresolved, ["feelings", "actions"]);
 });
+
+test("translation document submits vocabulary review through the injected queue", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pyash-translation-queue-"));
+  const source = join(directory, "source.txt");
+  const translation = join(directory, "translation.pya");
+  const catalog = join(directory, "catalog.pya");
+  const pack = join(directory, "pack.pyac");
+  writeFileSync(source, "Love involves caring for another.\n", "utf8");
+  const submissions = [];
+  const reports = [];
+  const output = await runTranslationDocument(
+    ["english", source, translation, catalog, pack],
+    {
+      report: (value) => reports.push(JSON.parse(value)),
+      queueVocabulary: async (request) => {
+        submissions.push(request);
+        return { status: "queued", ob: { text: "queued" } };
+      }
+    }
+  );
+  assert.equal(submissions.length, 1);
+  assert.match(submissions[0].prompt, /Pyash vocabulary review worker/u);
+  assert.equal(reports[0].vocabularySubmitted, 3);
+  assert.equal(output.translation.vocabularyQueue.status, "queued");
+  assert.equal(output.translation.vocabularyCandidates.every((candidate) => candidate.queue?.handleId), true);
+  const parsed = parseTranslationPipelinePya(readFileSync(translation, "utf8"));
+  assert.equal(parsed.vocabularyCandidates.every((candidate) => candidate.queue?.status === "queued"), true);
+});
