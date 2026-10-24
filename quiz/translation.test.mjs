@@ -83,7 +83,7 @@ test("translation decodes Pyac into English Pyash and English text", async () =>
   );
   const pyashResult = await interpret(toPyash);
   const pyashText = pyashResult?.ob?.text ?? pyashResult?.value?.text;
-  assert.equal(pyashText, "su I be walked ob our houses ya");
+  assert.equal(pyashText, "ya su I be walked ob our houses.");
   assert.equal(pyashResult?.ob?.sentences?.[0]?.be ?? pyashResult?.value?.sentences?.[0]?.be, "pfin ki");
 
   const toEnglish = parse(

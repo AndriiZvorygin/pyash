@@ -106,12 +106,12 @@ test("Lord's Prayer translation fuses grammar endings and emits clause moods", a
   assert.equal(translation.clauses[2].pyac, "saye hmucna cyakteswih tlapta tcunjwih");
   assert.equal(
     translation.clauses[2].englishPyash,
-    "su your purpose be done ob in heaven as on floor may"
+    "may su your purpose be done ob in heaven as on floor."
   );
   assert.equal(translation.clauses[3].pyac, "nyahyi trenmyah nyahye dlatci hpupka kwinpcih");
   assert.equal(
     translation.clauses[3].englishPyash,
-    "su you be give ob us today our daily bread do"
+    "do su you be give ob us today our daily bread."
   );
   assert.equal(translation.clauses[5].pyac, "nyahna pcah nyahye hdef hgenpuka hsonrali");
   assert.equal(translation.clauses[8].pyac, "hyap syunna wa htafna wa nyamna hnispumyah sayeli");
@@ -127,9 +127,9 @@ test("Lord's Prayer renders every text form from decoded VLIW", async () => {
     assert.ok(clause.englishPyash.length > 0, clause.locator);
     assert.ok(clause.english.length > 0, clause.locator);
   }
-  assert.equal(translation.clauses[8].englishPyash, "su yours be is ob king government and strength and glory during ages ya");
+  assert.equal(translation.clauses[8].englishPyash, "ya su yours be is ob king government and strength and glory during ages.");
   assert.equal(translation.clauses[8].english, "Yours is king government and strength and glory during ages.");
-  assert.equal(translation.clauses[9].englishPyash, "firmly ya");
+  assert.equal(translation.clauses[9].englishPyash, "ya firmly.");
   assert.equal(translation.clauses[9].english, "Firmly.");
 });
 
