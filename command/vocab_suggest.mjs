@@ -1,5 +1,9 @@
+#!/usr/bin/env node
+
 import fs from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildProgram } from "../program/program.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { loadCoverage } from "./compound_coverage.mjs";
@@ -603,7 +607,16 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   };
 }
 
-if (import.meta.url === new URL(process.argv[1], "file://").href) {
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   const { exitCode } = await runVocabSuggest(process.argv.slice(2));
   if (exitCode > 0) process.exitCode = exitCode;
 }
