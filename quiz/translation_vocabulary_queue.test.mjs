@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildTranslationVocabularyVerificationPrompt,
+  buildTranslationVocabularyInventory,
   createQueuedMindTranslationVocabularySubmitter,
   submitTranslationVocabularyCandidates,
   translationVocabularyQueueHandle
@@ -35,15 +36,30 @@ const result = {
 };
 
 test("vocabulary review prompt is bounded to supplied candidate evidence", () => {
+  const inventory = buildTranslationVocabularyInventory({
+    sourceText: "Love involves caring for another.",
+    candidates: result.vocabularyCandidates,
+    grammarEntries: [{
+      surface: "another",
+      kind: "pronoun",
+      pyashSequence: ["hqok"],
+      position: "standalone"
+    }]
+  });
   const prompt = buildTranslationVocabularyVerificationPrompt({
     language: "english",
     sourceText: "Love involves caring for another.",
     locator: "love.txt",
-    candidates: result.vocabularyCandidates
+    candidates: result.vocabularyCandidates,
+    inventory
   });
   assert.match(prompt, /Return exactly one JSON object/u);
   assert.match(prompt, /candidate-one/u);
   assert.match(prompt, /candidate-two/u);
+  assert.match(prompt, /AUTHORITATIVE PYASH/u);
+  assert.match(prompt, /love.*pyan/u);
+  assert.match(prompt, /deterministic parser's candidate sequences are heuristics/u);
+  assert.match(prompt, /another.*hqok/u);
   assert.doesNotMatch(prompt, /ollama/u);
 });
 
@@ -82,4 +98,6 @@ test("default vocabulary submitter uses the Pyash future GPU duty", async () => 
   assert.equal(response.status, "queued");
   assert.match(sentence, /vyah start future be gpu mind do/u);
   assert.match(sentence, /translation-vocabulary-test/u);
+  assert.match(sentence, /think.*false/u);
+  assert.match(sentence, /format.*candidates/u);
 });
