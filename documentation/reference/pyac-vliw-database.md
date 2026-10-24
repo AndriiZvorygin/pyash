@@ -414,10 +414,21 @@ simple finite forms, progressive auxiliaries, and the first noun-phrase
 grammar layer. For example, the durable catalog records `walked` as `pfin ki`,
 `walks` as `pfin ra`, and the contextual participle candidate `walking` as
 `pfin pfih`; `I am walking` resolves to `pfin pfih ra`. Sentence composition
-keeps grammar particles separate from lexical roots: `our houses` becomes
-`nyah ye hcas pu`, `and` becomes `wa`, `thy` becomes `sa ye`, and `not`
-becomes `no`. Imperative clauses use the understood second-person subject and
-remain contextual predicate candidates for Housekeeper review.
+keeps grammar particles separate from lexical roots: `our houses` keeps the
+canonical component sequence `nyah ye hcas pu`, while its spoken surface is
+`nyahye hcaspu`; `and` remains `wa`, `thy` has the spoken surface `saye`, and
+`not` remains `no`. Imperative clauses use the understood second-person
+subject and remain contextual predicate candidates for Housekeeper review.
+
+Resolved translation records carry both projections: `pyash` preserves
+space-delimited grammar components for replay and PyAC lowering, while
+`pyashSurface` fuses noun, adjective, case, voice, tense, and aspect endings
+into spoken words and leaves sentence-final moods as particles. The reusable
+surface renderer is
+`program/verbs/exchange/translation/pyash_surface.mjs`. The bounded Greek
+Lord's Prayer pilot uses it through
+`program/verbs/exchange/translation/lord_prayer_translation.mjs`; its daily
+bread clause renders as `nyahyi trenmyah nyahye dlatci hpupka kwin pcih`.
 
 Standalone `vocab_suggest` output keeps the lexical lemma line and adds a
 morphology candidate line. A sentence with unresolved candidates can be sent
