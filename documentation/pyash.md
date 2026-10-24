@@ -88,7 +88,14 @@ That maps cleanly onto a C IR / VLIW ISA / bytecode interpreter layer. The earth
    * Genitives, cases, signatures, and memory effects must be preserved across both paths.
    * Quizzes should cover both interpreter and compiler flows to guard against divergence.
 
-10. **Deterministic JSON artefacts**
+10. **Asynchronous composition**
+
+   * I/O, lazy resource loading, provider calls, queue duties, and pipeline stages use promises and `async`/`await`.
+   * Pure local transformations stay synchronous and easy to test.
+   * Independent reads may use `Promise.all` when ordering and resource bounds remain deterministic; an in-flight promise is the process-local cache for a lazy resource.
+   * Pyash-facing long work follows the same model through future duties and `vyah await`.
+
+11. **Deterministic JSON artefacts**
 
    * JSON output defaults to RFC 8785 official form via `to state json`.
    * Use `to state beautiful json` for human-readable pretty output.
