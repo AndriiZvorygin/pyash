@@ -57,6 +57,15 @@ input token that cannot be segmented into known roots and grammatical
 endings. Its implementation is
 `program/verbs/exchange/translation/pyac_to_english_pyash.mjs`.
 
+The English projection reads phrase roles from the decoded VLIW head: the
+nominative phrase supplies `su`, remaining case phrases supply `ob`, and
+case endings become English prepositions (`te` → `in`, `so` → `from`, `ma` →
+`to`, and `twih` → `into`). Possessive, plural, negation, conjunction,
+imperative, tense, aspect, passive, and mood markers are applied during this
+projection. English Pyash keeps the `su`/`ob`/`be` sentence shape while using
+English words inside those phrases. The Lord's Prayer clauses use this same
+decoded renderer; their VLIW components carry `our father` explicitly.
+
 The result is stored under `to name <output>` with:
 ```
 su name <output> be <language> ob text "<translated>" ya

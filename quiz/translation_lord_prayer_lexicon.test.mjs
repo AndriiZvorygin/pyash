@@ -95,8 +95,8 @@ test("Greek pilot index and renderer retain stable candidate identities", async 
 test("Lord's Prayer translation fuses grammar endings and emits clause moods", async () => {
   const translation = buildLordPrayerTranslation({ lexicon: await loadLordPrayerLexicon() });
   assert.equal(translation.clauses[0].canonical, "Our Father in heaven, may your name be kept holy.");
-  assert.equal(translation.clauses[0].pyac, "hpapwu cyakte saye hnimna swutpyohjwih");
-  assert.equal(translation.clauses[0].pyash, "hpap wu cyak te sa ye hnim na swut pyoh jwih");
+  assert.equal(translation.clauses[0].pyac, "nyahye hpapwu cyakte saye hnimna swutpyohjwih");
+  assert.equal(translation.clauses[0].pyash, "nyah ye hpap wu cyak te sa ye hnim na swut pyoh jwih");
   assert.equal(translation.clauses[0].pyashSurface, translation.clauses[0].pyac);
   assert.equal(translation.clauses[2].pyac, "saye hmucna cyakte tlapta tcunjwih");
   assert.equal(translation.clauses[3].pyac, "nyahyi trenmyah nyahye dlatci hpupka kwinpcih");
@@ -114,8 +114,8 @@ test("Lord's Prayer renders every text form from decoded VLIW", async () => {
     assert.ok(clause.englishPyash.length > 0, clause.locator);
     assert.ok(clause.english.length > 0, clause.locator);
   }
-  assert.equal(translation.clauses[8].englishPyash, 'su yours ob name "kingdom power glory forever" be is li');
-  assert.equal(translation.clauses[8].english, "Yours is the kingdom, the power, and the glory forever.");
+  assert.equal(translation.clauses[8].englishPyash, 'su yours ob name "kingdom and power and glory forever" be is li');
+  assert.equal(translation.clauses[8].english, "Yours is kingdom and power and glory forever.");
   assert.equal(translation.clauses[9].englishPyash, "amen li");
   assert.equal(translation.clauses[9].english, "Amen.");
 });

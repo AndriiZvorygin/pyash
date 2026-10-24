@@ -4,6 +4,7 @@ import {
   renderVliwPyac,
   renderVliwStructuralPyash
 } from "../../../library/vliw/phrase.mjs";
+import { renderEnglishFromVliw } from "./pyac_to_english_pyash.mjs";
 
 export const LORD_PRAYER_TRANSLATION_FORMAT = "lord-prayer-translation-v1";
 
@@ -43,34 +44,8 @@ function ending(sequence, ...markers) {
   return result;
 }
 
-const ENGLISH_PYASH_PROJECTIONS = Object.freeze([
-  'su your name ob name "our father in heaven" be holy jwih',
-  "su your kingdom be come jwih",
-  'su your will ob name "in heaven on earth" be done jwih',
-  'su you ob name "us today our daily bread" be give pcih',
-  'su you ob name "us our debts" be forgive pcih',
-  'su we ob name "also our debtors" be forgive li',
-  'su you ob name "us not into temptation" be bring pcih',
-  'su you ob name "us from evil" be deliver pcih',
-  'su yours ob name "kingdom power glory forever" be is li',
-  "amen li"
-]);
-
-const ENGLISH_PROJECTIONS = Object.freeze([
-  "Our Father in heaven, may your name be kept holy.",
-  "Let your kingdom come.",
-  "Let your will be done in heaven and on earth.",
-  "Give us today our daily bread.",
-  "Forgive us our debts.",
-  "As we also forgive our debtors.",
-  "Bring us not into temptation.",
-  "Deliver us from evil.",
-  "Yours is the kingdom, the power, and the glory forever.",
-  "Amen."
-]);
-
 const LORD_PRAYER_VLIW_SIGNATURES = Object.freeze([
-  "hpap wu cyak te sa ye hnim na swut pyoh jwih",
+  "nyah ye hpap wu cyak te sa ye hnim na swut pyoh jwih",
   "sa ye hyap syun na hlam jwih",
   "sa ye hmuc na cyak te tlap ta tcun jwih",
   "nyah yi tren myah nyah ye dlat ci hpup ka kwin pcih",
@@ -90,13 +65,14 @@ export function renderLordPrayerClauseFromVliw(input) {
     throw invalid("Lord's Prayer VLIW clause has no semantic projection", { pyash });
   }
   const pyac = renderVliwPyac(decoded);
+  const english = renderEnglishFromVliw(decoded);
   return {
     index,
     pyash,
     pyac,
     pyashSurface: pyac,
-    englishPyash: ENGLISH_PYASH_PROJECTIONS[index],
-    english: ENGLISH_PROJECTIONS[index],
+    englishPyash: english.englishPyash,
+    english: english.english,
     vliw: {
       format: decoded.format,
       words: [...decoded.words],
@@ -135,6 +111,7 @@ export function buildLordPrayerTranslation({ lexicon } = {}) {
   const kingdom = selected(lexicon, "kingdom");
   const clauses = [
     clause(0, [
+      ...our,
       ...ending(selected(lexicon, "father"), "wu"),
       ...ending(selected(lexicon, "heaven"), "te"),
       ...yours,
