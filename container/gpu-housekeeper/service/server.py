@@ -1435,7 +1435,7 @@ def discharge(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dict
       else:
         return {"success": True, "profileName": profile_name, "discharged": False, "reason": "profile was not resident"}
       runtime_entry = runtime_registry.get(runtime_name)
-      if not runtime_entry or normalize_text(runtime_entry.get("dischargeKind")).lower() not in {"huggingface", "comfyui", "strata"}:
+      if not runtime_entry or normalize_text(runtime_entry.get("dischargeKind")).lower() not in {"huggingface", "comfyui", "ollama", "strata"}:
         return {"success": True, "profileName": profile_name, "discharged": False, "reason": "runtime has no provider discharge hook"}
     else:
       for name in _PROFILES:
@@ -3398,6 +3398,12 @@ def normalize_comfyui_prompt(job_spec: Dict[str, Any]) -> Dict[str, Any]:
   return prompt
 
 
+def is_comfyui_cuda_context_error(error: BaseException) -> bool:
+  """Return true only for the stale CUDA context failure ComfyUI can recover from."""
+  message = normalize_text(error)
+  return bool(re.search(r"cuda(?:error|.*error).*operation not permitted|cudaErrorNotPermitted", message, re.IGNORECASE))
+
+
 def poll_comfyui_history(prompt_id: str, timeout_sec: int, interval_sec: float = 0.5) -> Dict[str, Any]:
   deadline = time.time() + max(1, timeout_sec)
   while time.time() <= deadline:
@@ -3521,7 +3527,7 @@ def execute_katago_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   return result
 
 
-def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+def execute_comfyui_job_once(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   profile_name = normalize_text(job.get("profileName"))
   job_spec = job.get("jobSpec")
@@ -3559,6 +3565,38 @@ def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[st
     "kind": kind,
     "history": history_entry
   }
+
+
+def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  """Run one ComfyUI job, recovering once from a stale CUDA context.
+
+  A provider-level CUDA context can remain defective after a failed model load
+  even when the GPU has plenty of free memory.  The housekeeper owns the
+  ComfyUI container, so an idle provider may be restarted and the same
+  checkpointed job retried exactly once.  Other failures are surfaced without
+  restarting anything.
+  """
+  try:
+    return execute_comfyui_job_once(job, runtime_registry)
+  except Exception as first_error:
+    if not is_comfyui_cuda_context_error(first_error):
+      raise
+    runtime_name = normalize_text(job.get("runtimeName")).lower() or "comfyui"
+    runtime_entry = runtime_registry.get(runtime_name) or {}
+    activity = observe_runtime_activity(runtime_name, runtime_entry)
+    if activity.get("state") not in {"idle", "cooldown"}:
+      raise RuntimeError(
+        f"ComfyUI CUDA recovery refused while provider is {activity.get('state') or 'not idle'}: {first_error}"
+      ) from first_error
+    restarted = runtime_action(runtime_registry, runtime_name, "restartAction")
+    if not restarted.get("success"):
+      raise RuntimeError(
+        f"ComfyUI CUDA recovery restart failed: {restarted.get('message') or first_error}"
+      ) from first_error
+    try:
+      return execute_comfyui_job_once(job, runtime_registry)
+    except Exception as retry_error:
+      raise RuntimeError(f"ComfyUI CUDA recovery retry failed: {retry_error}") from retry_error
 
 
 def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
