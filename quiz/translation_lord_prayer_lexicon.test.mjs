@@ -30,6 +30,7 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
   assert.equal(lexicon.format, "lord-prayer-lexicon-v1");
   assert.equal(lexicon.metadata["canonical-edition"], "Nestle-Aland 28 (NA28)");
   assert.equal(lexicon.metadata["critical-edition"], "SBL Greek New Testament (SBLGNT)");
+  assert.equal(lexicon.metadata["syriac-source"], "Matthew 6:10 form ܡܰܠܟܽܘܬܳܟ, malkūthākh");
   assert.equal(lexicon.entries.length, 26);
   assert.deepEqual(lexicon.entries.find((entry) => entry.term === "daily")?.greekForms, ["ἐπιούσιον"]);
   assert.equal(lexicon.entries.find((entry) => entry.term === "daily")?.selectedCandidateId, "grammar-hodiernal-bread");
@@ -37,7 +38,11 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
     lexicon.entries.find((entry) => entry.term === "daily")?.semanticCandidates[0].pyashSequence,
     ["dleh", "hpup"]
   );
-  assert.equal(lexicon.entries.find((entry) => entry.term === "kingdom")?.semanticCandidates[0].status, "review");
+  const kingdom = lexicon.entries.find((entry) => entry.term === "kingdom");
+  assert.equal(kingdom?.semanticCandidates[0].status, "review");
+  assert.deepEqual(kingdom?.aramaicForms, ["ܡܰܠܟܽܘܬܳܟ"]);
+  assert.deepEqual(kingdom?.aramaicTransliterations, ["malkūthākh"]);
+  assert.deepEqual(kingdom?.semanticCandidates[1].pyashSequence, ["hyap", "tyun"]);
   assert.deepEqual(
     lexicon.entries.find((entry) => entry.term === "our")?.semanticCandidates[0].pyashSequence,
     ["nyah", "ye"]
@@ -48,6 +53,7 @@ test("Greek pilot index and renderer retain stable candidate identities", async 
   const lexicon = await loadLordPrayerLexicon();
   const index = buildLordPrayerLexiconIndex(lexicon);
   assert.equal(index.resolve("KINGDOM").greekLemma, "βασιλεία");
+  assert.deepEqual(index.resolve("kingdom").aramaicTransliterations, ["malkūthākh"]);
   assert.equal(index.resolve("deliver").semanticCandidates[0].id, "rhyomai-review");
 
   const source = renderLordPrayerLexiconPya(lexicon);
@@ -68,6 +74,7 @@ test("Lord's Prayer analysis links dictionary evidence to Greek pilot records", 
   assert.equal(heaven.lexicon.greekLemma, "οὐρανός");
   assert.equal(heaven.lexicon.selectedCandidateId, "existing-heaven");
   assert.equal(kingdom.lexicon.semanticCandidates[0].status, "review");
+  assert.equal(kingdom.lexicon.aramaicTransliterations[0], "malkūthākh");
   const rendered = renderLordPrayerAnalysisPya(analysis);
   const roundTrip = buildProgram(rendered);
   const roundTripKingdom = roundTrip.sentences.find((sentence) => sentence?.su?.text === "term:kingdom");

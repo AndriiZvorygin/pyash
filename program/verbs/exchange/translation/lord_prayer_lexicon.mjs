@@ -66,6 +66,18 @@ function normalizeEntry(payload, termKey, index) {
   const locator = text(payload.locator);
   const greekLemma = text(payload.greekLemma);
   const greekForms = stringList(payload.greekForms, "Greek forms", index);
+  const aramaicForms = stringList(
+    payload.aramaicForms ?? [],
+    "Aramaic forms",
+    index,
+    { allowEmpty: true }
+  );
+  const aramaicTransliterations = stringList(
+    payload.aramaicTransliterations ?? [],
+    "Aramaic transliterations",
+    index,
+    { allowEmpty: true }
+  );
   const yltSurfaces = stringList(payload.yltSurfaces, "YLT surfaces", index);
   const kjvSurfaces = stringList(payload.kjvSurfaces, "KJV surfaces", index);
   const candidates = (payload.semanticCandidates ?? []).map((candidate, candidateIndex) => (
@@ -85,6 +97,8 @@ function normalizeEntry(payload, termKey, index) {
     locator,
     greekLemma,
     greekForms,
+    aramaicForms,
+    aramaicTransliterations,
     yltSurfaces,
     kjvSurfaces,
     semanticCandidates: candidates,
@@ -148,6 +162,8 @@ export function buildLordPrayerLexiconIndex({ entries = [] } = {}) {
     lookup.set(entry.term.toLowerCase(), {
       ...entry,
       greekForms: [...entry.greekForms],
+      aramaicForms: [...entry.aramaicForms],
+      aramaicTransliterations: [...entry.aramaicTransliterations],
       yltSurfaces: [...entry.yltSurfaces],
       kjvSurfaces: [...entry.kjvSurfaces],
       semanticCandidates: entry.semanticCandidates.map((candidate) => ({

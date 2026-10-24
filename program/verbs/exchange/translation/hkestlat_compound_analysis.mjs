@@ -341,6 +341,8 @@ function prayerTermRecord(term, locator, dictionaryIndex, compoundBySurface, lex
     payload.lexicon = {
       greekLemma: lexiconEntry.greekLemma,
       greekForms: [...lexiconEntry.greekForms],
+      aramaicForms: [...lexiconEntry.aramaicForms],
+      aramaicTransliterations: [...lexiconEntry.aramaicTransliterations],
       yltSurfaces: [...lexiconEntry.yltSurfaces],
       kjvSurfaces: [...lexiconEntry.kjvSurfaces],
       semanticCandidates: lexiconEntry.semanticCandidates.map((candidate) => ({
