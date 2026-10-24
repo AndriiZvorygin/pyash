@@ -32,7 +32,11 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
   assert.equal(lexicon.metadata["critical-edition"], "SBL Greek New Testament (SBLGNT)");
   assert.equal(lexicon.entries.length, 26);
   assert.deepEqual(lexicon.entries.find((entry) => entry.term === "daily")?.greekForms, ["ἐπιούσιον"]);
-  assert.equal(lexicon.entries.find((entry) => entry.term === "daily")?.selectedCandidateId, null);
+  assert.equal(lexicon.entries.find((entry) => entry.term === "daily")?.selectedCandidateId, "grammar-hodiernal-bread");
+  assert.deepEqual(
+    lexicon.entries.find((entry) => entry.term === "daily")?.semanticCandidates[0].pyashSequence,
+    ["dleh", "hpup"]
+  );
   assert.equal(lexicon.entries.find((entry) => entry.term === "kingdom")?.semanticCandidates[0].status, "review");
   assert.deepEqual(
     lexicon.entries.find((entry) => entry.term === "our")?.semanticCandidates[0].pyashSequence,
