@@ -4,6 +4,11 @@ import { sentenceToPyash } from "../../../beautiful.mjs";
 import { buildProgram } from "../../../program.mjs";
 import { buildVliwDatabase } from "../../../library/vliw/index.mjs";
 import {
+  decodePhraseVliw,
+  lowerSentencePhraseVliw,
+  renderVliwPyac
+} from "../../../library/vliw/phrase.mjs";
+import {
   analyzeDefaultEnglishSentence,
   loadDefaultEnglishSentenceResources,
   resolveEnglishSentence
@@ -183,7 +188,25 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
   const pyashPreview = sentence
     ? sentenceToPyash(sentence)
     : text(analysis.pyash ?? analysis.verbPhrase?.pyashSequence?.join(" "));
-  const pyac = sentence ? renderPyacSentenceSurface(sentence) : "";
+  let phraseVliw = null;
+  if (sentence) {
+    try {
+      const lowered = lowerSentencePhraseVliw(sentence);
+      const decoded = decodePhraseVliw(lowered.vectors);
+      phraseVliw = {
+        format: decoded.format,
+        words: [...decoded.words],
+        vectors: decoded.vectors.map((vector) => [...vector]),
+        phraseEnds: [...decoded.phraseEnds],
+        moodIndex: decoded.moodIndex
+      };
+    } catch {
+      phraseVliw = null;
+    }
+  }
+  const pyac = phraseVliw
+    ? renderVliwPyac(decodePhraseVliw(phraseVliw.vectors))
+    : sentence ? renderPyacSentenceSurface(sentence) : "";
   const unresolved = analysis.unresolved.length > 0
     ? [...new Set(analysis.unresolved.map(text).filter(Boolean))]
     : sentence ? [] : [segment.text];
@@ -209,6 +232,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     status,
     ...(sentence ? { sentence, pyash: pyashPreview } : {}),
     ...(pyac ? { pyac, pyashSurface: pyac } : {}),
+    ...(phraseVliw ? { vliw: phraseVliw } : {}),
     ...(canonical ? { canonical } : {}),
     ...(pyashPreview && !sentence ? { pyashPreview } : {}),
     ...(unresolved.length > 0 ? { unresolved } : {}),

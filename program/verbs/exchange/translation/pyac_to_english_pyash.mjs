@@ -1,10 +1,15 @@
 import pyashWords from "../../../library/pyashWords.json" with { type: "json" };
 import { sentenceToPyash } from "../../../beautiful.mjs";
 import { PYASH_SURFACE_FUSED_MOODS } from "./pyash_surface.mjs";
+import {
+  decodePhraseVliw,
+  lowerPhraseVliw,
+  phraseParts
+} from "../../../library/vliw/phrase.mjs";
 
 export const PYAC_TO_ENGLISH_PYASH_FORMAT = "pyac-to-english-pyash-v1";
 
-const CASE_WORDS = new Map([
+const CASE_NAMES = new Map([
   ["na", "nominative"],
   ["ka", "accusative"],
   ["ti", "genitive"],
@@ -19,6 +24,9 @@ const CASE_WORDS = new Map([
 ]);
 
 const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
+const CASE_WORDS = new Set([
+  "na", "ka", "ti", "te", "ma", "so", "yi", "wu", "ta", "myah", "twih"
+]);
 const COMMON_GLOSSES = new Map([
   ["mi", "me"],
   ["sa", "you"],
@@ -75,7 +83,7 @@ function buildInventory(entries = pyashWords) {
 function grammarPart(pya, entries) {
   const entry = entries?.[0];
   const english = englishWord(entry);
-  const caseName = CASE_WORDS.get(pya);
+  const caseName = CASE_NAMES.get(pya);
   return {
     pya,
     kind: caseName ? "case" : MOOD_WORDS.has(pya) ? "mood" : "grammar",
@@ -159,19 +167,20 @@ function moodPart(parts) {
   return last?.kind === "mood" ? last : null;
 }
 
-function structuralSentence(tokens) {
-  if (tokens.length < 2) throw invalid("Pyac sentence requires a subject and verb");
-  const subject = tokens[0].parts.map((part) => part.pyash).join(" ");
-  const verbToken = tokens.at(-1);
-  const mood = moodPart(verbToken.parts);
-  const verbParts = mood ? verbToken.parts.slice(0, -1) : verbToken.parts;
-  if (verbParts.length === 0) throw invalid("Pyac sentence has no verb root");
-  const objectTokens = tokens.slice(1, -1);
-  const object = objectTokens.flatMap((token) => token.parts.map((part) => part.pyash)).join(" ");
+function structuralSentence(tokens, decoded) {
+  const parts = phraseParts(decoded);
+  if (parts.phrases.length === 0 || parts.trailing.length === 0) {
+    throw invalid("Pyac sentence requires a subject and verb");
+  }
+  const subject = parts.phrases[0].tokens.map((part) => part.pya).join(" ");
+  const verbParts = parts.trailing;
+  const object = parts.phrases.slice(1)
+    .flatMap((phrase) => phrase.tokens.map((part) => part.pya))
+    .join(" ");
   const sentence = {
-    mood: mood?.pyash ?? "ya",
+    mood: parts.mood ?? "ya",
     su: { name: subject },
-    be: verbParts.map((part) => part.pyash).join(" ")
+    be: verbParts.map((part) => part.pya).join(" ")
   };
   if (object) sentence.ob = { name: object };
   return sentence;
@@ -238,29 +247,45 @@ function renderPhrase(parts, { subject = false } = {}) {
   return words.join(" ");
 }
 
-function renderEnglishPyash(sentence, tokens) {
+function decodedPart(token, glosses) {
+  return {
+    pya: token.pya,
+    kind: CASE_WORDS.has(token.pya)
+      ? "case"
+      : token.en.endsWith("_") ? "grammar" : "root",
+    english: glosses.get(token.pya) ?? token.en.replace(/_$/u, "")
+  };
+}
+
+function renderEnglishPyash(sentence, tokens, decoded, glosses) {
+  const parts = phraseParts(decoded);
   const mood = sentence.mood === "ya" ? "ya" : sentence.mood;
-  const subject = renderPhrase(tokens[0].parts, { subject: true });
-  const object = tokens.slice(1, -1)
-    .flatMap((token) => token.parts)
+  const subject = renderPhrase(parts.phrases[0].tokens.map((token) => decodedPart(token, glosses)), { subject: true });
+  const object = parts.phrases.slice(1)
+    .flatMap((phrase) => phrase.tokens)
+    .map((token) => decodedPart(token, glosses))
     .filter((part) => part.pya !== "ka")
     .map((part) => part.pya === "na" ? null : part)
     .filter(Boolean);
   const objectText = renderPhrase(object);
-  const verb = inflectVerb(tokens.at(-1).parts.filter((part) => part.kind !== "mood"));
-  const parts = ["su", subject];
-  if (objectText) parts.push("ob", "name", JSON.stringify(objectText));
-  parts.push("be", verb, mood);
-  return parts.join(" ");
+  const verb = inflectVerb(parts.trailing.map((token) => decodedPart(token, glosses))
+    .filter((part) => part.kind !== "mood"));
+  const rendered = ["su", subject];
+  if (objectText) rendered.push("ob", "name", JSON.stringify(objectText));
+  rendered.push("be", verb, mood);
+  return rendered.join(" ");
 }
 
-function renderEnglish(sentence, tokens) {
-  const subject = renderPhrase(tokens[0].parts, { subject: true });
-  const object = tokens.slice(1, -1)
-    .flatMap((token) => token.parts)
+function renderEnglish(sentence, tokens, decoded, glosses) {
+  const decodedParts = phraseParts(decoded);
+  const subject = renderPhrase(decodedParts.phrases[0].tokens.map((token) => decodedPart(token, glosses)), { subject: true });
+  const object = decodedParts.phrases.slice(1)
+    .flatMap((phrase) => phrase.tokens)
+    .map((token) => decodedPart(token, glosses))
     .filter((part) => !["ka", "na"].includes(part.pya));
   const objectText = renderPhrase(object);
-  const verb = inflectVerb(tokens.at(-1).parts.filter((part) => part.kind !== "mood"));
+  const verb = inflectVerb(decodedParts.trailing.map((token) => decodedPart(token, glosses))
+    .filter((part) => part.kind !== "mood"));
   return `${subject} ${verb}${objectText ? ` ${objectText}` : ""}.`;
 }
 
@@ -274,15 +299,18 @@ export function buildPyacDecoder({ entries = pyashWords, glosses = {} } = {}) {
     decode(source) {
       const tokens = cleanToken(source).split(/\s+/u).filter(Boolean)
         .map((token) => decodeToken(token, inventory, mergedGlosses));
-      const sentence = structuralSentence(tokens);
+      const lowered = lowerPhraseVliw({ tokens: tokens.flatMap((token) => token.parts.map((part) => part.pyash)) });
+      const decoded = decodePhraseVliw(lowered.vectors);
+      const sentence = structuralSentence(tokens, decoded);
       return {
         format: PYAC_TO_ENGLISH_PYASH_FORMAT,
         source: text(source),
         tokens,
         sentence,
+        vliw: decoded,
         pyash: sentenceToPyash(sentence),
-        englishPyash: renderEnglishPyash(sentence, tokens),
-        english: renderEnglish(sentence, tokens)
+        englishPyash: renderEnglishPyash(sentence, tokens, decoded, mergedGlosses),
+        english: renderEnglish(sentence, tokens, decoded, mergedGlosses)
       };
     }
   };

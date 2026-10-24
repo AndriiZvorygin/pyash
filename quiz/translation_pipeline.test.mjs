@@ -91,6 +91,9 @@ test("English translation uses the shared resources and retains unresolved vocab
   assert.equal(result.records[0].pyash, "su name nyah ye hcas pu na be pfin ki ya");
   assert.equal(result.records[0].pyac, "nyahye hcaspuna pfinkiya");
   assert.equal(result.records[0].pyashSurface, "nyahye hcaspuna pfinkiya");
+  assert.equal(result.records[0].vliw.format, "pyac-vliw-phrase-v1");
+  assert.equal(result.records[0].vliw.vectors.length, 1);
+  assert.deepEqual(result.records[0].vliw.phraseEnds, [4]);
   assert.equal(result.records[0].canonical, "our houses walked.");
   assert.equal(result.records[1].status, "provisional");
   assert.equal(result.resourceHashes.english30k.length, 64);

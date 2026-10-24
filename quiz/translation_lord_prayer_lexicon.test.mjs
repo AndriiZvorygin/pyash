@@ -14,6 +14,7 @@ import {
   renderLordPrayerAnalysisPya
 } from "../program/verbs/exchange/translation/hkestlat_compound_analysis.mjs";
 import { buildLordPrayerTranslation } from "../program/verbs/exchange/translation/lord_prayer_translation.mjs";
+import { decodePhraseVliw, renderVliwPyac } from "../program/library/vliw/phrase.mjs";
 
 function fixtureSources() {
   return {
@@ -102,6 +103,21 @@ test("Lord's Prayer translation fuses grammar endings and emits clause moods", a
   assert.equal(translation.clauses[5].pyac, "nyahna pcah nyahye hdef hgenpuka hsonrali");
   assert.equal(translation.clauses[8].pyac, "hyap syunna wa htafna wa nyamna hnispumyah sayeli");
   assert.equal(translation.clauses[9].pyac, "hretli");
+});
+
+test("Lord's Prayer renders every text form from decoded VLIW", async () => {
+  const translation = buildLordPrayerTranslation({ lexicon: await loadLordPrayerLexicon() });
+  for (const clause of translation.clauses) {
+    const decoded = decodePhraseVliw(clause.vliw.vectors);
+    assert.equal(renderVliwPyac(decoded), clause.pyac, clause.locator);
+    assert.equal(clause.vliw.format, "pyac-vliw-phrase-v1");
+    assert.ok(clause.englishPyash.length > 0, clause.locator);
+    assert.ok(clause.english.length > 0, clause.locator);
+  }
+  assert.equal(translation.clauses[8].englishPyash, 'su yours ob name "kingdom power glory forever" be is li');
+  assert.equal(translation.clauses[8].english, "Yours is the kingdom, the power, and the glory forever.");
+  assert.equal(translation.clauses[9].englishPyash, "amen li");
+  assert.equal(translation.clauses[9].english, "Amen.");
 });
 
 test("Lord's Prayer analysis links dictionary evidence to Greek pilot records", async () => {
