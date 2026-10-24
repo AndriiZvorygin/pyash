@@ -9,7 +9,7 @@ import {
 test("Pyac decoder expands fused grammar into structural Pyash and English Pyash", () => {
   const result = decodePyacSentence("mina nyahye hcaspuka pfinkiya");
   assert.equal(result.pyash, "su name mi na ob name nyah ye hcas pu ka be pfin ki ya");
-  assert.equal(result.englishPyash, 'su I ob name "our houses" be walked ya');
+  assert.equal(result.englishPyash, "su I ob name our houses be walked ya");
   assert.equal(result.english, "I walked our houses.");
   assert.deepEqual(
     result.tokens.map((token) => token.parts.map((part) => part.pya)),
@@ -27,14 +27,14 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
   const prayerOpening = decodePyacSentence("nyahye hpapwu cyakte saye hnimna swutpyohjwih");
   assert.equal(
     prayerOpening.englishPyash,
-    'su your name ob name "our father in heaven" be holy jwih'
+    "su your name ob name our father in heaven be holy jwih"
   );
   assert.equal(prayerOpening.english, "Our father in heaven, may your name be holy.");
 
   const negativeImperative = decodePyacSentence("nyahyi no hyocma tlakpcih");
   assert.equal(
     negativeImperative.englishPyash,
-    'su you ob name "us to temptation" be not bring pcih'
+    "su you ob name us to temptation be not bring pcih"
   );
   assert.equal(negativeImperative.english, "Do not bring us to temptation.");
 });
@@ -42,8 +42,8 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
 test("Pyac document translation keeps one record per input line", () => {
   const result = translatePyacToEnglishPyash("mina hcaspuka pfinkiya\nmina hpupka kwinpcih");
   assert.equal(result.records.length, 2);
-  assert.match(result.englishPyash, /su I ob name "houses" be walked ya/u);
-  assert.match(result.englishPyash, /su I ob name "bread" be give pcih/u);
+  assert.match(result.englishPyash, /su I ob name houses be walked ya/u);
+  assert.match(result.englishPyash, /su I ob name bread be give pcih/u);
 });
 
 test("Pyac decoder rejects vocabulary that cannot be segmented", () => {

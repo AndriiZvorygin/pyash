@@ -42,7 +42,7 @@ Pyash evidence, then emits the readable English-Pyash surface:
 ```text
 Pyac:          mina nyahye hcaspuka pfinkiya
 structural:    su name mi na ob name nyah ye hcas pu ka be pfin ki ya
-English Pyash: su I ob name "our houses" be walked ya
+English Pyash: su I ob name our houses be walked ya
 English gloss: I walked our houses.
 ```
 
@@ -65,6 +65,9 @@ imperative, tense, aspect, passive, and mood markers are applied during this
 projection. English Pyash keeps the `su`/`ob`/`be` sentence shape while using
 English words inside those phrases. The Lord's Prayer clauses use this same
 decoded renderer; their VLIW components carry `our father` explicitly.
+Composed English-Pyash phrases remain token-visible, so a source like
+`us from evil` renders as `ob name us from evil`; quotes remain reserved for
+literal text payloads.
 
 The result is stored under `to name <output>` with:
 ```
