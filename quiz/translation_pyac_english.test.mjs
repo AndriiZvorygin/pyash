@@ -27,9 +27,9 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
   const prayerOpening = decodePyacSentence("nyahye hpapwu cyakte saye hnimna swutpyohjwih");
   assert.equal(
     prayerOpening.englishPyash,
-    "O our father in heaven, su your name be holy jwih"
+    "O our dad in heaven, su your name be holy jwih"
   );
-  assert.equal(prayerOpening.english, "Our father in heaven, may your name be holy.");
+  assert.equal(prayerOpening.english, "Our dad in heaven, may your name be holy.");
 
   const negativeImperative = decodePyacSentence("nyahyi no hyocma tlakpcih");
   assert.equal(
@@ -51,4 +51,12 @@ test("Pyac decoder rejects vocabulary that cannot be segmented", () => {
     () => decodePyacSentence("unknown pfinkiya"),
     (error) => error.code === "invalid-pyac-translation"
   );
+});
+
+test("Pyac decoder takes lexical English from the dictionary", () => {
+  const result = decodePyacSentence("pyuh nyahyi cwakso hxucpcih");
+  const hxuc = result.tokens.at(-1).parts.find((part) => part.pya === "hxuc");
+  assert.equal(hxuc.english, "rescuing");
+  assert.equal(result.englishPyash, "su you ob us from evil be rescue pcih");
+  assert.equal(result.english, "But rescue us from evil.");
 });
