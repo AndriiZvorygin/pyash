@@ -56,7 +56,8 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
     ["power", "strength"],
     ["forever", "age"],
     ["debts", "debit-plural"],
-    ["debtors", "debit-agent-plural"]
+    ["debtors", "debit-agent-plural"],
+    ["deliver", "rescuing"]
   ]) {
     assert.equal(lexicon.entries.find((entry) => entry.term === term)?.selectedCandidateId, candidateId);
   }
@@ -75,7 +76,7 @@ test("Greek pilot index and renderer retain stable candidate identities", async 
   const index = buildLordPrayerLexiconIndex(lexicon);
   assert.equal(index.resolve("KINGDOM").greekLemma, "βασιλεία");
   assert.deepEqual(index.resolve("kingdom").aramaicTransliterations, ["malkūthākh"]);
-  assert.equal(index.resolve("deliver").semanticCandidates[0].id, "rhyomai-review");
+  assert.equal(index.resolve("deliver").semanticCandidates[0].id, "rescuing");
 
   const source = renderLordPrayerLexiconPya(lexicon);
   const reparsed = parseLordPrayerLexicon(source);
