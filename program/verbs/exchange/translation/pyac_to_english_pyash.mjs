@@ -111,6 +111,11 @@ function englishWord(entry) {
   return text(entry?.en).replace(/_$/u, "").replaceAll("_", " ");
 }
 
+function englishGrammarWord(value) {
+  const word = text(value).replace(/_$/u, "").replaceAll("_", " ");
+  return word === "adjective" ? "adj" : word;
+}
+
 function buildInventory(entries = pyashWords) {
   const roots = new Map();
   const grammar = new Map();
@@ -126,7 +131,7 @@ function buildInventory(entries = pyashWords) {
 
 function grammarPart(pya, entries) {
   const entry = entries?.[0];
-  const english = englishWord(entry);
+  const english = englishGrammarWord(entry?.en);
   const caseName = CASE_NAMES.get(pya);
   return {
     pya,
@@ -343,12 +348,15 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
 }
 
 function decodedPart(token, glosses) {
+  const grammar = token.en.endsWith("_");
   return {
     pya: token.pya,
     kind: PHRASE_CASE_WORDS.has(token.pya)
       ? "case"
-      : token.en.endsWith("_") ? "grammar" : "root",
-    english: glosses.get(token.pya) ?? token.en.replace(/_$/u, "")
+      : grammar ? "grammar" : "root",
+    english: glosses.get(token.pya) ?? (grammar
+      ? englishGrammarWord(token.en)
+      : token.en.replace(/_$/u, ""))
   };
 }
 
