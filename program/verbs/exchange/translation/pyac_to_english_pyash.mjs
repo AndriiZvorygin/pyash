@@ -391,7 +391,7 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
   const negative = decoded.tokens.some((token) => token.pya === "no");
   const renderedVerb = negative ? `not ${verb}` : verb;
   const rendered = ["su", subject];
-  if (objectText) rendered.push("ob", "name", JSON.stringify(objectText));
+  if (objectText) rendered.push("ob", "name", ...objectText.split(/\s+/u));
   rendered.push("be", renderedVerb, mood);
   return rendered.join(" ");
 }
