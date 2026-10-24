@@ -16,11 +16,17 @@ const PRESENT_TENSE_MARKER = "ra";
 const PRESENT_TENSE_NAME = "present_tense_";
 const NOMINATIVE_MARKER = "na";
 const ACCUSATIVE_MARKER = "ka";
-const COMPOSITIONAL_KEYWORDS = new Set(
+const COMPOSITIONAL_CASE_INDEX = new Map(
   Object.values(compositionalGrid)
     .flatMap((context) => ["source", "way", "destination"]
-      .map((axis) => context[axis]?.keyword)
-      .filter(Boolean))
+      .map((axis) => context[axis])
+      .filter((entry) => entry?.keyword && entry?.pya)
+      .map((entry) => [entry.keyword, {
+        axis: entry.axis,
+        case: entry.case,
+        keyword: entry.keyword,
+        pya: entry.pya
+      }]))
 );
 
 let defaultResourcesPromise = null;
@@ -58,11 +64,19 @@ function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex } = {})
   const normalized = surface.toLowerCase();
   const coverage = typeof resolveWord === "function" ? resolveWord(normalized) : null;
   const lemma = lemmaBySurface?.get(normalized) ?? null;
-  const grammar = grammarIndex?.resolve(normalized) ?? null;
-  let pyashSequence = coverage?.pyashSequence?.length
-    ? [...coverage.pyashSequence]
-    : grammar?.pyashSequence?.length
-      ? [...grammar.pyashSequence]
+  const catalogGrammar = grammarIndex?.resolve(normalized) ?? null;
+  const compositionalCase = COMPOSITIONAL_CASE_INDEX.get(normalized) ?? null;
+  const grammar = catalogGrammar ?? (compositionalCase ? {
+    kind: "case-marker",
+    components: [compositionalCase.case],
+    pyashSequence: [compositionalCase.pya],
+    position: "link",
+    evidence: `compositional ${compositionalCase.keyword} maps to ${compositionalCase.case}`
+  } : null);
+  let pyashSequence = grammar?.pyashSequence?.length
+    ? [...grammar.pyashSequence]
+    : coverage?.pyashSequence?.length
+      ? [...coverage.pyashSequence]
       : [];
   const morphology = cloneMorphology(coverage?.morphology ?? lemma?.morphology);
   let grammaticalNumber = coverage?.grammaticalNumber ?? lemma?.grammaticalNumber ?? "";
@@ -83,6 +97,7 @@ function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex } = {})
     pyashSequence,
     morphology,
     grammaticalNumber,
+    compositionalCase,
     grammar: grammar ? {
       kind: grammar.kind,
       components: [...grammar.components],
@@ -174,16 +189,27 @@ function makeSentence(subject, verbPhrase, objectRecords) {
     be: verbPhrase.pyashSequence.join(" ")
   };
   if (objectRecords.length > 0) {
-    const objectSequence = objectRecords.flatMap((record) => record.pyashSequence);
-    const locationMarked = objectRecords.some((record) => (
-      record.pyashSequence ?? []
-    ).some((word) => COMPOSITIONAL_KEYWORDS.has(word)));
-    if (!locationMarked && objectSequence.at(-1) !== ACCUSATIVE_MARKER) {
+    const objectSequence = composeObjectSequence(objectRecords);
+    const compositionalMarked = objectRecords.some((record) => record.compositionalCase);
+    if (!compositionalMarked && objectSequence.at(-1) !== ACCUSATIVE_MARKER) {
       objectSequence.push(ACCUSATIVE_MARKER);
     }
     sentence.ob = { name: objectSequence.join(" ") };
   }
   return sentence;
+}
+
+function composeObjectSequence(records) {
+  const phrase = [];
+  const linkedCases = [];
+  for (const record of records) {
+    if (record.grammar?.kind === "case-marker" && record.grammar.position === "link") {
+      linkedCases.push(...record.pyashSequence);
+      continue;
+    }
+    phrase.push(...record.pyashSequence);
+  }
+  return [...phrase, ...linkedCases];
 }
 
 function makeSubjectPhrase(records, verbIndex) {

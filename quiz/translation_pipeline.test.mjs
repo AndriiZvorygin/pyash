@@ -114,6 +114,15 @@ test("English subject nominative lowers to the fused Pyac form", async () => {
   assert.equal(result.records[0].pyashSurface, "mina nyahye hcaspuka pfinkiya");
 });
 
+test("translation pipeline renders compositional cases at the phrase boundary", async () => {
+  const result = await translateDocument({
+    language: "english",
+    text: "I walked into houses."
+  });
+  assert.equal(result.records[0].pyash, "su name mi na ob name hcas pu twih be pfin ki ya");
+  assert.equal(result.records[0].pyac, "mina hcasputwih pfinkiya");
+});
+
 test("sentence verification can resolve a contextual candidate through the pipeline", async () => {
   const calls = [];
   const result = await translateDocument({

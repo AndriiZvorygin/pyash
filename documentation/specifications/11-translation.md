@@ -207,7 +207,7 @@ Phrase rules:
    by a compositional location or relation such as `into`, `to`, `at`, or
    `from`.
 4. Explicit possession uses `ye`: `nyah ye` becomes `nyahye` for “our”.
-   Ordinary genitive relations use `ti`: `hcas ti tlan` represents “house of
+   Ordinary genitive relations use `ti`: `hcas tlan ti` represents “house of
    God”, with `ti` closing the possessor phrase. Possessive `ye` and genitive
    `ti` express different source meanings.
 5. A verb phrase puts lexical root, voice, aspect, and tense markers together:

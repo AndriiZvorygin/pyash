@@ -104,7 +104,18 @@ test("English of-relations use genitive ti while possessive determiners keep ye"
     resolveWord: (word) => rows.get(word) ?? base(word)
   });
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name mi na ob name hcas ti tlan ka be pfin ki ya");
+  assert.equal(result.pyash, "su name mi na ob name hcas tlan ti ka be pfin ki ya");
+});
+
+test("English compositional relations lower to phrase-final case markers", async () => {
+  const into = await analyzeDefaultEnglishSentence("I walked into houses");
+  assert.equal(into.status, "resolved");
+  assert.equal(into.pyash, "su name mi na ob name hcas pu twih be pfin ki ya");
+  assert.deepEqual(into.tokens.find((token) => token.surface === "into").pyashSequence, ["twih"]);
+
+  const from = await analyzeDefaultEnglishSentence("I walked from houses");
+  assert.equal(from.status, "resolved");
+  assert.equal(from.pyash, "su name mi na ob name hcas pu so be pfin ki ya");
 });
 
 test("sentence grammar maps thy and negation while leaving the lexical predicate contextual", async () => {
@@ -118,7 +129,7 @@ test("sentence grammar maps thy and negation while leaving the lexical predicate
     verify: async ({ candidates }) => ({ verdict: "accept", candidateId: candidates[0].id })
   });
   assert.equal(resolved.status, "resolved");
-  assert.equal(resolved.pyash, "su name sa ye hnim pu na ob name nyah into hyoc be tyip ra no ya");
+  assert.equal(resolved.pyash, "su name sa ye hnim pu na ob name nyah hyoc twih be tyip ra no ya");
 });
 
 test("imperative Lord's Prayer clause supplies the second-person subject", async () => {
