@@ -10,7 +10,7 @@ import {
 } from "../../../library/vliw/phrase.mjs";
 import {
   analyzeDefaultEnglishSentence,
-  loadDefaultEnglishSentenceResources,
+  loadEnglishSentenceResources,
   resolveEnglishSentence
 } from "./english_sentence.mjs";
 import { renderPyacSentenceSurface } from "./pyash_surface.mjs";
@@ -323,9 +323,9 @@ export async function translateDocument({
 }
 
 async function loadEnglishResourceHashes() {
-  const resources = await loadDefaultEnglishSentenceResources();
+  const resources = await loadEnglishSentenceResources();
   return {
-    english30k: resources.coverage.source.sourceHash,
+    english30k: resources.source.sourceHash,
     englishLemmas: resources.lemmaCatalog.sourceHash,
     englishGrammar: resources.grammarCatalog.sourceHash
   };

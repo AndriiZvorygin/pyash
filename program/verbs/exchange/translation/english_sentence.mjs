@@ -1,11 +1,19 @@
 import { sentenceToPyash } from "../../../beautiful.mjs";
 import pyashWords from "../../../library/pyashWords.json" with { type: "json" };
 import {
-  loadDefaultEnglish30kCoverage,
+  DEFAULT_GRAMMAR_MAPPINGS,
+  buildEnglish30kCoverage,
+  loadEnglish30k,
+  english30kLookupVariants,
   lookupEnglish30kCoverage
 } from "./english30k_coverage.mjs";
+import { loadAnchorWordForms } from "./anchor_words.mjs";
+import {
+  buildEnglishDictionaryAliases,
+  loadEnglishDictionaryBlacklist
+} from "./english_dictionary_aliases.mjs";
 import { loadEnglishGrammarCatalog, buildEnglishGrammarIndex } from "./english_grammar.mjs";
-import { loadEnglishLemmaCatalog } from "./english_lemmas.mjs";
+import { buildEnglishLemmaIndex, loadEnglishLemmaCatalog } from "./english_lemmas.mjs";
 import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 
 export const ENGLISH_SENTENCE_FORMAT = "english-sentence-v1";
@@ -30,6 +38,7 @@ const COMPOSITIONAL_CASE_INDEX = new Map(
 );
 
 let defaultResourcesPromise = null;
+let sentenceResourcesPromise = null;
 
 function invalid(message) {
   const error = new Error(message);
@@ -415,26 +424,199 @@ export function analyzeEnglishSentence(source, {
 
 export async function loadDefaultEnglishSentenceResources() {
   if (!defaultResourcesPromise) {
-    defaultResourcesPromise = Promise.all([
-      loadDefaultEnglish30kCoverage({ atomicEntries: pyashWords }),
-      loadEnglishLemmaCatalog(),
-      loadEnglishGrammarCatalog()
-    ]).then(([coverage, lemmaCatalog, grammarCatalog]) => ({
-      coverage,
-      lemmaCatalog,
-      grammarCatalog,
-      grammarIndex: buildEnglishGrammarIndex({ catalogEntries: grammarCatalog.entries })
+    defaultResourcesPromise = loadEnglishSentenceResources().then((resources) => ({
+      ...resources,
+      coverage: buildEnglish30kCoverage({
+        source: resources.source,
+        atomicEntries: pyashWords,
+        aliases: resources.aliases,
+        dictionaryAliases: resources.dictionaryAliases,
+        grammarMappings: resources.grammarMappings,
+        grammarOverrides: resources.grammarOverrides,
+        lemmaEntries: resources.lemmaCatalog.entries
+      })
     }));
   }
   return defaultResourcesPromise;
 }
 
+export async function loadEnglishSentenceResources() {
+  if (!sentenceResourcesPromise) {
+    sentenceResourcesPromise = Promise.all([
+      loadEnglish30k(),
+      loadEnglishLemmaCatalog(),
+      loadEnglishGrammarCatalog(),
+      loadEnglishDictionaryBlacklist(),
+      loadAnchorWordForms()
+    ]).then(([source, lemmaCatalog, grammarCatalog, dictionary, anchors]) => {
+      const grammarIndex = buildEnglishGrammarIndex({ catalogEntries: grammarCatalog.entries });
+      const aliases = anchors.formsToAnchor;
+      const dictionaryAliases = buildEnglishDictionaryAliases({
+        dictionary,
+        atomicEntries: pyashWords
+      }).aliases;
+      const lemmaIndex = buildEnglishLemmaIndex({
+        atomicEntries: pyashWords,
+        aliases,
+        catalogEntries: lemmaCatalog.entries
+      });
+      const sourceByVariant = new Map();
+      for (const row of source.rows) {
+        for (const variant of english30kLookupVariants(row.word)) {
+          if (!sourceByVariant.has(variant)) sourceByVariant.set(variant, row);
+        }
+      }
+      const atomicByVariant = new Map();
+      for (const entry of pyashWords) {
+        if (typeof entry?.en !== "string" || typeof entry?.pya !== "string") continue;
+        const english = entry.en.trim();
+        const pya = entry.pya.trim();
+        if (!english || !pya || english.startsWith("_") || english.endsWith("_")) continue;
+        for (const variant of english30kLookupVariants(english)) {
+          if (!atomicByVariant.has(variant)) atomicByVariant.set(variant, {
+            en: english,
+            pya,
+            hnuc: entry.hnuc
+          });
+        }
+      }
+      const grammarMappings = new Map(DEFAULT_GRAMMAR_MAPPINGS);
+      for (const [surface, mapping] of grammarIndex.mappings) grammarMappings.set(surface, mapping);
+      return {
+        source,
+        lemmaCatalog,
+        grammarCatalog,
+        grammarIndex,
+        grammarMappings,
+        grammarOverrides: grammarIndex.mappings,
+        dictionaryAliases,
+        aliases,
+        lemmaIndex,
+        sourceByVariant,
+        atomicByVariant
+      };
+    });
+  }
+  return sentenceResourcesPromise;
+}
+
+function stagedEnglishCoverage(resources, word) {
+  const variants = english30kLookupVariants(word);
+  const row = variants.map((variant) => resources.sourceByVariant.get(variant)).find(Boolean);
+  if (!row) return null;
+  const grammarOverride = variants.map((variant) => resources.grammarOverrides.get(variant)).find(Boolean);
+  if (grammarOverride) {
+    return {
+      ...row,
+      coverageType: "grammar",
+      status: "covered-grammar",
+      pyashSequence: [...grammarOverride]
+    };
+  }
+  const exact = variants.map((variant) => resources.atomicByVariant.get(variant)).find(Boolean);
+  if (exact) {
+    return {
+      ...row,
+      coverageType: "atomic",
+      status: "covered-atomic",
+      canonicalEnglish: exact.en,
+      pyashSequence: [exact.pya],
+      hnuc: exact.hnuc
+    };
+  }
+  const alias = variants.map((variant) => resources.aliases.get(variant)).find(Boolean);
+  if (alias) {
+    const anchor = english30kLookupVariants(alias)
+      .map((variant) => resources.atomicByVariant.get(variant))
+      .find(Boolean);
+    if (anchor) {
+      return {
+        ...row,
+        coverageType: "alias",
+        status: "covered-alias",
+        canonicalEnglish: anchor.en,
+        aliasOf: alias,
+        pyashSequence: [anchor.pya],
+        hnuc: anchor.hnuc
+      };
+    }
+  }
+  const grammar = variants.map((variant) => resources.grammarMappings.get(variant)).find(Boolean);
+  if (grammar) {
+    return {
+      ...row,
+      coverageType: "grammar",
+      status: "covered-grammar",
+      pyashSequence: [...grammar]
+    };
+  }
+  const dictionaryAlias = variants.map((variant) => resources.dictionaryAliases.get(variant)).find(Boolean);
+  if (dictionaryAlias) {
+    const anchor = english30kLookupVariants(dictionaryAlias)
+      .map((variant) => resources.atomicByVariant.get(variant))
+      .find(Boolean);
+    if (anchor) {
+      return {
+        ...row,
+        coverageType: "dictionary-alias",
+        status: "covered-dictionary-alias",
+        canonicalEnglish: anchor.en,
+        aliasOf: dictionaryAlias,
+        pyashSequence: [anchor.pya],
+        hnuc: anchor.hnuc
+      };
+    }
+  }
+  const resolved = resources.lemmaIndex.resolve(row.word);
+  if (resolved) {
+    return {
+      ...row,
+      coverageType: "lemma",
+      status: "covered-lemma",
+      canonicalEnglish: resolved.canonicalEnglish,
+      pyashSequence: [...resolved.pyashSequence],
+      hnuc: resolved.hnuc,
+      lemma: resolved.lemma,
+      lemmaKind: resolved.kind,
+      lemmaStatus: resolved.status,
+      lemmaRule: resolved.rule,
+      lemmaEvidence: resolved.evidence,
+      lemmaPyashSequence: [...resolved.pyashSequence],
+      ...(resolved.morphology ? {
+        morphology: {
+          ...resolved.morphology,
+          markerNames: [...resolved.morphology.markerNames],
+          markerSequence: [...resolved.morphology.markerSequence]
+        }
+      } : {}),
+      ...(resolved.grammaticalNumber ? { grammaticalNumber: resolved.grammaticalNumber } : {})
+    };
+  }
+  return {
+    ...row,
+    coverageType: "unresolved",
+    status: "unresolved"
+  };
+}
+
+function needsFullCoverage(analysis) {
+  return analysis.unresolved?.length > 0;
+}
+
 export async function analyzeDefaultEnglishSentence(source) {
-  const { coverage, lemmaCatalog, grammarIndex } = await loadDefaultEnglishSentenceResources();
+  const resources = await loadEnglishSentenceResources();
+  const analysis = analyzeEnglishSentence(source, {
+    resolveWord: (word) => stagedEnglishCoverage(resources, word),
+    lemmaEntries: resources.lemmaCatalog.entries,
+    grammarIndex: resources.grammarIndex
+  });
+  if (!needsFullCoverage(analysis)) return analysis;
+
+  const fullResources = await loadDefaultEnglishSentenceResources();
   return analyzeEnglishSentence(source, {
-    resolveWord: (word) => lookupEnglish30kCoverage(coverage, word),
-    lemmaEntries: lemmaCatalog.entries,
-    grammarIndex
+    resolveWord: (word) => lookupEnglish30kCoverage(fullResources.coverage, word),
+    lemmaEntries: fullResources.lemmaCatalog.entries,
+    grammarIndex: fullResources.grammarIndex
   });
 }
 

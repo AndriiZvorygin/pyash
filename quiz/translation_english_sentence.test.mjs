@@ -5,6 +5,7 @@ import {
   analyzeDefaultEnglishSentence,
   analyzeEnglishSentence,
   applyEnglishSentenceCandidate,
+  loadEnglishSentenceResources,
   resolveEnglishSentence
 } from "../program/verbs/exchange/translation/english_sentence.mjs";
 import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
@@ -46,6 +47,14 @@ function fixtureResolver() {
   ]);
   return (word) => rows.get(word) ?? null;
 }
+
+test("English sentence resources expose a staged source index before full coverage", async () => {
+  const resources = await loadEnglishSentenceResources();
+  assert.equal(resources.coverage, undefined);
+  assert.equal(resources.source.cutoff, 30000);
+  assert.equal(resources.sourceByVariant.get("walked").word, "walked");
+  assert.deepEqual(resources.grammarIndex.resolve("our").pyashSequence, ["nyah", "ye"]);
+});
 
 test("sentence analysis selects simple past and emits the root plus tense particle", () => {
   const result = analyzeEnglishSentence("I walked", { resolveWord: fixtureResolver() });
