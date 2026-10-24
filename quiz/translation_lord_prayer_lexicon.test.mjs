@@ -114,10 +114,10 @@ test("Lord's Prayer renders every text form from decoded VLIW", async () => {
     assert.ok(clause.englishPyash.length > 0, clause.locator);
     assert.ok(clause.english.length > 0, clause.locator);
   }
-  assert.equal(translation.clauses[8].englishPyash, "su yours ob kingdom and power and glory forever be is li");
-  assert.equal(translation.clauses[8].english, "Yours is kingdom and power and glory forever.");
-  assert.equal(translation.clauses[9].englishPyash, "amen li");
-  assert.equal(translation.clauses[9].english, "Amen.");
+  assert.equal(translation.clauses[8].englishPyash, "su yours ob king government and strength and glory ages be is li");
+  assert.equal(translation.clauses[8].english, "Yours is king government and strength and glory ages.");
+  assert.equal(translation.clauses[9].englishPyash, "firmly li");
+  assert.equal(translation.clauses[9].english, "Firmly.");
 });
 
 test("Lord's Prayer analysis links dictionary evidence to Greek pilot records", async () => {

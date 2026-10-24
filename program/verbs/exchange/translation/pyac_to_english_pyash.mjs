@@ -84,55 +84,6 @@ const PRONOUN_FORMS = new Map([
   ["ya", { subject: "it", object: "it", possessive: "its", standalone: "its" }],
   ["mo", { subject: "we", object: "us", possessive: "our", standalone: "ours" }]
 ]);
-const ENGLISH_PARTICLE_GLOSSES = new Map([
-  ["no", "not"],
-  ["wa", "and"],
-  ["pcah", "also"],
-  ["pyuh", "but"]
-]);
-const ENGLISH_COMPOUND_GLOSSES = new Map([
-  ["hyap syun", "kingdom"],
-  ["hdef hgen", "debtor"],
-  ["dlat ci", "daily"]
-]);
-const ENGLISH_PHRASE_GLOSSES = new Map([
-  ["hnis pu", "forever"]
-]);
-const COMMON_GLOSSES = new Map([
-  ["mi", "me"],
-  ["sa", "you"],
-  ["nyah", "us"],
-  ["ye", "possessive"],
-  ["pu", "plural"],
-  ["hcas", "house"],
-  ["hnim", "name"],
-  ["cyak", "heaven"],
-  ["swut", "holy"],
-  ["hpap", "father"],
-  ["hyap", "king"],
-  ["syun", "government"],
-  ["hlam", "come"],
-  ["hmuc", "will"],
-  ["tlap", "earth"],
-  ["tcun", "done"],
-  ["tren", "today"],
-  ["dlat", "daily"],
-  ["hpup", "bread"],
-  ["pfin", "walk"],
-  ["kwin", "give"],
-  ["hdef", "debt"],
-  ["hgen", "debtor"],
-  ["hson", "forgive"],
-  ["tlak", "bring"],
-  ["hyoc", "temptation"],
-  ["cwak", "evil"],
-  ["hxuc", "deliver"],
-  ["htaf", "power"],
-  ["nyam", "glory"],
-  ["hnis", "forever"],
-  ["hret", "amen"]
-]);
-
 function invalid(message, details = {}) {
   const error = new Error(message);
   error.code = "invalid-pyac-translation";
@@ -318,7 +269,13 @@ function rootEnglish(part) {
 function inflectVerb(parts) {
   const root = parts.find((part) => part.kind === "root");
   if (!root) return "something";
-  const base = rootEnglish(root);
+  const dictionaryForm = rootEnglish(root);
+  const base = dictionaryForm.length > 5 && dictionaryForm.endsWith("ing")
+    ? dictionaryForm
+      .replace(/iving$/u, "ive")
+      .replace(/uing$/u, "ue")
+      .replace(/ing$/u, "")
+    : dictionaryForm;
   const markers = new Set(parts.filter((part) => part.kind === "grammar").map((part) => part.pya));
   if (markers.has("ki")) {
     return new Map([
@@ -334,25 +291,13 @@ function inflectVerb(parts) {
 }
 
 function renderPhrase(parts, { subject = false, standalone = false, vocativeMarker = false } = {}) {
-  const phraseGloss = ENGLISH_PHRASE_GLOSSES.get(
-    parts.filter((part) => part.kind !== "case").map((part) => part.pya).join(" ")
-  );
-  if (phraseGloss) {
-    return [renderCasePreposition(phraseCase(parts), phraseGloss, parts, { vocativeMarker }), phraseGloss]
-      .filter(Boolean)
-      .join(" ");
-  }
   const words = [];
   let possessive = false;
   let possessivePya = null;
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
     if (part.kind === "root" || isPronoun(part)) {
-      const next = parts[index + 1];
-      const compound = next
-        ? ENGLISH_COMPOUND_GLOSSES.get(`${part.pya} ${next.pya}`)
-        : null;
-      let word = compound ?? rootEnglish(part);
+      let word = rootEnglish(part);
       if (isPronoun(part)) word = pronounForm(part, subject ? "subject" : "object");
       if (possessive) {
         const owner = PRONOUN_FORMS.get(possessivePya);
@@ -362,7 +307,6 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
         possessivePya = null;
       }
       words.push(word);
-      if (compound) index += 1;
       continue;
     }
     if (part.pya === "ye") {
@@ -380,8 +324,7 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
     if (part.pya === "no" || part.pya === "pyuh") {
       continue;
     }
-    const particle = ENGLISH_PARTICLE_GLOSSES.get(part.pya);
-    if (particle) words.push(particle);
+    if (part.kind === "grammar" && part.english) words.push(part.english);
   }
   if (possessive && words.length > 0) {
     const owner = PRONOUN_FORMS.get(possessivePya);
@@ -519,7 +462,6 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
 export function buildPyacDecoder({ entries = pyashWords, glosses = {} } = {}) {
   const inventory = buildInventory(entries);
   const mergedGlosses = new Map([
-    ...COMMON_GLOSSES,
     ...Object.entries(glosses).map(([key, value]) => [key, text(value)])
   ]);
   return {
@@ -546,7 +488,6 @@ export function buildPyacDecoder({ entries = pyashWords, glosses = {} } = {}) {
 export function renderEnglishFromVliw(input, { glosses = {} } = {}) {
   const decoded = input?.vectors ? decodePhraseVliw(input.vectors) : decodePhraseVliw(input);
   const mergedGlosses = new Map([
-    ...COMMON_GLOSSES,
     ...Object.entries(glosses).map(([key, value]) => [key, text(value)])
   ]);
   const sentence = structuralSentence([], decoded);
