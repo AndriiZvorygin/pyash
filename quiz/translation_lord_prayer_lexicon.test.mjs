@@ -49,7 +49,8 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
     ["holy", "holy-root"],
     ["give", "giving"],
     ["forgive", "pardon"],
-    ["bring", "existing-bring"]
+    ["bring", "existing-bring"],
+    ["evil", "evil"]
   ]) {
     assert.equal(lexicon.entries.find((entry) => entry.term === term)?.selectedCandidateId, candidateId);
   }
