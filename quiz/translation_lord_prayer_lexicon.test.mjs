@@ -54,10 +54,16 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
     ["will", "purpose"],
     ["earth", "floor"],
     ["power", "strength"],
-    ["forever", "age"]
+    ["forever", "age"],
+    ["debts", "debit-plural"],
+    ["debtors", "debit-agent-plural"]
   ]) {
     assert.equal(lexicon.entries.find((entry) => entry.term === term)?.selectedCandidateId, candidateId);
   }
+  assert.deepEqual(
+    lexicon.entries.find((entry) => entry.term === "debtors")?.semanticCandidates[0].pyashSequence,
+    ["hdef", "hgen", "pu"]
+  );
   assert.deepEqual(
     lexicon.entries.find((entry) => entry.term === "our")?.semanticCandidates[0].pyashSequence,
     ["nyah", "ye"]
