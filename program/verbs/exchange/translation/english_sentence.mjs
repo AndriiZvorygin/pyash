@@ -370,6 +370,7 @@ export async function loadDefaultEnglishSentenceResources() {
     ]).then(([coverage, lemmaCatalog, grammarCatalog]) => ({
       coverage,
       lemmaCatalog,
+      grammarCatalog,
       grammarIndex: buildEnglishGrammarIndex({ catalogEntries: grammarCatalog.entries })
     }));
   }
