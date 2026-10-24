@@ -37,7 +37,13 @@ const COMPOSITIONAL_CASE_INDEX = new Map(
       }]))
 );
 const COMPOSITIONAL_CASE_ALIASES = new Map([
-  ["within", "in"]
+  ["within", "in"],
+  ["inside", "in"],
+  ["through", "in"],
+  ["before", "since"],
+  ["after", "until"],
+  ["below", "beneath"],
+  ["upon", "on"]
 ]);
 
 let defaultResourcesPromise = null;

@@ -112,6 +112,58 @@ test("English surface grammar resolves pro-forms, demonstratives, and within as 
   assert.equal(within.pyash, "su name mi na ob name hcas pu lwah be pfin ki ya");
 });
 
+test("English case surfaces cover the canonical grid and common aliases", async () => {
+  const cases = [
+    ["from", "so"],
+    ["at", "ga"],
+    ["to", "ma"],
+    ["in", "lwah"],
+    ["into", "twih"],
+    ["on", "lwah"],
+    ["onto", "sweh"],
+    ["under", "lwah"],
+    ["beneath", "bveh"],
+    ["since", "tsi7h"],
+    ["during", "myah"],
+    ["until", "tweh"],
+    ["as", "swih"],
+    ["with", "mwah"],
+    ["for", "yi"],
+    ["among", "sa7"],
+    ["inside", "lwah"],
+    ["through", "lwah"],
+    ["before", "tsi7h"],
+    ["after", "tweh"],
+    ["below", "bveh"],
+    ["upon", "lwah"]
+  ];
+  for (const [surface, pya] of cases) {
+    const result = await analyzeDefaultEnglishSentence(`I walked ${surface} houses`);
+    assert.equal(result.status, "resolved", surface);
+    assert.equal(result.tokens.find((token) => token.surface === surface).pyashSequence[0], pya, surface);
+  }
+});
+
+test("English quantifier and article surfaces use existing grammar particles", async () => {
+  const cases = [
+    ["the", "dlih"],
+    ["a", "tlih"],
+    ["an", "tlih"],
+    ["some", "tlih"],
+    ["any", "tlah"],
+    ["all", "wi"],
+    ["every", "wi"],
+    ["these", ["tsah", "pu"]],
+    ["those", ["tsuh", "pu"]],
+    ["or", "ba"]
+  ];
+  for (const [surface, pya] of cases) {
+    const grammar = await loadEnglishGrammarCatalog();
+    const entry = grammar.entries.find((candidate) => candidate.surface === surface);
+    assert.deepEqual(entry?.pyashSequence, Array.isArray(pya) ? pya : [pya], surface);
+  }
+});
+
 test("sentence objects preserve possessives, plural markers, and conjunction links", async () => {
   const result = await analyzeDefaultEnglishSentence("I walked our houses and your names");
   assert.equal(result.status, "resolved");
