@@ -47,7 +47,7 @@ function ending(sequence, ...markers) {
 const LORD_PRAYER_VLIW_SIGNATURES = Object.freeze([
   "nyah ye hpap wu cyak te sa ye hnim na swut pyoh jwih",
   "sa ye hyap syun na hlam jwih",
-  "sa ye hmuc na cyak te swih wa tlap ta tcun jwih",
+  "sa ye hmuc na cyak te swih tlap ta tcun jwih",
   "nyah yi tren myah nyah ye dlat ci hpup ka kwin pcih",
   "nyah yi nyah ye hdef pu ka hson pcih",
   "nyah na pcah nyah ye hdef hgen pu ka hson ra li",
@@ -127,7 +127,6 @@ export function buildLordPrayerTranslation({ lexicon } = {}) {
       ...yours,
       ...ending(selected(lexicon, "will"), "na"),
       ...ending(selected(lexicon, "heaven"), "te", "swih"),
-      "wa",
       ...ending(selected(lexicon, "earth"), "ta"),
       "tcun", "jwih"
     ]),
