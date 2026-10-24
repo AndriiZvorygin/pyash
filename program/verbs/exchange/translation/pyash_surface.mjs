@@ -11,7 +11,7 @@ const FUSED_ENDINGS = new Set([
   "greh", "rweh", "xwih", "kxeh", "lwoh", "bvah", "dvah", "je",
   "gveh", "vwih", "bveh", "dzih", "tsi7h", "vyah", "gvah", "zreh",
   "bu", "sa7", "si7", "tsi2h", "ta7",
-  "ra", "ki", "pfih", "pyoh"
+  "ra", "ki", "pfih", "pyoh", "vi"
 ]);
 
 const SENTENCE_PARTICLES = new Set([
