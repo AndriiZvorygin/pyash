@@ -33,7 +33,7 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
   assert.equal(lexicon.metadata["canonical-edition"], "Nestle-Aland 28 (NA28)");
   assert.equal(lexicon.metadata["critical-edition"], "SBL Greek New Testament (SBLGNT)");
   assert.equal(lexicon.metadata["syriac-source"], "Matthew 6:10 form ܡܰܠܟܽܘܬܳܟ, malkūthākh");
-  assert.equal(lexicon.entries.length, 26);
+  assert.equal(lexicon.entries.length, 27);
   assert.deepEqual(lexicon.entries.find((entry) => entry.term === "daily")?.greekForms, ["ἐπιούσιον"]);
   assert.equal(lexicon.entries.find((entry) => entry.term === "daily")?.selectedCandidateId, "adjective-hodiernal-bread");
   assert.deepEqual(
@@ -59,6 +59,7 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
     ["evil", "evil"],
     ["will", "purpose"],
     ["earth", "floor"],
+    ["as", "essive-comparison"],
     ["power", "strength"],
     ["forever", "age"],
     ["debts", "debit-plural"],
@@ -68,6 +69,10 @@ test("Lord's Prayer Greek pilot preserves source policy and lexical gaps", async
   ]) {
     assert.equal(lexicon.entries.find((entry) => entry.term === term)?.selectedCandidateId, candidateId);
   }
+  assert.deepEqual(
+    lexicon.entries.find((entry) => entry.term === "as")?.semanticCandidates[0].pyashSequence,
+    ["swih"]
+  );
   assert.deepEqual(
     lexicon.entries.find((entry) => entry.term === "debtors")?.semanticCandidates[0].pyashSequence,
     ["hdef", "hgen", "pu"]

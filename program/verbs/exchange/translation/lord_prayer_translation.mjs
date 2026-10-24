@@ -109,6 +109,7 @@ export function buildLordPrayerTranslation({ lexicon } = {}) {
   const us = our.slice(0, 1);
   const yours = selected(lexicon, "yours");
   const kingdom = selected(lexicon, "kingdom");
+  const comparison = selected(lexicon, "as");
   const clauses = [
     clause(0, [
       ...our,
@@ -126,7 +127,7 @@ export function buildLordPrayerTranslation({ lexicon } = {}) {
     clause(2, [
       ...yours,
       ...ending(selected(lexicon, "will"), "na"),
-      ...ending(selected(lexicon, "heaven"), "te", "swih"),
+      ...ending(selected(lexicon, "heaven"), "te", ...comparison),
       ...ending(selected(lexicon, "earth"), "ta"),
       "tcun", "jwih"
     ]),
