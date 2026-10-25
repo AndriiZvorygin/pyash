@@ -27,10 +27,15 @@ node command/criterion.mjs inspect --benchmark flores-200
 node command/criterion.mjs run \
   --benchmark flores-200 \
   --dataset "$PYA_BENCHMARK_CACHE/flores-200/devtest.jsonl" \
-  --model "qwen3.8:27b,aya-expanse:8b,translategemma:12b" \
+  --model "qwen3.5:9b" \
   --profile translation_direct \
   --limit 100 --resume --json
 ```
+
+FLORES runs default to `qwen3.5:9b` when `--model` and
+`PYA_CRITERION_MODELS` are unset. Use the existing housekeeper lane for live
+translation work by setting `PYA_GPU_HOUSEKEEPER_URL`; pass a comma-separated
+model list explicitly when a comparison is intended.
 
 The suite reports chrF on the 0–100 scale and groups results by language
 direction. It does not download FLORES or commit model outputs; the supplied

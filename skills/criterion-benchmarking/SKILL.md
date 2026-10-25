@@ -10,9 +10,12 @@ Use `node command/criterion.mjs list` and `inspect` before selecting a suite. Ke
 Use the same `--profile` and `--context-length` for every model in a comparison. The normal profiles are `summary_direct`, `summary_reasoned`, and `summary_reasoned_hidden` (`reasoning` remains a compatibility alias); the default comparison models are `qwen3.5:9b` and `hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M`.
 
 For translation comparisons, use the `flores-200` suite with the
-`translation_direct` profile and inspect chrF by language direction. Supply a
-local normalized FLORES export; Criterion never downloads or commits the
-dataset or model outputs.
+`translation_direct` profile and inspect chrF by language direction. The
+translation-specific default is `qwen3.5:9b` when no model override is
+provided; use `PYA_CRITERION_MODELS` or `--model` for an explicit comparison.
+Supply a local normalized FLORES export; Criterion never downloads or commits
+the dataset or model outputs. Route live model work through the existing GPU
+housekeeper lane.
 
 Start with `--smoke` and a small `--limit`. Long runs are resumable with `--resume` or `criterion again <run-id>`. Inspect the generated `.pya`, JSONL, Markdown, CSV and review HTML before using a golden.
 

@@ -55,7 +55,6 @@ test("FLORES Criterion runs score chrF, group directions, and render replay evid
   const run = await runCriterion({
     benchmark: "flores-200",
     datasetPath: dataset,
-    models: ["qwen3.8:27b"],
     profile: "translation_direct",
     runId: "flores-translation",
     root,
@@ -63,6 +62,7 @@ test("FLORES Criterion runs score chrF, group directions, and render replay evid
     metadataProvider
   });
   assert.equal(run.status, "completed");
+  assert.deepEqual(run.models, ["qwen3.5:9b"]);
   assert.equal(run.results.length, 2);
   assert.equal(run.aggregates[0].aggregate.chrf, 100);
   assert.equal(run.evaluationAggregates.length, 2);
