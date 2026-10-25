@@ -22,7 +22,9 @@ It supplies part-of-speech, synset, gloss, and same-synset evidence for unresolv
 does not create vocabulary. A term is auto-resolved only when the existing Pyash inventory and
 sentence context leave one result. Multiple senses or missing inventory evidence remain
 unresolved and can enter the existing bounded Housekeeper verifier, whose response is limited
-to supplied candidate ids.
+to supplied candidate ids. The English `such as` surface is classified as an
+`exemplifier` construction, a subtype of `exemplification`; its Pyash sequence remains
+unresolved until the grammar inventory supplies an authoritative token.
 
 ---
 
