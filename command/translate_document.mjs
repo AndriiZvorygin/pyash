@@ -108,6 +108,7 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     wordnetDeterministicLinks: wordnet?.counts.deterministic ?? 0,
     wordnetPending: wordnet?.queuePending ?? 0,
     wordnetQueueHandle: wordnet?.queueHandle ?? null,
+    wordnetQueueHandles: wordnet?.queues?.map((queue) => queue.handleId) ?? [],
     compoundRequests: compoundCache?.requested ?? 0,
     compoundCacheHits: compoundCache?.counts.hits ?? 0,
     compoundTranslations: compoundCache?.counts.translated ?? 0,

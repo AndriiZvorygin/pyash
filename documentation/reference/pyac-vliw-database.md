@@ -258,9 +258,13 @@ English document refineries also run
 `program/verbs/exchange/translation/english_wordnet_refinery.mjs`. Encountered
 lexical gaps receive stable WordNet sense rows; existing-atom or accepted-compound
 leaf/edge links are recorded deterministically, while ambiguous senses enter the
-existing durable Housekeeper `mind` queue. The `wordnet-refinery` row in the
-translation `.pya` catalog preserves the sense batch and queue handle without
-silently promoting a model decision into the vocabulary.
+existing durable Housekeeper `mind` queue. Source context is compacted by unresolved term and
+sent once for a paragraph-sized group where the prompt fits; a larger group is split between
+complete sense rows. Each prompt is capped at 12,000 characters and 3,900 conservative
+token-like units, keeping the request within the rough 4,000-token budget without truncating ids.
+The `wordnet-refinery` row in the translation
+`.pya` catalog preserves the sense batches and queue handles without silently promoting a model
+decision into the vocabulary.
 
 Closed-word review also carries morphology metadata from
 `program/verbs/exchange/translation/compound_morphology.pya` and the

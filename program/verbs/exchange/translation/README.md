@@ -50,7 +50,10 @@ The bounded sense-linking worker is configured in `english_wordnet_linker.pya`. 
 targets present in the supplied inventory, and submits unresolved records through the existing
 `vyah start future be gpu mind do` queue path. A completed response can be rendered back into
 the native `english_wordnet_bridges.pya` map; the linker is evidence generation, not a second
-vocabulary or transcript format. The durable configuration caps one batch at 200 senses.
+vocabulary or transcript format. The durable configuration caps one batch at 200 senses and
+keeps each queued prompt below 12,000 characters and 3,900 conservative token-like units (inside
+the 4,000-token context budget). A paragraph-sized group is sent as one duty when it fits; larger
+groups split on complete sense rows, so a provider never receives a truncated sense identity.
 The deterministic pre-pass also accepts a low-degree edge synset when one lemma has exactly
 one WordNet sense. The existing target may be an atom or an accepted compound; missing
 vocabulary stays review evidence and is never invented.
@@ -96,11 +99,12 @@ separate evidence-backed catalog change.
 For English documents, the command also runs the standard WordNet refinery before vocabulary
 review. It records one stable row per encountered unresolved WordNet sense, accepts only
 existing-atom or accepted-compound leaf/edge links deterministically, and submits the remaining
-ambiguous senses through the same durable Housekeeper queue. The refinery evidence and
-`english-wordnet-link-*` handle are stored under `wordnet-refinery` in the translation `.pya`
-catalog. A queued sense decision remains review evidence until a bounded response is accepted
-into `english_wordnet_bridges.pya`; the current run never invents a lexical word or applies an
-ambiguous sense silently.
+ambiguous senses through the same durable Housekeeper queue. The refinery includes bounded source
+context for unresolved terms, so one duty can cover a paragraph without making one mind call per
+sense. The refinery evidence and each `english-wordnet-link-*` handle are stored under
+`wordnet-refinery` in the translation `.pya` catalog. A queued sense decision remains review
+evidence until a bounded response is accepted into `english_wordnet_bridges.pya`; the current
+run never invents a lexical word or applies an ambiguous sense silently.
 
 To regenerate the English pairs from `examples/pyash/*.pya`:
 

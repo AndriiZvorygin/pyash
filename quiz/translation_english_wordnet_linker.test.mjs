@@ -9,6 +9,7 @@ import {
   buildEnglishWordNetSenseLinkRecords,
   createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter,
   createQueuedMindEnglishWordNetSenseLinkSubmitter,
+  estimateEnglishWordNetSenseLinkPromptTokens,
   loadEnglishWordNetLinkerConfig,
   parseEnglishWordNetSenseLinkResponse,
   renderEnglishWordNetSenseLinksPya,
@@ -129,6 +130,42 @@ test("WordNet linker prompt stays bounded to supplied senses and inventory", () 
   assert.match(prompt, /v:beta/u);
   assert.match(prompt, /emotionally.*xyek/u);
   assert.doesNotMatch(prompt, /ollama/u);
+  assert.ok(prompt.length <= 12000);
+  assert.ok(estimateEnglishWordNetSenseLinkPromptTokens(prompt) < 4000);
+});
+
+test("WordNet linker splits oversized sense batches without truncating identities", async () => {
+  const records = Array.from({ length: 120 }, (_, index) => ({
+    id: `sense-${String(index).padStart(3, "0")}`,
+    status: "review",
+    pos: "n",
+    gloss: "a deliberately compact sense gloss used to exercise bounded batching",
+    lemmas: [`term-${index}`],
+    candidates: []
+  }));
+  const requests = [];
+  const queued = await submitEnglishWordNetSenseLinks({
+    records,
+    inventory: {
+      entries: Array.from({ length: 500 }, (_, index) => ({
+        english: `inventory-${index}`,
+        pyash: [`word-${index}`]
+      })),
+      grammar: []
+    },
+    sourceHash: "oversized-source",
+    submit: async (request) => {
+      requests.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.ok(requests.length > 1);
+  assert.equal(queued.queues.length, requests.length);
+  assert.ok(requests.every((request) => request.prompt.length <= 12000));
+  assert.ok(requests.every((request) => estimateEnglishWordNetSenseLinkPromptTokens(request.prompt) < 4000));
+  for (const record of records) {
+    assert.equal(requests.filter((request) => request.prompt.includes(`\"id\":\"${record.id}\"`)).length, 1);
+  }
 });
 
 test("WordNet linker submits one durable future queue duty for pending senses", async () => {
@@ -293,6 +330,8 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     queueIntent: "mind",
     queueLane: "durable",
     maxBatch: 200,
+    promptMaxChars: 12000,
+    promptMaxTokens: 3900,
     edgeMaxDegree: 1
   });
 });

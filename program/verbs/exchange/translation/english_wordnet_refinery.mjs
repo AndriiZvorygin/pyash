@@ -72,6 +72,25 @@ function counts(records) {
   };
 }
 
+function contextByTerm(result, terms) {
+  const rows = new Map(terms.map((term) => [term, new Set()]));
+  for (const record of result.records ?? []) {
+    const sentences = [record?.source?.text, ...(record?.context ?? [])]
+      .filter((value) => typeof value === "string" && value.trim())
+      .map((value) => value.trim());
+    const unresolved = new Set((record?.unresolved ?? []).map((value) => text(value).toLowerCase()));
+    for (const term of terms) {
+      if (!unresolved.has(term)) continue;
+      const target = rows.get(term);
+      for (const sentence of sentences) {
+        if (target.size >= 4) break;
+        target.add(sentence.slice(0, 1200));
+      }
+    }
+  }
+  return terms.map((term) => ({ term, sentences: [...(rows.get(term) ?? [])] }));
+}
+
 export async function refineEnglishWordNet({
   result,
   submit = null,
@@ -112,11 +131,15 @@ export async function refineEnglishWordNet({
     grammarEntries: loadedResources.grammarCatalog?.entries ?? [],
     compoundRecords
   });
+  const context = contextByTerm(result, terms);
   const queued = records.some((record) => !accepted(record.status)) && typeof submit === "function"
     ? await submitEnglishWordNetSenseLinks({
       records,
       inventory,
       sourceHash: text(result.sourceHash),
+      context,
+      maxChars: linkerConfig.promptMaxChars,
+      maxTokens: linkerConfig.promptMaxTokens,
       submit
     })
     : null;
@@ -126,9 +149,11 @@ export async function refineEnglishWordNet({
     sourceHash: text(result.sourceHash),
     sourceTerms: terms,
     records: refinedRecords,
+    context,
     counts: counts(refinedRecords),
     inventoryCount: inventory.entries.length,
     queue: queued?.queue ?? null,
+    queues: queued?.queues ?? [],
     queueHandle: queued?.handleId ?? null,
     queuePending: queued?.pending?.length ?? refinedRecords.filter((record) => !accepted(record.status)).length
   };
