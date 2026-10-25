@@ -2,9 +2,9 @@ su name translation_english_wordnet_linker be map def
 su text "format" ob text "english-wordnet-linker-v1" ya
 su text "queue-intent" ob text "mind" ya
 su text "queue-lane" ob text "durable" ya
+su text "model" ob text "qwen3.5:9b" ya
 su text "max-batch" ob num 200 ya
 su text "prompt-max-chars" ob num 12000 ya
-su text "prompt-max-tokens" ob num 3900 ya
 su text "edge-max-degree" ob num 1 ya
 su text "edge-resolution" ob text "one WordNet meaning plus an existing atom or accepted compound" ya
 su text "response-contract" ob text "one bounded sense-links object" ya

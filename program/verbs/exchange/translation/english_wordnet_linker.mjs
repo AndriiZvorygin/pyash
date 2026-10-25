@@ -8,6 +8,11 @@ import {
 } from "./translation_vocabulary_queue.mjs";
 import { DERIVED_COMPOUND_STATUSES } from "./compound_coverage.mjs";
 import { extractBoundedJsonObject } from "./english_verification.mjs";
+import {
+  DEFAULT_TRANSLATION_MODEL,
+  loadTranslationModelCard,
+  TRANSLATION_MODEL_CARDS_URL
+} from "./translation_model_cards.mjs";
 
 export const ENGLISH_WORDNET_LINKER_FORMAT = "english-wordnet-linker-v1";
 export const ENGLISH_WORDNET_LINKER_NAME = "translation_english_wordnet_linker";
@@ -714,6 +719,7 @@ export function parseEnglishWordNetLinkerConfig(source) {
     format: metadata.format,
     queueIntent: metadata["queue-intent"] || ENGLISH_WORDNET_LINKER_QUEUE_INTENT,
     queueLane: metadata["queue-lane"] || ENGLISH_WORDNET_LINKER_QUEUE_LANE,
+    model: metadata.model || DEFAULT_TRANSLATION_MODEL,
     maxBatch: Math.max(1, Math.trunc(Number(metadata["max-batch"]) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE)),
     promptMaxChars: Math.max(1000, Math.trunc(Number(metadata["prompt-max-chars"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS)),
     promptMaxTokens: Math.max(100, Math.trunc(Number(metadata["prompt-max-tokens"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS)),
@@ -721,8 +727,17 @@ export function parseEnglishWordNetLinkerConfig(source) {
   };
 }
 
-export async function loadEnglishWordNetLinkerConfig({ configUrl = ENGLISH_WORDNET_LINKER_CONFIG_URL } = {}) {
-  return parseEnglishWordNetLinkerConfig(await readFile(configUrl, "utf8"));
+export async function loadEnglishWordNetLinkerConfig({
+  configUrl = ENGLISH_WORDNET_LINKER_CONFIG_URL,
+  modelCardsUrl = TRANSLATION_MODEL_CARDS_URL
+} = {}) {
+  const config = parseEnglishWordNetLinkerConfig(await readFile(configUrl, "utf8"));
+  const card = await loadTranslationModelCard({ model: config.model, url: modelCardsUrl });
+  return {
+    ...config,
+    promptMaxTokens: card.safeInputTokens,
+    modelCard: card
+  };
 }
 
 export function createQueuedMindEnglishWordNetSenseLinkSubmitter(options = {}) {
