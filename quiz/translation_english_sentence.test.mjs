@@ -126,6 +126,25 @@ test("English example uses its generated non-overlapping grammar word", async ()
   assert.deepEqual(example.grammar.components, ["example_"]);
 });
 
+test("English lexical equivalence maps mix surfaces to the existing mixed atom", async () => {
+  const present = await analyzeDefaultEnglishSentence("I mix");
+  assert.equal(present.status, "review");
+  assert.deepEqual(present.unresolved, []);
+  assert.equal(present.pyash, "mrat ra");
+
+  const past = await analyzeDefaultEnglishSentence("I mixed");
+  assert.equal(past.status, "resolved");
+  assert.equal(past.pyash, "su name mi na be mrat ki ya");
+
+  const progressive = await analyzeDefaultEnglishSentence("I am mixing");
+  assert.equal(progressive.status, "resolved");
+  assert.equal(progressive.pyash, "su name mi na be mrat pfih ra ya");
+
+  const noun = await analyzeDefaultEnglishSentence("a mix");
+  assert.equal(noun.tokens.find((token) => token.surface === "mix").coverageType, "lemma");
+  assert.deepEqual(noun.tokens.find((token) => token.surface === "mix").pyashSequence, ["mrat"]);
+});
+
 test("English case surfaces cover the canonical grid and common aliases", async () => {
   const cases = [
     ["from", "so"],
