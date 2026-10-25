@@ -243,6 +243,17 @@ response violates the contract. Outcomes use `accepted-llm`, `repaired-llm`,
 `coverageStatus`. Verification evidence and attempt counts remain in the same
 `.pya` record.
 
+Compound translations for downstream integrations are lazy. The document
+pipeline selects only accepted lexical compounds that occur in the source;
+grammar rows, unresolved candidates, and unused compounds do not trigger a
+model request. Missing language surfaces are requested through the existing
+durable GPU worker and configured Housekeeper, using the model and five-language
+set in `program/verbs/exchange/translation/compound_translation_config.pya`.
+Successful responses are appended to the parser-readable cache at
+`program/verbs/exchange/translation/compound_translation_cache.pya` and later
+integrations reuse the stable compound request identity. The cache is evidence
+for translation integration, not a second accepted-vocabulary catalog.
+
 Closed-word review also carries morphology metadata from
 `program/verbs/exchange/translation/compound_morphology.pya` and the
 underscore-marked affix rows in `program/library/pyashWords.json`. Each record

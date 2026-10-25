@@ -11,6 +11,13 @@ import {
   createDefaultQueuedMindTranslationVocabularySubmitter,
   submitTranslationVocabularyCandidates
 } from "../program/verbs/exchange/translation/translation_vocabulary_queue.mjs";
+import { loadCoverage } from "./compound_coverage.mjs";
+import {
+  COMPOUND_TRANSLATION_LANGUAGES,
+  createDefaultQueuedCompoundTranslator,
+  ensureCompoundTranslations,
+  selectCompoundDemands
+} from "../program/verbs/exchange/translation/compound_translation_cache.mjs";
 import { writeVliwDatabaseFiles } from "../program/library/vliw/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
@@ -23,7 +30,8 @@ function usageError(message) {
 
 export async function runTranslationDocument(args = process.argv.slice(2), {
   report = console.log,
-  queueVocabulary = null
+  queueVocabulary = null,
+  compoundTranslation = null
 } = {}) {
   if (args.length !== 5) throw usageError("translate_document requires language, source, translation catalog, PyAC catalog, and PyAC pack");
   const [language, sourcePath, translationPath, catalogPath, packPath] = args;
@@ -47,6 +55,19 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     })
     : { result: translation, submitted: false, submittedCount: 0, handleId: "" };
   const finalTranslation = queued.result;
+  const compoundDemands = compoundTranslation
+    ? selectCompoundDemands(source, compoundTranslation.records ?? [])
+    : [];
+  const compoundCache = compoundTranslation
+    ? await ensureCompoundTranslations({
+      compounds: compoundDemands,
+      languages: compoundTranslation.languages ?? COMPOUND_TRANSLATION_LANGUAGES,
+      cachePath: compoundTranslation.cachePath,
+      translate: compoundTranslation.translate,
+      context: finalTranslation.records.map((record) => record.source.text),
+      onEvent: compoundTranslation.onEvent
+    })
+    : null;
   fs.writeFileSync(paths.translation, renderTranslationPipelinePya(finalTranslation), "utf8");
   const database = lowerTranslationToPyac(finalTranslation);
   writeVliwDatabaseFiles(database, {
@@ -67,19 +88,34 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     vocabularyCandidates: finalTranslation.vocabularyCandidates.length,
     vocabularySubmitted: queued.submittedCount,
     vocabularyQueueHandle: queued.handleId || null,
+    compoundRequests: compoundCache?.requested ?? 0,
+    compoundCacheHits: compoundCache?.counts.hits ?? 0,
+    compoundTranslations: compoundCache?.counts.translated ?? 0,
+    compoundTranslationPartials: compoundCache?.counts.partial ?? 0,
+    compoundTranslationFailures: compoundCache?.counts.failed ?? 0,
+    compoundTranslationCache: compoundCache?.cachePath ?? null,
     executable: database.catalog.executableCount,
     unsupported: database.catalog.unsupportedCount,
     packHash: database.catalog.packHash
   };
   report(JSON.stringify(result, null, 2));
-  return { translation: finalTranslation, database, result };
+  return { translation: finalTranslation, database, compoundCache, result };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   (async () => {
     await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret, entryPath: process.cwd() });
     const queueVocabulary = await createDefaultQueuedMindTranslationVocabularySubmitter();
-    return runTranslationDocument(process.argv.slice(2), { queueVocabulary });
+    const coverage = await loadCoverage();
+    const compoundTranslator = await createDefaultQueuedCompoundTranslator();
+    return runTranslationDocument(process.argv.slice(2), {
+      queueVocabulary,
+      compoundTranslation: {
+        records: coverage.accepted,
+        languages: COMPOUND_TRANSLATION_LANGUAGES,
+        translate: compoundTranslator
+      }
+    });
   })().catch((error) => {
     console.error(error?.message || String(error));
     process.exitCode = 1;
