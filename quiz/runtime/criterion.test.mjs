@@ -193,13 +193,14 @@ test("criterion native DeepSWE cases select the external Pier runner", () => {
   assert.ok(criterionSignatures.some(({ signatureWords }) => JSON.stringify(signatureWords) === JSON.stringify(deriveSignatureFromCall(sentence))));
 });
 
-test("Strata Criterion adapter prepares capacity, sends OpenAI-compatible work, and discharges", async () => {
+test("Strata Criterion adapter submits work and discharge through the Housekeeper", async () => {
   const calls = [];
   const response = (value, status = 200) => ({
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 200 ? "OK" : "error",
-    async text() { return JSON.stringify(value); }
+    async text() { return JSON.stringify(value); },
+    async json() { return value; }
   });
   const adapter = createStrataExecutor({
     baseUrl: "http://strata:8081",
@@ -207,8 +208,12 @@ test("Strata Criterion adapter prepares capacity, sends OpenAI-compatible work, 
     vramRequiredMb: 20000,
     fetchImpl: async (url, options) => {
       calls.push({ url, options, body: options?.body ? JSON.parse(options.body) : null });
-      if (url.endsWith("/capacity/prepare")) return response({ prepared: true, deviceId: "gpu0" });
-      if (url.endsWith("/v1/chat/completions")) return response({ choices: [{ message: { content: "strata summary" } }], usage: { prompt_tokens: 12, completion_tokens: 4 } });
+      if (url.endsWith("/submit")) return response({ remoteJobId: "strata-job-1" });
+      if (url.endsWith("/job/strata-job-1")) return response({
+        status: "success",
+        result: { choices: [{ message: { content: "strata summary" } }], usage: { prompt_tokens: 12, completion_tokens: 4 }
+        }
+      });
       if (url.endsWith("/discharge")) return response({ success: true, status: "discharged" });
       return response({ error: "unexpected endpoint" }, 404);
     }
@@ -220,14 +225,15 @@ test("Strata Criterion adapter prepares capacity, sends OpenAI-compatible work, 
   assert.equal(result.timing.outputTokens, 4);
   await adapter.close();
   assert.deepEqual(calls.map(call => call.url), [
-    "http://housekeeper:8090/capacity/prepare",
-    "http://strata:8081/v1/chat/completions",
+    "http://housekeeper:8090/submit",
+    "http://housekeeper:8090/job/strata-job-1",
     "http://housekeeper:8090/discharge"
   ]);
   assert.equal(calls[0].body.runtimeName, "strata");
+  assert.equal(calls[0].body.jobSpec.kind, "strata-chat");
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 20000);
-  assert.equal(calls[1].body.model, "qwen3.5:9b");
-  assert.equal(calls[1].body.temperature, 0.2);
+  assert.equal(calls[0].body.jobSpec.payload.model, "qwen3.5:9b");
+  assert.equal(calls[0].body.jobSpec.payload.temperature, 0.2);
 });
 
 test("DeepSWE task selection and verifier parsing are deterministic", () => {

@@ -123,10 +123,11 @@ be criterion do
 ```
 
 Use `from state "ollama"` and the Ollama endpoint for an Ollama run. Strata
-Criterion runs require `PYA_GPU_HOUSEKEEPER_URL`; the adapter requests capacity
-before the first sample and discharges Strata after the run through the existing
-Housekeeper API. `as state "summary_direct"` remains a legacy profile-only form
-when no `via state` model is present.
+Criterion runs require `PYA_GPU_HOUSEKEEPER_URL`; each `strata-chat` sample is
+submitted to the Housekeeper, which owns admission, model loading, the bounded
+wait for the provider result, and provider-specific discharge. Criterion never
+posts chat requests to the Strata endpoint. `as state "summary_direct"` remains
+a legacy profile-only form when no `via state` model is present.
 
 ```bash
 node command/criterion.mjs list
