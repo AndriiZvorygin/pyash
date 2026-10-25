@@ -38,6 +38,21 @@ function hash(value) {
 function parseLine(line, lineNumber) {
   const value = String(line).trim();
   if (!value || value.startsWith("#")) return null;
+  const relationMatch = value.match(/^r\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\](?:\s+(.*))?$/u);
+  if (relationMatch) {
+    const [, source, target, relation, rawEvidence = ""] = relationMatch;
+    if (!source.trim() || !target.trim() || !relation.trim()) {
+      throw invalid("WordNet relation has an invalid source, target, or type", { lineNumber, line });
+    }
+    return {
+      kind: "relation",
+      id: `relation:${source.trim()}:${target.trim()}:${relation.trim()}:${hash(value).slice(0, 12)}`,
+      source: source.trim(),
+      target: target.trim(),
+      relation: relation.trim(),
+      evidence: rawEvidence.trim()
+    };
+  }
   const match = value.match(/^([anrvs])\s+\[([^\]]+)\]\s+\[([^\]]+)\](?:\s+(.*))?$/u);
   if (!match) {
     throw invalid("WordNet line is malformed", { lineNumber, line });
@@ -59,6 +74,7 @@ function parseLine(line, lineNumber) {
 export function parseEnglishWordNetText(source, { strict = true } = {}) {
   if (typeof source !== "string") throw invalid("WordNet source must be text");
   const rows = [];
+  const relations = [];
   const skippedLines = [];
   const seen = new Set();
   for (const [index, line] of source.split(/\r?\n/u).entries()) {
@@ -67,7 +83,8 @@ export function parseEnglishWordNetText(source, { strict = true } = {}) {
       if (!row) continue;
       if (seen.has(row.id)) throw invalid("WordNet row is duplicated", { lineNumber: index + 1, id: row.id });
       seen.add(row.id);
-      rows.push(row);
+      if (row.kind === "relation") relations.push(row);
+      else rows.push(row);
     } catch (error) {
       if (strict) throw error;
       skippedLines.push({ lineNumber: index + 1, line: String(line), reason: error.message });
@@ -76,9 +93,10 @@ export function parseEnglishWordNetText(source, { strict = true } = {}) {
   return {
     format: ENGLISH_WORDNET_FORMAT,
     rows,
+    relations,
     skippedLines,
     sourceHash: hash(source),
-    sourceRows: rows.length + skippedLines.length
+    sourceRows: rows.length + relations.length + skippedLines.length
   };
 }
 
@@ -88,9 +106,14 @@ function lookupVariants(value) {
   return [...new Set([normalized, normalized.replace(/ /gu, "_"), normalized.replace(/ /gu, "-")])];
 }
 
-export function buildEnglishWordNetIndex({ rows = [] } = {}) {
+function relationKey(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+export function buildEnglishWordNetIndex({ rows = [], relations = [] } = {}) {
   const byLemma = new Map();
   const bySynset = new Map();
+  const relationGraph = new Map();
   for (const row of rows) {
     if (!row?.lemma || !row?.synset || !WORDNET_POS.has(row.pos)) continue;
     const group = bySynset.get(`${row.pos}:${row.synset}`) ?? [];
@@ -102,10 +125,43 @@ export function buildEnglishWordNetIndex({ rows = [] } = {}) {
       byLemma.set(variant, matches);
     }
   }
+  for (const relation of relations) {
+    const source = relationKey(relation?.source);
+    const target = relationKey(relation?.target);
+    if (!source || !target) continue;
+    const sourceEdges = relationGraph.get(source) ?? [];
+    sourceEdges.push({ target, relation: relation.relation, evidence: relation.evidence ?? "" });
+    relationGraph.set(source, sourceEdges);
+    const targetEdges = relationGraph.get(target) ?? [];
+    targetEdges.push({ target: source, relation: relation.relation, evidence: relation.evidence ?? "" });
+    relationGraph.set(target, targetEdges);
+  }
+  function relatedness(sourceValue, targetValue, maxDepth = 4) {
+    const source = relationKey(sourceValue);
+    const target = relationKey(targetValue);
+    if (!source || !target) return 0;
+    if (source === target) return 1;
+    const queue = [{ key: source, depth: 0 }];
+    const visited = new Set([source]);
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (current.depth >= maxDepth) continue;
+      for (const edge of relationGraph.get(current.key) ?? []) {
+        if (edge.target === target) return 1 / (current.depth + 2);
+        if (visited.has(edge.target)) continue;
+        visited.add(edge.target);
+        queue.push({ key: edge.target, depth: current.depth + 1 });
+      }
+    }
+    return 0;
+  }
   return {
     rows: rows.map((row) => ({ ...row })),
+    relations: relations.map((relation) => ({ ...relation })),
     byLemma,
     bySynset,
+    relationGraph,
+    relatedness,
     lookup(surface) {
       return lookupVariants(surface)
         .flatMap((variant) => byLemma.get(variant) ?? [])

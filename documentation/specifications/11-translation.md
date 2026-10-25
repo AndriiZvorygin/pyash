@@ -25,6 +25,10 @@ unresolved and can enter the existing bounded Housekeeper verifier, whose respon
 to supplied candidate ids. For unresolved WordNet terms, a bounded local sentence window scores
 exact overlap between neighboring words and sense glosses or lemmas before this agreement check;
 a unique positive match narrows the sense set, while tied or unmapped senses remain reviewable.
+The index also accepts optional relation rows in the form `r [source] [target] [relation]`;
+when present, bounded graph relatedness contributes to the context score. The checked-in slice
+currently remains gloss-based, so relation data is additive evidence rather than a hidden
+runtime download.
 The English `such as` surface is classified as an
 `exemplifier` construction, a subtype of `exemplification`. It lowers to `fluh ga`: the
 `example_` referential head with the space-way case, whose established surface glosses

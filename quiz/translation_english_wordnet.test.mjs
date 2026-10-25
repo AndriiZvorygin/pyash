@@ -44,6 +44,27 @@ test("WordNet parser rejects malformed source and can report noisy lines in boun
   assert.equal(parsed.skippedLines[0].lineNumber, 2);
 });
 
+test("WordNet parser and index preserve optional relation edges", () => {
+  const parsed = parseEnglishWordNetText([
+    "n [river] [bank] edge of terrain",
+    "n [river] [riverbank] edge of terrain",
+    "n [water] [water] liquid",
+    "r [n:river] [n:water] [related] source relation"
+  ].join("\n"));
+  assert.equal(parsed.relations.length, 1);
+  assert.deepEqual(parsed.relations[0], {
+    kind: "relation",
+    id: parsed.relations[0].id,
+    source: "n:river",
+    target: "n:water",
+    relation: "related",
+    evidence: "source relation"
+  });
+  const index = buildEnglishWordNetIndex(parsed);
+  assert.equal(index.relatedness("n:river", "n:water"), 0.5);
+  assert.equal(index.relatedness("n:river", "n:unknown"), 0);
+});
+
 test("repository WordNet resource is available as read-only semantic evidence", async () => {
   const resource = await loadEnglishWordNet();
   assert.equal(resource.format, "english-wordnet-core-v1");
