@@ -40,6 +40,10 @@ consulting semantic evidence. The read-only WordNet resource is configured by
 speech, synset, gloss, and bounded same-synset Pyash candidates. The dataset is a local
 knowledge input rather than a vendored dependency; its upstream URL, license, and source hash
 are durable in the Pyash configuration.
+Curated lemma equivalence may reuse one existing Pyash atom across English lexical surfaces:
+the `mixed` atom `mrat` anchors `mix`, `mixes`, `mixed`, and `mixing`. The `mix` surface keeps
+noun/verb ambiguity in sentence review, while the inflected surfaces carry their accepted tense
+or aspect evidence.
 The analyzer also scores a bounded local sentence window against sense glosses and lemmas;
 one unique positive overlap narrows the sense set before deterministic agreement.
 Optional relation edges can add bounded graph relatedness to that score without changing the

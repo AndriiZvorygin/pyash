@@ -891,6 +891,31 @@ function stagedEnglishCoverage(resources, word) {
       hnuc: exact.hnuc
     };
   }
+  const resolved = resources.lemmaIndex.resolve(word);
+  if (resolved) {
+    return {
+      ...sourceRow,
+      coverageType: "lemma",
+      status: "covered-lemma",
+      canonicalEnglish: resolved.canonicalEnglish,
+      pyashSequence: [...resolved.pyashSequence],
+      hnuc: resolved.hnuc,
+      lemma: resolved.lemma,
+      lemmaKind: resolved.kind,
+      lemmaStatus: resolved.status,
+      lemmaRule: resolved.rule,
+      lemmaEvidence: resolved.evidence,
+      lemmaPyashSequence: [...resolved.pyashSequence],
+      ...(resolved.morphology ? {
+        morphology: {
+          ...resolved.morphology,
+          markerNames: [...resolved.morphology.markerNames],
+          markerSequence: [...resolved.morphology.markerSequence]
+        }
+      } : {}),
+      ...(resolved.grammaticalNumber ? { grammaticalNumber: resolved.grammaticalNumber } : {})
+    };
+  }
   if (!row) return null;
   const alias = variants.map((variant) => resources.aliases.get(variant)).find(Boolean);
   if (alias) {
@@ -934,31 +959,6 @@ function stagedEnglishCoverage(resources, word) {
         hnuc: anchor.hnuc
       };
     }
-  }
-  const resolved = resources.lemmaIndex.resolve(row.word);
-  if (resolved) {
-    return {
-      ...row,
-      coverageType: "lemma",
-      status: "covered-lemma",
-      canonicalEnglish: resolved.canonicalEnglish,
-      pyashSequence: [...resolved.pyashSequence],
-      hnuc: resolved.hnuc,
-      lemma: resolved.lemma,
-      lemmaKind: resolved.kind,
-      lemmaStatus: resolved.status,
-      lemmaRule: resolved.rule,
-      lemmaEvidence: resolved.evidence,
-      lemmaPyashSequence: [...resolved.pyashSequence],
-      ...(resolved.morphology ? {
-        morphology: {
-          ...resolved.morphology,
-          markerNames: [...resolved.morphology.markerNames],
-          markerSequence: [...resolved.morphology.markerSequence]
-        }
-      } : {}),
-      ...(resolved.grammaticalNumber ? { grammaticalNumber: resolved.grammaticalNumber } : {})
-    };
   }
   return {
     ...row,
