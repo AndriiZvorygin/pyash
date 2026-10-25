@@ -62,6 +62,14 @@ one WordNet sense. The existing target may be an atom or an accepted compound; m
 vocabulary stays review evidence and is never invented.
 Callers that have loaded the derived compound catalog pass its accepted records explicitly;
 candidate-closed and rejected compounds are excluded from the authoritative inventory.
+Compound and atom relationships are derived by
+`compound_atom_links.mjs`. A lowered or accepted compound whose target is an existing atom
+gets that atom as `specificAtom`; a curated semantic alternative may name a different atom,
+as `brainstorm` does for `brain_storming`. The same index exposes reverse `atomToCompounds`
+links, so adding an atom makes all loaded language compounds that point to it discoverable.
+Unlowered and candidate-only records stay outside inferred links until their lowering is
+accepted. `vocab_suggest` uses this index for both compound-to-atom and atom-to-compound
+reports.
 Curated lemma equivalence may reuse one existing Pyash atom across English lexical surfaces:
 the `mixed` atom `mrat` anchors `mix`, `mixes`, `mixed`, and `mixing`. The `mix` surface keeps
 noun/verb ambiguity in sentence review, while the inflected surfaces carry their accepted tense

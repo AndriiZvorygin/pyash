@@ -2,8 +2,15 @@ import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 
 import { buildProgram } from "../../../program.mjs";
+import pyashWords from "../../../library/pyashWords.json" with { type: "json" };
 import { COMPOUND_VERIFICATION_STATUSES } from "./compound_verification.mjs";
 import { COMPOUND_MORPHOLOGY_KINDS } from "./compound_morphology.mjs";
+import {
+  buildCompoundAtomLinks,
+  linkCompoundToAtom,
+  linkedCompoundAtom
+} from "./compound_atom_links.mjs";
+export { buildCompoundAtomLinks, linkCompoundToAtom, linkedCompoundAtom };
 
 export const CHINESE_COMPOUND_LEXICON_NAME = "translation_compounds_chinese";
 
@@ -313,7 +320,7 @@ function normalizeEntry(payload, surface, index, language) {
   return entry;
 }
 
-export function parseCompoundLexicon(source, { name, language } = {}) {
+export function parseCompoundLexicon(source, { name, language, atomicEntries = pyashWords } = {}) {
   if (typeof source !== "string") throw invalid("compound lexicon source must be text");
   if (typeof name !== "string" || !name) throw invalid("compound lexicon requires a map name");
   if (typeof language !== "string" || !language) throw invalid("compound lexicon requires a language");
@@ -344,28 +351,30 @@ export function parseCompoundLexicon(source, { name, language } = {}) {
     entries.push(entry);
   }
   if (!entries.length) throw invalid("compound lexicon has no rows");
-  return entries;
+  return buildCompoundAtomLinks({ atomicEntries, compoundEntries: entries }).entries;
 }
 
-export function parseChineseCompoundLexicon(source) {
+export function parseChineseCompoundLexicon(source, options = {}) {
   return parseCompoundLexicon(source, {
     name: CHINESE_COMPOUND_LEXICON_NAME,
-    language: "chinese"
+    language: "chinese",
+    ...options
   });
 }
 
-export async function loadCompoundLexicon({ url, name, language } = {}) {
+export async function loadCompoundLexicon({ url, name, language, atomicEntries = pyashWords } = {}) {
   if (!(url instanceof URL) && typeof url !== "string") {
     throw invalid("compound lexicon requires a source URL");
   }
-  return parseCompoundLexicon(await fs.readFile(url, "utf8"), { name, language });
+  return parseCompoundLexicon(await fs.readFile(url, "utf8"), { name, language, atomicEntries });
 }
 
-export async function loadChineseCompoundLexicon({ url = new URL("./compound_lexicon_chinese.pya", import.meta.url) } = {}) {
+export async function loadChineseCompoundLexicon({ url = new URL("./compound_lexicon_chinese.pya", import.meta.url), atomicEntries = pyashWords } = {}) {
   return loadCompoundLexicon({
     url,
     name: CHINESE_COMPOUND_LEXICON_NAME,
-    language: "chinese"
+    language: "chinese",
+    atomicEntries
   });
 }
 

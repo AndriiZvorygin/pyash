@@ -74,6 +74,21 @@ test("vocab_suggest exposes the accepted brain compound from Chinese evidence", 
   assert.match(lines.join("\n"), /brainstorm: found compound brain \+ storm -> twum hfup \(accepted-curated\); specific atom brain_storming -> hto7n/u);
 });
 
+test("vocab_suggest exposes earlier multilingual compounds from their shared atom", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["database"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.equal(result.compoundAtomLinks[0].token, "database");
+  assert.deepEqual(
+    result.compoundAtomLinks[0].compounds.map((compound) => compound.surface),
+    ["base de datos", "base de données", "база данных", "डेटाबेस", "数据库"]
+  );
+  assert.match(lines.join("\n"), /database: root -> hdes \(English30k rank 21916\); compounds:/u);
+});
+
 test("vocab_suggest resolves the specific brain-storming atom from English", async () => {
   const lines = [];
   const result = await runVocabSuggest(["brain_storming"], {
@@ -81,7 +96,17 @@ test("vocab_suggest resolves the specific brain-storming atom from English", asy
   });
   assert.equal(result.exitCode, 0);
   assert.equal(result.missing, 0);
-  assert.match(lines.join("\n"), /brain_storming: root -> hto7n \(direct Pyash atom\)/u);
+  assert.deepEqual(result.compoundAtomLinks, [{
+    token: "brain_storming",
+    compounds: [{
+      surface: "头脑风暴",
+      target: "brain_storming",
+      pyashSequence: ["twum", "hfup"],
+      atom: "brain_storming",
+      atomPyash: "hto7n"
+    }]
+  }]);
+  assert.match(lines.join("\n"), /brain_storming: root -> hto7n \(direct Pyash atom\); compounds: 头脑风暴 -> twum hfup/u);
 });
 
 test("vocab_suggest exposes lexical and progressive readings of English brainstorming", async () => {
