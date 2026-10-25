@@ -17,7 +17,8 @@ const GRAMMAR_KINDS = new Set([
   "possessive-pronoun",
   "negation",
   "case-marker",
-  "number-marker"
+  "number-marker",
+  "referential"
 ]);
 
 function invalid(message, details = {}) {
