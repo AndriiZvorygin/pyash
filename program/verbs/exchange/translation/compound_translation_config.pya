@@ -1,0 +1,4 @@
+exists su name compound_translation_model ob text "qwen3.5:9b" be default ya
+exists su name compound_translation_prompt_revision ob text "qwen-compound-translation-v1" be default ya
+exists su name compound_translation_languages ob text "[\"chinese\",\"french\",\"russian\",\"hindi\",\"interlingua\"]" be default ya
+prah

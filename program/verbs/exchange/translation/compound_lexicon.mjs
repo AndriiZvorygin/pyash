@@ -174,6 +174,14 @@ function normalizeEntry(payload, surface, index, language) {
   if (payload.coverageStatus !== undefined && (typeof payload.coverageStatus !== "string" || !payload.coverageStatus)) {
     throw invalid("compound coverage status must be text", { index, surface });
   }
+  if (payload.translationStatus !== undefined && !["complete", "partial"].includes(payload.translationStatus)) {
+    throw invalid("compound translation status is unsupported", { index, surface });
+  }
+  for (const field of ["translationRequestId", "translationModel", "translationPromptRevision"]) {
+    if (payload[field] !== undefined && (typeof payload[field] !== "string" || !payload[field])) {
+      throw invalid(`compound ${field} must be non-empty text`, { index, surface });
+    }
+  }
   if (payload.verificationStatus !== undefined && (
     !COMPOUND_VERIFICATION_STATUSES.includes(payload.verificationStatus)
   )) {
@@ -267,6 +275,10 @@ function normalizeEntry(payload, surface, index, language) {
       )
     }),
     ...(payload.coverageStatus === undefined ? {} : { coverageStatus: payload.coverageStatus }),
+    ...(payload.translationStatus === undefined ? {} : { translationStatus: payload.translationStatus }),
+    ...(payload.translationRequestId === undefined ? {} : { translationRequestId: payload.translationRequestId }),
+    ...(payload.translationModel === undefined ? {} : { translationModel: payload.translationModel }),
+    ...(payload.translationPromptRevision === undefined ? {} : { translationPromptRevision: payload.translationPromptRevision }),
     ...(payload.verificationStatus === undefined ? {} : { verificationStatus: payload.verificationStatus }),
     ...(payload.verificationHeadKind === undefined ? {} : { verificationHeadKind: payload.verificationHeadKind }),
     ...(payload.certainty === undefined ? {} : { certainty: payload.certainty }),
@@ -397,6 +409,10 @@ export function canonicalCompoundPayload(entry) {
     sourceSurfaces: entry.sourceSurfaces ?? null,
     sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage ?? null,
     coverageStatus: entry.coverageStatus ?? null,
+    translationStatus: entry.translationStatus ?? null,
+    translationRequestId: entry.translationRequestId ?? null,
+    translationModel: entry.translationModel ?? null,
+    translationPromptRevision: entry.translationPromptRevision ?? null,
     verificationStatus: entry.verificationStatus ?? null,
     verificationHeadKind: entry.verificationHeadKind ?? null,
     certainty: entry.certainty ?? null,
