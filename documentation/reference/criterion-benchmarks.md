@@ -7,6 +7,35 @@ qwen3.5:9b
 hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M
 ```
 
+## FLORES-200 translation
+
+Criterion also provides a local-dataset `flores-200` suite for comparing
+translation models with the same prompts and greedy `translation_direct`
+profile. Keep the FLORES export outside the repository and normalize each row
+to JSON/JSONL/CSV fields named `id`, `source_language`, `target_language`,
+`source`, and `reference` (an optional `references` array is supported):
+
+```json
+{"id":"eng-fra-1","source_language":"eng_Latn","target_language":"fra_Latn","source":"Hello world.","reference":"Bonjour le monde."}
+```
+
+Run a bounded comparison through the normal Criterion/Ollama or housekeeper
+path:
+
+```bash
+node command/criterion.mjs inspect --benchmark flores-200
+node command/criterion.mjs run \
+  --benchmark flores-200 \
+  --dataset "$PYA_BENCHMARK_CACHE/flores-200/devtest.jsonl" \
+  --model "qwen3.8:27b,aya-expanse:8b,translategemma:12b" \
+  --profile translation_direct \
+  --limit 100 --resume --json
+```
+
+The suite reports chrF on the 0–100 scale and groups results by language
+direction. It does not download FLORES or commit model outputs; the supplied
+dataset path and revision remain part of the replayable run metadata.
+
 Endpoint selection is external configuration:
 
 ```bash

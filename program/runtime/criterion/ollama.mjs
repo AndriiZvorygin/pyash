@@ -12,6 +12,7 @@ export function resolveOllamaBaseUrl(baseUrl = null, env = process.env) {
 
 export const DEFAULT_PROFILES = Object.freeze({
   baseline: Object.freeze({ think: false, reasoningMode: "deterministic", temperature: null, top_p: null, top_k: null, contextLength: null }),
+  translation_direct: Object.freeze({ think: false, reasoningMode: "direct", temperature: 0, top_p: 1, top_k: 0, contextLength: 32768 }),
   summary_direct: Object.freeze({ think: false, reasoningMode: "direct", temperature: 0.2, top_p: 0.8, top_k: 20, contextLength: 32768 }),
   summary_reasoned: Object.freeze({ think: true, reasoningMode: "reasoned", temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 }),
   summary_reasoned_hidden: Object.freeze({ think: true, reasoningMode: "reasoned-hidden", temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 }),

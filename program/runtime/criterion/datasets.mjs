@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseCsv } from "csv-parse/sync";
 import { sha256, stableJson, tokenize } from "./metrics.mjs";
+import { normalizeTranslationSample } from "./translation.mjs";
 
 export const SUITE_CATALOG = Object.freeze({
   meetingbank: {
@@ -64,6 +65,14 @@ export const SUITE_CATALOG = Object.freeze({
     version: "official instruction-following evaluation",
     sourceUrl: "https://github.com/google-research/google-research/tree/master/instruction_following_eval",
     required: "official JSONL export; official verifier may be configured separately"
+  },
+  "flores-200": {
+    name: "FLORES-200 translation",
+    version: "official devtest contract; pass a local normalized pair export",
+    sourceUrl: "https://github.com/facebookresearch/flores",
+    datasetUrl: "https://huggingface.co/datasets/facebook/flores",
+    licenseUrl: "https://github.com/facebookresearch/flores/blob/main/LICENSE",
+    required: "local JSON, JSONL, or CSV rows with source_language, target_language, source, and reference fields"
   },
   "helpos-local": {
     name: "HelpOS-local",
@@ -506,6 +515,7 @@ export async function loadSuiteSamples({ benchmark, datasetPath, split = "test",
     "longbench-summary": longBenchSummarySample,
     longbench: longBenchSample,
     ifeval: ifevalSample,
+    "flores-200": normalizeTranslationSample,
     "mmlu-pro": longBenchSample,
     gpqa: longBenchSample
   };
