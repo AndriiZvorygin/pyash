@@ -17,6 +17,11 @@ import {
   wordNetSenseLinkQueueHandle
 } from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
 import { parseEnglishWordNetBridgeCatalog } from "../program/verbs/exchange/translation/english_wordnet_bridges.mjs";
+import {
+  loadTranslationModelCard,
+  parseTranslationModelCards,
+  selectTranslationModelCard
+} from "../program/verbs/exchange/translation/translation_model_cards.mjs";
 
 function fixtureIndex() {
   return buildEnglishWordNetIndex({
@@ -329,10 +334,40 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     format: "english-wordnet-linker-v1",
     queueIntent: "mind",
     queueLane: "durable",
+    model: "qwen3.5:9b",
     maxBatch: 200,
     promptMaxChars: 12000,
     promptMaxTokens: 3900,
-    edgeMaxDegree: 1
+    edgeMaxDegree: 1,
+    modelCard: {
+      model: "qwen3.5:9b",
+      provider: "ollama",
+      contextWindowTokens: 32768,
+      safeInputTokens: 3900,
+      cardSource: "Ollama model metadata with bounded Pyash translation input policy"
+    }
+  });
+});
+
+test("translation model card keeps safe input below the model context window", async () => {
+  const card = await loadTranslationModelCard();
+  assert.equal(card.model, "qwen3.5:9b");
+  assert.equal(card.provider, "ollama");
+  assert.equal(card.contextWindowTokens, 32768);
+  assert.equal(card.safeInputTokens, 3900);
+  const parsed = parseTranslationModelCards([
+    "su name translation_model_cards be map def",
+    "su text \"format\" ob text \"translation-model-cards-v1\" ya",
+    "su text \"model:test:context-window-tokens\" ob num 100 ya",
+    "su text \"model:test:safe-input-tokens\" ob num 90 ya",
+    "prah"
+  ].join("\n"));
+  assert.deepEqual(selectTranslationModelCard(parsed.cards, "test"), {
+    model: "test",
+    provider: "",
+    contextWindowTokens: 100,
+    safeInputTokens: 90,
+    cardSource: ""
   });
 });
 

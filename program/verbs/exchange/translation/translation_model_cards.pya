@@ -1,0 +1,7 @@
+su name translation_model_cards be map def
+su text "format" ob text "translation-model-cards-v1" ya
+su text "model:qwen3.5:9b:provider" ob text "ollama" ya
+su text "model:qwen3.5:9b:context-window-tokens" ob num 32768 ya
+su text "model:qwen3.5:9b:safe-input-tokens" ob num 3900 ya
+su text "model:qwen3.5:9b:card-source" ob text "Ollama model metadata with bounded Pyash translation input policy" ya
+prah
