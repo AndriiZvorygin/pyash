@@ -367,6 +367,13 @@ async function findFastEnglishCoverage(token) {
     coverageType: grammar ? "grammar" : "atomic",
     status: grammar ? "covered-grammar" : "covered-atomic",
     ...(atomic ? { canonicalEnglish: atomic.en, hnuc: atomic.hnuc } : {}),
+    ...(atomic ? {
+      lexicalRoot: {
+        english: atomic.en,
+        pya: atomic.pya,
+        hnuc: atomic.hnuc
+      }
+    } : {}),
     pyashSequence: grammar ? [...grammar.pyashSequence] : [atomic.pya]
   };
 }
@@ -678,6 +685,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const rankedCoverage = new Map();
   const dictionaryMatches = new Map();
   const lemmaMatches = new Map();
+  const rootMatches = new Map();
   const grammarMatches = new Map();
   const morphologyMatches = new Map();
   const okTextTokens = new Set();
@@ -792,6 +800,13 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       }
     }
     if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
+      if (ranked.lexicalRoot?.pya) {
+        rootMatches.set(token, {
+          ...ranked,
+          coverageType: "root",
+          pyashSequence: [ranked.lexicalRoot.pya]
+        });
+      }
       if (ranked.morphology?.markerSequence?.length) morphologyMatches.set(token, ranked);
       if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
       else if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
@@ -878,6 +893,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
 
   for (const [token, ranked] of [...dictionaryMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     report(`${token}: dictionary alias ${ranked.aliasOf} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+  }
+
+  for (const [token, ranked] of [...rootMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    report(`${token}: root -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
   }
 
   for (const [token, ranked] of [...grammarMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
