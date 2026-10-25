@@ -40,6 +40,9 @@ token retains its part of speech, synset, gloss, and bounded same-synset Pyash c
 WordNet evidence can narrow a review candidate, but a lexical mapping is auto-selected only
 when the existing Pyash evidence leaves one deterministic result. Ambiguity remains queued for
 the existing Housekeeper/LLM verifier, which may choose only from supplied candidates.
+The English surface `such as` is classified as an `exemplifier` construction under the broader
+`exemplification` category; its Pyash grammar sequence remains a vocabulary-review item until
+the grammar inventory supplies an authoritative token.
 
 The durable command writes the translation evidence catalog and the existing Pyac catalog/pack:
 

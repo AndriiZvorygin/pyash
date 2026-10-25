@@ -285,9 +285,11 @@ function applyContextualEnglishGrammar(records) {
       return {
         ...record,
         construction: {
-          kind: "exemplification",
-          evidence: "such as is a contextual exemplification construction; lexical mapping remains unresolved"
-        }
+          kind: "exemplifier",
+          category: "exemplification",
+          evidence: "such as is a contextual exemplifier construction; Pyash grammar mapping remains unresolved"
+        },
+        evidence: "such as is a contextual exemplifier construction; Pyash grammar mapping remains unresolved"
       };
     }
     return record;

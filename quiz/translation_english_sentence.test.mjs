@@ -295,6 +295,14 @@ test("WordNet auto-resolves only when every available sense agrees on one existi
   assert.deepEqual(token.semanticCandidates, []);
 });
 
+test("such as is classified as an exemplifier construction", async () => {
+  const result = await analyzeDefaultEnglishSentence("love includes things such as friendship");
+  const such = result.tokens.find((token) => token.surface === "such");
+  assert.equal(such.construction.kind, "exemplifier");
+  assert.equal(such.construction.category, "exemplification");
+  assert.match(such.evidence, /Pyash grammar mapping remains unresolved/u);
+});
+
 test("sentence grammar maps thy and negation while leaving the lexical predicate contextual", async () => {
   const result = await analyzeDefaultEnglishSentence("thy names lead us not into temptation");
   assert.equal(result.status, "review");
