@@ -254,6 +254,14 @@ Successful responses are appended to the parser-readable cache at
 integrations reuse the stable compound request identity. The cache is evidence
 for translation integration, not a second accepted-vocabulary catalog.
 
+English document refineries also run
+`program/verbs/exchange/translation/english_wordnet_refinery.mjs`. Encountered
+lexical gaps receive stable WordNet sense rows; existing-atom or accepted-compound
+leaf/edge links are recorded deterministically, while ambiguous senses enter the
+existing durable Housekeeper `mind` queue. The `wordnet-refinery` row in the
+translation `.pya` catalog preserves the sense batch and queue handle without
+silently promoting a model decision into the vocabulary.
+
 Closed-word review also carries morphology metadata from
 `program/verbs/exchange/translation/compound_morphology.pya` and the
 underscore-marked affix rows in `program/library/pyashWords.json`. Each record

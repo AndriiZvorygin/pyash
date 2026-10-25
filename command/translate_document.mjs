@@ -18,6 +18,8 @@ import {
   ensureCompoundTranslations,
   selectCompoundDemands
 } from "../program/verbs/exchange/translation/compound_translation_cache.mjs";
+import { refineEnglishWordNet } from "../program/verbs/exchange/translation/english_wordnet_refinery.mjs";
+import { createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter } from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
 import { writeVliwDatabaseFiles } from "../program/library/vliw/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
@@ -31,7 +33,8 @@ function usageError(message) {
 export async function runTranslationDocument(args = process.argv.slice(2), {
   report = console.log,
   queueVocabulary = null,
-  compoundTranslation = null
+  compoundTranslation = null,
+  wordnetRefinery = null
 } = {}) {
   if (args.length !== 5) throw usageError("translate_document requires language, source, translation catalog, PyAC catalog, and PyAC pack");
   const [language, sourcePath, translationPath, catalogPath, packPath] = args;
@@ -47,6 +50,16 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     text: source,
     locator: paths.source
   });
+  const wordnet = wordnetRefinery && String(language).toLowerCase() === "english"
+    ? await refineEnglishWordNet({
+      result: translation,
+      submit: wordnetRefinery.submit,
+      resources: wordnetRefinery.resources,
+      config: wordnetRefinery.config,
+      compoundRecords: wordnetRefinery.compoundRecords,
+      sourceTerms: wordnetRefinery.sourceTerms
+    })
+    : null;
   const queued = queueVocabulary
     ? await submitTranslationVocabularyCandidates({
       result: translation,
@@ -54,7 +67,9 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
       submit: queueVocabulary
     })
     : { result: translation, submitted: false, submittedCount: 0, handleId: "" };
-  const finalTranslation = queued.result;
+  const finalTranslation = wordnet
+    ? { ...queued.result, wordnet }
+    : queued.result;
   const compoundDemands = compoundTranslation
     ? selectCompoundDemands(source, compoundTranslation.records ?? [])
     : [];
@@ -88,6 +103,11 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     vocabularyCandidates: finalTranslation.vocabularyCandidates.length,
     vocabularySubmitted: queued.submittedCount,
     vocabularyQueueHandle: queued.handleId || null,
+    wordnetSenseRecords: wordnet?.counts.senses ?? 0,
+    wordnetLeafLinks: wordnet?.counts.leaf ?? 0,
+    wordnetDeterministicLinks: wordnet?.counts.deterministic ?? 0,
+    wordnetPending: wordnet?.queuePending ?? 0,
+    wordnetQueueHandle: wordnet?.queueHandle ?? null,
     compoundRequests: compoundCache?.requested ?? 0,
     compoundCacheHits: compoundCache?.counts.hits ?? 0,
     compoundTranslations: compoundCache?.counts.translated ?? 0,
@@ -106,10 +126,15 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   (async () => {
     await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret, entryPath: process.cwd() });
     const queueVocabulary = await createDefaultQueuedMindTranslationVocabularySubmitter();
+    const queueWordNet = await createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter();
     const coverage = await loadCoverage();
     const compoundTranslator = await createDefaultQueuedCompoundTranslator();
     return runTranslationDocument(process.argv.slice(2), {
       queueVocabulary,
+      wordnetRefinery: {
+        submit: queueWordNet,
+        compoundRecords: coverage.accepted
+      },
       compoundTranslation: {
         records: coverage.accepted,
         languages: COMPOUND_TRANSLATION_LANGUAGES,
