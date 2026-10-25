@@ -357,6 +357,63 @@ test("WordNet context selects the matching sense before deterministic agreement"
   assert.match(financeBank.evidence, /context matched account/u);
 });
 
+test("WordNet graph relations rank a connected sense when glosses provide no overlap", () => {
+  const wordnet = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:river:bank",
+      pos: "n",
+      synset: "river",
+      senseKey: "river",
+      lemma: "bank",
+      gloss: "edge of terrain"
+    }, {
+      id: "n:river:riverbank",
+      pos: "n",
+      synset: "river",
+      senseKey: "river",
+      lemma: "riverbank",
+      gloss: "edge of terrain"
+    }, {
+      id: "n:finance:bank",
+      pos: "n",
+      synset: "finance",
+      senseKey: "finance",
+      lemma: "bank",
+      gloss: "financial institution"
+    }, {
+      id: "n:finance:financial",
+      pos: "n",
+      synset: "finance",
+      senseKey: "finance",
+      lemma: "financial",
+      gloss: "financial institution"
+    }, {
+      id: "n:water:water",
+      pos: "n",
+      synset: "water",
+      senseKey: "water",
+      lemma: "water",
+      gloss: "liquid"
+    }],
+    relations: [{
+      source: "n:river",
+      target: "n:water",
+      relation: "related"
+    }]
+  });
+  const result = analyzeEnglishSentence("water bank", {
+    wordnetIndex: wordnet,
+    resolveWord: (word) => ({
+      riverbank: { coverageType: "atomic", pyashSequence: ["tlap"] },
+      financial: { coverageType: "atomic", pyashSequence: ["hrit"] }
+    }[word] ?? null)
+  });
+  const bank = result.tokens.find((token) => token.surface === "bank");
+  assert.equal(bank.coverageType, "semantic-wordnet");
+  assert.deepEqual(bank.pyashSequence, ["tlap"]);
+  assert.match(bank.evidence, /graph:water \(0\.5\)/u);
+});
+
 test("such as is classified as an exemplifier construction", async () => {
   const result = await analyzeDefaultEnglishSentence("love includes things such as friendship");
   const such = result.tokens.find((token) => token.surface === "such");

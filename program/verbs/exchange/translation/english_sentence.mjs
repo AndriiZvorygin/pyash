@@ -139,23 +139,55 @@ function wordNetContextTerms(records, index) {
   return terms;
 }
 
-function wordNetSenseContext(sense, contextTerms) {
+function wordNetSenseKey(sense) {
+  return `${sense?.pos ?? ""}:${sense?.synset ?? ""}`;
+}
+
+function wordNetGraphContext(sense, records, index, wordnetIndex) {
+  if (typeof wordnetIndex?.relatedness !== "function") return { score: 0, matched: [] };
+  const matched = [];
+  let score = 0;
+  for (let contextIndex = 0; contextIndex < records.length; contextIndex += 1) {
+    if (contextIndex === index) continue;
+    const contextRecord = records[contextIndex];
+    const related = (contextRecord?.wordnet?.senses ?? [])
+      .map((contextSense) => ({
+        score: wordnetIndex.relatedness(wordNetSenseKey(sense), wordNetSenseKey(contextSense)),
+        surface: contextRecord.surface
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) => right.score - left.score)[0];
+    if (!related) continue;
+    score += related.score;
+    matched.push(`${related.surface} (${related.score})`);
+  }
+  return { score, matched };
+}
+
+function wordNetSenseContext(sense, contextTerms, records, index, wordnetIndex) {
   const senseTerms = new Set([
     ...wordNetLookupVariants(sense?.gloss ?? "").flatMap((value) => value.split(/\s+/u)),
     ...(sense?.lemmas ?? []).flatMap((lemma) => wordNetLookupVariants(lemma))
   ]);
   const matched = [...contextTerms].filter((term) => senseTerms.has(term));
-  return { score: matched.length, matched };
+  const graph = wordNetGraphContext(sense, records, index, wordnetIndex);
+  return {
+    score: matched.length + (graph.score * 2),
+    matched: [
+      ...matched,
+      ...graph.matched.map((term) => `graph:${term}`)
+    ]
+  };
 }
 
-function selectWordNetSenses(record, records, index) {
+function selectWordNetSenses(record, records, index, wordnetIndex) {
   const senses = record?.wordnet?.senses ?? [];
   if (senses.length < 2) return { senses, evidence: "" };
   const contextTerms = wordNetContextTerms(records, index);
   if (contextTerms.size === 0) return { senses, evidence: "" };
   const scored = senses.map((sense) => ({
     sense,
-    context: wordNetSenseContext(sense, contextTerms)
+    context: wordNetSenseContext(sense, contextTerms, records, index, wordnetIndex)
   }));
   const bestScore = Math.max(...scored.map((entry) => entry.context.score));
   if (bestScore <= 0) return { senses, evidence: "" };
@@ -415,9 +447,9 @@ function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, mar
   };
 }
 
-function wordNetSenseCandidates(record, resolveWord, records, index) {
+function wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex) {
   if (record?.consumedBy || record?.pyashSequence?.length || !record?.wordnet?.senses || typeof resolveWord !== "function") return [];
-  const selection = selectWordNetSenses(record, records, index);
+  const selection = selectWordNetSenses(record, records, index, wordnetIndex);
   return selection.senses.map((sense) => {
     const candidates = new Map();
     for (const lemma of sense.lemmas ?? []) {
@@ -442,9 +474,9 @@ function wordNetSenseCandidates(record, resolveWord, records, index) {
   });
 }
 
-function addWordNetCandidates(records, resolveWord) {
+function addWordNetCandidates(records, resolveWord, wordnetIndex) {
   return records.map((record, index) => {
-    const candidateSets = wordNetSenseCandidates(record, resolveWord, records, index);
+    const candidateSets = wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex);
     const candidates = candidateSets.flat();
     const uniqueSequences = new Map(candidates.map((candidate) => [candidate.pyashSequence.join(" "), candidate]));
     if (candidateSets.length > 0
@@ -555,7 +587,7 @@ export function analyzeEnglishSentence(source, {
     lemmaBySurface,
     grammarIndex,
     wordnetIndex
-  })), grammarIndex), resolveWord);
+  })), grammarIndex), resolveWord, wordnetIndex);
   const progressiveIndex = findProgressiveIndex(records);
   const finiteIndex = findVerbIndex(records);
   const imperativeIndex = progressiveIndex < 0 && finiteIndex < 0 ? findImperativeVerbIndex(records) : -1;
