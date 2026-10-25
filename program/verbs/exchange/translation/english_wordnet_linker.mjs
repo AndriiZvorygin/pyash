@@ -72,9 +72,10 @@ function senseId(source) {
 }
 
 function sequence(value) {
-  return Array.isArray(value)
-    ? value.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
-    : [];
+  if (Array.isArray(value)) {
+    return value.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim());
+  }
+  return typeof value === "string" && value.trim() ? [value.trim()] : [];
 }
 
 function sequenceKey(value) {

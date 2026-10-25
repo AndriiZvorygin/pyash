@@ -219,6 +219,28 @@ test("WordNet linker rejects an empty completed provider response", () => {
   assert.equal(response.reason, "response senses must contain at least one decision");
 });
 
+test("WordNet linker matches string-backed base inventory rows to response sequences", () => {
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  });
+  const response = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "accept",
+      target: "emotionally",
+      pyashSequence: ["xyek"],
+      rationale: "the supplied gloss describes an emotional state"
+    }]
+  }), {
+    records,
+    inventory: { entries: [{ english: "emotionally", pyash: "xyek" }], grammar: [] }
+  });
+  assert.equal(response.valid, true);
+});
+
 test("WordNet linker configuration is durable Pyash workflow data", async () => {
   const config = await loadEnglishWordNetLinkerConfig();
   assert.deepEqual(config, {
