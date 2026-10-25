@@ -45,6 +45,12 @@ Sense-specific bridges live in the native Pyash map
 WordNet sense, `ob` names an existing English target anchor, `as` records its part of speech,
 `with` records certainty, and `via` records provenance. The bridge adds a bounded candidate;
 it does not create a new Pyash word or bypass sentence-level sense selection.
+The bounded sense-linking worker is configured in `english_wordnet_linker.pya`. Its
+`english_wordnet_linker.mjs` module emits one stable record per WordNet sense, accepts only
+targets present in the supplied inventory, and submits unresolved records through the existing
+`vyah start future be gpu mind do` queue path. A completed response can be rendered back into
+the native `english_wordnet_bridges.pya` map; the linker is evidence generation, not a second
+vocabulary or transcript format. The durable configuration caps one batch at 200 senses.
 Curated lemma equivalence may reuse one existing Pyash atom across English lexical surfaces:
 the `mixed` atom `mrat` anchors `mix`, `mixes`, `mixed`, and `mixing`. The `mix` surface keeps
 noun/verb ambiguity in sentence review, while the inflected surfaces carry their accepted tense
