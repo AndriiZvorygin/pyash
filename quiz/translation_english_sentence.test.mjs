@@ -114,6 +114,18 @@ test("English surface grammar resolves pro-forms, demonstratives, and within as 
   assert.equal(within.pyash, "su name mi na ob name hcas pu lwah be pfin ki ya");
 });
 
+test("English example uses the referential grammar word while the lexical root remains separate", async () => {
+  const resources = await loadEnglishSentenceResources();
+  assert.deepEqual(resources.grammarIndex.resolve("example").pyashSequence, ["freh"]);
+  assert.equal(resources.grammarIndex.resolve("example").kind, "referential");
+
+  const result = await analyzeDefaultEnglishSentence("this is an example");
+  const example = result.tokens.find((token) => token.surface === "example");
+  assert.equal(example.coverageType, "grammar");
+  assert.deepEqual(example.pyashSequence, ["freh"]);
+  assert.deepEqual(example.grammar.components, ["referential_"]);
+});
+
 test("English case surfaces cover the canonical grid and common aliases", async () => {
   const cases = [
     ["from", "so"],
