@@ -295,7 +295,7 @@ export function buildEnglish30kCoverage({
       });
     }
     const resolved = resolvedLemmaIndex.resolve(rowWord(row));
-    if (resolved) {
+    if (resolved && resolved.status !== "accepted-deterministic") {
       return withLemma({
         id: makeIdentity(row),
         ...row,
@@ -377,7 +377,29 @@ export function buildEnglish30kCoverage({
       coverageType: "unresolved",
       status: "unresolved"
     };
-    return unresolved;
+    if (!resolved) return unresolved;
+    return {
+      ...unresolved,
+      coverageType: "lemma",
+      status: "covered-lemma",
+      canonicalEnglish: resolved.canonicalEnglish,
+      pyashSequence: [...resolved.pyashSequence],
+      hnuc: resolved.hnuc,
+      lemma: resolved.lemma,
+      lemmaKind: resolved.kind,
+      lemmaStatus: resolved.status,
+      lemmaRule: resolved.rule,
+      lemmaEvidence: resolved.evidence,
+      lemmaPyashSequence: [...resolved.pyashSequence],
+      ...(resolved.morphology ? {
+        morphology: {
+          ...resolved.morphology,
+          markerNames: [...resolved.morphology.markerNames],
+          markerSequence: [...resolved.morphology.markerSequence]
+        }
+      } : {}),
+      ...(resolved.grammaticalNumber ? { grammaticalNumber: resolved.grammaticalNumber } : {}),
+    };
   });
   const counts = Object.fromEntries(
     ["atomic", "alias", "grammar", "compound", "dictionary-alias", "lemma", "unresolved"].map((type) => [

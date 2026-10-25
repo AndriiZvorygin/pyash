@@ -44,6 +44,10 @@ Curated lemma equivalence may reuse one existing Pyash atom across English lexic
 the `mixed` atom `mrat` anchors `mix`, `mixes`, `mixed`, and `mixing`. The `mix` surface keeps
 noun/verb ambiguity in sentence review, while the inflected surfaces carry their accepted tense
 or aspect evidence.
+The same equivalence pass reuses `emotionally` (`xyek`) for `emotion`, `emotions`, `emotional`,
+and the emotional-sensitivity sense of `feelings`; plural `pu` and adjective `ci` remain explicit
+Pyash grammar suffixes. Broad `feel` and singular `feeling` stay contextual because WordNet
+also gives them tactile, perceptual, intuitive, and physical senses.
 The analyzer also scores a bounded local sentence window against sense glosses and lemmas;
 one unique positive overlap narrows the sense set before deterministic agreement.
 Optional relation edges can add bounded graph relatedness to that score without changing the

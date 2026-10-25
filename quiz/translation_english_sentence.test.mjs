@@ -145,6 +145,21 @@ test("English lexical equivalence maps mix surfaces to the existing mixed atom",
   assert.deepEqual(noun.tokens.find((token) => token.surface === "mix").pyashSequence, ["mrat"]);
 });
 
+test("emotion equivalences reuse emotionally and attach number or adjective grammar", async () => {
+  const emotion = await analyzeDefaultEnglishSentence("emotions");
+  assert.deepEqual(emotion.tokens[0].pyashSequence, ["xyek", "pu"]);
+
+  const emotional = await analyzeDefaultEnglishSentence("emotional");
+  assert.deepEqual(emotional.tokens[0].pyashSequence, ["xyek", "ci"]);
+
+  const feelings = await analyzeDefaultEnglishSentence("feelings");
+  assert.deepEqual(feelings.tokens[0].pyashSequence, ["xyek", "pu"]);
+
+  const feel = await analyzeDefaultEnglishSentence("feel");
+  assert.equal(feel.tokens[0].coverageType, "unresolved");
+  assert.ok(feel.tokens[0].wordnet.senses.length > 1);
+});
+
 test("English case surfaces cover the canonical grid and common aliases", async () => {
   const cases = [
     ["from", "so"],

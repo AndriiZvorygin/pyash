@@ -892,7 +892,7 @@ function stagedEnglishCoverage(resources, word) {
     };
   }
   const resolved = resources.lemmaIndex.resolve(word);
-  if (resolved) {
+  if (resolved && resolved.status !== "accepted-deterministic") {
     return {
       ...sourceRow,
       coverageType: "lemma",
