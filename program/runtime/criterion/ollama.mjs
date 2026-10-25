@@ -4,6 +4,7 @@ import path from "node:path";
 import { enqueueInputEnvelope } from "../gpu/queue.mjs";
 import { runGpuWorkerOnce } from "../gpu/worker.mjs";
 import { isTerminalHandleStatus, readGpuHandleStatus, writeGpuHandleStatus } from "../gpu/handle_status.mjs";
+import { createGpuHousekeeperAdapter } from "../gpu/housekeeper_adapter.mjs";
 import { ollamaTiming, stripThinking } from "./metrics.mjs";
 
 export function resolveOllamaBaseUrl(baseUrl = null, env = process.env) {
@@ -211,6 +212,7 @@ export function createQueuedOllamaExecutor({
   readStatus = readGpuHandleStatus,
   writeStatus = writeGpuHandleStatus,
   enqueue = enqueueInputEnvelope,
+  housekeeperAdapter = null,
   vramRequiredMb = null,
   now = () => new Date()
 } = {}) {
@@ -220,6 +222,7 @@ export function createQueuedOllamaExecutor({
   const normalizedGpuId = String(gpuId || "gpu-0").trim() || "gpu-0";
   const normalizedTimeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Math.trunc(Number(timeoutMs)) : 900000;
   const normalizedVram = Number(vramRequiredMb) > 0 ? Math.trunc(Number(vramRequiredMb)) : null;
+  const metadataHousekeeper = housekeeperAdapter ?? createGpuHousekeeperAdapter({ baseUrl: normalizedHousekeeperUrl });
 
   async function submit({ model, prompt = "", profile = "summary_direct", contextLength, sampling = {}, identity = "", operation = "generate", kind = "ollama-chat" }) {
     const settings = resolveProfile(profile, { ...sampling, contextLength });
@@ -337,7 +340,35 @@ export function createQueuedOllamaExecutor({
     }
     return { status: results.every(result => result.status === "ok") ? "ok" : "partial", results, verifiedByHousekeeper: true };
   };
-  return { executor, dischargeModel, dischargeModels, metadataProvider: async ({ model, baseUrl, fetchImpl }) => readOllamaMetadata({ model, baseUrl, fetchImpl }) };
+  const metadataProvider = async ({ model }) => {
+    try {
+      const response = await metadataHousekeeper.getOllamaModels();
+      const listed = Array.isArray(response?.models)
+        ? response.models.find(entry => entry?.name === model)
+        : null;
+      return {
+        model,
+        modelDigest: listed?.digest ?? null,
+        quantization: listed?.details?.quantization_level ?? listed?.details?.quantization ?? null,
+        parameterSize: listed?.details?.parameter_size ?? null,
+        contextLength: listed?.details?.context_length ?? null,
+        engine: "ollama",
+        managedBy: "gpu-housekeeper",
+        housekeeperUrl: normalizedHousekeeperUrl
+      };
+    } catch (error) {
+      return {
+        model,
+        modelDigest: null,
+        quantization: null,
+        engine: "ollama",
+        managedBy: "gpu-housekeeper",
+        housekeeperUrl: normalizedHousekeeperUrl,
+        metadataError: String(error?.message ?? error)
+      };
+    }
+  };
+  return { executor, dischargeModel, dischargeModels, metadataProvider };
 }
 
 export async function readOllamaMetadata({ model, baseUrl, fetchImpl = globalThis.fetch } = {}) {

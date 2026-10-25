@@ -105,6 +105,41 @@ test("queued Ollama Criterion adapter uses the durable GPU lane and housekeeper 
   assert.equal(requests[1].jobSpec.payload.keep_alive, 0);
 });
 
+test("queued Ollama metadata stays on the housekeeper lane", async () => {
+  const root = await tempRoot();
+  let metadataCalls = 0;
+  const adapter = createQueuedOllamaExecutor({
+    root,
+    runId: "queued-ollama-metadata-test",
+    housekeeperUrl: "http://housekeeper:8090",
+    housekeeperAdapter: {
+      getOllamaModels: async () => {
+        metadataCalls += 1;
+        return {
+          models: [{
+            name: "qwen3.5:9b",
+            digest: "digest-qwen35",
+            details: { quantization_level: "Q4_K_M", parameter_size: "9.7B", context_length: 262144 }
+          }]
+        };
+      }
+    }
+  });
+
+  const metadata = await adapter.metadataProvider({ model: "qwen3.5:9b", baseUrl: "http://ollama-must-not-be-used" });
+  assert.equal(metadataCalls, 1);
+  assert.deepEqual(metadata, {
+    model: "qwen3.5:9b",
+    modelDigest: "digest-qwen35",
+    quantization: "Q4_K_M",
+    parameterSize: "9.7B",
+    contextLength: 262144,
+    engine: "ollama",
+    managedBy: "gpu-housekeeper",
+    housekeeperUrl: "http://housekeeper:8090"
+  });
+});
+
 test("criterion language surface is registered as be criterion do", () => {
   const sentence = parse("be criterion do");
   assert.deepEqual(deriveSignatureFromCall(sentence), ["be", "criterion"]);
