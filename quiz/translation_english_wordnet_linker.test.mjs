@@ -180,6 +180,31 @@ test("WordNet linker recovers one bounded noisy JSON object and rejects malforme
   ).valid, false);
 });
 
+test("WordNet linker extracts the nested response from an Ollama envelope", () => {
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  });
+  const inventory = { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] };
+  const response = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    model: "qwen3.5:9b",
+    response: JSON.stringify({
+      verdict: "complete",
+      senses: [{
+        id: records[0].id,
+        status: "accept",
+        target: "emotionally",
+        pyashSequence: ["xyek"],
+        rationale: "the supplied gloss describes an emotional state"
+      }]
+    }),
+    done: true
+  }), { records, inventory });
+  assert.equal(response.valid, true);
+  assert.equal(response.links[0].target, "emotionally");
+});
+
 test("WordNet linker configuration is durable Pyash workflow data", async () => {
   const config = await loadEnglishWordNetLinkerConfig();
   assert.deepEqual(config, {
