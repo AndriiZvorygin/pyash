@@ -52,10 +52,11 @@ targets present in the supplied inventory, and submits unresolved records throug
 the native `english_wordnet_bridges.pya` map; the linker is evidence generation, not a second
 vocabulary or transcript format. The durable configuration caps one batch at 200 senses and
 keeps each queued prompt below 12,000 characters. The selected model's durable card is
-`translation_model_cards.pya`; Qwen3.5 9B declares a 32,768-token context window and a 3,900
-token safe input budget for this workflow. A paragraph-sized group is sent as one duty when it
-fits; larger groups split on complete sense rows, so a provider never receives a truncated sense
-identity.
+`translation_model_cards.pya`; Qwen3.5 9B declares a 32,768-token context window, a 3,900-token
+safe input budget, and an 8,192-token safe output budget for this workflow. A paragraph-sized
+group is sent as one duty when it fits; larger groups split on complete sense rows, so a provider
+never receives a truncated sense identity or exhausts the response budget before returning all
+decision rows.
 The deterministic pre-pass also accepts a low-degree edge synset when one lemma has exactly
 one WordNet sense. The existing target may be an atom or an accepted compound; missing
 vocabulary stays review evidence and is never invented.

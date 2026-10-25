@@ -11,6 +11,7 @@ const CARD_FIELDS = [
   "provider",
   "context-window-tokens",
   "safe-input-tokens",
+  "safe-output-tokens",
   "card-source"
 ];
 
@@ -74,11 +75,13 @@ export function selectTranslationModelCard(cards, model = DEFAULT_TRANSLATION_MO
   if (!card) throw invalid("no translation model card is configured", { model: modelId });
   const contextWindowTokens = Math.max(1, Math.trunc(Number(card["context-window-tokens"]) || 1));
   const safeInputTokens = Math.max(1, Math.trunc(Number(card["safe-input-tokens"]) || 1));
-  if (safeInputTokens >= contextWindowTokens) {
-    throw invalid("model-card safe input budget must fit inside its context window", {
+  const safeOutputTokens = Math.max(1, Math.trunc(Number(card["safe-output-tokens"]) || 1));
+  if (safeInputTokens + safeOutputTokens >= contextWindowTokens) {
+    throw invalid("model-card input and output budgets must fit inside its context window", {
       model: modelId,
       contextWindowTokens,
-      safeInputTokens
+      safeInputTokens,
+      safeOutputTokens
     });
   }
   return {
@@ -86,6 +89,7 @@ export function selectTranslationModelCard(cards, model = DEFAULT_TRANSLATION_MO
     provider: text(card.provider),
     contextWindowTokens,
     safeInputTokens,
+    safeOutputTokens,
     cardSource: text(card["card-source"])
   };
 }

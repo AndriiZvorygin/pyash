@@ -100,4 +100,5 @@ test("default vocabulary submitter uses the Pyash future GPU duty", async () => 
   assert.match(sentence, /translation-vocabulary-test/u);
   assert.match(sentence, /think.*false/u);
   assert.match(sentence, /format.*candidates/u);
+  assert.match(sentence, /num_predict.*4096/u);
 });
