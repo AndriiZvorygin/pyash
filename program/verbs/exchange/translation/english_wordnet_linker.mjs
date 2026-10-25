@@ -346,8 +346,22 @@ function inventoryMatch({ target, pyashSequence, record, inventory }) {
   )) ?? null;
 }
 
-export function parseEnglishWordNetSenseLinkResponse(value, { records = [], inventory } = {}) {
+function providerResponseText(value) {
+  if (value && typeof value === "object" && typeof value.response === "string") {
+    return value.response;
+  }
   const raw = String(value ?? "");
+  try {
+    const envelope = JSON.parse(raw);
+    if (envelope && typeof envelope.response === "string") return envelope.response;
+  } catch {
+    // The bounded extractor below handles direct or noisy provider text.
+  }
+  return raw;
+}
+
+export function parseEnglishWordNetSenseLinkResponse(value, { records = [], inventory } = {}) {
+  const raw = providerResponseText(value);
   const payload = extractBoundedJsonObject(raw);
   if (!payload) return { valid: false, reason: "response did not contain one bounded JSON object" };
   const verdict = text(payload.verdict).toLowerCase();
