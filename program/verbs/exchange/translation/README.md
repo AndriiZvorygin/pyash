@@ -37,6 +37,8 @@ and accepted compound vocabulary, conservative inflection, and sentence construc
 consulting semantic evidence. The read-only WordNet slice is configured by
 `english_wordnet.pya` and loaded from `/home/htaf/pyachso2n/wordnet-core.txt`; each unresolved
 token retains its part of speech, synset, gloss, and bounded same-synset Pyash candidates.
+The analyzer also scores a bounded local sentence window against sense glosses and lemmas;
+one unique positive overlap narrows the sense set before deterministic agreement.
 WordNet evidence can narrow a review candidate, but a lexical mapping is auto-selected only
 when the existing Pyash evidence leaves one deterministic result. Ambiguity remains queued for
 the existing Housekeeper/LLM verifier, which may choose only from supplied candidates.
