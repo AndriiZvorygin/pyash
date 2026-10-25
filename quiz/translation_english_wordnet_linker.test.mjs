@@ -12,6 +12,7 @@ import {
   estimateEnglishWordNetSenseLinkPromptTokens,
   loadEnglishWordNetLinkerConfig,
   parseEnglishWordNetSenseLinkResponse,
+  reconcileEnglishWordNetSenseLinks,
   renderEnglishWordNetSenseLinksPya,
   submitEnglishWordNetSenseLinks,
   wordNetSenseLinkQueueHandle
@@ -265,6 +266,94 @@ test("WordNet linker recovers one bounded noisy JSON object and rejects malforme
     '{"verdict":"complete","senses":[',
     { records, inventory }
   ).valid, false);
+});
+
+test("WordNet linker automatically repairs malformed model decisions and applies them", async () => {
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  }).map((record) => ({
+    ...record,
+    queue: { handleId: "english-wordnet-link-reconcile", status: "queued" }
+  }));
+  const inventory = { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] };
+  const repaired = JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "accept",
+      target: "emotionally",
+      pyashSequence: ["xyek"],
+      rationale: "the supplied gloss describes an emotional state"
+    }]
+  });
+  const submitted = [];
+  const settled = await reconcileEnglishWordNetSenseLinks({
+    records,
+    inventory,
+    sourceHash: "reconcile-source",
+    queues: [{ handleId: "english-wordnet-link-reconcile", senseCount: 1 }],
+    awaitHandle: async (handleId) => handleId.endsWith("-retry-2")
+      ? repaired
+      : JSON.stringify({ verdict: "complete", senses: [{ id: records[0].id, status: "accept", rationale: "missing mapping" }] }),
+    submit: async (request) => {
+      submitted.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.equal(submitted.length, 1);
+  assert.match(submitted[0].handleId, /-retry-2$/u);
+  assert.equal(settled.queues[0].outcome, "applied");
+  assert.equal(settled.records[0].status, "accepted-llm");
+  assert.deepEqual(settled.records[0].link.pyashSequence, ["xyek"]);
+});
+
+test("WordNet linker keeps valid rows during bounded partial recovery", async () => {
+  const records = [
+    {
+      id: "sense-valid",
+      pos: "n",
+      status: "review",
+      candidates: [],
+      queue: { handleId: "english-wordnet-link-partial", status: "queued" }
+    },
+    {
+      id: "sense-malformed",
+      pos: "n",
+      status: "review",
+      candidates: [],
+      queue: { handleId: "english-wordnet-link-partial", status: "queued" }
+    }
+  ];
+  const settled = await reconcileEnglishWordNetSenseLinks({
+    records,
+    inventory: { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] },
+    sourceHash: "partial-source",
+    queues: [{ handleId: "english-wordnet-link-partial", senseCount: 2 }],
+    maxRepairAttempts: 0,
+    awaitHandle: async () => JSON.stringify({
+      verdict: "complete",
+      senses: [
+        {
+          id: "sense-valid",
+          status: "accept",
+          target: "emotionally",
+          pyashSequence: ["xyek"],
+          rationale: "the supplied inventory supports the target"
+        },
+        {
+          id: "sense-malformed",
+          status: "accept",
+          rationale: "the provider omitted the required mapping"
+        }
+      ]
+    }),
+    submit: async () => ({ status: "queued" })
+  });
+  assert.equal(settled.queues[0].outcome, "partial");
+  assert.equal(settled.records.find((record) => record.id === "sense-valid").status, "accepted-llm");
+  assert.equal(settled.records.find((record) => record.id === "sense-malformed").status, "uncertain-llm");
 });
 
 test("WordNet linker extracts the nested response from an Ollama envelope", () => {

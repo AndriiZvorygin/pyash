@@ -9,6 +9,7 @@ import {
 } from "../program/verbs/exchange/translation/translation_pipeline.mjs";
 import {
   createDefaultQueuedMindTranslationVocabularySubmitter,
+  reconcileTranslationVocabularyCandidates,
   submitTranslationVocabularyCandidates
 } from "../program/verbs/exchange/translation/translation_vocabulary_queue.mjs";
 import { loadCoverage } from "./compound_coverage.mjs";
@@ -22,7 +23,19 @@ import { refineEnglishWordNet } from "../program/verbs/exchange/translation/engl
 import { createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter } from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
 import { writeVliwDatabaseFiles } from "../program/library/vliw/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
+import { parse } from "../program/understand/index.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
+
+async function awaitGpuDuty(handleId, timeoutMs = Number(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || 1800000)) {
+  const completed = await interpret(parse(
+    `accordingto text ${JSON.stringify(String(handleId ?? ""))} during num ${Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000))} vyah await be gpu do`
+  ));
+  const status = String(completed?.ob?.text ?? "").trim().toLowerCase();
+  if (status !== "success") {
+    throw new Error(`translation GPU duty ${handleId} completed with status ${status || "unknown"}`);
+  }
+  return String(completed?.result?.text ?? "");
+}
 
 function usageError(message) {
   const error = new Error(`${message}\nusage: node command/translate_document.mjs <language> <source.txt> <translation.pya> <catalog.pya> <pack.pyac>`);
@@ -34,7 +47,8 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
   report = console.log,
   queueVocabulary = null,
   compoundTranslation = null,
-  wordnetRefinery = null
+  wordnetRefinery = null,
+  awaitVocabulary = null
 } = {}) {
   if (args.length !== 5) throw usageError("translate_document requires language, source, translation catalog, PyAC catalog, and PyAC pack");
   const [language, sourcePath, translationPath, catalogPath, packPath] = args;
@@ -57,7 +71,8 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
       resources: wordnetRefinery.resources,
       config: wordnetRefinery.config,
       compoundRecords: wordnetRefinery.compoundRecords,
-      sourceTerms: wordnetRefinery.sourceTerms
+      sourceTerms: wordnetRefinery.sourceTerms,
+      awaitHandle: wordnetRefinery.awaitHandle
     })
     : null;
   const queued = queueVocabulary
@@ -67,9 +82,20 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
       submit: queueVocabulary
     })
     : { result: translation, submitted: false, submittedCount: 0, handleId: "" };
+  const settledVocabulary = queued.submitted && typeof awaitVocabulary === "function"
+    ? await reconcileTranslationVocabularyCandidates({
+      result: queued.result,
+      sourceText: source,
+      candidates: queued.candidates,
+      handleId: queued.handleId,
+      awaitHandle: awaitVocabulary,
+      submit: queueVocabulary
+    })
+    : null;
+  const translated = settledVocabulary?.result ?? queued.result;
   const finalTranslation = wordnet
-    ? { ...queued.result, wordnet }
-    : queued.result;
+    ? { ...translated, wordnet }
+    : translated;
   const compoundDemands = compoundTranslation
     ? selectCompoundDemands(source, compoundTranslation.records ?? [])
     : [];
@@ -103,6 +129,7 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     vocabularyCandidates: finalTranslation.vocabularyCandidates.length,
     vocabularySubmitted: queued.submittedCount,
     vocabularyQueueHandle: queued.handleId || null,
+    vocabularyOutcome: settledVocabulary?.queue?.outcome ?? queued.result.vocabularyQueue?.status ?? null,
     wordnetSenseRecords: wordnet?.counts.senses ?? 0,
     wordnetLeafLinks: wordnet?.counts.leaf ?? 0,
     wordnetDeterministicLinks: wordnet?.counts.deterministic ?? 0,
@@ -134,8 +161,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       queueVocabulary,
       wordnetRefinery: {
         submit: queueWordNet,
-        compoundRecords: coverage.accepted
+        compoundRecords: coverage.accepted,
+        awaitHandle: awaitGpuDuty
       },
+      awaitVocabulary: awaitGpuDuty,
       compoundTranslation: {
         records: coverage.accepted,
         languages: COMPOUND_TRANSLATION_LANGUAGES,
