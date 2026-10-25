@@ -18,7 +18,8 @@ const GRAMMAR_KINDS = new Set([
   "negation",
   "case-marker",
   "number-marker",
-  "referential"
+  "referential",
+  "exemplifier"
 ]);
 
 function invalid(message, details = {}) {

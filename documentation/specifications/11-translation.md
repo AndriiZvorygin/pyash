@@ -23,8 +23,10 @@ does not create vocabulary. A term is auto-resolved only when the existing Pyash
 sentence context leave one result. Multiple senses or missing inventory evidence remain
 unresolved and can enter the existing bounded Housekeeper verifier, whose response is limited
 to supplied candidate ids. The English `such as` surface is classified as an
-`exemplifier` construction, a subtype of `exemplification`; its Pyash sequence remains
-unresolved until the grammar inventory supplies an authoritative token.
+`exemplifier` construction, a subtype of `exemplification`. It lowers to `fluh ga`: the
+`example_` referential head with the space-way case, whose established surface glosses
+are “at” and “via”; the fused form is `fluhga`. The lexical noun form remains `tlam`
+when the source requires the root noun.
 
 The English surface `example` now uses the generated `example_` grammar word `fluh`.
 `fluh` is a `CCVh` long grammar form (`0x5367`), selected by the existing

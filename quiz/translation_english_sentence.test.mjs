@@ -312,7 +312,11 @@ test("such as is classified as an exemplifier construction", async () => {
   const such = result.tokens.find((token) => token.surface === "such");
   assert.equal(such.construction.kind, "exemplifier");
   assert.equal(such.construction.category, "exemplification");
-  assert.match(such.evidence, /Pyash grammar mapping remains unresolved/u);
+  assert.deepEqual(such.pyashSequence, ["fluh", "ga"]);
+  assert.equal(such.grammar.kind, "exemplifier");
+  const as = result.tokens.find((token) => token.surface === "as");
+  assert.equal(as.consumedBy, "such as");
+  assert.deepEqual(as.pyashSequence, []);
 });
 
 test("sentence grammar maps thy and negation while leaving the lexical predicate contextual", async () => {
