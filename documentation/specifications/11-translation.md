@@ -46,6 +46,11 @@ and sends only unresolved senses through the existing durable `mind`/`gpu` futur
 worker may choose only an inventory-backed target; accepted evidence renders into the bridge
 map. The configured batch bound is 200 senses, and the linker never edits the vocabulary
 directly.
+A deterministic seed pass also accepts low-degree edge synsets when a lemma has exactly one
+WordNet sense and the inventory supplies an atom or accepted compound. This grows evidence
+from graph leaves inward; central or multi-sense nodes remain contextual review cases.
+Accepted compound records are supplied as an explicit inventory input; candidate or rejected
+compound decompositions remain outside the linker's target set.
 The current catalog covers all 17 Open English WordNet `feel` senses. Context examples select
 `emotionally` for an emotional state, `experience` for a conscious or passive state,
 `finger` for touch examination, `touch` for physical sensation or palpation, `searching` for

@@ -6,6 +6,7 @@ import {
   buildTranslationVocabularyInventory,
   createQueuedMindTranslationVocabularySubmitter
 } from "./translation_vocabulary_queue.mjs";
+import { DERIVED_COMPOUND_STATUSES } from "./compound_coverage.mjs";
 import { extractBoundedJsonObject } from "./english_verification.mjs";
 
 export const ENGLISH_WORDNET_LINKER_FORMAT = "english-wordnet-linker-v1";
@@ -14,6 +15,7 @@ export const ENGLISH_WORDNET_LINKER_CONFIG_URL = new URL("./english_wordnet_link
 export const ENGLISH_WORDNET_LINKER_QUEUE_INTENT = "mind";
 export const ENGLISH_WORDNET_LINKER_QUEUE_LANE = "durable";
 export const ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE = 200;
+export const ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE = 1;
 export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   type: "object",
   required: ["verdict", "senses"],
@@ -39,7 +41,7 @@ export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   }
 });
 
-const ACCEPTED_STATUSES = new Set(["accepted-existing", "accepted-deterministic", "accepted-llm"]);
+const ACCEPTED_STATUSES = new Set(["accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm"]);
 const LINK_STATUSES = new Set(["accept", "reject", "uncertain"]);
 const MAX_RATIONALE_CHARS = 1200;
 const WORDNET_POS = new Set(["a", "n", "r", "s", "v"]);
@@ -120,7 +122,9 @@ function bridgeFor(wordnetIndex, source, resolveWord) {
 function linkCandidate(record, target, pyashSequence, {
   targetPartOfSpeech = record.pos,
   certainty = "contextual",
-  evidence = ""
+  evidence = "",
+  sourceLemma = "",
+  edgeEligible = false
 } = {}) {
   const targetName = normalized(target);
   const words = sequence(pyashSequence);
@@ -131,22 +135,58 @@ function linkCandidate(record, target, pyashSequence, {
     pyashSequence: words,
     targetPartOfSpeech: text(targetPartOfSpeech) || record.pos,
     certainty: text(certainty) || "contextual",
-    evidence: text(evidence)
+    evidence: text(evidence),
+    sourceLemmas: sourceLemma ? [sourceLemma] : [],
+    edgeEligible: edgeEligible === true
   };
 }
 
-function directCandidates(record, resolveWord) {
+function singleSenseLemma(wordnetIndex, lemma, source) {
+  if (!wordnetIndex || typeof wordnetIndex.lookup !== "function") return false;
+  const senses = new Set(wordnetIndex.lookup(lemma).map((row) => `${row.pos}:${row.synset}`));
+  return senses.size === 1 && senses.has(source);
+}
+
+function edgeNodeDegree(wordnetIndex, source) {
+  return wordnetIndex?.relationGraph instanceof Map
+    ? (wordnetIndex.relationGraph.get(source)?.length ?? 0)
+    : 0;
+}
+
+function edgeDegreeLimit(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? Math.max(0, Math.trunc(numeric))
+    : ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE;
+}
+
+function directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree) {
   if (typeof resolveWord !== "function") return [];
   const candidates = new Map();
   for (const lemma of record.lemmas) {
     const coverage = resolveWord(lemma);
     if (!coverage?.pyashSequence?.length || coverage.coverageType === "dictionary-alias") continue;
+    const edgeEligible = singleSenseLemma(wordnetIndex, lemma, record.source)
+      && edgeNodeDegree(wordnetIndex, record.source) <= maxEdgeDegree;
     const candidate = linkCandidate(record, coverage.canonicalEnglish || lemma, coverage.pyashSequence, {
       targetPartOfSpeech: record.pos,
       certainty: "deterministic",
-      evidence: `existing Pyash coverage for WordNet lemma ${lemma}`
+      evidence: edgeEligible
+        ? `leaf/edge WordNet node ${record.source} has one meaning for lemma ${lemma} and existing Pyash coverage`
+        : `existing Pyash coverage for WordNet lemma ${lemma}`,
+      sourceLemma: lemma,
+      edgeEligible
     });
-    if (candidate) candidates.set(sequenceKey(candidate.pyashSequence), candidate);
+    if (!candidate) continue;
+    const key = sequenceKey(candidate.pyashSequence);
+    const prior = candidates.get(key);
+    if (!prior) {
+      candidates.set(key, candidate);
+      continue;
+    }
+    prior.sourceLemmas = [...new Set([...prior.sourceLemmas, ...candidate.sourceLemmas])];
+    prior.edgeEligible ||= candidate.edgeEligible;
+    if (candidate.edgeEligible) prior.evidence = candidate.evidence;
   }
   return [...candidates.values()];
 }
@@ -165,10 +205,12 @@ export function buildEnglishWordNetSenseLinkRecords({
   wordnetIndex,
   resolveWord,
   sourceTerms = [],
-  limit = ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE
+  limit = ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE,
+  edgeMaxDegree = ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE
 } = {}) {
   const terms = sourceTermSet(sourceTerms);
   const max = Math.max(1, Math.trunc(Number(limit) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE));
+  const maxEdgeDegree = edgeDegreeLimit(edgeMaxDegree);
   const records = [];
   for (const { key, rows } of rowsForWordNetIndex(wordnetIndex)) {
     const pos = key.slice(0, 1);
@@ -191,8 +233,18 @@ export function buildEnglishWordNetSenseLinkRecords({
       record.status = "accepted-existing";
       record.link = existing;
     } else {
-      record.candidates = directCandidates(record, resolveWord);
-      if (record.candidates.length === 1) {
+      record.candidates = directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree);
+      const edgeCandidates = record.candidates.filter((candidate) => candidate.edgeEligible);
+      record.edgeNode = {
+        degree: edgeNodeDegree(wordnetIndex, key),
+        singleSenseLemmas: record.candidates
+          .filter((candidate) => candidate.edgeEligible)
+          .flatMap((candidate) => candidate.sourceLemmas)
+      };
+      if (edgeCandidates.length === 1) {
+        record.status = "accepted-edge";
+        record.link = edgeCandidates[0];
+      } else if (record.candidates.length === 1) {
         record.status = "accepted-deterministic";
         record.link = record.candidates[0];
       } else {
@@ -209,10 +261,20 @@ function inventoryRowKey(row) {
   return `${normalized(row?.english)}\u0000${sequenceKey(row?.pyash)}`;
 }
 
+function acceptedCompoundRow(record) {
+  const status = text(record?.status);
+  const accepted = DERIVED_COMPOUND_STATUSES.slice(0, 2).includes(status);
+  const english = normalized(record?.target ?? record?.surface ?? record?.english);
+  const pyash = sequence(record?.pyashSequence ?? record?.pyash);
+  if (!accepted || !english || pyash.length < 2) return null;
+  return { english, pyash };
+}
+
 export function buildEnglishWordNetSenseLinkInventory({
   records = [],
   grammarEntries = [],
   anchors = [],
+  compoundRecords = [],
   baseInventory
 } = {}) {
   const inventory = baseInventory ?? buildTranslationVocabularyInventory({
@@ -227,7 +289,8 @@ export function buildEnglishWordNetSenseLinkInventory({
   const seen = new Set(rows.map(inventoryRowKey));
   for (const anchor of [
     ...records.flatMap((record) => record.candidates ?? []),
-    ...anchors
+    ...anchors,
+    ...compoundRecords.map(acceptedCompoundRow).filter(Boolean)
   ]) {
     const row = {
       english: anchor?.target ?? anchor?.english,
@@ -476,7 +539,9 @@ export function renderEnglishWordNetSenseLinksPya({
     if (seen.has(record.source)) continue;
     seen.add(record.source);
     const target = renderTargetName(record.link.target);
-    const certainty = record.status === "accepted-deterministic" ? "deterministic" : "contextual";
+    const certainty = ["accepted-edge", "accepted-deterministic"].includes(record.status)
+      ? "deterministic"
+      : "contextual";
     const evidence = record.link.evidence || record.evidence || `WordNet ${record.source} accepted anchor ${target}`;
     lines.push(`su text ${JSON.stringify(record.source)} ob name ${target} as text ${JSON.stringify(record.pos)} with text ${JSON.stringify(certainty)} via text ${JSON.stringify(evidence)} ya`);
   }
@@ -506,7 +571,8 @@ export function parseEnglishWordNetLinkerConfig(source) {
     format: metadata.format,
     queueIntent: metadata["queue-intent"] || ENGLISH_WORDNET_LINKER_QUEUE_INTENT,
     queueLane: metadata["queue-lane"] || ENGLISH_WORDNET_LINKER_QUEUE_LANE,
-    maxBatch: Math.max(1, Math.trunc(Number(metadata["max-batch"]) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE))
+    maxBatch: Math.max(1, Math.trunc(Number(metadata["max-batch"]) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE)),
+    edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE))
   };
 }
 
