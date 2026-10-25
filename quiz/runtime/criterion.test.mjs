@@ -15,7 +15,7 @@ import { loadSuiteSamples } from "../../program/runtime/criterion/datasets.mjs";
 import { contextLengthBucket, ollamaTiming, percentile, rougeScores } from "../../program/runtime/criterion/metrics.mjs";
 import { runNightmare, runReverie } from "../../program/runtime/criterion/suites.mjs";
 import { runCriterionRefinery } from "../../program/runtime/criterion/refinery.mjs";
-import { createQueuedOllamaExecutor, runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
+import { createQueuedOllamaExecutor, resolveConfiguredGpuHousekeeperUrl, runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
 import { createStrataExecutor } from "../../program/runtime/criterion/strata.mjs";
 import { discoverDeepSWETasks, parseDeepSWEResult, resolvePierModelName, runDeepSWE, selectDeepSWETasks } from "../../program/runtime/criterion/deepswe.mjs";
 import { loadRun, renderRunCsv, renderRunMarkdown } from "../../program/runtime/criterion/report.mjs";
@@ -48,6 +48,17 @@ test("criterion metrics calculate ROUGE, percentiles, and Ollama speeds", () => 
   assert.equal(timing.promptTokensPerSecond, 100);
   assert.equal(timing.generationTokensPerSecond, 20);
   assert.equal(timing.totalElapsedMs, 800);
+});
+
+test("queued Ollama executor resolves the configured Pyash Housekeeper before localhost", () => {
+  const rememberFn = (name) => name === "gpu housekeeper url"
+    ? { ob: { text: "http://mriczo:8090" } }
+    : null;
+  assert.equal(resolveConfiguredGpuHousekeeperUrl({ env: {}, rememberFn }), "http://mriczo:8090");
+  assert.equal(resolveConfiguredGpuHousekeeperUrl({
+    env: { PYA_GPU_HOUSEKEEPER_URL: "http://override:8090" },
+    rememberFn
+  }), "http://override:8090");
 });
 
 test("Ollama adapter uses one configured profile and keeps thinking out of scored text", async () => {

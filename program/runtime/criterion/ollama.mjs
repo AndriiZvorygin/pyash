@@ -5,6 +5,8 @@ import { enqueueInputEnvelope } from "../gpu/queue.mjs";
 import { runGpuWorkerOnce } from "../gpu/worker.mjs";
 import { isTerminalHandleStatus, readGpuHandleStatus, writeGpuHandleStatus } from "../gpu/handle_status.mjs";
 import { createGpuHousekeeperAdapter } from "../gpu/housekeeper_adapter.mjs";
+import { resolveConfigText } from "../../configure/env.mjs";
+import { remember } from "../../remember/index.mjs";
 import { ollamaTiming, stripThinking } from "./metrics.mjs";
 
 export function resolveOllamaBaseUrl(baseUrl = null, env = process.env) {
@@ -150,6 +152,17 @@ function queuedHandleId({ runId, model, operation, requestId, prompt }) {
     .slice(0, 24)}`;
 }
 
+export function resolveConfiguredGpuHousekeeperUrl({ housekeeperUrl = "", env = process.env, rememberFn = remember } = {}) {
+  const explicit = String(
+    housekeeperUrl
+      || env?.PYA_GPU_HOUSEKEEPER_URL
+      || env?.GPU_HOUSEKEEPER_URL
+      || resolveConfigText("gpu housekeeper url", { rememberFn })
+      || ""
+  ).trim();
+  return explicit.replace(/\/+$/u, "");
+}
+
 function parseQueuedResult(status) {
   if (status?.result && typeof status.result === "object") return status.result;
   try {
@@ -203,7 +216,7 @@ async function waitForQueuedOllama({
 export function createQueuedOllamaExecutor({
   root = process.cwd(),
   runId = "criterion",
-  housekeeperUrl = process.env.PYA_GPU_HOUSEKEEPER_URL ?? "",
+  housekeeperUrl = "",
   gpuId = process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0",
   hostId = process.env.PYA_GPU_HOST_ID ?? "",
   timeoutMs = Number(process.env.PYA_CRITERION_OLLAMA_TIMEOUT_MS || 900000),
@@ -217,7 +230,7 @@ export function createQueuedOllamaExecutor({
   now = () => new Date()
 } = {}) {
   const worldRoot = path.resolve(root, "world");
-  const normalizedHousekeeperUrl = String(housekeeperUrl ?? "").trim();
+  const normalizedHousekeeperUrl = resolveConfiguredGpuHousekeeperUrl({ housekeeperUrl });
   if (!normalizedHousekeeperUrl) throw new Error("queued Ollama execution requires PYA_GPU_HOUSEKEEPER_URL");
   const normalizedGpuId = String(gpuId || "gpu-0").trim() || "gpu-0";
   const normalizedTimeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Math.trunc(Number(timeoutMs)) : 900000;
