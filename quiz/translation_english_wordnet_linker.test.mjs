@@ -203,6 +203,10 @@ test("default WordNet linker submitter uses the existing future GPU duty", async
   assert.equal(response.status, "queued");
   assert.match(sentence, /vyah start future be gpu mind do/u);
   assert.match(sentence, /english-wordnet-link-test/u);
+  const encodedSpec = sentence.match(/ob text (".*") vyah start future be gpu mind do/u)?.[1];
+  const spec = JSON.parse(JSON.parse(encodedSpec));
+  assert.deepEqual(spec.format.required, ["verdict", "senses"]);
+  assert.ok(spec.format.properties.senses);
 });
 
 test("default WordNet linker factory resolves the existing Pyash runtime adapters", async () => {

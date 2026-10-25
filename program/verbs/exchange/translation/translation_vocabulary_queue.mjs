@@ -240,37 +240,46 @@ export async function submitTranslationVocabularyCandidates({
   };
 }
 
-export function createQueuedMindTranslationVocabularySubmitter({ interpret, parse } = {}) {
+const DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT = {
+  type: "object",
+  required: ["verdict", "candidates"],
+  additionalProperties: false,
+  properties: {
+    verdict: { type: "string", enum: ["complete", "partial", "uncertain"] },
+    candidates: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "status", "pyashSequence", "rationale"],
+        additionalProperties: false,
+        properties: {
+          id: { type: "string" },
+          status: { type: "string", enum: ["accept", "reject", "uncertain"] },
+          pyashSequence: { type: "array", items: { type: "string" } },
+          rationale: { type: "string" }
+        }
+      }
+    }
+  }
+};
+
+export function createQueuedMindTranslationVocabularySubmitter({
+  interpret,
+  parse,
+  responseFormat = DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT
+} = {}) {
   if (typeof interpret !== "function") throw invalid("queued vocabulary submitter requires interpret");
   if (typeof parse !== "function") throw invalid("queued vocabulary submitter requires parse");
+  if (!responseFormat || typeof responseFormat !== "object") {
+    throw invalid("queued vocabulary submitter requires a response format");
+  }
   return async ({ handleId, prompt } = {}) => {
     const jobSpec = {
       kind: "ollama-generate",
       prompt: String(prompt ?? ""),
       stream: false,
       think: false,
-      format: {
-        type: "object",
-        required: ["verdict", "candidates"],
-        additionalProperties: false,
-        properties: {
-          verdict: { type: "string", enum: ["complete", "partial", "uncertain"] },
-          candidates: {
-            type: "array",
-            items: {
-              type: "object",
-              required: ["id", "status", "pyashSequence", "rationale"],
-              additionalProperties: false,
-              properties: {
-                id: { type: "string" },
-                status: { type: "string", enum: ["accept", "reject", "uncertain"] },
-                pyashSequence: { type: "array", items: { type: "string" } },
-                rationale: { type: "string" }
-              }
-            }
-          }
-        }
-      },
+      format: responseFormat,
       options: {
         temperature: 0,
         num_predict: 4096
