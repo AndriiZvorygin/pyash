@@ -39,6 +39,11 @@ WordNet sense: `su` is the POS-prefixed sense key, `ob` is an existing English t
 `as` is the target part of speech, `with` is certainty, and `via` is provenance. The bridge
 provides a bounded candidate after the normal sentence sense selection; it does not add a
 second vocabulary or transcript format.
+The current catalog covers all 17 Open English WordNet `feel` senses. Context examples select
+`emotionally` for an emotional state, `experience` for a conscious or passive state,
+`finger` for touch examination, `touch` for physical sensation or palpation, `searching` for
+groping, and `appear` for an impression or perceived quality. A tied context remains a
+review candidate rather than receiving an arbitrary lexical choice.
 The English `such as` surface is classified as an
 `exemplifier` construction, a subtype of `exemplification`. It lowers to `fluh ga`: the
 `example_` referential head with the space-way case, whose established surface glosses
