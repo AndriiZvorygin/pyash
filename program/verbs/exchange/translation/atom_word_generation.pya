@@ -1,0 +1,7 @@
+su name translation_atom_word_generation be map def
+su text "format" ob text "pyac-atom-word-generation-v1" ya
+su text "phonetic-source" ob text "pyachso2n/phonetics.json.txt" ya
+su text "frequency-source" ob text "pyachso2n/English30k.txt" ya
+su text "layer-sources" ob text "pyachso2n/*GlyphWordList.txt" ya
+su text "selection" ob text "aggregate NativeWeights phonetic profile, rank generated root candidates, then retain the first unused word and HNUC" ya
+prah
