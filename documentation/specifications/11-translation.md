@@ -18,6 +18,10 @@ English source analysis is deterministic-first. Grammar surfaces, conservative m
 existing Pyash atoms/compounds, and sentence constructions are applied before semantic review.
 The read-only WordNet evidence resource is configured in
 `program/verbs/exchange/translation/english_wordnet.pya` and records the source path and hash.
+The current resource is Open English WordNet 2025 JSON under
+`know/wordnet/open-english-wordnet-2025-json/`; the dataset is a local knowledge input,
+kept outside version control, with its upstream archive URL and license recorded in the
+Pyash configuration.
 It supplies part-of-speech, synset, gloss, and same-synset evidence for unresolved terms; it
 does not create vocabulary. A term is auto-resolved only when the existing Pyash inventory and
 sentence context leave one result. Multiple senses or missing inventory evidence remain

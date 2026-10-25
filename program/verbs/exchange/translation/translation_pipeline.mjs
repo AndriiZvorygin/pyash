@@ -225,9 +225,11 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
   const unresolved = analysis.unresolved.length > 0
     ? [...new Set(analysis.unresolved.map(text).filter(Boolean))]
     : sentence ? [] : [segment.text];
+  const tokenCandidates = analysis.tokens.flatMap((token) => token.semanticCandidates ?? []);
+  const hasReviewCandidates = analysis.candidates.length > 0 || tokenCandidates.length > 0;
   const status = sentence
     ? "resolved"
-    : unresolved.length > 0 && analysis.candidates.length > 0
+    : unresolved.length > 0 && hasReviewCandidates
       ? "provisional"
       : "unresolved";
   const canonical = language === "english" && sentence ? segment.text : "";

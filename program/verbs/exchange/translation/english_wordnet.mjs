@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildProgram } from "../../../program.mjs";
 
 export const ENGLISH_WORDNET_FORMAT = "english-wordnet-core-v1";
+export const OPEN_ENGLISH_WORDNET_FORMAT = "open-english-wordnet-2025-json-v1";
 export const ENGLISH_WORDNET_NAME = "translation_english_wordnet";
 export const ENGLISH_WORDNET_DEFAULT_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -17,6 +18,21 @@ export const ENGLISH_WORDNET_DEFAULT_PATH = resolve(
 export const ENGLISH_WORDNET_CONFIG_URL = new URL("./english_wordnet.pya", import.meta.url);
 
 const WORDNET_POS = new Set(["a", "n", "r", "v", "s"]);
+const OPEN_SYNSET_FILE = /^(adj|adv|noun|verb)\..+\.json$/u;
+const OPEN_RELATION_FIELDS = new Set([
+  "also",
+  "attribute",
+  "causes",
+  "domain_region",
+  "domain_topic",
+  "entails",
+  "exemplifies",
+  "hypernym",
+  "mero_member",
+  "mero_part",
+  "mero_substance",
+  "similar"
+]);
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -98,6 +114,83 @@ export function parseEnglishWordNetText(source, { strict = true } = {}) {
     sourceHash: hash(source),
     sourceRows: rows.length + relations.length + skippedLines.length
   };
+}
+
+function openWordNetTargetKey(value) {
+  const target = typeof value === "string" ? value.trim() : "";
+  const match = target.match(/^(.+)-([anrsv])$/u);
+  return match ? `${match[2]}:${target}` : "";
+}
+
+export function parseOpenEnglishWordNetJsonFiles(files = []) {
+  if (!Array.isArray(files)) throw invalid("Open English WordNet files must be an array");
+  const rows = [];
+  const relations = [];
+  const sourceFiles = [];
+  for (const file of files) {
+    if (!file || typeof file.name !== "string" || !OPEN_SYNSET_FILE.test(file.name)) continue;
+    const source = typeof file.source === "string" ? file.source : "";
+    let data;
+    try {
+      data = JSON.parse(source);
+    } catch (error) {
+      throw invalid("Open English WordNet JSON is malformed", { file: file.name, cause: error.message });
+    }
+    sourceFiles.push(file.name);
+    for (const [synset, value] of Object.entries(data)) {
+      const pos = value?.partOfSpeech;
+      if (!WORDNET_POS.has(pos) || !Array.isArray(value?.members)) continue;
+      const gloss = [
+        ...(Array.isArray(value.definition) ? value.definition : []),
+        ...(Array.isArray(value.example) ? value.example : [])
+      ].filter((part) => typeof part === "string" && part.trim()).join("; ");
+      for (const member of value.members) {
+        const lemma = normalize(member);
+        if (!lemma) continue;
+        rows.push({
+          id: `oewn:${pos}:${synset}:${lemma}:${hash(`${file.name}\u0000${synset}\u0000${lemma}`).slice(0, 12)}`,
+          pos,
+          synset,
+          senseKey: `${synset}:${lemma}`,
+          lemma,
+          gloss
+        });
+      }
+      for (const [relation, targets] of Object.entries(value)) {
+        if (!OPEN_RELATION_FIELDS.has(relation) || !Array.isArray(targets)) continue;
+        for (const target of targets) {
+          const targetKey = openWordNetTargetKey(target);
+          if (!targetKey) continue;
+          relations.push({
+            kind: "relation",
+            id: `oewn-relation:${pos}:${synset}:${relation}:${target}`,
+            source: `${pos}:${synset}`,
+            target: targetKey,
+            relation,
+            evidence: "Open English WordNet 2025"
+          });
+        }
+      }
+    }
+  }
+  return {
+    format: OPEN_ENGLISH_WORDNET_FORMAT,
+    rows,
+    relations,
+    sourceFiles: sourceFiles.sort(),
+    sourceRows: rows.length + relations.length
+  };
+}
+
+async function loadOpenEnglishWordNetJson(directory) {
+  const names = (await readdir(directory)).filter((name) => OPEN_SYNSET_FILE.test(name)).sort();
+  const files = await Promise.all(names.map(async (name) => ({
+    name,
+    source: await readFile(join(directory, name), "utf8")
+  })));
+  const parsed = parseOpenEnglishWordNetJsonFiles(files);
+  const sourceHash = hash(files.map((file) => `${file.name}\u0000${file.source}`).join("\u0000"));
+  return { ...parsed, sourceHash, path: resolve(directory) };
 }
 
 function lookupVariants(value) {
@@ -193,7 +286,7 @@ export function parseEnglishWordNetConfig(source) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
     if (typeof sentence.ob?.text === "string") metadata[sentence.su.text] = sentence.ob.text;
   }
-  if (metadata.format !== ENGLISH_WORDNET_FORMAT) {
+  if (![ENGLISH_WORDNET_FORMAT, OPEN_ENGLISH_WORDNET_FORMAT].includes(metadata.format)) {
     throw invalid("WordNet configuration has an unsupported format", { format: metadata.format });
   }
   if (!metadata.source) throw invalid("WordNet configuration requires a source path");
@@ -210,6 +303,20 @@ export async function loadEnglishWordNet({ path, strict = true, configUrl = ENGL
     ? null
     : parseEnglishWordNetConfig(await readFile(configUrl, "utf8"));
   const sourcePath = path ?? configuration?.source ?? ENGLISH_WORDNET_DEFAULT_PATH;
+  if (configuration?.format === OPEN_ENGLISH_WORDNET_FORMAT) {
+    const parsed = await loadOpenEnglishWordNetJson(sourcePath);
+    if (configuration.sourceHash && configuration.sourceHash !== parsed.sourceHash) {
+      throw invalid("Open English WordNet source hash does not match configuration", {
+        expected: configuration.sourceHash,
+        actual: parsed.sourceHash
+      });
+    }
+    return {
+      ...parsed,
+      configuration,
+      index: buildEnglishWordNetIndex(parsed)
+    };
+  }
   const source = await readFile(sourcePath, "utf8");
   const parsed = parseEnglishWordNetText(source, { strict });
   if (configuration?.sourceHash && configuration.sourceHash !== parsed.sourceHash) {

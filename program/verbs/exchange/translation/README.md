@@ -34,9 +34,12 @@ added. A caller may supply the existing Housekeeper verifier for contextual cand
 
 The English analyzer is deterministic-first. It applies the grammar catalog, existing atomic
 and accepted compound vocabulary, conservative inflection, and sentence constructions before
-consulting semantic evidence. The read-only WordNet slice is configured by
-`english_wordnet.pya` and loaded from `/home/htaf/pyachso2n/wordnet-core.txt`; each unresolved
-token retains its part of speech, synset, gloss, and bounded same-synset Pyash candidates.
+consulting semantic evidence. The read-only WordNet resource is configured by
+`english_wordnet.pya` and loaded from
+`know/wordnet/open-english-wordnet-2025-json/`; each unresolved token retains its part of
+speech, synset, gloss, and bounded same-synset Pyash candidates. The dataset is a local
+knowledge input rather than a vendored dependency; its upstream URL, license, and source hash
+are durable in the Pyash configuration.
 The analyzer also scores a bounded local sentence window against sense glosses and lemmas;
 one unique positive overlap narrows the sense set before deterministic agreement.
 Optional relation edges can add bounded graph relatedness to that score without changing the

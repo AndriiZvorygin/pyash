@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildEnglishWordNetIndex,
   loadEnglishWordNet,
+  parseOpenEnglishWordNetJsonFiles,
   parseEnglishWordNetConfig,
   parseEnglishWordNetText
 } from "../program/verbs/exchange/translation/english_wordnet.mjs";
@@ -65,10 +66,36 @@ test("WordNet parser and index preserve optional relation edges", () => {
   assert.equal(index.relatedness("n:river", "n:unknown"), 0);
 });
 
+test("Open English WordNet loader rejects malformed JSON and ignores non-synset files", () => {
+  assert.throws(
+    () => parseOpenEnglishWordNetJsonFiles([{ name: "noun.bad.json", source: "{noisy" }]),
+    (error) => error.code === "invalid-english-wordnet"
+  );
+  const parsed = parseOpenEnglishWordNetJsonFiles([
+    { name: "entries-a.json", source: "not a synset file" },
+    {
+      name: "noun.sample.json",
+      source: JSON.stringify({
+        "00000001-n": {
+          definition: ["a bounded sample"],
+          members: ["sample"],
+          hypernym: ["00000002-n"],
+          partOfSpeech: "n"
+        }
+      })
+    }
+  ]);
+  assert.equal(parsed.rows[0].lemma, "sample");
+  assert.equal(parsed.relations[0].target, "n:00000002-n");
+  assert.deepEqual(parsed.sourceFiles, ["noun.sample.json"]);
+});
+
 test("repository WordNet resource is available as read-only semantic evidence", async () => {
   const resource = await loadEnglishWordNet();
-  assert.equal(resource.format, "english-wordnet-core-v1");
-  assert.ok(resource.rows.length > 4000);
+  assert.equal(resource.format, "open-english-wordnet-2025-json-v1");
+  assert.ok(resource.rows.length > 180000);
+  assert.ok(resource.relations.length > 100000);
+  assert.equal(resource.sourceFiles.length, 45);
   assert.ok(resource.index.lookup("feel").some((row) => row.pos === "v"));
   assert.ok(resource.index.lookup("reaction").length >= 3);
 });

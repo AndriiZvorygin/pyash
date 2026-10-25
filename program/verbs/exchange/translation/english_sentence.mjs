@@ -52,6 +52,13 @@ const WORDNET_CONTEXT_STOP_WORDS = new Set([
   "has", "have", "in", "into", "is", "it", "of", "on", "or", "that", "the", "their",
   "there", "these", "this", "those", "to", "was", "were", "with"
 ]);
+const WORDNET_MODAL_PRECEDERS = new Set([
+  "can", "could", "may", "might", "must", "shall", "should", "will", "would"
+]);
+const WORDNET_NOUN_PRECEDERS = new Set([
+  "a", "an", "the", "this", "that", "these", "those", "some", "many", "another", "each",
+  "my", "your", "our", "their", "of", "for", "from", "with", "in", "on", "within", "into"
+]);
 
 let defaultResourcesPromise = null;
 let sentenceResourcesPromise = null;
@@ -164,6 +171,34 @@ function wordNetGraphContext(sense, records, index, wordnetIndex) {
   return { score, matched };
 }
 
+function expectedWordNetPartsOfSpeech(records, index) {
+  const expected = new Set();
+  const record = records[index];
+  const previous = records[index - 1];
+  const next = records[index + 1];
+  const previousTwo = records[index - 2];
+  if (!record) return expected;
+  if (WORDNET_MODAL_PRECEDERS.has(previous?.surface) || WORDNET_MODAL_PRECEDERS.has(previousTwo?.surface)) {
+    expected.add("v");
+  }
+  if (WORDNET_NOUN_PRECEDERS.has(previous?.surface)) expected.add("n");
+  if (previous?.surface === "and" || previous?.surface === "or") {
+    if (previousTwo?.wordnet?.partsOfSpeech?.includes("n")) expected.add("n");
+  }
+  if (previous?.wordnet?.partsOfSpeech?.includes("a")) expected.add("n");
+  if (next && ["a", "an", "the", "this", "that", "these", "those"].includes(next.surface)) {
+    expected.add("v");
+  }
+  if (record.surface.endsWith("ing") && ["is", "are", "was", "were", "be", "been", "being"].includes(previous?.surface)) {
+    expected.add("v");
+  }
+  if (record.surface.endsWith("s") && !WORDNET_MODAL_PRECEDERS.has(previous?.surface)
+    && previous?.surface !== "to" && !expected.has("v")) {
+    expected.add("n");
+  }
+  return expected;
+}
+
 function wordNetSenseContext(sense, contextTerms, records, index, wordnetIndex) {
   const senseTerms = new Set([
     ...wordNetLookupVariants(sense?.gloss ?? "").flatMap((value) => value.split(/\s+/u)),
@@ -181,7 +216,10 @@ function wordNetSenseContext(sense, contextTerms, records, index, wordnetIndex) 
 }
 
 function selectWordNetSenses(record, records, index, wordnetIndex) {
-  const senses = record?.wordnet?.senses ?? [];
+  const allSenses = record?.wordnet?.senses ?? [];
+  const expectedPartsOfSpeech = expectedWordNetPartsOfSpeech(records, index);
+  const filteredSenses = allSenses.filter((sense) => expectedPartsOfSpeech.has(sense.pos));
+  const senses = filteredSenses.length > 0 ? filteredSenses : allSenses;
   if (senses.length < 2) return { senses, evidence: "" };
   const contextTerms = wordNetContextTerms(records, index);
   if (contextTerms.size === 0) return { senses, evidence: "" };
@@ -293,6 +331,8 @@ function findLexicalVerbIndex(records, startIndex = subjectPredicateStart(record
   for (let index = startIndex; index < records.length; index += 1) {
     const record = records[index];
     if (!record?.pyashSequence?.length || record.grammar || record.copula) continue;
+    if (record.wordnetPartOfSpeech && record.wordnetPartOfSpeech !== "v") continue;
+    if (record.wordnet?.partsOfSpeech?.length && !record.wordnet.partsOfSpeech.includes("v")) continue;
     if (record.morphology?.kind === "progressive") continue;
     return index;
   }
@@ -468,6 +508,7 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
           selection.evidence
         ].filter(Boolean).join("; ")
       });
+      candidate.partOfSpeech = sense.pos;
       candidates.set(candidate.id, candidate);
     }
     return [...candidates.values()];
@@ -487,6 +528,7 @@ function addWordNetCandidates(records, resolveWord, wordnetIndex) {
         ...record,
         coverageType: "semantic-wordnet",
         lemma: candidate.lemma,
+        wordnetPartOfSpeech: candidate.partOfSpeech,
         pyashSequence: [...candidate.lexicalSequence],
         evidence: `deterministic WordNet sense agreement; ${candidate.evidence}`,
         semanticCandidates: []
