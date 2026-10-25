@@ -1,0 +1,6 @@
+su name translation_english_wordnet_bridges be map def
+su text "format" ob text "english-wordnet-bridge-v1" ya
+su text "source" ob text "Open English WordNet 2025 sense bridge catalog" ya
+su text "mode" ob text "sense-level semantic bridge" ya
+su text "v:01775456-v" ob name emotionally as text "v" with text "contextual" via text "Open English WordNet 2025 emotional-state sense" ya
+prah

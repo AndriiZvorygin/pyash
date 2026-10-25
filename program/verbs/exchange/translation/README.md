@@ -40,6 +40,11 @@ consulting semantic evidence. The read-only WordNet resource is configured by
 speech, synset, gloss, and bounded same-synset Pyash candidates. The dataset is a local
 knowledge input rather than a vendored dependency; its upstream URL, license, and source hash
 are durable in the Pyash configuration.
+Sense-specific bridges live in the native Pyash map
+`english_wordnet_bridges.pya`. Each bridge sense is one sentence row: `su` identifies the
+WordNet sense, `ob` names an existing English target anchor, `as` records its part of speech,
+`with` records certainty, and `via` records provenance. The bridge adds a bounded candidate;
+it does not create a new Pyash word or bypass sentence-level sense selection.
 Curated lemma equivalence may reuse one existing Pyash atom across English lexical surfaces:
 the `mixed` atom `mrat` anchors `mix`, `mixes`, `mixed`, and `mixing`. The `mix` surface keeps
 noun/verb ambiguity in sentence review, while the inflected surfaces carry their accepted tense

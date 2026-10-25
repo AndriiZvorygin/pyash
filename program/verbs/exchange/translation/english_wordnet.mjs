@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildProgram } from "../../../program.mjs";
+import { buildEnglishWordNetBridgeIndex } from "./english_wordnet_bridges.mjs";
 
 export const ENGLISH_WORDNET_FORMAT = "english-wordnet-core-v1";
 export const OPEN_ENGLISH_WORDNET_FORMAT = "open-english-wordnet-2025-json-v1";
@@ -203,7 +204,7 @@ function relationKey(value) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
-export function buildEnglishWordNetIndex({ rows = [], relations = [] } = {}) {
+export function buildEnglishWordNetIndex({ rows = [], relations = [], bridges = [] } = {}) {
   const byLemma = new Map();
   const bySynset = new Map();
   const relationGraph = new Map();
@@ -248,12 +249,14 @@ export function buildEnglishWordNetIndex({ rows = [], relations = [] } = {}) {
     }
     return 0;
   }
+  const bridgeIndex = buildEnglishWordNetBridgeIndex({ entries: bridges });
   return {
     rows: rows.map((row) => ({ ...row })),
     relations: relations.map((relation) => ({ ...relation })),
     byLemma,
     bySynset,
     relationGraph,
+    bridgeIndex: bridgeIndex.bySense,
     relatedness,
     lookup(surface) {
       return lookupVariants(surface)
