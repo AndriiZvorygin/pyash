@@ -6,9 +6,11 @@ import {
   loadCompoundLexicon,
   loadChineseCompoundLexicon,
   queryCompoundLexicon,
+  parseCompoundLexicon,
   parseChineseCompoundLexicon,
   queryChineseCompoundLexicon
 } from "../program/verbs/exchange/translation/compound_lexicon.mjs";
+import { buildCompoundAtomLinks } from "../program/verbs/exchange/translation/compound_atom_links.mjs";
 
 test("Chinese compound lexicon preserves ordered morphemes and stable identities", async () => {
   const entries = await loadChineseCompoundLexicon();
@@ -97,6 +99,56 @@ test("Chinese compound lexicon preserves ordered morphemes and stable identities
   assert.deepEqual(
     queryChineseCompoundLexicon(entries, { pyashWord: "twum" }).map((entry) => entry.surface),
     ["小脑", "中脑", "头脑风暴"]
+  );
+});
+
+test("compound loading links exact atoms and preserves reverse atom lookup", () => {
+  const source = [
+    "su name translation_compounds_fixture be map def",
+    `su text "database" ob text ${JSON.stringify(JSON.stringify({
+      surface: "database",
+      morphemes: ["data", "storehouse"],
+      target: "database",
+      componentGlosses: ["data", "storehouse"],
+      pyashSequence: ["hnuc", "cren"],
+      componentLayers: [16, 19],
+      maxLayer: 19,
+      provenance: "fixture",
+      confidence: "curated",
+      status: "lowered-compound"
+    }))} ya`,
+    `su text "brainstorm" ob text ${JSON.stringify(JSON.stringify({
+      surface: "brainstorm",
+      morphemes: ["brain", "storm"],
+      target: "brainstorm",
+      specificAtom: "brain_storming",
+      componentGlosses: ["brain", "storm"],
+      pyashSequence: ["twum", "hfup"],
+      componentLayers: [16, 16],
+      maxLayer: 16,
+      provenance: "fixture",
+      confidence: "curated",
+      status: "accepted-curated"
+    }))} ya`,
+    "prah"
+  ].join("\n");
+  const atomicEntries = [
+    { en: "database", pya: "hdes" },
+    { en: "brain_storming", pya: "hto7n" }
+  ];
+  const entries = parseCompoundLexicon(source, {
+    name: "translation_compounds_fixture",
+    language: "fixture",
+    atomicEntries
+  });
+  assert.equal(entries.find((entry) => entry.target === "database").specificAtom, "database");
+  assert.equal(entries.find((entry) => entry.target === "brainstorm").specificAtom, "brain_storming");
+
+  const links = buildCompoundAtomLinks({ atomicEntries, compoundEntries: entries });
+  assert.equal(links.compoundToAtom.get(entries[0].id).atom.pya, "hdes");
+  assert.deepEqual(
+    links.atomToCompounds.get("brain_storming").map((link) => link.compound.surface),
+    ["brainstorm"]
   );
 });
 

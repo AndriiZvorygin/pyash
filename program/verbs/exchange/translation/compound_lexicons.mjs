@@ -1,9 +1,17 @@
 import {
   COMPOUND_LEXICON_NAMES,
+  loadChineseCompoundLexicon,
   loadCompoundLexicon,
   parseCompoundLexicon,
   queryCompoundLexicon
 } from "./compound_lexicon.mjs";
+import pyashWords from "../../../library/pyashWords.json" with { type: "json" };
+import { buildCompoundAtomLinks } from "./compound_atom_links.mjs";
+export {
+  buildCompoundAtomLinks,
+  linkCompoundToAtom,
+  linkedCompoundAtom
+} from "./compound_atom_links.mjs";
 export {
   buildDerivedCompoundCoverage,
   loadCuratedCompoundDecompositions,
@@ -36,18 +44,31 @@ function sourceFor(language) {
   return new URL(`./${filename}`, import.meta.url);
 }
 
-export function parseMultilingualCompoundLexicon(source, language) {
+export function parseMultilingualCompoundLexicon(source, language, { atomicEntries = pyashWords } = {}) {
   return parseCompoundLexicon(source, {
     name: COMPOUND_LEXICON_NAMES[language],
-    language
+    language,
+    atomicEntries
   });
 }
 
-export function loadMultilingualCompoundLexicon(language, { url = sourceFor(language) } = {}) {
+export function loadMultilingualCompoundLexicon(language, { url = sourceFor(language), atomicEntries = pyashWords } = {}) {
   return loadCompoundLexicon({
     url,
     name: COMPOUND_LEXICON_NAMES[language],
-    language
+    language,
+    atomicEntries
+  });
+}
+
+export async function loadAllCompoundAtomLinks({ atomicEntries = pyashWords } = {}) {
+  const catalogs = await Promise.all([
+    loadChineseCompoundLexicon({ atomicEntries }),
+    ...Object.keys(sources).map((language) => loadMultilingualCompoundLexicon(language, { atomicEntries }))
+  ]);
+  return buildCompoundAtomLinks({
+    atomicEntries,
+    compoundEntries: catalogs.flat()
   });
 }
 

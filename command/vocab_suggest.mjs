@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { buildProgram } from "../program/program.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { loadCoverage } from "./compound_coverage.mjs";
+import { loadAllCompoundAtomLinks } from "../program/verbs/exchange/translation/compound_lexicons.mjs";
 import { renderPyacSurface } from "../program/verbs/exchange/translation/pyash_surface.mjs";
 import {
   buildEnglishDictionaryAliases,
@@ -68,6 +69,7 @@ let english30kSourcePromise = null;
 let englishGrammarIndexPromise = null;
 let extendedEnglishResourcesPromise = null;
 let anchorWordFormsPromise = null;
+let compoundAtomLinksPromise = null;
 let fastAtomicIndex = null;
 
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
@@ -303,6 +305,11 @@ async function loadDefaultAnchorWordFormsSafe() {
       });
   }
   return anchorWordFormsPromise;
+}
+
+async function loadDefaultCompoundAtomLinksSafe() {
+  if (!compoundAtomLinksPromise) compoundAtomLinksPromise = loadAllCompoundAtomLinks();
+  return compoundAtomLinksPromise;
 }
 
 function sourceRowForToken(source, token) {
@@ -762,6 +769,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const dictionaryMatches = new Map();
   const lemmaMatches = new Map();
   const rootMatches = new Map();
+  const compoundAtomMatches = new Map();
   const grammarMatches = new Map();
   const morphologyMatches = new Map();
   const pyaGlossMatches = new Map();
@@ -778,6 +786,11 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     if (defaultAcceptedCompoundsLoaded) return;
     mergeCompoundRows(acceptedCompounds, await loadDefaultAcceptedCompounds());
     defaultAcceptedCompoundsLoaded = true;
+  };
+  const registerCompoundAtomMatches = async (token, english) => {
+    const links = await loadDefaultCompoundAtomLinksSafe();
+    const matches = links.atomToCompounds.get(normalizeCompoundTarget(english)) ?? [];
+    if (matches.length > 0) compoundAtomMatches.set(token, matches);
   };
   for (const root of roots) {
     await collectFiles(root, files);
@@ -858,6 +871,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       const directAtomic = findDirectAtomicCoverage(token);
       if (directAtomic) {
         rootMatches.set(token, directAtomic);
+        await registerCompoundAtomMatches(token, directAtomic.canonicalEnglish);
         continue;
       }
       await ensureCuratedAcceptedCompounds();
@@ -893,6 +907,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
           coverageType: "root",
           pyashSequence: [ranked.lexicalRoot.pya]
         });
+        await registerCompoundAtomMatches(token, ranked.lexicalRoot.english);
       }
       if (ranked.morphology?.markerSequence?.length) morphologyMatches.set(token, ranked);
       if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
@@ -1012,7 +1027,11 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
 
   for (const [token, ranked] of [...rootMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     const source = Number.isInteger(ranked.rank) ? `English30k rank ${ranked.rank}` : "direct Pyash atom";
-    report(`${token}: root -> ${ranked.pyashSequence.join(" ")} (${source})`);
+    const links = compoundAtomMatches.get(token) ?? [];
+    const compoundSuffix = links.length > 0
+      ? `; compounds: ${links.map(({ compound }) => `${compound.surface ?? compound.target} -> ${(compound.pyashSequence ?? compound.pyash).join(" ")}`).join(" | ")}`
+      : "";
+    report(`${token}: root -> ${ranked.pyashSequence.join(" ")} (${source})${compoundSuffix}`);
   }
 
   for (const [token, ranked] of [...grammarMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
@@ -1057,7 +1076,17 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         locations: [...locations]
       };
     }),
-    compoundMorphologies: [...compoundMorphologyMatches.values()].flat()
+    compoundMorphologies: [...compoundMorphologyMatches.values()].flat(),
+    compoundAtomLinks: [...compoundAtomMatches.entries()].map(([token, links]) => ({
+      token,
+      compounds: links.map(({ compound, atom }) => ({
+        surface: compound.surface ?? compound.target,
+        target: compound.target,
+        pyashSequence: [...(compound.pyashSequence ?? compound.pyash)],
+        atom: atom.english,
+        atomPyash: atom.pya
+      }))
+    }))
   };
 }
 

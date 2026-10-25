@@ -6,6 +6,7 @@ import {
   buildCompoundMorphologyIndex
 } from "./compound_morphology.mjs";
 import { choosePyacCompoundCandidate } from "./pyac_complexity.mjs";
+import { buildCompoundAtomLinks } from "./compound_atom_links.mjs";
 
 export const DERIVED_COMPOUND_LEXICON_NAME = "translation_compounds_derived";
 export const DERIVED_COMPOUND_CURATED_NAME = "translation_compounds_derived_curated";
@@ -352,13 +353,23 @@ export function buildDerivedCompoundCoverage({
     }
   }
 
-  records.sort((left, right) => left.target.localeCompare(right.target) || left.id.localeCompare(right.id));
+  const linked = buildCompoundAtomLinks({ atomicEntries, compoundEntries: records });
+  const linkedRecords = linked.entries.map((record) => ({
+    ...record,
+    id: recordId(record)
+  }));
+  const finalLinks = buildCompoundAtomLinks({ atomicEntries, compoundEntries: linkedRecords });
+  finalLinks.entries.sort((left, right) => left.target.localeCompare(right.target) || left.id.localeCompare(right.id));
   return {
-    records,
-    accepted: records.filter((record) => DERIVED_COMPOUND_STATUSES.slice(0, 2).includes(record.status)),
-    candidates: records.filter((record) => record.status === "candidate-closed"),
+    records: finalLinks.entries,
+    accepted: finalLinks.entries.filter((record) => DERIVED_COMPOUND_STATUSES.slice(0, 2).includes(record.status)),
+    candidates: finalLinks.entries.filter((record) => record.status === "candidate-closed"),
     existingAtomic,
-    rejected
+    rejected,
+    atomLinks: {
+      atomToCompounds: finalLinks.atomToCompounds,
+      compoundToAtom: finalLinks.compoundToAtom
+    }
   };
 }
 
