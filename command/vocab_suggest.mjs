@@ -14,6 +14,7 @@ import {
 } from "../program/verbs/exchange/translation/english_dictionary_aliases.mjs";
 import {
   buildEnglishLemmaIndex,
+  inflectionCandidates,
   loadEnglishLemmaCatalog
 } from "../program/verbs/exchange/translation/english_lemmas.mjs";
 import { loadAnchorWordForms } from "../program/verbs/exchange/translation/anchor_words.mjs";
@@ -141,12 +142,16 @@ function acceptedCompoundRow(payload) {
     : [];
   const status = payload?.verificationStatus ?? payload?.status;
   if (!target || components.length < 2 || pyash.length !== components.length || !ACCEPTED_COMPOUND_STATUSES.has(status)) return null;
+  const specificAtom = typeof payload?.specificAtom === "string" && payload.specificAtom.trim()
+    ? payload.specificAtom.trim()
+    : null;
   return {
     target,
     components,
     pyash,
     status,
-    identity: `${components.join("\u0001")}\u0000${pyash.join("\u0001")}`
+    ...(specificAtom ? { specificAtom } : {}),
+    identity: `${components.join("\u0001")}\u0000${pyash.join("\u0001")}\u0000${specificAtom ?? ""}`
   };
 }
 
@@ -343,6 +348,57 @@ function directDelimitedCompoundRow(token) {
     status: "accepted-delimited",
     identity: `${components.join("\u0001")}\u0000${pyash.join("\u0001")}`
   };
+}
+
+function findAtomicEntry(token) {
+  return english30kLookupVariants(token)
+    .map((variant) => buildFastAtomicIndex().get(variant))
+    .find(Boolean);
+}
+
+function findDirectAtomicCoverage(token) {
+  const atomic = findAtomicEntry(token);
+  if (!atomic) return null;
+  return {
+    coverageType: "atomic",
+    status: "covered-atomic",
+    canonicalEnglish: atomic.en,
+    lexicalRoot: {
+      english: atomic.en,
+      pya: atomic.pya,
+      hnuc: atomic.hnuc
+    },
+    pyashSequence: [atomic.pya],
+    hnuc: atomic.hnuc,
+    direct: true
+  };
+}
+
+function resolveSpecificAtom(row) {
+  if (!row?.specificAtom) return null;
+  const atomic = findAtomicEntry(row.specificAtom);
+  if (!atomic) return null;
+  return {
+    english: atomic.en,
+    pyash: atomic.pya,
+    hnuc: atomic.hnuc
+  };
+}
+
+function findCompoundProgressiveCoverage(token, acceptedCompounds) {
+  const candidates = inflectionCandidates(token)
+    .map((candidate) => ({ candidate, rows: acceptedCompounds.get(normalizeCompoundTarget(candidate.lemma)) ?? [] }))
+    .filter(({ rows }) => rows.length > 0);
+  return candidates.flatMap(({ candidate, rows }) => rows.map((row) => ({
+    token,
+    lemma: candidate.lemma,
+    components: row.components,
+    pyash: [...row.pyash, "pfih"],
+    specificAtom: row.specificAtom,
+    specificAtomPyash: resolveSpecificAtom(row)?.pyash ?? null,
+    certainty: "contextual",
+    status: row.status
+  })));
 }
 
 function directRecordId(row) {
@@ -591,6 +647,25 @@ function getPyashFromLine(line) {
   return match[1];
 }
 
+function exactVocabMatches(token, lines) {
+  const lower = String(token ?? "").toLowerCase();
+  if (!lower) return [];
+  const matches = [];
+  const seen = new Set();
+  for (const line of lines) {
+    if (!line || isFileMarker(line) || parseBlacklist(line) !== null || line.startsWith("#define")) continue;
+    const pyash = getPyashFromLine(line);
+    const gloss = getGlossFromLine(line);
+    if (!pyash || !gloss) continue;
+    if (pyash.toLowerCase() !== lower && gloss.toLowerCase() !== lower) continue;
+    const key = `${pyash}\u0000${gloss}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    matches.push({ pyash, gloss });
+  }
+  return matches;
+}
+
 function isExactTokenMatch(token, lines) {
   const lower = String(token ?? "").toLowerCase();
   if (!lower) return false;
@@ -683,11 +758,13 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const acceptedCompounds = new Map();
   const foundCompounds = new Map();
   const rankedCoverage = new Map();
+  const compoundMorphologyMatches = new Map();
   const dictionaryMatches = new Map();
   const lemmaMatches = new Map();
   const rootMatches = new Map();
   const grammarMatches = new Map();
   const morphologyMatches = new Map();
+  const pyaGlossMatches = new Map();
   const okTextTokens = new Set();
   const files = [];
   let curatedAcceptedCompoundsLoaded = false;
@@ -778,7 +855,17 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     const fastRanked = await findFastEnglishCoverage(token);
     let ranked = fastRanked;
     if (!ranked) {
+      const directAtomic = findDirectAtomicCoverage(token);
+      if (directAtomic) {
+        rootMatches.set(token, directAtomic);
+        continue;
+      }
       await ensureCuratedAcceptedCompounds();
+      const compoundProgressive = findCompoundProgressiveCoverage(token, acceptedCompounds);
+      if (compoundProgressive.length > 0) {
+        compoundMorphologyMatches.set(token, compoundProgressive);
+        continue;
+      }
       let knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
       if (knownCompounds?.length) {
         registerFoundCompound(foundCompounds, knownCompounds, "input");
@@ -811,7 +898,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
       else if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
       else if (ranked.coverageType === "grammar") grammarMatches.set(token, ranked);
-      else okTextTokens.add(token);
+      else if (!ranked.lexicalRoot?.pya) okTextTokens.add(token);
       continue;
     }
     if (ranked) rankedCoverage.set(token, ranked);
@@ -827,7 +914,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       if (!occurrences.has(token)) occurrences.set(token, new Set());
       occurrences.get(token).add("input");
     } else {
-      okTextTokens.add(token);
+      const exactMatches = exactVocabMatches(token, lines)
+        .filter((match) => match.pyash.toLowerCase() === token.toLowerCase());
+      if (exactMatches.length > 0) pyaGlossMatches.set(token, exactMatches);
+      else okTextTokens.add(token);
     }
   }
 
@@ -837,7 +927,11 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       .filter(Boolean)
       .join(", ");
     const row = found.row;
-    report(`${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${locationSuffix ? ` (${locationSuffix})` : ""}`);
+    const specificAtom = resolveSpecificAtom(row);
+    const specificSuffix = specificAtom
+      ? `; specific atom ${specificAtom.english} -> ${specificAtom.pyash}`
+      : "";
+    report(`${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${specificSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`);
   }
 
   if (occurrences.size > 0) {
@@ -863,7 +957,15 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         .filter(name => name && name !== "input");
       const locationSuffix = fileList.length > 0 ? ` (${fileList.join(", ")})` : "";
       if (blacklistValue !== null) {
-        report(`${token} blocked, instead: ${blacklistValue}.${locationSuffix}`);
+        const alternatives = Array.isArray(blacklistValue) ? blacklistValue : [blacklistValue];
+        const pyacAlternatives = alternatives
+          .map((alternative) => findAtomicEntry(alternative))
+          .filter(Boolean)
+          .map((entry) => `${entry.en} -> ${entry.pya}`);
+        const pyacSuffix = pyacAlternatives.length > 0
+          ? ` Pyac: ${pyacAlternatives.join(" | ")}.`
+          : "";
+        report(`${token} blocked, instead: ${blacklistValue}.${pyacSuffix}${locationSuffix}`);
       } else {
         const ranked = rankedCoverage.get(token);
         const rankSuffix = ranked
@@ -880,6 +982,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
   }
 
+  for (const [token, matches] of [...pyaGlossMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    report(`${token}: ${matches.map((match) => match.gloss).join(" | ")}`);
+  }
+
   for (const [token, ranked] of [...lemmaMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     report(`${token}: lemma ${ranked.lemma} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
   }
@@ -891,12 +997,22 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     report(`${token}: morphology ${ranked.lemma} + ${markers} -> ${sequence} (${morphology.certainty}; English30k rank ${ranked.rank})`);
   }
 
+  for (const [token, candidates] of [...compoundMorphologyMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    for (const candidate of candidates) {
+      const specificSuffix = candidate.specificAtomPyash
+        ? `; specific atom ${candidate.specificAtom} -> ${candidate.specificAtomPyash}`
+        : "";
+      report(`${token}: morphology ${candidate.lemma} (${candidate.components.join(" + ")}) + progressive_aspect_ -> ${candidate.pyash.join(" ")} (${candidate.certainty})${specificSuffix}`);
+    }
+  }
+
   for (const [token, ranked] of [...dictionaryMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     report(`${token}: dictionary alias ${ranked.aliasOf} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
   }
 
   for (const [token, ranked] of [...rootMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-    report(`${token}: root -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+    const source = Number.isInteger(ranked.rank) ? `English30k rank ${ranked.rank}` : "direct Pyash atom";
+    report(`${token}: root -> ${ranked.pyashSequence.join(" ")} (${source})`);
   }
 
   for (const [token, ranked] of [...grammarMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
@@ -918,7 +1034,9 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         foundCompound: {
           components: found.row.components,
           pyash: found.row.pyash,
-          status: found.row.status
+          status: found.row.status,
+          ...(found.row.specificAtom ? { specificAtom: found.row.specificAtom } : {}),
+          ...(resolveSpecificAtom(found.row)?.pyash ? { specificAtomPyash: resolveSpecificAtom(found.row).pyash } : {})
         },
         files: [...found.locations]
       };
@@ -932,8 +1050,14 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     missing,
     foundCompounds: [...foundCompounds.values()].map(({ row, locations }) => {
       const { identity, ...publicRow } = row;
-      return { ...publicRow, locations: [...locations] };
-    })
+      const specificAtom = resolveSpecificAtom(row);
+      return {
+        ...publicRow,
+        ...(specificAtom ? { specificAtomPyash: specificAtom.pyash } : {}),
+        locations: [...locations]
+      };
+    }),
+    compoundMorphologies: [...compoundMorphologyMatches.values()].flat()
   };
 }
 

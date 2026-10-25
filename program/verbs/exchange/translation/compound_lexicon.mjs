@@ -70,6 +70,11 @@ function normalizeEntry(payload, surface, index, language) {
   if (payload.gloss !== undefined && typeof payload.gloss !== "string") {
     throw invalid("compound row gloss must be text", { index, surface });
   }
+  if (payload.specificAtom !== undefined && (
+    typeof payload.specificAtom !== "string" || !payload.specificAtom.trim()
+  )) {
+    throw invalid("compound specific atom must be non-empty text", { index, surface });
+  }
   if (payload.sourceMorphemes !== undefined && (
     !Array.isArray(payload.sourceMorphemes) ||
     payload.sourceMorphemes.length === 0 ||
@@ -250,6 +255,7 @@ function normalizeEntry(payload, surface, index, language) {
     morphemes: [...payload.morphemes],
     target: payload.target,
     ...(payload.gloss === undefined ? {} : { gloss: payload.gloss }),
+    ...(payload.specificAtom === undefined ? {} : { specificAtom: payload.specificAtom }),
     ...(payload.sourceMorphemes === undefined ? {} : { sourceMorphemes: [...payload.sourceMorphemes] }),
     ...(payload.componentGlosses === undefined ? {} : { componentGlosses: [...payload.componentGlosses] }),
     ...(payload.componentRoles === undefined ? {} : { componentRoles: [...payload.componentRoles] }),
@@ -373,6 +379,7 @@ export function queryCompoundLexicon(entries, criteria = {}, options = {}) {
     if (criteria.surface !== undefined && entry.surface !== criteria.surface) return false;
     if (criteria.morpheme !== undefined && !entry.morphemes.includes(criteria.morpheme)) return false;
     if (criteria.target !== undefined && entry.target !== criteria.target) return false;
+    if (criteria.specificAtom !== undefined && entry.specificAtom !== criteria.specificAtom) return false;
     if (criteria.status !== undefined && entry.status !== criteria.status) return false;
     if (criteria.confidence !== undefined && entry.confidence !== criteria.confidence) return false;
     if (criteria.provenance !== undefined && entry.provenance !== criteria.provenance) return false;
@@ -396,6 +403,7 @@ export function canonicalCompoundPayload(entry) {
     morphemes: entry.morphemes,
     target: entry.target,
     gloss: entry.gloss ?? null,
+    specificAtom: entry.specificAtom ?? null,
     sourceMorphemes: entry.sourceMorphemes ?? null,
     componentGlosses: entry.componentGlosses ?? null,
     componentRoles: entry.componentRoles ?? null,

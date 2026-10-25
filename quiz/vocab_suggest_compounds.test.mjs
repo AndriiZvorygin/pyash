@@ -55,6 +55,55 @@ test("vocab_suggest recognizes repository accepted compounds for direct token ch
   assert.match(lines.join("\n"), /blueprint: found compound blue \+ print -> plun trat \(accepted-curated\)/u);
 });
 
+test("vocab_suggest exposes the accepted brain compound from Chinese evidence", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["brainstorm"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.deepEqual(result.foundCompounds, [{
+    target: "brainstorm",
+    components: ["brain", "storm"],
+    pyash: ["twum", "hfup"],
+    status: "accepted-curated",
+    specificAtom: "brain_storming",
+    specificAtomPyash: "hto7n",
+    locations: ["input"]
+  }]);
+  assert.match(lines.join("\n"), /brainstorm: found compound brain \+ storm -> twum hfup \(accepted-curated\); specific atom brain_storming -> hto7n/u);
+});
+
+test("vocab_suggest resolves the specific brain-storming atom from English", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["brain_storming"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.match(lines.join("\n"), /brain_storming: root -> hto7n \(direct Pyash atom\)/u);
+});
+
+test("vocab_suggest exposes lexical and progressive readings of English brainstorming", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["brainstorming"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.deepEqual(result.compoundMorphologies, [{
+    token: "brainstorming",
+    lemma: "brainstorm",
+    components: ["brain", "storm"],
+    pyash: ["twum", "hfup", "pfih"],
+    specificAtom: "brain_storming",
+    specificAtomPyash: "hto7n",
+    certainty: "contextual",
+    status: "accepted-curated"
+  }]);
+  assert.match(lines.join("\n"), /brainstorming: morphology brainstorm \(brain \+ storm\) \+ progressive_aspect_ -> twum hfup pfih \(contextual\); specific atom brain_storming -> hto7n/u);
+});
+
 test("vocab_suggest derives the expanded deterministic compound set", async () => {
   const lines = [];
   const result = await runVocabSuggest(["acid-rain"], {
