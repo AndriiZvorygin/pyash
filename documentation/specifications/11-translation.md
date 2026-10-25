@@ -26,10 +26,10 @@ to supplied candidate ids. The English `such as` surface is classified as an
 `exemplifier` construction, a subtype of `exemplification`; its Pyash sequence remains
 unresolved until the grammar inventory supplies an authoritative token.
 
-The English surface `example` uses the existing `referential_` grammar word `freh` at
-the sentence layer. The lexical root `example_WORD` remains `tlam` in the vocabulary
-for explicit root and compound use; this keeps the grammar surface separate from the
-lexical inventory.
+The English surface `example` now uses the generated `example_` grammar word `tfum`.
+The proposal comes from the existing `pyachso2n` weighted phonetic method and reserves
+both the checked-in vocabulary and the historical `pyachso2n/pyashWords.txt` inventory.
+The lexical root `example_WORD` remains `tlam` for explicit root and compound use.
 
 For a lexical gap that needs a new atomic Pyac word, the read-only atom proposal
 path in `atom_word_generation.mjs` reuses the historical

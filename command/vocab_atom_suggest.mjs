@@ -14,7 +14,8 @@ export async function runAtomWordSuggestion(args = process.argv.slice(2), {
   const proposal = buildAtomWordProposal({
     concept,
     ...inputs,
-    existingEntries: pyashWords
+    existingEntries: pyashWords,
+    reservedEntries: inputs.reservedEntries
   });
   report(JSON.stringify(proposal, null, 2));
   return proposal;

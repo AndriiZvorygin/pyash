@@ -97,6 +97,17 @@ The proposal command is read-only and emits evidence rather than editing
 node command/vocab_atom_suggest.mjs blueprint
 ```
 
+Grammar concepts use the same allocator with a trailing underscore and reserve the
+historical Pyash word list as well:
+
+```
+node command/vocab_grammar_suggest.mjs example
+```
+
+For `example`, the deterministic proposal is `example_ -> tfum` (`0xA8A`, layer 16).
+The command remains read-only; accepting a proposal into `pyashWords.json` and the
+English grammar catalog is a separate vocabulary change.
+
 The command uses `pyachso2n/phonetics.json.txt`, `pyachso2n/English30k.txt`,
 and the five `*GlyphWordList.txt` files. A concept absent from the phonetic
 catalog returns `missing-phonetic-evidence`, preserving the deterministic

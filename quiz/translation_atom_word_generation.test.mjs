@@ -4,10 +4,12 @@ import test from "node:test";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import {
   buildAtomWordProposal,
+  buildGrammarWordProposal,
   buildWeightedPhoneticProfile,
   loadAtomWordGenerationInputs,
   normalizeIpaToLayer,
   parseAtomWordLists,
+  parseLegacyPyashWords,
   parsePhoneticCatalog
 } from "../program/verbs/exchange/translation/atom_word_generation.mjs";
 
@@ -79,6 +81,11 @@ test("atom source parsers reject duplicate layer words and malformed phonetics",
     /duplicate/
   );
   assert.throws(() => parsePhoneticCatalog("[]"), /must be an object/);
+  assert.deepEqual(parseLegacyPyashWords("si\tinfinitive\ntsin\tneedle\n").entries, [
+    { pya: "si", en: "infinitive" },
+    { pya: "tsin", en: "needle" }
+  ]);
+  assert.throws(() => parseLegacyPyashWords("malformed"), /malformed/);
 });
 
 test("atom proposal reports a bounded missing-phonetic state", () => {
@@ -108,6 +115,33 @@ test("real pyachso2n sources produce a non-overlapping proposal", async () => {
   assert.equal(Object.keys(proposal.layerSourceHashes).length, 5);
   assert.ok(!pyashWords.some((entry) => entry.pya === proposal.selected.word));
   assert.ok(!pyashWords.some((entry) => {
+    try {
+      return Number.parseInt(entry.hnuc, 16) === proposal.selected.hnuc;
+    } catch {
+      return false;
+    }
+  }));
+});
+
+test("grammar word proposal reuses source phonetics without colliding with the lexical root", async () => {
+  const inputs = await loadAtomWordGenerationInputs();
+  const existingEntries = pyashWords.filter((entry) => entry.en !== "example_");
+  const proposal = buildGrammarWordProposal({
+    concept: "example_",
+    sourceConcept: "example",
+    ...inputs,
+    existingEntries
+  });
+  assert.equal(proposal.category, "grammar");
+  assert.equal(proposal.concept, "example_");
+  assert.equal(proposal.sourceConcept, "example");
+  assert.equal(proposal.status, "candidate");
+  assert.equal(proposal.reservedWordSourceHash.length, 64);
+  assert.ok(proposal.selected.word);
+  assert.equal(proposal.selected.word, "tfum");
+  assert.notEqual(proposal.selected.word, "tsin");
+  assert.ok(!existingEntries.some((entry) => entry.pya === proposal.selected.word));
+  assert.ok(!existingEntries.some((entry) => {
     try {
       return Number.parseInt(entry.hnuc, 16) === proposal.selected.hnuc;
     } catch {

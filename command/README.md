@@ -25,6 +25,8 @@ Utility scripts for working with Pyash from the shell:
 - `list_pyash_words.mjs` — print a comma-separated list of English entries from `pyashWords.json`.
 - `anchor_words_add.mjs --anchor <name> --form <text> --role <role>` — append a new anchor word mapping to `anchor_words.pya`.
 - `vocab_suggest.mjs "word"` — check a proposed token/phrase; pass a file/dir to scan `.pya` files.
+- `vocab_atom_suggest.mjs "concept"` — propose a non-overlapping lexical atom from weighted phonetic evidence.
+- `vocab_grammar_suggest.mjs "concept"` — propose a non-overlapping trailing-underscore grammar word from the same evidence.
 - `english30k_coverage.mjs [summary|covered|unresolved|candidates|pya]` — measure ranked Gutenberg English30k coverage against executable Pyash atoms, aliases, grammar mappings, and accepted compounds; `candidates` emits bounded compound candidates for the existing verifier.
 - `english30k_coverage_verify.mjs [summary|pya] [mind] [output.pya]` — verify English30k compound candidates through the existing queued GPU/housekeeper mind path.
 - `translate_document.mjs <language> <source.txt> <translation.pya> <catalog.pya> <pack.pyac>` — preserve sentence-level translation evidence, submit unresolved vocabulary through the existing future GPU mind queue, and lower resolved canonical Pyash sentences through the existing Pyac database path.
