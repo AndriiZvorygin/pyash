@@ -42,7 +42,7 @@ export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
           status: { type: "string", enum: ["accept", "reject", "uncertain"] },
           target: { type: "string" },
           pyashSequence: { type: "array", items: { type: "string" } },
-          rationale: { type: "string" }
+          rationale: { type: "string", maxLength: 120 }
         }
       }
     }
@@ -132,7 +132,9 @@ function prioritizedInventoryEntries(entries, records) {
 
 function outputFits(records, maxOutputTokens) {
   const fixedOutputTokens = 256;
-  const perSenseTokens = 256;
+  // Qwen can spend more tokens than the compact contract suggests on a rationale.
+  // Keep batches conservative so one malformed long row cannot consume the whole response.
+  const perSenseTokens = 512;
   return fixedOutputTokens + (records.length * perSenseTokens) < maxOutputTokens;
 }
 
@@ -401,7 +403,8 @@ export function buildEnglishWordNetSenseLinkPrompt({
   source = "Open English WordNet",
   context = [],
   maxChars = ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS,
-  maxTokens = ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS
+  maxTokens = ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS,
+  repairReason = ""
 } = {}) {
   if (!Array.isArray(records) || records.length === 0) {
     throw invalid("WordNet linker prompt requires sense records");
@@ -427,6 +430,10 @@ export function buildEnglishWordNetSenseLinkPrompt({
     '{"verdict":"complete|partial|uncertain","senses":[{"id":"...","status":"accept|reject|uncertain","target":"...","pyashSequence":["..."],"rationale":"..."}]}',
     "Include exactly one result for every supplied sense id. Never return an empty senses array.",
     "For reject or uncertain, omit target and pyashSequence.",
+    ...(text(repairReason) ? [
+      `AUTOMATIC CONTRACT REPAIR: ${bounded(repairReason, 300)}`,
+      "Return every supplied sense id exactly once, and include target plus pyashSequence for every accepted row."
+    ] : []),
     `SOURCE: ${text(source) || "Open English WordNet"}`,
     "Sense rows use id, p=part of speech, g=gloss, l=lemmas, c=deterministic candidates.",
     "AUTHORITATIVE PYASH ATOM AND COMPOUND INVENTORY (English gloss -> Pyash token):",
@@ -596,7 +603,12 @@ function providerResponseText(value) {
   return raw;
 }
 
-export function parseEnglishWordNetSenseLinkResponse(value, { records = [], inventory } = {}) {
+export function parseEnglishWordNetSenseLinkResponse(value, {
+  records = [],
+  inventory,
+  requireComplete = false,
+  recoverRows = false
+} = {}) {
   const raw = providerResponseText(value);
   const payload = extractBoundedJsonObject(raw);
   if (!payload) return { valid: false, reason: "response did not contain one bounded JSON object" };
@@ -619,13 +631,32 @@ export function parseEnglishWordNetSenseLinkResponse(value, { records = [], inve
     if (!LINK_STATUSES.has(status)) return { valid: false, reason: "sense status must be accept, reject, or uncertain" };
     const rationale = text(row?.rationale);
     if (!rationale) return { valid: false, reason: "sense rationale is empty" };
-    if (rationale.length > MAX_RATIONALE_CHARS) return { valid: false, reason: "sense rationale exceeds the bounded limit" };
+    if (rationale.length > MAX_RATIONALE_CHARS && !recoverRows) {
+      return { valid: false, reason: "sense rationale exceeds the bounded limit" };
+    }
+    const boundedRationale = bounded(rationale, MAX_RATIONALE_CHARS);
     if (status === "accept") {
       const target = normalized(row?.target);
       const pyashSequence = sequence(row?.pyashSequence);
-      if (!target || pyashSequence.length === 0) return { valid: false, reason: "accepted sense requires target and Pyash sequence" };
+      if (!target || pyashSequence.length === 0) {
+        if (!recoverRows) return { valid: false, reason: "accepted sense requires target and Pyash sequence" };
+        links.push({
+          id,
+          status: "uncertain",
+          rationale: `automatic safe downgrade: ${bounded(boundedRationale, MAX_RATIONALE_CHARS - 28)}`
+        });
+        continue;
+      }
       const match = inventoryMatch({ target, pyashSequence, record: byId.get(id), inventory });
-      if (!match) return { valid: false, reason: "accepted sense target is outside the supplied inventory" };
+      if (!match) {
+        if (!recoverRows) return { valid: false, reason: "accepted sense target is outside the supplied inventory" };
+        links.push({
+          id,
+          status: "uncertain",
+          rationale: `automatic safe downgrade: ${boundedRationale}`
+        });
+        continue;
+      }
       links.push({
         id,
         status,
@@ -633,12 +664,15 @@ export function parseEnglishWordNetSenseLinkResponse(value, { records = [], inve
         pyashSequence,
         targetPartOfSpeech: byId.get(id).pos,
         certainty: "contextual",
-        rationale,
-        evidence: `Housekeeper WordNet sense link: ${rationale}`
+        rationale: boundedRationale,
+        evidence: `Housekeeper WordNet sense link: ${boundedRationale}`
       });
     } else {
-      links.push({ id, status, rationale });
+      links.push({ id, status, rationale: boundedRationale });
     }
+  }
+  if (requireComplete && seen.size !== records.length) {
+    return { valid: false, reason: "response did not contain one decision for every supplied sense id" };
   }
   return { valid: true, verdict, links, raw };
 }
@@ -676,6 +710,121 @@ export function applyEnglishWordNetSenseLinkResponse(records, response) {
     rejected: updated.filter((record) => record.status === "rejected-llm"),
     uncertain: updated.filter((record) => record.status === "uncertain-llm" || record.status === "review")
   };
+}
+
+export async function reconcileEnglishWordNetSenseLinks({
+  records = [],
+  inventory,
+  sourceHash,
+  context = [],
+  source = "Open English WordNet",
+  maxChars = ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS,
+  maxTokens = ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS,
+  maxOutputTokens = ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS,
+  queues = [],
+  awaitHandle,
+  submit,
+  maxRepairAttempts = 1
+} = {}) {
+  if (!Array.isArray(records)) throw invalid("WordNet linker reconciliation requires records");
+  if (!Array.isArray(queues) || queues.length === 0) return { records: [...records], queues: [] };
+  if (typeof awaitHandle !== "function") throw invalid("WordNet linker reconciliation requires an await function");
+  if (typeof submit !== "function") throw invalid("WordNet linker reconciliation requires a submit function");
+  const repairLimit = Math.min(1, Math.max(0, Math.trunc(Number(maxRepairAttempts) || 0)));
+  let current = records.map((record) => ({ ...record }));
+  const reconciledQueues = [];
+  for (const queue of queues) {
+    const batch = current.filter((record) => record.queue?.handleId === queue.handleId);
+    if (batch.length === 0) continue;
+    let queueState = { ...queue };
+    let attempt = 1;
+    let raw = await awaitHandle(queue.handleId);
+    let response = parseEnglishWordNetSenseLinkResponse(raw, {
+      records: batch,
+      inventory,
+      requireComplete: true
+    });
+    while (!response.valid && attempt <= repairLimit) {
+      attempt += 1;
+      const repairHandleId = wordNetSenseLinkQueueHandle({ sourceHash, records: batch, attempt });
+      const repairPrompt = buildEnglishWordNetSenseLinkPrompt({
+        records: batch,
+        inventory,
+        source,
+        context,
+        maxChars,
+        maxTokens,
+        repairReason: response.reason
+      });
+      const queued = await submit({
+        handleId: repairHandleId,
+        prompt: repairPrompt,
+        candidates: batch,
+        inventory,
+        sourceHash,
+        maxOutputTokens
+      });
+      const status = text(queued?.status || queued?.ob?.text).toLowerCase();
+      if (status !== "queued") {
+        response = { valid: false, reason: `automatic repair queue submission failed for ${repairHandleId}` };
+        break;
+      }
+      queueState = { ...queueState, repairHandleId };
+      raw = await awaitHandle(repairHandleId);
+      response = parseEnglishWordNetSenseLinkResponse(raw, {
+        records: batch,
+        inventory,
+        requireComplete: true
+      });
+    }
+    let recovered = false;
+    if (!response.valid) {
+      const safeResponse = parseEnglishWordNetSenseLinkResponse(raw, {
+        records: batch,
+        inventory,
+        recoverRows: true
+      });
+      if (safeResponse.valid && safeResponse.links.length > 0) {
+        response = { ...safeResponse, recovered: true };
+        recovered = true;
+      }
+    }
+    if (response.valid) {
+      current = applyEnglishWordNetSenseLinkResponse(current, response).records;
+      if (recovered) {
+        const linked = new Set(response.links.map((link) => link.id));
+        current = current.map((record) => batch.some((candidate) => candidate.id === record.id) && !linked.has(record.id)
+          ? {
+            ...record,
+            status: "uncertain-llm",
+            verificationAttempts: attempt,
+            verificationRationale: "automatic row recovery found no decision for this sense"
+          }
+          : record);
+      }
+    } else {
+      current = current.map((record) => batch.some((candidate) => candidate.id === record.id)
+        ? {
+          ...record,
+          status: "uncertain-llm",
+          verificationAttempts: attempt,
+          verificationRationale: `automatic model-response repair exhausted: ${response.reason}`
+        }
+        : record);
+    }
+    const outcome = response.valid ? (recovered ? "partial" : "applied") : "uncertain";
+    current = current.map((record) => batch.some((candidate) => candidate.id === record.id)
+      ? { ...record, queue: { ...record.queue, ...queueState, status: "complete", outcome } }
+      : record);
+    reconciledQueues.push({
+      ...queueState,
+      status: "complete",
+      outcome,
+      verificationAttempts: attempt,
+      ...(response.valid ? {} : { reason: response.reason })
+    });
+  }
+  return { records: current, queues: reconciledQueues };
 }
 
 function renderTargetName(value) {

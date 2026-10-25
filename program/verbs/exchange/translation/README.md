@@ -91,23 +91,30 @@ node command/translate_document.mjs english source.txt translation.pya catalog.p
 ```
 
 The command automatically submits one deduplicated vocabulary-review duty through the existing
-`vyah start future be gpu mind do` path. The returned handle and candidate queue state are written
-into the translation catalog. The translation catalog remains the evidence record. Only resolved
-canonical sentences are passed to Pyac lowering; unresolved vocabulary stays available for later
-catalog expansion. The queued LLM receives a bounded slice of `pyashWords.json` plus the grammar
-catalog, returns schema-constrained review evidence, and never edits the lexicon directly. A
-worker result is durable at the returned GPU handle; accepting it into the lexicon remains a
-separate evidence-backed catalog change.
+`vyah start future be gpu mind do` path and awaits that same handle through the bounded GPU await
+path. The returned handle, repair handle (when needed), decision, and candidate queue state are
+written into the translation catalog. The translation catalog remains the evidence record. A
+malformed, incomplete, or ungrounded response gets one automatic repair submission through the
+same queue; if repair still fails, valid inventory-backed rows are retained and malformed rows
+receive a durable `uncertain-llm` outcome rather than waiting for a human approval step. Accepted
+model decisions apply existing inventory-backed sequences to the document's provisional records and
+still never edit the lexicon directly. Only resolved canonical sentences are passed to Pyac lowering;
+machine-uncertain vocabulary stays available as explicit evidence for a later refinery run.
 
 For English documents, the command also runs the standard WordNet refinery before vocabulary
 review. It records one stable row per encountered unresolved WordNet sense, accepts only
 existing-atom or accepted-compound leaf/edge links deterministically, and submits the remaining
 ambiguous senses through the same durable Housekeeper queue. The refinery includes bounded source
 context for unresolved terms, so one duty can cover a paragraph without making one mind call per
-sense. The refinery evidence and each `english-wordnet-link-*` handle are stored under
-`wordnet-refinery` in the translation `.pya` catalog. A queued sense decision remains review
-evidence until a bounded response is accepted into `english_wordnet_bridges.pya`; the current
-run never invents a lexical word or applies an ambiguous sense silently.
+sense. Conservative output budgeting keeps each batch small enough for complete decision rows. The
+direct document command awaits each duty, gives malformed or incomplete output one automatic repair
+through the same queue, and then applies complete inventory-backed rows; bounded row recovery keeps
+valid rows and marks malformed rows `uncertain-llm` when a repaired batch is still partial.
+The refinery evidence, repair handles, outcomes, and each `english-wordnet-link-*` handle are
+stored under `wordnet-refinery` in the translation `.pya` catalog. A failed repair becomes explicit
+`uncertain-llm` evidence; the run never invents a lexical word or silently turns an unsupported
+model response into a mapping. The native bridge catalog remains the durable curated lexicon, while
+the document catalog records automatic model decisions without requiring a human in the loop.
 
 To regenerate the English pairs from `examples/pyash/*.pya`:
 

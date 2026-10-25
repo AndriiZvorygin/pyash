@@ -5,6 +5,7 @@ import {
   buildEnglishWordNetSenseLinkInventory,
   buildEnglishWordNetSenseLinkRecords,
   loadEnglishWordNetLinkerConfig,
+  reconcileEnglishWordNetSenseLinks,
   submitEnglishWordNetSenseLinks
 } from "./english_wordnet_linker.mjs";
 import { lookupEnglish30kCoverage } from "./english30k_coverage.mjs";
@@ -97,7 +98,9 @@ export async function refineEnglishWordNet({
   resources = null,
   config = null,
   compoundRecords = [],
-  sourceTerms = null
+  sourceTerms = null,
+  awaitHandle = null,
+  maxRepairAttempts = 1
 } = {}) {
   if (!result || typeof result !== "object" || text(result.language) !== "english") {
     throw invalid("WordNet refinery requires an English translation result");
@@ -144,7 +147,22 @@ export async function refineEnglishWordNet({
       submit
     })
     : null;
-  const refinedRecords = queued?.records ?? records;
+  const reconciled = queued && typeof awaitHandle === "function"
+    ? await reconcileEnglishWordNetSenseLinks({
+      records: queued.records,
+      inventory,
+      sourceHash: text(result.sourceHash),
+      context,
+      maxChars: linkerConfig.promptMaxChars,
+      maxTokens: linkerConfig.promptMaxTokens,
+      maxOutputTokens: linkerConfig.maxOutputTokens,
+      queues: queued.queues,
+      awaitHandle,
+      submit,
+      maxRepairAttempts
+    })
+    : null;
+  const refinedRecords = reconciled?.records ?? queued?.records ?? records;
   return {
     format: ENGLISH_WORDNET_REFINERY_FORMAT,
     sourceHash: text(result.sourceHash),
@@ -153,9 +171,10 @@ export async function refineEnglishWordNet({
     context,
     counts: counts(refinedRecords),
     inventoryCount: inventory.entries.length,
-    queue: queued?.queue ?? null,
-    queues: queued?.queues ?? [],
+    queue: reconciled?.queues?.length === 1 ? reconciled.queues[0] : queued?.queue ?? null,
+    queues: reconciled?.queues ?? queued?.queues ?? [],
+    reconciliation: reconciled?.queues ?? [],
     queueHandle: queued?.handleId ?? null,
-    queuePending: queued?.pending?.length ?? refinedRecords.filter((record) => !accepted(record.status)).length
+    queuePending: refinedRecords.filter((record) => !accepted(record.status)).length
   };
 }

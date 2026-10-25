@@ -265,9 +265,14 @@ and provider context values are durable in
 `program/verbs/exchange/translation/translation_model_cards.pya`; the Qwen3.5 9B card declares
 32,768 context tokens, a 3,900-token safe input budget, and an 8,192-token safe output budget.
 This keeps requests within the rough input budget without truncating ids or exhausting the
-response before every sense decision is returned. The `wordnet-refinery` row in the translation
-`.pya` catalog preserves the sense batches and queue handles without silently promoting a model
-decision into the vocabulary.
+response before every sense decision is returned. Conservative output budgeting keeps each batch
+small enough for complete decision rows. The direct document command awaits each queued duty and
+gives malformed or incomplete output one automatic repair through the same queue. Complete
+inventory-backed rows are applied automatically; bounded row recovery keeps valid rows and marks
+malformed rows `uncertain-llm` when a repaired batch is still partial. An exhausted repair becomes
+explicit `uncertain-llm` evidence, so this refinery has no human approval gate. The `wordnet-refinery` row
+in the translation `.pya` catalog preserves the sense batches, queue handles, repair handles,
+decisions, and outcomes without inventing vocabulary or creating a parallel transcript.
 
 Closed-word review also carries morphology metadata from
 `program/verbs/exchange/translation/compound_morphology.pya` and the
