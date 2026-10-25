@@ -91,7 +91,10 @@ npm run quiz
 node --test quiz
 ```
 
-`npm test` runs the full quiz suite via `node --test`.
+`npm test` runs the root quiz suite and automatically discovers reporter-house tests
+when those house checkouts are present under `world/house/`. A checkout without a
+house simply has no house tests to discover. Use `PYASH_INCLUDE_HOUSE_TESTS=0 npm test`
+for a root-only run; `npm run test:houses` is an explicit house-inclusive alias.
 
 ## Quick Start
 
