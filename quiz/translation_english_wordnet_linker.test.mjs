@@ -205,6 +205,20 @@ test("WordNet linker extracts the nested response from an Ollama envelope", () =
   assert.equal(response.links[0].target, "emotionally");
 });
 
+test("WordNet linker rejects an empty completed provider response", () => {
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  });
+  const response = parseEnglishWordNetSenseLinkResponse(
+    JSON.stringify({ verdict: "complete", senses: [] }),
+    { records, inventory: { entries: [], grammar: [] } }
+  );
+  assert.equal(response.valid, false);
+  assert.equal(response.reason, "response senses must contain at least one decision");
+});
+
 test("WordNet linker configuration is durable Pyash workflow data", async () => {
   const config = await loadEnglishWordNetLinkerConfig();
   assert.deepEqual(config, {

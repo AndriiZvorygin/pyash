@@ -21,10 +21,11 @@ export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   properties: {
     verdict: { type: "string", enum: ["complete", "partial", "uncertain"] },
     senses: {
+      minItems: 1,
       type: "array",
       items: {
         type: "object",
-        required: ["id", "status", "target", "pyashSequence", "rationale"],
+        required: ["id", "status", "rationale"],
         additionalProperties: false,
         properties: {
           id: { type: "string" },
@@ -269,7 +270,7 @@ export function buildEnglishWordNetSenseLinkPrompt({
     "A link selects an existing atom, accepted compound, or accepted lexical mapping; it does not create vocabulary.",
     "Return exactly one JSON object with this shape:",
     '{"verdict":"complete|partial|uncertain","senses":[{"id":"...","status":"accept|reject|uncertain","target":"...","pyashSequence":["..."],"rationale":"..."}]}',
-    "Include at most one result for each supplied sense id.",
+    "Include exactly one result for every supplied sense id. Never return an empty senses array.",
     `SOURCE: ${text(source) || "Open English WordNet"}`,
     "AUTHORITATIVE PYASH ATOM AND COMPOUND INVENTORY:",
     inventory.entries.map(JSON.stringify).join("\n"),
@@ -369,6 +370,9 @@ export function parseEnglishWordNetSenseLinkResponse(value, { records = [], inve
     return { valid: false, reason: "response verdict must be complete, partial, or uncertain" };
   }
   if (!Array.isArray(payload.senses)) return { valid: false, reason: "response senses must be an array" };
+  if (records.length > 0 && payload.senses.length === 0) {
+    return { valid: false, reason: "response senses must contain at least one decision" };
+  }
   const byId = new Map(records.map((record) => [record.id, record]));
   const seen = new Set();
   const links = [];
