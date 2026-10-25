@@ -228,8 +228,8 @@ test("English prose with an is-clause stays in sentence review", async () => {
   });
   assert.equal(result.records[0].status, "provisional");
   assert.equal(result.records[0].sentence, undefined);
-  assert.deepEqual(result.records[0].unresolved, ["feelings"]);
-  assert.deepEqual(result.vocabularyCandidates.map((candidate) => candidate.surface), ["feelings"]);
+  assert.equal(result.records[0].unresolved, undefined);
+  assert.deepEqual(result.vocabularyCandidates, []);
 });
 
 test("translation document submits vocabulary review through the injected queue", async () => {

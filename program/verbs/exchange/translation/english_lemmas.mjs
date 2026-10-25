@@ -85,6 +85,9 @@ function normalizeEntry(payload, surface, index) {
     throw invalid("English lemma row rule must be text", { index, surface });
   }
   const morphology = normalizeMorphology(payload.morphology, normalizedSurface, index);
+  const pyashSequence = payload.pyashSequence === undefined
+    ? []
+    : normalizePyashSequence(payload.pyashSequence, normalizedSurface, index);
   const grammaticalNumber = payload.grammaticalNumber === undefined
     ? ""
     : String(payload.grammaticalNumber).trim().toLowerCase();
@@ -99,10 +102,18 @@ function normalizeEntry(payload, surface, index) {
     status,
     rule: payload.rule?.trim() ?? "",
     evidence: payload.evidence.trim(),
+    ...(pyashSequence.length > 0 ? { pyashSequence } : {}),
     ...(morphology ? { morphology } : {}),
     ...(grammaticalNumber ? { grammaticalNumber } : {}),
     ...(Number.isInteger(payload.rank) ? { rank: payload.rank } : {})
   };
+}
+
+function normalizePyashSequence(payload, surface, index) {
+  if (!Array.isArray(payload)) throw invalid("English lemma Pyash sequence must be a vector", { index, surface });
+  const sequence = payload.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim());
+  if (sequence.length === 0) throw invalid("English lemma Pyash sequence must contain a word", { index, surface });
+  return sequence;
 }
 
 function normalizeMorphology(payload, surface, index) {
@@ -260,6 +271,7 @@ function addExplicitRows(lookup, entries, atomicLookup, aliases) {
       status: entry.status,
       rule: entry.rule,
       evidence: entry.evidence,
+      ...(entry.pyashSequence ? { pyashSequence: [...entry.pyashSequence] } : {}),
       ...(entry.morphology ? {
         morphology: {
           ...entry.morphology,
@@ -385,6 +397,7 @@ export function renderEnglishLemmaCatalogPya({ source, entries }, {
         status: entry.status ?? "accepted-deterministic",
         ...(entry.rule ? { rule: entry.rule } : {}),
         ...(entry.morphology ? { morphology: entry.morphology } : {}),
+        ...(entry.pyashSequence ? { pyashSequence: entry.pyashSequence } : {}),
         ...(entry.grammaticalNumber ? { grammaticalNumber: entry.grammaticalNumber } : {}),
         evidence: entry.evidence ?? ""
       }))} ya`),

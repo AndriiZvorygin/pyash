@@ -306,6 +306,31 @@ test("durable lemma morphology keeps lexical roots separate from particles", asy
   assert.equal(index.resolve("walking")?.morphology?.certainty, "contextual");
 });
 
+test("lemma equivalence can carry an explicit Pyash grammar suffix", () => {
+  const index = buildEnglishLemmaIndex({
+    atomicEntries: [{ en: "emotionally", pya: "xyek" }],
+    catalogEntries: [{
+      surface: "emotional",
+      lemma: "emotion",
+      canonicalEnglish: "emotionally",
+      pyashSequence: ["xyek", "ci"],
+      kind: "anchor",
+      status: "accepted-curated",
+      evidence: "fixture adjective equivalence"
+    }]
+  });
+  assert.deepEqual(index.resolve("emotional")?.pyashSequence, ["xyek", "ci"]);
+  assert.throws(
+    () => parseEnglishLemmaCatalog([
+      "su name translation_english30k_lemmas be map def",
+      "su text \"format\" ob text \"english-lemma-v1\" ya",
+      "su text \"emotion\" ob text \"{\\\"surface\\\":\\\"emotion\\\",\\\"lemma\\\":\\\"emotion\\\",\\\"kind\\\":\\\"anchor\\\",\\\"pyashSequence\\\":\\\"xyek\\\",\\\"evidence\\\":\\\"fixture\\\"}\" ya",
+      "prah"
+    ].join("\\n")),
+    (error) => error.code === "invalid-english-lemma"
+  );
+});
+
 test("dictionary blacklist aliases accept only one existing Pyash target", () => {
   const dictionary = parseEnglishDictionaryBlacklist({
     en: {
