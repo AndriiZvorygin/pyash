@@ -93,6 +93,15 @@ catalog, returns schema-constrained review evidence, and never edits the lexicon
 worker result is durable at the returned GPU handle; accepting it into the lexicon remains a
 separate evidence-backed catalog change.
 
+For English documents, the command also runs the standard WordNet refinery before vocabulary
+review. It records one stable row per encountered unresolved WordNet sense, accepts only
+existing-atom or accepted-compound leaf/edge links deterministically, and submits the remaining
+ambiguous senses through the same durable Housekeeper queue. The refinery evidence and
+`english-wordnet-link-*` handle are stored under `wordnet-refinery` in the translation `.pya`
+catalog. A queued sense decision remains review evidence until a bounded response is accepted
+into `english_wordnet_bridges.pya`; the current run never invents a lexical word or applies an
+ambiguous sense silently.
+
 To regenerate the English pairs from `examples/pyash/*.pya`:
 
 ```

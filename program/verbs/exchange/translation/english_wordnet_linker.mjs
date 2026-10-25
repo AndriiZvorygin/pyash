@@ -61,6 +61,19 @@ function normalized(value) {
   return text(value).toLowerCase().replace(/[ _-]+/gu, " ").replace(/\s+/gu, " ");
 }
 
+function termVariants(value) {
+  const word = normalized(value);
+  if (!word) return [];
+  const variants = new Set([word]);
+  if (word.endsWith("ies")) variants.add(`${word.slice(0, -3)}y`);
+  if (word.endsWith("ves")) variants.add(`${word.slice(0, -3)}f`).add(`${word.slice(0, -3)}fe`);
+  if (word.endsWith("es")) variants.add(word.slice(0, -2)).add(word.slice(0, -1));
+  if (word.endsWith("s")) variants.add(word.slice(0, -1));
+  if (word.endsWith("ing")) variants.add(word.slice(0, -3)).add(`${word.slice(0, -3)}e`);
+  if (word.endsWith("ed")) variants.add(word.slice(0, -2));
+  return [...variants].filter((variant) => variant.length > 1);
+}
+
 function hash(value) {
   return createHash("sha256").update(String(value ?? "")).digest("hex");
 }
@@ -94,13 +107,12 @@ function candidateId(record, target, pyashSequence) {
 
 function sourceTermSet(sourceTerms) {
   return new Set((Array.isArray(sourceTerms) ? sourceTerms : sourceTerms ? [sourceTerms] : [])
-    .map(normalized)
-    .filter(Boolean));
+    .flatMap(termVariants));
 }
 
 function sourceMatches(lemmas, terms) {
   if (terms.size === 0) return true;
-  return lemmas.some((lemma) => terms.has(normalized(lemma)));
+  return lemmas.some((lemma) => termVariants(lemma).some((variant) => terms.has(variant)));
 }
 
 function bridgeFor(wordnetIndex, source, resolveWord) {

@@ -385,6 +385,7 @@ export function renderTranslationPipelinePya(result, { name = TRANSLATION_PIPELI
     pyaRow("resource-hashes", result.resourceHashes ?? {}),
     pyaRow("locator", result.locator),
     pyaRow("source-length", result.sourceLength),
+    ...(result.wordnet ? [pyaRow("wordnet-refinery", result.wordnet)] : []),
     ...result.records.map((record) => pyaRow(`record:${record.id}`, record)),
     ...result.vocabularyCandidates.map((candidate) => pyaRow(`vocabulary:${candidate.id}`, candidate)),
     "prah"
@@ -421,6 +422,7 @@ export function parseTranslationPipelinePya(source, { name = TRANSLATION_PIPELIN
     resourceHashes: metadata["resource-hashes"] ?? {},
     locator: metadata.locator,
     sourceLength: metadata["source-length"],
+    wordnet: metadata["wordnet-refinery"] ?? null,
     records,
     vocabularyCandidates
   };
