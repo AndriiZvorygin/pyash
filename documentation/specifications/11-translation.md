@@ -26,6 +26,16 @@ to supplied candidate ids. The English `such as` surface is classified as an
 `exemplifier` construction, a subtype of `exemplification`; its Pyash sequence remains
 unresolved until the grammar inventory supplies an authoritative token.
 
+For a lexical gap that needs a new atomic Pyac word, the read-only atom proposal
+path in `atom_word_generation.mjs` reuses the historical
+`pyachso2n/rootWordPhon.js` method. It combines multilingual phonetic evidence
+with the source `NativeWeights`, ranks generated root candidates, and selects
+the first free word from the 16, 19, 24, 28, and 32 glyph inventories. The
+current Pyash vocabulary reserves both word spellings and encoded HNUCs before
+selection. English30k rank is retained as concept evidence and batch order;
+the phonetic profile supplies the candidate score. A proposal is evidence for
+review and does not mutate `pyashWords.json`.
+
 ---
 
 ## 2. Translation verb (normative)

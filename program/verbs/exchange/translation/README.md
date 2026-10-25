@@ -77,3 +77,29 @@ quoted text literal. Vocative phrases render as an address prefix (`O ...`);
 the remaining case inventory is derived from the vocabulary's `_case_` entries.
 The `translation` verb accepts `from state pyac` with `to state pyash` or
 `to state english`; unknown or unsegmentable Pyac tokens remain hard errors.
+
+## Atom word proposals
+
+`atom_word_generation.mjs` adapts the original `pyachso2n/rootWordPhon.js`
+allocation method to one concept at a time. It loads the existing multilingual
+phonetic catalog, applies the source `NativeWeights` profile, builds the same
+weighted CV/CCV(C) root candidates, and selects the first candidate available
+in the cumulative 16/19/24/28/32 glyph inventories. Existing Pyash words and
+their algorithmically encoded HNUCs are reserved before selection, so a
+proposal stays non-overlapping with the checked-in vocabulary.
+
+English30k rank and frequency remain attached as concept evidence. They order a
+larger generation batch; the phonetic profile determines the candidate word.
+The proposal command is read-only and emits evidence rather than editing
+`pyashWords.json`:
+
+```
+node command/vocab_atom_suggest.mjs blueprint
+```
+
+The command uses `pyachso2n/phonetics.json.txt`, `pyachso2n/English30k.txt`,
+and the five `*GlyphWordList.txt` files. A concept absent from the phonetic
+catalog returns `missing-phonetic-evidence`, preserving the deterministic
+boundary instead of inventing a pronunciation. The durable workflow facts are
+recorded in `atom_word_generation.pya`; `renderAtomWordProposalPya` can place a
+proposal into a parser-readable evidence map for later review.

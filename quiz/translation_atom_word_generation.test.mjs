@@ -1,0 +1,118 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
+import {
+  buildAtomWordProposal,
+  buildWeightedPhoneticProfile,
+  loadAtomWordGenerationInputs,
+  normalizeIpaToLayer,
+  parseAtomWordLists,
+  parsePhoneticCatalog
+} from "../program/verbs/exchange/translation/atom_word_generation.mjs";
+
+test("atom phonetic projection follows the cumulative glyph layers", () => {
+  assert.equal(normalizeIpaToLayer(" lˈʌv\n", 16), "luw");
+  assert.equal(normalizeIpaToLayer(" lˈʌv\n", 19), "low");
+  assert.equal(normalizeIpaToLayer(" lˈʌv\n", 24), "low");
+  assert.equal(normalizeIpaToLayer(" lˈʌv\n", 28), "lov");
+  assert.equal(normalizeIpaToLayer(" lˈʌv\n", 32), "lov");
+});
+
+test("atom phonetic profile keeps source language order and weighted evidence", () => {
+  const profile = buildWeightedPhoneticProfile({
+    en: "mas",
+    zh: "mas"
+  }, { layer: 16, weights: { en: 2, zh: 3 } });
+  assert.deepEqual(profile.languages, ["en", "zh"]);
+  assert.equal(profile.profile.initialConsonants.m, 5);
+  assert.equal(profile.profile.vowels.a, 5);
+  assert.equal(profile.profile.finalConsonants.s, 5);
+});
+
+test("atom proposal is deterministic and reserves an existing word", () => {
+  const phonetics = parsePhoneticCatalog(JSON.stringify({ Xmyas: { en: "myas" } }));
+  const wordLists = { words: { 16: "hmis\nhmas\n", 19: "", 24: "", 28: "", 32: "" } };
+  const frequency = { rows: [{ rank: 3, word: "myas", normalizedWord: "myas", score: 99 }] };
+  const options = {
+    concept: "myas",
+    phonetics,
+    frequency,
+    wordLists,
+    existingEntries: [],
+    minLayer: 16,
+    maxLayer: 16,
+    weights: { en: 2 },
+    candidateLimit: 2
+  };
+  const first = buildAtomWordProposal(options);
+  const second = buildAtomWordProposal(options);
+  assert.deepEqual(first, second);
+  assert.equal(first.status, "candidate");
+  assert.equal(first.selected.word, "hmis");
+  assert.equal(first.selected.layer, 16);
+  assert.equal(first.frequency.rank, 3);
+  const reserved = buildAtomWordProposal({ ...options, existingEntries: [{ en: "old", pya: "hmis" }] });
+  assert.equal(reserved.status, "candidate");
+  assert.equal(reserved.selected.word, "hmas");
+});
+
+test("atom proposal rejects an algorithmic HNUC collision", () => {
+  const phonetics = parsePhoneticCatalog(JSON.stringify({ Xmas: { en: "mas" } }));
+  const proposal = buildAtomWordProposal({
+    concept: "mas",
+    phonetics,
+    frequency: { rows: [] },
+    wordLists: { words: { 16: "hmas\n", 19: "", 24: "", 28: "", 32: "" } },
+    existingEntries: [{ en: "occupied", pya: "hmaz" }],
+    minLayer: 16,
+    maxLayer: 16,
+    weights: { en: 1 }
+  });
+  assert.equal(proposal.status, "no-non-overlapping-candidate");
+  assert.equal(proposal.rejectedHnuc, 1);
+});
+
+test("atom source parsers reject duplicate layer words and malformed phonetics", () => {
+  assert.throws(
+    () => parseAtomWordLists({ 16: "hmas\nhmas\n", 19: "", 24: "", 28: "", 32: "" }),
+    /duplicate/
+  );
+  assert.throws(() => parsePhoneticCatalog("[]"), /must be an object/);
+});
+
+test("atom proposal reports a bounded missing-phonetic state", () => {
+  const proposal = buildAtomWordProposal({
+    concept: "unlisted",
+    phonetics: parsePhoneticCatalog(JSON.stringify({ Xknown: { en: "mas" } })),
+    frequency: { rows: [{ rank: 1, normalizedWord: "unlisted", score: 1 }] },
+    wordLists: { words: { 16: "", 19: "", 24: "", 28: "", 32: "" } },
+    existingEntries: []
+  });
+  assert.equal(proposal.status, "missing-phonetic-evidence");
+  assert.equal(proposal.frequency.rank, 1);
+});
+
+test("real pyachso2n sources produce a non-overlapping proposal", async () => {
+  const inputs = await loadAtomWordGenerationInputs();
+  const proposal = buildAtomWordProposal({
+    concept: "blueprint",
+    ...inputs,
+    existingEntries: pyashWords
+  });
+  assert.equal(proposal.status, "candidate");
+  assert.equal(proposal.frequency.rank, 28770);
+  assert.ok(proposal.selected.word);
+  assert.equal(proposal.phoneticSourceHash.length, 64);
+  assert.equal(proposal.frequencySourceHash.length, 64);
+  assert.equal(Object.keys(proposal.layerSourceHashes).length, 5);
+  assert.ok(!pyashWords.some((entry) => entry.pya === proposal.selected.word));
+  assert.ok(!pyashWords.some((entry) => {
+    try {
+      return Number.parseInt(entry.hnuc, 16) === proposal.selected.hnuc;
+    } catch {
+      return false;
+    }
+  }));
+});
+
