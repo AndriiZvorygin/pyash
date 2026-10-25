@@ -103,6 +103,13 @@ function wordNetLookupVariants(surface) {
   ].filter((value, index, values) => value.length > 1 && values.indexOf(value) === index);
 }
 
+function wordNetTerms(value) {
+  return wordNetLookupVariants(value)
+    .flatMap((variant) => variant.split(/\s+/u))
+    .map((term) => term.replace(/^[^a-z0-9]+|[^a-z0-9]+$/giu, ""))
+    .filter((term) => term.length > 2);
+}
+
 function wordNetMetadata(surface, wordnetIndex) {
   if (!wordnetIndex?.lookup) return null;
   const variants = wordNetLookupVariants(surface);
@@ -137,10 +144,8 @@ function wordNetContextTerms(records, index) {
     if (contextIndex === index) continue;
     const record = records[contextIndex];
     for (const value of [record?.surface, record?.lemma]) {
-      for (const variant of wordNetLookupVariants(value)) {
-        for (const term of variant.split(/\s+/u)) {
-          if (term.length > 2 && !WORDNET_CONTEXT_STOP_WORDS.has(term)) terms.add(term);
-        }
+      for (const term of wordNetTerms(value)) {
+        if (!WORDNET_CONTEXT_STOP_WORDS.has(term)) terms.add(term);
       }
     }
   }
@@ -187,7 +192,11 @@ function expectedWordNetPartsOfSpeech(records, index) {
     if (previousTwo?.wordnet?.partsOfSpeech?.includes("n")) expected.add("n");
   }
   if (previous?.wordnet?.partsOfSpeech?.includes("a")) expected.add("n");
+  if (previous?.grammar?.kind === "pronoun") expected.add("v");
   if (next && ["a", "an", "the", "this", "that", "these", "those"].includes(next.surface)) {
+    expected.add("v");
+  }
+  if (next?.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))) {
     expected.add("v");
   }
   if (record.surface.endsWith("ing") && ["is", "are", "was", "were", "be", "been", "being"].includes(previous?.surface)) {
@@ -202,13 +211,13 @@ function expectedWordNetPartsOfSpeech(records, index) {
 
 function wordNetSenseContext(sense, contextTerms, records, index, wordnetIndex) {
   const senseTerms = new Set([
-    ...wordNetLookupVariants(sense?.gloss ?? "").flatMap((value) => value.split(/\s+/u)),
-    ...(sense?.lemmas ?? []).flatMap((lemma) => wordNetLookupVariants(lemma))
+    ...wordNetTerms(sense?.gloss ?? ""),
+    ...(sense?.lemmas ?? []).flatMap((lemma) => wordNetTerms(lemma))
   ]);
   const matched = [...contextTerms].filter((term) => senseTerms.has(term));
   const graph = wordNetGraphContext(sense, records, index, wordnetIndex);
   return {
-    score: matched.length + (graph.score * 2),
+    score: (matched.length * 2) + graph.score,
     matched: [
       ...matched,
       ...graph.matched.map((term) => `graph:${term}`)
@@ -275,7 +284,9 @@ function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex, wordne
       grammaticalNumber = "plural";
     }
   }
-  const wordnet = wordNetMetadata(normalized, wordnetIndex);
+  const wordnet = lemma?.lemma && lemma.lemma !== normalized
+    ? (wordNetMetadata(lemma.lemma, wordnetIndex) ?? wordNetMetadata(normalized, wordnetIndex))
+    : wordNetMetadata(normalized, wordnetIndex);
   if (coverage?.coverageType === "dictionary-alias" && wordnet?.senses?.length > 1) {
     coverage = null;
     pyashSequence = [];
@@ -493,25 +504,6 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
   const selection = selectWordNetSenses(record, records, index, wordnetIndex);
   return selection.senses.map((sense) => {
     const candidates = new Map();
-    for (const lemma of sense.lemmas ?? []) {
-      if (!lemma || lemma === record.surface) continue;
-      const coverage = resolveWord(lemma);
-      if (!coverage?.pyashSequence?.length || coverage.coverageType === "dictionary-alias") continue;
-      const candidate = makeCandidate({
-        phrase: record.surface,
-        lemma,
-        lexicalSequence: coverage.pyashSequence,
-        morphologySequence: [],
-        markerNames: [],
-        certainty: "contextual",
-        evidence: [
-          `WordNet ${sense.pos}:${sense.synset} synonym ${lemma}${sense.gloss ? `; ${sense.gloss}` : ""}`,
-          selection.evidence
-        ].filter(Boolean).join("; ")
-      });
-      candidate.partOfSpeech = sense.pos;
-      candidates.set(candidate.id, candidate);
-    }
     const bridge = wordnetIndex?.bridgeIndex?.get(wordNetSenseKey(sense));
     if (bridge) {
       const coverage = resolveWord(bridge.target);
@@ -532,6 +524,26 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
         candidate.partOfSpeech = bridge.targetPartOfSpeech;
         candidates.set(candidate.id, candidate);
       }
+      return [...candidates.values()];
+    }
+    for (const lemma of sense.lemmas ?? []) {
+      if (!lemma || lemma === record.surface) continue;
+      const coverage = resolveWord(lemma);
+      if (!coverage?.pyashSequence?.length || coverage.coverageType === "dictionary-alias") continue;
+      const candidate = makeCandidate({
+        phrase: record.surface,
+        lemma,
+        lexicalSequence: coverage.pyashSequence,
+        morphologySequence: [],
+        markerNames: [],
+        certainty: "contextual",
+        evidence: [
+          `WordNet ${sense.pos}:${sense.synset} synonym ${lemma}${sense.gloss ? `; ${sense.gloss}` : ""}`,
+          selection.evidence
+        ].filter(Boolean).join("; ")
+      });
+      candidate.partOfSpeech = sense.pos;
+      candidates.set(candidate.id, candidate);
     }
     return [...candidates.values()];
   });

@@ -2,5 +2,21 @@ su name translation_english_wordnet_bridges be map def
 su text "format" ob text "english-wordnet-bridge-v1" ya
 su text "source" ob text "Open English WordNet 2025 sense bridge catalog" ya
 su text "mode" ob text "sense-level semantic bridge" ya
+su text "n:00856168-n" ob name touch as text "n" with text "contextual" via text "Open English WordNet 2025 tactile-sexual sense" ya
+su text "n:04953730-n" ob name touch as text "n" with text "contextual" via text "Open English WordNet 2025 tactile-property sense" ya
+su text "n:05685184-n" ob name awareness as text "n" with text "contextual" via text "Open English WordNet 2025 intuitive-awareness sense" ya
+su text "n:14549784-n" ob name atm as text "n" with text "contextual" via text "Open English WordNet 2025 atmosphere sense" ya
+su text "v:00105712-v" ob name experience as text "v" with text "contextual" via text "Open English WordNet 2025 conscious-state sense" ya
+su text "v:00692071-v" ob name emotionally as text "v" with text "contextual" via text "Open English WordNet 2025 self-feeling sense" ya
+su text "v:00717144-v" ob name believe as text "v" with text "contextual" via text "Open English WordNet 2025 intuitive-belief sense" ya
+su text "v:01212242-v" ob name finger as text "v" with text "contextual" via text "Open English WordNet 2025 touch-examination sense" ya
+su text "v:01212716-v" ob name touch as text "v" with text "contextual" via text "Open English WordNet 2025 sexual-touch sense" ya
+su text "v:01212916-v" ob name touch as text "v" with text "contextual" via text "Open English WordNet 2025 palpation sense" ya
 su text "v:01775456-v" ob name emotionally as text "v" with text "contextual" via text "Open English WordNet 2025 emotional-state sense" ya
+su text "v:02110460-v" ob name touch as text "v" with text "contextual" via text "Open English WordNet 2025 physical-sensation sense" ya
+su text "v:02115034-v" ob name experience as text "v" with text "contextual" via text "Open English WordNet 2025 passive-experience sense" ya
+su text "v:02132078-v" ob name searching as text "v" with text "contextual" via text "Open English WordNet 2025 groping-search sense" ya
+su text "v:02138815-v" ob name appear as text "v" with text "contextual" via text "Open English WordNet 2025 impression sense" ya
+su text "v:02290872-v" ob name searching as text "v" with text "contextual" via text "Open English WordNet 2025 cautious-search sense" ya
+su text "v:02736346-v" ob name appear as text "v" with text "contextual" via text "Open English WordNet 2025 perceived-quality sense" ya
 prah
