@@ -266,14 +266,16 @@ const DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT = {
 export function createQueuedMindTranslationVocabularySubmitter({
   interpret,
   parse,
-  responseFormat = DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT
+  responseFormat = DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT,
+  maxOutputTokens = 4096
 } = {}) {
   if (typeof interpret !== "function") throw invalid("queued vocabulary submitter requires interpret");
   if (typeof parse !== "function") throw invalid("queued vocabulary submitter requires parse");
   if (!responseFormat || typeof responseFormat !== "object") {
     throw invalid("queued vocabulary submitter requires a response format");
   }
-  return async ({ handleId, prompt } = {}) => {
+  return async ({ handleId, prompt, maxOutputTokens: requestedMaxOutputTokens } = {}) => {
+    const outputTokens = Math.max(1, Math.trunc(Number(requestedMaxOutputTokens ?? maxOutputTokens) || 4096));
     const jobSpec = {
       kind: "ollama-generate",
       prompt: String(prompt ?? ""),
@@ -282,7 +284,7 @@ export function createQueuedMindTranslationVocabularySubmitter({
       format: responseFormat,
       options: {
         temperature: 0,
-        num_predict: 4096
+        num_predict: outputTokens
       }
     };
     const response = await interpret(parse(

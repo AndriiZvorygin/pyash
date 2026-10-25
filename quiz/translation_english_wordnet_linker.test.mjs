@@ -338,28 +338,32 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     maxBatch: 200,
     promptMaxChars: 12000,
     promptMaxTokens: 3900,
+    maxOutputTokens: 8192,
     edgeMaxDegree: 1,
     modelCard: {
       model: "qwen3.5:9b",
       provider: "ollama",
       contextWindowTokens: 32768,
       safeInputTokens: 3900,
+      safeOutputTokens: 8192,
       cardSource: "Ollama model metadata with bounded Pyash translation input policy"
     }
   });
 });
 
-test("translation model card keeps safe input below the model context window", async () => {
+test("translation model card keeps input and output budgets below the model context window", async () => {
   const card = await loadTranslationModelCard();
   assert.equal(card.model, "qwen3.5:9b");
   assert.equal(card.provider, "ollama");
   assert.equal(card.contextWindowTokens, 32768);
   assert.equal(card.safeInputTokens, 3900);
+  assert.equal(card.safeOutputTokens, 8192);
   const parsed = parseTranslationModelCards([
     "su name translation_model_cards be map def",
     "su text \"format\" ob text \"translation-model-cards-v1\" ya",
     "su text \"model:test:context-window-tokens\" ob num 100 ya",
     "su text \"model:test:safe-input-tokens\" ob num 90 ya",
+    "su text \"model:test:safe-output-tokens\" ob num 8 ya",
     "prah"
   ].join("\n"));
   assert.deepEqual(selectTranslationModelCard(parsed.cards, "test"), {
@@ -367,6 +371,7 @@ test("translation model card keeps safe input below the model context window", a
     provider: "",
     contextWindowTokens: 100,
     safeInputTokens: 90,
+    safeOutputTokens: 8,
     cardSource: ""
   });
 });
@@ -388,6 +393,7 @@ test("default WordNet linker submitter uses the existing future GPU duty", async
   const spec = JSON.parse(JSON.parse(encodedSpec));
   assert.deepEqual(spec.format.required, ["verdict", "senses"]);
   assert.ok(spec.format.properties.senses);
+  assert.equal(spec.options.num_predict, 8192);
 });
 
 test("default WordNet linker factory resolves the existing Pyash runtime adapters", async () => {

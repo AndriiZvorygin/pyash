@@ -22,6 +22,7 @@ export const ENGLISH_WORDNET_LINKER_QUEUE_LANE = "durable";
 export const ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE = 200;
 export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS = 12000;
 export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS = 3900;
+export const ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS = 8192;
 export const ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE = 1;
 export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   type: "object",
@@ -127,6 +128,12 @@ function prioritizedInventoryEntries(entries, records) {
   return [...(entries ?? [])].sort((left, right) => (
     Number(targets.has(normalized(right?.english))) - Number(targets.has(normalized(left?.english)))
   ));
+}
+
+function outputFits(records, maxOutputTokens) {
+  const fixedOutputTokens = 256;
+  const perSenseTokens = 256;
+  return fixedOutputTokens + (records.length * perSenseTokens) < maxOutputTokens;
 }
 
 function termVariants(value) {
@@ -475,12 +482,23 @@ function partitionSenseRecords(records, options) {
     const candidate = [...batch, record];
     try {
       buildEnglishWordNetSenseLinkPrompt({ ...options, records: candidate });
+      if (!outputFits(candidate, options.maxOutputTokens)) {
+        throw invalid("WordNet linker output budget cannot hold one result per sense", {
+          maxOutputTokens: options.maxOutputTokens,
+          senseCount: candidate.length
+        });
+      }
       batch = candidate;
     } catch (error) {
       if (batch.length === 0) throw error;
       batches.push(batch);
       batch = [record];
       buildEnglishWordNetSenseLinkPrompt({ ...options, records: batch });
+      if (!outputFits(batch, options.maxOutputTokens)) {
+        throw invalid("WordNet linker output budget cannot hold one sense result", {
+          maxOutputTokens: options.maxOutputTokens
+        });
+      }
     }
   }
   if (batch.length > 0) batches.push(batch);
@@ -495,6 +513,7 @@ export async function submitEnglishWordNetSenseLinks({
   context = [],
   maxChars = ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS,
   maxTokens = ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS,
+  maxOutputTokens = ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS,
   submit,
   attempt = 1
 } = {}) {
@@ -502,7 +521,7 @@ export async function submitEnglishWordNetSenseLinks({
   const pending = records.filter((record) => !ACCEPTED_STATUSES.has(record?.status));
   if (pending.length === 0) return { submitted: false, records: [...records], pending: [] };
   if (typeof submit !== "function") throw invalid("WordNet linker requires a queue submitter");
-  const promptOptions = { inventory, source, context, maxChars, maxTokens };
+  const promptOptions = { inventory, source, context, maxChars, maxTokens, maxOutputTokens };
   const batches = partitionSenseRecords(pending, promptOptions);
   const queues = [];
   const prompts = [];
@@ -516,7 +535,8 @@ export async function submitEnglishWordNetSenseLinks({
       prompt,
       candidates: batch,
       inventory,
-      sourceHash
+      sourceHash,
+      maxOutputTokens
     });
     const status = text(response?.status || response?.ob?.text).toLowerCase();
     if (status !== "queued") {
@@ -723,6 +743,7 @@ export function parseEnglishWordNetLinkerConfig(source) {
     maxBatch: Math.max(1, Math.trunc(Number(metadata["max-batch"]) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE)),
     promptMaxChars: Math.max(1000, Math.trunc(Number(metadata["prompt-max-chars"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS)),
     promptMaxTokens: Math.max(100, Math.trunc(Number(metadata["prompt-max-tokens"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS)),
+    maxOutputTokens: Math.max(100, Math.trunc(Number(metadata["max-output-tokens"]) || ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS)),
     edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE))
   };
 }
@@ -736,12 +757,14 @@ export async function loadEnglishWordNetLinkerConfig({
   return {
     ...config,
     promptMaxTokens: card.safeInputTokens,
+    maxOutputTokens: card.safeOutputTokens,
     modelCard: card
   };
 }
 
 export function createQueuedMindEnglishWordNetSenseLinkSubmitter(options = {}) {
   return createQueuedMindTranslationVocabularySubmitter({
+    maxOutputTokens: ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS,
     ...options,
     responseFormat: ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT
   });
