@@ -20,6 +20,8 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.observation_dir = tempfile.TemporaryDirectory()
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.observation_dir.name
     self.orig_parse_nvidia_smi = server.parse_nvidia_smi
+    self.orig_capacity_plan_for_job = server.capacity_plan_for_job
+    self.orig_local_execution_slot_busy = server.local_execution_slot_busy
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
     self.orig_request_ollama_json = server.request_ollama_json
@@ -44,6 +46,8 @@ class HousekeeperOllamaTests(unittest.TestCase):
       os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
     self.observation_dir.cleanup()
     server.parse_nvidia_smi = self.orig_parse_nvidia_smi
+    server.capacity_plan_for_job = self.orig_capacity_plan_for_job
+    server.local_execution_slot_busy = self.orig_local_execution_slot_busy
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_ollama_json = self.orig_request_ollama_json
@@ -888,6 +892,9 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.orig_run_docker = server.run_docker
     self.orig_observe_runtime_activity = server.observe_runtime_activity
     self.orig_idle_grace_seconds = server.idle_grace_seconds
+    self.orig_discharge_runtime = server.discharge_runtime
+    self.orig_ensure_capacity_for_job = server.ensure_capacity_for_job
+    self.orig_capacity_poll_seconds = server.capacity_poll_seconds
     server._RUNTIME_ACTIVITY.clear()
     server._PROFILES.clear()
     server._JOBS.clear()
@@ -904,6 +911,9 @@ class HousekeeperCapacityTests(unittest.TestCase):
     server.run_docker = self.orig_run_docker
     server.observe_runtime_activity = self.orig_observe_runtime_activity
     server.idle_grace_seconds = self.orig_idle_grace_seconds
+    server.discharge_runtime = self.orig_discharge_runtime
+    server.ensure_capacity_for_job = self.orig_ensure_capacity_for_job
+    server.capacity_poll_seconds = self.orig_capacity_poll_seconds
     server._RUNTIME_ACTIVITY.clear()
     server._PROFILES.clear()
     server._JOBS.clear()
@@ -1169,6 +1179,52 @@ class HousekeeperCapacityTests(unittest.TestCase):
     server.ollama_running_model_status = lambda: self.fail("must not inspect/unload after unknown activity")
     result = server.discharge_runtime("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
     self.assertFalse(result["success"])
+
+  def test_explicit_profile_discharge_uses_ollama_provider_hook(self):
+    server._PROFILES["qwen-test"] = {
+      "profileName": "qwen-test",
+      "runtimeName": "ollama",
+      "loaded": True,
+    }
+    calls = []
+    server.discharge_runtime = lambda runtime_name, runtime_entry: calls.append((runtime_name, runtime_entry)) or {
+      "success": True,
+      "runtimeName": runtime_name,
+      "reason": "unloaded",
+    }
+
+    result = server.discharge({
+      "profileName": "qwen-test",
+    }, {
+      "ollama": {
+        "runtimeName": "ollama",
+        "dischargeKind": "ollama",
+      },
+    })
+
+    self.assertTrue(result["discharged"])
+    self.assertEqual(calls[0][0], "ollama")
+
+  def test_execution_waits_for_temporarily_unavailable_capacity(self):
+    attempts = {"value": 0}
+
+    def fake_ensure(_job, _registry):
+      attempts["value"] += 1
+      if attempts["value"] == 1:
+        raise RuntimeError("GPU capacity remains insufficient after safe managed-runtime discharge")
+      return {"decision": "fits"}
+
+    server.ensure_capacity_for_job = fake_ensure
+    server.capacity_poll_seconds = lambda: 0.01
+    result = server.execute_job({
+      "remoteJobId": "capacity-wait",
+      "runtimeName": "safe",
+      "profileName": "safe",
+      "jobSpec": {"kind": "sleep", "sleepMs": 10, "capacityWaitSec": 1},
+    }, {"safe": {"runtimeName": "safe"}})
+
+    self.assertEqual(result["message"], "completed")
+    self.assertEqual(attempts["value"], 2)
 
   def test_strata_capacity_admission_reclaims_idle_ollama_through_housekeeper(self):
     telemetry = iter([
@@ -1462,6 +1518,7 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
     self.orig_request_comfyui_json = server.request_comfyui_json
+    self.orig_poll_comfyui_history = server.poll_comfyui_history
     server._PROFILES.clear()
     server._JOBS.clear()
 
@@ -1469,6 +1526,7 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_comfyui_json = self.orig_request_comfyui_json
+    server.poll_comfyui_history = self.orig_poll_comfyui_history
     server._PROFILES.clear()
     server._JOBS.clear()
 
@@ -1554,6 +1612,58 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     }, {"comfyui": {"runtimeName": "comfyui", "gpuExpected": True}})
 
     self.assertEqual(actions, [("comfyui", "beginAction")])
+
+  def test_comfyui_cuda_context_error_restarts_idle_provider_and_retries(self):
+    actions = []
+    prompt_ids = iter(["prompt-first", "prompt-retry"])
+    poll_count = {"value": 0}
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running",
+    }
+    server.runtime_action = lambda _registry, runtime_name, action_key: actions.append((runtime_name, action_key)) or {
+      "success": True,
+      "status": "running",
+      "message": "restarted",
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/prompt":
+        return {"prompt_id": next(prompt_ids)}
+      if pathname == "/queue":
+        return {"queue_running": [], "queue_pending": []}
+      raise AssertionError(pathname)
+
+    def fake_poll(_prompt_id, _timeout_sec=None, **_kwargs):
+      poll_count["value"] += 1
+      if poll_count["value"] == 1:
+        raise RuntimeError("CUDA error: operation not permitted")
+      return {"outputs": {"9": {"audio": [{"filename": "voice.wav"}]}}}
+
+    server.request_comfyui_json = fake_request
+    server.poll_comfyui_history = fake_poll
+    result = server.execute_comfyui_job({
+      "runtimeName": "comfyui",
+      "profileName": "qwen-say",
+      "jobSpec": {
+        "kind": "comfyui-say",
+        "prompt": {"1": {"inputs": {"text": "hello"}}},
+      },
+    }, {
+      "comfyui": {
+        "runtimeName": "comfyui",
+        "containerName": "comfyui",
+        "gpuExpected": True,
+        "activityProbe": "comfyui-queue",
+        "dischargeKind": "comfyui",
+      },
+    })
+
+    self.assertEqual(result["promptId"], "prompt-retry")
+    self.assertEqual(actions, [("comfyui", "restartAction")])
+    self.assertEqual(poll_count["value"], 2)
 
 
 class HousekeeperKatagoTests(unittest.TestCase):
@@ -1754,6 +1864,8 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.orig_ollama_running_model_status = server.ollama_running_model_status
     self.orig_ollama_model_catalog = server.ollama_model_catalog
     self.orig_parse_nvidia_smi = server.parse_nvidia_smi
+    self.orig_capacity_plan_for_job = server.capacity_plan_for_job
+    self.orig_local_execution_slot_busy = server.local_execution_slot_busy
     self.orig_host_id = server.Handler.host_id
     self.orig_accept_forwarded = os.environ.get("GPU_HOUSEKEEPER_ACCEPT_FORWARDED")
     server._JOBS.clear()
@@ -1767,6 +1879,8 @@ class HousekeeperFederationTests(unittest.TestCase):
     server.ollama_running_model_status = self.orig_ollama_running_model_status
     server.ollama_model_catalog = self.orig_ollama_model_catalog
     server.parse_nvidia_smi = self.orig_parse_nvidia_smi
+    server.capacity_plan_for_job = self.orig_capacity_plan_for_job
+    server.local_execution_slot_busy = self.orig_local_execution_slot_busy
     server.Handler.host_id = self.orig_host_id
     if self.orig_accept_forwarded is None:
       os.environ.pop("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", None)
@@ -1791,6 +1905,29 @@ class HousekeeperFederationTests(unittest.TestCase):
     route = server.select_route({}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}}, {"ollama": {}}, "mriczo")
     self.assertTrue(route["forwarded"])
     self.assertEqual(route["selected"]["hostId"], "swac")
+
+  def test_local_route_defers_when_capacity_can_become_available(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 14000, "vramFreeMb": 10576}],
+    }
+    server.capacity_plan_for_job = lambda *_args, **_kwargs: {
+      "decision": "insufficient",
+      "reason": "free VRAM plus safely reclaimable idle VRAM is insufficient",
+      "requiredVramMb": 12000,
+      "deviceId": "gpu0",
+    }
+    server.local_execution_slot_busy = lambda *_args, **_kwargs: False
+    candidate = server.local_route_state({
+      "runtimeName": "comfyui",
+      "profileName": "qwen3-asr-timestamps-attn2",
+      "dischargeAllowed": True,
+      "jobSpec": {"kind": "comfyui-hear", "resourceRequest": {"vramRequiredMb": 12000}},
+    }, {"comfyui": {"runtimeName": "comfyui"}}, "mriczo")
+
+    self.assertTrue(candidate["available"])
+    self.assertFalse(candidate["immediate"])
+    self.assertTrue(candidate["deferable"])
 
   def test_forwarded_request_cannot_forward_again(self):
     server.configured_peers = lambda: {"swac": "http://swac:8090"}
