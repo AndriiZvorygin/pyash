@@ -13,10 +13,13 @@ export const DEFAULT_MODELS = Object.freeze([
   "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"
 ]);
 
-function normalizeModels(models) {
+export const DEFAULT_TRANSLATION_MODELS = Object.freeze(["qwen3.5:9b"]);
+
+function normalizeModels(models, suiteKey) {
   if (Array.isArray(models) && models.length) return models.map(String).filter(Boolean);
   const fromEnv = String(process.env.PYA_CRITERION_MODELS ?? "").split(",").map(value => value.trim()).filter(Boolean);
-  return fromEnv.length ? fromEnv : [...DEFAULT_MODELS];
+  if (fromEnv.length) return fromEnv;
+  return suiteKey === "flores-200" ? [...DEFAULT_TRANSLATION_MODELS] : [...DEFAULT_MODELS];
 }
 
 function estimateContextTokens(sample) {
@@ -222,7 +225,7 @@ export async function runCriterion({
   const selectedSamples = limit === null || limit === undefined ? sampleSelection : sampleSelection.slice(0, Math.max(0, Number(limit)));
   const resolvedProfile = resolveProfile(profile, { ...sampling, contextLength });
   const resolvedContextLength = resolvedProfile.contextLength === null ? null : Number(resolvedProfile.contextLength);
-  const resolvedModels = normalizeModels(models);
+  const resolvedModels = normalizeModels(models, suiteKey);
   const id = String(runId ?? `${suiteKey}-${now().toISOString().replace(/[-:.TZ]/gu, "").slice(0, 14)}-${sha256(`${suiteKey}:${now().toISOString()}`).slice(0, 8)}`);
   const runStartedAt = now().toISOString();
   const outputJsonl = path.resolve(root, "criterion", "results", `${id}.jsonl`);
