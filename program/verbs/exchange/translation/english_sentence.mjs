@@ -212,8 +212,33 @@ function findLexicalVerbIndex(records, startIndex = subjectPredicateStart(record
   return -1;
 }
 
-function applyContextualEnglishGrammar(records) {
+function applyContextualEnglishGrammar(records, grammarIndex) {
+  const exemplifier = grammarIndex?.resolve("such as");
   return records.map((record, index) => {
+    if (record.surface === "such" && records[index + 1]?.surface === "as" && exemplifier) {
+      return {
+        ...record,
+        coverageType: "grammar",
+        pyashSequence: [...exemplifier.pyashSequence],
+        grammar: { ...exemplifier },
+        construction: {
+          kind: "exemplifier",
+          category: "exemplification",
+          evidence: "such as lowers to the example_ referential head with the space-way case ga"
+        },
+        evidence: "such as lowers to the example_ referential head with the space-way case ga"
+      };
+    }
+    if (record.surface === "as" && records[index - 1]?.surface === "such" && exemplifier) {
+      return {
+        ...record,
+        coverageType: "grammar",
+        pyashSequence: [],
+        grammar: { ...exemplifier },
+        consumedBy: "such as",
+        evidence: "as is consumed by the preceding such as exemplifier construction"
+      };
+    }
     if (record.copula) {
       const following = records[index + 1];
       const passiveParticiple = following
@@ -287,9 +312,9 @@ function applyContextualEnglishGrammar(records) {
         construction: {
           kind: "exemplifier",
           category: "exemplification",
-          evidence: "such as is a contextual exemplifier construction; Pyash grammar mapping remains unresolved"
+          evidence: "such as is a contextual exemplifier construction"
         },
-        evidence: "such as is a contextual exemplifier construction; Pyash grammar mapping remains unresolved"
+        evidence: "such as is a contextual exemplifier construction"
       };
     }
     return record;
@@ -336,7 +361,7 @@ function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, mar
 }
 
 function wordNetSenseCandidates(record, resolveWord) {
-  if (record?.pyashSequence?.length || !record?.wordnet?.senses || typeof resolveWord !== "function") return [];
+  if (record?.consumedBy || record?.pyashSequence?.length || !record?.wordnet?.senses || typeof resolveWord !== "function") return [];
   return record.wordnet.senses.map((sense) => {
     const candidates = new Map();
     for (const lemma of sense.lemmas ?? []) {
@@ -445,7 +470,9 @@ function hasNegation(records, verbIndex) {
 
 function objectRecordsAfter(records, verbIndex) {
   return verbIndex >= 0
-    ? records.slice(verbIndex + 1).filter((record) => record.grammar?.kind !== NEGATION_GRAMMAR_KIND)
+    ? records.slice(verbIndex + 1).filter((record) => (
+      record.grammar?.kind !== NEGATION_GRAMMAR_KIND && !record.consumedBy
+    ))
     : [];
 }
 
@@ -469,7 +496,7 @@ export function analyzeEnglishSentence(source, {
     lemmaBySurface,
     grammarIndex,
     wordnetIndex
-  }))), resolveWord);
+  })), grammarIndex), resolveWord);
   const progressiveIndex = findProgressiveIndex(records);
   const finiteIndex = findVerbIndex(records);
   const imperativeIndex = progressiveIndex < 0 && finiteIndex < 0 ? findImperativeVerbIndex(records) : -1;
@@ -579,6 +606,7 @@ export function analyzeEnglishSentence(source, {
   const unresolved = records
     .filter((record, index) => (
       record.pyashSequence.length === 0
+      && !record.consumedBy
       && (!consumedIndexes.has(index) || (!record.copula && !record.grammar))
       && record.grammar?.kind !== NEGATION_GRAMMAR_KIND
       && !record.copula
