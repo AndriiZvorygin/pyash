@@ -59,6 +59,8 @@ test("standard WordNet refinery selects leaf links and queues only pending sense
   assert.equal(refined.queuePending, 2);
   assert.equal(submissions.length, 1);
   assert.match(submissions[0].handleId, /^english-wordnet-link-/u);
+  assert.match(submissions[0].prompt, /SOURCE CONTEXT BY TERM/u);
+  assert.match(submissions[0].prompt, /blorp/u);
   assert.equal(refined.records.find((record) => record.source === "v:one")?.status, "accepted-edge");
   assert.equal(refined.records.every((record) => record.queue?.status === "queued" || record.status === "accepted-edge"), true);
 });
@@ -108,4 +110,5 @@ test("translation document persists the WordNet refinery before vocabulary lower
   assert.equal(parsed.wordnet?.format, "english-wordnet-refinery-v1");
   assert.equal(parsed.wordnet?.sourceTerms[0], "blorp");
   assert.equal(parsed.wordnet?.queue?.status, "queued");
+  assert.equal(parsed.wordnet?.context[0].term, "blorp");
 });

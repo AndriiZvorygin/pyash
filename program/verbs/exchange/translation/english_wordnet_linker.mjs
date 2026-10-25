@@ -15,6 +15,8 @@ export const ENGLISH_WORDNET_LINKER_CONFIG_URL = new URL("./english_wordnet_link
 export const ENGLISH_WORDNET_LINKER_QUEUE_INTENT = "mind";
 export const ENGLISH_WORDNET_LINKER_QUEUE_LANE = "durable";
 export const ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE = 200;
+export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS = 12000;
+export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS = 3900;
 export const ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE = 1;
 export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   type: "object",
@@ -59,6 +61,67 @@ function text(value) {
 
 function normalized(value) {
   return text(value).toLowerCase().replace(/[ _-]+/gu, " ").replace(/\s+/gu, " ");
+}
+
+function bounded(value, maxChars) {
+  const limit = Math.max(1, Math.trunc(Number(maxChars) || 1));
+  const valueText = text(value);
+  return valueText.length > limit ? `${valueText.slice(0, Math.max(0, limit - 1))}…` : valueText;
+}
+
+function compactSense(record) {
+  return {
+    id: text(record?.id),
+    s: text(record?.source),
+    p: text(record?.pos),
+    g: bounded(record?.gloss, 56),
+    l: (record?.lemmas ?? []).slice(0, 2).map((lemma) => bounded(lemma, 24)),
+    c: (record?.candidates ?? []).slice(0, 2).map((candidate) => ({
+      target: bounded(candidate?.target, 24),
+      pyash: (candidate?.pyashSequence ?? []).slice(0, 4).map((word) => bounded(word, 20))
+    }))
+  };
+}
+
+function compactContext(context) {
+  return (Array.isArray(context) ? context : []).map((row) => ({
+    term: bounded(row?.term, 32),
+    sentences: [...new Set((row?.sentences ?? []).slice(0, 3).map((sentence) => bounded(sentence, 280)))]
+  }));
+}
+
+function compactInventoryRows(entries, maxChars, maxTokens = Number.POSITIVE_INFINITY) {
+  const rows = [];
+  let used = 0;
+  let usedTokens = 0;
+  for (const entry of entries ?? []) {
+    const row = JSON.stringify({
+      english: entry?.english,
+      pyash: entry?.pyash,
+      ...(entry?.kind ? { kind: entry.kind } : {})
+    });
+    const next = used + row.length + (rows.length ? 1 : 0);
+    const rowTokens = estimateEnglishWordNetSenseLinkPromptTokens(row);
+    const nextTokens = usedTokens + rowTokens + (rows.length ? 1 : 0);
+    if (next > maxChars || nextTokens >= maxTokens) break;
+    rows.push(row);
+    used = next;
+    usedTokens = nextTokens;
+  }
+  return rows.join("\n");
+}
+
+export function estimateEnglishWordNetSenseLinkPromptTokens(value) {
+  return [...String(value ?? "").matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\s]/gu)].length;
+}
+
+function prioritizedInventoryEntries(entries, records) {
+  const targets = new Set((records ?? []).flatMap((record) => (
+    record?.candidates ?? []
+  )).map((candidate) => normalized(candidate?.target)).filter(Boolean));
+  return [...(entries ?? [])].sort((left, right) => (
+    Number(targets.has(normalized(right?.english))) - Number(targets.has(normalized(left?.english)))
+  ));
 }
 
 function termVariants(value) {
@@ -323,21 +386,23 @@ export function buildEnglishWordNetSenseLinkInventory({
 export function buildEnglishWordNetSenseLinkPrompt({
   records = [],
   inventory = { entries: [], grammar: [] },
-  source = "Open English WordNet"
+  source = "Open English WordNet",
+  context = [],
+  maxChars = ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS,
+  maxTokens = ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS
 } = {}) {
   if (!Array.isArray(records) || records.length === 0) {
     throw invalid("WordNet linker prompt requires sense records");
   }
   if (!Array.isArray(inventory.entries)) throw invalid("WordNet linker prompt requires an atom inventory");
-  const senseRows = records.map((record) => JSON.stringify({
-    id: record.id,
-    source: record.source,
-    partOfSpeech: record.pos,
-    gloss: record.gloss,
-    lemmas: record.lemmas,
-    deterministicCandidates: record.candidates ?? []
-  })).join("\n");
-  return [
+  const senseRows = records.map((record) => JSON.stringify(compactSense(record))).join("\n");
+  const contextRows = compactContext(context);
+  const grammar = compactInventoryRows((inventory.grammar ?? []).map((entry) => ({
+    english: entry?.english,
+    pyash: entry?.pyash,
+    kind: entry?.kind
+  })), 1800);
+  const fixed = [
     "You are the bounded Pyash WordNet sense-linking worker.",
     "Link each supplied WordNet sense to one existing Pyash English anchor when the evidence supports it.",
     "Use the gloss, lemmas, and deterministic candidates as semantic evidence.",
@@ -351,13 +416,43 @@ export function buildEnglishWordNetSenseLinkPrompt({
     "Include exactly one result for every supplied sense id. Never return an empty senses array.",
     "For reject or uncertain, omit target and pyashSequence.",
     `SOURCE: ${text(source) || "Open English WordNet"}`,
-    "AUTHORITATIVE PYASH ATOM AND COMPOUND INVENTORY:",
-    inventory.entries.map(JSON.stringify).join("\n"),
+    "Sense rows use id, p=part of speech, g=gloss, l=lemmas, c=deterministic candidates.",
+    "AUTHORITATIVE PYASH ATOM AND COMPOUND INVENTORY (English gloss -> Pyash token):",
+    "__INVENTORY__",
     "AUTHORITATIVE PYASH GRAMMAR INVENTORY:",
-    inventory.grammar.map(JSON.stringify).join("\n"),
+    grammar,
+    "SOURCE CONTEXT BY TERM:",
+    contextRows.map(JSON.stringify).join("\n"),
     "WORDNET SENSES:",
     senseRows
-  ].join("\n");
+  ];
+  const budget = Math.max(1000, Math.trunc(Number(maxChars) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS));
+  const tokenBudget = Math.max(100, Math.trunc(Number(maxTokens) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS));
+  const fixedText = fixed.join("\n");
+  const inventoryBudget = Math.max(0, budget - fixedText.length + "__INVENTORY__".length);
+  const inventoryTokenBudget = Math.max(
+    0,
+    tokenBudget
+      - estimateEnglishWordNetSenseLinkPromptTokens(fixedText)
+      + estimateEnglishWordNetSenseLinkPromptTokens("__INVENTORY__")
+  );
+  const inventoryText = compactInventoryRows(
+    prioritizedInventoryEntries(inventory.entries, records),
+    inventoryBudget,
+    inventoryTokenBudget
+  );
+  const prompt = fixedText.replace("__INVENTORY__", inventoryText);
+  const tokenEstimate = estimateEnglishWordNetSenseLinkPromptTokens(prompt);
+  if (prompt.length > budget || tokenEstimate >= tokenBudget) {
+    throw invalid("WordNet linker prompt exceeds configured prompt budget", {
+      budget,
+      promptChars: prompt.length,
+      tokenBudget,
+      tokenEstimate,
+      senseCount: records.length
+    });
+  }
+  return prompt;
 }
 
 export function wordNetSenseLinkQueueHandle({ sourceHash, records = [], attempt = 1 } = {}) {
@@ -368,11 +463,33 @@ export function wordNetSenseLinkQueueHandle({ sourceHash, records = [], attempt 
   return `english-wordnet-link-${hash(`${source}\u0000${ids}`).slice(0, 24)}${retry > 1 ? `-retry-${retry}` : ""}`;
 }
 
+function partitionSenseRecords(records, options) {
+  const batches = [];
+  let batch = [];
+  for (const record of records) {
+    const candidate = [...batch, record];
+    try {
+      buildEnglishWordNetSenseLinkPrompt({ ...options, records: candidate });
+      batch = candidate;
+    } catch (error) {
+      if (batch.length === 0) throw error;
+      batches.push(batch);
+      batch = [record];
+      buildEnglishWordNetSenseLinkPrompt({ ...options, records: batch });
+    }
+  }
+  if (batch.length > 0) batches.push(batch);
+  return batches;
+}
+
 export async function submitEnglishWordNetSenseLinks({
   records = [],
   inventory,
   sourceHash,
   source = "Open English WordNet",
+  context = [],
+  maxChars = ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS,
+  maxTokens = ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS,
   submit,
   attempt = 1
 } = {}) {
@@ -380,36 +497,50 @@ export async function submitEnglishWordNetSenseLinks({
   const pending = records.filter((record) => !ACCEPTED_STATUSES.has(record?.status));
   if (pending.length === 0) return { submitted: false, records: [...records], pending: [] };
   if (typeof submit !== "function") throw invalid("WordNet linker requires a queue submitter");
-  const handleId = wordNetSenseLinkQueueHandle({ sourceHash, records: pending, attempt });
-  const prompt = buildEnglishWordNetSenseLinkPrompt({ records: pending, inventory, source });
-  const response = await submit({
-    handleId,
-    prompt,
-    candidates: pending,
-    inventory,
-    sourceHash
-  });
-  const status = text(response?.status || response?.ob?.text).toLowerCase();
-  if (status !== "queued") {
-    throw invalid("WordNet linker queue submission was not accepted", { handleId, response });
+  const promptOptions = { inventory, source, context, maxChars, maxTokens };
+  const batches = partitionSenseRecords(pending, promptOptions);
+  const queues = [];
+  const prompts = [];
+  const responses = [];
+  const pendingQueues = new Map();
+  for (const batch of batches) {
+    const handleId = wordNetSenseLinkQueueHandle({ sourceHash, records: batch, attempt });
+    const prompt = buildEnglishWordNetSenseLinkPrompt({ records: batch, ...promptOptions });
+    const response = await submit({
+      handleId,
+      prompt,
+      candidates: batch,
+      inventory,
+      sourceHash
+    });
+    const status = text(response?.status || response?.ob?.text).toLowerCase();
+    if (status !== "queued") {
+      throw invalid("WordNet linker queue submission was not accepted", { handleId, response });
+    }
+    const queue = {
+      handleId,
+      status: "queued",
+      intent: ENGLISH_WORDNET_LINKER_QUEUE_INTENT,
+      lane: ENGLISH_WORDNET_LINKER_QUEUE_LANE,
+      attempt: Math.max(1, Math.trunc(Number(attempt) || 1)),
+      senseCount: batch.length
+    };
+    queues.push(queue);
+    prompts.push(prompt);
+    responses.push(response);
+    for (const record of batch) pendingQueues.set(record.id, queue);
   }
-  const queue = {
-    handleId,
-    status: "queued",
-    intent: ENGLISH_WORDNET_LINKER_QUEUE_INTENT,
-    lane: ENGLISH_WORDNET_LINKER_QUEUE_LANE,
-    attempt: Math.max(1, Math.trunc(Number(attempt) || 1)),
-    senseCount: pending.length
-  };
-  const pendingIds = new Set(pending.map((record) => record.id));
   return {
     submitted: true,
-    handleId,
-    prompt,
-    response,
-    queue,
+    handleId: queues.length === 1 ? queues[0].handleId : "",
+    prompt: prompts.length === 1 ? prompts[0] : prompts,
+    response: responses.length === 1 ? responses[0] : responses,
+    queue: queues.length === 1 ? queues[0] : null,
+    queues,
     pending,
-    records: records.map((record) => pendingIds.has(record.id) ? { ...record, queue } : { ...record })
+    records: records.map((record) => pendingQueues.has(record.id)
+      ? { ...record, queue: pendingQueues.get(record.id) }
+      : { ...record })
   };
 }
 
@@ -584,6 +715,8 @@ export function parseEnglishWordNetLinkerConfig(source) {
     queueIntent: metadata["queue-intent"] || ENGLISH_WORDNET_LINKER_QUEUE_INTENT,
     queueLane: metadata["queue-lane"] || ENGLISH_WORDNET_LINKER_QUEUE_LANE,
     maxBatch: Math.max(1, Math.trunc(Number(metadata["max-batch"]) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE)),
+    promptMaxChars: Math.max(1000, Math.trunc(Number(metadata["prompt-max-chars"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS)),
+    promptMaxTokens: Math.max(100, Math.trunc(Number(metadata["prompt-max-tokens"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS)),
     edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE))
   };
 }
