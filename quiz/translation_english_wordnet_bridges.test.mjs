@@ -29,7 +29,7 @@ test("feel contexts select the bridge for the matching WordNet sense", async () 
     ["a feel for sexual pleasure", "feel", "touch", "tcum"],
     ["the feel of touch", "feel", "touch", "tcum"],
     ["a feel for animals", "feel", "awareness", "hyes"],
-    ["the feel of the city", "feel", "atm", "hge7m"],
+    ["the feel of the city", "feel", "air", "cwat"],
     ["I feel tired", "feel", "experience", "tyap"],
     ["I feel small", "feel", "emotionally", "xyek"],
     ["I feel he believes me", "feel", "believe", "kcan"],

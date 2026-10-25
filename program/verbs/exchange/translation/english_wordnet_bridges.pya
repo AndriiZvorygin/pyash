@@ -5,7 +5,7 @@ su text "mode" ob text "sense-level semantic bridge" ya
 su text "n:00856168-n" ob name touch as text "n" with text "contextual" via text "Open English WordNet 2025 tactile-sexual sense" ya
 su text "n:04953730-n" ob name touch as text "n" with text "contextual" via text "Open English WordNet 2025 tactile-property sense" ya
 su text "n:05685184-n" ob name awareness as text "n" with text "contextual" via text "Open English WordNet 2025 intuitive-awareness sense" ya
-su text "n:14549784-n" ob name atm as text "n" with text "contextual" via text "Open English WordNet 2025 atmosphere sense" ya
+su text "n:14549784-n" ob name air as text "n" with text "contextual" via text "Open English WordNet 2025 atmosphere-as-air sense" ya
 su text "v:00105712-v" ob name experience as text "v" with text "contextual" via text "Open English WordNet 2025 conscious-state sense" ya
 su text "v:00692071-v" ob name emotionally as text "v" with text "contextual" via text "Open English WordNet 2025 self-feeling sense" ya
 su text "v:00717144-v" ob name believe as text "v" with text "contextual" via text "Open English WordNet 2025 intuitive-belief sense" ya
