@@ -14,6 +14,29 @@ export const ENGLISH_WORDNET_LINKER_CONFIG_URL = new URL("./english_wordnet_link
 export const ENGLISH_WORDNET_LINKER_QUEUE_INTENT = "mind";
 export const ENGLISH_WORDNET_LINKER_QUEUE_LANE = "durable";
 export const ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE = 200;
+export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
+  type: "object",
+  required: ["verdict", "senses"],
+  additionalProperties: false,
+  properties: {
+    verdict: { type: "string", enum: ["complete", "partial", "uncertain"] },
+    senses: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "status", "target", "pyashSequence", "rationale"],
+        additionalProperties: false,
+        properties: {
+          id: { type: "string" },
+          status: { type: "string", enum: ["accept", "reject", "uncertain"] },
+          target: { type: "string" },
+          pyashSequence: { type: "array", items: { type: "string" } },
+          rationale: { type: "string" }
+        }
+      }
+    }
+  }
+});
 
 const ACCEPTED_STATUSES = new Set(["accepted-existing", "accepted-deterministic", "accepted-llm"]);
 const LINK_STATUSES = new Set(["accept", "reject", "uncertain"]);
@@ -470,7 +493,10 @@ export async function loadEnglishWordNetLinkerConfig({ configUrl = ENGLISH_WORDN
 }
 
 export function createQueuedMindEnglishWordNetSenseLinkSubmitter(options = {}) {
-  return createQueuedMindTranslationVocabularySubmitter(options);
+  return createQueuedMindTranslationVocabularySubmitter({
+    ...options,
+    responseFormat: ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT
+  });
 }
 
 export async function createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter(options = {}) {
