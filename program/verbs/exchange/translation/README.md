@@ -51,6 +51,11 @@ targets present in the supplied inventory, and submits unresolved records throug
 `vyah start future be gpu mind do` queue path. A completed response can be rendered back into
 the native `english_wordnet_bridges.pya` map; the linker is evidence generation, not a second
 vocabulary or transcript format. The durable configuration caps one batch at 200 senses.
+The deterministic pre-pass also accepts a low-degree edge synset when one lemma has exactly
+one WordNet sense. The existing target may be an atom or an accepted compound; missing
+vocabulary stays review evidence and is never invented.
+Callers that have loaded the derived compound catalog pass its accepted records explicitly;
+candidate-closed and rejected compounds are excluded from the authoritative inventory.
 Curated lemma equivalence may reuse one existing Pyash atom across English lexical surfaces:
 the `mixed` atom `mrat` anchors `mix`, `mixes`, `mixed`, and `mixing`. The `mix` surface keeps
 noun/verb ambiguity in sentence review, while the inflected surfaces carry their accepted tense

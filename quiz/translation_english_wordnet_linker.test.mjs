@@ -61,12 +61,57 @@ test("WordNet linker creates stable one-record-per-sense batches", () => {
   });
   assert.equal(records.length, 3);
   assert.deepEqual(records.map((record) => record.source), ["v:alpha", "v:beta", "v:gamma"]);
-  assert.equal(records[0].status, "accepted-deterministic");
+  assert.equal(records[0].status, "accepted-edge");
   assert.deepEqual(records[0].link.pyashSequence, ["tyap"]);
+  assert.deepEqual(records[0].edgeNode, { degree: 0, singleSenseLemmas: ["florp"] });
   assert.equal(records[1].status, "review");
   assert.equal(records[2].status, "review");
   assert.equal(records[2].candidates.length, 0);
   assert.equal(new Set(records.map((record) => record.id)).size, 3);
+});
+
+test("WordNet linker accepts a leaf node mapped to an existing compound", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:compound:ledger_house",
+      pos: "n",
+      synset: "compound",
+      senseKey: "compound",
+      lemma: "ledger house",
+      gloss: "a house for ledgers"
+    }]
+  });
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: index,
+    resolveWord: () => ({
+      coverageType: "compound",
+      canonicalEnglish: "ledger house",
+      pyashSequence: ["ledger", "house"]
+    })
+  });
+  assert.equal(records[0].status, "accepted-edge");
+  assert.deepEqual(records[0].link.pyashSequence, ["ledger", "house"]);
+  assert.equal(records[0].link.target, "ledger house");
+});
+
+test("WordNet linker inventory includes accepted compounds and excludes compound candidates", () => {
+  const inventory = buildEnglishWordNetSenseLinkInventory({
+    records: [],
+    baseInventory: { entries: [], grammar: [] },
+    compoundRecords: [{
+      target: "ledger house",
+      status: "accepted-curated",
+      pyashSequence: ["ledger", "house"]
+    }, {
+      target: "candidate house",
+      status: "candidate-closed",
+      pyashSequence: ["candidate", "house"]
+    }]
+  });
+  assert.deepEqual(inventory.entries, [{
+    english: "ledger house",
+    pyash: ["ledger", "house"]
+  }]);
 });
 
 test("WordNet linker prompt stays bounded to supplied senses and inventory", () => {
@@ -247,7 +292,8 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     format: "english-wordnet-linker-v1",
     queueIntent: "mind",
     queueLane: "durable",
-    maxBatch: 200
+    maxBatch: 200,
+    edgeMaxDegree: 1
   });
 });
 
