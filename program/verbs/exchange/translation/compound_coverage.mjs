@@ -106,6 +106,7 @@ export async function loadCuratedCompoundDecompositions({
     target: entry.target,
     sourceMorphemes: entry.sourceMorphemes ?? entry.morphemes,
     componentGlosses: entry.componentGlosses ?? entry.morphemes,
+    ...(entry.specificAtom ? { specificAtom: entry.specificAtom } : {}),
     evidence: entry.evidence,
     confidence: entry.confidence
   }));
@@ -182,6 +183,7 @@ function curatedMap(curatedDecompositions) {
     result.set(target, {
       target,
       componentGlosses,
+      ...(decomposition.specificAtom ? { specificAtom: normalizeTerm(decomposition.specificAtom) } : {}),
       sourceMorphemes: Array.isArray(decomposition.sourceMorphemes)
         ? decomposition.sourceMorphemes.map((part) => String(part).normalize("NFC").trim()).filter(Boolean)
         : [...componentGlosses],
@@ -197,6 +199,7 @@ function recordId(record) {
     target: record.target,
     sourceMorphemes: record.sourceMorphemes,
     componentGlosses: record.componentGlosses,
+    specificAtom: record.specificAtom,
     pyashSequence: record.pyashSequence,
     sourceSurfaces: record.sourceSurfaces,
     sourceMorphemesByLanguage: record.sourceMorphemesByLanguage
@@ -209,6 +212,7 @@ function makeRecord({
   componentGlosses,
   sourceSurfaces,
   sourceMorphemesByLanguage,
+  specificAtom,
   status,
   confidence,
   evidence,
@@ -235,6 +239,7 @@ function makeRecord({
     sourceMorphemes: [...sourceMorphemes],
     morphemes: [...sourceMorphemes],
     componentGlosses: [...componentGlosses],
+    ...(specificAtom ? { specificAtom } : {}),
     pyashSequence: [...selected.pyashSequence],
     componentLayers: [...selected.componentLayers],
     maxLayer: selected.maxLayer,
@@ -288,6 +293,7 @@ export function buildDerivedCompoundCoverage({
         target,
         sourceMorphemes: curatedEntry.sourceMorphemes,
         componentGlosses: curatedEntry.componentGlosses,
+        specificAtom: curatedEntry.specificAtom,
         sourceSurfaces: source.sourceSurfaces,
         sourceMorphemesByLanguage: source.sourceMorphemesByLanguage,
         status: "accepted-curated",
@@ -382,6 +388,7 @@ function renderDerivedCompoundCoverageRow(entry) {
     target: entry.target,
     gloss: entry.target,
     componentGlosses: entry.componentGlosses,
+    specificAtom: entry.specificAtom,
     pyashSequence: entry.pyashSequence,
     componentLayers: entry.componentLayers,
     maxLayer: entry.maxLayer,

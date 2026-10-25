@@ -113,6 +113,7 @@ test("curated prayer constructions enter the shared compound catalog", async () 
   });
   const kingdom = entries.find((entry) => entry.surface === "kingdom");
   const debtor = entries.find((entry) => entry.surface === "debtor");
+  const brainstorm = entries.find((entry) => entry.surface === "brainstorm");
 
   assert.ok(kingdom);
   assert.deepEqual(kingdom.morphemes, ["king", "government"]);
@@ -127,6 +128,9 @@ test("curated prayer constructions enter the shared compound catalog", async () 
   assert.equal(debtor.head, "agent");
   assert.deepEqual(debtor.componentRoles, ["lexeme", "lexeme"]);
   assert.equal(debtor.provenance, "lord_prayer_lexicon.pya");
+
+  assert.ok(brainstorm);
+  assert.equal(brainstorm.specificAtom, "brain_storming");
 });
 
 test("compound coverage separates delimited use from accidental closed splits", () => {
@@ -295,14 +299,16 @@ test("current dictionaries produce broad derived coverage", async (t) => {
     morphologyEntries: await loadCompoundMorphology(),
     layerIndex: { ...layerIndex, englishToPyash }
   });
-  assert.equal(coverage.existingAtomic.length, 7830);
-  assert.equal(coverage.accepted.length, 395);
-  assert.equal(coverage.candidates.length, 411);
+  assert.equal(coverage.existingAtomic.length, 7831);
+  assert.equal(coverage.accepted.length, 396);
+  assert.equal(coverage.candidates.length, 412);
   const blueprint = coverage.accepted.find((entry) => entry.target === "blueprint");
   assert.deepEqual(blueprint.pyashSequence, ["plun", "trat"]);
   assert.equal(blueprint.head, "print");
   assert.equal(blueprint.sourceSurfaces.chinese, "蓝图");
   assert.deepEqual(blueprint.sourceMorphemesByLanguage.french, ["plan"]);
+  const brainstorm = coverage.accepted.find((entry) => entry.target === "brainstorm");
+  assert.equal(brainstorm.specificAtom, "brain_storming");
   const acceptant = coverage.candidates.find((entry) => entry.target === "acceptant");
   const zincking = coverage.candidates.find((entry) => entry.target === "zincking");
   assert.equal(acceptant.morphologyStatus, "ending-overlap-review");

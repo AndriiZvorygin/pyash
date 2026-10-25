@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 
 import {
   canonicalCompoundPayload,
@@ -17,12 +18,13 @@ const languages = ["french", "russian", "hindi", "interlingua"];
 
 test("multilingual compound catalogs lower the shared compound set through one parser", async () => {
   const expected = {
-    database: { sequence: ["hnuc", "cren"], layers: [16, 19], maxLayer: 19 },
-    lighthouse: { sequence: ["kwan", "hcas"], layers: [16, 16], maxLayer: 16 },
-    dollhouse: { sequence: ["bwak", "hcas"], layers: [24, 16], maxLayer: 24 },
-    waterfall: { sequence: ["hwic", "hfut"], layers: [16, 16], maxLayer: 16 },
-    waterline: { sequence: ["hwic", "hlas"], layers: [16, 16], maxLayer: 16 }
+    database: { sequence: ["hnuc", "cren"], layers: [16, 19], maxLayer: 19, atom: "hdes" },
+    lighthouse: { sequence: ["kwan", "hcas"], layers: [16, 16], maxLayer: 16, atom: "gxas" },
+    dollhouse: { sequence: ["bwak", "hcas"], layers: [24, 16], maxLayer: 24, atom: "dxus" },
+    waterfall: { sequence: ["hwic", "hfut"], layers: [16, 16], maxLayer: 16, atom: "crop" },
+    waterline: { sequence: ["hwic", "hlas"], layers: [16, 16], maxLayer: 16, atom: "vli7n" }
   };
+  const atomByEnglish = new Map(pyashWords.map((entry) => [entry.en, entry.pya]));
 
   for (const language of languages) {
     const entries = await loadMultilingualCompoundLexicon(language);
@@ -34,6 +36,8 @@ test("multilingual compound catalogs lower the shared compound set through one p
       assert.deepEqual(entry.pyashSequence, shape.sequence);
       assert.deepEqual(entry.componentLayers, shape.layers);
       assert.equal(entry.maxLayer, shape.maxLayer);
+      assert.equal(entry.specificAtom, target);
+      assert.equal(atomByEnglish.get(entry.specificAtom), shape.atom);
       assert.equal(entry.status, "lowered-compound");
       assert.match(entry.provenance, new RegExp(`dictionary_${language === "interlingua" ? "ia" : language.slice(0, 2)}\\.json$`, "u"));
       assert.equal(entry.rejectedCandidates[0].maxLayer > entry.maxLayer, true);

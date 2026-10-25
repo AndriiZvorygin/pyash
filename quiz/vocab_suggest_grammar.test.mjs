@@ -36,3 +36,13 @@ test("vocab_suggest reports both lexical and grammar forms for example", async (
   assert.match(output, /example: root -> tlam \(English30k rank 1032\)/u);
   assert.match(output, /example: grammar -> fluh \(English30k rank 1032\)/u);
 });
+
+test("vocab_suggest reports the English gloss for an accepted Pyac atom", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["twum"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.match(lines.join("\n"), /^twum: brain$/mu);
+});

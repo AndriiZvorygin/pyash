@@ -5,6 +5,7 @@ import pyashWords from "../program/library/pyashWords.json" with { type: "json" 
 import {
   buildAtomWordProposal,
   buildGrammarWordProposal,
+  buildPhoneticContributors,
   buildWeightedPhoneticProfile,
   generateGrammarCandidates,
   loadAtomWordGenerationInputs,
@@ -31,6 +32,45 @@ test("atom phonetic profile keeps source language order and weighted evidence", 
   assert.equal(profile.profile.initialConsonants.m, 5);
   assert.equal(profile.profile.vowels.a, 5);
   assert.equal(profile.profile.finalConsonants.s, 5);
+});
+
+test("atom candidates report the source languages for each generated glyph role", () => {
+  const phonetic = buildWeightedPhoneticProfile({
+    en: "fwuk",
+    zh: "pwum"
+  }, { layer: 16, weights: { en: 1, zh: 1 } });
+  assert.deepEqual(buildPhoneticContributors("fwuk", phonetic.evidence), [
+    { role: "initial", glyph: "f", languages: ["en"], languageCount: 1, populationWeight: 1 },
+    { role: "middle", glyph: "w", languages: ["en", "zh"], languageCount: 2, populationWeight: 2 },
+    { role: "vowel", glyph: "u", languages: ["en", "zh"], languageCount: 2, populationWeight: 2 },
+    { role: "final", glyph: "k", languages: ["en"], languageCount: 1, populationWeight: 1 }
+  ]);
+  assert.deepEqual(buildPhoneticContributors("pwum", phonetic.evidence), [
+    { role: "initial", glyph: "p", languages: ["zh"], languageCount: 1, populationWeight: 1 },
+    { role: "middle", glyph: "w", languages: ["en", "zh"], languageCount: 2, populationWeight: 2 },
+    { role: "vowel", glyph: "u", languages: ["en", "zh"], languageCount: 2, populationWeight: 2 },
+    { role: "final", glyph: "m", languages: ["zh"], languageCount: 1, populationWeight: 1 }
+  ]);
+
+  const rankedPhonetic = buildWeightedPhoneticProfile({
+    en: "fwuk",
+    zh: "pwum"
+  }, { layer: 16, weights: { en: 1, zh: 2 } });
+  const proposal = buildAtomWordProposal({
+    concept: "brain",
+    phonetics: parsePhoneticCatalog(JSON.stringify({ Xbrain: { en: "fwuk", zh: "pwum" } })),
+    frequency: { rows: [] },
+    wordLists: { words: { 16: "fwuk\npwum\n", 19: "", 24: "", 28: "", 32: "" } },
+    existingEntries: [],
+    minLayer: 16,
+    maxLayer: 16,
+    weights: { en: 1, zh: 2 },
+    candidateLimit: 2,
+    candidateGenerator: () => [["fwuk", 2], ["pwum", 1]]
+  });
+  assert.equal(proposal.selected.word, "pwum");
+  assert.deepEqual(proposal.selected.phoneticContributors, buildPhoneticContributors("pwum", rankedPhonetic.evidence));
+  assert.deepEqual(proposal.layers[0].candidates[1].phoneticContributors, buildPhoneticContributors("fwuk", rankedPhonetic.evidence));
 });
 
 test("atom proposal is deterministic and reserves an existing word", () => {

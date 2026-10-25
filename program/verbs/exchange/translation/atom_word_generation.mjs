@@ -308,9 +308,26 @@ function addGlyphs(profile, glyphWord, weight) {
     addTypeOfGlyphToObject(SECOND_CONSONANTS, profile.middleConsonants, weight, glyph);
   }
   for (const glyph of arrayUnique(glyphs.slice(finalStart))) {
-    const converted = { q: "n", b: "p", d: "t", g: "k", v: "f", z: "s", j: "c" }[glyph] ?? glyph;
-    addTypeOfGlyphToObject(FINAL_CONSONANTS, profile.finalConsonants, weight, converted);
+    addTypeOfGlyphToObject(FINAL_CONSONANTS, profile.finalConsonants, weight, finalConsonantGlyph(glyph));
   }
+}
+
+function finalConsonantGlyph(glyph) {
+  return { q: "n", b: "p", d: "t", g: "k", v: "f", z: "s", j: "c" }[glyph] ?? glyph;
+}
+
+function glyphEvidence(glyphWord) {
+  const glyphs = [...glyphWord];
+  const segmentLength = Math.ceil(glyphs.length / 3);
+  const middleStart = Math.floor(glyphs.length / 3);
+  const finalStart = glyphs.length - (segmentLength + 1);
+  return {
+    initialConsonants: arrayUnique(glyphs.slice(0, segmentLength)),
+    middleConsonants: arrayUnique(glyphs.slice(middleStart, middleStart + segmentLength)),
+    vowels: arrayUnique(glyphs.filter((glyph) => VOWELS.includes(glyph))),
+    tones: arrayUnique(glyphs.filter((glyph) => TONES.includes(glyph))),
+    finalConsonants: arrayUnique(glyphs.slice(finalStart).map(finalConsonantGlyph))
+  };
 }
 
 function emptyProfile() {
@@ -333,15 +350,124 @@ export function buildWeightedPhoneticProfile(phoneticEntry, {
   }
   const profile = emptyProfile();
   const languages = [];
+  const evidence = [];
   for (const [language, weight] of Object.entries(weights)) {
     const phonetic = stableString(phoneticEntry[language]);
     if (!phonetic.trim()) continue;
     const glyphWord = normalizeIpaToLayer(phonetic, layer);
     addGlyphs(profile, glyphWord, weight);
     languages.push(language);
+    evidence.push({ language, weight, glyphWord, ...glyphEvidence(glyphWord) });
   }
   if (languages.length === 0) throw invalid("phonetic entry has no weighted language evidence");
-  return { profile, languages, layer };
+  return { profile, languages, layer, evidence };
+}
+
+function candidateShape(word, kind = "root") {
+  const glyphs = [...word];
+  if (kind === "grammar") {
+    if (glyphs.length === 2) {
+      return [
+        { role: "initial", glyph: glyphs[0] },
+        { role: "vowel", glyph: glyphs[1] }
+      ];
+    }
+    if (glyphs.length === 3) {
+      return [
+        { role: "initial", glyph: glyphs[0] },
+        { role: "vowel", glyph: glyphs[1] },
+        { role: "tone", glyph: glyphs[2] }
+      ];
+    }
+    if (glyphs.length === 4 && glyphs.at(-1) === "h") {
+      return [
+        { role: "initial", glyph: glyphs[0] },
+        { role: "middle", glyph: glyphs[1] },
+        { role: "vowel", glyph: glyphs[2] }
+      ];
+    }
+    if (glyphs.length === 5 && glyphs.at(-1) === "h") {
+      return [
+        { role: "initial", glyph: glyphs[0] },
+        { role: "middle", glyph: glyphs[1] },
+        { role: "vowel", glyph: glyphs[2] },
+        { role: "tone", glyph: glyphs[3] }
+      ];
+    }
+    return [];
+  }
+  if (glyphs.length === 5 && glyphs[0] === "h") {
+    return [
+      { role: "initial", glyph: glyphs[1] },
+      { role: "vowel", glyph: glyphs[2] },
+      { role: "tone", glyph: glyphs[3] },
+      { role: "final", glyph: glyphs[4] }
+    ];
+  }
+  if (glyphs.length === 4 && glyphs[0] === "h") {
+    return [
+      { role: "initial", glyph: glyphs[1] },
+      { role: "vowel", glyph: glyphs[2] },
+      { role: "final", glyph: glyphs[3] }
+    ];
+  }
+  if (glyphs.length === 5) {
+    return [
+      { role: "initial", glyph: glyphs[0] },
+      { role: "middle", glyph: glyphs[1] },
+      { role: "vowel", glyph: glyphs[2] },
+      { role: "tone", glyph: glyphs[3] },
+      { role: "final", glyph: glyphs[4] }
+    ];
+  }
+  if (glyphs.length !== 4) return [];
+  return [
+    { role: "initial", glyph: glyphs[0] },
+    { role: "middle", glyph: glyphs[1] },
+    { role: "vowel", glyph: glyphs[2] },
+    { role: "final", glyph: glyphs[3] }
+  ];
+}
+
+export function buildPhoneticContributors(word, evidence = [], { kind = "root" } = {}) {
+  return candidateShape(word, kind).map(({ role, glyph }) => {
+    const evidenceKey = {
+      initial: "initialConsonants",
+      middle: "middleConsonants",
+      vowel: "vowels",
+      tone: "tones",
+      final: "finalConsonants"
+    }[role];
+    const sources = evidence.filter((source) => source[evidenceKey]?.includes(glyph));
+    return {
+      role,
+      glyph,
+      languages: sources.map((source) => source.language),
+      languageCount: sources.length,
+      populationWeight: roundSupport(sources.reduce((total, source) => total + source.weight, 0))
+    };
+  });
+}
+
+function roundSupport(value) {
+  return Math.round(value * 1000000) / 1000000;
+}
+
+function buildPhoneticSupport(contributors) {
+  if (!contributors.length) {
+    return {
+      minimumPopulationWeight: 0,
+      totalPopulationWeight: 0,
+      minimumLanguageCount: 0,
+      totalLanguageCount: 0
+    };
+  }
+  return {
+    minimumPopulationWeight: Math.min(...contributors.map((entry) => entry.populationWeight)),
+    totalPopulationWeight: roundSupport(contributors.reduce((total, entry) => total + entry.populationWeight, 0)),
+    minimumLanguageCount: Math.min(...contributors.map((entry) => entry.languageCount)),
+    totalLanguageCount: contributors.reduce((total, entry) => total + entry.languageCount, 0)
+  };
 }
 
 function objectToWeightedArray(value) {
@@ -449,7 +575,20 @@ function sourceEvidence({ phonetics, frequency, wordLists, sources, reservedWord
   };
 }
 
-function candidateRows(generated, available, used) {
+function compareCandidateSupport(left, right) {
+  for (const field of [
+    "minimumPopulationWeight",
+    "totalPopulationWeight",
+    "minimumLanguageCount",
+    "totalLanguageCount"
+  ]) {
+    const difference = right.phoneticSupport[field] - left.phoneticSupport[field];
+    if (difference !== 0) return difference;
+  }
+  return right.score - left.score;
+}
+
+function candidateRows(generated, available, used, evidence, candidateKind) {
   const availableWords = Array.isArray(available)
     ? available
     : typeof available === "string"
@@ -479,8 +618,18 @@ function candidateRows(generated, available, used) {
       rejectedHnuc += 1;
       continue;
     }
-    rows.push({ word, hnuc: `0x${hnuc.toString(16).toUpperCase()}`, score });
+    const phoneticContributors = buildPhoneticContributors(word, evidence, { kind: candidateKind });
+    rows.push({
+      word,
+      hnuc: `0x${hnuc.toString(16).toUpperCase()}`,
+      score,
+      phoneticContributors,
+      phoneticSupport: buildPhoneticSupport(phoneticContributors)
+    });
   }
+  rows.sort(candidateKind === "root"
+    ? compareCandidateSupport
+    : (left, right) => right.score - left.score);
   return { rows, rejectedWord, rejectedHnuc };
 }
 
@@ -498,7 +647,8 @@ export function buildAtomWordProposal({
   skipExistingConcept = false,
   reservedEntries = [],
   reservedWordSourceHash,
-  candidateGenerator = generateRootCandidates
+  candidateGenerator = generateRootCandidates,
+  candidateKind = "root"
 } = {}) {
   const normalizedConcept = normalizeConcept(concept);
   if (!normalizedConcept) throw invalid("atom word concept must be non-empty text");
@@ -535,7 +685,13 @@ export function buildAtomWordProposal({
   for (const layer of ATOM_WORD_LAYERS.filter((value) => value >= minLayer && value <= maxLayer)) {
     const weighted = buildWeightedPhoneticProfile(phoneticMatch.entry, { layer, weights });
     const generated = candidateGenerator(weighted.profile);
-    const rows = candidateRows(generated, wordLists?.words?.[layer] ?? wordLists?.[layer] ?? [], used);
+    const rows = candidateRows(
+      generated,
+      wordLists?.words?.[layer] ?? wordLists?.[layer] ?? [],
+      used,
+      weighted.evidence,
+      candidateKind
+    );
     rejectedWord += rows.rejectedWord;
     rejectedHnuc += rows.rejectedHnuc;
     const layerResult = {
@@ -607,7 +763,8 @@ export function buildGrammarWordProposal({
     existingEntries,
     reservedEntries: options.reservedEntries,
     skipExistingConcept: true,
-    candidateGenerator: generateGrammarCandidates
+    candidateGenerator: generateGrammarCandidates,
+    candidateKind: "grammar"
   });
   return {
     ...proposal,
