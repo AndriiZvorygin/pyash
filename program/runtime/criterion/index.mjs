@@ -1,6 +1,7 @@
 export { DEFAULT_MODELS, getProfile, runCriterion, rerunCriterion, scoreBenchmarkSample, scoreSample } from "./run.mjs";
 export { DEFAULT_PROFILES, createQueuedOllamaExecutor, resolveOllamaBaseUrl, resolveProfile, runOllamaChat, readOllamaMetadata, probeOllama } from "./ollama.mjs";
 export { SUITE_CATALOG, loadSuiteSamples, loadHelpOSFixtures, readDatasetFile } from "./datasets.mjs";
+export { chrfScore, normalizeTranslationSample, scoreTranslationSample } from "./translation.mjs";
 export { runCriterionRefinery } from "./refinery.mjs";
 export { runNightmare, runReverie } from "./suites.mjs";
 export { loadRun, renderComparison, renderRunCsv, renderRunMarkdown, renderReviewHtml, writeRunArtifacts } from "./report.mjs";

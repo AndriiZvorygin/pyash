@@ -93,7 +93,7 @@ function usage() {
   return [
     "criterion list",
     "criterion inspect --benchmark <name>",
-    "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|strata|huggingface] [--base-url <runtime>] [--model <a,b>] [--profile summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
+    "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|strata|huggingface] [--base-url <runtime>] [--model <a,b>] [--profile translation_direct|summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
     "criterion baseline --benchmark meetingbank --dataset <local.jsonl> --baseline lead-3 [--resume]",
     "criterion fact-audit --dataset <meetingbank.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--limit 5] [--resume]",
     "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",

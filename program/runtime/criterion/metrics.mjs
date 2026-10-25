@@ -187,7 +187,7 @@ function aggregateCore(results) {
   const latencies = successful.map(row => row.metrics?.totalElapsedMs).filter(Number.isFinite);
   const aggregateMetric = key => mean(successful.map(row => Number(row.scores?.[key])).filter(Number.isFinite));
   const qualityPerSecond = mean(successful.map(row => {
-    const quality = Number(row.scores?.rougeL ?? row.scores?.accuracy ?? row.scores?.factualAccuracy ?? row.scores?.instructionAccuracy);
+    const quality = Number(row.scores?.chrf ?? row.scores?.rougeL ?? row.scores?.accuracy ?? row.scores?.factualAccuracy ?? row.scores?.instructionAccuracy);
     const elapsed = Number(row.metrics?.totalElapsedMs);
     return Number.isFinite(quality) && elapsed > 0 ? quality / (elapsed / 1000) : null;
   }).filter(Number.isFinite));
@@ -202,6 +202,7 @@ function aggregateCore(results) {
     rouge1: aggregateMetric("rouge1"),
     rouge2: aggregateMetric("rouge2"),
     rougeL: aggregateMetric("rougeL"),
+    chrf: aggregateMetric("chrf"),
     accuracy: aggregateMetric("accuracy"),
     promptAccuracy: aggregateMetric("promptAccuracy"),
     instructionAccuracy: aggregateMetric("instructionAccuracy"),
