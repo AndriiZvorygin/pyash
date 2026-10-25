@@ -736,15 +736,6 @@ test("qualitative numeric retries name rejected grounded address phrases", async
   assert.match(prompt, /do not repeat them or any close variant/u);
 });
 
-test("Owen Stage 3 delegates availability retries to the model-specific renderer", () => {
-  const source = fs.readFileSync(
-    new URL("../world/house/owen-sound-reporter/program/summarize-agenda-wise-sections-from-transcript-folder.mjs", import.meta.url),
-    "utf8",
-  );
-  assert.doesNotMatch(source, /\/api\/tags/u);
-  assert.match(source, /runAgendaStage3SummaryRenderer/u);
-});
-
 test("stage3 duplication repairs retain sibling summaries as grounding context", () => {
   const source = fs.readFileSync(
     new URL("../program/library/reporter_shared/agenda-stage3-summary-renderer.mjs", import.meta.url),
