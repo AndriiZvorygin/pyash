@@ -25,3 +25,14 @@ test("vocab_suggest reports indefinite pronouns as fused Pyac words", async () =
     assert.match(output, new RegExp(`${surface}: grammar -> ${pyac}`, "u"));
   }
 });
+
+test("vocab_suggest reports both lexical and grammar forms for example", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["example"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  const output = lines.join("\n");
+  assert.match(output, /example: root -> tlam \(English30k rank 1032\)/u);
+  assert.match(output, /example: grammar -> fluh \(English30k rank 1032\)/u);
+});
