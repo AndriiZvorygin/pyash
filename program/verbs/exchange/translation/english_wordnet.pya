@@ -1,6 +1,8 @@
 su name translation_english_wordnet be map def
-su text "format" ob text "english-wordnet-core-v1" ya
-su text "source" ob text "/home/htaf/pyachso2n/wordnet-core.txt" ya
-su text "source-hash" ob text "857797681af15401ebba799f0797ed6e8f463ffcf5ce55d15d2a92ff6e08c90d" ya
+su text "format" ob text "open-english-wordnet-2025-json-v1" ya
+su text "source" ob text "know/wordnet/open-english-wordnet-2025-json" ya
+su text "source-hash" ob text "4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba" ya
+su text "source-url" ob text "https://en-word.net/static/english-wordnet-2025-json.zip" ya
+su text "license" ob text "Open English WordNet CC-BY 4.0 plus Princeton WordNet license" ya
 su text "mode" ob text "read-only semantic evidence" ya
 prah

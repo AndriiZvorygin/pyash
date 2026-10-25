@@ -226,9 +226,10 @@ test("English prose with an is-clause stays in sentence review", async () => {
     text: "Love is a mix of feelings and actions.",
     locator: "https://simple.wikipedia.org/wiki/Love#Beginning"
   });
-  assert.equal(result.records[0].status, "provisional");
+  assert.equal(result.records[0].status, "unresolved");
   assert.equal(result.records[0].sentence, undefined);
-  assert.deepEqual(result.records[0].unresolved, ["feelings", "actions"]);
+  assert.deepEqual(result.records[0].unresolved, ["mix", "feelings"]);
+  assert.deepEqual(result.vocabularyCandidates.map((candidate) => candidate.surface), ["mix", "feelings"]);
 });
 
 test("translation document submits vocabulary review through the injected queue", async () => {
