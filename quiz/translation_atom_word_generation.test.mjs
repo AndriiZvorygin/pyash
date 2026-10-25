@@ -6,6 +6,7 @@ import {
   buildAtomWordProposal,
   buildGrammarWordProposal,
   buildWeightedPhoneticProfile,
+  generateGrammarCandidates,
   loadAtomWordGenerationInputs,
   normalizeIpaToLayer,
   parseAtomWordLists,
@@ -57,6 +58,24 @@ test("atom proposal is deterministic and reserves an existing word", () => {
   const reserved = buildAtomWordProposal({ ...options, existingEntries: [{ en: "old", pya: "hmis" }] });
   assert.equal(reserved.status, "candidate");
   assert.equal(reserved.selected.word, "hmas");
+});
+
+test("grammar candidate generation uses grammar word shapes", () => {
+  const candidates = generateGrammarCandidates(buildWeightedPhoneticProfile({ en: "example" }, {
+    layer: 16,
+    weights: { en: 1 }
+  }).profile);
+  assert.ok(candidates.length > 0);
+  assert.ok(candidates.every(([word]) => word.length <= 3 || word.endsWith("h")));
+});
+
+test("example keeps its lexical root separate from its grammar word", () => {
+  const roots = pyashWords.filter((entry) => entry.en === "example");
+  const grammar = pyashWords.filter((entry) => entry.en === "example_");
+  assert.deepEqual(roots.map((entry) => entry.pya), ["tlam"]);
+  assert.deepEqual(grammar.map((entry) => entry.pya), ["fluh"]);
+  assert.notEqual(roots[0].pya, grammar[0].pya);
+  assert.ok(grammar[0].pya.endsWith("h"));
 });
 
 test("atom proposal rejects an algorithmic HNUC collision", () => {
@@ -138,8 +157,9 @@ test("grammar word proposal reuses source phonetics without colliding with the l
   assert.equal(proposal.status, "candidate");
   assert.equal(proposal.reservedWordSourceHash.length, 64);
   assert.ok(proposal.selected.word);
-  assert.equal(proposal.selected.word, "tfum");
+  assert.equal(proposal.selected.word, "fluh");
   assert.notEqual(proposal.selected.word, "tsin");
+  assert.ok(proposal.selected.word.length <= 3 || proposal.selected.word.endsWith("h"));
   assert.ok(!existingEntries.some((entry) => entry.pya === proposal.selected.word));
   assert.ok(!existingEntries.some((entry) => {
     try {

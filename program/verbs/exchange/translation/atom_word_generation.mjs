@@ -384,6 +384,28 @@ export function generateRootCandidates(profile) {
   return averageWeight(words).sort((left, right) => right[1] - left[1]);
 }
 
+export function generateGrammarCandidates(profile) {
+  const vowels = profile.vowels;
+  const initials = objectToWeightedArray(profile.initialConsonants);
+  const middles = profile.middleConsonants;
+  const tones = profile.tone;
+  const words = [];
+  let cv = initials.flatMap((start) => addWeighted(vowels, start));
+  let ccv = initials.flatMap((start) => addWeighted(middles, start));
+  ccv = ccv.flatMap((start) => addWeighted(vowels, start));
+  if (Object.keys(tones).length > 0) {
+    words.push(
+      ...cv.flatMap((start) => addWeighted(tones, start)),
+      ...ccv.flatMap((start) => addWeighted(tones, start)).map(([word, weight]) => [`${word}h`, weight])
+    );
+  }
+  words.push(
+    ...cv,
+    ...ccv.map(([word, weight]) => [`${word}h`, weight])
+  );
+  return averageWeight(words).sort((left, right) => right[1] - left[1]);
+}
+
 function normalizeHnuc(value) {
   if (typeof value === "number" && Number.isInteger(value)) return `0x${value.toString(16)}`;
   if (typeof value !== "string") return "";
@@ -475,7 +497,8 @@ export function buildAtomWordProposal({
   sources,
   skipExistingConcept = false,
   reservedEntries = [],
-  reservedWordSourceHash
+  reservedWordSourceHash,
+  candidateGenerator = generateRootCandidates
 } = {}) {
   const normalizedConcept = normalizeConcept(concept);
   if (!normalizedConcept) throw invalid("atom word concept must be non-empty text");
@@ -511,7 +534,7 @@ export function buildAtomWordProposal({
   let rejectedHnuc = 0;
   for (const layer of ATOM_WORD_LAYERS.filter((value) => value >= minLayer && value <= maxLayer)) {
     const weighted = buildWeightedPhoneticProfile(phoneticMatch.entry, { layer, weights });
-    const generated = generateRootCandidates(weighted.profile);
+    const generated = candidateGenerator(weighted.profile);
     const rows = candidateRows(generated, wordLists?.words?.[layer] ?? wordLists?.[layer] ?? [], used);
     rejectedWord += rows.rejectedWord;
     rejectedHnuc += rows.rejectedHnuc;
@@ -583,7 +606,8 @@ export function buildGrammarWordProposal({
     concept: normalizedSourceConcept,
     existingEntries,
     reservedEntries: options.reservedEntries,
-    skipExistingConcept: true
+    skipExistingConcept: true,
+    candidateGenerator: generateGrammarCandidates
   });
   return {
     ...proposal,

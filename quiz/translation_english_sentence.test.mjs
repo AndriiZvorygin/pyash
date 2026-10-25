@@ -116,13 +116,13 @@ test("English surface grammar resolves pro-forms, demonstratives, and within as 
 
 test("English example uses its generated non-overlapping grammar word", async () => {
   const resources = await loadEnglishSentenceResources();
-  assert.deepEqual(resources.grammarIndex.resolve("example").pyashSequence, ["tfum"]);
+  assert.deepEqual(resources.grammarIndex.resolve("example").pyashSequence, ["fluh"]);
   assert.equal(resources.grammarIndex.resolve("example").kind, "referential");
 
   const result = await analyzeDefaultEnglishSentence("this is an example");
   const example = result.tokens.find((token) => token.surface === "example");
   assert.equal(example.coverageType, "grammar");
-  assert.deepEqual(example.pyashSequence, ["tfum"]);
+  assert.deepEqual(example.pyashSequence, ["fluh"]);
   assert.deepEqual(example.grammar.components, ["example_"]);
 });
 

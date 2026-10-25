@@ -104,7 +104,7 @@ historical Pyash word list as well:
 node command/vocab_grammar_suggest.mjs example
 ```
 
-For `example`, the deterministic proposal is `example_ -> tfum` (`0xA8A`, layer 16).
+For `example`, the deterministic proposal is `example_ -> fluh` (`0x5367`, layer 16).
 The command remains read-only; accepting a proposal into `pyashWords.json` and the
 English grammar catalog is a separate vocabulary change.
 
