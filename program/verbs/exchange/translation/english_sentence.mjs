@@ -14,7 +14,8 @@ import {
 } from "./english_dictionary_aliases.mjs";
 import { loadEnglishGrammarCatalog, buildEnglishGrammarIndex } from "./english_grammar.mjs";
 import { buildEnglishLemmaIndex, loadEnglishLemmaCatalog } from "./english_lemmas.mjs";
-import { loadEnglishWordNet } from "./english_wordnet.mjs";
+import { buildEnglishWordNetIndex, loadEnglishWordNet } from "./english_wordnet.mjs";
+import { loadEnglishWordNetBridges } from "./english_wordnet_bridges.mjs";
 import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 
 export const ENGLISH_SENTENCE_FORMAT = "english-sentence-v1";
@@ -511,6 +512,27 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
       candidate.partOfSpeech = sense.pos;
       candidates.set(candidate.id, candidate);
     }
+    const bridge = wordnetIndex?.bridgeIndex?.get(wordNetSenseKey(sense));
+    if (bridge) {
+      const coverage = resolveWord(bridge.target);
+      if (coverage?.pyashSequence?.length && coverage.coverageType !== "dictionary-alias") {
+        const candidate = makeCandidate({
+          phrase: record.surface,
+          lemma: bridge.target,
+          lexicalSequence: coverage.pyashSequence,
+          morphologySequence: [],
+          markerNames: [],
+          certainty: bridge.certainty,
+          evidence: [
+            `WordNet ${sense.pos}:${sense.synset} bridge ${bridge.target}${sense.gloss ? `; ${sense.gloss}` : ""}`,
+            bridge.evidence,
+            selection.evidence
+          ].filter(Boolean).join("; ")
+        });
+        candidate.partOfSpeech = bridge.targetPartOfSpeech;
+        candidates.set(candidate.id, candidate);
+      }
+    }
     return [...candidates.values()];
   });
 }
@@ -808,8 +830,9 @@ export async function loadEnglishSentenceResources() {
       loadEnglishGrammarCatalog(),
       loadEnglishDictionaryBlacklist(),
       loadAnchorWordForms(),
-      loadEnglishWordNet()
-    ]).then(([source, lemmaCatalog, grammarCatalog, dictionary, anchors, wordnet]) => {
+      loadEnglishWordNet(),
+      loadEnglishWordNetBridges()
+    ]).then(([source, lemmaCatalog, grammarCatalog, dictionary, anchors, wordnet, bridgeCatalog]) => {
       const grammarIndex = buildEnglishGrammarIndex({ catalogEntries: grammarCatalog.entries });
       const aliases = anchors.formsToAnchor;
       const dictionaryAliases = buildEnglishDictionaryAliases({
@@ -843,6 +866,11 @@ export async function loadEnglishSentenceResources() {
       }
       const grammarMappings = new Map(DEFAULT_GRAMMAR_MAPPINGS);
       for (const [surface, mapping] of grammarIndex.mappings) grammarMappings.set(surface, mapping);
+      const wordnetIndex = buildEnglishWordNetIndex({
+        rows: wordnet.rows,
+        relations: wordnet.relations,
+        bridges: bridgeCatalog.entries
+      });
       return {
         source,
         lemmaCatalog,
@@ -855,7 +883,11 @@ export async function loadEnglishSentenceResources() {
         lemmaIndex,
         sourceByVariant,
         atomicByVariant,
-        wordnet
+        wordnet: {
+          ...wordnet,
+          bridges: bridgeCatalog,
+          index: wordnetIndex
+        }
       };
     });
   }

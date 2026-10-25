@@ -33,6 +33,12 @@ The index also accepts optional relation rows in the form `r [source] [target] [
 when present, bounded graph relatedness contributes to the context score. The checked-in slice
 currently remains gloss-based, so relation data is additive evidence rather than a hidden
 runtime download.
+Sense-specific lexical bridges are recorded in the native Pyash map
+`program/verbs/exchange/translation/english_wordnet_bridges.pya`. One row represents one
+WordNet sense: `su` is the POS-prefixed sense key, `ob` is an existing English target anchor,
+`as` is the target part of speech, `with` is certainty, and `via` is provenance. The bridge
+provides a bounded candidate after the normal sentence sense selection; it does not add a
+second vocabulary or transcript format.
 The English `such as` surface is classified as an
 `exemplifier` construction, a subtype of `exemplification`. It lowers to `fluh ga`: the
 `example_` referential head with the space-way case, whose established surface glosses
