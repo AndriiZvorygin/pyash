@@ -26,6 +26,10 @@ export const DEFAULT_ATOM_WORD_LAYER_DIRECTORY = resolve(
   "../../../../..",
   "pyachso2n"
 );
+export const DEFAULT_ATOM_WORD_LEGACY_PATH = resolve(
+  DEFAULT_ATOM_WORD_LAYER_DIRECTORY,
+  "pyashWords.txt"
+);
 
 export const ATOM_WORD_LAYERS = Object.freeze([16, 19, 24, 28, 32]);
 
@@ -107,6 +111,10 @@ function normalizeConcept(value) {
   return normalizeEnglish30kWord(value).replace(/[ _]+/gu, "-");
 }
 
+function normalizeGrammarConcept(value) {
+  return normalizeEnglish30kWord(value).replace(/\s+/gu, "_");
+}
+
 function sourceKeyVariants(value) {
   const concept = normalizeConcept(value);
   if (!concept) return [];
@@ -160,21 +168,37 @@ export function parseAtomWordLists(wordLists) {
   return { words: result, sourceHashes };
 }
 
+export function parseLegacyPyashWords(source) {
+  if (typeof source !== "string") throw invalid("legacy Pyash word source must be text");
+  const entries = [];
+  for (const [index, line] of source.split(/\r?\n/u).entries()) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = line.match(/^\s*(\S+)\s*\t\s*(.*?)\s*$/u);
+    if (!match) throw invalid("legacy Pyash word source row is malformed", { index, line });
+    entries.push({ pya: match[1], en: match[2].trim() });
+  }
+  return { entries, sourceHash: sha256(source) };
+}
+
 export async function loadAtomWordGenerationInputs({
   phoneticPath = DEFAULT_ATOM_WORD_PHONETIC_PATH,
   frequencyPath = DEFAULT_ATOM_WORD_FREQUENCY_PATH,
-  layerDirectory = DEFAULT_ATOM_WORD_LAYER_DIRECTORY
+  layerDirectory = DEFAULT_ATOM_WORD_LAYER_DIRECTORY,
+  legacyWordPath = DEFAULT_ATOM_WORD_LEGACY_PATH
 } = {}) {
   const layers = await Promise.all(ATOM_WORD_LAYERS.map(async (layer) => [
     layer,
     await fs.readFile(resolve(layerDirectory, `${layer}GlyphWordList.txt`), "utf8")
   ]));
-  const [phoneticSource, frequency, ...wordListSources] = await Promise.all([
+  const [phoneticSource, frequency, legacyWordSource, ...wordListSources] = await Promise.all([
     fs.readFile(phoneticPath, "utf8"),
     loadEnglish30k({ path: frequencyPath }),
+    fs.readFile(legacyWordPath, "utf8"),
     ...layers.map(([, source]) => Promise.resolve(source))
   ]);
   const phonetics = parsePhoneticCatalog(phoneticSource);
+  const legacyWords = parseLegacyPyashWords(legacyWordSource);
   const wordLists = parseAtomWordLists(Object.fromEntries(
     wordListSources.map((source, index) => [ATOM_WORD_LAYERS[index], source])
   ));
@@ -183,10 +207,13 @@ export async function loadAtomWordGenerationInputs({
     phonetics,
     frequency,
     wordLists,
+    reservedEntries: legacyWords.entries,
+    reservedWordSourceHash: legacyWords.sourceHash,
     sources: {
       phoneticPath: resolve(phoneticPath),
       frequencyPath: resolve(frequencyPath),
-      layerDirectory: resolve(layerDirectory)
+      layerDirectory: resolve(layerDirectory),
+      legacyWordPath: resolve(legacyWordPath)
     }
   };
 }
@@ -390,11 +417,12 @@ function findPhoneticEntry(phonetics, concept) {
   return null;
 }
 
-function sourceEvidence({ phonetics, frequency, wordLists, sources }) {
+function sourceEvidence({ phonetics, frequency, wordLists, sources, reservedWordSourceHash }) {
   return {
     ...(phonetics?.sourceHash ? { phoneticSourceHash: phonetics.sourceHash } : {}),
     ...(frequency?.sourceHash ? { frequencySourceHash: frequency.sourceHash } : {}),
     ...(wordLists?.sourceHashes ? { layerSourceHashes: wordLists.sourceHashes } : {}),
+    ...(reservedWordSourceHash ? { reservedWordSourceHash } : {}),
     ...(sources ? { sources } : {})
   };
 }
@@ -444,21 +472,26 @@ export function buildAtomWordProposal({
   maxLayer = 32,
   weights = NATIVE_LANGUAGE_WEIGHTS,
   candidateLimit = 12,
-  sources
+  sources,
+  skipExistingConcept = false,
+  reservedEntries = [],
+  reservedWordSourceHash
 } = {}) {
   const normalizedConcept = normalizeConcept(concept);
   if (!normalizedConcept) throw invalid("atom word concept must be non-empty text");
   if (!ATOM_WORD_LAYERS.includes(minLayer) || !ATOM_WORD_LAYERS.includes(maxLayer) || minLayer > maxLayer) {
     throw invalid("atom word layer range is invalid", { minLayer, maxLayer });
   }
-  const existing = (existingEntries ?? []).find((entry) => normalizeConcept(entry?.en) === normalizedConcept);
+  const existing = skipExistingConcept
+    ? null
+    : (existingEntries ?? []).find((entry) => normalizeConcept(entry?.en) === normalizedConcept);
   if (existing) {
     return {
       format: ATOM_WORD_GENERATION_FORMAT,
       concept: normalizedConcept,
       status: "already-present",
       existing: { en: existing.en, pya: existing.pya, hnuc: existing.hnuc },
-      ...sourceEvidence({ phonetics, frequency, wordLists, sources })
+      ...sourceEvidence({ phonetics, frequency, wordLists, sources, reservedWordSourceHash })
     };
   }
   const phoneticMatch = findPhoneticEntry(phonetics, normalizedConcept);
@@ -468,10 +501,10 @@ export function buildAtomWordProposal({
       concept: normalizedConcept,
       status: "missing-phonetic-evidence",
       frequency: frequencyRecord(frequency, normalizedConcept),
-      ...sourceEvidence({ phonetics, frequency, wordLists, sources })
+      ...sourceEvidence({ phonetics, frequency, wordLists, sources, reservedWordSourceHash })
     };
   }
-  const used = usedInventory(existingEntries);
+  const used = usedInventory([...(existingEntries ?? []), ...reservedEntries]);
   const layers = [];
   let selected = null;
   let rejectedWord = 0;
@@ -503,7 +536,7 @@ export function buildAtomWordProposal({
       rejectedWord,
       rejectedHnuc,
       layers,
-      ...sourceEvidence({ phonetics, frequency, wordLists, sources })
+      ...sourceEvidence({ phonetics, frequency, wordLists, sources, reservedWordSourceHash })
     };
   }
   return {
@@ -517,7 +550,46 @@ export function buildAtomWordProposal({
     rejectedWord,
     rejectedHnuc,
     layers,
-    ...sourceEvidence({ phonetics, frequency, wordLists, sources })
+    ...sourceEvidence({ phonetics, frequency, wordLists, sources, reservedWordSourceHash })
+  };
+}
+
+export function buildGrammarWordProposal({
+  concept,
+  sourceConcept = concept,
+  existingEntries = pyashWords,
+  ...options
+} = {}) {
+  const normalizedGrammarConcept = normalizeGrammarConcept(concept);
+  const normalizedSourceConcept = normalizeConcept(sourceConcept).replace(/_$/u, "");
+  if (!normalizedGrammarConcept.endsWith("_")) {
+    throw invalid("grammar word concept must end with an underscore", { concept });
+  }
+  if (!normalizedSourceConcept) throw invalid("grammar word source concept must be non-empty", { sourceConcept });
+  const existing = (existingEntries ?? []).find((entry) => normalizeGrammarConcept(entry?.en) === normalizedGrammarConcept);
+  if (existing) {
+    return {
+      format: ATOM_WORD_GENERATION_FORMAT,
+      category: "grammar",
+      concept: normalizedGrammarConcept,
+      sourceConcept: normalizedSourceConcept,
+      status: "already-present",
+      existing: { en: existing.en, pya: existing.pya, hnuc: existing.hnuc },
+      ...sourceEvidence(options)
+    };
+  }
+  const proposal = buildAtomWordProposal({
+    ...options,
+    concept: normalizedSourceConcept,
+    existingEntries,
+    reservedEntries: options.reservedEntries,
+    skipExistingConcept: true
+  });
+  return {
+    ...proposal,
+    category: "grammar",
+    concept: normalizedGrammarConcept,
+    sourceConcept: normalizedSourceConcept
   };
 }
 
