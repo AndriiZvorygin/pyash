@@ -290,6 +290,7 @@ async function main() {
       runtimeName: "strata",
       profileName: payload.model,
       managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || process.env.GPU_HOUSEKEEPER_URL || "",
+      providerUrl: host,
       vramRequiredMb: Number(process.env.PYA_STRATA_VRAM_REQUIRED_MB || process.env.PYASH_STRATA_VRAM_REQUIRED_MIB || 20000),
       timeoutMs: Number(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || 1800000),
       jobSpec: {

@@ -24,36 +24,56 @@ Pyash sends requests to `http://127.0.0.1:8081/v1/chat/completions`. The Strata 
 
 ### GPU manager handoff
 
-Strata must be installed outside this repository. Strata eagerly loads the model on its initial server start, before its `before_load` hook applies, so start it through the Pyash admission helper:
+Strata must be installed outside this repository. Keep its API process available but start it **lazy and loopback-only**; the Housekeeper loads the model only after admitting a Strata job, and unloads it for another managed runtime when needed. A host `systemd --user` service can supervise this lightweight, unloaded API process:
 
 ```sh
-PYASH_ROOT=/path/to/pyash
 STRATA_ROOT="$HOME/Strata"
-python3 "$PYASH_ROOT/command/strata_prepare_gpu.py" 20000 -- "$STRATA_ROOT/run-iq2_xs.sh"
+jq 'del(.before_load, .before_load_timeout_s, .before_load_strict) | .open_browser = false' \
+  "$STRATA_ROOT/strata-iq2_xs.json" > "$STRATA_ROOT/strata-iq2_xs-housekeeper.json"
+mkdir -p "$HOME/.config/systemd/user"
+cat > "$HOME/.config/systemd/user/strata-iq2-xs.service" <<'EOF'
+[Unit]
+Description=Strata API for GPU Housekeeper-managed inference
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Strata
+ExecStart=%h/Strata/.venv/bin/python %h/Strata/serve/server.py --engine strata --config %h/Strata/strata-iq2_xs-housekeeper.json --port 8081 --lazy
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=90
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now strata-iq2-xs.service
+sudo loginctl enable-linger "$USER"
 ```
 
-The helper starts Strata only after the GPU Housekeeper grants capacity. It retries the manager's specific post-discharge VRAM-settling refusal; all other refusals fail closed. In Strata's `strata-<model>.json`, also point `before_load` at the tracked Pyash capacity hook for future unload/reload cycles and set the same free-VRAM threshold. Replace `<pyash-root>` with this checkout's absolute path:
+Do not configure Strata's `before_load` hook to call `/capacity/prepare` in this managed path. The Housekeeper already holds the GPU execution gate while it loads a Strata chat job, so a second admission request from the hook is correctly refused as busy. The Housekeeper admits capacity before calling `/v1/load`; Strata's `min_free_vram_mib` remains a final provider-side floor check:
 
 ```json
 {
   "host": "127.0.0.1",
   "port": 8081,
-  "before_load": ["python3", "<pyash-root>/command/strata_prepare_gpu.py", "20000"],
-  "before_load_timeout_s": 120,
-  "before_load_strict": true,
   "min_free_vram_mib": 20000
 }
 ```
 
-Before startup and before later model reloads, the helper/hook asks the local GPU Housekeeper to admit the requested VRAM. The manager refuses while its execution gate is busy, and only unloads a managed runtime when its provider-specific activity probe confirms it is safe. For Ollama this means no queued/running Housekeeper job, no inference request in the configured idle-log window, `keep_alive: 0` for each resident model, and a verified empty `/api/ps` response. Unknown activity or failed telemetry prevents loading. Strata's `min_free_vram_mib` checks the free-VRAM floor again, closing the short race between manager admission and allocation.
+Register the same loopback API with the Housekeeper in `container/gpu-housekeeper/service/.env`, then recreate only the Housekeeper container so the setting takes effect:
 
-For reverse handoff, register this host's loopback Strata API with the Housekeeper by adding the following to `container/gpu-housekeeper/service/.env`, then restart the Housekeeper:
-
-```sh
+```dotenv
 GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=http://127.0.0.1:8081
 ```
 
-The manager then checks Strata before admitting another managed GPU runtime. It unloads Strata only after its status API confirms zero in-flight requests and the configured 300-second idle grace has elapsed; it verifies `loaded:false` and rechecks actual free VRAM before admitting the next runtime. The Housekeeper uses a short-lived host-network helper container to reach Strata's loopback API, so Strata itself remains bound to `127.0.0.1`. If Strata API-key authentication is enabled, put the same key in the Housekeeper environment as `STRATA_API_KEY`; never commit it.
+```sh
+cd container/gpu-housekeeper/service
+docker compose -p gpu-housekeeper --env-file .env -f compose.gpu.yaml up -d --no-build --force-recreate gpu-housekeeper
+```
+
+The manager then loads Strata for queued Strata jobs and checks its status before admitting another managed GPU runtime. It unloads Strata only after its status API confirms zero in-flight requests and the configured 300-second idle grace has elapsed; it verifies `loaded:false` and rechecks actual free VRAM before admitting the next runtime. The Housekeeper uses a short-lived host-network helper container to reach Strata's loopback API, so Strata itself remains bound to `127.0.0.1`. If Strata API-key authentication is enabled, put the same key in the Housekeeper environment as `STRATA_API_KEY`; never commit it.
 
 Non-streaming Strata mind calls are submitted as `strata-chat` jobs through the
 Pyash GPU Housekeeper. The Housekeeper owns the device gate, capacity check,
@@ -61,6 +81,9 @@ safe discharge of idle managed runtimes, Strata load/reload, and the provider
 request. The caller receives the completed response after the queued job
 finishes. This keeps web chat and ordinary mind calls on the same GPU control
 plane instead of letting a caller race a resident model directly.
+For a local Strata endpoint, the mind runner infers the co-located Housekeeper
+at `http://localhost:8090`; remote GPU hosts should set
+`PYA_GPU_HOUSEKEEPER_URL` explicitly.
 
 The Housekeeper's Strata activity probe uses Strata's own in-flight and
 last-request status, and refuses to discharge it when those fields are absent
