@@ -1,0 +1,7 @@
+su name translation_english_wordnet_linker be map def
+su text "format" ob text "english-wordnet-linker-v1" ya
+su text "queue-intent" ob text "mind" ya
+su text "queue-lane" ob text "durable" ya
+su text "max-batch" ob num 200 ya
+su text "response-contract" ob text "one bounded sense-links object" ya
+prah

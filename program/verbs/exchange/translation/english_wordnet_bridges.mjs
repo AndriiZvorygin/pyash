@@ -8,7 +8,7 @@ export const ENGLISH_WORDNET_BRIDGE_CONFIG_URL = new URL("./english_wordnet_brid
 
 const WORDNET_POS = new Set(["a", "n", "r", "v", "s"]);
 const CERTAINTIES = new Set(["deterministic", "contextual"]);
-const METADATA_KEYS = new Set(["format", "source", "mode"]);
+const METADATA_KEYS = new Set(["format", "source", "source-hash", "mode"]);
 
 function invalid(message, details = {}) {
   const error = new Error(message);

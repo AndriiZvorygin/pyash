@@ -39,6 +39,13 @@ WordNet sense: `su` is the POS-prefixed sense key, `ob` is an existing English t
 `as` is the target part of speech, `with` is certainty, and `via` is provenance. The bridge
 provides a bounded candidate after the normal sentence sense selection; it does not add a
 second vocabulary or transcript format.
+The bounded linker workflow is configured in
+`program/verbs/exchange/translation/english_wordnet_linker.pya`. Its JavaScript adapter emits
+one stable record per WordNet sense, builds a bounded inventory from existing Pyash coverage,
+and sends only unresolved senses through the existing durable `mind`/`gpu` future queue. The
+worker may choose only an inventory-backed target; accepted evidence renders into the bridge
+map. The configured batch bound is 200 senses, and the linker never edits the vocabulary
+directly.
 The current catalog covers all 17 Open English WordNet `feel` senses. Context examples select
 `emotionally` for an emotional state, `experience` for a conscious or passive state,
 `finger` for touch examination, `touch` for physical sensation or palpation, `searching` for
