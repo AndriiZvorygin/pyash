@@ -307,6 +307,56 @@ test("WordNet auto-resolves only when every available sense agrees on one existi
   assert.deepEqual(token.semanticCandidates, []);
 });
 
+test("WordNet context selects the matching sense before deterministic agreement", () => {
+  const wordnet = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:river:bank",
+      pos: "n",
+      synset: "river",
+      senseKey: "river",
+      lemma: "bank",
+      gloss: "sloping land beside a river"
+    }, {
+      id: "n:river:riverbank",
+      pos: "n",
+      synset: "river",
+      senseKey: "river",
+      lemma: "riverbank",
+      gloss: "sloping land beside a river"
+    }, {
+      id: "n:finance:bank",
+      pos: "n",
+      synset: "finance",
+      senseKey: "finance",
+      lemma: "bank",
+      gloss: "financial institution handling an account"
+    }, {
+      id: "n:finance:financial",
+      pos: "n",
+      synset: "finance",
+      senseKey: "finance",
+      lemma: "financial",
+      gloss: "financial institution handling an account"
+    }]
+  });
+  const resolveWord = (word) => ({
+    riverbank: { coverageType: "atomic", pyashSequence: ["tlap"] },
+    financial: { coverageType: "atomic", pyashSequence: ["hrit"] }
+  }[word] ?? null);
+
+  const river = analyzeEnglishSentence("river bank", { wordnetIndex: wordnet, resolveWord });
+  const riverBank = river.tokens.find((token) => token.surface === "bank");
+  assert.equal(riverBank.coverageType, "semantic-wordnet");
+  assert.deepEqual(riverBank.pyashSequence, ["tlap"]);
+  assert.match(riverBank.evidence, /context matched river/u);
+
+  const finance = analyzeEnglishSentence("bank account", { wordnetIndex: wordnet, resolveWord });
+  const financeBank = finance.tokens.find((token) => token.surface === "bank");
+  assert.equal(financeBank.coverageType, "semantic-wordnet");
+  assert.deepEqual(financeBank.pyashSequence, ["hrit"]);
+  assert.match(financeBank.evidence, /context matched account/u);
+});
+
 test("such as is classified as an exemplifier construction", async () => {
   const result = await analyzeDefaultEnglishSentence("love includes things such as friendship");
   const such = result.tokens.find((token) => token.surface === "such");

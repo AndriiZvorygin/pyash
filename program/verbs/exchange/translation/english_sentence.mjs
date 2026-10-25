@@ -47,6 +47,11 @@ const COMPOSITIONAL_CASE_ALIASES = new Map([
   ["below", "beneath"],
   ["upon", "on"]
 ]);
+const WORDNET_CONTEXT_STOP_WORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "but", "by", "can", "for", "from",
+  "has", "have", "in", "into", "is", "it", "of", "on", "or", "that", "the", "their",
+  "there", "these", "this", "those", "to", "was", "were", "with"
+]);
 
 let defaultResourcesPromise = null;
 let sentenceResourcesPromise = null;
@@ -114,6 +119,56 @@ function wordNetMetadata(surface, wordnetIndex) {
     senses,
     evidence: senses.map((sense) => `${sense.pos}:${sense.synset}${sense.gloss ? ` ${sense.gloss}` : ""}`).join("; ")
   };
+}
+
+function wordNetContextTerms(records, index) {
+  const terms = new Set();
+  const start = Math.max(0, index - 4);
+  const end = Math.min(records.length, index + 5);
+  for (let contextIndex = start; contextIndex < end; contextIndex += 1) {
+    if (contextIndex === index) continue;
+    const record = records[contextIndex];
+    for (const value of [record?.surface, record?.lemma]) {
+      for (const variant of wordNetLookupVariants(value)) {
+        for (const term of variant.split(/\s+/u)) {
+          if (term.length > 2 && !WORDNET_CONTEXT_STOP_WORDS.has(term)) terms.add(term);
+        }
+      }
+    }
+  }
+  return terms;
+}
+
+function wordNetSenseContext(sense, contextTerms) {
+  const senseTerms = new Set([
+    ...wordNetLookupVariants(sense?.gloss ?? "").flatMap((value) => value.split(/\s+/u)),
+    ...(sense?.lemmas ?? []).flatMap((lemma) => wordNetLookupVariants(lemma))
+  ]);
+  const matched = [...contextTerms].filter((term) => senseTerms.has(term));
+  return { score: matched.length, matched };
+}
+
+function selectWordNetSenses(record, records, index) {
+  const senses = record?.wordnet?.senses ?? [];
+  if (senses.length < 2) return { senses, evidence: "" };
+  const contextTerms = wordNetContextTerms(records, index);
+  if (contextTerms.size === 0) return { senses, evidence: "" };
+  const scored = senses.map((sense) => ({
+    sense,
+    context: wordNetSenseContext(sense, contextTerms)
+  }));
+  const bestScore = Math.max(...scored.map((entry) => entry.context.score));
+  if (bestScore <= 0) return { senses, evidence: "" };
+  const selected = scored.filter((entry) => entry.context.score === bestScore);
+  if (selected.length !== 1) return { senses, evidence: "" };
+  return {
+    senses: selected.map((entry) => entry.sense),
+    evidence: `sentence context matched ${entryTerms(selected[0].context.matched)}`
+  };
+}
+
+function entryTerms(terms) {
+  return terms.join(", ");
 }
 
 function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex, wordnetIndex } = {}) {
@@ -360,9 +415,10 @@ function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, mar
   };
 }
 
-function wordNetSenseCandidates(record, resolveWord) {
+function wordNetSenseCandidates(record, resolveWord, records, index) {
   if (record?.consumedBy || record?.pyashSequence?.length || !record?.wordnet?.senses || typeof resolveWord !== "function") return [];
-  return record.wordnet.senses.map((sense) => {
+  const selection = selectWordNetSenses(record, records, index);
+  return selection.senses.map((sense) => {
     const candidates = new Map();
     for (const lemma of sense.lemmas ?? []) {
       if (!lemma || lemma === record.surface) continue;
@@ -375,7 +431,10 @@ function wordNetSenseCandidates(record, resolveWord) {
         morphologySequence: [],
         markerNames: [],
         certainty: "contextual",
-        evidence: `WordNet ${sense.pos}:${sense.synset} synonym ${lemma}${sense.gloss ? `; ${sense.gloss}` : ""}`
+        evidence: [
+          `WordNet ${sense.pos}:${sense.synset} synonym ${lemma}${sense.gloss ? `; ${sense.gloss}` : ""}`,
+          selection.evidence
+        ].filter(Boolean).join("; ")
       });
       candidates.set(candidate.id, candidate);
     }
@@ -384,8 +443,8 @@ function wordNetSenseCandidates(record, resolveWord) {
 }
 
 function addWordNetCandidates(records, resolveWord) {
-  return records.map((record) => {
-    const candidateSets = wordNetSenseCandidates(record, resolveWord);
+  return records.map((record, index) => {
+    const candidateSets = wordNetSenseCandidates(record, resolveWord, records, index);
     const candidates = candidateSets.flat();
     const uniqueSequences = new Map(candidates.map((candidate) => [candidate.pyashSequence.join(" "), candidate]));
     if (candidateSets.length > 0

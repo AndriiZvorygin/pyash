@@ -22,7 +22,10 @@ It supplies part-of-speech, synset, gloss, and same-synset evidence for unresolv
 does not create vocabulary. A term is auto-resolved only when the existing Pyash inventory and
 sentence context leave one result. Multiple senses or missing inventory evidence remain
 unresolved and can enter the existing bounded Housekeeper verifier, whose response is limited
-to supplied candidate ids. The English `such as` surface is classified as an
+to supplied candidate ids. For unresolved WordNet terms, a bounded local sentence window scores
+exact overlap between neighboring words and sense glosses or lemmas before this agreement check;
+a unique positive match narrows the sense set, while tied or unmapped senses remain reviewable.
+The English `such as` surface is classified as an
 `exemplifier` construction, a subtype of `exemplification`. It lowers to `fluh ga`: the
 `example_` referential head with the space-way case, whose established surface glosses
 are “at” and “via”; the fused form is `fluhga`. The lexical noun form remains `tlam`
