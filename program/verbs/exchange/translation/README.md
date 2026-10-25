@@ -54,7 +54,7 @@ and the emotional-sensitivity sense of `feelings`; plural `pu` and adjective `ci
 Pyash grammar suffixes. Broad `feel` and singular `feeling` stay contextual because WordNet
 also gives them tactile, perceptual, intuitive, and physical senses. The native bridge catalog
 covers all 17 Open English WordNet senses of `feel` with existing anchors such as `touch`,
-`awareness`, `experience`, `searching`, and `appear`; sentence context selects among those
+`awareness`, `experience`, `searching`, `appear`, and `air`; sentence context selects among those
 bridges and leaves genuinely tied readings reviewable.
 The analyzer also scores a bounded local sentence window against sense glosses and lemmas;
 one unique positive overlap narrows the sense set before deterministic agreement.
