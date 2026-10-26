@@ -14,6 +14,12 @@ server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
 
 
+class HousekeeperServerConfigTests(unittest.TestCase):
+  def test_server_defaults_to_port_18886_and_allows_explicit_override(self):
+    self.assertEqual(server.parse_server_args([]).port, 18886)
+    self.assertEqual(server.parse_server_args(["--port", "8090"]).port, 8090)
+
+
 class HousekeeperOllamaTests(unittest.TestCase):
   def setUp(self):
     self.original_pya_dir = os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")

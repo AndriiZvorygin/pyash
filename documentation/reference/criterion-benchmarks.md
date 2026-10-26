@@ -210,7 +210,7 @@ The factuality-first pilot is a separate, post-generation evaluation lane:
 
 ```bash
 OLLAMA_BASE_URL=http://mriczo:11434 \
-PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 \
 node command/criterion.mjs meetingbank-factuality-pilot \
   --dataset "$PYA_BENCHMARK_CACHE/meetingbank/test.jsonl" \
   --run-id meetingbank-qwen-factuality-pilot-20260916 \

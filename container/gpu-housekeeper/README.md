@@ -13,7 +13,7 @@ survives SSH disconnects, but not a Mac reboot; rerun the installer after
 reboot unless the LaunchAgent can be bootstrapped.
 
 Ollama stays bound to 127.0.0.1:11434. Housekeeper is the only peer-facing
-service, on port 8090, and identifies this peer as macstudio. Its installer
+service, on port 18886 by default, and identifies this peer as macstudio. Its installer
 binds to loopback by default; set GPU_HOUSEKEEPER_BIND_HOST to the specific
 trusted overlay address to enable federation. The same manager also listens
 on Mac loopback for a trusted SSH tunnel to reach that single manager
@@ -27,6 +27,12 @@ to warm-load and inference requests unless a job explicitly sets `num_ctx`.
 Ollama residency is checked through
 /api/ps; idle models are discharged with keep_alive=0 and verified absent
 from that endpoint.
+
+Port 18886 is the default for new installs. Existing running services keep
+their explicitly configured listener and peer URLs until they are migrated.
+The Linux Compose deployment also publishes legacy host port 8090 to the same
+listener so already-running workers and federated peers continue to work
+during migration; new Pyash clients use 18886.
 
 To install or refresh from a checkout on the Mac:
 
@@ -45,13 +51,13 @@ Add the Mac as a peer in the GPU Housekeeper host's GPU_HOUSEKEEPER_PEERS
 setting, for example:
 
 ```text
-swac=http://swac:8090;macstudio=http://macstudio:8090
+swac=http://swac:8090;macstudio=http://macstudio:18886
 ```
 
 The peer hostname must resolve from the Housekeeper host (for this setup, the
 existing /etc/hosts mapping provides macstudio). Verify the peer from the
-Housekeeper host with `curl http://macstudio:8090/health` and
-`curl http://macstudio:8090/snapshot`, then confirm
+Housekeeper host with `curl http://macstudio:18886/health` and
+`curl http://macstudio:18886/snapshot`, then confirm
 accelerator.memoryModel is unified, the Ollama runtime is running, and the
 available device is apple0.
 
@@ -60,7 +66,7 @@ to the Mac's overlay IPv6 address, use `command/macstudio-peer-tunnel.sh` as a
 user systemd service. It binds SSH forwarding to the Docker default bridge
 gateway only and forwards to Mac loopback; do not bind this relay to all host
 interfaces. Set the local peer URL to
-`macstudio=http://DOCKER_BRIDGE_GATEWAY:8091`. The tunnel requires working
+`macstudio=http://DOCKER_BRIDGE_GATEWAY:18887`. The tunnel requires working
 key-based SSH to `ai@macstudio` and can be started by a user service without
 sudo. A user unit can use:
 

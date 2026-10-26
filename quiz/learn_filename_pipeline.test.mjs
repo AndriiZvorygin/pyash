@@ -102,7 +102,7 @@ test("learn child runs default to the local housekeeper and preserve explicit qu
     delete process.env.PYA_GPU_HOUSEKEEPER_URL;
     delete process.env.PYA_GPU_MIND_QUEUE;
     const defaults = buildLearnChildEnv();
-    assert.equal(defaults.PYA_GPU_HOUSEKEEPER_URL, "http://localhost:8090");
+    assert.equal(defaults.PYA_GPU_HOUSEKEEPER_URL, "http://localhost:18886");
     assert.equal(defaults.PYA_GPU_MIND_QUEUE, "truth");
 
     const configured = buildLearnChildEnv({ PYA_GPU_HOUSEKEEPER_URL: "http://gpu-housekeeper:8090" });
@@ -112,7 +112,7 @@ test("learn child runs default to the local housekeeper and preserve explicit qu
     assert.equal(buildLearnChildEnv().PYA_GPU_MIND_QUEUE, "truth");
     const direct = buildLearnChildEnv({ PYA_GPU_MIND_QUEUE: "false" });
     assert.equal(direct.PYA_GPU_MIND_QUEUE, "false");
-    assert.equal(direct.PYA_GPU_HOUSEKEEPER_URL, "http://localhost:8090");
+    assert.equal(direct.PYA_GPU_HOUSEKEEPER_URL, "http://localhost:18886");
   } finally {
     if (originalManager === undefined) delete process.env.PYA_GPU_HOUSEKEEPER_URL;
     else process.env.PYA_GPU_HOUSEKEEPER_URL = originalManager;

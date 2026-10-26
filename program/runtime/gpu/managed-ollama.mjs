@@ -4,7 +4,7 @@ import { resolveGpuSourceIdentity } from "./source_identity.mjs";
 
 export { DEFAULT_TEXT_MODEL } from "./text-model.mjs";
 
-export const DEFAULT_GPU_HOUSEKEEPER_URL = "http://localhost:8090";
+export const DEFAULT_GPU_HOUSEKEEPER_URL = "http://localhost:18886";
 
 const DEFAULT_FETCH = globalThis.fetch;
 
@@ -50,7 +50,7 @@ function managerUrlFromOllama(ollamaUrl = "") {
     // The housekeeper is the stable control-plane port for the remote GPU
     // host, regardless of whether the provider itself is Ollama, ComfyUI,
     // or another service port.
-    if (["11434", "8188", "8010", ""].includes(parsed.port)) parsed.port = "8090";
+    if (["11434", "8188", "8010", ""].includes(parsed.port)) parsed.port = "18886";
     return parsed.toString().replace(/\/+$/u, "");
   } catch {
     return "";
