@@ -7,6 +7,10 @@ import { tmpdir } from "node:os";
 import { parseVliwCatalogPya } from "../program/library/vliw/index.mjs";
 import { runTranslationDocument } from "../command/translate_document.mjs";
 import {
+  decodeCheckpointText,
+  encodeCheckpointText
+} from "../command/run_pya_helpers.mjs";
+import {
   lowerTranslationToPyac,
   parseTranslationPipelinePya,
   renderTranslationPipelinePya,
@@ -204,6 +208,53 @@ test("translation document command writes durable evidence and Pyac outputs", as
   assert.equal(parseVliwCatalogPya(readFileSync(catalog, "utf8")).catalog.records.length, 2);
   assert.equal(readFileSync(pack).length > 32, true);
   assert.equal(reports.length, 1);
+});
+
+test("translation document resumes unchanged stages from its Pyash checkpoint newspaper", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pyash-translation-resume-"));
+  const source = join(directory, "source.txt");
+  const translation = join(directory, "translation.pya");
+  const catalog = join(directory, "catalog.pya");
+  const pack = join(directory, "pack.pyac");
+  const runId = "translation-resume-checkpoint";
+  writeFileSync(source, "collector is number 5.\nadd 2 to collector.\n", "utf8");
+  const firstStages = [];
+  const first = await runTranslationDocument(
+    ["english", source, translation, catalog, pack],
+    {
+      report: () => {},
+      runId,
+      checkpointCwd: directory,
+      onStage: (stage) => firstStages.push(stage)
+    }
+  );
+  const newspaper = join(directory, "newspaper", `${runId}.pya`);
+  const newspaperText = readFileSync(newspaper, "utf8");
+  assert.equal(firstStages.length, 9);
+  assert.equal((newspaperText.match(/be checkpoint/gu) ?? []).length, 9);
+  const secondStages = [];
+  const second = await runTranslationDocument(
+    ["english", source, translation, catalog, pack],
+    {
+      report: () => {},
+      runId,
+      checkpointCwd: directory,
+      onStage: (stage) => secondStages.push(stage)
+    }
+  );
+  assert.deepEqual(secondStages, []);
+  assert.equal(second.result.runId, runId);
+  assert.equal(second.result.checkpointPath, newspaper);
+  assert.equal(second.result.packHash, first.result.packHash);
+});
+
+test("checkpoint text escaping preserves newlines, literal escapes, and noisy payload text", () => {
+  const source = "line one\nline two\\n\\u000a\rline three";
+  const encoded = encodeCheckpointText(source);
+  assert.equal(encoded.includes("\n"), false);
+  assert.equal(encoded.includes("\r"), false);
+  assert.equal(decodeCheckpointText(encoded), source);
+  assert.equal(decodeCheckpointText("checkpoint noise"), "checkpoint noise");
 });
 
 test("translation catalogs keep repeated vocabulary gaps replayable", async () => {

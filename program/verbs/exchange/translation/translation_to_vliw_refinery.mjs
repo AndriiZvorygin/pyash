@@ -301,6 +301,7 @@ async function runStage(sentence, context) {
   }
   const stage = text(sentence?.su?.name);
   const output = outputName(sentence);
+  context.onStage?.(stage);
   let result;
 
   if (stage === "read source") {
@@ -438,6 +439,7 @@ export async function runTranslationSourceToVliwRefinery({
   checkpointEnabled = true,
   retryConfig,
   onEvoke,
+  onStage,
   onCheckpoint,
   onRetry
 } = {}) {
@@ -473,7 +475,8 @@ export async function runTranslationSourceToVliwRefinery({
     compoundCache: null,
     result: null,
     translation: null,
-    database: null
+    database: null,
+    onStage
   };
 
   await runRefinery({

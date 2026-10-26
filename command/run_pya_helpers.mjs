@@ -397,10 +397,43 @@ export async function materializeProduceBundle(bundle) {
   return written;
 }
 
+export function encodeCheckpointText(value) {
+  const source = String(value ?? "");
+  let encoded = "";
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "\\") encoded += "\\u005c";
+    else if (character === "\r") encoded += "\\u000d";
+    else if (character === "\n") encoded += "\\u000a";
+    else encoded += character;
+  }
+  return encoded;
+}
+
+export function decodeCheckpointText(value) {
+  const source = String(value ?? "");
+  let decoded = "";
+  for (let index = 0; index < source.length; index += 1) {
+    if (source.startsWith("\\u005c", index)) {
+      decoded += "\\";
+      index += 5;
+    } else if (source.startsWith("\\u000d", index)) {
+      decoded += "\r";
+      index += 5;
+    } else if (source.startsWith("\\u000a", index)) {
+      decoded += "\n";
+      index += 5;
+    } else {
+      decoded += source[index];
+    }
+  }
+  return decoded;
+}
+
 function parseCheckpointPayload(text) {
   if (typeof text !== "string" || text.length === 0) return null;
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(decodeCheckpointText(text));
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
@@ -538,16 +571,19 @@ export async function loadCheckpointIndex({ runId, cwd }) {
     }
     if (sentence?.be !== "checkpoint" || sentence?.mood !== "ya") continue;
     const refineryName = sentence?.from?.name;
-    const platformName = sentence?.su?.name;
     const hash = sentence?.ob?.text;
     const payload = parseCheckpointPayload(sentence?.fromtext?.text);
+    const rawPlatform = line.match(/^su name (.+?)\s+ob text\s+/u)?.[1]?.trim();
+    const platformName = payload?.platform || rawPlatform || sentence?.su?.name;
     const resultSentence =
       (payload && typeof payload === "object" && payload.result ? payload.result : payload)
       ?? sentence?.to?.la;
     const exportFacts = Array.isArray(payload?.exports) ? payload.exports : [];
     const scopeSlots = payload?.scope && typeof payload.scope === "object" ? payload.scope : {};
     if (!refineryName || !platformName || !hash || !resultSentence) continue;
-    const resultLine = sentence?.totext?.text ?? sentenceToPyash(resultSentence);
+    const resultLine = sentence?.totext?.text
+      ? decodeCheckpointText(sentence.totext.text)
+      : sentenceToPyash(resultSentence);
     if (!checkpoints.has(refineryName)) checkpoints.set(refineryName, new Map());
     checkpoints.get(refineryName).set(platformName, { hash, resultSentence, resultLine, exportFacts, scopeSlots });
   }
