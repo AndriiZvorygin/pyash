@@ -182,26 +182,34 @@ test("source-to-VLIW refinery closes the Qwen sense-link loop", async () => {
   const wordnetIndex = buildEnglishWordNetIndex({
     rows: [
       {
-        id: "v:dynamic-v:florp",
+        id: "v:dynamic-v-one:florp",
         pos: "v",
-        synset: "dynamic-v",
-        senseKey: "dynamic-v",
+        synset: "dynamic-v-one",
+        senseKey: "dynamic-v-one",
         lemma: "florp",
         gloss: "like something"
       },
       {
-        id: "v:dynamic-v:like",
+        id: "v:dynamic-v-one:like",
         pos: "v",
-        synset: "dynamic-v",
-        senseKey: "dynamic-v",
+        synset: "dynamic-v-one",
+        senseKey: "dynamic-v-one",
         lemma: "like",
         gloss: "like something"
       },
       {
-        id: "v:dynamic-v:dislike",
+        id: "v:dynamic-v-two:florp",
         pos: "v",
-        synset: "dynamic-v",
-        senseKey: "dynamic-v",
+        synset: "dynamic-v-two",
+        senseKey: "dynamic-v-two",
+        lemma: "florp",
+        gloss: "dislike something"
+      },
+      {
+        id: "v:dynamic-v-two:dislike",
+        pos: "v",
+        synset: "dynamic-v-two",
+        senseKey: "dynamic-v-two",
         lemma: "dislike",
         gloss: "like something"
       }
@@ -244,13 +252,10 @@ test("source-to-VLIW refinery closes the Qwen sense-link loop", async () => {
         return { status: "queued" };
       },
       awaitHandle: async () => JSON.stringify({
-        verdict: "complete",
-        senses: submitted.candidates.map((record) => ({
-          id: record.id,
-          status: "accept",
-          targetEnglish: "like",
-          rationale: "fixture Qwen decision"
-        }))
+        verdict: "accept",
+        senseId: "v:dynamic-v-one",
+        confidence: "high",
+        rationale: "fixture Qwen decision"
       })
     }
   });

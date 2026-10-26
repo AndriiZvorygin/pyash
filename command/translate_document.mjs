@@ -8,7 +8,7 @@ import {
   COMPOUND_TRANSLATION_LANGUAGES,
   createDefaultQueuedCompoundTranslator
 } from "../program/verbs/exchange/translation/compound_translation_cache.mjs";
-import { createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter } from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
+import { createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter } from "../program/verbs/exchange/translation/english_wordnet_selection.mjs";
 import { runTranslationSourceToVliwRefinery } from "../program/verbs/exchange/translation/translation_to_vliw_refinery.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
@@ -90,7 +90,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   (async () => {
     await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret, entryPath: process.cwd() });
     const queueVocabulary = await createDefaultQueuedMindTranslationVocabularySubmitter();
-    const queueWordNet = await createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter();
+    const queueWordNet = await createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter();
     const coverage = await loadCoverage();
     const compoundTranslator = await createDefaultQueuedCompoundTranslator();
     return runTranslationDocument(process.argv.slice(2), {

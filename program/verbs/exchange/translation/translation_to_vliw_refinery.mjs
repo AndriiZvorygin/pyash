@@ -11,8 +11,11 @@ import {
   segmentTranslationDocument,
   translateDocumentSegments
 } from "./translation_pipeline.mjs";
-import { refineEnglishWordNet } from "./english_wordnet_refinery.mjs";
-import { buildEnglishWordNetSenseBridgeIndex } from "./english_wordnet_linker.mjs";
+import {
+  appendEnglishWordNetAttachmentCandidates,
+  buildEnglishWordNetSelectedBridgeIndex,
+  refineEnglishWordNet
+} from "./english_wordnet_refinery.mjs";
 import {
   reconcileTranslationVocabularyCandidates,
   submitTranslationVocabularyCandidates
@@ -40,6 +43,10 @@ function invalid(message, details = {}) {
 
 function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
+}
+
+function occurrenceKey(recordId, surface) {
+  return `${text(recordId)}\u0000${text(surface).toLowerCase()}`;
 }
 
 function mapFact(name, map) {
@@ -88,10 +95,16 @@ async function refineSenses(context, translated) {
     awaitHandle: context.wordnetRefinery.awaitHandle,
     maxRepairAttempts: context.wordnetRefinery.maxRepairAttempts
   });
-  const wordnetBridges = buildEnglishWordNetSenseBridgeIndex(
-    wordnet.records.filter((record) => record.status === "accepted-llm")
-  );
-  const hasAcceptedLinks = wordnet.records.some((record) => record.status === "accepted-llm");
+  const wordnetBridges = buildEnglishWordNetSelectedBridgeIndex(wordnet.records);
+  const acceptedRecordKeys = new Set(wordnet.records
+    .filter((record) => ["accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm"].includes(record.status))
+    .map((record) => occurrenceKey(record.sourceRecordId, record.surface)));
+  const blockedRecordKeys = new Set(wordnet.records
+    .filter((record) => record.status === "error")
+    .map((record) => occurrenceKey(record.sourceRecordId, record.surface)));
+  const hasAcceptedLinks = wordnet.records.some((record) => [
+    "accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm"
+  ].includes(record.status));
   const closedLoopTranslation = hasAcceptedLinks
     ? await translateDocumentSegments({
       language: translated.language,
@@ -105,8 +118,17 @@ async function refineSenses(context, translated) {
       wordnetBridges
     })
     : translated;
+  const filteredVocabulary = (closedLoopTranslation.vocabularyCandidates ?? []).filter((candidate) => {
+    const key = occurrenceKey(candidate.sourceRecordId, candidate.surface);
+    return !blockedRecordKeys.has(key) && !acceptedRecordKeys.has(key);
+  });
+  const attachedTranslation = appendEnglishWordNetAttachmentCandidates({
+    ...closedLoopTranslation,
+    vocabularyCandidates: filteredVocabulary,
+    ...(wordnet.errors?.length > 0 ? { errors: wordnet.errors } : {})
+  }, wordnet.records);
   return {
-    translation: { ...closedLoopTranslation, wordnet },
+    translation: { ...attachedTranslation, wordnet },
     wordnet
   };
 }
@@ -248,13 +270,17 @@ function buildCommandResult(context, translation, database, compoundCache) {
     vocabularyOutcome: vocabulary.settled?.queue?.outcome
       ?? vocabulary.queued?.result?.vocabularyQueue?.status
       ?? null,
+    wordnetDecisions: wordnet?.counts.decisions ?? 0,
+    wordnetAmbiguous: wordnet?.counts.ambiguous ?? 0,
+    wordnetSelected: wordnet?.counts.selected ?? 0,
     wordnetSenseRecords: wordnet?.counts.senses ?? 0,
     wordnetAccepted: wordnet?.counts.accepted ?? 0,
     wordnetLeafLinks: wordnet?.counts.leaf ?? 0,
     wordnetDeterministicLinks: wordnet?.counts.deterministic ?? 0,
-    wordnetUnresolved: wordnet?.queuePending ?? 0,
+    wordnetUnresolved: wordnet?.counts.unresolved ?? 0,
     wordnetQueuePending: wordnet?.queues?.filter((queue) => queue.status !== "complete").length ?? 0,
-    wordnetPending: wordnet?.queuePending ?? 0,
+    wordnetPending: wordnet?.queues?.filter((queue) => queue.status !== "complete").length ?? 0,
+    wordnetErrors: wordnet?.counts.errors ?? 0,
     wordnetQueueHandle: wordnet?.queueHandle ?? null,
     wordnetQueueHandles: wordnet?.queues?.map((queue) => queue.handleId) ?? [],
     compoundRequests: compoundCache?.requested ?? 0,

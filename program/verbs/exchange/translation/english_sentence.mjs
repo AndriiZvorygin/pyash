@@ -152,7 +152,7 @@ function wordNetContextTerms(records, index) {
   return terms;
 }
 
-function wordNetSenseKey(sense) {
+export function wordNetSenseKey(sense) {
   return `${sense?.pos ?? ""}:${sense?.synset ?? ""}`;
 }
 
@@ -225,7 +225,7 @@ function wordNetSenseContext(sense, contextTerms, records, index, wordnetIndex) 
   };
 }
 
-function selectWordNetSenses(record, records, index, wordnetIndex) {
+export function selectEnglishWordNetSenses(record, records, index, wordnetIndex) {
   const allSenses = record?.wordnet?.senses ?? [];
   const expectedPartsOfSpeech = expectedWordNetPartsOfSpeech(records, index);
   const filteredSenses = allSenses.filter((sense) => expectedPartsOfSpeech.has(sense.pos));
@@ -501,7 +501,7 @@ function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, mar
 
 function wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex, wordnetBridges) {
   if (record?.consumedBy || record?.pyashSequence?.length || !record?.wordnet?.senses || typeof resolveWord !== "function") return [];
-  const selection = selectWordNetSenses(record, records, index, wordnetIndex);
+  const selection = selectEnglishWordNetSenses(record, records, index, wordnetIndex);
   const dynamicSenses = record.wordnet.senses.filter((sense) => (
     wordnetBridges?.has?.(wordNetSenseKey(sense))
   ));

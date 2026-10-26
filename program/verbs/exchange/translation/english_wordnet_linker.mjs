@@ -13,6 +13,10 @@ import {
   loadTranslationModelCard,
   TRANSLATION_MODEL_CARDS_URL
 } from "./translation_model_cards.mjs";
+import {
+  ENGLISH_WORDNET_SELECTION_DEFAULT_OUTPUT_TOKENS,
+  ENGLISH_WORDNET_SELECTION_FORMAT
+} from "./english_wordnet_selection.mjs";
 
 export const ENGLISH_WORDNET_LINKER_FORMAT = "english-wordnet-linker-v1";
 export const ENGLISH_WORDNET_LINKER_NAME = "translation_english_wordnet_linker";
@@ -257,6 +261,38 @@ function directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree) {
     if (candidate.edgeEligible) prior.evidence = candidate.evidence;
   }
   return [...candidates.values()];
+}
+
+export function linkEnglishWordNetSense({
+  sense,
+  sourceTerm = "",
+  resolveWord,
+  wordnetIndex,
+  edgeMaxDegree = ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE
+} = {}) {
+  const source = senseKey(sense?.pos, sense?.synset);
+  const record = {
+    id: senseId(source),
+    source,
+    pos: text(sense?.pos),
+    synset: text(sense?.synset),
+    lemmas: [...new Set((sense?.lemmas ?? [sense?.lemma]).map(normalized).filter(Boolean))].sort(),
+    gloss: text(sense?.gloss),
+    sourceTerms: sourceTerm ? [normalized(sourceTerm)] : [],
+    candidates: []
+  };
+  const existing = bridgeFor(wordnetIndex, source, resolveWord);
+  if (existing?.target && existing.pyashSequence.length > 0) {
+    return { ...record, status: "accepted-existing", link: existing };
+  }
+  record.candidates = directCandidates(record, resolveWord, wordnetIndex, edgeDegreeLimit(edgeMaxDegree));
+  const edgeCandidates = record.candidates.filter((candidate) => candidate.edgeEligible);
+  const linked = edgeCandidates.length === 1
+    ? { status: "accepted-edge", link: edgeCandidates[0] }
+    : record.candidates.length === 1
+      ? { status: "accepted-deterministic", link: record.candidates[0] }
+      : { status: "review" };
+  return { ...record, ...linked };
 }
 
 function rowsForWordNetIndex(wordnetIndex) {
@@ -507,7 +543,13 @@ export async function submitEnglishWordNetSenseLinks({
 } = {}) {
   if (!Array.isArray(records)) throw invalid("WordNet linker records must be an array");
   const pending = records.filter((record) => !ACCEPTED_STATUSES.has(record?.status));
-  if (pending.length === 0) return { submitted: false, records: [...records], pending: [] };
+  const decisionPending = pending.filter((record) => (
+    Array.isArray(record?.candidates) && record.candidates.length > 0
+  ));
+  const skipped = pending.filter((record) => !decisionPending.includes(record));
+  if (decisionPending.length === 0) {
+    return { submitted: false, records: [...records], pending: [], skipped };
+  }
   if (typeof submit !== "function") throw invalid("WordNet linker requires a queue submitter");
   const promptOptions = {
     inventory,
@@ -518,7 +560,7 @@ export async function submitEnglishWordNetSenseLinks({
     maxOutputTokens,
     maxDutySenses: Math.max(1, Math.trunc(Number(maxDutySenses) || ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE))
   };
-  const batches = partitionSenseRecords(pending, promptOptions);
+  const batches = partitionSenseRecords(decisionPending, promptOptions);
   const queues = [];
   const prompts = [];
   const responses = [];
@@ -558,7 +600,8 @@ export async function submitEnglishWordNetSenseLinks({
     response: responses.length === 1 ? responses[0] : responses,
     queue: queues.length === 1 ? queues[0] : null,
     queues,
-    pending,
+    pending: decisionPending,
+    skipped,
     records: records.map((record) => pendingQueues.has(record.id)
       ? { ...record, queue: pendingQueues.get(record.id) }
       : { ...record })
@@ -888,6 +931,11 @@ export function parseEnglishWordNetLinkerConfig(source) {
   if (metadata.format !== ENGLISH_WORDNET_LINKER_FORMAT) {
     throw invalid("WordNet linker configuration has an unsupported format", { format: metadata.format });
   }
+  if (metadata["selection-format"] && metadata["selection-format"] !== ENGLISH_WORDNET_SELECTION_FORMAT) {
+    throw invalid("WordNet linker configuration has an unsupported selection format", {
+      format: metadata["selection-format"]
+    });
+  }
   return {
     format: metadata.format,
     queueIntent: metadata["queue-intent"] || ENGLISH_WORDNET_LINKER_QUEUE_INTENT,
@@ -898,6 +946,8 @@ export function parseEnglishWordNetLinkerConfig(source) {
     promptMaxChars: Math.max(1000, Math.trunc(Number(metadata["prompt-max-chars"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS)),
     promptMaxTokens: Math.max(100, Math.trunc(Number(metadata["prompt-max-tokens"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS)),
     maxOutputTokens: Math.max(100, Math.trunc(Number(metadata["max-output-tokens"]) || ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS)),
+    selectionFormat: metadata["selection-format"] || ENGLISH_WORDNET_SELECTION_FORMAT,
+    selectionMaxOutputTokens: Math.max(100, Math.trunc(Number(metadata["selection-max-output-tokens"]) || ENGLISH_WORDNET_SELECTION_DEFAULT_OUTPUT_TOKENS)),
     edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE))
   };
 }
@@ -912,6 +962,7 @@ export async function loadEnglishWordNetLinkerConfig({
     ...config,
     promptMaxTokens: card.safeInputTokens,
     maxOutputTokens: Math.min(config.maxOutputTokens, card.safeOutputTokens),
+    selectionMaxOutputTokens: Math.min(config.selectionMaxOutputTokens, card.safeOutputTokens),
     modelCard: card
   };
 }

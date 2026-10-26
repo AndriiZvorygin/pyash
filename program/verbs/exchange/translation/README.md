@@ -110,26 +110,24 @@ still never edit the lexicon directly. Only resolved canonical sentences are pas
 machine-uncertain vocabulary stays available as explicit evidence for a later refinery run.
 
 For English documents, the command also runs the standard WordNet refinery before vocabulary
-review. It records one stable row per encountered unresolved WordNet sense, accepts only
-existing-atom or accepted-compound leaf/edge links deterministically, and submits the remaining
-ambiguous senses through the same durable Housekeeper queue. The refinery includes bounded source
-context for unresolved terms, so one duty can cover a paragraph without making one mind call per
-sense. Conservative output budgeting keeps each batch small enough for complete decision rows. The
-direct document command awaits each duty, gives malformed or incomplete output one automatic repair
-through the same queue, and then applies complete inventory-backed rows; bounded row recovery keeps
-valid rows and marks malformed rows `uncertain-llm` when a repaired batch is still partial.
-The refinery evidence, repair handles, outcomes, and each `english-wordnet-link-*` handle are
-stored under `wordnet-refinery` in the translation `.pya` catalog. A failed repair becomes explicit
-`uncertain-llm` evidence; the run never invents a lexical word or silently turns an unsupported
-model response into a mapping. The native bridge catalog remains the durable curated lexicon, while
-the document catalog records automatic model decisions without requiring a human in the loop. After
-WordNet reconciliation, accepted model sense links are fed back through the same sentence analyzer
-before vocabulary review. The accepted sense set takes precedence over the analyzer's earlier
-deterministic alternatives for that source surface, so a decision such as `shows` -> `exhibit` is
-actually applied to the token in the same run. Accepted vocabulary links get the same bounded
-second pass. `wordnetUnresolved` counts unresolved sense rows; `wordnetQueuePending` counts active
-Housekeeper queues, so completed queues do not appear to be hanging merely because review rows
-remain uncertain.
+review. It records one stable occurrence decision only for a source word that is present in the
+document and still unresolved. Deterministic context selects a unique sense locally; an ambiguous
+occurrence gets one focused Housekeeper duty containing only that word, its sentence, and its
+possible WordNet senses. The model returns one supplied sense id, confidence, and short rationale;
+it never emits a Pyash sequence or a whole-document translation. A low-confidence, uncertain,
+malformed, or failed duty becomes an explicit occurrence error, while other occurrences continue.
+
+After a sense is selected, the refinery first checks the existing atom and accepted-compound
+coverage through the normal WordNet bridge path. When no direct bridge exists, it emits a bounded
+`wordnet-sense-attachment` candidate for the existing vocabulary/compound refinery. The native
+bridge catalog remains the durable curated lexicon; the document catalog records automatic model
+decisions without requiring a human in the loop. Accepted sense links are fed back through the
+same sentence analyzer before vocabulary review, so the selected sense can affect the current run.
+Each selection queue uses an `english-wordnet-select-*` handle and is stored under
+`wordnet-refinery` in the translation `.pya` catalog. `wordnetSelected` counts occurrences with a
+selected sense, `wordnetUnresolved` counts selected senses still lacking a bridge, and
+`wordnetQueuePending`/`wordnetPending` count active Housekeeper queues. Completed queues therefore
+do not appear to be hanging merely because attachment or vocabulary review remains unresolved.
 
 To regenerate the English pairs from `examples/pyash/*.pya`:
 

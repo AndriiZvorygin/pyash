@@ -16,7 +16,9 @@ function resources() {
   return {
     coverage: {
       byVariant: new Map([
-        ["like", { coverageType: "atomic", canonicalEnglish: "like", pyashSequence: ["pyan"] }]
+        ["like", { coverageType: "atomic", canonicalEnglish: "like", pyashSequence: ["pyan"] }],
+        ["require", { coverageType: "atomic", canonicalEnglish: "require", pyashSequence: ["hcas"] }],
+        ["join", { coverageType: "atomic", canonicalEnglish: "join", pyashSequence: ["sren"] }]
       ])
     },
     grammarCatalog: { entries: [] },
@@ -26,7 +28,9 @@ function resources() {
           { id: "v:one:florp", pos: "v", synset: "one", senseKey: "one", lemma: "florp", gloss: "be fond of" },
           { id: "v:one:like", pos: "v", synset: "one", senseKey: "one", lemma: "like", gloss: "be fond of" },
           { id: "v:two:blorp", pos: "v", synset: "two", senseKey: "two", lemma: "blorp", gloss: "require a thing" },
-          { id: "v:three:blorp", pos: "v", synset: "three", senseKey: "three", lemma: "blorp", gloss: "join a thing" }
+          { id: "v:two:require", pos: "v", synset: "two", senseKey: "two", lemma: "require", gloss: "require a thing" },
+          { id: "v:three:blorp", pos: "v", synset: "three", senseKey: "three", lemma: "blorp", gloss: "join a thing" },
+          { id: "v:three:join", pos: "v", synset: "three", senseKey: "three", lemma: "join", gloss: "join a thing" }
         ]
       })
     }
@@ -37,13 +41,18 @@ test("standard WordNet refinery selects leaf links and queues only pending sense
   const result = {
     language: "english",
     sourceHash: "source-hash",
+    records: [{
+      id: "translation-blorp",
+      source: { text: "I blorp.", sentenceIndex: 0 },
+      context: [],
+      unresolved: ["blorp"]
+    }],
     vocabularyCandidates: [
-      { surface: "florps", kind: "lexical-gap" },
       { surface: "blorp", kind: "lexical-gap" },
       { surface: "is", kind: "grammar-gap" }
     ]
   };
-  assert.deepEqual(collectEnglishWordNetSourceTerms(result), ["blorp", "florps"]);
+  assert.deepEqual(collectEnglishWordNetSourceTerms(result), ["blorp"]);
   const submissions = [];
   const refined = await refineEnglishWordNet({
     result,
@@ -54,15 +63,15 @@ test("standard WordNet refinery selects leaf links and queues only pending sense
       return { status: "queued" };
     }
   });
-  assert.equal(refined.counts.leaf, 1);
-  assert.equal(refined.counts.review, 2);
-  assert.equal(refined.queuePending, 2);
+  assert.equal(refined.counts.decisions, 1);
+  assert.equal(refined.counts.ambiguous, 1);
+  assert.equal(refined.counts.review, 1);
+  assert.equal(refined.queuePending, 1);
   assert.equal(submissions.length, 1);
-  assert.match(submissions[0].handleId, /^english-wordnet-link-/u);
-  assert.match(submissions[0].prompt, /WORDNET SENSES AND PER-SENSE CHOICES/u);
+  assert.match(submissions[0].handleId, /^english-wordnet-select-/u);
+  assert.match(submissions[0].prompt, /POSSIBLE SENSES/u);
   assert.match(submissions[0].prompt, /blorp/u);
-  assert.equal(refined.records.find((record) => record.source === "v:one")?.status, "accepted-edge");
-  assert.equal(refined.records.every((record) => record.queue?.status === "queued" || record.status === "accepted-edge"), true);
+  assert.equal(refined.records[0].queue.status, "queued");
 });
 
 test("WordNet refinery remains a no-op when the document has no lexical gaps", async () => {
@@ -72,6 +81,9 @@ test("WordNet refinery remains a no-op when the document has no lexical gaps", a
   });
   assert.deepEqual(refined.sourceTerms, []);
   assert.deepEqual(refined.counts, {
+    decisions: 0,
+    ambiguous: 0,
+    selected: 0,
     senses: 0,
     accepted: 0,
     leaf: 0,
@@ -79,7 +91,9 @@ test("WordNet refinery remains a no-op when the document has no lexical gaps", a
     existing: 0,
     review: 0,
     rejected: 0,
-    uncertain: 0
+    uncertain: 0,
+    errors: 0,
+    unresolved: 0
   });
   assert.equal(refined.queue, null);
 });
@@ -106,7 +120,7 @@ test("translation document persists the WordNet refinery before vocabulary lower
   });
   const parsed = parseTranslationPipelinePya(readFileSync(translation, "utf8"));
   assert.equal(submissions.length, 1);
-  assert.match(submissions[0].handleId, /^english-wordnet-link-/u);
+  assert.match(submissions[0].handleId, /^english-wordnet-select-/u);
   assert.equal(parsed.wordnet?.format, "english-wordnet-refinery-v1");
   assert.equal(parsed.wordnet?.sourceTerms[0], "blorp");
   assert.equal(parsed.wordnet?.queue?.status, "queued");
