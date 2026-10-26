@@ -6,10 +6,12 @@ services:
       dockerfile: container/gpu-housekeeper/Dockerfile
     image: liberit/gpu-housekeeper:latest
     entrypoint: ["python3", "/service/server.py"]
-    command: ["--host", "0.0.0.0", "--port", "8090", "--host-id", "${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}"]
+    command: ["--host", "0.0.0.0", "--port", "18886", "--host-id", "${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}"]
     restart: unless-stopped
     ports:
-      - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-8090}:8090"
+      - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}:18886"
+      # Legacy alias keeps existing workers and federated peers online during migration.
+      - "8090:18886"
     runtime: nvidia
     deploy:
       resources:

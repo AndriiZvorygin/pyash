@@ -84,7 +84,7 @@ request. The caller receives the completed response after the queued job
 finishes. This keeps web chat and ordinary mind calls on the same GPU control
 plane instead of letting a caller race a resident model directly.
 For a local Strata endpoint, the mind runner infers the co-located Housekeeper
-at `http://localhost:8090`; remote GPU hosts should set
+at `http://localhost:18886`; remote GPU hosts should set
 `PYA_GPU_HOUSEKEEPER_URL` explicitly.
 
 The Housekeeper's Strata activity probe uses Strata's own in-flight and
@@ -92,7 +92,7 @@ last-request status, and refuses to discharge it when those fields are absent
 or invalid. Streaming compatibility remains available for the legacy direct
 runner path; the web assistant uses the non-streaming queued path.
 
-Keep Strata bound to loopback. The Housekeeper endpoint is on the host-local `http://127.0.0.1:8090`; do not point the Strata hook at a remote or federated manager.
+Keep Strata bound to loopback. The Housekeeper endpoint is on the host-local `http://127.0.0.1:18886`; do not point the Strata hook at a remote or federated manager.
 
 ---
 

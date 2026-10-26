@@ -23,7 +23,7 @@ This container is meant for a remote GPU host such as `mriczo` or `swac`. Local 
 5. On the Pyash side, point the worker at that host:
 
 ```sh
-PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 node command/gpu_worker.mjs --world world
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 node command/gpu_worker.mjs --world world
 ```
 
 Use `http://swac:8090` instead when the runtime lives on `swac`.

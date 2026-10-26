@@ -4375,13 +4375,20 @@ def create_housekeeper_server(host: str, port: int) -> ThreadingHTTPServer:
   return housekeeper_server_class(host)((host, port), Handler)
 
 
-def main() -> None:
+DEFAULT_PORT = 18886
+
+
+def parse_server_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
   parser = argparse.ArgumentParser()
   parser.add_argument("--host", default="0.0.0.0")
   parser.add_argument("--also-host", action="append", default=[])
-  parser.add_argument("--port", type=int, default=8090)
+  parser.add_argument("--port", type=int, default=DEFAULT_PORT)
   parser.add_argument("--host-id", default="gpu-housekeeper")
-  args = parser.parse_args()
+  return parser.parse_args(argv)
+
+
+def main() -> None:
+  args = parse_server_args()
 
   Handler.host_id = normalize_text(args.host_id) or "gpu-housekeeper"
   Handler.runtime_registry = load_runtime_registry()
