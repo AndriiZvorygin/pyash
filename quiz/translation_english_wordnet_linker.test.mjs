@@ -60,6 +60,17 @@ function resolver(word) {
   }[word] ?? null;
 }
 
+function withChoice(records, {
+  target = "emotionally",
+  pyashSequence = ["xyek"],
+  evidence = "fixture sense choice"
+} = {}) {
+  return records.map((record) => ({
+    ...record,
+    candidates: [{ target, pyashSequence, evidence }]
+  }));
+}
+
 test("WordNet linker creates stable one-record-per-sense batches", () => {
   const records = buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
@@ -121,7 +132,7 @@ test("WordNet linker inventory includes accepted compounds and excludes compound
   }]);
 });
 
-test("WordNet linker prompt stays bounded to supplied senses and inventory", () => {
+test("WordNet linker prompt stays bounded to supplied senses and per-sense choices", () => {
   const records = buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
     resolveWord: resolver,
@@ -133,10 +144,13 @@ test("WordNet linker prompt stays bounded to supplied senses and inventory", () 
   });
   const prompt = buildEnglishWordNetSenseLinkPrompt({ records, inventory });
   assert.match(prompt, /bounded Pyash WordNet sense-linking worker/u);
-  assert.match(prompt, /CONTEXT SELECTION IS REQUIRED/u);
-  assert.match(prompt, /reject unrelated senses even when they have valid inventory mappings/u);
+  assert.match(prompt, /A sense row with no choices cannot be accepted/u);
   assert.match(prompt, /v:beta/u);
-  assert.match(prompt, /\{"english":"emotionally"\}/u);
+  assert.match(prompt, /"choices":\[\]/u);
+  assert.doesNotMatch(prompt, /emotionally/u);
+  assert.doesNotMatch(prompt, /AUTHORITATIVE ENGLISH ANCHOR INVENTORY/u);
+  assert.doesNotMatch(prompt, /AUTHORITATIVE PYASH GRAMMAR INVENTORY/u);
+  assert.doesNotMatch(prompt, /SOURCE CONTEXT BY TERM/u);
   assert.doesNotMatch(prompt, /"pyash":"xyek"/u);
   assert.doesNotMatch(prompt, /ollama/u);
   assert.ok(prompt.length <= 12000);
@@ -191,13 +205,17 @@ test("ambiguous source words keep every sense choice beside the original sentenc
     context: [{
       term: "shows",
       sentences: ["Love is a mix of feelings and actions that shows a deep liking."]
+    }, {
+      term: "other",
+      sentences: ["background-only context must stay outside this decision duty"]
     }]
   });
   assert.match(prompt, /"word":"shows"/u);
   assert.match(prompt, /"sourceSentences":\["Love is a mix of feelings and actions that shows a deep liking\."\]/u);
   assert.match(prompt, /"targetEnglish":"exhibit"/u);
   assert.match(prompt, /"targetEnglish":"demonstrate"/u);
-  assert.match(prompt, /Choose the relevant sense for each source word/u);
+  assert.match(prompt, /Choose targetEnglish only from the choices listed on that same sense row/u);
+  assert.doesNotMatch(prompt, /background-only context/u);
 });
 
 test("WordNet linker splits oversized sense batches without truncating identities", async () => {
@@ -295,13 +313,13 @@ test("WordNet linker submits one durable future queue duty for pending senses", 
   assert.equal(wordNetSenseLinkQueueHandle({ sourceHash: "fixture-source", records }), queued.handleId);
 });
 
-test("WordNet linker accepts only an inventory-backed target and renders native Pyash bridges", () => {
-  const records = buildEnglishWordNetSenseLinkRecords({
+test("WordNet linker accepts only a supplied sense choice and renders native Pyash bridges", () => {
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
     resolveWord: resolver,
     sourceTerms: ["blorp"]
-  });
-  const inventory = { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] };
+  }));
+  const inventory = { entries: [], grammar: [] };
   const response = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
     verdict: "complete",
     senses: [{
@@ -335,6 +353,22 @@ test("WordNet linker accepts only an inventory-backed target and renders native 
       rationale: "unsupported"
     }]
   }), { records, inventory }).valid, false);
+  const emptyChoiceRecords = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  });
+  const emptyChoiceResponse = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: emptyChoiceRecords[0].id,
+      status: "accept",
+      targetEnglish: "emotionally",
+      rationale: "unsupported without a row choice"
+    }]
+  }), { records: emptyChoiceRecords, inventory });
+  assert.equal(emptyChoiceResponse.valid, false);
+  assert.match(emptyChoiceResponse.reason, /sense choices/u);
   const sequenceResponse = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
     verdict: "complete",
     senses: [{
@@ -350,12 +384,12 @@ test("WordNet linker accepts only an inventory-backed target and renders native 
 });
 
 test("WordNet linker recovers one bounded noisy JSON object and rejects malformed output", () => {
-  const records = buildEnglishWordNetSenseLinkRecords({
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
     resolveWord: resolver,
     sourceTerms: ["blorp"]
-  });
-  const inventory = { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] };
+  }));
+  const inventory = { entries: [], grammar: [] };
   const row = {
     id: records[0].id,
     status: "accept",
@@ -375,15 +409,15 @@ test("WordNet linker recovers one bounded noisy JSON object and rejects malforme
 });
 
 test("WordNet linker automatically repairs malformed model decisions and applies them", async () => {
-  const records = buildEnglishWordNetSenseLinkRecords({
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
     resolveWord: resolver,
     sourceTerms: ["blorp"]
-  }).map((record) => ({
+  })).map((record) => ({
     ...record,
     queue: { handleId: "english-wordnet-link-reconcile", status: "queued" }
   }));
-  const inventory = { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] };
+  const inventory = { entries: [], grammar: [] };
   const repaired = JSON.stringify({
     verdict: "complete",
     senses: [{
@@ -420,7 +454,7 @@ test("WordNet linker keeps valid rows during bounded partial recovery", async ()
       id: "sense-valid",
       pos: "n",
       status: "review",
-      candidates: [],
+      candidates: [{ target: "emotionally", pyashSequence: ["xyek"] }],
       queue: { handleId: "english-wordnet-link-partial", status: "queued" }
     },
     {
@@ -461,12 +495,12 @@ test("WordNet linker keeps valid rows during bounded partial recovery", async ()
 });
 
 test("WordNet linker extracts the nested response from an Ollama envelope", () => {
-  const records = buildEnglishWordNetSenseLinkRecords({
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
     resolveWord: resolver,
     sourceTerms: ["blorp"]
-  });
-  const inventory = { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] };
+  }));
+  const inventory = { entries: [], grammar: [] };
   const response = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
     model: "qwen3.5:9b",
     response: JSON.stringify({
@@ -498,12 +532,12 @@ test("WordNet linker rejects an empty completed provider response", () => {
   assert.equal(response.reason, "response senses must contain at least one decision");
 });
 
-test("WordNet linker matches string-backed base inventory rows to response sequences", () => {
-  const records = buildEnglishWordNetSenseLinkRecords({
+test("WordNet linker matches string-backed sense choices to response sequences", () => {
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
     resolveWord: resolver,
     sourceTerms: ["blorp"]
-  });
+  }), { pyashSequence: "xyek" });
   const response = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
     verdict: "complete",
     senses: [{
@@ -514,7 +548,7 @@ test("WordNet linker matches string-backed base inventory rows to response seque
     }]
   }), {
     records,
-    inventory: { entries: [{ english: "emotionally", pyash: "xyek" }], grammar: [] }
+    inventory: { entries: [], grammar: [] }
   });
   assert.equal(response.valid, true);
 });
@@ -530,7 +564,7 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     maxDutySenses: 4,
     promptMaxChars: 12000,
     promptMaxTokens: 3900,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 1024,
     edgeMaxDegree: 1,
     modelCard: {
       model: "qwen3.5:9b",
@@ -585,7 +619,7 @@ test("default WordNet linker submitter uses the existing future GPU duty", async
   const spec = JSON.parse(JSON.parse(encodedSpec));
   assert.deepEqual(spec.format.required, ["verdict", "senses"]);
   assert.ok(spec.format.properties.senses);
-  assert.equal(spec.options.num_predict, 8192);
+  assert.equal(spec.options.num_predict, 1024);
 });
 
 test("default WordNet linker factory resolves the existing Pyash runtime adapters", async () => {
