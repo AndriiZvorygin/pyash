@@ -12,6 +12,7 @@ import {
   translateDocumentSegments
 } from "./translation_pipeline.mjs";
 import { refineEnglishWordNet } from "./english_wordnet_refinery.mjs";
+import { buildEnglishWordNetSenseBridgeIndex } from "./english_wordnet_linker.mjs";
 import {
   reconcileTranslationVocabularyCandidates,
   submitTranslationVocabularyCandidates
@@ -87,8 +88,25 @@ async function refineSenses(context, translated) {
     awaitHandle: context.wordnetRefinery.awaitHandle,
     maxRepairAttempts: context.wordnetRefinery.maxRepairAttempts
   });
+  const wordnetBridges = buildEnglishWordNetSenseBridgeIndex(
+    wordnet.records.filter((record) => record.status === "accepted-llm")
+  );
+  const hasAcceptedLinks = wordnet.records.some((record) => record.status === "accepted-llm");
+  const closedLoopTranslation = hasAcceptedLinks
+    ? await translateDocumentSegments({
+      language: translated.language,
+      text: context.source,
+      segments: context.sourceSegments,
+      locator: translated.locator,
+      contextRadius: context.contextRadius,
+      verify: context.verify,
+      resourceHashes: translated.resourceHashes,
+      adapterResolver: context.adapterResolver,
+      wordnetBridges
+    })
+    : translated;
   return {
-    translation: { ...translated, wordnet },
+    translation: { ...closedLoopTranslation, wordnet },
     wordnet
   };
 }
@@ -116,8 +134,43 @@ async function reviewVocabulary(context, translated) {
       submit: context.queueVocabulary
     })
     : null;
+  const reviewedTranslation = settled?.result ?? queued.result;
+  const accepted = reviewedTranslation.vocabularyCandidates
+    .filter((candidate) => candidate.status === "accepted-llm"
+      && Array.isArray(candidate.pyashSequence)
+      && candidate.pyashSequence.length > 0);
+  const coverageOverrides = new Map(accepted.map((candidate) => [
+    text(candidate.surface).toLowerCase(),
+    {
+      coverageType: "llm",
+      canonicalEnglish: text(candidate.surface).toLowerCase(),
+      pyashSequence: [...candidate.pyashSequence]
+    }
+  ]));
+  const closedLoopTranslation = accepted.length > 0
+    ? await translateDocumentSegments({
+      language: reviewedTranslation.language,
+      text: context.source,
+      segments: context.sourceSegments,
+      locator: reviewedTranslation.locator,
+      contextRadius: context.contextRadius,
+      verify: context.verify,
+      resourceHashes: reviewedTranslation.resourceHashes,
+      adapterResolver: context.adapterResolver,
+      wordnetBridges: reviewedTranslation.wordnet
+        ? buildEnglishWordNetSenseBridgeIndex(
+          reviewedTranslation.wordnet.records.filter((record) => record.status === "accepted-llm")
+        )
+        : null,
+      coverageOverrides
+    })
+    : reviewedTranslation;
   return {
-    translation: settled?.result ?? queued.result,
+    translation: {
+      ...closedLoopTranslation,
+      vocabularyCandidates: reviewedTranslation.vocabularyCandidates,
+      ...(reviewedTranslation.wordnet ? { wordnet: reviewedTranslation.wordnet } : {})
+    },
     queued,
     settled
   };
@@ -164,8 +217,11 @@ function buildCommandResult(context, translation, database, compoundCache) {
       ?? vocabulary.queued?.result?.vocabularyQueue?.status
       ?? null,
     wordnetSenseRecords: wordnet?.counts.senses ?? 0,
+    wordnetAccepted: wordnet?.counts.accepted ?? 0,
     wordnetLeafLinks: wordnet?.counts.leaf ?? 0,
     wordnetDeterministicLinks: wordnet?.counts.deterministic ?? 0,
+    wordnetUnresolved: wordnet?.queuePending ?? 0,
+    wordnetQueuePending: wordnet?.queues?.filter((queue) => queue.status !== "complete").length ?? 0,
     wordnetPending: wordnet?.queuePending ?? 0,
     wordnetQueueHandle: wordnet?.queueHandle ?? null,
     wordnetQueueHandles: wordnet?.queues?.map((queue) => queue.handleId) ?? [],
@@ -211,6 +267,7 @@ async function runStage(sentence, context) {
     };
   } else if (stage === "refine senses") {
     const translated = mapValue("translated document").translation;
+    context.sourceSegments = mapValue("source segments").segments ?? segmentTranslationDocument(context.source);
     result = await refineSenses(context, translated);
   } else if (stage === "review vocabulary") {
     const translated = mapValue("sensed document").translation;
@@ -345,6 +402,7 @@ export async function runTranslationSourceToVliwRefinery({
     locator: text(locator),
     sourcePath: text(sourcePath),
     paths: outputPaths,
+    sourceSegments: segmentTranslationDocument(source),
     contextRadius,
     verify,
     resourceHashes,

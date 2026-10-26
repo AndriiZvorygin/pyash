@@ -170,11 +170,11 @@ function adapterSurfaceText(sourceText) {
   return sourceText.replace(/[。！？।॥]+$/u, ".");
 }
 
-async function analyzeSegment({ adapter, sourceText, context, verify }) {
+async function analyzeSegment({ adapter, sourceText, context, verify, wordnetBridges, coverageOverrides }) {
   const adapterText = adapterSurfaceText(sourceText);
   let analysis;
   if (typeof adapter.analyzeSentence === "function") {
-    analysis = await adapter.analyzeSentence(adapterText, { context });
+    analysis = await adapter.analyzeSentence(adapterText, { context, wordnetBridges, coverageOverrides });
     if (
       adapter.name === "english" &&
       analysis?.status !== "resolved" &&
@@ -288,7 +288,9 @@ export async function translateDocumentSegments({
   contextRadius = 1,
   verify,
   resourceHashes,
-  adapterResolver = resolveTranslationSource
+  adapterResolver = resolveTranslationSource,
+  wordnetBridges = null,
+  coverageOverrides = null
 } = {}) {
   const normalizedLanguage = normalizeLanguage(language);
   if (!normalizedLanguage) throw invalid("translation requires an explicit language");
@@ -308,7 +310,9 @@ export async function translateDocumentSegments({
       adapter,
       sourceText: segment.text,
       context,
-      verify
+      verify,
+      wordnetBridges,
+      coverageOverrides
     });
     const result = makeRecord({
       language: normalizedLanguage,

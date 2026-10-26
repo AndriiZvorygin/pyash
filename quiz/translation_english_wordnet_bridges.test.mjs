@@ -6,6 +6,7 @@ import {
   loadEnglishWordNetBridges,
   parseEnglishWordNetBridgeCatalog
 } from "../program/verbs/exchange/translation/english_wordnet_bridges.mjs";
+import { buildEnglishWordNetSenseBridgeIndex } from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
 import {
   analyzeDefaultEnglishSentence,
   analyzeEnglishSentence
@@ -110,6 +111,99 @@ test("a sense bridge contributes a bounded existing-vocabulary candidate", () =>
   assert.equal(token.coverageType, "semantic-wordnet");
   assert.deepEqual(token.pyashSequence, ["xyek"]);
   assert.match(token.evidence, /bridge emotionally/u);
+});
+
+test("a reconciled Qwen sense link can be fed back as a dynamic bridge", () => {
+  const wordnet = buildEnglishWordNetIndex({
+    rows: [{
+      id: "v:dynamic-v:florp",
+      pos: "v",
+      synset: "dynamic-v",
+      senseKey: "dynamic-v",
+      lemma: "florp",
+      gloss: "express an emotional state"
+    }]
+  });
+  const bridges = buildEnglishWordNetSenseBridgeIndex([{
+    id: "english-wordnet-sense-dynamic",
+    source: "v:dynamic-v",
+    pos: "v",
+    synset: "dynamic-v",
+    status: "accepted-llm",
+    link: {
+      target: "emotionally",
+      pyashSequence: ["xyek"],
+      targetPartOfSpeech: "v",
+      certainty: "contextual",
+      evidence: "fixture Qwen decision"
+    }
+  }]);
+  const result = analyzeEnglishSentence("I florp", {
+    wordnetIndex: wordnet,
+    wordnetBridges: bridges,
+    resolveWord: (word) => word === "i"
+      ? { coverageType: "grammar", pyashSequence: ["mi"] }
+      : word === "emotionally"
+        ? { coverageType: "atomic", pyashSequence: ["xyek"] }
+        : null
+  });
+  const token = result.tokens.find((candidate) => candidate.surface === "florp");
+  assert.equal(token.coverageType, "semantic-wordnet");
+  assert.equal(token.lemma, "emotionally");
+  assert.deepEqual(token.pyashSequence, ["xyek"]);
+  assert.match(token.evidence, /fixture Qwen decision/u);
+});
+
+test("an accepted Qwen sense wins over the deterministic alternatives for that surface", () => {
+  const wordnet = buildEnglishWordNetIndex({
+    rows: [
+      {
+        id: "v:dynamic-like:florp",
+        pos: "v",
+        synset: "dynamic-like",
+        senseKey: "dynamic-like",
+        lemma: "florp",
+        gloss: "like something"
+      },
+      {
+        id: "v:dynamic-dislike:florp",
+        pos: "v",
+        synset: "dynamic-dislike",
+        senseKey: "dynamic-dislike",
+        lemma: "florp",
+        gloss: "dislike something"
+      }
+    ]
+  });
+  const bridges = buildEnglishWordNetSenseBridgeIndex([{
+    id: "english-wordnet-sense-dynamic-dislike",
+    pos: "v",
+    synset: "dynamic-dislike",
+    status: "accepted-llm",
+    link: {
+      target: "dislike",
+      pyashSequence: ["twin"],
+      targetPartOfSpeech: "v",
+      certainty: "contextual",
+      evidence: "fixture Qwen decision for the selected sense"
+    }
+  }]);
+  const result = analyzeEnglishSentence("I florp", {
+    wordnetIndex: wordnet,
+    wordnetBridges: bridges,
+    resolveWord: (word) => word === "i"
+      ? { coverageType: "grammar", pyashSequence: ["mi"] }
+      : word === "like"
+        ? { coverageType: "atomic", pyashSequence: ["pyan"] }
+        : word === "dislike"
+          ? { coverageType: "atomic", pyashSequence: ["twin"] }
+          : null
+  });
+  const token = result.tokens.find((candidate) => candidate.surface === "florp");
+  assert.equal(token.coverageType, "semantic-wordnet");
+  assert.equal(token.lemma, "dislike");
+  assert.deepEqual(token.pyashSequence, ["twin"]);
+  assert.match(token.evidence, /fixture Qwen decision for the selected sense/u);
 });
 
 test("bridge index preserves one entry for each source sense", () => {
