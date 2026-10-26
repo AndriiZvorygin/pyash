@@ -71,6 +71,7 @@ let extendedEnglishResourcesPromise = null;
 let anchorWordFormsPromise = null;
 let compoundAtomLinksPromise = null;
 let fastAtomicIndex = null;
+let fastRootIndex = null;
 
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
 const PYASH_QUOTED_START = "quoted.pyash.";
@@ -238,6 +239,27 @@ function buildFastAtomicIndex() {
     }
   }
   return fastAtomicIndex;
+}
+
+function buildFastRootIndex() {
+  if (fastRootIndex) return fastRootIndex;
+  fastRootIndex = new Map();
+  for (const entry of pyashWords) {
+    if (typeof entry?.en !== "string" || typeof entry?.pya !== "string") continue;
+    if (entry.en.endsWith("_")) continue;
+    const key = entry.en.normalize("NFC").trim().toLowerCase();
+    if (key && !fastRootIndex.has(key)) fastRootIndex.set(key, entry);
+  }
+  return fastRootIndex;
+}
+
+function resolveGrammarRootEntries(grammar) {
+  if (!grammar || !Array.isArray(grammar.components) || grammar.components.length === 0) return [];
+  const roots = grammar.components.map((component) => {
+    const rootName = String(component ?? "").trim().replace(/_$/u, "").toLowerCase();
+    return rootName ? buildFastRootIndex().get(rootName) ?? null : null;
+  });
+  return roots.every(Boolean) ? roots : [];
 }
 
 async function loadDefaultEnglish30kSourceSafe() {
@@ -415,6 +437,7 @@ function directRecordId(row) {
 async function findFastEnglishCoverage(token) {
   const grammarIndex = await loadDefaultEnglishGrammarIndexSafe();
   const grammar = grammarIndex?.resolve(token) ?? null;
+  const grammarRootEntries = resolveGrammarRootEntries(grammar);
   const atomic = english30kLookupVariants(token)
     .map((variant) => buildFastAtomicIndex().get(variant))
     .find(Boolean) ?? null;
@@ -436,6 +459,14 @@ async function findFastEnglishCoverage(token) {
         pya: atomic.pya,
         hnuc: atomic.hnuc
       }
+    } : {}),
+    ...(grammarRootEntries.length > 0 ? {
+      lexicalRootSequence: grammarRootEntries.map((entry) => entry.pya),
+      lexicalRootEntries: grammarRootEntries.map((entry) => ({
+        english: entry.en,
+        pya: entry.pya,
+        hnuc: entry.hnuc
+      }))
     } : {}),
     pyashSequence: grammar ? [...grammar.pyashSequence] : [atomic.pya]
   };
@@ -861,11 +892,11 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
   }
   for (const token of textTokens) {
-    if (isGrammarKeyword(token)) {
+    const fastRanked = await findFastEnglishCoverage(token);
+    if (isGrammarKeyword(token) && !fastRanked) {
       okTextTokens.add(token);
       continue;
     }
-    const fastRanked = await findFastEnglishCoverage(token);
     let ranked = fastRanked;
     if (!ranked) {
       const directAtomic = findDirectAtomicCoverage(token);
@@ -901,19 +932,26 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       }
     }
     if (ranked?.coverageType && ranked.coverageType !== "unresolved") {
-      if (ranked.lexicalRoot?.pya) {
+      const rootSequence = ranked.lexicalRootSequence?.length
+        ? ranked.lexicalRootSequence
+        : ranked.lexicalRoot?.pya
+          ? [ranked.lexicalRoot.pya]
+          : [];
+      if (rootSequence.length > 0) {
         rootMatches.set(token, {
           ...ranked,
           coverageType: "root",
-          pyashSequence: [ranked.lexicalRoot.pya]
+          pyashSequence: rootSequence
         });
-        await registerCompoundAtomMatches(token, ranked.lexicalRoot.english);
+        if (ranked.lexicalRoot?.english) {
+          await registerCompoundAtomMatches(token, ranked.lexicalRoot.english);
+        }
       }
       if (ranked.morphology?.markerSequence?.length) morphologyMatches.set(token, ranked);
       if (ranked.coverageType === "lemma") lemmaMatches.set(token, ranked);
       else if (ranked.coverageType === "dictionary-alias") dictionaryMatches.set(token, ranked);
       else if (ranked.coverageType === "grammar") grammarMatches.set(token, ranked);
-      else if (!ranked.lexicalRoot?.pya) okTextTokens.add(token);
+      else if (rootSequence.length === 0) okTextTokens.add(token);
       continue;
     }
     if (ranked) rankedCoverage.set(token, ranked);
