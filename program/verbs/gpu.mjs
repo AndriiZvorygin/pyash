@@ -111,6 +111,22 @@ function pyashMapToPlain(map = {}) {
   return out;
 }
 
+function withMindResourceRequest(jobSpec = {}) {
+  const existing = jobSpec?.resourceRequest;
+  const resourceRequest = existing && typeof existing === "object" && !Array.isArray(existing)
+    ? { ...existing }
+    : {};
+  const declaredVram = Number(resourceRequest.vramRequiredMb ?? resourceRequest.vram_required_mb);
+  const configuredVram = Number.parseInt(String(
+    process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || process.env.PYA_GPU_VRAM_REQUIRED_MB || "12000"
+  ), 10);
+  resourceRequest.vramRequiredMb = Number.isFinite(declaredVram) && declaredVram > 0
+    ? Math.trunc(declaredVram)
+    : (Number.isFinite(configuredVram) && configuredVram > 0 ? configuredVram : 12000);
+  delete resourceRequest.vram_required_mb;
+  return { ...jobSpec, resourceRequest };
+}
+
 function defaultRuntimeForIntent(intent, jobSpec = {}, sentence = {}) {
   const runtimeName = String(sentence?.as?.name ?? sentence?.fromstate?.text ?? jobSpec.runtimeName ?? "").trim();
   if (runtimeName) return runtimeName;
@@ -138,7 +154,7 @@ function defaultProfileForIntent(intent, jobSpec = {}, sentence = {}, { remember
 
 function buildMindJobSpec(sentence = {}, intent = "mind", { rememberFn = remember } = {}) {
   const explicit = sentence?.ob?.map ? pyashMapToPlain(sentence.ob.map) : parseJsonMap(sentence?.ob?.text);
-  if (explicit) return explicit;
+  if (explicit) return withMindResourceRequest(explicit);
 
   const prompt = String(sentence?.ob?.text ?? "").trim();
   if (!prompt) {
@@ -152,12 +168,12 @@ function buildMindJobSpec(sentence = {}, intent = "mind", { rememberFn = remembe
   const configured = rememberFn("mind model") || rememberFn("mind ollama model");
   const model = String(sentence?.to?.name ?? sentence?.to?.text ?? configured?.ob?.text ?? configured?.ob?.name ?? "").trim()
     || resolveTextModel();
-  return {
+  return withMindResourceRequest({
     kind: "ollama-generate",
     model,
     prompt,
     stream: false
-  };
+  });
 }
 
 function buildJobSpec(sentence = {}, intent = "", { rememberFn = remember } = {}) {
