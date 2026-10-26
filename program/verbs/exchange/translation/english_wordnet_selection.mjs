@@ -9,11 +9,11 @@ export const ENGLISH_WORDNET_SELECTION_FORMAT = "english-wordnet-sense-selection
 export const ENGLISH_WORDNET_SELECTION_DEFAULT_OUTPUT_TOKENS = 512;
 export const ENGLISH_WORDNET_SELECTION_RESPONSE_FORMAT = Object.freeze({
   type: "object",
-  required: ["verdict", "senseId", "confidence", "rationale"],
+  required: ["verdict", "option", "confidence", "rationale"],
   additionalProperties: false,
   properties: {
     verdict: { type: "string", enum: ["accept", "uncertain"] },
-    senseId: { type: "string" },
+    option: { type: "integer", minimum: 1 },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     rationale: { type: "string", maxLength: 240 }
   }
@@ -75,7 +75,6 @@ function senseOption(sense, number) {
   const row = senseRow(sense);
   return [
     `OPTION ${number}`,
-    `senseId: ${row.id}`,
     `part of speech: ${partOfSpeechName(row.pos)}`,
     `lemmas: ${row.lemmas.join(", ") || "(none)"}`,
     `meaning: ${row.gloss || "(no gloss supplied)"}`
@@ -118,16 +117,16 @@ export function buildEnglishWordNetSenseSelectionPrompt({
     "A familiar lemma alone is not evidence. Do not use knowledge outside this sentence and these options.",
     "If the sentence does not clearly choose one option, return verdict uncertain.",
     "Return one JSON object only. No markdown, explanation, Pyash words, or extra keys.",
-    '{"verdict":"accept|uncertain","senseId":"exact supplied senseId","confidence":"high|medium|low","rationale":"under 120 characters"}',
+    '{"verdict":"accept|uncertain","option":1,"confidence":"high|medium|low","rationale":"under 120 characters"}',
     `WORD TO CLASSIFY: ${bounded(surface, 80)}`,
     `SENTENCE: ${bounded(sentence, 1200)}`,
     `DATASET: ${bounded(source, 80) || "Open English WordNet"}`,
     "OPTIONS:",
     options,
     "ANSWER RULES:",
-    "- senseId must exactly match one option.",
+    "- option must be one option number shown above.",
     "- For accept, use high or medium confidence only.",
-    "- For uncertain, still return the closest supplied senseId and use low confidence.",
+    "- For uncertain, still return the closest option number and use low confidence.",
     "- Keep rationale short and name the sentence clue.",
     ...(text(repairReason) ? [
       `REPAIR: the previous answer was invalid because ${bounded(repairReason, 240)}`,
@@ -168,13 +167,26 @@ export function parseEnglishWordNetSenseSelectionResponse(value, { senses = [] }
   if (!["accept", "uncertain"].includes(verdict)) {
     return { valid: false, reason: "selection verdict must be accept or uncertain" };
   }
-  const senseId = text(payload.senseId);
   const allowed = new Map(senses.map((sense) => [
     `${text(sense?.pos)}:${text(sense?.synset)}`,
     sense
   ]));
-  if (!senseId || !allowed.has(senseId)) {
-    return { valid: false, reason: "selected senseId is outside the supplied sense set" };
+  const hasOption = Object.prototype.hasOwnProperty.call(payload, "option");
+  const option = Number(payload.option);
+  const selectedByOption = Number.isInteger(option) && option >= 1 && option <= senses.length
+    ? senses[option - 1]
+    : null;
+  const legacySenseId = text(payload.senseId);
+  const selectedSense = hasOption
+    ? selectedByOption
+    : allowed.get(legacySenseId) ?? null;
+  const senseId = selectedSense
+    ? `${text(selectedSense.pos)}:${text(selectedSense.synset)}`
+    : "";
+  if (!selectedSense || !senseId || !allowed.has(senseId)) {
+    return { valid: false, reason: hasOption
+      ? "selected option is outside the supplied sense set"
+      : "selected senseId is outside the supplied sense set" };
   }
   const confidence = normalized(payload.confidence);
   if (!["high", "medium", "low"].includes(confidence)) {
@@ -193,7 +205,7 @@ export function parseEnglishWordNetSenseSelectionResponse(value, { senses = [] }
     valid: true,
     verdict,
     senseId,
-    sense: allowed.get(senseId),
+    sense: selectedSense,
     confidence,
     rationale,
     raw: providerResponseText(value)

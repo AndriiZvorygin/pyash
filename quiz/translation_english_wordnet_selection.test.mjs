@@ -73,11 +73,12 @@ test("WordNet sense selection prompt contains one word, one sentence, and only i
   });
   assert.match(prompt, /WORD TO CLASSIFY: florp/u);
   assert.match(prompt, /SENTENCE: I florp the object\./u);
-  assert.match(prompt, /OPTION 1[\s\S]*senseId: v:one/u);
-  assert.match(prompt, /OPTION 2[\s\S]*senseId: v:two/u);
+  assert.match(prompt, /OPTION 1[\s\S]*meaning: like something/u);
+  assert.match(prompt, /OPTION 2[\s\S]*meaning: dislike something/u);
   assert.match(prompt, /Return one JSON object only/u);
   assert.match(prompt, /No markdown, explanation, Pyash words, or extra keys/u);
-  assert.match(prompt, /senseId must exactly match one option/u);
+  assert.match(prompt, /option must be one option number shown above/u);
+  assert.doesNotMatch(prompt, /senseId:/u);
   assert.doesNotMatch(prompt, /other sentence/u);
   assert.doesNotMatch(prompt, /Pyash inventory/u);
 });
@@ -95,7 +96,7 @@ test("WordNet selector prompt keeps a large sense set bounded and numbered", () 
     senses
   });
   assert.equal((prompt.match(/OPTION /gu) ?? []).length, 17);
-  assert.match(prompt, /OPTION 17[\s\S]*senseId: v:sense-16/u);
+  assert.match(prompt, /OPTION 17[\s\S]*meaning: meaning 16/u);
   assert.ok(prompt.length < 10000);
   assert.ok(!prompt.includes("pyashSequence"));
 });
@@ -107,14 +108,14 @@ test("WordNet sense selection accepts medium confidence and fails closed below t
   ];
   const accepted = parseEnglishWordNetSenseSelectionResponse(JSON.stringify({
     verdict: "accept",
-    senseId: "v:one",
+    option: 1,
     confidence: "medium",
     rationale: "the sentence supports this sense"
   }), { senses });
   assert.equal(accepted.valid, true);
   const low = parseEnglishWordNetSenseSelectionResponse(JSON.stringify({
     verdict: "accept",
-    senseId: "v:one",
+    option: 1,
     confidence: "low",
     rationale: "the sentence is weakly compatible"
   }), { senses });
@@ -140,7 +141,7 @@ test("WordNet sense selection recovers one noisy JSON envelope and rejects malfo
   assert.equal(noisy.valid, true);
   assert.equal(noisy.senseId, "v:one");
   const malformed = parseEnglishWordNetSenseSelectionResponse(
-    "{\"verdict\":\"accept\",\"senseId\":\"v:one\"}",
+    "{\"verdict\":\"accept\",\"option\":1}",
     { senses }
   );
   assert.equal(malformed.valid, false);
@@ -218,7 +219,7 @@ test("ambiguous repeated occurrences receive independent sense decisions", async
       const sense = request.candidates.find((candidate) => candidate.synset === "one");
       return JSON.stringify({
         verdict: "accept",
-        senseId: `${sense.pos}:${sense.synset}`,
+        option: request.candidates.indexOf(sense) + 1,
         confidence: "high",
         rationale: "the fixture sentence selects the like sense"
       });
@@ -251,7 +252,7 @@ test("low-confidence sense selection persists an explicit error and blocks attac
     submit: async () => ({ status: "queued" }),
     awaitHandle: async () => JSON.stringify({
       verdict: "accept",
-      senseId: "v:one",
+      option: 1,
       confidence: "low",
       rationale: "weak evidence"
     })
