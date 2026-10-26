@@ -22,7 +22,7 @@ export const ENGLISH_WORDNET_LINKER_QUEUE_LANE = "durable";
 export const ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE = 200;
 export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS = 12000;
 export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS = 3900;
-export const ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS = 8192;
+export const ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE = 1;
 export const ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE = 4;
 export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
@@ -102,57 +102,22 @@ function compactSense(record, context) {
     g: bounded(record?.gloss, 56),
     l: (record?.lemmas ?? []).slice(0, 2).map((lemma) => bounded(lemma, 24)),
     sourceSentences: [...new Set(sentences)].slice(0, 3),
-    choices: (record?.candidates ?? []).slice(0, 2).map((candidate) => ({
-      targetEnglish: bounded(candidate?.target, 24)
+    choices: (record?.candidates ?? []).slice(0, 8).map((candidate) => ({
+      targetEnglish: bounded(candidate?.target, 48),
+      evidence: bounded(candidate?.evidence, 120)
     }))
   };
-}
-
-function compactContext(context) {
-  return (Array.isArray(context) ? context : []).map((row) => ({
-    term: bounded(row?.term, 32),
-    sentences: [...new Set((row?.sentences ?? []).slice(0, 3).map((sentence) => bounded(sentence, 280)))]
-  }));
-}
-
-function compactInventoryRows(entries, maxChars, maxTokens = Number.POSITIVE_INFINITY) {
-  const rows = [];
-  let used = 0;
-  let usedTokens = 0;
-  for (const entry of entries ?? []) {
-    const row = JSON.stringify({
-      english: entry?.english,
-      ...(entry?.kind ? { kind: entry.kind } : {})
-    });
-    const next = used + row.length + (rows.length ? 1 : 0);
-    const rowTokens = estimateEnglishWordNetSenseLinkPromptTokens(row);
-    const nextTokens = usedTokens + rowTokens + (rows.length ? 1 : 0);
-    if (next > maxChars || nextTokens >= maxTokens) break;
-    rows.push(row);
-    used = next;
-    usedTokens = nextTokens;
-  }
-  return rows.join("\n");
 }
 
 export function estimateEnglishWordNetSenseLinkPromptTokens(value) {
   return [...String(value ?? "").matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\s]/gu)].length;
 }
 
-function prioritizedInventoryEntries(entries, records) {
-  const targets = new Set((records ?? []).flatMap((record) => (
-    record?.candidates ?? []
-  )).map((candidate) => normalized(candidate?.target)).filter(Boolean));
-  return [...(entries ?? [])].sort((left, right) => (
-    Number(targets.has(normalized(right?.english))) - Number(targets.has(normalized(left?.english)))
-  ));
-}
-
 function outputFits(records, maxOutputTokens) {
   const fixedOutputTokens = 192;
   // The response contract bounds each rationale to 120 characters. Keep enough room
   // for one compact decision per supplied sense while retaining repair headroom.
-  const perSenseTokens = 256;
+  const perSenseTokens = 128;
   return fixedOutputTokens + (records.length * perSenseTokens) < maxOutputTokens;
 }
 
@@ -439,29 +404,19 @@ export function buildEnglishWordNetSenseLinkPrompt({
   if (!Array.isArray(records) || records.length === 0) {
     throw invalid("WordNet linker prompt requires sense records");
   }
-  if (!Array.isArray(inventory.entries)) throw invalid("WordNet linker prompt requires an atom inventory");
-  const contextRows = compactContext(context);
   const senseRows = records.map((record) => JSON.stringify(compactSense(record, context))).join("\n");
-  const grammar = compactInventoryRows((inventory.grammar ?? []).map((entry) => ({
-    english: entry?.english,
-    pyash: entry?.pyash,
-    kind: entry?.kind
-  })), 1800);
   const fixed = [
     "You are the bounded Pyash WordNet sense-linking worker.",
-    "Link each supplied WordNet sense to one existing Pyash English anchor when the evidence supports it.",
-    "Use the gloss, lemmas, and deterministic candidates as semantic evidence.",
-    "CONTEXT SELECTION IS REQUIRED: use SOURCE CONTEXT BY TERM to decide which sense the source sentence actually means.",
-    "For each source term, accept only the sense that fits at least one supplied sentence; reject unrelated senses even when they have valid inventory mappings.",
-    "When one sense is clearly the best contextual reading, accept that sense and reject competing readings instead of accepting every gloss-compatible sense.",
-    "Use uncertain only when two or more senses remain genuinely plausible after reading the supplied sentence; never use accept as a generic vocabulary link.",
-    "A context row may contain several sentences for the same term; preserve multiple accepted senses only when those sentences clearly require different readings.",
-    "Choose an English anchor only from the supplied authoritative inventory.",
-    "For an accepted link, targetEnglish must be the exact English inventory key.",
+    "For each supplied WordNet sense, decide whether its source sentence supports one of the choices on that same row.",
+    "Use the original source sentence, gloss, lemmas, and choice evidence as the only decision context.",
+    "Accept only the sense and choice that best fits the source sentence; reject unrelated senses.",
+    "Use uncertain only when the supplied sentence leaves two or more choices genuinely plausible.",
+    "A sense row with no choices cannot be accepted; use reject or uncertain.",
+    "Choose targetEnglish only from the choices listed on that same sense row.",
+    "For an accepted link, targetEnglish must exactly match one listed choice.",
     "Return the English anchor and sense decision only; the host pipeline derives the Pyash sequence.",
     "Never return Pyash tokens, pyashSequence, or a concatenated phrase.",
-    "Preserve uncertainty when the inventory or sense evidence is insufficient.",
-    "A link selects an existing atom, accepted compound, or accepted lexical mapping; it does not create vocabulary.",
+    "Preserve uncertainty when the choices or sense evidence are insufficient.",
     "Return exactly one JSON object with this shape:",
     '{"verdict":"complete|partial|uncertain","senses":[{"id":"...","status":"accept|reject|uncertain","targetEnglish":"...","rationale":"..."}]}',
     "Include exactly one result for every supplied sense id. Never return an empty senses array.",
@@ -471,33 +426,13 @@ export function buildEnglishWordNetSenseLinkPrompt({
       "Return every supplied sense id exactly once, and include targetEnglish for every accepted row. Never return Pyash tokens."
     ] : []),
     `SOURCE: ${text(source) || "Open English WordNet"}`,
-    "Each sense row names the source word, the original source sentence, and the available English anchor choices.",
-    "Choose the relevant sense for each source word from the supplied rows; the host derives Pyash lowering after the decision.",
-    "AUTHORITATIVE ENGLISH ANCHOR INVENTORY (choose the exact English key; Pyash lowering is deterministic):",
-    "__INVENTORY__",
-    "AUTHORITATIVE PYASH GRAMMAR INVENTORY:",
-    grammar,
-    "SOURCE CONTEXT BY TERM:",
-    contextRows.map(JSON.stringify).join("\n"),
-    "WORDNET SENSES:",
+    "Each row contains only one source word, its original source sentence, its WordNet sense, and its allowed choices.",
+    "WORDNET SENSES AND PER-SENSE CHOICES:",
     senseRows
   ];
   const budget = Math.max(1000, Math.trunc(Number(maxChars) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS));
   const tokenBudget = Math.max(100, Math.trunc(Number(maxTokens) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS));
-  const fixedText = fixed.join("\n");
-  const inventoryBudget = Math.max(0, budget - fixedText.length + "__INVENTORY__".length);
-  const inventoryTokenBudget = Math.max(
-    0,
-    tokenBudget
-      - estimateEnglishWordNetSenseLinkPromptTokens(fixedText)
-      + estimateEnglishWordNetSenseLinkPromptTokens("__INVENTORY__")
-  );
-  const inventoryText = compactInventoryRows(
-    prioritizedInventoryEntries(inventory.entries, records),
-    inventoryBudget,
-    inventoryTokenBudget
-  );
-  const prompt = fixedText.replace("__INVENTORY__", inventoryText);
+  const prompt = fixed.join("\n");
   const tokenEstimate = estimateEnglishWordNetSenseLinkPromptTokens(prompt);
   if (prompt.length > budget || tokenEstimate >= tokenBudget) {
     throw invalid("WordNet linker prompt exceeds configured prompt budget", {
@@ -630,14 +565,9 @@ export async function submitEnglishWordNetSenseLinks({
   };
 }
 
-function inventoryMatch({ targetEnglish, record, inventory }) {
+function inventoryMatch({ targetEnglish, record }) {
   const targetName = normalized(targetEnglish);
-  const options = [
-    ...(record?.candidates ?? []),
-    ...(inventory?.entries ?? []),
-    ...(inventory?.grammar ?? [])
-  ];
-  return options.find((option) => (
+  return (record?.candidates ?? []).find((option) => (
     normalized(option?.target ?? option?.english) === targetName
   )) ?? null;
 }
@@ -702,10 +632,10 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
         });
         continue;
       }
-      const match = inventoryMatch({ targetEnglish, record: byId.get(id), inventory });
+      const match = inventoryMatch({ targetEnglish, record: byId.get(id) });
       const pyashSequence = sequence(match?.pyashSequence ?? match?.pyash);
       if (!match || pyashSequence.length === 0) {
-        if (!recoverRows) return { valid: false, reason: "accepted sense target is outside the supplied inventory" };
+        if (!recoverRows) return { valid: false, reason: "accepted sense target is outside the supplied sense choices" };
         links.push({
           id,
           status: "uncertain",
@@ -981,7 +911,7 @@ export async function loadEnglishWordNetLinkerConfig({
   return {
     ...config,
     promptMaxTokens: card.safeInputTokens,
-    maxOutputTokens: card.safeOutputTokens,
+    maxOutputTokens: Math.min(config.maxOutputTokens, card.safeOutputTokens),
     modelCard: card
   };
 }
