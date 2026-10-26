@@ -308,7 +308,7 @@ test("current dictionaries produce broad derived coverage", async (t) => {
     layerIndex: { ...layerIndex, englishToPyash }
   });
   assert.equal(coverage.existingAtomic.length, 7831);
-  assert.equal(coverage.accepted.length, 396);
+  assert.equal(coverage.accepted.length, 397);
   assert.equal(coverage.candidates.length, 412);
   const blueprint = coverage.accepted.find((entry) => entry.target === "blueprint");
   assert.deepEqual(blueprint.pyashSequence, ["plun", "trat"]);
@@ -317,6 +317,9 @@ test("current dictionaries produce broad derived coverage", async (t) => {
   assert.deepEqual(blueprint.sourceMorphemesByLanguage.french, ["plan"]);
   const brainstorm = coverage.accepted.find((entry) => entry.target === "brainstorm");
   assert.equal(brainstorm.specificAtom, "brain_storming");
+  const include = coverage.accepted.find((entry) => entry.target === "include");
+  assert.deepEqual(include.aliases, ["involve"]);
+  assert.deepEqual(include.pyashSequence, ["lwak", "hzan"]);
   const acceptant = coverage.candidates.find((entry) => entry.target === "acceptant");
   const zincking = coverage.candidates.find((entry) => entry.target === "zincking");
   assert.equal(acceptant.morphologyStatus, "ending-overlap-review");

@@ -91,6 +91,24 @@ test("English30k coverage classifies atoms, aliases, grammar, and compounds", ()
   assert.equal(summarizeEnglish30kCoverage(coverage).uniqueCanonicalLemmas, 3);
 });
 
+test("English30k coverage reuses one accepted compound for a semantic alias", () => {
+  const source = parseEnglish30kText("1 involve 100\n", { cutoff: 1 });
+  const coverage = buildEnglish30kCoverage({
+    source,
+    atomicEntries: [],
+    compoundRecords: [{
+      target: "include",
+      aliases: ["involve"],
+      componentGlosses: ["inside", "containing"],
+      pyashSequence: ["lwak", "hzan"],
+      status: "accepted-curated",
+      provenance: "fixture"
+    }]
+  });
+  assert.equal(coverage.records[0].coverageType, "compound");
+  assert.deepEqual(coverage.records[0].pyashSequence, ["lwak", "hzan"]);
+});
+
 test("explicit grammar catalog mappings override same-surface lexical roots", () => {
   const source = parseEnglish30kText("1\tus\t100\n2\tand\t90", { cutoff: 2 });
   const coverage = buildEnglish30kCoverage({
@@ -377,6 +395,14 @@ test("default English30k coverage uses the repository dictionary blacklist", asy
   assert.equal(he.canonicalEnglish, "it");
   assert.equal(he.pyashSequence[0], "htit");
   assert.ok(coverage.counts["dictionary-alias"] > 6000);
+});
+
+test("default English30k coverage uses the curated involve compound alias", async () => {
+  const coverage = await loadDefaultEnglish30kCoverage({ atomicEntries: pyashWords });
+  const involve = lookupEnglish30kCoverage(coverage, "involve");
+  assert.equal(involve.coverageType, "compound");
+  assert.equal(involve.canonicalEnglish, undefined);
+  assert.deepEqual(involve.pyashSequence, ["lwak", "hzan"]);
 });
 
 test("lwonprom-derived English grammar keeps particles separate from lexical roots", async () => {
