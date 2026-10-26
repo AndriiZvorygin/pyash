@@ -4,7 +4,10 @@ import json
 import math
 import os
 import re
+import signal
+import socket
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -26,6 +29,8 @@ _SUBMISSION_LOCK = threading.Lock()
 _RUNNING_JOB_ID: Optional[str] = None
 _RUNNING_JOB_IDS: Dict[str, set] = {}
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
+_NATIVE_RUNTIME_PROCESSES: Dict[str, subprocess.Popen] = {}
+_NATIVE_RUNTIME_LOCK = threading.Lock()
 _OLLAMA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
   "observedAt": 0.0,
   "available": False,
@@ -352,6 +357,8 @@ def read_json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
 
 
 def parse_nvidia_smi() -> Dict[str, Any]:
+  if accelerator_memory_backend() == "apple-unified":
+    return parse_apple_unified_memory()
   try:
     proc = subprocess.run(
       [
@@ -395,6 +402,64 @@ def parse_nvidia_smi() -> Dict[str, Any]:
     "available": len(devices) > 0,
     "devices": devices
   }
+
+
+def accelerator_memory_backend() -> str:
+  configured = normalize_text(os.environ.get("GPU_HOUSEKEEPER_DEVICE_BACKEND")).lower()
+  if configured:
+    return configured
+  return "apple-unified" if sys.platform == "darwin" else "nvidia-cuda"
+
+
+def parse_apple_unified_memory() -> Dict[str, Any]:
+  """Report a conservative Ollama capacity budget from macOS memory pressure."""
+  try:
+    total_bytes = int(subprocess.run(
+      ["sysctl", "-n", "hw.memsize"], check=True, capture_output=True,
+      text=True, timeout=3
+    ).stdout.strip())
+    pressure = subprocess.run(
+      ["memory_pressure", "-Q"], check=True, capture_output=True,
+      text=True, timeout=3
+    ).stdout
+    match = re.search(r"System-wide memory free percentage:\s*(\d+)%", pressure)
+    if not match:
+      raise RuntimeError("memory_pressure did not report free percentage")
+    total_mb = max(0, total_bytes // (1024 * 1024))
+    free_percent = max(0, min(100, int(match.group(1))))
+    system_free_mb = total_mb * free_percent // 100
+    try:
+      reserve_mb = int(os.environ.get("GPU_HOUSEKEEPER_APPLE_MEMORY_RESERVE_MB", "8192"))
+    except (TypeError, ValueError):
+      reserve_mb = 8192
+    reserve_mb = max(2048, min(total_mb, reserve_mb))
+    budget_total_mb = max(0, total_mb - reserve_mb)
+    used_mb = min(budget_total_mb, max(0, total_mb - system_free_mb))
+    free_mb = max(0, min(system_free_mb, budget_total_mb - used_mb))
+    return {
+      "available": total_mb > 0,
+      "backend": "apple-unified",
+      "devices": [{
+        "deviceId": "apple0",
+        "vramTotalMb": budget_total_mb,
+        "vramUsedMb": used_mb,
+        "vramFreeMb": free_mb,
+        "memoryModel": "unified",
+        "accelerator": "Apple Metal",
+        "systemFreePercent": free_percent,
+        "systemAvailableMb": system_free_mb,
+        "physicalTotalMb": total_mb,
+        "reservedSystemMb": reserve_mb
+      }] if total_mb > 0 else [],
+      "error": ""
+    }
+  except Exception as err:
+    return {
+      "available": False,
+      "backend": "apple-unified",
+      "devices": [],
+      "error": normalize_text(err) or "macOS unified-memory telemetry unavailable"
+    }
 
 
 def parse_nvidia_smi_processes() -> Dict[str, Any]:
@@ -1109,9 +1174,18 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
   profiles = project_strata_profile_residency(profile_list(), runtime_statuses, loading_observations)
   return {
     "hostId": host_id,
+    "accelerator": {
+      "memoryBackend": telemetry.get("backend") or accelerator_memory_backend(),
+      "memoryModel": (telemetry.get("devices") or [{}])[0].get("memoryModel", "dedicated")
+      if telemetry.get("devices") else "unknown"
+    },
     "capabilities": {
       "ollamaModelProvisioning": True,
-      "ollamaGpuResidencyGuard": True
+      "ollamaGpuResidencyGuard": True,
+      "nativeOllamaRuntime": any(
+        normalize_text(item.get("runtimeMode")).lower() == "native-ollama"
+        for item in (list(Handler.runtime_registry.values()) if "Handler" in globals() else [])
+      )
     },
     "queueDepth": queue_depth(),
     "devices": telemetry["devices"],
@@ -1571,6 +1645,48 @@ def parse_runtime_status(runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   runtime_name = normalize_text(runtime_entry.get("runtimeName"))
   container_name = normalize_text(runtime_entry.get("containerName"))
   gpu_expected = bool(runtime_entry.get("gpuExpected", False))
+  runtime_mode = normalize_text(runtime_entry.get("runtimeMode")).lower()
+
+  if runtime_mode == "native-ollama":
+    try:
+      response = request_ollama_json("/api/version", None, timeout_sec=5)
+    except Exception as err:
+      return {
+        "runtimeName": runtime_name,
+        "status": "stopped",
+        "containerName": "",
+        "gpuExpected": gpu_expected,
+        "gpuObserved": None,
+        "loaded": None,
+        "message": normalize_text(err) or "native Ollama API probe failed"
+      }
+    version = normalize_text(response.get("version"))
+    if not version:
+      return {
+        "runtimeName": runtime_name,
+        "status": "unknown",
+        "containerName": "",
+        "gpuExpected": gpu_expected,
+        "gpuObserved": None,
+        "loaded": None,
+        "message": "native Ollama API response did not include its version"
+      }
+    residency = ollama_running_model_status()
+    loaded_models = residency.get("models", []) if residency.get("available") else []
+    gpu_observed = None
+    if loaded_models:
+      gpu_observed = all(bool(model.get("gpuResident")) for model in loaded_models)
+    return {
+      "runtimeName": runtime_name,
+      "status": "running",
+      "containerName": "",
+      "runtimeMode": runtime_mode,
+      "gpuExpected": gpu_expected,
+      "gpuObserved": gpu_observed,
+      "loaded": bool(loaded_models) if residency.get("available") else None,
+      "version": version,
+      "message": f"native Ollama API running ({version})"
+    }
 
   if normalize_text(runtime_entry.get("dischargeKind")).lower() == "strata":
     try:
@@ -1694,6 +1810,34 @@ def container_process_ids(container_name: str) -> List[int]:
 
 
 def managed_gpu_processes(runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  if accelerator_memory_backend() == "apple-unified":
+    residency = ollama_running_model_status()
+    if not residency.get("available"):
+      return {
+        "available": False,
+        "runtimes": {},
+        "unmanagedProcesses": [],
+        "error": residency.get("error") or "Ollama model residency telemetry unavailable"
+      }
+    ollama_memory_mb = sum(
+      max(0, int(item.get("sizeVram") or item.get("size") or 0)) // (1024 * 1024)
+      for item in residency.get("models", [])
+      if isinstance(item, dict)
+    )
+    return {
+      "available": True,
+      "runtimes": {
+        "ollama": {
+          "runtimeName": "ollama",
+          "managed": True,
+          "pids": [],
+          "processes": [],
+          "usedMemoryMb": ollama_memory_mb
+        }
+      },
+      "unmanagedProcesses": [],
+      "memoryModel": "unified"
+    }
   telemetry = parse_nvidia_smi_processes()
   processes = telemetry.get("processes") if isinstance(telemetry, dict) else []
   if not isinstance(processes, list):
@@ -1796,6 +1940,35 @@ def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -
     base["state"] = "idle"
     base["idleSeconds"] = grace
     base["reason"] = "no queued Ollama job or recent inference access log within the idle grace"
+    return base
+
+  if probe == "ollama-housekeeper":
+    with _LOCK:
+      active_jobs = [
+        job for job in _JOBS.values()
+        if normalize_text(job.get("runtimeName")).lower() == runtime_name
+        and normalize_text(job.get("status")).lower() in {"queued", "running"}
+      ]
+      if active_jobs:
+        base["state"] = "active"
+        base["reason"] = "GPU Housekeeper has queued or running native Ollama work"
+        return base
+      previous = _RUNTIME_ACTIVITY.get(runtime_name, {})
+      idle_since = float(previous.get("idleSince") or time.time())
+      last_activity = normalize_text(previous.get("lastActivityAt"))
+      _RUNTIME_ACTIVITY[runtime_name] = {
+        "lastActivityAt": last_activity,
+        "idleSince": idle_since
+      }
+    elapsed = max(0.0, time.time() - idle_since)
+    base["lastActivityAt"] = last_activity
+    base["idleSeconds"] = round(elapsed, 3)
+    if elapsed >= idle_grace_seconds():
+      base["state"] = "idle"
+      base["reason"] = "native Ollama has no Housekeeper jobs beyond idle grace"
+    else:
+      base["state"] = "cooldown"
+      base["reason"] = "native Ollama Housekeeper idle grace has not elapsed"
     return base
 
   if probe == "strata-status":
@@ -1972,7 +2145,7 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
   if not telemetry.get("available") or not devices:
     return {
       "decision": "telemetry-unavailable",
-      "reason": "nvidia-smi memory telemetry unavailable",
+      "reason": "accelerator memory telemetry unavailable",
       "requiredVramMb": request["vramRequiredMb"],
       "candidates": []
     }
@@ -2410,6 +2583,66 @@ def list_runtime_statuses(runtime_registry: Dict[str, Dict[str, Any]]) -> List[D
   return out
 
 
+def native_runtime_process_id(command: str) -> Optional[int]:
+  expected = f"{normalize_text(command)} serve"
+  if expected == "serve":
+    return None
+  try:
+    proc = subprocess.run(
+      ["ps", "-axo", "pid=,command="], check=True, capture_output=True,
+      text=True, timeout=5
+    )
+  except Exception:
+    return None
+  for line in normalize_text(proc.stdout).splitlines():
+    fields = line.strip().split(None, 1)
+    if len(fields) != 2 or fields[1] != expected:
+      continue
+    try:
+      return int(fields[0])
+    except ValueError:
+      return None
+  return None
+
+
+def stop_native_runtime_process(
+  runtime_name: str,
+  command: str,
+  process: Optional[subprocess.Popen]
+) -> Dict[str, Any]:
+  pid = int(process.pid) if process is not None else native_runtime_process_id(command)
+  if not pid:
+    return {
+      "success": False,
+      "status": "unknown",
+      "message": "no process matching the configured native runtime executable was found"
+    }
+  try:
+    if process is not None:
+      process.terminate()
+      try:
+        process.wait(timeout=15)
+      except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+    else:
+      os.kill(pid, signal.SIGTERM)
+      deadline = time.monotonic() + 15
+      while native_runtime_process_id(command) == pid and time.monotonic() < deadline:
+        time.sleep(0.2)
+      if native_runtime_process_id(command) == pid:
+        os.kill(pid, signal.SIGKILL)
+        deadline = time.monotonic() + 5
+        while native_runtime_process_id(command) == pid and time.monotonic() < deadline:
+          time.sleep(0.1)
+    if native_runtime_process_id(command) == pid:
+      return {"success": False, "status": "running", "message": "configured native runtime did not stop"}
+  except Exception as err:
+    return {"success": False, "status": "defective", "message": normalize_text(err) or "native runtime stop failed"}
+  _NATIVE_RUNTIME_PROCESSES.pop(runtime_name, None)
+  return {"success": True, "status": "stopped", "message": "Housekeeper-stopped configured native runtime process"}
+
+
 def runtime_action(runtime_registry: Dict[str, Dict[str, Any]], runtime_name: str, action_key: str) -> Dict[str, Any]:
   entry = runtime_registry.get(runtime_name)
   if not entry:
@@ -2417,6 +2650,100 @@ def runtime_action(runtime_registry: Dict[str, Dict[str, Any]], runtime_name: st
       "success": False,
       "status": "missing",
       "message": f"runtime not managed: {runtime_name}"
+    }
+
+  if normalize_text(entry.get("actionDriver")).lower() == "native-process":
+    with _NATIVE_RUNTIME_LOCK:
+      command = normalize_text(entry.get("runtimeCommand"))
+      if not command:
+        return {"success": False, "status": "defective", "message": "runtimeCommand not configured"}
+      current_process = _NATIVE_RUNTIME_PROCESSES.get(runtime_name)
+      if current_process is not None and current_process.poll() is not None:
+        _NATIVE_RUNTIME_PROCESSES.pop(runtime_name, None)
+        current_process = None
+      if action_key not in {"beginAction", "stopAction", "restartAction"}:
+        return {"success": False, "status": "invalid", "message": f"unsupported native process action: {action_key}"}
+      if action_key == "stopAction":
+        return stop_native_runtime_process(runtime_name, command, current_process)
+      if action_key == "restartAction":
+        result = stop_native_runtime_process(runtime_name, command, current_process)
+        if not result.get("success"):
+          return result
+        current_process = None
+      if current_process is None:
+        if parse_runtime_status(entry).get("status") == "running":
+          return {"success": True, "status": "running", "message": "native runtime is already available"}
+        env = os.environ.copy()
+        runtime_env = entry.get("runtimeEnvironment") if isinstance(entry.get("runtimeEnvironment"), dict) else {}
+        env.update({str(key): str(value) for key, value in runtime_env.items()})
+        log_path = normalize_text(entry.get("runtimeLogPath"))
+        try:
+          if log_path:
+            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+            log_handle = open(log_path, "a", encoding="utf-8")
+          else:
+            log_handle = open(os.devnull, "w", encoding="utf-8")
+          try:
+            process = subprocess.Popen(
+              [command, "serve"],
+              stdin=subprocess.DEVNULL,
+              stdout=log_handle,
+              stderr=subprocess.STDOUT,
+              env=env,
+              start_new_session=True
+            )
+          finally:
+            log_handle.close()
+        except Exception as err:
+          return {"success": False, "status": "defective", "message": normalize_text(err) or "native runtime start failed"}
+        _NATIVE_RUNTIME_PROCESSES[runtime_name] = process
+      return {"success": True, "status": "starting", "message": "Housekeeper started the native runtime process"}
+
+  if normalize_text(entry.get("actionDriver")).lower() == "launchd-agent":
+    label = normalize_text(entry.get("launchdLabel"))
+    plist_path = normalize_text(entry.get("launchdPlist"))
+    domain = normalize_text(entry.get("launchdDomain")).lower() or "gui"
+    domain_target = f"{domain}/{os.getuid()}"
+    target = f"{domain_target}/{label}" if label else ""
+    try:
+      if not label or not plist_path:
+        raise RuntimeError("launchdLabel and launchdPlist are required for launchd-agent actions")
+      if action_key == "stopAction":
+        proc = subprocess.run(
+          ["launchctl", "bootout", target],
+          capture_output=True, text=True, timeout=15
+        )
+      elif action_key in {"beginAction", "restartAction"}:
+        proc = subprocess.run(
+          ["launchctl", "kickstart", "-k", target],
+          capture_output=True, text=True, timeout=15
+        )
+        if proc.returncode != 0:
+          bootstrap = subprocess.run(
+            ["launchctl", "bootstrap", domain_target, plist_path],
+            capture_output=True, text=True, timeout=15
+          )
+          if bootstrap.returncode == 0:
+            proc = subprocess.run(
+              ["launchctl", "kickstart", "-k", target],
+              capture_output=True, text=True, timeout=15
+            )
+      else:
+        raise RuntimeError(f"unsupported launchd action: {action_key}")
+      success = proc.returncode == 0
+      message = normalize_text(proc.stderr or proc.stdout) or (
+        "launchd action completed" if success else "launchd action failed"
+      )
+    except Exception as err:
+      success = False
+      message = normalize_text(err) or "launchd action failed"
+    current = parse_runtime_status(entry)
+    if action_key == "stopAction" and success:
+      current = {**current, "status": "stopped", "message": "native Ollama LaunchAgent stopped"}
+    return {
+      "success": success,
+      "status": current.get("status", "unknown"),
+      "message": message
     }
 
   args = entry.get(action_key)
@@ -2668,6 +2995,17 @@ def ollama_model_pull_allowed(model_name: str) -> bool:
 
 
 def memory_available_mb() -> Dict[str, Any]:
+  if accelerator_memory_backend() == "apple-unified":
+    telemetry = parse_apple_unified_memory()
+    devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+    if not telemetry.get("available") or not devices:
+      return {"available": False, "error": telemetry.get("error") or "macOS memory telemetry unavailable"}
+    device = devices[0]
+    return {
+      "available": True,
+      "availableMb": int(device.get("systemAvailableMb") or 0),
+      "totalMb": int(device.get("physicalTotalMb") or 0)
+    }
   try:
     values = {}
     with open("/proc/meminfo", "r", encoding="utf-8") as handle:
@@ -2699,6 +3037,24 @@ def container_disk_available_mb(container_name: str, path_name: str) -> Dict[str
     return {"available": False, "error": "model-store disk telemetry was malformed"}
   try:
     available_mb = int(fields[3]) // 1024
+  except (TypeError, ValueError):
+    return {"available": False, "error": "model-store disk telemetry was malformed"}
+  return {"available": True, "availableMb": max(0, available_mb), "path": path_name}
+
+
+def host_disk_available_mb(path_name: str) -> Dict[str, Any]:
+  try:
+    proc = subprocess.run(
+      ["df", "-Pk", path_name], check=True, capture_output=True,
+      text=True, timeout=10
+    )
+  except Exception as err:
+    return {"available": False, "error": normalize_text(err) or "model-store disk telemetry unavailable"}
+  rows = [line.strip().split() for line in normalize_text(proc.stdout).splitlines() if line.strip()]
+  if len(rows) < 2 or len(rows[-1]) < 4:
+    return {"available": False, "error": "model-store disk telemetry was malformed"}
+  try:
+    available_mb = int(rows[-1][3]) // 1024
   except (TypeError, ValueError):
     return {"available": False, "error": "model-store disk telemetry was malformed"}
   return {"available": True, "availableMb": max(0, available_mb), "path": path_name}
@@ -2831,6 +3187,13 @@ def ensure_runtime_ready(runtime_registry: Dict[str, Dict[str, Any]], runtime_na
     if not result.get("success"):
       raise RuntimeError(result.get("message") or f"runtime begin failed: {runtime_name}")
     status = parse_runtime_status(entry)
+    if normalize_text(entry.get("runtimeMode")).lower() == "native-ollama":
+      deadline = time.monotonic() + 30
+      while status.get("status") == "stopped" and time.monotonic() < deadline:
+        time.sleep(0.25)
+        status = parse_runtime_status(entry)
+      if status.get("status") != "running":
+        raise RuntimeError(status.get("message") or "native Ollama did not start after launchd kickstart")
 
   if bool(entry.get("gpuExpected", False)) and status.get("gpuObserved") is False:
     result = runtime_action(runtime_registry, runtime_name, "restartAction")
@@ -3040,13 +3403,19 @@ def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str
   # Ollama loads on the first generate call. Keep the real prompt out of that
   # cold-load window, where /api/ps can briefly report zero GPU VRAM.
   load_started = time.monotonic()
+  load_payload = {
+    "model": model,
+    "prompt": "",
+    "stream": False,
+    "keep_alive": 300
+  }
+  context_length = runtime_default_context_length(runtime_registry)
+  if context_length > 0:
+    load_payload["options"] = {"num_ctx": context_length}
   try:
-    load_result = request_ollama_json("/api/generate", {
-      "model": model,
-      "prompt": "",
-      "stream": False,
-      "keep_alive": 300
-    }, timeout_sec=max(30, int(grace)))
+    load_result = request_ollama_json(
+      "/api/generate", load_payload, timeout_sec=max(30, int(grace))
+    )
   except Exception as err:
     raise RuntimeError(f"Ollama GPU model load failed for {model}: {normalize_text(err)}")
   if normalize_text(load_result.get("error")):
@@ -3083,7 +3452,11 @@ def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str
     time.sleep(ollama_gpu_guard_poll_seconds())
 
 
-def normalize_ollama_payload(job_spec: Dict[str, Any], profile_name: str) -> Dict[str, Any]:
+def normalize_ollama_payload(
+  job_spec: Dict[str, Any],
+  profile_name: str,
+  default_context_length: int = 0
+) -> Dict[str, Any]:
   payload = dict(job_spec.get("payload")) if isinstance(job_spec.get("payload"), dict) else dict(job_spec)
   payload.pop("kind", None)
   payload.pop("payload", None)
@@ -3092,9 +3465,24 @@ def normalize_ollama_payload(job_spec: Dict[str, Any], profile_name: str) -> Dic
   payload.pop("resource_request", None)
   payload["model"] = normalize_text(payload.get("model")) or profile_name
   payload["stream"] = False
+  if default_context_length > 0:
+    options = dict(payload.get("options")) if isinstance(payload.get("options"), dict) else {}
+    if options.get("num_ctx") is None:
+      options["num_ctx"] = default_context_length
+    payload["options"] = options
   if "keep_alive" not in payload:
     payload["keep_alive"] = 300
   return payload
+
+
+def runtime_default_context_length(runtime_registry: Dict[str, Dict[str, Any]], runtime_name: str = "ollama") -> int:
+  entry = runtime_registry.get(runtime_name) if isinstance(runtime_registry, dict) else {}
+  if not isinstance(entry, dict):
+    return 0
+  try:
+    return max(0, min(1_000_000, int(entry.get("defaultContextLength") or 0)))
+  except (TypeError, ValueError):
+    return 0
 
 
 def is_zero_keep_alive(value: Any) -> bool:
@@ -3150,9 +3538,12 @@ def ensure_ollama_resource_capacity(job: Dict[str, Any], runtime_registry: Dict[
 
   if require_storage:
     entry = runtime_registry.get("ollama") or {}
-    container_name = normalize_text(entry.get("containerName")) or "ollama"
     store_path = normalize_text(entry.get("modelStorePath")) or normalize_text(os.environ.get("GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH")) or DEFAULT_OLLAMA_MODEL_STORE_PATH
-    disk = container_disk_available_mb(container_name, store_path)
+    if normalize_text(entry.get("runtimeMode")).lower() == "native-ollama":
+      disk = host_disk_available_mb(store_path)
+    else:
+      container_name = normalize_text(entry.get("containerName")) or "ollama"
+      disk = container_disk_available_mb(container_name, store_path)
     resources["disk"] = disk
     if not disk.get("available"):
       return {"state": "capacity-unknown", "reason": disk.get("error") or "model-store disk telemetry unavailable", "resources": resources}
@@ -3269,7 +3660,11 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
     raise RuntimeError(f"unsupported ollama job kind: {kind or 'missing'}")
 
   ensure_runtime_ready(runtime_registry, runtime_name)
-  payload = normalize_ollama_payload(job_spec, profile_name)
+  payload = normalize_ollama_payload(
+    job_spec,
+    profile_name,
+    default_context_length=runtime_default_context_length(runtime_registry, runtime_name)
+  )
   target_model = normalize_text(payload.get("model"))
   if not target_model:
     raise RuntimeError("ollama model is required")
@@ -3704,12 +4099,27 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
       runtime_name = normalize_text(item.get("runtimeName")).lower()
       container_name = normalize_text(item.get("containerName"))
       discharge_kind = normalize_text(item.get("dischargeKind")).lower()
+      runtime_mode = normalize_text(item.get("runtimeMode")).lower()
       external_strata = runtime_name == "strata" and discharge_kind == "strata"
-      if not runtime_name or (not container_name and not external_strata):
+      native_ollama = runtime_name == "ollama" and runtime_mode == "native-ollama"
+      if not runtime_name or (not container_name and not external_strata and not native_ollama):
         continue
+      try:
+        default_context_length = max(0, min(1_000_000, int(item.get("defaultContextLength") or 0)))
+      except (TypeError, ValueError):
+        default_context_length = 0
       registry[runtime_name] = {
         "runtimeName": runtime_name,
         "containerName": container_name,
+        "runtimeMode": runtime_mode,
+        "actionDriver": normalize_text(item.get("actionDriver")).lower(),
+        "launchdDomain": normalize_text(item.get("launchdDomain")).lower(),
+        "launchdLabel": normalize_text(item.get("launchdLabel")),
+        "launchdPlist": normalize_text(item.get("launchdPlist")),
+        "runtimeCommand": normalize_text(item.get("runtimeCommand")),
+        "runtimeLogPath": normalize_text(item.get("runtimeLogPath")),
+        "runtimeEnvironment": item.get("runtimeEnvironment") if isinstance(item.get("runtimeEnvironment"), dict) else {},
+        "defaultContextLength": default_context_length,
         "gpuExpected": parse_bool_value(item.get("gpuExpected", True), True),
         "beginAction": item.get("beginAction") if isinstance(item.get("beginAction"), list) else (["start", container_name] if container_name else []),
         "stopAction": item.get("stopAction") if isinstance(item.get("stopAction"), list) else (["stop", container_name] if container_name else []),
@@ -3802,6 +4212,11 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           current["finishedAt"] = utc_now_iso()
     finally:
       with _LOCK:
+        if runtime_name.lower() == "ollama":
+          _RUNTIME_ACTIVITY[runtime_name.lower()] = {
+            "lastActivityAt": utc_now_iso(),
+            "idleSince": time.time()
+          }
         running_on_device = _RUNNING_JOB_IDS.get(device_id, set())
         running_on_device.discard(remote_job_id)
         if not running_on_device:
@@ -3946,9 +4361,24 @@ class Handler(BaseHTTPRequestHandler):
     return
 
 
+def housekeeper_server_class(host: str):
+  if ":" not in host:
+    return ThreadingHTTPServer
+
+  class IPv6ThreadingHTTPServer(ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+  return IPv6ThreadingHTTPServer
+
+
+def create_housekeeper_server(host: str, port: int) -> ThreadingHTTPServer:
+  return housekeeper_server_class(host)((host, port), Handler)
+
+
 def main() -> None:
   parser = argparse.ArgumentParser()
   parser.add_argument("--host", default="0.0.0.0")
+  parser.add_argument("--also-host", action="append", default=[])
   parser.add_argument("--port", type=int, default=8090)
   parser.add_argument("--host-id", default="gpu-housekeeper")
   args = parser.parse_args()
@@ -3963,8 +4393,32 @@ def main() -> None:
     daemon=True
   ).start()
 
-  server = ThreadingHTTPServer((args.host, args.port), Handler)
-  server.serve_forever()
+  listen_hosts = list(dict.fromkeys([args.host, *args.also_host]))
+  servers = []
+  try:
+    for host in listen_hosts:
+      servers.append(create_housekeeper_server(host, args.port))
+  except Exception:
+    for server in servers:
+      server.server_close()
+    raise
+  server = servers[0]
+  for extra_server in servers[1:]:
+    threading.Thread(
+      target=extra_server.serve_forever,
+      name=f"housekeeper-listener-{extra_server.server_address[0]}",
+      daemon=True
+    ).start()
+  ollama_entry = Handler.runtime_registry.get("ollama") or {}
+  try:
+    if normalize_text(ollama_entry.get("runtimeMode")).lower() == "native-ollama":
+      ensure_runtime_ready(Handler.runtime_registry, "ollama")
+    server.serve_forever()
+  finally:
+    for extra_server in servers[1:]:
+      extra_server.shutdown()
+      extra_server.server_close()
+    server.server_close()
 
 
 if __name__ == "__main__":
