@@ -347,6 +347,46 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(observations[0]["loading seconds"], 12.5)
     self.assertEqual(observations[0]["load source"], "ollama load_duration")
 
+  def test_cold_gpu_verified_model_can_unload_after_fast_zero_keep_alive_inference(self):
+    model = "qwen3.5:9b"
+    loaded = {"gpu": False}
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/api/ps":
+        models = [{
+          "name": model, "size": 6000, "size_vram": 6000
+        }] if loaded["gpu"] else []
+        return {"available": True, "models": models}
+      calls.append((pathname, dict(payload or {})))
+      if pathname == "/api/generate" and payload.get("prompt") == "":
+        loaded["gpu"] = True
+        return {"response": "", "load_duration": 12_500_000_000}
+      if pathname == "/api/generate" and payload.get("prompt") == "quick answer":
+        self.assertTrue(loaded["gpu"], "real prompt must start after GPU residency is verified")
+        loaded["gpu"] = False
+        return {"response": "answer"}
+      return {"models": []}
+
+    server.request_ollama_json = fake_request
+    result = server.execute_ollama_job({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "jobSpec": {
+        "kind": "ollama-generate",
+        "payload": {"model": model, "prompt": "quick answer", "keep_alive": 0}
+      }
+    }, {"ollama": {
+      "runtimeName": "ollama", "gpuExpected": True, "defaultContextLength": 8192
+    }})
+
+    self.assertEqual(result, {"response": "answer"})
+    self.assertEqual([payload.get("prompt") for _, payload in calls[:2]], ["", "quick answer"])
+    self.assertFalse(server._PROFILES[model]["loaded"])
+
   def test_configured_default_context_preserves_explicit_job_context(self):
     spec = {"payload": {"model": "qwen3.5:9b", "options": {"temperature": 0.2}}}
     defaulted = server.normalize_ollama_payload(spec, "qwen3.5:9b", 8192)
