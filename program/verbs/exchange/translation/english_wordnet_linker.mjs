@@ -75,14 +75,34 @@ function bounded(value, maxChars) {
   return valueText.length > limit ? `${valueText.slice(0, Math.max(0, limit - 1))}…` : valueText;
 }
 
-function compactSense(record) {
+function matchingSourceTerms(lemmas, sourceTerms) {
+  const rows = Array.isArray(sourceTerms) ? sourceTerms : [];
+  return rows.filter((term) => {
+    const variants = new Set(termVariants(term));
+    return [...(lemmas ?? [])].some((lemma) => (
+      termVariants(lemma).some((variant) => variants.has(variant))
+    ));
+  });
+}
+
+function compactSense(record, context) {
+  const sourceTerms = Array.isArray(record?.sourceTerms) && record.sourceTerms.length > 0
+    ? record.sourceTerms
+    : [record?.lemmas?.[0] ?? ""];
+  const contextByTerm = new Map((Array.isArray(context) ? context : []).map((row) => [
+    normalized(row?.term),
+    [...new Set((row?.sentences ?? []).map((sentence) => bounded(sentence, 280)))]
+  ]));
+  const sentences = sourceTerms.flatMap((term) => contextByTerm.get(normalized(term)) ?? []);
   return {
     id: text(record?.id),
+    word: bounded(sourceTerms[0], 32),
     s: text(record?.source),
     p: text(record?.pos),
     g: bounded(record?.gloss, 56),
     l: (record?.lemmas ?? []).slice(0, 2).map((lemma) => bounded(lemma, 24)),
-    c: (record?.candidates ?? []).slice(0, 2).map((candidate) => ({
+    sourceSentences: [...new Set(sentences)].slice(0, 3),
+    choices: (record?.candidates ?? []).slice(0, 2).map((candidate) => ({
       targetEnglish: bounded(candidate?.target, 24)
     }))
   };
@@ -129,10 +149,10 @@ function prioritizedInventoryEntries(entries, records) {
 }
 
 function outputFits(records, maxOutputTokens) {
-  const fixedOutputTokens = 256;
-  // Qwen can spend more tokens than the compact contract suggests on a rationale.
-  // Keep batches conservative so one malformed long row cannot consume the whole response.
-  const perSenseTokens = 512;
+  const fixedOutputTokens = 192;
+  // The response contract bounds each rationale to 120 characters. Keep enough room
+  // for one compact decision per supplied sense while retaining repair headroom.
+  const perSenseTokens = 256;
   return fixedOutputTokens + (records.length * perSenseTokens) < maxOutputTokens;
 }
 
@@ -292,6 +312,9 @@ export function buildEnglishWordNetSenseLinkRecords({
   edgeMaxDegree = ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE
 } = {}) {
   const terms = sourceTermSet(sourceTerms);
+  const requestedTerms = [...new Set((Array.isArray(sourceTerms) ? sourceTerms : [sourceTerms])
+    .map(normalized)
+    .filter(Boolean))];
   const max = Math.max(1, Math.trunc(Number(limit) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE));
   const maxEdgeDegree = edgeDegreeLimit(edgeMaxDegree);
   const records = [];
@@ -309,6 +332,7 @@ export function buildEnglishWordNetSenseLinkRecords({
       synset,
       lemmas,
       gloss,
+      sourceTerms: matchingSourceTerms(lemmas, requestedTerms),
       candidates: []
     };
     const existing = bridgeFor(wordnetIndex, key, resolveWord);
@@ -337,7 +361,19 @@ export function buildEnglishWordNetSenseLinkRecords({
     records.push(record);
     if (records.length >= max) break;
   }
-  return records;
+  const senseCounts = new Map();
+  for (const record of records) {
+    for (const term of record.sourceTerms) {
+      senseCounts.set(term, (senseCounts.get(term) ?? 0) + 1);
+    }
+  }
+  return records.map((record) => {
+    const ambiguous = record.sourceTerms.some((term) => (senseCounts.get(term) ?? 0) > 1);
+    if (!ambiguous || !["accepted-edge", "accepted-deterministic"].includes(record.status)) {
+      return record;
+    }
+    return { ...record, status: "review" };
+  });
 }
 
 function inventoryRowKey(row) {
@@ -404,8 +440,8 @@ export function buildEnglishWordNetSenseLinkPrompt({
     throw invalid("WordNet linker prompt requires sense records");
   }
   if (!Array.isArray(inventory.entries)) throw invalid("WordNet linker prompt requires an atom inventory");
-  const senseRows = records.map((record) => JSON.stringify(compactSense(record))).join("\n");
   const contextRows = compactContext(context);
+  const senseRows = records.map((record) => JSON.stringify(compactSense(record, context))).join("\n");
   const grammar = compactInventoryRows((inventory.grammar ?? []).map((entry) => ({
     english: entry?.english,
     pyash: entry?.pyash,
@@ -435,7 +471,8 @@ export function buildEnglishWordNetSenseLinkPrompt({
       "Return every supplied sense id exactly once, and include targetEnglish for every accepted row. Never return Pyash tokens."
     ] : []),
     `SOURCE: ${text(source) || "Open English WordNet"}`,
-    "Sense rows use id, p=part of speech, g=gloss, l=lemmas, c=deterministic candidates.",
+    "Each sense row names the source word, the original source sentence, and the available English anchor choices.",
+    "Choose the relevant sense for each source word from the supplied rows; the host derives Pyash lowering after the decision.",
     "AUTHORITATIVE ENGLISH ANCHOR INVENTORY (choose the exact English key; Pyash lowering is deterministic):",
     "__INVENTORY__",
     "AUTHORITATIVE PYASH GRAMMAR INVENTORY:",
@@ -486,7 +523,11 @@ function partitionSenseRecords(records, options) {
   const batches = [];
   let batch = [];
   for (const record of records) {
-    if (batch.length >= options.maxDutySenses) {
+    const recordTerms = new Set(record.sourceTerms ?? []);
+    const sameSourceWord = batch.length > 0
+      && recordTerms.size > 0
+      && batch.every((candidate) => [...recordTerms].some((term) => (candidate.sourceTerms ?? []).includes(term)));
+    if (batch.length >= options.maxDutySenses && !sameSourceWord) {
       batches.push(batch);
       batch = [];
     }

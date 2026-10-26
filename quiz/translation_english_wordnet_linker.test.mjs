@@ -143,6 +143,63 @@ test("WordNet linker prompt stays bounded to supplied senses and inventory", () 
   assert.ok(estimateEnglishWordNetSenseLinkPromptTokens(prompt) < 4000);
 });
 
+test("ambiguous source words keep every sense choice beside the original sentence", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:show-exhibit:show",
+      pos: "n",
+      synset: "show-exhibit",
+      senseKey: "show-exhibit",
+      lemma: "show",
+      gloss: "something shown to the public"
+    }, {
+      id: "n:show-exhibit:exhibit",
+      pos: "n",
+      synset: "show-exhibit",
+      senseKey: "show-exhibit",
+      lemma: "exhibit",
+      gloss: "something shown to the public"
+    }, {
+      id: "v:show-demonstrate:show",
+      pos: "v",
+      synset: "show-demonstrate",
+      senseKey: "show-demonstrate",
+      lemma: "show",
+      gloss: "give evidence of"
+    }, {
+      id: "v:show-demonstrate:demonstrate",
+      pos: "v",
+      synset: "show-demonstrate",
+      senseKey: "show-demonstrate",
+      lemma: "demonstrate",
+      gloss: "give evidence of"
+    }]
+  });
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: index,
+    sourceTerms: ["shows"],
+    resolveWord: (word) => ({
+      exhibit: { coverageType: "atomic", canonicalEnglish: "exhibit", pyashSequence: ["sren"] },
+      demonstrate: { coverageType: "atomic", canonicalEnglish: "demonstrate", pyashSequence: ["tyap"] }
+    }[word] ?? null)
+  });
+  assert.equal(records.length, 2);
+  assert.deepEqual(records.map((record) => record.status), ["review", "review"]);
+  const prompt = buildEnglishWordNetSenseLinkPrompt({
+    records,
+    inventory: buildEnglishWordNetSenseLinkInventory({ records }),
+    context: [{
+      term: "shows",
+      sentences: ["Love is a mix of feelings and actions that shows a deep liking."]
+    }]
+  });
+  assert.match(prompt, /"word":"shows"/u);
+  assert.match(prompt, /"sourceSentences":\["Love is a mix of feelings and actions that shows a deep liking\."\]/u);
+  assert.match(prompt, /"targetEnglish":"exhibit"/u);
+  assert.match(prompt, /"targetEnglish":"demonstrate"/u);
+  assert.match(prompt, /Choose the relevant sense for each source word/u);
+});
+
 test("WordNet linker splits oversized sense batches without truncating identities", async () => {
   const records = Array.from({ length: 120 }, (_, index) => ({
     id: `sense-${String(index).padStart(3, "0")}`,
@@ -176,6 +233,42 @@ test("WordNet linker splits oversized sense batches without truncating identitie
   for (const record of records) {
     assert.equal(requests.filter((request) => request.prompt.includes(`\"id\":\"${record.id}\"`)).length, 1);
   }
+});
+
+test("WordNet linker keeps every sense for one source word in one decision duty", async () => {
+  const records = Array.from({ length: 6 }, (_, index) => ({
+    id: `shows-sense-${index}`,
+    source: `n:shows-${index}`,
+    sourceTerms: ["shows"],
+    status: "review",
+    pos: "n",
+    gloss: `sense ${index} shown in a public context`,
+    lemmas: ["show"],
+    candidates: [{
+      target: `anchor-${index}`,
+      pyashSequence: [`word-${index}`]
+    }]
+  }));
+  const requests = [];
+  await submitEnglishWordNetSenseLinks({
+    records,
+    inventory: {
+      entries: records.map((record, index) => ({
+        english: `anchor-${index}`,
+        pyash: [`word-${index}`]
+      })),
+      grammar: []
+    },
+    sourceHash: "same-source-word",
+    maxDutySenses: 2,
+    submit: async (request) => {
+      requests.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].candidates.length, records.length);
+  assert.ok(requests[0].prompt.includes('"word":"shows"'));
 });
 
 test("WordNet linker submits one durable future queue duty for pending senses", async () => {
