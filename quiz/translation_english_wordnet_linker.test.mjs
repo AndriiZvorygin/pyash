@@ -225,7 +225,10 @@ test("WordNet linker splits oversized sense batches without truncating identitie
     pos: "n",
     gloss: "a deliberately compact sense gloss used to exercise bounded batching",
     lemmas: [`term-${index}`],
-    candidates: []
+    candidates: [{
+      target: `inventory-${index}`,
+      pyashSequence: [`word-${index}`]
+    }]
   }));
   const requests = [];
   const queued = await submitEnglishWordNetSenseLinks({
@@ -290,11 +293,11 @@ test("WordNet linker keeps every sense for one source word in one decision duty"
 });
 
 test("WordNet linker submits one durable future queue duty for pending senses", async () => {
-  const records = buildEnglishWordNetSenseLinkRecords({
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
     resolveWord: resolver,
     sourceTerms: ["blorp"]
-  });
+  }));
   const inventory = { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] };
   const requests = [];
   const queued = await submitEnglishWordNetSenseLinks({
@@ -311,6 +314,34 @@ test("WordNet linker submits one durable future queue duty for pending senses", 
   assert.equal(queued.queue.senseCount, 1);
   assert.equal(queued.records[0].queue.status, "queued");
   assert.equal(wordNetSenseLinkQueueHandle({ sourceHash: "fixture-source", records }), queued.handleId);
+});
+
+test("WordNet linker skips pending senses without candidate choices", async () => {
+  const records = [{
+    id: "sense-without-choice",
+    status: "review",
+    sourceTerms: ["unused"],
+    candidates: []
+  }, {
+    id: "sense-with-choice",
+    status: "review",
+    sourceTerms: ["used"],
+    candidates: [{ target: "anchor", pyashSequence: ["word"] }]
+  }];
+  const requests = [];
+  const queued = await submitEnglishWordNetSenseLinks({
+    records,
+    sourceHash: "choice-filter-source",
+    submit: async (request) => {
+      requests.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].candidates.map((record) => record.id), ["sense-with-choice"]);
+  assert.deepEqual(queued.skipped.map((record) => record.id), ["sense-without-choice"]);
+  assert.equal(queued.records.find((record) => record.id === "sense-without-choice").queue, undefined);
+  assert.equal(queued.records.find((record) => record.id === "sense-with-choice").queue.status, "queued");
 });
 
 test("WordNet linker accepts only a supplied sense choice and renders native Pyash bridges", () => {
@@ -565,6 +596,8 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     promptMaxChars: 12000,
     promptMaxTokens: 3900,
     maxOutputTokens: 1024,
+    selectionFormat: "english-wordnet-sense-selection-v1",
+    selectionMaxOutputTokens: 512,
     edgeMaxDegree: 1,
     modelCard: {
       model: "qwen3.5:9b",
