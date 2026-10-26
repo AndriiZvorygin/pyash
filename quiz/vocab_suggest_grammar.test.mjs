@@ -37,6 +37,19 @@ test("vocab_suggest reports both lexical and grammar forms for example", async (
   assert.match(output, /example: grammar -> fluh \(English30k rank 1032\)/u);
 });
 
+test("vocab_suggest reports grammar and lexical root forms for inside", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["inside"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  const output = lines.join("\n");
+  assert.match(output, /inside: root -> lwak \(English30k rank 1583\)/u);
+  assert.match(output, /inside: grammar -> lwah \(English30k rank 1583\)/u);
+  assert.doesNotMatch(output, /^inside: ok$/mu);
+});
+
 test("vocab_suggest reports the English gloss for an accepted Pyac atom", async () => {
   const lines = [];
   const result = await runVocabSuggest(["twum"], {
