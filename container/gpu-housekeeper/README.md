@@ -28,11 +28,8 @@ Ollama residency is checked through
 /api/ps; idle models are discharged with keep_alive=0 and verified absent
 from that endpoint.
 
-Port 18886 is the default for new installs. Existing running services keep
-their explicitly configured listener and peer URLs until they are migrated.
-The Linux Compose deployment also publishes legacy host port 8090 to the same
-listener so already-running workers and federated peers continue to work
-during migration; new Pyash clients use 18886.
+Port 18886 is the Housekeeper port. Configure workers and federated peers to
+use this port; Linux Compose publishes only this port.
 
 To install or refresh from a checkout on the Mac:
 
@@ -51,7 +48,7 @@ Add the Mac as a peer in the GPU Housekeeper host's GPU_HOUSEKEEPER_PEERS
 setting, for example:
 
 ```text
-swac=http://swac:8090;macstudio=http://macstudio:18886
+swac=http://swac:18886;macstudio=http://macstudio:18886
 ```
 
 The peer hostname must resolve from the Housekeeper host (for this setup, the

@@ -26,7 +26,7 @@ This container is meant for a remote GPU host such as `mriczo` or `swac`. Local 
 PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 node command/gpu_worker.mjs --world world
 ```
 
-Use `http://swac:8090` instead when the runtime lives on `swac`.
+Use `http://swac:18886` instead when the runtime lives on `swac`.
 
 ## Housekeeper Defaults
 
