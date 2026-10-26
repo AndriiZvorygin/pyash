@@ -266,7 +266,12 @@ test("module manuscript scored long segment generation caps stay below platform 
   assert.match(moduleSource, /module manuscript segment three retry draft stage[^\n]*atmost num 104 be write do/u);
 });
 
-test("module manuscript scored fixture refinery run avoids unknown-verb wiring failures", async () => {
+test("module manuscript scored fixture refinery run avoids unknown-verb wiring failures", async t => {
+  try {
+    await fs.access(path.join(repoRoot, "know/input/power-learnteaching.txt"));
+  } catch {
+    return t.skip("know/input/power-learnteaching.txt is not present in this checkout");
+  }
   const fixtureResponses = [
     "True power is an inherent capacity of the awakened self to direct will and attention in loving service. It is not borrowed from outside conditions but rises within consciousness as intelligent light and wisdom. This force becomes practical when desire, intention, and disciplined emotional clarity are aligned with love. In that alignment, people co-create circumstances with steadier coherence, clearer purpose, and greater responsibility for outcomes. The same current expands when shared, so service strengthens both the individual and the collective field at once.",
     "The candidate stays grounded in the source and preserves the same teaching meaning.\nPASS",

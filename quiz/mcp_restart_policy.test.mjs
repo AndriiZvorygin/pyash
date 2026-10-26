@@ -42,7 +42,9 @@ test("mcp restart policy retries on crash and then denies", async () => {
     (err) => err?.sentence?.su?.name === "mcp defective"
   );
 
-  await new Promise(resolve => setTimeout(resolve, 50));
+  for (let attempt = 0; attempt < 20 && !records.some(s => s?.be === "mcp restart denied" && s?.ob?.name === "crash"); attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
 
   assert.ok(records.some(s => s?.be === "mcp restart" && s?.ob?.name === "crash"));
   assert.ok(records.some(s => s?.be === "mcp restart denied" && s?.ob?.name === "crash"));

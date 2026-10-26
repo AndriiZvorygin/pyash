@@ -650,6 +650,8 @@ export async function handleImperative({
   const useRawTo =
     be === "mind" ||
     be === "say" ||
+    be === "import" ||
+    be === "text" ||
     be === "write" ||
     be === "evoke" ||
     be === "distribute" ||

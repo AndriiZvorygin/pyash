@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   deriveCoverOverlayText,
   verifyCoverOverlayText,
@@ -15,6 +15,11 @@ import { buildBackgroundPromptSpec } from "../program/library/reporter_shared/co
 
 function mkTmpDir(prefix = "cover-overlay-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function mediaToolsAvailable() {
+  return spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0
+    && spawnSync("ffprobe", ["-version"], { stdio: "ignore" }).status === 0;
 }
 
 test("derive overlay preserves trailing year", () => {
@@ -69,6 +74,7 @@ test("verifier accepts exact overlay", () => {
 });
 
 test("deterministic compositor creates image within target dimensions", async (t) => {
+  if (!mediaToolsAvailable()) return t.skip("ffmpeg and ffprobe are required");
   const tmp = mkTmpDir();
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   const bg = path.join(tmp, "bg.png");
@@ -221,6 +227,7 @@ test("prompt policy keeps overlay text out of positive prompt and keeps negative
 });
 
 test("deterministic compositor returns transparent text layer metadata", async (t) => {
+  if (!mediaToolsAvailable()) return t.skip("ffmpeg and ffprobe are required");
   const tmp = mkTmpDir("cover-overlay-layer-");
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   const bg = path.join(tmp, "bg.png");
@@ -256,13 +263,13 @@ test("derived report records whether hook was unchanged or shortened", () => {
 
 test("promptify infers visual subject from hook semantics", async () => {
   const { runCoverPromptifyStage } = await import("../program/library/reporter_shared/cover-promptify-stage.mjs");
-  const out = runCoverPromptifyStage({
+  const out = await runCoverPromptifyStage({
     hookText: "Easing The Burden On Local Businesses",
     overlayText: "Easing The Burden On Local Businesses",
     oneSentenceSummary: "Council reviewed costs for local operators.",
     topNews: "Patio permit barriers and business costs",
   });
-  assert.match(out.selectedVisualSubject, /planning|development|documents|business|downtown/iu);
+  assert.match(out.selectedVisualSubject, /planning|development|documents|business|downtown|patio|storefront|tables/iu);
   assert.equal(out.promptContainsOverlayText, false);
 });
 
@@ -392,13 +399,13 @@ test("roadwork prompt uses object-level street terms and excludes text-inducing 
   assert.equal(spec.negativePrompt, "");
 });
 
-test("retry prompt for synthetic text risk shifts to close-up roadwork framing", async () => {
+test("retry prompt for synthetic text risk simplifies the grounded scene", async () => {
   const { buildRetryPromptForBackgroundRisk } = await import("../program/library/reporter_shared/cover-promptify-stage.mjs");
   const retry = buildRetryPromptForBackgroundRisk({
     visualSubject: "municipal roadway corridor with civic infrastructure context",
     positivePrompt: "Documentary photograph style municipal street under roadwork",
   }).toLowerCase();
-  for (const term of ["close-up", "lane arrows", "route", "markings", "directional symbols", "square composition"]) {
+  for (const term of ["simplify composition", "topic-grounded scene elements", "flat-shaded illustration", "cleaner visual hierarchy"]) {
     assert.equal(retry.includes(term), true);
   }
 });

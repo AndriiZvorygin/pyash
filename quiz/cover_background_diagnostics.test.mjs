@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { diagnoseCoverBackground } from "../program/library/reporter_shared/cover-background-diagnostics.mjs";
 import { runCoverOverlayStage } from "../program/library/reporter_shared/cover-overlay-stage.mjs";
 
@@ -21,7 +21,12 @@ function makeImage(color, out) {
   });
 }
 
+function ffmpegAvailable() {
+  return spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0;
+}
+
 test("rejected overlay text overlap triggers stale_background_text_detected", async (t) => {
+  if (!ffmpegAvailable()) return t.skip("ffmpeg is required");
   const tmp = mkTmpDir();
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   const bg = path.join(tmp, "bg.png");
@@ -64,6 +69,7 @@ test("final mostly black composite fails when final background usefulness is fal
 });
 
 test("abstract fallback fails relevance by default", async (t) => {
+  if (!ffmpegAvailable()) return t.skip("ffmpeg is required");
   const tmp = mkTmpDir();
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   const bg = path.join(tmp, "bg.png");

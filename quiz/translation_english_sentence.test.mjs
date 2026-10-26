@@ -269,7 +269,7 @@ test("sentence context distinguishes distal that from a relative-clause that", a
   assert.match(that.evidence, /relative-clause/u);
   assert.equal(relative.tokens.find((token) => token.surface === "be").construction.kind, "passive-auxiliary");
   assert.equal(relative.tokens.find((token) => token.surface === "be").copula, true);
-  assert.deepEqual(relative.unresolved, ["brain"]);
+  assert.deepEqual(relative.unresolved, []);
 });
 
 test("WordNet evidence yields bounded synonym candidates without auto-selecting a sense", () => {

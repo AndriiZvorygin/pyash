@@ -53,7 +53,14 @@ function scheduleMcpRestart(record, { code, signal }) {
   state.timer = setTimeout(() => {
     state.pending = false;
     state.timer = null;
-    startMcpClient({ record, source: "mcp restart" }).catch(() => {});
+    startMcpClient({ record, source: "mcp restart" }).catch(() => {
+      // A failed restart is itself a crash for restart-policy accounting.
+      // Retry failures must consume the bounded restart budget and eventually
+      // produce the same denial event as an exited child process.
+      const clientAlreadyExited = record.client === null;
+      record.client = null;
+      if (!clientAlreadyExited) scheduleMcpRestart(record, { code: null, signal: null });
+    });
   }, delayMs);
   record.restartState = state;
   return true;

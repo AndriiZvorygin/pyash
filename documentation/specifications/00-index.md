@@ -1,6 +1,6 @@
 # Specifications Index
 
-Purpose: normative spec set for Pyash. This folder is intentionally compact: <=20 files, each <=16KB.
+Purpose: normative spec set for Pyash. This folder is intentionally compact: <=24 files, each <=16KB.
 
 ## Core order
 
@@ -38,6 +38,8 @@ Moved out of `specifications/` to keep core spec compact:
 - `documentation/reference/android-executive-lifecycle.md`
 - `documentation/reference/spec-index-map.md`
 - `documentation/reference/spec-implementation-map.md`
+- `documentation/reference/translation-parity-notes.md`
+- `documentation/reference/pyac-vliw-semantic-slices.md`
 - `documentation/reference/instead-replacement.md`
 - `documentation/reference/music-module.md`
 

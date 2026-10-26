@@ -1063,22 +1063,22 @@ async function dispatchChannelEvents({
           }
           return false;
         }
+        const produceRequest = buildRouterProduceRequestSentence({
+          channelType,
+          event,
+          sourceAgentName: targetAgent,
+          payloadId: orchestratorDirective.payloadId,
+          responseText: content
+        });
+        await routeChannelProduce({
+          routerInterpretFn,
+          channelType,
+          event,
+          sourceAgentName: targetAgent,
+          payloadId: orchestratorDirective.payloadId,
+          responseText: content
+        });
         if (outputMode === "queue") {
-          const produceRequest = buildRouterProduceRequestSentence({
-            channelType,
-            event,
-            sourceAgentName: targetAgent,
-            payloadId: orchestratorDirective.payloadId,
-            responseText: content
-          });
-          await routeChannelProduce({
-            routerInterpretFn,
-            channelType,
-            event,
-            sourceAgentName: targetAgent,
-            payloadId: orchestratorDirective.payloadId,
-            responseText: content
-          });
           await enqueueProduceEnvelope(worldRootResolved, {
             lane: "durable",
             channelType,

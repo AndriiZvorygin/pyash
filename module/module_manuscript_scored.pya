@@ -858,7 +858,7 @@ su name module manuscript scored settle from name map checkpoint with name serie
   exists su name module manuscript scored settle checkpoint words slot ob words of map of from of this be nickname ya
   exists su name module manuscript scored settle checkpoint score slot ob score of map of from of this be nickname ya
   exists su name module manuscript scored settle checkpoint passing slot ob passing of map of from of this be nickname ya
-  su name module manuscript scored settle attempt row stage from name map of from of this to name map module manuscript scored attempt one row be module manuscript scored attempt row do
+  su name module manuscript scored settle attempt row stage from name map checkpoint to name map module manuscript scored attempt one row be module manuscript scored attempt row do
   ob text of attempt_name of map of from of this to name module manuscript scored state current attempt slot be text do
   ob text of attempt_name of map of from of this to name module manuscript scored state best attempt slot be text do
   ob num of score of map of from of this to name module manuscript scored state best score slot be plus do
@@ -904,17 +904,17 @@ su name module manuscript scored promote from name map checkpoint with name map 
   ob text "attempt " to name text module manuscript scored promote current attempt text be text do
   ob name text module manuscript scored promote attempt text to name module manuscript scored promote current attempt text be plus do
   ob name num module manuscript scored promote attempt num be equally from num 1 then
-  su name module manuscript scored promote attempt row one stage from name map of from of this to name map module manuscript scored attempt one row be module manuscript scored attempt row do
+  su name module manuscript scored promote attempt row one stage from name map checkpoint to name map module manuscript scored attempt one row be module manuscript scored attempt row do
   ob name num module manuscript scored promote attempt num be equally from num 2 then
-  su name module manuscript scored promote attempt row two stage from name map of from of this to name map module manuscript scored attempt two row be module manuscript scored attempt row do
+  su name module manuscript scored promote attempt row two stage from name map checkpoint to name map module manuscript scored attempt two row be module manuscript scored attempt row do
   ob name num module manuscript scored promote attempt num be equally from num 3 then
-  su name module manuscript scored promote attempt row three stage from name map of from of this to name map module manuscript scored attempt three row be module manuscript scored attempt row do
+  su name module manuscript scored promote attempt row three stage from name map checkpoint to name map module manuscript scored attempt three row be module manuscript scored attempt row do
   ob name num module manuscript scored promote attempt num be equally from num 4 then
-  su name module manuscript scored promote attempt row four stage from name map of from of this to name map module manuscript scored attempt four row be module manuscript scored attempt row do
+  su name module manuscript scored promote attempt row four stage from name map checkpoint to name map module manuscript scored attempt four row be module manuscript scored attempt row do
   ob name num module manuscript scored promote attempt num be equally from num 5 then
-  su name module manuscript scored promote attempt row five stage from name map of from of this to name map module manuscript scored attempt five row be module manuscript scored attempt row do
+  su name module manuscript scored promote attempt row five stage from name map checkpoint to name map module manuscript scored attempt five row be module manuscript scored attempt row do
   ob name num module manuscript scored promote attempt num be equally from num 6 then
-  su name module manuscript scored promote attempt row six stage from name map of from of this to name map module manuscript scored attempt six row be module manuscript scored attempt row do
+  su name module manuscript scored promote attempt row six stage from name map checkpoint to name map module manuscript scored attempt six row be module manuscript scored attempt row do
   ob text of history of map of with of this to name text module manuscript scored promote prior history be text do
   ob text of best_attempt of map of with of this to name module manuscript scored promote best attempt slot be text do
   ob num of best_score of map of with of this to name module manuscript scored promote best score slot be plus do
@@ -984,7 +984,7 @@ su name module manuscript scored collect pair from name map first with name map 
   exists su name module manuscript scored collect pair second checkpoint ob map of with of this be nickname ya
   exists su name module manuscript scored collect pair first words slot ob words of map of from of this be nickname ya
   exists su name module manuscript scored collect pair second words slot ob words of map of with of this be nickname ya
-  su name module manuscript scored collect pair row one stage from name map of from of this to name map module manuscript scored attempt one row be module manuscript scored attempt row do
+  su name module manuscript scored collect pair row one stage from name map first to name map module manuscript scored attempt one row be module manuscript scored attempt row do
   su name module manuscript scored collect pair row two stage from name map module manuscript scored collect pair second checkpoint to name map module manuscript scored attempt two row be module manuscript scored attempt row do
   ob text "module manuscript scored attempt one row" to name module manuscript scored collect pair history slot be text do
   ob text "
