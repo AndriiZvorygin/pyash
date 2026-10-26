@@ -326,16 +326,32 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "runtimeName": "ollama",
       "profileName": model,
       "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "teach this"}}
-    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+    }, {"ollama": {
+      "runtimeName": "ollama", "gpuExpected": True, "defaultContextLength": 8192
+    }})
 
     self.assertEqual(result, {"response": "answer"})
     self.assertEqual([payload["prompt"] for payload in calls], ["", "teach this"])
+    self.assertEqual(calls[0]["options"]["num_ctx"], 8192)
+    self.assertEqual(calls[1]["options"]["num_ctx"], 8192)
     observations = server.model_loading_observations()
     self.assertEqual(len(observations), 1)
     self.assertEqual(observations[0]["runtime name"], "ollama")
     self.assertEqual(observations[0]["model name"], model)
     self.assertEqual(observations[0]["loading seconds"], 12.5)
     self.assertEqual(observations[0]["load source"], "ollama load_duration")
+
+  def test_configured_default_context_preserves_explicit_job_context(self):
+    spec = {"payload": {"model": "qwen3.5:9b", "options": {"temperature": 0.2}}}
+    defaulted = server.normalize_ollama_payload(spec, "qwen3.5:9b", 8192)
+    explicit = server.normalize_ollama_payload({
+      "payload": {
+        "model": "qwen3.5:9b",
+        "options": {"temperature": 0.2, "num_ctx": 4096}
+      }
+    }, "qwen3.5:9b", 8192)
+    self.assertEqual(defaulted["options"], {"temperature": 0.2, "num_ctx": 8192})
+    self.assertEqual(explicit["options"]["num_ctx"], 4096)
 
   def test_cold_cpu_model_is_restarted_without_sending_real_prompt(self):
     actions = []
@@ -877,6 +893,257 @@ class HousekeeperOllamaTests(unittest.TestCase):
         os.environ["GPU_HOUSEKEEPER_RUNTIME_REGISTRY"] = original_registry
     self.assertTrue(registry["safe"]["gpuExpected"])
     self.assertTrue(registry["safe"]["concurrencySafe"])
+
+
+class HousekeeperAppleSiliconTests(unittest.TestCase):
+  def setUp(self):
+    self.original_backend = os.environ.get("GPU_HOUSEKEEPER_DEVICE_BACKEND")
+    self.original_registry = os.environ.get("GPU_HOUSEKEEPER_RUNTIME_REGISTRY")
+    self.original_strata_url = os.environ.get("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL")
+    os.environ["GPU_HOUSEKEEPER_DEVICE_BACKEND"] = "apple-unified"
+    os.environ.pop("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL", None)
+    server._JOBS.clear()
+    server._RUNTIME_ACTIVITY.clear()
+    server._NATIVE_RUNTIME_PROCESSES.clear()
+
+  def tearDown(self):
+    for name, value in (
+      ("GPU_HOUSEKEEPER_DEVICE_BACKEND", self.original_backend),
+      ("GPU_HOUSEKEEPER_RUNTIME_REGISTRY", self.original_registry),
+      ("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL", self.original_strata_url)
+    ):
+      if value is None:
+        os.environ.pop(name, None)
+      else:
+        os.environ[name] = value
+    server._JOBS.clear()
+    server._RUNTIME_ACTIVITY.clear()
+    server._NATIVE_RUNTIME_PROCESSES.clear()
+
+  def native_runtime(self):
+    return {
+      "runtimeName": "ollama",
+      "containerName": "",
+      "runtimeMode": "native-ollama",
+      "defaultContextLength": 8192,
+      "gpuExpected": True,
+      "actionDriver": "launchd-agent",
+      "launchdLabel": "com.pyash.ollama",
+      "launchdPlist": "/Users/ai/Library/LaunchAgents/com.pyash.ollama.plist",
+      "activityProbe": "ollama-housekeeper",
+      "dischargeKind": "ollama"
+    }
+
+  def test_macos_memory_pressure_becomes_a_reserved_unified_memory_budget(self):
+    class FakeProcess:
+      returncode = 0
+      stderr = ""
+
+      def __init__(self, stdout):
+        self.stdout = stdout
+
+    def fake_run(args, **_kwargs):
+      if args[0] == "sysctl":
+        return FakeProcess("68719476736\n")
+      if args[0] == "memory_pressure":
+        return FakeProcess("System-wide memory free percentage: 96%\n")
+      raise AssertionError(args)
+
+    with patch.object(server.subprocess, "run", side_effect=fake_run):
+      telemetry = server.parse_nvidia_smi()
+
+    self.assertTrue(telemetry["available"])
+    self.assertEqual(telemetry["backend"], "apple-unified")
+    device = telemetry["devices"][0]
+    self.assertEqual(device["deviceId"], "apple0")
+    self.assertEqual(device["memoryModel"], "unified")
+    self.assertEqual(device["vramTotalMb"], 57344)
+    self.assertGreater(device["vramFreeMb"], 50000)
+
+  def test_native_ollama_registry_does_not_require_a_container(self):
+    raw = json.dumps([self.native_runtime()])
+    with patch.dict(os.environ, {"GPU_HOUSEKEEPER_RUNTIME_REGISTRY": raw}):
+      registry = server.load_runtime_registry()
+    self.assertEqual(registry["ollama"]["runtimeMode"], "native-ollama")
+    self.assertEqual(registry["ollama"]["actionDriver"], "launchd-agent")
+    self.assertEqual(registry["ollama"]["containerName"], "")
+    self.assertEqual(registry["ollama"]["defaultContextLength"], 8192)
+
+  def test_housekeeper_listener_supports_an_additional_loopback_bind(self):
+    self.assertIs(server.housekeeper_server_class("127.0.0.1"), server.ThreadingHTTPServer)
+    ipv6_server_class = server.housekeeper_server_class("eb22::1")
+    self.assertEqual(ipv6_server_class.address_family, server.socket.AF_INET6)
+
+  def test_native_process_driver_starts_ollama_as_a_housekeeper_child(self):
+    entry = {
+      "runtimeName": "ollama",
+      "runtimeMode": "native-ollama",
+      "actionDriver": "native-process",
+      "runtimeCommand": "/Users/ai/Applications/Ollama.app/Contents/Resources/ollama",
+      "runtimeEnvironment": {"OLLAMA_HOST": "127.0.0.1:11434"}
+    }
+
+    class FakeProcess:
+      returncode = None
+
+      def poll(self):
+        return self.returncode
+
+    process = FakeProcess()
+    original_request = server.request_ollama_json
+    server.request_ollama_json = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("not running"))
+    try:
+      with patch.object(server.subprocess, "Popen", return_value=process) as popen:
+        result = server.runtime_action({"ollama": entry}, "ollama", "beginAction")
+    finally:
+      server.request_ollama_json = original_request
+
+    self.assertTrue(result["success"])
+    self.assertIs(server._NATIVE_RUNTIME_PROCESSES["ollama"], process)
+    self.assertEqual(popen.call_args.args[0], [entry["runtimeCommand"], "serve"])
+    self.assertEqual(popen.call_args.kwargs["env"]["OLLAMA_HOST"], "127.0.0.1:11434")
+
+  def test_native_process_driver_can_stop_its_configured_process_after_restart(self):
+    entry = {
+      "runtimeName": "ollama",
+      "runtimeMode": "native-ollama",
+      "actionDriver": "native-process",
+      "runtimeCommand": "/Users/ai/Applications/Ollama.app/Contents/Resources/ollama"
+    }
+    with patch.object(server, "native_runtime_process_id", side_effect=[4321, None, None, None]), \
+         patch.object(server.os, "kill") as kill:
+      result = server.runtime_action({"ollama": entry}, "ollama", "stopAction")
+    self.assertTrue(result["success"])
+    self.assertEqual(kill.call_args.args, (4321, server.signal.SIGTERM))
+
+  def test_native_process_restart_replaces_an_adopted_configured_process(self):
+    entry = {
+      "runtimeName": "ollama",
+      "runtimeMode": "native-ollama",
+      "actionDriver": "native-process",
+      "runtimeCommand": "/Users/ai/Applications/Ollama.app/Contents/Resources/ollama",
+      "runtimeEnvironment": {"OLLAMA_HOST": "127.0.0.1:11434"}
+    }
+
+    class FakeProcess:
+      returncode = None
+
+      def poll(self):
+        return self.returncode
+
+    replacement = FakeProcess()
+    with patch.object(server, "native_runtime_process_id", side_effect=[4321, None, None, None]), \
+         patch.object(server.os, "kill"), \
+         patch.object(server, "parse_runtime_status", return_value={"status": "stopped"}), \
+         patch.object(server.subprocess, "Popen", return_value=replacement) as popen:
+      result = server.runtime_action({"ollama": entry}, "ollama", "restartAction")
+    self.assertTrue(result["success"])
+    self.assertIs(server._NATIVE_RUNTIME_PROCESSES["ollama"], replacement)
+    self.assertEqual(popen.call_args.args[0], [entry["runtimeCommand"], "serve"])
+
+  def test_native_ollama_health_and_launchd_lifecycle_are_provider_aware(self):
+    entry = self.native_runtime()
+    registry = {"ollama": entry}
+    original_request = server.request_ollama_json
+    server.request_ollama_json = lambda pathname, _payload=None, timeout_sec=600: (
+      {"version": "test"} if pathname == "/api/version" else {"models": []}
+    )
+
+    class FakeProcess:
+      returncode = 0
+      stdout = ""
+      stderr = ""
+
+    try:
+      status = server.parse_runtime_status(entry)
+      with patch.object(server.subprocess, "run", return_value=FakeProcess()) as run:
+        action = server.runtime_action(registry, "ollama", "beginAction")
+    finally:
+      server.request_ollama_json = original_request
+
+    self.assertEqual(status["status"], "running")
+    self.assertFalse(status["loaded"])
+    self.assertTrue(action["success"])
+    self.assertEqual(run.call_args.args[0][:3], ["launchctl", "kickstart", "-k"])
+
+  def test_capacity_admission_uses_the_apple_unified_memory_device(self):
+    original = server.parse_apple_unified_memory
+    server.parse_apple_unified_memory = lambda: {
+      "available": True,
+      "backend": "apple-unified",
+      "devices": [{
+        "deviceId": "apple0", "vramTotalMb": 57344,
+        "vramUsedMb": 4096, "vramFreeMb": 53248,
+        "memoryModel": "unified"
+      }]
+    }
+    try:
+      plan = server.capacity_plan_for_job({
+        "runtimeName": "ollama",
+        "profileName": "qwen3.5:9b",
+        "jobSpec": {
+          "kind": "ollama-generate",
+          "resourceRequest": {"vramRequiredMb": 12000},
+          "payload": {"model": "qwen3.5:9b", "prompt": "health check"}
+        }
+      }, {"ollama": self.native_runtime()})
+    finally:
+      server.parse_apple_unified_memory = original
+    self.assertEqual(plan["decision"], "fits")
+    self.assertEqual(plan["deviceId"], "apple0")
+
+  def test_unified_memory_process_view_tracks_native_ollama_residency(self):
+    original = server.ollama_running_model_status
+    server.ollama_running_model_status = lambda: {
+      "available": True,
+      "models": [{
+        "name": "qwen3.5:9b", "size": 7 * 1024 * 1024 * 1024,
+        "sizeVram": 6 * 1024 * 1024 * 1024
+      }]
+    }
+    try:
+      view = server.managed_gpu_processes({"ollama": self.native_runtime()})
+    finally:
+      server.ollama_running_model_status = original
+    self.assertTrue(view["available"])
+    self.assertEqual(view["memoryModel"], "unified")
+    self.assertEqual(view["runtimes"]["ollama"]["usedMemoryMb"], 6144)
+
+  def test_native_ollama_idle_discharge_unloads_and_verifies_models(self):
+    entry = self.native_runtime()
+    model = {"name": "qwen3.5:9b", "size": 8 * 1024 * 1024, "size_vram": 8 * 1024 * 1024}
+    running = {"value": [model]}
+    calls = []
+    original_request = server.request_ollama_json
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      calls.append((pathname, payload))
+      if pathname == "/api/version":
+        return {"version": "test"}
+      if pathname == "/api/ps":
+        return {"models": running["value"]}
+      if pathname == "/api/generate" and payload.get("keep_alive") == 0:
+        running["value"] = []
+      return {"response": ""}
+
+    server._RUNTIME_ACTIVITY["ollama"] = {
+      "lastActivityAt": "",
+      "idleSince": time.time() - 600
+    }
+    original_idle_grace = server.idle_grace_seconds
+    server.idle_grace_seconds = lambda: 300
+    server.request_ollama_json = fake_request
+    try:
+      result = server.discharge_runtime("ollama", entry)
+    finally:
+      server.request_ollama_json = original_request
+      server.idle_grace_seconds = original_idle_grace
+
+    self.assertTrue(result["success"])
+    self.assertIn(("/api/generate", {
+      "model": "qwen3.5:9b", "prompt": "", "stream": False, "keep_alive": 0
+    }), calls)
+    self.assertFalse(running["value"])
 
 
 class HousekeeperCapacityTests(unittest.TestCase):
