@@ -502,7 +502,7 @@ URLs:
 
 ```sh
 GPU_HOUSEKEEPER_HOST_ID=mriczo
-GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
+GPU_HOUSEKEEPER_PEERS='swac=http://swac:18886'
 GPU_HOUSEKEEPER_ACCEPT_FORWARDED=true
 ```
 
@@ -510,7 +510,7 @@ The first live pair is configured symmetrically:
 
 ```sh
 # mriczo
-GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
+GPU_HOUSEKEEPER_PEERS='swac=http://swac:18886'
 
 # swac
 GPU_HOUSEKEEPER_PEERS='mriczo=http://mriczo:18886'

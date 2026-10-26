@@ -10,8 +10,6 @@ services:
     restart: unless-stopped
     ports:
       - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}:18886"
-      # Legacy alias keeps existing workers and federated peers online during migration.
-      - "8090:18886"
     runtime: nvidia
     deploy:
       resources:
