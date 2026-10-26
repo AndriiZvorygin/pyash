@@ -80,6 +80,7 @@ function buildCheckpointSentence({ refineryName, platformName, hash, resultSente
   let payloadText = "";
   try {
     payloadText = JSON.stringify({
+      platform: platformName ?? "",
       result: resultSentence ?? {},
       exports: exportFacts,
       scope: scopeSlots

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,7 +13,14 @@ import { createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter } from "..
 import { runTranslationSourceToVliwRefinery } from "../program/verbs/exchange/translation/translation_to_vliw_refinery.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
-import { loadDefaultConfig } from "./run_pya_helpers.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import {
+  buildRunId,
+  encodeCheckpointText,
+  loadCheckpointIndex,
+  loadDefaultConfig,
+  sanitizeRunId
+} from "./run_pya_helpers.mjs";
 
 async function awaitGpuDuty(handleId, timeoutMs = Number(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || 1800000)) {
   const completed = await interpret(parse(
@@ -31,6 +39,29 @@ function usageError(message) {
   return error;
 }
 
+async function appendCheckpointJournal({ runId, cwd, sentences }) {
+  if (!runId || !Array.isArray(sentences) || sentences.length === 0) return null;
+  const newspaperDir = resolve(cwd, "newspaper");
+  const newspaperPath = resolve(newspaperDir, `${sanitizeRunId(runId)}.pya`);
+  await fsp.mkdir(newspaperDir, { recursive: true });
+  const lines = sentences
+    .filter((sentence) => sentence?.mood === "ya" && sentence?.be === "checkpoint")
+    .map((sentence) => {
+      const safeSentence = { ...sentence };
+      for (const key of ["fromtext", "totext"]) {
+        if (typeof safeSentence[key]?.text !== "string") continue;
+        safeSentence[key] = {
+          ...safeSentence[key],
+          text: encodeCheckpointText(safeSentence[key].text)
+        };
+      }
+      return sentenceToPyash(safeSentence);
+    });
+  if (lines.length === 0) return newspaperPath;
+  await fsp.appendFile(newspaperPath, `${lines.join("\n")}\n`, "utf8");
+  return newspaperPath;
+}
+
 export async function runTranslationDocument(args = process.argv.slice(2), {
   report = console.log,
   queueVocabulary = null,
@@ -40,8 +71,10 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
   runId = process.env.PYA_RUN_ID || null,
   checkpointIndex,
   checkpointEnabled = true,
+  checkpointCwd = process.cwd(),
   retryConfig,
   onEvoke,
+  onStage,
   onCheckpoint,
   onRetry
 } = {}) {
@@ -54,46 +87,94 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     pack: resolve(packPath)
   };
   const source = fs.readFileSync(paths.source, "utf8");
-  const output = await runTranslationSourceToVliwRefinery({
-    language,
-    source,
-    locator: paths.source,
-    sourcePath: paths.source,
-    paths: {
-      translation: paths.translation,
-      catalog: paths.catalog,
-      pack: paths.pack
-    },
-    queueVocabulary,
-    awaitVocabulary,
-    wordnetRefinery,
-    runId,
-    checkpointIndex,
-    checkpointEnabled,
-    retryConfig,
-    onEvoke,
-    onCheckpoint,
-    onRetry,
-    compoundTranslation: compoundTranslation
-      ? {
-        ...compoundTranslation,
-        languages: compoundTranslation.languages ?? COMPOUND_TRANSLATION_LANGUAGES
+  const effectiveCheckpointIndex = checkpointEnabled && checkpointIndex === undefined && runId
+    ? await loadCheckpointIndex({ runId, cwd: checkpointCwd })
+    : checkpointIndex;
+  let checkpointPath = null;
+  let checkpointWriteError = null;
+  let checkpointWrite = Promise.resolve();
+  const checkpointHandler = (sentence) => {
+    checkpointWrite = checkpointWrite.then(async () => {
+      if (checkpointWriteError) return;
+      try {
+        checkpointPath = await appendCheckpointJournal({
+          runId,
+          cwd: checkpointCwd,
+          sentences: [sentence]
+        });
+      } catch (error) {
+        checkpointWriteError = error;
       }
-      : null
-  });
-  const { result } = output;
-  report(JSON.stringify(result, null, 2));
-  return output;
+    });
+    onCheckpoint?.(sentence);
+  };
+  const flushCheckpointJournal = async () => {
+    await checkpointWrite;
+    if (checkpointWriteError) throw checkpointWriteError;
+  };
+  let output;
+  try {
+    output = await runTranslationSourceToVliwRefinery({
+      language,
+      source,
+      locator: paths.source,
+      sourcePath: paths.source,
+      paths: {
+        translation: paths.translation,
+        catalog: paths.catalog,
+        pack: paths.pack
+      },
+      queueVocabulary,
+      awaitVocabulary,
+      wordnetRefinery,
+      runId,
+      checkpointIndex: effectiveCheckpointIndex,
+      checkpointEnabled,
+      retryConfig,
+      onEvoke,
+      onStage,
+      onCheckpoint: checkpointHandler,
+      onRetry,
+      compoundTranslation: compoundTranslation
+        ? {
+          ...compoundTranslation,
+          languages: compoundTranslation.languages ?? COMPOUND_TRANSLATION_LANGUAGES
+        }
+        : null
+    });
+    await flushCheckpointJournal();
+    const result = {
+      ...output.result,
+      ...(runId ? { runId } : {}),
+      ...(checkpointPath ? { checkpointPath } : {})
+    };
+    report(JSON.stringify(result, null, 2));
+    return { ...output, result, checkpointPath };
+  } catch (error) {
+    try {
+      await flushCheckpointJournal();
+    } catch (journalError) {
+      error.checkpointError = journalError;
+    }
+    throw error;
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   (async () => {
     await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret, entryPath: process.cwd() });
+    const args = process.argv.slice(2);
+    const runId = process.env.PYA_RUN_ID || await buildRunId({
+      runTime: new Date().toISOString(),
+      sourcePath: args[1],
+      cwd: process.cwd()
+    });
     const queueVocabulary = await createDefaultQueuedMindTranslationVocabularySubmitter();
     const queueWordNet = await createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter();
     const coverage = await loadCoverage();
     const compoundTranslator = await createDefaultQueuedCompoundTranslator();
-    return runTranslationDocument(process.argv.slice(2), {
+    return runTranslationDocument(args, {
+      runId,
       queueVocabulary,
       wordnetRefinery: {
         submit: queueWordNet,
