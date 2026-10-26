@@ -287,6 +287,14 @@ async function reviewVocabulary(context, translated) {
     }
   ]));
   const occurrenceOverrides = occurrenceCoverageOverrides(accepted, { coverageType: "llm" });
+  const acceptedWordNetRecords = linkedTranslation.wordnet?.records
+    ?.filter((record) => [
+      "accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm"
+    ].includes(record.status))
+    ?? [];
+  const wordNetOccurrenceOverrides = occurrenceCoverageOverrides(acceptedWordNetRecords);
+  const allOccurrenceOverrides = new Map(wordNetOccurrenceOverrides);
+  for (const [key, value] of occurrenceOverrides) allOccurrenceOverrides.set(key, value);
   const closedLoopTranslation = accepted.length > 0
     ? await translateDocumentSegments({
       language: linkedTranslation.language,
@@ -298,12 +306,10 @@ async function reviewVocabulary(context, translated) {
       resourceHashes: linkedTranslation.resourceHashes,
       adapterResolver: context.adapterResolver,
       wordnetBridges: linkedTranslation.wordnet
-        ? buildEnglishWordNetSelectedBridgeIndex(
-          linkedTranslation.wordnet.records.filter((record) => record.status === "accepted-llm")
-        )
+        ? buildEnglishWordNetSelectedBridgeIndex(linkedTranslation.wordnet.records)
         : null,
       coverageOverrides,
-      occurrenceOverrides
+      occurrenceOverrides: allOccurrenceOverrides
     })
     : reviewedTranslation;
   return {
