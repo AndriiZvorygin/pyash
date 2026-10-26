@@ -16,12 +16,12 @@ test("default config and system service connect the local GPU queue", async () =
   ]);
 
   assert.match(defaults, /exists su name gpu housekeeper url ob text "http:\/\/localhost:18886" be default ya/u);
-  assert.match(secret, /exists su name gpu housekeeper url ob text "http:\/\/mriczo:8090" be default ya/u);
+  assert.doesNotMatch(secret, /http:\/\/mriczo:8090/u);
   assert.match(service, /^WorkingDirectory=\/home\/htaf\/pyash$/mu);
   assert.match(service, /^Environment=PYA_GPU_HOUSEKEEPER_URL=http:\/\/localhost:18886$/mu);
   assert.match(compose, /"--port", "18886"/u);
   assert.match(compose, /GPU_HOUSEKEEPER_PUBLISH_PORT:-18886\}:18886/u);
-  assert.match(compose, /"8090:18886"/u);
+  assert.doesNotMatch(compose, /8090/u);
   assert.match(dockerfile, /EXPOSE 18886/u);
   assert.match(macInstaller, /GPU_HOUSEKEEPER_PORT:-18886/u);
   assert.match(tunnel, /GPU_HOUSEKEEPER_TUNNEL_REMOTE_PORT:-18886/u);
