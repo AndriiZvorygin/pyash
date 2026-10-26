@@ -59,3 +59,13 @@ test("vocab_suggest reports the English gloss for an accepted Pyac atom", async 
   assert.equal(result.missing, 0);
   assert.match(lines.join("\n"), /^twum: brain$/mu);
 });
+
+test("vocab_suggest keeps a repository-directory-named token on the vocabulary path", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["container"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.match(lines.join("\n"), /^container: root -> hven \(English30k rank \d+\)$/mu);
+});

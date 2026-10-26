@@ -119,6 +119,11 @@ function isApprovedContractNameToken(token) {
     || APPROVED_CONTRACT_NAME_PATTERNS.some(pattern => pattern.test(lower));
 }
 
+function isPlainVocabularyToken(input) {
+  const value = String(input ?? "").trim();
+  return NAME_TOKEN_REGEX.test(value) && !value.startsWith(".");
+}
+
 function isGrammarKeyword(token) {
   return GRAMMAR_KEYWORDS.has(String(token ?? "").toLowerCase());
 }
@@ -502,6 +507,11 @@ async function findExtendedEnglishCoverage(token) {
         status: "covered-dictionary-alias",
         canonicalEnglish: target.en,
         aliasOf: dictionaryAlias,
+        lexicalRoot: {
+          english: target.en,
+          pya: target.pya,
+          hnuc: target.hnuc
+        },
         pyashSequence: [target.pya],
         hnuc: target.hnuc
       };
@@ -550,6 +560,11 @@ async function findExtendedEnglishCoverage(token) {
         status: "covered-alias",
         canonicalEnglish: target.en,
         aliasOf: anchor,
+        lexicalRoot: {
+          english: target.en,
+          pya: target.pya,
+          hnuc: target.hnuc
+        },
         pyashSequence: [target.pya],
         hnuc: target.hnuc
       };
@@ -773,6 +788,10 @@ async function resolveRootsAndTokens(inputs, textInputs) {
   for (const input of inputs) {
     if (textInputs.length > 0) {
       roots.push(input);
+      continue;
+    }
+    if (isPlainVocabularyToken(input)) {
+      tokens.push(input);
       continue;
     }
     try {
