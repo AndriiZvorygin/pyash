@@ -248,8 +248,7 @@ test("source-to-VLIW refinery closes the Qwen sense-link loop", async () => {
         senses: submitted.candidates.map((record) => ({
           id: record.id,
           status: "accept",
-          target: "like",
-          pyashSequence: ["pyan"],
+          targetEnglish: "like",
           rationale: "fixture Qwen decision"
         }))
       })
@@ -288,7 +287,7 @@ test("source-to-VLIW refinery re-runs after an accepted Qwen vocabulary link", a
       candidates: submitted.candidates.map((candidate) => ({
         id: candidate.id,
         status: "accept",
-        pyashSequence: ["pyan"],
+        targetEnglish: "love",
         rationale: "fixture Qwen vocabulary decision"
       }))
     })

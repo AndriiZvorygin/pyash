@@ -136,7 +136,8 @@ test("WordNet linker prompt stays bounded to supplied senses and inventory", () 
   assert.match(prompt, /CONTEXT SELECTION IS REQUIRED/u);
   assert.match(prompt, /reject unrelated senses even when they have valid inventory mappings/u);
   assert.match(prompt, /v:beta/u);
-  assert.match(prompt, /emotionally.*xyek/u);
+  assert.match(prompt, /\{"english":"emotionally"\}/u);
+  assert.doesNotMatch(prompt, /"pyash":"xyek"/u);
   assert.doesNotMatch(prompt, /ollama/u);
   assert.ok(prompt.length <= 12000);
   assert.ok(estimateEnglishWordNetSenseLinkPromptTokens(prompt) < 4000);
@@ -171,6 +172,7 @@ test("WordNet linker splits oversized sense batches without truncating identitie
   assert.equal(queued.queues.length, requests.length);
   assert.ok(requests.every((request) => request.prompt.length <= 12000));
   assert.ok(requests.every((request) => estimateEnglishWordNetSenseLinkPromptTokens(request.prompt) < 4000));
+  assert.ok(requests.every((request) => request.candidates.length <= 4));
   for (const record of records) {
     assert.equal(requests.filter((request) => request.prompt.includes(`\"id\":\"${record.id}\"`)).length, 1);
   }
@@ -212,8 +214,7 @@ test("WordNet linker accepts only an inventory-backed target and renders native 
     senses: [{
       id: records[0].id,
       status: "accept",
-      target: "emotionally",
-      pyashSequence: ["xyek"],
+      targetEnglish: "emotionally",
       rationale: "the supplied gloss describes an emotional state"
     }]
   }), { records, inventory });
@@ -237,11 +238,22 @@ test("WordNet linker accepts only an inventory-backed target and renders native 
     senses: [{
       id: records[0].id,
       status: "accept",
-      target: "outside",
-      pyashSequence: ["hax"],
+      targetEnglish: "outside",
       rationale: "unsupported"
     }]
   }), { records, inventory }).valid, false);
+  const sequenceResponse = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "accept",
+      targetEnglish: "emotionally",
+      pyashSequence: ["xyek"],
+      rationale: "the model attempted to lower the answer"
+    }]
+  }), { records, inventory });
+  assert.equal(sequenceResponse.valid, false);
+  assert.match(sequenceResponse.reason, /Pyash sequence is derived/u);
 });
 
 test("WordNet linker recovers one bounded noisy JSON object and rejects malformed output", () => {
@@ -254,8 +266,7 @@ test("WordNet linker recovers one bounded noisy JSON object and rejects malforme
   const row = {
     id: records[0].id,
     status: "accept",
-    target: "emotionally",
-    pyashSequence: ["xyek"],
+    targetEnglish: "emotionally",
     rationale: "the supplied gloss describes an emotional state"
   };
   const noisy = parseEnglishWordNetSenseLinkResponse(
@@ -285,8 +296,7 @@ test("WordNet linker automatically repairs malformed model decisions and applies
     senses: [{
       id: records[0].id,
       status: "accept",
-      target: "emotionally",
-      pyashSequence: ["xyek"],
+      targetEnglish: "emotionally",
       rationale: "the supplied gloss describes an emotional state"
     }]
   });
@@ -340,8 +350,7 @@ test("WordNet linker keeps valid rows during bounded partial recovery", async ()
         {
           id: "sense-valid",
           status: "accept",
-          target: "emotionally",
-          pyashSequence: ["xyek"],
+          targetEnglish: "emotionally",
           rationale: "the supplied inventory supports the target"
         },
         {
@@ -372,8 +381,7 @@ test("WordNet linker extracts the nested response from an Ollama envelope", () =
       senses: [{
         id: records[0].id,
         status: "accept",
-        target: "emotionally",
-        pyashSequence: ["xyek"],
+        targetEnglish: "emotionally",
         rationale: "the supplied gloss describes an emotional state"
       }]
     }),
@@ -408,8 +416,7 @@ test("WordNet linker matches string-backed base inventory rows to response seque
     senses: [{
       id: records[0].id,
       status: "accept",
-      target: "emotionally",
-      pyashSequence: ["xyek"],
+      targetEnglish: "emotionally",
       rationale: "the supplied gloss describes an emotional state"
     }]
   }), {
@@ -427,6 +434,7 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     queueLane: "durable",
     model: "qwen3.5:9b",
     maxBatch: 200,
+    maxDutySenses: 4,
     promptMaxChars: 12000,
     promptMaxTokens: 3900,
     maxOutputTokens: 8192,

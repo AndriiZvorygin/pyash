@@ -58,10 +58,11 @@ test("vocabulary review prompt is bounded to supplied candidate evidence", () =>
   assert.match(prompt, /Return exactly one JSON object/u);
   assert.match(prompt, /candidate-one/u);
   assert.match(prompt, /candidate-two/u);
-  assert.match(prompt, /AUTHORITATIVE PYASH/u);
-  assert.match(prompt, /love.*pyan/u);
-  assert.match(prompt, /deterministic parser's candidate sequences are heuristics/u);
-  assert.match(prompt, /another.*hqok/u);
+  assert.match(prompt, /AUTHORITATIVE ENGLISH ANCHOR/u);
+  assert.match(prompt, /\{"english":"love"\}/u);
+  assert.match(prompt, /host pipeline derives the Pyash sequence/u);
+  assert.match(prompt, /\{"english":"another","kind":"pronoun","position":"standalone"\}/u);
+  assert.doesNotMatch(prompt, /"pyash":"pyan"/u);
   assert.doesNotMatch(prompt, /ollama/u);
 });
 
@@ -85,6 +86,34 @@ test("vocabulary candidates share one deduplicated durable queue duty", async ()
     sourceHash: result.sourceHash,
     candidates: requests[0].candidates
   }), queued.handleId);
+});
+
+test("vocabulary duties keep semantic decisions small and retain every candidate", async () => {
+  const candidates = Array.from({ length: 5 }, (_, index) => ({
+    id: `candidate-${index}`,
+    surface: `term-${index}`,
+    kind: "lexical-gap",
+    sourceRecordId: `record-${index}`,
+    context: [`Term ${index} matters.`],
+    evidence: "source term remains unresolved"
+  }));
+  const requests = [];
+  const queued = await submitTranslationVocabularyCandidates({
+    result: { ...result, sourceHash: "many-vocabulary-candidates", vocabularyCandidates: candidates },
+    sourceText: "Term 0 matters. Term 1 matters. Term 2 matters. Term 3 matters. Term 4 matters.",
+    submit: async (request) => {
+      requests.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.deepEqual(requests.map((request) => request.candidates.length), [2, 2, 1]);
+  assert.equal(queued.batches.length, 3);
+  assert.equal(queued.queues.length, 3);
+  assert.equal(queued.submittedCount, 5);
+  assert.equal(new Set(queued.queues.map((queue) => queue.handleId)).size, 3);
+  assert.deepEqual(queued.result.vocabularyCandidates.map((candidate) => candidate.queue.handleId), queued.handleIds
+    .flatMap((handleId) => [handleId, handleId])
+    .slice(0, 5));
 });
 
 test("default vocabulary submitter uses the Pyash future GPU duty", async () => {
@@ -112,7 +141,7 @@ test("vocabulary decisions are parsed and applied without a human approval step"
     candidates: [{
       id: candidate.id,
       status: "accept",
-      pyashSequence: ["twot"],
+      targetEnglish: "caring",
       rationale: "the supplied inventory supports the caring atom"
     }]
   }), {
@@ -130,7 +159,7 @@ test("vocabulary parser extracts noisy provider JSON and rejects ungrounded sequ
     candidates: [{
       id: candidate.id,
       status: "accept",
-      pyashSequence: ["twot"],
+      targetEnglish: "caring",
       rationale: "bounded inventory match"
     }]
   })}\nworker suffix`;
@@ -140,12 +169,27 @@ test("vocabulary parser extracts noisy provider JSON and rejects ungrounded sequ
     requireComplete: true
   });
   assert.equal(accepted.valid, true);
+  const sequenceResponse = parseTranslationVocabularyVerificationResponse(JSON.stringify({
+    verdict: "complete",
+    candidates: [{
+      id: candidate.id,
+      status: "accept",
+      pyashSequence: ["twot"],
+      rationale: "the model attempted to lower the answer"
+    }]
+  }), {
+    candidates: [candidate],
+    inventory: { entries: [{ english: "caring", pyash: ["twot"] }], grammar: [] },
+    requireComplete: true
+  });
+  assert.equal(sequenceResponse.valid, false);
+  assert.match(sequenceResponse.reason, /Pyash sequence is derived/u);
   const rejected = parseTranslationVocabularyVerificationResponse(JSON.stringify({
     verdict: "complete",
     candidates: [{
       id: candidate.id,
       status: "accept",
-      pyashSequence: ["outside-inventory"],
+      targetEnglish: "outside-inventory",
       rationale: "ungrounded"
     }]
   }), {
@@ -154,7 +198,7 @@ test("vocabulary parser extracts noisy provider JSON and rejects ungrounded sequ
     requireComplete: true
   });
   assert.equal(rejected.valid, false);
-  assert.match(rejected.reason, /outside the supplied inventory/u);
+  assert.match(rejected.reason, /inventory-backed targetEnglish/u);
 });
 
 test("vocabulary reconciliation repairs malformed model output through the same queue", async () => {
@@ -190,7 +234,7 @@ test("vocabulary reconciliation repairs malformed model output through the same 
     awaitHandle: async (handleId) => handleId.endsWith("-retry-2")
       ? JSON.stringify({
         verdict: "complete",
-        candidates: [{ id: candidate.id, status: "accept", pyashSequence: ["pyan"], rationale: "love is present in the inventory" }]
+        candidates: [{ id: candidate.id, status: "accept", targetEnglish: "love", rationale: "love is present in the inventory" }]
       })
       : JSON.stringify({ verdict: "complete", candidates: [{ id: candidate.id, status: "accept", rationale: "missing sequence" }] }),
     submit: async (request) => {
@@ -250,7 +294,7 @@ test("vocabulary reconciliation keeps valid rows during bounded partial recovery
         {
           id: "candidate-activity",
           status: "accept",
-          pyashSequence: ["twot"],
+          targetEnglish: "activity",
           rationale: "the activity atom is in the inventory"
         },
         {

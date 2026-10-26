@@ -6,6 +6,7 @@ import { extractBoundedJsonObject } from "./english_verification.mjs";
 
 export const TRANSLATION_VOCABULARY_QUEUE_INTENT = "mind";
 export const TRANSLATION_VOCABULARY_QUEUE_LANE = "durable";
+export const TRANSLATION_VOCABULARY_MAX_CANDIDATES_PER_DUTY = 2;
 
 const FUNCTION_WORDS = new Set([
   "a", "an", "and", "are", "as", "be", "but", "by", "can", "for", "from", "in",
@@ -28,6 +29,12 @@ function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
 }
 
+function bounded(value, maxChars) {
+  const limit = Math.max(1, Math.trunc(Number(maxChars) || 1));
+  const valueText = text(value);
+  return valueText.length > limit ? `${valueText.slice(0, Math.max(0, limit - 1))}…` : valueText;
+}
+
 function hash(value) {
   return createHash("sha256").update(String(value ?? "")).digest("hex");
 }
@@ -38,6 +45,13 @@ function candidateIdentity(candidate) {
 
 function normalizedWord(value) {
   return text(value).toLowerCase().replace(/[^a-z0-9_ -]+/gu, "").replace(/\s+/gu, " ");
+}
+
+function sequence(value) {
+  if (Array.isArray(value)) {
+    return value.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim());
+  }
+  return typeof value === "string" && value.trim() ? value.trim().split(/\s+/u) : [];
 }
 
 function wordRoots(value) {
@@ -104,8 +118,10 @@ function promptCandidate(candidate) {
     id: candidateIdentity(candidate),
     surface: text(candidate?.surface),
     kind: text(candidate?.kind),
-    context: Array.isArray(candidate?.context) ? [...candidate.context] : [],
-    evidence: text(candidate?.evidence)
+    context: Array.isArray(candidate?.context)
+      ? candidate.context.slice(0, 3).map((sentence) => bounded(sentence, 280))
+      : [],
+    evidence: bounded(candidate?.evidence, 900)
   };
 }
 
@@ -124,26 +140,30 @@ export function buildTranslationVocabularyVerificationPrompt({
   return [
     "You are the bounded Pyash vocabulary review worker.",
     "Review unresolved source terms from one translation document.",
-    "Use the supplied context and evidence to propose existing Pyash atoms, compounds, or grammar mappings.",
+    "Use the supplied context and evidence to choose one existing English anchor when the meaning is clear.",
     "Keep derivational and grammatical endings separate from lexical heads.",
-    "The deterministic parser's candidate sequences are heuristics only; they are not verified mappings.",
     "Do not reject a candidate merely because it is a common English word: these are terms the deterministic coverage pass could not resolve.",
-    "Accept only a sequence grounded in the supplied inventory. Use uncertain when the inventory cannot support a defensible mapping.",
+    "Accept only an exact English anchor from the supplied inventory. Use uncertain when no anchor is defensible.",
     "Reject only when the candidate is demonstrably not a translation target in its supplied context.",
     "Include one result entry for every supplied candidate, in supplied order.",
-    "Use an empty pyashSequence for reject or uncertain. Never return an inventory row such as {english,pyash} as the top-level result.",
+    "Return the English anchor only. The host pipeline derives the Pyash sequence after validation.",
+    "Never return Pyash tokens, pyashSequence, a whole phrase, or a concatenation of inventory rows.",
     "Return exactly one JSON object with this shape:",
-    '{"verdict":"complete|partial|uncertain","candidates":[{"id":"...","status":"accept|reject|uncertain","pyashSequence":["..."],"rationale":"..."}]}',
+    '{"verdict":"complete|partial|uncertain","candidates":[{"id":"...","status":"accept|reject|uncertain","targetEnglish":"...","rationale":"..."}]}',
     "Use only supplied candidate ids. Preserve uncertainty when the source evidence does not establish a mapping.",
     "Return the object immediately. Use no hidden reasoning or preface. Keep each rationale under 120 characters.",
     `SOURCE LANGUAGE: ${text(language)}`,
     `SOURCE LOCATOR: ${text(locator) || "unavailable"}`,
     "SOURCE TEXT:",
     sourceText,
-    "AUTHORITATIVE PYASH ATOM AND COMPOUND INVENTORY (English gloss -> Pyash token):",
-    (inventory?.entries ?? []).map(JSON.stringify).join("\n"),
-    "AUTHORITATIVE PYASH GRAMMAR INVENTORY:",
-    (inventory?.grammar ?? []).map(JSON.stringify).join("\n"),
+    "AUTHORITATIVE ENGLISH ANCHOR INVENTORY (choose the exact English key; Pyash lowering is deterministic):",
+    (inventory?.entries ?? []).map((entry) => JSON.stringify({ english: entry.english })).join("\n"),
+    "AUTHORITATIVE ENGLISH GRAMMAR ANCHORS:",
+    (inventory?.grammar ?? []).map((entry) => JSON.stringify({
+      english: entry.english,
+      kind: entry.kind,
+      position: entry.position
+    })).join("\n"),
     "CANDIDATES:",
     candidates.map(promptCandidate).map(JSON.stringify).join("\n")
   ].join("\n");
@@ -174,16 +194,13 @@ function providerResponseText(value) {
   return raw;
 }
 
-function sameSequence(left, right) {
-  const leftSequence = Array.isArray(left)
-    ? left
-    : typeof left === "string" && left.trim() ? left.trim().split(/\s+/u) : [];
-  const rightSequence = Array.isArray(right)
-    ? right
-    : typeof right === "string" && right.trim() ? right.trim().split(/\s+/u) : [];
-  return leftSequence.length > 0
-    && leftSequence.length === rightSequence.length
-    && leftSequence.every((word, index) => word === rightSequence[index]);
+function inventoryMatch(targetEnglish, inventory) {
+  const target = normalizedWord(targetEnglish);
+  const rows = [
+    ...(inventory?.entries ?? []),
+    ...(inventory?.grammar ?? [])
+  ];
+  return rows.find((entry) => normalizedWord(entry?.english) === target) ?? null;
 }
 
 export function parseTranslationVocabularyVerificationResponse(value, {
@@ -206,10 +223,6 @@ export function parseTranslationVocabularyVerificationResponse(value, {
   const byId = new Map(candidates.map((candidate) => [candidateIdentity(candidate), candidate]));
   const supplied = new Set();
   const links = [];
-  const inventoryRows = [
-    ...(inventory?.entries ?? []),
-    ...(inventory?.grammar ?? [])
-  ];
   for (const row of payload.candidates) {
     const id = text(row?.id);
     if (!id || !byId.has(id) || supplied.has(id)) {
@@ -226,22 +239,27 @@ export function parseTranslationVocabularyVerificationResponse(value, {
       return { valid: false, reason: "candidate rationale exceeds the bounded limit" };
     }
     const boundedRationale = rationale.length > 1200 ? rationale.slice(0, 1200) : rationale;
-    const pyashSequence = Array.isArray(row?.pyashSequence)
-      ? row.pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
-      : [];
     if (status === "accept") {
-      if (pyashSequence.length === 0) {
-        if (!recoverRows) return { valid: false, reason: "accepted candidate requires a Pyash sequence" };
+      if (Object.hasOwn(row, "pyashSequence")) {
+        return { valid: false, reason: "response must choose targetEnglish; Pyash sequence is derived" };
+      }
+      const targetEnglish = normalizedWord(row?.targetEnglish);
+      const match = inventoryMatch(targetEnglish, inventory);
+      const pyashSequence = sequence(match?.pyash ?? match?.pyashSequence);
+      if (!targetEnglish) {
+        if (!recoverRows) return { valid: false, reason: "accepted candidate requires targetEnglish" };
         links.push({ id, status: "uncertain", rationale: `automatic safe downgrade: ${boundedRationale}` });
         continue;
       }
-      if (!inventoryRows.some((entry) => sameSequence(entry?.pyash ?? entry?.pyashSequence, pyashSequence))) {
-        if (!recoverRows) return { valid: false, reason: "accepted candidate sequence is outside the supplied inventory" };
+      if (!match || pyashSequence.length === 0) {
+        if (!recoverRows) return { valid: false, reason: "accepted candidate requires an inventory-backed targetEnglish" };
         links.push({ id, status: "uncertain", rationale: `automatic safe downgrade: ${boundedRationale}` });
         continue;
       }
+      links.push({ id, status, targetEnglish, pyashSequence, rationale: boundedRationale });
+      continue;
     }
-    links.push({ id, status, ...(status === "accept" ? { pyashSequence } : {}), rationale: boundedRationale });
+    links.push({ id, status, rationale: boundedRationale });
   }
   if (requireComplete && supplied.size !== candidates.length) {
     return { valid: false, reason: "response did not contain one decision for every supplied candidate id" };
@@ -262,6 +280,7 @@ export function applyTranslationVocabularyVerificationResponse(result, response)
     return {
       ...candidate,
       status: verificationStatus,
+      ...(link.status === "accept" ? { targetEnglish: link.targetEnglish } : {}),
       ...(link.status === "accept" ? { pyashSequence: [...link.pyashSequence] } : {}),
       verificationStatus,
       verificationRationale: link.rationale
@@ -339,7 +358,7 @@ export async function reconcileTranslationVocabularyCandidates({
       prompt,
       "AUTOMATIC CONTRACT REPAIR:",
       `The previous response failed deterministic validation: ${response.reason}`,
-      "Return every supplied candidate id exactly once with a valid status, rationale, and inventory-backed Pyash sequence for accepted rows."
+      "Return every supplied candidate id exactly once with a valid status, rationale, and exact targetEnglish for accepted rows. Never return Pyash tokens."
     ].join("\n");
     const queued = await submit({ handleId: repairHandleId, prompt: repairPrompt, candidates, inventory, result, maxOutputTokens: 8192 });
     if (text(queued?.status || queued?.ob?.text).toLowerCase() !== "queued") {
@@ -432,58 +451,87 @@ export async function submitTranslationVocabularyCandidates({
   }
   if (typeof submit !== "function") throw invalid("vocabulary queue requires a submit function");
   const batch = uniqueCandidates(candidates);
-  const handleId = translationVocabularyQueueHandle({ sourceHash: result.sourceHash, candidates: batch, attempt });
   const grammarCatalog = await loadEnglishGrammarCatalog();
-  const inventory = buildTranslationVocabularyInventory({
-    sourceText,
-    candidates: batch,
-    grammarEntries: grammarCatalog.entries
-  });
-  const prompt = buildTranslationVocabularyVerificationPrompt({
-    language: result.language,
-    sourceText,
-    locator: result.locator,
-    candidates: batch,
-    inventory
-  });
-  const response = await submit({
-    handleId,
-    prompt,
-    candidates: batch,
-    inventory,
-    result
-  });
-  const status = text(response?.status || response?.ob?.text).toLowerCase();
-  if (status !== "queued") {
-    throw invalid("vocabulary queue submission was not accepted", { handleId, response });
+  const dutyBatches = [];
+  for (let index = 0; index < batch.length; index += TRANSLATION_VOCABULARY_MAX_CANDIDATES_PER_DUTY) {
+    dutyBatches.push(batch.slice(index, index + TRANSLATION_VOCABULARY_MAX_CANDIDATES_PER_DUTY));
   }
-  const queue = {
-    handleId,
-    status: "queued",
-    intent: TRANSLATION_VOCABULARY_QUEUE_INTENT,
-    lane: TRANSLATION_VOCABULARY_QUEUE_LANE,
-    submittedAt,
-    candidateCount: batch.length,
-    attempt: Math.max(1, Math.trunc(Number(attempt) || 1))
-  };
+  const queues = [];
+  const prompts = [];
+  const responses = [];
+  for (const duty of dutyBatches) {
+    const handleId = translationVocabularyQueueHandle({ sourceHash: result.sourceHash, candidates: duty, attempt });
+    const inventory = buildTranslationVocabularyInventory({
+      sourceText,
+      candidates: duty,
+      grammarEntries: grammarCatalog.entries
+    });
+    const prompt = buildTranslationVocabularyVerificationPrompt({
+      language: result.language,
+      sourceText,
+      locator: result.locator,
+      candidates: duty,
+      inventory
+    });
+    const response = await submit({
+      handleId,
+      prompt,
+      candidates: duty,
+      inventory,
+      result
+    });
+    const status = text(response?.status || response?.ob?.text).toLowerCase();
+    if (status !== "queued") {
+      throw invalid("vocabulary queue submission was not accepted", { handleId, response });
+    }
+    queues.push({
+      handleId,
+      status: "queued",
+      intent: TRANSLATION_VOCABULARY_QUEUE_INTENT,
+      lane: TRANSLATION_VOCABULARY_QUEUE_LANE,
+      submittedAt,
+      candidateCount: duty.length,
+      attempt: Math.max(1, Math.trunc(Number(attempt) || 1))
+    });
+    prompts.push(prompt);
+    responses.push(response);
+  }
+  const queueByCandidate = new Map();
+  dutyBatches.forEach((duty, index) => {
+    for (const candidate of duty) queueByCandidate.set(candidateIdentity(candidate), queues[index]);
+  });
+  const handleIds = queues.map((queue) => queue.handleId);
   return {
     result: {
       ...result,
       vocabularyCandidates: candidates.map((candidate) => ({
         ...candidate,
         queue: {
-          ...queue,
+          ...(queueByCandidate.get(candidateIdentity(candidate)) ?? {}),
           candidateIds: [candidateIdentity(candidate)]
         }
       })),
-      vocabularyQueue: queue
+      vocabularyQueue: {
+        status: "queued",
+        intent: TRANSLATION_VOCABULARY_QUEUE_INTENT,
+        lane: TRANSLATION_VOCABULARY_QUEUE_LANE,
+        submittedAt,
+        candidateCount: batch.length,
+        attempt: Math.max(1, Math.trunc(Number(attempt) || 1)),
+        ...(handleIds.length === 1 ? { handleId: handleIds[0] } : { handleIds })
+      }
     },
     submitted: true,
     submittedCount: batch.length,
-    handleId,
+    handleId: handleIds.length === 1 ? handleIds[0] : "",
+    handleIds,
     candidates: batch,
-    prompt,
-    response
+    batches: dutyBatches,
+    queues,
+    prompts,
+    responses,
+    prompt: prompts.length === 1 ? prompts[0] : prompts,
+    response: responses.length === 1 ? responses[0] : responses
   };
 }
 
@@ -497,12 +545,12 @@ const DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT = {
       type: "array",
       items: {
         type: "object",
-        required: ["id", "status", "pyashSequence", "rationale"],
+        required: ["id", "status", "rationale"],
         additionalProperties: false,
         properties: {
           id: { type: "string" },
           status: { type: "string", enum: ["accept", "reject", "uncertain"] },
-          pyashSequence: { type: "array", items: { type: "string" } },
+          targetEnglish: { type: "string" },
           rationale: { type: "string", maxLength: 120 }
         }
       }

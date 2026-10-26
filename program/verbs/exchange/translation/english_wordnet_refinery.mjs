@@ -144,6 +144,7 @@ export async function refineEnglishWordNet({
       maxChars: linkerConfig.promptMaxChars,
       maxTokens: linkerConfig.promptMaxTokens,
       maxOutputTokens: linkerConfig.maxOutputTokens,
+      maxDutySenses: linkerConfig.maxDutySenses,
       submit
     })
     : null;
