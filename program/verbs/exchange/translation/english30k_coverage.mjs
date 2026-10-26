@@ -173,6 +173,9 @@ function makeIdentity(row) {
 
 function acceptedCompound(record) {
   const target = normalizeEnglish30kWord(record?.target ?? record?.surface);
+  const aliases = Array.isArray(record?.aliases)
+    ? record.aliases.map(normalizeEnglish30kWord).filter((alias) => alias && alias !== target)
+    : [];
   const status = record?.verificationStatus ?? record?.status;
   const pyashSequence = Array.isArray(record?.pyashSequence)
     ? record.pyashSequence.filter((word) => typeof word === "string" && word.trim())
@@ -180,6 +183,7 @@ function acceptedCompound(record) {
   if (!target || pyashSequence.length < 2 || !ACCEPTED_COMPOUND_STATUSES.has(status)) return null;
   return {
     target,
+    aliases,
     status,
     pyashSequence,
     componentGlosses: Array.isArray(record?.componentGlosses) ? [...record.componentGlosses] : [],
@@ -193,8 +197,10 @@ function buildCompoundLookup(records) {
   for (const record of records ?? []) {
     const accepted = acceptedCompound(record);
     if (!accepted) continue;
-    for (const variant of english30kLookupVariants(accepted.target)) {
-      if (!lookup.has(variant)) lookup.set(variant, accepted);
+    for (const term of [accepted.target, ...accepted.aliases]) {
+      for (const variant of english30kLookupVariants(term)) {
+        if (!lookup.has(variant)) lookup.set(variant, accepted);
+      }
     }
   }
   return lookup;
@@ -479,7 +485,7 @@ export function renderEnglish30kCoveragePya(coverage, {
 export async function loadDefaultEnglish30kCoverage({
   path = ENGLISH30K_DEFAULT_PATH,
   atomicEntries = [],
-  compoundRecords = [],
+  compoundRecords = null,
   grammarMappings = DEFAULT_GRAMMAR_MAPPINGS,
   lemmaEntries = null,
   dictionaryAliases = null,
@@ -494,6 +500,14 @@ export async function loadDefaultEnglish30kCoverage({
     ?? buildEnglishDictionaryAliases({ dictionary, atomicEntries }).aliases;
   const grammarCatalogResolved = grammarCatalog === null ? await loadEnglishGrammarCatalog() : grammarCatalog;
   const grammarIndex = buildEnglishGrammarIndex({ catalogEntries: grammarCatalogResolved?.entries ?? [] });
+  const resolvedCompoundRecords = compoundRecords ?? (await loadCuratedCompoundDecompositions()).map((entry) => ({
+    target: entry.target,
+    aliases: entry.aliases,
+    componentGlosses: entry.componentGlosses,
+    pyashSequence: entry.pyashSequence,
+    status: "accepted-curated",
+    provenance: "compound_coverage_curated.pya"
+  }));
   const resolvedGrammarMappings = new Map(grammarMappings instanceof Map ? grammarMappings : []);
   for (const [surface, mapping] of grammarIndex.mappings) {
     resolvedGrammarMappings.set(surface, mapping);
@@ -511,7 +525,7 @@ export async function loadDefaultEnglish30kCoverage({
     dictionaryAliases: resolvedDictionaryAliases,
     grammarMappings: resolvedGrammarMappings,
     grammarOverrides: grammarIndex.mappings,
-    compoundRecords,
+    compoundRecords: resolvedCompoundRecords,
     lemmaEntries: resolvedLemmaEntries
   });
 }

@@ -151,6 +151,70 @@ test("accepted occurrence sense resumes without re-submitting to the selector", 
   assert.equal(resumed.records[0].occurrenceId, first.records[0].occurrenceId);
 });
 
+test("accepted compound aliases link the selected involve inclusion sense", async () => {
+  const sourceRecord = {
+    id: "sentence-involve",
+    source: { text: "This decision involves changes.", sentenceIndex: 0 },
+    tokens: [{
+      surface: "involves",
+      tokenIndex: 0,
+      pyashSequence: [],
+      senseCandidates: [{
+        pos: "v",
+        synset: "02642216-v",
+        lemma: "involve",
+        lemmas: ["imply", "involve"],
+        gloss: "have as a necessary feature"
+      }]
+    }],
+    unresolved: ["involves"]
+  };
+  const result = {
+    language: "english",
+    sourceHash: "involve-source",
+    senseStateFormat: TRANSLATION_SENSE_STATE_FORMAT,
+    records: [sourceRecord],
+    vocabularyCandidates: [{
+      id: "translation-occurrence-involves",
+      occurrenceId: "translation-occurrence-involves",
+      surface: "involves",
+      kind: "lexical-gap",
+      sourceRecordId: sourceRecord.id,
+      tokenIndex: 0,
+      senseCandidates: sourceRecord.tokens[0].senseCandidates,
+      context: [sourceRecord.source.text]
+    }]
+  };
+  const refined = await refineEnglishWordNet({
+    result,
+    resources: {
+      coverage: { byVariant: new Map() },
+      grammarCatalog: { entries: [] },
+      wordnet: {
+        index: buildEnglishWordNetIndex({
+          rows: [{
+            id: "v:02642216-v",
+            pos: "v",
+            synset: "02642216-v",
+            senseKey: "v:02642216-v",
+            lemma: "involve",
+            gloss: "have as a necessary feature"
+          }]
+        })
+      }
+    },
+    compoundRecords: [{
+      target: "include",
+      aliases: ["involve"],
+      pyashSequence: ["lwak", "hzan"],
+      status: "accepted-curated"
+    }]
+  });
+  assert.equal(refined.records[0].status, "accepted-edge");
+  assert.equal(refined.records[0].link.target, "include");
+  assert.deepEqual(refined.records[0].link.pyashSequence, ["lwak", "hzan"]);
+});
+
 test("WordNet refinery remains a no-op when the document has no lexical gaps", async () => {
   const refined = await refineEnglishWordNet({
     result: { language: "english", sourceHash: "source-hash", vocabularyCandidates: [] },

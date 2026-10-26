@@ -82,6 +82,12 @@ function normalizeEntry(payload, surface, index, language) {
   )) {
     throw invalid("compound specific atom must be non-empty text", { index, surface });
   }
+  if (payload.aliases !== undefined && (
+    !Array.isArray(payload.aliases) ||
+    payload.aliases.some((alias) => typeof alias !== "string" || !alias.trim() || alias === payload.target)
+  )) {
+    throw invalid("compound aliases must be non-empty and distinct from target", { index, surface });
+  }
   if (payload.sourceMorphemes !== undefined && (
     !Array.isArray(payload.sourceMorphemes) ||
     payload.sourceMorphemes.length === 0 ||
@@ -261,6 +267,7 @@ function normalizeEntry(payload, surface, index, language) {
     surface,
     morphemes: [...payload.morphemes],
     target: payload.target,
+    ...(payload.aliases === undefined ? {} : { aliases: [...new Set(payload.aliases)] }),
     ...(payload.gloss === undefined ? {} : { gloss: payload.gloss }),
     ...(payload.specificAtom === undefined ? {} : { specificAtom: payload.specificAtom }),
     ...(payload.sourceMorphemes === undefined ? {} : { sourceMorphemes: [...payload.sourceMorphemes] }),

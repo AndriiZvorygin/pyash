@@ -105,8 +105,13 @@ export async function loadCuratedCompoundDecompositions({
   });
   return entries.map((entry) => ({
     target: entry.target,
+    ...(Array.isArray(entry.aliases) && entry.aliases.length > 0
+      ? { aliases: entry.aliases }
+      : {}),
     sourceMorphemes: entry.sourceMorphemes ?? entry.morphemes,
     componentGlosses: entry.componentGlosses ?? entry.morphemes,
+    ...(Array.isArray(entry.pyashSequence) ? { pyashSequence: entry.pyashSequence } : {}),
+    ...(Array.isArray(entry.componentLayers) ? { componentLayers: entry.componentLayers } : {}),
     ...(entry.specificAtom ? { specificAtom: entry.specificAtom } : {}),
     evidence: entry.evidence,
     confidence: entry.confidence
@@ -177,13 +182,19 @@ function curatedMap(curatedDecompositions) {
     const componentGlosses = Array.isArray(decomposition?.componentGlosses)
       ? decomposition.componentGlosses.map(normalizeTerm).filter(Boolean)
       : [];
+    const aliases = Array.isArray(decomposition?.aliases)
+      ? decomposition.aliases.map(normalizeTerm).filter((alias) => alias && alias !== target)
+      : [];
     if (!target || componentGlosses.length < 2) {
       throw invalid("curated compound requires a target and two components", { index });
     }
     if (result.has(target)) throw invalid("curated compound target is duplicated", { index, target });
     result.set(target, {
       target,
+      ...(aliases.length > 0 ? { aliases } : {}),
       componentGlosses,
+      ...(Array.isArray(decomposition.pyashSequence) ? { pyashSequence: [...decomposition.pyashSequence] } : {}),
+      ...(Array.isArray(decomposition.componentLayers) ? { componentLayers: [...decomposition.componentLayers] } : {}),
       ...(decomposition.specificAtom ? { specificAtom: normalizeTerm(decomposition.specificAtom) } : {}),
       sourceMorphemes: Array.isArray(decomposition.sourceMorphemes)
         ? decomposition.sourceMorphemes.map((part) => String(part).normalize("NFC").trim()).filter(Boolean)
@@ -198,6 +209,7 @@ function curatedMap(curatedDecompositions) {
 function recordId(record) {
   return `derived-compound-${createHash("sha256").update(stableJson({
     target: record.target,
+    aliases: record.aliases,
     sourceMorphemes: record.sourceMorphemes,
     componentGlosses: record.componentGlosses,
     specificAtom: record.specificAtom,
@@ -209,8 +221,11 @@ function recordId(record) {
 
 function makeRecord({
   target,
+  aliases,
   sourceMorphemes,
   componentGlosses,
+  pyashSequence,
+  componentLayers,
   sourceSurfaces,
   sourceMorphemesByLanguage,
   specificAtom,
@@ -223,9 +238,15 @@ function makeRecord({
   atomicEntries
 }) {
   const pyashWords = componentGlosses.map((gloss) => layerIndex?.englishToPyash?.get(gloss) ?? null);
-  const selected = pyashWords.every(Boolean)
-    ? choosePyacCompoundCandidate([{ pyashSequence: pyashWords }], layerIndex)
-    : null;
+  const selected = Array.isArray(pyashSequence) && Array.isArray(componentLayers)
+    ? {
+      pyashSequence: [...pyashSequence],
+      componentLayers: [...componentLayers],
+      maxLayer: Math.max(...componentLayers)
+    }
+    : pyashWords.every(Boolean)
+      ? choosePyacCompoundCandidate([{ pyashSequence: pyashWords }], layerIndex)
+      : null;
   if (!selected) return null;
   const morphology = analyzeCompoundMorphology({
     target,
@@ -237,6 +258,7 @@ function makeRecord({
     language: "canonical",
     surface: target,
     target,
+    ...(Array.isArray(aliases) && aliases.length > 0 ? { aliases: [...aliases] } : {}),
     sourceMorphemes: [...sourceMorphemes],
     morphemes: [...sourceMorphemes],
     componentGlosses: [...componentGlosses],
@@ -292,8 +314,11 @@ export function buildDerivedCompoundCoverage({
     if (curatedEntry) {
       const record = makeRecord({
         target,
+        aliases: curatedEntry.aliases,
         sourceMorphemes: curatedEntry.sourceMorphemes,
         componentGlosses: curatedEntry.componentGlosses,
+        pyashSequence: curatedEntry.pyashSequence,
+        componentLayers: curatedEntry.componentLayers,
         specificAtom: curatedEntry.specificAtom,
         sourceSurfaces: source.sourceSurfaces,
         sourceMorphemesByLanguage: source.sourceMorphemesByLanguage,
@@ -394,6 +419,7 @@ export function resolveDerivedCompound(records, { language, surface, target } = 
 function renderDerivedCompoundCoverageRow(entry) {
   const payload = {
     surface: entry.target,
+    aliases: entry.aliases,
     morphemes: entry.sourceMorphemes,
     sourceMorphemes: entry.sourceMorphemes,
     target: entry.target,

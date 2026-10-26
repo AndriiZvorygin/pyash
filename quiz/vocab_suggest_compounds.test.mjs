@@ -72,6 +72,23 @@ test("vocab_suggest reports the accepted include compound", async () => {
   assert.match(lines.join("\n"), /include: found compound inside \+ containing -> lwak hzan \(accepted-curated\)/u);
 });
 
+test("vocab_suggest reuses the accepted include compound for the involve inclusion alias", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["involve"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.deepEqual(result.foundCompounds, [{
+    target: "include",
+    components: ["inside", "containing"],
+    pyash: ["lwak", "hzan"],
+    status: "accepted-curated",
+    locations: ["input"]
+  }]);
+  assert.match(lines.join("\n"), /involve: found compound inside \+ containing -> lwak hzan \(accepted-curated\)/u);
+});
+
 test("vocab_suggest exposes the accepted brain compound from Chinese evidence", async () => {
   const lines = [];
   const result = await runVocabSuggest(["brainstorm"], {

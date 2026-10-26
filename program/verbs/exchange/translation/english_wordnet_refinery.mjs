@@ -56,16 +56,21 @@ function compoundResolver(compoundRecords = []) {
   const byTarget = new Map();
   for (const record of compoundRecords) {
     const target = normalized(record?.target);
+    const aliases = Array.isArray(record?.aliases)
+      ? record.aliases.map(normalized).filter((alias) => alias && alias !== target)
+      : [];
     const pyashSequence = Array.isArray(record?.pyashSequence)
       ? record.pyashSequence.filter((word) => typeof word === "string" && word.trim())
       : [];
     if (!target || pyashSequence.length === 0) continue;
     if (["accepted-delimited", "accepted-curated"].includes(text(record.status))) {
-      byTarget.set(target, {
-        coverageType: "compound",
-        canonicalEnglish: target,
-        pyashSequence
-      });
+      for (const term of [target, ...aliases]) {
+        byTarget.set(term, {
+          coverageType: "compound",
+          canonicalEnglish: target,
+          pyashSequence
+        });
+      }
     }
   }
   return byTarget;

@@ -153,11 +153,18 @@ function acceptedCompoundRow(payload) {
   const specificAtom = typeof payload?.specificAtom === "string" && payload.specificAtom.trim()
     ? payload.specificAtom.trim()
     : null;
+  const aliases = Array.isArray(payload?.aliases)
+    ? payload.aliases
+      .filter((alias) => typeof alias === "string" && alias.trim())
+      .map((alias) => normalizeCompoundTarget(alias))
+      .filter((alias) => alias && alias !== target)
+    : [];
   return {
     target,
     components,
     pyash,
     status,
+    aliases,
     ...(specificAtom ? { specificAtom } : {}),
     identity: `${components.join("\u0001")}\u0000${pyash.join("\u0001")}\u0000${specificAtom ?? ""}`
   };
@@ -171,6 +178,15 @@ function addAcceptedCompoundRow(compounds, payload) {
   if (existingIndex === -1) rows.push(row);
   else if ((COMPOUND_STATUS_RANK.get(row.status) ?? 0) > (COMPOUND_STATUS_RANK.get(rows[existingIndex].status) ?? 0)) rows[existingIndex] = row;
   compounds.set(row.target, rows);
+  for (const alias of row.aliases) {
+    const aliasRows = compounds.get(alias) ?? [];
+    const aliasIndex = aliasRows.findIndex((candidate) => candidate.identity === row.identity);
+    if (aliasIndex === -1) aliasRows.push(row);
+    else if ((COMPOUND_STATUS_RANK.get(row.status) ?? 0) > (COMPOUND_STATUS_RANK.get(aliasRows[aliasIndex].status) ?? 0)) {
+      aliasRows[aliasIndex] = row;
+    }
+    compounds.set(alias, aliasRows);
+  }
 }
 
 function parseAcceptedCompoundRows(program) {
@@ -590,14 +606,15 @@ function isCompoundCatalog(program) {
   ));
 }
 
-function registerFoundCompound(foundCompounds, rows, location) {
+function registerFoundCompound(foundCompounds, rows, location, matchedTarget = null) {
   for (const row of rows) {
-    const current = foundCompounds.get(row.target) ?? { row, locations: new Set() };
+    const target = matchedTarget || row.target;
+    const current = foundCompounds.get(target) ?? { row, locations: new Set() };
     if ((COMPOUND_STATUS_RANK.get(row.status) ?? 0) > (COMPOUND_STATUS_RANK.get(current.row.status) ?? 0)) {
       current.row = row;
     }
     if (location) current.locations.add(location);
-    foundCompounds.set(row.target, current);
+    foundCompounds.set(target, current);
   }
 }
 
@@ -835,6 +852,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const ensureDefaultAcceptedCompounds = async () => {
     if (defaultAcceptedCompoundsLoaded) return;
     mergeCompoundRows(acceptedCompounds, await loadDefaultAcceptedCompounds());
+    mergeCompoundRows(acceptedCompounds, await loadDefaultCuratedAcceptedCompounds());
     defaultAcceptedCompoundsLoaded = true;
   };
   const registerCompoundAtomMatches = async (token, english) => {
@@ -878,13 +896,13 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       if (isGrammarKeyword(token)) continue;
       let knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
       if (knownCompounds?.length) {
-        registerFoundCompound(foundCompounds, knownCompounds, file);
+        registerFoundCompound(foundCompounds, knownCompounds, file, token);
         continue;
       }
       await ensureDefaultAcceptedCompounds();
       knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
       if (knownCompounds?.length) {
-        registerFoundCompound(foundCompounds, knownCompounds, file);
+        registerFoundCompound(foundCompounds, knownCompounds, file, token);
         continue;
       }
       const ranked = await findEnglish30kCoverage(token);
@@ -932,12 +950,12 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       }
       let knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
       if (knownCompounds?.length) {
-        registerFoundCompound(foundCompounds, knownCompounds, "input");
+        registerFoundCompound(foundCompounds, knownCompounds, "input", token);
         continue;
       }
       const directCompound = directDelimitedCompoundRow(token);
       if (directCompound) {
-        registerFoundCompound(foundCompounds, [directCompound], "input");
+        registerFoundCompound(foundCompounds, [directCompound], "input", token);
         continue;
       }
       ranked = await findExtendedEnglishCoverage(token);
@@ -945,7 +963,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         await ensureDefaultAcceptedCompounds();
         knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
         if (knownCompounds?.length) {
-          registerFoundCompound(foundCompounds, knownCompounds, "input");
+          registerFoundCompound(foundCompounds, knownCompounds, "input", token);
           continue;
         }
       }
@@ -1125,7 +1143,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     exitCode,
     missing,
     foundCompounds: [...foundCompounds.values()].map(({ row, locations }) => {
-      const { identity, ...publicRow } = row;
+      const { identity, aliases, ...publicRow } = row;
       const specificAtom = resolveSpecificAtom(row);
       return {
         ...publicRow,
