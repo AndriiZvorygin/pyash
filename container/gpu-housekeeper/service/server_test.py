@@ -894,6 +894,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.orig_idle_grace_seconds = server.idle_grace_seconds
     self.orig_discharge_runtime = server.discharge_runtime
     self.orig_ensure_capacity_for_job = server.ensure_capacity_for_job
+    self.orig_capacity_plan_for_job = server.capacity_plan_for_job
     self.orig_capacity_poll_seconds = server.capacity_poll_seconds
     server._RUNTIME_ACTIVITY.clear()
     server._PROFILES.clear()
@@ -913,6 +914,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     server.idle_grace_seconds = self.orig_idle_grace_seconds
     server.discharge_runtime = self.orig_discharge_runtime
     server.ensure_capacity_for_job = self.orig_ensure_capacity_for_job
+    server.capacity_plan_for_job = self.orig_capacity_plan_for_job
     server.capacity_poll_seconds = self.orig_capacity_poll_seconds
     server._RUNTIME_ACTIVITY.clear()
     server._PROFILES.clear()
@@ -1225,6 +1227,58 @@ class HousekeeperCapacityTests(unittest.TestCase):
 
     self.assertEqual(result["message"], "completed")
     self.assertEqual(attempts["value"], 2)
+
+  def test_execution_waits_for_managed_runtime_idle_grace_before_handoff(self):
+    plans = iter([
+      {
+        "decision": "insufficient",
+        "waitForCapacity": True,
+        "reason": "managed GPU runtime is active or within its safe idle grace",
+      },
+      {"decision": "fits", "reason": "free VRAM satisfies request"},
+    ])
+    server.capacity_plan_for_job = lambda *_args, **_kwargs: next(plans)
+    server.capacity_poll_seconds = lambda: 0.01
+
+    result = server.execute_job({
+      "remoteJobId": "strata-cooldown-capacity-wait",
+      "runtimeName": "safe",
+      "profileName": "safe",
+      "jobSpec": {"kind": "sleep", "sleepMs": 10, "capacityWaitSec": 1},
+    }, {"safe": {"runtimeName": "safe"}})
+
+    self.assertEqual(result["message"], "completed")
+
+  def test_strata_cooldown_is_reported_as_waitable_capacity(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 24302, "vramFreeMb": 274}],
+    }
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"strata": {"usedMemoryMb": 0}},
+      "unmanagedProcesses": [],
+    }
+    server.observe_runtime_activity = lambda *_args, **_kwargs: {
+      "state": "cooldown",
+      "reason": "Strata request idle grace has not elapsed",
+    }
+    registry = {
+      "huggingface": {"runtimeName": "huggingface"},
+      "strata": {
+        "runtimeName": "strata",
+        "activityProbe": "strata-status",
+        "dischargeKind": "strata",
+      },
+    }
+
+    plan = server.capacity_plan_for_job(self.target_job(), registry)
+
+    self.assertEqual(plan["decision"], "insufficient")
+    self.assertTrue(plan["waitForCapacity"])
+    self.assertEqual(plan["candidateDiagnostics"][0]["state"], "cooldown")
+    with self.assertRaisesRegex(RuntimeError, "GPU capacity temporarily unavailable"):
+      server.ensure_capacity_for_job(self.target_job(), registry)
 
   def test_strata_capacity_admission_reclaims_idle_ollama_through_housekeeper(self):
     telemetry = iter([
