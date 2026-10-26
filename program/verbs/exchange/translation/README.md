@@ -122,7 +122,14 @@ The refinery evidence, repair handles, outcomes, and each `english-wordnet-link-
 stored under `wordnet-refinery` in the translation `.pya` catalog. A failed repair becomes explicit
 `uncertain-llm` evidence; the run never invents a lexical word or silently turns an unsupported
 model response into a mapping. The native bridge catalog remains the durable curated lexicon, while
-the document catalog records automatic model decisions without requiring a human in the loop.
+the document catalog records automatic model decisions without requiring a human in the loop. After
+WordNet reconciliation, accepted model sense links are fed back through the same sentence analyzer
+before vocabulary review. The accepted sense set takes precedence over the analyzer's earlier
+deterministic alternatives for that source surface, so a decision such as `shows` -> `exhibit` is
+actually applied to the token in the same run. Accepted vocabulary links get the same bounded
+second pass. `wordnetUnresolved` counts unresolved sense rows; `wordnetQueuePending` counts active
+Housekeeper queues, so completed queues do not appear to be hanging merely because review rows
+remain uncertain.
 
 To regenerate the English pairs from `examples/pyash/*.pya`:
 

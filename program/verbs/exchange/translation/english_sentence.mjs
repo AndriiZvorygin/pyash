@@ -499,12 +499,19 @@ function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, mar
   };
 }
 
-function wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex) {
+function wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex, wordnetBridges) {
   if (record?.consumedBy || record?.pyashSequence?.length || !record?.wordnet?.senses || typeof resolveWord !== "function") return [];
   const selection = selectWordNetSenses(record, records, index, wordnetIndex);
-  return selection.senses.map((sense) => {
+  const dynamicSenses = record.wordnet.senses.filter((sense) => (
+    wordnetBridges?.has?.(wordNetSenseKey(sense))
+  ));
+  const senses = dynamicSenses.length > 0
+    ? dynamicSenses
+    : selection.senses;
+  return senses.map((sense) => {
     const candidates = new Map();
-    const bridge = wordnetIndex?.bridgeIndex?.get(wordNetSenseKey(sense));
+    const bridge = wordnetBridges?.get?.(wordNetSenseKey(sense))
+      ?? wordnetIndex?.bridgeIndex?.get(wordNetSenseKey(sense));
     if (bridge) {
       const coverage = resolveWord(bridge.target);
       if (coverage?.pyashSequence?.length && coverage.coverageType !== "dictionary-alias") {
@@ -549,9 +556,9 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
   });
 }
 
-function addWordNetCandidates(records, resolveWord, wordnetIndex) {
+function addWordNetCandidates(records, resolveWord, wordnetIndex, wordnetBridges) {
   return records.map((record, index) => {
-    const candidateSets = wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex);
+    const candidateSets = wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex, wordnetBridges);
     const candidates = candidateSets.flat();
     const uniqueSequences = new Map(candidates.map((candidate) => [candidate.pyashSequence.join(" "), candidate]));
     if (candidateSets.length > 0
@@ -647,7 +654,9 @@ export function analyzeEnglishSentence(source, {
   resolveWord,
   lemmaEntries = [],
   grammarIndex,
-  wordnetIndex
+  wordnetIndex,
+  wordnetBridges = null,
+  coverageOverrides = null
 } = {}) {
   const tokens = tokenizeEnglishSentence(source);
   if (tokens.length === 0) {
@@ -658,12 +667,18 @@ export function analyzeEnglishSentence(source, {
       .filter((entry) => entry?.surface)
       .map((entry) => [entry.surface.toLowerCase(), entry])
   );
+  const resolveWithOverrides = (word) => {
+    const normalized = String(word ?? "").trim().toLowerCase();
+    const override = coverageOverrides?.get?.(normalized)
+      ?? (coverageOverrides && typeof coverageOverrides === "object" ? coverageOverrides[normalized] : null);
+    return override ?? resolveWord?.(word);
+  };
   const records = addWordNetCandidates(applyContextualEnglishGrammar(tokens.map((token) => wordRecord(token, {
-    resolveWord,
+    resolveWord: resolveWithOverrides,
     lemmaBySurface,
     grammarIndex,
     wordnetIndex
-  })), grammarIndex), resolveWord, wordnetIndex);
+  })), grammarIndex), resolveWithOverrides, wordnetIndex, wordnetBridges);
   const progressiveIndex = findProgressiveIndex(records);
   const finiteIndex = findVerbIndex(records);
   const imperativeIndex = progressiveIndex < 0 && finiteIndex < 0 ? findImperativeVerbIndex(records) : -1;
@@ -1015,13 +1030,14 @@ function needsFullCoverage(analysis) {
   return analysis.unresolved?.length > 0;
 }
 
-export async function analyzeDefaultEnglishSentence(source) {
+export async function analyzeDefaultEnglishSentence(source, options = {}) {
   const resources = await loadEnglishSentenceResources();
   const analysis = analyzeEnglishSentence(source, {
     resolveWord: (word) => stagedEnglishCoverage(resources, word),
     lemmaEntries: resources.lemmaCatalog.entries,
     grammarIndex: resources.grammarIndex,
-    wordnetIndex: resources.wordnet?.index
+    wordnetIndex: resources.wordnet?.index,
+    ...options
   });
   if (!needsFullCoverage(analysis)) return analysis;
 
@@ -1031,7 +1047,8 @@ export async function analyzeDefaultEnglishSentence(source) {
       ?? stagedEnglishCoverage(resources, word),
     lemmaEntries: fullResources.lemmaCatalog.entries,
     grammarIndex: fullResources.grammarIndex,
-    wordnetIndex: fullResources.wordnet?.index
+    wordnetIndex: fullResources.wordnet?.index,
+    ...options
   });
 }
 

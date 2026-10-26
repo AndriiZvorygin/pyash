@@ -717,6 +717,24 @@ export function applyEnglishWordNetSenseLinkResponse(records, response) {
   };
 }
 
+export function buildEnglishWordNetSenseBridgeIndex(records = []) {
+  const bridges = new Map();
+  for (const record of records) {
+    if (!ACCEPTED_STATUSES.has(record?.status) || !record?.link?.target) continue;
+    const source = senseKey(record.pos, record.synset);
+    const pyashSequence = sequence(record.link.pyashSequence);
+    if (!source || pyashSequence.length === 0) continue;
+    bridges.set(source, {
+      target: normalized(record.link.target),
+      pyashSequence,
+      targetPartOfSpeech: text(record.link.targetPartOfSpeech) || text(record.pos),
+      certainty: text(record.link.certainty) || "contextual",
+      evidence: text(record.link.evidence) || text(record.verificationRationale)
+    });
+  }
+  return bridges;
+}
+
 export async function reconcileEnglishWordNetSenseLinks({
   records = [],
   inventory,
