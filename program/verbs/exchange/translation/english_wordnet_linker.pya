@@ -10,6 +10,7 @@ su text "max-output-tokens" ob num 1024 ya
 su text "selection-format" ob text "english-wordnet-sense-selection-v1" ya
 su text "selection-max-output-tokens" ob num 512 ya
 su text "edge-max-degree" ob num 1 ya
+su text "anchor-max-candidates" ob num 8 ya
 su text "edge-resolution" ob text "one WordNet meaning plus an existing atom or accepted compound" ya
 su text "response-contract" ob text "one bounded sense-links object" ya
 prah

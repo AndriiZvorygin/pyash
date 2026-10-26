@@ -16,6 +16,7 @@ import {
   TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
   runTranslationSourceToVliwRefinery
 } from "../program/verbs/exchange/translation/translation_to_vliw_refinery.mjs";
+import { inspectTranslationRefineryArtifacts } from "../program/verbs/exchange/translation/translation_refinery_artifacts.mjs";
 
 test("source-to-VLIW refinery declares the complete Pyash stage graph", async () => {
   const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-"));
@@ -83,6 +84,27 @@ test("source-to-VLIW refinery writes the translation catalog and executable pack
   assert.equal(readFileSync(paths.pack).length > 32, true);
 });
 
+test("source-to-VLIW refinery surfaces the current stage failure", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-error-"));
+  const paths = {
+    translation: join(directory, "translation.pya"),
+    catalog: join(directory, "catalog.pya"),
+    pack: join(directory, "pack.pyac")
+  };
+  await assert.rejects(
+    () => runTranslationSourceToVliwRefinery({
+      language: "english",
+      source: "I walk.",
+      locator: "fixture.txt",
+      paths,
+      adapterResolver: () => null,
+      checkpointEnabled: false,
+      retryConfig: { initialDelayMs: 0, backoff: 1, maxAttempts: 1, maxDelayMs: 0 }
+    }),
+    /no translation adapter is registered/u
+  );
+});
+
 test("source-to-VLIW refinery replays its durable map checkpoints", async () => {
   const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-replay-"));
   const paths = {
@@ -125,6 +147,78 @@ test("source-to-VLIW refinery replays its durable map checkpoints", async () => 
   assert.equal(checkpoints.length, 9);
   assert.deepEqual(second.result, first.result);
   assert.equal(second.database.catalog.packHash, first.database.catalog.packHash);
+  const inspected = inspectTranslationRefineryArtifacts({ checkpointIndex });
+  assert.equal(inspected.latestStage, "write outputs");
+  assert.equal(inspected.counts.stages, 9);
+  assert.deepEqual(inspected.stages.at(-1).outputNames, [
+    "database",
+    "result",
+    "translation",
+    "translationPya"
+  ]);
+  assert.deepEqual(Object.keys(inspected.stages.at(-1).inputArtifacts), [
+    "lower vliw",
+    "render translation"
+  ]);
+  assert.equal(inspected.counts.pendingSenseLinks, 0);
+});
+
+test("refinery artifact inspection reports pending sense links from the latest stage", () => {
+  const checkpointIndex = new Map([[
+    TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
+    new Map([
+      ["translate sentences", {
+        hash: "translate-hash",
+        resultSentence: {
+          mood: "ya",
+          be: "map",
+          ob: { map: { translation: { records: [] } } }
+        },
+        resultLine: "translate output"
+      }],
+      ["refine senses", {
+        hash: "sense-hash",
+        resultSentence: {
+          mood: "ya",
+          be: "map",
+          ob: {
+            map: {
+              translation: {
+                wordnet: {
+                  records: [{
+                    id: "sense-record",
+                    occurrenceId: "translation-occurrence-1",
+                    sourceRecordId: "sentence-1",
+                    tokenIndex: 2,
+                    surface: "florp",
+                    status: "review",
+                    selectionStatus: "pending",
+                    selectedSenseId: "v:one",
+                    selectedSense: { gloss: "perform an action" },
+                    anchorCandidates: [{ target: "activity", pyashSequence: ["twot"] }]
+                  }]
+                }
+              }
+            }
+          }
+        },
+        resultLine: "sense output"
+      }]
+    ])
+  ]]);
+  const inspected = inspectTranslationRefineryArtifacts({ checkpointIndex });
+  assert.equal(inspected.latestStage, "refine senses");
+  assert.deepEqual(inspected.pendingSenseLinks.map((record) => ({
+    occurrenceId: record.occurrenceId,
+    surface: record.surface,
+    selectedSenseId: record.selectedSenseId,
+    selectedSenseWord: record.selectedSenseWord
+  })), [{
+    occurrenceId: "translation-occurrence-1",
+    surface: "florp",
+    selectedSenseId: "v:one",
+    selectedSenseWord: "florp"
+  }]);
 });
 
 test("source-to-VLIW pipeline forwards reconciled sense links into sentence analysis", async () => {
@@ -303,4 +397,112 @@ test("source-to-VLIW refinery re-runs after an accepted Qwen vocabulary link", a
   assert.equal(record.unresolved, undefined);
   assert.equal(blorf.coverageType, "llm");
   assert.deepEqual(blorf.pyashSequence, ["pyan"]);
+});
+
+test("source-to-VLIW refinery feeds an accepted sense attachment through the anchor loop", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-wordnet-anchor-loop-"));
+  const paths = {
+    translation: join(directory, "translation.pya"),
+    catalog: join(directory, "catalog.pya"),
+    pack: join(directory, "pack.pyac")
+  };
+  const wordnetIndex = buildEnglishWordNetIndex({
+    rows: [
+      {
+        id: "v:anchor-v-one:florp",
+        pos: "v",
+        synset: "anchor-v-one",
+        senseKey: "anchor-v-one",
+        lemma: "florp",
+        gloss: "perform an activity"
+      },
+      {
+        id: "v:anchor-v-two:florp",
+        pos: "v",
+        synset: "anchor-v-two",
+        senseKey: "anchor-v-two",
+        lemma: "florp",
+        gloss: "touch a surface"
+      },
+      {
+        id: "v:anchor-activity:activity",
+        pos: "v",
+        synset: "anchor-activity",
+        senseKey: "anchor-activity",
+        lemma: "activity",
+        gloss: "an activity"
+      }
+    ],
+    relations: [{
+      source: "v:anchor-v-one",
+      target: "v:anchor-activity",
+      relation: "hypernym"
+    }]
+  });
+  const adapterResolver = () => ({
+    name: "english",
+    analyzeSentence: (source, options) => analyzeEnglishSentence(source, {
+      ...options,
+      wordnetIndex,
+      resolveWord: (word) => word === "i"
+        ? { coverageType: "grammar", pyashSequence: ["mi"] }
+        : word === "activity"
+          ? { coverageType: "atomic", canonicalEnglish: "activity", pyashSequence: ["twot"] }
+        : null
+    })
+  });
+  let vocabularyRequest;
+  const output = await runTranslationSourceToVliwRefinery({
+    language: "english",
+    source: "I florp.",
+    locator: "fixture.txt",
+    paths,
+    adapterResolver,
+    checkpointEnabled: false,
+    wordnetRefinery: {
+      resources: {
+        coverage: {
+          byVariant: new Map([
+            ["activity", {
+              coverageType: "atomic",
+              canonicalEnglish: "activity",
+              pyashSequence: ["twot"]
+            }]
+          ])
+        },
+        grammarCatalog: { entries: [] },
+        wordnet: { index: wordnetIndex }
+      },
+      config: { edgeMaxDegree: 1 },
+      submit: async () => ({ status: "queued" }),
+      awaitHandle: async () => JSON.stringify({
+        verdict: "accept",
+        option: 1,
+        confidence: "high",
+        rationale: "fixture selected activity sense"
+      })
+    },
+    queueVocabulary: async (request) => {
+      vocabularyRequest = request;
+      return { status: "queued" };
+    },
+    awaitVocabulary: async () => JSON.stringify({
+      verdict: "complete",
+      candidates: [{
+        id: vocabularyRequest.candidates[0].id,
+        status: "accept",
+        targetEnglish: "activity",
+        rationale: "the selected sense describes an activity"
+      }]
+    })
+  });
+  const record = output.translation.records[0];
+  const florp = record.tokens.find((token) => token.surface === "florp");
+  assert.equal(output.result.vocabularyOutcome, "applied");
+  assert.equal(output.translation.wordnet.records[0].status, "accepted-llm");
+  assert.equal(output.translation.wordnet.records[0].link.target, "activity");
+  assert.equal(output.translation.wordnet.records[0].selectedSenseId, "v:anchor-v-one");
+  assert.equal(record.unresolved, undefined);
+  assert.equal(florp.coverageType, "llm");
+  assert.deepEqual(florp.pyashSequence, ["twot"]);
 });

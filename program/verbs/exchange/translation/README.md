@@ -117,6 +117,14 @@ possible WordNet senses. The model returns one supplied sense id, confidence, an
 it never emits a Pyash sequence or a whole-document translation. A low-confidence, uncertain,
 malformed, or failed duty becomes an explicit occurrence error, while other occurrences continue.
 
+The canonical unit after sentence analysis is the source occurrence, not the surface spelling.
+Every persisted token and vocabulary candidate carries its source record, token index, stable
+occurrence id, and bounded WordNet sense candidates. Two uses of the same English word therefore
+retain separate decisions and queue duties. The `translation-sense-state-v1` marker in the
+translation `.pya` catalog guards this boundary: current checkpoints resume selected occurrences
+without re-submitting them, while an older or incomplete catalog regenerates only the missing
+token-sense state before continuing the existing refinery stages.
+
 After a sense is selected, the refinery first checks the existing atom and accepted-compound
 coverage through the normal WordNet bridge path. When no direct bridge exists, it emits a bounded
 `wordnet-sense-attachment` candidate for the existing vocabulary/compound refinery. The native
@@ -128,6 +136,17 @@ Each selection queue uses an `english-wordnet-select-*` handle and is stored und
 selected sense, `wordnetUnresolved` counts selected senses still lacking a bridge, and
 `wordnetQueuePending`/`wordnetPending` count active Housekeeper queues. Completed queues therefore
 do not appear to be hanging merely because attachment or vocabulary review remains unresolved.
+
+Stage outputs are durable checkpoint artifacts in the run newspaper. Inspect them without running
+the refinery again:
+
+```
+node command/read_translation_refinery.mjs <run-id> [checkpoint-cwd]
+```
+
+The report lists the latest completed stage, each stage's input/output map artifact, and pending
+WordNet occurrence links from the latest translation artifact. The canonical session remains the
+translation `.pya`; the newspaper remains the replayable stage-evidence source.
 
 To regenerate the English pairs from `examples/pyash/*.pya`:
 

@@ -5,6 +5,7 @@ import {
 } from "./english_sentence.mjs";
 import {
   buildEnglishWordNetSenseBridgeIndex,
+  buildEnglishWordNetSenseAnchorCandidates,
   linkEnglishWordNetSense,
   loadEnglishWordNetLinkerConfig
 } from "./english_wordnet_linker.mjs";
@@ -15,6 +16,10 @@ import {
   selectEnglishWordNetSense
 } from "./english_wordnet_selection.mjs";
 import { lookupEnglish30kCoverage } from "./english30k_coverage.mjs";
+import {
+  isTranslationSenseState,
+  translationOccurrenceId
+} from "./translation_occurrence.mjs";
 
 export const ENGLISH_WORDNET_REFINERY_FORMAT = "english-wordnet-refinery-v1";
 
@@ -93,9 +98,130 @@ function counts(records, decisions) {
   };
 }
 
+function persistedSenseRows(candidate) {
+  return (candidate?.senseCandidates ?? []).map((sense) => ({
+    pos: text(sense?.pos),
+    synset: text(sense?.synset),
+    lemma: text(sense?.lemma),
+    lemmas: [...new Set((sense?.lemmas ?? [sense?.lemma]).map(text).filter(Boolean))].slice(0, 8),
+    gloss: text(sense?.gloss)
+  })).filter((sense) => sense.pos && sense.synset);
+}
+
+function persistedToken(token) {
+  return {
+    surface: normalized(token?.surface),
+    lemma: normalized(token?.lemma),
+    pyashSequence: Array.isArray(token?.pyashSequence) ? [...token.pyashSequence] : [],
+    grammar: token?.grammar ?? null,
+    morphology: token?.morphology ?? null,
+    wordnet: { senses: token?.senseCandidates ?? [] },
+    semanticCandidates: token?.semanticCandidates ?? []
+  };
+}
+
 function occurrenceDecisions(result, resources, compounds, terms) {
   const decisions = [];
   const termSet = new Set(terms);
+  const sourceRecords = new Map((result.records ?? []).map((record) => [record.id, record]));
+  const persisted = isTranslationSenseState(result.senseStateFormat);
+
+  for (const candidate of result.vocabularyCandidates ?? []) {
+    if (text(candidate?.kind) !== "lexical-gap") continue;
+    const surface = normalized(candidate.surface);
+    if (!surface || !termSet.has(surface)) continue;
+    const sourceRecord = sourceRecords.get(candidate.sourceRecordId);
+    const sentence = text(sourceRecord?.source?.text ?? candidate.context?.[0]);
+    const tokenIndex = Number(candidate.tokenIndex);
+    const senseRows = persistedSenseRows(candidate);
+    if (!sentence || !Number.isInteger(tokenIndex) || tokenIndex < 0 || senseRows.length === 0) {
+      if (!sentence) continue;
+    } else {
+      const persistedTokens = (sourceRecord?.tokens ?? []).map(persistedToken);
+      const token = persistedTokens[tokenIndex] ?? {
+        surface,
+        wordnet: { senses: senseRows }
+      };
+      const selection = selectEnglishWordNetSenses(
+        token,
+        persistedTokens.length > 0 ? persistedTokens : [token],
+        Math.min(tokenIndex, Math.max(0, persistedTokens.length - 1)),
+        resources.wordnet?.index
+      );
+      const senses = selection.senses.length > 0 ? selection.senses : senseRows;
+      if (senses.length === 0) continue;
+      const id = englishWordNetSelectionId({
+        sourceHash: result.sourceHash,
+        sourceRecordId: candidate.sourceRecordId,
+        tokenIndex,
+        surface
+      });
+      decisions.push({
+        id,
+        occurrenceId: candidate.occurrenceId || translationOccurrenceId({
+          sourceRecordId: candidate.sourceRecordId,
+          tokenIndex,
+          surface
+        }),
+        sourceRecordId: candidate.sourceRecordId,
+        sentenceIndex: sourceRecord?.source?.sentenceIndex,
+        tokenIndex,
+        surface,
+        sentence,
+        senses,
+        selectionEvidence: selection.evidence,
+        stateSource: "translation-token-state"
+      });
+      continue;
+    }
+
+    // Compatibility path for pre-sense-state fixtures and old checkpoints.
+    // New translation outputs always take the persisted-token branch above.
+    if (!sentence) continue;
+    const unresolved = new Set((sourceRecord?.unresolved ?? []).map(normalized));
+    const analysis = analyzeEnglishSentence(sentence, {
+      resolveWord: (word) => resolveWord(resources, compounds, word),
+      lemmaEntries: resources.lemmaCatalog?.entries ?? [],
+      grammarIndex: resources.grammarIndex ?? emptyGrammarIndex(),
+      wordnetIndex: resources.wordnet?.index
+    });
+    for (const [legacyTokenIndex, token] of analysis.tokens.entries()) {
+      if (normalized(token?.surface) !== surface || !unresolved.has(surface)) continue;
+      const selection = selectEnglishWordNetSenses(
+        token,
+        analysis.tokens,
+        legacyTokenIndex,
+        resources.wordnet?.index
+      );
+      if (!Array.isArray(selection.senses) || selection.senses.length === 0) continue;
+      const id = englishWordNetSelectionId({
+        sourceHash: result.sourceHash,
+        sourceRecordId: candidate.sourceRecordId || sourceRecord?.id,
+        tokenIndex: legacyTokenIndex,
+        surface
+      });
+      decisions.push({
+        id,
+        occurrenceId: translationOccurrenceId({
+          sourceRecordId: candidate.sourceRecordId || sourceRecord?.id,
+          tokenIndex: legacyTokenIndex,
+          surface
+        }),
+        sourceRecordId: candidate.sourceRecordId || sourceRecord?.id,
+        sentenceIndex: sourceRecord?.source?.sentenceIndex,
+        tokenIndex: legacyTokenIndex,
+        surface,
+        sentence,
+        senses: selection.senses,
+        selectionEvidence: selection.evidence,
+        stateSource: "legacy-surface-reanalysis"
+      });
+    }
+  }
+
+  if (decisions.length > 0 || persisted) return decisions;
+
+  // Preserve direct callers that provide records without vocabulary candidates.
   for (const sourceRecord of result.records ?? []) {
     const sentence = text(sourceRecord?.source?.text);
     const unresolved = new Set((sourceRecord?.unresolved ?? []).map(normalized));
@@ -124,6 +250,11 @@ function occurrenceDecisions(result, resources, compounds, terms) {
       });
       decisions.push({
         id,
+        occurrenceId: translationOccurrenceId({
+          sourceRecordId: sourceRecord.id,
+          tokenIndex,
+          surface
+        }),
         sourceRecordId: sourceRecord.id,
         sentenceIndex: sourceRecord.source.sentenceIndex,
         tokenIndex,
@@ -169,6 +300,7 @@ async function queueSelectionWithoutAwait({ decision, sourceHash, submit, config
 function selectedDecisionRecord(decision, sense, selection = {}) {
   return {
     ...decision,
+    selectionStatus: "selected",
     selectedSenseId: `${text(sense?.pos)}:${text(sense?.synset)}`,
     selectedSense: sense,
     selectionConfidence: selection.confidence || "deterministic",
@@ -178,15 +310,32 @@ function selectedDecisionRecord(decision, sense, selection = {}) {
 
 function attachmentCandidate(record) {
   if (record.status !== "review" || !record.selectedSense) return null;
+  const selectedSense = record.selectedSense;
   return {
     id: `wordnet-attachment:${record.id}`,
     surface: record.surface,
     kind: "wordnet-sense-attachment",
     sourceRecordId: record.sourceRecordId,
+    tokenIndex: record.tokenIndex,
+    occurrenceId: record.occurrenceId,
     context: [record.sentence],
+    senseId: record.selectedSenseId,
+    sense: {
+      pos: text(selectedSense.pos),
+      synset: text(selectedSense.synset),
+      lemmas: [...new Set((selectedSense.lemmas ?? [selectedSense.lemma])
+        .map(text)
+        .filter(Boolean))].slice(0, 4),
+      gloss: text(selectedSense.gloss)
+    },
+    anchorCandidates: (record.anchorCandidates ?? []).map((candidate) => ({
+      target: text(candidate.target),
+      pyashSequence: [...(candidate.pyashSequence ?? [])],
+      evidence: text(candidate.evidence)
+    })),
     evidence: [
       `selected WordNet sense ${record.selectedSenseId}`,
-      record.selectedSense.gloss,
+      selectedSense.gloss,
       record.selectionRationale
     ].filter(Boolean).join("; ")
   };
@@ -195,13 +344,72 @@ function attachmentCandidate(record) {
 export function appendEnglishWordNetAttachmentCandidates(translation, records) {
   const attachments = records.map(attachmentCandidate).filter(Boolean);
   if (attachments.length === 0) return translation;
-  const selectedKeys = new Set(attachments.map((candidate) => `${candidate.sourceRecordId}\u0000${candidate.surface}`));
+  const selectedKeys = new Set(attachments.map((candidate) => (
+    candidate.occurrenceId
+      || translationOccurrenceId({
+        sourceRecordId: candidate.sourceRecordId,
+        tokenIndex: candidate.tokenIndex,
+        surface: candidate.surface
+      })
+      || `${candidate.sourceRecordId}\u0000${candidate.surface}`
+  )));
   const existing = (translation.vocabularyCandidates ?? []).filter((candidate) => (
-    !selectedKeys.has(`${candidate.sourceRecordId}\u0000${normalized(candidate.surface)}`)
+    !selectedKeys.has(
+      candidate.occurrenceId
+        || translationOccurrenceId({
+          sourceRecordId: candidate.sourceRecordId,
+          tokenIndex: candidate.tokenIndex,
+          surface: candidate.surface
+        })
+        || `${candidate.sourceRecordId}\u0000${normalized(candidate.surface)}`
+    )
   ));
   return {
     ...translation,
     vocabularyCandidates: [...existing, ...attachments]
+  };
+}
+
+export function applyEnglishWordNetSenseAttachmentLinks(translation) {
+  const wordnet = translation?.wordnet;
+  if (!wordnet || !Array.isArray(wordnet.records)) return translation;
+  const accepted = new Map((translation.vocabularyCandidates ?? [])
+    .filter((candidate) => (
+      candidate?.kind === "wordnet-sense-attachment"
+      && candidate?.status === "accepted-llm"
+      && text(candidate.targetEnglish)
+      && Array.isArray(candidate.pyashSequence)
+      && candidate.pyashSequence.length > 0
+      && text(candidate.senseId)
+    ))
+    .map((candidate) => [candidate.id, candidate]));
+  if (accepted.size === 0) return translation;
+  const records = wordnet.records.map((record) => {
+    const candidate = accepted.get(`wordnet-attachment:${record.id}`);
+    if (!candidate || text(record.selectedSenseId) !== text(candidate.senseId)) return record;
+    const target = text(candidate.targetEnglish).toLowerCase();
+    const pyashSequence = candidate.pyashSequence.filter((word) => typeof word === "string" && word.trim());
+    return {
+      ...record,
+      status: "accepted-llm",
+      link: {
+        target,
+        pyashSequence: [...pyashSequence],
+        targetPartOfSpeech: text(record.pos),
+        certainty: "contextual",
+        evidence: `selected sense ${record.selectedSenseId} linked to existing Pyash anchor ${target}`
+      },
+      verificationRationale: text(candidate.verificationRationale)
+        || `selected sense ${record.selectedSenseId} linked to ${target}`
+    };
+  });
+  return {
+    ...translation,
+    wordnet: {
+      ...wordnet,
+      records,
+      counts: counts(records, wordnet.decisions ?? [])
+    }
   };
 }
 
@@ -222,8 +430,12 @@ export async function refineEnglishWordNet({
     ? [...new Set(sourceTerms.map(normalized).filter(Boolean))].sort()
     : collectEnglishWordNetSourceTerms(result);
   if (terms.length === 0) {
+    if (result.wordnet?.format === ENGLISH_WORDNET_REFINERY_FORMAT) {
+      return result.wordnet;
+    }
     return {
       format: ENGLISH_WORDNET_REFINERY_FORMAT,
+      senseStateFormat: result.senseStateFormat || "",
       sourceHash: text(result.sourceHash),
       sourceTerms: [],
       decisions: [],
@@ -240,11 +452,44 @@ export async function refineEnglishWordNet({
   const linkerConfig = config ?? await loadEnglishWordNetLinkerConfig();
   const compounds = compoundResolver(compoundRecords);
   const decisions = occurrenceDecisions(result, loadedResources, compounds, terms);
+  const priorRecords = new Map((result.wordnet?.records ?? []).map((record) => [
+    record.occurrenceId
+      || translationOccurrenceId({
+        sourceRecordId: record.sourceRecordId,
+        tokenIndex: record.tokenIndex,
+        surface: record.surface
+      })
+      || record.id,
+    record
+  ]));
   const records = [];
   const queues = [];
   const errors = [];
   for (const decision of decisions) {
     try {
+      const prior = priorRecords.get(
+        decision.occurrenceId
+          || translationOccurrenceId({
+            sourceRecordId: decision.sourceRecordId,
+            tokenIndex: decision.tokenIndex,
+            surface: decision.surface
+          })
+      );
+      if (prior && prior.selectedSenseId && prior.selectedSense) {
+        if (accepted(prior.status)) {
+          records.push(prior);
+          continue;
+        }
+        if (prior.status === "uncertain-llm" && prior.selectionStatus !== "selected") {
+          records.push(prior);
+          continue;
+        }
+      }
+      if (prior && !prior.selectedSenseId && prior.selectionStatus === "pending") {
+        records.push(prior);
+        if (prior.queue) queues.push(prior.queue);
+        continue;
+      }
       let selected = decision.senses.length === 1
         ? selectedDecisionRecord(decision, decision.senses[0])
         : null;
@@ -263,9 +508,11 @@ export async function refineEnglishWordNet({
         if (outcome.error) {
           const errorRecord = {
             ...decision,
+            selectionStatus: "error",
             status: "error",
             queue: outcome.queue,
-            error: outcome.error
+            error: outcome.error,
+            providerResponse: outcome.raw || ""
           };
           records.push(errorRecord);
           errors.push({ id: decision.id, surface: decision.surface, error: outcome.error });
@@ -280,12 +527,12 @@ export async function refineEnglishWordNet({
           config: linkerConfig
         });
         queues.push(outcome.queue);
-        records.push({ ...decision, status: "review", queue: outcome.queue });
+        records.push({ ...decision, selectionStatus: "pending", status: "review", queue: outcome.queue });
         continue;
       }
       if (!selected) {
         const error = "ambiguous WordNet sense requires a selector";
-        records.push({ ...decision, status: "error", error });
+        records.push({ ...decision, selectionStatus: "error", status: "error", error });
         errors.push({ id: decision.id, surface: decision.surface, error });
         continue;
       }
@@ -296,8 +543,16 @@ export async function refineEnglishWordNet({
         wordnetIndex: loadedResources.wordnet?.index,
         edgeMaxDegree: linkerConfig.edgeMaxDegree
       });
+      const anchorCandidates = buildEnglishWordNetSenseAnchorCandidates({
+        sense: selected.selectedSense,
+        wordnetIndex: loadedResources.wordnet?.index,
+        resolveWord: (word) => resolveWord(loadedResources, compounds, word),
+        maxDepth: linkerConfig.anchorMaxDepth ?? 1,
+        maxCandidates: linkerConfig.anchorMaxCandidates ?? 8
+      });
       records.push({
         ...linked,
+        occurrenceId: selected.occurrenceId,
         decisionId: selected.id,
         sourceRecordId: selected.sourceRecordId,
         sentenceIndex: selected.sentenceIndex,
@@ -307,7 +562,8 @@ export async function refineEnglishWordNet({
         selectedSenseId: selected.selectedSenseId,
         selectedSense: selected.selectedSense,
         selectionConfidence: selected.selectionConfidence,
-        selectionRationale: selected.selectionRationale
+        selectionRationale: selected.selectionRationale,
+        anchorCandidates
       });
     } catch (caught) {
       const error = caught?.message || String(caught);
@@ -323,6 +579,7 @@ export async function refineEnglishWordNet({
   }));
   return {
     format: ENGLISH_WORDNET_REFINERY_FORMAT,
+    senseStateFormat: result.senseStateFormat || "",
     sourceHash: text(result.sourceHash),
     sourceTerms: terms,
     decisions,

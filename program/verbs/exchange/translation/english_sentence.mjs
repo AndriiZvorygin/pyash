@@ -17,6 +17,7 @@ import { buildEnglishLemmaIndex, loadEnglishLemmaCatalog } from "./english_lemma
 import { buildEnglishWordNetIndex, loadEnglishWordNet } from "./english_wordnet.mjs";
 import { loadEnglishWordNetBridges } from "./english_wordnet_bridges.mjs";
 import { compositionalGrid } from "../../../library/compositionalCases.mjs";
+import { translationOccurrenceKey } from "./translation_occurrence.mjs";
 
 export const ENGLISH_SENTENCE_FORMAT = "english-sentence-v1";
 
@@ -261,9 +262,15 @@ function entryTerms(terms) {
   return terms.join(", ");
 }
 
-function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex, wordnetIndex } = {}) {
+function wordRecord(surface, {
+  resolveWord,
+  lemmaBySurface,
+  grammarIndex,
+  wordnetIndex,
+  tokenIndex
+} = {}) {
   const normalized = surface.toLowerCase();
-  let coverage = typeof resolveWord === "function" ? resolveWord(normalized) : null;
+  let coverage = typeof resolveWord === "function" ? resolveWord(normalized, tokenIndex) : null;
   const lemma = lemmaBySurface?.get(normalized) ?? null;
   const catalogGrammar = grammarIndex?.resolve(normalized) ?? null;
   const compositionalCase = COMPOSITIONAL_CASE_INDEX.get(normalized)
@@ -285,7 +292,7 @@ function wordRecord(surface, { resolveWord, lemmaBySurface, grammarIndex, wordne
   let grammaticalNumber = coverage?.grammaticalNumber ?? lemma?.grammaticalNumber ?? "";
   if (!grammar && !morphology && grammaticalNumber !== "plural" && normalized.endsWith("s")) {
     const singular = pluralBaseCandidates(normalized)
-      .map((candidate) => ({ candidate, coverage: typeof resolveWord === "function" ? resolveWord(candidate) : null }))
+      .map((candidate) => ({ candidate, coverage: typeof resolveWord === "function" ? resolveWord(candidate, tokenIndex) : null }))
       .find((row) => row.coverage?.pyashSequence?.length
         && row.coverage.coverageType !== "dictionary-alias");
     if (singular) {
@@ -666,7 +673,9 @@ export function analyzeEnglishSentence(source, {
   grammarIndex,
   wordnetIndex,
   wordnetBridges = null,
-  coverageOverrides = null
+  coverageOverrides = null,
+  sourceRecordId = "",
+  occurrenceOverrides = null
 } = {}) {
   const tokens = tokenizeEnglishSentence(source);
   if (tokens.length === 0) {
@@ -677,17 +686,21 @@ export function analyzeEnglishSentence(source, {
       .filter((entry) => entry?.surface)
       .map((entry) => [entry.surface.toLowerCase(), entry])
   );
-  const resolveWithOverrides = (word) => {
+  const resolveWithOverrides = (word, tokenIndex) => {
     const normalized = String(word ?? "").trim().toLowerCase();
-    const override = coverageOverrides?.get?.(normalized)
+    const occurrence = translationOccurrenceKey({ sourceRecordId, tokenIndex });
+    const override = occurrenceOverrides?.get?.(occurrence)
+      ?? occurrenceOverrides?.get?.(String(tokenIndex))
+      ?? coverageOverrides?.get?.(normalized)
       ?? (coverageOverrides && typeof coverageOverrides === "object" ? coverageOverrides[normalized] : null);
     return override ?? resolveWord?.(word);
   };
-  const records = addWordNetCandidates(applyContextualEnglishGrammar(tokens.map((token) => wordRecord(token, {
+  const records = addWordNetCandidates(applyContextualEnglishGrammar(tokens.map((token, tokenIndex) => wordRecord(token, {
     resolveWord: resolveWithOverrides,
     lemmaBySurface,
     grammarIndex,
-    wordnetIndex
+    wordnetIndex,
+    tokenIndex
   })), grammarIndex), resolveWithOverrides, wordnetIndex, wordnetBridges);
   const progressiveIndex = findProgressiveIndex(records);
   const finiteIndex = findVerbIndex(records);

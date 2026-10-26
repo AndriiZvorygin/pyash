@@ -300,9 +300,11 @@ export async function selectEnglishWordNetSense({
         outcome: "error",
         verificationAttempts: attempt,
         ...(repairHandleId ? { repairHandleId } : {}),
-        error: response.reason || "selection remained uncertain"
+        error: response.reason || "selection remained uncertain",
+        raw: response.raw || raw
       },
-      error: response.reason || "selection remained uncertain"
+      error: response.reason || "selection remained uncertain",
+      raw: response.raw || raw
     };
   }
   return {
