@@ -14,7 +14,7 @@ WORKDIR /service
 
 COPY container/gpu-housekeeper/service/server.py /service/server.py
 
-EXPOSE 8090
+EXPOSE 18886
 
 ENTRYPOINT ["python3", "/service/server.py"]
-CMD ["--host", "0.0.0.0", "--port", "8090", "--host-id", "gpu-housekeeper"]
+CMD ["--host", "0.0.0.0", "--port", "18886", "--host-id", "gpu-housekeeper"]

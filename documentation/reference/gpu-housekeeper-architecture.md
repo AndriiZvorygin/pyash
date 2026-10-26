@@ -321,20 +321,21 @@ unmanaged processes are never discharged by the housekeeper.
 Local Pyash can point at a remote housekeeper using either:
 
 ```sh
-PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886
 ```
 
 or a local, git-ignored Pyash config sentence in `configure/secret.pya`:
 
 ```pya
-exists su name gpu housekeeper url ob text "http://mriczo:8090" be default ya
+exists su name gpu housekeeper url ob text "http://mriczo:18886" be default ya
 ```
 
 Do not commit host-local URLs or secrets unless they are portable defaults.
 
-The current known-good remote deployment is `mriczo`, where:
+New deployments publish the Housekeeper on port `18886`. An already-running
+container keeps its existing published port until it is recreated with the
+updated Compose configuration. After deployment, verify that:
 
-- `gpu-housekeeper` is reachable on port `8090`,
 - `/health` returns `ok`,
 - `/runtime` reports `ollama`, `comfyui`, and `katago`,
 - `/queue` is empty when idle.
@@ -512,7 +513,7 @@ The first live pair is configured symmetrically:
 GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
 
 # swac
-GPU_HOUSEKEEPER_PEERS='mriczo=http://mriczo:8090'
+GPU_HOUSEKEEPER_PEERS='mriczo=http://mriczo:18886'
 ```
 
 Forwarded requests carry `forwardDepth` and `visitedHosts`. A peer executes a
@@ -523,10 +524,10 @@ failure never triggers an unsafe duplicate submission.
 Useful live checks:
 
 ```sh
-curl -sS http://mriczo:8090/health
-curl -sS http://mriczo:8090/runtime
-curl -sS http://mriczo:8090/queue
-curl -sS http://mriczo:8090/snapshot
+curl -sS http://mriczo:18886/health
+curl -sS http://mriczo:18886/runtime
+curl -sS http://mriczo:18886/queue
+curl -sS http://mriczo:18886/snapshot
 ```
 
 Start a local worker against configured housekeeper:
@@ -539,7 +540,7 @@ For independent queued duties, the same worker can use a bounded coordinator:
 
 ```sh
 PYA_GPU_WORKER_CONCURRENCY=2 \
-PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 \
 node command/gpu_worker.mjs --world world --once
 ```
 
@@ -550,7 +551,7 @@ capacity, device and execution-slot evidence.
 Start with explicit environment:
 
 ```sh
-PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 node command/gpu_worker.mjs --world world
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 node command/gpu_worker.mjs --world world
 ```
 
 KataGo lifecycle examples:

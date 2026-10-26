@@ -92,10 +92,10 @@ test("text and vision models are loaded from declarative pya configuration", asy
 });
 
 test("housekeeper URL defaults to localhost for local providers and derives known remote ports", () => {
-  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://mriczo:8188" }), "http://mriczo:8090");
-  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://localhost:11434" }), "http://localhost:8090");
-  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://127.0.0.1:11434" }), "http://localhost:8090");
-  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://127.0.0.1:8081/v1" }), "http://localhost:8090");
+  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://mriczo:8188" }), "http://mriczo:18886");
+  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://localhost:11434" }), "http://localhost:18886");
+  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://127.0.0.1:11434" }), "http://localhost:18886");
+  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://127.0.0.1:8081/v1" }), "http://localhost:18886");
   assert.equal(resolveGpuHousekeeperUrl({ managerUrl: "http://gpu-manager:8090/" }), "http://gpu-manager:8090");
 });
 

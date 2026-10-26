@@ -468,7 +468,7 @@ function webGpuHousekeeperUrl() {
   return String(
     process.env.PYA_GPU_HOUSEKEEPER_URL
       || resolveConfigText("gpu housekeeper url")
-      || "http://localhost:8090"
+      || "http://localhost:18886"
   ).replace(/\/+$/u, "");
 }
 

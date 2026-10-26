@@ -19,11 +19,12 @@ HOUSEKEEPER_LABEL="com.pyash.gpu-housekeeper"
 HOUSEKEEPER_PLIST="$LAUNCH_AGENTS/$HOUSEKEEPER_LABEL.plist"
 USER_DOMAIN="user/$(id -u)"
 HOUSEKEEPER_PID_FILE="$INSTALL_DIR/housekeeper.pid"
+HOUSEKEEPER_PORT="${GPU_HOUSEKEEPER_PORT:-18886}"
 BIND_HOST="${GPU_HOUSEKEEPER_BIND_HOST:-127.0.0.1}"
 if [[ "$BIND_HOST" == *:* ]]; then
-  HOUSEKEEPER_URL="http://[$BIND_HOST]:8090"
+  HOUSEKEEPER_URL="http://[$BIND_HOST]:$HOUSEKEEPER_PORT"
 else
-  HOUSEKEEPER_URL="http://$BIND_HOST:8090"
+  HOUSEKEEPER_URL="http://$BIND_HOST:$HOUSEKEEPER_PORT"
 fi
 
 mkdir -p "$HOME/Applications" "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$LAUNCH_AGENTS"
@@ -52,6 +53,7 @@ LOG_DIR="$LOG_DIR" \
 HOME_DIR="$HOME" \
 HOUSEKEEPER_LABEL="$HOUSEKEEPER_LABEL" \
 BIND_HOST="$BIND_HOST" \
+BIND_PORT="$HOUSEKEEPER_PORT" \
 /usr/bin/python3 - <<'PY'
 import json
 import os
@@ -60,6 +62,7 @@ import plistlib
 home = os.environ["HOME_DIR"]
 housekeeper_label = os.environ["HOUSEKEEPER_LABEL"]
 bind_host = os.environ["BIND_HOST"]
+bind_port = os.environ["BIND_PORT"]
 state_dir = os.environ["STATE_DIR"]
 log_dir = os.environ["LOG_DIR"]
 server_path = os.environ["SERVER_PATH"]
@@ -91,7 +94,7 @@ housekeeper = {
     "ProgramArguments": [
         "/usr/bin/python3", server_path,
         "--host", bind_host, "--also-host", "127.0.0.1",
-        "--port", "8090", "--host-id", "macstudio"
+        "--port", bind_port, "--host-id", "macstudio"
     ],
     "RunAtLoad": True,
     "KeepAlive": True,
@@ -146,17 +149,17 @@ fi
 
 for _ in $(seq 1 60); do
   if curl -fsS http://127.0.0.1:11434/api/version >/dev/null 2>&1 \
-    && curl -fsS http://127.0.0.1:8090/health >/dev/null 2>&1 \
-    && lsof -nP -iTCP:8090 -sTCP:LISTEN 2>/dev/null | grep -F "$BIND_HOST" >/dev/null; then
+    && curl -fsS "http://127.0.0.1:$HOUSEKEEPER_PORT/health" >/dev/null 2>&1 \
+    && lsof -nP -iTCP:"$HOUSEKEEPER_PORT" -sTCP:LISTEN 2>/dev/null | grep -F "$BIND_HOST" >/dev/null; then
     break
   fi
   sleep 1
 done
 
 curl -fsS http://127.0.0.1:11434/api/version >/dev/null
-curl -fsS http://127.0.0.1:8090/health >/dev/null
-if ! lsof -nP -iTCP:8090 -sTCP:LISTEN 2>/dev/null | grep -F "$BIND_HOST" >/dev/null; then
-  echo "Housekeeper did not listen on the configured address: $BIND_HOST:8090" >&2
+curl -fsS "http://127.0.0.1:$HOUSEKEEPER_PORT/health" >/dev/null
+if ! lsof -nP -iTCP:"$HOUSEKEEPER_PORT" -sTCP:LISTEN 2>/dev/null | grep -F "$BIND_HOST" >/dev/null; then
+  echo "Housekeeper did not listen on the configured address: $BIND_HOST:$HOUSEKEEPER_PORT" >&2
   tail -40 "$LOG_DIR/housekeeper.log" "$LOG_DIR/housekeeper.error.log" >&2 2>/dev/null || true
   exit 1
 fi
