@@ -474,6 +474,7 @@ def capacity_poll_seconds() -> float:
 def capacity_waitable_error(error: BaseException) -> bool:
   message = normalize_text(error).lower()
   return any(token in message for token in (
+    "gpu capacity temporarily unavailable",
     "gpu capacity remains insufficient",
     "free vram is insufficient",
     "telemetry unavailable",
@@ -2043,6 +2044,7 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
   process_view = managed_gpu_processes(runtime_registry)
   target_runtime = normalize_text(job.get("runtimeName")).lower()
   candidates = []
+  waiting_for_activity = False
   for runtime_name in sorted(runtime_registry.keys()):
     if runtime_name == target_runtime:
       continue
@@ -2059,6 +2061,8 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
       continue
     activity = observe_runtime_activity(runtime_name, entry)
     if activity.get("state") != "idle":
+      if activity.get("state") in {"active", "cooldown"}:
+        waiting_for_activity = True
       common["candidateDiagnostics"].append({
         "runtimeName": runtime_name,
         "state": activity.get("state") or "unknown",
@@ -2092,6 +2096,10 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
   if free_before + reclaimable >= required:
     common["decision"] = "reclaim-available"
     common["reason"] = "idle managed runtimes can be discharged through provider hooks"
+  elif waiting_for_activity:
+    common["decision"] = "insufficient"
+    common["waitForCapacity"] = True
+    common["reason"] = "managed GPU runtime is active or within its safe idle grace"
   else:
     common["decision"] = "insufficient"
     common["reason"] = "free VRAM plus safely reclaimable idle VRAM is insufficient"
@@ -2265,6 +2273,8 @@ def ensure_capacity_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
     return plan
   if decision == "telemetry-unavailable":
     raise RuntimeError(plan.get("reason") or "GPU capacity telemetry unavailable")
+  if decision == "insufficient" and plan.get("waitForCapacity") is True:
+    raise RuntimeError(f"GPU capacity temporarily unavailable (insufficient VRAM): {plan.get('reason') or 'waiting for safe managed-runtime handoff'}")
   if decision in {"invalid-device", "request-exceeds-device", "discharge-disabled", "insufficient"}:
     raise RuntimeError(plan.get("reason") or "GPU capacity is insufficient")
 
