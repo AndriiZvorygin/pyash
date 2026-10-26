@@ -55,6 +55,23 @@ test("vocab_suggest recognizes repository accepted compounds for direct token ch
   assert.match(lines.join("\n"), /blueprint: found compound blue \+ print -> plun trat \(accepted-curated\)/u);
 });
 
+test("vocab_suggest reports the accepted include compound", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["include"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.deepEqual(result.foundCompounds, [{
+    target: "include",
+    components: ["inside", "containing"],
+    pyash: ["lwak", "hzan"],
+    status: "accepted-curated",
+    locations: ["input"]
+  }]);
+  assert.match(lines.join("\n"), /include: found compound inside \+ containing -> lwak hzan \(accepted-curated\)/u);
+});
+
 test("vocab_suggest exposes the accepted brain compound from Chinese evidence", async () => {
   const lines = [];
   const result = await runVocabSuggest(["brainstorm"], {
