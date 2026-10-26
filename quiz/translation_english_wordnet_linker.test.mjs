@@ -133,6 +133,8 @@ test("WordNet linker prompt stays bounded to supplied senses and inventory", () 
   });
   const prompt = buildEnglishWordNetSenseLinkPrompt({ records, inventory });
   assert.match(prompt, /bounded Pyash WordNet sense-linking worker/u);
+  assert.match(prompt, /CONTEXT SELECTION IS REQUIRED/u);
+  assert.match(prompt, /reject unrelated senses even when they have valid inventory mappings/u);
   assert.match(prompt, /v:beta/u);
   assert.match(prompt, /emotionally.*xyek/u);
   assert.doesNotMatch(prompt, /ollama/u);
