@@ -12,7 +12,7 @@ import { runGpuWorkerOnce } from "../program/runtime/gpu/worker.mjs";
 import { readGpuHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 
 async function run(line) {
-  return gpu(parse(line));
+  return interpret(parse(line));
 }
 
 function setWorldRoot(worldRoot) {
@@ -30,7 +30,8 @@ test("gpu mind status and await follow durable duty lifecycle through worker", a
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  const queued = await run('su name gpu handle one ob text "teach fractions briefly" to name llama3.2 vyah start future be gpu mind do');
+  const spec = JSON.stringify({ kind: "ollama-generate", model: "llama3.2", prompt: "teach fractions briefly" });
+  const queued = await run(`su name gpu handle one ob text ${JSON.stringify(spec)} vyah start future be gpu mind do`);
   assert.equal(queued?.be, "duty");
   assert.deepEqual(queued?.vyah?.ve?.values, ["start", "success"]);
   assert.equal(queued?.ob?.text, "queued");
@@ -66,6 +67,7 @@ test("gpu mind status and await follow durable duty lifecycle through worker", a
   assert.equal(submitted[0]?.profileName, "llama3.2");
   assert.equal(submitted[0]?.jobSpec?.kind, "ollama-generate");
   assert.equal(submitted[0]?.jobSpec?.prompt, "teach fractions briefly");
+  assert.equal(submitted[0]?.jobSpec?.resourceRequest?.vramRequiredMb, 12000);
 
   const state = await readGpuHandleStatus(worldRoot, "gpu handle one");
   assert.equal(state?.status, "success");
@@ -106,6 +108,44 @@ test("interpreted GPU await stays with the GPU lifecycle handler", async () => {
   assert.equal(awaited?.ob?.text, "success");
   assert.equal(awaited?.vyah?.ve?.values?.[0], "await");
   assert.equal(awaited?.result?.text, '{"response":"interpreted result"}');
+});
+
+test("gpu mind preserves an explicit VRAM request in the durable Housekeeper envelope", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-mind-vram-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+
+  const spec = JSON.stringify({
+    kind: "ollama-generate",
+    model: "qwen3.5:9b",
+    prompt: "Return one short greeting.",
+    resourceRequest: { vramRequiredMb: 16000, ramRequiredMb: 4000 }
+  });
+  await run(`su name gpu mind explicit ob text ${JSON.stringify(spec)} vyah start future be gpu mind do`);
+
+  const submitted = [];
+  await runGpuWorkerOnce({
+    worldRoot,
+    adapter: {
+      async submitJob(job) {
+        submitted.push(job);
+        return { remoteJobId: "remote-explicit-vram" };
+      },
+      async getJobStatus() {
+        return {
+          status: "success",
+          message: "ok",
+          result: { response: "Hello." },
+          finishedAt: new Date().toISOString()
+        };
+      }
+    },
+    maxPolls: 2
+  });
+
+  assert.equal(submitted[0]?.jobSpec?.resourceRequest?.vramRequiredMb, 16000);
+  assert.equal(submitted[0]?.jobSpec?.resourceRequest?.ramRequiredMb, 4000);
 });
 
 
