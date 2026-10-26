@@ -2,26 +2,14 @@ import fs from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  lowerTranslationToPyac,
-  renderTranslationPipelinePya,
-  translateDocument
-} from "../program/verbs/exchange/translation/translation_pipeline.mjs";
-import {
-  createDefaultQueuedMindTranslationVocabularySubmitter,
-  reconcileTranslationVocabularyCandidates,
-  submitTranslationVocabularyCandidates
-} from "../program/verbs/exchange/translation/translation_vocabulary_queue.mjs";
+import { createDefaultQueuedMindTranslationVocabularySubmitter } from "../program/verbs/exchange/translation/translation_vocabulary_queue.mjs";
 import { loadCoverage } from "./compound_coverage.mjs";
 import {
   COMPOUND_TRANSLATION_LANGUAGES,
-  createDefaultQueuedCompoundTranslator,
-  ensureCompoundTranslations,
-  selectCompoundDemands
+  createDefaultQueuedCompoundTranslator
 } from "../program/verbs/exchange/translation/compound_translation_cache.mjs";
-import { refineEnglishWordNet } from "../program/verbs/exchange/translation/english_wordnet_refinery.mjs";
 import { createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter } from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
-import { writeVliwDatabaseFiles } from "../program/library/vliw/index.mjs";
+import { runTranslationSourceToVliwRefinery } from "../program/verbs/exchange/translation/translation_to_vliw_refinery.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
@@ -48,7 +36,14 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
   queueVocabulary = null,
   compoundTranslation = null,
   wordnetRefinery = null,
-  awaitVocabulary = null
+  awaitVocabulary = null,
+  runId = process.env.PYA_RUN_ID || null,
+  checkpointIndex,
+  checkpointEnabled = true,
+  retryConfig,
+  onEvoke,
+  onCheckpoint,
+  onRetry
 } = {}) {
   if (args.length !== 5) throw usageError("translate_document requires language, source, translation catalog, PyAC catalog, and PyAC pack");
   const [language, sourcePath, translationPath, catalogPath, packPath] = args;
@@ -59,95 +54,36 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     pack: resolve(packPath)
   };
   const source = fs.readFileSync(paths.source, "utf8");
-  const translation = await translateDocument({
+  const output = await runTranslationSourceToVliwRefinery({
     language,
-    text: source,
-    locator: paths.source
+    source,
+    locator: paths.source,
+    sourcePath: paths.source,
+    paths: {
+      translation: paths.translation,
+      catalog: paths.catalog,
+      pack: paths.pack
+    },
+    queueVocabulary,
+    awaitVocabulary,
+    wordnetRefinery,
+    runId,
+    checkpointIndex,
+    checkpointEnabled,
+    retryConfig,
+    onEvoke,
+    onCheckpoint,
+    onRetry,
+    compoundTranslation: compoundTranslation
+      ? {
+        ...compoundTranslation,
+        languages: compoundTranslation.languages ?? COMPOUND_TRANSLATION_LANGUAGES
+      }
+      : null
   });
-  const wordnet = wordnetRefinery && String(language).toLowerCase() === "english"
-    ? await refineEnglishWordNet({
-      result: translation,
-      submit: wordnetRefinery.submit,
-      resources: wordnetRefinery.resources,
-      config: wordnetRefinery.config,
-      compoundRecords: wordnetRefinery.compoundRecords,
-      sourceTerms: wordnetRefinery.sourceTerms,
-      awaitHandle: wordnetRefinery.awaitHandle
-    })
-    : null;
-  const queued = queueVocabulary
-    ? await submitTranslationVocabularyCandidates({
-      result: translation,
-      sourceText: source,
-      submit: queueVocabulary
-    })
-    : { result: translation, submitted: false, submittedCount: 0, handleId: "" };
-  const settledVocabulary = queued.submitted && typeof awaitVocabulary === "function"
-    ? await reconcileTranslationVocabularyCandidates({
-      result: queued.result,
-      sourceText: source,
-      candidates: queued.candidates,
-      handleId: queued.handleId,
-      awaitHandle: awaitVocabulary,
-      submit: queueVocabulary
-    })
-    : null;
-  const translated = settledVocabulary?.result ?? queued.result;
-  const finalTranslation = wordnet
-    ? { ...translated, wordnet }
-    : translated;
-  const compoundDemands = compoundTranslation
-    ? selectCompoundDemands(source, compoundTranslation.records ?? [])
-    : [];
-  const compoundCache = compoundTranslation
-    ? await ensureCompoundTranslations({
-      compounds: compoundDemands,
-      languages: compoundTranslation.languages ?? COMPOUND_TRANSLATION_LANGUAGES,
-      cachePath: compoundTranslation.cachePath,
-      translate: compoundTranslation.translate,
-      context: finalTranslation.records.map((record) => record.source.text),
-      onEvent: compoundTranslation.onEvent
-    })
-    : null;
-  fs.writeFileSync(paths.translation, renderTranslationPipelinePya(finalTranslation), "utf8");
-  const database = lowerTranslationToPyac(finalTranslation);
-  writeVliwDatabaseFiles(database, {
-    catalogPath: paths.catalog,
-    packPath: paths.pack
-  });
-  const result = {
-    command: "translate-document",
-    language: finalTranslation.language,
-    source: paths.source,
-    translation: paths.translation,
-    catalog: paths.catalog,
-    pack: paths.pack,
-    records: finalTranslation.records.length,
-    resolved: finalTranslation.counts.resolved,
-    provisional: finalTranslation.counts.provisional,
-    unresolved: finalTranslation.counts.unresolved,
-    vocabularyCandidates: finalTranslation.vocabularyCandidates.length,
-    vocabularySubmitted: queued.submittedCount,
-    vocabularyQueueHandle: queued.handleId || null,
-    vocabularyOutcome: settledVocabulary?.queue?.outcome ?? queued.result.vocabularyQueue?.status ?? null,
-    wordnetSenseRecords: wordnet?.counts.senses ?? 0,
-    wordnetLeafLinks: wordnet?.counts.leaf ?? 0,
-    wordnetDeterministicLinks: wordnet?.counts.deterministic ?? 0,
-    wordnetPending: wordnet?.queuePending ?? 0,
-    wordnetQueueHandle: wordnet?.queueHandle ?? null,
-    wordnetQueueHandles: wordnet?.queues?.map((queue) => queue.handleId) ?? [],
-    compoundRequests: compoundCache?.requested ?? 0,
-    compoundCacheHits: compoundCache?.counts.hits ?? 0,
-    compoundTranslations: compoundCache?.counts.translated ?? 0,
-    compoundTranslationPartials: compoundCache?.counts.partial ?? 0,
-    compoundTranslationFailures: compoundCache?.counts.failed ?? 0,
-    compoundTranslationCache: compoundCache?.cachePath ?? null,
-    executable: database.catalog.executableCount,
-    unsupported: database.catalog.unsupportedCount,
-    packHash: database.catalog.packHash
-  };
+  const { result } = output;
   report(JSON.stringify(result, null, 2));
-  return { translation: finalTranslation, database, compoundCache, result };
+  return output;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

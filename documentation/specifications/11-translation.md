@@ -14,6 +14,35 @@ Define the translation pipeline for Pyash text ↔ natural language, including:
 
 This spec documents current behavior so future changes remain consistent and low-churn.
 
+## 1.1 Source-to-VLIW refinery
+
+The end-to-end document path is declared in
+`program/verbs/exchange/translation/translation_to_vliw_refinery.pya` under the
+`translation source vliw` refinery. Its stages carry named map outputs through the
+normal refinery runner:
+
+1. source input and sentence segmentation,
+2. source-language sentence translation,
+3. WordNet/context refinement when English senses remain ambiguous,
+4. vocabulary review and lazy compound refinement,
+5. translation-catalog rendering,
+6. Pyac/VLIW lowering,
+7. catalog and pack writes.
+
+`command/translate_document.mjs` invokes this refinery through
+`program/verbs/exchange/translation/translation_to_vliw_refinery.mjs`. The
+JavaScript adapter owns resource/index access, asynchronous Housekeeper work,
+and VLIW file writing; the `.pya` file owns stage names, typed map contracts,
+and dependency edges. The final artifacts remain the translation `.pya`
+catalog, the VLIW catalog `.pya`, and the binary `.pyac` pack supplied by the
+command's output paths.
+
+The WordNet linker is a refinement stage inside this source-to-VLIW flow. It
+selects only supplied inventory entries and retains unresolved senses when the
+bounded queue has no complete decision. The translation catalog remains the
+durable source record, while the VLIW catalog and pack contain only sentences
+that lower successfully.
+
 English source analysis is deterministic-first. Grammar surfaces, conservative morphology,
 existing Pyash atoms/compounds, and sentence constructions are applied before semantic review.
 The read-only WordNet evidence resource is configured in

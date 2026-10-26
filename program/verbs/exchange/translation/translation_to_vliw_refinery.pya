@@ -1,0 +1,11 @@
+su name translation source vliw be refinery def
+su name read source to name map source input be translation stage do
+su name segment source from name map source input to name map source segments be translation stage do
+su name translate sentences from ve name map source input name map source segments to name map translated document be translation stage do
+su name refine senses from name map translated document to name map sensed document be translation stage do
+su name review vocabulary from name map sensed document to name map reviewed document be translation stage do
+su name refine compounds from name map reviewed document to name map enriched document be translation stage do
+su name render translation from name map enriched document to name map translation artifact be translation stage do
+su name lower vliw from name map translation artifact to name map vliw database be translation stage do
+su name write outputs from ve name map vliw database name map translation artifact to name map output manifest be translation stage do
+prah

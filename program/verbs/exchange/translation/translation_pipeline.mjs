@@ -280,9 +280,10 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
   };
 }
 
-export async function translateDocument({
+export async function translateDocumentSegments({
   language,
   text: source,
+  segments,
   locator = "",
   contextRadius = 1,
   verify,
@@ -292,9 +293,9 @@ export async function translateDocument({
   const normalizedLanguage = normalizeLanguage(language);
   if (!normalizedLanguage) throw invalid("translation requires an explicit language");
   if (typeof source !== "string") throw invalid("translation requires source text");
+  if (!Array.isArray(segments)) throw invalid("translation requires sentence segments");
   const adapter = adapterResolver(normalizedLanguage);
   if (!adapter) throw invalid("no translation adapter is registered for the source language", { language: normalizedLanguage });
-  const segments = segmentTranslationDocument(source);
   const sourceHash = hash(source);
   const resolvedResourceHashes = resourceHashes ?? (
     normalizedLanguage === "english" ? await loadEnglishResourceHashes() : {}
@@ -337,6 +338,27 @@ export async function translateDocument({
     provisional: records.filter((record) => record.status === "provisional"),
     unresolved: records.filter((record) => record.status === "unresolved")
   };
+}
+
+export async function translateDocument({
+  language,
+  text: source,
+  locator = "",
+  contextRadius = 1,
+  verify,
+  resourceHashes,
+  adapterResolver = resolveTranslationSource
+} = {}) {
+  return translateDocumentSegments({
+    language,
+    text: source,
+    segments: segmentTranslationDocument(source),
+    locator,
+    contextRadius,
+    verify,
+    resourceHashes,
+    adapterResolver
+  });
 }
 
 async function loadEnglishResourceHashes() {
