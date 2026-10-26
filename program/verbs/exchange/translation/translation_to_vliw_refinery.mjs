@@ -12,6 +12,7 @@ import {
   translateDocumentSegments
 } from "./translation_pipeline.mjs";
 import {
+  applyEnglishWordNetSenseAttachmentLinks,
   appendEnglishWordNetAttachmentCandidates,
   buildEnglishWordNetSelectedBridgeIndex,
   refineEnglishWordNet
@@ -25,6 +26,9 @@ import {
   ensureCompoundTranslations,
   selectCompoundDemands
 } from "./compound_translation_cache.mjs";
+import {
+  translationOccurrenceKey
+} from "./translation_occurrence.mjs";
 
 export const TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME = "translation source vliw";
 export const TRANSLATION_SOURCE_TO_VLIW_REFINERY_URL = new URL(
@@ -45,8 +49,30 @@ function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
 }
 
-function occurrenceKey(recordId, surface) {
-  return `${text(recordId)}\u0000${text(surface).toLowerCase()}`;
+function occurrenceKey(record) {
+  return translationOccurrenceKey({
+    sourceRecordId: record?.sourceRecordId,
+    tokenIndex: record?.tokenIndex
+  }) || record?.occurrenceId || `${text(record?.sourceRecordId)}\u0000${text(record?.surface).toLowerCase()}`;
+}
+
+function occurrenceCoverageOverrides(records = [], { coverageType = "semantic-wordnet" } = {}) {
+  const overrides = new Map();
+  for (const record of records) {
+    const key = occurrenceKey(record);
+    const target = text(record?.link?.target || record?.targetEnglish || record?.surface).toLowerCase();
+    const sequence = Array.isArray(record?.link?.pyashSequence)
+      ? record.link.pyashSequence
+      : record?.pyashSequence;
+    if (!key || !target || !Array.isArray(sequence) || sequence.length === 0) continue;
+    overrides.set(key, {
+      coverageType,
+      canonicalEnglish: target,
+      lemma: target,
+      pyashSequence: [...sequence]
+    });
+  }
+  return overrides;
 }
 
 function mapFact(name, map) {
@@ -85,8 +111,20 @@ async function refineSenses(context, translated) {
   if (!context.wordnetRefinery || translated.language !== "english") {
     return { translation: translated, wordnet: null };
   }
+  const sourceTranslation = translated.senseStateFormat
+    ? translated
+    : await translateDocumentSegments({
+      language: translated.language,
+      text: context.source,
+      segments: context.sourceSegments,
+      locator: translated.locator,
+      contextRadius: context.contextRadius,
+      verify: context.verify,
+      resourceHashes: translated.resourceHashes,
+      adapterResolver: context.adapterResolver
+    });
   const wordnet = await refineEnglishWordNet({
-    result: translated,
+    result: sourceTranslation,
     submit: context.wordnetRefinery.submit,
     resources: context.wordnetRefinery.resources,
     config: context.wordnetRefinery.config,
@@ -96,30 +134,33 @@ async function refineSenses(context, translated) {
     maxRepairAttempts: context.wordnetRefinery.maxRepairAttempts
   });
   const wordnetBridges = buildEnglishWordNetSelectedBridgeIndex(wordnet.records);
-  const acceptedRecordKeys = new Set(wordnet.records
-    .filter((record) => ["accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm"].includes(record.status))
-    .map((record) => occurrenceKey(record.sourceRecordId, record.surface)));
-  const blockedRecordKeys = new Set(wordnet.records
-    .filter((record) => record.status === "error")
-    .map((record) => occurrenceKey(record.sourceRecordId, record.surface)));
-  const hasAcceptedLinks = wordnet.records.some((record) => [
+  const acceptedRecords = wordnet.records.filter((record) => [
     "accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm"
   ].includes(record.status));
+  const occurrenceOverrides = occurrenceCoverageOverrides(acceptedRecords);
+  const acceptedRecordKeys = new Set(wordnet.records
+    .filter((record) => acceptedRecords.includes(record))
+    .map(occurrenceKey));
+  const blockedRecordKeys = new Set(wordnet.records
+    .filter((record) => record.status === "error")
+    .map(occurrenceKey));
+  const hasAcceptedLinks = acceptedRecords.length > 0;
   const closedLoopTranslation = hasAcceptedLinks
     ? await translateDocumentSegments({
-      language: translated.language,
+      language: sourceTranslation.language,
       text: context.source,
       segments: context.sourceSegments,
-      locator: translated.locator,
+      locator: sourceTranslation.locator,
       contextRadius: context.contextRadius,
       verify: context.verify,
-      resourceHashes: translated.resourceHashes,
+      resourceHashes: sourceTranslation.resourceHashes,
       adapterResolver: context.adapterResolver,
-      wordnetBridges
+      wordnetBridges,
+      occurrenceOverrides
     })
-    : translated;
+    : sourceTranslation;
   const filteredVocabulary = (closedLoopTranslation.vocabularyCandidates ?? []).filter((candidate) => {
-    const key = occurrenceKey(candidate.sourceRecordId, candidate.surface);
+    const key = occurrenceKey(candidate);
     return !blockedRecordKeys.has(key) && !acceptedRecordKeys.has(key);
   });
   const attachedTranslation = appendEnglishWordNetAttachmentCandidates({
@@ -188,7 +229,8 @@ async function reviewVocabulary(context, translated) {
     }
   }
   const reviewedTranslation = settled?.result ?? queued.result;
-  const accepted = reviewedTranslation.vocabularyCandidates
+  const linkedTranslation = applyEnglishWordNetSenseAttachmentLinks(reviewedTranslation);
+  const accepted = linkedTranslation.vocabularyCandidates
     .filter((candidate) => candidate.status === "accepted-llm"
       && Array.isArray(candidate.pyashSequence)
       && candidate.pyashSequence.length > 0);
@@ -200,29 +242,31 @@ async function reviewVocabulary(context, translated) {
       pyashSequence: [...candidate.pyashSequence]
     }
   ]));
+  const occurrenceOverrides = occurrenceCoverageOverrides(accepted, { coverageType: "llm" });
   const closedLoopTranslation = accepted.length > 0
     ? await translateDocumentSegments({
-      language: reviewedTranslation.language,
+      language: linkedTranslation.language,
       text: context.source,
       segments: context.sourceSegments,
-      locator: reviewedTranslation.locator,
+      locator: linkedTranslation.locator,
       contextRadius: context.contextRadius,
       verify: context.verify,
-      resourceHashes: reviewedTranslation.resourceHashes,
+      resourceHashes: linkedTranslation.resourceHashes,
       adapterResolver: context.adapterResolver,
-      wordnetBridges: reviewedTranslation.wordnet
-        ? buildEnglishWordNetSenseBridgeIndex(
-          reviewedTranslation.wordnet.records.filter((record) => record.status === "accepted-llm")
+      wordnetBridges: linkedTranslation.wordnet
+        ? buildEnglishWordNetSelectedBridgeIndex(
+          linkedTranslation.wordnet.records.filter((record) => record.status === "accepted-llm")
         )
         : null,
-      coverageOverrides
+      coverageOverrides,
+      occurrenceOverrides
     })
     : reviewedTranslation;
   return {
     translation: {
       ...closedLoopTranslation,
-      vocabularyCandidates: reviewedTranslation.vocabularyCandidates,
-      ...(reviewedTranslation.wordnet ? { wordnet: reviewedTranslation.wordnet } : {})
+      vocabularyCandidates: linkedTranslation.vocabularyCandidates,
+      ...(linkedTranslation.wordnet ? { wordnet: linkedTranslation.wordnet } : {})
     },
     queued,
     settled
@@ -479,7 +523,7 @@ export async function runTranslationSourceToVliwRefinery({
     onStage
   };
 
-  await runRefinery({
+  const refineryResult = await runRefinery({
     name: TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
     interpret: (sentence) => runStage(sentence, context),
     runId,
@@ -490,6 +534,10 @@ export async function runTranslationSourceToVliwRefinery({
     onCheckpoint,
     onRetry
   });
+
+  if (refineryResult?.mood === "ya" && refineryResult?.be === "error") {
+    throw new Error(refineryResult.ob?.text || "translation refinery failed");
+  }
 
   const manifest = mapValue("output manifest");
   const translation = context.translation ?? manifest.translation;

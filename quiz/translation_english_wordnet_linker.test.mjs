@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
 import {
   applyEnglishWordNetSenseLinkResponse,
+  buildEnglishWordNetSenseAnchorCandidates,
   buildEnglishWordNetSenseLinkInventory,
   buildEnglishWordNetSenseLinkPrompt,
   buildEnglishWordNetSenseLinkRecords,
@@ -86,6 +87,41 @@ test("WordNet linker creates stable one-record-per-sense batches", () => {
   assert.equal(records[2].status, "review");
   assert.equal(records[2].candidates.length, 0);
   assert.equal(new Set(records.map((record) => record.id)).size, 3);
+});
+
+test("WordNet sense anchors use covered relation targets only", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:action:action",
+      pos: "n",
+      synset: "action",
+      senseKey: "action",
+      lemma: "action",
+      gloss: "something done"
+    }, {
+      id: "n:activity:activity",
+      pos: "n",
+      synset: "activity",
+      senseKey: "activity",
+      lemma: "activity",
+      gloss: "an action"
+    }],
+    relations: [{
+      source: "n:action",
+      target: "n:activity",
+      relation: "hypernym"
+    }]
+  });
+  const anchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "action", lemmas: ["action"] },
+    wordnetIndex: index,
+    resolveWord: (word) => word === "activity"
+      ? { canonicalEnglish: "activity", pyashSequence: ["twot"] }
+      : null
+  });
+  assert.deepEqual(anchors.map((anchor) => anchor.target), ["activity"]);
+  assert.deepEqual(anchors[0].pyashSequence, ["twot"]);
+  assert.match(anchors[0].evidence, /hypernym/u);
 });
 
 test("WordNet linker accepts a leaf node mapped to an existing compound", () => {
@@ -599,6 +635,7 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     selectionFormat: "english-wordnet-sense-selection-v1",
     selectionMaxOutputTokens: 512,
     edgeMaxDegree: 1,
+    anchorMaxCandidates: 8,
     modelCard: {
       model: "qwen3.5:9b",
       provider: "ollama",

@@ -3,10 +3,13 @@ import { createHash } from "node:crypto";
 import pyashWords from "../../../library/pyashWords.json" with { type: "json" };
 import { loadEnglishGrammarCatalog } from "./english_grammar.mjs";
 import { extractBoundedJsonObject } from "./english_verification.mjs";
+import { translationOccurrenceKey } from "./translation_occurrence.mjs";
 
 export const TRANSLATION_VOCABULARY_QUEUE_INTENT = "mind";
 export const TRANSLATION_VOCABULARY_QUEUE_LANE = "durable";
-export const TRANSLATION_VOCABULARY_MAX_CANDIDATES_PER_DUTY = 2;
+export const TRANSLATION_VOCABULARY_QUEUE_FORMAT = "translation-vocabulary-v6";
+export const TRANSLATION_VOCABULARY_MAX_CANDIDATES_PER_DUTY = 1;
+export const TRANSLATION_VOCABULARY_MAX_OUTPUT_TOKENS = 512;
 
 const FUNCTION_WORDS = new Set([
   "a", "an", "and", "are", "as", "be", "but", "by", "can", "for", "from", "in",
@@ -15,7 +18,9 @@ const FUNCTION_WORDS = new Set([
 
 const SEMANTIC_CORE_GLOSSES = new Set([
   "action", "activity", "body", "brain", "care", "cause", "change", "event", "feeling", "heart",
-  "idea", "life", "mind", "object", "reaction", "thing", "type", "use", "work", "world"
+  "idea", "life", "mind", "object", "reaction", "thing", "type", "use", "work", "world",
+  "appear", "consist", "display", "emotion", "feature", "form", "include", "kind", "look", "love",
+  "observe", "pleasure", "process", "quality", "require", "see", "sort", "state"
 ]);
 
 function invalid(message, details = {}) {
@@ -41,6 +46,14 @@ function hash(value) {
 
 function candidateIdentity(candidate) {
   return text(candidate?.id) || `${text(candidate?.surface)}:${text(candidate?.sourceRecordId)}`;
+}
+
+function candidateOccurrenceKey(candidate) {
+  return text(candidate?.occurrenceId)
+    || translationOccurrenceKey({
+      sourceRecordId: candidate?.sourceRecordId,
+      tokenIndex: candidate?.tokenIndex
+    });
 }
 
 function normalizedWord(value) {
@@ -77,6 +90,46 @@ function inventoryScore(entry, roots) {
   return exact * 100 + related * 10 + simple;
 }
 
+function candidateAnchorOptions(candidate, inventory) {
+  const sense = candidate?.sense && typeof candidate.sense === "object" ? candidate.sense : {};
+  const hasSelectedSense = Boolean(text(candidate?.senseId) || text(sense.synset));
+  const relationAnchors = new Map((candidate?.anchorCandidates ?? [])
+    .filter((anchor) => text(anchor?.target))
+    .map((anchor) => [normalizedWord(anchor.target), anchor]));
+  const senseRoots = new Set([
+    ...(Array.isArray(sense.lemmas) ? sense.lemmas.flatMap(wordRoots) : [])
+  ]);
+  const roots = new Set([
+    ...wordRoots(candidate?.surface),
+    ...senseRoots,
+    ...(Array.isArray(candidate?.context) ? candidate.context.flatMap(wordRoots) : [])
+  ]);
+  const rows = (inventory?.entries ?? [])
+    .filter((entry) => {
+      const english = normalizedWord(entry?.english);
+      return english && !FUNCTION_WORDS.has(english);
+    })
+    .map((entry) => {
+      const english = normalizedWord(entry.english);
+      const parts = english.split("_");
+      const direct = hasSelectedSense
+        ? false
+        : roots.has(english) || parts.some((part) => roots.has(part));
+      const semantic = SEMANTIC_CORE_GLOSSES.has(english);
+      const relation = relationAnchors.has(english);
+      return {
+        english: entry.english,
+        score: hasSelectedSense
+          ? relation ? 0 : direct ? 1 : 4
+          : direct ? 0 : semantic ? 1 : 2
+      };
+    })
+    .filter((entry) => !hasSelectedSense || entry.score < 4)
+    .sort((left, right) => left.score - right.score || normalizedWord(left.english).localeCompare(normalizedWord(right.english)))
+    .map((entry) => entry.english);
+  return [...new Set(rows)].slice(0, 24);
+}
+
 export function buildTranslationVocabularyInventory({ sourceText, candidates = [], grammarEntries = [] } = {}) {
   const roots = new Set(wordRoots(sourceText));
   for (const candidate of candidates) {
@@ -102,6 +155,15 @@ export function buildTranslationVocabularyInventory({ sourceText, candidates = [
     ))
     .slice(0, 2800)
     .map((entry) => ({ english: entry.en, pyash: entry.pya }));
+  const seenEntries = new Set(entries.map((entry) => `${normalizedWord(entry.english)}\u0000${sequence(entry.pyash).join(" ")}`));
+  for (const anchor of candidates.flatMap((candidate) => candidate?.anchorCandidates ?? [])) {
+    const english = text(anchor?.target);
+    const pyash = sequence(anchor?.pyashSequence);
+    const key = `${normalizedWord(english)}\u0000${pyash.join(" ")}`;
+    if (!english || pyash.length === 0 || seenEntries.has(key)) continue;
+    seenEntries.add(key);
+    entries.push({ english, pyash });
+  }
   const grammar = grammarEntries
     .filter((entry) => entry?.surface && Array.isArray(entry.pyashSequence))
     .map((entry) => ({
@@ -113,7 +175,17 @@ export function buildTranslationVocabularyInventory({ sourceText, candidates = [
   return { entries, grammar };
 }
 
-function promptCandidate(candidate) {
+function promptCandidate(candidate, inventory) {
+  const selectedSense = candidate?.sense && typeof candidate.sense === "object"
+    ? {
+      pos: text(candidate.sense.pos),
+      synset: text(candidate.sense.synset),
+      lemmas: Array.isArray(candidate.sense.lemmas)
+        ? candidate.sense.lemmas.slice(0, 4).map((lemma) => bounded(lemma, 32))
+        : [],
+      gloss: bounded(candidate.sense.gloss, 240)
+    }
+    : null;
   return {
     id: candidateIdentity(candidate),
     surface: text(candidate?.surface),
@@ -121,7 +193,47 @@ function promptCandidate(candidate) {
     context: Array.isArray(candidate?.context)
       ? candidate.context.slice(0, 3).map((sentence) => bounded(sentence, 280))
       : [],
-    evidence: bounded(candidate?.evidence, 900)
+    evidence: bounded(candidate?.evidence, 900),
+    ...(text(candidate?.senseId) ? { selectedSenseId: text(candidate.senseId) } : {}),
+    ...(selectedSense ? { selectedSense } : {}),
+    anchorOptions: candidateAnchorOptions(candidate, inventory),
+    ...(Array.isArray(candidate?.anchorCandidates) && candidate.anchorCandidates.length > 0
+      ? {
+        anchorEvidence: candidate.anchorCandidates.slice(0, 12).map((anchor) => ({
+          target: text(anchor?.target),
+          evidence: bounded(anchor?.evidence, 180)
+        }))
+      }
+      : {})
+  };
+}
+
+function responseFormatForCandidates(candidates, inventory) {
+  const targetOptions = [
+    "",
+    ...candidates.flatMap((candidate) => candidateAnchorOptions(candidate, inventory))
+  ];
+  return {
+    type: "object",
+    required: ["verdict", "candidates"],
+    additionalProperties: false,
+    properties: {
+      verdict: { type: "string", enum: ["complete", "partial", "uncertain"] },
+      candidates: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["id", "status", "targetEnglish", "rationale"],
+          additionalProperties: false,
+          properties: {
+            id: { type: "string" },
+            status: { type: "string", enum: ["accept", "reject", "uncertain"] },
+            targetEnglish: { type: "string", enum: [...new Set(targetOptions)] },
+            rationale: { type: "string", maxLength: 80 }
+          }
+        }
+      }
+    }
   };
 }
 
@@ -141,6 +253,11 @@ export function buildTranslationVocabularyVerificationPrompt({
     "You are the bounded Pyash vocabulary review worker.",
     "Review unresolved source terms from one translation document.",
     "Use the supplied context and evidence to choose one existing English anchor when the meaning is clear.",
+    "If a candidate includes selectedSense, that WordNet sense and its sentence are the authoritative meaning for this occurrence.",
+    "For selectedSense candidates, choose an anchor for that meaning; do not re-disambiguate the source word.",
+    "The targetEnglish anchor may differ from the source surface and WordNet lemma; choose the closest defensible supplied anchor.",
+    "For each candidate, choose targetEnglish from that candidate's anchorOptions, or use uncertain when none is defensible.",
+    "Do not choose a merely related context word when the selected sense does not support it; use uncertain instead.",
     "Keep derivational and grammatical endings separate from lexical heads.",
     "Do not reject a candidate merely because it is a common English word: these are terms the deterministic coverage pass could not resolve.",
     "Accept only an exact English anchor from the supplied inventory. Use uncertain when no anchor is defensible.",
@@ -148,14 +265,18 @@ export function buildTranslationVocabularyVerificationPrompt({
     "Include one result entry for every supplied candidate, in supplied order.",
     "Return the English anchor only. The host pipeline derives the Pyash sequence after validation.",
     "Never return Pyash tokens, pyashSequence, a whole phrase, or a concatenation of inventory rows.",
-    "Return exactly one JSON object with this shape:",
+    "Return exactly one JSON object with this shape. Put targetEnglish before rationale:",
     '{"verdict":"complete|partial|uncertain","candidates":[{"id":"...","status":"accept|reject|uncertain","targetEnglish":"...","rationale":"..."}]}',
     "Use only supplied candidate ids. Preserve uncertainty when the source evidence does not establish a mapping.",
-    "Return the object immediately. Use no hidden reasoning or preface. Keep each rationale under 120 characters.",
+    "Return the object immediately. Use no hidden reasoning or preface. Always include targetEnglish; use an empty string for uncertain or reject. Keep rationale under 80 characters.",
     `SOURCE LANGUAGE: ${text(language)}`,
     `SOURCE LOCATOR: ${text(locator) || "unavailable"}`,
     "SOURCE TEXT:",
-    sourceText,
+    candidates.length === 1
+      && text(candidates[0]?.kind) === "wordnet-sense-attachment"
+      && text(candidates[0]?.context?.[0])
+      ? text(candidates[0].context[0])
+      : sourceText,
     "AUTHORITATIVE ENGLISH ANCHOR INVENTORY (choose the exact English key; Pyash lowering is deterministic):",
     (inventory?.entries ?? []).map((entry) => JSON.stringify({ english: entry.english })).join("\n"),
     "AUTHORITATIVE ENGLISH GRAMMAR ANCHORS:",
@@ -165,7 +286,7 @@ export function buildTranslationVocabularyVerificationPrompt({
       position: entry.position
     })).join("\n"),
     "CANDIDATES:",
-    candidates.map(promptCandidate).map(JSON.stringify).join("\n")
+    candidates.map((candidate) => promptCandidate(candidate, inventory)).map(JSON.stringify).join("\n")
   ].join("\n");
 }
 
@@ -178,7 +299,7 @@ export function translationVocabularyQueueHandle({ sourceHash, candidates = [], 
   const suffix = Math.max(1, Math.trunc(Number(attempt) || 1)) > 1
     ? `-retry-${Math.max(1, Math.trunc(Number(attempt) || 1))}`
     : "";
-  return `translation-vocabulary-${hash(`${sourceHash}\u0000${identities}`).slice(0, 24)}${suffix}`;
+  return `${TRANSLATION_VOCABULARY_QUEUE_FORMAT}-${hash(`${TRANSLATION_VOCABULARY_QUEUE_FORMAT}\u0000${sourceHash}\u0000${identities}`).slice(0, 24)}${suffix}`;
 }
 
 function providerResponseText(value) {
@@ -251,6 +372,18 @@ export function parseTranslationVocabularyVerificationResponse(value, {
         links.push({ id, status: "uncertain", rationale: `automatic safe downgrade: ${boundedRationale}` });
         continue;
       }
+      const candidate = byId.get(id);
+      const allowedTargets = candidateAnchorOptions(candidate, inventory);
+      if (allowedTargets.length > 0 && !allowedTargets.includes(targetEnglish)) {
+        if (!recoverRows) return { valid: false, reason: "accepted candidate targetEnglish is outside its bounded anchor options" };
+        links.push({ id, status: "uncertain", rationale: `automatic safe downgrade: ${boundedRationale}` });
+        continue;
+      }
+      if ((text(candidate?.senseId) || text(candidate?.sense?.synset)) && allowedTargets.length === 0) {
+        if (!recoverRows) return { valid: false, reason: "selected-sense candidate has no bounded anchor options" };
+        links.push({ id, status: "uncertain", rationale: `automatic safe downgrade: ${boundedRationale}` });
+        continue;
+      }
       if (!match || pyashSequence.length === 0) {
         if (!recoverRows) return { valid: false, reason: "accepted candidate requires an inventory-backed targetEnglish" };
         links.push({ id, status: "uncertain", rationale: `automatic safe downgrade: ${boundedRationale}` });
@@ -291,17 +424,26 @@ export function applyTranslationVocabularyVerificationResponse(result, response)
     .map((candidate) => [candidate.id, candidate]));
   const records = (result.records ?? []).map((record) => {
     const recordCandidates = candidates.filter((candidate) => candidate.sourceRecordId === record.id);
-    const acceptedBySurface = new Map(recordCandidates
+    const acceptedByOccurrence = new Map(recordCandidates
       .filter((candidate) => accepted.has(candidate.id))
+      .map((candidate) => [candidateOccurrenceKey(candidate), candidate])
+      .filter(([key]) => key));
+    const acceptedBySurface = new Map(recordCandidates
+      .filter((candidate) => accepted.has(candidate.id) && !candidateOccurrenceKey(candidate))
       .map((candidate) => [text(candidate.surface).toLowerCase(), candidate]));
-    if (acceptedBySurface.size === 0) return { ...record };
-    const tokens = (record.tokens ?? []).map((token) => {
-      const candidate = acceptedBySurface.get(text(token.surface).toLowerCase());
+    if (acceptedByOccurrence.size === 0 && acceptedBySurface.size === 0) return { ...record };
+    const tokens = (record.tokens ?? []).map((token, tokenIndex) => {
+      const occurrence = token.occurrenceId
+        || translationOccurrenceKey({ sourceRecordId: record.id, tokenIndex });
+      const candidate = acceptedByOccurrence.get(occurrence)
+        || acceptedBySurface.get(text(token.surface).toLowerCase());
       return candidate
         ? { ...token, coverageType: "llm", pyashSequence: [...candidate.pyashSequence], evidence: `Housekeeper vocabulary link: ${candidate.verificationRationale}` }
         : { ...token };
     });
-    const unresolved = (record.unresolved ?? []).filter((surface) => !acceptedBySurface.has(text(surface).toLowerCase()));
+    const acceptedSurfaces = new Set([...acceptedByOccurrence.values(), ...acceptedBySurface.values()]
+      .map((candidate) => text(candidate.surface).toLowerCase()));
+    const unresolved = (record.unresolved ?? []).filter((surface) => !acceptedSurfaces.has(text(surface).toLowerCase()));
     return {
       ...record,
       tokens,
@@ -360,7 +502,15 @@ export async function reconcileTranslationVocabularyCandidates({
       `The previous response failed deterministic validation: ${response.reason}`,
       "Return every supplied candidate id exactly once with a valid status, rationale, and exact targetEnglish for accepted rows. Never return Pyash tokens."
     ].join("\n");
-    const queued = await submit({ handleId: repairHandleId, prompt: repairPrompt, candidates, inventory, result, maxOutputTokens: 8192 });
+    const queued = await submit({
+      handleId: repairHandleId,
+      prompt: repairPrompt,
+      candidates,
+      inventory,
+      result,
+      responseFormat: responseFormatForCandidates(candidates, inventory),
+      maxOutputTokens: TRANSLATION_VOCABULARY_MAX_OUTPUT_TOKENS
+    });
     if (text(queued?.status || queued?.ob?.text).toLowerCase() !== "queued") {
       response = { valid: false, reason: `automatic repair queue submission failed for ${repairHandleId}` };
       break;
@@ -403,6 +553,7 @@ export async function reconcileTranslationVocabularyCandidates({
         })
     }
     : settled;
+  const settledCandidateIds = new Set(candidates.map(candidateIdentity));
   const queue = {
     ...(result.vocabularyQueue ?? {}),
     handleId,
@@ -416,10 +567,18 @@ export async function reconcileTranslationVocabularyCandidates({
     result: {
       ...settledWithRecovery,
       vocabularyQueue: queue,
-      vocabularyCandidates: settledWithRecovery.vocabularyCandidates.map((candidate) => ({
-        ...candidate,
-        queue: { ...(candidate.queue ?? {}), ...queue, candidateIds: [candidateIdentity(candidate)] }
-      }))
+      vocabularyCandidates: settledWithRecovery.vocabularyCandidates.map((candidate) => {
+        if (!settledCandidateIds.has(candidateIdentity(candidate))) return candidate;
+        return {
+          ...candidate,
+          queue: {
+            ...(candidate.queue ?? {}),
+            ...queue,
+            candidateCount: candidate.queue?.candidateCount ?? candidates.length,
+            candidateIds: [candidateIdentity(candidate)]
+          }
+        };
+      })
     },
     response,
     queue
@@ -429,7 +588,7 @@ export async function reconcileTranslationVocabularyCandidates({
 function uniqueCandidates(candidates) {
   const seen = new Set();
   return candidates.filter((candidate) => {
-    const key = `${text(candidate?.surface).toLowerCase()}\u0000${text(candidate?.kind)}`;
+    const key = `${candidateIdentity(candidate)}\u0000${text(candidate?.kind)}`;
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -478,7 +637,8 @@ export async function submitTranslationVocabularyCandidates({
       prompt,
       candidates: duty,
       inventory,
-      result
+      result,
+      responseFormat: responseFormatForCandidates(duty, inventory)
     });
     const status = text(response?.status || response?.ob?.text).toLowerCase();
     if (status !== "queued") {
@@ -545,13 +705,13 @@ const DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT = {
       type: "array",
       items: {
         type: "object",
-        required: ["id", "status", "rationale"],
+        required: ["id", "status", "targetEnglish", "rationale"],
         additionalProperties: false,
         properties: {
           id: { type: "string" },
           status: { type: "string", enum: ["accept", "reject", "uncertain"] },
           targetEnglish: { type: "string" },
-          rationale: { type: "string", maxLength: 120 }
+          rationale: { type: "string", maxLength: 80 }
         }
       }
     }
@@ -562,21 +722,21 @@ export function createQueuedMindTranslationVocabularySubmitter({
   interpret,
   parse,
   responseFormat = DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT,
-  maxOutputTokens = 4096
+  maxOutputTokens = TRANSLATION_VOCABULARY_MAX_OUTPUT_TOKENS
 } = {}) {
   if (typeof interpret !== "function") throw invalid("queued vocabulary submitter requires interpret");
   if (typeof parse !== "function") throw invalid("queued vocabulary submitter requires parse");
   if (!responseFormat || typeof responseFormat !== "object") {
     throw invalid("queued vocabulary submitter requires a response format");
   }
-  return async ({ handleId, prompt, maxOutputTokens: requestedMaxOutputTokens } = {}) => {
-    const outputTokens = Math.max(1, Math.trunc(Number(requestedMaxOutputTokens ?? maxOutputTokens) || 4096));
+  return async ({ handleId, prompt, responseFormat: requestedResponseFormat, maxOutputTokens: requestedMaxOutputTokens } = {}) => {
+    const outputTokens = Math.max(1, Math.trunc(Number(requestedMaxOutputTokens ?? maxOutputTokens) || TRANSLATION_VOCABULARY_MAX_OUTPUT_TOKENS));
     const jobSpec = {
       kind: "ollama-generate",
       prompt: String(prompt ?? ""),
       stream: false,
       think: false,
-      format: responseFormat,
+      format: requestedResponseFormat ?? responseFormat,
       options: {
         temperature: 0,
         num_predict: outputTokens

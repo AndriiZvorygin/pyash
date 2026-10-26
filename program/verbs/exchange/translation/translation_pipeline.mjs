@@ -15,6 +15,10 @@ import {
 } from "./english_sentence.mjs";
 import { renderPyacSentenceSurface } from "./pyash_surface.mjs";
 import { resolveTranslationSource } from "./registry.mjs";
+import {
+  TRANSLATION_SENSE_STATE_FORMAT,
+  translationOccurrenceId
+} from "./translation_occurrence.mjs";
 
 export const TRANSLATION_PIPELINE_FORMAT = "translation-pipeline-v1";
 export const TRANSLATION_PIPELINE_NAME = "translation_pipeline";
@@ -134,15 +138,25 @@ function contextFor(segments, index, radius) {
     .map((segment) => segment.text);
 }
 
+function senseRows(token) {
+  return (token?.wordnet?.senses ?? []).map((sense) => ({
+    pos: text(sense?.pos),
+    synset: text(sense?.synset),
+    lemma: text(sense?.lemma),
+    lemmas: [...new Set((sense?.lemmas ?? [sense?.lemma]).map(text).filter(Boolean))].slice(0, 8),
+    gloss: text(sense?.gloss)
+  })).filter((sense) => sense.pos && sense.synset);
+}
+
 function vocabularyCandidates({ recordId, language, sourceText, context, analysis }) {
   const unresolvedTokens = analysis.tokens.length > 0
-    ? analysis.tokens.filter((token) => (
+    ? analysis.tokens.map((token, tokenIndex) => ({ token, tokenIndex })).filter(({ token }) => (
       cloneSequence(token?.pyashSequence).length === 0
       && !token?.copula
       && !token?.grammar
     ))
-    : [{ surface: sourceText, coverageType: "unresolved", evidence: analysis.reason ?? "" }];
-  return unresolvedTokens.map((token, tokenIndex) => {
+    : [{ token: { surface: sourceText, coverageType: "unresolved", evidence: analysis.reason ?? "" }, tokenIndex: 0 }];
+  return unresolvedTokens.map(({ token, tokenIndex }) => {
     const surface = text(token.surface ?? sourceText);
     const candidateSequences = [
       ...analysis.candidates.filter((candidate) => (
@@ -152,13 +166,21 @@ function vocabularyCandidates({ recordId, language, sourceText, context, analysi
     ]
       .map((candidate) => cloneSequence(candidate?.pyashSequence))
       .filter((sequence) => sequence.length > 0);
+    const occurrenceId = translationOccurrenceId({
+      sourceRecordId: recordId,
+      tokenIndex,
+      surface
+    });
     return {
-      id: stableId(["vocabulary", language, recordId, String(tokenIndex), surface]),
+      id: occurrenceId || stableId(["vocabulary", language, recordId, String(tokenIndex), surface]),
       language,
       surface,
       kind: token.grammar ? "grammar-gap" : "lexical-gap",
       sourceRecordId: recordId,
+      tokenIndex,
+      ...(occurrenceId ? { occurrenceId } : {}),
       context: [...context],
+      senseCandidates: senseRows(token),
       candidateSequences,
       evidence: tokenEvidence(token) || text(analysis.reason) || "source term remains unresolved",
       status: "queued"
@@ -170,11 +192,26 @@ function adapterSurfaceText(sourceText) {
   return sourceText.replace(/[。！？।॥]+$/u, ".");
 }
 
-async function analyzeSegment({ adapter, sourceText, context, verify, wordnetBridges, coverageOverrides }) {
+async function analyzeSegment({
+  adapter,
+  sourceText,
+  sourceRecordId,
+  context,
+  verify,
+  wordnetBridges,
+  coverageOverrides,
+  occurrenceOverrides
+}) {
   const adapterText = adapterSurfaceText(sourceText);
   let analysis;
   if (typeof adapter.analyzeSentence === "function") {
-    analysis = await adapter.analyzeSentence(adapterText, { context, wordnetBridges, coverageOverrides });
+    analysis = await adapter.analyzeSentence(adapterText, {
+      context,
+      sourceRecordId,
+      wordnetBridges,
+      coverageOverrides,
+      occurrenceOverrides
+    });
     if (
       adapter.name === "english" &&
       analysis?.status !== "resolved" &&
@@ -255,14 +292,34 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     ...(unresolved.length > 0 ? { unresolved } : {}),
     ...(analysis.candidates.length > 0 ? { candidates: analysis.candidates } : {}),
     ...(analysis.tokens.length > 0 ? {
-      tokens: analysis.tokens.map((token) => ({
-        surface: token.surface,
-        coverageType: token.coverageType,
-        pyashSequence: cloneSequence(token.pyashSequence),
-        ...(token.lemma ? { lemma: token.lemma } : {}),
-        ...(token.morphology ? { morphology: token.morphology } : {}),
-        ...(tokenEvidence(token) ? { evidence: tokenEvidence(token) } : {})
-      }))
+      tokens: analysis.tokens.map((token, tokenIndex) => {
+        const occurrenceId = translationOccurrenceId({
+          sourceRecordId: recordId,
+          tokenIndex,
+          surface: token.surface
+        });
+        const candidates = Array.isArray(token.semanticCandidates)
+          ? token.semanticCandidates.map((candidate) => ({
+            phrase: text(candidate?.phrase),
+            lemma: text(candidate?.lemma),
+            pyashSequence: cloneSequence(candidate?.pyashSequence),
+            evidence: text(candidate?.evidence)
+          }))
+          : [];
+        const senses = senseRows(token);
+        return {
+          surface: token.surface,
+          tokenIndex,
+          ...(occurrenceId ? { occurrenceId } : {}),
+          coverageType: token.coverageType,
+          pyashSequence: cloneSequence(token.pyashSequence),
+          ...(token.lemma ? { lemma: token.lemma } : {}),
+          ...(token.morphology ? { morphology: token.morphology } : {}),
+          ...(senses.length > 0 ? { senseCandidates: senses } : {}),
+          ...(candidates.length > 0 ? { semanticCandidates: candidates } : {}),
+          ...(tokenEvidence(token) ? { evidence: tokenEvidence(token) } : {})
+        };
+      })
     } : {}),
     ...(analysis.reason ? { reason: text(analysis.reason) } : {})
   };
@@ -290,7 +347,8 @@ export async function translateDocumentSegments({
   resourceHashes,
   adapterResolver = resolveTranslationSource,
   wordnetBridges = null,
-  coverageOverrides = null
+  coverageOverrides = null,
+  occurrenceOverrides = null
 } = {}) {
   const normalizedLanguage = normalizeLanguage(language);
   if (!normalizedLanguage) throw invalid("translation requires an explicit language");
@@ -306,13 +364,16 @@ export async function translateDocumentSegments({
   const vocabulary = [];
   for (const segment of segments) {
     const context = contextFor(segments, segment.sentenceIndex, Math.max(0, Math.trunc(Number(contextRadius) || 0)));
+    const sourceRecordId = stableId([normalizedLanguage, String(segment.sentenceIndex), segment.text]);
     const analysis = await analyzeSegment({
       adapter,
       sourceText: segment.text,
+      sourceRecordId,
       context,
       verify,
       wordnetBridges,
-      coverageOverrides
+      coverageOverrides,
+      occurrenceOverrides
     });
     const result = makeRecord({
       language: normalizedLanguage,
@@ -333,6 +394,7 @@ export async function translateDocumentSegments({
     language: normalizedLanguage,
     locator: locator || null,
     sourceHash,
+    senseStateFormat: TRANSLATION_SENSE_STATE_FORMAT,
     resourceHashes: resolvedResourceHashes,
     sourceLength: source.length,
     records,
@@ -408,6 +470,7 @@ export function renderTranslationPipelinePya(result, { name = TRANSLATION_PIPELI
     pyaRow("format", TRANSLATION_PIPELINE_FORMAT),
     pyaRow("language", result.language),
     pyaRow("source-hash", result.sourceHash),
+    pyaRow("sense-state-format", result.senseStateFormat ?? TRANSLATION_SENSE_STATE_FORMAT),
     pyaRow("resource-hashes", result.resourceHashes ?? {}),
     pyaRow("locator", result.locator),
     pyaRow("source-length", result.sourceLength),
@@ -445,6 +508,7 @@ export function parseTranslationPipelinePya(source, { name = TRANSLATION_PIPELIN
     format: metadata.format,
     language: metadata.language,
     sourceHash: metadata["source-hash"],
+    senseStateFormat: metadata["sense-state-format"] ?? "",
     resourceHashes: metadata["resource-hashes"] ?? {},
     locator: metadata.locator,
     sourceLength: metadata["source-length"],

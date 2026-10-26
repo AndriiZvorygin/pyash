@@ -66,7 +66,43 @@ test("vocabulary review prompt is bounded to supplied candidate evidence", () =>
   assert.doesNotMatch(prompt, /ollama/u);
 });
 
-test("vocabulary candidates share one deduplicated durable queue duty", async () => {
+test("vocabulary review prompt carries the selected WordNet sense to anchor selection", () => {
+  const candidate = {
+    id: "wordnet-attachment:feel",
+    surface: "feel",
+    kind: "wordnet-sense-attachment",
+    sourceRecordId: "record-feel",
+    context: ["People feel love."],
+    senseId: "v:01775456",
+    sense: {
+      pos: "v",
+      synset: "01775456",
+      lemmas: ["feel", "experience"],
+      gloss: "undergo an emotional state"
+    },
+    anchorCandidates: [{
+      target: "activity",
+      pyashSequence: ["twot"],
+      evidence: "fixture WordNet relation reaches activity"
+    }],
+    evidence: "selected WordNet sense v:01775456; undergo an emotional state"
+  };
+  const prompt = buildTranslationVocabularyVerificationPrompt({
+    language: "english",
+    sourceText: candidate.context[0],
+    locator: "love.txt",
+    candidates: [candidate],
+    inventory: { entries: [{ english: "activity", pyash: ["twot"] }], grammar: [] }
+  });
+  assert.match(prompt, /authoritative meaning for this occurrence/u);
+  assert.match(prompt, /do not re-disambiguate the source word/u);
+  assert.match(prompt, /may differ from the source surface and WordNet lemma/u);
+  assert.match(prompt, /"selectedSenseId":"v:01775456"/u);
+  assert.match(prompt, /"gloss":"undergo an emotional state"/u);
+  assert.match(prompt, /"anchorOptions":\["activity"\]/u);
+});
+
+test("vocabulary candidates preserve independent occurrence queue duties", async () => {
   const requests = [];
   const queued = await submitTranslationVocabularyCandidates({
     result,
@@ -77,15 +113,23 @@ test("vocabulary candidates share one deduplicated durable queue duty", async ()
       return { status: "queued" };
     }
   });
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].candidates.length, 1);
-  assert.equal(queued.submittedCount, 1);
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests.map((request) => request.candidates.length), [1, 1]);
+  assert.equal(queued.submittedCount, 2);
+  assert.equal(queued.handleId, "");
+  assert.equal(queued.handleIds.length, 2);
   assert.equal(queued.result.vocabularyQueue.status, "queued");
-  assert.equal(queued.result.vocabularyCandidates[0].queue.handleId, queued.handleId);
-  assert.equal(translationVocabularyQueueHandle({
-    sourceHash: result.sourceHash,
-    candidates: requests[0].candidates
-  }), queued.handleId);
+  assert.deepEqual(
+    queued.result.vocabularyCandidates.map((candidate) => candidate.queue.handleId),
+    queued.handleIds
+  );
+  assert.deepEqual(
+    queued.handleIds,
+    requests.map((request) => translationVocabularyQueueHandle({
+      sourceHash: result.sourceHash,
+      candidates: request.candidates
+    }))
+  );
 });
 
 test("vocabulary duties keep semantic decisions small and retain every candidate", async () => {
@@ -106,14 +150,13 @@ test("vocabulary duties keep semantic decisions small and retain every candidate
       return { status: "queued" };
     }
   });
-  assert.deepEqual(requests.map((request) => request.candidates.length), [2, 2, 1]);
-  assert.equal(queued.batches.length, 3);
-  assert.equal(queued.queues.length, 3);
+  assert.deepEqual(requests.map((request) => request.candidates.length), [1, 1, 1, 1, 1]);
+  assert.ok(requests.every((request) => request.responseFormat?.properties?.candidates?.items?.properties?.targetEnglish?.enum));
+  assert.equal(queued.batches.length, 5);
+  assert.equal(queued.queues.length, 5);
   assert.equal(queued.submittedCount, 5);
-  assert.equal(new Set(queued.queues.map((queue) => queue.handleId)).size, 3);
-  assert.deepEqual(queued.result.vocabularyCandidates.map((candidate) => candidate.queue.handleId), queued.handleIds
-    .flatMap((handleId) => [handleId, handleId])
-    .slice(0, 5));
+  assert.equal(new Set(queued.queues.map((queue) => queue.handleId)).size, 5);
+  assert.deepEqual(queued.result.vocabularyCandidates.map((candidate) => candidate.queue.handleId), queued.handleIds);
 });
 
 test("default vocabulary submitter uses the Pyash future GPU duty", async () => {
@@ -131,7 +174,7 @@ test("default vocabulary submitter uses the Pyash future GPU duty", async () => 
   assert.match(sentence, /translation-vocabulary-test/u);
   assert.match(sentence, /think.*false/u);
   assert.match(sentence, /format.*candidates/u);
-  assert.match(sentence, /num_predict.*4096/u);
+  assert.match(sentence, /num_predict.*512/u);
 });
 
 test("vocabulary decisions are parsed and applied without a human approval step", () => {
@@ -198,7 +241,39 @@ test("vocabulary parser extracts noisy provider JSON and rejects ungrounded sequ
     requireComplete: true
   });
   assert.equal(rejected.valid, false);
-  assert.match(rejected.reason, /inventory-backed targetEnglish/u);
+  assert.match(rejected.reason, /bounded anchor options|inventory-backed targetEnglish/u);
+});
+
+test("selected-sense vocabulary links cannot escape their bounded anchor options", () => {
+  const candidate = {
+    id: "wordnet-attachment:action",
+    surface: "actions",
+    kind: "wordnet-sense-attachment",
+    senseId: "n:00038116-n",
+    sense: { pos: "n", synset: "00038116-n", lemmas: ["action"], gloss: "something done" },
+    anchorCandidates: [{ target: "activity", pyashSequence: ["twot"] }]
+  };
+  const response = parseTranslationVocabularyVerificationResponse(JSON.stringify({
+    verdict: "complete",
+    candidates: [{
+      id: candidate.id,
+      status: "accept",
+      targetEnglish: "love",
+      rationale: "unrelated inventory entry"
+    }]
+  }), {
+    candidates: [candidate],
+    inventory: {
+      entries: [
+        { english: "activity", pyash: ["twot"] },
+        { english: "love", pyash: ["pyan"] }
+      ],
+      grammar: []
+    },
+    requireComplete: true
+  });
+  assert.equal(response.valid, false);
+  assert.match(response.reason, /bounded anchor options/u);
 });
 
 test("vocabulary reconciliation repairs malformed model output through the same queue", async () => {

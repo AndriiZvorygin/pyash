@@ -28,6 +28,7 @@ export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS = 12000;
 export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS = 3900;
 export const ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE = 1;
+export const ENGLISH_WORDNET_LINKER_ANCHOR_MAX_CANDIDATES = 8;
 export const ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE = 4;
 export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   type: "object",
@@ -293,6 +294,66 @@ export function linkEnglishWordNetSense({
       ? { status: "accepted-deterministic", link: record.candidates[0] }
       : { status: "review" };
   return { ...record, ...linked };
+}
+
+export function buildEnglishWordNetSenseAnchorCandidates({
+  sense,
+  wordnetIndex,
+  resolveWord,
+  maxDepth = 1,
+  maxCandidates = 16
+} = {}) {
+  const source = senseKey(sense?.pos, sense?.synset);
+  if (!source || !(wordnetIndex?.relationGraph instanceof Map) || typeof resolveWord !== "function") {
+    return [];
+  }
+  const depthLimit = Math.max(1, Math.trunc(Number(maxDepth) || 1));
+  const candidateLimit = Math.max(1, Math.trunc(Number(maxCandidates) || 1));
+  const sourceLemmas = new Set((sense?.lemmas ?? [sense?.lemma]).map(normalized).filter(Boolean));
+  const queue = [{ key: source, depth: 0, path: [] }];
+  const visited = new Set([source]);
+  const candidates = new Map();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current.depth >= depthLimit) continue;
+    for (const edge of wordnetIndex.relationGraph.get(current.key) ?? []) {
+      const nextDepth = current.depth + 1;
+      const path = [...current.path, edge];
+      const rows = wordnetIndex.bySynset?.get(edge.target) ?? [];
+      for (const row of rows) {
+        const lemma = normalized(row?.lemma);
+        const parts = lemma.split(/\s+/u);
+        for (const targetTerm of [lemma, ...parts]) {
+          if (!targetTerm || sourceLemmas.has(targetTerm)) continue;
+          const coverage = resolveWord(targetTerm);
+          const pyashSequence = sequence(coverage?.pyashSequence);
+          if (pyashSequence.length === 0) continue;
+          const target = normalized(coverage.canonicalEnglish || targetTerm);
+          if (!target || sourceLemmas.has(target)) continue;
+          const key = `${target}\u0000${pyashSequence.join(" ")}`;
+          const evidence = `WordNet ${path.map((item) => text(item.relation) || "related").join(" -> ")} from ${source} reaches ${lemma}`;
+          const prior = candidates.get(key);
+          if (!prior || nextDepth < prior.depth) {
+            candidates.set(key, {
+              target,
+              pyashSequence,
+              depth: nextDepth,
+              evidence,
+              sourceLemmas: [lemma]
+            });
+          } else if (prior) {
+            prior.sourceLemmas = [...new Set([...prior.sourceLemmas, lemma])];
+          }
+        }
+      }
+      if (visited.has(edge.target)) continue;
+      visited.add(edge.target);
+      queue.push({ key: edge.target, depth: nextDepth, path });
+    }
+  }
+  return [...candidates.values()]
+    .sort((left, right) => left.depth - right.depth || left.target.localeCompare(right.target))
+    .slice(0, candidateLimit);
 }
 
 function rowsForWordNetIndex(wordnetIndex) {
@@ -948,7 +1009,8 @@ export function parseEnglishWordNetLinkerConfig(source) {
     maxOutputTokens: Math.max(100, Math.trunc(Number(metadata["max-output-tokens"]) || ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS)),
     selectionFormat: metadata["selection-format"] || ENGLISH_WORDNET_SELECTION_FORMAT,
     selectionMaxOutputTokens: Math.max(100, Math.trunc(Number(metadata["selection-max-output-tokens"]) || ENGLISH_WORDNET_SELECTION_DEFAULT_OUTPUT_TOKENS)),
-    edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE))
+    edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE)),
+    anchorMaxCandidates: Math.max(1, Math.trunc(Number(metadata["anchor-max-candidates"]) || ENGLISH_WORDNET_LINKER_ANCHOR_MAX_CANDIDATES))
   };
 }
 

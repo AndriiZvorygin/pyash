@@ -21,6 +21,7 @@ import {
   renderPyashSentenceSurface,
   renderPyashSurface
 } from "../program/verbs/exchange/translation/pyash_surface.mjs";
+import { TRANSLATION_SENSE_STATE_FORMAT } from "../program/verbs/exchange/translation/translation_occurrence.mjs";
 
 test("Pyash surface rendering fuses endings and preserves sentence-final moods", () => {
   assert.equal(
@@ -113,6 +114,51 @@ test("English translation uses the shared resources and retains unresolved vocab
   assert.equal(result.vocabularyCandidates[0].surface, "blorf");
   assert.equal(result.vocabularyCandidates[0].status, "queued");
   assert.equal(result.vocabularyCandidates[0].sourceRecordId, result.records[1].id);
+});
+
+test("translation persists sense candidates per stable source occurrence", async () => {
+  const senseCandidates = [{
+    pos: "v",
+    synset: "florp-one",
+    lemma: "florp",
+    lemmas: ["florp"],
+    gloss: "perform an unspecified action"
+  }];
+  const result = await translateDocument({
+    language: "english",
+    text: "Florp. Florp.",
+    adapterResolver: () => ({
+      name: "english",
+      analyzeSentence: async () => ({
+        format: "english-sentence-v1",
+        status: "review",
+        unresolved: ["florp"],
+        candidates: [],
+        tokens: [{
+          surface: "florp",
+          coverageType: "unresolved",
+          pyashSequence: [],
+          wordnet: { senses: senseCandidates }
+        }]
+      })
+    }),
+    resourceHashes: {}
+  });
+  const candidates = result.vocabularyCandidates;
+  assert.equal(result.senseStateFormat, TRANSLATION_SENSE_STATE_FORMAT);
+  assert.equal(candidates.length, 2);
+  assert.equal(new Set(candidates.map((candidate) => candidate.occurrenceId)).size, 2);
+  assert.deepEqual(candidates.map((candidate) => candidate.tokenIndex), [0, 0]);
+  assert.deepEqual(candidates.map((candidate) => candidate.senseCandidates[0].synset), [
+    "florp-one",
+    "florp-one"
+  ]);
+  const parsed = parseTranslationPipelinePya(renderTranslationPipelinePya(result));
+  assert.equal(parsed.senseStateFormat, TRANSLATION_SENSE_STATE_FORMAT);
+  assert.deepEqual(parsed.records.map((record) => record.tokens[0].occurrenceId), [
+    result.records[0].tokens[0].occurrenceId,
+    result.records[1].tokens[0].occurrenceId
+  ]);
 });
 
 test("English subject nominative lowers to the fused Pyac form", async () => {
@@ -302,7 +348,8 @@ test("translation document submits vocabulary review through the injected queue"
       }
     }
   );
-  assert.equal(submissions.length, 1);
+  assert.equal(submissions.length, 2);
+  assert.deepEqual(submissions.map((request) => request.candidates.length), [1, 1]);
   assert.match(submissions[0].prompt, /Pyash vocabulary review worker/u);
   assert.equal(reports[0].vocabularySubmitted, 2);
   assert.equal(output.translation.vocabularyQueue.status, "queued");
