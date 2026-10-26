@@ -437,6 +437,7 @@ function resolveSpecificAtom(row) {
 
 function findCompoundProgressiveCoverage(token, acceptedCompounds) {
   const candidates = inflectionCandidates(token)
+    .filter(({ rule }) => rule.startsWith("present-participle"))
     .map((candidate) => ({ candidate, rows: acceptedCompounds.get(normalizeCompoundTarget(candidate.lemma)) ?? [] }))
     .filter(({ rows }) => rows.length > 0);
   return candidates.flatMap(({ candidate, rows }) => rows.map((row) => ({

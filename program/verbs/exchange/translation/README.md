@@ -148,6 +148,14 @@ The report lists the latest completed stage, each stage's input/output map artif
 WordNet occurrence links from the latest translation artifact. The canonical session remains the
 translation `.pya`; the newspaper remains the replayable stage-evidence source.
 
+The source-to-VLIW runner also uses those checkpoint artifacts as its resume boundary. It records
+the source hash and the hashes of the loaded English resources in the stage input map. A matching
+checkpoint can be replayed directly; a stale or legacy checkpoint reruns the affected stages while
+preserving accepted occurrence sequences and accepted vocabulary candidates from the same source.
+The latest stage output is therefore the input to the next refinery pass, rather than a fresh
+analysis of the original surface words. This state remains in the existing Pyash newspaper and
+translation `.pya` catalog; the refinery does not create a parallel JSON artifact or transcript.
+
 To regenerate the English pairs from `examples/pyash/*.pya`:
 
 ```

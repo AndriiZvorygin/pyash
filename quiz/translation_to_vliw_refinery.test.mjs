@@ -163,6 +163,96 @@ test("source-to-VLIW refinery replays its durable map checkpoints", async () => 
   assert.equal(inspected.counts.pendingSenseLinks, 0);
 });
 
+test("stale translation artifacts rebuild without downgrading accepted records", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-monotonic-"));
+  const paths = {
+    translation: join(directory, "translation.pya"),
+    catalog: join(directory, "catalog.pya"),
+    pack: join(directory, "pack.pyac")
+  };
+  const checkpoints = [];
+  let resolved = true;
+  const adapterResolver = () => ({
+    name: "english",
+    analyzeSentence: (source, options) => resolved
+      ? analyzeEnglishSentence(source, {
+        ...options,
+        resolveWord: (word) => word === "i"
+          ? { coverageType: "grammar", pyashSequence: ["mi"] }
+          : word === "walked"
+            ? {
+              coverageType: "lemma",
+              lemma: "walk",
+              pyashSequence: ["pfin"],
+              morphology: {
+                kind: "finite-past",
+                markerNames: ["past_tense_"],
+                markerSequence: ["ki"],
+                certainty: "deterministic"
+              }
+            }
+            : null
+      })
+      : {
+        format: "english-sentence-v1",
+        status: "review",
+        unresolved: ["walked"],
+        candidates: [],
+        tokens: [{ surface: "walked", coverageType: "unresolved", pyashSequence: [] }]
+      }
+  });
+  const first = await runTranslationSourceToVliwRefinery({
+    language: "english",
+    source: "I walked.",
+    locator: "fixture.txt",
+    paths,
+    adapterResolver,
+    resourceHashes: { fixture: "one" },
+    onCheckpoint: (sentence) => checkpoints.push(sentence)
+  });
+  assert.equal(first.translation.records[0].status, "resolved");
+  const checkpointIndex = new Map([[
+    TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
+    new Map(checkpoints.map((sentence) => {
+      const payload = JSON.parse(sentence.fromtext.text);
+      return [sentence.su.name, {
+        hash: sentence.ob.text,
+        resultSentence: sentence.to.la,
+        resultLine: sentence.totext.text,
+        exportFacts: payload.exports,
+        scopeSlots: payload.scope
+      }];
+    }))
+  ]]);
+
+  resolved = false;
+  const secondStages = [];
+  const second = await runTranslationSourceToVliwRefinery({
+    language: "english",
+    source: "I walked.",
+    locator: "fixture.txt",
+    paths,
+    adapterResolver,
+    resourceHashes: { fixture: "two" },
+    checkpointIndex,
+    onStage: (stage) => secondStages.push(stage)
+  });
+  assert.deepEqual(secondStages, [
+    "read source",
+    "segment source",
+    "translate sentences",
+    "refine senses",
+    "review vocabulary",
+    "refine compounds",
+    "render translation",
+    "lower vliw",
+    "write outputs"
+  ]);
+  assert.equal(second.translation.records[0].status, "resolved");
+  assert.equal(second.translation.records[0].unresolved, undefined);
+  assert.equal(second.translation.records[0].pyash, first.translation.records[0].pyash);
+});
+
 test("refinery artifact inspection reports pending sense links from the latest stage", () => {
   const checkpointIndex = new Map([[
     TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
