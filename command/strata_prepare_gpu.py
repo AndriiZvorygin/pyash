@@ -52,7 +52,7 @@ def main() -> int:
     print(f"strata GPU preparation: {err}", file=sys.stderr)
     return 2
 
-  base_url = os.environ.get("PYASH_GPU_HOUSEKEEPER_URL", "http://127.0.0.1:8090").rstrip("/")
+  base_url = os.environ.get("PYASH_GPU_HOUSEKEEPER_URL", "http://127.0.0.1:18886").rstrip("/")
   body = json.dumps({
     "runtimeName": "strata",
     "jobSpec": {"resourceRequest": {"vramRequiredMb": required_mib}}

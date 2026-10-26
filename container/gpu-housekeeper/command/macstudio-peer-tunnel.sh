@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ssh_target="${GPU_HOUSEKEEPER_TUNNEL_SSH_TARGET:-ai@macstudio}"
-local_port="${GPU_HOUSEKEEPER_TUNNEL_LOCAL_PORT:-8091}"
-remote_port="${GPU_HOUSEKEEPER_TUNNEL_REMOTE_PORT:-8090}"
+local_port="${GPU_HOUSEKEEPER_TUNNEL_LOCAL_PORT:-18887}"
+remote_port="${GPU_HOUSEKEEPER_TUNNEL_REMOTE_PORT:-18886}"
 bind_address="${GPU_HOUSEKEEPER_TUNNEL_BIND_ADDRESS:-}"
 
 if [[ -z "$bind_address" ]]; then

@@ -60,7 +60,7 @@ The run is recorded as `baseline:lead-3`. Processing latency is recorded, while 
 Criterion keeps dataset loading, scoring, checkpoints and reports in Node. Hugging Face inference runs as a GPU-managed Pyash duty through the existing `gpu-worker` and `gpu-housekeeper` services. The CUDA host owns the container and its private model cache; the development machine does not need a Python virtual environment or model dependencies:
 
 ```bash
-PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 \
 node command/criterion.mjs run \
   --benchmark meetingbank \
   --engine huggingface \
@@ -76,7 +76,7 @@ node command/criterion.mjs run \
 Start the normal Pyash GPU worker for the Criterion lane when one is not already running:
 
 ```bash
-PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 \
 node command/gpu_worker.mjs --world world
 ```
 
@@ -209,7 +209,7 @@ Run or resume the pilot from the development machine:
 
 ```bash
 OLLAMA_BASE_URL=http://mriczo:11434 \
-PYA_GPU_HOUSEKEEPER_URL=http://mriczo:8090 \
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 \
 node command/criterion.mjs meetingbank-judge-pilot \
   --dataset /tmp/pyash-criterion-cache/meetingbank/test.jsonl \
   --run-id meetingbank-qwen-unirrm-pilot-20260915 \
