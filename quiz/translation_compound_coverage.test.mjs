@@ -114,6 +114,7 @@ test("curated prayer constructions enter the shared compound catalog", async () 
   const kingdom = entries.find((entry) => entry.surface === "kingdom");
   const debtor = entries.find((entry) => entry.surface === "debtor");
   const brainstorm = entries.find((entry) => entry.surface === "brainstorm");
+  const include = entries.find((entry) => entry.surface === "include");
 
   assert.ok(kingdom);
   assert.deepEqual(kingdom.morphemes, ["king", "government"]);
@@ -131,6 +132,13 @@ test("curated prayer constructions enter the shared compound catalog", async () 
 
   assert.ok(brainstorm);
   assert.equal(brainstorm.specificAtom, "brain_storming");
+
+  assert.ok(include);
+  assert.deepEqual(include.morphemes, ["inside", "containing"]);
+  assert.deepEqual(include.pyashSequence, ["lwak", "hzan"]);
+  assert.deepEqual(include.componentLayers, [16, 24]);
+  assert.equal(include.head, "containing");
+  assert.match(include.evidence, /contain-within sense of include/u);
 });
 
 test("compound coverage separates delimited use from accidental closed splits", () => {
