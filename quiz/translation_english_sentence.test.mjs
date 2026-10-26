@@ -451,6 +451,15 @@ test("WordNet graph relations rank a connected sense when glosses provide no ove
   assert.match(bank.evidence, /graph:water \(0\.5\)/u);
 });
 
+test("WordNet leaves a graph-only near tie for the focused sense selector", async () => {
+  const result = await analyzeDefaultEnglishSentence(
+    "Romantic love can lead to things such as dating and marriage, but a person can also feel for friends, such as platonic love, or family."
+  );
+  const feel = result.tokens.find((token) => token.surface === "feel");
+  assert.notEqual(feel?.coverageType, "semantic-wordnet");
+  assert.ok((feel?.semanticCandidates?.length ?? 0) > 1);
+});
+
 test("such as is classified as an exemplifier construction", async () => {
   const result = await analyzeDefaultEnglishSentence("love includes things such as friendship");
   const such = result.tokens.find((token) => token.surface === "such");

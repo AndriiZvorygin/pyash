@@ -60,6 +60,7 @@ const WORDNET_NOUN_PRECEDERS = new Set([
   "a", "an", "the", "this", "that", "these", "those", "some", "many", "another", "each",
   "my", "your", "our", "their", "of", "for", "from", "with", "in", "on", "within", "into"
 ]);
+const WORDNET_GRAPH_SELECTION_MIN_MARGIN = 0.3;
 
 let defaultResourcesPromise = null;
 let sentenceResourcesPromise = null;
@@ -241,6 +242,15 @@ export function selectEnglishWordNetSenses(record, records, index, wordnetIndex)
   if (bestScore <= 0) return { senses, evidence: "" };
   const selected = scored.filter((entry) => entry.context.score === bestScore);
   if (selected.length !== 1) return { senses, evidence: "" };
+  const rankedScores = scored
+    .map((entry) => entry.context.score)
+    .sort((left, right) => right - left);
+  const secondBestScore = rankedScores[1] ?? 0;
+  const directMatches = selected[0].context.matched.filter((term) => !term.startsWith("graph:"));
+  if (directMatches.length === 0
+    && (bestScore - secondBestScore) < WORDNET_GRAPH_SELECTION_MIN_MARGIN) {
+    return { senses, evidence: "" };
+  }
   return {
     senses: selected.map((entry) => entry.sense),
     evidence: `sentence context matched ${entryTerms(selected[0].context.matched)}`

@@ -71,12 +71,33 @@ test("WordNet sense selection prompt contains one word, one sentence, and only i
       gloss: "dislike something"
     }]
   });
-  assert.match(prompt, /WORD: florp/u);
+  assert.match(prompt, /WORD TO CLASSIFY: florp/u);
   assert.match(prompt, /SENTENCE: I florp the object\./u);
-  assert.match(prompt, /"id":"v:one"/u);
-  assert.match(prompt, /"id":"v:two"/u);
+  assert.match(prompt, /OPTION 1[\s\S]*senseId: v:one/u);
+  assert.match(prompt, /OPTION 2[\s\S]*senseId: v:two/u);
+  assert.match(prompt, /Return one JSON object only/u);
+  assert.match(prompt, /No markdown, explanation, Pyash words, or extra keys/u);
+  assert.match(prompt, /senseId must exactly match one option/u);
   assert.doesNotMatch(prompt, /other sentence/u);
   assert.doesNotMatch(prompt, /Pyash inventory/u);
+});
+
+test("WordNet selector prompt keeps a large sense set bounded and numbered", () => {
+  const senses = Array.from({ length: 17 }, (_, index) => ({
+    pos: "v",
+    synset: `sense-${index}`,
+    lemmas: [`florp-${index}`, "shared-lemma"],
+    gloss: `meaning ${index} with a short contextual description`
+  }));
+  const prompt = buildEnglishWordNetSenseSelectionPrompt({
+    surface: "florp",
+    sentence: "They florp the object near the station.",
+    senses
+  });
+  assert.equal((prompt.match(/OPTION /gu) ?? []).length, 17);
+  assert.match(prompt, /OPTION 17[\s\S]*senseId: v:sense-16/u);
+  assert.ok(prompt.length < 10000);
+  assert.ok(!prompt.includes("pyashSequence"));
 });
 
 test("WordNet sense selection accepts medium confidence and fails closed below threshold", () => {

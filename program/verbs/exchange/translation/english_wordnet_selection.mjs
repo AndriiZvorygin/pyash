@@ -55,9 +55,31 @@ function senseRow(sense) {
     id: `${text(sense?.pos)}:${text(sense?.synset)}`,
     pos: text(sense?.pos),
     synset: text(sense?.synset),
-    lemmas: [...new Set((sense?.lemmas ?? [sense?.lemma]).map(text).filter(Boolean))].slice(0, 8),
-    gloss: bounded(sense?.gloss, 360)
+    lemmas: [...new Set((sense?.lemmas ?? [sense?.lemma]).map(text).filter(Boolean))].slice(0, 6),
+    gloss: bounded(sense?.gloss, 240)
   };
+}
+
+function partOfSpeechName(value) {
+  const name = {
+    a: "adjective",
+    n: "noun",
+    r: "adverb",
+    s: "adjective",
+    v: "verb"
+  }[text(value)] ?? text(value);
+  return name || "unknown";
+}
+
+function senseOption(sense, number) {
+  const row = senseRow(sense);
+  return [
+    `OPTION ${number}`,
+    `senseId: ${row.id}`,
+    `part of speech: ${partOfSpeechName(row.pos)}`,
+    `lemmas: ${row.lemmas.join(", ") || "(none)"}`,
+    `meaning: ${row.gloss || "(no gloss supplied)"}`
+  ].join("\n");
 }
 
 export function englishWordNetSelectionId({ sourceHash, sourceRecordId, tokenIndex, surface } = {}) {
@@ -88,24 +110,28 @@ export function buildEnglishWordNetSenseSelectionPrompt({
   if (!text(surface) || !text(sentence) || !Array.isArray(senses) || senses.length < 2) {
     throw invalid("WordNet selection prompt requires one word, one sentence, and multiple senses");
   }
-  const rows = senses.map((sense) => JSON.stringify(senseRow(sense))).join("\n");
+  const options = senses.map((sense, index) => senseOption(sense, index + 1)).join("\n");
   const prompt = [
-    "You are the bounded Pyash WordNet sense selector.",
-    "Select the one supplied WordNet sense that best matches this one source-word occurrence.",
-    "Use only the source word, its containing sentence, and the supplied sense rows.",
-    "Return exactly one supplied senseId; never invent a sense, English anchor, or Pyash sequence.",
-    "Return uncertain when the sentence does not support one clear sense.",
-    "Return exactly one JSON object with this shape:",
-    '{"verdict":"accept|uncertain","senseId":"pos:synset","confidence":"high|medium|low","rationale":"..."}',
-    "SOURCE:",
-    text(source) || "Open English WordNet",
-    `WORD: ${bounded(surface, 80)}`,
+    "You choose the meaning of one English word in one sentence.",
+    "TASK: choose the one supplied option that matches the word's meaning here.",
+    "Use the sentence grammar and nearby words. Compare all options.",
+    "A familiar lemma alone is not evidence. Do not use knowledge outside this sentence and these options.",
+    "If the sentence does not clearly choose one option, return verdict uncertain.",
+    "Return one JSON object only. No markdown, explanation, Pyash words, or extra keys.",
+    '{"verdict":"accept|uncertain","senseId":"exact supplied senseId","confidence":"high|medium|low","rationale":"under 120 characters"}',
+    `WORD TO CLASSIFY: ${bounded(surface, 80)}`,
     `SENTENCE: ${bounded(sentence, 1200)}`,
-    "POSSIBLE SENSES:",
-    rows,
+    `DATASET: ${bounded(source, 80) || "Open English WordNet"}`,
+    "OPTIONS:",
+    options,
+    "ANSWER RULES:",
+    "- senseId must exactly match one option.",
+    "- For accept, use high or medium confidence only.",
+    "- For uncertain, still return the closest supplied senseId and use low confidence.",
+    "- Keep rationale short and name the sentence clue.",
     ...(text(repairReason) ? [
-      `AUTOMATIC CONTRACT REPAIR: ${bounded(repairReason, 300)}`,
-      "Return one supplied senseId, a confidence value, and a short rationale."
+      `REPAIR: the previous answer was invalid because ${bounded(repairReason, 240)}`,
+      "Follow the answer rules and return one valid JSON object."
     ] : [])
   ].join("\n");
   const charBudget = Math.max(1000, Math.trunc(Number(maxChars) || 12000));
