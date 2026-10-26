@@ -124,16 +124,47 @@ async function reviewVocabulary(context, translated) {
       submittedCount: 0,
       handleId: ""
     };
-  const settled = queued.submitted && typeof context.awaitVocabulary === "function"
-    ? await reconcileTranslationVocabularyCandidates({
-      result: queued.result,
-      sourceText: context.source,
-      candidates: queued.candidates,
-      handleId: queued.handleId,
-      awaitHandle: context.awaitVocabulary,
-      submit: context.queueVocabulary
-    })
-    : null;
+  let settled = null;
+  if (queued.submitted && typeof context.awaitVocabulary === "function") {
+    let current = queued.result;
+    const batches = queued.batches ?? [queued.candidates];
+    const queues = queued.queues ?? (queued.handleId ? [{ handleId: queued.handleId }] : []);
+    const settlements = [];
+    for (let index = 0; index < batches.length; index += 1) {
+      const duty = batches[index];
+      const queue = queues[index];
+      if (!Array.isArray(duty) || duty.length === 0 || !queue?.handleId) continue;
+      const settlement = await reconcileTranslationVocabularyCandidates({
+        result: current,
+        sourceText: context.source,
+        candidates: duty,
+        handleId: queue.handleId,
+        awaitHandle: context.awaitVocabulary,
+        submit: context.queueVocabulary
+      });
+      current = settlement.result;
+      settlements.push(settlement);
+    }
+    if (settlements.length > 0) {
+      const outcomes = settlements.map((settlement) => settlement.queue?.outcome);
+      settled = {
+        result: current,
+        response: settlements.map((settlement) => settlement.response),
+        queues: settlements.map((settlement) => settlement.queue).filter(Boolean),
+        queue: settlements.length === 1
+          ? settlements[0].queue
+          : {
+            ...(current.vocabularyQueue ?? {}),
+            status: "complete",
+            outcome: outcomes.every((outcome) => outcome === "applied")
+              ? "applied"
+              : outcomes.some((outcome) => outcome === "uncertain")
+                ? "uncertain"
+                : "partial"
+          }
+      };
+    }
+  }
   const reviewedTranslation = settled?.result ?? queued.result;
   const accepted = reviewedTranslation.vocabularyCandidates
     .filter((candidate) => candidate.status === "accepted-llm"
@@ -143,7 +174,7 @@ async function reviewVocabulary(context, translated) {
     text(candidate.surface).toLowerCase(),
     {
       coverageType: "llm",
-      canonicalEnglish: text(candidate.surface).toLowerCase(),
+      canonicalEnglish: text(candidate.targetEnglish || candidate.surface).toLowerCase(),
       pyashSequence: [...candidate.pyashSequence]
     }
   ]));
@@ -213,6 +244,7 @@ function buildCommandResult(context, translation, database, compoundCache) {
     vocabularyCandidates: translation.vocabularyCandidates.length,
     vocabularySubmitted: vocabulary.queued?.submittedCount ?? 0,
     vocabularyQueueHandle: vocabulary.queued?.handleId || null,
+    vocabularyQueueHandles: vocabulary.queued?.handleIds ?? [],
     vocabularyOutcome: vocabulary.settled?.queue?.outcome
       ?? vocabulary.queued?.result?.vocabularyQueue?.status
       ?? null,

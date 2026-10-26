@@ -24,6 +24,7 @@ export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS = 12000;
 export const ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS = 3900;
 export const ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS = 8192;
 export const ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE = 1;
+export const ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE = 4;
 export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   type: "object",
   required: ["verdict", "senses"],
@@ -40,8 +41,7 @@ export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
         properties: {
           id: { type: "string" },
           status: { type: "string", enum: ["accept", "reject", "uncertain"] },
-          target: { type: "string" },
-          pyashSequence: { type: "array", items: { type: "string" } },
+          targetEnglish: { type: "string" },
           rationale: { type: "string", maxLength: 120 }
         }
       }
@@ -83,8 +83,7 @@ function compactSense(record) {
     g: bounded(record?.gloss, 56),
     l: (record?.lemmas ?? []).slice(0, 2).map((lemma) => bounded(lemma, 24)),
     c: (record?.candidates ?? []).slice(0, 2).map((candidate) => ({
-      target: bounded(candidate?.target, 24),
-      pyash: (candidate?.pyashSequence ?? []).slice(0, 4).map((word) => bounded(word, 20))
+      targetEnglish: bounded(candidate?.target, 24)
     }))
   };
 }
@@ -103,7 +102,6 @@ function compactInventoryRows(entries, maxChars, maxTokens = Number.POSITIVE_INF
   for (const entry of entries ?? []) {
     const row = JSON.stringify({
       english: entry?.english,
-      pyash: entry?.pyash,
       ...(entry?.kind ? { kind: entry.kind } : {})
     });
     const next = used + row.length + (rows.length ? 1 : 0);
@@ -172,10 +170,6 @@ function sequence(value) {
 
 function sequenceKey(value) {
   return sequence(value).join(" ");
-}
-
-function sameSequence(left, right) {
-  return sequenceKey(left) === sequenceKey(right);
 }
 
 function candidateId(record, target, pyashSequence) {
@@ -426,22 +420,23 @@ export function buildEnglishWordNetSenseLinkPrompt({
     "When one sense is clearly the best contextual reading, accept that sense and reject competing readings instead of accepting every gloss-compatible sense.",
     "Use uncertain only when two or more senses remain genuinely plausible after reading the supplied sentence; never use accept as a generic vocabulary link.",
     "A context row may contain several sentences for the same term; preserve multiple accepted senses only when those sentences clearly require different readings.",
-    "Choose an anchor only from the supplied authoritative inventory.",
-    "For an accepted link, target must be the exact English inventory key, never a Pyash token.",
-    "Copy pyashSequence exactly from that inventory entry; do not put the Pyash token in target.",
+    "Choose an English anchor only from the supplied authoritative inventory.",
+    "For an accepted link, targetEnglish must be the exact English inventory key.",
+    "Return the English anchor and sense decision only; the host pipeline derives the Pyash sequence.",
+    "Never return Pyash tokens, pyashSequence, or a concatenated phrase.",
     "Preserve uncertainty when the inventory or sense evidence is insufficient.",
     "A link selects an existing atom, accepted compound, or accepted lexical mapping; it does not create vocabulary.",
     "Return exactly one JSON object with this shape:",
-    '{"verdict":"complete|partial|uncertain","senses":[{"id":"...","status":"accept|reject|uncertain","target":"...","pyashSequence":["..."],"rationale":"..."}]}',
+    '{"verdict":"complete|partial|uncertain","senses":[{"id":"...","status":"accept|reject|uncertain","targetEnglish":"...","rationale":"..."}]}',
     "Include exactly one result for every supplied sense id. Never return an empty senses array.",
-    "For reject or uncertain, omit target and pyashSequence.",
+    "For reject or uncertain, omit targetEnglish.",
     ...(text(repairReason) ? [
       `AUTOMATIC CONTRACT REPAIR: ${bounded(repairReason, 300)}`,
-      "Return every supplied sense id exactly once, and include target plus pyashSequence for every accepted row."
+      "Return every supplied sense id exactly once, and include targetEnglish for every accepted row. Never return Pyash tokens."
     ] : []),
     `SOURCE: ${text(source) || "Open English WordNet"}`,
     "Sense rows use id, p=part of speech, g=gloss, l=lemmas, c=deterministic candidates.",
-    "AUTHORITATIVE PYASH ATOM AND COMPOUND INVENTORY (English gloss -> Pyash token):",
+    "AUTHORITATIVE ENGLISH ANCHOR INVENTORY (choose the exact English key; Pyash lowering is deterministic):",
     "__INVENTORY__",
     "AUTHORITATIVE PYASH GRAMMAR INVENTORY:",
     grammar,
@@ -491,6 +486,10 @@ function partitionSenseRecords(records, options) {
   const batches = [];
   let batch = [];
   for (const record of records) {
+    if (batch.length >= options.maxDutySenses) {
+      batches.push(batch);
+      batch = [];
+    }
     const candidate = [...batch, record];
     try {
       buildEnglishWordNetSenseLinkPrompt({ ...options, records: candidate });
@@ -526,6 +525,7 @@ export async function submitEnglishWordNetSenseLinks({
   maxChars = ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS,
   maxTokens = ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS,
   maxOutputTokens = ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS,
+  maxDutySenses = ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE,
   submit,
   attempt = 1
 } = {}) {
@@ -533,7 +533,15 @@ export async function submitEnglishWordNetSenseLinks({
   const pending = records.filter((record) => !ACCEPTED_STATUSES.has(record?.status));
   if (pending.length === 0) return { submitted: false, records: [...records], pending: [] };
   if (typeof submit !== "function") throw invalid("WordNet linker requires a queue submitter");
-  const promptOptions = { inventory, source, context, maxChars, maxTokens, maxOutputTokens };
+  const promptOptions = {
+    inventory,
+    source,
+    context,
+    maxChars,
+    maxTokens,
+    maxOutputTokens,
+    maxDutySenses: Math.max(1, Math.trunc(Number(maxDutySenses) || ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE))
+  };
   const batches = partitionSenseRecords(pending, promptOptions);
   const queues = [];
   const prompts = [];
@@ -581,16 +589,15 @@ export async function submitEnglishWordNetSenseLinks({
   };
 }
 
-function inventoryMatch({ target, pyashSequence, record, inventory }) {
-  const targetName = normalized(target);
-  const words = sequence(pyashSequence);
+function inventoryMatch({ targetEnglish, record, inventory }) {
+  const targetName = normalized(targetEnglish);
   const options = [
     ...(record?.candidates ?? []),
-    ...(inventory?.entries ?? [])
+    ...(inventory?.entries ?? []),
+    ...(inventory?.grammar ?? [])
   ];
   return options.find((option) => (
     normalized(option?.target ?? option?.english) === targetName
-    && sameSequence(option?.pyashSequence ?? option?.pyash, words)
   )) ?? null;
 }
 
@@ -641,10 +648,12 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
     }
     const boundedRationale = bounded(rationale, MAX_RATIONALE_CHARS);
     if (status === "accept") {
-      const target = normalized(row?.target);
-      const pyashSequence = sequence(row?.pyashSequence);
-      if (!target || pyashSequence.length === 0) {
-        if (!recoverRows) return { valid: false, reason: "accepted sense requires target and Pyash sequence" };
+      if (Object.hasOwn(row, "pyashSequence")) {
+        return { valid: false, reason: "response must choose targetEnglish; Pyash sequence is derived" };
+      }
+      const targetEnglish = normalized(row?.targetEnglish);
+      if (!targetEnglish) {
+        if (!recoverRows) return { valid: false, reason: "accepted sense requires targetEnglish" };
         links.push({
           id,
           status: "uncertain",
@@ -652,8 +661,9 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
         });
         continue;
       }
-      const match = inventoryMatch({ target, pyashSequence, record: byId.get(id), inventory });
-      if (!match) {
+      const match = inventoryMatch({ targetEnglish, record: byId.get(id), inventory });
+      const pyashSequence = sequence(match?.pyashSequence ?? match?.pyash);
+      if (!match || pyashSequence.length === 0) {
         if (!recoverRows) return { valid: false, reason: "accepted sense target is outside the supplied inventory" };
         links.push({
           id,
@@ -665,7 +675,7 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
       links.push({
         id,
         status,
-        target,
+        target: targetEnglish,
         pyashSequence,
         targetPartOfSpeech: byId.get(id).pos,
         certainty: "contextual",
@@ -913,6 +923,7 @@ export function parseEnglishWordNetLinkerConfig(source) {
     queueLane: metadata["queue-lane"] || ENGLISH_WORDNET_LINKER_QUEUE_LANE,
     model: metadata.model || DEFAULT_TRANSLATION_MODEL,
     maxBatch: Math.max(1, Math.trunc(Number(metadata["max-batch"]) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE)),
+    maxDutySenses: Math.max(1, Math.trunc(Number(metadata["max-duty-senses"]) || ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE)),
     promptMaxChars: Math.max(1000, Math.trunc(Number(metadata["prompt-max-chars"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS)),
     promptMaxTokens: Math.max(100, Math.trunc(Number(metadata["prompt-max-tokens"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS)),
     maxOutputTokens: Math.max(100, Math.trunc(Number(metadata["max-output-tokens"]) || ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS)),
