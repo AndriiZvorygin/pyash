@@ -3689,13 +3689,20 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   endpoint = "/api/chat" if kind == "ollama-chat" else "/api/generate"
   timeout_sec = int(os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900"))
   if gpu_expected:
+    # A cold model is verified by ensure_ollama_model_gpu_resident immediately
+    # before inference. Preserve that evidence for fast jobs that unload at
+    # completion (for example, keep_alive=0) before the guard's next poll.
+    residency_verified = bool(
+      (target_residency and target_residency.get("gpuResident"))
+      or loading_sample is not None
+    )
     result = guarded_ollama_request(
       endpoint,
       payload,
       target_model,
       runtime_registry,
       timeout_sec,
-      already_gpu_resident=bool(target_residency and target_residency.get("gpuResident"))
+      already_gpu_resident=residency_verified
     )
     residency_report = ollama_running_model_status()
     if residency_report.get("available"):
