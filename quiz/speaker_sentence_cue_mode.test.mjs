@@ -8,12 +8,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const readRepoFile = relativePath => fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 
 const DIARIZER = readRepoFile("command/diarize_sentence_srt_from_transcript_folder.mjs");
-const MEETING_RUNNER = readRepoFile("world/house/andrii-youtube-reporter/program/run-andrii-youtube-meeting-from-ref.mjs");
-const FOLDER_RUNNER = readRepoFile("world/house/andrii-youtube-reporter/program/run-full-transcript-pipeline-from-meeting-folder.mjs");
-const PIPELINE = readRepoFile("world/house/andrii-youtube-reporter/program/run-full-transcript-pipeline.mjs");
-const OWEN_RUNNER = readRepoFile("world/house/owen-sound-reporter/program/run-owen-sound-youtube-from-ref.mjs");
-const OWEN_PIPELINE = readRepoFile("world/house/owen-sound-reporter/program/run-full-transcript-pipeline.mjs");
-const GREY_PIPELINE = readRepoFile("world/house/grey-county-reporter/program/run-full-transcript-pipeline.mjs");
 const AUTO_ASSIGN = readRepoFile("command/auto_assign_speakers_from_callouts.mjs");
 
 test("interview diarization routes one sentence cue per recognition request", () => {

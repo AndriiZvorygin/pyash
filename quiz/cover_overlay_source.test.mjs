@@ -50,8 +50,8 @@ test("stale business hook rejected when final title is fourth avenue", () => {
   assert.ok(out.rejectedOverlayTexts.some((r) => r.text === "Easing The Burden On Local Businesses"));
 });
 
-test("promptify for fourth avenue picks roadwork/street civic subject", () => {
-  const out = runCoverPromptifyStage({
+test("promptify for fourth avenue picks roadwork/street civic subject", async () => {
+  const out = await runCoverPromptifyStage({
     hookText: "Fourth Avenue One-Way Option Defeated",
     overlayText: "Fourth Avenue One-Way Option Defeated",
     oneSentenceSummary: "On April 27, 2026, council deferred Fourth Avenue to 2027.",

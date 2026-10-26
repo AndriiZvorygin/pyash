@@ -495,7 +495,9 @@ export async function runToolChat({
       let toolText = "";
       if (surfacedTool && typeof surfacedTool === "object") {
         if (surfacedTool.be === "error") {
-          toolText = String(surfacedTool.ob?.text ?? "tool failed").trim();
+          const errorName = String(surfacedTool.su?.name ?? "").trim();
+          const errorMessage = String(surfacedTool.ob?.text ?? "tool failed").trim();
+          toolText = [errorName, errorMessage].filter(Boolean).join(": ");
         }
         const mapName = surfacedTool.ob?.name;
         const mapFact = mapName ? remember(mapName) : null;

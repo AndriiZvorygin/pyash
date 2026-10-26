@@ -4,8 +4,9 @@ su name read from filename input become wo text to name text output be ceremony 
   ob name input to name mime be plus do
   ob text "\" ]; then file --mime-type -b -- \"" to name mime be plus do
   ob name input to name mime be plus do
-  ob text "\"; else echo \"\"; fi | tr -d '\\n' | tr -d '\\`'" to name mime be plus do
+  ob text "\"; else echo \"\"; fi | head -c -1" to name mime be plus do
   ob text of mime to name text mime be command do
+  ob text of result to name text mime be text do
 
   exists su name cat ob text "cat -- \"" be text ya
   ob name input to name cat be plus do
@@ -13,8 +14,9 @@ su name read from filename input become wo text to name text output be ceremony 
 
   exists su name kind ob text "case \"" be text ya
   ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name kind be plus do
   ob text of kind to name text kind be command do
+  ob text of result to name text kind be text do
 
   exists su name handled ob num 0 be number ya
   ob name kind be equally from text "html" then
@@ -59,8 +61,9 @@ su name read from filename input become wo text be ceremony def
   ob name input to name mime be plus do
   ob text "\" ]; then file --mime-type -b -- \"" to name mime be plus do
   ob name input to name mime be plus do
-  ob text "\"; else echo \"\"; fi | tr -d '\\n' | tr -d '\\`'" to name mime be plus do
+  ob text "\"; else echo \"\"; fi | head -c -1" to name mime be plus do
   ob text of mime to name text mime be command do
+  ob text of result to name text mime be text do
 
   exists su name cat ob text "cat -- \"" be text ya
   ob name input to name cat be plus do
@@ -68,8 +71,9 @@ su name read from filename input become wo text be ceremony def
 
   exists su name kind ob text "case \"" be text ya
   ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name kind be plus do
   ob text of kind to name text kind be command do
+  ob text of result to name text kind be text do
 
   exists su name handled ob num 0 be number ya
   ob name kind be equally from text "html" then
@@ -114,8 +118,9 @@ su name read from filename input become wo markdown to name text output be cerem
   ob name input to name mime be plus do
   ob text "\" ]; then file --mime-type -b -- \"" to name mime be plus do
   ob name input to name mime be plus do
-  ob text "\"; else echo \"\"; fi | tr -d '\\n' | tr -d '\\`'" to name mime be plus do
+  ob text "\"; else echo \"\"; fi | head -c -1" to name mime be plus do
   ob text of mime to name text mime be command do
+  ob text of result to name text mime be text do
 
   exists su name cat ob text "cat -- \"" be text ya
   ob name input to name cat be plus do
@@ -123,8 +128,9 @@ su name read from filename input become wo markdown to name text output be cerem
 
   exists su name kind ob text "case \"" be text ya
   ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name kind be plus do
   ob text of kind to name text kind be command do
+  ob text of result to name text kind be text do
 
   exists su name handled ob num 0 be number ya
   ob name kind be equally from text "html" then
@@ -169,8 +175,9 @@ su name read from filename input become wo markdown plain to name text output be
   ob name input to name mime be plus do
   ob text "\" ]; then file --mime-type -b -- \"" to name mime be plus do
   ob name input to name mime be plus do
-  ob text "\"; else echo \"\"; fi | tr -d '\\n' | tr -d '\\`'" to name mime be plus do
+  ob text "\"; else echo \"\"; fi | head -c -1" to name mime be plus do
   ob text of mime to name text mime be command do
+  ob text of result to name text mime be text do
 
   exists su name cat ob text "cat -- \"" be text ya
   ob name input to name cat be plus do
@@ -178,8 +185,9 @@ su name read from filename input become wo markdown plain to name text output be
 
   exists su name kind ob text "case \"" be text ya
   ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name kind be plus do
   ob text of kind to name text kind be command do
+  ob text of result to name text kind be text do
 
   exists su name handled ob num 0 be number ya
   ob name kind be equally from text "html" then
