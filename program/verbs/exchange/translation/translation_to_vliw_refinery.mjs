@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 
 import { buildProgram } from "../../../program.mjs";
@@ -9,7 +10,9 @@ import {
   lowerTranslationToPyac,
   renderTranslationPipelinePya,
   segmentTranslationDocument,
-  translateDocumentSegments
+  translateDocumentSegments,
+  loadEnglishResourceHashes,
+  mergeTranslationArtifacts
 } from "./translation_pipeline.mjs";
 import {
   applyEnglishWordNetSenseAttachmentLinks,
@@ -29,6 +32,7 @@ import {
 import {
   translationOccurrenceKey
 } from "./translation_occurrence.mjs";
+import { inspectTranslationRefineryArtifacts } from "./translation_refinery_artifacts.mjs";
 
 export const TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME = "translation source vliw";
 export const TRANSLATION_SOURCE_TO_VLIW_REFINERY_URL = new URL(
@@ -47,6 +51,45 @@ function invalid(message, details = {}) {
 
 function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
+}
+
+function sourceHash(value) {
+  return createHash("sha256").update(String(value ?? "")).digest("hex");
+}
+
+function stableResourceHashes(value) {
+  return JSON.stringify(Object.fromEntries(
+    Object.entries(value ?? {}).sort(([left], [right]) => left.localeCompare(right))
+  ));
+}
+
+function priorStageArtifacts(checkpointIndex) {
+  const inspected = inspectTranslationRefineryArtifacts({
+    checkpointIndex,
+    refineryName: TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME
+  });
+  return new Map(inspected.stages.map((stage) => [stage.stage, stage.outputArtifact]));
+}
+
+function priorTranslationArtifact(stageArtifacts) {
+  for (const stage of ["write outputs", "render translation", "refine compounds", "review vocabulary", "refine senses", "translate sentences"]) {
+    const translation = stageArtifacts.get(stage)?.translation;
+    if (translation) return translation;
+  }
+  return null;
+}
+
+function reusableCheckpointIndex({ checkpointIndex, source, resourceHashes }) {
+  if (!(checkpointIndex instanceof Map) || checkpointIndex.size === 0) return checkpointIndex;
+  const prior = priorTranslationArtifact(priorStageArtifacts(checkpointIndex));
+  if (!prior || prior.sourceHash !== sourceHash(source)) return new Map();
+  if (stableResourceHashes(prior.resourceHashes) !== stableResourceHashes(resourceHashes)) return new Map();
+  return checkpointIndex;
+}
+
+function mergeStageTranslation(context, stage, translation) {
+  const prior = context.priorStageArtifacts.get(stage)?.translation;
+  return mergeTranslationArtifacts(translation, prior);
 }
 
 function occurrenceKey(record) {
@@ -103,7 +146,8 @@ function sourceInput(context) {
     source: context.source,
     locator: context.locator,
     sourcePath: context.sourcePath,
-    paths: context.paths
+    paths: context.paths,
+    resourceHashes: context.resourceHashes
   };
 }
 
@@ -356,30 +400,39 @@ async function runStage(sentence, context) {
   } else if (stage === "translate sentences") {
     const input = mapValue("source input").input ?? sourceInput(context);
     const segments = mapValue("source segments").segments ?? [];
+    const translated = await translateDocumentSegments({
+      language: input.language,
+      text: input.source,
+      segments,
+      locator: input.locator,
+      contextRadius: context.contextRadius,
+      verify: context.verify,
+      resourceHashes: context.resourceHashes,
+      adapterResolver: context.adapterResolver
+    });
     result = {
-      translation: await translateDocumentSegments({
-        language: input.language,
-        text: input.source,
-        segments,
-        locator: input.locator,
-        contextRadius: context.contextRadius,
-        verify: context.verify,
-        resourceHashes: context.resourceHashes,
-        adapterResolver: context.adapterResolver
-      })
+      translation: mergeStageTranslation(context, stage, translated)
     };
   } else if (stage === "refine senses") {
-    const translated = mapValue("translated document").translation;
+    const translated = mergeStageTranslation(
+      context,
+      stage,
+      mapValue("translated document").translation
+    );
     context.sourceSegments = mapValue("source segments").segments ?? segmentTranslationDocument(context.source);
     result = await refineSenses(context, translated);
   } else if (stage === "review vocabulary") {
-    const translated = mapValue("sensed document").translation;
+    const translated = mergeStageTranslation(
+      context,
+      stage,
+      mapValue("sensed document").translation
+    );
     const reviewed = await reviewVocabulary(context, translated);
     context.vocabulary = reviewed;
     result = reviewed;
   } else if (stage === "refine compounds") {
     const reviewed = mapValue("reviewed document");
-    const translated = reviewed.translation;
+    const translated = mergeStageTranslation(context, stage, reviewed.translation);
     context.vocabulary = {
       queued: reviewed.queued,
       settled: reviewed.settled
@@ -499,6 +552,15 @@ export async function runTranslationSourceToVliwRefinery({
     throw invalid("translation refinery requires translation, catalog, and pack paths", { paths });
   }
 
+  const resolvedResourceHashes = resourceHashes
+    ?? (normalizedLanguage === "english" ? await loadEnglishResourceHashes() : {});
+  const stageArtifacts = priorStageArtifacts(checkpointIndex);
+  const effectiveCheckpointIndex = reusableCheckpointIndex({
+    checkpointIndex,
+    source,
+    resourceHashes: resolvedResourceHashes
+  });
+
   await ensureTranslationSourceToVliwRefinery({ interpretFn });
   const context = {
     language: normalizedLanguage,
@@ -509,7 +571,7 @@ export async function runTranslationSourceToVliwRefinery({
     sourceSegments: segmentTranslationDocument(source),
     contextRadius,
     verify,
-    resourceHashes,
+    resourceHashes: resolvedResourceHashes,
     adapterResolver,
     queueVocabulary,
     awaitVocabulary,
@@ -520,6 +582,7 @@ export async function runTranslationSourceToVliwRefinery({
     result: null,
     translation: null,
     database: null,
+    priorStageArtifacts: stageArtifacts,
     onStage
   };
 
@@ -527,7 +590,7 @@ export async function runTranslationSourceToVliwRefinery({
     name: TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
     interpret: (sentence) => runStage(sentence, context),
     runId,
-    checkpointIndex,
+    checkpointIndex: effectiveCheckpointIndex,
     checkpointEnabled,
     retryConfig,
     onEvoke,

@@ -47,6 +47,100 @@ function stableId(parts) {
   return `translation-${hash(parts.join("\u0000")).slice(0, 24)}`;
 }
 
+function occurrenceKey(value) {
+  return value?.occurrenceId
+    || translationOccurrenceId({
+      sourceRecordId: value?.sourceRecordId,
+      tokenIndex: value?.tokenIndex,
+      surface: value?.surface
+    })
+    || `${text(value?.sourceRecordId)}\u0000${String(value?.tokenIndex ?? "")}\u0000${text(value?.surface).toLowerCase()}`;
+}
+
+function hasSequence(value) {
+  return Array.isArray(value?.pyashSequence) && value.pyashSequence.length > 0;
+}
+
+function mergeTokens(currentTokens = [], priorTokens = []) {
+  const priorByKey = new Map(priorTokens.map((token) => [occurrenceKey(token), token]));
+  return currentTokens.map((token) => {
+    const prior = priorByKey.get(occurrenceKey(token));
+    if (!prior || !hasSequence(prior) || hasSequence(token)) return token;
+    return {
+      ...prior,
+      ...token,
+      pyashSequence: [...prior.pyashSequence],
+      ...(prior.coverageType ? { coverageType: prior.coverageType } : {})
+    };
+  });
+}
+
+function mergeRecords(currentRecords = [], priorRecords = []) {
+  const priorById = new Map(priorRecords.map((record) => [record.id, record]));
+  return currentRecords.map((record) => {
+    const prior = priorById.get(record.id);
+    if (!prior) return record;
+    const tokens = mergeTokens(record.tokens ?? [], prior.tokens ?? []);
+    const preservedResolved = prior.status === "resolved" && record.status !== "resolved";
+    const unresolved = [...new Set((record.unresolved ?? []).filter((surface) => (
+      !tokens.some((token) => text(token.surface).toLowerCase() === text(surface).toLowerCase() && hasSequence(token))
+    )))];
+    const merged = {
+      ...prior,
+      ...record,
+      source: record.source ?? prior.source,
+      context: record.context ?? prior.context,
+      tokens,
+      ...(unresolved.length > 0 ? { unresolved } : {})
+    };
+    if (unresolved.length === 0) delete merged.unresolved;
+    if (preservedResolved) {
+      merged.status = "resolved";
+      delete merged.unresolved;
+    }
+    return merged;
+  });
+}
+
+function mergeCandidates(currentCandidates = [], priorCandidates = []) {
+  const currentById = new Map(currentCandidates.map((candidate) => [candidate.id || occurrenceKey(candidate), candidate]));
+  for (const prior of priorCandidates) {
+    const key = prior.id || occurrenceKey(prior);
+    const current = currentById.get(key);
+    if (!current) {
+      if (String(prior.status ?? "").startsWith("accepted-")) currentById.set(key, prior);
+      continue;
+    }
+    const accepted = String(prior.status ?? "").startsWith("accepted-");
+    if (accepted && !String(current.status ?? "").startsWith("accepted-")) currentById.set(key, prior);
+  }
+  return [...currentById.values()];
+}
+
+export function mergeTranslationArtifacts(current, prior) {
+  if (!current || !prior || current.sourceHash !== prior.sourceHash) return current;
+  const records = mergeRecords(current.records ?? [], prior.records ?? []);
+  const vocabularyCandidates = mergeCandidates(
+    current.vocabularyCandidates ?? [],
+    prior.vocabularyCandidates ?? []
+  );
+  const counts = Object.fromEntries(
+    TRANSLATION_RECORD_STATUSES.map((status) => [
+      status,
+      records.filter((record) => record.status === status).length
+    ])
+  );
+  return {
+    ...current,
+    records,
+    vocabularyCandidates,
+    counts,
+    resolved: records.filter((record) => record.status === "resolved"),
+    provisional: records.filter((record) => record.status === "provisional"),
+    unresolved: records.filter((record) => record.status === "unresolved")
+  };
+}
+
 function normalizeLanguage(value) {
   return text(value).toLowerCase();
 }
@@ -427,13 +521,9 @@ export async function translateDocument({
   });
 }
 
-async function loadEnglishResourceHashes() {
+export async function loadEnglishResourceHashes() {
   const resources = await loadEnglishSentenceResources();
-  return {
-    english30k: resources.source.sourceHash,
-    englishLemmas: resources.lemmaCatalog.sourceHash,
-    englishGrammar: resources.grammarCatalog.sourceHash
-  };
+  return { ...resources.resourceHashes };
 }
 
 export function lowerTranslationToPyac(result) {

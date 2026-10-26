@@ -163,6 +163,15 @@ test("vocab_suggest exposes lexical and progressive readings of English brainsto
   assert.match(lines.join("\n"), /brainstorming: morphology brainstorm \(brain \+ storm\) \+ progressive_aspect_ -> twum hfup pfih \(contextual\); specific atom brain_storming -> hto7n/u);
 });
 
+test("vocab_suggest does not label a third-person compound verb as progressive", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["involves"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.deepEqual(result.compoundMorphologies, []);
+  assert.equal(lines.some((line) => line.includes("progressive_aspect_")), false);
+});
+
 test("vocab_suggest derives the expanded deterministic compound set", async () => {
   const lines = [];
   const result = await runVocabSuggest(["acid-rain"], {

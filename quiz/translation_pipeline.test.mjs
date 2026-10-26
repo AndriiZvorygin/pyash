@@ -15,7 +15,8 @@ import {
   parseTranslationPipelinePya,
   renderTranslationPipelinePya,
   segmentTranslationDocument,
-  translateDocument
+  translateDocument,
+  mergeTranslationArtifacts
 } from "../program/verbs/exchange/translation/translation_pipeline.mjs";
 import {
   renderPyashSentenceSurface,
@@ -114,6 +115,73 @@ test("English translation uses the shared resources and retains unresolved vocab
   assert.equal(result.vocabularyCandidates[0].surface, "blorf");
   assert.equal(result.vocabularyCandidates[0].status, "queued");
   assert.equal(result.vocabularyCandidates[0].sourceRecordId, result.records[1].id);
+});
+
+test("English paragraph reuses the accepted involve compound before vocabulary review", async () => {
+  const result = await translateDocument({
+    language: "english",
+    text: "Love involves caring for another.",
+    locator: "fixture.txt"
+  });
+  const involves = result.records[0].tokens.find((token) => token.surface === "involves");
+  assert.equal(involves.coverageType, "compound");
+  assert.deepEqual(involves.pyashSequence, ["lwak", "hzan"]);
+  assert.deepEqual(result.records[0].unresolved, ["caring"]);
+});
+
+test("translation artifact merging never downgrades an accepted occurrence", () => {
+  const prior = {
+    sourceHash: "same-source",
+    records: [{
+      id: "sentence-1",
+      status: "resolved",
+      sentence: { mood: "ya", su: { name: "mi" }, be: "pfin", ob: { name: "lwak hzan" } },
+      tokens: [{
+        occurrenceId: "translation-occurrence-1",
+        surface: "involve",
+        coverageType: "compound",
+        pyashSequence: ["lwak", "hzan"]
+      }]
+    }],
+    vocabularyCandidates: [{
+      id: "translation-occurrence-1",
+      occurrenceId: "translation-occurrence-1",
+      surface: "involve",
+      status: "accepted-llm",
+      pyashSequence: ["lwak", "hzan"]
+    }, {
+      id: "translation-occurrence-2",
+      occurrenceId: "translation-occurrence-2",
+      surface: "caring",
+      status: "queued"
+    }]
+  };
+  const fresh = {
+    sourceHash: "same-source",
+    records: [{
+      id: "sentence-1",
+      status: "unresolved",
+      unresolved: ["involve"],
+      tokens: [{
+        occurrenceId: "translation-occurrence-1",
+        surface: "involve",
+        coverageType: "unresolved",
+        pyashSequence: []
+      }]
+    }],
+    vocabularyCandidates: [{
+      id: "translation-occurrence-1",
+      occurrenceId: "translation-occurrence-1",
+      surface: "involve",
+      status: "queued"
+    }]
+  };
+  const merged = mergeTranslationArtifacts(fresh, prior);
+  assert.equal(merged.records[0].status, "resolved");
+  assert.equal(merged.records[0].unresolved, undefined);
+  assert.deepEqual(merged.records[0].tokens[0].pyashSequence, ["lwak", "hzan"]);
+  assert.equal(merged.vocabularyCandidates.length, 1);
+  assert.equal(merged.vocabularyCandidates[0].status, "accepted-llm");
 });
 
 test("translation persists sense candidates per stable source occurrence", async () => {
@@ -348,10 +416,10 @@ test("translation document submits vocabulary review through the injected queue"
       }
     }
   );
-  assert.equal(submissions.length, 2);
-  assert.deepEqual(submissions.map((request) => request.candidates.length), [1, 1]);
+  assert.equal(submissions.length, 1);
+  assert.deepEqual(submissions.map((request) => request.candidates.length), [1]);
   assert.match(submissions[0].prompt, /Pyash vocabulary review worker/u);
-  assert.equal(reports[0].vocabularySubmitted, 2);
+  assert.equal(reports[0].vocabularySubmitted, 1);
   assert.equal(output.translation.vocabularyQueue.status, "queued");
   assert.equal(output.translation.vocabularyCandidates.every((candidate) => candidate.queue?.handleId), true);
   const parsed = parseTranslationPipelinePya(readFileSync(translation, "utf8"));

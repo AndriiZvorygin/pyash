@@ -604,7 +604,10 @@ export async function submitTranslationVocabularyCandidates({
 } = {}) {
   if (!result || typeof result !== "object") throw invalid("vocabulary queue requires a translation result");
   if (!text(sourceText)) throw invalid("vocabulary queue requires source text");
-  const candidates = Array.isArray(result.vocabularyCandidates) ? result.vocabularyCandidates : [];
+  const candidates = (Array.isArray(result.vocabularyCandidates) ? result.vocabularyCandidates : [])
+    .filter((candidate) => (
+      candidate?.status !== "accepted-llm" && candidate?.verificationStatus !== "accepted-llm"
+    ));
   if (candidates.length === 0) {
     return { result, submitted: false, submittedCount: 0, handleId: "", candidates: [] };
   }

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { sentenceToPyash } from "../../../beautiful.mjs";
 import pyashWords from "../../../library/pyashWords.json" with { type: "json" };
 import {
@@ -16,6 +18,7 @@ import { loadEnglishGrammarCatalog, buildEnglishGrammarIndex } from "./english_g
 import { buildEnglishLemmaIndex, loadEnglishLemmaCatalog } from "./english_lemmas.mjs";
 import { buildEnglishWordNetIndex, loadEnglishWordNet } from "./english_wordnet.mjs";
 import { loadEnglishWordNetBridges } from "./english_wordnet_bridges.mjs";
+import { loadCuratedCompoundDecompositions } from "./compound_coverage.mjs";
 import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 import { translationOccurrenceKey } from "./translation_occurrence.mjs";
 
@@ -65,6 +68,22 @@ const WORDNET_GRAPH_SELECTION_MIN_MARGIN = 0.3;
 
 let defaultResourcesPromise = null;
 let sentenceResourcesPromise = null;
+
+function stableResourceValue(value) {
+  if (Array.isArray(value)) return value.map(stableResourceValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, stableResourceValue(value[key])])
+    );
+  }
+  return value;
+}
+
+function resourceHash(value) {
+  return createHash("sha256")
+    .update(JSON.stringify(stableResourceValue(value)))
+    .digest("hex");
+}
 
 function invalid(message) {
   const error = new Error(message);
@@ -136,6 +155,12 @@ function wordNetMetadata(surface, wordnetIndex) {
     senses,
     evidence: senses.map((sense) => `${sense.pos}:${sense.synset}${sense.gloss ? ` ${sense.gloss}` : ""}`).join("; ")
   };
+}
+
+function isVerbOnlyWordNetRecord(surface, wordnetIndex) {
+  const metadata = wordNetMetadata(surface, wordnetIndex);
+  return Boolean(metadata?.partsOfSpeech?.length)
+    && metadata.partsOfSpeech.every((partOfSpeech) => partOfSpeech === "v");
 }
 
 function wordNetContextTerms(records, index) {
@@ -297,8 +322,11 @@ function wordRecord(surface, {
         && row.coverage.coverageType !== "dictionary-alias");
     if (singular) {
       coverage = singular.coverage;
-      pyashSequence = [...singular.coverage.pyashSequence, "pu"];
-      grammaticalNumber = "plural";
+      pyashSequence = [...singular.coverage.pyashSequence];
+      if (!isVerbOnlyWordNetRecord(singular.candidate, wordnetIndex)) {
+        pyashSequence.push("pu");
+        grammaticalNumber = "plural";
+      }
     }
   }
   const wordnet = lemma?.lemma && lemma.lemma !== normalized
@@ -855,20 +883,7 @@ export function analyzeEnglishSentence(source, {
 }
 
 export async function loadDefaultEnglishSentenceResources() {
-  if (!defaultResourcesPromise) {
-    defaultResourcesPromise = loadEnglishSentenceResources().then((resources) => ({
-      ...resources,
-      coverage: buildEnglish30kCoverage({
-        source: resources.source,
-        atomicEntries: pyashWords,
-        aliases: resources.aliases,
-        dictionaryAliases: resources.dictionaryAliases,
-        grammarMappings: resources.grammarMappings,
-        grammarOverrides: resources.grammarOverrides,
-        lemmaEntries: resources.lemmaCatalog.entries
-      })
-    }));
-  }
+  if (!defaultResourcesPromise) defaultResourcesPromise = loadEnglishSentenceResources();
   return defaultResourcesPromise;
 }
 
@@ -881,8 +896,9 @@ export async function loadEnglishSentenceResources() {
       loadEnglishDictionaryBlacklist(),
       loadAnchorWordForms(),
       loadEnglishWordNet(),
-      loadEnglishWordNetBridges()
-    ]).then(([source, lemmaCatalog, grammarCatalog, dictionary, anchors, wordnet, bridgeCatalog]) => {
+      loadEnglishWordNetBridges(),
+      loadCuratedCompoundDecompositions()
+    ]).then(([source, lemmaCatalog, grammarCatalog, dictionary, anchors, wordnet, bridgeCatalog, compoundRecords]) => {
       const grammarIndex = buildEnglishGrammarIndex({ catalogEntries: grammarCatalog.entries });
       const aliases = anchors.formsToAnchor;
       const dictionaryAliases = buildEnglishDictionaryAliases({
@@ -921,15 +937,21 @@ export async function loadEnglishSentenceResources() {
         relations: wordnet.relations,
         bridges: bridgeCatalog.entries
       });
-      return {
+      const curatedCompoundRecords = compoundRecords.map((entry) => ({
+        ...entry,
+        status: "accepted-curated"
+      }));
+      const resources = {
         source,
         lemmaCatalog,
+        dictionary,
         grammarCatalog,
         grammarIndex,
         grammarMappings,
         grammarOverrides: grammarIndex.mappings,
         dictionaryAliases,
         aliases,
+        compoundRecords: curatedCompoundRecords,
         lemmaIndex,
         sourceByVariant,
         atomicByVariant,
@@ -939,6 +961,28 @@ export async function loadEnglishSentenceResources() {
           index: wordnetIndex
         }
       };
+      resources.coverage = buildEnglish30kCoverage({
+        source,
+        atomicEntries: pyashWords,
+        aliases,
+        dictionaryAliases,
+        grammarMappings,
+        grammarOverrides: grammarIndex.mappings,
+        compoundRecords: curatedCompoundRecords,
+        lemmaEntries: lemmaCatalog.entries,
+        lemmaIndex
+      });
+      resources.resourceHashes = Object.freeze({
+        english30k: source.sourceHash,
+        englishLemmas: lemmaCatalog.sourceHash,
+        englishGrammar: grammarCatalog.sourceHash,
+        englishDictionary: dictionary.sourceHash,
+        englishAnchors: resourceHash([...aliases.entries()].sort(([left], [right]) => left.localeCompare(right))),
+        englishCompounds: resourceHash(curatedCompoundRecords),
+        englishWordNet: wordnet.sourceHash,
+        englishWordNetBridges: resourceHash(bridgeCatalog.entries)
+      });
+      return resources;
     });
   }
   return sentenceResourcesPromise;

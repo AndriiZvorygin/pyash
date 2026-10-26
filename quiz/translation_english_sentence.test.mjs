@@ -49,9 +49,10 @@ function fixtureResolver() {
   return (word) => rows.get(word) ?? null;
 }
 
-test("English sentence resources expose a staged source index before full coverage", async () => {
+test("English sentence resources expose one shared full coverage index", async () => {
   const resources = await loadEnglishSentenceResources();
-  assert.equal(resources.coverage, undefined);
+  assert.equal(resources.coverage.counts.compound, 22);
+  assert.deepEqual(resources.coverage.byVariant.get("involve").pyashSequence, ["lwak", "hzan"]);
   assert.equal(resources.source.cutoff, 30000);
   assert.ok(resources.wordnet.rows.length > 4000);
   assert.equal(resources.sourceByVariant.get("walked").word, "walked");
