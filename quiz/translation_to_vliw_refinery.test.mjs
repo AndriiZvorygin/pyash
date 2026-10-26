@@ -76,3 +76,47 @@ test("source-to-VLIW refinery writes the translation catalog and executable pack
   assert.equal(parseVliwCatalogPya(readFileSync(paths.catalog, "utf8")).catalog.records.length, 2);
   assert.equal(readFileSync(paths.pack).length > 32, true);
 });
+
+test("source-to-VLIW refinery replays its durable map checkpoints", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-replay-"));
+  const paths = {
+    translation: join(directory, "translation.pya"),
+    catalog: join(directory, "catalog.pya"),
+    pack: join(directory, "pack.pyac")
+  };
+  const checkpoints = [];
+  const first = await runTranslationSourceToVliwRefinery({
+    language: "english",
+    source: "collector is number 5.\nadd 2 to collector.\n",
+    locator: "fixture.txt",
+    paths,
+    onCheckpoint: (sentence) => checkpoints.push(sentence)
+  });
+  const checkpointIndex = new Map([
+    [
+      TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
+      new Map(checkpoints.map((sentence) => {
+        const payload = JSON.parse(sentence.fromtext.text);
+        return [sentence.su.name, {
+          hash: sentence.ob.text,
+          resultSentence: sentence.to.la,
+          resultLine: sentence.totext.text,
+          exportFacts: payload.exports,
+          scopeSlots: payload.scope
+        }];
+      }))
+    ]
+  ]);
+
+  const second = await runTranslationSourceToVliwRefinery({
+    language: "english",
+    source: "collector is number 5.\nadd 2 to collector.\n",
+    locator: "fixture.txt",
+    paths,
+    checkpointIndex
+  });
+
+  assert.equal(checkpoints.length, 9);
+  assert.deepEqual(second.result, first.result);
+  assert.equal(second.database.catalog.packHash, first.database.catalog.packHash);
+});
