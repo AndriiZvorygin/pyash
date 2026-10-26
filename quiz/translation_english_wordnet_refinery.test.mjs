@@ -69,7 +69,7 @@ test("standard WordNet refinery selects leaf links and queues only pending sense
   assert.equal(refined.queuePending, 1);
   assert.equal(submissions.length, 1);
   assert.match(submissions[0].handleId, /^english-wordnet-select-/u);
-  assert.match(submissions[0].prompt, /POSSIBLE SENSES/u);
+  assert.match(submissions[0].prompt, /OPTIONS/u);
   assert.match(submissions[0].prompt, /blorp/u);
   assert.equal(refined.records[0].queue.status, "queued");
 });
