@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { parse } from "../program/understand/index.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { runScriptWithInput } from "./helpers/run_script.mjs";
+import { loadCheckpointIndex } from "../command/run_pya_helpers.mjs";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(".");
@@ -149,4 +150,30 @@ test("runner ratify resume carries one identity through approval, result, audits
     "--run-id", runId,
     "--run-root", tmpDir
   ], { cwd: repoRoot, env: cleanEnv(), timeout: 120000 });
+});
+
+test("checkpoint loader follows externalized newspaper payload artifacts", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-checkpoint-artifact-"));
+  const runId = "external-checkpoint";
+  const result = {
+    mood: "ya",
+    su: { name: "source input" },
+    be: "map",
+    ob: { map: { input: { source: "text" } } }
+  };
+  const payload = JSON.stringify({ platform: "read source", result, exports: [], scope: {} });
+  await fs.mkdir(path.join(tmpDir, "artifacts", runId, "newspaper"), { recursive: true });
+  await fs.mkdir(path.join(tmpDir, "newspaper"), { recursive: true });
+  await fs.writeFile(
+    path.join(tmpDir, "artifacts", runId, "newspaper", "text-000001.txt"),
+    payload,
+    "utf8"
+  );
+  await fs.writeFile(
+    path.join(tmpDir, "newspaper", `${runId}.pya`),
+    `su name read source ob text "hash" from name translation source vliw to la su name source input be map ya ko fromtext text "artifact newspaper-001 sha256:fixture" totext text "artifact newspaper-001 sha256:fixture" be checkpoint ya\n`,
+    "utf8"
+  );
+  const checkpoints = await loadCheckpointIndex({ runId, cwd: tmpDir });
+  assert.equal(checkpoints.get("translation source vliw").get("read source").resultSentence.su.name, "source input");
 });

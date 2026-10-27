@@ -38,6 +38,10 @@ ob text "task" from name plan loop to name text result be refinery do
 - bounded retry behavior,
 - replay visibility through run recording.
 
+Every refinery job has one semantic destination and one artifact folder. The
+destination names the goal state; stage outputs, manifests, checkpoints, queue
+evidence, and other durable products remain artifacts of that same job.
+
 Native sub-refinery invocation rule:
 - a refinery call may target either a registered refinery name or a refinery-backed `.pya` program file,
 - canonical file-backed call shape is `from filename "<program>.pya" ob name <bindings map> to name map <result> be refinery do`,

@@ -456,10 +456,11 @@ async function main() {
   let toolCounter = 0;
   const pushNewspaper = (line) => {
     if (!line) return;
-    let nextLine = line;
+    const sourceSentence = typeof line === "object" ? line : null;
+    let nextLine = sourceSentence ? sentenceToPyash(sourceSentence) : line;
     if ((useNewspaper || useAgain)) {
       try {
-        const parsed = parse(String(line).trim());
+        const parsed = sourceSentence ?? parse(String(line).trim());
         if (parsed?.mood) {
           const rewritten = rewriteSentenceTextForNewspaper(parsed, {
             runId,
@@ -472,7 +473,7 @@ async function main() {
         }
       } catch {
         // Keep the run alive even if newspaper formatting/externalization overflows.
-        nextLine = String(line);
+        nextLine = sourceSentence ? sentenceToPyash(sourceSentence) : String(line);
       }
       newspaperLines.push(nextLine);
     }
@@ -552,7 +553,7 @@ async function main() {
   if (useNewspaper) {
     setExchangeRecorder({
       runRoot,
-      record: (sentence) => pushNewspaper(sentenceToPyash(sentence))
+      record: (sentence) => pushNewspaper(sentence)
     });
     setExchangeRunId(runId);
     setExchangeStrict(true);
@@ -646,10 +647,10 @@ async function main() {
       pushNewspaper(`ob la ${embedded} ko be evoke ya`);
     },
     onCheckpoint: (checkpointSentence) => {
-      pushNewspaper(sentenceToPyash(checkpointSentence));
+      pushNewspaper(checkpointSentence);
     },
     onRetry: (retrySentence) => {
-      pushNewspaper(sentenceToPyash(retrySentence));
+      pushNewspaper(retrySentence);
     },
     onResult: (res) => {
       const resultSentence = toResultSentence(res, null);
