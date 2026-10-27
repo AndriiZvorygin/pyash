@@ -1,6 +1,7 @@
 import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
+import { emitExchangeSentence } from "../../bridge/exchange.mjs";
 import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
 import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
 import { translatePyacToEnglishPyash } from "./translation/pyac_to_english_pyash.mjs";
@@ -236,9 +237,63 @@ export async function translation_from_text_to_name_text(sentence) {
   return { ob: { text: translation, sentences }, be: sentence?.become?.name ?? outputLang };
 }
 
+export async function translation_from_filename_to_vliw(sentence, options = {}) {
+  const sourcePath = sentence?.from?.filename;
+  const sourceLanguage = String(sentence?.fromstate?.name ?? "english").trim().toLowerCase();
+  const target = String(sentence?.become?.name ?? sentence?.tostate?.name ?? "").trim().toLowerCase();
+  const outputName = sentence?.to?.name;
+  if (!sourcePath) throw new Error("translation source-to-VLIW operation requires a source filename");
+  if (target !== "vliw") throw new Error(`translation source-to-VLIW operation requires vliw target, got ${target || "unknown"}`);
+  if (!outputName) throw new Error("translation source-to-VLIW operation requires a map output name");
+
+  const { runTranslationVliwJob } = await import("./translation/translation_to_vliw_job.mjs");
+  const verbose = process.env.PYA_RUN_VERBOSE === "1";
+  const log = (message) => {
+    if (verbose) console.error(`[translation] ${message}`);
+  };
+  const output = await runTranslationVliwJob({
+    sourcePath,
+    language: sourceLanguage,
+    cwd: options.cwd ?? process.cwd(),
+    runId: options.runId ?? process.env.PYA_RUN_ID ?? null,
+    dependencies: options.translationDependencies ?? null,
+    onEvoke: (actionSentence) => emitExchangeSentence({
+      mood: "ya",
+      be: "evoke",
+      ob: { la: actionSentence }
+    }),
+    onStage: (stage) => log(`stage: ${stage}`),
+    onCheckpoint: (checkpointSentence) => emitExchangeSentence(checkpointSentence),
+    onRetry: (retrySentence) => emitExchangeSentence(retrySentence)
+  });
+  log(`run: ${output.result.runId}`);
+  const fact = {
+    mood: "ya",
+    su: { name: outputName },
+    be: "map",
+    ob: {
+      map: {
+        goal: { text: output.result.goal },
+        runId: { text: output.result.runId },
+        source: { text: output.result.source },
+        artifactFolder: { text: output.result.artifactFolder },
+        translation: { text: output.result.translation },
+        catalog: { text: output.result.catalog },
+        pack: { text: output.result.pack }
+      }
+    }
+  };
+  doRemember(fact);
+  return fact;
+}
+
 export default translation_from_text_to_name_text;
 
 export const signatures = [
+  {
+    signatureWords: ["be", "translation", "become", "name", "vliw", "from", "filename", "fromstate", "name", "english", "to", "name", "map"],
+    handler: translation_from_filename_to_vliw
+  },
   {
     signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "pyac", "to", "name", "num"],
     handler: translation_from_text_to_name_text

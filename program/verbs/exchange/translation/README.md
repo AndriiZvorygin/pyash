@@ -102,6 +102,53 @@ The durable command writes the translation evidence catalog and the existing Pya
 node command/translate_document.mjs english source.txt translation.pya catalog.pya pack.pyac
 ```
 
+The goal form uses the refinery's normal single destination and run artifact
+folder, so a shell run needs no intermediate filenames:
+
+```bash
+PYA_RUN_VERBOSE=1 PYA_RUN_ID=love-paragraph-vliw \
+node command/translate_document.mjs english \
+  examples/translation/simple-english-wikipedia-love.txt vliw
+```
+
+Stage and checkpoint progress is written to stderr. The JSON summary is written
+to stdout. The generated artifacts are kept together under
+`artifacts/love-paragraph-vliw/`: `translation.pya`, `vliw-catalog.pya`, and
+`vliw.pyac`. The checkpoint newspaper remains at
+`newspaper/love-paragraph-vliw.pya`, so it can be inspected without rerunning:
+
+```bash
+node command/read_translation_refinery.mjs love-paragraph-vliw .
+node command/pya_to_json.mjs artifacts/love-paragraph-vliw/translation.pya --pretty
+```
+
+The normal Pyash entry point is the runnable example
+`examples/pyash/translate-love-to-vliw.pya`. Run it through the standard runner
+to keep the outer run identity, exchange events, result artifact, and newspaper
+in the same durable run:
+
+```bash
+./run --verbose --newspaper --full --run-id love-paragraph-vliw \
+  examples/pyash/translate-love-to-vliw.pya
+```
+
+That sentence invokes the same source-to-VLIW refinery as the command module;
+the `to name map translation result` value is the returned artifact map, not a
+second transcript or intermediate destination. The returned map is written to
+`artifacts/love-paragraph-vliw/result.pya`, while the translation, VLIW catalog,
+and `.pyac` pack remain beside it. The outer newspaper is
+`newspaper/love-paragraph-vliw.pya`.
+
+Reuse an existing `PYA_RUN_ID` to replay matching checkpoints and see where the
+previous run stopped; choose a new id for a fresh run.
+
+This is one source-to-VLIW job. Its semantic destination is the VLIW goal;
+`translation.pya`, the VLIW catalog, the `.pyac` pack, queue evidence, and
+checkpoint/newspaper records are intermediate or audit artifacts in that same
+job artifact folder. Destination type describes the goal state, while artifact
+names describe files produced along the path. `understand` remains the parser
+for Pyash source and is not the document-translation verb.
+
 The command automatically submits one deduplicated vocabulary-review duty through the existing
 `vyah start future be gpu mind do` path and awaits that same handle through the bounded GPU await
 path. The returned handle, repair handle (when needed), decision, and candidate queue state are
@@ -151,6 +198,11 @@ node command/read_translation_refinery.mjs <run-id> [checkpoint-cwd]
 The report lists the latest completed stage, each stage's input/output map artifact, and pending
 WordNet occurrence links from the latest translation artifact. The canonical session remains the
 translation `.pya`; the newspaper remains the replayable stage-evidence source.
+
+The source-to-VLIW operation therefore means “translate this English source
+toward the VLIW goal.” It does not mean “translate separately to a translation
+catalog, a catalog, and a pack”; those are durable members of the one job
+artifact folder.
 
 The source-to-VLIW runner also uses those checkpoint artifacts as its resume boundary. It records
 the source hash and the hashes of the loaded English resources in the stage input map. A matching

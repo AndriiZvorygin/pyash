@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { parseVliwCatalogPya } from "../program/library/vliw/index.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
 import { runTranslationDocument } from "../command/translate_document.mjs";
+import { translation_from_filename_to_vliw } from "../program/verbs/exchange/translation.mjs";
 import {
   decodeCheckpointText,
   encodeCheckpointText
@@ -325,6 +327,82 @@ test("translation document command writes durable evidence and Pyac outputs", as
   assert.equal(parseVliwCatalogPya(readFileSync(catalog, "utf8")).catalog.records.length, 2);
   assert.equal(readFileSync(pack).length > 32, true);
   assert.equal(reports.length, 1);
+});
+
+test("translation document goal mode keeps all output artifacts in one run folder", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pyash-translation-goal-"));
+  const source = join(directory, "source.txt");
+  const runId = "goal-mode-translation";
+  writeFileSync(source, "collector is number 5.\nadd 2 to collector.\n", "utf8");
+
+  await runTranslationDocument(
+    ["english", source, join(directory, "old-translation.pya"), join(directory, "old-catalog.pya"), join(directory, "old.pyac")],
+    {
+      runId,
+      checkpointCwd: directory,
+      checkpointEnabled: true,
+      report: () => {}
+    }
+  );
+  const stages = [];
+
+  const result = await runTranslationDocument(
+    ["english", source, "vliw"],
+    {
+      runId,
+      checkpointCwd: directory,
+      artifactCwd: directory,
+      onStage: (stage) => stages.push(stage),
+      report: () => {}
+    }
+  );
+
+  const artifactFolder = join(directory, "artifacts", runId);
+  assert.equal(result.result.goal, "vliw");
+  assert.equal(result.result.artifactFolder, artifactFolder);
+  assert.equal(result.result.translation, join(artifactFolder, "translation.pya"));
+  assert.equal(result.result.catalog, join(artifactFolder, "vliw-catalog.pya"));
+  assert.equal(result.result.pack, join(artifactFolder, "vliw.pyac"));
+  assert.deepEqual(stages, ["lower vliw", "write outputs"]);
+  assert.equal(readFileSync(result.result.translation, "utf8").includes("translation-pipeline-v1"), true);
+  assert.equal(parseVliwCatalogPya(readFileSync(result.result.catalog, "utf8")).catalog.records.length, 2);
+  assert.equal(readFileSync(result.result.pack).length > 32, true);
+});
+
+test("the Pyash source-to-VLIW translation operation uses one injected artifact job", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pyash-translation-operation-"));
+  const source = join(directory, "source.txt");
+  const runId = "translation-operation";
+  writeFileSync(source, "collector is number 5.\nadd 2 to collector.\n", "utf8");
+
+  const result = await translation_from_filename_to_vliw({
+    mood: "do",
+    be: "translation",
+    from: { filename: source },
+    fromstate: { name: "english" },
+    become: { name: "vliw" },
+    to: { name: "translation result", nameTypeWords: ["map"] }
+  }, {
+    cwd: directory,
+    runId,
+    translationDependencies: {
+      queueVocabulary: null,
+      awaitVocabulary: null,
+      wordnetRefinery: null,
+      compoundTranslation: null
+    }
+  });
+
+  const artifactFolder = join(directory, "artifacts", runId);
+  assert.equal(result.be, "map");
+  assert.equal(result.ob.map.goal.text, "vliw");
+  assert.equal(result.ob.map.artifactFolder.text, artifactFolder);
+  assert.equal(readFileSync(result.ob.map.translation.text, "utf8").includes("translation-pipeline-v1"), true);
+  assert.equal(parseVliwCatalogPya(readFileSync(result.ob.map.catalog.text, "utf8")).catalog.records.length, 2);
+  assert.equal(readFileSync(result.ob.map.pack.text).length > 32, true);
+  const serialized = sentenceToPyash(result);
+  assert.match(serialized, new RegExp(`artifactFolder ob text ${JSON.stringify(artifactFolder)}`));
+  assert.match(serialized, new RegExp(`pack ob text ${JSON.stringify(join(artifactFolder, "vliw.pyac"))}`));
 });
 
 test("translation document resumes unchanged stages from its Pyash checkpoint newspaper", async () => {

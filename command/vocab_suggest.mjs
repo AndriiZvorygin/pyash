@@ -95,7 +95,7 @@ const STRUCTURAL_VERB_TOKENS = new Set(["exists", "export"]);
 // These names are stable Pyash contract identifiers rather than prose names.
 // Keep them available to artifact/provenance records even when the external
 // dictionary has no exact technical entry for them.
-const APPROVED_CONTRACT_NAME_TOKENS = new Set(["source", "sha256"]);
+const APPROVED_CONTRACT_NAME_TOKENS = new Set(["source", "sha256", "vliw"]);
 const APPROVED_CONTRACT_NAME_PATTERNS = [
   /^src-[0-9a-f]{64}(?::[A-Za-z0-9._:-]+)?$/u
 ];

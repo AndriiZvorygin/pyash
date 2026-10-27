@@ -440,6 +440,25 @@ function parseCheckpointPayload(text) {
   }
 }
 
+async function resolveCheckpointTextArtifact(value, { runId, cwd } = {}) {
+  const decoded = decodeCheckpointText(value);
+  const match = decoded.match(/^artifact newspaper-(\d+)\b/u);
+  if (!match || !runId) return decoded;
+  const filename = `text-${String(Number(match[1])).padStart(6, "0")}.txt`;
+  const artifactPath = path.resolve(
+    cwd,
+    "artifacts",
+    artifactRunPath(runId),
+    "newspaper",
+    filename
+  );
+  try {
+    return await fs.readFile(artifactPath, "utf8");
+  } catch {
+    return decoded;
+  }
+}
+
 export function collectSentenceNodes(root) {
   const nodes = [];
   const stack = [root];
@@ -559,6 +578,14 @@ export async function loadCheckpointIndex({ runId, cwd }) {
     if (err?.code === "ENOENT") return checkpoints;
     throw err;
   }
+  const resolvedText = new Map();
+  const resolveText = async (value) => {
+    const key = String(value ?? "");
+    if (!resolvedText.has(key)) {
+      resolvedText.set(key, resolveCheckpointTextArtifact(key, { runId, cwd }));
+    }
+    return resolvedText.get(key);
+  };
   const lines = splitSentences(text, { includeThen: true });
   for (const raw of lines) {
     const line = raw.trim();
@@ -572,7 +599,10 @@ export async function loadCheckpointIndex({ runId, cwd }) {
     if (sentence?.be !== "checkpoint" || sentence?.mood !== "ya") continue;
     const refineryName = sentence?.from?.name;
     const hash = sentence?.ob?.text;
-    const payload = parseCheckpointPayload(sentence?.fromtext?.text);
+    const payloadText = sentence?.fromtext?.text
+      ? await resolveText(sentence.fromtext.text)
+      : "";
+    const payload = parseCheckpointPayload(payloadText);
     const rawPlatform = line.match(/^su name (.+?)\s+ob text\s+/u)?.[1]?.trim();
     const platformName = payload?.platform || rawPlatform || sentence?.su?.name;
     const resultSentence =
@@ -581,9 +611,10 @@ export async function loadCheckpointIndex({ runId, cwd }) {
     const exportFacts = Array.isArray(payload?.exports) ? payload.exports : [];
     const scopeSlots = payload?.scope && typeof payload.scope === "object" ? payload.scope : {};
     if (!refineryName || !platformName || !hash || !resultSentence) continue;
-    const resultLine = sentence?.totext?.text
-      ? decodeCheckpointText(sentence.totext.text)
-      : sentenceToPyash(resultSentence);
+    const resultLineText = sentence?.totext?.text
+      ? await resolveText(sentence.totext.text)
+      : "";
+    const resultLine = resultLineText || sentenceToPyash(resultSentence);
     if (!checkpoints.has(refineryName)) checkpoints.set(refineryName, new Map());
     checkpoints.get(refineryName).set(platformName, { hash, resultSentence, resultLine, exportFacts, scopeSlots });
   }

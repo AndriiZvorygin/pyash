@@ -1,42 +1,56 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createDefaultQueuedMindTranslationVocabularySubmitter } from "../program/verbs/exchange/translation/translation_vocabulary_queue.mjs";
-import { loadCoverage } from "./compound_coverage.mjs";
-import {
-  COMPOUND_TRANSLATION_LANGUAGES,
-  createDefaultQueuedCompoundTranslator
-} from "../program/verbs/exchange/translation/compound_translation_cache.mjs";
-import { createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter } from "../program/verbs/exchange/translation/english_wordnet_selection.mjs";
 import { runTranslationSourceToVliwRefinery } from "../program/verbs/exchange/translation/translation_to_vliw_refinery.mjs";
+import {
+  awaitTranslationGpuDuty,
+  createDefaultTranslationVliwDependencies,
+  rebindTranslationOutputCheckpoint
+} from "../program/verbs/exchange/translation/translation_to_vliw_job.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { parse } from "../program/understand/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import {
   buildRunId,
   encodeCheckpointText,
+  artifactRunPath,
   loadCheckpointIndex,
   loadDefaultConfig,
   sanitizeRunId
 } from "./run_pya_helpers.mjs";
 
-async function awaitGpuDuty(handleId, timeoutMs = Number(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || 1800000)) {
-  const completed = await interpret(parse(
-    `accordingto text ${JSON.stringify(String(handleId ?? ""))} during num ${Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000))} vyah await be gpu do`
-  ));
-  const status = String(completed?.ob?.text ?? "").trim().toLowerCase();
-  if (status !== "success") {
-    throw new Error(`translation GPU duty ${handleId} completed with status ${status || "unknown"}`);
-  }
-  return String(completed?.result?.text ?? "");
-}
-
 function usageError(message) {
-  const error = new Error(`${message}\nusage: node command/translate_document.mjs <language> <source.txt> <translation.pya> <catalog.pya> <pack.pyac>`);
+  const error = new Error(`${message}\nusage: node command/translate_document.mjs <language> <source.txt> vliw\n   or: node command/translate_document.mjs <language> <source.txt> <translation.pya> <catalog.pya> <pack.pyac>`);
   error.code = "invalid-usage";
   return error;
+}
+
+function resolveTranslationPaths(args, { runId, artifactCwd }) {
+  if (args.length === 5) {
+    const [, sourcePath, translationPath, catalogPath, packPath] = args;
+    return {
+      goal: "vliw",
+      source: resolve(sourcePath),
+      translation: resolve(translationPath),
+      catalog: resolve(catalogPath),
+      pack: resolve(packPath),
+      artifactFolder: null
+    };
+  }
+  if (args.length !== 3 || String(args[2]).trim().toLowerCase() !== "vliw") {
+    throw usageError("translate_document expects one semantic destination: vliw");
+  }
+  if (!runId) throw usageError("goal-mode translation requires a run id");
+  const artifactFolder = resolve(artifactCwd, "artifacts", artifactRunPath(runId));
+  return {
+    goal: "vliw",
+    source: resolve(args[1]),
+    translation: join(artifactFolder, "translation.pya"),
+    catalog: join(artifactFolder, "vliw-catalog.pya"),
+    pack: join(artifactFolder, "vliw.pyac"),
+    artifactFolder
+  };
 }
 
 async function appendCheckpointJournal({ runId, cwd, sentences }) {
@@ -76,20 +90,26 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
   onEvoke,
   onStage,
   onCheckpoint,
-  onRetry
+  onRetry,
+  artifactCwd = null
 } = {}) {
-  if (args.length !== 5) throw usageError("translate_document requires language, source, translation catalog, PyAC catalog, and PyAC pack");
-  const [language, sourcePath, translationPath, catalogPath, packPath] = args;
-  const paths = {
-    source: resolve(sourcePath),
-    translation: resolve(translationPath),
-    catalog: resolve(catalogPath),
-    pack: resolve(packPath)
-  };
+  if (args.length !== 3 && args.length !== 5) {
+    throw usageError("translate_document requires a language, source, and semantic destination");
+  }
+  const language = args[0];
+  const paths = resolveTranslationPaths(args, {
+    runId,
+    artifactCwd: artifactCwd ?? checkpointCwd ?? process.cwd()
+  });
+  if (paths.artifactFolder) await fsp.mkdir(paths.artifactFolder, { recursive: true });
   const source = fs.readFileSync(paths.source, "utf8");
-  const effectiveCheckpointIndex = checkpointEnabled && checkpointIndex === undefined && runId
+  let effectiveCheckpointIndex = checkpointEnabled && checkpointIndex === undefined && runId
     ? await loadCheckpointIndex({ runId, cwd: checkpointCwd })
     : checkpointIndex;
+  effectiveCheckpointIndex = rebindTranslationOutputCheckpoint({
+    checkpointIndex: effectiveCheckpointIndex,
+    paths
+  });
   let checkpointPath = null;
   let checkpointWriteError = null;
   let checkpointWrite = Promise.resolve();
@@ -145,6 +165,8 @@ export async function runTranslationDocument(args = process.argv.slice(2), {
     await flushCheckpointJournal();
     const result = {
       ...output.result,
+      goal: paths.goal,
+      ...(paths.artifactFolder ? { artifactFolder: paths.artifactFolder } : {}),
       ...(runId ? { runId } : {}),
       ...(checkpointPath ? { checkpointPath } : {})
     };
@@ -169,26 +191,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       sourcePath: args[1],
       cwd: process.cwd()
     });
-    const queueVocabulary = await createDefaultQueuedMindTranslationVocabularySubmitter();
-    const queueWordNet = await createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter();
-    const coverage = await loadCoverage();
-    const compoundTranslator = await createDefaultQueuedCompoundTranslator();
+    const dependencies = await createDefaultTranslationVliwDependencies();
+    const verbose = process.env.PYA_RUN_VERBOSE === "1";
+    const verboseLog = (message) => {
+      if (verbose) console.error(`[translation] ${message}`);
+    };
+    verboseLog(`run: ${runId}`);
+    verboseLog(`goal: ${args.length === 3 ? args[2] : "vliw"}`);
     return runTranslationDocument(args, {
       runId,
-      queueVocabulary,
-      wordnetRefinery: {
-        submit: queueWordNet,
-        compoundRecords: coverage.accepted,
-        awaitHandle: awaitGpuDuty
-      },
-      awaitVocabulary: awaitGpuDuty,
-      compoundTranslation: {
-        records: coverage.accepted,
-        languages: COMPOUND_TRANSLATION_LANGUAGES,
-        translate: compoundTranslator
-      }
+      ...dependencies,
+      onStage: (stage) => verboseLog(`stage: ${stage}`),
+      onCheckpoint: (sentence) => verboseLog(`checkpoint: ${sentence?.su?.name || "unknown"}`),
+      onRetry: (sentence) => verboseLog(`retry: ${sentence?.su?.name || "unknown"}`)
     });
   })().catch((error) => {
+    if (process.env.PYA_RUN_VERBOSE === "1") console.error("[translation] failed");
     console.error(error?.message || String(error));
     process.exitCode = 1;
   });
