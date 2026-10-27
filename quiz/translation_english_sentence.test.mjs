@@ -6,7 +6,8 @@ import {
   analyzeEnglishSentence,
   applyEnglishSentenceCandidate,
   loadEnglishSentenceResources,
-  resolveEnglishSentence
+  resolveEnglishSentence,
+  selectEnglishWordNetSenses
 } from "../program/verbs/exchange/translation/english_sentence.mjs";
 import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
 import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
@@ -393,6 +394,61 @@ test("WordNet context selects the matching sense before deterministic agreement"
   assert.equal(financeBank.coverageType, "semantic-wordnet");
   assert.deepEqual(financeBank.pyashSequence, ["hrit"]);
   assert.match(financeBank.evidence, /context matched account/u);
+});
+
+test("WordNet keeps broad modifiers from collapsing a type sense", () => {
+  const wordnet = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:symbol:type",
+      pos: "n",
+      synset: "symbol",
+      senseKey: "symbol",
+      lemma: "type",
+      gloss: "all of the tokens of the same symbol; different types of character"
+    }, {
+      id: "n:kind:type",
+      pos: "n",
+      synset: "kind",
+      senseKey: "kind",
+      lemma: "type",
+      gloss: "a subdivision of a particular kind of thing"
+    }]
+  });
+  const records = [{
+    surface: "different",
+    lemma: "different",
+    wordnet: { partsOfSpeech: ["a"], senses: [] }
+  }, {
+    surface: "types",
+    lemma: "type",
+    wordnet: {
+      partsOfSpeech: ["n"],
+      senses: [{
+        pos: "n",
+        synset: "symbol",
+        lemma: "type",
+        lemmas: ["type"],
+        gloss: "all of the tokens of the same symbol; different types of character"
+      }, {
+        pos: "n",
+        synset: "kind",
+        lemma: "type",
+        lemmas: ["type"],
+        gloss: "a subdivision of a particular kind of thing"
+      }]
+    }
+  }, {
+    surface: "of",
+    lemma: "",
+    wordnet: { partsOfSpeech: [], senses: [] }
+  }, {
+    surface: "love",
+    lemma: "love",
+    wordnet: { partsOfSpeech: ["n"], senses: [] }
+  }];
+  const selection = selectEnglishWordNetSenses(records[1], records, 1, wordnet);
+  assert.equal(selection.senses.length, 2);
+  assert.equal(selection.evidence, "");
 });
 
 test("WordNet graph relations rank a connected sense when glosses provide no overlap", () => {

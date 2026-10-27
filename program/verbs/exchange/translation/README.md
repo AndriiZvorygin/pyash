@@ -83,6 +83,10 @@ covers all 17 Open English WordNet senses of `feel` with existing anchors such a
 bridges and leaves genuinely tied readings reviewable.
 The analyzer also scores a bounded local sentence window against sense glosses and lemmas;
 one unique positive overlap narrows the sense set before deterministic agreement.
+Generic contrast and quantity modifiers such as `different`, `various`, and `several` do not
+select a sense by themselves; constructions such as `different types of love` therefore retain
+their noun-sense alternatives for the focused selector instead of collapsing to a character or
+symbol sense merely because its gloss repeats `different`.
 Optional relation edges can add bounded graph relatedness to that score without changing the
 offline resource contract.
 WordNet evidence can narrow a review candidate, but a lexical mapping is auto-selected only
