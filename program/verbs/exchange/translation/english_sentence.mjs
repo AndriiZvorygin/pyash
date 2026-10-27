@@ -55,7 +55,8 @@ const COMPOSITIONAL_CASE_ALIASES = new Map([
 const WORDNET_CONTEXT_STOP_WORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "but", "by", "can", "for", "from",
   "has", "have", "in", "into", "is", "it", "of", "on", "or", "that", "the", "their",
-  "there", "these", "this", "those", "to", "was", "were", "with"
+  "there", "these", "this", "those", "to", "was", "were", "with",
+  "certain", "different", "many", "other", "particular", "same", "several", "various"
 ]);
 const WORDNET_MODAL_PRECEDERS = new Set([
   "can", "could", "may", "might", "must", "shall", "should", "will", "would"
