@@ -1,10 +1,17 @@
 import crypto from "node:crypto";
+import {
+  resolveConfiguredGpuHousekeeperUrl,
+  resolveDefaultGpuHousekeeperUrl,
+  resolveConfiguredText,
+} from "./configured-endpoints.mjs";
 import { resolveTextModel } from "./text-model.mjs";
 import { resolveGpuSourceIdentity } from "./source_identity.mjs";
 
 export { DEFAULT_TEXT_MODEL } from "./text-model.mjs";
 
-export const DEFAULT_GPU_HOUSEKEEPER_URL = "http://localhost:18886";
+// The universal fallback is declared in configure/default.pya. House-local
+// secret.pya files may override it without changing runtime code.
+export const DEFAULT_GPU_HOUSEKEEPER_URL = resolveDefaultGpuHousekeeperUrl();
 
 const DEFAULT_FETCH = globalThis.fetch;
 
@@ -36,31 +43,10 @@ function envFlag(value, fallback = false) {
   return fallback;
 }
 
-function managerUrlFromOllama(ollamaUrl = "") {
-  const base = stripApiPath(ollamaUrl);
-  if (!base) return "";
-  try {
-    const parsed = new URL(base);
-    const host = parsed.hostname.toLowerCase();
-    if (["localhost", "127.0.0.1", "::1"].includes(host)) return DEFAULT_GPU_HOUSEKEEPER_URL;
-    // Only infer the co-located housekeeper for the known remote GPU host.
-    // Other hosts must opt in with PYA_GPU_HOUSEKEEPER_URL rather than having
-    // a provider port guessed from an arbitrary URL.
-    if (host !== "mriczo") return "";
-    // The housekeeper is the stable control-plane port for the remote GPU
-    // host, regardless of whether the provider itself is Ollama, ComfyUI,
-    // or another service port.
-    if (["11434", "8188", "8010", ""].includes(parsed.port)) parsed.port = "18886";
-    return parsed.toString().replace(/\/+$/u, "");
-  } catch {
-    return "";
-  }
-}
-
-export function resolveGpuHousekeeperUrl({ ollamaUrl = "", managerUrl = "", env = process.env } = {}) {
+export function resolveGpuHousekeeperUrl({ ollamaUrl = "", managerUrl = "", env = process.env, cwd = process.cwd(), configPaths = [] } = {}) {
   const explicit = text(managerUrl || env.PYA_GPU_HOUSEKEEPER_URL || env.GPU_HOUSEKEEPER_URL);
   if (explicit) return explicit.replace(/\/+$/u, "");
-  return managerUrlFromOllama(ollamaUrl || env.OLLAMA_HOST || "");
+  return resolveConfiguredGpuHousekeeperUrl({ cwd, configPaths });
 }
 
 function timeoutSignal(timeoutMs) {
@@ -131,7 +117,7 @@ export async function submitManagedGpuJob({
   const explicitManager = text(managerUrl || process.env.PYA_GPU_HOUSEKEEPER_URL || process.env.GPU_HOUSEKEEPER_URL);
   const resolvedManager = explicitManager
     ? explicitManager.replace(/\/+$/u, "")
-    : (fetchImpl === DEFAULT_FETCH ? managerUrlFromOllama(providerUrl) : "");
+    : (fetchImpl === DEFAULT_FETCH ? resolveGpuHousekeeperUrl({ ollamaUrl: providerUrl }) : "");
   if (!resolvedManager) throw new Error("managed GPU job requires PYA_GPU_HOUSEKEEPER_URL");
   const normalizedRuntime = text(runtimeName);
   const normalizedProfile = text(profileName) || normalizedRuntime;
@@ -254,7 +240,13 @@ export async function requestManagedOllamaChat({
   if (typeof fetchImpl !== "function") throw new Error("managed Ollama requires fetch");
   const normalizedModel = resolveTextModel(model, { env, cwd, runtimePath });
   if (!normalizedModel) throw new Error("managed Ollama requires a model");
-  const base = stripApiPath(ollamaUrl || process.env.OLLAMA_HOST || "http://mriczo:11434");
+  const base = stripApiPath(
+    ollamaUrl
+      || env.OLLAMA_HOST
+      || process.env.OLLAMA_HOST
+      || resolveConfiguredText("ollama host", { cwd }),
+  );
+  if (!base) throw new Error("managed Ollama requires a configured Ollama host");
   const explicitManager = text(managerUrl || process.env.PYA_GPU_HOUSEKEEPER_URL || process.env.GPU_HOUSEKEEPER_URL);
   // An explicit direct mode is useful for a single-flight recovery when the
   // housekeeper control plane is healthy but its one-slot queue is wedged.
@@ -263,7 +255,7 @@ export async function requestManagedOllamaChat({
     ? ""
     : (explicitManager
       ? explicitManager.replace(/\/+$/u, "")
-      : (fetchImpl === DEFAULT_FETCH ? managerUrlFromOllama(base) : ""));
+      : (fetchImpl === DEFAULT_FETCH ? resolveGpuHousekeeperUrl({ ollamaUrl: base, env, cwd }) : ""));
   const payload = {
     model: normalizedModel,
     messages: Array.isArray(messages) ? messages : [],
