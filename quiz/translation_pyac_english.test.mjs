@@ -5,21 +5,38 @@ import {
   decodePyacSentence,
   translatePyacToEnglishPyash
 } from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
+import {
+  decodePhraseVliw,
+  lowerSentencePhraseVliw
+} from "../program/library/vliw/phrase.mjs";
+
+test("Pyac lowering uses suffix roles instead of structural su/ob/name tokens", () => {
+  const lowered = lowerSentencePhraseVliw({
+    mood: "ya",
+    su: { name: "mi na" },
+    ob: { name: "hcas pu ka" },
+    be: "pfin ki"
+  });
+  const decoded = decodePhraseVliw(lowered.vectors);
+  assert.deepEqual(decoded.tokens.map((token) => token.pya), [
+    "mi", "gi", "na", "hcas", "pu", "gi", "ka", "pfin", "ki", "ya"
+  ]);
+});
 
 test("Pyac decoder expands fused grammar into structural Pyash and English Pyash", () => {
-  const result = decodePyacSentence("mina nyahye hcaspuka pfinkiya");
-  assert.equal(result.pyash, "su name mi na ob name nyah ye hcas pu ka be pfin ki ya");
+  const result = decodePyacSentence("migina nyahye hcaspugika pfinkiya");
+  assert.equal(result.pyash, "su name mi gi na ob name nyah ye hcas pu gi ka be pfin ki ya");
   assert.equal(result.englishPyash, "ya su I be walked ob our houses.");
   assert.equal(result.english, "I walked our houses.");
   assert.deepEqual(
     result.tokens.map((token) => token.parts.map((part) => part.pya)),
-    [["mi", "na"], ["nyah", "ye"], ["hcas", "pu", "ka"], ["pfin", "ki", "ya"]]
+    [["mi", "gi", "na"], ["nyah", "ye"], ["hcas", "pu", "gi", "ka"], ["pfin", "ki", "ya"]]
   );
 });
 
 test("Pyac decoder restores phrase-final location cases", () => {
-  const result = decodePyacSentence("mina hcasputwih pfinkiya");
-  assert.equal(result.pyash, "su name mi na ob name hcas pu twih be pfin ki ya");
+  const result = decodePyacSentence("migina hcaspugitwih pfinkiya");
+  assert.equal(result.pyash, "su name mi gi na ob name hcas pu gi twih be pfin ki ya");
   assert.equal(result.english, "I walked into houses.");
 });
 

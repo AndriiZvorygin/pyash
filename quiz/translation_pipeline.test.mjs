@@ -100,11 +100,12 @@ test("English translation uses the shared resources and retains unresolved vocab
 
   assert.deepEqual(result.counts, { resolved: 1, provisional: 1, unresolved: 0 });
   assert.equal(result.records[0].pyash, "su name nyah ye hcas pu na be pfin ki ya");
-  assert.equal(result.records[0].pyac, "nyahye hcaspuna pfinkiya");
-  assert.equal(result.records[0].pyashSurface, "nyahye hcaspuna pfinkiya");
+  assert.equal(result.records[0].pyac, "nyahye hcaspugina pfinkiya");
+  assert.equal(result.records[0].pyashSurface, "nyahye hcaspugina pfinkiya");
+  assert.equal(result.records[0].englishPyash, "ya su our houses be walked.");
   assert.equal(result.records[0].vliw.format, "pyac-vliw-phrase-v1");
   assert.equal(result.records[0].vliw.vectors.length, 1);
-  assert.deepEqual(result.records[0].vliw.phraseEnds, [4]);
+  assert.deepEqual(result.records[0].vliw.phraseEnds, [5]);
   assert.equal(result.records[0].canonical, "our houses walked.");
   assert.equal(result.records[1].status, "provisional");
   assert.equal(result.resourceHashes.english30k.length, 64);
@@ -236,8 +237,9 @@ test("English subject nominative lowers to the fused Pyac form", async () => {
   });
   assert.equal(result.records[0].canonical, "I walked our houses.");
   assert.equal(result.records[0].pyash, "su name mi na ob name nyah ye hcas pu ka be pfin ki ya");
-  assert.equal(result.records[0].pyac, "mina nyahye hcaspuka pfinkiya");
-  assert.equal(result.records[0].pyashSurface, "mina nyahye hcaspuka pfinkiya");
+  assert.equal(result.records[0].pyac, "migina nyahye hcaspugika pfinkiya");
+  assert.equal(result.records[0].pyashSurface, "migina nyahye hcaspugika pfinkiya");
+  assert.equal(result.records[0].englishPyash, "ya su I be walked ob our houses.");
 });
 
 test("translation pipeline renders compositional cases at the phrase boundary", async () => {
@@ -246,7 +248,8 @@ test("translation pipeline renders compositional cases at the phrase boundary", 
     text: "I walked into houses."
   });
   assert.equal(result.records[0].pyash, "su name mi na ob name hcas pu twih be pfin ki ya");
-  assert.equal(result.records[0].pyac, "mina hcasputwih pfinkiya");
+  assert.equal(result.records[0].pyac, "migina hcaspugitwih pfinkiya");
+  assert.equal(result.records[0].englishPyash, "ya su I be walked ob into houses.");
 });
 
 test("sentence verification can resolve a contextual candidate through the pipeline", async () => {
@@ -385,15 +388,20 @@ test("translation catalogs keep repeated vocabulary gaps replayable", async () =
   assert.equal(parsed.vocabularyCandidates.length, result.vocabularyCandidates.length);
 });
 
-test("English prose with an is-clause stays in sentence review", async () => {
+test("English zero-copula clauses lower through the VLIW projection", async () => {
   const result = await translateDocument({
     language: "english",
     text: "Love is a mix of feelings and actions.",
     locator: "https://simple.wikipedia.org/wiki/Love#Beginning"
   });
-  assert.equal(result.records[0].status, "provisional");
-  assert.equal(result.records[0].sentence, undefined);
-  assert.equal(result.records[0].unresolved, undefined);
+  assert.equal(result.records[0].status, "resolved");
+  assert.equal(result.records[0].sentence.be, undefined);
+  assert.equal(result.records[0].pyac, "pyangina tlih mrat xyekpu wa twottigikaya");
+  assert.equal(result.records[0].englishPyash, "ya su love ob of a mixed emotionallys and activity.");
+  assert.deepEqual(result.records[0].phrases.map((phrase) => [phrase.slot, phrase.start, phrase.end]), [
+    ["su", 0, 1],
+    ["ob", 2, 8]
+  ]);
   assert.deepEqual(result.vocabularyCandidates, []);
 });
 

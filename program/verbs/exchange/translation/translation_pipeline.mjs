@@ -14,6 +14,7 @@ import {
   resolveEnglishSentence
 } from "./english_sentence.mjs";
 import { renderPyacSentenceSurface } from "./pyash_surface.mjs";
+import { renderEnglishPyash } from "./pyac_to_english_pyash.mjs";
 import { resolveTranslationSource } from "./registry.mjs";
 import {
   TRANSLATION_SENSE_STATE_FORMAT,
@@ -353,6 +354,9 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
   const pyac = phraseVliw
     ? renderVliwPyac(decodePhraseVliw(phraseVliw.vectors))
     : sentence ? renderPyacSentenceSurface(sentence) : "";
+  const englishPyash = phraseVliw
+    ? renderEnglishPyash(sentence, [], decodePhraseVliw(phraseVliw.vectors), new Map())
+    : "";
   const tokenCandidates = analysis.tokens.flatMap((token) => token.semanticCandidates ?? []);
   const hasReviewCandidates = analysis.candidates.length > 0 || tokenCandidates.length > 0;
   const unresolved = analysis.unresolved.length > 0
@@ -379,12 +383,22 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     context: [...context],
     status,
     ...(sentence ? { sentence, pyash: pyashPreview } : {}),
+    ...(englishPyash ? { englishPyash } : {}),
     ...(pyac ? { pyac, pyashSurface: pyac } : {}),
     ...(phraseVliw ? { vliw: phraseVliw } : {}),
     ...(canonical ? { canonical } : {}),
     ...(pyashPreview && !sentence ? { pyashPreview } : {}),
     ...(unresolved.length > 0 ? { unresolved } : {}),
     ...(analysis.candidates.length > 0 ? { candidates: analysis.candidates } : {}),
+    ...(Array.isArray(analysis.phrases) && analysis.phrases.length > 0 ? {
+      phrases: analysis.phrases.map((phrase) => ({
+        slot: text(phrase?.slot),
+        start: Number.isInteger(phrase?.start) ? phrase.start : null,
+        end: Number.isInteger(phrase?.end) ? phrase.end : null,
+        surface: text(phrase?.surface),
+        pyashSequence: cloneSequence(phrase?.pyashSequence)
+      }))
+    } : {}),
     ...(analysis.tokens.length > 0 ? {
       tokens: analysis.tokens.map((token, tokenIndex) => {
         const occurrenceId = translationOccurrenceId({

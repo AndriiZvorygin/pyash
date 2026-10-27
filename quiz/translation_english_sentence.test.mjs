@@ -122,10 +122,38 @@ test("English example uses its generated non-overlapping grammar word", async ()
   assert.equal(resources.grammarIndex.resolve("example").kind, "referential");
 
   const result = await analyzeDefaultEnglishSentence("this is an example");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.construction, "zero-copula");
+  assert.equal(result.sentence.be, undefined);
   const example = result.tokens.find((token) => token.surface === "example");
   assert.equal(example.coverageType, "grammar");
   assert.deepEqual(example.pyashSequence, ["fluh"]);
   assert.deepEqual(example.grammar.components, ["example_"]);
+});
+
+test("English zero-copula analysis records subject and object phrase evidence", async () => {
+  const result = await analyzeDefaultEnglishSentence("Love is a mix of feelings and actions.");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.construction, "zero-copula");
+  assert.equal(result.sentence.be, undefined);
+  assert.equal(result.sentence.su.name, "pyan na");
+  assert.equal(result.sentence.ob.name, "tlih mrat xyek pu wa twot ti ka");
+  assert.deepEqual(result.phrases.map((phrase) => ({
+    slot: phrase.slot,
+    start: phrase.start,
+    end: phrase.end,
+    surface: phrase.surface
+  })), [
+    { slot: "su", start: 0, end: 1, surface: "Love" },
+    { slot: "ob", start: 2, end: 8, surface: "a mix of feelings and actions" }
+  ]);
+});
+
+test("English passive participles are not treated as zero-copula predicates", async () => {
+  const result = await analyzeDefaultEnglishSentence("Love is expressed.");
+  assert.equal(result.construction, undefined);
+  assert.equal(result.status, "review");
+  assert.deepEqual(result.unresolved, ["expressed"]);
 });
 
 test("English lexical equivalence maps mix surfaces to the existing mixed atom", async () => {

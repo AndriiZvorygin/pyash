@@ -11,7 +11,7 @@ database stores two projections of that source:
 
 In the language terminology, Pyash is the English-oriented form, such as
 `su me be happy ya`. Pyac is the VLIW-compatible word form, such as
-`mina nyahye hcaspuka pfinkiya`; Pyac is a language form, while `.pyac` names
+`migina nyahye hcaspugika pfinkiya`; Pyac is a language form, while `.pyac` names
 the corresponding packed artifact.
 
 ```text
@@ -479,15 +479,19 @@ the English source/gloss, `pyash` preserves the structural `su`/`ob`/`be` form
 for replay, and `pyac` renders the VLIW-compatible word order. The
 `pyashSurface` field remains a compatibility alias for `pyac`. The Pyac form
 fuses noun, adjective, case, voice, tense, aspect, and final mood words into
-complete phrases. For example, `I walked our houses` has the canonical English
-form `I walked our houses.` and the Pyac form `mina nyahye hcaspuka pfinkiya`.
+complete phrases. Named noun phrases add `gi` immediately before their final
+case suffix, so `mi gi na` becomes `migina` and `hcas pu gi ka` becomes
+`hcaspugika`. For example, `I walked our houses` has the canonical English
+form `I walked our houses.` and the Pyac form
+`migina nyahye hcaspugika pfinkiya`.
 Noun/pro-form quantifier grammar also fuses to its head: structural `cyah tlih`,
 `ya no`, and `clah tlih` render as `cyahtlih`, `yano`, and `clahtlih`.
 The structural components remain separate in the VLIW evidence so decoding can
 recover the grammar layers.
 English compositional relations lower to Pyac case markers at the phrase
 boundary: `I walked into houses` has structural form `hcas pu twih` and
-surface form `hcasputwih`; direct objects retain final `ka` when no
+surface form `hcasputwih`; named direct objects carry `gi` before final `ka`
+when no
 compositional case already closes the phrase.
 The reusable surface renderer is
 `program/verbs/exchange/translation/pyash_surface.mjs`. The bounded Greek

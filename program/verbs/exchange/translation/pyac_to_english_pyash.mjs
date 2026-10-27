@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import pyashWords from "../../../library/pyashWords.json" with { type: "json" };
 import { sentenceToPyash } from "../../../beautiful.mjs";
+import { parseEnglishGrammarCatalog } from "./english_grammar.mjs";
 import { PYASH_SURFACE_FUSED_MOODS } from "./pyash_surface.mjs";
 import {
   decodePhraseVliw,
@@ -31,6 +33,18 @@ for (const entry of pyashWords) {
 }
 
 const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
+const ENGLISH_GRAMMAR_SURFACES = new Map();
+try {
+  const grammarSource = readFileSync(new URL("./english_grammar.pya", import.meta.url), "utf8");
+  const grammarCatalog = parseEnglishGrammarCatalog(grammarSource);
+  for (const entry of grammarCatalog.entries) {
+    for (const pya of entry.pyashSequence) {
+      if (!ENGLISH_GRAMMAR_SURFACES.has(pya)) ENGLISH_GRAMMAR_SURFACES.set(pya, entry.surface);
+    }
+  }
+} catch {
+  // The vocabulary fallback below keeps Pyac decoding available in packaged runs.
+}
 const ENGLISH_MOOD_GLOSSES = new Map([
   ["pcih", "do"],
   ["jwih", "may"],
@@ -133,6 +147,10 @@ function englishGrammarWord(value) {
   if (word === "adjective") return "adj";
   if (word === "hodiernal tense") return "today";
   return word;
+}
+
+function englishGrammarSurface(pya, value) {
+  return ENGLISH_GRAMMAR_SURFACES.get(pya) ?? englishGrammarWord(value);
 }
 
 function buildInventory(entries = pyashWords) {
@@ -349,6 +367,7 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       possessivePya = words.length > 0 ? parts[index - 1]?.pya : null;
       continue;
     }
+    if (part.pya === "gi") continue;
     if (part.pya === "pu" && words.length > 0) {
       words[words.length - 1] = words.at(-1).endsWith("s") ? words.at(-1) : `${words.at(-1)}s`;
       continue;
@@ -393,12 +412,12 @@ function decodedPart(token, glosses) {
       ? "case"
       : grammar ? "grammar" : "root",
     english: glosses.get(token.pya) ?? (grammar
-      ? englishGrammarWord(token.en)
+      ? englishGrammarSurface(token.pya, token.en)
       : token.en.replace(/_$/u, ""))
   };
 }
 
-function renderEnglishPyash(sentence, tokens, decoded, glosses) {
+export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map()) {
   const parts = phraseParts(decoded);
   const sourceMood = sentence.mood;
   const mood = ENGLISH_MOOD_GLOSSES.get(sourceMood) ?? sourceMood;
@@ -407,6 +426,7 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
     return finishEnglishPyash(mood, standalone);
   }
   const subjectPhrase = selectSubjectPhrase(parts);
+  const zeroVerb = parts.trailing.length === 0 && Boolean(subjectPhrase);
   const nominalPredicate = parts.trailing.some((part) => ["ye", "sa", "mi", "nyah", "ya"].includes(part.pya))
     && !parts.trailing.some((part) => part.kind === "root");
   const subject = nominalPredicate
@@ -440,7 +460,9 @@ function renderEnglishPyash(sentence, tokens, decoded, glosses) {
     .filter((part) => part.kind !== "mood"));
   const negative = decoded.tokens.some((token) => token.pya === "no");
   const renderedVerb = negative ? `not ${verb}` : verb;
-  const rendered = ["su", subject, "be", renderedVerb];
+  const rendered = zeroVerb
+    ? ["su", subject]
+    : ["su", subject, "be", renderedVerb];
   if (objectText) rendered.push("ob", ...objectText.split(/\s+/u));
   const body = addressPhrases.length === 0
     ? rendered.join(" ")

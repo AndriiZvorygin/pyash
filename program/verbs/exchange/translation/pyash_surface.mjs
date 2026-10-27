@@ -2,7 +2,7 @@
 // Noun, adjective, case, voice, tense, aspect, and final mood endings join
 // the word immediately before them.
 const FUSED_ENDINGS = new Set([
-  "ye", "pu", "ci",
+  "gi", "ye", "pu", "ci",
   "na", "ka", "ta", "wu", "ti", "ma", "yi", "yu",
   "mwah", "pwah", "swih", "da", "te", "ga", "so", "pwih",
   "twah", "twih", "myah", "lwah", "lwih", "ksih", "tweh", "nweh",

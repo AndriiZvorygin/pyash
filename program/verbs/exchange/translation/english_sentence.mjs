@@ -530,6 +530,52 @@ function findProgressiveIndex(records) {
   return -1;
 }
 
+function isPassiveAuxiliary(records, index) {
+  const following = records[index + 1];
+  return Boolean(following
+    && following.morphology?.kind !== "progressive"
+    && (following.morphology?.kind === "participle"
+      || /(?:ed|en)$/u.test(following.surface)
+      || following.wordnet?.partsOfSpeech?.includes("v")));
+}
+
+function nominalHeadAfter(records, startIndex) {
+  for (let index = startIndex; index < records.length; index += 1) {
+    const record = records[index];
+    if (!record || record.copula) return null;
+    if (record.grammar?.position === "prefix") continue;
+    if (record.grammar?.kind === "case-marker") {
+      continue;
+    }
+    if (record.grammar?.kind === "conjunction") return null;
+    return { record, index };
+  }
+  return null;
+}
+
+function isStructuralCopularComplement(records, index) {
+  if (index <= 0 || records[0]?.surface === "there") return false;
+  const following = records[index + 1];
+  if (!following || isPassiveAuxiliary(records, index)) return false;
+  if (following.morphology?.kind === "progressive") return false;
+  const head = nominalHeadAfter(records, index + 1);
+  if (!head) return false;
+  const partsOfSpeech = head.record.wordnet?.partsOfSpeech ?? [];
+  const nominal = (partsOfSpeech.includes("n") && !partsOfSpeech.includes("v"))
+    || partsOfSpeech.includes("a")
+    || ["pronoun", "possessive-pronoun", "referential"].includes(head.record.grammar?.kind);
+  const hasDeterminer = following.grammar?.position === "prefix";
+  const caseLed = following.grammar?.kind === "case-marker";
+  return nominal || (hasDeterminer && head.record.pyashSequence.length > 0) || caseLed;
+}
+
+function findStructuralCopulaIndex(records) {
+  for (let index = 1; index < records.length; index += 1) {
+    if (records[index].copula && isStructuralCopularComplement(records, index)) return index;
+  }
+  return -1;
+}
+
 function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, markerNames, certainty, evidence }) {
   const pyashSequence = [...lexicalSequence, ...morphologySequence];
   return {
@@ -625,19 +671,21 @@ function addWordNetCandidates(records, resolveWord, wordnetIndex, wordnetBridges
   });
 }
 
+function objectSequence(objectRecords) {
+  const sequence = composeObjectSequence(objectRecords);
+  const compositionalMarked = objectRecords.some((record) => record.compositionalCase);
+  if (!compositionalMarked && sequence.at(-1) !== ACCUSATIVE_MARKER) sequence.push(ACCUSATIVE_MARKER);
+  return sequence;
+}
+
 function makeSentence(subject, verbPhrase, objectRecords) {
   const sentence = {
     mood: "ya",
-    su: { name: subject.pyashSequence.join(" ") },
-    be: verbPhrase.pyashSequence.join(" ")
+    su: { name: subject.pyashSequence.join(" ") }
   };
+  if (verbPhrase?.pyashSequence?.length) sentence.be = verbPhrase.pyashSequence.join(" ");
   if (objectRecords.length > 0) {
-    const objectSequence = composeObjectSequence(objectRecords);
-    const compositionalMarked = objectRecords.some((record) => record.compositionalCase);
-    if (!compositionalMarked && objectSequence.at(-1) !== ACCUSATIVE_MARKER) {
-      objectSequence.push(ACCUSATIVE_MARKER);
-    }
-    sentence.ob = { name: objectSequence.join(" ") };
+    sentence.ob = { name: objectSequence(objectRecords).join(" ") };
   }
   return sentence;
 }
@@ -696,6 +744,39 @@ function objectRecordsAfter(records, verbIndex) {
     : [];
 }
 
+function phraseRecord(slot, tokens, start, end, pyashSequence) {
+  return {
+    slot,
+    start,
+    end,
+    surface: tokens.slice(start, end).join(" "),
+    pyashSequence: [...pyashSequence]
+  };
+}
+
+function buildPhraseRecords({
+  tokens,
+  subject,
+  subjectBoundary,
+  verbPhrase,
+  verbStart,
+  verbEnd,
+  objectRecords,
+  objectStart
+} = {}) {
+  const phrases = [];
+  if (subjectBoundary > 0 && subject?.pyashSequence?.length) {
+    phrases.push(phraseRecord("su", tokens, 0, subjectBoundary, subject.pyashSequence));
+  }
+  if (verbPhrase?.pyashSequence?.length && verbStart >= 0 && verbEnd > verbStart) {
+    phrases.push(phraseRecord("be", tokens, verbStart, verbEnd, verbPhrase.pyashSequence));
+  }
+  if (objectRecords?.length > 0 && objectStart >= 0) {
+    phrases.push(phraseRecord("ob", tokens, objectStart, tokens.length, objectSequence(objectRecords)));
+  }
+  return phrases;
+}
+
 export function analyzeEnglishSentence(source, {
   resolveWord,
   lemmaEntries = [],
@@ -733,11 +814,18 @@ export function analyzeEnglishSentence(source, {
   })), grammarIndex), resolveWithOverrides, wordnetIndex, wordnetBridges);
   const progressiveIndex = findProgressiveIndex(records);
   const finiteIndex = findVerbIndex(records);
-  const imperativeIndex = progressiveIndex < 0 && finiteIndex < 0 ? findImperativeVerbIndex(records) : -1;
-  const lexicalIndex = progressiveIndex < 0 && finiteIndex < 0 && imperativeIndex < 0
+  const copulaIndex = progressiveIndex < 0 && finiteIndex < 0
+    ? findStructuralCopulaIndex(records)
+    : -1;
+  const imperativeIndex = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0
+    ? findImperativeVerbIndex(records)
+    : -1;
+  const lexicalIndex = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0 && imperativeIndex < 0
     ? findLexicalVerbIndex(records)
     : -1;
-  let verbIndex = progressiveIndex >= 0
+  let verbIndex = copulaIndex >= 0
+    ? -1
+    : progressiveIndex >= 0
     ? progressiveIndex
     : finiteIndex >= 0
       ? finiteIndex
@@ -827,7 +915,9 @@ export function analyzeEnglishSentence(source, {
 
   const consumedIndexes = new Set();
   for (let index = 0; index < Math.max(0, verbIndex); index += 1) consumedIndexes.add(index);
-  if (progressiveIndex >= 0) {
+  if (copulaIndex >= 0) {
+    for (let index = 0; index <= copulaIndex; index += 1) consumedIndexes.add(index);
+  } else if (progressiveIndex >= 0) {
     let auxiliaryIndex = progressiveIndex - 1;
     while (auxiliaryIndex >= 0 && records[auxiliaryIndex]?.grammar?.kind === NEGATION_GRAMMAR_KIND) auxiliaryIndex -= 1;
     consumedIndexes.add(auxiliaryIndex);
@@ -846,7 +936,7 @@ export function analyzeEnglishSentence(source, {
       && !record.copula
     ))
     .map((record) => record.surface);
-  let subjectBoundary = verbIndex;
+  let subjectBoundary = copulaIndex >= 0 ? copulaIndex : verbIndex;
   if (progressiveIndex >= 0) {
     subjectBoundary = progressiveIndex - 1;
     while (subjectBoundary >= 0 && records[subjectBoundary]?.grammar?.kind === NEGATION_GRAMMAR_KIND) subjectBoundary -= 1;
@@ -860,14 +950,29 @@ export function analyzeEnglishSentence(source, {
   const subjectReady = subject.pyashSequence.length > 0
     && subjectRecordsReady
     && (verbIndex === 0 || isSubject(subject) || subject.pyashSequence.some(Boolean));
-  const objectRecords = objectRecordsAfter(records, verbIndex);
+  const objectStart = copulaIndex >= 0 ? copulaIndex + 1 : verbIndex + 1;
+  const objectRecords = objectRecordsAfter(records, copulaIndex >= 0 ? copulaIndex : verbIndex);
   const objectReady = objectRecords.every((record) => record.pyashSequence.length > 0);
-  const deterministic = Boolean(verbPhrase)
-    && verbPhrase.certainty === "deterministic"
+  const deterministic = (copulaIndex >= 0 || Boolean(verbPhrase))
+    && (copulaIndex >= 0 || verbPhrase.certainty === "deterministic")
     && subjectReady
     && unresolved.length === 0
     && objectReady;
   const sentence = deterministic ? makeSentence(subject, verbPhrase, objectRecords) : null;
+  const verbStart = progressiveIndex >= 0
+    ? Math.max(0, progressiveIndex - 1)
+    : verbIndex;
+  const verbEnd = progressiveIndex >= 0 ? progressiveIndex + 1 : verbIndex + 1;
+  const phrases = buildPhraseRecords({
+    tokens,
+    subject,
+    subjectBoundary,
+    verbPhrase,
+    verbStart,
+    verbEnd,
+    objectRecords,
+    objectStart
+  });
   return {
     format: ENGLISH_SENTENCE_FORMAT,
     sourceText: source,
@@ -876,6 +981,8 @@ export function analyzeEnglishSentence(source, {
     subject,
     verbPhrase,
     verbIndex,
+    ...(copulaIndex >= 0 ? { copulaIndex, construction: "zero-copula" } : {}),
+    phrases,
     candidates: verbPhrase ? [verbPhrase] : [],
     unresolved,
     sentence,
