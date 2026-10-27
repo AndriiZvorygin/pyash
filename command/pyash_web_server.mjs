@@ -41,6 +41,7 @@ import { resolveConfigText } from "../program/configure/env.mjs";
 import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
+import { DEFAULT_GPU_HOUSEKEEPER_URL } from "../program/runtime/gpu/managed-ollama.mjs";
 import {
   buildRuntime,
   serializeResult,
@@ -468,7 +469,7 @@ function webGpuHousekeeperUrl() {
   return String(
     process.env.PYA_GPU_HOUSEKEEPER_URL
       || resolveConfigText("gpu housekeeper url")
-      || "http://localhost:18886"
+      || DEFAULT_GPU_HOUSEKEEPER_URL
   ).replace(/\/+$/u, "");
 }
 

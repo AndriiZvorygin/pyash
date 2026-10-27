@@ -91,11 +91,13 @@ test("text and vision models are loaded from declarative pya configuration", asy
   assert.equal(calls[0].body.jobSpec.payload.model, "runtime-text-model");
 });
 
-test("housekeeper URL defaults to localhost for local providers and derives known remote ports", () => {
-  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://mriczo:8188" }), "http://mriczo:18886");
-  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://localhost:11434" }), "http://localhost:18886");
-  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://127.0.0.1:11434" }), "http://localhost:18886");
-  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://127.0.0.1:8081/v1" }), "http://localhost:18886");
+test("housekeeper URL comes from explicit configuration instead of provider host inference", async () => {
+  const configRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-housekeeper-config-"));
+  const configPath = path.join(configRoot, "configure", "default.pya");
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(configPath, 'exists su name gpu housekeeper url ob text "http://configured-manager:18886" be default ya\n', "utf8");
+  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://mriczo:8188", configPaths: [configPath] }), "http://configured-manager:18886");
+  assert.equal(resolveGpuHousekeeperUrl({ ollamaUrl: "http://localhost:11434", configPaths: [configPath] }), "http://configured-manager:18886");
   assert.equal(resolveGpuHousekeeperUrl({ managerUrl: "http://gpu-manager:8090/" }), "http://gpu-manager:8090");
 });
 
