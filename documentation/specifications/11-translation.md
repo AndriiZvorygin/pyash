@@ -127,16 +127,16 @@ Common forms:
   ```
 - Pyac → English Pyash:
   ```
-  from text "mina nyahye hcaspuka pfinkiya" from state pyac to state pyash to name output be translation do
+  from text "migina nyahye hcaspugika pfinkiya" from state pyac to state pyash to name output be translation do
   ```
 
 The Pyac reverse slice expands fused vocabulary and grammar into structural
 Pyash evidence, then emits the readable English-Pyash surface:
 
 ```text
-Pyac:          mina nyahye hcaspuka pfinkiya
-structural:    su name mi na ob name nyah ye hcas pu ka be pfin ki ya
-English Pyash: su I ob our houses be walked ya
+Pyac:          migina nyahye hcaspugika pfinkiya
+structural:    su name mi gi na ob name nyah ye hcas pu gi ka be pfin ki ya
+English Pyash: ya su I be walked ob our houses.
 English gloss: I walked our houses.
 ```
 
@@ -322,43 +322,37 @@ Terminology:
 - **Pyash** is the English-oriented semantic form. Its compact shape uses
   English words with grammatical roles, for example `su me be happy ya`.
 - **Pyac** is the VLIW-compatible word form. It uses the short encoded words,
-  for example `mina nyahye hcaspuka pfinkiya`.
+  for example `migina nyahye hcaspugika pfinkiya`.
 - The pipeline's `canonical` field keeps the English source/gloss. The
   parser-native structural `pyash` field remains replay evidence; it is an
   internal role serialization, not the displayed English canonical form.
 
 Phrase rules:
 
-1. A noun phrase ends with its case marker. Grammatical endings attach to the
-   preceding phrase word. Plural `pu` comes before the phrase-final case:
-   `hcas pu na` becomes `hcaspuna`, and `hcas pu ka` becomes `hcaspuka`.
-2. A subject takes nominative `na`: `mi na` becomes `mina`.
-3. A direct object takes accusative `ka`, unless the phrase is already marked
+1. A named noun phrase carries suffix `gi` immediately before its final case
+   marker. Subject `na`, object `ka`, and name `gi` replace structural `su`,
+   `ob`, and `name`; plural `pu` comes first: `mi gi na` becomes `migina`, and
+   `hcas pu gi ka` becomes `hcaspugika`.
+2. A subject takes nominative `na`; a direct object takes accusative `ka`, unless the phrase is already marked
    by a compositional location or relation such as `into`, `to`, `at`, or
    `from`.
-4. Explicit possession uses `ye`: `nyah ye` becomes `nyahye` for “our”.
+3. Explicit possession uses `ye`: `nyah ye` becomes `nyahye` for “our”.
    Ordinary genitive relations use `ti`: `hcas tlan ti` represents “house of
    God”, with `ti` closing the possessor phrase. Possessive `ye` and genitive
    `ti` express different source meanings.
-5. A verb phrase puts lexical root, voice, aspect, and tense markers together:
+4. A verb phrase puts lexical root, voice, aspect, and tense markers together:
    `pfin ki` is a past `walk` phrase. The sentence-final mood attaches to the
    final verb phrase: `pfin ki ya` becomes `pfinkiya`.
-6. A verb phrase that must finish before a later phrase may close with the
+5. A verb phrase that must finish before a later phrase may close with the
    verb-affix `vi`: `pfin ki vi` becomes `pfinkivi`. The sentence mood still
    closes the complete sentence.
-7. Ordinary sentence lowering keeps the verb phrase at the end. A direct
-   object example is:
-
-   ```text
-   English: I walked our houses.
-   Pyac:    mina nyahye hcaspuka pfinkiya
-   ```
-
 The reusable renderer is
 `program/verbs/exchange/translation/pyash_surface.mjs`; its `renderPyac*`
 exports name the Pyac projection, while the older `renderPyash*` names remain
 compatibility aliases. The translation pipeline exposes `pyac` and retains
-`pyashSurface` as an alias.
+`pyashSurface` as an alias. Resolved records expose `englishPyash`, the
+English-word projection decoded from VLIW in the `su`/`ob`/`be` shape; `pyash`
+remains replay evidence.
 
 ## 5.3 References
 

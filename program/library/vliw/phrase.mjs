@@ -156,13 +156,43 @@ function sentencePhraseValue(value) {
   return "";
 }
 
+function phraseTokens(value) {
+  const phrase = sentencePhraseValue(value);
+  return phrase.trim().split(/\s+/u).filter(Boolean);
+}
+
+function namedPhraseTokens(value, role) {
+  const tokens = phraseTokens(value);
+  if (tokens.length === 0) return [];
+  const roleCase = role === "su" ? "na" : role === "ob" ? "ka" : "";
+  const finalCaseIndex = [...tokens].findLastIndex((token) => PHRASE_CASE_WORDS.has(token));
+  const caseIndex = finalCaseIndex >= 0
+    ? finalCaseIndex
+    : roleCase
+      ? tokens.length
+      : -1;
+  if (caseIndex < 0) return tokens;
+  if (tokens[caseIndex - 1] === "gi") return tokens;
+  const result = [...tokens];
+  result.splice(caseIndex, 0, "gi");
+  if (finalCaseIndex < 0 && roleCase) result.push(roleCase);
+  return result;
+}
+
+function sentencePhraseTokens(value, role) {
+  if (value && typeof value === "object" && typeof value.name === "string") {
+    return namedPhraseTokens(value, role);
+  }
+  return phraseTokens(value);
+}
+
 export function lowerSentencePhraseVliw(sentence) {
   if (!sentence || typeof sentence !== "object") {
     throw invalid("VLIW sentence must be an object");
   }
   const values = [
-    sentencePhraseValue(sentence.su),
-    sentencePhraseValue(sentence.ob),
+    sentencePhraseTokens(sentence.su, "su").join(" "),
+    sentencePhraseTokens(sentence.ob, "ob").join(" "),
     sentencePhraseValue(sentence.be),
     typeof sentence.mood === "string" ? sentence.mood : ""
   ].filter(Boolean);
