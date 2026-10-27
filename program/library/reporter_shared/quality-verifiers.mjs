@@ -330,7 +330,13 @@ function forceTopNewsBullets(text) {
   return bullets.slice(0, 8).join("\n");
 }
 
-function buildSourceCorpus({ meetingSummaryMd = "", meetingSummaryChunksPyaPath = "", agendaSummaryPyaPath = "", agendaSectionGroundingPyaPath = "" }) {
+function buildSourceCorpus({
+  meetingSummaryMd = "",
+  meetingSummaryChunksPyaPath = "",
+  chapterSummaryMd = "",
+  agendaSummaryPyaPath = "",
+  agendaSectionGroundingPyaPath = "",
+}) {
   const strong = [];
   const secondary = [];
   const weak = [];
@@ -364,6 +370,11 @@ function buildSourceCorpus({ meetingSummaryMd = "", meetingSummaryChunksPyaPath 
       secondary.push(String(s?.summary || "").trim());
     }
   }
+  // Video-only recaps do not have an agenda grounding artifact, but their
+  // chapter summaries are independently generated from bounded transcript
+  // sections and pass the chapter-summary verifier before reaching this gate.
+  // Keep that verified chapter evidence available for outcome grounding.
+  if (chapterSummaryMd) secondary.push(String(chapterSummaryMd).trim());
   weak.push(String(meetingSummaryMd || "").trim());
   return {
     strong: strong.filter(Boolean).join("\n\n"),
@@ -539,11 +550,18 @@ export function verifyArticleClaims({
   bodyMarkdown = "",
   meetingSummaryMd = "",
   meetingSummaryChunksPyaPath = "",
+  chapterSummaryMd = "",
   agendaSummaryPyaPath = "",
   agendaSectionGroundingPyaPath = "",
   reportPath = "",
 } = {}) {
-  const source = buildSourceCorpus({ meetingSummaryMd, meetingSummaryChunksPyaPath, agendaSummaryPyaPath, agendaSectionGroundingPyaPath });
+  const source = buildSourceCorpus({
+    meetingSummaryMd,
+    meetingSummaryChunksPyaPath,
+    chapterSummaryMd,
+    agendaSummaryPyaPath,
+    agendaSectionGroundingPyaPath,
+  });
   const groundedClaimUnits = readGroundedClaimUnits(agendaSectionGroundingPyaPath);
   const strongNorm = normalizeText(source.strong);
   const secondaryNorm = normalizeText(source.secondary);
