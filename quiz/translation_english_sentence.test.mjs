@@ -19,6 +19,7 @@ import {
 } from "../program/verbs/exchange/translation/english_sentence_verification.mjs";
 import {
   decodePhraseVliw,
+  lowerPhraseVliw,
   lowerSentencePhraseVliw,
   renderVliwPyac
 } from "../program/library/vliw/phrase.mjs";
@@ -324,11 +325,35 @@ test("there are also is an additive existential clause", async () => {
   }]);
   assert.equal(result.candidates.length, 0);
   assert.ok(!result.unresolved.includes("brain"));
-  assert.match(result.pyash, /^pcah syi7h /u);
+  assert.match(result.pyash, /^pcah /u);
+  assert.match(result.pyash, / syi7h$/u);
+  assert.ok(result.pyash.indexOf("la") < result.pyash.indexOf("ryik"));
   assert.doesNotMatch(result.pyash, /twum ra/u);
   assert.equal(result.relativeClauses[0].construction, "passive-relative-clause");
   assert.equal(result.relativeClauses[0].action.phrase, "can be triggered");
   assert.deepEqual(result.relativeClauses[0].action.pyashSequence, ["txak", "pyoh", "tseh"]);
+  assert.ok(result.relativeClauses[0].pyashSequence.indexOf("je") < result.relativeClauses[0].pyashSequence.indexOf("txak"));
+  const resolved = await analyzeDefaultEnglishSentence(
+    "There are also chemical reactions within the brain that can be triggered by the different types of love.",
+    {
+      coverageOverrides: new Map([
+        ["different", { coverageType: "fixture", pyashSequence: ["nros"] }],
+        ["types", { coverageType: "fixture", pyashSequence: ["nyit", "pu"] }]
+      ])
+    }
+  );
+  assert.deepEqual(resolved.relativeClauses[0].pyashSequence, [
+    "la", "dlih", "nros", "nyit", "pu", "pyan", "ti", "je", "txak", "pyoh", "tseh"
+  ]);
+  const lowered = lowerPhraseVliw({ tokens: [
+    "pcah",
+    ...resolved.relativeClauses[0].pyashSequence,
+    "ryik", "ryak", "pu", "lwah", "dlih", "twum", "na", "syi7h"
+  ] });
+  assert.deepEqual(lowered.tokens.slice(0, 9), [
+    "pcah", "la", "dlih", "nros", "nyit", "pu", "pyan", "ti", "je"
+  ]);
+  assert.equal(lowered.tokens.at(-1), "syi7h");
 });
 
 test("sentence context distinguishes distal that from a relative-clause that", async () => {

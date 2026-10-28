@@ -18,7 +18,7 @@ const SENTENCE_PARTICLES = new Set([
   "ya", "do", "tu", "cu", "si", "ri", "tcih", "lo", "cyih", "dwih",
   "pcih", "psih", "tseh", "twuh", "rwih", "jwih", "mwih", "mu", "nwoh",
   "lu", "byih", "kcu7h", "dyah", "pceh", "pruh", "swuh", "ru", "ksuh",
-  "t6", "zlih", "n6", "gyih", "pi7", "si2", "prah", "def"
+  "t6", "zlih", "n6", "gyih", "pi7", "si2", "prah", "def", "syi7h"
 ]);
 
 const FUSED_MOODS = new Set([
@@ -26,7 +26,7 @@ const FUSED_MOODS = new Set([
   "li", "tu", "cu", "si", "ri", "di", "tcih", "lo", "cyih", "dwih",
   "pcih", "psih", "tseh", "twuh", "rwih", "jwih", "mwih", "mu", "nwoh",
   "lu", "byih", "kcuh", "kcu7h", "dyah", "pceh", "pruh", "swuh", "ru",
-  "ksuh", "t6", "zlih", "n6", "gyih", "si2"
+  "ksuh", "t6", "zlih", "n6", "gyih", "si2", "syi7h"
 ]);
 
 // Quantifier grammar attaches to a noun/pro-form head in the Pyac surface.

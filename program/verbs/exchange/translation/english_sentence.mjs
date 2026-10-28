@@ -662,12 +662,13 @@ function relativeClauseProjection(records, relativeIndex) {
   }
   const modal = records[modalIndex];
   const action = records[actionIndex];
+  const relativeTail = composeRelativeTailSequence(records.slice(actionIndex + 1));
   const sequence = [
     ...records.slice(relativeIndex, modalIndex).flatMap((record) => recordSequence(record)),
+    ...relativeTail,
     ...action.pyashSequence,
     "pyoh",
-    ENGLISH_MODAL_MOOD_PYA.get(modal.surface),
-    ...records.slice(actionIndex + 1).flatMap((record) => recordSequence(record))
+    ENGLISH_MODAL_MOOD_PYA.get(modal.surface)
   ];
   return {
     sequence,
@@ -730,9 +731,9 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
   const relativeSequence = content.relativeSequence;
   const structuralSequence = [
     ...connectorSequence,
-    ...existentialSequence,
+    ...relativeSequence,
     ...content.subject.pyashSequence,
-    ...relativeSequence
+    ...existentialSequence
   ];
   const unresolved = records
     .filter((record) => (
@@ -1131,7 +1132,7 @@ function isLinkedCaseRecord(record) {
     && recordSequence(record).length > 0;
 }
 
-function composeObjectSequence(objectRecords) {
+function composeCaseSequence(records, defaultCase = null) {
   const sequence = [];
   const pending = [];
   let current = [];
@@ -1142,10 +1143,10 @@ function composeObjectSequence(objectRecords) {
     current = [];
   };
 
-  for (const record of objectRecords) {
+  for (const record of records) {
     if (isLinkedCaseRecord(record)) {
       if (pending.length > 0) flush(pending.splice(0));
-      else if (current.length > 0) flush([ACCUSATIVE_MARKER]);
+      else if (current.length > 0 && defaultCase) flush([defaultCase]);
       pending.push(...recordSequence(record));
       sawLinkedCase = true;
       continue;
@@ -1155,10 +1156,24 @@ function composeObjectSequence(objectRecords) {
   if (pending.length > 0) flush(pending.splice(0));
   else flush();
 
-  if (!sawLinkedCase && sequence.length > 0 && sequence.at(-1) !== ACCUSATIVE_MARKER) {
-    sequence.push(ACCUSATIVE_MARKER);
+  if (!sawLinkedCase && defaultCase && sequence.length > 0 && sequence.at(-1) !== defaultCase) {
+    sequence.push(defaultCase);
   }
   return sequence;
+}
+
+function composeObjectSequence(objectRecords) {
+  return composeCaseSequence(objectRecords, ACCUSATIVE_MARKER);
+}
+
+function composeRelativeTailSequence(records) {
+  const firstCaseIndex = records.findIndex(isLinkedCaseRecord);
+  if (firstCaseIndex !== 0) return composeCaseSequence(records);
+  const outerCase = recordSequence(records[0]);
+  return [
+    ...composeCaseSequence(records.slice(1)),
+    ...outerCase
+  ];
 }
 
 function objectSequence(objectRecords) {
