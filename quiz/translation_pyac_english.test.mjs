@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   decodePyacSentence,
+  renderEnglishFromVliw,
   translatePyacToEnglishPyash
 } from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
 import {
@@ -67,6 +68,18 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
     "do su you be not bring ob us to temptation."
   );
   assert.equal(negativeImperative.english, "Do not bring us to temptation.");
+});
+
+test("relative-clause marker renders its English surface instead of its structural label", () => {
+  const lowered = lowerSentencePhraseVliw({
+    mood: "ya",
+    su: { name: "pyan na" },
+    be: "pcim ra",
+    ob: { name: "la sren ra kcin ka" }
+  });
+  const result = renderEnglishFromVliw(lowered.vectors);
+  assert.match(result.englishPyash, /that exhibit/u);
+  assert.doesNotMatch(result.englishPyash, /dependent clause/u);
 });
 
 test("Pyac document translation keeps one record per input line", () => {

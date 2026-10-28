@@ -33,6 +33,9 @@ for (const entry of pyashWords) {
 }
 
 const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
+const ENGLISH_GRAMMAR_SURFACE_OVERRIDES = new Map([
+  ["la", "that"]
+]);
 const ENGLISH_GRAMMAR_SURFACES = new Map();
 try {
   const grammarSource = readFileSync(new URL("./english_grammar.pya", import.meta.url), "utf8");
@@ -150,7 +153,9 @@ function englishGrammarWord(value) {
 }
 
 function englishGrammarSurface(pya, value) {
-  return ENGLISH_GRAMMAR_SURFACES.get(pya) ?? englishGrammarWord(value);
+  return ENGLISH_GRAMMAR_SURFACE_OVERRIDES.get(pya)
+    ?? ENGLISH_GRAMMAR_SURFACES.get(pya)
+    ?? englishGrammarWord(value);
 }
 
 function buildInventory(entries = pyashWords) {
