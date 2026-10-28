@@ -9,6 +9,7 @@ import { getRefinery } from "../program/bridge/refinery.mjs";
 import { analyzeEnglishSentence } from "../program/verbs/exchange/translation/english_sentence.mjs";
 import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
 import {
+  projectTranslationSentence,
   segmentTranslationDocument,
   translateDocumentSegments
 } from "../program/verbs/exchange/translation/translation_pipeline.mjs";
@@ -88,13 +89,37 @@ test("source-to-VLIW refinery writes the translation catalog and executable pack
       { original: "add 2 to collector.", status: "resolved" }
     ]
   );
-  assert.equal(output.result.sentences[0].pyash, null);
+  assert.deepEqual(output.result.sentences[0].pyash, []);
   assert.equal(output.result.sentences[0].pyac, "collector 5 numberya");
-  assert.equal(output.result.sentences[1].pyash, null);
+  assert.deepEqual(output.result.sentences[1].pyash, []);
   assert.equal(output.result.sentences[1].pyac, "2 plusdo");
   assert.equal(readFileSync(paths.translation, "utf8").includes("translation-pipeline-v1"), true);
   assert.equal(parseVliwCatalogPya(readFileSync(paths.catalog, "utf8")).catalog.records.length, 2);
   assert.equal(readFileSync(paths.pack).length > 32, true);
+});
+
+test("sentence output preserves approved partial Pyash and Pyac parts", () => {
+  const projection = projectTranslationSentence({
+    status: "provisional",
+    source: { text: "Love involves caring for another." },
+    tokens: [
+      { surface: "Love", pyashSequence: ["sren"] },
+      { surface: "involves", pyashSequence: [] },
+      { surface: "caring", pyashSequence: ["xyen"] },
+      { surface: "for", pyashSequence: ["pwah"] }
+    ]
+  });
+
+  assert.deepEqual(projection.pyash, [
+    { source: "Love", value: "exhibit", sequence: ["sren"] },
+    { source: "caring", value: "nurture", sequence: ["xyen"] },
+    { source: "for", value: "for", sequence: ["pwah"] }
+  ]);
+  assert.deepEqual(projection.pyac, [
+    { source: "Love", value: "sren", sequence: ["sren"] },
+    { source: "caring", value: "xyen", sequence: ["xyen"] },
+    { source: "for", value: "pwah", sequence: ["pwah"] }
+  ]);
 });
 
 test("source-to-VLIW refinery surfaces the current stage failure", async () => {

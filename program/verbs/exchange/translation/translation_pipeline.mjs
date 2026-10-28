@@ -5,6 +5,7 @@ import { buildProgram } from "../../../program.mjs";
 import { buildVliwDatabase } from "../../../library/vliw/index.mjs";
 import {
   decodePhraseVliw,
+  lowerPhraseVliw,
   lowerSentencePhraseVliw,
   renderVliwPyac
 } from "../../../library/vliw/phrase.mjs";
@@ -42,6 +43,62 @@ function text(value) {
 
 function hash(value) {
   return createHash("sha256").update(String(value)).digest("hex");
+}
+
+function partialSequenceProjection(sequence, source = "") {
+  try {
+    const lowered = lowerPhraseVliw({ tokens: sequence });
+    const decoded = decodePhraseVliw(lowered.vectors);
+    const english = renderEnglishPyash({ mood: null }, [], decoded, new Map())
+      .replace(/[.!?]+$/u, "")
+      .trim();
+    return {
+      pyash: english && english !== "su" ? english : source,
+      pyac: renderVliwPyac(decoded)
+    };
+  } catch {
+    return {
+      pyash: sequence.join(" "),
+      pyac: sequence.join(" ")
+    };
+  }
+}
+
+function partialTokenParts(record) {
+  const parts = (record?.tokens ?? []).flatMap((token) => {
+    const sequence = cloneSequence(token?.pyashSequence);
+    if (sequence.length === 0) return [];
+    const source = text(token?.surface);
+    const projection = partialSequenceProjection(sequence, source);
+    return [{
+      source,
+      value: projection.pyash,
+      sequence,
+      pyac: projection.pyac
+    }];
+  });
+  if (parts.length > 0) return parts;
+
+  const structural = text(record?.structuralPreview);
+  if (!structural) return [];
+  const sequence = structural.split(/\s+/u).filter(Boolean);
+  const projection = partialSequenceProjection(sequence, text(record?.source?.text));
+  return [{
+    source: text(record?.source?.text),
+    value: projection.pyash,
+    sequence,
+    pyac: projection.pyac
+  }];
+}
+
+export function projectTranslationSentence(record) {
+  const completePyash = text(record?.englishPyash ?? record?.pyash);
+  const completePyac = text(record?.pyac);
+  const partial = partialTokenParts(record);
+  return {
+    pyash: completePyash || partial.map(({ source, value, sequence }) => ({ source, value, sequence })),
+    pyac: completePyac || partial.map(({ source, pyac, sequence }) => ({ source, value: pyac, sequence }))
+  };
 }
 
 function stableId(parts) {
