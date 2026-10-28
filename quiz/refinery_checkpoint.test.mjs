@@ -85,6 +85,37 @@ test("refinery reruns stage when checkpoint output file is missing", async (t) =
   assert.ok(newspaper.includes("be checkpoint ya"));
 });
 
+test("refinery checkpoint payloads stay inline in the newspaper", async (t) => {
+  if (!canCaptureNodeChildStdout) t.skip("environment cannot capture node child stdout");
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-refinery-checkpoint-inline-"));
+  const programPath = path.join(tmpDir, "program.pya");
+  const largeText = "checkpoint payload ".repeat(180);
+  await fs.writeFile(programPath, [
+    "su name line be refinery def",
+    `su name writeout ob text ${JSON.stringify(largeText)} to filename "out.txt" be write do`,
+    "prah",
+    ""
+  ].join("\n"), "utf8");
+
+  const __filename = fileURLToPath(import.meta.url);
+  const repoRoot = path.join(path.dirname(__filename), "..");
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  await execFileAsync(process.execPath, [
+    runPath,
+    "--refinery", "line",
+    "--newspaper",
+    "--run-id", "run-checkpoint-inline",
+    "--run-time", "2025-01-01T00:00:00Z",
+    programPath
+  ], { cwd: tmpDir, timeout: 120000 });
+
+  const newspaperPath = path.join(tmpDir, "newspaper", "run-checkpoint-inline.pya");
+  const newspaper = await fs.readFile(newspaperPath, "utf8");
+  assert.match(newspaper, /from name line to la[\s\S]*?fromtext text quoted\.text\.\{/u);
+  assert.doesNotMatch(newspaper, /from name line to la[\s\S]*?fromtext text "artifact newspaper-/u);
+  assert.match(newspaper, /"platform": "writeout"/u);
+});
+
 test("refinery checkpoint replay preserves series payload in result", async (t) => {
   if (!canCaptureNodeChildStdout) t.skip("environment cannot capture node child stdout");
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-refinery-checkpoint-series-"));
