@@ -292,20 +292,37 @@ export function renderVliwPyac(decoded) {
 }
 
 export function phraseParts(decoded) {
-  const ends = [...decoded.phraseEnds].filter((end) => (
+  const moodIndex = decoded.moodIndex >= 0 ? decoded.moodIndex : decoded.tokens.length;
+  const relativeCloseIndices = new Set();
+  const ends = new Set([...decoded.phraseEnds].filter((end) => (
     end + 1 >= decoded.tokens.length
     || !PHRASE_CASE_WORDS.has(decoded.tokens[end + 1].pya)
-  ));
+  )));
+  for (let index = 0; index < moodIndex; index += 1) {
+    if (decoded.tokens[index].pya !== "la") continue;
+    const close = decoded.tokens.findIndex((token, tokenIndex) => (
+      tokenIndex > index && tokenIndex < moodIndex && token.pya === "ba"
+    ));
+    if (close < 0) continue;
+    for (const end of [...ends]) {
+      if (end > index && end < close) ends.delete(end);
+    }
+    if (close > index) ends.add(close - 1);
+    relativeCloseIndices.add(close);
+  }
   const phrases = [];
   let start = 0;
-  for (const end of ends) {
+  for (const end of [...ends].sort((left, right) => left - right)) {
+    if (end < start) continue;
     phrases.push({
       tokens: decoded.tokens.slice(start, end + 1),
-      case: decoded.tokens[end].pya
+      case: PHRASE_CASE_WORDS.has(decoded.tokens[end].pya)
+        ? decoded.tokens[end].pya
+        : null
     });
     start = end + 1;
+    while (relativeCloseIndices.has(start)) start += 1;
   }
-  const moodIndex = decoded.moodIndex >= 0 ? decoded.moodIndex : decoded.tokens.length;
   return {
     phrases,
     trailing: decoded.tokens.slice(start, moodIndex),

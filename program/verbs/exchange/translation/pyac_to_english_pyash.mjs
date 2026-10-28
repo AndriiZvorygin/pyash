@@ -69,6 +69,7 @@ const ENGLISH_MOOD_GLOSSES = new Map([
   ["tseh", "can"],
   ["syi7h", "there are"]
 ]);
+const ENGLISH_NUMBER_MARKERS = new Set(["the"]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],
   ["te", "in"],
@@ -84,7 +85,7 @@ const CASE_PREPOSITIONS = new Map([
   ["ga", "via"],
   ["pwih", "from"],
   ["twah", "out of"],
-  ["lwah", "through"],
+  ["lwah", "within"],
   ["lwih", "off"],
   ["tweh", "until"],
   ["nweh", "in"],
@@ -409,7 +410,8 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
     const part = parts[index];
     const grammarSequence = grammarSequenceSurface(parts, index);
     if (grammarSequence) {
-      words.push(grammarSequence.surface);
+      if (ENGLISH_NUMBER_MARKERS.has(grammarSequence.surface)) words.unshift(grammarSequence.surface);
+      else words.push(grammarSequence.surface);
       index += grammarSequence.pya.length - 1;
       continue;
     }
@@ -444,7 +446,10 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
     if (part.pya === "no" || part.pya === "pyuh") {
       continue;
     }
-    if (part.kind === "grammar" && part.english) words.push(part.english);
+    if (part.kind === "grammar" && part.english) {
+      if (ENGLISH_NUMBER_MARKERS.has(part.english)) words.unshift(part.english);
+      else words.push(part.english);
+    }
   }
   if (possessive && words.length > 0) {
     const owner = PRONOUN_FORMS.get(possessivePya);

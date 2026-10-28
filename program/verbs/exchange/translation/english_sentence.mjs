@@ -617,12 +617,24 @@ function existentialContent(records, existential) {
   const contentRecords = records.slice(contentStart, contentEnd).filter((record) => (
     !record.consumedBy && record.construction?.kind !== "additive-connector"
   ));
-  const subject = addNominativeCase({
+  const firstCaseIndex = contentRecords.findIndex(isLinkedCaseRecord);
+  const subjectRecords = firstCaseIndex < 0
+    ? contentRecords
+    : contentRecords.slice(0, firstCaseIndex);
+  const adjunctRecords = firstCaseIndex < 0
+    ? []
+    : contentRecords.slice(firstCaseIndex);
+  const contentSequence = [
+    ...composeHeadInitialPhraseSequence(subjectRecords),
+    NOMINATIVE_MARKER,
+    ...(adjunctRecords.length > 0 ? composeCaseSequence(adjunctRecords) : [])
+  ];
+  const subject = {
     surface: contentRecords.map((record) => record.surface).join(" "),
-    pyashSequence: composeHeadInitialPhraseSequence(contentRecords),
+    pyashSequence: contentSequence,
     coverageType: "construction",
     evidence: "existential clause content follows there is/are"
-  });
+  };
   const relativeRecords = relativeIndex >= 0
     ? records.slice(relativeIndex).filter((record) => !record.consumedBy)
     : [];
