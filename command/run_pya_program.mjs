@@ -180,6 +180,13 @@ function shouldForceTextExternalization({ sentence, pathKey } = {}) {
   return false;
 }
 
+function shouldExternalizeNewspaperText({ sentence, pathKey, bytes } = {}) {
+  const key = String(pathKey ?? "");
+  if (sentence?.be === "checkpoint" && key === "fromtext.text") return false;
+  return shouldForceTextExternalization({ sentence, pathKey })
+    || bytes.length > NEWSPAPER_TEXT_ARTIFACT_THRESHOLD;
+}
+
 function rewriteSentenceTextForNewspaper(sentence, {
   runId,
   nextTextArtifactIndex
@@ -200,8 +207,7 @@ function rewriteSentenceTextForNewspaper(sentence, {
       const childPath = pathKey ? `${pathKey}.${key}` : key;
       if (key === "text" && typeof entry === "string" && entry.length > 0) {
         const bytes = Buffer.from(entry, "utf8");
-        const force = shouldForceTextExternalization({ sentence, pathKey: childPath });
-        if (force || bytes.length > NEWSPAPER_TEXT_ARTIFACT_THRESHOLD) {
+        if (shouldExternalizeNewspaperText({ sentence, pathKey: childPath, bytes })) {
           const idx = typeof nextTextArtifactIndex === "function" ? nextTextArtifactIndex() : 1;
           const relLocator = path.join(
             "artifacts",
