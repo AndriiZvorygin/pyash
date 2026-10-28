@@ -421,6 +421,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
           coverageType: token.coverageType,
           pyashSequence: cloneSequence(token.pyashSequence),
           ...(token.lemma ? { lemma: token.lemma } : {}),
+          ...(token.grammar ? { grammar: token.grammar } : {}),
           ...(token.morphology ? { morphology: token.morphology } : {}),
           ...(senses.length > 0 ? { senseCandidates: senses } : {}),
           ...(candidates.length > 0 ? { semanticCandidates: candidates } : {}),
