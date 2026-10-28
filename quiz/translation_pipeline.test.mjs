@@ -466,6 +466,20 @@ test("the Pyash source-to-VLIW translation operation uses one injected artifact 
   assert.equal(readFileSync(result.ob.map.translation.text, "utf8").includes("translation-pipeline-v1"), true);
   assert.equal(parseVliwCatalogPya(readFileSync(result.ob.map.catalog.text, "utf8")).catalog.records.length, 2);
   assert.equal(readFileSync(result.ob.map.pack.text).length > 32, true);
+  assert.deepEqual(JSON.parse(result.ob.map.sentences.text), [
+    {
+      original: "collector is number 5.",
+      pyash: [],
+      pyac: "collector 5 numberya",
+      status: "resolved"
+    },
+    {
+      original: "add 2 to collector.",
+      pyash: [],
+      pyac: "2 plusdo",
+      status: "resolved"
+    }
+  ]);
   const serialized = sentenceToPyash(result);
   assert.match(serialized, new RegExp(`artifactFolder ob text ${JSON.stringify(artifactFolder)}`));
   assert.match(serialized, new RegExp(`pack ob text ${JSON.stringify(join(artifactFolder, "vliw.pyac"))}`));

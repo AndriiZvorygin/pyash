@@ -78,7 +78,7 @@ function resolveSourcePath(sourcePath, cwd) {
   return path.resolve(cwd, sourcePath);
 }
 
-function resultPaths({ artifactFolder, source, translation, catalog, pack, runId }) {
+function resultPaths({ artifactFolder, source, translation, catalog, pack, runId, sentences = [] }) {
   return {
     goal: "vliw",
     runId,
@@ -86,7 +86,8 @@ function resultPaths({ artifactFolder, source, translation, catalog, pack, runId
     artifactFolder,
     translation,
     catalog,
-    pack
+    pack,
+    sentences
   };
 }
 

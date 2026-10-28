@@ -119,7 +119,8 @@ token-level output remains visible without inventing a complete sentence; an
 empty array means that side has no available projection. The generated artifacts
 are kept together under
 `artifacts/love-paragraph-vliw/`: `translation.pya`, `vliw-catalog.pya`, and
-`vliw.pyac`. The checkpoint newspaper remains at
+`vliw.pyac`. The direct `./run` map also includes a `sentences` text field
+containing the same JSON sentence rows, including partial arrays. The checkpoint newspaper remains at
 `newspaper/love-paragraph-vliw.pya`, so it can be inspected without rerunning:
 
 ```bash
