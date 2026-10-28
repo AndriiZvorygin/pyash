@@ -280,7 +280,7 @@ export async function translation_from_filename_to_vliw(sentence, options = {}) 
         translation: { text: output.result.translation },
         catalog: { text: output.result.catalog },
         pack: { text: output.result.pack },
-        sentences: { text: JSON.stringify(output.result.sentences ?? []) }
+        sentences: { text: JSON.stringify(output.result.sentences ?? [], null, 2) }
       }
     }
   };

@@ -76,7 +76,7 @@ function normalizeRetryConfig(config = {}) {
   return { initialDelayMs, backoff, maxAttempts, maxDelayMs };
 }
 
-function buildCheckpointSentence({ refineryName, platformName, hash, resultSentence, resultLine, exportFacts = [], scopeSlots = {} }) {
+export function buildCheckpointSentence({ refineryName, platformName, hash, resultSentence, resultLine, exportFacts = [], scopeSlots = {} }) {
   let payloadText = "";
   try {
     payloadText = JSON.stringify({
@@ -84,7 +84,7 @@ function buildCheckpointSentence({ refineryName, platformName, hash, resultSente
       result: resultSentence ?? {},
       exports: exportFacts,
       scope: scopeSlots
-    });
+    }, null, 2);
   } catch {
     payloadText = "";
   }
