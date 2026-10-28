@@ -518,6 +518,9 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
     : parts.phrases.filter((phrase) => (
       phrase !== subjectPhrase && !addressPhrases.includes(phrase)
     ));
+  // The encoded phrase is postpositional: its dependent clause precedes the
+  // parent phrase. English-Pyash is prepositional/SVO, so render the complete
+  // parent arguments first and keep the dependent clause attached afterward.
   const relativeArguments = argumentPhrases.filter((phrase) => (
     phrase.tokens.some((token) => token.pya === "la")
   ));

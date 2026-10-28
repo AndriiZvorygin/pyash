@@ -243,6 +243,12 @@ and gloss source. English-Pyash keeps composed noun and prepositional phrases
 as visible words (`ob us from evil`) rather than collapsing them into a
 quoted text literal. Vocative phrases render as an address prefix (`O ...`);
 the remaining case inventory is derived from the vocabulary's `_case_` entries.
+Relative-clause direction follows the target language's adposition direction.
+The postpositional Pyac/VLIW structural stream places a dependent clause before
+its parent phrase (`la ... ba` followed by the parent). The English-Pyash
+projection is prepositional and SVO, so it renders the complete parent phrase
+first and then its attached dependent clause (`the brain that ...`). The clause
+remains linked to its parent phrase across both projections.
 The `translation` verb accepts `from state pyac` with `to state pyash` or
 `to state english`; unknown or unsegmentable Pyac tokens remain hard errors.
 
