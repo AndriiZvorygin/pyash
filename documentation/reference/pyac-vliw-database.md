@@ -475,9 +475,9 @@ Imperative clauses use the understood second-person subject and remain
 contextual predicate candidates for Housekeeper review.
 
 Resolved translation records carry three useful projections: `canonical` keeps
-the English source/gloss, `pyash` preserves the structural `su`/`ob`/`be` form
-for replay, and `pyac` renders the VLIW-compatible word order. The
-`pyashSurface` field remains a compatibility alias for `pyac`. The Pyac form
+the English source/gloss, `pyash` renders the English-word Pyash form, and
+`pyac` renders the VLIW-compatible word order. `structural` preserves the
+encoded lexical role serialization for replay. The Pyac form
 fuses noun, adjective, case, voice, tense, aspect, and final mood words into
 complete phrases. Named noun phrases add `gi` immediately before their final
 case suffix, so `mi gi na` becomes `migina` and `hcas pu gi ka` becomes

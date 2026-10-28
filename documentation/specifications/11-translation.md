@@ -323,9 +323,10 @@ Terminology:
   English words with grammatical roles, for example `su me be happy ya`.
 - **Pyac** is the VLIW-compatible word form. It uses the short encoded words,
   for example `migina nyahye hcaspugika pfinkiya`.
-- The pipeline's `canonical` field keeps the English source/gloss. The
-  parser-native structural `pyash` field remains replay evidence; it is an
-  internal role serialization, not the displayed English canonical form.
+- The pipeline's `canonical` field keeps the English source/gloss. Resolved
+  records expose `pyash` as the English-word Pyash projection, `pyac` as the
+  fused VLIW-compatible projection, and `structural` as the internal role
+  serialization used to preserve the encoded lexical sentence for replay.
 
 Phrase rules:
 
@@ -349,10 +350,8 @@ Phrase rules:
 The reusable renderer is
 `program/verbs/exchange/translation/pyash_surface.mjs`; its `renderPyac*`
 exports name the Pyac projection, while the older `renderPyash*` names remain
-compatibility aliases. The translation pipeline exposes `pyac` and retains
-`pyashSurface` as an alias. Resolved records expose `englishPyash`, the
-English-word projection decoded from VLIW in the `su`/`ob`/`be` shape; `pyash`
-remains replay evidence.
+compatibility aliases. Resolved records expose `pyash` and `englishPyash` as
+the English-word projection decoded from VLIW in the `su`/`ob`/`be` shape.
 
 ## 5.3 References
 

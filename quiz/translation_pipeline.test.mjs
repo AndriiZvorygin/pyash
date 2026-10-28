@@ -101,9 +101,10 @@ test("English translation uses the shared resources and retains unresolved vocab
   });
 
   assert.deepEqual(result.counts, { resolved: 1, provisional: 1, unresolved: 0 });
-  assert.equal(result.records[0].pyash, "su name nyah ye hcas pu na be pfin ki ya");
+  assert.equal(result.records[0].pyash, "ya su our houses be walked.");
+  assert.equal(result.records[0].structural, "su name nyah ye hcas pu na be pfin ki ya");
   assert.equal(result.records[0].pyac, "nyahye hcaspugina pfinkiya");
-  assert.equal(result.records[0].pyashSurface, "nyahye hcaspugina pfinkiya");
+  assert.equal(result.records[0].englishPyash, result.records[0].pyash);
   assert.equal(result.records[0].englishPyash, "ya su our houses be walked.");
   assert.equal(result.records[0].vliw.format, "pyac-vliw-phrase-v1");
   assert.equal(result.records[0].vliw.vectors.length, 1);
@@ -226,6 +227,9 @@ test("translation persists sense candidates per stable source occurrence", async
   ]);
   const parsed = parseTranslationPipelinePya(renderTranslationPipelinePya(result));
   assert.equal(parsed.senseStateFormat, TRANSLATION_SENSE_STATE_FORMAT);
+  assert.equal(parsed.records[0].pyash, result.records[0].pyash);
+  assert.equal(parsed.records[0].structural, result.records[0].structural);
+  assert.equal(parsed.records[0].pyashSurface, undefined);
   assert.deepEqual(parsed.records.map((record) => record.tokens[0].occurrenceId), [
     result.records[0].tokens[0].occurrenceId,
     result.records[1].tokens[0].occurrenceId
@@ -238,9 +242,10 @@ test("English subject nominative lowers to the fused Pyac form", async () => {
     text: "I walked our houses."
   });
   assert.equal(result.records[0].canonical, "I walked our houses.");
-  assert.equal(result.records[0].pyash, "su name mi na ob name nyah ye hcas pu ka be pfin ki ya");
+  assert.equal(result.records[0].pyash, "ya su I be walked ob our houses.");
+  assert.equal(result.records[0].structural, "su name mi na ob name nyah ye hcas pu ka be pfin ki ya");
   assert.equal(result.records[0].pyac, "migina nyahye hcaspugika pfinkiya");
-  assert.equal(result.records[0].pyashSurface, "migina nyahye hcaspugika pfinkiya");
+  assert.equal(result.records[0].englishPyash, result.records[0].pyash);
   assert.equal(result.records[0].englishPyash, "ya su I be walked ob our houses.");
 });
 
@@ -249,7 +254,8 @@ test("translation pipeline renders compositional cases at the phrase boundary", 
     language: "english",
     text: "I walked into houses."
   });
-  assert.equal(result.records[0].pyash, "su name mi na ob name hcas pu twih be pfin ki ya");
+  assert.equal(result.records[0].pyash, "ya su I be walked ob into houses.");
+  assert.equal(result.records[0].structural, "su name mi na ob name hcas pu twih be pfin ki ya");
   assert.equal(result.records[0].pyac, "migina hcaspugitwih pfinkiya");
   assert.equal(result.records[0].englishPyash, "ya su I be walked ob into houses.");
 });
@@ -272,7 +278,8 @@ test("sentence verification can resolve a contextual candidate through the pipel
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].context, ["I walking."]);
   assert.equal(result.records[0].status, "resolved");
-  assert.equal(result.records[0].pyash, "su name mi na be pfin pfih ya");
+  assert.equal(result.records[0].pyash, "ya su I be walking.");
+  assert.equal(result.records[0].structural, "su name mi na be pfin pfih ya");
 });
 
 test("registered structured adapters share the document pipeline", async () => {
