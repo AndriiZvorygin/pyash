@@ -20,7 +20,7 @@ const MOOD_WORDS = new Set([
   "ya", "do", "def", "prah", "ret", "que", "can", "pe", "pi7", "li", "tu", "cu",
   "si", "ri", "di", "tcih", "lo", "cyih", "dwih", "pcih", "psih", "tseh", "twuh",
   "rwih", "jwih", "mwih", "mu", "nwoh", "lu", "byih", "kcuh", "kcu7h", "dyah",
-  "pceh", "pruh", "swuh", "ru", "ksuh", "t6", "zlih", "n6", "gyih", "si2"
+  "pceh", "pruh", "swuh", "ru", "ksuh", "t6", "zlih", "n6", "gyih", "si2", "syi7h"
 ]);
 
 const entriesByPya = new Map();

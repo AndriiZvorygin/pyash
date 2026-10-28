@@ -234,10 +234,13 @@ test("translation records additive existential structure without inventing a bra
     scope: "sentence",
     evidence: "also connects the existential clause to the preceding discourse"
   }]);
-  assert.match(record.structuralPreview, /^pcah syi7h /u);
+  assert.match(record.structuralPreview, /^pcah /u);
+  assert.match(record.structuralPreview, / syi7h$/u);
+  assert.ok(record.structuralPreview.indexOf("la") < record.structuralPreview.indexOf("ryik"));
   assert.equal((record.candidates ?? []).some((candidate) => candidate.phrase === "brain"), false);
   assert.equal(record.relativeClauses[0].construction, "passive-relative-clause");
   assert.deepEqual(record.relativeClauses[0].action.pyashSequence, ["txak", "pyoh", "tseh"]);
+  assert.ok(record.relativeClauses[0].pyashSequence.indexOf("je") < record.relativeClauses[0].pyashSequence.indexOf("txak"));
   const projection = projectTranslationSentence(record);
   assert.deepEqual(projection.pyash.find((part) => part.source === "can").sequence, ["tseh"]);
   assert.deepEqual(projection.pyac.find((part) => part.source === "can").sequence, ["tseh"]);
