@@ -36,6 +36,7 @@ const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
 const ENGLISH_GRAMMAR_SURFACE_OVERRIDES = new Map([
   ["la", "that"]
 ]);
+const TENSE_MARKERS = new Set(["ki", "ra", "pfih"]);
 const ENGLISH_GRAMMAR_SURFACES = new Map();
 try {
   const grammarSource = readFileSync(new URL("./english_grammar.pya", import.meta.url), "utf8");
@@ -322,7 +323,7 @@ function rootEnglish(part) {
   return word === "hodiernal_tense" ? "today" : word;
 }
 
-function inflectVerb(parts) {
+function inflectVerb(parts, { thirdPerson = false } = {}) {
   const root = parts.find((part) => part.kind === "root");
   if (!root) return "something";
   const dictionaryForm = rootEnglish(root);
@@ -343,10 +344,27 @@ function inflectVerb(parts) {
     ]).get(base) ?? `${base}ed`;
   }
   if (markers.has("pfih")) return `${base}ing`;
+  if (markers.has("ra") && thirdPerson) {
+    if (/[sxz]$/u.test(base) || /(?:ch|sh|o)$/u.test(base)) return `${base}es`;
+    if (/[^aeiou]y$/u.test(base)) return `${base.slice(0, -1)}ies`;
+    return `${base}s`;
+  }
   return base;
 }
 
 function renderPhrase(parts, { subject = false, standalone = false, vocativeMarker = false } = {}) {
+  const relativeIndex = parts.findIndex((part) => part.pya === "la");
+  if (relativeIndex >= 0) {
+    const verbStart = parts.slice(relativeIndex + 1).findIndex((part) => part.kind === "root");
+    if (verbStart >= 0) {
+      const absoluteVerbStart = relativeIndex + 1 + verbStart;
+      let verbEnd = absoluteVerbStart + 1;
+      while (verbEnd < parts.length && TENSE_MARKERS.has(parts[verbEnd].pya)) verbEnd += 1;
+      const verb = inflectVerb(parts.slice(absoluteVerbStart, verbEnd), { thirdPerson: true });
+      const remainder = renderPhrase(parts.slice(verbEnd), { standalone, vocativeMarker });
+      return ["that", verb, remainder].filter(Boolean).join(" ");
+    }
+  }
   const words = [];
   let possessive = false;
   let possessivePya = null;
