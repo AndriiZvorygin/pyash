@@ -553,7 +553,28 @@ export function lowerTranslationToPyac(result) {
     endOffset: record.source.endOffset,
     text: record.source.text
   }));
-  const database = buildVliwDatabase(resolved.map((record) => record.sentence), { sources });
+  const database = buildVliwDatabase(resolved.map((record) => record.sentence), {
+    sources,
+    lowerSentence: (sentence, inputIndex) => {
+      const phraseVliw = resolved[inputIndex]?.vliw;
+      if (!phraseVliw?.vectors) return undefined;
+      return {
+        codelets: phraseVliw.vectors.map((words) => ({
+          words,
+          usedWords: phraseVliw.usedWords
+        })),
+        decodeCodelet: () => ({
+          format: phraseVliw.format,
+          semantic: "phrase-vliw",
+          sentence,
+          effects: null,
+          usedWords: phraseVliw.usedWords,
+          phraseEnds: [...(phraseVliw.phraseEnds ?? [])],
+          moodIndex: phraseVliw.moodIndex ?? -1
+        })
+      };
+    }
+  });
   return {
     ...database,
     sourceRecordIds: resolved.map((record) => record.id),
