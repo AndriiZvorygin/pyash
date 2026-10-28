@@ -461,7 +461,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
   const resolvedClauseSentences = clauseProjections.length > 1
     && clauseProjections.length === analysis.clauses.length;
   const structural = sentence
-    ? sentenceToPyash(sentence)
+    ? text(analysis.structural ?? sentenceToPyash(sentence))
     : text(analysis.pyash ?? analysis.verbPhrase?.pyashSequence?.join(" "));
   let phraseVliw = null;
   if (sentence) {

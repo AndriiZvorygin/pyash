@@ -250,6 +250,41 @@ test("translation records additive existential structure without inventing a bra
   assert.deepEqual(projection.pyac.find((part) => part.source === "be").sequence, ["pyoh"]);
 });
 
+test("accepted existential coverage produces complete Pyash, Pyac, and VLIW output", async () => {
+  const source = "There are also chemical reactions within the brain that can be triggered by the different types of love.";
+  const result = await translateDocumentSegments({
+    language: "english",
+    text: source,
+    segments: segmentTranslationDocument(source),
+    locator: "fixture.txt",
+    coverageOverrides: new Map([
+      ["different", { coverageType: "fixture", pyashSequence: ["nros"] }],
+      ["types", { coverageType: "fixture", pyashSequence: ["nyit", "pu"] }]
+    ])
+  });
+  const record = result.records[0];
+
+  assert.equal(record.status, "resolved");
+  assert.equal(record.sentence.mood, "syi7h");
+  assert.equal(
+    record.structural,
+    "pcah la nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu lwah twum dlih na syi7h"
+  );
+  assert.equal(record.structuralPreview, undefined);
+  assert.equal(
+    record.pyac,
+    "pcah la nros nyitpudlih pyantije txakpyoh tseh ba ryik ryakpulwah twumdlihnasyi7h"
+  );
+  assert.match(record.pyash, /chemical reactions/u);
+  assert.match(record.englishPyash, /there are/u);
+  assert.equal(record.vliw.format, "pyac-vliw-phrase-v1");
+  assert.deepEqual(result.counts, { resolved: 1, provisional: 0, unresolved: 0 });
+
+  const database = lowerTranslationToPyac(result);
+  assert.equal(database.catalog.executableCount, 2);
+  assert.deepEqual(database.sourceRecordIds, [record.id]);
+});
+
 test("translation artifact merging never downgrades an accepted occurrence", () => {
   const prior = {
     sourceHash: "same-source",
