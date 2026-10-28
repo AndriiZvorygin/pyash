@@ -190,6 +190,7 @@ test("persisted mixed-part-of-speech senses retain surrounding noun evidence", a
         surface: "and",
         tokenIndex: 1,
         pyashSequence: ["wa"],
+        grammar: { kind: "conjunction", components: ["and_"], position: "link" },
         senseCandidates: []
       }, {
         surface: "actions",

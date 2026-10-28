@@ -61,10 +61,6 @@ const WORDNET_CONTEXT_STOP_WORDS = new Set([
 const WORDNET_MODAL_PRECEDERS = new Set([
   "can", "could", "may", "might", "must", "shall", "should", "will", "would"
 ]);
-const WORDNET_NOUN_PRECEDERS = new Set([
-  "a", "an", "the", "this", "that", "these", "those", "some", "many", "another", "each",
-  "my", "your", "our", "their", "of", "for", "from", "with", "in", "on", "within", "into"
-]);
 const WORDNET_GRAPH_SELECTION_MIN_MARGIN = 0.3;
 
 let defaultResourcesPromise = null;
@@ -206,7 +202,7 @@ function wordNetGraphContext(sense, records, index, wordnetIndex) {
 }
 
 function hasRelativeClauseAfter(records, index) {
-  if (records[index + 1]?.surface !== "that") return false;
+  if (records[index + 1]?.grammar?.kind !== "dependent-clause") return false;
   const predicate = records[index + 2];
   return Boolean(predicate && (
     predicate.morphology?.kind === "finite-past"
@@ -227,20 +223,22 @@ function expectedWordNetPartsOfSpeech(records, index) {
   if (WORDNET_MODAL_PRECEDERS.has(previous?.surface) || WORDNET_MODAL_PRECEDERS.has(previousTwo?.surface)) {
     expected.add("v");
   }
-  if (WORDNET_NOUN_PRECEDERS.has(previous?.surface)) expected.add("n");
-  if (previous?.surface === "and" || previous?.surface === "or") {
+  if (previous?.grammar?.kind === "number-marker"
+    || previous?.grammar?.kind === "case-marker"
+    || previous?.grammar?.kind === "possessive-determiner") expected.add("n");
+  if (previous?.grammar?.kind === "conjunction") {
     if (previousTwo?.wordnet?.partsOfSpeech?.includes("n")) expected.add("n");
   }
   if (previous?.wordnet?.partsOfSpeech?.includes("a")) expected.add("n");
   if (previous?.grammar?.kind === "pronoun") expected.add("v");
-  if (next && ["a", "an", "the", "this", "that", "these", "those"].includes(next.surface)
-    && !(next.surface === "that" && hasRelativeClauseAfter(records, index))) {
+  if (["number-marker", "pronoun"].includes(next?.grammar?.kind)
+    && !hasRelativeClauseAfter(records, index)) {
     expected.add("v");
   }
   if (next?.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))) {
     expected.add("v");
   }
-  if (record.surface.endsWith("ing") && ["is", "are", "was", "were", "be", "been", "being"].includes(previous?.surface)) {
+  if (record.surface.endsWith("ing") && previous?.copula) {
     expected.add("v");
   }
   if (record.surface.endsWith("s") && !WORDNET_MODAL_PRECEDERS.has(previous?.surface)
