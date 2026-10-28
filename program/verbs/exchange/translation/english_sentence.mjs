@@ -1137,7 +1137,9 @@ export function analyzeEnglishSentence(source, {
       lexicalSequence: action.pyashSequence,
       morphologySequence: negated ? ["no"] : [],
       markerNames: negated ? ["negatory_quantifier_"] : [],
-      certainty: lexicalVerbCertainty(action),
+      certainty: action.pyashSequence.length > 0
+        ? "deterministic"
+        : lexicalVerbCertainty(action),
       evidence: `modal ${modal.surface} scopes the following action ${action.surface}`,
       mood: modalAction.mood,
       moodSurface: modal.surface
