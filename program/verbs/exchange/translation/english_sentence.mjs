@@ -664,7 +664,10 @@ function relativeClauseProjection(records, relativeIndex) {
   const action = records[actionIndex];
   const relativeTail = composeRelativeTailSequence(records.slice(actionIndex + 1));
   const sequence = [
-    ...records.slice(relativeIndex, modalIndex).flatMap((record) => recordSequence(record)),
+    ...records
+      .slice(relativeIndex, modalIndex)
+      .filter((record) => record.grammar?.kind !== "dependent-clause")
+      .flatMap((record) => recordSequence(record)),
     ...relativeTail,
     ...action.pyashSequence,
     "pyoh",

@@ -236,7 +236,7 @@ test("translation records additive existential structure without inventing a bra
   }]);
   assert.match(record.structuralPreview, /^pcah /u);
   assert.match(record.structuralPreview, / syi7h$/u);
-  assert.ok(record.structuralPreview.indexOf("la") < record.structuralPreview.indexOf("ryik"));
+  assert.equal(record.structuralPreview.includes(" la "), false);
   assert.equal((record.candidates ?? []).some((candidate) => candidate.phrase === "brain"), false);
   assert.equal(record.relativeClauses[0].construction, "passive-relative-clause");
   assert.deepEqual(record.relativeClauses[0].action.pyashSequence, ["txak", "pyoh", "tseh"]);
