@@ -486,8 +486,11 @@ form `I walked our houses.` and the Pyac form
 `mina nyahye hcaspuka pfinkiya`.
 Noun/pro-form quantifier grammar also fuses to its head: structural `cyah tlih`,
 `ya no`, and `clah tlih` render as `cyahtlih`, `yano`, and `clahtlih`.
+Accepted compound sequences from `compound_coverage_curated.pya` fuse in the
+same surface projection: `lwak hzan` renders as `lwakhzan`, and the reverse
+dictionary resolves that sequence to its canonical English target `include`.
 The structural components remain separate in the VLIW evidence so decoding can
-recover the grammar layers.
+recover the grammar layers and compound boundaries.
 English compositional relations lower to Pyac case markers at the phrase
 boundary: `I walked into houses` has structural form `hcas pu twih` and
 surface form `hcasputwih`; names and variables carry `gi` before their final

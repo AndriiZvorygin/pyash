@@ -8,7 +8,8 @@ import {
 } from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
 import {
   decodePhraseVliw,
-  lowerSentencePhraseVliw
+  lowerSentencePhraseVliw,
+  renderVliwPyac
 } from "../program/library/vliw/phrase.mjs";
 
 test("Pyac lowering uses suffix roles instead of structural su/ob/name tokens", () => {
@@ -96,6 +97,22 @@ test("benefactive renders for across a mixed noun and pronoun phrase", () => {
   );
   assert.doesNotMatch(result.englishPyash, /\bob (?:for|to|from|in)\b/u);
   assert.match(result.englishPyash, /someone or something/u);
+});
+
+test("Pyac compounds fuse on the surface and decode through the compound lexicon", () => {
+  const lowered = lowerSentencePhraseVliw({
+    mood: "ya",
+    su: { name: "pyan na" },
+    be: "lwak hzan ra",
+    ob: { name: "xyen ka clah tlih pwah" }
+  });
+  const decoded = decodePhraseVliw(lowered.vectors);
+  assert.equal(renderVliwPyac(decoded), "pyanna xyenka clahtlihpwah lwakhzanraya");
+  const result = renderEnglishFromVliw(lowered.vectors);
+  assert.equal(result.englishPyash, "ya su love be include ob nurture for another.");
+
+  const roundTrip = decodePyacSentence("pyanna xyenka clahtlihpwah lwakhzanraya");
+  assert.equal(roundTrip.pyash, "ya su love be include ob nurture for another.");
 });
 
 test("Pyac document translation keeps one record per input line", () => {
