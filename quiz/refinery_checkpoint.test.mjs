@@ -6,12 +6,35 @@ import fs from "node:fs/promises";
 import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import { buildCheckpointSentence } from "../program/bridge/refinery.mjs";
 
 const execFileAsync = promisify(execFile);
 const canCaptureNodeChildStdout = (() => {
   const { stdout } = spawnSync(process.execPath, ["-e", "console.log('ok')"], { encoding: "utf8" });
   return String(stdout ?? "").trim() === "ok";
 })();
+
+test("refinery checkpoint payloads use readable Pyash quote blocks", () => {
+  const sentence = buildCheckpointSentence({
+    refineryName: "translation source vliw",
+    platformName: "segment source",
+    hash: "checkpoint-hash",
+    resultSentence: {
+      mood: "ya",
+      su: { name: "source segments" },
+      be: "map",
+      ob: { map: { segments: [{ text: "Love is a mix." }] } }
+    },
+    resultLine: "su name source segments be map def\nprah",
+    exportFacts: [],
+    scopeSlots: {}
+  });
+  const rendered = sentenceToPyash(sentence);
+  assert.match(rendered, /fromtext text quoted\.text\.\{/u);
+  assert.equal(rendered.includes('\n  "platform": "segment source"'), true);
+  assert.equal(rendered.includes('fromtext text "{\\"platform'), false);
+});
 
 test("refinery reruns stage when checkpoint output file is missing", async (t) => {
   if (!canCaptureNodeChildStdout) t.skip("environment cannot capture node child stdout");
