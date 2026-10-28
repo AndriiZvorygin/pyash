@@ -137,7 +137,7 @@ test("English zero-copula analysis records subject and object phrase evidence", 
   assert.equal(result.construction, "zero-copula");
   assert.equal(result.sentence.be, undefined);
   assert.equal(result.sentence.su.name, "pyan na");
-  assert.equal(result.sentence.ob.name, "tlih mrat xyek pu wa twot ti ka");
+  assert.equal(result.sentence.ob.name, "tlih mrat ka xyek pu wa twot ti");
   assert.deepEqual(result.phrases.map((phrase) => ({
     slot: phrase.slot,
     start: phrase.start,
@@ -264,7 +264,7 @@ test("English of-relations use genitive ti while possessive determiners keep ye"
     resolveWord: (word) => rows.get(word) ?? base(word)
   });
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name mi na ob name hcas tlan ti ka be pfin ki ya");
+  assert.equal(result.pyash, "su name mi na ob name hcas ka tlan ti be pfin ki ya");
 });
 
 test("English compositional relations lower to phrase-final case markers", async () => {
@@ -276,6 +276,13 @@ test("English compositional relations lower to phrase-final case markers", async
   const from = await analyzeDefaultEnglishSentence("I walked from houses");
   assert.equal(from.status, "resolved");
   assert.equal(from.pyash, "su name mi na ob name hcas pu so be pfin ki ya");
+});
+
+test("English object and benefactive phrases keep separate Pyac suffixes", async () => {
+  const result = await analyzeDefaultEnglishSentence("I walked a house for someone");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.sentence.ob.name, "tlih hcas ka cyah tlih pwah");
+  assert.match(result.pyash, /ob name tlih hcas ka cyah tlih pwah/u);
 });
 
 test("deterministic plural recovery uses an existing root and retains WordNet sense evidence", async () => {
@@ -582,7 +589,7 @@ test("sentence grammar maps thy and negation while leaving the lexical predicate
     verify: async ({ candidates }) => ({ verdict: "accept", candidateId: candidates[0].id })
   });
   assert.equal(resolved.status, "resolved");
-  assert.equal(resolved.pyash, "su name sa ye hnim pu na ob name nyah hyoc twih be tyip ra no ya");
+  assert.equal(resolved.pyash, "su name sa ye hnim pu na ob name nyah ka hyoc twih be tyip ra no ya");
 });
 
 test("imperative Lord's Prayer clause supplies the second-person subject", async () => {

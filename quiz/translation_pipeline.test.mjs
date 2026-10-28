@@ -254,10 +254,10 @@ test("translation pipeline renders compositional cases at the phrase boundary", 
     language: "english",
     text: "I walked into houses."
   });
-  assert.equal(result.records[0].pyash, "ya su I be walked ob into houses.");
+  assert.equal(result.records[0].pyash, "ya su I be walked into houses.");
   assert.equal(result.records[0].structural, "su name mi na ob name hcas pu twih be pfin ki ya");
   assert.equal(result.records[0].pyac, "mina hcasputwih pfinkiya");
-  assert.equal(result.records[0].englishPyash, "ya su I be walked ob into houses.");
+  assert.equal(result.records[0].englishPyash, "ya su I be walked into houses.");
 });
 
 test("sentence verification can resolve a contextual candidate through the pipeline", async () => {
@@ -481,8 +481,8 @@ test("English zero-copula clauses lower through the VLIW projection", async () =
   });
   assert.equal(result.records[0].status, "resolved");
   assert.equal(result.records[0].sentence.be, undefined);
-  assert.equal(result.records[0].pyac, "pyanna tlih mrat xyekpu wa twottikaya");
-  assert.equal(result.records[0].englishPyash, "ya su love ob of a mixed emotionallys and activity.");
+  assert.equal(result.records[0].pyac, "pyanna tlih mratka xyekpu wa twottiya");
+  assert.equal(result.records[0].englishPyash, "ya su love ob a mixed of emotionallys and activity.");
   assert.deepEqual(result.records[0].phrases.map((phrase) => [phrase.slot, phrase.start, phrase.end]), [
     ["su", 0, 1],
     ["ob", 2, 8]

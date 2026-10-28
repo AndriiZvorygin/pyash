@@ -470,13 +470,14 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
     : parts.phrases.filter((phrase) => (
       phrase !== subjectPhrase && !addressPhrases.includes(phrase)
     ));
-  const objectText = argumentPhrases
-    .map((phrase) => renderPhrase(
+  const objectParts = argumentPhrases.flatMap((phrase) => {
+    const content = renderPhrase(
       phrase.tokens.map((token) => decodedPart(token, glosses)),
       { vocativeMarker: true }
-    ))
-    .filter(Boolean)
-    .join(" ");
+    );
+    if (!content) return [];
+    return phrase.case === "ka" ? ["ob", content] : [content];
+  });
   const verb = nominalPredicate
     ? "is"
     : inflectVerb(parts.trailing.map((token) => decodedPart(token, glosses))
@@ -486,7 +487,7 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
   const rendered = zeroVerb
     ? ["su", subject]
     : ["su", subject, "be", renderedVerb];
-  if (objectText) rendered.push("ob", ...objectText.split(/\s+/u));
+  if (objectParts.length > 0) rendered.push(...objectParts.flatMap((part) => part.split(/\s+/u)));
   const body = addressPhrases.length === 0
     ? rendered.join(" ")
     : `${addressPhrases
