@@ -81,6 +81,17 @@ test("source-to-VLIW refinery writes the translation catalog and executable pack
   assert.equal(output.result.records, 2);
   assert.equal(output.result.executable, 1);
   assert.equal(output.result.unsupported, 1);
+  assert.deepEqual(
+    output.result.sentences.map(({ original, status }) => ({ original, status })),
+    [
+      { original: "collector is number 5.", status: "resolved" },
+      { original: "add 2 to collector.", status: "resolved" }
+    ]
+  );
+  assert.equal(output.result.sentences[0].pyash, null);
+  assert.equal(output.result.sentences[0].pyac, "collector 5 numberya");
+  assert.equal(output.result.sentences[1].pyash, null);
+  assert.equal(output.result.sentences[1].pyac, "2 plusdo");
   assert.equal(readFileSync(paths.translation, "utf8").includes("translation-pipeline-v1"), true);
   assert.equal(parseVliwCatalogPya(readFileSync(paths.catalog, "utf8")).catalog.records.length, 2);
   assert.equal(readFileSync(paths.pack).length > 32, true);
