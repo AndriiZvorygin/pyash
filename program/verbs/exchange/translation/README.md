@@ -123,6 +123,11 @@ are kept together under
 containing the same JSON sentence rows, including partial arrays. The checkpoint newspaper remains at
 `newspaper/love-paragraph-vliw.pya`, so it can be inspected without rerunning:
 
+The durable `translation.pya` stores each metadata, record, and vocabulary row as
+pretty JSON inside a Pyash `quoted.text ... .text.quoted` block. This keeps the
+whitespace readable in the artifact while `pya_to_json.mjs` and the pipeline
+parser recover the same structured values.
+
 ```bash
 node command/read_translation_refinery.mjs love-paragraph-vliw .
 node command/pya_to_json.mjs artifacts/love-paragraph-vliw/translation.pya --pretty
