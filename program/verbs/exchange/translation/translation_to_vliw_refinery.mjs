@@ -8,6 +8,7 @@ import { getRefinery, runRefinery } from "../../../bridge/refinery.mjs";
 import { writeVliwDatabaseFiles } from "../../../library/vliw/index.mjs";
 import {
   lowerTranslationToPyac,
+  projectTranslationSentence,
   renderTranslationPipelinePya,
   segmentTranslationDocument,
   translateDocumentSegments,
@@ -374,8 +375,7 @@ function buildCommandResult(context, translation, database, compoundCache) {
   const vocabulary = context.vocabulary ?? {};
   const sentences = translation.records.map((record) => ({
     original: record.source?.text ?? "",
-    pyash: text(record.englishPyash ?? record.pyash) || null,
-    pyac: text(record.pyac) || null,
+    ...projectTranslationSentence(record),
     status: record.status
   }));
   return {
