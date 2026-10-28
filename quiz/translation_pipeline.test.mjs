@@ -16,6 +16,7 @@ import {
   lowerTranslationToPyac,
   parseTranslationPipelinePya,
   renderTranslationPipelinePya,
+  projectTranslationSentence,
   segmentTranslationDocument,
   translateDocumentSegments,
   translateDocument,
@@ -156,6 +157,26 @@ test("accepted lexical verb and complete phrases produce a full sentence", async
   assert.equal(result.records[0].pyash, "ya su love be include ob nurture for another.");
   assert.equal(result.records[0].pyac, "pyanna xyenka clahtlihpwah lwakhzanraya");
   assert.deepEqual(result.records[0].unresolved, undefined);
+});
+
+test("translation records coordinated clauses with their source connectors", async () => {
+  const source = "Romantic love can lead to dating, but a person can also feel for friends.";
+  const result = await translateDocument({
+    language: "english",
+    text: source,
+    locator: "fixture.txt"
+  });
+  const record = result.records[0];
+
+  assert.equal(record.clauses.length, 2);
+  assert.match(record.clauses[1].source, /^but a person can also feel/u);
+  assert.equal(record.clauses[1].connector, "but");
+  assert.deepEqual(record.clauses[1].connectorPyashSequence, ["pyuh"]);
+  assert.equal(record.clauses[1].action.phrase, "can also feel");
+  assert.deepEqual(projectTranslationSentence(record).clauses, record.clauses);
+
+  const roundTrip = parseTranslationPipelinePya(renderTranslationPipelinePya(result));
+  assert.deepEqual(roundTrip.records[0].clauses, record.clauses);
 });
 
 test("translation artifact merging never downgrades an accepted occurrence", () => {

@@ -610,6 +610,22 @@ test("modal capacity keeps the full action phrase and preceding noun phrase toge
   );
 });
 
+test("independent clauses retain their connector while noun conjunctions stay inside a clause", async () => {
+  const source = "Romantic love can lead to things such as dating and marriage, but a person can also feel for friends, such as platonic love, or family.";
+  const analysis = await analyzeDefaultEnglishSentence(source);
+
+  assert.equal(analysis.clauses.length, 2);
+  assert.match(analysis.clauses[0].source, /dating and marriage,/u);
+  assert.equal(analysis.clauses[0].connector, null);
+  assert.equal(analysis.clauses[0].action.phrase, "can lead");
+  assert.match(analysis.clauses[1].source, /^but a person can also feel/u);
+  assert.equal(analysis.clauses[1].connector, "but");
+  assert.deepEqual(analysis.clauses[1].connectorPyashSequence, ["pyuh"]);
+  assert.equal(analysis.clauses[1].subject.surface, "a person");
+  assert.equal(analysis.clauses[1].action.phrase, "can also feel");
+  assert.match(analysis.clauses[1].pyash, /^pyuh /u);
+});
+
 test("such as is classified as an exemplifier construction", async () => {
   const result = await analyzeDefaultEnglishSentence("love includes things such as friendship");
   const such = result.tokens.find((token) => token.surface === "such");

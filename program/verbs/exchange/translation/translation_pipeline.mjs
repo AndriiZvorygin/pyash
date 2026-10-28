@@ -95,10 +95,14 @@ export function projectTranslationSentence(record) {
   const completePyash = text(record?.englishPyash ?? record?.pyash);
   const completePyac = text(record?.pyac);
   const partial = partialTokenParts(record);
-  return {
+  const projection = {
     pyash: completePyash || partial.map(({ source, value, sequence }) => ({ source, value, sequence })),
     pyac: completePyac || partial.map(({ source, pyac, sequence }) => ({ source, value: pyac, sequence }))
   };
+  if (Array.isArray(record?.clauses) && record.clauses.length > 0) {
+    projection.clauses = record.clauses;
+  }
+  return projection;
 }
 
 function stableId(parts) {
@@ -367,6 +371,7 @@ async function analyzeSegment({
     if (
       adapter.name === "english" &&
       analysis?.status !== "resolved" &&
+      !Array.isArray(analysis?.clauses) &&
       typeof verify === "function" &&
       Array.isArray(analysis?.candidates) &&
       analysis.candidates.length > 0
@@ -454,6 +459,41 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
         surface: text(phrase?.surface),
         pyashSequence: cloneSequence(phrase?.pyashSequence)
       }))
+    } : {}),
+    ...(Array.isArray(analysis.clauses) && analysis.clauses.length > 0 ? {
+      clauses: analysis.clauses.map((clause) => ({
+        index: Number.isInteger(clause?.index) ? clause.index : null,
+        source: text(clause?.source),
+        connector: text(clause?.connector) || null,
+        connectorPyashSequence: cloneSequence(clause?.connectorPyashSequence),
+        status: text(clause?.status),
+        subject: clause?.subject ? {
+          surface: text(clause.subject.surface),
+          pyashSequence: cloneSequence(clause.subject.pyashSequence)
+        } : null,
+        action: clause?.action ? {
+          phrase: text(clause.action.phrase),
+          pyashSequence: cloneSequence(clause.action.pyashSequence),
+          certainty: text(clause.action.certainty),
+          mood: text(clause.action.mood) || null
+        } : null,
+        phrases: Array.isArray(clause?.phrases) ? clause.phrases.map((phrase) => ({
+          slot: text(phrase?.slot),
+          start: Number.isInteger(phrase?.start) ? phrase.start : null,
+          end: Number.isInteger(phrase?.end) ? phrase.end : null,
+          surface: text(phrase?.surface),
+          pyashSequence: cloneSequence(phrase?.pyashSequence)
+        })) : [],
+        pyash: text(clause?.pyash),
+        unresolved: Array.isArray(clause?.unresolved) ? clause.unresolved.map(text).filter(Boolean) : [],
+        candidates: Array.isArray(clause?.candidates) ? clause.candidates : []
+      })),
+      clauseConnectors: Array.isArray(analysis.clauseConnectors)
+        ? analysis.clauseConnectors.map((connector) => ({
+          surface: text(connector?.surface),
+          pyashSequence: cloneSequence(connector?.pyashSequence)
+        }))
+        : []
     } : {}),
     ...(analysis.tokens.length > 0 ? {
       tokens: analysis.tokens.map((token, tokenIndex) => {
