@@ -19,26 +19,37 @@ test("Pyac lowering uses suffix roles instead of structural su/ob/name tokens", 
   });
   const decoded = decodePhraseVliw(lowered.vectors);
   assert.deepEqual(decoded.tokens.map((token) => token.pya), [
-    "mi", "gi", "na", "hcas", "pu", "gi", "ka", "pfin", "ki", "ya"
+    "mi", "na", "hcas", "pu", "ka", "pfin", "ki", "ya"
+  ]);
+});
+
+test("Pyac lowering marks an explicitly named variable while lexical phrases stay unmarked", () => {
+  const lowered = lowerSentencePhraseVliw({
+    mood: "ya",
+    su: { name: "mi na" },
+    be: "pfin ki"
+  }, { markNames: true });
+  assert.deepEqual(decodePhraseVliw(lowered.vectors).tokens.map((token) => token.pya), [
+    "mi", "gi", "na", "pfin", "ki", "ya"
   ]);
 });
 
 test("Pyac decoder separates English Pyash from encoded structural evidence", () => {
-  const result = decodePyacSentence("migina nyahye hcaspugika pfinkiya");
+  const result = decodePyacSentence("mina nyahye hcaspuka pfinkiya");
   assert.equal(result.pyash, "ya su I be walked ob our houses.");
-  assert.equal(result.structural, "su name mi gi na ob name nyah ye hcas pu gi ka be pfin ki ya");
+  assert.equal(result.structural, "su name mi na ob name nyah ye hcas pu ka be pfin ki ya");
   assert.equal(result.englishPyash, "ya su I be walked ob our houses.");
   assert.equal(result.english, "I walked our houses.");
   assert.deepEqual(
     result.tokens.map((token) => token.parts.map((part) => part.pya)),
-    [["mi", "gi", "na"], ["nyah", "ye"], ["hcas", "pu", "gi", "ka"], ["pfin", "ki", "ya"]]
+    [["mi", "na"], ["nyah", "ye"], ["hcas", "pu", "ka"], ["pfin", "ki", "ya"]]
   );
 });
 
 test("Pyac decoder restores phrase-final location cases", () => {
-  const result = decodePyacSentence("migina hcaspugitwih pfinkiya");
+  const result = decodePyacSentence("mina hcasputwih pfinkiya");
   assert.equal(result.pyash, "ya su I be walked ob into houses.");
-  assert.equal(result.structural, "su name mi gi na ob name hcas pu gi twih be pfin ki ya");
+  assert.equal(result.structural, "su name mi na ob name hcas pu twih be pfin ki ya");
   assert.equal(result.english, "I walked into houses.");
 });
 
