@@ -630,6 +630,7 @@ function existentialContent(records, existential) {
     relativeIndex,
     subject,
     relativeRecords,
+    relativeProjection,
     relativeSequence: relativeProjection.sequence,
     relativeAction: relativeProjection.action,
     relativeConstruction: relativeProjection.construction
@@ -653,7 +654,9 @@ function relativeClauseProjection(records, relativeIndex) {
     return {
       sequence: records.slice(relativeIndex).flatMap((record) => recordSequence(record)),
       action: null,
-      construction: "relative-clause"
+      construction: "relative-clause",
+      modalIndex,
+      auxiliaryIndex
     };
   }
   const modal = records[modalIndex];
@@ -678,12 +681,46 @@ function relativeClauseProjection(records, relativeIndex) {
       mood: ENGLISH_MODAL_MOOD_PYA.get(modal.surface),
       passive: true
     },
-    construction: "passive-relative-clause"
+    construction: "passive-relative-clause",
+    modalIndex,
+    auxiliaryIndex,
+    actionIndex
   };
+}
+
+function projectRelativeClauseTokens(records, projection) {
+  if (projection.actionIndex === undefined || projection.actionIndex < 0) return records;
+  return records.map((record, index) => {
+    if (index === projection.auxiliaryIndex) {
+      return {
+        ...record,
+        coverageType: "grammar",
+        pyashSequence: ["pyoh"],
+        consumedBy: "passive-relative-clause",
+        evidence: "passive relative clause contributes passive_voice_ pyoh"
+      };
+    }
+    if (index === projection.modalIndex) {
+      const mood = ENGLISH_MODAL_MOOD_PYA.get(record.surface);
+      return {
+        ...record,
+        coverageType: "grammar",
+        pyashSequence: mood ? [mood] : [...record.pyashSequence],
+        grammar: {
+          kind: "modal-mood",
+          components: ["potential_mood_"],
+          position: "suffix"
+        },
+        evidence: "modal relative clause contributes potential_mood_ tseh"
+      };
+    }
+    return record;
+  });
 }
 
 function analyzeExistentialClause({ source, tokens, records, existential }) {
   const content = existentialContent(records, existential);
+  const relativeRecords = projectRelativeClauseTokens(records, content.relativeProjection);
   const connector = existential.connectorIndex === null
     ? null
     : records[existential.connectorIndex];
@@ -758,7 +795,7 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     }] : [],
     candidates: [],
     unresolved: [...new Set(unresolved)],
-    tokens: records,
+    tokens: relativeRecords,
     pyash: structuralSequence.join(" ")
   };
 }
