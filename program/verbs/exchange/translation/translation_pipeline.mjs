@@ -102,6 +102,14 @@ export function projectTranslationSentence(record) {
   if (Array.isArray(record?.clauses) && record.clauses.length > 0) {
     projection.clauses = record.clauses;
   }
+  if (record?.construction) projection.construction = record.construction;
+  if (record?.existential) projection.existential = record.existential;
+  if (Array.isArray(record?.discourseConnectors) && record.discourseConnectors.length > 0) {
+    projection.discourseConnectors = record.discourseConnectors;
+  }
+  if (Array.isArray(record?.relativeClauses) && record.relativeClauses.length > 0) {
+    projection.relativeClauses = record.relativeClauses;
+  }
   return projection;
 }
 
@@ -424,10 +432,17 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
   const unresolved = analysis.unresolved.length > 0
     ? [...new Set(analysis.unresolved.map(text).filter(Boolean))]
     : sentence || hasReviewCandidates ? [] : [segment.text];
+  const hasStructuralReview = Boolean(
+    analysis.construction
+      || analysis.existential
+      || (Array.isArray(analysis.relativeClauses) && analysis.relativeClauses.length > 0)
+  );
   const status = sentence
     ? "resolved"
     : hasReviewCandidates
       ? "provisional"
+      : hasStructuralReview
+        ? "provisional"
       : "unresolved";
   const canonical = language === "english" && sentence ? segment.text : "";
   const record = {
@@ -449,6 +464,14 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     ...(phraseVliw ? { vliw: phraseVliw } : {}),
     ...(canonical ? { canonical } : {}),
     ...(structural && !sentence ? { structuralPreview: structural } : {}),
+    ...(analysis.construction ? { construction: analysis.construction } : {}),
+    ...(analysis.existential ? { existential: analysis.existential } : {}),
+    ...(Array.isArray(analysis.discourseConnectors) && analysis.discourseConnectors.length > 0
+      ? { discourseConnectors: analysis.discourseConnectors }
+      : {}),
+    ...(Array.isArray(analysis.relativeClauses) && analysis.relativeClauses.length > 0
+      ? { relativeClauses: analysis.relativeClauses }
+      : {}),
     ...(unresolved.length > 0 ? { unresolved } : {}),
     ...(analysis.candidates.length > 0 ? { candidates: analysis.candidates } : {}),
     ...(Array.isArray(analysis.phrases) && analysis.phrases.length > 0 ? {

@@ -179,6 +179,29 @@ test("translation records coordinated clauses with their source connectors", asy
   assert.deepEqual(roundTrip.records[0].clauses, record.clauses);
 });
 
+test("translation records additive existential structure without inventing a brain action", async () => {
+  const source = "There are also chemical reactions within the brain that can be triggered by the different types of love.";
+  const result = await translateDocument({
+    language: "english",
+    text: source,
+    locator: "fixture.txt"
+  });
+  const record = result.records[0];
+
+  assert.equal(record.status, "provisional");
+  assert.equal(record.construction, "existential-clause");
+  assert.deepEqual(record.existential.pyashSequence, ["syi7h"]);
+  assert.deepEqual(record.discourseConnectors, [{
+    surface: "also",
+    pyashSequence: ["pcah"],
+    scope: "sentence",
+    evidence: "also connects the existential clause to the preceding discourse"
+  }]);
+  assert.match(record.structuralPreview, /^pcah syi7h /u);
+  assert.equal((record.candidates ?? []).some((candidate) => candidate.phrase === "brain"), false);
+  assert.equal(record.relativeClauses[0].construction, "passive-relative-clause");
+});
+
 test("translation artifact merging never downgrades an accepted occurrence", () => {
   const prior = {
     sourceHash: "same-source",

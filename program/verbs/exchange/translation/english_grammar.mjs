@@ -19,7 +19,8 @@ const GRAMMAR_KINDS = new Set([
   "case-marker",
   "number-marker",
   "referential",
-  "exemplifier"
+  "exemplifier",
+  "existential-clause"
 ]);
 
 function invalid(message, details = {}) {

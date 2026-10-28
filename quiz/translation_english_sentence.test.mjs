@@ -300,6 +300,32 @@ test("deterministic plural recovery uses an existing root and retains WordNet se
   assert.ok(reaction.wordnet.senses.length >= 3);
 });
 
+test("there are also is an additive existential clause", async () => {
+  const result = await analyzeDefaultEnglishSentence(
+    "There are also chemical reactions within the brain that can be triggered by the different types of love."
+  );
+  const there = result.tokens.find((token) => token.surface === "there");
+  const are = result.tokens.find((token) => token.surface === "are");
+  const also = result.tokens.find((token) => token.surface === "also");
+  assert.equal(result.construction, "existential-clause");
+  assert.equal(there.grammar.kind, "existential-clause");
+  assert.deepEqual(there.pyashSequence, ["syi7h"]);
+  assert.equal(are.consumedBy, "existential-clause");
+  assert.equal(also.construction.kind, "additive-connector");
+  assert.equal(also.construction.scope, "sentence");
+  assert.deepEqual(result.discourseConnectors, [{
+    surface: "also",
+    pyashSequence: ["pcah"],
+    scope: "sentence",
+    evidence: "also connects the existential clause to the preceding discourse"
+  }]);
+  assert.equal(result.candidates.length, 0);
+  assert.ok(!result.unresolved.includes("brain"));
+  assert.match(result.pyash, /^pcah syi7h /u);
+  assert.doesNotMatch(result.pyash, /twum ra/u);
+  assert.equal(result.relativeClauses[0].construction, "passive-relative-clause");
+});
+
 test("sentence context distinguishes distal that from a relative-clause that", async () => {
   const distal = await analyzeDefaultEnglishSentence("that house walked");
   assert.deepEqual(distal.tokens.find((token) => token.surface === "that").pyashSequence, ["tsuh"]);

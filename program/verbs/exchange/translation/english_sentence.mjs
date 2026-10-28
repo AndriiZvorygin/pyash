@@ -579,9 +579,187 @@ function lexicalVerbCertainty(record) {
     : "contextual";
 }
 
+function existentialEntry(records, grammarIndex) {
+  if (records[0]?.surface !== "there") return null;
+  const auxiliary = records[1]?.surface;
+  return grammarIndex?.resolve(`there ${auxiliary}`)
+    ?? (auxiliary === "exists" ? grammarIndex?.resolve("there exists") : null);
+}
+
+function findExistentialClause(records) {
+  const marker = records[0];
+  if (marker?.grammar?.kind !== "existential-clause") return null;
+  const auxiliaryIndex = records.findIndex((record, index) => (
+    index > 0 && record.consumedBy === "existential-clause"
+  ));
+  if (auxiliaryIndex < 0) return null;
+  const connectorIndex = records.findIndex((record, index) => (
+    index > auxiliaryIndex
+      && record.construction?.kind === "additive-connector"
+  ));
+  return {
+    entry: marker.grammar,
+    markerIndex: 0,
+    auxiliaryIndex,
+    connectorIndex: connectorIndex >= 0 ? connectorIndex : null
+  };
+}
+
+function existentialContent(records, existential) {
+  const contentStart = existential.auxiliaryIndex + 1;
+  const relativeIndex = records.findIndex((record, index) => (
+    index >= contentStart && record.grammar?.kind === "dependent-clause"
+  ));
+  const contentEnd = relativeIndex >= 0 ? relativeIndex : records.length;
+  const contentRecords = records.slice(contentStart, contentEnd).filter((record) => (
+    !record.consumedBy && record.construction?.kind !== "additive-connector"
+  ));
+  const subject = addNominativeCase({
+    surface: contentRecords.map((record) => record.surface).join(" "),
+    pyashSequence: contentRecords.flatMap((record) => recordSequence(record)),
+    coverageType: "construction",
+    evidence: "existential clause content follows there is/are"
+  });
+  const relativeRecords = relativeIndex >= 0
+    ? records.slice(relativeIndex).filter((record) => !record.consumedBy)
+    : [];
+  const relativeSequence = relativeRecords.flatMap((record) => recordSequence(record));
+  return {
+    contentStart,
+    contentEnd,
+    relativeIndex,
+    subject,
+    relativeRecords,
+    relativeSequence
+  };
+}
+
+function analyzeExistentialClause({ source, tokens, records, existential }) {
+  const content = existentialContent(records, existential);
+  const connector = existential.connectorIndex === null
+    ? null
+    : records[existential.connectorIndex];
+  const connectorSequence = connector ? recordSequence(connector) : [];
+  const existentialSequence = [...existential.entry.pyashSequence];
+  const relativeSequence = content.relativeSequence;
+  const structuralSequence = [
+    ...connectorSequence,
+    ...existentialSequence,
+    ...content.subject.pyashSequence,
+    ...relativeSequence
+  ];
+  const unresolved = records
+    .filter((record) => (
+      record.pyashSequence.length === 0
+      && !record.consumedBy
+      && !record.copula
+      && record.grammar?.kind !== NEGATION_GRAMMAR_KIND
+    ))
+    .map((record) => record.surface);
+  const phrases = [
+    phraseRecord(
+      "su",
+      tokens,
+      content.contentStart,
+      content.contentEnd,
+      content.subject.pyashSequence
+    ),
+    phraseRecord(
+      "be",
+      tokens,
+      existential.markerIndex,
+      existential.auxiliaryIndex + 1,
+      existentialSequence
+    )
+  ];
+  if (content.relativeIndex >= 0) {
+    phrases.push(phraseRecord(
+      "ob",
+      tokens,
+      content.relativeIndex,
+      tokens.length,
+      relativeSequence
+    ));
+  }
+  return {
+    format: ENGLISH_SENTENCE_FORMAT,
+    sourceText: source,
+    status: "review",
+    construction: "existential-clause",
+    existential: {
+      surface: tokens.slice(existential.markerIndex, existential.auxiliaryIndex + 1).join(" "),
+      pyashSequence: existentialSequence,
+      content: content.subject
+    },
+    discourseConnectors: connector ? [{
+      surface: connector.surface,
+      pyashSequence: connectorSequence,
+      scope: "sentence",
+      evidence: connector.construction?.evidence ?? "additive connector scopes the existential clause"
+    }] : [],
+    subject: content.subject,
+    verbPhrase: null,
+    verbIndex: existential.auxiliaryIndex,
+    phrases,
+    relativeClauses: content.relativeIndex >= 0 ? [{
+      marker: records[content.relativeIndex].surface,
+      pyashSequence: relativeSequence,
+      source: tokens.slice(content.relativeIndex).join(" "),
+      construction: records[content.relativeIndex + 2]?.construction?.kind === "passive-auxiliary"
+        ? "passive-relative-clause"
+        : "relative-clause"
+    }] : [],
+    candidates: [],
+    unresolved: [...new Set(unresolved)],
+    tokens: records,
+    pyash: structuralSequence.join(" ")
+  };
+}
+
 function applyContextualEnglishGrammar(records, grammarIndex) {
   const exemplifier = grammarIndex?.resolve("such as");
   return records.map((record, index) => {
+    const existential = existentialEntry(records, grammarIndex);
+    if (index === 0 && existential) {
+      return {
+        ...record,
+        coverageType: "grammar",
+        pyashSequence: [...existential.pyashSequence],
+        grammar: { ...existential, pyashSequence: [...existential.pyashSequence] },
+        construction: {
+          kind: "existential-clause",
+          evidence: existential.evidence
+        },
+        evidence: existential.evidence
+      };
+    }
+    if (index === 1 && existential) {
+      return {
+        ...record,
+        coverageType: "grammar",
+        pyashSequence: [],
+        consumedBy: "existential-clause",
+        construction: {
+          kind: "existential-auxiliary",
+          evidence: `${existential.surface} is consumed by the existential clause construction`
+        },
+        evidence: `${existential.surface} is consumed by the existential clause construction`
+      };
+    }
+    if (existential
+      && index > 1
+      && record.surface === "also"
+      && record.grammar?.kind === "conjunction") {
+      return {
+        ...record,
+        construction: {
+          kind: "additive-connector",
+          scope: "sentence",
+          evidence: "also connects the existential clause to the preceding discourse"
+        },
+        evidence: "also connects the existential clause to the preceding discourse"
+      };
+    }
     if (record.surface === "such" && records[index + 1]?.surface === "as" && exemplifier) {
       return {
         ...record,
@@ -1024,6 +1202,7 @@ export function analyzeEnglishSentence(source, {
     wordnetIndex,
     tokenIndex
   })), grammarIndex), resolveWithOverrides, wordnetIndex, wordnetBridges);
+  const existential = findExistentialClause(records);
   const clauseParts = splitClauses ? splitIndependentClauses(source, records) : [];
   if (clauseParts.length > 1) {
     const clauses = clauseParts.map((part, index) => {
@@ -1059,6 +1238,7 @@ export function analyzeEnglishSentence(source, {
       pyash: clauses.map((clause) => clause.pyash).filter(Boolean).join(" ")
     };
   }
+  if (existential) return analyzeExistentialClause({ source, tokens, records, existential });
   const progressiveIndex = findProgressiveIndex(records);
   const finiteIndex = findVerbIndex(records);
   const copulaIndex = progressiveIndex < 0 && finiteIndex < 0
