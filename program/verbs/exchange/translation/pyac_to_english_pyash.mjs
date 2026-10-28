@@ -59,6 +59,7 @@ const CASE_PREPOSITIONS = new Map([
   ["te", "in"],
   ["ma", "to"],
   ["so", "from"],
+  ["yi", "to"],
   ["ta", "on"],
   ["twih", "into"],
   ["yu", "with"],
@@ -304,7 +305,6 @@ function renderCasePrepositions(parts, words, { vocativeMarker = false } = {}) {
   const caseNames = parts.filter((part) => part.kind === "case").map((part) => part.pya);
   const prepositions = [];
   for (const caseName of [...caseNames].reverse()) {
-    if (caseName === "yi" && parts.some(isPronoun)) continue;
     if (caseName === "myah" && (words === "today" || words === "forever")) continue;
     if (caseName === "wu") {
       if (vocativeMarker) prepositions.push("O");
@@ -312,7 +312,7 @@ function renderCasePrepositions(parts, words, { vocativeMarker = false } = {}) {
     }
     if (caseName === "na" || caseName === "ka") continue;
     const preposition = CASE_PREPOSITIONS.get(caseName)
-      ?? (caseName === "yi" ? "to" : CASE_NAMES.get(caseName) ?? "");
+      ?? CASE_NAMES.get(caseName) ?? "";
     if (preposition) prepositions.push(preposition);
   }
   return prepositions;

@@ -65,9 +65,9 @@ test("Pyac decoder derives English roles and prepositions from VLIW grammar", ()
   const negativeImperative = decodePyacSentence("nyahyi no hyocma tlakpcih");
   assert.equal(
     negativeImperative.englishPyash,
-    "do su you be not bring ob us to temptation."
+    "do su you be not bring ob to us to temptation."
   );
-  assert.equal(negativeImperative.english, "Do not bring us to temptation.");
+  assert.equal(negativeImperative.english, "Do not bring to us to temptation.");
 });
 
 test("relative-clause marker renders its English surface instead of its structural label", () => {
@@ -80,6 +80,18 @@ test("relative-clause marker renders its English surface instead of its structur
   const result = renderEnglishFromVliw(lowered.vectors);
   assert.match(result.englishPyash, /that exhibits/u);
   assert.doesNotMatch(result.englishPyash, /dependent clause/u);
+});
+
+test("benefactive renders for across a mixed noun and pronoun phrase", () => {
+  const lowered = lowerSentencePhraseVliw({
+    mood: "ya",
+    su: { name: "pyan na" },
+    be: "pcim ra",
+    ob: { name: "la sren ra tlih kcin twin cyah tlih ba ya tlih pwah" }
+  });
+  const result = renderEnglishFromVliw(lowered.vectors);
+  assert.match(result.englishPyash, /for a deep desire someone/u);
+  assert.match(result.englishPyash, /or it/u);
 });
 
 test("Pyac document translation keeps one record per input line", () => {
@@ -100,6 +112,6 @@ test("Pyac decoder takes lexical English from the dictionary", () => {
   const result = decodePyacSentence("pyuh nyahyi cwakso hxucpcih");
   const hxuc = result.tokens.at(-1).parts.find((part) => part.pya === "hxuc");
   assert.equal(hxuc.english, "rescuing");
-  assert.equal(result.englishPyash, "do su you be rescue ob us from evil.");
-  assert.equal(result.english, "But rescue us from evil.");
+  assert.equal(result.englishPyash, "do su you be rescue ob to us from evil.");
+  assert.equal(result.english, "But rescue to us from evil.");
 });
