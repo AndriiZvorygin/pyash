@@ -65,7 +65,8 @@ try {
 const ENGLISH_MOOD_GLOSSES = new Map([
   ["pcih", "do"],
   ["jwih", "may"],
-  ["li", "ya"]
+  ["li", "ya"],
+  ["tseh", "can"]
 ]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],

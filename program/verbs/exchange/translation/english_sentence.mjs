@@ -61,6 +61,10 @@ const WORDNET_CONTEXT_STOP_WORDS = new Set([
 const WORDNET_MODAL_PRECEDERS = new Set([
   "can", "could", "may", "might", "must", "shall", "should", "will", "would"
 ]);
+const ENGLISH_MODAL_MOOD_PYA = new Map([
+  ["can", "tseh"],
+  ["could", "tseh"]
+]);
 const WORDNET_GRAPH_SELECTION_MIN_MARGIN = 0.3;
 
 let defaultResourcesPromise = null;
@@ -203,13 +207,13 @@ function wordNetGraphContext(sense, records, index, wordnetIndex) {
 
 function hasRelativeClauseAfter(records, index) {
   if (records[index + 1]?.grammar?.kind !== "dependent-clause") return false;
-  const predicate = records[index + 2];
-  return Boolean(predicate && (
-    predicate.morphology?.kind === "finite-past"
-    || predicate.morphology?.kind === "finite-present"
-    || predicate.morphology?.kind === "progressive"
-    || predicate.wordnet?.partsOfSpeech?.includes("v")
-    || WORDNET_MODAL_PRECEDERS.has(predicate.surface)
+  const followingAction = records[index + 2];
+  return Boolean(followingAction && (
+    followingAction.morphology?.kind === "finite-past"
+    || followingAction.morphology?.kind === "finite-present"
+    || followingAction.morphology?.kind === "progressive"
+    || followingAction.wordnet?.partsOfSpeech?.includes("v")
+    || WORDNET_MODAL_PRECEDERS.has(followingAction.surface)
   ));
 }
 
@@ -393,7 +397,7 @@ function findVerbIndex(records) {
   return -1;
 }
 
-function subjectPredicateStart(records) {
+function subjectActionStart(records) {
   if (records[0]?.grammar?.kind === "pronoun" || records[0]?.grammar?.kind === "possessive-pronoun") return 1;
   if (records[0]?.grammar?.position !== "prefix") return 1;
   let index = 1;
@@ -406,14 +410,30 @@ function subjectPredicateStart(records) {
   return index;
 }
 
-function findLexicalVerbIndex(records, startIndex = subjectPredicateStart(records)) {
+function isLexicalActionRecord(record) {
+  if (!record?.pyashSequence?.length || record.grammar || record.copula) return false;
+  if (record.wordnetPartOfSpeech && record.wordnetPartOfSpeech !== "v") return false;
+  if (record.wordnet?.partsOfSpeech?.length && !record.wordnet.partsOfSpeech.includes("v")) return false;
+  if (record.morphology?.kind === "progressive") return false;
+  return true;
+}
+
+function findModalAction(records, startIndex = subjectActionStart(records)) {
+  for (let modalIndex = startIndex; modalIndex < records.length; modalIndex += 1) {
+    const modal = records[modalIndex];
+    if (!WORDNET_MODAL_PRECEDERS.has(modal?.surface)) continue;
+    const mood = ENGLISH_MODAL_MOOD_PYA.get(modal.surface);
+    if (!mood) continue;
+    let actionIndex = modalIndex + 1;
+    while (records[actionIndex]?.grammar?.kind === NEGATION_GRAMMAR_KIND) actionIndex += 1;
+    if (isLexicalActionRecord(records[actionIndex])) return { modalIndex, actionIndex, mood };
+  }
+  return null;
+}
+
+function findLexicalActionIndex(records, startIndex = subjectActionStart(records)) {
   for (let index = startIndex; index < records.length; index += 1) {
-    const record = records[index];
-    if (!record?.pyashSequence?.length || record.grammar || record.copula) continue;
-    if (record.wordnetPartOfSpeech && record.wordnetPartOfSpeech !== "v") continue;
-    if (record.wordnet?.partsOfSpeech?.length && !record.wordnet.partsOfSpeech.includes("v")) continue;
-    if (record.morphology?.kind === "progressive") continue;
-    return index;
+    if (isLexicalActionRecord(records[index])) return index;
   }
   return -1;
 }
@@ -467,7 +487,7 @@ function applyContextualEnglishGrammar(records, grammarIndex) {
           ...record,
           construction: {
             kind: "passive-auxiliary",
-            evidence: "copula plus a participial predicate is a passive-voice construction"
+            evidence: "copula plus a participial action is a passive-voice construction"
           }
         };
       }
@@ -606,7 +626,7 @@ function findStructuralCopulaIndex(records) {
   return -1;
 }
 
-function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, markerNames, certainty, evidence }) {
+function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, markerNames, certainty, evidence, mood = "", moodSurface = "" }) {
   const pyashSequence = [...lexicalSequence, ...morphologySequence];
   return {
     id: `${phrase.toLowerCase()}::${pyashSequence.join(" ")}`,
@@ -617,7 +637,9 @@ function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, mar
     markerNames: [...markerNames],
     certainty,
     evidence,
-    pyashSequence
+    pyashSequence,
+    ...(mood ? { mood } : {}),
+    ...(moodSurface ? { moodSurface } : {})
   };
 }
 
@@ -748,9 +770,9 @@ function objectSequence(objectRecords) {
   return composeObjectSequence(objectRecords);
 }
 
-function makeSentence(subject, verbPhrase, objectRecords) {
+function makeSentence(subject, verbPhrase, objectRecords, mood = "ya") {
   const sentence = {
-    mood: "ya",
+    mood,
     su: { name: subject.pyashSequence.join(" ") }
   };
   if (verbPhrase?.pyashSequence?.length) sentence.be = verbPhrase.pyashSequence.join(" ");
@@ -877,18 +899,18 @@ export function analyzeEnglishSentence(source, {
   const imperativeIndex = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0
     ? findImperativeVerbIndex(records)
     : -1;
-  const lexicalIndex = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0 && imperativeIndex < 0
-    ? findLexicalVerbIndex(records)
+  const modalAction = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0 && imperativeIndex < 0
+    ? findModalAction(records)
+    : null;
+  const lexicalIndex = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0 && imperativeIndex < 0 && !modalAction
+    ? findLexicalActionIndex(records)
     : -1;
-  let verbIndex = copulaIndex >= 0
-    ? -1
-    : progressiveIndex >= 0
-    ? progressiveIndex
-    : finiteIndex >= 0
-      ? finiteIndex
-      : lexicalIndex >= 0
-        ? lexicalIndex
-        : imperativeIndex;
+  const actionIndex = modalAction?.actionIndex ?? lexicalIndex;
+  let verbIndex = -1;
+  if (progressiveIndex >= 0) verbIndex = progressiveIndex;
+  else if (finiteIndex >= 0) verbIndex = finiteIndex;
+  else if (actionIndex >= 0) verbIndex = actionIndex;
+  else if (imperativeIndex >= 0) verbIndex = imperativeIndex;
   let verbPhrase = null;
 
   if (progressiveIndex >= 0) {
@@ -937,6 +959,23 @@ export function analyzeEnglishSentence(source, {
     }
   }
 
+  if (!verbPhrase && modalAction) {
+    const modal = records[modalAction.modalIndex];
+    const action = records[modalAction.actionIndex];
+    const negated = hasNegation(records, modalAction.actionIndex);
+    verbPhrase = makeCandidate({
+      phrase: tokens.slice(modalAction.modalIndex, modalAction.actionIndex + 1).join(" "),
+      lemma: action.lemma,
+      lexicalSequence: action.pyashSequence,
+      morphologySequence: negated ? ["no"] : [],
+      markerNames: negated ? ["negatory_quantifier_"] : [],
+      certainty: lexicalVerbCertainty(action),
+      evidence: `modal ${modal.surface} scopes the following action ${action.surface}`,
+      mood: modalAction.mood,
+      moodSurface: modal.surface
+    });
+  }
+
   if (!verbPhrase && (lexicalIndex >= 0 || imperativeIndex >= 0)) {
     const selectedIndex = lexicalIndex >= 0 ? lexicalIndex : imperativeIndex;
     const lexical = records[selectedIndex];
@@ -949,7 +988,7 @@ export function analyzeEnglishSentence(source, {
         morphologySequence: [PRESENT_TENSE_MARKER, ...(negated ? ["no"] : [])],
         markerNames: [PRESENT_TENSE_NAME, ...(negated ? ["negatory_quantifier_"] : [])],
         certainty: lexicalVerbCertainty(lexical),
-        evidence: "sentence context supplies a present-tense lexical predicate"
+        evidence: "sentence context supplies a present-tense lexical action"
       });
     }
   }
@@ -993,7 +1032,9 @@ export function analyzeEnglishSentence(source, {
       && !record.copula
     ))
     .map((record) => record.surface);
-  let subjectBoundary = copulaIndex >= 0 ? copulaIndex : verbIndex;
+  let subjectBoundary = copulaIndex >= 0
+    ? copulaIndex
+    : modalAction?.modalIndex ?? verbIndex;
   if (progressiveIndex >= 0) {
     subjectBoundary = progressiveIndex - 1;
     while (subjectBoundary >= 0 && records[subjectBoundary]?.grammar?.kind === NEGATION_GRAMMAR_KIND) subjectBoundary -= 1;
@@ -1015,11 +1056,19 @@ export function analyzeEnglishSentence(source, {
     && subjectReady
     && unresolved.length === 0
     && objectReady;
-  const sentence = deterministic ? makeSentence(subject, verbPhrase, objectRecords) : null;
+  const sentence = deterministic
+    ? makeSentence(subject, verbPhrase, objectRecords, modalAction?.modalIndex >= 0
+      ? modalAction.mood
+      : "ya")
+    : null;
   const verbStart = progressiveIndex >= 0
     ? Math.max(0, progressiveIndex - 1)
-    : verbIndex;
-  const verbEnd = progressiveIndex >= 0 ? progressiveIndex + 1 : verbIndex + 1;
+    : modalAction?.modalIndex ?? verbIndex;
+  const verbEnd = progressiveIndex >= 0
+    ? progressiveIndex + 1
+    : modalAction?.actionIndex !== undefined
+      ? modalAction.actionIndex + 1
+      : verbIndex + 1;
   const phrases = buildPhraseRecords({
     tokens,
     subject,
@@ -1043,7 +1092,9 @@ export function analyzeEnglishSentence(source, {
     candidates: verbPhrase ? [verbPhrase] : [],
     unresolved,
     sentence,
-    pyash: sentence ? sentenceToPyash(sentence) : verbPhrase?.pyashSequence?.join(" ") ?? ""
+    pyash: sentence
+      ? sentenceToPyash(sentence)
+      : [verbPhrase?.pyashSequence?.join(" "), verbPhrase?.moodSurface].filter(Boolean).join(" ")
   };
 }
 
@@ -1312,13 +1363,15 @@ export function applyEnglishSentenceCandidate(analysis, candidateId) {
     : analysis.tokens.findIndex((record) => record.surface === candidate.phrase.split(" ").at(-1));
   const objectRecords = objectRecordsAfter(analysis.tokens, verbIndex);
   const sentence = subject?.pyashSequence?.length && objectRecords.every((record) => record.pyashSequence.length > 0)
-    ? makeSentence(subject, candidate, objectRecords)
+    ? makeSentence(subject, candidate, objectRecords, candidate.mood ?? analysis.verbPhrase?.mood ?? "ya")
     : null;
   return {
     ...analysis,
     status: sentence ? "resolved" : "review",
     verbPhrase: candidate,
     sentence,
-    pyash: sentence ? sentenceToPyash(sentence) : candidate.pyashSequence.join(" ")
+    pyash: sentence
+      ? sentenceToPyash(sentence)
+      : [candidate.pyashSequence.join(" "), candidate.moodSurface].filter(Boolean).join(" ")
   };
 }
