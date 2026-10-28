@@ -132,6 +132,10 @@ in the same durable run:
   examples/pyash/translate-love-to-vliw.pya
 ```
 
+The runner also accepts `--verbose` after the program path. Verbose runs stream
+stage and checkpoint records while the job is running, including during a cold
+Housekeeper/model load.
+
 That sentence invokes the same source-to-VLIW refinery as the command module;
 the `to name map translation result` value is the returned artifact map, not a
 second transcript or intermediate destination. The returned map is written to
