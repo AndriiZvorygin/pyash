@@ -712,6 +712,7 @@ function projectRelativeClauseTokens(records, projection) {
         coverageType: "grammar",
         pyashSequence: ["pyoh"],
         consumedBy: "passive-relative-clause",
+        semanticCandidates: [],
         evidence: "passive relative clause contributes passive_voice_ pyoh"
       };
     }
@@ -726,6 +727,7 @@ function projectRelativeClauseTokens(records, projection) {
           components: ["potential_mood_"],
           position: "suffix"
         },
+        semanticCandidates: [],
         evidence: "modal relative clause contributes potential_mood_ tseh"
       };
     }
@@ -781,10 +783,20 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
       relativeSequence
     ));
   }
+  const canResolve = unresolved.length === 0
+    && structuralSequence.length > 0
+    && existentialSequence.length > 0
+    && (content.relativeIndex < 0 || Boolean(content.relativeProjection.action));
+  const sentence = canResolve
+    ? {
+      mood: existentialSequence.at(-1),
+      su: { name: structuralSequence.slice(0, -1).join(" ") }
+    }
+    : null;
   return {
     format: ENGLISH_SENTENCE_FORMAT,
     sourceText: source,
-    status: "review",
+    status: sentence ? "resolved" : "review",
     construction: "existential-clause",
     existential: {
       surface: tokens.slice(existential.markerIndex, existential.auxiliaryIndex + 1).join(" "),
@@ -799,6 +811,7 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     }] : [],
     subject: content.subject,
     verbPhrase: null,
+    ...(sentence ? { sentence } : {}),
     verbIndex: existential.auxiliaryIndex,
     phrases,
     relativeClauses: content.relativeIndex >= 0 ? [{
@@ -811,7 +824,8 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     candidates: [],
     unresolved: [...new Set(unresolved)],
     tokens: relativeRecords,
-    pyash: structuralSequence.join(" ")
+    pyash: structuralSequence.join(" "),
+    structural: structuralSequence.join(" ")
   };
 }
 

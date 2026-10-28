@@ -350,6 +350,12 @@ test("there are also is an additive existential clause", async () => {
       ])
     }
   );
+  assert.equal(resolved.status, "resolved");
+  assert.equal(resolved.sentence.mood, "syi7h");
+  assert.equal(
+    resolved.sentence.su.name,
+    "pcah la nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu lwah twum dlih na"
+  );
   assert.deepEqual(resolved.relativeClauses[0].pyashSequence, [
     "la", "nros", "nyit", "pu", "dlih", "pyan", "ti", "je", "txak", "pyoh", "tseh", "ba"
   ]);
