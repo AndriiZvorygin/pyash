@@ -65,6 +65,7 @@ const ENGLISH_MODAL_MOOD_PYA = new Map([
   ["can", "tseh"],
   ["could", "tseh"]
 ]);
+const INDEPENDENT_CLAUSE_CONNECTORS = new Set(["and", "but", "or"]);
 const WORDNET_GRAPH_SELECTION_MIN_MARGIN = 0.3;
 
 let defaultResourcesPromise = null;
@@ -418,6 +419,13 @@ function isLexicalActionRecord(record) {
   return true;
 }
 
+function isPotentialModalActionRecord(record) {
+  if (isLexicalActionRecord(record)) return true;
+  if (!record || record.grammar || record.copula) return false;
+  if (record.wordnetPartOfSpeech === "v") return true;
+  return (record.wordnet?.partsOfSpeech ?? []).includes("v");
+}
+
 function findModalAction(records, startIndex = subjectActionStart(records)) {
   for (let modalIndex = startIndex; modalIndex < records.length; modalIndex += 1) {
     const modal = records[modalIndex];
@@ -425,10 +433,134 @@ function findModalAction(records, startIndex = subjectActionStart(records)) {
     const mood = ENGLISH_MODAL_MOOD_PYA.get(modal.surface);
     if (!mood) continue;
     let actionIndex = modalIndex + 1;
-    while (records[actionIndex]?.grammar?.kind === NEGATION_GRAMMAR_KIND) actionIndex += 1;
-    if (isLexicalActionRecord(records[actionIndex])) return { modalIndex, actionIndex, mood };
+    while (
+      records[actionIndex]?.grammar?.kind === NEGATION_GRAMMAR_KIND
+      || records[actionIndex]?.surface === "also"
+    ) actionIndex += 1;
+    if (isPotentialModalActionRecord(records[actionIndex])) return { modalIndex, actionIndex, mood };
   }
   return null;
+}
+
+function englishTokenSpans(source) {
+  return [...source.matchAll(/[A-Za-z]+(?:'[A-Za-z]+)?/gu)].map((match) => ({
+    surface: match[0].toLowerCase(),
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length
+  }));
+}
+
+function trimClauseBounds(value, offset) {
+  const leading = value.search(/\S/u);
+  if (leading < 0) return null;
+  const trailing = value.search(/\s+$/u);
+  const endTrim = trailing < 0 ? value.length : trailing;
+  return {
+    text: value.slice(leading, endTrim),
+    startOffset: offset + leading,
+    endOffset: offset + endTrim
+  };
+}
+
+function independentClauseActionIndex(records, connectorIndex) {
+  let subjectIndex = connectorIndex + 1;
+  while (records[subjectIndex]?.grammar?.position === "prefix") subjectIndex += 1;
+  if (!records[subjectIndex]) return -1;
+  for (let index = subjectIndex + 1; index < records.length; index += 1) {
+    const record = records[index];
+    if (record.grammar?.kind === "dependent-clause") return -1;
+    if (record.grammar?.kind === "conjunction") return -1;
+    if (ENGLISH_MODAL_MOOD_PYA.has(record.surface)) return index;
+    if (record.morphology?.kind === "finite-past"
+      || record.morphology?.kind === "finite-present"
+      || record.morphology?.kind === "progressive") return index;
+    if (record.wordnetPartOfSpeech === "v") return index;
+    const partsOfSpeech = record.wordnet?.partsOfSpeech ?? [];
+    if (partsOfSpeech.length > 0 && partsOfSpeech.every((partOfSpeech) => partOfSpeech === "v")) return index;
+  }
+  return -1;
+}
+
+function splitIndependentClauses(source, records) {
+  const spans = englishTokenSpans(source);
+  const cuts = spans
+    .map((span, index) => ({ span, index, record: records[index] }))
+    .filter(({ record, index }) => (
+      index > 0
+      && INDEPENDENT_CLAUSE_CONNECTORS.has(record?.surface)
+      && record?.grammar?.kind === "conjunction"
+      && independentClauseActionIndex(records, index) >= 0
+    ));
+  if (cuts.length === 0) return [];
+  const parts = [];
+  let outputStart = 0;
+  let analysisStart = 0;
+  let connector = null;
+  for (const cut of cuts) {
+    const bounds = trimClauseBounds(source.slice(outputStart, cut.span.start), outputStart);
+    if (!bounds) continue;
+    const analysisBounds = trimClauseBounds(source.slice(analysisStart, cut.span.start), analysisStart);
+    parts.push({
+      ...bounds,
+      analysisText: analysisBounds?.text ?? bounds.text,
+      analysisStartOffset: analysisBounds?.startOffset ?? bounds.startOffset,
+      connector
+    });
+    connector = {
+      surface: cut.record.surface,
+      pyashSequence: [...cut.record.pyashSequence]
+    };
+    outputStart = cut.span.start;
+    analysisStart = cut.span.end;
+  }
+  const final = trimClauseBounds(source.slice(outputStart), outputStart);
+  const finalAnalysis = trimClauseBounds(source.slice(analysisStart), analysisStart);
+  if (final) {
+    parts.push({
+      ...final,
+      analysisText: finalAnalysis?.text ?? final.text,
+      analysisStartOffset: finalAnalysis?.startOffset ?? final.startOffset,
+      connector
+    });
+  }
+  return parts.length > 1 ? parts : [];
+}
+
+function compactClauseAnalysis(analysis, source, connector, index) {
+  return {
+    index,
+    source,
+    connector: connector?.surface ?? null,
+    connectorPyashSequence: connector?.pyashSequence ? [...connector.pyashSequence] : [],
+    status: analysis.status,
+    subject: analysis.subject
+      ? { surface: analysis.subject.surface, pyashSequence: [...analysis.subject.pyashSequence] }
+      : null,
+    action: analysis.verbPhrase
+      ? {
+        phrase: analysis.verbPhrase.phrase,
+        pyashSequence: [...analysis.verbPhrase.pyashSequence],
+        certainty: analysis.verbPhrase.certainty,
+        mood: analysis.verbPhrase.moodSurface ?? null
+      }
+      : null,
+    phrases: (analysis.phrases ?? []).map((phrase) => ({
+      slot: phrase.slot,
+      start: phrase.start,
+      end: phrase.end,
+      surface: phrase.surface,
+      pyashSequence: [...phrase.pyashSequence]
+    })),
+    pyash: [connector?.pyashSequence?.join(" "), analysis.pyash].filter(Boolean).join(" "),
+    unresolved: [...(analysis.unresolved ?? [])],
+    candidates: (analysis.candidates ?? []).map((candidate) => ({
+      id: candidate.id,
+      phrase: candidate.phrase,
+      pyashSequence: [...candidate.pyashSequence],
+      certainty: candidate.certainty,
+      evidence: candidate.evidence
+    }))
+  };
 }
 
 function findLexicalActionIndex(records, startIndex = subjectActionStart(records)) {
@@ -864,7 +996,8 @@ export function analyzeEnglishSentence(source, {
   wordnetBridges = null,
   coverageOverrides = null,
   sourceRecordId = "",
-  occurrenceOverrides = null
+  occurrenceOverrides = null,
+  splitClauses = true
 } = {}) {
   const tokens = tokenizeEnglishSentence(source);
   if (tokens.length === 0) {
@@ -891,6 +1024,41 @@ export function analyzeEnglishSentence(source, {
     wordnetIndex,
     tokenIndex
   })), grammarIndex), resolveWithOverrides, wordnetIndex, wordnetBridges);
+  const clauseParts = splitClauses ? splitIndependentClauses(source, records) : [];
+  if (clauseParts.length > 1) {
+    const clauses = clauseParts.map((part, index) => {
+      const clauseAnalysis = analyzeEnglishSentence(part.analysisText ?? part.text, {
+        resolveWord,
+        lemmaEntries,
+        grammarIndex,
+        wordnetIndex,
+        wordnetBridges,
+        coverageOverrides,
+        sourceRecordId: `${sourceRecordId}:clause-${index}`,
+        occurrenceOverrides,
+        splitClauses: false
+      });
+      return compactClauseAnalysis(clauseAnalysis, part.text, part.connector, index);
+    });
+    return {
+      format: ENGLISH_SENTENCE_FORMAT,
+      sourceText: source,
+      status: "review",
+      tokens: records,
+      clauses,
+      clauseConnectors: clauses.slice(1).map((clause) => ({
+        surface: clause.connector,
+        pyashSequence: [...clause.connectorPyashSequence]
+      })),
+      phrases: clauses.flatMap((clause) => (clause.phrases ?? []).map((phrase) => ({
+        ...phrase,
+        clauseIndex: clause.index
+      }))),
+      candidates: clauses.flatMap((clause) => clause.candidates ?? []),
+      unresolved: [...new Set(clauses.flatMap((clause) => clause.unresolved ?? []))],
+      pyash: clauses.map((clause) => clause.pyash).filter(Boolean).join(" ")
+    };
+  }
   const progressiveIndex = findProgressiveIndex(records);
   const finiteIndex = findVerbIndex(records);
   const copulaIndex = progressiveIndex < 0 && finiteIndex < 0
