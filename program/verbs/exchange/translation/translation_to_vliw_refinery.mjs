@@ -372,6 +372,12 @@ async function refineCompounds(context, translated) {
 function buildCommandResult(context, translation, database, compoundCache) {
   const wordnet = translation.wordnet;
   const vocabulary = context.vocabulary ?? {};
+  const sentences = translation.records.map((record) => ({
+    original: record.source?.text ?? "",
+    pyash: text(record.englishPyash ?? record.pyash) || null,
+    pyac: text(record.pyac) || null,
+    status: record.status
+  }));
   return {
     command: "translate-document",
     language: translation.language,
@@ -383,6 +389,7 @@ function buildCommandResult(context, translation, database, compoundCache) {
     resolved: translation.counts.resolved,
     provisional: translation.counts.provisional,
     unresolved: translation.counts.unresolved,
+    sentences,
     vocabularyCandidates: translation.vocabularyCandidates.length,
     vocabularySubmitted: vocabulary.queued?.submittedCount ?? 0,
     vocabularyQueueHandle: vocabulary.queued?.handleId || null,

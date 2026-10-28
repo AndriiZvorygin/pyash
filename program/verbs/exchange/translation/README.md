@@ -112,7 +112,10 @@ node command/translate_document.mjs english \
 ```
 
 Stage and checkpoint progress is written to stderr. The JSON summary is written
-to stdout. The generated artifacts are kept together under
+to stdout. Its `sentences` rows preserve each source sentence with `original`,
+`pyash`, `pyac`, and `status`; a provisional sentence keeps the unavailable
+projection as `null` instead of inventing output. The generated artifacts are
+kept together under
 `artifacts/love-paragraph-vliw/`: `translation.pya`, `vliw-catalog.pya`, and
 `vliw.pyac`. The checkpoint newspaper remains at
 `newspaper/love-paragraph-vliw.pya`, so it can be inspected without rerunning:
