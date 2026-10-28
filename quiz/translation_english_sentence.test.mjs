@@ -580,23 +580,17 @@ test("modal capacity keeps the full action phrase and preceding noun phrase toge
   assert.equal(analysis.verbPhrase.phrase, "can lead");
   assert.equal(analysis.verbPhrase.mood, "tseh");
   assert.equal(analysis.verbPhrase.moodSurface, "can");
-  assert.equal(analysis.verbPhrase.certainty, "contextual");
+  assert.equal(analysis.verbPhrase.certainty, "deterministic");
+  assert.equal(analysis.status, "resolved");
   assert.deepEqual(analysis.phrases.map((phrase) => [phrase.slot, phrase.surface]), [
     ["su", "Romantic love"],
     ["be", "can lead"],
     ["ob", "to dating"]
   ]);
   assert.deepEqual(analysis.tokens[2].pyashSequence, ["can"]);
-  assert.equal(analysis.pyash, "tyip can");
+  assert.equal(analysis.pyash, "su name hram pyan na ob name dxek ma be tyip tseh");
 
-  const resolved = await resolveEnglishSentence(source, {
-    analyze: async () => analysis,
-    verify: async ({ candidates }) => ({
-      verdict: "accept",
-      candidateId: candidates[0].id,
-      rationale: "fixture accepts the selected lexical action"
-    })
-  });
+  const resolved = await resolveEnglishSentence(source, { analyze: async () => analysis });
   assert.equal(resolved.status, "resolved");
   assert.equal(resolved.sentence.mood, "tseh");
   assert.equal(resolved.sentence.be, "tyip");
