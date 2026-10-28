@@ -320,9 +320,31 @@ export function buildVliwDatabase(sentences, options = {}) {
     const expected = Array.isArray(options.expectedResults)
       ? options.expectedResults[inputIndex]
       : undefined;
-    let codelets;
+    let lowered;
     try {
-      codelets = lowerSentence(sentence);
+      const override = typeof options.lowerSentence === "function"
+        ? options.lowerSentence(sentence, inputIndex)
+        : undefined;
+      if (override === undefined) {
+        lowered = {
+          codelets: lowerSentence(sentence),
+          decodeCodelet
+        };
+      } else if (Array.isArray(override)) {
+        lowered = {
+          codelets: override,
+          decodeCodelet: options.decodeCodelet ?? decodeCodelet
+        };
+      } else if (override && Array.isArray(override.codelets)) {
+        lowered = {
+          codelets: override.codelets,
+          decodeCodelet: override.decodeCodelet ?? options.decodeCodelet ?? decodeCodelet
+        };
+      } else {
+        fail("invalid-lowering", "custom PyAC lowering must return codelets", {
+          inputIndex
+        });
+      }
     } catch (error) {
       records.push(makeUnsupportedRecord({
         sentence,
@@ -334,9 +356,14 @@ export function buildVliwDatabase(sentences, options = {}) {
       return;
     }
 
+    const codelets = lowered.codelets;
     codelets.forEach((codelet, partIndex) => {
       try {
-        const decoded = decodeCodelet(codelet.words ?? codelet);
+        const decoded = lowered.decodeCodelet(codelet.words ?? codelet, {
+          sentence,
+          inputIndex,
+          partIndex
+        });
         const record = makeExecutableRecord({
           sentence,
           decoded,

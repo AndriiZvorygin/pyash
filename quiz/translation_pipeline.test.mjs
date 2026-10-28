@@ -24,6 +24,7 @@ import {
   renderPyashSentenceSurface,
   renderPyashSurface
 } from "../program/verbs/exchange/translation/pyash_surface.mjs";
+import { lowerSentencePhraseVliw } from "../program/library/vliw/phrase.mjs";
 import { TRANSLATION_SENSE_STATE_FORMAT } from "../program/verbs/exchange/translation/translation_occurrence.mjs";
 
 test("Pyash surface rendering fuses endings and preserves sentence-final moods", () => {
@@ -313,6 +314,40 @@ test("pipeline records round-trip and only resolved sentences enter Pyac", async
   assert.equal(database.catalog.executableCount, 1);
   assert.equal(database.catalog.unsupportedCount, 1);
   assert.deepEqual(database.skippedRecordIds, []);
+});
+
+test("translation lowering preserves phrase VLIW for resolved subject/object sentences", () => {
+  const sentence = {
+    mood: "ya",
+    su: { name: "pyan na" },
+    ob: { name: "tlih kcin crin ka cyah tlih ba ya tlih pwah" },
+    be: "sren ra"
+  };
+  const phraseVliw = lowerSentencePhraseVliw(sentence);
+  const database = lowerTranslationToPyac({
+    language: "english",
+    locator: "fixture.txt",
+    records: [{
+      id: "translation-sentence-0",
+      status: "resolved",
+      sentence,
+      vliw: phraseVliw,
+      source: {
+        sentenceIndex: 0,
+        lineIndex: 0,
+        startOffset: 0,
+        endOffset: 10,
+        text: "fixture sentence."
+      }
+    }]
+  });
+
+  assert.equal(database.catalog.records.length, 1);
+  assert.equal(database.catalog.records[0].status, "executable");
+  assert.equal(database.catalog.records[0].semantic, "phrase-vliw");
+  assert.equal(database.catalog.records[0].error, undefined);
+  assert.deepEqual(database.catalog.records[0].sentence, sentence);
+  assert.equal(database.catalog.records[0].words.length, 16);
 });
 
 test("translation document command writes durable evidence and Pyac outputs", async () => {
