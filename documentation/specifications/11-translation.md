@@ -165,6 +165,8 @@ Composed English-Pyash keeps direct objects such as `ob us from evil` and
 renders pure relations such as `to us` or `for someone` without outer `ob`.
 Quotes remain reserved for literal text payloads.
 
+Head-initial Pyac puts grammar after the noun head.
+
 The result is stored under `to name <output>` with:
 ```
 su name <output> be <language> ob text "<translated>" ya

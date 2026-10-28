@@ -44,6 +44,8 @@ test("Pyash surface rendering fuses endings and preserves sentence-final moods",
   );
   assert.equal(renderPyashSurface("cyah tlih"), "cyahtlih");
   assert.equal(renderPyashSurface("cyah tlah"), "cyahtlah");
+  assert.equal(renderPyashSurface("twum dlih na"), "twumdlihna");
+  assert.equal(renderPyashSurface("mrat tlih ka"), "mrattlihka");
   assert.equal(renderPyashSurface("ya no"), "yano");
   assert.equal(renderPyashSurface("clah tlih"), "clahtlih");
   assert.equal(renderPyashSurface("pfin ra no ya"), "pfinra noya");
@@ -645,8 +647,8 @@ test("English zero-copula clauses lower through the VLIW projection", async () =
   });
   assert.equal(result.records[0].status, "resolved");
   assert.equal(result.records[0].sentence.be, undefined);
-  assert.equal(result.records[0].pyac, "pyanna tlih mratka xyekpu wa twottiya");
-  assert.equal(result.records[0].englishPyash, "ya su love ob a mixed of emotionallys and activity.");
+  assert.equal(result.records[0].pyac, "pyanna mrattlihka xyekpu wa twottiya");
+  assert.equal(result.records[0].englishPyash, "ya su love ob mixed a of emotionallys and activity.");
   assert.deepEqual(result.records[0].phrases.map((phrase) => [phrase.slot, phrase.start, phrase.end]), [
     ["su", 0, 1],
     ["ob", 2, 8]

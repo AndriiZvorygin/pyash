@@ -29,11 +29,11 @@ const FUSED_MOODS = new Set([
   "ksuh", "t6", "zlih", "n6", "gyih", "si2", "syi7h"
 ]);
 
-// Quantifier grammar attaches to a noun/pro-form head in the Pyac surface.
-// Keep the structural sequence available for decoding while rendering these
-// noun phrases as one spoken word.
+// Number grammar attaches to a noun head in the Pyac surface. Keep the
+// structural sequence available for decoding while rendering noun phrases as
+// one spoken word.
 const FUSED_NOUN_GRAMMAR_HEADS = new Set(["cyah", "clah", "ya"]);
-const FUSED_NOUN_GRAMMAR_SUFFIXES = new Set(["tlih", "tlah", "wi", "no"]);
+const FUSED_NOUN_GRAMMAR_SUFFIXES = new Set(["dlih", "tlih", "tlah", "wi", "no"]);
 
 function tokens(value) {
   if (typeof value !== "string") return [];
@@ -51,7 +51,9 @@ export function renderPyashSurface(value, {
     const clean = token.replace(/[.,;:]+$/u, "");
     const previous = inputTokens[index - 1]?.replace(/[.,;:]+$/u, "");
     const nounGrammarSuffix = FUSED_NOUN_GRAMMAR_SUFFIXES.has(clean)
-      && FUSED_NOUN_GRAMMAR_HEADS.has(previous);
+      && (FUSED_NOUN_GRAMMAR_HEADS.has(previous)
+        || previous === "pu"
+        || !FUSED_ENDINGS.has(previous));
     const mood = fusedMoods.has(clean) && index === inputTokens.length - 1;
     if (
       rendered.length > 0 &&
