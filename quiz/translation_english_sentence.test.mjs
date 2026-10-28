@@ -311,6 +311,9 @@ test("there are also is an additive existential clause", async () => {
   assert.equal(there.grammar.kind, "existential-clause");
   assert.deepEqual(there.pyashSequence, ["syi7h"]);
   assert.equal(are.consumedBy, "existential-clause");
+  assert.deepEqual(result.tokens.find((token) => token.surface === "can").pyashSequence, ["tseh"]);
+  assert.deepEqual(result.tokens.find((token) => token.surface === "be").pyashSequence, ["pyoh"]);
+  assert.deepEqual(result.tokens.find((token) => token.surface === "triggered").pyashSequence, ["txak"]);
   assert.equal(also.construction.kind, "additive-connector");
   assert.equal(also.construction.scope, "sentence");
   assert.deepEqual(result.discourseConnectors, [{
@@ -615,7 +618,7 @@ test("modal capacity keeps the full action phrase and preceding noun phrase toge
     ["be", "can lead"],
     ["ob", "to dating"]
   ]);
-  assert.deepEqual(analysis.tokens[2].pyashSequence, ["can"]);
+  assert.deepEqual(analysis.tokens[2].pyashSequence, ["tseh"]);
   assert.equal(analysis.pyash, "su name hram pyan na ob name dxek ma be tyip tseh");
 
   const resolved = await resolveEnglishSentence(source, { analyze: async () => analysis });

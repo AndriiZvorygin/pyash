@@ -20,7 +20,8 @@ const GRAMMAR_KINDS = new Set([
   "number-marker",
   "referential",
   "exemplifier",
-  "existential-clause"
+  "existential-clause",
+  "modal-mood"
 ]);
 
 function invalid(message, details = {}) {

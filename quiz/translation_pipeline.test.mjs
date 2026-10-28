@@ -201,6 +201,10 @@ test("translation records additive existential structure without inventing a bra
   assert.equal((record.candidates ?? []).some((candidate) => candidate.phrase === "brain"), false);
   assert.equal(record.relativeClauses[0].construction, "passive-relative-clause");
   assert.deepEqual(record.relativeClauses[0].action.pyashSequence, ["txak", "pyoh", "tseh"]);
+  const projection = projectTranslationSentence(record);
+  assert.deepEqual(projection.pyash.find((part) => part.source === "can").sequence, ["tseh"]);
+  assert.deepEqual(projection.pyac.find((part) => part.source === "can").sequence, ["tseh"]);
+  assert.deepEqual(projection.pyac.find((part) => part.source === "be").sequence, ["pyoh"]);
 });
 
 test("translation artifact merging never downgrades an accepted occurrence", () => {
