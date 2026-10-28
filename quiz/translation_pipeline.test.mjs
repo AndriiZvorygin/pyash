@@ -179,6 +179,43 @@ test("translation records coordinated clauses with their source connectors", asy
   assert.deepEqual(roundTrip.records[0].clauses, record.clauses);
 });
 
+test("resolved coordinated clauses become separate Pyash sentences and VLIW codelets", async () => {
+  const source = "Romantic love can lead to dating, but a person can also feel for friends.";
+  const result = await translateDocumentSegments({
+    language: "english",
+    text: source,
+    segments: segmentTranslationDocument(source),
+    locator: "fixture.txt",
+    coverageOverrides: new Map([
+      ["feel", {
+        coverageType: "llm",
+        canonicalEnglish: "emotionally",
+        lemma: "emotionally",
+        pyashSequence: ["xyek"]
+      }]
+    ])
+  });
+  const record = result.records[0];
+  assert.equal(record.status, "resolved");
+  assert.equal(record.sentences.length, 2);
+  assert.equal(record.sentences[0].connector, null);
+  assert.equal(record.sentences[1].connector, "but");
+  assert.deepEqual(record.sentences[1].connectorPyashSequence, ["pyuh"]);
+  assert.equal(record.pyash.length, 2);
+  assert.equal(record.pyac.length, 2);
+  assert.match(record.pyash[1], /^but can su /u);
+
+  const projection = projectTranslationSentence(record);
+  assert.deepEqual(projection.sentences.map(({ connector }) => connector), [null, "but"]);
+  assert.equal(projection.pyash.length, 2);
+  const database = lowerTranslationToPyac(result);
+  assert.equal(database.catalog.executableCount, 2);
+  assert.deepEqual(database.sourceRecordIds, [
+    `${record.id}:clause-0`,
+    `${record.id}:clause-1`
+  ]);
+});
+
 test("translation records additive existential structure without inventing a brain action", async () => {
   const source = "There are also chemical reactions within the brain that can be triggered by the different types of love.";
   const result = await translateDocument({

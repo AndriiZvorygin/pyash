@@ -551,6 +551,7 @@ function compactClauseAnalysis(analysis, source, connector, index) {
       surface: phrase.surface,
       pyashSequence: [...phrase.pyashSequence]
     })),
+    sentence: analysis.sentence ?? null,
     pyash: [connector?.pyashSequence?.join(" "), analysis.pyash].filter(Boolean).join(" "),
     unresolved: [...(analysis.unresolved ?? [])],
     candidates: (analysis.candidates ?? []).map((candidate) => ({
@@ -1319,6 +1320,7 @@ export function analyzeEnglishSentence(source, {
       }))),
       candidates: clauses.flatMap((clause) => clause.candidates ?? []),
       unresolved: [...new Set(clauses.flatMap((clause) => clause.unresolved ?? []))],
+      clauseSentences: clauses.map((clause) => clause.sentence).filter(Boolean),
       pyash: clauses.map((clause) => clause.pyash).filter(Boolean).join(" ")
     };
   }
