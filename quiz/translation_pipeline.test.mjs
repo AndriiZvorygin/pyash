@@ -268,14 +268,15 @@ test("accepted existential coverage produces complete Pyash, Pyac, and VLIW outp
   assert.equal(record.sentence.mood, "syi7h");
   assert.equal(
     record.structural,
-    "pcah la nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu lwah twum dlih na syi7h"
+    "pcah la nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu na twum dlih lwah syi7h"
   );
   assert.equal(record.structuralPreview, undefined);
   assert.equal(
     record.pyac,
-    "pcah la nros nyitpudlih pyantije txakpyoh tseh ba ryik ryakpulwah twumdlihnasyi7h"
+    "pcah la nros nyitpudlih pyantije txakpyoh tseh ba ryik ryakpuna twumdlihlwahsyi7h"
   );
-  assert.match(record.pyash, /chemical reactions/u);
+  assert.match(record.pyash, /su chemical reactions/u);
+  assert.match(record.pyash, /within the brain/u);
   assert.match(record.englishPyash, /there are/u);
   assert.equal(record.vliw.format, "pyac-vliw-phrase-v1");
   assert.deepEqual(result.counts, { resolved: 1, provisional: 0, unresolved: 0 });
