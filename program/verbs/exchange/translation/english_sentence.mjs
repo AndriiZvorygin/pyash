@@ -623,14 +623,62 @@ function existentialContent(records, existential) {
   const relativeRecords = relativeIndex >= 0
     ? records.slice(relativeIndex).filter((record) => !record.consumedBy)
     : [];
-  const relativeSequence = relativeRecords.flatMap((record) => recordSequence(record));
+  const relativeProjection = relativeClauseProjection(records, relativeIndex);
   return {
     contentStart,
     contentEnd,
     relativeIndex,
     subject,
     relativeRecords,
-    relativeSequence
+    relativeSequence: relativeProjection.sequence,
+    relativeAction: relativeProjection.action,
+    relativeConstruction: relativeProjection.construction
+  };
+}
+
+function relativeClauseProjection(records, relativeIndex) {
+  if (relativeIndex < 0) return { sequence: [], action: null, construction: "relative-clause" };
+  const modalIndex = records.findIndex((record, index) => (
+    index > relativeIndex
+      && WORDNET_MODAL_PRECEDERS.has(record.surface)
+      && ENGLISH_MODAL_MOOD_PYA.has(record.surface)
+  ));
+  const auxiliaryIndex = modalIndex >= 0 && records[modalIndex + 1]?.copula
+    ? modalIndex + 1
+    : -1;
+  const actionIndex = auxiliaryIndex >= 0 && records[auxiliaryIndex + 1]?.pyashSequence?.length > 0
+    ? auxiliaryIndex + 1
+    : -1;
+  if (modalIndex < 0 || auxiliaryIndex < 0 || actionIndex < 0) {
+    return {
+      sequence: records.slice(relativeIndex).flatMap((record) => recordSequence(record)),
+      action: null,
+      construction: "relative-clause"
+    };
+  }
+  const modal = records[modalIndex];
+  const action = records[actionIndex];
+  const sequence = [
+    ...records.slice(relativeIndex, modalIndex).flatMap((record) => recordSequence(record)),
+    ...action.pyashSequence,
+    "pyoh",
+    ENGLISH_MODAL_MOOD_PYA.get(modal.surface),
+    ...records.slice(actionIndex + 1).flatMap((record) => recordSequence(record))
+  ];
+  return {
+    sequence,
+    action: {
+      phrase: `${modal.surface} be ${action.surface}`,
+      pyashSequence: [
+        ...action.pyashSequence,
+        "pyoh",
+        ENGLISH_MODAL_MOOD_PYA.get(modal.surface)
+      ],
+      certainty: "deterministic",
+      mood: ENGLISH_MODAL_MOOD_PYA.get(modal.surface),
+      passive: true
+    },
+    construction: "passive-relative-clause"
   };
 }
 
@@ -705,9 +753,8 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
       marker: records[content.relativeIndex].surface,
       pyashSequence: relativeSequence,
       source: tokens.slice(content.relativeIndex).join(" "),
-      construction: records[content.relativeIndex + 2]?.construction?.kind === "passive-auxiliary"
-        ? "passive-relative-clause"
-        : "relative-clause"
+      construction: content.relativeConstruction,
+      ...(content.relativeAction ? { action: content.relativeAction } : {})
     }] : [],
     candidates: [],
     unresolved: [...new Set(unresolved)],

@@ -324,6 +324,8 @@ test("there are also is an additive existential clause", async () => {
   assert.match(result.pyash, /^pcah syi7h /u);
   assert.doesNotMatch(result.pyash, /twum ra/u);
   assert.equal(result.relativeClauses[0].construction, "passive-relative-clause");
+  assert.equal(result.relativeClauses[0].action.phrase, "can be triggered");
+  assert.deepEqual(result.relativeClauses[0].action.pyashSequence, ["txak", "pyoh", "tseh"]);
 });
 
 test("sentence context distinguishes distal that from a relative-clause that", async () => {
