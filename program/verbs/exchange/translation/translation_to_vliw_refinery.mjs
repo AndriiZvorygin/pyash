@@ -99,7 +99,28 @@ function occurrenceKey(record) {
   }) || record?.occurrenceId || `${text(record?.sourceRecordId)}\u0000${text(record?.surface).toLowerCase()}`;
 }
 
-function occurrenceCoverageOverrides(records = [], { coverageType = "semantic-wordnet" } = {}) {
+function selectedPartOfSpeech(record) {
+  return text(
+    record?.selectedSense?.pos
+      ?? record?.sense?.pos
+      ?? record?.link?.targetPartOfSpeech
+  ).toLowerCase();
+}
+
+function selectedVerbMorphology(record) {
+  if (selectedPartOfSpeech(record) !== "v") return null;
+  const surface = text(record?.surface).toLowerCase();
+  if (!surface.endsWith("s")) return null;
+  return {
+    kind: "finite-present",
+    markerNames: ["present_tense_"],
+    markerSequence: ["ra"],
+    certainty: "deterministic",
+    evidence: "English third-person present surface selected for a WordNet verb sense"
+  };
+}
+
+export function occurrenceCoverageOverrides(records = [], { coverageType = "semantic-wordnet" } = {}) {
   const overrides = new Map();
   for (const record of records) {
     const key = occurrenceKey(record);
@@ -108,11 +129,16 @@ function occurrenceCoverageOverrides(records = [], { coverageType = "semantic-wo
       ? record.link.pyashSequence
       : record?.pyashSequence;
     if (!key || !target || !Array.isArray(sequence) || sequence.length === 0) continue;
+    const morphology = selectedVerbMorphology(record);
+    const lexicalSequence = morphology
+      ? sequence.filter((word) => word !== "pu")
+      : sequence;
     overrides.set(key, {
       coverageType,
       canonicalEnglish: target,
       lemma: target,
-      pyashSequence: [...sequence]
+      pyashSequence: [...lexicalSequence],
+      ...(morphology ? { morphology } : {})
     });
   }
   return overrides;
