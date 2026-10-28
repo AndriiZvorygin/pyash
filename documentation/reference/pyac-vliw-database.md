@@ -11,7 +11,7 @@ database stores two projections of that source:
 
 In the language terminology, Pyash is the English-oriented form, such as
 `su me be happy ya`. Pyac is the VLIW-compatible word form, such as
-`migina nyahye hcaspugika pfinkiya`; Pyac is a language form, while `.pyac` names
+`mina nyahye hcaspuka pfinkiya`; Pyac is a language form, while `.pyac` names
 the corresponding packed artifact.
 
 ```text
@@ -479,19 +479,19 @@ the English source/gloss, `pyash` renders the English-word Pyash form, and
 `pyac` renders the VLIW-compatible word order. `structural` preserves the
 encoded lexical role serialization for replay. The Pyac form
 fuses noun, adjective, case, voice, tense, aspect, and final mood words into
-complete phrases. Named noun phrases add `gi` immediately before their final
-case suffix, so `mi gi na` becomes `migina` and `hcas pu gi ka` becomes
-`hcaspugika`. For example, `I walked our houses` has the canonical English
+complete phrases. Names and variables add `gi` immediately before their final
+case suffix; lexical noun phrases and standalone pronouns keep only their case:
+`mi na` becomes `mina` and `hcas pu ka` becomes `hcaspuka`. For example, `I walked our houses` has the canonical English
 form `I walked our houses.` and the Pyac form
-`migina nyahye hcaspugika pfinkiya`.
+`mina nyahye hcaspuka pfinkiya`.
 Noun/pro-form quantifier grammar also fuses to its head: structural `cyah tlih`,
 `ya no`, and `clah tlih` render as `cyahtlih`, `yano`, and `clahtlih`.
 The structural components remain separate in the VLIW evidence so decoding can
 recover the grammar layers.
 English compositional relations lower to Pyac case markers at the phrase
 boundary: `I walked into houses` has structural form `hcas pu twih` and
-surface form `hcasputwih`; named direct objects carry `gi` before final `ka`
-when no
+surface form `hcasputwih`; names and variables carry `gi` before their final
+case marker, while natural lexical objects use the case directly when no
 compositional case already closes the phrase.
 The reusable surface renderer is
 `program/verbs/exchange/translation/pyash_surface.mjs`. The bounded Greek

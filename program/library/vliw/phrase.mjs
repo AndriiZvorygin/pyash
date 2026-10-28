@@ -179,20 +179,20 @@ function namedPhraseTokens(value, role) {
   return result;
 }
 
-function sentencePhraseTokens(value, role) {
+function sentencePhraseTokens(value, role, { markName = false } = {}) {
   if (value && typeof value === "object" && typeof value.name === "string") {
-    return namedPhraseTokens(value, role);
+    return markName ? namedPhraseTokens(value, role) : phraseTokens(value);
   }
   return phraseTokens(value);
 }
 
-export function lowerSentencePhraseVliw(sentence) {
+export function lowerSentencePhraseVliw(sentence, { markNames = false } = {}) {
   if (!sentence || typeof sentence !== "object") {
     throw invalid("VLIW sentence must be an object");
   }
   const values = [
-    sentencePhraseTokens(sentence.su, "su").join(" "),
-    sentencePhraseTokens(sentence.ob, "ob").join(" "),
+    sentencePhraseTokens(sentence.su, "su", { markName: markNames }).join(" "),
+    sentencePhraseTokens(sentence.ob, "ob", { markName: markNames }).join(" "),
     sentencePhraseValue(sentence.be),
     typeof sentence.mood === "string" ? sentence.mood : ""
   ].filter(Boolean);

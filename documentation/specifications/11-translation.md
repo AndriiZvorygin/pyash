@@ -127,15 +127,15 @@ Common forms:
   ```
 - Pyac → English Pyash:
   ```
-  from text "migina nyahye hcaspugika pfinkiya" from state pyac to state pyash to name output be translation do
+  from text "mina nyahye hcaspuka pfinkiya" from state pyac to state pyash to name output be translation do
   ```
 
 The Pyac reverse slice expands fused vocabulary and grammar into structural
 Pyash evidence, then emits the readable English-Pyash surface:
 
 ```text
-Pyac:          migina nyahye hcaspugika pfinkiya
-structural:    su name mi gi na ob name nyah ye hcas pu gi ka be pfin ki ya
+Pyac:          mina nyahye hcaspuka pfinkiya
+structural:    su name mi na ob name nyah ye hcas pu ka be pfin ki ya
 English Pyash: ya su I be walked ob our houses.
 English gloss: I walked our houses.
 ```
@@ -322,7 +322,7 @@ Terminology:
 - **Pyash** is the English-oriented semantic form. Its compact shape uses
   English words with grammatical roles, for example `su me be happy ya`.
 - **Pyac** is the VLIW-compatible word form. It uses the short encoded words,
-  for example `migina nyahye hcaspugika pfinkiya`.
+  for example `mina nyahye hcaspuka pfinkiya`.
 - The pipeline's `canonical` field keeps the English source/gloss. Resolved
   records expose `pyash` as the English-word Pyash projection, `pyac` as the
   fused VLIW-compatible projection, and `structural` as the internal role
@@ -330,10 +330,9 @@ Terminology:
 
 Phrase rules:
 
-1. A named noun phrase carries suffix `gi` immediately before its final case
-   marker. Subject `na`, object `ka`, and name `gi` replace structural `su`,
-   `ob`, and `name`; plural `pu` comes first: `mi gi na` becomes `migina`, and
-   `hcas pu gi ka` becomes `hcaspugika`.
+1. Names and variables use `gi` immediately before their final case marker;
+   lexical phrases and standalone pronouns keep only their case: `mi na`
+   becomes `mina`, while `hcas pu ka` becomes `hcaspuka`.
 2. A subject takes nominative `na`; a direct object takes accusative `ka`, unless the phrase is already marked
    by a compositional location or relation such as `into`, `to`, `at`, or
    `from`.
