@@ -65,6 +65,8 @@ const ENGLISH_MODAL_MOOD_PYA = new Map([
   ["can", "tseh"],
   ["could", "tseh"]
 ]);
+const RELATIVE_CLAUSE_OPEN_PYA = "la";
+const RELATIVE_CLAUSE_CLOSE_PYA = "ba";
 const INDEPENDENT_CLAUSE_CONNECTORS = new Set(["and", "but", "or"]);
 const WORDNET_GRAPH_SELECTION_MIN_MARGIN = 0.3;
 
@@ -640,6 +642,11 @@ function existentialContent(records, existential) {
 
 function relativeClauseProjection(records, relativeIndex) {
   if (relativeIndex < 0) return { sequence: [], action: null, construction: "relative-clause" };
+  const relativeMarker = recordSequence(records[relativeIndex]);
+  const relativeOpen = relativeMarker.length > 0
+    ? relativeMarker
+    : [RELATIVE_CLAUSE_OPEN_PYA];
+  const relativeBody = records.slice(relativeIndex + 1);
   const modalIndex = records.findIndex((record, index) => (
     index > relativeIndex
       && WORDNET_MODAL_PRECEDERS.has(record.surface)
@@ -653,7 +660,11 @@ function relativeClauseProjection(records, relativeIndex) {
     : -1;
   if (modalIndex < 0 || auxiliaryIndex < 0 || actionIndex < 0) {
     return {
-      sequence: records.slice(relativeIndex).flatMap((record) => recordSequence(record)),
+      sequence: [
+        ...relativeOpen,
+        ...relativeBody.flatMap((record) => recordSequence(record)),
+        RELATIVE_CLAUSE_CLOSE_PYA
+      ],
       action: null,
       construction: "relative-clause",
       modalIndex,
@@ -664,14 +675,15 @@ function relativeClauseProjection(records, relativeIndex) {
   const action = records[actionIndex];
   const relativeTail = composeRelativeTailSequence(records.slice(actionIndex + 1));
   const sequence = [
+    ...relativeOpen,
     ...records
-      .slice(relativeIndex, modalIndex)
-      .filter((record) => record.grammar?.kind !== "dependent-clause")
+      .slice(relativeIndex + 1, modalIndex)
       .flatMap((record) => recordSequence(record)),
     ...relativeTail,
     ...action.pyashSequence,
     "pyoh",
-    ENGLISH_MODAL_MOOD_PYA.get(modal.surface)
+    ENGLISH_MODAL_MOOD_PYA.get(modal.surface),
+    RELATIVE_CLAUSE_CLOSE_PYA
   ];
   return {
     sequence,
