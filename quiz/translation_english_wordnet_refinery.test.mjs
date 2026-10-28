@@ -151,6 +151,85 @@ test("accepted occurrence sense resumes without re-submitting to the selector", 
   assert.equal(resumed.records[0].occurrenceId, first.records[0].occurrenceId);
 });
 
+test("persisted mixed-part-of-speech senses retain surrounding noun evidence", async () => {
+  const actionSenses = [
+    {
+      pos: "n",
+      synset: "action-noun",
+      lemma: "action",
+      lemmas: ["action"],
+      gloss: "something done"
+    },
+    {
+      pos: "v",
+      synset: "action-verb",
+      lemma: "action",
+      lemmas: ["action"],
+      gloss: "carry out a task"
+    }
+  ];
+  const result = {
+    language: "english",
+    sourceHash: "mixed-pos-source",
+    senseStateFormat: TRANSLATION_SENSE_STATE_FORMAT,
+    records: [{
+      id: "mixed-pos-record",
+      source: { text: "Feelings and actions.", sentenceIndex: 0 },
+      tokens: [{
+        surface: "feelings",
+        tokenIndex: 0,
+        pyashSequence: ["xyek", "pu"],
+        senseCandidates: [{
+          pos: "n",
+          synset: "feeling-noun",
+          lemma: "feeling",
+          lemmas: ["feeling"],
+          gloss: "an emotional state"
+        }]
+      }, {
+        surface: "and",
+        tokenIndex: 1,
+        pyashSequence: ["wa"],
+        senseCandidates: []
+      }, {
+        surface: "actions",
+        tokenIndex: 2,
+        pyashSequence: [],
+        senseCandidates: actionSenses
+      }],
+      unresolved: ["actions"]
+    }],
+    vocabularyCandidates: [{
+      id: "translation-occurrence-actions",
+      occurrenceId: "translation-occurrence-actions",
+      surface: "actions",
+      kind: "lexical-gap",
+      sourceRecordId: "mixed-pos-record",
+      tokenIndex: 2,
+      senseCandidates: actionSenses,
+      context: ["Feelings and actions."]
+    }]
+  };
+  const refined = await refineEnglishWordNet({
+    result,
+    resources: {
+      coverage: { byVariant: new Map() },
+      grammarCatalog: { entries: [] },
+      wordnet: {
+        index: buildEnglishWordNetIndex({
+          rows: [
+            { id: "n:action-noun:action", pos: "n", synset: "action-noun", senseKey: "action-noun", lemma: "action", gloss: "something done" },
+            { id: "v:action-verb:action", pos: "v", synset: "action-verb", senseKey: "action-verb", lemma: "action", gloss: "carry out a task" }
+          ]
+        })
+      }
+    },
+    config: { maxBatch: 200, edgeMaxDegree: 1 },
+    submit: async () => { throw new Error("noun evidence should resolve before a model call"); }
+  });
+  assert.deepEqual(refined.decisions[0].senses.map((sense) => sense.pos), ["n"]);
+});
+
 test("accepted compound aliases link the selected involve inclusion sense", async () => {
   const sourceRecord = {
     id: "sentence-involve",

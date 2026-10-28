@@ -302,6 +302,20 @@ test("sentence context distinguishes distal that from a relative-clause that", a
   assert.deepEqual(relative.unresolved, []);
 });
 
+test("relative-clause context keeps a mixed-part-of-speech noun nominal", async () => {
+  const result = await analyzeDefaultEnglishSentence("feelings and actions that shows");
+  const actions = result.tokens.find((token) => token.surface === "actions");
+  const resources = await loadEnglishSentenceResources();
+  const selection = selectEnglishWordNetSenses(
+    actions,
+    result.tokens,
+    result.tokens.indexOf(actions),
+    resources.wordnet.index
+  );
+  assert.ok(selection.senses.length > 0);
+  assert.ok(selection.senses.every((sense) => sense.pos === "n"));
+});
+
 test("WordNet evidence yields bounded synonym candidates without auto-selecting a sense", () => {
   const wordnet = buildEnglishWordNetIndex({
     rows: [{

@@ -114,13 +114,17 @@ function persistedSenseRows(candidate) {
 }
 
 function persistedToken(token) {
+  const senses = token?.senseCandidates ?? [];
   return {
     surface: normalized(token?.surface),
     lemma: normalized(token?.lemma),
     pyashSequence: Array.isArray(token?.pyashSequence) ? [...token.pyashSequence] : [],
     grammar: token?.grammar ?? null,
     morphology: token?.morphology ?? null,
-    wordnet: { senses: token?.senseCandidates ?? [] },
+    wordnet: {
+      partsOfSpeech: [...new Set(senses.map((sense) => text(sense?.pos)).filter(Boolean))],
+      senses
+    },
     semanticCandidates: token?.semanticCandidates ?? []
   };
 }
