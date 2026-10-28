@@ -123,6 +123,13 @@ test("English surface grammar resolves pro-forms, demonstratives, and within as 
   assert.equal(within.pyash, "su name mi na ob name hcas pu lwah be pfin ki ya");
 });
 
+test("head-initial noun phrases place number grammar after the noun head", async () => {
+  const result = await analyzeDefaultEnglishSentence("the brain walked");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.pyash, "su name twum dlih na be pfin ki ya");
+  assert.deepEqual(result.subject.pyashSequence, ["twum", "dlih", "na"]);
+});
+
 test("English example uses its generated non-overlapping grammar word", async () => {
   const resources = await loadEnglishSentenceResources();
   assert.deepEqual(resources.grammarIndex.resolve("example").pyashSequence, ["fluh"]);
@@ -144,7 +151,7 @@ test("English zero-copula analysis records subject and object phrase evidence", 
   assert.equal(result.construction, "zero-copula");
   assert.equal(result.sentence.be, undefined);
   assert.equal(result.sentence.su.name, "pyan na");
-  assert.equal(result.sentence.ob.name, "tlih mrat ka xyek pu wa twot ti");
+  assert.equal(result.sentence.ob.name, "mrat tlih ka xyek pu wa twot ti");
   assert.deepEqual(result.phrases.map((phrase) => ({
     slot: phrase.slot,
     start: phrase.start,
@@ -288,8 +295,8 @@ test("English compositional relations lower to phrase-final case markers", async
 test("English object and benefactive phrases keep separate Pyac suffixes", async () => {
   const result = await analyzeDefaultEnglishSentence("I walked a house for someone");
   assert.equal(result.status, "resolved");
-  assert.equal(result.sentence.ob.name, "tlih hcas ka cyah tlih pwah");
-  assert.match(result.pyash, /ob name tlih hcas ka cyah tlih pwah/u);
+  assert.equal(result.sentence.ob.name, "hcas tlih ka cyah tlih pwah");
+  assert.match(result.pyash, /ob name hcas tlih ka cyah tlih pwah/u);
 });
 
 test("deterministic plural recovery uses an existing root and retains WordNet sense evidence", async () => {
@@ -344,15 +351,15 @@ test("there are also is an additive existential clause", async () => {
     }
   );
   assert.deepEqual(resolved.relativeClauses[0].pyashSequence, [
-    "la", "dlih", "nros", "nyit", "pu", "pyan", "ti", "je", "txak", "pyoh", "tseh", "ba"
+    "la", "nros", "nyit", "pu", "dlih", "pyan", "ti", "je", "txak", "pyoh", "tseh", "ba"
   ]);
   const lowered = lowerPhraseVliw({ tokens: [
     "pcah",
     ...resolved.relativeClauses[0].pyashSequence,
-    "ryik", "ryak", "pu", "lwah", "dlih", "twum", "na", "syi7h"
+    "ryik", "ryak", "pu", "lwah", "twum", "dlih", "na", "syi7h"
   ] });
   assert.deepEqual(lowered.tokens.slice(0, 13), [
-    "pcah", "la", "dlih", "nros", "nyit", "pu", "pyan", "ti", "je", "txak", "pyoh", "tseh", "ba"
+    "pcah", "la", "nros", "nyit", "pu", "dlih", "pyan", "ti", "je", "txak", "pyoh", "tseh", "ba"
   ]);
   assert.equal(lowered.tokens.at(-1), "syi7h");
 });

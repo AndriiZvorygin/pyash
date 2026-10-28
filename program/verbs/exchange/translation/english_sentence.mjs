@@ -619,7 +619,7 @@ function existentialContent(records, existential) {
   ));
   const subject = addNominativeCase({
     surface: contentRecords.map((record) => record.surface).join(" "),
-    pyashSequence: contentRecords.flatMap((record) => recordSequence(record)),
+    pyashSequence: composeHeadInitialPhraseSequence(contentRecords),
     coverageType: "construction",
     evidence: "existential clause content follows there is/are"
   });
@@ -662,7 +662,7 @@ function relativeClauseProjection(records, relativeIndex) {
     return {
       sequence: [
         ...relativeOpen,
-        ...relativeBody.flatMap((record) => recordSequence(record)),
+        ...composeHeadInitialPhraseSequence(relativeBody),
         RELATIVE_CLAUSE_CLOSE_PYA
       ],
       action: null,
@@ -676,9 +676,7 @@ function relativeClauseProjection(records, relativeIndex) {
   const relativeTail = composeRelativeTailSequence(records.slice(actionIndex + 1));
   const sequence = [
     ...relativeOpen,
-    ...records
-      .slice(relativeIndex + 1, modalIndex)
-      .flatMap((record) => recordSequence(record)),
+    ...composeHeadInitialPhraseSequence(records.slice(relativeIndex + 1, modalIndex)),
     ...relativeTail,
     ...action.pyashSequence,
     "pyoh",
@@ -1147,13 +1145,64 @@ function isLinkedCaseRecord(record) {
     && recordSequence(record).length > 0;
 }
 
+function isHeadPostposedGrammarRecord(record) {
+  return record?.grammar?.kind === "number-marker"
+    && record.grammar.position === "prefix";
+}
+
+function composeHeadInitialNounSegment(records) {
+  const postposed = records.filter(isHeadPostposedGrammarRecord);
+  if (postposed.length === 0) return records.flatMap((record) => recordSequence(record));
+
+  let headIndex = -1;
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index];
+    if (!isHeadPostposedGrammarRecord(record) && recordSequence(record).length > 0) {
+      headIndex = index;
+      break;
+    }
+  }
+  if (headIndex < 0) return records.flatMap((record) => recordSequence(record));
+
+  const sequence = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (isHeadPostposedGrammarRecord(record)) continue;
+    sequence.push(...recordSequence(record));
+    if (index === headIndex) {
+      sequence.push(...postposed.flatMap((postposedRecord) => recordSequence(postposedRecord)));
+    }
+  }
+  return sequence;
+}
+
+function composeHeadInitialPhraseSequence(records) {
+  const sequence = [];
+  let current = [];
+  const flush = () => {
+    sequence.push(...composeHeadInitialNounSegment(current));
+    current = [];
+  };
+
+  for (const record of records) {
+    if (isLinkedCaseRecord(record)) {
+      flush();
+      sequence.push(...recordSequence(record));
+      continue;
+    }
+    current.push(record);
+  }
+  flush();
+  return sequence;
+}
+
 function composeCaseSequence(records, defaultCase = null) {
   const sequence = [];
   const pending = [];
   let current = [];
   let sawLinkedCase = false;
   const flush = (suffix = []) => {
-    sequence.push(...current.flatMap(recordSequence));
+    sequence.push(...composeHeadInitialNounSegment(current));
     if (suffix.length > 0) sequence.push(...suffix);
     current = [];
   };
@@ -1162,6 +1211,7 @@ function composeCaseSequence(records, defaultCase = null) {
     if (isLinkedCaseRecord(record)) {
       if (pending.length > 0) flush(pending.splice(0));
       else if (current.length > 0 && defaultCase) flush([defaultCase]);
+      else if (current.length > 0) flush();
       pending.push(...recordSequence(record));
       sawLinkedCase = true;
       continue;
@@ -1222,7 +1272,7 @@ function makeSubjectPhrase(records, verbIndex) {
   return {
     ...first,
     surface: phraseRecords.map((record) => record.surface).join(" "),
-    pyashSequence: phraseRecords.flatMap((record) => record.pyashSequence)
+    pyashSequence: composeHeadInitialPhraseSequence(phraseRecords)
   };
 }
 
