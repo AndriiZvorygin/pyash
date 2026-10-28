@@ -92,10 +92,10 @@ test("benefactive renders for across a mixed noun and pronoun phrase", () => {
   const result = renderEnglishFromVliw(lowered.vectors);
   assert.equal(
     result.englishPyash,
-    "ya su love be fulfill ob a deep admiration for someone a or it a."
+    "ya su love be fulfill ob a deep admiration for someone or something."
   );
   assert.doesNotMatch(result.englishPyash, /\bob (?:for|to|from|in)\b/u);
-  assert.match(result.englishPyash, /or it/u);
+  assert.match(result.englishPyash, /someone or something/u);
 });
 
 test("Pyac document translation keeps one record per input line", () => {

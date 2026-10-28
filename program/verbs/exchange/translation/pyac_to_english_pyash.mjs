@@ -38,6 +38,7 @@ const ENGLISH_GRAMMAR_SURFACE_OVERRIDES = new Map([
 ]);
 const TENSE_MARKERS = new Set(["ki", "ra", "pfih"]);
 const ENGLISH_GRAMMAR_SURFACES = new Map();
+const ENGLISH_GRAMMAR_SEQUENCE_SURFACES = [];
 try {
   const grammarSource = readFileSync(new URL("./english_grammar.pya", import.meta.url), "utf8");
   const grammarCatalog = parseEnglishGrammarCatalog(grammarSource);
@@ -45,7 +46,14 @@ try {
     for (const pya of entry.pyashSequence) {
       if (!ENGLISH_GRAMMAR_SURFACES.has(pya)) ENGLISH_GRAMMAR_SURFACES.set(pya, entry.surface);
     }
+    if (entry.pyashSequence.length > 1 && entry.kind !== "case-marker") {
+      ENGLISH_GRAMMAR_SEQUENCE_SURFACES.push({
+        pya: [...entry.pyashSequence],
+        surface: entry.surface
+      });
+    }
   }
+  ENGLISH_GRAMMAR_SEQUENCE_SURFACES.sort((left, right) => right.pya.length - left.pya.length);
 } catch {
   // The vocabulary fallback below keeps Pyac decoding available in packaged runs.
 }
@@ -300,6 +308,19 @@ function pronounForm(part, role) {
   return PRONOUN_FORMS.get(part.pya)?.[role] ?? part.english;
 }
 
+function grammarSequenceSurface(parts, index) {
+  for (const entry of ENGLISH_GRAMMAR_SEQUENCE_SURFACES) {
+    const candidate = parts.slice(index, index + entry.pya.length);
+    if (candidate.length !== entry.pya.length) continue;
+    if (!candidate.every((part, offset) => (
+      (part.kind === "grammar" || isPronoun(part))
+      && part.pya === entry.pya[offset]
+    ))) continue;
+    return entry;
+  }
+  return null;
+}
+
 function renderCasePrepositions(parts, words, { vocativeMarker = false } = {}) {
   if (!words) return [];
   const caseNames = parts.filter((part) => part.kind === "case").map((part) => part.pya);
@@ -370,6 +391,12 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
   let possessivePya = null;
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
+    const grammarSequence = grammarSequenceSurface(parts, index);
+    if (grammarSequence) {
+      words.push(grammarSequence.surface);
+      index += grammarSequence.pya.length - 1;
+      continue;
+    }
     if (part.kind === "root" || isPronoun(part)) {
       const adjective = parts[index + 1]?.pya === "ci";
       let word = part.pya === "dlat" && adjective ? "daily" : rootEnglish(part);
