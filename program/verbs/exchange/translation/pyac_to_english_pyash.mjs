@@ -518,7 +518,13 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
     : parts.phrases.filter((phrase) => (
       phrase !== subjectPhrase && !addressPhrases.includes(phrase)
     ));
-  const objectParts = argumentPhrases.flatMap((phrase) => {
+  const relativeArguments = argumentPhrases.filter((phrase) => (
+    phrase.tokens.some((token) => token.pya === "la")
+  ));
+  const ordinaryArguments = argumentPhrases.filter((phrase) => (
+    !phrase.tokens.some((token) => token.pya === "la")
+  ));
+  const objectParts = [...ordinaryArguments, ...relativeArguments].flatMap((phrase) => {
     const content = renderPhrase(
       phrase.tokens.map((token) => decodedPart(token, glosses)),
       { vocativeMarker: true }
