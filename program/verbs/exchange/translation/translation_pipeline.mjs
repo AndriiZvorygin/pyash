@@ -91,9 +91,52 @@ function partialTokenParts(record) {
   }];
 }
 
+function sentencePhraseTokens(value) {
+  if (typeof value === "string") return cloneSequence(value.split(/\s+/u));
+  if (value && typeof value.name === "string") return cloneSequence(value.name.split(/\s+/u));
+  return [];
+}
+
+function projectClauseSentence(clause) {
+  const sentence = clause?.sentence;
+  if (!sentence || typeof sentence !== "object") return null;
+  const tokens = [
+    ...cloneSequence(clause.connectorPyashSequence),
+    ...sentencePhraseTokens(sentence.su),
+    ...sentencePhraseTokens(sentence.ob),
+    ...sentencePhraseTokens(sentence.be),
+    ...cloneSequence(typeof sentence.mood === "string" ? [sentence.mood] : [])
+  ];
+  if (tokens.length === 0) return null;
+  try {
+    const phraseVliw = lowerPhraseVliw({ tokens });
+    const decoded = decodePhraseVliw(phraseVliw.vectors);
+    const connector = text(clause.connector);
+    const pyashBody = renderEnglishPyash(sentence, [], decoded, new Map());
+    const pyash = connector ? `${connector} ${pyashBody}` : pyashBody;
+    return {
+      source: text(clause.source),
+      connector: connector || null,
+      connectorPyashSequence: cloneSequence(clause.connectorPyashSequence),
+      sentence,
+      pyash,
+      englishPyash: pyash,
+      pyac: renderVliwPyac(decoded),
+      structural: sentenceToPyash(sentence),
+      vliw: phraseVliw
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function projectTranslationSentence(record) {
-  const completePyash = text(record?.englishPyash ?? record?.pyash);
-  const completePyac = text(record?.pyac);
+  const completePyash = Array.isArray(record?.englishPyash)
+    ? record.englishPyash
+    : text(record?.englishPyash ?? record?.pyash);
+  const completePyac = Array.isArray(record?.pyac)
+    ? record.pyac
+    : text(record?.pyac);
   const partial = partialTokenParts(record);
   const projection = {
     pyash: completePyash || partial.map(({ source, value, sequence }) => ({ source, value, sequence })),
@@ -109,6 +152,16 @@ export function projectTranslationSentence(record) {
   }
   if (Array.isArray(record?.relativeClauses) && record.relativeClauses.length > 0) {
     projection.relativeClauses = record.relativeClauses;
+  }
+  if (Array.isArray(record?.sentences) && record.sentences.length > 0) {
+    projection.sentences = record.sentences.map((sentence) => ({
+      source: sentence.source,
+      connector: sentence.connector,
+      connectorPyashSequence: sentence.connectorPyashSequence,
+      pyash: sentence.pyash,
+      pyac: sentence.pyac,
+      structural: sentence.structural
+    }));
   }
   return projection;
 }
@@ -402,6 +455,11 @@ async function analyzeSegment({
 function makeRecord({ language, sourceHash, locator, segment, analysis, context }) {
   const recordId = stableId([language, String(segment.sentenceIndex), segment.text]);
   const sentence = analysis.status === "resolved" ? analysis.sentence : null;
+  const clauseProjections = Array.isArray(analysis.clauses)
+    ? analysis.clauses.map(projectClauseSentence).filter(Boolean)
+    : [];
+  const resolvedClauseSentences = clauseProjections.length > 1
+    && clauseProjections.length === analysis.clauses.length;
   const structural = sentence
     ? sentenceToPyash(sentence)
     : text(analysis.pyash ?? analysis.verbPhrase?.pyashSequence?.join(" "));
@@ -439,6 +497,8 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
   );
   const status = sentence
     ? "resolved"
+    : resolvedClauseSentences
+      ? "resolved"
     : hasReviewCandidates
       ? "provisional"
       : hasStructuralReview
@@ -460,7 +520,14 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     context: [...context],
     status,
     ...(sentence ? { sentence, pyash: englishPyash, englishPyash, structural } : {}),
-    ...(pyac ? { pyac } : {}),
+    ...(resolvedClauseSentences ? {
+      sentences: clauseProjections,
+      pyash: clauseProjections.map((clause) => clause.pyash),
+      englishPyash: clauseProjections.map((clause) => clause.englishPyash),
+      pyac: clauseProjections.map((clause) => clause.pyac),
+      vliwSentences: clauseProjections.map((clause) => clause.vliw)
+    } : {}),
+    ...(pyac && !resolvedClauseSentences ? { pyac } : {}),
     ...(phraseVliw ? { vliw: phraseVliw } : {}),
     ...(canonical ? { canonical } : {}),
     ...(structural && !sentence ? { structuralPreview: structural } : {}),
@@ -641,7 +708,9 @@ export async function translateDocument({
   contextRadius = 1,
   verify,
   resourceHashes,
-  adapterResolver = resolveTranslationSource
+  adapterResolver = resolveTranslationSource,
+  coverageOverrides = null,
+  occurrenceOverrides = null
 } = {}) {
   return translateDocumentSegments({
     language,
@@ -651,7 +720,9 @@ export async function translateDocument({
     contextRadius,
     verify,
     resourceHashes,
-    adapterResolver
+    adapterResolver,
+    coverageOverrides,
+    occurrenceOverrides
   });
 }
 
@@ -662,16 +733,30 @@ export async function loadEnglishResourceHashes() {
 
 export function lowerTranslationToPyac(result) {
   if (!result || !Array.isArray(result.records)) throw invalid("Pyac lowering requires translation records");
-  const resolved = result.records.filter((record) => record.status === "resolved" && record.sentence);
+  const resolved = result.records.flatMap((record) => {
+    if (record.status !== "resolved") return [];
+    if (record.sentence) return [{ record, sentence: record.sentence, vliw: record.vliw }];
+    if (!Array.isArray(record.sentences)) return [];
+    return record.sentences.map((sentence, clauseIndex) => ({
+      record,
+      sentence: sentence.sentence,
+      vliw: sentence.vliw,
+      clauseIndex
+    }));
+  });
   const sources = resolved.map((record) => ({
     language: result.language,
     locator: result.locator,
-    sentenceId: record.id,
-    sentenceIndex: record.source.sentenceIndex,
-    lineIndex: record.source.lineIndex,
-    startOffset: record.source.startOffset,
-    endOffset: record.source.endOffset,
-    text: record.source.text
+    sentenceId: record.clauseIndex === undefined
+      ? record.record.id
+      : `${record.record.id}:clause-${record.clauseIndex}`,
+    sentenceIndex: record.record.source.sentenceIndex,
+    lineIndex: record.record.source.lineIndex,
+    startOffset: record.record.source.startOffset,
+    endOffset: record.record.source.endOffset,
+    text: record.clauseIndex === undefined
+      ? record.record.source.text
+      : record.record.sentences[record.clauseIndex].source
   }));
   const database = buildVliwDatabase(resolved.map((record) => record.sentence), {
     sources,
@@ -697,7 +782,9 @@ export function lowerTranslationToPyac(result) {
   });
   return {
     ...database,
-    sourceRecordIds: resolved.map((record) => record.id),
+    sourceRecordIds: resolved.map((record) => record.clauseIndex === undefined
+      ? record.record.id
+      : `${record.record.id}:clause-${record.clauseIndex}`),
     skippedRecordIds: result.records.filter((record) => record.status !== "resolved").map((record) => record.id)
   };
 }
