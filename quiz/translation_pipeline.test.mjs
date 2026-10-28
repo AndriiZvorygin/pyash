@@ -17,6 +17,7 @@ import {
   parseTranslationPipelinePya,
   renderTranslationPipelinePya,
   segmentTranslationDocument,
+  translateDocumentSegments,
   translateDocument,
   mergeTranslationArtifacts
 } from "../program/verbs/exchange/translation/translation_pipeline.mjs";
@@ -132,6 +133,29 @@ test("English paragraph reuses the accepted involve compound before vocabulary r
   assert.equal(involves.coverageType, "compound");
   assert.deepEqual(involves.pyashSequence, ["lwak", "hzan"]);
   assert.deepEqual(result.records[0].unresolved, ["caring"]);
+});
+
+test("accepted lexical verb and complete phrases produce a full sentence", async () => {
+  const source = "Love involves caring for another.";
+  const result = await translateDocumentSegments({
+    language: "english",
+    text: source,
+    segments: segmentTranslationDocument(source),
+    locator: "fixture.txt",
+    coverageOverrides: new Map([
+      ["caring", {
+        coverageType: "llm",
+        canonicalEnglish: "nurture",
+        lemma: "nurture",
+        pyashSequence: ["xyen"]
+      }]
+    ])
+  });
+
+  assert.equal(result.records[0].status, "resolved");
+  assert.equal(result.records[0].pyash, "ya su love be include ob nurture for another.");
+  assert.equal(result.records[0].pyac, "pyanna xyenka clahtlihpwah lwakhzanraya");
+  assert.deepEqual(result.records[0].unresolved, undefined);
 });
 
 test("translation artifact merging never downgrades an accepted occurrence", () => {

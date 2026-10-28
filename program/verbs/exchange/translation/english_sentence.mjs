@@ -418,6 +418,15 @@ function findLexicalVerbIndex(records, startIndex = subjectPredicateStart(record
   return -1;
 }
 
+function lexicalVerbCertainty(record) {
+  const partsOfSpeech = record?.wordnet?.partsOfSpeech ?? [];
+  const exclusivelyVerbal = partsOfSpeech.length > 0
+    && partsOfSpeech.every((partOfSpeech) => partOfSpeech === "v");
+  return record?.wordnetPartOfSpeech === "v" || exclusivelyVerbal
+    ? "deterministic"
+    : "contextual";
+}
+
 function applyContextualEnglishGrammar(records, grammarIndex) {
   const exemplifier = grammarIndex?.resolve("such as");
   return records.map((record, index) => {
@@ -939,7 +948,7 @@ export function analyzeEnglishSentence(source, {
         lexicalSequence: lexical.pyashSequence,
         morphologySequence: [PRESENT_TENSE_MARKER, ...(negated ? ["no"] : [])],
         markerNames: [PRESENT_TENSE_NAME, ...(negated ? ["negatory_quantifier_"] : [])],
-        certainty: "contextual",
+        certainty: lexicalVerbCertainty(lexical),
         evidence: "sentence context supplies a present-tense lexical predicate"
       });
     }
