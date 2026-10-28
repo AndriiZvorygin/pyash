@@ -17,6 +17,12 @@ import {
   parseEnglishSentenceVerificationResponse,
   verifyEnglishSentenceCandidates
 } from "../program/verbs/exchange/translation/english_sentence_verification.mjs";
+import {
+  decodePhraseVliw,
+  lowerSentencePhraseVliw,
+  renderVliwPyac
+} from "../program/library/vliw/phrase.mjs";
+import { renderEnglishPyash } from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
 
 function fixtureResolver() {
   const rows = new Map([
@@ -149,7 +155,7 @@ test("English zero-copula analysis records subject and object phrase evidence", 
   ]);
 });
 
-test("English passive participles are not treated as zero-copula predicates", async () => {
+test("English passive participles remain separate from zero-copula actions", async () => {
   const result = await analyzeDefaultEnglishSentence("Love is expressed.");
   assert.equal(result.construction, undefined);
   assert.equal(result.status, "review");
@@ -566,6 +572,44 @@ test("WordNet leaves a graph-only near tie for the focused sense selector", asyn
   assert.ok((feel?.semanticCandidates?.length ?? 0) > 1);
 });
 
+test("modal capacity keeps the full action phrase and preceding noun phrase together", async () => {
+  const source = "Romantic love can lead to dating.";
+  const analysis = await analyzeDefaultEnglishSentence(source);
+
+  assert.equal(analysis.subject.surface, "romantic love");
+  assert.equal(analysis.verbPhrase.phrase, "can lead");
+  assert.equal(analysis.verbPhrase.mood, "tseh");
+  assert.equal(analysis.verbPhrase.moodSurface, "can");
+  assert.equal(analysis.verbPhrase.certainty, "contextual");
+  assert.deepEqual(analysis.phrases.map((phrase) => [phrase.slot, phrase.surface]), [
+    ["su", "Romantic love"],
+    ["be", "can lead"],
+    ["ob", "to dating"]
+  ]);
+  assert.deepEqual(analysis.tokens[2].pyashSequence, ["can"]);
+  assert.equal(analysis.pyash, "tyip can");
+
+  const resolved = await resolveEnglishSentence(source, {
+    analyze: async () => analysis,
+    verify: async ({ candidates }) => ({
+      verdict: "accept",
+      candidateId: candidates[0].id,
+      rationale: "fixture accepts the selected lexical action"
+    })
+  });
+  assert.equal(resolved.status, "resolved");
+  assert.equal(resolved.sentence.mood, "tseh");
+  assert.equal(resolved.sentence.be, "tyip");
+  assert.match(resolved.pyash, / tseh$/u);
+  const lowered = lowerSentencePhraseVliw(resolved.sentence);
+  const decoded = decodePhraseVliw(lowered.vectors);
+  assert.equal(renderVliwPyac(decoded), "hram pyanna dxekma tyiptseh");
+  assert.equal(
+    renderEnglishPyash(resolved.sentence, [], decoded, new Map()),
+    "can su romantic love be lead to dating."
+  );
+});
+
 test("such as is classified as an exemplifier construction", async () => {
   const result = await analyzeDefaultEnglishSentence("love includes things such as friendship");
   const such = result.tokens.find((token) => token.surface === "such");
@@ -578,7 +622,7 @@ test("such as is classified as an exemplifier construction", async () => {
   assert.deepEqual(as.pyashSequence, []);
 });
 
-test("sentence grammar maps thy and negation while leaving the lexical predicate contextual", async () => {
+test("sentence grammar maps thy and negation while leaving the lexical action contextual", async () => {
   const result = await analyzeDefaultEnglishSentence("thy names lead us not into temptation");
   assert.equal(result.status, "review");
   assert.deepEqual(result.subject.pyashSequence, ["sa", "ye", "hnim", "pu", "na"]);
