@@ -327,7 +327,7 @@ test("there are also is an additive existential clause", async () => {
   assert.ok(!result.unresolved.includes("brain"));
   assert.match(result.pyash, /^pcah /u);
   assert.match(result.pyash, / syi7h$/u);
-  assert.ok(result.pyash.indexOf("la") < result.pyash.indexOf("ryik"));
+  assert.equal(result.pyash.includes(" la "), false);
   assert.doesNotMatch(result.pyash, /twum ra/u);
   assert.equal(result.relativeClauses[0].construction, "passive-relative-clause");
   assert.equal(result.relativeClauses[0].action.phrase, "can be triggered");
@@ -343,7 +343,7 @@ test("there are also is an additive existential clause", async () => {
     }
   );
   assert.deepEqual(resolved.relativeClauses[0].pyashSequence, [
-    "la", "dlih", "nros", "nyit", "pu", "pyan", "ti", "je", "txak", "pyoh", "tseh"
+    "dlih", "nros", "nyit", "pu", "pyan", "ti", "je", "txak", "pyoh", "tseh"
   ]);
   const lowered = lowerPhraseVliw({ tokens: [
     "pcah",
@@ -351,7 +351,7 @@ test("there are also is an additive existential clause", async () => {
     "ryik", "ryak", "pu", "lwah", "dlih", "twum", "na", "syi7h"
   ] });
   assert.deepEqual(lowered.tokens.slice(0, 9), [
-    "pcah", "la", "dlih", "nros", "nyit", "pu", "pyan", "ti", "je"
+    "pcah", "dlih", "nros", "nyit", "pu", "pyan", "ti", "je", "txak"
   ]);
   assert.equal(lowered.tokens.at(-1), "syi7h");
 });
