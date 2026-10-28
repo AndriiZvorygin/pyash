@@ -300,6 +300,7 @@ test("translation persists sense candidates per stable source occurrence", async
     "florp-one"
   ]);
   const parsed = parseTranslationPipelinePya(renderTranslationPipelinePya(result));
+  assert.match(renderTranslationPipelinePya(result), /ob text quoted\.text\.\{/u);
   assert.equal(parsed.senseStateFormat, TRANSLATION_SENSE_STATE_FORMAT);
   assert.equal(parsed.records[0].pyash, result.records[0].pyash);
   assert.equal(parsed.records[0].structural, result.records[0].structural);

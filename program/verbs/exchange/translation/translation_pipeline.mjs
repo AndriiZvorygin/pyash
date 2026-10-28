@@ -703,7 +703,8 @@ export function lowerTranslationToPyac(result) {
 }
 
 function pyaRow(key, value) {
-  return `su text ${JSON.stringify(key)} ob text ${JSON.stringify(JSON.stringify(value))} ya`;
+  const payload = JSON.stringify(value, null, 2) ?? "null";
+  return `su text ${JSON.stringify(key)} ob text quoted.text.${payload}.text.quoted ya`;
 }
 
 export function renderTranslationPipelinePya(result, { name = TRANSLATION_PIPELINE_NAME } = {}) {
