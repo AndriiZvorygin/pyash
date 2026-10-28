@@ -699,6 +699,9 @@ function composeObjectSequence(records) {
       continue;
     }
     phrase.push(...record.pyashSequence);
+    if (record.morphology?.markerSequence?.length) {
+      phrase.push(...record.morphology.markerSequence);
+    }
   }
   return [...phrase, ...linkedCases];
 }

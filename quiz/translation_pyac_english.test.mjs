@@ -78,7 +78,7 @@ test("relative-clause marker renders its English surface instead of its structur
     ob: { name: "la sren ra kcin ka" }
   });
   const result = renderEnglishFromVliw(lowered.vectors);
-  assert.match(result.englishPyash, /that exhibit/u);
+  assert.match(result.englishPyash, /that exhibits/u);
   assert.doesNotMatch(result.englishPyash, /dependent clause/u);
 });
 
