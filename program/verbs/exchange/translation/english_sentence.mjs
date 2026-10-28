@@ -205,6 +205,18 @@ function wordNetGraphContext(sense, records, index, wordnetIndex) {
   return { score, matched };
 }
 
+function hasRelativeClauseAfter(records, index) {
+  if (records[index + 1]?.surface !== "that") return false;
+  const predicate = records[index + 2];
+  return Boolean(predicate && (
+    predicate.morphology?.kind === "finite-past"
+    || predicate.morphology?.kind === "finite-present"
+    || predicate.morphology?.kind === "progressive"
+    || predicate.wordnet?.partsOfSpeech?.includes("v")
+    || WORDNET_MODAL_PRECEDERS.has(predicate.surface)
+  ));
+}
+
 function expectedWordNetPartsOfSpeech(records, index) {
   const expected = new Set();
   const record = records[index];
@@ -221,7 +233,8 @@ function expectedWordNetPartsOfSpeech(records, index) {
   }
   if (previous?.wordnet?.partsOfSpeech?.includes("a")) expected.add("n");
   if (previous?.grammar?.kind === "pronoun") expected.add("v");
-  if (next && ["a", "an", "the", "this", "that", "these", "those"].includes(next.surface)) {
+  if (next && ["a", "an", "the", "this", "that", "these", "those"].includes(next.surface)
+    && !(next.surface === "that" && hasRelativeClauseAfter(records, index))) {
     expected.add("v");
   }
   if (next?.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))) {
