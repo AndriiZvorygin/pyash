@@ -332,7 +332,7 @@ async function analyzeSegment({
 function makeRecord({ language, sourceHash, locator, segment, analysis, context }) {
   const recordId = stableId([language, String(segment.sentenceIndex), segment.text]);
   const sentence = analysis.status === "resolved" ? analysis.sentence : null;
-  const pyashPreview = sentence
+  const structural = sentence
     ? sentenceToPyash(sentence)
     : text(analysis.pyash ?? analysis.verbPhrase?.pyashSequence?.join(" "));
   let phraseVliw = null;
@@ -382,12 +382,11 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     },
     context: [...context],
     status,
-    ...(sentence ? { sentence, pyash: pyashPreview } : {}),
-    ...(englishPyash ? { englishPyash } : {}),
-    ...(pyac ? { pyac, pyashSurface: pyac } : {}),
+    ...(sentence ? { sentence, pyash: englishPyash, englishPyash, structural } : {}),
+    ...(pyac ? { pyac } : {}),
     ...(phraseVliw ? { vliw: phraseVliw } : {}),
     ...(canonical ? { canonical } : {}),
-    ...(pyashPreview && !sentence ? { pyashPreview } : {}),
+    ...(structural && !sentence ? { structuralPreview: structural } : {}),
     ...(unresolved.length > 0 ? { unresolved } : {}),
     ...(analysis.candidates.length > 0 ? { candidates: analysis.candidates } : {}),
     ...(Array.isArray(analysis.phrases) && analysis.phrases.length > 0 ? {

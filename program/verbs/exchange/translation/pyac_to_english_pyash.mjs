@@ -544,14 +544,16 @@ export function buildPyacDecoder({ entries = pyashWords, glosses = {} } = {}) {
       const lowered = lowerPhraseVliw({ tokens: tokens.flatMap((token) => token.parts.map((part) => part.pyash)) });
       const decoded = decodePhraseVliw(lowered.vectors);
       const sentence = structuralSentence(tokens, decoded);
+      const pyash = renderEnglishPyash(sentence, tokens, decoded, mergedGlosses);
       return {
         format: PYAC_TO_ENGLISH_PYASH_FORMAT,
         source: text(source),
         tokens,
         sentence,
         vliw: decoded,
-        pyash: sentenceToPyash(sentence),
-        englishPyash: renderEnglishPyash(sentence, tokens, decoded, mergedGlosses),
+        pyash,
+        englishPyash: pyash,
+        structural: sentenceToPyash(sentence),
         english: renderEnglish(sentence, tokens, decoded, mergedGlosses)
       };
     }
@@ -584,6 +586,7 @@ export function translatePyacToEnglishPyash(source, options = {}) {
     records,
     pyash: records.map((record) => record.pyash).join("\n"),
     englishPyash: records.map((record) => record.englishPyash).join("\n"),
+    structural: records.map((record) => record.structural).join("\n"),
     english: records.map((record) => record.english).join("\n")
   };
 }

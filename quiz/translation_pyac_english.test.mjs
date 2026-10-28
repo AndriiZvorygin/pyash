@@ -23,9 +23,10 @@ test("Pyac lowering uses suffix roles instead of structural su/ob/name tokens", 
   ]);
 });
 
-test("Pyac decoder expands fused grammar into structural Pyash and English Pyash", () => {
+test("Pyac decoder separates English Pyash from encoded structural evidence", () => {
   const result = decodePyacSentence("migina nyahye hcaspugika pfinkiya");
-  assert.equal(result.pyash, "su name mi gi na ob name nyah ye hcas pu gi ka be pfin ki ya");
+  assert.equal(result.pyash, "ya su I be walked ob our houses.");
+  assert.equal(result.structural, "su name mi gi na ob name nyah ye hcas pu gi ka be pfin ki ya");
   assert.equal(result.englishPyash, "ya su I be walked ob our houses.");
   assert.equal(result.english, "I walked our houses.");
   assert.deepEqual(
@@ -36,7 +37,8 @@ test("Pyac decoder expands fused grammar into structural Pyash and English Pyash
 
 test("Pyac decoder restores phrase-final location cases", () => {
   const result = decodePyacSentence("migina hcaspugitwih pfinkiya");
-  assert.equal(result.pyash, "su name mi gi na ob name hcas pu gi twih be pfin ki ya");
+  assert.equal(result.pyash, "ya su I be walked ob into houses.");
+  assert.equal(result.structural, "su name mi gi na ob name hcas pu gi twih be pfin ki ya");
   assert.equal(result.english, "I walked into houses.");
 });
 

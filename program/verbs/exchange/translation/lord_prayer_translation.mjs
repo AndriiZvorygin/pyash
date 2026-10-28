@@ -34,18 +34,18 @@ function selected(lexicon, term) {
 
 export function renderLordPrayerClauseFromVliw(input, { signatures = [] } = {}) {
   const decoded = decodePhraseVliw(input);
-  const pyash = renderVliwStructuralPyash(decoded);
-  const index = signatures.indexOf(pyash);
+  const structural = renderVliwStructuralPyash(decoded);
+  const index = signatures.indexOf(structural);
   if (index < 0) {
-    throw invalid("Lord's Prayer VLIW clause has no semantic projection", { pyash });
+    throw invalid("Lord's Prayer VLIW clause has no semantic projection", { structural });
   }
   const pyac = renderVliwPyac(decoded);
   const english = renderEnglishFromVliw(decoded);
   return {
     index,
-    pyash,
+    pyash: english.englishPyash,
+    structural,
     pyac,
-    pyashSurface: pyac,
     englishPyash: english.englishPyash,
     english: english.english,
     vliw: {

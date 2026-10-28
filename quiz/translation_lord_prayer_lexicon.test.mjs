@@ -132,8 +132,8 @@ test("Lord's Prayer translation fuses grammar endings and emits clause moods", a
   assert.equal(translation.clauses.at(-1).locator, "Matthew 6:13b");
   assert.equal(translation.clauses[0].canonical, "Our Father in heaven, may your name be kept holy.");
   assert.equal(translation.clauses[0].pyac, "nyahye hpapwu cyakte saye hnimna swutpyohjwih");
-  assert.equal(translation.clauses[0].pyash, "nyah ye hpap wu cyak te sa ye hnim na swut pyoh jwih");
-  assert.equal(translation.clauses[0].pyashSurface, translation.clauses[0].pyac);
+  assert.equal(translation.clauses[0].pyash, "may O our dad in heaven, su your name be holy.");
+  assert.equal(translation.clauses[0].structural, "nyah ye hpap wu cyak te sa ye hnim na swut pyoh jwih");
   assert.equal(translation.clauses[2].pyac, "saye hmucna cyakteswih tlapta tcunjwih");
   assert.equal(
     translation.clauses[2].englishPyash,
