@@ -14,8 +14,10 @@ import {
 } from "../program/verbs/exchange/translation/translation_pipeline.mjs";
 import {
   TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
+  occurrenceCoverageOverrides,
   runTranslationSourceToVliwRefinery
 } from "../program/verbs/exchange/translation/translation_to_vliw_refinery.mjs";
+import { translationOccurrenceKey } from "../program/verbs/exchange/translation/translation_occurrence.mjs";
 import { inspectTranslationRefineryArtifacts } from "../program/verbs/exchange/translation/translation_refinery_artifacts.mjs";
 
 test("source-to-VLIW refinery declares the complete Pyash stage graph", async () => {
@@ -354,6 +356,42 @@ test("source-to-VLIW pipeline forwards reconciled sense links into sentence anal
   const token = result.records[0].tokens.find((candidate) => candidate.surface === "florp");
   assert.equal(token.coverageType, "semantic-wordnet");
   assert.deepEqual(token.pyashSequence, ["xyek"]);
+});
+
+test("selected third-person verb senses receive present tense instead of plural marking", () => {
+  const sourceRecordId = "translation-record-shows";
+  const occurrence = {
+    sourceRecordId,
+    tokenIndex: 1,
+    surface: "shows",
+    selectedSense: { pos: "v" },
+    link: { target: "exhibit", pyashSequence: ["sren", "pu"] }
+  };
+  const overrides = occurrenceCoverageOverrides([occurrence]);
+  const key = translationOccurrenceKey({ sourceRecordId, tokenIndex: 1 });
+  assert.deepEqual(overrides.get(key).pyashSequence, ["sren"]);
+  assert.deepEqual(overrides.get(key).morphology.markerSequence, ["ra"]);
+
+  const result = analyzeEnglishSentence("Love shows", {
+    sourceRecordId,
+    occurrenceOverrides: overrides,
+    grammarIndex: { resolve: () => null },
+    resolveWord: (word) => word === "love"
+      ? { coverageType: "atomic", pyashSequence: ["pyan"] }
+      : null
+  });
+  const shows = result.tokens.find((token) => token.surface === "shows");
+  assert.equal(result.status, "resolved");
+  assert.deepEqual(shows.pyashSequence, ["sren"]);
+  assert.equal(shows.morphology.kind, "finite-present");
+  assert.equal(result.pyash, "su name pyan na be sren ra ya");
+
+  const plural = occurrenceCoverageOverrides([{
+    ...occurrence,
+    selectedSense: { pos: "n" }
+  }]).get(key);
+  assert.deepEqual(plural.pyashSequence, ["sren", "pu"]);
+  assert.equal(plural.morphology, undefined);
 });
 
 test("source-to-VLIW refinery closes the Qwen sense-link loop", async () => {
