@@ -9,6 +9,11 @@ import {
   PHRASE_CASE_WORDS,
   phraseParts
 } from "../../../library/vliw/phrase.mjs";
+import {
+  collapseVliwCompounds,
+  matchVliwCompoundSurface,
+  VLIW_COMPOUND_ENTRIES
+} from "../../../library/vliw/compound_dictionary.mjs";
 import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 
 export const PYAC_TO_ENGLISH_PYASH_FORMAT = "pyac-to-english-pyash-v2";
@@ -231,6 +236,13 @@ function segmentGrammar(value, grammar, memo = new Map()) {
 function segmentToken(token, inventory) {
   const value = cleanToken(token);
   if (!value) throw invalid("Pyac input contains an empty token");
+  const compound = matchVliwCompoundSurface(value, VLIW_COMPOUND_ENTRIES);
+  if (compound) {
+    const suffixes = segmentGrammar(compound.remainder, inventory.grammar);
+    if (!compound.remainder || suffixes.length > 0) {
+      return [...compound.pyashSequence, ...suffixes];
+    }
+  }
   const rootOptions = [...new Set([...inventory.roots.keys(), ...inventory.grammar.keys()])]
     .filter((pya) => value.startsWith(pya))
     .sort((left, right) => right.length - left.length);
@@ -345,6 +357,7 @@ function rootEnglish(part) {
 }
 
 function inflectVerb(parts, { thirdPerson = false } = {}) {
+  parts = collapseVliwCompounds(parts);
   const root = parts.find((part) => part.kind === "root");
   if (!root) return "something";
   const dictionaryForm = rootEnglish(root);
@@ -386,6 +399,7 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       return ["that", verb, remainder].filter(Boolean).join(" ");
     }
   }
+  parts = collapseVliwCompounds(parts);
   const words = [];
   let possessive = false;
   let possessivePya = null;

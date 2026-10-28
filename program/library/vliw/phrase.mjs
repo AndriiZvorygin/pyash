@@ -1,6 +1,11 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
 import { renderPyashSurface } from "../../verbs/exchange/translation/pyash_surface.mjs";
 import { decodePyacWord, encodePyacWord } from "./word_code.mjs";
+import {
+  matchVliwCompound,
+  matchVliwCompoundSurface,
+  VLIW_COMPOUND_ENTRIES
+} from "./compound_dictionary.mjs";
 
 export const PHRASE_VLIW_FORMAT = "pyac-vliw-phrase-v1";
 export const PHRASE_VLIW_WORDS_PER_VECTOR = 16;
@@ -60,6 +65,13 @@ function expandGrammar(value) {
 
 function expandToken(value) {
   if (entriesByPya.has(value)) return [value];
+  const compound = matchVliwCompoundSurface(value, VLIW_COMPOUND_ENTRIES);
+  if (compound) {
+    const suffix = expandGrammar(compound.remainder);
+    if (!compound.remainder || suffix.length > 0) {
+      return [...compound.pyashSequence, ...suffix];
+    }
+  }
   const roots = [...entriesByPya.keys()]
     .filter((pya) => value.startsWith(pya))
     .sort((left, right) => right.length - left.length);
@@ -266,7 +278,17 @@ export function renderVliwStructuralPyash(decoded) {
 }
 
 export function renderVliwPyac(decoded) {
-  return renderPyashSurface(renderVliwStructuralPyash(decoded));
+  const rendered = [];
+  for (let index = 0; index < decoded.tokens.length; index += 1) {
+    const match = matchVliwCompound(decoded.tokens, index, VLIW_COMPOUND_ENTRIES);
+    if (match) {
+      rendered.push(match.pyashSequence.join(""));
+      index += match.length - 1;
+      continue;
+    }
+    rendered.push(decoded.tokens[index].pya);
+  }
+  return renderPyashSurface(rendered.join(" "));
 }
 
 export function phraseParts(decoded) {

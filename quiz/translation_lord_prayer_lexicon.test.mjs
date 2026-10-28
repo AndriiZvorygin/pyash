@@ -144,7 +144,7 @@ test("Lord's Prayer translation fuses grammar endings and emits clause moods", a
     translation.clauses[3].englishPyash,
     "do su you be give to us today ob our daily bread."
   );
-  assert.equal(translation.clauses[5].pyac, "nyahna pcah nyahye hdef hgenpuka hsonrali");
+  assert.equal(translation.clauses[5].pyac, "nyahna pcah nyahye hdefhgenpuka hsonrali");
 });
 
 test("Lord's Prayer renders every text form from decoded VLIW", async () => {
