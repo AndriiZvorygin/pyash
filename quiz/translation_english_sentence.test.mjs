@@ -209,7 +209,7 @@ test("English case surfaces cover the canonical grid and common aliases", async 
     ["until", "tweh"],
     ["as", "swih"],
     ["with", "mwah"],
-    ["for", "yi"],
+    ["for", "pwah"],
     ["among", "sa7"],
     ["inside", "lwah"],
     ["through", "lwah"],
