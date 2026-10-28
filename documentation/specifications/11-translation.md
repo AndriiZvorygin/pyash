@@ -151,19 +151,19 @@ input token that cannot be segmented into known roots and grammatical
 endings. Its implementation is
 `program/verbs/exchange/translation/pyac_to_english_pyash.mjs`.
 
-The English projection reads phrase roles from the decoded VLIW head: the
-nominative phrase supplies `su`, remaining case phrases supply `ob`, and
-case endings become English prepositions (`te` → `in`, `so` → `from`, `ma` →
-`to`, and `twih` → `into`); vocative `wu` becomes an `O` address prefix.
+The VLIW head maps the nominative phrase to `su` and an accusative `ka` phrase
+to `ob`. Other cases retain their prepositions (`pwah` → `for`, `te` → `in`,
+`so` → `from`, `ma` → `to`, `twih` → `into`); vocative `wu` becomes `O`.
+`ob` must precede object content, never another preposition such as `for`.
 The complete case inventory comes from vocabulary entries ending in
 `_case_`. Possessive, plural, negation, conjunction,
 imperative, tense, aspect, passive, and mood markers are applied during this
 projection. English Pyash keeps the `su`/`ob`/`be` sentence shape while using
 English words inside those phrases. The Lord's Prayer clauses use this same
 decoded renderer; their VLIW components carry `our father` explicitly.
-Composed English-Pyash phrases remain token-visible, so a source like
-`us from evil` renders as `ob us from evil`; quotes remain reserved for
-literal text payloads.
+Composed English-Pyash keeps direct objects such as `ob us from evil` and
+renders pure relations such as `to us` or `for someone` without outer `ob`.
+Quotes remain reserved for literal text payloads.
 
 The result is stored under `to name <output>` with:
 ```

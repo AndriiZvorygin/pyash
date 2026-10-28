@@ -310,7 +310,17 @@ function wordRecord(surface, {
   let coverage = typeof resolveWord === "function" ? resolveWord(normalized, tokenIndex) : null;
   const lemma = lemmaBySurface?.get(normalized) ?? null;
   const catalogGrammar = grammarIndex?.resolve(normalized) ?? null;
-  const compositionalCase = COMPOSITIONAL_CASE_INDEX.get(normalized)
+  const catalogCase = catalogGrammar?.kind === "case-marker"
+    && catalogGrammar.pyashSequence?.length > 0
+    ? {
+      axis: "link",
+      case: catalogGrammar.components?.[0] ?? "",
+      keyword: normalized,
+      pya: catalogGrammar.pyashSequence.at(-1)
+    }
+    : null;
+  const compositionalCase = catalogCase
+    ?? COMPOSITIONAL_CASE_INDEX.get(normalized)
     ?? COMPOSITIONAL_CASE_INDEX.get(COMPOSITIONAL_CASE_ALIASES.get(normalized))
     ?? null;
   const grammar = catalogGrammar ?? (compositionalCase ? {
@@ -682,11 +692,51 @@ function addWordNetCandidates(records, resolveWord, wordnetIndex, wordnetBridges
   });
 }
 
-function objectSequence(objectRecords) {
-  const sequence = composeObjectSequence(objectRecords);
-  const compositionalMarked = objectRecords.some((record) => record.compositionalCase);
-  if (!compositionalMarked && sequence.at(-1) !== ACCUSATIVE_MARKER) sequence.push(ACCUSATIVE_MARKER);
+function recordSequence(record) {
+  return [
+    ...(record?.pyashSequence ?? []),
+    ...(record?.morphology?.markerSequence ?? [])
+  ];
+}
+
+function isLinkedCaseRecord(record) {
+  return record?.grammar?.kind === "case-marker"
+    && record.grammar.position === "link"
+    && recordSequence(record).length > 0;
+}
+
+function composeObjectSequence(objectRecords) {
+  const sequence = [];
+  const pending = [];
+  let current = [];
+  let sawLinkedCase = false;
+  const flush = (suffix = []) => {
+    sequence.push(...current.flatMap(recordSequence));
+    if (suffix.length > 0) sequence.push(...suffix);
+    current = [];
+  };
+
+  for (const record of objectRecords) {
+    if (isLinkedCaseRecord(record)) {
+      if (pending.length > 0) flush(pending.splice(0));
+      else if (current.length > 0) flush([ACCUSATIVE_MARKER]);
+      pending.push(...recordSequence(record));
+      sawLinkedCase = true;
+      continue;
+    }
+    current.push(record);
+  }
+  if (pending.length > 0) flush(pending.splice(0));
+  else flush();
+
+  if (!sawLinkedCase && sequence.length > 0 && sequence.at(-1) !== ACCUSATIVE_MARKER) {
+    sequence.push(ACCUSATIVE_MARKER);
+  }
   return sequence;
+}
+
+function objectSequence(objectRecords) {
+  return composeObjectSequence(objectRecords);
 }
 
 function makeSentence(subject, verbPhrase, objectRecords) {
@@ -699,22 +749,6 @@ function makeSentence(subject, verbPhrase, objectRecords) {
     sentence.ob = { name: objectSequence(objectRecords).join(" ") };
   }
   return sentence;
-}
-
-function composeObjectSequence(records) {
-  const phrase = [];
-  const linkedCases = [];
-  for (const record of records) {
-    if (record.grammar?.kind === "case-marker" && record.grammar.position === "link") {
-      linkedCases.push(...record.pyashSequence);
-      continue;
-    }
-    phrase.push(...record.pyashSequence);
-    if (record.morphology?.markerSequence?.length) {
-      phrase.push(...record.morphology.markerSequence);
-    }
-  }
-  return [...phrase, ...linkedCases];
 }
 
 function makeSubjectPhrase(records, verbIndex) {

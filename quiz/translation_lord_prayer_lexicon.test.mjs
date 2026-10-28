@@ -137,12 +137,12 @@ test("Lord's Prayer translation fuses grammar endings and emits clause moods", a
   assert.equal(translation.clauses[2].pyac, "saye hmucna cyakteswih tlapta tcunjwih");
   assert.equal(
     translation.clauses[2].englishPyash,
-    "may su your purpose be done ob in heaven as on floor."
+    "may su your purpose be done in heaven as on floor."
   );
   assert.equal(translation.clauses[3].pyac, "nyahyi trenmyah nyahye dlatci hpupka kwinpcih");
   assert.equal(
     translation.clauses[3].englishPyash,
-    "do su you be give ob us today our daily bread."
+    "do su you be give to us today ob our daily bread."
   );
   assert.equal(translation.clauses[5].pyac, "nyahna pcah nyahye hdef hgenpuka hsonrali");
 });
@@ -156,8 +156,8 @@ test("Lord's Prayer renders every text form from decoded VLIW", async () => {
     assert.ok(clause.englishPyash.length > 0, clause.locator);
     assert.ok(clause.english.length > 0, clause.locator);
   }
-  assert.equal(translation.clauses.at(-1).englishPyash, "do su you be rescue ob us from evil.");
-  assert.equal(translation.clauses.at(-1).english, "But rescue us from evil.");
+  assert.equal(translation.clauses.at(-1).englishPyash, "do su you be rescue to us from evil.");
+  assert.equal(translation.clauses.at(-1).english, "But rescue to us from evil.");
 });
 
 test("Lord's Prayer analysis links dictionary evidence to Greek pilot records", async () => {
