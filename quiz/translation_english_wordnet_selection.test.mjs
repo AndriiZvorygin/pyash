@@ -62,6 +62,10 @@ test("WordNet sense selection prompt contains one word, one sentence, and only i
   const prompt = buildEnglishWordNetSenseSelectionPrompt({
     surface: "florp",
     sentence: "I florp the object.",
+    localPhrase: "I florp the object",
+    grammaticalRole: "verb or action word",
+    headWord: "object",
+    nearbyWords: ["i", "florp", "the", "object"],
     senses: [{
       pos: "v",
       synset: "one",
@@ -78,11 +82,16 @@ test("WordNet sense selection prompt contains one word, one sentence, and only i
   });
   assert.match(prompt, /WORD TO CLASSIFY: florp/u);
   assert.match(prompt, /SENTENCE: I florp the object\./u);
+  assert.match(prompt, /LOCAL PHRASE: I florp the object/u);
+  assert.match(prompt, /GRAMMATICAL ROLE: verb or action word/u);
+  assert.match(prompt, /HEAD OR MODIFIED WORD: object/u);
+  assert.match(prompt, /NEARBY WORDS: i florp the object/u);
   assert.match(prompt, /OPTION 1[\s\S]*meaning: like something/u);
   assert.match(prompt, /OPTION 2[\s\S]*meaning: dislike something/u);
   assert.match(prompt, /Return one JSON object only/u);
   assert.match(prompt, /No markdown, explanation, Pyash words, or extra keys/u);
   assert.match(prompt, /option must be one option number shown above/u);
+  assert.match(prompt, /Determine the word's grammatical role before comparing meanings/u);
   assert.doesNotMatch(prompt, /senseId:/u);
   assert.doesNotMatch(prompt, /other sentence/u);
   assert.doesNotMatch(prompt, /Pyash inventory/u);

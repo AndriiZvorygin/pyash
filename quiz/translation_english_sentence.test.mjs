@@ -702,6 +702,31 @@ test("WordNet leaves a graph-only near tie for the focused sense selector", asyn
   assert.ok((feel?.semanticCandidates?.length ?? 0) > 1);
 });
 
+test("WordNet preserves adjective senses when graph evidence alone is weak", async () => {
+  const source = "Normal friendship is a form of love that can be distracted by lust and misunderstanding.";
+  const analysis = await analyzeDefaultEnglishSentence(source);
+  const normal = analysis.tokens.find((token) => token.surface === "normal");
+  const resources = await loadEnglishSentenceResources();
+  const selection = selectEnglishWordNetSenses(
+    normal,
+    analysis.tokens,
+    analysis.tokens.indexOf(normal),
+    resources.wordnet.index
+  );
+  assert.equal(selection.evidence, "");
+  assert.ok(selection.senses.length > 1);
+  assert.ok(selection.senses.every((sense) => ["a", "s"].includes(sense.pos)));
+});
+
+test("English may is a grammar mood before WordNet", async () => {
+  const analysis = await analyzeDefaultEnglishSentence("Lust and love may be thought of as different.");
+  const may = analysis.tokens.find((token) => token.surface === "may");
+  assert.equal(may.coverageType, "grammar");
+  assert.equal(may.grammar.kind, "modal-mood");
+  assert.deepEqual(may.pyashSequence, ["mwih"]);
+  assert.equal(may.wordnet.senses.length, 2);
+});
+
 test("modal capacity keeps the full action phrase and preceding noun phrase together", async () => {
   const source = "Romantic love can lead to dating.";
   const analysis = await analyzeDefaultEnglishSentence(source);

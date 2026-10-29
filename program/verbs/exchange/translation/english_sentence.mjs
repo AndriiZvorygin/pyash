@@ -63,7 +63,8 @@ const WORDNET_MODAL_PRECEDERS = new Set([
 ]);
 const ENGLISH_MODAL_MOOD_PYA = new Map([
   ["can", "tseh"],
-  ["could", "tseh"]
+  ["could", "tseh"],
+  ["may", "mwih"]
 ]);
 const RELATIVE_CLAUSE_OPEN_PYA = "la";
 const RELATIVE_CLAUSE_CLOSE_PYA = "ba";
@@ -245,6 +246,11 @@ function expectedWordNetPartsOfSpeech(records, index) {
   if (next?.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))) {
     expected.add("v");
   }
+  if (next?.wordnet?.partsOfSpeech?.includes("n")
+    && record.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))) {
+    expected.add("a");
+    expected.add("s");
+  }
   if (record.surface.endsWith("ing") && previous?.copula) {
     expected.add("v");
   }
@@ -292,6 +298,10 @@ export function selectEnglishWordNetSenses(record, records, index, wordnetIndex)
     .sort((left, right) => right - left);
   const secondBestScore = rankedScores[1] ?? 0;
   const directMatches = selected[0].context.matched.filter((term) => !term.startsWith("graph:"));
+  const modifierSelection = expectedPartsOfSpeech.has("a") || expectedPartsOfSpeech.has("s");
+  if (directMatches.length === 0 && modifierSelection) {
+    return { senses, evidence: "" };
+  }
   if (directMatches.length === 0
     && (bestScore - secondBestScore) < WORDNET_GRAPH_SELECTION_MIN_MARGIN) {
     return { senses, evidence: "" };
