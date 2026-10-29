@@ -19,6 +19,7 @@ function resources() {
   return {
     coverage: {
       byVariant: new Map([
+        ["florp", { coverageType: "atomic", canonicalEnglish: "florp", pyashSequence: ["tyap"] }],
         ["like", { coverageType: "atomic", canonicalEnglish: "like", pyashSequence: ["pyan"] }],
         ["require", { coverageType: "atomic", canonicalEnglish: "require", pyashSequence: ["hcas"] }],
         ["join", { coverageType: "atomic", canonicalEnglish: "join", pyashSequence: ["sren"] }]

@@ -271,8 +271,9 @@ function selectDirectLink(record, sourceTerms = []) {
   const exactCandidates = record.candidates.filter((candidate) => (
     candidate.sourceLemmas.some((lemma) => sourceVariants.has(normalized(lemma)))
   ));
-  if (edgeCandidates.length === 1) {
-    return { status: "accepted-edge", link: edgeCandidates[0] };
+  const exactEdgeCandidates = edgeCandidates.filter((candidate) => exactCandidates.includes(candidate));
+  if (exactEdgeCandidates.length === 1) {
+    return { status: "accepted-edge", link: exactEdgeCandidates[0] };
   }
   if (exactCandidates.length === 1) {
     return { status: "accepted-deterministic", link: exactCandidates[0] };
