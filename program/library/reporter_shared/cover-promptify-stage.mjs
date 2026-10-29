@@ -114,6 +114,7 @@ async function callPromptifyLlm({ host, model, prompt }) {
     think: false,
     keepAlive: 300,
     timeoutMs,
+    requireManager: true,
   });
   return cleanLine(String(data?.message?.content || data?.response || ""));
 }
