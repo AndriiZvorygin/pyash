@@ -687,6 +687,27 @@ function relativeClauseProjection(records, relativeIndex) {
     ? auxiliaryIndex + 1
     : -1;
   if (modalIndex < 0 || auxiliaryIndex < 0 || actionIndex < 0) {
+    const activeActionIndex = relativeBody.findIndex((record) => isLexicalActionRecord(record));
+    if (activeActionIndex >= 0) {
+      const actionRecord = relativeBody[activeActionIndex];
+      const actionTail = relativeBody.slice(activeActionIndex + 1);
+      return {
+        sequence: [
+          ...relativeOpen,
+          ...recordSequence(actionRecord),
+          ...(actionTail.length > 0 ? composeCaseSequence(actionTail, ACCUSATIVE_MARKER) : []),
+          RELATIVE_CLAUSE_CLOSE_PYA
+        ],
+        action: {
+          phrase: actionRecord.surface,
+          pyashSequence: recordSequence(actionRecord),
+          certainty: "deterministic",
+          passive: false
+        },
+        construction: "relative-clause",
+        actionIndex: relativeIndex + 1 + activeActionIndex
+      };
+    }
     return {
       sequence: [
         ...relativeOpen,
@@ -1294,7 +1315,26 @@ function composeCaseSequence(records, defaultCase = null) {
 }
 
 function composeObjectSequence(objectRecords) {
-  return composeCaseSequence(objectRecords, ACCUSATIVE_MARKER);
+  const relativeIndex = objectRecords.findIndex((record) => record.grammar?.kind === "dependent-clause");
+  if (relativeIndex >= 0) {
+    const parent = reorderHeadFinalGenitiveObjectSequence(
+      composeCaseSequence(objectRecords.slice(0, relativeIndex), ACCUSATIVE_MARKER)
+    );
+    const relative = relativeClauseProjection(objectRecords, relativeIndex);
+    return [...relative.sequence, ...parent];
+  }
+  return reorderHeadFinalGenitiveObjectSequence(
+    composeCaseSequence(objectRecords, ACCUSATIVE_MARKER)
+  );
+}
+
+function reorderHeadFinalGenitiveObjectSequence(sequence) {
+  const headCaseIndex = sequence.indexOf(ACCUSATIVE_MARKER);
+  if (headCaseIndex <= 0) return sequence;
+  const head = sequence.slice(0, headCaseIndex + 1);
+  const tail = sequence.slice(headCaseIndex + 1);
+  if (!tail.includes("ti")) return sequence;
+  return [...tail, ...head];
 }
 
 function composeRelativeTailSequence(records) {

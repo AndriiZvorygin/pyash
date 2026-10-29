@@ -300,9 +300,13 @@ export function phraseParts(decoded) {
   )));
   for (let index = 0; index < moodIndex; index += 1) {
     if (decoded.tokens[index].pya !== "la") continue;
-    const close = decoded.tokens.findIndex((token, tokenIndex) => (
-      tokenIndex > index && tokenIndex < moodIndex && token.pya === "ba"
-    ));
+    let close = -1;
+    for (let tokenIndex = moodIndex - 1; tokenIndex > index; tokenIndex -= 1) {
+      if (decoded.tokens[tokenIndex].pya === "ba") {
+        close = tokenIndex;
+        break;
+      }
+    }
     if (close < 0) continue;
     for (const end of [...ends]) {
       if (end > index && end < close) ends.delete(end);
