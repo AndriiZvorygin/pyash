@@ -15,6 +15,7 @@ import { refineEnglishWordNet } from "../program/verbs/exchange/translation/engl
 function senseResources(rows) {
   const wordnet = buildEnglishWordNetIndex({ rows });
   const coverage = new Map([
+    ["florp", { coverageType: "atomic", canonicalEnglish: "florp", pyashSequence: ["tyap"] }],
     ["like", { coverageType: "atomic", canonicalEnglish: "like", pyashSequence: ["pyan"] }],
     ["dislike", { coverageType: "atomic", canonicalEnglish: "dislike", pyashSequence: ["twin"] }]
   ]);

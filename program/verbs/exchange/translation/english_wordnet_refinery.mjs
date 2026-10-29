@@ -492,7 +492,7 @@ export async function refineEnglishWordNet({
           })
       );
       if (prior && prior.selectedSenseId && prior.selectedSense) {
-        if (accepted(prior.status)) {
+        if (accepted(prior.status) || prior.status === "review") {
           records.push(prior);
           continue;
         }
