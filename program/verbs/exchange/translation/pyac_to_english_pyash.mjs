@@ -410,7 +410,8 @@ function renderHeadFinalGenitivePhrase(subjectParts, modifierPhrases, glosses) {
   if (!subjectParts?.length || modifierPhrases.length === 0) return "";
   const numberParts = subjectParts.filter(isEnglishNumberPart);
   const headParts = subjectParts.filter((part) => !isEnglishNumberPart(part) && part.kind !== "case");
-  if (numberParts.length > 0 && !headParts.some((part) => part.pya === "pu")) {
+  const pluralQuantifier = numberParts.some((part) => ["po", "tl6h", "wi"].includes(part.pya));
+  if (pluralQuantifier && !headParts.some((part) => part.pya === "pu")) {
     headParts.push({ pya: "pu", kind: "grammar", english: "plural_number_" });
   }
   const head = renderPhrase(headParts, { subject: true });
@@ -426,6 +427,25 @@ function renderHeadFinalGenitivePhrase(subjectParts, modifierPhrases, glosses) {
     .map((part) => englishGrammarSurface(part.pya, part.english))
     .filter(Boolean);
   return [...numbers, head, "of", ...modifiers].join(" ");
+}
+
+function renderHeadFinalGenitiveArgument(parts, glosses) {
+  const caseIndex = parts.findLastIndex((part) => part.pya === "ka");
+  const genitiveIndex = parts.findLastIndex((part, index) => (
+    part.pya === "ti" && index < caseIndex
+  ));
+  if (caseIndex < 0 || genitiveIndex <= 0 || genitiveIndex >= caseIndex - 1) return "";
+  const dependent = renderPhrase(parts.slice(0, genitiveIndex));
+  const head = renderPhrase(parts.slice(genitiveIndex + 1, caseIndex + 1));
+  if (!dependent || !head) return "";
+  return `${head} of ${dependent}`;
+}
+
+function precedingGenitiveArgumentPhrase(phrases, phrase) {
+  const index = phrases.indexOf(phrase);
+  if (index <= 0) return null;
+  const preceding = phrases[index - 1];
+  return preceding?.case === "ti" ? preceding : null;
 }
 
 function renderRelativeGenitive(parts) {
@@ -481,7 +501,14 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       let verbEnd = absoluteVerbStart + 1;
       while (verbEnd < parts.length && TENSE_MARKERS.has(parts[verbEnd].pya)) verbEnd += 1;
       const verb = inflectVerb(parts.slice(absoluteVerbStart, verbEnd), { thirdPerson: true });
-      const remainder = renderPhrase(parts.slice(verbEnd), { standalone, vocativeMarker });
+      const remainderParts = parts.slice(verbEnd);
+      const objectCaseIndex = remainderParts.findIndex((part) => part.pya === "ka");
+      const remainder = objectCaseIndex >= 0
+        ? [
+          renderPhrase(remainderParts.slice(0, objectCaseIndex + 1), { standalone, vocativeMarker }),
+          renderPhrase(remainderParts.slice(objectCaseIndex + 1), { standalone, vocativeMarker })
+        ].filter(Boolean).join(" ")
+        : renderPhrase(remainderParts, { standalone, vocativeMarker });
       return [prefix, "that", verb, remainder].filter(Boolean).join(" ");
     }
   }
@@ -626,21 +653,33 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
   const relativeArgumentIndex = relativeArgument
     ? argumentPhrases.indexOf(relativeArgument)
     : -1;
+  const genitiveObjectArguments = new Set(
+    argumentPhrases
+      .map((phrase) => precedingGenitiveArgumentPhrase(argumentPhrases, phrase))
+      .filter(Boolean)
+  );
   const ordinaryArguments = argumentPhrases.filter((phrase) => (
     !phrase.tokens.some((token) => token.pya === "la")
+      && !genitiveObjectArguments.has(phrase)
   ));
-  const orderedArguments = relativeArgument && relativeArgumentIndex > 0
+  const orderedArguments = relativeArgumentIndex > 0
     ? [
-      ...argumentPhrases.slice(0, relativeArgumentIndex),
+      ...argumentPhrases
+        .slice(0, relativeArgumentIndex)
+        .filter((phrase) => !genitiveObjectArguments.has(phrase)),
       relativeArgument,
-      ...argumentPhrases.slice(relativeArgumentIndex + 1)
+      ...argumentPhrases
+        .slice(relativeArgumentIndex + 1)
+        .filter((phrase) => !genitiveObjectArguments.has(phrase))
     ]
     : [...ordinaryArguments, ...relativeArguments];
   const objectParts = orderedArguments.flatMap((phrase) => {
-    const content = renderPhrase(
-      phrase.tokens.map((token) => decodedPart(token, glosses)),
-      { vocativeMarker: true }
-    );
+    const phraseParts = phrase.tokens.map((token) => decodedPart(token, glosses));
+    const genitiveModifier = precedingGenitiveArgumentPhrase(argumentPhrases, phrase);
+    const content = genitiveModifier
+      ? renderHeadFinalGenitivePhrase(phraseParts, [genitiveModifier], glosses)
+      : renderHeadFinalGenitiveArgument(phraseParts, glosses)
+      || renderPhrase(phraseParts, { vocativeMarker: true });
     if (!content) return [];
     return phrase.case === "ka" ? ["ob", content] : [content];
   });
@@ -702,18 +741,30 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
       return phraseIndex < subjectIndex && ["wu", "te"].includes(phrase.case);
     })
     : [];
-  const objectText = (nominalPredicate
+  const objectArguments = nominalPredicate
     ? decodedParts.phrases
     : decodedParts.phrases.filter((phrase) => (
       phrase !== subjectPhrase
         && !addressPhrases.includes(phrase)
         && !genitiveSubjectPhrases.includes(phrase)
-    )))
-    .map((phrase) => renderPhrase(
-      phrase.tokens
+    ));
+  const genitiveObjectArguments = new Set(
+    objectArguments
+      .map((phrase) => precedingGenitiveArgumentPhrase(objectArguments, phrase))
+      .filter(Boolean)
+  );
+  const objectText = objectArguments
+    .filter((phrase) => !genitiveObjectArguments.has(phrase))
+    .map((phrase) => {
+      const phraseParts = phrase.tokens
         .filter((token) => token.pya !== "pcah")
-        .map((token) => decodedPart(token, glosses))
-    ))
+        .map((token) => decodedPart(token, glosses));
+      const genitiveModifier = precedingGenitiveArgumentPhrase(objectArguments, phrase);
+      return genitiveModifier
+        ? renderHeadFinalGenitivePhrase(phraseParts, [genitiveModifier], glosses)
+        : renderHeadFinalGenitiveArgument(phraseParts, glosses)
+        || renderPhrase(phraseParts);
+    })
     .filter(Boolean)
     .join(" ");
   let verb = decodedParts.mood === "syi7h"

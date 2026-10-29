@@ -151,7 +151,7 @@ test("English zero-copula analysis records subject and object phrase evidence", 
   assert.equal(result.construction, "zero-copula");
   assert.equal(result.sentence.be, undefined);
   assert.equal(result.sentence.su.name, "pyan na");
-  assert.equal(result.sentence.ob.name, "mrat tlih ka xyek pu wa twot ti");
+  assert.equal(result.sentence.ob.name, "xyek pu wa twot ti mrat tlih ka");
   assert.deepEqual(result.phrases.map((phrase) => ({
     slot: phrase.slot,
     start: phrase.start,
@@ -189,7 +189,7 @@ test("zero-copula clauses keep a nominal complement before a relative action", a
   assert.equal(result.sentence.su.name, "pyan na");
   assert.equal(
     result.sentence.ob.name,
-    "mrat tlih ka xyek pu wa twot la dren kcin lyas tlih ti cyah tlih ba ya tlih pwah"
+    "la dren kcin lyas tlih ka cyah tlih ba ya tlih pwah ba xyek pu wa twot ti mrat tlih ka"
   );
 });
 
@@ -338,7 +338,7 @@ test("English of-relations use genitive ti while possessive determiners keep ye"
     resolveWord: (word) => rows.get(word) ?? base(word)
   });
   assert.equal(result.status, "resolved");
-  assert.equal(result.pyash, "su name mi na ob name hcas ka tlan ti be pfin ki ya");
+  assert.equal(result.pyash, "su name mi na ob name tlan ti hcas ka be pfin ki ya");
 });
 
 test("English compositional relations lower to phrase-final case markers", async () => {
