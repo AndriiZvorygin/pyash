@@ -124,6 +124,68 @@ test("WordNet sense anchors use covered relation targets only", () => {
   assert.match(anchors[0].evidence, /hypernym/u);
 });
 
+test("WordNet sense anchors compose a covered multiword relation instead of losing a component", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:lust:lust",
+      pos: "n",
+      synset: "lust",
+      senseKey: "lust",
+      lemma: "lust",
+      gloss: "a strong sexual desire"
+    }, {
+      id: "n:sexual-desire:sexual desire",
+      pos: "n",
+      synset: "sexual-desire",
+      senseKey: "sexual desire",
+      lemma: "sexual desire",
+      gloss: "sexual desire"
+    }, {
+      id: "n:sexual-activity:sexual activity",
+      pos: "n",
+      synset: "sexual-activity",
+      senseKey: "sexual activity",
+      lemma: "sexual activity",
+      gloss: "sexual activity"
+    }, {
+      id: "n:sex-activity:sex activity",
+      pos: "n",
+      synset: "sex-activity",
+      senseKey: "sex activity",
+      lemma: "sex activity",
+      gloss: "sexual activity"
+    }],
+    relations: [{
+      source: "n:lust",
+      target: "n:sexual-desire",
+      relation: "hypernym"
+    }, {
+      source: "n:lust",
+      target: "n:sexual-activity",
+      relation: "domain_topic"
+    }, {
+      source: "n:lust",
+      target: "n:sex-activity",
+      relation: "domain_topic"
+    }]
+  });
+  const anchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "lust", lemmas: ["lust"] },
+    wordnetIndex: index,
+    resolveWord: (word) => ({
+      sexual: { canonicalEnglish: "sexual", pyashSequence: ["hjon"] },
+      activity: { canonicalEnglish: "activity", pyashSequence: ["twot"] },
+      desire: { canonicalEnglish: "desire", pyashSequence: ["twin"] }
+    }[word] ?? null)
+  });
+  assert.deepEqual(anchors.map((anchor) => anchor.target), ["sexual activity", "sexual desire"]);
+  assert.deepEqual(anchors[0].pyashSequence, ["hjon", "twot"]);
+  assert.deepEqual(anchors[1].pyashSequence, ["hjon", "twin"]);
+  assert.equal(anchors[1].kind, "compound-composition");
+  assert.deepEqual(anchors[1].componentTargets, ["sexual", "desire"]);
+  assert.match(anchors[1].evidence, /composed from covered components sexual desire/u);
+});
+
 test("WordNet sense anchors include convergent vocab suggestions with Pyac mappings", () => {
   const index = buildEnglishWordNetIndex({
     rows: [{

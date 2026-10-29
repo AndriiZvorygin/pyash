@@ -327,6 +327,34 @@ export function buildEnglishWordNetSenseAnchorCandidates({
   const queue = [{ key: source, depth: 0, path: [] }];
   const visited = new Set([source]);
   const candidates = new Map();
+  const addCandidate = ({
+    target,
+    pyashSequence,
+    depth,
+    evidence,
+    sourceLemma,
+    kind = "relation",
+    componentTargets = []
+  }) => {
+    const words = sequence(pyashSequence);
+    const targetName = normalized(target);
+    if (!targetName || words.length === 0 || sourceLemmas.has(targetName)) return;
+    const key = `${targetName}\u0000${words.join(" ")}`;
+    const prior = candidates.get(key);
+    if (!prior || depth < prior.depth) {
+      candidates.set(key, {
+        target: targetName,
+        pyashSequence: words,
+        depth,
+        evidence,
+        sourceLemmas: sourceLemma ? [sourceLemma] : [],
+        kind,
+        ...(componentTargets.length > 0 ? { componentTargets: [...componentTargets] } : {})
+      });
+    } else if (prior) {
+      prior.sourceLemmas = [...new Set([...prior.sourceLemmas, ...(sourceLemma ? [sourceLemma] : [])])];
+    }
+  };
   while (queue.length > 0) {
     const current = queue.shift();
     if (current.depth >= depthLimit) continue;
@@ -337,27 +365,53 @@ export function buildEnglishWordNetSenseAnchorCandidates({
       for (const row of rows) {
         const lemma = normalized(row?.lemma);
         const parts = lemma.split(/\s+/u);
-        for (const targetTerm of [lemma, ...parts]) {
-          if (!targetTerm || sourceLemmas.has(targetTerm)) continue;
+        const evidence = `WordNet ${path.map((item) => text(item.relation) || "related").join(" -> ")} from ${source} reaches ${lemma}`;
+        const wholeCoverage = resolveWord(lemma);
+        const wholeSequence = sequence(wholeCoverage?.pyashSequence);
+        if (wholeSequence.length > 0) {
+          addCandidate({
+            target: wholeCoverage.canonicalEnglish || lemma,
+            pyashSequence: wholeSequence,
+            depth: nextDepth,
+            evidence,
+            sourceLemma: lemma,
+            kind: parts.length > 1 ? "compound" : "relation"
+          });
+          continue;
+        }
+        if (parts.length > 1) {
+          const components = parts.map((part) => ({
+            target: part,
+            coverage: resolveWord(part)
+          }));
+          if (components.every((component) => sequence(component.coverage?.pyashSequence).length > 0)) {
+            const componentTargets = components.map((component) => normalized(
+              component.coverage.canonicalEnglish || component.target
+            ));
+            addCandidate({
+              target: lemma,
+              pyashSequence: components.flatMap((component) => sequence(component.coverage.pyashSequence)),
+              depth: nextDepth,
+              evidence: `${evidence}; composed from covered components ${componentTargets.join(" ")}`,
+              sourceLemma: lemma,
+              kind: "compound-composition",
+              componentTargets
+            });
+            continue;
+          }
+        }
+        for (const targetTerm of parts) {
           const coverage = resolveWord(targetTerm);
           const pyashSequence = sequence(coverage?.pyashSequence);
           if (pyashSequence.length === 0) continue;
-          const target = normalized(coverage.canonicalEnglish || targetTerm);
-          if (!target || sourceLemmas.has(target)) continue;
-          const key = `${target}\u0000${pyashSequence.join(" ")}`;
-          const evidence = `WordNet ${path.map((item) => text(item.relation) || "related").join(" -> ")} from ${source} reaches ${lemma}`;
-          const prior = candidates.get(key);
-          if (!prior || nextDepth < prior.depth) {
-            candidates.set(key, {
-              target,
-              pyashSequence,
-              depth: nextDepth,
-              evidence,
-              sourceLemmas: [lemma]
-            });
-          } else if (prior) {
-            prior.sourceLemmas = [...new Set([...prior.sourceLemmas, lemma])];
-          }
+          addCandidate({
+            target: coverage.canonicalEnglish || targetTerm,
+            pyashSequence,
+            depth: nextDepth,
+            evidence,
+            sourceLemma: lemma,
+            kind: parts.length > 1 ? "relation-component" : "relation"
+          });
         }
       }
       if (visited.has(edge.target)) continue;
@@ -407,8 +461,24 @@ export function buildEnglishWordNetSenseAnchorCandidates({
       ...(candidate.ranks.length > 0 ? { bestRank: Math.min(...candidate.ranks) } : {})
     });
   }
-  return [...candidates.values()]
-    .sort((left, right) => left.depth - right.depth || left.target.localeCompare(right.target))
+  const completeTerms = new Set([...candidates.values()]
+    .filter((candidate) => candidate.kind === "compound-composition" || candidate.kind === "compound")
+    .map((candidate) => candidate.target));
+  const completeComponents = new Set(
+    [...completeTerms].flatMap((term) => term.split(/\s+/u))
+  );
+  const retainedCandidates = [...candidates.values()].filter((candidate) => (
+    candidate.kind !== "relation-component"
+      || completeTerms.size === 0
+      || !completeComponents.has(candidate.target)
+  ));
+  return retainedCandidates
+    .sort((left, right) => (
+      (left.kind === "compound-composition" || left.kind === "compound" ? 0 : 1)
+      - (right.kind === "compound-composition" || right.kind === "compound" ? 0 : 1)
+      || left.depth - right.depth
+      || left.target.localeCompare(right.target)
+    ))
     .slice(0, candidateLimit);
 }
 

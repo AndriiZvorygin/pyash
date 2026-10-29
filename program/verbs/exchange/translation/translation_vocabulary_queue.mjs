@@ -96,6 +96,16 @@ function candidateAnchorOptions(candidate, inventory) {
   const relationAnchors = new Map((candidate?.anchorCandidates ?? [])
     .filter((anchor) => text(anchor?.target))
     .map((anchor) => [normalizedWord(anchor.target), anchor]));
+  const completeRelationTerms = [...relationAnchors.values()]
+    .filter((anchor) => (
+      text(anchor?.kind) === "compound-composition"
+      || text(anchor?.kind) === "compound"
+      || normalizedWord(anchor?.target).includes(" ")
+    ))
+    .map((anchor) => normalizedWord(anchor.target));
+  const completeRelationComponents = new Set(
+    completeRelationTerms.flatMap((term) => term.split(/\s+/u))
+  );
   const senseRoots = new Set([
     ...(Array.isArray(sense.lemmas) ? sense.lemmas.flatMap(wordRoots) : [])
   ]);
@@ -117,10 +127,13 @@ function candidateAnchorOptions(candidate, inventory) {
         : roots.has(english) || parts.some((part) => roots.has(part));
       const semantic = SEMANTIC_CORE_GLOSSES.has(english);
       const relation = relationAnchors.has(english);
+      const componentOfCompleteRelation = completeRelationTerms.length > 0
+        && completeRelationComponents.has(english)
+        && !completeRelationTerms.includes(english);
       return {
         english: entry.english,
         score: hasSelectedSense
-          ? relation ? 0 : direct ? 1 : 4
+          ? componentOfCompleteRelation ? 5 : relation ? 0 : direct ? 1 : 4
           : direct ? 0 : semantic ? 1 : 2
       };
     })
@@ -201,7 +214,11 @@ function promptCandidate(candidate, inventory) {
       ? {
         anchorEvidence: candidate.anchorCandidates.slice(0, 12).map((anchor) => ({
           target: text(anchor?.target),
-          evidence: bounded(anchor?.evidence, 180)
+          evidence: bounded(anchor?.evidence, 180),
+          ...(text(anchor?.kind) ? { kind: text(anchor.kind) } : {}),
+          ...(Array.isArray(anchor?.componentTargets) && anchor.componentTargets.length > 0
+            ? { components: anchor.componentTargets.slice(0, 8).map(text).filter(Boolean) }
+            : {})
         }))
       }
       : {})
@@ -257,6 +274,7 @@ export function buildTranslationVocabularyVerificationPrompt({
     "For selectedSense candidates, choose an anchor for that meaning; do not re-disambiguate the source word.",
     "The targetEnglish anchor may differ from the source surface and WordNet lemma; choose the closest defensible supplied anchor.",
     "For each candidate, choose targetEnglish from that candidate's anchorOptions, or use uncertain when none is defensible.",
+    "When a complete multiword anchor is supplied, preserve the complete term; do not replace it with one of its components merely because the component is also known.",
     "Do not choose a merely related context word when the selected sense does not support it; use uncertain instead.",
     "Keep derivational and grammatical endings separate from lexical heads.",
     "Do not reject a candidate merely because it is a common English word: these are terms the deterministic coverage pass could not resolve.",

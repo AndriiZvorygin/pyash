@@ -102,6 +102,56 @@ test("vocabulary review prompt carries the selected WordNet sense to anchor sele
   assert.match(prompt, /"anchorOptions":\["activity"\]/u);
 });
 
+test("vocabulary review preserves a complete composed anchor over its components", () => {
+  const candidate = {
+    id: "wordnet-attachment:lust",
+    surface: "lust",
+    kind: "wordnet-sense-attachment",
+    sourceRecordId: "record-lust",
+    context: ["Lust means strong sexual desire."],
+    senseId: "n:07504854-n",
+    sense: {
+      pos: "n",
+      synset: "07504854-n",
+      lemmas: ["lust"],
+      gloss: "a strong sexual desire"
+    },
+    anchorCandidates: [{
+      target: "sexual desire",
+      pyashSequence: ["hjon", "twin"],
+      kind: "compound-composition",
+      componentTargets: ["sexual", "desire"],
+      evidence: "WordNet hypernym reaches sexual desire; composed from covered components sexual desire"
+    }, {
+      target: "sexual",
+      pyashSequence: ["hjon"],
+      evidence: "WordNet relation component"
+    }, {
+      target: "desire",
+      pyashSequence: ["twin"],
+      evidence: "WordNet relation component"
+    }],
+    evidence: "selected WordNet sense n:07504854-n"
+  };
+  const prompt = buildTranslationVocabularyVerificationPrompt({
+    language: "english",
+    sourceText: candidate.context[0],
+    locator: "love.txt",
+    candidates: [candidate],
+    inventory: {
+      entries: [
+        { english: "sexual desire", pyash: ["hjon", "twin"] },
+        { english: "sexual", pyash: ["hjon"] },
+        { english: "desire", pyash: ["twin"] }
+      ],
+      grammar: []
+    }
+  });
+  assert.match(prompt, /complete multiword anchor/u);
+  assert.match(prompt, /"anchorOptions":\["sexual desire"\]/u);
+  assert.match(prompt, /"components":\["sexual","desire"\]/u);
+});
+
 test("vocabulary candidates preserve independent occurrence queue duties", async () => {
   const requests = [];
   const queued = await submitTranslationVocabularyCandidates({
