@@ -152,6 +152,60 @@ test("accepted occurrence sense resumes without re-submitting to the selector", 
   assert.equal(resumed.records[0].occurrenceId, first.records[0].occurrenceId);
 });
 
+test("refinery uses convergent vocab suggestions as a deterministic anchor", async () => {
+  const sourceRecord = {
+    id: "sentence-one",
+    source: { text: "I florp.", sentenceIndex: 0 },
+    tokens: [{
+      surface: "florp",
+      tokenIndex: 0,
+      pyashSequence: [],
+      senseCandidates: occurrenceResources().wordnet.index.senses("florp")
+    }],
+    unresolved: ["florp"]
+  };
+  const result = {
+    language: "english",
+    sourceHash: "suggestion-anchor-source",
+    senseStateFormat: TRANSLATION_SENSE_STATE_FORMAT,
+    records: [sourceRecord],
+    vocabularyCandidates: [{
+      id: "translation-occurrence-florp",
+      occurrenceId: "translation-occurrence-florp",
+      surface: "florp",
+      kind: "lexical-gap",
+      sourceRecordId: sourceRecord.id,
+      tokenIndex: 0,
+      senseCandidates: sourceRecord.tokens[0].senseCandidates,
+      context: [sourceRecord.source.text]
+    }]
+  };
+  const resources = occurrenceResources();
+  resources.coverage.byVariant.delete("florp");
+  const refined = await refineEnglishWordNet({
+    result,
+    resources,
+    config: { maxBatch: 200, edgeMaxDegree: 1, vocabSuggestionMinSupport: 2 },
+    submit: async () => ({ status: "queued" }),
+    awaitHandle: async () => JSON.stringify({
+      verdict: "accept",
+      senseId: "v:one",
+      confidence: "high",
+      rationale: "fixture selected the supplied sense"
+    }),
+    suggestVocabulary: async () => [{
+      input: "florp",
+      mappings: [{ word: "mystified", pyacSequence: ["hmi2f"] }]
+    }, {
+      input: "like",
+      mappings: [{ word: "mystified", pyacSequence: ["hmi2f"] }]
+    }]
+  });
+  assert.equal(refined.records[0].status, "accepted-deterministic");
+  assert.equal(refined.records[0].link.target, "mystified");
+  assert.deepEqual(refined.records[0].link.pyashSequence, ["hmi2f"]);
+});
+
 test("persisted mixed-part-of-speech senses retain surrounding noun evidence", async () => {
   const actionSenses = [
     {

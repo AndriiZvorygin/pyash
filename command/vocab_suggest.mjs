@@ -737,6 +737,48 @@ function exactVocabMatches(token, lines) {
   return matches;
 }
 
+function coverageSequence(coverage) {
+  if (Array.isArray(coverage?.pyashSequence) && coverage.pyashSequence.length > 0) {
+    return coverage.pyashSequence.filter((word) => typeof word === "string" && word.trim());
+  }
+  if (Array.isArray(coverage?.lexicalRootSequence) && coverage.lexicalRootSequence.length > 0) {
+    return coverage.lexicalRootSequence.filter((word) => typeof word === "string" && word.trim());
+  }
+  if (typeof coverage?.lexicalRoot?.pya === "string" && coverage.lexicalRoot.pya.trim()) {
+    return [coverage.lexicalRoot.pya.trim()];
+  }
+  return [];
+}
+
+function structuredCoverageMapping(word, coverage, kind, source = "") {
+  const sequence = coverageSequence(coverage);
+  if (sequence.length === 0) return null;
+  const english = normalizeCompoundTarget(
+    coverage?.canonicalEnglish
+      || coverage?.aliasOf
+      || coverage?.lemma
+      || word
+  );
+  if (!english) return null;
+  return {
+    word: english,
+    pyac: renderPyacSurface(sequence.join(" ")),
+    pyacSequence: sequence,
+    kind,
+    coverageType: coverage?.coverageType || "suggestion",
+    status: coverage?.status || "covered",
+    ...(Number.isInteger(coverage?.rank) ? { rank: coverage.rank } : {}),
+    ...(source ? { source } : {})
+  };
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values
+    .filter((value) => typeof value === "string")
+    .map((value) => normalizeCompoundTarget(value))
+    .filter(Boolean))];
+}
+
 function isExactTokenMatch(token, lines) {
   const lower = String(token ?? "").toLowerCase();
   if (!lower) return false;
@@ -751,6 +793,136 @@ function isExactTokenMatch(token, lines) {
     if (gloss && (gloss.toLowerCase() === lower || gloss.toLowerCase() === target)) return true;
   }
   return false;
+}
+
+async function findStructuredSuggestionCoverage(word) {
+  const fast = await findFastEnglishCoverage(word);
+  if (fast) return fast;
+  const direct = findDirectAtomicCoverage(word);
+  if (direct) return direct;
+  const extended = await findExtendedEnglishCoverage(word);
+  return extended?.coverageType && extended.coverageType !== "unresolved"
+    ? extended
+    : null;
+}
+
+async function buildStructuredSuggestionRecord(token, {
+  occurrences,
+  foundCompounds,
+  dictionaryMatches,
+  lemmaMatches,
+  rootMatches,
+  grammarMatches,
+  morphologyMatches,
+  compoundMorphologyMatches,
+  pyaGlossMatches,
+  okTextTokens
+}) {
+  const input = normalizeCompoundTarget(token);
+  const mappings = [];
+  const mappingKeys = new Set();
+  const directMappings = [];
+  const addMapping = (mapping, direct = false) => {
+    if (!mapping) return;
+    const key = `${mapping.word}\u0000${mapping.pyacSequence.join(" ")}`;
+    if (mappingKeys.has(key)) return;
+    mappingKeys.add(key);
+    mappings.push(mapping);
+    if (direct) directMappings.push(mapping);
+  };
+  const addCoverage = (word, coverage, kind, source, direct = false) => {
+    addMapping(structuredCoverageMapping(word, coverage, kind, source), direct);
+  };
+
+  addCoverage(input, dictionaryMatches.get(token), "dictionary-alias", "vocab-suggest", true);
+  addCoverage(input, lemmaMatches.get(token), "lemma", "vocab-suggest", true);
+  addCoverage(input, rootMatches.get(token), "root", "vocab-suggest", true);
+  addCoverage(input, grammarMatches.get(token), "grammar", "vocab-suggest", true);
+  addCoverage(input, morphologyMatches.get(token), "morphology", "vocab-suggest", true);
+
+  for (const candidate of compoundMorphologyMatches.get(token) ?? []) {
+    const sequence = Array.isArray(candidate.pyash)
+      ? candidate.pyash.filter((word) => typeof word === "string" && word.trim())
+      : [];
+    if (sequence.length === 0) continue;
+    addMapping({
+      word: normalizeCompoundTarget(candidate.lemma || input),
+      pyac: renderPyacSurface(sequence.join(" ")),
+      pyacSequence: sequence,
+      kind: "compound-morphology",
+      coverageType: "compound",
+      status: candidate.status || "covered",
+      source: "vocab-suggest"
+    }, true);
+  }
+
+  const found = foundCompounds.get(token);
+  if (found?.row) {
+    const sequence = Array.isArray(found.row.pyash) ? found.row.pyash : found.row.pyashSequence;
+    if (Array.isArray(sequence) && sequence.length > 0) {
+      addMapping({
+        word: normalizeCompoundTarget(found.row.target || found.row.surface || input),
+        pyac: renderPyacSurface(sequence.join(" ")),
+        pyacSequence: sequence,
+        kind: "compound",
+        coverageType: "compound",
+        status: found.row.status || "covered-compound",
+        source: "accepted-compound"
+      }, true);
+    }
+  }
+
+  for (const match of pyaGlossMatches.get(token) ?? []) {
+    if (!match.pyash || !match.gloss) continue;
+    addMapping({
+      word: normalizeCompoundTarget(match.gloss),
+      pyac: renderPyacSurface(match.pyash),
+      pyacSequence: [match.pyash],
+      kind: "gloss",
+      coverageType: "atomic",
+      status: "covered-atomic",
+      source: "vocab-suggest"
+    }, true);
+  }
+
+  const lines = occurrences.has(token) ? await queryRyan(token) : [];
+  const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
+  const blacklistWords = Array.isArray(blacklistValue)
+    ? blacklistValue
+    : typeof blacklistValue === "string"
+      ? blacklistValue.split(/\s*,\s*/u)
+      : [];
+  const lineWords = lines
+    .filter((line) => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define"))
+    .map(getGlossFromLine)
+    .filter(Boolean);
+  const wordSuggestions = uniqueStrings([
+    ...directMappings.map((mapping) => mapping.word),
+    ...blacklistWords,
+    ...lineWords
+  ]).filter((word) => word !== input);
+
+  for (const word of wordSuggestions) {
+    const coverage = await findStructuredSuggestionCoverage(word);
+    addCoverage(word, coverage, "word-suggestion", "vocab-suggest", false);
+  }
+
+  const status = directMappings.length > 0
+    ? "covered"
+    : blacklistWords.length > 0
+      ? "blocked"
+      : occurrences.has(token)
+        ? "unresolved"
+        : okTextTokens.has(token)
+          ? "ok"
+          : "unresolved";
+  return {
+    input,
+    status,
+    wordSuggestions,
+    mappings,
+    ...(blacklistWords.length > 0 ? { suggestionSource: "blacklist" } : {})
+  };
 }
 
 async function isExactTokenMatchOrAlias(token, lines) {
@@ -1115,28 +1287,52 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     report(`${token}: grammar -> ${pyac} (English30k rank ${ranked.rank})`);
   }
 
+  const suggestionTokens = new Set([
+    ...resolvedTextInputs.flatMap(tokenizeName),
+    ...occurrences.keys(),
+    ...foundCompounds.keys(),
+    ...dictionaryMatches.keys(),
+    ...lemmaMatches.keys(),
+    ...rootMatches.keys(),
+    ...grammarMatches.keys(),
+    ...morphologyMatches.keys(),
+    ...compoundMorphologyMatches.keys(),
+    ...pyaGlossMatches.keys(),
+    ...okTextTokens
+  ]);
+  const suggestionRecords = [];
+  for (const token of [...suggestionTokens].sort((left, right) => left.localeCompare(right))) {
+    suggestionRecords.push(await buildStructuredSuggestionRecord(token, {
+      occurrences,
+      foundCompounds,
+      dictionaryMatches,
+      lemmaMatches,
+      rootMatches,
+      grammarMatches,
+      morphologyMatches,
+      compoundMorphologyMatches,
+      pyaGlossMatches,
+      okTextTokens
+    }));
+  }
+
   if (mapPath) {
-    const map = {};
-    for (const [token, filesForToken] of occurrences.entries()) {
-      const lines = await queryRyan(token);
-      map[token] = {
-        suggestions: lines.filter(line => !isFileMarker(line)),
-        files: [...filesForToken]
-      };
-    }
-    for (const [target, found] of foundCompounds.entries()) {
-      map[target] = {
-        foundCompound: {
-          components: found.row.components,
-          pyash: found.row.pyash,
-          status: found.row.status,
-          ...(found.row.specificAtom ? { specificAtom: found.row.specificAtom } : {}),
-          ...(resolveSpecificAtom(found.row)?.pyash ? { specificAtomPyash: resolveSpecificAtom(found.row).pyash } : {})
-        },
-        files: [...found.locations]
-      };
-    }
-    await fs.writeFile(mapPath, JSON.stringify(map, null, 2));
+    const records = Object.fromEntries(suggestionRecords.map((record) => [record.input, record]));
+    await fs.writeFile(mapPath, JSON.stringify({
+      format: "vocab-suggest-v2",
+      records,
+      foundCompounds: [...foundCompounds.entries()].map(([target, found]) => ({
+        target,
+        components: found.row.components,
+        pyacSequence: found.row.pyash,
+        status: found.row.status,
+        files: [...found.locations],
+        ...(found.row.specificAtom ? { specificAtom: found.row.specificAtom } : {}),
+        ...(resolveSpecificAtom(found.row)?.pyash
+          ? { specificAtomPyac: resolveSpecificAtom(found.row).pyash }
+          : {})
+      }))
+    }, null, 2));
   }
 
   const exitCode = missing > 0 ? 1 : 0;
@@ -1162,7 +1358,8 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         atom: atom.english,
         atomPyash: atom.pya
       }))
-    }))
+    })),
+    suggestionRecords
   };
 }
 

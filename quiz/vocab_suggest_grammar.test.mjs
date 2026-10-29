@@ -69,3 +69,23 @@ test("vocab_suggest keeps a repository-directory-named token on the vocabulary p
   assert.equal(result.missing, 0);
   assert.match(lines.join("\n"), /^container: root -> hven \(English30k rank \d+\)$/mu);
 });
+
+test("vocab_suggest returns separate English suggestions and Pyac mappings", async () => {
+  const result = await runVocabSuggest(["baffled", "bewildered"], { report: () => {} });
+  const records = new Map(result.suggestionRecords.map((record) => [record.input, record]));
+  const baffled = records.get("baffled");
+  const bewildered = records.get("bewildered");
+  assert.deepEqual(baffled.wordSuggestions, ["mystified"]);
+  assert.deepEqual(baffled.mappings[0], {
+    word: "mystified",
+    pyac: "hmi2f",
+    pyacSequence: ["hmi2f"],
+    kind: "dictionary-alias",
+    coverageType: "dictionary-alias",
+    status: "covered-dictionary-alias",
+    rank: 7439,
+    source: "vocab-suggest"
+  });
+  assert.deepEqual(bewildered.wordSuggestions, ["panicked", "mystified", "crazily"]);
+  assert.equal(bewildered.mappings.find((mapping) => mapping.word === "mystified")?.pyac, "hmi2f");
+});
