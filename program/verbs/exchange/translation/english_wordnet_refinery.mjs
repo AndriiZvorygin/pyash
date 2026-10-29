@@ -437,6 +437,7 @@ export async function refineEnglishWordNet({
   compoundRecords = [],
   sourceTerms = null,
   awaitHandle = null,
+  suggestVocabulary = null,
   maxRepairAttempts = 1
 } = {}) {
   if (!result || typeof result !== "object" || text(result.language) !== "english") {
@@ -559,15 +560,44 @@ export async function refineEnglishWordNet({
         wordnetIndex: loadedResources.wordnet?.index,
         edgeMaxDegree: linkerConfig.edgeMaxDegree
       });
+      const suggestionRecords = typeof suggestVocabulary === "function"
+        ? await suggestVocabulary(selected.selectedSense.lemmas ?? [selected.selectedSense.lemma])
+        : [];
       const anchorCandidates = buildEnglishWordNetSenseAnchorCandidates({
         sense: selected.selectedSense,
         wordnetIndex: loadedResources.wordnet?.index,
         resolveWord: (word) => resolveWord(loadedResources, compounds, word),
+        suggestionRecords,
+        suggestionMinSupport: linkerConfig.vocabSuggestionMinSupport,
         maxDepth: linkerConfig.anchorMaxDepth ?? 1,
         maxCandidates: linkerConfig.anchorMaxCandidates ?? 8
       });
+      const legacyLink = typeof suggestVocabulary !== "function"
+        && linked.status === "review"
+        && linked.candidates.length === 1
+        ? {
+          status: "accepted-deterministic",
+          link: linked.candidates[0]
+        }
+        : linked;
+      const suggestionAnchors = anchorCandidates.filter((candidate) => candidate.kind === "vocab-suggestion");
+      const relationAnchors = anchorCandidates.filter((candidate) => candidate.kind !== "vocab-suggestion");
+      const resolvedLink = legacyLink.status === "review"
+        && suggestionAnchors.length === 1
+        && relationAnchors.length === 0
+        ? {
+          status: "accepted-deterministic",
+          link: {
+            target: suggestionAnchors[0].target,
+            pyashSequence: suggestionAnchors[0].pyashSequence,
+            targetPartOfSpeech: selected.selectedSense.pos,
+            certainty: "deterministic",
+            evidence: suggestionAnchors[0].evidence
+          }
+        }
+        : legacyLink;
       records.push({
-        ...linked,
+        ...resolvedLink,
         occurrenceId: selected.occurrenceId,
         decisionId: selected.id,
         sourceRecordId: selected.sourceRecordId,

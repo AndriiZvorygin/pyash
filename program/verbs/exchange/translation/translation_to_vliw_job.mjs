@@ -4,6 +4,7 @@ import path from "node:path";
 import { interpret } from "../../../bridge/index.mjs";
 import { parse } from "../../../understand/index.mjs";
 import { loadCoverage } from "../../../../command/compound_coverage.mjs";
+import { runVocabSuggest } from "../../../../command/vocab_suggest.mjs";
 import { createDefaultQueuedMindTranslationVocabularySubmitter } from "./translation_vocabulary_queue.mjs";
 import { createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter } from "./english_wordnet_selection.mjs";
 import {
@@ -40,7 +41,11 @@ export async function createDefaultTranslationVliwDependencies() {
     wordnetRefinery: {
       submit: wordnetSubmit,
       compoundRecords: coverage.accepted,
-      awaitHandle: awaitTranslationGpuDuty
+      awaitHandle: awaitTranslationGpuDuty,
+      suggestVocabulary: async (words) => {
+        const result = await runVocabSuggest(words, { report: () => {} });
+        return result.suggestionRecords ?? [];
+      }
     },
     compoundTranslation: {
       records: coverage.accepted,

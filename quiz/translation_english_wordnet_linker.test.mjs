@@ -124,6 +124,54 @@ test("WordNet sense anchors use covered relation targets only", () => {
   assert.match(anchors[0].evidence, /hypernym/u);
 });
 
+test("WordNet sense anchors include convergent vocab suggestions with Pyac mappings", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "s:confused:baffled",
+      pos: "s",
+      synset: "confused",
+      senseKey: "baffled",
+      lemma: "baffled",
+      gloss: "perplexed"
+    }, {
+      id: "s:confused:bewildered",
+      pos: "s",
+      synset: "confused",
+      senseKey: "bewildered",
+      lemma: "bewildered",
+      gloss: "perplexed"
+    }, {
+      id: "s:confused:confused",
+      pos: "s",
+      synset: "confused",
+      senseKey: "confused",
+      lemma: "confused",
+      gloss: "perplexed"
+    }]
+  });
+  const anchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "s", synset: "confused", lemmas: ["baffled", "bewildered", "confused"] },
+    wordnetIndex: index,
+    resolveWord: (word) => ({
+      mystified: { canonicalEnglish: "mystified", pyashSequence: ["hmi2f"] },
+      confusion: { canonicalEnglish: "confusion", pyashSequence: ["hbun"] }
+    }[word] ?? null),
+    suggestionRecords: [{
+      input: "baffled",
+      mappings: [{ word: "mystified", pyacSequence: ["hmi2f"], rank: 7439 }]
+    }, {
+      input: "bewildered",
+      mappings: [{ word: "mystified", pyacSequence: ["hmi2f"], rank: 13450 }]
+    }, {
+      input: "confused",
+      mappings: [{ word: "confusion", pyacSequence: ["hbun"], rank: 2061 }]
+    }]
+  });
+  assert.deepEqual(anchors.map((anchor) => anchor.target), ["mystified"]);
+  assert.equal(anchors.find((anchor) => anchor.target === "mystified").support, 2);
+  assert.deepEqual(anchors.find((anchor) => anchor.target === "mystified").pyashSequence, ["hmi2f"]);
+});
+
 test("WordNet linker accepts a leaf node mapped to an existing compound", () => {
   const index = buildEnglishWordNetIndex({
     rows: [{
@@ -636,6 +684,7 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     selectionMaxOutputTokens: 512,
     edgeMaxDegree: 1,
     anchorMaxCandidates: 8,
+    vocabSuggestionMinSupport: 2,
     modelCard: {
       model: "qwen3.5:9b",
       provider: "ollama",

@@ -272,8 +272,9 @@ function selectDirectLink(record, sourceTerms = []) {
     candidate.sourceLemmas.some((lemma) => sourceVariants.has(normalized(lemma)))
   ));
   const exactEdgeCandidates = edgeCandidates.filter((candidate) => exactCandidates.includes(candidate));
-  if (exactEdgeCandidates.length === 1) {
-    return { status: "accepted-edge", link: exactEdgeCandidates[0] };
+  if (exactEdgeCandidates.length === 1
+    || (sourceVariants.size === 0 && edgeCandidates.length === 1)) {
+    return { status: "accepted-edge", link: exactEdgeCandidates[0] ?? edgeCandidates[0] };
   }
   if (exactCandidates.length === 1) {
     return { status: "accepted-deterministic", link: exactCandidates[0] };
@@ -311,6 +312,8 @@ export function buildEnglishWordNetSenseAnchorCandidates({
   sense,
   wordnetIndex,
   resolveWord,
+  suggestionRecords = [],
+  suggestionMinSupport = 2,
   maxDepth = 1,
   maxCandidates = 16
 } = {}) {
@@ -361,6 +364,48 @@ export function buildEnglishWordNetSenseAnchorCandidates({
       visited.add(edge.target);
       queue.push({ key: edge.target, depth: nextDepth, path });
     }
+  }
+  const senseLemmas = new Set((sense?.lemmas ?? [sense?.lemma]).map(normalized).filter(Boolean));
+  const suggestionSupport = new Map();
+  for (const record of Array.isArray(suggestionRecords) ? suggestionRecords : []) {
+    const input = normalized(record?.input);
+    if (!input || !senseLemmas.has(input)) continue;
+    const mappings = Array.isArray(record?.mappings) ? record.mappings : [];
+    const seenWords = new Set();
+    for (const mapping of mappings) {
+      const target = normalized(mapping?.word);
+      const pyashSequence = sequence(mapping?.pyacSequence ?? mapping?.pyashSequence);
+      if (!target || senseLemmas.has(target) || pyashSequence.length === 0 || seenWords.has(target)) continue;
+      seenWords.add(target);
+      const key = `${target}\u0000${pyashSequence.join(" ")}`;
+      const prior = suggestionSupport.get(key) ?? {
+        target,
+        pyashSequence,
+        support: new Set(),
+        sourceLemmas: new Set(),
+        ranks: []
+      };
+      prior.support.add(input);
+      prior.sourceLemmas.add(input);
+      if (Number.isInteger(mapping?.rank)) prior.ranks.push(mapping.rank);
+      suggestionSupport.set(key, prior);
+    }
+  }
+  const minimumSupport = Math.max(1, Math.trunc(Number(suggestionMinSupport) || 1));
+  for (const candidate of suggestionSupport.values()) {
+    if (candidate.support.size < minimumSupport) continue;
+    const key = `${candidate.target}\u0000${candidate.pyashSequence.join(" ")}`;
+    if (candidates.has(key)) continue;
+    candidates.set(key, {
+      target: candidate.target,
+      pyashSequence: candidate.pyashSequence,
+      depth: 1,
+      evidence: `vocab_suggest convergence across ${candidate.support.size} WordNet lemmas`,
+      sourceLemmas: [...candidate.sourceLemmas],
+      support: candidate.support.size,
+      kind: "vocab-suggestion",
+      ...(candidate.ranks.length > 0 ? { bestRank: Math.min(...candidate.ranks) } : {})
+    });
   }
   return [...candidates.values()]
     .sort((left, right) => left.depth - right.depth || left.target.localeCompare(right.target))
@@ -1012,7 +1057,8 @@ export function parseEnglishWordNetLinkerConfig(source) {
     selectionFormat: metadata["selection-format"] || ENGLISH_WORDNET_SELECTION_FORMAT,
     selectionMaxOutputTokens: Math.max(100, Math.trunc(Number(metadata["selection-max-output-tokens"]) || ENGLISH_WORDNET_SELECTION_DEFAULT_OUTPUT_TOKENS)),
     edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE)),
-    anchorMaxCandidates: Math.max(1, Math.trunc(Number(metadata["anchor-max-candidates"]) || ENGLISH_WORDNET_LINKER_ANCHOR_MAX_CANDIDATES))
+    anchorMaxCandidates: Math.max(1, Math.trunc(Number(metadata["anchor-max-candidates"]) || ENGLISH_WORDNET_LINKER_ANCHOR_MAX_CANDIDATES)),
+    vocabSuggestionMinSupport: Math.max(1, Math.trunc(Number(metadata["vocab-suggestion-min-support"]) || 2))
   };
 }
 

@@ -202,6 +202,7 @@ async function refineSenses(context, translated) {
     compoundRecords: context.wordnetRefinery.compoundRecords,
     sourceTerms: context.wordnetRefinery.sourceTerms,
     awaitHandle: context.wordnetRefinery.awaitHandle,
+    suggestVocabulary: context.wordnetRefinery.suggestVocabulary,
     maxRepairAttempts: context.wordnetRefinery.maxRepairAttempts
   });
   const wordnetBridges = buildEnglishWordNetSelectedBridgeIndex(wordnet.records);
