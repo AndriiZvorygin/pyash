@@ -1,11 +1,12 @@
 # Pyash
 
-Pyash is a sentence-based programming language, runtime, and intelligence-work framework. It treats grammar as the API surface: programs are made of typed sentences, the runtime dispatches them by signature, and the same program can be interpreted directly or compiled to JavaScript and C. Pyash is also the foundation layer for HelpOS.ca: it supplies the durable language, refinery, agent, artifact, and model-orchestration primitives that HelpOS workflows build on.
+Pyash is a sentence-based programming language, runtime, intelligence-work framework, and digital content curation and creation ecosystem. It treats grammar as the API surface: programs are made of typed sentences, the runtime dispatches them by signature, and the same program can be interpreted directly or compiled to JavaScript and C. Pyash is also the foundation layer for HelpOS.ca: it supplies the durable language, refinery, agent, artifact, content, and model-orchestration primitives that HelpOS workflows build on.
 
 In practice, this repo is both:
 
 - a language implementation, with parser, interpreter, compiler, memory model, and specs;
 - an execution platform for large-scale intelligence work: model/tool orchestration, artifact-producing refineries, channels, durable agent workflows, and evaluation;
+- a digital content ecosystem for researching, curating, transforming, creating, validating, and publishing durable media and knowledge artifacts;
 - the Pyash-first foundation for HelpOS.ca and its evidence-preserving ingestion, review, and publishing workflows.
 
 Pyash sentences use a speakable subject-object-verb style such as `exists su name counter ob num 7 be number ya`. Verbs like `plus`, `subtract`, `multiply`, `divide`, `invert`, `giant`, `tiny`, `equally`, `understand`, `read`, `mind`, and `chip` route to concrete implementations based on case and type signatures rather than positional arguments.
@@ -31,10 +32,10 @@ Pyash is the common layer between human meaning, intelligence work, and executab
 - `.pya` is the durable program, configuration, workflow, and evidence format. A refinery job keeps its canonical outputs, stage checkpoints, queue decisions, and provenance in parser-readable Pyash artifacts.
 - Refineries turn source material into progressively stronger artifacts. A translation refinery, for example, moves from source text through sentence analysis, grammar and vocabulary coverage, sense selection, Pyash projection, and Pyac/VLIW lowering.
 - Model-backed work follows the existing Pyash duty and GPU Housekeeper path. The durable queue records the request and result while the Housekeeper owns model admission, GPU capacity, residency, routing, and provider-appropriate discharge.
-- HelpOS.ca is a primary application and integration surface for this foundation. Its domain workflows remain authoritative for publication and validation, while Pyash supplies the reusable orchestration, artifact, agent, and evaluation machinery.
+- HelpOS.ca is a primary application and integration surface for this foundation. Its domain workflows remain authoritative for publication and validation, while Pyash supplies the reusable orchestration, artifact, agent, content, and evaluation machinery.
 - Every substantial workflow should remain inspectable and resumable: a run has a stable identity, a job artifact folder, stage records, and newspaper evidence rather than an opaque provider transcript.
 
-This makes Pyash more than a general-purpose scripting language and more than a model wrapper. It is a compositional substrate for building, checking, and replaying large bodies of intelligence work.
+This makes Pyash more than a general-purpose scripting language and more than a model wrapper. It is a compositional substrate for curating knowledge, creating digital content, building intelligence workflows, and replaying their evidence.
 
 If you want the conceptual framing, read `documentation/pyash.md`. If you want the normative behavior contract, start at `documentation/specifications/00-index.md`.
 
