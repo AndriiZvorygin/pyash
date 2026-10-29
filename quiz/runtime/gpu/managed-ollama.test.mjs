@@ -58,6 +58,25 @@ test("remote Ollama requests submit to the GPU housekeeper with Qwen resource de
   assert.equal(calls[0].body.jobSpec.payload.model, DEFAULT_TEXT_MODEL);
 });
 
+test("manager-required Ollama requests fail closed before any direct provider call", async () => {
+  let providerCalls = 0;
+  await assert.rejects(
+    requestManagedOllamaChat({
+      ollamaUrl: "http://mriczo:11434/api/chat",
+      requireManager: true,
+      env: {},
+      fetchImpl: async () => {
+        providerCalls += 1;
+        return response({ message: { content: "direct" } });
+      },
+      messages: [{ role: "user", content: "Say no" }],
+      pollIntervalMs: 1,
+    }),
+    /requires PYA_GPU_HOUSEKEEPER_URL/u
+  );
+  assert.equal(providerCalls, 0);
+});
+
 test("text and vision models are loaded from declarative pya configuration", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-model-config-"));
   const runtimePath = path.join(dir, "runtime.pya");
