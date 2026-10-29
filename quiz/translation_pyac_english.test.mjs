@@ -123,7 +123,7 @@ test("head-initial number markers render before the English noun head", () => {
 });
 
 test("head-final genitive phrases render several sorts of love", () => {
-  const result = decodePyacSentence("nyitti pyanponasyi7h");
+  const result = decodePyacSentence("pyanti nyitponasyi7h");
   assert.equal(result.pyash, "there are su several sorts of love.");
   assert.equal(result.englishPyash, "there are su several sorts of love.");
   assert.equal(result.english, "Several sorts of love.");

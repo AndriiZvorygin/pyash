@@ -409,22 +409,22 @@ function renderHeadFinalGenitivePhrase(subjectParts, modifierPhrases, glosses) {
   if (!subjectParts?.length || modifierPhrases.length === 0) return "";
   const numberParts = subjectParts.filter((part) => part.pya === "po");
   const headParts = subjectParts.filter((part) => part.pya !== "po" && part.kind !== "case");
+  if (numberParts.length > 0 && !headParts.some((part) => part.pya === "pu")) {
+    headParts.push({ pya: "pu", kind: "grammar", english: "plural_number_" });
+  }
   const head = renderPhrase(headParts, { subject: true });
   if (!head) return "";
   const modifiers = modifierPhrases.map((phrase) => {
     const modifierParts = phrase.tokens
       .map((token) => decodedPart(token, glosses))
       .filter((part) => part.kind !== "case");
-    if (numberParts.length > 0 && !modifierParts.some((part) => part.pya === "pu")) {
-      modifierParts.push({ pya: "pu", kind: "grammar", english: "plural_number_" });
-    }
     return renderPhrase(modifierParts);
   }).filter(Boolean);
   if (modifiers.length === 0) return "";
   const numbers = numberParts
     .map((part) => englishGrammarSurface(part.pya, part.english))
     .filter(Boolean);
-  return [...numbers, ...modifiers, "of", head].join(" ");
+  return [...numbers, head, "of", ...modifiers].join(" ");
 }
 
 function renderRelativeGenitive(parts) {

@@ -633,9 +633,9 @@ function existentialContent(records, existential) {
       const headRecords = adjunctRecords.slice(1);
       const paucal = numberRecords.some(isPaucalNumberRecord);
       return [
-        ...composeHeadInitialNounSegment(modifierRecords, { suppressPlural: paucal }),
-        ...recordSequence(contentRecords[firstCaseIndex]),
         ...composeHeadInitialPhraseSequence(headRecords),
+        ...recordSequence(contentRecords[firstCaseIndex]),
+        ...composeHeadInitialNounSegment(modifierRecords, { suppressPlural: paucal }),
         ...numberRecords.flatMap(recordSequence),
         NOMINATIVE_MARKER
       ];

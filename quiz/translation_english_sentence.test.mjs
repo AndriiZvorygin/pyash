@@ -270,8 +270,8 @@ test("several lowers as a paucal number marker on the quantified noun phrase", a
   const result = await analyzeDefaultEnglishSentence("There are several sorts of love.");
   assert.equal(result.status, "resolved");
   assert.deepEqual(result.tokens.find((token) => token.surface === "several")?.pyashSequence, ["po"]);
-  assert.deepEqual(result.subject.pyashSequence, ["nyit", "ti", "pyan", "po", "na"]);
-  assert.equal(result.pyash, "nyit ti pyan po na syi7h");
+  assert.deepEqual(result.subject.pyashSequence, ["pyan", "ti", "nyit", "po", "na"]);
+  assert.equal(result.pyash, "pyan ti nyit po na syi7h");
 });
 
 test("sentence objects preserve possessives, plural markers, and conjunction links", async () => {
