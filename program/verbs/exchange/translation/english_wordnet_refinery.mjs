@@ -317,11 +317,16 @@ function selectedDecisionRecord(decision, sense, selection = {}) {
   };
 }
 
+function attachmentCandidateId(record) {
+  const base = `wordnet-attachment:${record.id}`;
+  return record.occurrenceId ? `${base}:${record.occurrenceId}` : base;
+}
+
 function attachmentCandidate(record) {
   if (record.status !== "review" || !record.selectedSense) return null;
   const selectedSense = record.selectedSense;
   return {
-    id: `wordnet-attachment:${record.id}`,
+    id: attachmentCandidateId(record),
     surface: record.surface,
     kind: "wordnet-sense-attachment",
     sourceRecordId: record.sourceRecordId,
@@ -382,19 +387,21 @@ export function appendEnglishWordNetAttachmentCandidates(translation, records) {
 export function applyEnglishWordNetSenseAttachmentLinks(translation) {
   const wordnet = translation?.wordnet;
   if (!wordnet || !Array.isArray(wordnet.records)) return translation;
-  const accepted = new Map((translation.vocabularyCandidates ?? [])
-    .filter((candidate) => (
-      candidate?.kind === "wordnet-sense-attachment"
-      && candidate?.status === "accepted-llm"
-      && text(candidate.targetEnglish)
-      && Array.isArray(candidate.pyashSequence)
-      && candidate.pyashSequence.length > 0
-      && text(candidate.senseId)
-    ))
-    .map((candidate) => [candidate.id, candidate]));
-  if (accepted.size === 0) return translation;
+  const accepted = (translation.vocabularyCandidates ?? []).filter((candidate) => (
+    candidate?.kind === "wordnet-sense-attachment"
+    && candidate?.status === "accepted-llm"
+    && text(candidate.targetEnglish)
+    && Array.isArray(candidate.pyashSequence)
+    && candidate.pyashSequence.length > 0
+    && text(candidate.senseId)
+  ));
+  if (accepted.length === 0) return translation;
   const records = wordnet.records.map((record) => {
-    const candidate = accepted.get(`wordnet-attachment:${record.id}`);
+    const candidate = accepted.find((item) => (
+      item.id === attachmentCandidateId(record)
+        || item.id === `wordnet-attachment:${record.id}`
+        || (text(item.occurrenceId) && text(item.occurrenceId) === text(record.occurrenceId))
+    ));
     if (!candidate || text(record.selectedSenseId) !== text(candidate.senseId)) return record;
     const target = text(candidate.targetEnglish).toLowerCase();
     const pyashSequence = candidate.pyashSequence.filter((word) => typeof word === "string" && word.trim());

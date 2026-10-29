@@ -356,6 +356,51 @@ test("selected WordNet senses become bounded anchor candidates", () => {
   assert.deepEqual(translation.vocabularyCandidates[0].anchorCandidates[0].pyashSequence, ["nrec"]);
 });
 
+test("WordNet attachment ids remain unique for repeated senses", () => {
+  const translation = appendEnglishWordNetAttachmentCandidates({
+    language: "english",
+    vocabularyCandidates: []
+  }, [
+    {
+      id: "english-wordnet-sense-lust",
+      occurrenceId: "translation-occurrence-one",
+      status: "review",
+      surface: "lust",
+      sourceRecordId: "record-one",
+      selectedSenseId: "n:07504854-n",
+      selectedSense: {
+        pos: "n",
+        synset: "07504854-n",
+        lemmas: ["lust"],
+        gloss: "strong sexual desire"
+      },
+      anchorCandidates: [],
+      sentence: "Lust is desire."
+    },
+    {
+      id: "english-wordnet-sense-lust",
+      occurrenceId: "translation-occurrence-two",
+      status: "review",
+      surface: "lust",
+      sourceRecordId: "record-two",
+      selectedSenseId: "n:07504854-n",
+      selectedSense: {
+        pos: "n",
+        synset: "07504854-n",
+        lemmas: ["lust"],
+        gloss: "strong sexual desire"
+      },
+      anchorCandidates: [],
+      sentence: "Love can be confused with lust."
+    }
+  ]);
+  assert.equal(translation.vocabularyCandidates.length, 2);
+  assert.notEqual(
+    translation.vocabularyCandidates[0].id,
+    translation.vocabularyCandidates[1].id
+  );
+});
+
 test("accepted attachment links update the selected sense record", () => {
   const linked = applyEnglishWordNetSenseAttachmentLinks({
     wordnet: {
