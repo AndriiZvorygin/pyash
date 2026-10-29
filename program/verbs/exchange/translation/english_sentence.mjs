@@ -1472,10 +1472,10 @@ export function analyzeEnglishSentence(source, {
   }
   if (existential) return analyzeExistentialClause({ source, tokens, records, existential });
   const progressiveIndex = findProgressiveIndex(records);
-  const finiteIndex = findVerbIndex(records);
-  const copulaIndex = progressiveIndex < 0 && finiteIndex < 0
+  const copulaIndex = progressiveIndex < 0
     ? findStructuralCopulaIndex(records)
     : -1;
+  const finiteIndex = copulaIndex < 0 ? findVerbIndex(records) : -1;
   const imperativeIndex = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0
     ? findImperativeVerbIndex(records)
     : -1;

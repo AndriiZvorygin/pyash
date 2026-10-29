@@ -453,6 +453,10 @@ function renderRelativeAgent(parts) {
 function renderPhrase(parts, { subject = false, standalone = false, vocativeMarker = false } = {}) {
   const relativeIndex = parts.findIndex((part) => part.pya === "la");
   if (relativeIndex >= 0) {
+    const relativePrefix = parts.slice(0, relativeIndex);
+    const prefix = relativePrefix.length === 1 && relativePrefix[0].pya === "pcah"
+      ? ""
+      : renderPhrase(relativePrefix, { subject, standalone, vocativeMarker });
     const relativeBody = parts.slice(relativeIndex + 1);
     const passiveIndex = relativeBody.findIndex((part) => part.pya === "pyoh");
     const actionIndex = passiveIndex >= 0
@@ -465,7 +469,9 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       const mood = moodPart
         ? ENGLISH_MOOD_GLOSSES.get(moodPart.pya) ?? moodPart.english
         : "";
-      return ["that", mood, "be", inflectVerb(action), agent]
+      return [prefix, ["that", mood, "be", inflectVerb(action), agent]
+        .filter(Boolean)
+        .join(" ")]
         .filter(Boolean)
         .join(" ");
     }
@@ -476,7 +482,7 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       while (verbEnd < parts.length && TENSE_MARKERS.has(parts[verbEnd].pya)) verbEnd += 1;
       const verb = inflectVerb(parts.slice(absoluteVerbStart, verbEnd), { thirdPerson: true });
       const remainder = renderPhrase(parts.slice(verbEnd), { standalone, vocativeMarker });
-      return ["that", verb, remainder].filter(Boolean).join(" ");
+      return [prefix, "that", verb, remainder].filter(Boolean).join(" ");
     }
   }
   parts = collapseVliwCompounds(parts);
@@ -616,10 +622,21 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
   const relativeArguments = argumentPhrases.filter((phrase) => (
     phrase.tokens.some((token) => token.pya === "la")
   ));
+  const relativeArgument = relativeArguments.length === 1 ? relativeArguments[0] : null;
+  const relativeArgumentIndex = relativeArgument
+    ? argumentPhrases.indexOf(relativeArgument)
+    : -1;
   const ordinaryArguments = argumentPhrases.filter((phrase) => (
     !phrase.tokens.some((token) => token.pya === "la")
   ));
-  const objectParts = [...ordinaryArguments, ...relativeArguments].flatMap((phrase) => {
+  const orderedArguments = relativeArgument && relativeArgumentIndex > 0
+    ? [
+      ...argumentPhrases.slice(0, relativeArgumentIndex),
+      relativeArgument,
+      ...argumentPhrases.slice(relativeArgumentIndex + 1)
+    ]
+    : [...ordinaryArguments, ...relativeArguments];
+  const objectParts = orderedArguments.flatMap((phrase) => {
     const content = renderPhrase(
       phrase.tokens.map((token) => decodedPart(token, glosses)),
       { vocativeMarker: true }
