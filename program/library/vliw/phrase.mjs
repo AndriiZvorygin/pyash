@@ -299,7 +299,11 @@ export function phraseParts(decoded) {
     || !PHRASE_CASE_WORDS.has(decoded.tokens[end + 1].pya)
   )));
   for (let index = 0; index < moodIndex; index += 1) {
-    if (decoded.tokens[index].pya !== "la") continue;
+    const connectorRelative = index === 0 && decoded.tokens[index].pya === "pcah";
+    const opensRelativeClause = decoded.tokens[index].pya === "la"
+      || (connectorRelative
+        && decoded.tokens.slice(index + 1, moodIndex).some((token) => token.pya === "ba"));
+    if (!opensRelativeClause) continue;
     let close = -1;
     for (let tokenIndex = moodIndex - 1; tokenIndex > index; tokenIndex -= 1) {
       if (decoded.tokens[tokenIndex].pya === "ba") {
@@ -311,7 +315,7 @@ export function phraseParts(decoded) {
     for (const end of [...ends]) {
       if (end > index && end < close) ends.delete(end);
     }
-    if (close > index) ends.add(close - 1);
+    if (close > index) ends.add(connectorRelative ? close : close - 1);
     relativeCloseIndices.add(close);
   }
   const phrases = [];

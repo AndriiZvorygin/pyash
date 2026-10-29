@@ -240,7 +240,7 @@ test("translation records additive existential structure without inventing a bra
   }]);
   assert.match(record.structuralPreview, /^pcah /u);
   assert.match(record.structuralPreview, / syi7h$/u);
-  assert.match(record.structuralPreview, /^pcah la /u);
+  assert.doesNotMatch(record.structuralPreview, /^pcah la /u);
   assert.match(record.structuralPreview, / tseh ba ryik/u);
   assert.equal((record.candidates ?? []).some((candidate) => candidate.phrase === "brain"), false);
   assert.equal(record.relativeClauses[0].construction, "passive-relative-clause");
@@ -270,12 +270,12 @@ test("accepted existential coverage produces complete Pyash, Pyac, and VLIW outp
   assert.equal(record.sentence.mood, "syi7h");
   assert.equal(
     record.structural,
-    "pcah la nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu na twum dlih lwah syi7h"
+    "pcah nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu na twum dlih lwah syi7h"
   );
   assert.equal(record.structuralPreview, undefined);
   assert.equal(
     record.pyac,
-    "pcah la nros nyitpudlih pyantije txakpyoh tseh ba ryik ryakpuna twumdlihlwahsyi7h"
+    "pcah nros nyitpudlih pyantije txakpyoh tseh ba ryik ryakpuna twumdlihlwahsyi7h"
   );
   assert.equal(
     record.pyash,

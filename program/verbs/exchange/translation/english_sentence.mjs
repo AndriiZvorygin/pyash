@@ -792,7 +792,10 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     : records[existential.connectorIndex];
   const connectorSequence = connector ? recordSequence(connector) : [];
   const existentialSequence = [...existential.entry.pyashSequence];
-  const relativeSequence = content.relativeSequence;
+  const relativeSequence = connector?.construction?.scope === "sentence"
+    && content.relativeSequence[0] === RELATIVE_CLAUSE_OPEN_PYA
+    ? content.relativeSequence.slice(1)
+    : content.relativeSequence;
   const structuralSequence = [
     ...connectorSequence,
     ...relativeSequence,
