@@ -245,6 +245,7 @@ test("English quantifier and article surfaces use existing grammar particles", a
     ["a", "tlih"],
     ["an", "tlih"],
     ["some", "tlih"],
+    ["many", "tl6h"],
     ["several", "po"],
     ["any", "tlah"],
     ["all", "wi"],
@@ -272,6 +273,20 @@ test("several lowers as a paucal number marker on the quantified noun phrase", a
   assert.deepEqual(result.tokens.find((token) => token.surface === "several")?.pyashSequence, ["po"]);
   assert.deepEqual(result.subject.pyashSequence, ["pyan", "ti", "nyit", "po", "na"]);
   assert.equal(result.pyash, "pyan ti nyit po na syi7h");
+});
+
+test("many lowers as a multal number marker on the quantified noun phrase", async () => {
+  const grammar = await loadEnglishGrammarCatalog();
+  const many = grammar.entries.find((entry) => entry.surface === "many");
+  assert.equal(many?.kind, "number-marker");
+  assert.deepEqual(many?.components, ["multal_number_"]);
+  assert.deepEqual(many?.pyashSequence, ["tl6h"]);
+
+  const result = await analyzeDefaultEnglishSentence("There are many sorts of love.");
+  assert.equal(result.status, "resolved");
+  assert.deepEqual(result.tokens.find((token) => token.surface === "many")?.pyashSequence, ["tl6h"]);
+  assert.deepEqual(result.subject.pyashSequence, ["pyan", "ti", "nyit", "tl6h", "na"]);
+  assert.equal(result.pyash, "pyan ti nyit tl6h na syi7h");
 });
 
 test("sentence objects preserve possessives, plural markers, and conjunction links", async () => {

@@ -45,6 +45,7 @@ test("Pyash surface rendering fuses endings and preserves sentence-final moods",
   assert.equal(renderPyashSurface("cyah tlih"), "cyahtlih");
   assert.equal(renderPyashSurface("cyah tlah"), "cyahtlah");
   assert.equal(renderPyashSurface("pyan ti nyit po na syi7h"), "pyanti nyitponasyi7h");
+  assert.equal(renderPyashSurface("pyan ti nyit tl6h na syi7h"), "pyanti nyittl6hnasyi7h");
   assert.equal(renderPyashSurface("twum dlih na"), "twumdlihna");
   assert.equal(renderPyashSurface("mrat tlih ka"), "mrattlihka");
   assert.equal(renderPyashSurface("ya no"), "yano");

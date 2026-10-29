@@ -129,6 +129,13 @@ test("head-final genitive phrases render several sorts of love", () => {
   assert.equal(result.english, "Several sorts of love.");
 });
 
+test("head-final genitive phrases render many sorts of love", () => {
+  const result = decodePyacSentence("pyanti nyittl6hnasyi7h");
+  assert.equal(result.pyash, "there are su many sorts of love.");
+  assert.equal(result.englishPyash, "there are su many sorts of love.");
+  assert.equal(result.english, "Many sorts of love.");
+});
+
 test("Pyac compounds fuse on the surface and decode through the compound lexicon", () => {
   const lowered = lowerSentencePhraseVliw({
     mood: "ya",

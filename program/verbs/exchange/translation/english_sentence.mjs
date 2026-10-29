@@ -631,11 +631,11 @@ function existentialContent(records, existential) {
       const numberRecords = subjectRecords.filter(isHeadPostposedGrammarRecord);
       const modifierRecords = subjectRecords.filter((record) => !isHeadPostposedGrammarRecord(record));
       const headRecords = adjunctRecords.slice(1);
-      const paucal = numberRecords.some(isPaucalNumberRecord);
+      const quantityNumber = numberRecords.some(isQuantityNumberRecord);
       return [
         ...composeHeadInitialPhraseSequence(headRecords),
         ...recordSequence(contentRecords[firstCaseIndex]),
-        ...composeHeadInitialNounSegment(modifierRecords, { suppressPlural: paucal }),
+        ...composeHeadInitialNounSegment(modifierRecords, { suppressPlural: quantityNumber }),
         ...numberRecords.flatMap(recordSequence),
         NOMINATIVE_MARKER
       ];
@@ -1197,6 +1197,12 @@ function isPaucalNumberRecord(record) {
     && record.grammar.components?.includes("paucal_number_");
 }
 
+function isQuantityNumberRecord(record) {
+  return isPaucalNumberRecord(record)
+    || (isHeadPostposedGrammarRecord(record)
+      && record.grammar.components?.includes("multal_number_"));
+}
+
 function isGenitiveCaseRecord(record) {
   return record?.grammar?.kind === "case-marker"
     && record.grammar.components?.includes("genitive_case_");
@@ -1204,10 +1210,10 @@ function isGenitiveCaseRecord(record) {
 
 function composeHeadInitialNounSegment(records, { suppressPlural = false } = {}) {
   const postposed = records.filter(isHeadPostposedGrammarRecord);
-  const hasPaucalNumber = suppressPlural || postposed.some(isPaucalNumberRecord);
+  const hasQuantityNumber = suppressPlural || postposed.some(isQuantityNumberRecord);
   const recordSequenceForPhrase = (record) => {
     const sequence = recordSequence(record);
-    if (hasPaucalNumber && record.grammaticalNumber === "plural" && sequence.at(-1) === "pu") {
+    if (hasQuantityNumber && record.grammaticalNumber === "plural" && sequence.at(-1) === "pu") {
       return sequence.slice(0, -1);
     }
     return sequence;
