@@ -74,6 +74,11 @@ Curated lemma equivalence may reuse one existing Pyash atom across English lexic
 the `mixed` atom `mrat` anchors `mix`, `mixes`, `mixed`, and `mixing`. The `mix` surface keeps
 noun/verb ambiguity in sentence review, while the inflected surfaces carry their accepted tense
 or aspect evidence.
+The same `english_lemmas.pya` catalog is the reverse-rendering table: a Pyash atom's English
+surface gloss (for example `mixed`, `walking`, `containing`, or `triggered`) resolves to its
+English lemma before `ki`, `ra`, or `pfih` conjugation. The surface gloss remains available for
+lexical readings, while the lemma supplies the conjugation stem; the Pyac renderer therefore
+does not maintain a second JavaScript word map.
 The same equivalence pass reuses `emotionally` (`xyek`) for `emotion`, `emotions`, `emotional`,
 and the emotional-sensitivity sense of `feelings`; plural `pu` and adjective `ci` remain explicit
 Pyash grammar suffixes. Broad `feel` and singular `feeling` stay contextual because WordNet

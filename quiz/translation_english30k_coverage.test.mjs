@@ -316,6 +316,12 @@ test("vocab_suggest reports a ranked surface form through its lemma", async () =
 test("durable lemma morphology keeps lexical roots separate from particles", async () => {
   const catalog = await loadEnglishLemmaCatalog();
   const index = buildEnglishLemmaIndex({ atomicEntries: pyashWords, catalogEntries: catalog.entries });
+  assert.equal(index.resolve("mixed")?.lemma, "mix");
+  assert.deepEqual(index.resolve("mixed")?.pyashSequence, ["mrat"]);
+  assert.equal(index.resolve("triggered")?.lemma, "trigger");
+  assert.deepEqual(index.resolve("triggered")?.pyashSequence, ["txak"]);
+  assert.equal(index.resolve("containing")?.lemma, "contain");
+  assert.deepEqual(index.resolve("containing")?.pyashSequence, ["hzan"]);
   assert.deepEqual(index.resolve("walked")?.pyashSequence, ["pfin"]);
   assert.deepEqual(index.resolve("walked")?.morphology?.markerNames, ["past_tense_"]);
   assert.deepEqual(index.resolve("walked")?.morphology?.markerSequence, ["ki"]);
