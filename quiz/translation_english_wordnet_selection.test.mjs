@@ -6,6 +6,10 @@ import {
   buildEnglishWordNetSenseSelectionPrompt,
   parseEnglishWordNetSenseSelectionResponse
 } from "../program/verbs/exchange/translation/english_wordnet_selection.mjs";
+import {
+  buildEnglishWordNetSenseLinkRecords,
+  linkEnglishWordNetSense
+} from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
 import { refineEnglishWordNet } from "../program/verbs/exchange/translation/english_wordnet_refinery.mjs";
 
 function senseResources(rows) {
@@ -183,6 +187,87 @@ test("deterministic WordNet sense bypasses Housekeeper", async () => {
   assert.equal(refined.counts.selected, 1);
   assert.equal(refined.counts.accepted, 1);
   assert.equal(refined.queues.length, 0);
+});
+
+test("an uncovered source does not inherit an arbitrary covered synonym", () => {
+  const wordnetIndex = buildEnglishWordNetIndex({
+    rows: [{
+      id: "s:confused:confused",
+      pos: "s",
+      synset: "confused",
+      senseKey: "confused",
+      lemma: "confused",
+      gloss: "perplexed or mixed up"
+    }, {
+      id: "s:confused:lost",
+      pos: "s",
+      synset: "confused",
+      senseKey: "confused-lost",
+      lemma: "lost",
+      gloss: "perplexed or mixed up"
+    }, {
+      id: "s:lost:lost",
+      pos: "s",
+      synset: "lost",
+      senseKey: "lost",
+      lemma: "lost",
+      gloss: "unable to find the way"
+    }]
+  });
+  const linked = linkEnglishWordNetSense({
+    sense: {
+      pos: "s",
+      synset: "confused",
+      lemmas: ["confused", "lost"],
+      gloss: "perplexed or mixed up"
+    },
+    sourceTerm: "confused",
+    resolveWord: (word) => word === "lost"
+      ? { coverageType: "atomic", canonicalEnglish: "lost", pyashSequence: ["hmut"] }
+      : null,
+    wordnetIndex
+  });
+  assert.equal(linked.status, "review");
+  assert.equal(linked.link, undefined);
+  assert.equal(linked.candidates[0].target, "lost");
+});
+
+test("the batch linker keeps an uncovered source reviewable", () => {
+  const wordnetIndex = buildEnglishWordNetIndex({
+    rows: [{
+      id: "s:confused:confused",
+      pos: "s",
+      synset: "confused",
+      senseKey: "confused",
+      lemma: "confused",
+      gloss: "perplexed or mixed up"
+    }, {
+      id: "s:confused:lost",
+      pos: "s",
+      synset: "confused",
+      senseKey: "confused-lost",
+      lemma: "lost",
+      gloss: "perplexed or mixed up"
+    }, {
+      id: "s:lost:lost",
+      pos: "s",
+      synset: "lost",
+      senseKey: "lost",
+      lemma: "lost",
+      gloss: "unable to find the way"
+    }]
+  });
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex,
+    sourceTerms: ["confused"],
+    resolveWord: (word) => word === "lost"
+      ? { coverageType: "atomic", canonicalEnglish: "lost", pyashSequence: ["hmut"] }
+      : null
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].status, "review");
+  assert.equal(records[0].link, undefined);
+  assert.equal(records[0].candidates[0].target, "lost");
 });
 
 test("ambiguous repeated occurrences receive independent sense decisions", async () => {
