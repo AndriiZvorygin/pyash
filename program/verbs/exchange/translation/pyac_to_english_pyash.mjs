@@ -69,8 +69,8 @@ const ENGLISH_MOOD_GLOSSES = new Map([
   ["tseh", "can"],
   ["syi7h", "there are"]
 ]);
-const ENGLISH_NUMBER_MARKERS = new Set(["the", "a", "an", "some", "any", "all", "every"]);
-const ENGLISH_NUMBER_SURFACES = new Set(["the", "a", "an", "some", "any", "all", "every"]);
+const ENGLISH_NUMBER_MARKERS = new Set(["the", "a", "an", "some", "several", "any", "all", "every"]);
+const ENGLISH_NUMBER_SURFACES = new Set(["the", "a", "an", "some", "several", "any", "all", "every"]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],
   ["te", "in"],
@@ -398,6 +398,35 @@ function isEnglishNumberPart(part) {
   return part.kind === "grammar" && ENGLISH_NUMBER_SURFACES.has(part.english);
 }
 
+function precedingGenitivePhrase(parts, subjectPhrase) {
+  const subjectIndex = parts.phrases.indexOf(subjectPhrase);
+  if (subjectIndex <= 0) return [];
+  const preceding = parts.phrases[subjectIndex - 1];
+  return preceding?.case === "ti" ? [preceding] : [];
+}
+
+function renderHeadFinalGenitivePhrase(subjectParts, modifierPhrases, glosses) {
+  if (!subjectParts?.length || modifierPhrases.length === 0) return "";
+  const numberParts = subjectParts.filter((part) => part.pya === "po");
+  const headParts = subjectParts.filter((part) => part.pya !== "po" && part.kind !== "case");
+  const head = renderPhrase(headParts, { subject: true });
+  if (!head) return "";
+  const modifiers = modifierPhrases.map((phrase) => {
+    const modifierParts = phrase.tokens
+      .map((token) => decodedPart(token, glosses))
+      .filter((part) => part.kind !== "case");
+    if (numberParts.length > 0 && !modifierParts.some((part) => part.pya === "pu")) {
+      modifierParts.push({ pya: "pu", kind: "grammar", english: "plural_number_" });
+    }
+    return renderPhrase(modifierParts);
+  }).filter(Boolean);
+  if (modifiers.length === 0) return "";
+  const numbers = numberParts
+    .map((part) => englishGrammarSurface(part.pya, part.english))
+    .filter(Boolean);
+  return [...numbers, ...modifiers, "of", head].join(" ");
+}
+
 function renderRelativeGenitive(parts) {
   const genitiveIndex = parts.findLastIndex((part) => part.pya === "ti");
   if (genitiveIndex < 0) return renderPhrase(parts);
@@ -547,11 +576,24 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
   const zeroVerb = parts.trailing.length === 0 && Boolean(subjectPhrase);
   const nominalPredicate = parts.trailing.some((part) => ["ye", "sa", "mi", "nyah", "ya"].includes(part.pya))
     && !parts.trailing.some((part) => part.kind === "root");
+  const genitiveSubjectPhrases = !nominalPredicate
+    ? precedingGenitivePhrase(parts, subjectPhrase)
+    : [];
+  const headFinalSubject = genitiveSubjectPhrases.length > 0
+    ? renderHeadFinalGenitivePhrase(
+      subjectPhrase.tokens.map((token) => decodedPart(token, glosses)),
+      genitiveSubjectPhrases,
+      glosses
+    )
+    : "";
   const subject = nominalPredicate
     ? renderPhrase(parts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true })
     : isImperative(sourceMood) && !subjectPhrase
       ? "you"
-      : renderPhrase(subjectPhrase.tokens.map((token) => decodedPart(token, glosses)), { subject: true });
+      : headFinalSubject || renderPhrase(
+        subjectPhrase.tokens.map((token) => decodedPart(token, glosses)),
+        { subject: true }
+      );
   const vocativePhrases = parts.phrases.filter((phrase) => phrase.case === "wu");
   const addressPhrases = vocativePhrases.length > 0
     ? parts.phrases.filter((phrase) => {
@@ -563,7 +605,9 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
   const argumentPhrases = nominalPredicate
     ? parts.phrases
     : parts.phrases.filter((phrase) => (
-      phrase !== subjectPhrase && !addressPhrases.includes(phrase)
+      phrase !== subjectPhrase
+        && !addressPhrases.includes(phrase)
+        && !genitiveSubjectPhrases.includes(phrase)
     ));
   // The encoded phrase is postpositional: its dependent clause precedes the
   // parent phrase. English-Pyash is prepositional/SVO, so render the complete
@@ -614,11 +658,24 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
   const nominalPredicate = decodedParts.trailing.some((part) => ["ye", "sa", "mi", "nyah", "ya"].includes(part.pya))
     && !decodedParts.trailing.some((part) => part.kind === "root");
   const implicitImperative = isImperative(decodedParts.mood) && !subjectPhrase;
+  const genitiveSubjectPhrases = !nominalPredicate
+    ? precedingGenitivePhrase(decodedParts, subjectPhrase)
+    : [];
+  const headFinalSubject = genitiveSubjectPhrases.length > 0
+    ? renderHeadFinalGenitivePhrase(
+      subjectPhrase.tokens.map((token) => decodedPart(token, glosses)),
+      genitiveSubjectPhrases,
+      glosses
+    )
+    : "";
   const subject = nominalPredicate
     ? renderPhrase(decodedParts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true })
     : implicitImperative
       ? ""
-      : renderPhrase(subjectPhrase.tokens.map((token) => decodedPart(token, glosses)), { subject: true });
+      : headFinalSubject || renderPhrase(
+        subjectPhrase.tokens.map((token) => decodedPart(token, glosses)),
+        { subject: true }
+      );
   const vocativePhrases = decodedParts.phrases.filter((phrase) => phrase.case === "wu");
   const addressPhrases = vocativePhrases.length > 0
     ? decodedParts.phrases.filter((phrase) => {
@@ -630,7 +687,9 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
   const objectText = (nominalPredicate
     ? decodedParts.phrases
     : decodedParts.phrases.filter((phrase) => (
-      phrase !== subjectPhrase && !addressPhrases.includes(phrase)
+      phrase !== subjectPhrase
+        && !addressPhrases.includes(phrase)
+        && !genitiveSubjectPhrases.includes(phrase)
     )))
     .map((phrase) => renderPhrase(
       phrase.tokens
@@ -639,15 +698,17 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
     ))
     .filter(Boolean)
     .join(" ");
-  let verb = nominalPredicate
-    ? "is"
-    : inflectVerb(decodedParts.trailing.map((token) => decodedPart(token, glosses))
-    .filter((part) => part.kind !== "mood"));
+  let verb = decodedParts.mood === "syi7h"
+    ? ""
+    : nominalPredicate
+      ? "is"
+      : inflectVerb(decodedParts.trailing.map((token) => decodedPart(token, glosses))
+      .filter((part) => part.kind !== "mood"));
   const passive = decodedParts.trailing.some((part) => part.pya === "pyoh");
   if (passive || verb === "done") verb = `be ${verb}`;
   if (decoded.tokens?.some((token) => token.pya === "no")) verb = `do not ${verb}`;
   if (decoded.tokens?.some((token) => token.pya === "pcah")) verb = `also ${verb}`;
-  let result = `${subject ? `${subject} ` : ""}${verb}${objectText ? ` ${objectText}` : ""}.`;
+  let result = [subject, verb, objectText].filter(Boolean).join(" ") + ".";
   if (decodedParts.mood === "jwih") result = `may ${result}`;
   if (addressPhrases.length > 0) {
     const address = addressPhrases

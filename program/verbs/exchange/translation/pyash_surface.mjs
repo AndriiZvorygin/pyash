@@ -33,7 +33,7 @@ const FUSED_MOODS = new Set([
 // structural sequence available for decoding while rendering noun phrases as
 // one spoken word.
 const FUSED_NOUN_GRAMMAR_HEADS = new Set(["cyah", "clah", "ya"]);
-const FUSED_NOUN_GRAMMAR_SUFFIXES = new Set(["dlih", "tlih", "tlah", "wi", "no"]);
+const FUSED_NOUN_GRAMMAR_SUFFIXES = new Set(["dlih", "tlih", "tlah", "wi", "no", "po"]);
 
 function tokens(value) {
   if (typeof value !== "string") return [];
