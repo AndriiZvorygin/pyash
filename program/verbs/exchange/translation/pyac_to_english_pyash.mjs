@@ -69,8 +69,8 @@ const ENGLISH_MOOD_GLOSSES = new Map([
   ["tseh", "can"],
   ["syi7h", "there are"]
 ]);
-const ENGLISH_NUMBER_MARKERS = new Set(["the", "a", "an", "some", "several", "any", "all", "every"]);
-const ENGLISH_NUMBER_SURFACES = new Set(["the", "a", "an", "some", "several", "any", "all", "every"]);
+const ENGLISH_NUMBER_MARKERS = new Set(["the", "a", "an", "some", "many", "several", "any", "all", "every"]);
+const ENGLISH_NUMBER_SURFACES = new Set(["the", "a", "an", "some", "many", "several", "any", "all", "every"]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],
   ["te", "in"],
@@ -395,7 +395,8 @@ function isLexicalPart(part) {
 }
 
 function isEnglishNumberPart(part) {
-  return part.kind === "grammar" && ENGLISH_NUMBER_SURFACES.has(part.english);
+  return part.kind === "grammar"
+    && ENGLISH_NUMBER_SURFACES.has(englishGrammarSurface(part.pya, part.english));
 }
 
 function precedingGenitivePhrase(parts, subjectPhrase) {
@@ -407,8 +408,8 @@ function precedingGenitivePhrase(parts, subjectPhrase) {
 
 function renderHeadFinalGenitivePhrase(subjectParts, modifierPhrases, glosses) {
   if (!subjectParts?.length || modifierPhrases.length === 0) return "";
-  const numberParts = subjectParts.filter((part) => part.pya === "po");
-  const headParts = subjectParts.filter((part) => part.pya !== "po" && part.kind !== "case");
+  const numberParts = subjectParts.filter(isEnglishNumberPart);
+  const headParts = subjectParts.filter((part) => !isEnglishNumberPart(part) && part.kind !== "case");
   if (numberParts.length > 0 && !headParts.some((part) => part.pya === "pu")) {
     headParts.push({ pya: "pu", kind: "grammar", english: "plural_number_" });
   }
