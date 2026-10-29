@@ -163,6 +163,36 @@ test("English zero-copula analysis records subject and object phrase evidence", 
   ]);
 });
 
+test("zero-copula clauses keep a nominal complement before a relative action", async () => {
+  const result = await analyzeDefaultEnglishSentence(
+    "Love is a mix of feelings and actions that shows a deep liking for someone or something.",
+    {
+      coverageOverrides: new Map([
+        ["shows", {
+          coverageType: "atomic",
+          pyashSequence: ["dren"],
+          wordnet: { partsOfSpeech: ["v"] },
+          lemma: "demonstrate"
+        }],
+        ["liking", {
+          coverageType: "atomic",
+          pyashSequence: ["lyas"],
+          wordnet: { partsOfSpeech: ["n"] },
+          lemma: "interest"
+        }]
+      ])
+    }
+  );
+  assert.equal(result.status, "resolved");
+  assert.equal(result.construction, "zero-copula");
+  assert.equal(result.sentence.be, undefined);
+  assert.equal(result.sentence.su.name, "pyan na");
+  assert.equal(
+    result.sentence.ob.name,
+    "mrat tlih ka xyek pu wa twot la dren kcin lyas tlih ti cyah tlih ba ya tlih pwah"
+  );
+});
+
 test("English passive participles remain separate from zero-copula actions", async () => {
   const result = await analyzeDefaultEnglishSentence("Love is expressed.");
   assert.equal(result.construction, undefined);

@@ -84,6 +84,14 @@ test("relative-clause marker renders its English surface instead of its structur
   assert.doesNotMatch(result.englishPyash, /dependent clause/u);
 });
 
+test("relative clauses retain the parent phrase before their dependent action", () => {
+  const result = decodePyacSentence(
+    "pyanna mrattlihka xyekpu wa twot la drenra kcin lyastlihti cyahtlih ba yatlihpwahya"
+  );
+  assert.match(result.englishPyash, /ob a mixed emotionallys and activity that demonstrates/u);
+  assert.match(result.englishPyash, /someone for something/u);
+});
+
 test("passive relative clauses render their agent before the action", () => {
   const lowered = lowerPhraseVliw({
     tokens: "pcah la nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu na twum dlih lwah syi7h".split(/\\s+/u)
