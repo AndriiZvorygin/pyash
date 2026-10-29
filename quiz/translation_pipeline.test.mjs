@@ -277,7 +277,7 @@ test("accepted existential coverage produces complete Pyash, Pyac, and VLIW outp
   );
   assert.equal(
     record.pyash,
-    "there are su chemical reactions within the brain that contrast by of the sorts love triggered passive voice can."
+    "there are su chemical reactions within the brain that can be triggered by the contrasting sorts of love."
   );
   assert.match(record.englishPyash, /there are/u);
   assert.equal(record.vliw.format, "pyac-vliw-phrase-v1");

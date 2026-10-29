@@ -8,6 +8,7 @@ import {
 } from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
 import {
   decodePhraseVliw,
+  lowerPhraseVliw,
   lowerSentencePhraseVliw,
   renderVliwPyac
 } from "../program/library/vliw/phrase.mjs";
@@ -81,6 +82,17 @@ test("relative-clause marker renders its English surface instead of its structur
   const result = renderEnglishFromVliw(lowered.vectors);
   assert.match(result.englishPyash, /that exhibits/u);
   assert.doesNotMatch(result.englishPyash, /dependent clause/u);
+});
+
+test("passive relative clauses render their agent before the action", () => {
+  const lowered = lowerPhraseVliw({
+    tokens: "pcah la nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu na twum dlih lwah syi7h".split(/\\s+/u)
+  });
+  const result = renderEnglishFromVliw(lowered.vectors);
+  assert.equal(
+    result.englishPyash,
+    "there are su chemical reactions within the brain that can be triggered by the contrasting sorts of love."
+  );
 });
 
 test("benefactive renders for across a mixed noun and pronoun phrase", () => {
