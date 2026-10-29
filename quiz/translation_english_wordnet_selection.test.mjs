@@ -97,6 +97,28 @@ test("WordNet sense selection prompt contains one word, one sentence, and only i
   assert.doesNotMatch(prompt, /Pyash inventory/u);
 });
 
+test("WordNet selection prompt keeps the definition and removes gloss examples", () => {
+  const prompt = buildEnglishWordNetSenseSelectionPrompt({
+    surface: "florp",
+    sentence: "They florp the object.",
+    senses: [{
+      pos: "v",
+      synset: "one",
+      lemma: "florp",
+      gloss: "move something quickly; The runner florped past the gate"
+    }, {
+      pos: "v",
+      synset: "two",
+      lemma: "florp",
+      gloss: "hold something firmly; She florped the handle"
+    }]
+  });
+  assert.match(prompt, /meaning: move something quickly/u);
+  assert.match(prompt, /meaning: hold something firmly/u);
+  assert.doesNotMatch(prompt, /The runner florped past the gate/u);
+  assert.doesNotMatch(prompt, /She florped the handle/u);
+});
+
 test("WordNet selector prompt keeps a large sense set bounded and numbered", () => {
   const senses = Array.from({ length: 17 }, (_, index) => ({
     pos: "v",

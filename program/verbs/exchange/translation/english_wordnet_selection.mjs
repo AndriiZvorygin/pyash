@@ -73,11 +73,12 @@ function partOfSpeechName(value) {
 
 function senseOption(sense, number) {
   const row = senseRow(sense);
+  const definition = row.gloss.split(/\s*;\s*/u, 1)[0].trim();
   return [
     `OPTION ${number}`,
     `part of speech: ${partOfSpeechName(row.pos)}`,
     `lemmas: ${row.lemmas.join(", ") || "(none)"}`,
-    `meaning: ${row.gloss || "(no gloss supplied)"}`
+    `meaning: ${definition || "(no gloss supplied)"}`
   ].join("\n");
 }
 
