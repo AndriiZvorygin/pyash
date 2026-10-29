@@ -28,6 +28,7 @@ test("transcript normalization falls back to source chunks when LLM fetch fails"
     env: {
       ...process.env,
       OLLAMA_HOST: "http://127.0.0.1:9",
+      PYA_GPU_HOUSEKEEPER_URL: "http://127.0.0.1:9",
       PYA_NORMALIZE_FETCH_ATTEMPTS: "1",
       PYA_NORMALIZE_FETCH_TIMEOUT_MS: "6000",
       PYA_NORMALIZE_REQUIRE_LLM: "0",
@@ -63,6 +64,7 @@ test("oversized transcript paragraphs are chunked and coverage is recorded", () 
     env: {
       ...process.env,
       OLLAMA_HOST: "http://127.0.0.1:9",
+      PYA_GPU_HOUSEKEEPER_URL: "http://127.0.0.1:9",
       PYA_NORMALIZE_FETCH_ATTEMPTS: "1",
       PYA_NORMALIZE_FETCH_TIMEOUT_MS: "6000",
       PYA_NORMALIZE_REQUIRE_LLM: "0",
@@ -101,6 +103,7 @@ test("partial normalization cannot leave a checkpoint output", () => {
     env: {
       ...process.env,
       OLLAMA_HOST: "http://127.0.0.1:9",
+      PYA_GPU_HOUSEKEEPER_URL: "http://127.0.0.1:9",
       PYA_NORMALIZE_FETCH_ATTEMPTS: "1",
       PYA_NORMALIZE_FETCH_TIMEOUT_MS: "6000",
       PYA_NORMALIZE_REQUIRE_LLM: "0",

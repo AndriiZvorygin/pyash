@@ -329,6 +329,13 @@ function buildStringReplacementMap(profile, normalizationTerms) {
   return map;
 }
 
+function applyDeterministicNormalization(text, profile, normalizationTerms) {
+  const canon = typeof profile?.canonicalCleanup === "function"
+    ? profile.canonicalCleanup(text)
+    : String(text || "");
+  return applyNormalizationTerms(canon, normalizationTerms);
+}
+
 function splitOversizedParagraph(paragraph, maxChars) {
   const chunks = [];
   let rest = String(paragraph || "").trim();
@@ -540,6 +547,7 @@ export async function runNormalizeShared(writer, argv = []) {
   for (let i = 0; i < runChunks.length; i += 1) {
     process.stdout.write(`[normalize-transcript] atindex num ${i + 1} toindex num ${runChunks.length}\n`);
     let cleaned = "";
+    const sourceChunk = applyDeterministicNormalization(runChunks[i], profile, normalizationTerms);
     if (!requireLlmNormalize && maxFailedChunks >= 0 && fallbackChunks.length >= maxFailedChunks) {
       const message = `normalize circuit open after ${fallbackChunks.length} failed chunk(s)`;
       fallbackChunks.push({ index: i + 1, error: message, skipped_llm: true });
@@ -548,7 +556,7 @@ export async function runNormalizeShared(writer, argv = []) {
     } else {
       try {
         cleaned = await askNormalize({
-          chunk: runChunks[i],
+          chunk: sourceChunk,
           rosterText,
           termMapText,
           index: i + 1,
@@ -564,9 +572,9 @@ export async function runNormalizeShared(writer, argv = []) {
         cleaned = runChunks[i];
       }
     }
-    const canon = profile.canonicalCleanup(cleaned || runChunks[i]);
-    const termsNormalized = applyNormalizationTerms(canon, normalizationTerms);
-    const finalChunk = normalizeCanadianEnglish(termsNormalized);
+    const finalChunk = normalizeCanadianEnglish(
+      applyDeterministicNormalization(cleaned || runChunks[i], profile, normalizationTerms),
+    );
     out.push(finalChunk);
     const sourceWords = transcriptWordCount(runChunks[i]);
     const outputWords = transcriptWordCount(finalChunk);
