@@ -345,7 +345,11 @@ function attachmentCandidate(record) {
     anchorCandidates: (record.anchorCandidates ?? []).map((candidate) => ({
       target: text(candidate.target),
       pyashSequence: [...(candidate.pyashSequence ?? [])],
-      evidence: text(candidate.evidence)
+      evidence: text(candidate.evidence),
+      ...(text(candidate.kind) ? { kind: text(candidate.kind) } : {}),
+      ...(Array.isArray(candidate.componentTargets) && candidate.componentTargets.length > 0
+        ? { componentTargets: candidate.componentTargets.map(text).filter(Boolean) }
+        : {})
     })),
     evidence: [
       `selected WordNet sense ${record.selectedSenseId}`,
@@ -405,6 +409,14 @@ export function applyEnglishWordNetSenseAttachmentLinks(translation) {
     if (!candidate || text(record.selectedSenseId) !== text(candidate.senseId)) return record;
     const target = text(candidate.targetEnglish).toLowerCase();
     const pyashSequence = candidate.pyashSequence.filter((word) => typeof word === "string" && word.trim());
+    const selectedAnchor = (record.anchorCandidates ?? []).find((anchor) => (
+      text(anchor?.target).toLowerCase() === target
+        && Array.isArray(anchor?.pyashSequence)
+        && anchor.pyashSequence.join(" ") === pyashSequence.join(" ")
+    ));
+    const evidence = selectedAnchor?.kind === "compound-composition"
+      ? `selected sense ${record.selectedSenseId} composed multiword anchor ${target} from ${(selectedAnchor.componentTargets ?? []).join(" ")}`
+      : `selected sense ${record.selectedSenseId} linked to existing Pyash anchor ${target}`;
     return {
       ...record,
       status: "accepted-llm",
@@ -413,7 +425,7 @@ export function applyEnglishWordNetSenseAttachmentLinks(translation) {
         pyashSequence: [...pyashSequence],
         targetPartOfSpeech: text(record.pos),
         certainty: "contextual",
-        evidence: `selected sense ${record.selectedSenseId} linked to existing Pyash anchor ${target}`
+        evidence
       },
       verificationRationale: text(candidate.verificationRationale)
         || `selected sense ${record.selectedSenseId} linked to ${target}`

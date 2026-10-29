@@ -411,6 +411,56 @@ test("selected WordNet senses become bounded anchor candidates", () => {
   assert.deepEqual(translation.vocabularyCandidates[0].anchorCandidates[0].pyashSequence, ["nrec"]);
 });
 
+test("WordNet attachment preserves composed anchor evidence", () => {
+  const translation = appendEnglishWordNetAttachmentCandidates({
+    language: "english",
+    vocabularyCandidates: []
+  }, [{
+    id: "english-wordnet-sense-lust",
+    status: "review",
+    surface: "lust",
+    sourceRecordId: "record-lust",
+    selectedSenseId: "n:07504854-n",
+    selectedSense: {
+      pos: "n",
+      synset: "07504854-n",
+      lemmas: ["lust"],
+      gloss: "a strong sexual desire"
+    },
+    anchorCandidates: [{
+      target: "sexual desire",
+      pyashSequence: ["hjon", "twin"],
+      kind: "compound-composition",
+      componentTargets: ["sexual", "desire"],
+      evidence: "composed from covered components sexual desire"
+    }],
+    sentence: "Lust is a strong sexual desire."
+  }]);
+  assert.equal(translation.vocabularyCandidates[0].anchorCandidates[0].kind, "compound-composition");
+  assert.deepEqual(translation.vocabularyCandidates[0].anchorCandidates[0].componentTargets, ["sexual", "desire"]);
+  const linked = applyEnglishWordNetSenseAttachmentLinks({
+    wordnet: {
+      decisions: [],
+      records: [{
+        id: "english-wordnet-sense-lust",
+        status: "review",
+        pos: "n",
+        synset: "07504854-n",
+        selectedSenseId: "n:07504854-n",
+        anchorCandidates: translation.vocabularyCandidates[0].anchorCandidates
+      }]
+    },
+    vocabularyCandidates: [{
+      ...translation.vocabularyCandidates[0],
+      status: "accepted-llm",
+      targetEnglish: "sexual desire",
+      pyashSequence: ["hjon", "twin"],
+      verificationRationale: "selected sense retains the complete meaning"
+    }]
+  });
+  assert.match(linked.wordnet.records[0].link.evidence, /composed multiword anchor sexual desire/u);
+});
+
 test("WordNet attachment ids remain unique for repeated senses", () => {
   const translation = appendEnglishWordNetAttachmentCandidates({
     language: "english",
