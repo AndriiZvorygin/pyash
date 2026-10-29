@@ -394,6 +394,11 @@ function isLexicalPart(part) {
   return part.kind === "root" || isPronoun(part);
 }
 
+function isRelativeClauseParts(parts) {
+  return parts.some((part) => part.pya === "la")
+    || (parts[0]?.pya === "pcah" && parts.some((part) => part.pya === "ba"));
+}
+
 function isEnglishNumberPart(part) {
   return part.kind === "grammar"
     && ENGLISH_NUMBER_SURFACES.has(englishGrammarSurface(part.pya, part.english));
@@ -471,13 +476,19 @@ function renderRelativeAgent(parts) {
 }
 
 function renderPhrase(parts, { subject = false, standalone = false, vocativeMarker = false } = {}) {
-  const relativeIndex = parts.findIndex((part) => part.pya === "la");
+  const explicitRelativeIndex = parts.findIndex((part) => part.pya === "la");
+  const connectorRelative = explicitRelativeIndex < 0
+    && parts[0]?.pya === "pcah"
+    && parts.some((part) => part.pya === "ba");
+  const relativeIndex = explicitRelativeIndex >= 0 ? explicitRelativeIndex : connectorRelative ? 0 : -1;
   if (relativeIndex >= 0) {
-    const relativePrefix = parts.slice(0, relativeIndex);
+    const relativePrefix = connectorRelative ? [] : parts.slice(0, relativeIndex);
     const prefix = relativePrefix.length === 1 && relativePrefix[0].pya === "pcah"
       ? ""
       : renderPhrase(relativePrefix, { subject, standalone, vocativeMarker });
-    const relativeBody = parts.slice(relativeIndex + 1);
+    const relativeBody = connectorRelative
+      ? parts.slice(1, parts.findIndex((part) => part.pya === "ba"))
+      : parts.slice(relativeIndex + 1);
     const passiveIndex = relativeBody.findIndex((part) => part.pya === "pyoh");
     const actionIndex = passiveIndex >= 0
       ? relativeBody.slice(0, passiveIndex).findLastIndex(isLexicalPart)
@@ -647,7 +658,7 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
   // parent phrase. English-Pyash is prepositional/SVO, so render the complete
   // parent arguments first and keep the dependent clause attached afterward.
   const relativeArguments = argumentPhrases.filter((phrase) => (
-    phrase.tokens.some((token) => token.pya === "la")
+    isRelativeClauseParts(phrase.tokens)
   ));
   const relativeArgument = relativeArguments.length === 1 ? relativeArguments[0] : null;
   const relativeArgumentIndex = relativeArgument
@@ -659,7 +670,7 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
       .filter(Boolean)
   );
   const ordinaryArguments = argumentPhrases.filter((phrase) => (
-    !phrase.tokens.some((token) => token.pya === "la")
+    !isRelativeClauseParts(phrase.tokens)
       && !genitiveObjectArguments.has(phrase)
   ));
   const orderedArguments = relativeArgumentIndex > 0
