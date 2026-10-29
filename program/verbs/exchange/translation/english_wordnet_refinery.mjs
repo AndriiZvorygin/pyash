@@ -129,6 +129,49 @@ function persistedToken(token) {
   };
 }
 
+function decisionContext(tokens, index) {
+  const rows = Array.isArray(tokens) ? tokens : [];
+  const token = rows[index] ?? {};
+  const previous = rows[index - 1] ?? null;
+  const next = rows[index + 1] ?? null;
+  const surface = normalized(token.surface);
+  const nextSurface = normalized(next?.surface);
+  const previousSurface = normalized(previous?.surface);
+  const partsOfSpeech = new Set(token.wordnet?.partsOfSpeech ?? []);
+  const nextPartsOfSpeech = new Set(next?.wordnet?.partsOfSpeech ?? []);
+  let grammaticalRole = "lexical word in sentence";
+  let headWord = nextSurface || previousSurface;
+  if (token.grammar?.kind === "modal-mood") {
+    grammaticalRole = "modal mood marking the following action";
+  } else if (token.grammar?.kind === "case-marker") {
+    grammaticalRole = "case marker linking the following phrase";
+  } else if ((partsOfSpeech.has("r") && nextSurface)
+    || (partsOfSpeech.has("r") && nextPartsOfSpeech.size > 0)) {
+    grammaticalRole = "adverb modifying the following word or phrase";
+  } else if (nextPartsOfSpeech.has("n") && (partsOfSpeech.has("a") || partsOfSpeech.has("s"))) {
+    grammaticalRole = "adjective modifying the following noun";
+  } else if (previous?.grammar?.kind === "case-marker" && partsOfSpeech.has("n")) {
+    grammaticalRole = "noun inside a case-marked phrase";
+    headWord = surface;
+  } else if (partsOfSpeech.has("v")) {
+    grammaticalRole = "verb or action word";
+  } else if (partsOfSpeech.has("n")) {
+    grammaticalRole = "noun or noun phrase head";
+  }
+  const start = Math.max(0, index - 3);
+  const end = Math.min(rows.length, index + 4);
+  const nearbyWords = rows
+    .slice(start, end)
+    .map((row) => normalized(row?.surface))
+    .filter(Boolean);
+  return {
+    localPhrase: nearbyWords.join(" "),
+    grammaticalRole,
+    headWord,
+    nearbyWords
+  };
+}
+
 function occurrenceDecisions(result, resources, compounds, terms) {
   const decisions = [];
   const termSet = new Set(terms);
@@ -151,6 +194,10 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         surface,
         wordnet: { senses: senseRows }
       };
+      const context = decisionContext(
+        persistedTokens.length > 0 ? persistedTokens : [token],
+        Math.min(tokenIndex, Math.max(0, persistedTokens.length - 1))
+      );
       const selection = selectEnglishWordNetSenses(
         token,
         persistedTokens.length > 0 ? persistedTokens : [token],
@@ -178,6 +225,7 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         surface,
         sentence,
         senses,
+        ...context,
         selectionEvidence: selection.evidence,
         stateSource: "translation-token-state"
       });
@@ -222,6 +270,7 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         surface,
         sentence,
         senses: selection.senses,
+        ...decisionContext(analysis.tokens, legacyTokenIndex),
         selectionEvidence: selection.evidence,
         stateSource: "legacy-surface-reanalysis"
       });
@@ -270,6 +319,7 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         surface,
         sentence,
         senses: selection.senses,
+        ...decisionContext(analysis.tokens, tokenIndex),
         selectionEvidence: selection.evidence
       });
     }
@@ -283,6 +333,10 @@ async function queueSelectionWithoutAwait({ decision, sourceHash, submit, config
     surface: decision.surface,
     sentence: decision.sentence,
     senses: decision.senses,
+    localPhrase: decision.localPhrase,
+    grammaticalRole: decision.grammaticalRole,
+    headWord: decision.headWord,
+    nearbyWords: decision.nearbyWords,
     maxChars: config.promptMaxChars,
     maxTokens: config.promptMaxTokens
   });

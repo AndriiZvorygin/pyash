@@ -72,6 +72,7 @@ try {
 const ENGLISH_MOOD_GLOSSES = new Map([
   ["pcih", "do"],
   ["jwih", "may"],
+  ["mwih", "may"],
   ["li", "ya"],
   ["tseh", "can"],
   ["syi7h", "there are"]
@@ -838,7 +839,7 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
   if (decoded.tokens?.some((token) => token.pya === "no")) verb = `do not ${verb}`;
   if (decoded.tokens?.some((token) => token.pya === "pcah")) verb = `also ${verb}`;
   let result = [subject, verb, objectText].filter(Boolean).join(" ") + ".";
-  if (decodedParts.mood === "jwih") result = `may ${result}`;
+  if (["jwih", "mwih"].includes(decodedParts.mood)) result = `may ${result}`;
   if (addressPhrases.length > 0) {
     const address = addressPhrases
       .map((phrase) => renderPhrase(phrase.tokens.map((token) => decodedPart(token, glosses))))
