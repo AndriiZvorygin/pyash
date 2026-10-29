@@ -264,6 +264,22 @@ function directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree) {
   return [...candidates.values()];
 }
 
+function selectDirectLink(record, sourceTerms = []) {
+  const edgeCandidates = record.candidates.filter((candidate) => candidate.edgeEligible);
+  const sourceVariants = new Set((Array.isArray(sourceTerms) ? sourceTerms : [sourceTerms])
+    .flatMap(termVariants));
+  const exactCandidates = record.candidates.filter((candidate) => (
+    candidate.sourceLemmas.some((lemma) => sourceVariants.has(normalized(lemma)))
+  ));
+  if (edgeCandidates.length === 1) {
+    return { status: "accepted-edge", link: edgeCandidates[0] };
+  }
+  if (exactCandidates.length === 1) {
+    return { status: "accepted-deterministic", link: exactCandidates[0] };
+  }
+  return { status: "review" };
+}
+
 export function linkEnglishWordNetSense({
   sense,
   sourceTerm = "",
@@ -287,13 +303,7 @@ export function linkEnglishWordNetSense({
     return { ...record, status: "accepted-existing", link: existing };
   }
   record.candidates = directCandidates(record, resolveWord, wordnetIndex, edgeDegreeLimit(edgeMaxDegree));
-  const edgeCandidates = record.candidates.filter((candidate) => candidate.edgeEligible);
-  const linked = edgeCandidates.length === 1
-    ? { status: "accepted-edge", link: edgeCandidates[0] }
-    : record.candidates.length === 1
-      ? { status: "accepted-deterministic", link: record.candidates[0] }
-      : { status: "review" };
-  return { ...record, ...linked };
+  return { ...record, ...selectDirectLink(record, [sourceTerm]) };
 }
 
 export function buildEnglishWordNetSenseAnchorCandidates({
@@ -403,22 +413,13 @@ export function buildEnglishWordNetSenseLinkRecords({
       record.link = existing;
     } else {
       record.candidates = directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree);
-      const edgeCandidates = record.candidates.filter((candidate) => candidate.edgeEligible);
       record.edgeNode = {
         degree: edgeNodeDegree(wordnetIndex, key),
         singleSenseLemmas: record.candidates
           .filter((candidate) => candidate.edgeEligible)
           .flatMap((candidate) => candidate.sourceLemmas)
       };
-      if (edgeCandidates.length === 1) {
-        record.status = "accepted-edge";
-        record.link = edgeCandidates[0];
-      } else if (record.candidates.length === 1) {
-        record.status = "accepted-deterministic";
-        record.link = record.candidates[0];
-      } else {
-        record.status = "review";
-      }
+      Object.assign(record, selectDirectLink(record, record.sourceTerms));
     }
     records.push(record);
     if (records.length >= max) break;
