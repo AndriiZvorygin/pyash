@@ -194,3 +194,11 @@ test("Pyac decoder takes lexical English from the dictionary", () => {
   assert.equal(result.englishPyash, "do su you be rescue to us from evil.");
   assert.equal(result.english, "But rescue to us from evil.");
 });
+
+test("Pyac decoder uses Pyash surface atoms as glosses and their lemma table for inflection", () => {
+  assert.equal(decodePyacSentence("mina pfinya").englishPyash, "ya su I be walk.");
+  assert.equal(decodePyacSentence("mina pfinkiya").englishPyash, "ya su I be walked.");
+  assert.equal(decodePyacSentence("mina mratkiya").englishPyash, "ya su I be mixed.");
+  assert.equal(decodePyacSentence("mina mratpfihya").englishPyash, "ya su I be mixing.");
+  assert.equal(decodePyacSentence("mina txakpfihya").englishPyash, "ya su I be triggering.");
+});

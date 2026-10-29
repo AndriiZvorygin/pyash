@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import pyashWords from "../../../library/pyashWords.json" with { type: "json" };
 import { sentenceToPyash } from "../../../beautiful.mjs";
 import { parseEnglishGrammarCatalog } from "./english_grammar.mjs";
+import { buildEnglishLemmaIndex, parseEnglishLemmaCatalog } from "./english_lemmas.mjs";
 import { PYASH_SURFACE_FUSED_MOODS } from "./pyash_surface.mjs";
 import {
   decodePhraseVliw,
@@ -41,6 +42,12 @@ const MOOD_WORDS = new Set(PYASH_SURFACE_FUSED_MOODS);
 const ENGLISH_GRAMMAR_SURFACE_OVERRIDES = new Map([
   ["la", "that"]
 ]);
+const PYASH_LEMMA_INDEX = buildEnglishLemmaIndex({
+  atomicEntries: pyashWords,
+  catalogEntries: parseEnglishLemmaCatalog(
+    readFileSync(new URL("./english_lemmas.pya", import.meta.url), "utf8")
+  ).entries
+});
 const TENSE_MARKERS = new Set(["ki", "ra", "pfih"]);
 const ENGLISH_GRAMMAR_SURFACES = new Map();
 const ENGLISH_GRAMMAR_SEQUENCE_SURFACES = [];
@@ -360,17 +367,35 @@ function rootEnglish(part) {
   return word === "hodiernal_tense" ? "today" : word;
 }
 
+function lemmaEntry(surface) {
+  return PYASH_LEMMA_INDEX.resolve(surface);
+}
+
+function regularPast(lemma) {
+  if (lemma.endsWith("e")) return `${lemma}d`;
+  if (/[^aeiou]y$/u.test(lemma)) return `${lemma.slice(0, -1)}ied`;
+  return `${lemma}ed`;
+}
+
+function regularProgressive(lemma) {
+  if (lemma.endsWith("ie")) return `${lemma.slice(0, -2)}ying`;
+  if (lemma.endsWith("e") && !["be", "see"].includes(lemma)) return `${lemma.slice(0, -1)}ing`;
+  return `${lemma}ing`;
+}
+
+function regularThirdPerson(lemma) {
+  if (/[sxz]$/u.test(lemma) || /(?:ch|sh|o)$/u.test(lemma)) return `${lemma}es`;
+  if (/[^aeiou]y$/u.test(lemma)) return `${lemma.slice(0, -1)}ies`;
+  return `${lemma}s`;
+}
+
 function inflectVerb(parts, { thirdPerson = false } = {}) {
   parts = collapseVliwCompounds(parts);
   const root = parts.find((part) => part.kind === "root");
   if (!root) return "something";
-  const dictionaryForm = rootEnglish(root);
-  const base = dictionaryForm.length > 5 && dictionaryForm.endsWith("ing")
-    ? dictionaryForm
-      .replace(/iving$/u, "ive")
-      .replace(/uing$/u, "ue")
-      .replace(/ing$/u, "")
-    : dictionaryForm;
+  const surface = rootEnglish(root);
+  const entry = lemmaEntry(surface);
+  const lemma = entry?.lemma ?? surface;
   const markers = new Set(parts.filter((part) => part.kind === "grammar").map((part) => part.pya));
   if (markers.has("ki")) {
     return new Map([
@@ -379,15 +404,16 @@ function inflectVerb(parts, { thirdPerson = false } = {}) {
       ["bring", "brought"],
       ["come", "came"],
       ["forgive", "forgave"]
-    ]).get(base) ?? `${base}ed`;
+    ]).get(lemma) ?? regularPast(lemma);
   }
-  if (markers.has("pfih")) return `${base}ing`;
+  if (markers.has("pfih")) return regularProgressive(lemma);
   if (markers.has("ra") && thirdPerson) {
-    if (/[sxz]$/u.test(base) || /(?:ch|sh|o)$/u.test(base)) return `${base}es`;
-    if (/[^aeiou]y$/u.test(base)) return `${base.slice(0, -1)}ies`;
-    return `${base}s`;
+    return regularThirdPerson(lemma);
   }
-  return base;
+  if (markers.has("ra")) return lemma;
+  return entry?.kind === "irregular" || entry?.morphology?.kind === "finite-past"
+    ? surface
+    : lemma;
 }
 
 function isLexicalPart(part) {
