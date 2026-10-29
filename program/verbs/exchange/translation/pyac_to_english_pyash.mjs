@@ -69,7 +69,7 @@ const ENGLISH_MOOD_GLOSSES = new Map([
   ["tseh", "can"],
   ["syi7h", "there are"]
 ]);
-const ENGLISH_NUMBER_MARKERS = new Set(["the"]);
+const ENGLISH_NUMBER_MARKERS = new Set(["the", "a", "an", "some", "any", "all", "every"]);
 const ENGLISH_NUMBER_SURFACES = new Set(["the", "a", "an", "some", "any", "all", "every"]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],
