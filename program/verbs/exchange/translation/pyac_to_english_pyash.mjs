@@ -70,6 +70,7 @@ const ENGLISH_MOOD_GLOSSES = new Map([
   ["syi7h", "there are"]
 ]);
 const ENGLISH_NUMBER_MARKERS = new Set(["the"]);
+const ENGLISH_NUMBER_SURFACES = new Set(["the", "a", "an", "some", "any", "all", "every"]);
 const CASE_PREPOSITIONS = new Map([
   ["ti", "of"],
   ["te", "in"],
@@ -389,10 +390,56 @@ function inflectVerb(parts, { thirdPerson = false } = {}) {
   return base;
 }
 
+function isLexicalPart(part) {
+  return part.kind === "root" || isPronoun(part);
+}
+
+function isEnglishNumberPart(part) {
+  return part.kind === "grammar" && ENGLISH_NUMBER_SURFACES.has(part.english);
+}
+
+function renderRelativeGenitive(parts) {
+  const genitiveIndex = parts.findLastIndex((part) => part.pya === "ti");
+  if (genitiveIndex < 0) return renderPhrase(parts);
+  const nominal = parts.slice(0, genitiveIndex);
+  const numberIndex = nominal.findLastIndex(isEnglishNumberPart);
+  const splitIndex = numberIndex >= 0
+    ? nominal.findIndex((part, index) => index > numberIndex && isLexicalPart(part))
+    : nominal.findLastIndex(isLexicalPart);
+  if (splitIndex <= 0 || splitIndex >= nominal.length) return renderPhrase(nominal);
+  const head = renderPhrase(nominal.slice(0, splitIndex));
+  const dependent = renderPhrase(nominal.slice(splitIndex));
+  return [head, "of", dependent].filter(Boolean).join(" ");
+}
+
+function renderRelativeAgent(parts) {
+  const agentiveIndex = parts.findLastIndex((part) => part.pya === "je");
+  const nominal = agentiveIndex >= 0 ? parts.slice(0, agentiveIndex) : parts;
+  const rendered = renderRelativeGenitive(nominal);
+  if (!rendered) return "";
+  return agentiveIndex >= 0 ? `by ${rendered}` : rendered;
+}
+
 function renderPhrase(parts, { subject = false, standalone = false, vocativeMarker = false } = {}) {
   const relativeIndex = parts.findIndex((part) => part.pya === "la");
   if (relativeIndex >= 0) {
-    const verbStart = parts.slice(relativeIndex + 1).findIndex((part) => part.kind === "root");
+    const relativeBody = parts.slice(relativeIndex + 1);
+    const passiveIndex = relativeBody.findIndex((part) => part.pya === "pyoh");
+    const actionIndex = passiveIndex >= 0
+      ? relativeBody.slice(0, passiveIndex).findLastIndex(isLexicalPart)
+      : -1;
+    if (passiveIndex >= 0 && actionIndex >= 0) {
+      const action = relativeBody.slice(actionIndex, passiveIndex);
+      const agent = renderRelativeAgent(relativeBody.slice(0, actionIndex));
+      const moodPart = relativeBody.slice(passiveIndex + 1).find((part) => MOOD_WORDS.has(part.pya));
+      const mood = moodPart
+        ? ENGLISH_MOOD_GLOSSES.get(moodPart.pya) ?? moodPart.english
+        : "";
+      return ["that", mood, "be", inflectVerb(action), agent]
+        .filter(Boolean)
+        .join(" ");
+    }
+    const verbStart = relativeBody.findIndex((part) => part.kind === "root");
     if (verbStart >= 0) {
       const absoluteVerbStart = relativeIndex + 1 + verbStart;
       let verbEnd = absoluteVerbStart + 1;
