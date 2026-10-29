@@ -111,6 +111,17 @@ test("benefactive renders for across a mixed noun and pronoun phrase", () => {
   assert.match(result.englishPyash, /someone or something/u);
 });
 
+test("head-initial number markers render before the English noun head", () => {
+  const lowered = lowerSentencePhraseVliw({
+    mood: "ya",
+    su: { name: "pyan na" },
+    be: "dren ra",
+    ob: { name: "kcin lyas tlih ka" }
+  });
+  const result = renderEnglishFromVliw(lowered.vectors);
+  assert.equal(result.englishPyash, "ya su love be demonstrate ob a deep interest.");
+});
+
 test("Pyac compounds fuse on the surface and decode through the compound lexicon", () => {
   const lowered = lowerSentencePhraseVliw({
     mood: "ya",
