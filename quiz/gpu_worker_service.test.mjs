@@ -26,7 +26,7 @@ test("default config and system service connect the local GPU queue", async () =
   assert.match(macInstaller, /GPU_HOUSEKEEPER_PORT:-18886/u);
   assert.match(tunnel, /GPU_HOUSEKEEPER_TUNNEL_REMOTE_PORT:-18886/u);
   assert.match(tunnel, /GPU_HOUSEKEEPER_TUNNEL_LOCAL_PORT:-18887/u);
-  assert.match(webServer, /\|\| "http:\/\/localhost:18886"/u);
+  assert.match(webServer, /DEFAULT_GPU_HOUSEKEEPER_URL/u);
   assert.match(strataHelper, /PYASH_GPU_HOUSEKEEPER_URL", "http:\/\/127\.0\.0\.1:18886"/u);
   assert.match(service, /^Environment=PYA_GPU_WORKER_CONCURRENCY=1$/mu);
   assert.match(service, /command\/gpu_worker\.mjs .*--interval-ms 400/u);
