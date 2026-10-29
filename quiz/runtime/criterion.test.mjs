@@ -323,7 +323,7 @@ test("Hugging Face adapter exposes model defaults without loading a model", asyn
   assert.equal(dialogLed.numBeams, 4);
   assert.equal(dialogLed.doSample, false);
   assert.equal(dialogLed.chunkLongInputs, true);
-  const adapter = await createHuggingFaceExecutor({ housekeeperUrl: "http://mriczo:8090" });
+  const adapter = await createHuggingFaceExecutor({ housekeeperUrl: "http://test-housekeeper:8090" });
   const metadata = await adapter.metadataProvider({ model: "Shaelois/MeetingScript" });
   assert.equal(metadata.model, "Shaelois/MeetingScript");
   assert.equal(metadata.engine, "huggingface");

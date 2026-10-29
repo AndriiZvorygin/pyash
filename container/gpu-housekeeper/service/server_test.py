@@ -2257,8 +2257,8 @@ class HousekeeperFederationTests(unittest.TestCase):
 
   def test_parse_peer_registry_uses_host_url_pairs(self):
     self.assertEqual(
-      server.parse_peer_registry("swac=http://swac:8090;mriczo=http://mriczo:8090"),
-      {"swac": "http://swac:8090", "mriczo": "http://mriczo:8090"}
+      server.parse_peer_registry("swac=http://swac:8090;gpu-peer=http://gpu-peer:8090"),
+      {"swac": "http://swac:8090", "gpu-peer": "http://gpu-peer:8090"}
     )
 
   def test_busy_local_host_routes_to_idle_peer(self):
@@ -2568,7 +2568,7 @@ class HousekeeperFederationTests(unittest.TestCase):
 
     candidate = server.peer_route_candidate(
       "mriczo",
-      "http://mriczo:8090",
+      "http://gpu-peer:8090",
       {
         "runtimeName": "ollama",
         "profileName": "qwen3.5:9b",
