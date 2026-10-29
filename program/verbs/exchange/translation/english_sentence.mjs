@@ -624,11 +624,27 @@ function existentialContent(records, existential) {
   const adjunctRecords = firstCaseIndex < 0
     ? []
     : contentRecords.slice(firstCaseIndex);
-  const contentSequence = [
-    ...composeHeadInitialPhraseSequence(subjectRecords),
-    NOMINATIVE_MARKER,
-    ...(adjunctRecords.length > 0 ? composeCaseSequence(adjunctRecords) : [])
-  ];
+  const genitiveHeadFinal = firstCaseIndex >= 0
+    && isGenitiveCaseRecord(contentRecords[firstCaseIndex]);
+  const contentSequence = genitiveHeadFinal
+    ? (() => {
+      const numberRecords = subjectRecords.filter(isHeadPostposedGrammarRecord);
+      const modifierRecords = subjectRecords.filter((record) => !isHeadPostposedGrammarRecord(record));
+      const headRecords = adjunctRecords.slice(1);
+      const paucal = numberRecords.some(isPaucalNumberRecord);
+      return [
+        ...composeHeadInitialNounSegment(modifierRecords, { suppressPlural: paucal }),
+        ...recordSequence(contentRecords[firstCaseIndex]),
+        ...composeHeadInitialPhraseSequence(headRecords),
+        ...numberRecords.flatMap(recordSequence),
+        NOMINATIVE_MARKER
+      ];
+    })()
+    : [
+      ...composeHeadInitialPhraseSequence(subjectRecords),
+      NOMINATIVE_MARKER,
+      ...(adjunctRecords.length > 0 ? composeCaseSequence(adjunctRecords) : [])
+    ];
   const subject = {
     surface: contentRecords.map((record) => record.surface).join(" "),
     pyashSequence: contentSequence,
@@ -1176,9 +1192,27 @@ function isHeadPostposedGrammarRecord(record) {
     && record.grammar.position === "prefix";
 }
 
-function composeHeadInitialNounSegment(records) {
+function isPaucalNumberRecord(record) {
+  return isHeadPostposedGrammarRecord(record)
+    && record.grammar.components?.includes("paucal_number_");
+}
+
+function isGenitiveCaseRecord(record) {
+  return record?.grammar?.kind === "case-marker"
+    && record.grammar.components?.includes("genitive_case_");
+}
+
+function composeHeadInitialNounSegment(records, { suppressPlural = false } = {}) {
   const postposed = records.filter(isHeadPostposedGrammarRecord);
-  if (postposed.length === 0) return records.flatMap((record) => recordSequence(record));
+  const hasPaucalNumber = suppressPlural || postposed.some(isPaucalNumberRecord);
+  const recordSequenceForPhrase = (record) => {
+    const sequence = recordSequence(record);
+    if (hasPaucalNumber && record.grammaticalNumber === "plural" && sequence.at(-1) === "pu") {
+      return sequence.slice(0, -1);
+    }
+    return sequence;
+  };
+  if (postposed.length === 0) return records.flatMap(recordSequenceForPhrase);
 
   let headIndex = -1;
   for (let index = records.length - 1; index >= 0; index -= 1) {
@@ -1188,15 +1222,15 @@ function composeHeadInitialNounSegment(records) {
       break;
     }
   }
-  if (headIndex < 0) return records.flatMap((record) => recordSequence(record));
+  if (headIndex < 0) return records.flatMap(recordSequenceForPhrase);
 
   const sequence = [];
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
     if (isHeadPostposedGrammarRecord(record)) continue;
-    sequence.push(...recordSequence(record));
+    sequence.push(...recordSequenceForPhrase(record));
     if (index === headIndex) {
-      sequence.push(...postposed.flatMap((postposedRecord) => recordSequence(postposedRecord)));
+      sequence.push(...postposed.flatMap(recordSequenceForPhrase));
     }
   }
   return sequence;

@@ -245,6 +245,7 @@ test("English quantifier and article surfaces use existing grammar particles", a
     ["a", "tlih"],
     ["an", "tlih"],
     ["some", "tlih"],
+    ["several", "po"],
     ["any", "tlah"],
     ["all", "wi"],
     ["every", "wi"],
@@ -257,6 +258,20 @@ test("English quantifier and article surfaces use existing grammar particles", a
     const entry = grammar.entries.find((candidate) => candidate.surface === surface);
     assert.deepEqual(entry?.pyashSequence, Array.isArray(pya) ? pya : [pya], surface);
   }
+});
+
+test("several lowers as a paucal number marker on the quantified noun phrase", async () => {
+  const grammar = await loadEnglishGrammarCatalog();
+  const several = grammar.entries.find((entry) => entry.surface === "several");
+  assert.equal(several?.kind, "number-marker");
+  assert.deepEqual(several?.components, ["paucal_number_"]);
+  assert.deepEqual(several?.pyashSequence, ["po"]);
+
+  const result = await analyzeDefaultEnglishSentence("There are several sorts of love.");
+  assert.equal(result.status, "resolved");
+  assert.deepEqual(result.tokens.find((token) => token.surface === "several")?.pyashSequence, ["po"]);
+  assert.deepEqual(result.subject.pyashSequence, ["nyit", "ti", "pyan", "po", "na"]);
+  assert.equal(result.pyash, "nyit ti pyan po na syi7h");
 });
 
 test("sentence objects preserve possessives, plural markers, and conjunction links", async () => {
