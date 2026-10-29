@@ -236,9 +236,15 @@ function edgeDegreeLimit(value) {
 function directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree) {
   if (typeof resolveWord !== "function") return [];
   const candidates = new Map();
+  const sourceVariants = new Set((record.sourceTerms ?? []).flatMap(termVariants));
   for (const lemma of record.lemmas) {
     const coverage = resolveWord(lemma);
-    if (!coverage?.pyashSequence?.length || coverage.coverageType === "dictionary-alias") continue;
+    const aliasMatchesSource = coverage?.coverageType === "dictionary-alias"
+      && sourceVariants.size > 0
+      && sourceVariants.has(normalized(lemma));
+    if (!coverage?.pyashSequence?.length || (
+      coverage.coverageType === "dictionary-alias" && !aliasMatchesSource
+    )) continue;
     const edgeEligible = singleSenseLemma(wordnetIndex, lemma, record.source)
       && edgeNodeDegree(wordnetIndex, record.source) <= maxEdgeDegree;
     const candidate = linkCandidate(record, coverage.canonicalEnglish || lemma, coverage.pyashSequence, {
@@ -246,7 +252,9 @@ function directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree) {
       certainty: "deterministic",
       evidence: edgeEligible
         ? `leaf/edge WordNet node ${record.source} has one meaning for lemma ${lemma} and existing Pyash coverage`
-        : `existing Pyash coverage for WordNet lemma ${lemma}`,
+        : aliasMatchesSource
+          ? `source lemma ${lemma} uses existing Pyash dictionary alias ${coverage.canonicalEnglish || lemma}`
+          : `existing Pyash coverage for WordNet lemma ${lemma}`,
       sourceLemma: lemma,
       edgeEligible
     });

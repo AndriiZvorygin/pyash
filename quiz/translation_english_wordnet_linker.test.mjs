@@ -11,6 +11,7 @@ import {
   createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter,
   createQueuedMindEnglishWordNetSenseLinkSubmitter,
   estimateEnglishWordNetSenseLinkPromptTokens,
+  linkEnglishWordNetSense,
   loadEnglishWordNetLinkerConfig,
   parseEnglishWordNetSenseLinkResponse,
   reconcileEnglishWordNetSenseLinks,
@@ -87,6 +88,47 @@ test("WordNet linker creates stable one-record-per-sense batches", () => {
   assert.equal(records[2].status, "review");
   assert.equal(records[2].candidates.length, 0);
   assert.equal(new Set(records.map((record) => record.id)).size, 3);
+});
+
+test("WordNet linker uses an exact source lemma dictionary alias before relation compounds", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:kind:kind",
+      pos: "n",
+      synset: "kind",
+      senseKey: "kind",
+      lemma: "kind",
+      gloss: "a category of things"
+    }, {
+      id: "n:kind:sort",
+      pos: "n",
+      synset: "kind",
+      senseKey: "sort",
+      lemma: "sort",
+      gloss: "a category of things"
+    }, {
+      id: "n:kind:form",
+      pos: "n",
+      synset: "kind",
+      senseKey: "form",
+      lemma: "form",
+      gloss: "a category of things"
+    }]
+  });
+  const linked = linkEnglishWordNetSense({
+    sense: { pos: "n", synset: "kind", lemmas: ["kind", "sort", "form"] },
+    sourceTerm: "kinds",
+    wordnetIndex: index,
+    resolveWord: (word) => ({
+      kind: { coverageType: "dictionary-alias", canonicalEnglish: "sort", pyashSequence: ["nyit"] },
+      sort: { coverageType: "atomic", canonicalEnglish: "sort", pyashSequence: ["nyit"] },
+      form: { coverageType: "atomic", canonicalEnglish: "form", pyashSequence: ["hfam"] }
+    }[word] ?? null)
+  });
+  assert.equal(linked.status, "accepted-edge");
+  assert.equal(linked.link.target, "sort");
+  assert.deepEqual(linked.link.pyashSequence, ["nyit"]);
+  assert.match(linked.link.evidence, /existing Pyash dictionary alias|one meaning/u);
 });
 
 test("WordNet sense anchors use covered relation targets only", () => {
