@@ -328,6 +328,8 @@ test("durable lemma morphology keeps lexical roots separate from particles", asy
   assert.equal(index.resolve("walked")?.morphology?.certainty, "deterministic");
   assert.deepEqual(index.resolve("walking")?.morphology?.markerSequence, ["pfih"]);
   assert.equal(index.resolve("walking")?.morphology?.certainty, "contextual");
+  assert.equal(index.preferredSurfaceForSequence(["mrat"]), "mix");
+  assert.equal(index.preferredSurfaceForSequence(["xyek", "pu"]), "feelings");
 });
 
 test("lemma equivalence can carry an explicit Pyash grammar suffix", () => {
