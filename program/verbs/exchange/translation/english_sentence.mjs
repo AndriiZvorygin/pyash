@@ -649,17 +649,29 @@ function lexicalVerbCertainty(record) {
 function existentialEntry(records, grammarIndex) {
   if (records[0]?.surface !== "there") return null;
   const auxiliary = records[1]?.surface;
-  return grammarIndex?.resolve(`there ${auxiliary}`)
-    ?? (auxiliary === "exists" ? grammarIndex?.resolve("there exists") : null);
+  const direct = grammarIndex?.resolve(`there ${auxiliary}`);
+  if (direct?.kind === "existential-clause") {
+    return { ...direct, modalIndex: null, auxiliaryIndex: 1 };
+  }
+
+  const modal = records[1];
+  const existentialAuxiliary = records[2];
+  if (modal?.grammar?.kind !== "modal-mood"
+    || !existentialAuxiliary
+    || (existentialAuxiliary.surface !== "be" && !existentialAuxiliary.copula)) return null;
+  const composed = grammarIndex?.resolve(`there ${modal.surface} be`);
+  if (composed?.kind !== "existential-clause") return null;
+  return { ...composed, modalIndex: 1, auxiliaryIndex: 2 };
 }
 
 function findExistentialClause(records) {
   const marker = records[0];
   if (marker?.grammar?.kind !== "existential-clause") return null;
   const auxiliaryIndex = records.findIndex((record, index) => (
-    index > 0 && record.consumedBy === "existential-clause"
+    index > 0 && record.existentialRole === "auxiliary"
   ));
   if (auxiliaryIndex < 0) return null;
+  const modalIndex = records.findIndex((record) => record.existentialRole === "modal");
   const connectorIndex = records.findIndex((record, index) => (
     index > auxiliaryIndex
       && record.construction?.kind === "additive-connector"
@@ -668,6 +680,7 @@ function findExistentialClause(records) {
     entry: marker.grammar,
     markerIndex: 0,
     auxiliaryIndex,
+    modalIndex: modalIndex >= 0 ? modalIndex : null,
     connectorIndex: connectorIndex >= 0 ? connectorIndex : null
   };
 }
@@ -713,7 +726,7 @@ function existentialContent(records, existential) {
     surface: contentRecords.map((record) => record.surface).join(" "),
     pyashSequence: contentSequence,
     coverageType: "construction",
-    evidence: "existential clause content follows there is/are"
+    evidence: "existential clause content follows the existential auxiliary"
   };
   const relativeRecords = relativeIndex >= 0
     ? records.slice(relativeIndex).filter((record) => !record.consumedBy)
@@ -903,7 +916,17 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     && structuralSequence.length > 0
     && existentialSequence.length > 0
     && (content.relativeIndex < 0 || Boolean(content.relativeProjection.action));
+  const normalizedSource = source.normalize("NFC").toLowerCase();
+  const existentialStart = normalizedSource.indexOf(existential.entry.surface.toLowerCase());
+  const existentialEnd = existentialStart < 0
+    ? 0
+    : existentialStart + existential.entry.surface.length;
+  const hasUncomposedCoordination = /[,;]/u.test(normalizedSource.slice(existentialEnd));
+  const reviewReasons = hasUncomposedCoordination
+    ? ["comma-separated existential content is not yet composed as a coordinated phrase"]
+    : [];
   const sentence = canResolve
+    && !hasUncomposedCoordination
     ? {
       mood: existentialSequence.at(-1),
       su: { name: structuralSequence.slice(0, -1).join(" ") }
@@ -939,6 +962,7 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     }] : [],
     candidates: [],
     unresolved: [...new Set(unresolved)],
+    ...(reviewReasons.length > 0 ? { reviewReasons } : {}),
     tokens: relativeRecords,
     pyash: structuralSequence.join(" "),
     structural: structuralSequence.join(" ")
@@ -947,8 +971,8 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
 
 function applyContextualEnglishGrammar(records, grammarIndex) {
   const exemplifier = grammarIndex?.resolve("such as");
+  const existential = existentialEntry(records, grammarIndex);
   return records.map((record, index) => {
-    const existential = existentialEntry(records, grammarIndex);
     if (index === 0 && existential) {
       return {
         ...record,
@@ -962,12 +986,27 @@ function applyContextualEnglishGrammar(records, grammarIndex) {
         evidence: existential.evidence
       };
     }
-    if (index === 1 && existential) {
+    if (existential && index === existential.modalIndex) {
       return {
         ...record,
         coverageType: "grammar",
         pyashSequence: [],
         consumedBy: "existential-clause",
+        existentialRole: "modal",
+        construction: {
+          kind: "existential-modal",
+          evidence: `${record.surface} potential mood is composed with the existential clause`
+        },
+        evidence: `${record.surface} potential mood is composed with the existential clause`
+      };
+    }
+    if (existential && index === existential.auxiliaryIndex) {
+      return {
+        ...record,
+        coverageType: "grammar",
+        pyashSequence: [],
+        consumedBy: "existential-clause",
+        existentialRole: "auxiliary",
         construction: {
           kind: "existential-auxiliary",
           evidence: `${existential.surface} is consumed by the existential clause construction`

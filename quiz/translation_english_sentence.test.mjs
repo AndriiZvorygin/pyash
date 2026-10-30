@@ -23,7 +23,10 @@ import {
   lowerSentencePhraseVliw,
   renderVliwPyac
 } from "../program/library/vliw/phrase.mjs";
-import { renderEnglishPyash } from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
+import {
+  decodePyacSentence,
+  renderEnglishPyash
+} from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
 
 function fixtureResolver() {
   const rows = new Map([
@@ -65,6 +68,7 @@ test("English sentence resources expose one shared full coverage index", async (
   assert.ok(resources.wordnet.rows.length > 4000);
   assert.equal(resources.sourceByVariant.get("walked").word, "walked");
   assert.deepEqual(resources.grammarIndex.resolve("our").pyashSequence, ["nyah", "ye"]);
+  assert.deepEqual(resources.grammarIndex.resolve("there can be").pyashSequence, ["tseh", "syi7h"]);
 });
 
 test("sentence analysis selects simple past and emits the root plus tense particle", () => {
@@ -745,6 +749,46 @@ test("hyphenated self-love is one reflexive compound", async () => {
   assert.deepEqual(selfLove.pyashSequence, ["pyan", "fyoh"]);
   assert.equal(analysis.unresolved.includes("self"), false);
   assert.equal(analysis.unresolved.includes("self-love"), false);
+});
+
+test("existential can composes with potential mood and keeps self-love readable", async () => {
+  const analysis = await analyzeDefaultEnglishSentence("There can be self-love.");
+  const modal = analysis.tokens.find((token) => token.surface === "can");
+  const auxiliary = analysis.tokens.find((token) => token.surface === "be");
+
+  assert.equal(analysis.status, "resolved");
+  assert.deepEqual(analysis.unresolved, []);
+  assert.equal(analysis.existential.surface, "There can be");
+  assert.deepEqual(analysis.existential.pyashSequence, ["tseh", "syi7h"]);
+  assert.equal(analysis.sentence.mood, "syi7h");
+  assert.equal(modal.consumedBy, "existential-clause");
+  assert.equal(auxiliary.consumedBy, "existential-clause");
+
+  const lowered = lowerPhraseVliw({ tokens: analysis.pyash.split(/\s+/u) });
+  const pyac = renderVliwPyac(decodePhraseVliw(lowered.vectors));
+  assert.equal(pyac, "pyanfyohnatsehsyi7h");
+  const decoded = decodePyacSentence(pyac);
+  assert.equal(decoded.englishPyash, "there can be su self-love.");
+  assert.equal(decoded.english, "There can be self-love.");
+
+  const couldAnalysis = await analyzeDefaultEnglishSentence("There could be self-love.");
+  assert.equal(couldAnalysis.status, "resolved");
+  assert.deepEqual(couldAnalysis.existential.pyashSequence, ["tseh", "syi7h"]);
+});
+
+test("comma-separated existential lists stay reviewable until coordination is composed", async () => {
+  const analysis = await analyzeDefaultEnglishSentence(
+    "There can be self-love, platonic love."
+  );
+
+  assert.equal(analysis.status, "review");
+  assert.deepEqual(analysis.reviewReasons, [
+    "comma-separated existential content is not yet composed as a coordinated phrase"
+  ]);
+  assert.deepEqual(
+    analysis.tokens.find((token) => token.surface === "self-love").pyashSequence,
+    ["pyan", "fyoh"]
+  );
 });
 
 test("physically keeps bodily WordNet senses reviewable instead of deterministic collapse", async () => {

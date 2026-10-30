@@ -11,7 +11,7 @@ const FUSED_ENDINGS = new Set([
   "greh", "rweh", "xwih", "kxeh", "lwoh", "bvah", "dvah", "je",
   "gveh", "vwih", "bveh", "dzih", "tsi7h", "vyah", "gvah", "zreh",
   "bu", "sa7", "si7", "tsi2h", "ta7",
-  "ra", "ki", "pfih", "pyoh", "vi"
+  "ra", "ki", "pfih", "fyoh", "pyoh", "vi"
 ]);
 
 const SENTENCE_PARTICLES = new Set([
@@ -54,7 +54,10 @@ export function renderPyashSurface(value, {
       && (FUSED_NOUN_GRAMMAR_HEADS.has(previous)
         || previous === "pu"
         || !FUSED_ENDINGS.has(previous));
-    const mood = fusedMoods.has(clean) && index === inputTokens.length - 1;
+    const mood = fusedMoods.has(clean)
+      && inputTokens.slice(index + 1).every((following) => (
+        fusedMoods.has(following.replace(/[.,;:]+$/u, ""))
+      ));
     if (
       rendered.length > 0 &&
       (fusedEndings.has(clean) || nounGrammarSuffix || mood) &&
