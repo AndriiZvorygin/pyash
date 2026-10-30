@@ -6,7 +6,7 @@ import readline from "node:readline/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { forget, remember, doRemember } from "../program/remember/index.mjs";
+import { allRemember, forget, remember, doRemember } from "../program/remember/index.mjs";
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
@@ -15,7 +15,6 @@ import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
-import { fetchWebModels } from "./pyash_web_server.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import {
   buildSaddleMindSentence,
@@ -24,10 +23,13 @@ import {
   discoverSaddleModels,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  listSaddleMindNames,
   normalizeSaddleBackend,
   normalizeSaddleHost,
   normalizeSaddleModel,
   resolveSaddleModelOption,
+  resolveSaddleMindProfile,
+  parseSaddleMindCommand,
   saddleToolEventLabel
 } from "../program/agent/coding_saddle.mjs";
 
@@ -44,6 +46,19 @@ function resolveSaddleHost(backend) {
   if (backend === "ollama") return configValue("ollama host", "http://localhost:11434");
   if (backend === "zai") return "https://api.z.ai/api/v1";
   return configValue("ai host", configValue("ollama host", "http://localhost:11434"));
+}
+
+function resolveConfiguredSaddleMind(mindName) {
+  const profile = remember(mindName);
+  const usesGlobalDefaults = String(mindName).trim().toLowerCase() === "mind" && !profile?.fromstate;
+  const selectedProfile = usesGlobalDefaults ? { ...profile, as: undefined, from: undefined } : profile;
+  return resolveSaddleMindProfile({
+    mindName,
+    profile: selectedProfile,
+    defaultBackend: normalizeSaddleBackend(configValue("mind backend", "ollama")),
+    defaultModel: configValue("mind model", "qwen3.5:9b"),
+    hostForBackend: resolveSaddleHost
+  });
 }
 
 async function importSaddleTools() {
@@ -93,8 +108,8 @@ export async function prepareSaddle({
   cwd = process.cwd(),
   runtimeRoot = cwd,
   worldRoot = path.join(runtimeRoot, "world"),
+  mindName = process.env.PYA_SADDLE_MIND,
   model = process.env.PYA_SADDLE_MODEL,
-  backend = process.env.PYA_SADDLE_BACKEND,
   host = process.env.PYA_SADDLE_HOST,
   systemPrompt = DEFAULT_CODING_SADDLE_SYSTEM_PROMPT
 } = {}) {
@@ -105,10 +120,12 @@ export async function prepareSaddle({
   forget();
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
   await importSaddleTools();
-  const resolvedBackend = normalizeSaddleBackend(backend || configValue("mind backend", "ollama"));
-  const defaultModel = resolvedBackend === "zai" ? "glm-5.3" : configValue("mind model", "qwen3.5:9b");
-  const resolvedModel = normalizeSaddleModel(model || defaultModel);
-  const resolvedHost = normalizeSaddleHost(host || resolveSaddleHost(resolvedBackend));
+  const selectedMind = String(mindName || configValue("coding saddle mind", "mind")).trim();
+  const profileResolved = resolveConfiguredSaddleMind(selectedMind);
+  const resolvedBackend = profileResolved.backend;
+  const resolvedModel = normalizeSaddleModel(model || profileResolved.model);
+  const resolvedHost = normalizeSaddleHost(host || profileResolved.host);
+  const mindModels = new Map([[selectedMind, resolvedModel]]);
   configureSaddle({
     cwd: resolvedCwd,
     runtimeRoot: resolvedRuntimeRoot,
@@ -124,9 +141,11 @@ export async function prepareSaddle({
     cwd: resolvedCwd,
     runtimeRoot: resolvedRuntimeRoot,
     worldRoot: resolvedWorldRoot,
+    mindName: selectedMind,
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
+    mindModels,
     agentHouse,
     systemPrompt
   };
@@ -294,6 +313,8 @@ async function main() {
 
   const config = await prepareSaddle({ cwd: process.env.PYA_SADDLE_CWD || process.cwd() });
   let model = config.model;
+  let mindName = config.mindName;
+  const mindModels = config.mindModels;
   let backend = config.backend;
   let host = config.host;
   let busy = false;
@@ -305,7 +326,7 @@ async function main() {
 
   const showStatus = async () => {
     const queue = await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
-    writeLine(formatSaddleStatus({ model, backend, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
+    writeLine(formatSaddleStatus({ mindName, model, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
   };
   const prompt = ({ clear = true, label = promptLabel } = {}) => {
     promptLabel = label;
@@ -320,16 +341,14 @@ async function main() {
       .map((value) => value.trim())
       .filter(Boolean);
     const discovered = await discoverSaddleModels({ backend, host, currentModel: model, fallbackModels });
-    const catalog = await fetchWebModels(model, backend).catch(() => ({ modelOptions: [], errors: {} }));
     const discoveredOptions = discovered.models.map((entry) => ({
       model: entry,
       value: entry,
       backend,
       host,
-      label: backend === "ollama" ? entry : `${backend}: ${entry}`
+      label: entry
     }));
     const options = [
-      ...(Array.isArray(catalog.modelOptions) ? catalog.modelOptions : []),
       ...discoveredOptions
     ];
     modelPicker = [...new Map(options
@@ -344,10 +363,7 @@ async function main() {
       models: modelPicker,
       currentModel: model,
       currentBackend: backend,
-      error: discovered.available && !catalog.errors?.strata ? "" : [
-        discovered.available ? "" : discovered.error,
-        catalog.errors?.strata
-      ].filter(Boolean).join("; ")
+      error: discovered.available ? "" : discovered.error
     }));
     prompt({ clear: false, label: "select model> " });
   };
@@ -391,16 +407,43 @@ async function main() {
       }
       modelPicker = null;
       model = normalizeSaddleModel(selected.model, model);
-      backend = normalizeSaddleBackend(selected.backend, backend);
-      host = normalizeSaddleHost(selected.host, host);
+      mindModels.set(mindName, model);
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
-      writeLine(`model: ${model} via ${backend}${host ? ` @ ${host}` : ""}`);
+      writeLine(`model: ${model} (mind ${mindName})`);
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /model <name>  /backend <name>  /host <url>  /discharge  /exit");
+      writeLine("/status  /mind [name]  /model <name>  /host <url>  /discharge  /exit");
+      prompt({ clear: false });
+      return;
+    }
+    const mindCommand = parseSaddleMindCommand(input);
+    if (mindCommand?.type === "list") {
+      const names = listSaddleMindNames({ minds: allRemember(), activeMindName: AGENT_NAME });
+      writeLine(`available minds: ${names.map((name) => `${name}${name === mindName ? " (current)" : ""}`).join(", ")}`);
+      prompt({ clear: false });
+      return;
+    }
+    if (mindCommand?.type === "select") {
+      const nextMindName = mindCommand.mindName;
+      const available = listSaddleMindNames({ minds: allRemember(), activeMindName: AGENT_NAME });
+      if (!available.some((name) => name.toLowerCase() === nextMindName.toLowerCase())) {
+        writeLine(`unknown Pyash mind: ${nextMindName}; available: ${available.join(", ")}`);
+        prompt({ clear: false });
+        return;
+      }
+      const canonicalName = available.find((name) => name.toLowerCase() === nextMindName.toLowerCase());
+      await dischargeSaddleModel(model, backend).catch((error) => writeLine(`discharge: ${error.message}`));
+      const nextProfile = resolveConfiguredSaddleMind(canonicalName);
+      mindName = canonicalName;
+      backend = nextProfile.backend;
+      host = nextProfile.host;
+      model = normalizeSaddleModel(mindModels.get(mindName) || nextProfile.model);
+      mindModels.set(mindName, model);
+      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      writeLine(`mind: ${mindName} | model: ${model}`);
       prompt({ clear: false });
       return;
     }
@@ -421,17 +464,9 @@ async function main() {
     const modelMatch = input.trim().match(/^\/model\s+(.+)$/i);
     if (modelMatch) {
       model = normalizeSaddleModel(modelMatch[1], model);
+      mindModels.set(mindName, model);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model}`);
-      prompt({ clear: false });
-      return;
-    }
-    const backendMatch = input.trim().match(/^\/backend\s+(.+)$/i);
-    if (backendMatch) {
-      backend = normalizeSaddleBackend(backendMatch[1], backend);
-      host = resolveSaddleHost(backend);
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
-      writeLine(`backend: ${backend} (${host})`);
       prompt({ clear: false });
       return;
     }

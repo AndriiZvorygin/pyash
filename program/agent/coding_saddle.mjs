@@ -35,6 +35,53 @@ export function normalizeSaddleHost(value, fallback = "http://localhost:11434") 
   return normalizeText(value) || fallback;
 }
 
+function mindFieldValue(value) {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+  return normalizeText(value.name ?? value.text ?? value.filename);
+}
+
+export function resolveSaddleMindProfile({
+  mindName,
+  profile,
+  defaultBackend = "ollama",
+  defaultModel = "qwen3.5:9b",
+  defaultHost = "http://localhost:11434",
+  hostForBackend = () => defaultHost
+} = {}) {
+  const name = normalizeText(mindName);
+  if (!name || profile?.be !== "mind") throw new Error(`Pyash mind not found: ${name || "(empty)"}`);
+  const declaredBackend = mindFieldValue(profile.fromstate);
+  const backend = normalizeSaddleBackend(declaredBackend || defaultBackend);
+  const model = normalizeSaddleModel(
+    mindFieldValue(profile.as) || (backend === "zai" ? "glm-5.3" : defaultModel)
+  );
+  const declaredHost = mindFieldValue(profile.from);
+  const host = normalizeSaddleHost(declaredHost || hostForBackend(backend), defaultHost);
+  return { mindName: name, backend, model, host };
+}
+
+export function listSaddleMindNames({ minds = [], activeMindName = "coding saddle" } = {}) {
+  const active = normalizeText(activeMindName).toLowerCase();
+  const names = [...new Set((Array.isArray(minds) ? minds : [])
+    .filter((fact) => fact?.be === "mind" && fact?.su?.name)
+    .filter((fact) => normalizeText(fact.su.name).toLowerCase() !== active)
+    .filter((fact) => normalizeText(fact.su.name).toLowerCase() === "mind" || mindFieldValue(fact.fromstate))
+    .map((fact) => normalizeText(fact.su.name)))];
+  return names.sort((left, right) => {
+    if (left.toLowerCase() === "mind") return -1;
+    if (right.toLowerCase() === "mind") return 1;
+    return left.localeCompare(right);
+  });
+}
+
+export function parseSaddleMindCommand(value) {
+  const input = normalizeText(value);
+  if (/^\/mind$/i.test(input)) return { type: "list" };
+  const match = input.match(/^\/mind\s+(.+)$/i);
+  return match ? { type: "select", mindName: normalizeText(match[1]) } : null;
+}
+
 export function resolveSaddleModelSelection(value, models = []) {
   const selected = resolveSaddleModelOption(value, models);
   return selected?.model || "";
@@ -69,8 +116,8 @@ export async function discoverSaddleModels({
   const normalizedBackend = normalizeSaddleBackend(backend);
   const normalizedHost = normalizeSaddleHost(host);
   const configured = [currentModel, ...fallbackModels].map(normalizeText).filter(Boolean);
-  if (normalizedBackend === "zai") {
-    return { models: [...new Set(configured)], available: false, error: "select a GLM model by its Z.AI model ID" };
+  if (["zai", "openai", "litellm", "openrouter", "vllm"].includes(normalizedBackend)) {
+    return { models: [...new Set(configured)], available: false, error: "enter a model ID supported by the selected mind" };
   }
   if (typeof fetchFn !== "function") {
     return { models: [...new Set(configured)], available: false, error: "model discovery is unavailable" };
@@ -158,8 +205,8 @@ export function buildSaddleMindSentence({
 }
 
 export function formatSaddleStatus({
+  mindName = "mind",
   model,
-  backend,
   host,
   cwd,
   queue,
@@ -170,8 +217,8 @@ export function formatSaddleStatus({
     ? (Number(queue.total ?? queue.runtime ?? queue.input ?? 0) || 0)
     : Number(queue ?? 0) || 0;
   return [
+    `mind: ${normalizeText(mindName) || "mind"}`,
     `model: ${normalizeSaddleModel(model)}`,
-    `backend: ${normalizeSaddleBackend(backend)}`,
     `host: ${normalizeSaddleHost(host)}`,
     `session: ${normalizeText(session) || "coding"}`,
     `cwd: ${path.resolve(String(cwd || process.cwd()))}`,
