@@ -179,6 +179,7 @@ export function resolveSaddleModelOption(value, models = []) {
 export async function discoverSaddleModels({
   backend,
   host,
+  housekeeperUrl = "",
   currentModel = "",
   fallbackModels = [],
   apiKey,
@@ -222,13 +223,29 @@ export async function discoverSaddleModels({
   if (typeof fetchFn !== "function") {
     return { models: [...new Set(configured)], available: false, error: "model discovery is unavailable" };
   }
-  const endpoint = normalizedBackend === "strata" ? "/v1/models" : "/api/tags";
+  const localBackend = ["ollama", "strata"].includes(normalizedBackend);
+  if (!localBackend) {
+    return {
+      models: [...new Set(configured)],
+      available: false,
+      error: `model discovery is unsupported for backend ${normalizedBackend || "(empty)"}`
+    };
+  }
+  const catalogHost = normalizeText(housekeeperUrl).replace(/\/+$/u, "");
+  if (!catalogHost) {
+    return {
+      models: [...new Set(configured)],
+      available: false,
+      error: "GPU Housekeeper URL is required for local model discovery"
+    };
+  }
+  const endpoint = `${catalogHost}/runtime/${normalizedBackend}/models`;
   const controller = typeof AbortController === "function" ? new AbortController() : null;
   const timer = controller && Number.isFinite(Number(timeoutMs))
     ? setTimeout(() => controller.abort(), Number(timeoutMs))
     : null;
   try {
-    const response = await fetchFn(`${normalizedHost.replace(/\/+$/u, "")}${endpoint}`, {
+    const response = await fetchFn(endpoint, {
       signal: controller?.signal
     });
     if (!response?.ok) throw new Error(`model catalogue returned HTTP ${response?.status ?? "unknown"}`);

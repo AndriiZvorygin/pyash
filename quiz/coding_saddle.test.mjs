@@ -21,7 +21,7 @@ import {
   resolveSaddleModelSelection,
   resolveSaddleMindProfile
 } from "../program/agent/coding_saddle.mjs";
-import { prepareSaddle, runSaddleTurn } from "../command/pyash_saddle.mjs";
+import { dischargeSaddleModel, prepareSaddle, runSaddleTurn } from "../command/pyash_saddle.mjs";
 
 test("coding saddle submits Enter and keeps newline input separate", async () => {
   const submitted = [];
@@ -76,11 +76,17 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
 test("coding saddle delegates turns to the existing mind engine", async () => {
   let observed = null;
   let observedUsage = null;
+  const previousManagerEnv = {
+    url: process.env.PYA_GPU_HOUSEKEEPER_URL,
+    required: process.env.PYA_GPU_MANAGER_REQUIRED,
+    allowDirect: process.env.PYA_GPU_MANAGER_ALLOW_DIRECT
+  };
   const result = await runSaddleTurn({
     input: "run the focused test",
     model: "qwen3.5:9b",
     backend: "ollama",
     host: "http://localhost:11434",
+    housekeeperUrl: "http://housekeeper:18886",
     contextWindow: 65536,
     think: false,
     onUsage: (usage) => {
@@ -88,6 +94,9 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
       return usage;
     },
     mindFn: async (sentence, options) => {
+      assert.equal(process.env.PYA_GPU_HOUSEKEEPER_URL, "http://housekeeper:18886");
+      assert.equal(process.env.PYA_GPU_MANAGER_REQUIRED, "true");
+      assert.equal(process.env.PYA_GPU_MANAGER_ALLOW_DIRECT, "false");
       observed = { sentence, options };
       await options.onUsage?.({
         input_tokens: 10,
@@ -113,6 +122,27 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
     reasoningOutputTokens: 0,
     totalTokens: 14
   });
+  assert.equal(process.env.PYA_GPU_HOUSEKEEPER_URL, previousManagerEnv.url);
+  assert.equal(process.env.PYA_GPU_MANAGER_REQUIRED, previousManagerEnv.required);
+  assert.equal(process.env.PYA_GPU_MANAGER_ALLOW_DIRECT, previousManagerEnv.allowDirect);
+});
+
+test("coding saddle routes Strata turns through the configured Housekeeper", async () => {
+  let called = false;
+  await runSaddleTurn({
+    input: "inspect the repository",
+    model: "qwen3.8-flash-next-iq2_xs",
+    backend: "strata",
+    host: "http://127.0.0.1:8081",
+    housekeeperUrl: "http://housekeeper:18886",
+    mindFn: async () => {
+      called = true;
+      assert.equal(process.env.PYA_GPU_HOUSEKEEPER_URL, "http://housekeeper:18886");
+      assert.equal(process.env.PYA_GPU_MANAGER_REQUIRED, "true");
+      return { mood: "ya", be: "text", ob: { text: "done" } };
+    }
+  });
+  assert.equal(called, true);
 });
 
 test("duty saddle keeps runtime root separate from its persistent world root", async () => {
@@ -264,9 +294,10 @@ test("coding saddle discovers and selects models from the active backend", async
   const ollama = await discoverSaddleModels({
     backend: "ollama",
     host: "http://mriczo:11434",
+    housekeeperUrl: "http://housekeeper:18886",
     currentModel: "qwen3.5:9b",
     fetchFn: async (url) => {
-      assert.equal(url, "http://mriczo:11434/api/tags");
+      assert.equal(url, "http://housekeeper:18886/runtime/ollama/models");
       return { ok: true, async json() { return { models: [{ name: "qwen3.5:9b" }, { name: "qwen3.8:27b" }] }; } };
     }
   });
@@ -274,6 +305,47 @@ test("coding saddle discovers and selects models from the active backend", async
   assert.deepEqual(ollama.models, ["qwen3.5:9b", "qwen3.8:27b"]);
   assert.equal(resolveSaddleModelSelection("2", ollama.models), "qwen3.8:27b");
   assert.match(formatSaddleModelPicker({ models: ollama.models, currentModel: ollama.models[0] }), /1\. qwen3\.5:9b \(current\)/);
+});
+
+test("coding saddle discovers Strata models through Housekeeper, never its provider endpoint", async () => {
+  const result = await discoverSaddleModels({
+    backend: "strata",
+    host: "http://127.0.0.1:8081",
+    housekeeperUrl: "http://housekeeper:18886",
+    fetchFn: async (url) => {
+      assert.equal(url, "http://housekeeper:18886/runtime/strata/models");
+      return { ok: true, async json() { return { data: [{ id: "qwen3.8-flash-next-iq2_xs" }] }; } };
+    }
+  });
+  assert.deepEqual(result.models, ["qwen3.8-flash-next-iq2_xs"]);
+  assert.equal(result.available, true);
+});
+
+test("coding saddle does not attempt local model discovery without Housekeeper", async () => {
+  let fetchCalled = false;
+  const result = await discoverSaddleModels({
+    backend: "ollama",
+    host: "http://localhost:11434",
+    fetchFn: async () => { fetchCalled = true; throw new Error("must not call provider directly"); }
+  });
+  assert.equal(fetchCalled, false);
+  assert.equal(result.available, false);
+  assert.match(result.error, /Housekeeper URL is required/);
+});
+
+test("coding saddle discharges local model residency through Housekeeper", async () => {
+  const calls = [];
+  const result = await dischargeSaddleModel("qwen3.5:9b", "ollama", {
+    housekeeperUrl: "http://housekeeper:18886",
+    adapterFactory: ({ baseUrl }) => ({
+      async discharge({ profileName }) {
+        calls.push({ baseUrl, profileName });
+        return { success: true, discharged: true };
+      }
+    })
+  });
+  assert.deepEqual(calls, [{ baseUrl: "http://housekeeper:18886", profileName: "qwen3.5:9b" }]);
+  assert.deepEqual(result, { success: true, discharged: true });
 });
 
 test("coding saddle maps Ollama thinking to boolean and Strata thinking to supported efforts", () => {
@@ -350,8 +422,12 @@ test("coding saddle preserves the current model when catalogue discovery fails",
   const result = await discoverSaddleModels({
     backend: "strata",
     host: "http://swac:8081",
+    housekeeperUrl: "http://housekeeper:18886",
     currentModel: "qwen3.8:27b",
-    fetchFn: async () => { throw new Error("connection refused"); }
+    fetchFn: async (url) => {
+      assert.equal(url, "http://housekeeper:18886/runtime/strata/models");
+      throw new Error("connection refused");
+    }
   });
 
   assert.deepEqual(result.models, ["qwen3.8:27b"]);

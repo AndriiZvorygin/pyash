@@ -16,7 +16,6 @@ import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
 import { resolveGpuHousekeeperUrl } from "../program/runtime/gpu/managed-ollama.mjs";
-import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
 import {
   formatZaiContextWindow,
   getZaiCodexContextWindow,
@@ -59,6 +58,37 @@ const SESSION_NAME = "coding";
 
 function configValue(name, fallback = "") {
   return String(resolveConfigText(name, { rememberFn: remember }) ?? fallback).trim();
+}
+
+function resolveSaddleHousekeeperUrl(cwd = process.cwd()) {
+  return resolveGpuHousekeeperUrl({
+    managerUrl: configValue("gpu housekeeper url"),
+    cwd
+  });
+}
+
+function isLocalModelBackend(backend) {
+  return ["ollama", "strata"].includes(normalizeSaddleBackend(backend));
+}
+
+async function withLocalModelsManaged(backend, housekeeperUrl, action) {
+  if (!isLocalModelBackend(backend)) return action();
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: housekeeperUrl });
+  if (!managerUrl) throw new Error("local saddle models require a configured GPU Housekeeper URL");
+
+  const keys = ["PYA_GPU_HOUSEKEEPER_URL", "PYA_GPU_MANAGER_REQUIRED", "PYA_GPU_MANAGER_ALLOW_DIRECT"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  process.env.PYA_GPU_HOUSEKEEPER_URL = managerUrl;
+  process.env.PYA_GPU_MANAGER_REQUIRED = "true";
+  process.env.PYA_GPU_MANAGER_ALLOW_DIRECT = "false";
+  try {
+    return await action();
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
 }
 
 function resolveSaddleHost(backend) {
@@ -144,6 +174,7 @@ export async function prepareSaddle({
   const resolvedBackend = profileResolved.backend;
   const resolvedModel = normalizeSaddleModel(model || profileResolved.model);
   const resolvedHost = normalizeSaddleHost(host || profileResolved.host);
+  const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
   const mindModels = new Map([[selectedMind, resolvedModel]]);
   configureSaddle({
     cwd: resolvedCwd,
@@ -164,6 +195,7 @@ export async function prepareSaddle({
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
+    housekeeperUrl,
     mindModels,
     agentHouse,
     systemPrompt
@@ -183,6 +215,7 @@ export async function runSaddleTurn({
   sessionUserMetadata = null,
   onUsage,
   onToolCall,
+  housekeeperUrl = "",
   mindFn = mind_to_name_text
 } = {}) {
   const sentence = buildSaddleMindSentence({
@@ -204,17 +237,27 @@ export async function runSaddleTurn({
     if (typeof onUsage !== "function") return normalized;
     return onUsage(normalized);
   };
-  return mindFn(sentence, {
+  return withLocalModelsManaged(backend, housekeeperUrl, () => mindFn(sentence, {
     onToolCall,
     onUsage: emitUsage,
     sessionUserContent: String(input ?? ""),
     sessionUserMetadata
-  });
+  }));
 }
 
-async function dischargeSaddleModel(model, backend) {
-  if (normalizeSaddleBackend(backend) !== "ollama") return;
-  await dischargeOllamaMind(model, { rememberFn: remember, timeoutMs: 3000 });
+export async function dischargeSaddleModel(model, backend, {
+  housekeeperUrl = "",
+  cwd = process.cwd(),
+  adapterFactory = createGpuHousekeeperAdapter
+} = {}) {
+  if (!isLocalModelBackend(backend)) return null;
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: housekeeperUrl, cwd });
+  if (!managerUrl) throw new Error("local saddle models require a configured GPU Housekeeper URL");
+  const result = await adapterFactory({ baseUrl: managerUrl }).discharge({ profileName: model });
+  if (result?.success === false) {
+    throw new Error(result.reason || `Housekeeper could not discharge ${model}`);
+  }
+  return result;
 }
 
 function writeLine(text = "") {
@@ -369,14 +412,7 @@ async function main() {
     promptLabel = label;
     renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear, label });
   };
-  const strataHousekeeper = () => {
-    const baseUrl = resolveGpuHousekeeperUrl({
-      managerUrl: configValue("gpu housekeeper url"),
-      ollamaUrl: host,
-      cwd: config.cwd
-    });
-    return createGpuHousekeeperAdapter({ baseUrl });
-  };
+  const strataHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
   const applyStrataContext = async (tokens) => {
     busy = true;
     writeLine(`Housekeeper is reconfiguring Strata to ${formatZaiContextWindow(tokens)} and restarting its lazy server...`);
@@ -400,7 +436,13 @@ async function main() {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
-    const discovered = await discoverSaddleModels({ backend, host, currentModel: model, fallbackModels });
+    const discovered = await discoverSaddleModels({
+      backend,
+      host,
+      housekeeperUrl: isLocalModelBackend(backend) ? config.housekeeperUrl : "",
+      currentModel: model,
+      fallbackModels
+    });
     if (backend === "zai" && discovered.available && discovered.catalogModels?.length) {
       try {
         const refreshed = syncZaiCodexModelCatalog({ models: discovered.catalogModels });
@@ -528,7 +570,8 @@ async function main() {
         reason: "terminal exit"
       }).catch(() => {});
     }
-    await dischargeSaddleModel(model, backend).catch((error) => writeLine(`discharge: ${error.message}`));
+    await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+      .catch((error) => writeLine(`discharge: ${error.message}`));
     if (process.stdin.isRaw) process.stdin.setRawMode(false);
     process.stdin.pause();
     writeLine("saddle closed");
@@ -641,7 +684,8 @@ async function main() {
         return;
       }
       const canonicalName = available.find((name) => name.toLowerCase() === nextMindName.toLowerCase());
-      await dischargeSaddleModel(model, backend).catch((error) => writeLine(`discharge: ${error.message}`));
+      await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+        .catch((error) => writeLine(`discharge: ${error.message}`));
       const nextProfile = resolveConfiguredSaddleMind(canonicalName);
       mindName = canonicalName;
       backend = nextProfile.backend;
@@ -756,7 +800,9 @@ async function main() {
       return;
     }
     if (input.trim() === "/discharge") {
-      await dischargeSaddleModel(model, backend).then(() => writeLine(`discharged: ${model}`)).catch((error) => writeLine(`discharge failed: ${error.message}`));
+      await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+        .then(() => writeLine(`discharged through Housekeeper: ${model}`))
+        .catch((error) => writeLine(`discharge failed: ${error.message}`));
       prompt({ clear: false });
       return;
     }
@@ -783,7 +829,7 @@ async function main() {
     busy = true;
     clearRenderedInput(renderedRows);
     writeLine(`you> ${input}`);
-    writeLine(`saddle: queued ${model} via ${backend}`);
+    writeLine(`saddle: queued ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
     const turnUsages = [];
     try {
       const result = await runSaddleTurn({
@@ -791,6 +837,7 @@ async function main() {
         model,
         backend,
         host,
+        housekeeperUrl: config.housekeeperUrl,
         contextWindow,
         think: thinkSetting?.think,
         reasoningEffort: thinkSetting?.reasoningEffort,
