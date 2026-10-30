@@ -438,15 +438,17 @@ async function analyzeSegment({
       analysis?.status !== "resolved" &&
       !Array.isArray(analysis?.clauses) &&
       typeof verify === "function" &&
-      Array.isArray(analysis?.candidates) &&
-      analysis.candidates.length > 0
+      ((Array.isArray(analysis?.candidates) && analysis.candidates.length > 0) ||
+        analysis?.phraseCoordination?.decision?.required)
     ) {
       analysis = await resolveEnglishSentence(adapterText, {
         analyze: async () => analysis,
         verify: (request) => verify({ ...request, context })
       });
     }
-    if (analysis?.status !== "resolved" && typeof adapter.toPyash === "function") {
+    if (analysis?.status !== "resolved"
+      && !analysis?.phraseCoordination?.decision?.status
+      && typeof adapter.toPyash === "function") {
       const structured = await adapter.toPyash(adapterText);
       if (structured) analysis = structured;
     }
@@ -538,31 +540,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     ...(analysis.construction ? { construction: analysis.construction } : {}),
     ...(analysis.existential ? { existential: analysis.existential } : {}),
     ...(analysis.phraseCoordination ? {
-      phraseCoordination: {
-        kind: text(analysis.phraseCoordination.kind),
-        scope: text(analysis.phraseCoordination.scope),
-        evidence: text(analysis.phraseCoordination.evidence),
-        items: (analysis.phraseCoordination.items ?? []).map((item) => ({
-          surface: text(item?.surface),
-          start: Number.isInteger(item?.start) ? item.start : null,
-          end: Number.isInteger(item?.end) ? item.end : null,
-          startOffset: Number.isInteger(item?.startOffset) ? item.startOffset : null,
-          endOffset: Number.isInteger(item?.endOffset) ? item.endOffset : null,
-          separator: text(item?.separator) || null,
-          ...(item?.connector ? {
-            connector: {
-              surface: text(item.connector.surface),
-              pyashSequence: cloneSequence(item.connector.pyashSequence)
-            }
-          } : {}),
-          pyashSequence: cloneSequence(item?.pyashSequence),
-          internalConnectors: (item?.internalConnectors ?? []).map((connector) => ({
-            surface: text(connector?.surface),
-            pyashSequence: cloneSequence(connector?.pyashSequence),
-            tokenIndex: Number.isInteger(connector?.tokenIndex) ? connector.tokenIndex : null
-          }))
-        }))
-      }
+      phraseCoordination: structuredClone(analysis.phraseCoordination)
     } : {}),
     ...(Array.isArray(analysis.reviewReasons) && analysis.reviewReasons.length > 0
       ? { reviewReasons: [...analysis.reviewReasons] }

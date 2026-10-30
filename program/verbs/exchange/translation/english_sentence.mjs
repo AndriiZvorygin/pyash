@@ -20,6 +20,10 @@ import { buildEnglishLemmaIndex, loadEnglishLemmaCatalog } from "./english_lemma
 import { buildEnglishWordNetIndex, loadEnglishWordNet } from "./english_wordnet.mjs";
 import { loadEnglishWordNetBridges } from "./english_wordnet_bridges.mjs";
 import { loadCuratedCompoundDecompositions } from "./compound_coverage.mjs";
+import {
+  findSharedPhraseHead,
+  segmentEnglishPhraseList
+} from "./english_phrase_coordination.mjs";
 import { compositionalGrid } from "../../../library/compositionalCases.mjs";
 import { translationOccurrenceKey } from "./translation_occurrence.mjs";
 
@@ -44,7 +48,12 @@ const COMPOSITIONAL_CASE_INDEX = new Map(
         pya: entry.pya
       }]))
 );
+const PYASH_CASE_MARKERS = new Set(pyashWords
+  .filter((entry) => typeof entry?.en === "string" && entry.en.endsWith("_case_"))
+  .map((entry) => entry.pya));
 const COMPOSITIONAL_CASE_ALIASES = new Map([
+  ["toward", "to"],
+  ["towards", "to"],
   ["within", "in"],
   ["inside", "in"],
   ["through", "in"],
@@ -99,7 +108,8 @@ function invalid(message) {
 }
 export function tokenizeEnglishSentence(source) {
   if (typeof source !== "string") throw invalid("English sentence must be text");
-  return source.normalize("NFC").match(/[A-Za-z]+(?:'[A-Za-z]+)?(?:-[A-Za-z]+(?:'[A-Za-z]+)?)*/gu) ?? [];
+  return (source.normalize("NFC").match(/[A-Za-z]+(?:\(s\))?(?:'[A-Za-z]+)?(?:-[A-Za-z]+(?:'[A-Za-z]+)?)*/gu) ?? [])
+    .map((surface) => surface.replace(/\(s\)$/iu, "s"));
 }
 
 function cloneMorphology(morphology) {
@@ -508,9 +518,66 @@ function findModalAction(records, startIndex = subjectActionStart(records)) {
   return null;
 }
 
+function phraseCoordinationFor(source, records, startIndex, endIndex, { scope, role, selfSequence = [] }) {
+  const list = segmentEnglishPhraseList({ source, records, startIndex, endIndex, scope, role });
+  if (!list) return null;
+  const scopedGenitive = records.findIndex((record, index) => (
+    index >= startIndex
+    && index < endIndex
+    && record.grammar?.kind === "case-marker"
+    && record.grammar.components?.includes("genitive_case_")
+  ));
+  if (scopedGenitive >= 0 && records.some((record, index) => (
+    index > scopedGenitive
+    && index < endIndex
+    && record.grammar?.kind === "conjunction"
+  ))) return null;
+  if (role === "ob" && list.items.every((item) => (
+    records[item.start]?.grammar?.kind === "case-marker"
+  ))) list.role = "oblique";
+  const factorization = findSharedPhraseHead(list, records);
+  if (!factorization) return list;
+  const options = ["person", "social", "space"].map((context) => {
+    const entry = compositionalGrid[context].destination;
+    return {
+      id: `destination:${context}:${entry.pya}`,
+      context,
+      role: entry.case,
+      pya: entry.pya
+    };
+  });
+  const caseTargets = list.items.flatMap((item, itemIndex) => {
+    if (factorization.reflexiveItemIndexes.includes(itemIndex)) return [];
+    const itemRecords = records.slice(item.start, item.end);
+    const directional = itemRecords.find((record) => ["toward", "towards"].includes(record.surface));
+    if (!directional) return [];
+    return [{
+      itemIndex,
+      itemId: `phrase-item-${itemIndex + 1}`,
+      surface: item.surface,
+      options
+    }];
+  });
+  const factorizationId = `shared-head-${createHash("sha256")
+    .update(JSON.stringify([factorization.head.pyashSequence, list.items.map((item) => item.surface)]))
+    .digest("hex").slice(0, 20)}`;
+  return {
+    ...list,
+    factorization: { ...factorization, id: factorizationId, selfSequence: [...selfSequence] },
+    ...(caseTargets.length > 0 ? {
+      decision: {
+        kind: "phrase-list-factorization",
+        required: true,
+        factorizationId,
+        caseTargets
+      }
+    } : {})
+  };
+}
+
 function englishTokenSpans(source) {
-  return [...source.matchAll(/[A-Za-z]+(?:'[A-Za-z]+)?(?:-[A-Za-z]+(?:'[A-Za-z]+)?)*/gu)].map((match) => ({
-    surface: match[0].toLowerCase(),
+  return [...source.matchAll(/[A-Za-z]+(?:\(s\))?(?:'[A-Za-z]+)?(?:-[A-Za-z]+(?:'[A-Za-z]+)?)*/gu)].map((match) => ({
+    surface: match[0].toLowerCase().replace(/\(s\)$/iu, "s"),
     start: match.index ?? 0,
     end: (match.index ?? 0) + match[0].length
   }));
@@ -525,78 +592,6 @@ function trimClauseBounds(value, offset) {
     text: value.slice(leading, endTrim),
     startOffset: offset + leading,
     endOffset: offset + endTrim
-  };
-}
-
-function existentialPhraseCoordination(source, records, startIndex, endIndex) {
-  const spans = englishTokenSpans(source);
-  if (startIndex >= endIndex || !spans[startIndex] || !spans[endIndex - 1]) return null;
-  const startOffset = spans[startIndex].start;
-  const endOffset = spans[endIndex - 1].end;
-  const segments = [];
-  let segmentStart = startOffset;
-  let nesting = 0;
-  for (let offset = startOffset; offset < endOffset; offset += 1) {
-    if (source[offset] === "(") nesting += 1;
-    else if (source[offset] === ")") nesting = Math.max(0, nesting - 1);
-    else if (source[offset] === "," && nesting === 0) {
-      const bounds = trimClauseBounds(source.slice(segmentStart, offset), segmentStart);
-      if (bounds) segments.push(bounds);
-      segmentStart = offset + 1;
-    }
-  }
-  const final = trimClauseBounds(source.slice(segmentStart, endOffset), segmentStart);
-  if (final) segments.push(final);
-  if (segments.length < 2) return null;
-
-  const items = segments.map((bounds, segmentIndex) => {
-    const tokenIndexes = spans.flatMap((span, index) => (
-      span.start >= bounds.startOffset && span.end <= bounds.endOffset ? [index] : []
-    ));
-    let firstTokenIndex = tokenIndexes[0] ?? startIndex;
-    const lastTokenIndex = tokenIndexes.at(-1) ?? firstTokenIndex - 1;
-    const firstRecord = records[firstTokenIndex];
-    const connector = segmentIndex > 0 && firstRecord?.grammar?.kind === "conjunction"
-      ? {
-        surface: firstRecord.surface,
-        pyashSequence: recordSequence(firstRecord)
-      }
-      : null;
-    if (connector) firstTokenIndex += 1;
-    const memberSpans = spans.slice(firstTokenIndex, lastTokenIndex + 1);
-    const surfaceStart = memberSpans[0]?.start ?? bounds.startOffset;
-    const surfaceBounds = memberSpans.length > 0
-      ? trimClauseBounds(source.slice(surfaceStart, bounds.endOffset), surfaceStart)
-      : bounds;
-    const memberRecords = records.slice(firstTokenIndex, lastTokenIndex + 1);
-    const internalConnectors = memberRecords.flatMap((record, index) => (
-      record.grammar?.kind === "conjunction"
-        ? [{
-          surface: record.surface,
-          pyashSequence: recordSequence(record),
-          tokenIndex: firstTokenIndex + index
-        }]
-        : []
-    ));
-    return {
-      surface: surfaceBounds?.text ?? bounds.text,
-      start: firstTokenIndex,
-      end: lastTokenIndex + 1,
-      startOffset: surfaceBounds?.startOffset ?? bounds.startOffset,
-      endOffset: surfaceBounds?.endOffset ?? bounds.endOffset,
-      separator: segmentIndex > 0 ? "comma" : null,
-      ...(connector ? { connector } : {}),
-      pyashSequence: memberRecords
-        .filter((record) => !record.consumedBy)
-        .flatMap(recordSequence),
-      internalConnectors
-    };
-  });
-  return {
-    kind: "phrase-list",
-    scope: "existential-content",
-    items,
-    evidence: "top-level commas delimit phrase items; conjunctions inside parentheses and items stay within their phrase"
   };
 }
 
@@ -619,6 +614,19 @@ function independentClauseActionIndex(records, connectorIndex) {
   return -1;
 }
 
+function hasActionBeforeConnector(records, connectorIndex) {
+  return records.slice(0, connectorIndex).some((record, index) => (
+    index > 0 && (
+      record.morphology?.kind === "finite-past"
+      || record.morphology?.kind === "finite-present"
+      || record.morphology?.kind === "progressive"
+      || WORDNET_MODAL_PRECEDERS.has(record.surface)
+      || record.wordnetPartOfSpeech === "v"
+      || record.wordnet?.partsOfSpeech?.includes("v")
+    )
+  ));
+}
+
 function splitIndependentClauses(source, records) {
   const spans = englishTokenSpans(source);
   const cuts = spans
@@ -627,6 +635,7 @@ function splitIndependentClauses(source, records) {
       index > 0
       && INDEPENDENT_CLAUSE_CONNECTORS.has(record?.surface)
       && record?.grammar?.kind === "conjunction"
+      && hasActionBeforeConnector(records, index)
       && independentClauseActionIndex(records, index) >= 0
     ));
   if (cuts.length === 0) return [];
@@ -933,13 +942,18 @@ function projectRelativeClauseTokens(records, projection) {
   });
 }
 
-function analyzeExistentialClause({ source, tokens, records, existential }) {
+function analyzeExistentialClause({ source, tokens, records, existential, grammarIndex }) {
   const content = existentialContent(records, existential);
-  const phraseCoordination = existentialPhraseCoordination(
+  const phraseCoordination = phraseCoordinationFor(
     source,
     records,
     content.contentStart,
-    content.contentEnd
+    content.contentEnd,
+    {
+      scope: "existential-content",
+      role: "su",
+      selfSequence: grammarIndex?.resolve("self target")?.pyashSequence ?? []
+    }
   );
   const relativeRecords = projectRelativeClauseTokens(records, content.relativeProjection);
   const connector = existential.connectorIndex === null
@@ -951,18 +965,39 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     && content.relativeSequence[0] === RELATIVE_CLAUSE_OPEN_PYA
     ? content.relativeSequence.slice(1)
     : content.relativeSequence;
+  const coordinationParts = phraseCoordination
+    ? coordinatedPhraseParts(phraseCoordination, records)
+    : null;
+  const contentSequence = phraseCoordination
+    ? coordinatedPhraseSequence(phraseCoordination, records)
+    : content.subject.pyashSequence;
+  if (phraseCoordination) {
+    content.subject.pyashSequence = contentSequence;
+    phraseCoordination.items = phraseCoordination.items.map((item, index) => ({
+      ...item,
+      pyashSequence: coordinationParts.members[index]
+    }));
+    phraseCoordination.pyashSequence = contentSequence;
+    phraseCoordination.sharedHeadSequence = coordinationParts.sharedHead;
+  }
   const structuralSequence = [
     ...connectorSequence,
     ...relativeSequence,
-    ...content.subject.pyashSequence,
+    ...contentSequence,
     ...existentialSequence
   ];
+  const factoredReflexiveIndexes = new Set((phraseCoordination?.factorization?.reflexiveItemIndexes ?? [])
+    .flatMap((itemIndex) => {
+      const item = phraseCoordination.items[itemIndex];
+      return item ? Array.from({ length: item.end - item.start }, (_, offset) => item.start + offset) : [];
+    }));
   const unresolved = records
-    .filter((record) => (
+    .filter((record, index) => (
       record.pyashSequence.length === 0
       && !record.consumedBy
       && !record.copula
       && record.grammar?.kind !== NEGATION_GRAMMAR_KIND
+      && !factoredReflexiveIndexes.has(index)
     ))
     .map((record) => record.surface);
   const phrases = [
@@ -994,11 +1029,11 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     && structuralSequence.length > 0
     && existentialSequence.length > 0
     && (content.relativeIndex < 0 || Boolean(content.relativeProjection.action));
-  const reviewReasons = phraseCoordination
-    ? ["phrase-level existential list is segmented but not yet lowered as a coordinated phrase"]
+  const reviewReasons = phraseCoordination?.decision?.required
+    ? ["phrase-list factorization needs a queued case decision"]
     : [];
   const sentence = canResolve
-    && !phraseCoordination
+    && !phraseCoordination?.decision?.required
     ? {
       mood: existentialSequence.at(-1),
       su: { name: structuralSequence.slice(0, -1).join(" ") }
@@ -1498,6 +1533,83 @@ function composeCaseSequence(records, defaultCase = null) {
   return sequence;
 }
 
+function replaceFinalCase(sequence, caseWord) {
+  const result = [...sequence];
+  const index = result.findLastIndex((word) => PYASH_CASE_MARKERS.has(word));
+  if (index >= 0) result[index] = caseWord;
+  else result.push(caseWord);
+  return result;
+}
+
+function roleCase(role) {
+  return role === "su" ? NOMINATIVE_MARKER : role === "ob" ? ACCUSATIVE_MARKER : null;
+}
+
+function phraseListSeparator(coordination, index) {
+  const next = coordination.items[index + 1];
+  return next?.connector?.pyashSequence?.[0] ?? "ba";
+}
+
+function coordinatedPhraseParts(coordination, records, {
+  selfSequence = [],
+  caseSelections = new Map()
+} = {}) {
+  if (!coordination?.items?.length) return { members: [], sharedHead: [] };
+  const factorization = coordination.factorization;
+  if (!factorization) {
+    const carriesMemberCases = coordination.items.some((item) => (
+      records.slice(item.start, item.end).some(isLinkedCaseRecord)
+    ));
+    let inheritedCase = null;
+    const members = coordination.items.map((item) => {
+      const itemRecords = records.slice(item.start, item.end);
+      const explicitCase = itemRecords.find(isLinkedCaseRecord);
+      let sequence = carriesMemberCases
+        ? composeCaseSequence(itemRecords)
+        : composeHeadInitialPhraseSequence(itemRecords);
+      if (explicitCase) inheritedCase = recordSequence(explicitCase).at(-1);
+      else if (inheritedCase) sequence = replaceFinalCase(sequence, inheritedCase);
+      return sequence;
+    });
+    return {
+      members,
+      sharedHead: carriesMemberCases ? [] : [roleCase(coordination.role)].filter(Boolean)
+    };
+  }
+
+  const personDestination = compositionalGrid.person.destination.pya;
+  const targets = coordination.items.map((item, itemIndex) => {
+    if (factorization.reflexiveItemIndexes.includes(itemIndex)) {
+      return [...(factorization.selfSequence ?? selfSequence), personDestination];
+    }
+    const headIndex = factorization.itemHeadIndexes[itemIndex];
+    const itemRecords = records.slice(item.start, item.end);
+    const remainder = headIndex === undefined
+      ? itemRecords
+      : itemRecords.filter((record, index) => item.start + index !== headIndex);
+    let sequence = composeCaseSequence(remainder);
+    const selectedCase = caseSelections.get(itemIndex);
+    if (selectedCase) sequence = replaceFinalCase(sequence, selectedCase);
+    return sequence;
+  });
+  const sharedHead = [
+    ...factorization.head.pyashSequence,
+    roleCase(coordination.role)
+  ].filter(Boolean);
+  return { members: targets, sharedHead };
+}
+
+function coordinatedPhraseSequence(coordination, records, options = {}) {
+  const { members, sharedHead } = coordinatedPhraseParts(coordination, records, options);
+  return [
+    ...members.flatMap((member, index) => [
+      ...member,
+      ...(index < members.length - 1 ? [phraseListSeparator(coordination, index)] : [])
+    ]),
+    ...sharedHead
+  ];
+}
+
 function composeObjectSequence(objectRecords) {
   const relativeIndex = objectRecords.findIndex((record) => record.grammar?.kind === "dependent-clause");
   if (relativeIndex >= 0) {
@@ -1694,7 +1806,7 @@ export function analyzeEnglishSentence(source, {
       pyash: clauses.map((clause) => clause.pyash).filter(Boolean).join(" ")
     };
   }
-  if (existential) return analyzeExistentialClause({ source, tokens, records, existential });
+  if (existential) return analyzeExistentialClause({ source, tokens, records, existential, grammarIndex });
   const progressiveIndex = findProgressiveIndex(records);
   const copulaIndex = progressiveIndex < 0
     ? findStructuralCopulaIndex(records)
@@ -1829,15 +1941,15 @@ export function analyzeEnglishSentence(source, {
   } else if (verbIndex >= 0) {
     consumedIndexes.add(verbIndex);
   }
-  const unresolved = records
-    .filter((record, index) => (
-      record.pyashSequence.length === 0
+  const unresolvedRecords = records.flatMap((record, index) => (
+    record.pyashSequence.length === 0
       && !record.consumedBy
       && (!consumedIndexes.has(index) || (!record.copula && !record.grammar))
       && record.grammar?.kind !== NEGATION_GRAMMAR_KIND
       && !record.copula
-    ))
-    .map((record) => record.surface);
+      ? [{ record, index }]
+      : []
+  ));
   let subjectBoundary = copulaIndex >= 0
     ? copulaIndex
     : modalAction?.modalIndex ?? verbIndex;
@@ -1848,25 +1960,77 @@ export function analyzeEnglishSentence(source, {
     const copulaIndex = records.findIndex((record, index) => index < verbIndex && record.copula);
     if (copulaIndex >= 0) subjectBoundary = copulaIndex;
   }
-  const subject = addNominativeCase(makeSubjectPhrase(records, subjectBoundary));
+  let subject = addNominativeCase(makeSubjectPhrase(records, subjectBoundary));
   const subjectRecords = subjectBoundary > 0 ? records.slice(0, subjectBoundary) : [];
-  const subjectRecordsReady = subjectRecords.every((record) => record.pyashSequence.length > 0);
+  const objectStart = copulaIndex >= 0 ? copulaIndex + 1 : verbIndex + 1;
+  const objectRecords = objectRecordsAfter(records, copulaIndex >= 0 ? copulaIndex : verbIndex);
+  const selfSequence = grammarIndex?.resolve("self target")?.pyashSequence ?? [];
+  const subjectCoordination = subjectBoundary > 1
+    ? phraseCoordinationFor(source, records, 0, subjectBoundary, {
+      scope: "argument",
+      role: "su",
+      selfSequence
+    })
+    : null;
+  const objectCoordinationCandidate = objectStart >= 0 && objectStart < tokens.length
+    ? phraseCoordinationFor(source, records, objectStart, tokens.length, {
+      scope: "argument",
+      role: objectRecords.length > 0 && objectRecords.every((record) => record.grammar?.kind === "case-marker")
+        ? "oblique"
+        : "ob",
+      selfSequence
+    })
+    : null;
+  const phraseCoordination = subjectCoordination ?? objectCoordinationCandidate;
+  const coordinationParts = phraseCoordination
+    ? coordinatedPhraseParts(phraseCoordination, records)
+    : null;
+  const coordinatedSequence = phraseCoordination
+    ? coordinatedPhraseSequence(phraseCoordination, records)
+    : [];
+  if (phraseCoordination) {
+    phraseCoordination.items = phraseCoordination.items.map((item, index) => ({
+      ...item,
+      pyashSequence: coordinationParts.members[index]
+    }));
+    phraseCoordination.pyashSequence = coordinatedSequence;
+    phraseCoordination.sharedHeadSequence = coordinationParts.sharedHead;
+  }
+  if (subjectCoordination) subject = { ...subject, pyashSequence: coordinatedSequence };
+  const factoredReflexiveIndexes = new Set((phraseCoordination?.factorization?.reflexiveItemIndexes ?? [])
+    .flatMap((itemIndex) => {
+      const item = phraseCoordination.items[itemIndex];
+      return item ? Array.from({ length: item.end - item.start }, (_, offset) => item.start + offset) : [];
+    }));
+  const unresolved = unresolvedRecords
+    .filter(({ index }) => !factoredReflexiveIndexes.has(index))
+    .map(({ record }) => record.surface);
+  const subjectRecordsReady = subjectRecords.every((record, index) => (
+    record.pyashSequence.length > 0
+    || factoredReflexiveIndexes.has(index)
+  ));
   const subjectReady = subject.pyashSequence.length > 0
     && subjectRecordsReady
     && (verbIndex === 0 || isSubject(subject) || subject.pyashSequence.some(Boolean));
-  const objectStart = copulaIndex >= 0 ? copulaIndex + 1 : verbIndex + 1;
-  const objectRecords = objectRecordsAfter(records, copulaIndex >= 0 ? copulaIndex : verbIndex);
-  const objectReady = objectRecords.every((record) => record.pyashSequence.length > 0);
+  const objectReady = objectRecords.every((record) => (
+    record.pyashSequence.length > 0
+    || factoredReflexiveIndexes.has(records.indexOf(record))
+  ));
+  const listDecisionRequired = Boolean(phraseCoordination?.decision?.required);
   const deterministic = (copulaIndex >= 0 || Boolean(verbPhrase))
     && (copulaIndex >= 0 || verbPhrase.certainty === "deterministic")
     && subjectReady
     && unresolved.length === 0
-    && objectReady;
+    && objectReady
+    && !listDecisionRequired;
   const sentence = deterministic
     ? makeSentence(subject, verbPhrase, objectRecords, modalAction?.modalIndex >= 0
       ? modalAction.mood
       : "ya")
     : null;
+  if (sentence && objectCoordinationCandidate) {
+    sentence.ob = { name: coordinatedSequence.join(" ") };
+  }
   const verbStart = progressiveIndex >= 0
     ? Math.max(0, progressiveIndex - 1)
     : modalAction?.modalIndex ?? verbIndex;
@@ -1885,6 +2049,11 @@ export function analyzeEnglishSentence(source, {
     objectRecords,
     objectStart
   });
+  if (phraseCoordination && !listDecisionRequired) {
+    const slot = phraseCoordination.role === "su" ? "su" : "ob";
+    const phrase = phrases.find((entry) => entry.slot === slot);
+    if (phrase) phrase.pyashSequence = coordinatedSequence;
+  }
   return {
     format: ENGLISH_SENTENCE_FORMAT,
     sourceText: source,
@@ -1894,10 +2063,12 @@ export function analyzeEnglishSentence(source, {
     verbPhrase,
     verbIndex,
     ...(copulaIndex >= 0 ? { copulaIndex, construction: "zero-copula" } : {}),
+    ...(phraseCoordination ? { phraseCoordination } : {}),
     phrases,
     candidates: verbPhrase ? [verbPhrase] : [],
     unresolved,
     sentence,
+    ...(listDecisionRequired ? { reviewReasons: ["phrase-list factorization needs a queued case decision"] } : {}),
     pyash: sentence
       ? sentenceToPyash(sentence)
       : [verbPhrase?.pyashSequence?.join(" "), verbPhrase?.moodSurface].filter(Boolean).join(" ")
@@ -2170,9 +2341,14 @@ export async function resolveEnglishSentence(source, {
   verify
 } = {}) {
   const analysis = await analyze(source);
-  if (analysis.status === "resolved" || typeof verify !== "function" || analysis.candidates.length === 0) {
+  if (analysis.status === "resolved" || typeof verify !== "function") {
     return analysis;
   }
+  if (analysis.phraseCoordination?.decision?.required) {
+    const review = await verify({ sourceText: source, analysis, candidates: [] });
+    return applyEnglishPhraseCoordinationDecision(analysis, review);
+  }
+  if (analysis.candidates.length === 0) return analysis;
   const review = await verify({
     sourceText: source,
     analysis,
@@ -2182,6 +2358,114 @@ export async function resolveEnglishSentence(source, {
     return { ...analysis, review };
   }
   return applyEnglishSentenceCandidate(analysis, review.candidateId);
+}
+
+export function applyEnglishPhraseCoordinationDecision(analysis, review) {
+  const coordination = analysis?.phraseCoordination;
+  const decision = coordination?.decision;
+  if (review?.verdict !== "accept"
+    || review.factorizationId !== decision?.factorizationId
+    || !Array.isArray(review.targetCases)) {
+    return {
+      ...analysis,
+      review,
+      phraseCoordination: coordination
+        ? { ...coordination, decision: { ...decision, status: "uncertain" } }
+        : coordination
+    };
+  }
+  const selectedByItem = new Map(review.targetCases.map((row) => [row.itemId, row]));
+  const caseSelections = new Map((decision.caseTargets ?? []).flatMap((target) => {
+    const selected = selectedByItem.get(target.itemId);
+    return selected ? [[target.itemIndex, selected.pya]] : [];
+  }));
+  const { members, sharedHead } = coordinatedPhraseParts(
+    coordination,
+    analysis.tokens,
+    { caseSelections }
+  );
+  const sequence = [
+    ...members.flatMap((member, index) => [
+      ...member,
+      ...(index < members.length - 1 ? [phraseListSeparator(coordination, index)] : [])
+    ]),
+    ...sharedHead
+  ];
+  const phraseCoordination = {
+    ...coordination,
+    items: coordination.items.map((item, index) => ({ ...item, pyashSequence: members[index] })),
+    factorization: { ...coordination.factorization, status: "accepted" },
+    decision: {
+      ...decision,
+      status: "accepted",
+      rationale: review.rationale,
+      targetCases: review.targetCases
+    },
+    pyashSequence: sequence,
+    sharedHeadSequence: sharedHead
+  };
+  if (analysis.construction === "existential-clause") {
+    const existentialSequence = analysis.existential?.pyashSequence ?? [];
+    const relativeSequence = analysis.relativeClauses?.[0]?.pyashSequence ?? [];
+    const connectorSequence = (analysis.discourseConnectors ?? []).flatMap((connector) => connector.pyashSequence ?? []);
+    const structuralSequence = [
+      ...connectorSequence,
+      ...relativeSequence,
+      ...sequence,
+      ...existentialSequence
+    ];
+    const sentence = {
+      mood: existentialSequence.at(-1),
+      su: { name: structuralSequence.slice(0, -1).join(" ") }
+    };
+    const subject = { ...analysis.subject, pyashSequence: sequence };
+    const existential = {
+      ...analysis.existential,
+      content: { ...analysis.existential.content, pyashSequence: sequence }
+    };
+    return {
+      ...analysis,
+      status: analysis.unresolved?.length ? "review" : "resolved",
+      subject,
+      existential,
+      phraseCoordination,
+      sentence: analysis.unresolved?.length ? undefined : sentence,
+      phrases: analysis.phrases?.map((phrase) => phrase.slot === "su"
+        ? { ...phrase, pyashSequence: sequence }
+        : phrase),
+      structural: structuralSequence.join(" "),
+      pyash: structuralSequence.join(" "),
+      reviewReasons: analysis.unresolved?.length ? analysis.reviewReasons : []
+    };
+  }
+
+  const role = coordination.role;
+  const subjectSequence = role === "su" ? sequence : analysis.subject?.pyashSequence ?? [];
+  const objectSequenceValue = role === "ob"
+    ? sequence
+    : analysis.phrases?.find((phrase) => phrase.slot === "ob")?.pyashSequence ?? [];
+  const sentence = {
+    mood: analysis.sentence?.mood ?? "ya",
+    su: { name: subjectSequence.join(" ") },
+    ...(analysis.verbPhrase?.pyashSequence?.length
+      ? { be: analysis.verbPhrase.pyashSequence.join(" ") }
+      : {}),
+    ...(objectSequenceValue.length ? { ob: { name: objectSequenceValue.join(" ") } } : {})
+  };
+  const phrases = analysis.phrases?.map((phrase) => phrase.slot === role
+    ? { ...phrase, pyashSequence: sequence }
+    : phrase);
+  const unresolved = analysis.unresolved ?? [];
+  return {
+    ...analysis,
+    status: unresolved.length === 0 ? "resolved" : "review",
+    sentence: unresolved.length === 0 ? sentence : undefined,
+    subject: role === "su" ? { ...analysis.subject, pyashSequence: sequence } : analysis.subject,
+    phraseCoordination,
+    phrases,
+    structural: sentenceToPyash(sentence),
+    pyash: sentenceToPyash(sentence)
+  };
 }
 
 export function applyEnglishSentenceCandidate(analysis, candidateId) {

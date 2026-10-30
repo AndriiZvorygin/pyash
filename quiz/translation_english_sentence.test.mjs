@@ -13,8 +13,12 @@ import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/
 import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
 import {
   buildEnglishSentenceVerificationPrompt,
+  buildEnglishPhraseCoordinationPrompt,
   createQueuedMindEnglishSentenceVerifier,
+  createMemoizedEnglishPhraseCoordinationVerifier,
+  parseEnglishPhraseCoordinationResponse,
   parseEnglishSentenceVerificationResponse,
+  verifyEnglishPhraseCoordination,
   verifyEnglishSentenceCandidates
 } from "../program/verbs/exchange/translation/english_sentence_verification.mjs";
 import {
@@ -58,6 +62,50 @@ function fixtureResolver() {
     }]
   ]);
   return (word) => rows.get(word) ?? null;
+}
+
+let phraseFixtureGrammarIndexPromise;
+
+async function analyzePhraseFixtureSentence(source) {
+  phraseFixtureGrammarIndexPromise ??= loadEnglishGrammarCatalog().then((grammar) => (
+    buildEnglishGrammarIndex({ catalogEntries: grammar.entries })
+  ));
+  const grammarIndex = await phraseFixtureGrammarIndexPromise;
+  const rows = new Map([
+    ["self-love", { coverageType: "fixture", lemma: "self-love", pyashSequence: ["pyan", "fyoh"] }],
+    ["love", { coverageType: "fixture", lemma: "love", pyashSequence: ["pyan"] }],
+    ["friend", { coverageType: "fixture", lemma: "friend", pyashSequence: ["pyat"] }],
+    ["romance", { coverageType: "fixture", lemma: "romance", pyashSequence: ["hram"] }],
+    ["family", { coverageType: "fixture", lemma: "family", pyashSequence: ["hfac"] }],
+    ["respect", { coverageType: "fixture", lemma: "respect", pyashSequence: ["hput"] }],
+    ["art", { coverageType: "fixture", lemma: "art", pyashSequence: ["tlam"] }],
+    ["work", { coverageType: "fixture", lemma: "work", pyashSequence: ["prah"] }],
+    ["life", { coverageType: "fixture", lemma: "life", pyashSequence: ["hmas"] }],
+    ["god", { coverageType: "fixture", lemma: "god", pyashSequence: ["dwa2n"] }],
+    ["gods", { coverageType: "fixture", lemma: "god", pyashSequence: ["dwa2n", "pu"] }],
+    ["object", { coverageType: "fixture", lemma: "object", pyashSequence: ["hcas"] }],
+    ["idea", { coverageType: "fixture", lemma: "idea", pyashSequence: ["tli"] }],
+    ["i", { coverageType: "fixture", lemma: "i", pyashSequence: ["mi"] }],
+    ["walked", {
+      coverageType: "fixture",
+      lemma: "walk",
+      pyashSequence: ["pfin"],
+      morphology: {
+        kind: "finite-past",
+        markerNames: ["past_tense_"],
+        markerSequence: ["ki"],
+        certainty: "deterministic",
+        evidence: "phrase-list fixture action"
+      }
+    }]
+  ]);
+  return analyzeEnglishSentence(source, {
+    grammarIndex,
+    resolveWord: (word) => rows.get(word) ?? {
+      coverageType: "fixture",
+      pyashSequence: [`fixture-${word}`]
+    }
+  });
 }
 
 test("English sentence resources expose one shared full coverage index", async () => {
@@ -777,14 +825,12 @@ test("existential can composes with potential mood and keeps self-love readable"
 });
 
 test("existential lists keep phrase coordination separate from clause connectors", async () => {
-  const analysis = await analyzeDefaultEnglishSentence(
+  const analysis = await analyzePhraseFixtureSentence(
     "There can be self-love, love towards a friend (such as platonic love), love in romance, towards family, toward God(s), or towards an object or idea."
   );
 
   assert.equal(analysis.status, "review");
-  assert.deepEqual(analysis.reviewReasons, [
-    "phrase-level existential list is segmented but not yet lowered as a coordinated phrase"
-  ]);
+  assert.deepEqual(analysis.reviewReasons, ["phrase-list factorization needs a queued case decision"]);
   assert.deepEqual(analysis.phraseCoordination.items.map((item) => item.surface), [
     "self-love",
     "love towards a friend (such as platonic love)",
@@ -794,6 +840,12 @@ test("existential lists keep phrase coordination separate from clause connectors
     "towards an object or idea"
   ]);
   assert.equal(analysis.phraseCoordination.scope, "existential-content");
+  assert.equal(analysis.phraseCoordination.role, "su");
+  assert.deepEqual(analysis.phraseCoordination.factorization.reflexiveItemIndexes, [0]);
+  assert.deepEqual(analysis.phraseCoordination.factorization.inheritedItemIndexes, [3, 4, 5]);
+  assert.equal(analysis.phraseCoordination.factorization.head.lemma, "love");
+  assert.equal(analysis.phraseCoordination.factorization.placement, "after-list");
+  assert.equal(analysis.phraseCoordination.decision.caseTargets.length, 4);
   assert.deepEqual(analysis.phraseCoordination.items.at(-1).connector, {
     surface: "or",
     pyashSequence: ["ba"]
@@ -802,10 +854,125 @@ test("existential lists keep phrase coordination separate from clause connectors
     analysis.phraseCoordination.items.at(-1).internalConnectors.map(({ surface }) => surface),
     ["or"]
   );
-  assert.deepEqual(
-    analysis.phraseCoordination.items[0].pyashSequence,
-    ["pyan", "fyoh"]
-  );
+  assert.deepEqual(analysis.phraseCoordination.factorization.selfSequence, ["fyif"]);
+});
+
+test("queued phrase-list decision factors one shared head and applies target-role cases", async () => {
+  const source = "There can be self-love, love towards a friend, love in romance, towards family.";
+  const analysis = await analyzePhraseFixtureSentence(source);
+  const decision = analysis.phraseCoordination.decision;
+  const choices = ["person", "social"];
+  const targetCases = decision.caseTargets.map((target, index) => {
+    const selected = target.options.find((option) => option.context === choices[index]);
+    return { itemId: target.itemId, caseId: selected.id, pya: selected.pya };
+  });
+  let calls = 0;
+  const resolved = await resolveEnglishSentence(source, {
+    analyze: async () => analysis,
+    verify: async ({ analysis: current }) => {
+      calls += 1;
+      return {
+        verdict: "accept",
+        factorizationId: current.phraseCoordination.decision.factorizationId,
+        targetCases,
+        rationale: "target roles select the person, person, and social destination cases"
+      };
+    }
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(resolved.status, "resolved");
+  assert.deepEqual(resolved.phraseCoordination.items.map((item) => item.pyashSequence), [
+    ["fyif", "yi"],
+    ["pyat", "tlih", "yi"],
+    ["hram", "lwah"],
+    ["hfac", "pwah"]
+  ]);
+  assert.deepEqual(resolved.phraseCoordination.sharedHeadSequence, ["pyan", "na"]);
+  assert.deepEqual(resolved.sentence.su.name.split(/\s+/u), [
+    "fyif", "yi", "ba", "pyat", "tlih", "yi", "ba", "hram", "lwah", "ba", "hfac", "pwah", "pyan", "na", "tseh"
+  ]);
+  assert.equal(resolved.sentence.mood, "syi7h");
+  assert.equal(resolved.phraseCoordination.items[0].pyashSequence.includes("fyoh"), false);
+  const phraseVliw = lowerSentencePhraseVliw(resolved.sentence);
+  const pyac = renderVliwPyac(decodePhraseVliw(phraseVliw.vectors));
+  const decoded = decodePyacSentence(pyac);
+  assert.match(decoded.englishPyash, /love to self or to a friend/u);
+  assert.match(decoded.englishPyash, /family/u);
+});
+
+test("ordinary phrase lists lower in subject, object, and oblique roles", async () => {
+  const subject = await analyzePhraseFixtureSentence("Friend or family walked.");
+  assert.equal(subject.status, "resolved");
+  assert.equal(subject.phraseCoordination.role, "su");
+  assert.deepEqual(subject.phraseCoordination.pyashSequence, [
+    "pyat", "ba", "hfac", "na"
+  ]);
+
+  const object = await analyzePhraseFixtureSentence("I walked friend or family.");
+  assert.equal(object.status, "resolved");
+  assert.equal(object.phraseCoordination.role, "ob");
+  assert.deepEqual(object.sentence.ob.name.split(/\s+/u), [
+    "pyat", "ba", "hfac", "ka"
+  ]);
+
+  const oblique = await analyzePhraseFixtureSentence("I walked from friend or from family.");
+  assert.equal(oblique.status, "resolved");
+  assert.equal(oblique.phraseCoordination.role, "oblique");
+  assert.deepEqual(oblique.phraseCoordination.pyashSequence, [
+    "pyat", "so", "ba", "hfac", "so"
+  ]);
+
+  const elidedCase = await analyzePhraseFixtureSentence("I walked from friend or family.");
+  assert.equal(elidedCase.status, "resolved");
+  assert.deepEqual(elidedCase.phraseCoordination.pyashSequence, [
+    "pyat", "so", "ba", "hfac", "so"
+  ]);
+});
+
+test("shared-head factorization keeps the parent case in subject and object lists", async () => {
+  const list = "respect in art, respect in work, in life";
+  const subject = await analyzePhraseFixtureSentence(`${list} walked.`);
+  assert.equal(subject.status, "resolved");
+  assert.equal(subject.phraseCoordination.role, "su");
+  assert.equal(subject.phraseCoordination.factorization.head.lemma, "respect");
+  assert.deepEqual(subject.phraseCoordination.sharedHeadSequence, ["hput", "na"]);
+
+  const object = await analyzePhraseFixtureSentence(`I walked ${list}.`);
+  assert.equal(object.status, "resolved");
+  assert.equal(object.phraseCoordination.role, "ob");
+  assert.equal(object.phraseCoordination.factorization.head.lemma, "respect");
+  assert.deepEqual(object.phraseCoordination.sharedHeadSequence, ["hput", "ka"]);
+});
+
+test("queued case choices apply to a shared-head object list", async () => {
+  const source = "I walked respect towards friend, respect towards family, towards God.";
+  const analysis = await analyzePhraseFixtureSentence(source);
+  assert.equal(analysis.phraseCoordination.role, "ob");
+  const contexts = ["person", "social", "space"];
+  const targetCases = analysis.phraseCoordination.decision.caseTargets.map((target, index) => {
+    const option = target.options.find(({ context }) => context === contexts[index]);
+    return { itemId: target.itemId, caseId: option.id, pya: option.pya };
+  });
+  const resolved = await resolveEnglishSentence(source, {
+    analyze: async () => analysis,
+    verify: async ({ analysis: current }) => ({
+      verdict: "accept",
+      factorizationId: current.phraseCoordination.decision.factorizationId,
+      targetCases,
+      rationale: "the case selections follow each target's semantic context"
+    })
+  });
+  assert.equal(resolved.status, "resolved");
+  assert.deepEqual(resolved.phraseCoordination.items.map((item) => item.pyashSequence), [
+    ["pyat", "yi"],
+    ["hfac", "pwah"],
+    ["dwa2n", "ma"]
+  ]);
+  assert.deepEqual(resolved.phraseCoordination.sharedHeadSequence, ["hput", "ka"]);
+  assert.deepEqual(resolved.sentence.ob.name.split(/\s+/u), [
+    "pyat", "yi", "ba", "hfac", "pwah", "ba", "dwa2n", "ma", "hput", "ka"
+  ]);
 });
 
 test("physically keeps bodily WordNet senses reviewable instead of deterministic collapse", async () => {
@@ -954,6 +1121,67 @@ test("sentence verifier accepts only a supplied candidate and repairs once", asy
   assert.equal(applied.status, "resolved");
 });
 
+test("phrase-list verifier bounds its prompt, parses noisy JSON, and repairs at most once", async () => {
+  const analysis = await analyzeDefaultEnglishSentence(
+    "There can be love towards a friend, love in romance, towards family."
+  );
+  const coordination = analysis.phraseCoordination;
+  const decision = coordination.decision;
+  const cases = decision.caseTargets.map((target) => ({
+    itemId: target.itemId,
+    caseId: target.options.find((option) => option.context === "person").id
+  }));
+  const prompt = buildEnglishPhraseCoordinationPrompt({
+    sourceText: analysis.sourceText,
+    coordination
+  });
+  assert.ok(prompt.length < 12000);
+  assert.match(prompt, /SOURCE SENTENCE:/u);
+  assert.match(prompt, /DIRECTIONAL TARGETS AND CASE OPTIONS:/u);
+  assert.doesNotMatch(prompt, /WordNet|gloss|example:/iu);
+
+  const payload = {
+    verdict: "accept",
+    factorizationId: decision.factorizationId,
+    targetCases: cases,
+    rationale: "Both targets are people."
+  };
+  const calls = [];
+  const result = await verifyEnglishPhraseCoordination({
+    sourceText: analysis.sourceText,
+    coordination,
+    invoke: async (request) => {
+      calls.push(request);
+      return request.phase === "verify"
+        ? "preface {malformed"
+        : `decision follows: ${JSON.stringify(payload)}`;
+    }
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(result.verificationAttempts, 2);
+  assert.equal(result.verdict, "accept");
+  assert.equal(result.targetCases.length, 2);
+  assert.equal(parseEnglishPhraseCoordinationResponse("noise only", { coordination }).valid, false);
+  assert.equal(parseEnglishPhraseCoordinationResponse(JSON.stringify({
+    ...payload,
+    targetCases: cases.map((row) => ({ ...row, caseId: "outside" }))
+  }), { coordination }).valid, false);
+
+  let memoCalls = 0;
+  const memoized = createMemoizedEnglishPhraseCoordinationVerifier({
+    invoke: async () => {
+      memoCalls += 1;
+      return JSON.stringify(payload);
+    }
+  });
+  const [first, second] = await Promise.all([
+    memoized({ sourceText: analysis.sourceText, coordination }),
+    memoized({ sourceText: analysis.sourceText, coordination })
+  ]);
+  assert.equal(memoCalls, 1);
+  assert.deepEqual(first.targetCases, second.targetCases);
+});
+
 test("sentence resolution applies a Housekeeper-selected contextual candidate", async () => {
   const analysis = analyzeEnglishSentence("I walking", {
     resolveWord: fixtureResolver(),
@@ -998,4 +1226,29 @@ test("queued sentence verifier uses the existing future GPU duty and await path"
   assert.match(calls[0], /vyah start future be gpu mind do/u);
   assert.match(calls[1], /vyah await be gpu do/u);
   assert.match(result, /verdict/u);
+});
+
+test("queued phrase-list duties keep distinct factorization identities within one sentence", async () => {
+  const calls = [];
+  const invoke = createQueuedMindEnglishSentenceVerifier({
+    parse: (sentence) => sentence,
+    interpret: async (sentence) => {
+      calls.push(sentence);
+      return sentence.includes("vyah start future be gpu mind do")
+        ? { ob: { text: "queued" } }
+        : { ob: { text: "success" }, result: { text: "{}" } };
+    },
+    timeoutMs: 1000
+  });
+  const sourceText = "One sentence with two independent phrase lists.";
+  await Promise.all(["factorization-one", "factorization-two"].map((factorizationId) => invoke({
+    sourceText,
+    prompt: `prompt for ${factorizationId}`,
+    coordination: { decision: { factorizationId } }
+  })));
+  const handles = calls
+    .filter((sentence) => sentence.includes("vyah start future be gpu mind do"))
+    .map((sentence) => sentence.match(/su name "([^"]+)"/u)?.[1]);
+  assert.equal(handles.length, 2);
+  assert.equal(new Set(handles).size, 2);
 });

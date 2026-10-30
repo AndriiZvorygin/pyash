@@ -30,6 +30,26 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   postposing English prepositions, and do not treat Pyac suffix order as
   readable Pyash word order.
 
+## Phrase-list translation
+
+- Detect coordination at the phrase level in subject, object, oblique, and
+  existential-content roles. Preserve parenthetical examples and conjunctions
+  inside a member; do not promote them to sentence connectors.
+- Factor a repeated lexical head only when the list also provides explicit
+  case-led ellipsis evidence. Keep the member spans, target cases, and
+  factorization evidence in the translation `.pya` artifact.
+- In postpositional Pyac, place each member's case suffix before `ba`, put `ba`
+  between members only, and place a factored shared parent phrase after its
+  dependent members. Add the role case to the shared head.
+- Use the compositional destination grid for directional targets. If target
+  role is ambiguous, make one bounded structured choice through the queued
+  Housekeeper mind path; accept only supplied case ids and retain uncertain
+  results as review data.
+- A `self-` member in a factored list becomes the nominal self target `fyif`
+  plus its selected case. Keep `fyoh` for the separate reflexive-voice suffix.
+- Keep clause coordination separate: split an `and`/`but`/`or` clause only
+  when both sides have clause-action evidence.
+
 ## Update anchors quickly
 
 - Add a line by hand:

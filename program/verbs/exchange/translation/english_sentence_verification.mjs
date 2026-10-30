@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 
-import { parseBoundedVerificationResponse } from "./english_verification.mjs";
+import {
+  extractBoundedJsonObject,
+  parseBoundedVerificationResponse
+} from "./english_verification.mjs";
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -109,8 +112,146 @@ export async function verifyEnglishSentenceCandidates({ sourceText, analysis, ca
   };
 }
 
-function queuedHandle(sourceText, attempt) {
-  const identity = createHash("sha256").update(String(sourceText ?? "")).digest("hex").slice(0, 24);
+function phraseDecisionOptions(coordination) {
+  return (coordination?.decision?.caseTargets ?? []).map((target) => ({
+    itemId: target.itemId,
+    phrase: target.surface,
+    options: (target.options ?? []).map(({ id, context, role, pya }) => ({ id, context, role, pya }))
+  }));
+}
+
+export function buildEnglishPhraseCoordinationPrompt({ sourceText, coordination } = {}) {
+  const decision = coordination?.decision;
+  if (!text(sourceText) || !decision?.factorizationId) {
+    throw invalid("phrase-list verification requires source text and a factorization candidate");
+  }
+  return [
+    "Choose the supplied phrase-list factorization and target cases for one English sentence.",
+    "Use only the listed ids. Keep the shared lexical head after the coordinated members.",
+    "For each directional target, choose the destination case that matches its semantic role.",
+    "Return one JSON object only:",
+    '{"verdict":"accept|uncertain","factorizationId":"...","targetCases":[{"itemId":"...","caseId":"..."}],"rationale":"..."}',
+    "SOURCE SENTENCE:",
+    sourceText,
+    "SHARED HEAD:",
+    JSON.stringify({
+      id: decision.factorizationId,
+      surface: coordination.factorization?.head?.surface ?? "",
+      pyashSequence: coordination.factorization?.head?.pyashSequence ?? []
+    }),
+    "DIRECTIONAL TARGETS AND CASE OPTIONS:",
+    JSON.stringify(phraseDecisionOptions(coordination))
+  ].join("\n");
+}
+
+export function parseEnglishPhraseCoordinationResponse(value, { coordination } = {}) {
+  const raw = String(value ?? "");
+  const payload = extractBoundedJsonObject(raw);
+  if (!payload) return { valid: false, reason: "response did not contain a JSON object" };
+  const decision = coordination?.decision;
+  const verdict = text(payload.verdict ?? payload.status).toLowerCase();
+  if (!decision?.factorizationId) return { valid: false, reason: "phrase-list candidate is missing" };
+  if (!new Set(["accept", "uncertain", "reject"]).has(verdict)) {
+    return { valid: false, reason: "verdict must be accept, reject, or uncertain" };
+  }
+  const rationale = text(payload.rationale ?? payload.reason);
+  if (!rationale || rationale.length > 500) return { valid: false, reason: "rationale is empty or too long" };
+  if (verdict !== "accept") return { valid: true, verdict, rationale, raw, targetCases: [] };
+  if (text(payload.factorizationId) !== decision.factorizationId) {
+    return { valid: false, reason: "factorization id is outside the supplied candidate" };
+  }
+  if (!Array.isArray(payload.targetCases)) return { valid: false, reason: "targetCases must be an array" };
+  const expected = new Map((decision.caseTargets ?? []).map((target) => [target.itemId, target]));
+  const selected = new Map();
+  for (const row of payload.targetCases) {
+    const itemId = text(row?.itemId);
+    const caseId = text(row?.caseId);
+    const target = expected.get(itemId);
+    if (!target || selected.has(itemId)) return { valid: false, reason: "target item id is missing, duplicated, or unknown" };
+    const option = target.options.find((candidate) => candidate.id === caseId);
+    if (!option) return { valid: false, reason: "case id is outside the supplied options" };
+    selected.set(itemId, { itemId, caseId, pya: option.pya, context: option.context, role: option.role });
+  }
+  if (selected.size !== expected.size) return { valid: false, reason: "every directional target must receive one case" };
+  return {
+    valid: true,
+    verdict,
+    factorizationId: decision.factorizationId,
+    targetCases: [...selected.values()],
+    rationale,
+    raw
+  };
+}
+
+export async function verifyEnglishPhraseCoordination({
+  sourceText,
+  coordination,
+  invoke,
+  verifierName = "English phrase-list verifier",
+  maxRepairAttempts = 1
+} = {}) {
+  if (typeof invoke !== "function") throw invalid("phrase-list verification requires an invoke function");
+  const prompt = buildEnglishPhraseCoordinationPrompt({ sourceText, coordination });
+  const repairLimit = Math.min(1, Math.max(0, Math.trunc(Number(maxRepairAttempts) || 0)));
+  let attempts = 1;
+  let raw = await invoke({ phase: "verify", prompt, sourceText, coordination, attempt: attempts });
+  let response = parseEnglishPhraseCoordinationResponse(raw, { coordination });
+  if (!response.valid && repairLimit > 0) {
+    attempts += 1;
+    raw = await invoke({
+      phase: "repair",
+      prompt: [prompt, "The previous response failed this contract:", response.reason, "Return only corrected JSON.", "PREVIOUS RESPONSE:", String(raw ?? "")].join("\n"),
+      sourceText,
+      coordination,
+      attempt: attempts,
+      previous: response
+    });
+    response = parseEnglishPhraseCoordinationResponse(raw, { coordination });
+  }
+  if (!response.valid) {
+    return {
+      verdict: "uncertain",
+      factorizationId: "",
+      targetCases: [],
+      rationale: response.reason,
+      raw: String(raw ?? ""),
+      verifier: verifierName,
+      verificationAttempts: attempts
+    };
+  }
+  return { ...response, verifier: verifierName, verificationAttempts: attempts };
+}
+
+export function createMemoizedEnglishPhraseCoordinationVerifier({ invoke } = {}) {
+  if (typeof invoke !== "function") throw invalid("memoized phrase-list verifier requires an invoke function");
+  const decisions = new Map();
+  return (request = {}) => {
+    const coordination = request.analysis?.phraseCoordination ?? request.coordination;
+    const factorizationId = coordination?.decision?.factorizationId;
+    const sourceText = text(request.sourceText);
+    if (!sourceText || !factorizationId) {
+      throw invalid("memoized phrase-list verifier requires source text and a factorization id");
+    }
+    const key = `${sourceText}\u0000${factorizationId}`;
+    if (decisions.has(key)) return decisions.get(key);
+    const pending = verifyEnglishPhraseCoordination({
+      sourceText,
+      coordination,
+      invoke
+    }).catch((error) => {
+      decisions.delete(key);
+      throw error;
+    });
+    decisions.set(key, pending);
+    return pending;
+  };
+}
+
+function queuedHandle(sourceText, attempt, factorizationId = "") {
+  const identitySource = factorizationId
+    ? JSON.stringify([String(sourceText ?? ""), String(factorizationId)])
+    : String(sourceText ?? "");
+  const identity = createHash("sha256").update(identitySource).digest("hex").slice(0, 24);
   return `english-sentence-verifier-${identity}-verify-${Math.max(1, Math.trunc(Number(attempt) || 1))}`;
 }
 
@@ -118,8 +259,8 @@ export function createQueuedMindEnglishSentenceVerifier({ interpret, parse, time
   if (typeof interpret !== "function") throw invalid("queued English sentence verifier requires interpret");
   if (typeof parse !== "function") throw invalid("queued English sentence verifier requires parse");
   const waitMs = Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000));
-  return async ({ sourceText, prompt, attempt = 1 } = {}) => {
-    const handleId = queuedHandle(sourceText, attempt);
+  return async ({ sourceText, prompt, attempt = 1, coordination } = {}) => {
+    const handleId = queuedHandle(sourceText, attempt, coordination?.decision?.factorizationId);
     const start = await interpret(parse(
       `su name ${JSON.stringify(handleId)} ob text ${JSON.stringify(String(prompt ?? ""))} vyah start future be gpu mind do`
     ));

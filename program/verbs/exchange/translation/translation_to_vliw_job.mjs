@@ -8,6 +8,11 @@ import { runVocabSuggest } from "../../../../command/vocab_suggest.mjs";
 import { createDefaultQueuedMindTranslationVocabularySubmitter } from "./translation_vocabulary_queue.mjs";
 import { createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter } from "./english_wordnet_selection.mjs";
 import {
+  createMemoizedEnglishPhraseCoordinationVerifier,
+  createDefaultQueuedMindEnglishSentenceVerifier,
+  verifyEnglishSentenceCandidates
+} from "./english_sentence_verification.mjs";
+import {
   COMPOUND_TRANSLATION_LANGUAGES,
   createDefaultQueuedCompoundTranslator
 } from "./compound_translation_cache.mjs";
@@ -29,15 +34,26 @@ export async function awaitTranslationGpuDuty(
 }
 
 export async function createDefaultTranslationVliwDependencies() {
-  const [queueVocabulary, wordnetSubmit, coverage, compoundTranslator] = await Promise.all([
+  const [queueVocabulary, wordnetSubmit, queuedSentenceVerifier, coverage, compoundTranslator] = await Promise.all([
     createDefaultQueuedMindTranslationVocabularySubmitter(),
     createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter(),
+    createDefaultQueuedMindEnglishSentenceVerifier(),
     loadCoverage(),
     createDefaultQueuedCompoundTranslator()
   ]);
+  const verifyPhraseCoordination = createMemoizedEnglishPhraseCoordinationVerifier({
+    invoke: queuedSentenceVerifier
+  });
   return {
     queueVocabulary,
     awaitVocabulary: awaitTranslationGpuDuty,
+    verify: (request) => {
+      const coordination = request?.analysis?.phraseCoordination;
+      if (!coordination?.decision?.required) {
+        return verifyEnglishSentenceCandidates({ ...request, invoke: queuedSentenceVerifier });
+      }
+      return verifyPhraseCoordination({ sourceText: request.sourceText, coordination });
+    },
     wordnetRefinery: {
       submit: wordnetSubmit,
       compoundRecords: coverage.accepted,
