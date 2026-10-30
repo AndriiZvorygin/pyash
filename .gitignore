@@ -91,6 +91,20 @@ caterer/whisper.cpp/
 caterer/piper/
 .ssh/
 
+# bootstrap-managed external toolchains (see command/bootstrap_caterer.mjs)
+caterer/wasmtime/
+
+# vendored zsv/curl trees: keep only the header/source subsets used by C compilation
+caterer/zsv/*
+!caterer/zsv/include/
+!caterer/zsv/src/
+caterer/curl/*
+!caterer/curl/include/
+
+# book artifacts are published as release assets, not tracked
+caterer/pyac/lyac/kwon-book.pdf
+caterer/pyac/lyac/kwon.html
+
 # local reference checkout, do not commit
 caterer/nanobot/
 

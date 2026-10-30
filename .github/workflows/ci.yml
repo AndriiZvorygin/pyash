@@ -16,5 +16,9 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Bootstrap external toolchains
+        run: npm run bootstrap
       - name: Run tests
         run: npm run test:ci
+      - name: Check package size
+        run: npm run package:check

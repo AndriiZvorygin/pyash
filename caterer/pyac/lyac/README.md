@@ -2,7 +2,8 @@
 
 A project with materials for learning the Pyash language
 
-kwon-book.pdf is a printable introduction and dictionary to the language.
+The printable introduction and dictionary to the language is published as a
+release asset: https://github.com/AndriiZvorygin/pyash/releases/download/kwon-book-1/kwon-book.pdf
 
 ./pyashpwih.js word
 is for searching for either a pyac word meaning, or finding english word related to pyac

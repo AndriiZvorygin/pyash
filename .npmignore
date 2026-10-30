@@ -24,6 +24,10 @@ caterer/**/circumstances/
 caterer/**/building/
 caterer/**/build/
 
-# optional: ignore vendored upstream source trees if present
+# bootstrap-managed and local-only toolchain trees never ship in the package
+caterer/wasmtime/
 caterer/whisper.cpp/
 caterer/piper/
+caterer/nanobot/
+caterer/say/
+caterer/hear/

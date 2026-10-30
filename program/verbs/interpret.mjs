@@ -46,6 +46,15 @@ function resolveVendoredPath(relativePath) {
 function resolveWasmtimePath() {
   const envPath = process.env.PYA_WASMTIME_BIN;
   if (envPath) return envPath;
+  for (const dir of String(process.env.PATH ?? "").split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, "wasmtime");
+    try {
+      fsSync.accessSync(candidate, fsSync.constants.X_OK);
+      return candidate;
+    } catch {
+    }
+  }
   const vendored = resolveVendoredPath("caterer/wasmtime/bin/wasmtime");
   if (fsSync.existsSync(vendored)) return vendored;
   const fallback = "/usr/local/bin/wasmtime";

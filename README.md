@@ -38,6 +38,8 @@ Pyash is the common layer between human meaning, intelligence work, and executab
 This makes Pyash more than a general-purpose scripting language and more than a model wrapper. It is a compositional substrate for curating knowledge, creating digital content, building intelligence workflows, and replaying their evidence.
 
 If you want the conceptual framing, read `documentation/pyash.md`. If you want the normative behavior contract, start at `documentation/specifications/00-index.md`.
+The printable language introduction and dictionary is published separately as
+[kwon-book.pdf](https://github.com/AndriiZvorygin/pyash/releases/download/kwon-book-1/kwon-book.pdf).
 
 ## Core Model
 
@@ -112,6 +114,14 @@ house simply has no house tests to discover. Use `PYASH_INCLUDE_HOUSE_TESTS=0 np
 for a root-only run; `npm run test:houses` is an explicit house-inclusive alias.
 
 ## Quick Start
+
+After a fresh clone, fetch the pinned external toolchains (wasmtime for the
+`interpret` verb and compiled interpret paths):
+
+```bash
+npm install
+npm run bootstrap            # add --with-whisper for hear/speech builds
+```
 
 Run the REPL:
 
@@ -228,6 +238,10 @@ See `documentation/container.md` for full container workflows including build, c
 - `know/produce/` is for durable promoted outputs, not intermediates or scratch files
 
 ## Stability Notes
+
+Repository history was rewritten on 2026-10-30 to remove committed vendored
+binaries and generated book artifacts, so all commit hashes changed; existing
+clones should re-clone rather than pull across the rewrite.
 
 Stable enough for iteration:
 
