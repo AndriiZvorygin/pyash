@@ -258,6 +258,25 @@ both projections.
 The `translation` verb accepts `from state pyac` with `to state pyash` or
 `to state english`; unknown or unsegmentable Pyac tokens remain hard errors.
 
+Phrase coordination is analyzed as a phrase-level structure in subject,
+object, oblique, and existential-content roles. Top-level commas and
+conjunctions delimit members; parentheses and conjunctions inside a member
+remain attached to that member. A repeated lexical head followed by case-led
+ellipsis can be factored into coordinated dependent phrases plus the shared
+head. The Pyac/VLIW stream writes each member's phrase-final case, then `ba`
+between non-final members, then the shared head with its sentence role case.
+That places the dependent list before its parent in the postpositional target
+form. The `.pya` translation record keeps the original members, role,
+factorization evidence, and selected destination cases so the reverse
+projection can restore the shared-head reading.
+
+Directional case choices are sent as one bounded structured decision through
+the existing queued mind/Housekeeper route. The prompt contains the source
+sentence, shared-head candidate, each directional target, and only the
+canonical person, social, and space destination cases. Invalid or uncertain
+selections leave the record reviewable. Repeated stage analysis in one run
+shares the same in-flight/completed decision by sentence and factorization id.
+
 ## Atom word proposals
 
 `atom_word_generation.mjs` adapts the original `pyachso2n/rootWordPhon.js`
