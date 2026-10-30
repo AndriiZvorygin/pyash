@@ -11,7 +11,7 @@ Date: 2026-10-30
 | 1 — Documentation integrity | done | 3 corrupted passages repaired, `command/check_doc_prose.mjs` guard added, `AGENTS.md` points at the spec index |
 | 2 — Example correctness | done | `until-loop.pya` fixed, the two unimplemented signatures implemented, the example audit gates on regressions |
 | 3 — CI coverage | done | Every quiz file is tiered by resource need; `test:ci` now gates 748 of 752 files instead of 28 |
-| 4 — Core/periphery balance | partly done | translation domain moved out of `program/verbs`; the legacy `kind` alias is purged from Pyash names; 17 verb modules over 400 lines remain |
+| 4 — Core/periphery balance | done | translation and compile implementation folders moved out of `program/verbs`; the legacy `kind` alias purged from Pyash names; verb layer down to 151 modules / 29,571 lines |
 | 5 — Repo hygiene | done | `push_all.sh` remote check relaxed and guarded; the orphaned searxng settings removed and container-config ownership aligned; `documentation/state.md` refreshed |
 
 ## Test baseline movement
@@ -501,10 +501,10 @@ cannot answer both questions:
 | Bucket | Lines | Files |
 |---|---|---|
 | Interpreter core (parser, bridge, memory, program) | 6,393 | 25 |
-| Verb layer (`program/verbs/`) | 45,191 | 282 |
-| Applications (library, agent, runtime, command, module) | 156,993 | 555 |
+| Verb layer (`program/verbs/`) | 29,571 | 151 |
+| Applications (library, agent, runtime, command, module) | 173,077 | 689 |
 
-The core-to-applications ratio is **1:24.56**, and the core is 3.1% of the
+The core-to-applications ratio is **1:27.07**, and the core is 3.1% of the
 measured lines. The numbers are recorded in `documentation/state.md`.
 
 The earlier version of this plan counted the whole verb layer as "core" and
@@ -515,25 +515,39 @@ gauge that matters for `documentation/pyash.md`'s "keep verbs thin"
 requirement is the verb-layer gauge: how many modules exceed a few hundred
 lines.
 
-**4.2 Bound the verb surface.** *(partly done)*
+**4.2 Bound the verb surface.** *(done for the two implementation folders)*
 
 `program/verbs/exchange/translation/` held 85 modules and 20,344 lines of
 translation *domain* data — grammar catalogs, WordNet linkers, lexicons,
 translation pairs. `AGENTS.md` says `program/verbs/` holds "one verb per
-file, small and composable", and the folder broke that. It has moved to
+file, small and composable", and the folder broke that. It moved to
 `program/library/translation/`, which took `program/verbs/` from 370 modules
 and 66,030 lines down to 282 modules and 45,191 lines, and the count of
 modules over 400 lines from 38 to 17.
 
-The move was mechanical and rewrote every import specifier and every relative
-path computation by resolving and recomputing it, rather than by text
-substitution. 4,089 relative specifiers were checked afterwards and all
-resolve.
+`program/verbs/exchange/compile/` — the compile verb's implementation folder,
+132 modules and 15,728 lines — got the same treatment and moved to
+`program/library/compile/`. The verb itself stays a thin file at
+`program/verbs/exchange/compile.mjs`, exactly as `translation.mjs` did.
 
-The largest verb modules are now `itinerary_media.mjs` (2,098),
-`qwen_say.mjs` (1,622) and `command.mjs` (1,072). The compile verb's
-implementation folder (`program/verbs/exchange/compile/`, 37 modules) is the
-next candidate for the same treatment.
+Both moves were mechanical: every import specifier and every relative path
+computation was **resolved and recomputed**, never text-substituted. The
+method was a two-phase rewriter — snapshot every relative specifier to its
+absolute target before the move, then recompute each one from the importing
+file's new location to the target's new location — followed by
+`command/check_imports.mjs`, which resolves all 4,136 relative specifiers in
+the tree and fails on any that do not exist.
+
+Two path computations did not survive the depth change and were corrected by
+hand: the vendored `cJSON.h`/`cJSON.c` reads in
+`program/library/compile/constants.mjs`, whose `new URL(...)` depth went from
+`../../../../` to `../../../`.
+
+`program/verbs/` now holds 151 modules and 29,571 lines, with 15 modules over
+400 lines. The largest are `itinerary_media.mjs` (2,098), `qwen_say.mjs`
+(1,622) and `command.mjs` (1,072) — individual verb modules rather than
+implementation folders, so bounding them is a different kind of work than the
+two folder moves.
 
 **4.3 Re-evaluate the largest peripheral file.** *(decided)*
 
@@ -639,32 +653,48 @@ Per `AGENTS.md`:
 - Commit per tranche, lowercase imperative messages, pushed to both remotes
   via the dual-remote helper once `push_all.sh` is fixed.
 
-## Open questions for the owner
+## Questions resolved during this plan
 
-1. **WordNet provenance.** Should CI fetch the real Open English WordNet
-   dataset from a pinned upstream, or should the repo carry a committed
-   fixture? This decides whether Tier 2 is reproducible offline or needs
-   network access in CI. There is currently no provisioning script at all, and
-   the tests assert a `sourceHash`, so whichever route is chosen must pin it.
-2. **CI budget.** The root-only suite takes ~85s of test time. Widening to
-   T1+T2 should stay under a few minutes. The example audit is far slower
-   (one process per example, ~15 min for 362) and should probably be a
-   scheduled or dedicated job rather than a blocking gate.
-3. **House checkouts.** `world/house/*` is gitignored except two houses, so
+1. **WordNet provenance** — *resolved.* CI fetches the real Open English
+   WordNet dataset from a pinned upstream through
+   `command/bootstrap_caterer.mjs`; the dataset is never committed. The archive
+   sha256 and the loader content hash are recorded above.
+2. **CI budget** — *resolved.* The whole quiz suite is now the gate
+   (749 of 752 files, ~180 s). The example audit is far slower (one process per
+   example, ~15 min for 362), so it runs on a nightly cron in
+   `.github/workflows/examples-audit.yml` and gates on regressions rather than on
+   an absolute pass.
+3. **Core/periphery target** — *resolved.* There is no ratio target. The gauge
+   is the verb-layer gauge: `program/verbs/` now holds 151 modules and 15 of
+   them exceed 400 lines. The remaining three giants
+   (`itinerary_media.mjs`, `qwen_say.mjs`, `command.mjs`) are individual verb
+   modules, not implementation folders, so bounding them is a separate tranche.
+4. **Container-path examples** — *resolved.* `/workplace/...` paths only exist
+   inside the container image; the audit classifies them as *needs backend*
+   rather than failed, and `configure/example_audit_baseline.pya` records the
+   known ones.
+5. **The genuine example failures** — *partly resolved.* The audit now
+   separates *needs input* and *needs backend* from *failed*, so most of the
+   original 40 failures were environment, not defects. The remainder
+   (`love-teaching-compose-video.pya`, `love-teaching-draw-cuts.pya`,
+   `refinery-love-teaching-shorts.pya`,
+   `wide-teaching-video-gpu-queue-mind-duty.pya`) are still open and need a
+   decision about which side is correct.
+
+## Still open for the owner
+
+1. **House checkouts.** `world/house/*` is gitignored except two houses, so
    house tests behave differently per clone — a house test passed locally and
    was skipped in a fresh worktree during this review. Decide whether house
-   tests belong in CI at all, or stay advisory.
-4. **Core/periphery target.** Is there an intended ratio for interpreter core
-   versus applications, or is the goal simply that verbs stay thin?
-5. **The 12 genuine example failures.** Several are behavioral questions, not
-   typos: `coding-loop-guarantee.pya` reports `session replay defective:
-   conflicting request for turn-exchange-evolve-10`, and `talk-loop-stream.pya`
-   reports `series history missing`. These may be real runtime defects rather
-   than doc drift, and each needs a decision about which side is correct.
-6. **Container-path examples.** 24 failures reference `/workplace/...` paths
-   that only exist inside the container image. Should the audit run the
-   container variant of these examples, or should they be excluded from host
-   auditing by an explicit manifest?
+   tests belong in CI at all, or stay advisory. The tier classifier treats them
+   as Tier 3 for now: reported, not gated.
+2. **The four genuine example failures** listed above, each of which needs a
+   decision about which side is correct.
+3. **The remaining verb giants.** Whether `itinerary_media.mjs` (2,098),
+   `qwen_say.mjs` (1,622) and `command.mjs` (1,072) should be split, and on
+   what domain boundary.
+4. **`agenda-stage3-summary-renderer.mjs`** (6,675 lines) is already in
+   `program/library/` and one concern, but is still a candidate for splitting.
 
 ## Baseline measurements
 

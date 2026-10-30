@@ -10,7 +10,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { buildProgram } from "../program/program.mjs";
 import { forget } from "../program/remember/index.mjs";
-import { transpileProgram } from "../program/verbs/exchange/compile/transpile_program.mjs";
+import { transpileProgram } from "../program/library/compile/transpile_program.mjs";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(".");

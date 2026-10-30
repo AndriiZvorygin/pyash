@@ -728,7 +728,7 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 - Tool schema generation: `program/verbs/mind/mind.mjs` (`buildToolSchemas`, `toolFunctionNameFromSignature`, `toolSchemaType`).
 - Tool sentence reconstruction: `program/verbs/mind/mind.mjs` (`buildToolSentence`).
 - Mind invocation: `program/verbs/mind/mind.mjs` (`mind_to_name_text`).
-- Compiled JS/C runtime helpers: `program/verbs/exchange/compile/js/mind_runtime_helper.mjs` (mind runtime JS), `program/verbs/exchange/compile/c/helpers_c.mjs` (`MIND_RUNTIME_HELPER`).
+- Compiled JS/C runtime helpers: `program/library/compile/js/mind_runtime_helper.mjs` (mind runtime JS), `program/library/compile/c/helpers_c.mjs` (`MIND_RUNTIME_HELPER`).
 
 ---
 
@@ -1135,8 +1135,8 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 
 - Tool event emission (interpreter): `command/run_pya_program.mjs` (`emitToolEvent`).
 - Mind JSON records: `program/verbs/mind/mind.mjs` (`recordMindJson`).
-- Compiled JS tool events: `program/verbs/exchange/compile/emit_mind.mjs`, `program/verbs/exchange/compile/emit_command.mjs`, `program/verbs/exchange/compile/emit_write.mjs` (tool event `pyaEmitNewspaper` emissions).
-- Compiled C tool events: `program/verbs/exchange/compile/c/helpers_c.mjs` (`pya_emit_exchange`).
+- Compiled JS tool events: `program/library/compile/emit_mind.mjs`, `program/library/compile/emit_command.mjs`, `program/library/compile/emit_write.mjs` (tool event `pyaEmitNewspaper` emissions).
+- Compiled C tool events: `program/library/compile/c/helpers_c.mjs` (`pya_emit_exchange`).
 
 ---
 

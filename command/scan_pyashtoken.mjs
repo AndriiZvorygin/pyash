@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import { parse } from "../program/understand/index.mjs";
 import { splitSentences, splitSentencesWithLines } from "../program/library/sentenceSplitter.mjs";
 import { parseYamlToJsonValue } from "../program/verbs/exchange/yaml.mjs";
+import { MOODS, ROLE_KEYS, TYPE_TOKENS } from "../program/library/grammar/keywords.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -129,6 +130,20 @@ function scanPyashFile(relative, source, word) {
   return hits;
 }
 
+// Tokenizes the name words of a `su name ...` / `ob name ...` fragment using
+// the language's own grammar tables, so a fragment that runs on into English
+// prose is not mistaken for a name.
+function fragmentNameWords(text) {
+  const words = [];
+  for (const token of String(text || "").split(/\s+/u).filter(Boolean)) {
+    if (token.includes("$")) break; // interpolated, so the name is not literal
+    if (ROLE_KEYS.includes(token) || MOODS.includes(token)) break;
+    if (words.length === 0 && TYPE_TOKENS.includes(token)) continue; // type word
+    words.push(token);
+  }
+  return words;
+}
+
 function scanJsFile(relative, source, word) {
   const hits = [];
   for (const match of source.matchAll(JS_MAP_ROW_KEY_REGEX)) {
@@ -137,8 +152,7 @@ function scanJsFile(relative, source, word) {
     hits.push({ file: relative, line, found: ["map row key"], text: match[0].trim() });
   }
   for (const match of source.matchAll(JS_NAME_FRAGMENT_REGEX)) {
-    const words = String(match[1] || "").split(/\s+/u).filter(Boolean);
-    if (!words.some((token) => token === word)) continue;
+    if (!fragmentNameWords(match[1]).includes(word)) continue;
     const line = source.slice(0, match.index).split("\n").length;
     hits.push({ file: relative, line, found: ["name fragment"], text: match[0].trim() });
   }

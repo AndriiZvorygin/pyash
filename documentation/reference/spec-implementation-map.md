@@ -12,16 +12,16 @@ Short map from spec contracts → implementation locations.
 | Ceremonies + this | `program/bridge/sandpit.mjs`, `program/library/thisBinding.mjs`, `program/verbs/ceremony/*.mjs` |
 | Control flow (then/giant/equally/loops) | `program/bridge/conditions.mjs`, `program/bridge/imperative.mjs`, `program/bridge/sandpit.mjs` |
 | Runtime primitives (duty/stream/chip) | `program/library/runtimePrimitives.mjs`, `program/bridge/index.mjs` |
-| Claim identity, UTF-8 ordering, evidence normalization, linked facets, resolver views | `program/library/knowledge_core.mjs` (`compareUtf8Bytes`, `normalizeLinkedClaimBundle`, `resolveLinkedClaimBundle`), `program/agent/headquarters/knowledge.mjs` (schema-driven Headquarters projection), `module/headquarters-knowledge.pya`, `examples/pyash/headquarters-contacts-commitments.pya` (newspaper/replay proof), `program/verbs/claim.mjs`, `program/verbs/exchange/compile/emit_claim.mjs`, `program/verbs/exchange/compile/emit_knowledge.mjs`, `quiz/headquarters_knowledge_alignment.test.mjs` |
-| Compiled knowledge resolver runtime | `program/verbs/exchange/compile/transpile_program/js_helpers/knowledge_core.mjs`, `program/verbs/exchange/compile/transpile_program/c_helpers_knowledge_core.mjs` |
+| Claim identity, UTF-8 ordering, evidence normalization, linked facets, resolver views | `program/library/knowledge_core.mjs` (`compareUtf8Bytes`, `normalizeLinkedClaimBundle`, `resolveLinkedClaimBundle`), `program/agent/headquarters/knowledge.mjs` (schema-driven Headquarters projection), `module/headquarters-knowledge.pya`, `examples/pyash/headquarters-contacts-commitments.pya` (newspaper/replay proof), `program/verbs/claim.mjs`, `program/library/compile/emit_claim.mjs`, `program/library/compile/emit_knowledge.mjs`, `quiz/headquarters_knowledge_alignment.test.mjs` |
+| Compiled knowledge resolver runtime | `program/library/compile/transpile_program/js_helpers/knowledge_core.mjs`, `program/library/compile/transpile_program/c_helpers_knowledge_core.mjs` |
 | Run newspaper | `command/run_pya_program.mjs` (`pushNewspaper`, `emitToolEvent`), `command/run_with_newspaper.mjs` |
-| Tool envelope (tool events) | `command/run_pya_program.mjs` (`emitToolEvent`), `program/verbs/exchange/compile/emit_mind.mjs`, `program/verbs/exchange/compile/emit_command.mjs`, `program/verbs/exchange/compile/emit_write.mjs` (tool event emits), `program/verbs/exchange/compile/c/helpers_c.mjs` (`pya_emit_exchange`) |
+| Tool envelope (tool events) | `command/run_pya_program.mjs` (`emitToolEvent`), `program/library/compile/emit_mind.mjs`, `program/library/compile/emit_command.mjs`, `program/library/compile/emit_write.mjs` (tool event emits), `program/library/compile/c/helpers_c.mjs` (`pya_emit_exchange`) |
 | Exchange + artifacts | `program/bridge/exchange.mjs` (`recordArtifact`, `recordExchange`), `program/verbs/exchange/read.mjs`, `program/verbs/exchange/write.mjs` |
 | Mind (interpreter) | `program/verbs/mind/mind.mjs` (`mind_to_name_text`, `recordMindJson`, tool adapter) |
-| Mind (compiled JS/C) | `program/verbs/exchange/compile/js/mind_runtime_helper.mjs` (mind runtime JS), `program/verbs/exchange/compile/c/helpers_c.mjs` (`MIND_RUNTIME_HELPER`) |
-| Refinery | `program/bridge/refinery.mjs`, `command/run_pya_program.mjs` (refinery runner + newspaper), compiled: `program/verbs/exchange/compile.mjs` (emits helpers from `program/verbs/exchange/compile/js/runtime_helpers.mjs`) |
+| Mind (compiled JS/C) | `program/library/compile/js/mind_runtime_helper.mjs` (mind runtime JS), `program/library/compile/c/helpers_c.mjs` (`MIND_RUNTIME_HELPER`) |
+| Refinery | `program/bridge/refinery.mjs`, `command/run_pya_program.mjs` (refinery runner + newspaper), compiled: `program/verbs/exchange/compile.mjs` (emits helpers from `program/library/compile/js/runtime_helpers.mjs`) |
 | Source maps | `program/verbs/exchange/compile.mjs` (JS/C sourcemap embedding) |
-| Maps (plain/json/csv/yaml) | `program/bridge/maps.mjs`, `program/verbs/exchange/json.mjs`, `program/verbs/exchange/csv.mjs`, `program/verbs/exchange/yaml.mjs`, compiled: `program/verbs/exchange/compile/c/helpers_c.mjs` |
+| Maps (plain/json/csv/yaml) | `program/bridge/maps.mjs`, `program/verbs/exchange/json.mjs`, `program/verbs/exchange/csv.mjs`, `program/verbs/exchange/yaml.mjs`, compiled: `program/library/compile/c/helpers_c.mjs` |
 | Modules | `program/bridge/modules.mjs`, `program/verbs/exchange/compile.mjs` (closed-world include) |
-| C IR | `program/verbs/exchange/compile/c/helpers_c.mjs`, `documentation/specifications/04-runtime-primitives.md` |
+| C IR | `program/library/compile/c/helpers_c.mjs`, `documentation/specifications/04-runtime-primitives.md` |
 | Compiler (JS/C) | `program/verbs/exchange/compile.mjs` (`transpileProgram`) |

@@ -12,6 +12,7 @@
     "package:check": "node command/check_package_size.mjs",
     "config:safety": "node command/check_local_config_safety.mjs",
     "doc:prose": "node command/check_doc_prose.mjs",
+    "imports:check": "node command/check_imports.mjs",
     "measure:balance": "node command/measure_code_balance.mjs",
     "examples:audit": "node command/audit_examples.mjs",
     "android:default": "node command/android_default_device.mjs",

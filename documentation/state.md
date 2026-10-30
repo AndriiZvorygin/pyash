@@ -42,10 +42,10 @@ Three buckets, because they answer different questions.
 | Bucket | Lines | Files | What it means |
 |---|---|---|---|
 | Interpreter core | 6,393 | 25 | The language machinery: parser, bridge, memory, program |
-| Verb layer | 45,191 | 282 | The dispatch surface users write against |
-| Applications | 156,993 | 555 | Library, agent, runtime, command, module |
+| Verb layer | 29,571 | 151 | The dispatch surface users write against |
+| Applications | 173,077 | 689 | Library, agent, runtime, command, module |
 
-The core-to-applications ratio is **1:24.56**, and the core is 3.1% of the
+The core-to-applications ratio is **1:27.07**, and the core is 3.1% of the
 measured lines.
 
 Two caveats on reading that ratio. First, an earlier version of this file
@@ -58,7 +58,7 @@ the verb-layer gauge below.
 
 ### Verb surface
 
-`program/verbs/` holds 282 modules; **17** exceed 400 lines. The largest:
+`program/verbs/` holds 151 modules; **15** exceed 400 lines. The largest:
 
 | Lines | Module |
 |---|---|
@@ -70,8 +70,10 @@ the verb-layer gauge below.
 
 The translation domain (85 modules, 20,344 lines) was moved out of
 `program/verbs/` into `program/library/translation/` so that `program/verbs/`
-holds verbs rather than language data. The compile verb's implementation folder
-(`program/verbs/exchange/compile/`, 37 modules) is the next candidate.
+holds verbs rather than language data. The compile verb's implementation
+folder (132 modules, 15,728 lines) moved the same way, into
+`program/library/compile/`; the verb itself stays a thin file at
+`program/verbs/exchange/compile.mjs`.
 
 ## Architecture at a glance
 
