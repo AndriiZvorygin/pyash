@@ -67,13 +67,15 @@ It:
 7. writes terminal handle status back to Pyash holding,
 8. acks success/fail in the durable queue.
 
-`PYA_GPU_WORKER_CONCURRENCY` controls bounded coordinator fan-out and is
-clamped to a small finite range. It is a dispatch concurrency limit, not a
-permission to overlap arbitrary work on one GPU. The housekeeper remains the
-authority for host/device admission; with peer federation configured, separate
-slots can be routed to separate GPU hosts or devices. The default worker value
-is `2` so independent duties can make progress without turning the worker into
-an unbounded scheduler.
+The worker discovers device counts from the entry Housekeeper and its
+reachable configured peers, then uses that GPU topology to set bounded
+coordinator fan-out. It refreshes the topology every minute and retries failed
+discovery after five seconds. A single worker therefore dispatches up to the
+number of discovered GPU device slots (with a 64-slot safety ceiling), rather
+than using a fixed default of two. `PYA_GPU_WORKER_CONCURRENCY` remains an
+explicit override. This controls dispatch fan-out, not permission to overlap
+unsafe work on one GPU: Housekeeper remains authoritative for host/device
+admission and routes independent duties to separate idle devices.
 
 The worker talks to one configured entry housekeeper URL at a time; the entry
 housekeeper performs the peer selection rather than making the worker a second
@@ -559,10 +561,11 @@ Start a local worker against configured housekeeper:
 node command/gpu_worker.mjs --world world
 ```
 
-For independent queued duties, the same worker can use a bounded coordinator:
+For independent queued duties, the worker automatically sizes its bounded
+coordinator to the reachable GPU devices. Set an override only when needed:
 
 ```sh
-PYA_GPU_WORKER_CONCURRENCY=2 \
+PYA_GPU_WORKER_CONCURRENCY=4 \
 PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 \
 node command/gpu_worker.mjs --world world --once
 ```

@@ -63,11 +63,12 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", usernam
       });
     },
 
-    async getSnapshot() {
+    async getSnapshot({ timeoutMs = 5000 } = {}) {
       return requestJson({
         baseUrl: rootUrl,
         pathname: "/snapshot",
-        method: "GET"
+        method: "GET",
+        timeoutMs
       });
     },
 

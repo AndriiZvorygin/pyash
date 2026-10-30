@@ -227,14 +227,18 @@ test("gpu worker leaves a dependency-waiting envelope and claims an independent 
 test("bounded GPU worker batch fans out independent duties through the existing adapter", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-batch-"));
   const worldRoot = path.join(root, "world");
-  await enqueueMind(worldRoot, { handleId: "batch-one", queuedAt: "2026-03-10T08:00:00.000Z" });
-  await enqueueMind(worldRoot, { handleId: "batch-two", queuedAt: "2026-03-10T08:00:01.000Z" });
+  for (let index = 1; index <= 10; index += 1) {
+    await enqueueMind(worldRoot, {
+      handleId: `batch-${index}`,
+      queuedAt: `2026-03-10T08:00:${String(index).padStart(2, "0")}.000Z`
+    });
+  }
 
   let active = 0;
   let maximum = 0;
   const result = await runGpuWorkerBatch({
     worldRoot,
-    concurrency: 2,
+    concurrency: 10,
     pollIntervalMs: 1,
     maxPolls: 5,
     adapter: {
@@ -251,9 +255,9 @@ test("bounded GPU worker batch fans out independent duties through the existing 
     }
   });
 
-  assert.equal(result.received, 2);
-  assert.equal(result.handled, 2);
-  assert.equal(maximum, 2);
+  assert.equal(result.received, 10);
+  assert.equal(result.handled, 10);
+  assert.equal(maximum, 10);
   assert.equal((await queueDepth(worldRoot)).total, 0);
 });
 
