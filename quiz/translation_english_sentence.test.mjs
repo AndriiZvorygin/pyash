@@ -1138,6 +1138,7 @@ test("phrase-list verifier bounds its prompt, parses noisy JSON, and repairs at 
   assert.ok(prompt.length < 12000);
   assert.match(prompt, /SOURCE SENTENCE:/u);
   assert.match(prompt, /DIRECTIONAL TARGETS AND CASE OPTIONS:/u);
+  assert.match(prompt, /rationale to one short sentence, at most 200 characters/u);
   assert.doesNotMatch(prompt, /WordNet|gloss|example:/iu);
 
   const payload = {
@@ -1210,22 +1211,40 @@ test("sentence resolution applies a Housekeeper-selected contextual candidate", 
 
 test("queued sentence verifier uses the existing future GPU duty and await path", async () => {
   const calls = [];
+  const answer = JSON.stringify({ verdict: "accept", candidateId: "candidate-1", rationale: "selected" });
   const parse = (sentence) => sentence;
   const interpret = async (sentence) => {
     calls.push(sentence);
     return calls.length === 1
       ? { ob: { text: "queued" } }
-      : { ob: { text: "success" }, result: { text: '{"verdict":"accept"}' } };
+      : {
+        ob: { text: "success" },
+        result: {
+          text: JSON.stringify({
+            model: "qwen3.5:9b",
+            response: answer,
+            thinking: "internal reasoning ".repeat(2000)
+          })
+        }
+      };
   };
   const invoke = createQueuedMindEnglishSentenceVerifier({ interpret, parse, timeoutMs: 1000 });
-  const result = await invoke({ sourceText: "walking", prompt: buildEnglishSentenceVerificationPrompt({
+  const prompt = buildEnglishSentenceVerificationPrompt({
     sourceText: "walking",
     analysis: { status: "review", tokens: [] },
     candidates: [{ id: "candidate-1", phrase: "walking", pyashSequence: ["pfin", "pfih"] }]
-  }) });
+  });
+  const result = await invoke({ sourceText: "walking", prompt });
   assert.match(calls[0], /vyah start future be gpu mind do/u);
   assert.match(calls[1], /vyah await be gpu do/u);
-  assert.match(result, /verdict/u);
+  const encodedJobSpec = calls[0].match(/\sob text ("(?:\\.|[^"])*") vyah start/u)?.[1];
+  assert.ok(encodedJobSpec);
+  const jobSpec = JSON.parse(JSON.parse(encodedJobSpec));
+  assert.equal(jobSpec.think, false);
+  assert.equal(jobSpec.format, "json");
+  assert.equal(jobSpec.options.num_predict, 512);
+  assert.equal(jobSpec.prompt, prompt);
+  assert.equal(result, answer);
 });
 
 test("queued phrase-list duties keep distinct factorization identities within one sentence", async () => {

@@ -276,6 +276,10 @@ sentence, shared-head candidate, each directional target, and only the
 canonical person, social, and space destination cases. Invalid or uncertain
 selections leave the record reviewable. Repeated stage analysis in one run
 shares the same in-flight/completed decision by sentence and factorization id.
+The duty requests no thinking output, JSON-formatted output, and a 512-token
+generation limit. Provider envelopes are reduced to their answer text before
+the bounded verifier parses it, so metadata and thinking content do not trigger
+an oversized-response repair.
 
 ## Atom word proposals
 
