@@ -11,7 +11,7 @@ Date: 2026-10-30
 | 1 — Documentation integrity | done | 3 corrupted passages repaired, `command/check_doc_prose.mjs` guard added, `AGENTS.md` points at the spec index |
 | 2 — Example correctness | done | `until-loop.pya` fixed, the two unimplemented signatures implemented, the example audit gates on regressions |
 | 3 — CI coverage | done | Every quiz file is tiered by resource need; `test:ci` now gates 748 of 752 files instead of 28 |
-| 4 — Core/periphery balance | open | — |
+| 4 — Core/periphery balance | partly done | translation domain moved out of `program/verbs`; the legacy `kind` alias is purged from Pyash names; 17 verb modules over 400 lines remain |
 | 5 — Repo hygiene | partly done | `push_all.sh` remote check relaxed and guarded; orphaned searxng settings and file ownership still open |
 
 ## Test baseline movement
@@ -124,6 +124,52 @@ without anything noticing.
 This plan fixes the enforcement gaps rather than the design. The language design
 is sound; what is missing is the machinery that keeps the repo honest as it
 grows.
+
+## Phase 4 findings
+
+### 4.4 The legacy `kind` alias is purged from Pyash names (done)
+
+`kind` is only a legacy English-dictionary alias for the canonical Pyash word
+`sort` (`node command/vocab_suggest.mjs "kind"` -> `dictionary alias sort`).
+`vocab_suggest` accepted it, so the alias survived unnoticed, but every
+Pyash-facing use of it was a name that a Pyash sentence could not spell
+canonically.
+
+Scope was drawn at **Pyash name positions only**:
+
+| Position | Sites |
+|---|---|
+| name-role token (`su/ob/to/from/with/via/by name <word>`) | `module/read_auto.pya` (68), the JSON/YAML examples, the fixture-mail and confederation maps |
+| map row key (`su text "<word>" ob ...`) | `module/headquarters-fixture-mail.pya` (`work kind` -> `work sort`) |
+| key inside a quoted `json`/`yaml` data block | the JSON/YAML roundtrip and golden examples |
+| key inside a quoted `pyash` source block | `program/library/translation/pairs_english.pya` |
+| Pyash map row key written from JavaScript | `program/runtime/work/queue.mjs`, `program/runtime/work/status.mjs` (`kind`, `source kind`) |
+| Pyash fact name emitted from JavaScript | `program/runtime/work/outcome.mjs`, `program/agent/headquarters/approval.mjs` (`source kind`) |
+| Pyash map key read from JavaScript | `program/agent/channels/fixture_mail.mjs` (`work kind`), `program/verbs/wise_chip.mjs` (`kind`/`mode`) |
+| Pyash map key in a JavaScript-built map | `program/verbs/refinery.mjs` (child `kind` -> child `sort`) |
+
+Left alone on purpose:
+
+- English prose that merely uses the word ("what kind of truth it states") in
+  `module/learn.pya` and `examples/pyash/qwen-say-tone-promptify-demo.pya`;
+- JavaScript-internal identifiers and properties (`task.kind`, `jobSpec.kind`,
+  `error.kind`, `rule.kind`, `parsed.kind`) — these never become Pyash names;
+- the external English dictionary data that defines the alias itself
+  (`caterer/pyac/lyac/dictionary_en.json`), which is not repo content.
+
+`documentation/specifications/10-pipelines.md` was updated with the new child
+`sort` key so the normative spec matches the runtime.
+
+The work-task and refinery-checkpoint payloads are persisted as Pyash text, so
+the renamed keys change that on-disk shape. No compatibility shim was added:
+the repository rule is to remove obsolete paths rather than stack aliases, and
+stale payloads are local run state, not durable user data.
+
+`command/scan_pyashtoken.mjs` now answers "is this word used as a Pyash name?"
+across name-role tokens, map row keys, quoted JSON/YAML keys, quoted Pyash
+source, JavaScript map-row keys, and JavaScript name fragments. English prose
+is not a name and is skipped. `quiz/pyash_name_purge.test.mjs` pins the purge
+and proves each detection mode is non-vacuous.
 
 ## Phase 1 findings
 

@@ -278,7 +278,7 @@ async function appendApprovalEvent(worldRoot, task, approval, {
     `  su name state ob text ${JSON.stringify(state)} ya`,
     `  su name task id ob text ${JSON.stringify(task.taskId)} ya`,
     `  su name source identity ob text ${JSON.stringify(source.identity)} ya`,
-    `  su name source kind ob text ${JSON.stringify(source.kind)} ya`,
+    `  su name source sort ob text ${JSON.stringify(source.kind)} ya`,
     `  su name source locator ob text ${JSON.stringify(source.locator)} ya`,
     `  su name action ob text ${JSON.stringify(approval.action)} ya`,
     `  su name proposal ob text ${JSON.stringify(canonical(approval.proposal))} ya`,

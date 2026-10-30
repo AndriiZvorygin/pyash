@@ -217,7 +217,7 @@ export async function extractReport({ runId = "run", runRoot, lines } = {}) {
     const entry = artifacts[i];
     const lines = [
       { su: { name: "artifact id" }, ob: { text: entry.id }, mood: "ya" },
-      { su: { name: "artifact kind" }, ob: { text: entry.kind }, mood: "ya" },
+      { su: { name: "artifact sort" }, ob: { text: entry.kind }, mood: "ya" },
       { su: { name: "artifact order" }, ob: { num: entry.order }, mood: "ya" }
     ];
     if (entry.origin) {

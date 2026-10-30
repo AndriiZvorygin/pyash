@@ -15,7 +15,7 @@ test("import loads json object into json map with nested arrays", async () => {
 
   const json = JSON.stringify({
     name: "Ada",
-    pets: [{ kind: "cat" }, { kind: "dog" }],
+    pets: [{ sort: "cat" }, { sort: "dog" }],
     tags: [true, false]
   });
 
@@ -35,11 +35,11 @@ test("import loads json object into json map with nested arrays", async () => {
 
   const cat = remember("profile pets 1");
   assert.equal(cat?.be, "json map");
-  assert.equal(cat?.ob?.map?.kind?.text, "cat");
+  assert.equal(cat?.ob?.map?.sort?.text, "cat");
 
   const dog = remember("profile pets 2");
   assert.equal(dog?.be, "json map");
-  assert.equal(dog?.ob?.map?.kind?.text, "dog");
+  assert.equal(dog?.ob?.map?.sort?.text, "dog");
 });
 
 test("imported json map can be exported via write", async () => {
@@ -47,7 +47,7 @@ test("imported json map can be exported via write", async () => {
 
   const json = JSON.stringify({
     name: "Ada",
-    pets: [{ kind: "cat" }],
+    pets: [{ sort: "cat" }],
     tags: [true, false]
   });
 
@@ -67,6 +67,6 @@ test("imported json map can be exported via write", async () => {
   assert.equal(logs.length, 1);
   assert.equal(
     logs[0],
-    '{\n  "name": "Ada",\n  "pets": [\n    {\n      "kind": "cat"\n    }\n  ],\n  "tags": [\n    true,\n    false\n  ]\n}'
+    '{\n  "name": "Ada",\n  "pets": [\n    {\n      "sort": "cat"\n    }\n  ],\n  "tags": [\n    true,\n    false\n  ]\n}'
   );
 });

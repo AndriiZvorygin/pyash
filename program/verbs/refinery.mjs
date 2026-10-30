@@ -197,7 +197,7 @@ async function runFileBackedRefinery(sentence) {
   }
   const resultMap = {
     produce: resultSentence.ob ?? {},
-    kind: { text: String(resultSentence.be ?? "") },
+    sort: { text: String(resultSentence.be ?? "") },
     passing: { boolean: true },
     "run id": { text: runId },
     "artifacts folder": { filename: artifactDir },

@@ -61,7 +61,7 @@ export async function appendWorkOutcome(worldRoot, task, {
     `  su name status ob text ${quote(current.status)} ya`,
     `  su name phase ob text ${quote(checkpoint.interruption?.phase || current.status)} ya`,
     `  su name source identity ob text ${quote(current.source.identity)} ya`,
-    `  su name source kind ob text ${quote(current.source.kind)} ya`,
+    `  su name source sort ob text ${quote(current.source.kind)} ya`,
     `  su name source locator ob text ${quote(current.source.locator)} ya`,
     `  su name source provider ob text ${quote(current.source.provider)} ya`,
     `  su name source event id ob text ${quote(current.source.eventId)} ya`,

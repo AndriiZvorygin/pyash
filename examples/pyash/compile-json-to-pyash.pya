@@ -1,5 +1,5 @@
 su name profile ob text quoted.json.
-{"name":"Ada","pets":[{"kind":"cat"},{"kind":"dog"}],"tags":[true,false]}
+{"name":"Ada","pets":[{"sort":"cat"},{"sort":"dog"}],"tags":[true,false]}
 .json.quoted from state json to state pyash to name output be compile do
 
 ob name output be write do

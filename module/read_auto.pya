@@ -12,41 +12,41 @@ su name read from filename input become wo text to name text output be ceremony 
   ob name input to name cat be plus do
   ob text "\"" to name cat be plus do
 
-  exists su name kind ob text "case \"" be text ya
-  ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name kind be plus do
-  ob text of kind to name text kind be command do
-  ob text of result to name text kind be text do
+  exists su name sort ob text "case \"" be text ya
+  ob name mime to name sort be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name sort be plus do
+  ob text of sort to name text sort be command do
+  ob text of result to name text sort be text do
 
   exists su name handled ob num 0 be number ya
-  ob name kind be equally from text "html" then
+  ob name sort be equally from text "html" then
   from filename of input fromstate wo html to name text output be read html do
-  ob name kind be equally from text "html" then
+  ob name sort be equally from text "html" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "pdf" then
+  ob name sort be equally from text "pdf" then
   from filename of input fromstate wo pdf to name text output be read pdf do
-  ob name kind be equally from text "pdf" then
+  ob name sort be equally from text "pdf" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "audio" then
+  ob name sort be equally from text "audio" then
   from filename of input to name text output be hear do
-  ob name kind be equally from text "audio" then
+  ob name sort be equally from text "audio" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "video" then
+  ob name sort be equally from text "video" then
   from filename of input to name text output be hear do
-  ob name kind be equally from text "video" then
+  ob name sort be equally from text "video" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "text" then
+  ob name sort be equally from text "text" then
   ob text of cat to name text output be command do
-  ob name kind be equally from text "text" then
+  ob name sort be equally from text "text" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "image" then
+  ob name sort be equally from text "image" then
   from filename of input to name text output be see do
-  ob name kind be equally from text "image" then
+  ob name sort be equally from text "image" then
   ob num 1 to name handled be plus do
 
   ob name handled be equally from num 0 then
@@ -69,41 +69,41 @@ su name read from filename input become wo text be ceremony def
   ob name input to name cat be plus do
   ob text "\"" to name cat be plus do
 
-  exists su name kind ob text "case \"" be text ya
-  ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name kind be plus do
-  ob text of kind to name text kind be command do
-  ob text of result to name text kind be text do
+  exists su name sort ob text "case \"" be text ya
+  ob name mime to name sort be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name sort be plus do
+  ob text of sort to name text sort be command do
+  ob text of result to name text sort be text do
 
   exists su name handled ob num 0 be number ya
-  ob name kind be equally from text "html" then
+  ob name sort be equally from text "html" then
   from filename of input fromstate wo html to name text output be read html do
-  ob name kind be equally from text "html" then
+  ob name sort be equally from text "html" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "pdf" then
+  ob name sort be equally from text "pdf" then
   from filename of input fromstate wo pdf to name text output be read pdf do
-  ob name kind be equally from text "pdf" then
+  ob name sort be equally from text "pdf" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "audio" then
+  ob name sort be equally from text "audio" then
   from filename of input to name text output be hear do
-  ob name kind be equally from text "audio" then
+  ob name sort be equally from text "audio" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "video" then
+  ob name sort be equally from text "video" then
   from filename of input to name text output be hear do
-  ob name kind be equally from text "video" then
+  ob name sort be equally from text "video" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "text" then
+  ob name sort be equally from text "text" then
   ob text of cat to name text output be command do
-  ob name kind be equally from text "text" then
+  ob name sort be equally from text "text" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "image" then
+  ob name sort be equally from text "image" then
   from filename of input to name text output be see do
-  ob name kind be equally from text "image" then
+  ob name sort be equally from text "image" then
   ob num 1 to name handled be plus do
 
   ob name handled be equally from num 0 then
@@ -126,41 +126,41 @@ su name read from filename input become wo markdown to name text output be cerem
   ob name input to name cat be plus do
   ob text "\"" to name cat be plus do
 
-  exists su name kind ob text "case \"" be text ya
-  ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name kind be plus do
-  ob text of kind to name text kind be command do
-  ob text of result to name text kind be text do
+  exists su name sort ob text "case \"" be text ya
+  ob name mime to name sort be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name sort be plus do
+  ob text of sort to name text sort be command do
+  ob text of result to name text sort be text do
 
   exists su name handled ob num 0 be number ya
-  ob name kind be equally from text "html" then
+  ob name sort be equally from text "html" then
   from filename of input fromstate wo html become wo markdown to name text output be read html markdown do
-  ob name kind be equally from text "html" then
+  ob name sort be equally from text "html" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "pdf" then
+  ob name sort be equally from text "pdf" then
   from filename of input fromstate wo pdf become wo markdown to name text output be read pdf markdown do
-  ob name kind be equally from text "pdf" then
+  ob name sort be equally from text "pdf" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "audio" then
+  ob name sort be equally from text "audio" then
   from filename of input to name text output be hear do
-  ob name kind be equally from text "audio" then
+  ob name sort be equally from text "audio" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "video" then
+  ob name sort be equally from text "video" then
   from filename of input to name text output be hear do
-  ob name kind be equally from text "video" then
+  ob name sort be equally from text "video" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "text" then
+  ob name sort be equally from text "text" then
   ob text of cat to name text output be command do
-  ob name kind be equally from text "text" then
+  ob name sort be equally from text "text" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "image" then
+  ob name sort be equally from text "image" then
   from filename of input to name text output be see do
-  ob name kind be equally from text "image" then
+  ob name sort be equally from text "image" then
   ob num 1 to name handled be plus do
 
   ob name handled be equally from num 0 then
@@ -183,41 +183,41 @@ su name read from filename input become wo markdown plain to name text output be
   ob name input to name cat be plus do
   ob text "\"" to name cat be plus do
 
-  exists su name kind ob text "case \"" be text ya
-  ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name kind be plus do
-  ob text of kind to name text kind be command do
-  ob text of result to name text kind be text do
+  exists su name sort ob text "case \"" be text ya
+  ob name mime to name sort be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | head -c -1" to name sort be plus do
+  ob text of sort to name text sort be command do
+  ob text of result to name text sort be text do
 
   exists su name handled ob num 0 be number ya
-  ob name kind be equally from text "html" then
+  ob name sort be equally from text "html" then
   from filename of input fromstate wo html become wo markdown plain to name text output be read html markdown plain do
-  ob name kind be equally from text "html" then
+  ob name sort be equally from text "html" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "pdf" then
+  ob name sort be equally from text "pdf" then
   from filename of input fromstate wo pdf become wo markdown plain to name text output be read pdf markdown plain do
-  ob name kind be equally from text "pdf" then
+  ob name sort be equally from text "pdf" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "audio" then
+  ob name sort be equally from text "audio" then
   from filename of input to name text output be hear do
-  ob name kind be equally from text "audio" then
+  ob name sort be equally from text "audio" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "video" then
+  ob name sort be equally from text "video" then
   from filename of input to name text output be hear do
-  ob name kind be equally from text "video" then
+  ob name sort be equally from text "video" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "text" then
+  ob name sort be equally from text "text" then
   ob text of cat to name text output be command do
-  ob name kind be equally from text "text" then
+  ob name sort be equally from text "text" then
   ob num 1 to name handled be plus do
 
-  ob name kind be equally from text "image" then
+  ob name sort be equally from text "image" then
   from filename of input to name text output be see do
-  ob name kind be equally from text "image" then
+  ob name sort be equally from text "image" then
   ob num 1 to name handled be plus do
 
   ob name handled be equally from num 0 then

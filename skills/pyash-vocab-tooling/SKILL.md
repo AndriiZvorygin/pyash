@@ -15,6 +15,23 @@ Use this skill when adding new verbs/names or checking token validity.
   `node command/vocab_suggest.mjs examples/pyash`
 - Enforce known tokens:
   `node command/vocab_check.mjs examples/pyash`
+- Ask whether a word is used as a Pyash *name* anywhere:
+  `node command/scan_pyashtoken.mjs <word>`
+
+## Canonical words over legacy aliases
+
+`vocab_suggest` accepts a word that resolves through the English dictionary
+alias table, so a legacy alias can survive unnoticed. A name must be spelled
+with the canonical Pyash word, not the alias.
+
+`kind` is such an alias: it resolves to `sort` and is not a Pyash word of its
+own. The alias was purged from every Pyash name position (name-role tokens,
+map row keys, quoted JSON/YAML keys, quoted Pyash source, and the JavaScript
+that writes or reads those keys). `node command/scan_pyashtoken.mjs kind`
+reports zero hits, and `quiz/pyash_name_purge.test.mjs` pins that.
+
+`scan_pyashtoken.mjs` only reports name positions. English prose that happens
+to use the word is data, not a name, and is skipped.
 
 ## Anchor helpers
 
