@@ -41,7 +41,7 @@ PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs
 
 This selects the Pyash mind named `zai`, whose default model is `glm-5.3-flash` and endpoint is `https://api.z.ai/api/v1`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` queries the authenticated Coding Plan model catalog and offers the models returned for your account. Other minds continue using their existing configuration. After a successful refresh, Pyash also updates the local Codex `zai` profile catalog (`model_catalog_json`) from the same model IDs, so the regular Codex model selector stays in sync. Codex reads that local catalog rather than querying Z.AI itself; opening Pyash's `/model` picker refreshes it. If discovery is unavailable, the saddle keeps the configured model available and reports the lookup failure. Z.AI describes GLM-5.3-Flash as multimodal, but the current Codex profile declares text input only; Pyash tools remain available through the Codex MCP bridge.
 
-Use `/context` in the Pyash saddle to choose a client context budget up to the selected model's verified maximum; `/context 128K` selects a size directly. Available choices are 16K, 32K, 64K, and 128K for GLM-4.5/4.5-Air; those plus 200K for GLM-4.6/4.7, GLM-5/5.1, and GLM-5-Turbo; and 256K, 512K, and 1M are additionally available for GLM-5.2/5.3 and GLM-5.3-Flash/FlashX. Unknown future models are conservatively capped at 128K until their limit is verified. Pyash uses the selection on subsequent Z.AI turns and saves it as `model_context_window` in the local `zai.config.toml` profile for regular Codex sessions launched afterward. Restart an already-running Codex process to load the changed profile. This is a client-side context budget, not a change to Z.AI's model-side maximum; the account model-list endpoint returns model IDs but does not advertise context sizes.
+Use `/context` in the Pyash saddle to choose a context for the active backend. Z.AI selections set the client-side context budget and save `model_context_window` for future Codex sessions. Ollama selections send request-level `num_ctx` for the current saddle session. Strata choices come from the GPU Housekeeper; selecting one updates the configured `--max-context` and restarts Strata under the Housekeeper's exclusive GPU gate. The Strata model remains unloaded after restart and loads lazily on its next request. `/context 64K` selects a size directly; `/context default` restores Strata's configured default when that size is available. A busy GPU or in-flight direct Strata request makes the change fail visibly without restarting the server.
 
 The Codex route preserves the CLI's `turn.completed` token accounting. The
 saddle prints that total after each reply and appends a durable usage map to the
@@ -62,12 +62,13 @@ Pyash sends requests to `http://127.0.0.1:8081/v1/chat/completions`. The Strata 
 
 In the coding saddle, `/think none|low|medium|high` controls Strata's
 per-request reasoning effort; `off` and `on` are aliases for `none` and
-`high`. `/context` cannot resize a running Strata server: context is fixed by
-the Strata launch profile and requires its normal GPU-managed restart. For
-Ollama, `/context` selects a request-level `num_ctx` preset (4K through 64K),
-and `/think on|off` sends Ollama's boolean thinking option. These saddle
-overrides apply for the current interactive session only; no selection keeps
-the existing provider/model defaults.
+`high`. `/context` reads the supported Strata sizes from Housekeeper. Choosing
+one updates only `--max-context` in the configured Strata launch profile, then
+restarts the lazy server while holding the GPU gate. The model stays unloaded
+until the next request. For Ollama, `/context` selects a request-level
+`num_ctx` preset (4K through 64K), and `/think on|off` sends Ollama's boolean
+thinking option. These saddle overrides apply for the current interactive
+session only; no selection keeps the existing provider/model defaults.
 
 ### GPU manager handoff
 
@@ -113,12 +114,31 @@ Register the same loopback API with the Housekeeper in `container/gpu-housekeepe
 
 ```dotenv
 GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=http://127.0.0.1:8081
+GPU_HOUSEKEEPER_STRATA_CONTEXT_CONFIG_PATH=/path/to/Strata/strata-iq2_xs-housekeeper.json
+GPU_HOUSEKEEPER_STRATA_CONTEXT_SYSTEMD_UNIT=strata-iq2-xs.service
+GPU_HOUSEKEEPER_STRATA_CONTEXT_AGENT_SOCKET=/run/user/1000/pyash-strata-context-agent.sock
+GPU_HOUSEKEEPER_STRATA_CONTEXT_OPTIONS=8192,16384,32768,65536
+GPU_HOUSEKEEPER_STRATA_DEFAULT_CONTEXT_LENGTH=32768
+GPU_HOUSEKEEPER_STRATA_DEVICE_ID=gpu0
 ```
 
+Install the host-side user service once, then recreate the Housekeeper:
+
 ```sh
+container/gpu-housekeeper/command/install-strata-context-agent.sh
 cd container/gpu-housekeeper/service
-docker compose -p gpu-housekeeper --env-file .env -f compose.gpu.yaml up -d --no-build --force-recreate gpu-housekeeper
+docker compose -p gpu-housekeeper --env-file .env -f compose.gpu.yaml up -d --build --force-recreate gpu-housekeeper
 ```
+
+The agent accepts requests only over its owner-only Unix socket. Housekeeper
+holds the GPU execution gate, checks Strata has no in-flight work, and sends
+the allowlisted context change through a short-lived helper container. The host
+agent updates only `--max-context`, restarts the configured user unit, and
+verifies the reported limit; rollback restores the previous profile if restart
+or verification fails. Leave the context-control settings unset to disable
+this operation. `GET /runtime/strata/context` reports the active size and
+allowlist; `POST /runtime/strata/context` accepts only an allowlisted
+`contextLength`. Requests fail as busy if the GPU gate or Strata API is active.
 
 The manager then loads Strata for queued Strata jobs and checks its status before admitting another managed GPU runtime. It unloads Strata only after its status API confirms zero in-flight requests and the configured 300-second idle grace has elapsed; it verifies `loaded:false` and rechecks actual free VRAM before admitting the next runtime. The Housekeeper uses a short-lived host-network helper container to reach Strata's loopback API, so Strata itself remains bound to `127.0.0.1`. If Strata API-key authentication is enabled, put the same key in the Housekeeper environment as `STRATA_API_KEY`; never commit it.
 

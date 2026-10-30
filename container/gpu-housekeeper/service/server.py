@@ -1935,6 +1935,7 @@ def parse_runtime_status(runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
       "gpuExpected": gpu_expected,
       "gpuObserved": loaded,
       "loaded": loaded,
+      "contextLength": status.get("max_context") or (status.get("context") or {}).get("max_positions"),
       "message": "Strata model loaded" if loaded else "Strata API is running with its model unloaded"
     }
 
@@ -2760,6 +2761,102 @@ def request_strata_json(pathname: str, payload: Optional[Dict[str, Any]] = None,
     detail = normalize_text(response.pop("_httpBody", ""))
     raise RuntimeError(f"Strata API request failed ({status}): {detail or 'HTTP error'}")
   return response
+
+
+def strata_context_options() -> List[int]:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_CONTEXT_OPTIONS"))
+  values = []
+  for part in raw.split(",") if raw else ["8192", "16384", "32768", "65536"]:
+    try:
+      value = int(part.strip())
+    except (TypeError, ValueError):
+      continue
+    if 8192 <= value <= 262144:
+      values.append(value)
+  return sorted(set(values))
+
+
+def strata_context_status(runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  entry = runtime_registry.get("strata") or {}
+  required = (
+    normalize_text(entry.get("contextConfigPath")),
+    normalize_text(entry.get("contextSystemdUnit")),
+    normalize_text(entry.get("contextAgentSocket"))
+  )
+  if not all(required):
+    raise RuntimeError("Strata context restart is not configured in GPU Housekeeper")
+  options = strata_context_options()
+  if not options:
+    raise RuntimeError("Strata context restart has no valid configured context options")
+  status = request_strata_json("/v1/status", None, timeout_sec=8)
+  current = status.get("max_context") or (status.get("context") or {}).get("max_positions")
+  if not isinstance(current, int) or current <= 0:
+    raise RuntimeError("Strata status did not report its active context length")
+  return {
+    "runtimeName": "strata",
+    "contextLength": current,
+    "defaultContextLength": int(entry.get("defaultContextLength") or 32768),
+    "options": options,
+    "loaded": status.get("loaded") is True,
+    "configured": True
+  }
+
+
+def change_strata_context(context_length: Any, runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+  entry = runtime_registry.get("strata") or {}
+  try:
+    requested = int(context_length)
+  except (TypeError, ValueError):
+    raise RuntimeError("contextLength must be an integer")
+  available = strata_context_status(runtime_registry)
+  if requested not in available["options"]:
+    raise RuntimeError(f"unsupported Strata context length {requested}; available: {', '.join(str(value) for value in available['options'])}")
+  if requested == available["contextLength"]:
+    return {**available, "changed": False, "message": "Strata is already configured for this context"}
+
+  device_id = normalize_text(entry.get("deviceId")) or "gpu0"
+  gate = execution_gate_for(device_id)
+  if not gate.try_acquire_exclusive():
+    return {
+      **available,
+      "changed": False,
+      "busy": True,
+      "message": "GPU Housekeeper cannot restart Strata while managed GPU work is active"
+    }
+  try:
+    live = request_strata_json("/v1/status", None, timeout_sec=8)
+    activity = live.get("activity") if isinstance(live.get("activity"), dict) else {}
+    if int(activity.get("in_flight") or 0) > 0:
+      return {
+        **available,
+        "changed": False,
+        "busy": True,
+        "message": "Strata reports an in-flight request; context was not changed"
+      }
+    if live.get("loaded") is True:
+      request_strata_json("/v1/unload", {}, timeout_sec=300)
+
+    agent_socket = normalize_text(entry.get("contextAgentSocket"))
+    image = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE")) or "liberit/gpu-housekeeper:latest"
+    args = [
+      "run", "--rm", "--pull=never", "--network", "host",
+      "-v", f"{agent_socket}:/run/pyash-strata-context-agent.sock:rw",
+    ]
+    args.extend([
+      "--entrypoint", "python3", image,
+      "/service/strata_context_client.py",
+      "--socket", "/run/pyash-strata-context-agent.sock",
+      "--context", str(requested),
+    ])
+    result = run_docker(args, timeout_sec=210)
+    if not result.get("success"):
+      raise RuntimeError(normalize_text(result.get("message")) or "Strata context restart helper failed")
+    refreshed = strata_context_status(runtime_registry)
+    if refreshed["contextLength"] != requested:
+      raise RuntimeError(f"Strata restarted but reports context {refreshed['contextLength']}, expected {requested}")
+    return {**refreshed, "changed": True, "message": f"Strata restarted with {requested}-token context; model remains unloaded until its next request"}
+  finally:
+    gate.release(shared=False)
 
 
 def preview_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -4347,6 +4444,10 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         "runtimeLogPath": normalize_text(item.get("runtimeLogPath")),
         "runtimeEnvironment": item.get("runtimeEnvironment") if isinstance(item.get("runtimeEnvironment"), dict) else {},
         "defaultContextLength": default_context_length,
+        "contextConfigPath": normalize_text(item.get("contextConfigPath")),
+        "contextSystemdUnit": normalize_text(item.get("contextSystemdUnit")),
+        "contextAgentSocket": normalize_text(item.get("contextAgentSocket")),
+        "deviceId": normalize_text(item.get("deviceId")),
         "gpuExpected": parse_bool_value(item.get("gpuExpected", True), True),
         "beginAction": item.get("beginAction") if isinstance(item.get("beginAction"), list) else (["start", container_name] if container_name else []),
         "stopAction": item.get("stopAction") if isinstance(item.get("stopAction"), list) else (["stop", container_name] if container_name else []),
@@ -4371,6 +4472,16 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
       "dischargeKind": "strata",
       "concurrencySafe": False
     })
+  if "strata" in registry:
+    strata = registry["strata"]
+    strata["contextConfigPath"] = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_CONTEXT_CONFIG_PATH"))
+    strata["contextSystemdUnit"] = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_CONTEXT_SYSTEMD_UNIT"))
+    strata["contextAgentSocket"] = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_CONTEXT_AGENT_SOCKET"))
+    try:
+      strata["defaultContextLength"] = int(os.environ.get("GPU_HOUSEKEEPER_STRATA_DEFAULT_CONTEXT_LENGTH", "32768"))
+    except (TypeError, ValueError):
+      strata["defaultContextLength"] = 32768
+    strata["deviceId"] = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_DEVICE_ID")) or "gpu0"
   return registry
 
 
@@ -4500,6 +4611,13 @@ class Handler(BaseHTTPRequestHandler):
       json_response(self, 200, strata_model_catalog(self.runtime_registry))
       return
 
+    if self.path == "/runtime/strata/context":
+      try:
+        json_response(self, 200, strata_context_status(self.runtime_registry))
+      except Exception as err:
+        json_response(self, 503, {"error": normalize_text(err) or "Strata context status unavailable"})
+      return
+
     if self.path.startswith("/runtime/"):
       runtime_name = unquote(self.path[len("/runtime/"):]).strip().lower()
       if not runtime_name:
@@ -4527,6 +4645,24 @@ class Handler(BaseHTTPRequestHandler):
     json_response(self, 404, {"error": "not found"})
 
   def do_POST(self) -> None:
+    if self.path == "/runtime/strata/context":
+      payload = read_json_body(self)
+      try:
+        # Fail before attempting a mutation if this Housekeeper has no configured restart path.
+        strata_context_status(self.runtime_registry)
+      except Exception as err:
+        json_response(self, 503, {"error": normalize_text(err) or "Strata context control unavailable"})
+        return
+      try:
+        result = change_strata_context(payload.get("contextLength"), self.runtime_registry)
+      except Exception as err:
+        message = normalize_text(err) or "Strata context change failed"
+        code = 400 if "unsupported Strata context" in message or "contextLength must" in message else 503
+        json_response(self, code, {"error": message})
+        return
+      json_response(self, 409 if result.get("busy") else 200, result)
+      return
+
     if self.path == "/capacity/preview":
       payload = read_json_body(self)
       json_response(self, 200, preview_capacity(payload, self.runtime_registry))

@@ -13,6 +13,10 @@ SERVER_PATH = pathlib.Path(__file__).with_name("server.py")
 spec = importlib.util.spec_from_file_location("gpu_housekeeper_server", SERVER_PATH)
 server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
+HELPER_PATH = pathlib.Path(__file__).with_name("strata_context_helper.py")
+helper_spec = importlib.util.spec_from_file_location("strata_context_helper", HELPER_PATH)
+strata_helper = importlib.util.module_from_spec(helper_spec)
+helper_spec.loader.exec_module(strata_helper)
 
 
 class HousekeeperServerConfigTests(unittest.TestCase):
@@ -29,6 +33,101 @@ class HousekeeperServerConfigTests(unittest.TestCase):
       self.assertEqual(server.capacity_wait_seconds({"jobSpec": {"capacityWaitSec": 45}}), 45)
       os.environ["GPU_HOUSEKEEPER_CAPACITY_WAIT_SEC"] = "90"
       self.assertEqual(server.capacity_wait_seconds(), 90)
+
+
+class StrataContextControlTests(unittest.TestCase):
+  def registry(self):
+    return {"strata": {
+      "contextConfigPath": "/host/strata.json",
+      "contextSystemdUnit": "strata.service",
+      "contextAgentSocket": "/run/user/1000/strata-context.sock",
+      "deviceId": "gpu0"
+    }}
+
+  def test_context_options_are_bounded_and_deduplicated(self):
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_STRATA_CONTEXT_OPTIONS": "8192, 32768,32768,999999,not-a-size,65536"
+    }, clear=False):
+      self.assertEqual(server.strata_context_options(), [8192, 32768, 65536])
+
+  def test_context_change_refuses_while_gpu_gate_is_busy(self):
+    gate = server.DeviceExecutionGate()
+    self.assertTrue(gate.try_acquire_exclusive())
+    with patch.dict(os.environ, {"GPU_HOUSEKEEPER_STRATA_CONTEXT_OPTIONS": "32768,65536"}), \
+         patch.object(server, "execution_gate_for", return_value=gate), \
+         patch.object(server, "request_strata_json", return_value={"max_context": 32768, "loaded": False}):
+      result = server.change_strata_context(65536, self.registry())
+    self.assertTrue(result["busy"])
+    self.assertEqual(result["contextLength"], 32768)
+    gate.release(shared=False)
+
+  def test_context_change_runs_managed_restart_under_gpu_gate(self):
+    gate = server.DeviceExecutionGate()
+    statuses = iter([
+      {"max_context": 32768, "loaded": False},
+      {"max_context": 32768, "loaded": False},
+      {"max_context": 65536, "loaded": False}
+    ])
+    calls = []
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_STRATA_CONTEXT_OPTIONS": "32768,65536",
+      "GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE": "test-housekeeper:latest"
+    }), patch.object(server, "execution_gate_for", return_value=gate), \
+         patch.object(server, "request_strata_json", side_effect=lambda *args, **kwargs: next(statuses)), \
+         patch.object(server, "run_docker", side_effect=lambda args, timeout_sec: calls.append((args, timeout_sec)) or {"success": True}):
+      result = server.change_strata_context(65536, self.registry())
+    self.assertTrue(result["changed"])
+    self.assertEqual(result["contextLength"], 65536)
+    self.assertEqual(len(calls), 1)
+    self.assertIn("/service/strata_context_client.py", calls[0][0])
+    self.assertIn("/run/pyash-strata-context-agent.sock", calls[0][0])
+    self.assertIn("65536", calls[0][0])
+    self.assertIn("/run/user/1000/strata-context.sock:/run/pyash-strata-context-agent.sock:rw", calls[0][0])
+    self.assertFalse(gate.exclusive)
+
+  def test_context_change_does_not_restart_with_strata_inflight(self):
+    gate = server.DeviceExecutionGate()
+    with patch.dict(os.environ, {"GPU_HOUSEKEEPER_STRATA_CONTEXT_OPTIONS": "32768,65536"}), \
+         patch.object(server, "execution_gate_for", return_value=gate), \
+         patch.object(server, "request_strata_json", return_value={
+           "max_context": 32768, "loaded": True, "activity": {"in_flight": 1}
+         }), patch.object(server, "run_docker") as run_docker:
+      result = server.change_strata_context(65536, self.registry())
+    self.assertTrue(result["busy"])
+    run_docker.assert_not_called()
+    self.assertFalse(gate.exclusive)
+
+  def test_context_argument_replacement_preserves_other_profile_settings(self):
+    args = ["--pack", "p", "--max-context", "32768", "--kv", "int8"]
+    self.assertEqual(
+      strata_helper.replace_context_argument(args, 65536),
+      ["--pack", "p", "--max-context", "65536", "--kv", "int8"]
+    )
+    self.assertEqual(args[3], "32768")
+    self.assertEqual(
+      strata_helper.replace_context_argument(["--max-context=32768", "--vision"], 65536),
+      ["--max-context=65536", "--vision"]
+    )
+
+  def test_profile_update_is_atomic_and_changes_only_context(self):
+    with tempfile.TemporaryDirectory() as temp_dir:
+      path = pathlib.Path(temp_dir) / "strata.json"
+      original = {"port": 8081, "args": ["--pack", "p", "--max-context", "32768", "--kv", "int8"]}
+      path.write_text(json.dumps(original), encoding="utf-8")
+      path.chmod(0o640)
+      before, mode, previous = strata_helper.update_profile(path, 65536)
+      updated = json.loads(path.read_text(encoding="utf-8"))
+      self.assertEqual(previous, 32768)
+      self.assertEqual(mode, 0o640)
+      self.assertEqual(updated["args"], ["--pack", "p", "--max-context", "65536", "--kv", "int8"])
+      self.assertEqual(updated["port"], 8081)
+      self.assertEqual(json.loads(before.decode("utf-8")), original)
+
+  def test_context_argument_replacement_rejects_missing_or_ambiguous_profiles(self):
+    with self.assertRaisesRegex(ValueError, "exactly one"):
+      strata_helper.replace_context_argument(["--kv", "int8"], 65536)
+    with self.assertRaisesRegex(ValueError, "exactly one"):
+      strata_helper.replace_context_argument(["--max-context", "32768", "--max-context", "65536"], 8192)
 
 
 class HousekeeperOllamaTests(unittest.TestCase):

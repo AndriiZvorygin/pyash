@@ -14,6 +14,8 @@ import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
+import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
+import { resolveGpuHousekeeperUrl } from "../program/runtime/gpu/managed-ollama.mjs";
 import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
 import {
   formatZaiContextWindow,
@@ -32,6 +34,7 @@ import {
 import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
   buildSaddleMindSentence,
+  buildSaddleStrataContextOptions,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
@@ -366,6 +369,29 @@ async function main() {
     promptLabel = label;
     renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear, label });
   };
+  const strataHousekeeper = () => {
+    const baseUrl = resolveGpuHousekeeperUrl({
+      managerUrl: configValue("gpu housekeeper url"),
+      ollamaUrl: host,
+      cwd: config.cwd
+    });
+    return createGpuHousekeeperAdapter({ baseUrl });
+  };
+  const applyStrataContext = async (tokens) => {
+    busy = true;
+    writeLine(`Housekeeper is reconfiguring Strata to ${formatZaiContextWindow(tokens)} and restarting its lazy server...`);
+    prompt({ clear: false, label: "restarting Strata> " });
+    try {
+      const result = await strataHousekeeper().setStrataContext({ contextLength: tokens });
+      contextWindow = Number(result.contextLength || tokens);
+      writeLine(`Strata context: ${formatZaiContextWindow(contextWindow)}; Housekeeper verified the restart; model remains unloaded until its next request`);
+    } catch (error) {
+      writeLine(`Strata context change failed: ${error.message}`);
+    } finally {
+      busy = false;
+      prompt({ clear: false });
+    }
+  };
   const showModelPicker = async () => {
     modelPickerLoading = true;
     writeLine("discovering models...");
@@ -409,9 +435,27 @@ async function main() {
     }));
     prompt({ clear: false, label: "select model> " });
   };
-  const showContextPicker = () => {
+  const showContextPicker = async () => {
     if (backend === "strata") {
-      writeLine("Strata context is fixed when its server launches; Pyash cannot change it per request. Configure the Strata launch context and restart it through its normal GPU-managed process.");
+      try {
+        const status = await strataHousekeeper().getStrataContext();
+        contextWindow = Number(status.contextLength || 0) || null;
+        contextPicker = buildSaddleStrataContextOptions({
+          options: status.options,
+          currentContextLength: status.contextLength,
+          defaultContextLength: status.defaultContextLength
+        });
+        if (!contextPicker.length) throw new Error("Housekeeper returned no supported context sizes");
+        writeLine(`Strata context for ${model}: current ${formatZaiContextWindow(contextWindow)}; default ${formatZaiContextWindow(status.defaultContextLength)}`);
+        writeLine("Choose a size. Housekeeper updates Strata's launch profile and restarts it while holding the GPU gate.");
+        for (const [index, option] of contextPicker.entries()) {
+          writeLine(`${index + 1}. ${option.label}${option.current ? " (current)" : ""}`);
+        }
+        prompt({ clear: false, label: "select context> " });
+        return;
+      } catch (error) {
+        writeLine(`Strata context selection unavailable: ${error.message}`);
+      }
       prompt({ clear: false });
       return;
     }
@@ -503,6 +547,11 @@ async function main() {
       if (!selected) {
         writeLine("invalid context window selection");
         prompt({ clear: false, label: "select context> " });
+        return;
+      }
+      if (backend === "strata") {
+        contextPicker = null;
+        await applyStrataContext(selected.tokens);
         return;
       }
       if (backend === "zai") {
@@ -607,12 +656,28 @@ async function main() {
     const contextMatch = input.trim().match(/^\/context(?:\s+(.+))?$/i);
     if (contextMatch) {
       if (!contextMatch[1]) {
-        showContextPicker();
+        await showContextPicker();
         return;
       }
       if (backend === "strata") {
-        writeLine("Strata context is fixed when its server launches; Pyash cannot change it per request. Configure the Strata launch context and restart it through its normal GPU-managed process.");
-        prompt({ clear: false });
+        try {
+          const status = await strataHousekeeper().getStrataContext();
+          const choices = buildSaddleStrataContextOptions({
+            options: status.options,
+            currentContextLength: status.contextLength,
+            defaultContextLength: status.defaultContextLength
+          });
+          const selected = resolveSaddleModelOption(contextMatch[1], choices);
+          if (!selected) {
+            writeLine(`unknown Strata context size; available: ${choices.map((choice) => choice.label).join(", ")}`);
+            prompt({ clear: false });
+            return;
+          }
+          await applyStrataContext(selected.tokens);
+        } catch (error) {
+          writeLine(`Strata context selection unavailable: ${error.message}`);
+          prompt({ clear: false });
+        }
         return;
       }
       if (backend !== "zai" && backend !== "ollama") {

@@ -97,6 +97,25 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", usernam
       });
     },
 
+    async getStrataContext({ timeoutMs = 5000 } = {}) {
+      return requestJson({
+        baseUrl: rootUrl,
+        pathname: "/runtime/strata/context",
+        method: "GET",
+        timeoutMs
+      });
+    },
+
+    async setStrataContext({ contextLength, timeoutMs = 240000 } = {}) {
+      return requestJson({
+        baseUrl: rootUrl,
+        pathname: "/runtime/strata/context",
+        method: "POST",
+        body: { contextLength: Number(contextLength) },
+        timeoutMs
+      });
+    },
+
     async getRuntimes() {
       return requestJson({
         baseUrl: rootUrl,

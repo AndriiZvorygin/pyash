@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 
 import { allRemember, forget, remember } from "../program/remember/index.mjs";
 import {
+  buildSaddleStrataContextOptions,
   buildSaddleMindSentence,
   createSaddleInputDecoder,
   discoverSaddleModels,
@@ -280,6 +281,21 @@ test("coding saddle maps Ollama thinking to boolean and Strata thinking to suppo
     reasoningEffort: "low"
   });
   assert.equal(strataSentence.reasoningEffort, "low");
+});
+
+test("coding saddle builds Strata context choices from Housekeeper-supported sizes", () => {
+  const choices = buildSaddleStrataContextOptions({
+    options: [16384, 32768, 65536, 65536, 999999, "bad"],
+    currentContextLength: 32768,
+    defaultContextLength: 32768
+  });
+  assert.deepEqual(choices.map((choice) => [choice.label, choice.tokens, choice.current]), [
+    ["Default (32K)", 32768, true],
+    ["16K", 16384, false],
+    ["32K", 32768, true],
+    ["64K", 65536, false]
+  ]);
+  assert.deepEqual(buildSaddleStrataContextOptions({ options: [] }), []);
 });
 
 test("coding saddle discovers all account-enabled Z.AI models for the model picker", async () => {

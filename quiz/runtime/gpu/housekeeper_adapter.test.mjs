@@ -93,6 +93,37 @@ test("housekeeper adapter reads the exact Ollama model catalog", async () => {
   );
 });
 
+test("housekeeper adapter reads Strata context options from the managed runtime", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: {
+      runtimeName: "strata", contextLength: 32768, defaultContextLength: 32768,
+      options: [8192, 16384, 32768, 65536], configured: true
+    } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:18886" });
+      const result = await adapter.getStrataContext();
+      assert.equal(calls[0].url, "http://housekeeper:18886/runtime/strata/context");
+      assert.equal(calls[0].options.method, "GET");
+      assert.equal(result.contextLength, 32768);
+      assert.deepEqual(result.options, [8192, 16384, 32768, 65536]);
+    }
+  );
+});
+
+test("housekeeper adapter requests Strata context changes through the manager", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ body: { changed: true, contextLength: 65536 } }),
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:18886" });
+      const result = await adapter.setStrataContext({ contextLength: 65536 });
+      assert.equal(calls[0].url, "http://housekeeper:18886/runtime/strata/context");
+      assert.equal(calls[0].options.method, "POST");
+      assert.deepEqual(JSON.parse(calls[0].options.body), { contextLength: 65536 });
+      assert.equal(result.contextLength, 65536);
+    }
+  );
+});
+
 test("housekeeper adapter reads Strata model availability from the manager", async () => {
   await withMockFetch(
     async () => makeJsonResponse({ body: { available: true, models: [{ name: "qwen3.8-flash-next-coder-iq1_m" }] } }),

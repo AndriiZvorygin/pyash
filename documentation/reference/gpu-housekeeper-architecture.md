@@ -103,6 +103,8 @@ needs a larger recovery window.
 - `GET /runtime/<runtimeName>`
 - `GET /runtime/ollama/models`
 - `GET /runtime/strata/models`
+- `GET /runtime/strata/context`
+- `POST /runtime/strata/context` (allowlisted launch-context update under the exclusive GPU gate)
 - `POST /capacity/preview`
 - `POST /capacity/prepare` (Strata pre-load admission and idle-runtime handoff)
 - `POST /submit`

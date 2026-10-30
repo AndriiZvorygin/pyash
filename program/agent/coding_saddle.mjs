@@ -3,6 +3,46 @@ import { fetchZaiCodingPlanModels } from "../runtime/zai_coding_plan.mjs";
 
 export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536];
 
+function formatContextLength(tokens) {
+  const value = Number(tokens);
+  if (!Number.isSafeInteger(value) || value <= 0) return "default";
+  if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`;
+  if (value >= 1024 && value % 1024 === 0) return `${value / 1024}K`;
+  return value.toLocaleString("en-CA");
+}
+
+export function buildSaddleStrataContextOptions({
+  options = [],
+  currentContextLength = null,
+  defaultContextLength = null
+} = {}) {
+  const values = [...new Set((Array.isArray(options) ? options : [])
+    .map(Number)
+    .filter((value) => Number.isSafeInteger(value) && value >= 8192 && value <= 262144))]
+    .sort((a, b) => a - b);
+  if (!values.length) return [];
+  const choices = values.map((tokens) => ({
+    model: String(tokens),
+    value: formatContextLength(tokens),
+    label: formatContextLength(tokens),
+    tokens
+  }));
+  const defaultTokens = Number(defaultContextLength);
+  if (values.includes(defaultTokens)) {
+    choices.unshift({
+      model: String(defaultTokens),
+      value: "default",
+      label: `Default (${formatContextLength(defaultTokens)})`,
+      tokens: defaultTokens
+    });
+  }
+  return choices.map((choice) => ({
+    ...choice,
+    current: choice.tokens === Number(currentContextLength),
+    isDefault: choice.value === "default"
+  }));
+}
+
 export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "You are the Pyash coding saddle: an interactive coding agent operating inside the existing Pyash runtime.",
   "Use the provided Pyash tools for repository work. Do not pretend a change was made when a tool did not succeed.",
