@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 import {
   createZaiCodexHome,
@@ -28,6 +29,17 @@ test("Z.AI standard and Coding Plan keys resolve from distinct Pyash secret fact
   } finally {
     fs.rmSync(secretFilePath, { force: true });
   }
+});
+
+test("Codex auth helper emits the configured key only on stdout", () => {
+  const result = spawnSync(process.execPath, ["command/zai_codex_auth.mjs"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: { ...process.env, Z_AI_CODING_API_KEY: "fixture-coding-key" }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, "fixture-coding-key\n");
+  assert.equal(result.stderr, "");
 });
 
 test("isolated Codex profile uses Z.AI Responses and trusts only the active project", () => {

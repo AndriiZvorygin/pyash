@@ -23,6 +23,8 @@ exists su name zai coding api key ob text "<GLM Coding Plan key>" be default ya
 
 The standard API key is used for Chat Completions when a mind targets `api.z.ai`. The distinct Coding Plan key is used only by the Codex CLI Responses profile; it does not fall back to the standard API key.
 
+On this host, the regular Codex CLI also has a separate `zai` profile. Start it with `codex --profile zai`; plain `codex` keeps using the existing OpenAI default. Its auth command reads the Coding Plan key from `configure/secret.pya`, so the credential is not duplicated in `~/.codex`. In the Pyash coding saddle, switch providers with `/backend zai` or `/backend openai`, then select that provider's model with `/model glm-5.3` or `/model gpt-6-luna`. `/model` changes the model, not the provider.
+
 The runner launches the installed Codex CLI with an ephemeral, isolated `CODEX_HOME` configured for the OpenAI Responses protocol at `https://api.z.ai/api/v1`, model `glm-5.3`, and the supplied Coding Plan key. The temporary profile is permission-restricted and deleted after each request; your existing `~/.codex` configuration is not changed. Pyash keeps its existing default backend unless you explicitly select Z.AI. Z.AI's Coding Plan is limited to officially supported tools; this route uses Codex CLI rather than Pyash's direct Chat Completions client.
 
 To add a named Z.AI mind relay without changing the global default:
