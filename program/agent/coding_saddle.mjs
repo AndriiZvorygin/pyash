@@ -198,12 +198,13 @@ export function buildSaddleMindSentence({
   model,
   backend,
   host,
+  contextWindow,
   mindName = "coding saddle",
   toolMapName = "saddle tools",
   sessionName = "coding",
   sessionFile = ""
 } = {}) {
-  return {
+  const sentence = {
     mood: "do",
     be: "write",
     for: { name: normalizeText(mindName) || "coding saddle" },
@@ -218,11 +219,16 @@ export function buildSaddleMindSentence({
     by: { num: 50 },
     // The model is persisted in the mind configuration fact; the sentence stays canonical Pyash shape.
   };
+  if (Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
+    sentence.contextWindow = Number(contextWindow);
+  }
+  return sentence;
 }
 
 export function formatSaddleStatus({
   mindName = "mind",
   model,
+  contextWindow,
   host,
   cwd,
   queue,
@@ -235,6 +241,9 @@ export function formatSaddleStatus({
   return [
     `mind: ${normalizeText(mindName) || "mind"}`,
     `model: ${normalizeSaddleModel(model)}`,
+    ...(Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0
+      ? [`context: ${Number(contextWindow).toLocaleString("en-CA")} tokens`]
+      : []),
     `host: ${normalizeSaddleHost(host)}`,
     `session: ${normalizeText(session) || "coding"}`,
     `cwd: ${path.resolve(String(cwd || process.cwd()))}`,

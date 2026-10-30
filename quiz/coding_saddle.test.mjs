@@ -55,6 +55,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
     model: "qwen3.8:27b",
     backend: "ollama",
     host: "http://mriczo:11434",
+    contextWindow: 131072,
     sessionName: "coding"
   });
 
@@ -63,6 +64,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
   assert.equal(sentence.with.name, "saddle tools");
   assert.equal(sentence.fromstate.text, "ollama");
   assert.equal(sentence.from.text, "http://mriczo:11434");
+  assert.equal(sentence.contextWindow, 131072);
   assert.equal(sentence.fromtext.name, "session name coding");
 });
 
@@ -74,6 +76,7 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
     model: "qwen3.5:9b",
     backend: "ollama",
     host: "http://localhost:11434",
+    contextWindow: 65536,
     onUsage: (usage) => {
       observedUsage = usage;
       return usage;
@@ -92,6 +95,7 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   assert.equal(result.ob.text, "done");
   assert.equal(observed.sentence.ob.text, "run the focused test");
   assert.equal(observed.sentence.fromstate.text, "ollama");
+  assert.equal(observed.sentence.contextWindow, 65536);
   assert.equal(observed.options.sessionUserContent, "run the focused test");
   assert.equal(typeof observed.options.onUsage, "function");
   assert.deepEqual(observedUsage, {
@@ -268,6 +272,11 @@ test("coding saddle discovers all account-enabled Z.AI models for the model pick
   assert.deepEqual(result.catalogModels, ["glm-5.3", "glm-5.3-flash", "glm-5.3-flashx"]);
   assert.equal(result.available, true);
   assert.equal(resolveSaddleModelSelection("3", result.models), "glm-5.3-flashx");
+  const contextChoices = [
+    { model: "204800", value: "200K", label: "200K", tokens: 204800 },
+    { model: "1048576", value: "1M", label: "1M", tokens: 1048576 }
+  ];
+  assert.equal(resolveSaddleModelOption("200K", contextChoices)?.tokens, 204800);
 });
 
 test("coding saddle preserves the current model when catalogue discovery fails", async () => {

@@ -7,6 +7,26 @@ import { readPyaTextValues } from "../library/pya_config.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const codingKeyNames = ["Z_AI_CODING_API_KEY", "Z_A_CODING_API_KEY", "ZAI_CODING_API_KEY"];
 const defaultSecretPath = path.join(repoRoot, "configure/secret.pya");
+const DEFAULT_ZAI_CONTEXT_WINDOW = 131072;
+const ZAI_CONTEXT_WINDOW_PRESETS = [16384, 32768, 65536, 131072, 262144, 524288, 1048576];
+// The Coding Plan catalog returns IDs only, so keep verified provider limits here.
+const ZAI_MODEL_CONTEXT_LIMITS = new Map([
+  ["glm-4.5", 131072],
+  ["glm-4.5-air", 131072],
+  ["glm-4.6", 204800],
+  ["glm-4.7", 204800],
+  ["glm-5", 204800],
+  ["glm-5-turbo", 204800],
+  ["glm-5.1", 204800],
+  ["glm-5.2", 1048576],
+  ["glm-5.3", 1048576],
+  ["glm-5.3-flash", 1048576],
+  ["glm-5.3-flashx", 1048576]
+]);
+
+function zaiModelContextLimit(slug) {
+  return ZAI_MODEL_CONTEXT_LIMITS.get(String(slug ?? "").trim().toLowerCase()) ?? DEFAULT_ZAI_CONTEXT_WINDOW;
+}
 
 function readSecretValue(secretFilePath, name) {
   return String(readPyaTextValues(secretFilePath, [name])[name] || "").trim();
@@ -92,13 +112,103 @@ function defaultZaiCodexModelEntry(slug) {
     support_verbosity: false,
     apply_patch_tool_type: "freeform",
     truncation_policy: { mode: "bytes", limit: 10000 },
-    context_window: 1048576,
-    max_context_window: 1048576,
+    context_window: zaiModelContextLimit(slug),
+    max_context_window: zaiModelContextLimit(slug),
     effective_context_window_percent: 95,
     supports_parallel_tool_calls: true,
     experimental_supported_tools: [],
     input_modalities: ["text"]
   };
+}
+
+function zaiCodexPaths(codexHome) {
+  const home = codexHome || process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+  return {
+    home,
+    configPath: path.join(home, "zai.config.toml")
+  };
+}
+
+function readZaiCodexProfile(codexHome) {
+  const { home, configPath } = zaiCodexPaths(codexHome);
+  if (!fs.existsSync(configPath)) return { home, configPath, config: "", catalogPath: "", catalog: {} };
+  const config = fs.readFileSync(configPath, "utf8");
+  const pathMatch = config.match(/^\s*model_catalog_json\s*=\s*("(?:\\.|[^"])*")\s*$/m);
+  let catalogPath = "";
+  let catalog = {};
+  if (pathMatch) {
+    try {
+      catalogPath = path.resolve(home, JSON.parse(pathMatch[1]));
+      if (fs.existsSync(catalogPath)) catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+    } catch {
+      catalogPath = "";
+      catalog = {};
+    }
+  }
+  return { home, configPath, config, catalogPath, catalog };
+}
+
+export function getZaiModelContextLimit({ model = "glm-5.3-flash", codexHome } = {}) {
+  return zaiModelContextLimit(model);
+}
+
+export function getZaiContextWindowOptions({ model = "glm-5.3-flash", codexHome } = {}) {
+  const limit = getZaiModelContextLimit({ model, codexHome });
+  const options = ZAI_CONTEXT_WINDOW_PRESETS.filter((value) => value <= limit);
+  if (!options.includes(limit)) options.push(limit);
+  return [...new Set(options)].sort((left, right) => left - right);
+}
+
+export function formatZaiContextWindow(value) {
+  const tokens = Number(value);
+  if (!Number.isSafeInteger(tokens) || tokens <= 0) return "unknown";
+  if (tokens % 1048576 === 0) return `${tokens / 1048576}M`;
+  if (tokens % 1024 === 0) return `${tokens / 1024}K`;
+  return tokens.toLocaleString("en-CA");
+}
+
+export function getZaiCodexContextWindow({ model = "glm-5.3-flash", codexHome } = {}) {
+  const { config, catalog } = readZaiCodexProfile(codexHome);
+  const configured = config.match(/^\s*model_context_window\s*=\s*(\d+)\s*$/m);
+  const configuredValue = configured ? Number(configured[1]) : NaN;
+  const entry = (Array.isArray(catalog?.models) ? catalog.models : [])
+    .find((candidate) => String(candidate?.slug ?? "") === String(model ?? ""));
+  const defaultValue = Number(entry?.context_window ?? zaiModelContextLimit(model));
+  const selected = Number.isSafeInteger(configuredValue) && configuredValue > 0
+    ? configuredValue
+    : defaultValue;
+  return Math.min(selected, getZaiModelContextLimit({ model, codexHome }));
+}
+
+export function setZaiCodexContextWindow({ model = "glm-5.3-flash", contextWindow, codexHome } = {}) {
+  const requested = Number(contextWindow);
+  const options = getZaiContextWindowOptions({ model, codexHome });
+  if (!Number.isSafeInteger(requested) || !options.includes(requested)) {
+    return { updated: false, reason: `context window must be one of: ${options.map(formatZaiContextWindow).join(", ")}`, options };
+  }
+
+  const { configPath, config } = readZaiCodexProfile(codexHome);
+  if (!config) return { updated: false, reason: "Z.AI Codex profile is not configured", options };
+  const setting = /^\s*model_context_window\s*=\s*\d+\s*$/m;
+  const nextConfig = setting.test(config)
+    ? config.replace(setting, `model_context_window = ${requested}`)
+    : config.replace(/^(\s*model\s*=\s*"(?:\\.|[^"])*"\s*)$/m, `$1\nmodel_context_window = ${requested}`);
+  if (nextConfig === config) {
+    if (setting.test(config)) return { updated: true, unchanged: true, contextWindow: requested, options, configPath };
+    return { updated: false, reason: "could not locate the model setting in the Z.AI Codex profile", options };
+  }
+
+  const mode = fs.statSync(configPath).mode & 0o777;
+  const temporaryPath = `${configPath}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(temporaryPath, nextConfig, { mode });
+    fs.chmodSync(temporaryPath, mode);
+    fs.renameSync(temporaryPath, configPath);
+  } catch (error) {
+    fs.rmSync(temporaryPath, { force: true });
+    return { updated: false, reason: `could not update Z.AI Codex context setting: ${String(error?.message ?? error)}`, options };
+  }
+  return { updated: true, contextWindow: requested, options, configPath };
 }
 
 export function syncZaiCodexModelCatalog({
@@ -140,7 +250,14 @@ export function syncZaiCodexModelCatalog({
     ...catalog,
     models: ids.map((slug) => {
       const prior = bySlug.get(slug) || template || defaultZaiCodexModelEntry(slug);
-      return { ...prior, slug, display_name: slug };
+      const contextLimit = zaiModelContextLimit(slug);
+      return {
+        ...prior,
+        slug,
+        display_name: slug,
+        context_window: contextLimit,
+        max_context_window: contextLimit
+      };
     })
   };
 
@@ -160,7 +277,7 @@ function quoted(value) {
   return JSON.stringify(String(value ?? ""));
 }
 
-export function createZaiCodexHome({ apiKey, model = "glm-5.3-flash", reasoningEffort = "max", projectRoot = process.cwd() } = {}) {
+export function createZaiCodexHome({ apiKey, model = "glm-5.3-flash", reasoningEffort = "max", contextWindow, projectRoot = process.cwd() } = {}) {
   const selectedModel = String(model || "glm-5.3-flash").trim();
   const selectedEffort = ["low", "high", "max"].includes(String(reasoningEffort).trim())
     ? String(reasoningEffort).trim()
@@ -172,12 +289,17 @@ export function createZaiCodexHome({ apiKey, model = "glm-5.3-flash", reasoningE
   fs.chmodSync(home, 0o700);
   const modelsPath = path.join(home, "models.json");
   const modelEntry = defaultZaiCodexModelEntry(selectedModel);
+  modelEntry.context_window = zaiModelContextLimit(selectedModel);
+  modelEntry.max_context_window = zaiModelContextLimit(selectedModel);
   modelEntry.default_reasoning_level = selectedEffort;
   const models = { models: [modelEntry] };
   fs.writeFileSync(modelsPath, `${JSON.stringify(models, null, 2)}\n`, { mode: 0o600 });
   const config = [
     'model_provider = "ZAI"',
     `model = ${quoted(selectedModel)}`,
+    ...(Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0
+      ? [`model_context_window = ${Math.min(Number(contextWindow), modelEntry.max_context_window)}`]
+      : []),
     `model_reasoning_effort = ${quoted(selectedEffort)}`,
     `model_catalog_json = ${quoted(modelsPath)}`,
     "",

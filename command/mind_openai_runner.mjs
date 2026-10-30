@@ -298,6 +298,7 @@ async function main() {
         apiKey,
         model: payload.model || "glm-5.3-flash",
         reasoningEffort: payload.reasoningEffort || "max",
+        contextWindow: payload.contextWindow,
         projectRoot: process.cwd()
       });
       const fallback = await runCodexFallback(payload, { stream: payload.stream === true, codexHome });

@@ -39,6 +39,18 @@ catalog, so open Pyash's `/model` picker before starting regular Codex when you
 want its model selector refreshed. A failed lookup leaves the configured model
 available and reports the discovery error.
 
+Use `/context` to select a client context budget up to the active model's
+verified maximum, or `/context 128K` to set one directly. GLM-4.5/4.5-Air are
+capped at 128K; GLM-4.6/4.7, GLM-5/5.1, and GLM-5-Turbo at 200K; and GLM-5.2,
+GLM-5.3, GLM-5.3-Flash, and GLM-5.3-FlashX at 1M. Newly listed models without
+a verified limit are capped at 128K. Pyash applies the selection to its Z.AI
+turns and writes `model_context_window` into the local `zai.config.toml`
+profile for future regular Codex sessions. Restart an already-running Codex
+session to load the change. This controls the client's context budget; it does
+not change the model's provider-side context limit. The Coding Plan model-list
+endpoint supplies model IDs only, so context ceilings are tracked separately
+from discovery.
+
 The web app adds a **Duty** mode beside ordinary chat. Choose an online worker
 and one of its advertised directories, select the model in the existing model
 control, then create a duty with a concise objective and first instruction.

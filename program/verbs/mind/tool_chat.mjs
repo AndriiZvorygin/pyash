@@ -205,6 +205,7 @@ export async function runToolChat({
   backendName,
   ollamaHost,
   reasoningEffort,
+  contextWindow,
   modelTuning,
   maxToolCalls,
   runtimeContext,
@@ -315,6 +316,9 @@ export async function runToolChat({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    if (backendName === "zai command mind" && Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
+      requestPayload.contextWindow = Number(contextWindow);
+    }
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);

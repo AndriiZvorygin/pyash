@@ -8,7 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
-import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
+import { mind_to_name_text, resetMindLogs } from "../program/verbs/mind/mind.mjs";
 import { jsonObjectFromMapName } from "../program/verbs/exchange/json_map_export.mjs";
 import { buildToolSentence } from "../program/verbs/mind/tooling.mjs";
 
@@ -65,6 +65,39 @@ test("mind tool adapter sends non-empty tools array for with name map", async ()
     assert.equal(tool.signature, "be plus ob num to name num");
     assert.ok(tool.parameters?.properties?.to, "tool should include to");
     assert.ok(!tool.parameters?.properties?.ob, "tool should not include ob when fixed");
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test("Z.AI tool-chat request carries the selected Codex context budget", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name plus num be plus ob num 1 to name num can"));
+    await interpret(parse("prah"));
+    await interpret(parse('exists su name helper be mind fromstate "zai" ya'));
+    await mind_to_name_text({
+      mood: "do",
+      be: "write",
+      for: { name: "helper" },
+      ob: { text: "use plus" },
+      to: { name: "text" },
+      with: { name: "tools" },
+      fromstate: { text: "zai" },
+      contextWindow: 131072
+    });
+
+    const payload = decodeMindPayload(records, "helper");
+    assert.equal(payload.contextWindow, 131072);
   } finally {
     clearExchangeRecorder();
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;

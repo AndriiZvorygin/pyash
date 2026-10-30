@@ -100,6 +100,7 @@ export async function runGenerate({
   backendName,
   ollamaHost,
   reasoningEffort,
+  contextWindow,
   modelTuning,
   mindDebug,
   debugMind,
@@ -133,6 +134,12 @@ export async function runGenerate({
     const configured = resolveConfigNum("mind keep alive", { rememberFn: remember });
     const keepAlive = Number.isFinite(Number(configured)) ? Math.max(0, Math.trunc(Number(configured))) : 300;
     payload.keep_alive = keepAlive;
+  };
+  const applyContextWindow = (payload) => {
+    const value = Number(contextWindow);
+    if (backendName === "zai command mind" && Number.isSafeInteger(value) && value > 0) {
+      payload.contextWindow = value;
+    }
   };
   const visionInputs = Array.isArray(inputs) ? inputs.map(normalizeVisionInput).filter(Boolean) : [];
   const messages = [];
@@ -169,6 +176,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyContextWindow(requestPayload);
     applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
@@ -314,6 +322,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyContextWindow(requestPayload);
     applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
@@ -325,6 +334,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyContextWindow(requestPayload);
     applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });

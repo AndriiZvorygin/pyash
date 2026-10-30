@@ -528,6 +528,10 @@ export async function mind_to_name_text(sentence, {
     aiHost: resolveConfigText("ai host", { rememberFn: remember })
   });
   const mindReasoningEffort = runtimeReasoningEffort || resolveConfigText("mind reasoning effort", { rememberFn: remember }) || null;
+  const contextWindowValue = Number(sentence?.contextWindow);
+  const contextWindow = Number.isSafeInteger(contextWindowValue) && contextWindowValue > 0
+    ? contextWindowValue
+    : null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
   const debugMind = (label, payload) => {
     if (!mindDebug) return;
@@ -729,6 +733,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
+      contextWindow,
       modelTuning: effectiveModelTuning,
       maxToolCalls: configuredMaxToolCalls,
       runtimeContext: {
@@ -791,6 +796,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
+      contextWindow,
       modelTuning: effectiveModelTuning,
       mindDebug,
       debugMind,

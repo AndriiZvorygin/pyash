@@ -15,7 +15,14 @@ import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
-import { syncZaiCodexModelCatalog } from "../program/runtime/zai_coding_plan.mjs";
+import {
+  formatZaiContextWindow,
+  getZaiCodexContextWindow,
+  getZaiContextWindowOptions,
+  getZaiModelContextLimit,
+  setZaiCodexContextWindow,
+  syncZaiCodexModelCatalog
+} from "../program/runtime/zai_coding_plan.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import {
   appendSaddleUsage,
@@ -163,6 +170,7 @@ export async function runSaddleTurn({
   model,
   backend,
   host,
+  contextWindow,
   sessionName = SESSION_NAME,
   sessionFile = "",
   sessionUserMetadata = null,
@@ -175,6 +183,7 @@ export async function runSaddleTurn({
     model,
     backend,
     host,
+    contextWindow,
     mindName: AGENT_NAME,
     toolMapName: TOOL_MAP_NAME,
     sessionName,
@@ -332,16 +341,18 @@ async function main() {
   const mindModels = config.mindModels;
   let backend = config.backend;
   let host = config.host;
+  let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
   let busy = false;
   let closing = false;
   let modelPicker = null;
   let modelPickerLoading = false;
+  let contextPicker = null;
   let promptLabel = "pyash> ";
   let renderedRows = 1;
 
   const showStatus = async () => {
     const queue = await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
-    writeLine(formatSaddleStatus({ mindName, model, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
+    writeLine(formatSaddleStatus({ mindName, model, contextWindow, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
   };
   const prompt = ({ clear = true, label = promptLabel } = {}) => {
     promptLabel = label;
@@ -390,6 +401,27 @@ async function main() {
     }));
     prompt({ clear: false, label: "select model> " });
   };
+  const showContextPicker = () => {
+    if (backend !== "zai") {
+      writeLine("context window selection is currently available for the Z.AI Codex mind");
+      prompt({ clear: false });
+      return;
+    }
+    const maximum = getZaiModelContextLimit({ model });
+    const options = getZaiContextWindowOptions({ model });
+    contextPicker = options.map((tokens) => ({
+      model: String(tokens),
+      value: formatZaiContextWindow(tokens),
+      label: formatZaiContextWindow(tokens),
+      tokens
+    }));
+    writeLine(`context window for ${model}: current ${formatZaiContextWindow(contextWindow)}, model maximum ${formatZaiContextWindow(maximum)}`);
+    for (const [index, option] of contextPicker.entries()) {
+      writeLine(`${index + 1}. ${option.label}${option.tokens === contextWindow ? " (current)" : ""}`);
+    }
+    writeLine("Choose a size by number or label; this sets the client-side budget, not the provider's model limit.");
+    prompt({ clear: false, label: "select context> " });
+  };
   const shutdown = async () => {
     if (closing) return;
     closing = true;
@@ -421,6 +453,26 @@ async function main() {
       prompt({ clear: false, label: "model loading> " });
       return;
     }
+    if (contextPicker) {
+      const selected = resolveSaddleModelOption(input, contextPicker);
+      if (!selected) {
+        writeLine("invalid context window selection");
+        prompt({ clear: false, label: "select context> " });
+        return;
+      }
+      const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
+      if (!saved.updated) {
+        contextPicker = null;
+        writeLine(`could not save context window: ${saved.reason}`);
+        prompt({ clear: false });
+        return;
+      }
+      contextWindow = selected.tokens;
+      contextPicker = null;
+      writeLine(`context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`);
+      prompt({ clear: false });
+      return;
+    }
     if (modelPicker) {
       const selected = resolveSaddleModelOption(input, modelPicker);
       if (!selected) {
@@ -431,6 +483,9 @@ async function main() {
       modelPicker = null;
       model = normalizeSaddleModel(selected.model, model);
       mindModels.set(mindName, model);
+      if (backend === "zai") {
+        contextWindow = Math.min(contextWindow || getZaiCodexContextWindow({ model }), getZaiModelContextLimit({ model }));
+      }
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model} (mind ${mindName})`);
@@ -438,7 +493,7 @@ async function main() {
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /mind [name]  /model <name>  /host <url>  /usage  /discharge  /exit");
+      writeLine("/status  /mind [name]  /model <name>  /context [size]  /host <url>  /usage  /discharge  /exit");
       prompt({ clear: false });
       return;
     }
@@ -470,6 +525,7 @@ async function main() {
       backend = nextProfile.backend;
       host = nextProfile.host;
       model = normalizeSaddleModel(mindModels.get(mindName) || nextProfile.model);
+      contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
       mindModels.set(mindName, model);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`mind: ${mindName} | model: ${model}`);
@@ -478,6 +534,40 @@ async function main() {
     }
     if (input.trim() === "/model") {
       await showModelPicker();
+      return;
+    }
+    const contextMatch = input.trim().match(/^\/context(?:\s+(.+))?$/i);
+    if (contextMatch) {
+      if (!contextMatch[1]) {
+        showContextPicker();
+        return;
+      }
+      if (backend !== "zai") {
+        writeLine("context window selection is currently available for the Z.AI Codex mind");
+        prompt({ clear: false });
+        return;
+      }
+      const choices = getZaiContextWindowOptions({ model }).map((tokens) => ({
+        model: String(tokens),
+        value: formatZaiContextWindow(tokens),
+        label: formatZaiContextWindow(tokens),
+        tokens
+      }));
+      const selected = resolveSaddleModelOption(contextMatch[1], choices);
+      if (!selected) {
+        writeLine(`unknown context size; available: ${choices.map((choice) => choice.label).join(", ")}`);
+        prompt({ clear: false });
+        return;
+      }
+      const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
+      if (!saved.updated) {
+        writeLine(`could not save context window: ${saved.reason}`);
+        prompt({ clear: false });
+        return;
+      }
+      contextWindow = selected.tokens;
+      writeLine(`context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`);
+      prompt({ clear: false });
       return;
     }
     if (input.trim() === "/status") {
@@ -519,6 +609,7 @@ async function main() {
         model,
         backend,
         host,
+        contextWindow,
         onUsage: (usage) => {
           turnUsages.push(usage);
           return usage;
