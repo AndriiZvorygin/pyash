@@ -8,7 +8,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Dispatch is signature-first: built-in verb signatures register via `program/verbs/index.mjs`, ceremonies register their signatures on `def`, and `program/bridge/signature.mjs` hosts the registry/lookups.
 - Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
 - Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
-- Docs: `documentation/pyac.txt` (broader spec), `documentation/pyash.md` (design goals), `documentation/compositional-cases.md` (case grid). `program/configure/workplace.json` is example data/config; keep secrets out of the repo.
+- Docs: `documentation/specifications/00-index.md` is the normative spec index (start there); `documentation/specifications/01-sentence-and-grammar.md` and `02-core-execution.md` define the sentence model and dispatch contract. `documentation/pyac.txt` is the broader spec, `documentation/pyash.md` the design goals, `documentation/compositional-cases.md` the case grid. `program/configure/workplace.json` is example data/config; keep secrets out of the repo.
 - Ceremonies (`def...prah`) have speakable, multi-word names; bodies run in sandpits during invocation, and `this`/`ret` flow updates the caller’s evoke/targets and records sandpit traces.
 
 ## Build, Quiz, and Development Commands
@@ -19,6 +19,8 @@ This guide keeps contributions consistent for the Pyash codebase.
 - `node command/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
 - `node command/pya_to_json.mjs path/to/file.pya --pretty` converts `.pya` to JSON (`memory`, `sandpits`, and indexed names) for robust machine reads.
 - `node command/vocab_suggest.mjs examples/pyash` checks files for non-Pyash vocabulary and suggests replacements; `node command/vocab_suggest.mjs "word"` checks a proposed token without scanning files.
+- `node command/check_doc_prose.mjs` guards documentation against prose corrupted by bulk keyword replacement (a keyword between two lowercase words, or a duplicated alias such as `` `su` / `su` ``). Run it after any vocabulary or alias rename.
+- `node command/audit_examples.mjs` executes every `examples/pyash/*.pya` through the real runner and reports `passed` / `needs input` / `needs backend` / `failed`. Use it to catch example drift.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 
 ## Coding Style & Naming Conventions

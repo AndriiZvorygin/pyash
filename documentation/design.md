@@ -12,7 +12,7 @@ At the core of the design, **sentences are first-class datatypes**. Every piece 
 
 Pyash also introduces the idea of an **evoking sentence**: the original sentence that triggers a ceremony or other sandpit execution. When a sandpit starts, this evoking sentence is copied into the sandpit as sentence `0` (including any control cases such as `fromindex` and `toindex`) and is available throughout execution via `this`. Any sentence in the definition/body (ya/def/do/ret) can read from `this`. A `ret` mood inside the sandpit does not call a verb; instead it describes how to update that evoking sentence, which is then returned to main memory as a `ya` fact.
 
-There are no artificial IDs or metadata fields at sentence level. The **subject (`su` / `su`) functions as the “name” or reference key**: the latest sentence for a given subject has semantic priority. Earlier sentences for that subject remain as history toindex garbage collection chooses to purge them.
+There are no artificial IDs or metadata fields at sentence level. The **subject (`su` / `subj`) functions as the “name” or reference key**: the latest sentence for a given subject has semantic priority. Earlier sentences for that subject remain as history until garbage collection chooses to purge them.
 
 ---
 
@@ -41,7 +41,7 @@ Key points:
 
 * Only **mood**, **be**, and **case keywords** are allowed as top-level keys.
 * There is **no** `id`, `meta`, or nested structure at this time.
-* `su` (or `su`) is the closest equivalent to an identifier; it is how other sentences refer to this one in human language terms.
+* `subj` (or `su`) is the closest equivalent to an identifier; it is how other sentences refer to this one in human language terms.
 
 A **paragraph** is just an ordered array of such sentences:
 
@@ -311,7 +311,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
    * Architecturally:
 
      * `fromindex` and `toindex` are **cases on the evoker sentence**, not separate verbs.
-     * A loop runner (interpreter or compiled) reads these fields from `this` and re-invokes the ceremony’s paragraph toindex the condition is met or a `ret` returns an error or final result.
+     * A loop runner (interpreter or compiled) reads these fields from `this` and re-invokes the ceremony’s paragraph until the condition is met or a `ret` returns an error or final result.
 
 5. **Return with `ret` (mood)**
 

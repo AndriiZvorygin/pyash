@@ -39,12 +39,22 @@ const WHISPER = {
   sha256: "ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720"
 };
 
+// Open English WordNet 2025 JSON: read-only semantic evidence for translation.
+// The source URL, license, and the loader's own content hash are recorded in
+// program/verbs/exchange/translation/english_wordnet.pya.
+const WORDNET = {
+  url: "https://en-word.net/static/english-wordnet-2025-json.zip",
+  sha256: "7d749f6e2c39e6970e4997839dcf6e42fd281f3c2fae0171d2192bae8cfa4b51",
+  dir: join("know", "wordnet", "open-english-wordnet-2025-json")
+};
+
 function usage() {
   console.log(`Usage: npm run bootstrap [-- --with-whisper] [--force]
 
 Downloads the pinned external toolchains that are not stored in git:
   wasmtime ${WASMTIME_VERSION}    -> caterer/wasmtime/bin/wasmtime (interpret verb, compiled interpret)
   whisper.cpp ${WHISPER_TAG} -> caterer/whisper.cpp/ (only with --with-whisper; hear builds)
+  Open English WordNet 2025 -> ${WORDNET.dir}/ (translation semantic evidence)
 
 The zsv and curl header/source subsets used by C compilation stay in git.
 Existing downloads are kept; pass --force to replace them.`);
@@ -126,6 +136,22 @@ async function bootstrapWhisper({ force }) {
   console.log("  build hear binaries with: bash command/build_whisper_cpp_linux_x64.sh");
 }
 
+async function bootstrapWordnet({ force }) {
+  const dest = join(ROOT, WORDNET.dir);
+  if (!force && existsSync(join(dest, "entries-a.json"))) {
+    console.log(`Open English WordNet 2025: already present at ${WORDNET.dir}/`);
+    return;
+  }
+  console.log("Open English WordNet 2025: downloading...");
+  const bytes = await fetchChecksumed(WORDNET.url, WORDNET.sha256);
+  const archive = writeTempArchive("wordnet.zip", bytes);
+  rmSync(dest, { recursive: true, force: true });
+  mkdirSync(dest, { recursive: true });
+  run("unzip", ["-oq", archive, "-d", dest]);
+  rmSync(archive, { force: true });
+  console.log(`Open English WordNet 2025: installed at ${WORDNET.dir}/`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
@@ -142,6 +168,7 @@ async function main() {
   await bootstrapWasmtime({ force });
   if (withWhisper) await bootstrapWhisper({ force });
   else console.log("whisper.cpp: skipped (pass --with-whisper for hear builds)");
+  await bootstrapWordnet({ force });
 }
 
 main().catch((error) => {

@@ -18,6 +18,8 @@ jobs:
         run: npm install
       - name: Bootstrap external toolchains
         run: npm run bootstrap
+      - name: Check documentation prose
+        run: npm run doc:prose
       - name: Run tests
         run: npm run test:ci
       - name: Check package size
