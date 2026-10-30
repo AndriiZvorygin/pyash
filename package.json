@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node command/run-tests.mjs",
     "test:houses": "PYASH_INCLUDE_HOUSE_TESTS=1 node command/run-tests.mjs",
-    "test:ci": "node --test --test-concurrency=1 quiz/core.test.mjs quiz/codex_account_cli.test.mjs quiz/runtime/*.test.mjs",
+    "test:ci": "node command/run_test_tiers.mjs",
+    "test:ci:smoke": "node --test --test-concurrency=1 quiz/core.test.mjs quiz/codex_account_cli.test.mjs quiz/runtime/*.test.mjs",
     "quiz": "node command/run-tests.mjs",
     "bootstrap": "node command/bootstrap_caterer.mjs",
     "package:check": "node command/check_package_size.mjs",

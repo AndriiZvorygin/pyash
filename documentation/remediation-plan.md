@@ -10,7 +10,7 @@ Date: 2026-10-30
 | 0 — Baseline | done | `command/audit_examples.mjs` added; baseline recorded below |
 | 1 — Documentation integrity | done | 3 corrupted passages repaired, `command/check_doc_prose.mjs` guard added, `AGENTS.md` points at the spec index |
 | 2 — Example correctness | in progress | `until-loop.pya` fix verified; module manuscript score fix landed; remaining failures need owner decisions |
-| 3 — CI coverage | partly done | WordNet provisioning added to bootstrap and CI; `doc:prose` wired into CI; quiz tiering still open |
+| 3 — CI coverage | done | Every quiz file is tiered by resource need; `test:ci` now gates 748 of 752 files instead of 28 |
 | 4 — Core/periphery balance | open | — |
 | 5 — Repo hygiene | partly done | `push_all.sh` remote check relaxed and guarded; orphaned searxng settings and file ownership still open |
 
@@ -79,7 +79,41 @@ Two fixes are possible:
   Making that change correctly requires revisiting the promote ceremony's
   arithmetic as well, which is a language-semantics decision, not a bug fix.
 
-## Why this plan exists
+## Phase 3 findings
+
+The per-file sweep (`command/sweep_quiz_files.mjs`, 752 files run one at a
+time) found exactly **three** files that do not pass in this environment:
+
+| File | Cause | CI verdict |
+|---|---|---|
+| `quiz/cover_overlay_stage.test.mjs` | the local `/usr/local/bin/ffmpeg` build has no `drawtext` filter | CI's distro ffmpeg has it, so this gates there |
+| `quiz/music_say.test.mjs` | needs `caterer/whisper.cpp/samples/jfk.wav` | CI provisions it with `--with-whisper`, so this gates there |
+| `quiz/reporter_gpu_housekeeper.test.mjs` | reads an untracked house checkout | advisory: house content is per-clone and not in the repository |
+
+That changed the shape of Phase 3. The suite does not need four hand-maintained
+tiers with a curated file list; it needs a **policy about which tiers gate**,
+plus a way to tell when a quiz's resource is simply absent from the machine
+running it.
+
+`command/quiz_tiers.mjs` classifies a quiz by what it actually needs:
+
+| Tier | Meaning |
+|---|---|
+| `t1` | needs nothing beyond the repository |
+| `t2` | needs a provisioned resource: wordnet, whisper sample audio, or ffmpeg with `drawtext` |
+| `t3` | needs a house checkout the repository does not track |
+
+`configure/test_tiers.pya` holds the gating policy (`ci_gating_tiers`,
+`ci_advisory_tiers`) so it is Pyash configuration rather than a command-line
+switch. `command/run_test_tiers.mjs` reads the policy, checks each required
+resource against the machine, and runs the gating files. A quiz whose resource
+is missing is **reported with the reason rather than failed** — the
+environment is missing something, the code is not broken. In CI the resources
+are provisioned, so those quizzes gate there.
+
+The rules are pinned by `quiz/quiz_tiers.test.mjs`.
+
+
 
 The repo's spec-first discipline is genuinely strong, but the enforcement
 mechanisms around it are much weaker than the discipline itself. The specs

@@ -1,0 +1,2 @@
+su name ci_gating_tiers ob text "t0,t1,t2" ya
+su name ci_advisory_tiers ob text "t3" ya
