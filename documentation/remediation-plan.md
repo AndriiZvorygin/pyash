@@ -9,7 +9,7 @@ Date: 2026-10-30
 |---|---|---|
 | 0 — Baseline | done | `command/audit_examples.mjs` added; baseline recorded below |
 | 1 — Documentation integrity | done | 3 corrupted passages repaired, `command/check_doc_prose.mjs` guard added, `AGENTS.md` points at the spec index |
-| 2 — Example correctness | in progress | `until-loop.pya` fix verified; module manuscript score fix landed; remaining failures need owner decisions |
+| 2 — Example correctness | done | `until-loop.pya` fixed, the two unimplemented signatures implemented, the example audit gates on regressions |
 | 3 — CI coverage | done | Every quiz file is tiered by resource need; `test:ci` now gates 748 of 752 files instead of 28 |
 | 4 — Core/periphery balance | open | — |
 | 5 — Repo hygiene | partly done | `push_all.sh` remote check relaxed and guarded; orphaned searxng settings and file ownership still open |
@@ -313,24 +313,79 @@ needing live backends stay skipped, not failed. Because the audit spawns one
 process per example it takes several minutes; run it on a schedule or a
 dedicated CI job rather than blocking every push.
 
-**2.4 Decide the fate of unimplemented-example signatures.**
+**2.4 Decide the fate of unimplemented-example signatures.** *(done)*
 
-Two examples call signatures that have never existed:
+Two examples called signatures that had never existed:
 
-- `examples/pyash/pyac-corpus.pya` calls `be subtract ob num from num`.
-- `examples/pyash/read-image-auto.pya` calls `be read become wo text from filename`.
+- `examples/pyash/pyac-corpus.pya` called `be subtract ob num from num`.
+- `examples/pyash/read-image-auto.pya` called `be read become wo text from filename`.
 
-Neither was ever registered (verified against git history), so both were
-committed ahead of the verbs they need. Each needs one of:
+Neither was ever registered, so both were committed ahead of the verbs they
+needed.
 
-- **implement the signature** (adding it to the verb's `signatures` list plus
-  a quiz), or
-- **remove or gate the example** until the capability exists.
+`pyac-corpus.pya` needed four literal-operand signatures, not one:
 
-`read-image-auto.pya` already declares `su name required ob ve text
-"PYA_SEE_VL_FIXTURE"`, and `command/see_vl_runner.mjs` plus `module/see_vl.pya`
-exist — the image-description path exists, but is not wired to `be read` with
-`become wo text`. That is the cheaper of the two to complete.
+| Sentence | Derived signature | Resolution |
+|---|---|---|
+| `ob num 9 from num 4 be subtract do` | `be subtract from num ob num` | added |
+| `ob num 3 with num 4 be multiply do` | `be multiply ob num with num` | added |
+| `ob num 8 with num 2 be divide do` | `be divide ob num with num` | added |
+| `ob num 7 to num 3 be xor do` | `be xor ob num to num` | new `xor` verb |
+
+Signature words are derived with the case keys sorted alphabetically, so
+`ob num ... from num ...` always derives as `from num ob num`. `plus` already
+registered both orderings; `subtract` and the others now register the
+derivable form too.
+
+The operand order was taken from the verbs that already work rather than
+invented: `plus` adds `ob` to `from`, `remains` takes `ob` as the dividend,
+and `exponential` takes `ob` as the base. The new signatures follow the same
+rule, so `ob num 9 from num 4 be subtract do` is `9 - 4 = 5`. The rules are
+pinned by `quiz/mathematics_literal_operands.test.mjs`.
+
+`xor` is the first verb whose name is not an English word in the dictionary.
+`command/vocab_check.mjs` only inspects content words in name roles, not verb
+names, so the verb is accepted; the advisory `vocab_suggest` reports "xor
+blocked" because it treats the query as content.
+
+The same example also assigned to names it never created
+(`su name collector ...` instead of `exists su name collector ...`). The
+specification uses `exists su name <name> ... ya` to create a name, so the
+example now does the same.
+
+`read-image-auto.pya` needed the *prompt* dropped rather than a new
+signature. `module/read_auto.pya` already defines a `read` ceremony that
+detects the file kind itself and routes images to the `see` ceremony; the
+sentence in the example carried an `ob text` prompt that no `read` signature
+accepts. The example now uses the form the module already provides, and
+`quiz/read_image_auto_example.test.mjs` pins the described text.
+
+**2.5 Gate the audit on regressions.** *(done)*
+
+`configure/example_audit_baseline.pya` records the examples that are known to
+fail. The audit reports every failure, but only a failure that is *not*
+recorded fails the run, so the audit can gate CI while the known defects are
+still open. The audit also reports the recorded failures that now pass, so the
+baseline cannot quietly grow stale.
+
+The audit now separates **needs backend** from **failed**. A failure is only a
+defect when it is not explained by the machine: a live model, a media backend,
+an audio device, a helper binary that was never built, an interactive session
+that waits for a live session, or a container-only path such as `/workplace`.
+Those are reported as `needs backend`; only what is left is a defect.
+
+Two examples also used a wrong mind configuration. `su name mind be mind via
+discourse "Reply in one short sentence." ya` normalises `via discourse` to the
+`accordingto` role, and `accordingto` names a *session or series*, not an
+inline instruction — so the runtime looked for a series called "Reply in one
+short sentence." and refused. The specification puts an inline prompt in the
+`fromtext` role (`from discourse name <name> prompt`), so both examples now
+say `fromtext text`. With that fixed they fail on the missing whisper-stream
+binary, which is a backend dependency rather than a defect.
+
+`.github/workflows/examples-audit.yml` runs the audit on a nightly schedule and
+on demand. It is not on the per-push path because the audit spawns one
+process per example and takes several minutes.
 
 Acceptance: audit is clean for the loop family; a quiz pins the documented
 result; CI runs the audit; every failing example is either fixed or explicitly
@@ -392,24 +447,55 @@ load-sensitive.
 
 Goal: the language stays the centre of the repo.
 
-**4.1 Measure and record the ratio.**
+**4.1 Measure and record the ratio.** *(done)*
 
-Track interpreter-core lines versus peripheral lines in `documentation/state.md`
-so drift is visible over time.
+`command/measure_code_balance.mjs` reports three buckets, because one ratio
+cannot answer both questions:
 
-**4.2 Bound the verb surface.**
+| Bucket | Lines | Files |
+|---|---|---|
+| Interpreter core (parser, bridge, memory, program) | 6,393 | 25 |
+| Verb layer (`program/verbs/`) | 45,191 | 282 |
+| Applications (library, agent, runtime, command, module) | 156,993 | 555 |
 
-`program/verbs/english_sentence.mjs` (2,095 lines) and
-`program/library/reporter_shared/agenda-stage3-summary-renderer.mjs`
-(6,675 lines) are domain logic living in the language layer. Extract domain
-logic out of `program/verbs/` into `program/library/` or a house module, so
-verbs stay thin dispatchers — which is what `documentation/pyash.md` already
-requires ("Keep verbs thin and focused").
+The core-to-applications ratio is **1:24.56**, and the core is 3.1% of the
+measured lines. The numbers are recorded in `documentation/state.md`.
 
-**4.3 Re-evaluate the largest peripheral file.**
+The earlier version of this plan counted the whole verb layer as "core" and
+reported 1:1.88. That number was inflated by domain logic that has since moved
+to `program/library/`, and it hid where the mass actually sat. The ratio is
+not a target in itself — the language is small *because* it is a language. The
+gauge that matters for `documentation/pyash.md`'s "keep verbs thin"
+requirement is the verb-layer gauge: how many modules exceed a few hundred
+lines.
 
-Decide whether `agenda-stage3-summary-renderer.mjs` should be split on a
-domain boundary. It is one file, one concern, and 6,675 lines.
+**4.2 Bound the verb surface.** *(partly done)*
+
+`program/verbs/exchange/translation/` held 85 modules and 20,344 lines of
+translation *domain* data — grammar catalogs, WordNet linkers, lexicons,
+translation pairs. `AGENTS.md` says `program/verbs/` holds "one verb per
+file, small and composable", and the folder broke that. It has moved to
+`program/library/translation/`, which took `program/verbs/` from 370 modules
+and 66,030 lines down to 282 modules and 45,191 lines, and the count of
+modules over 400 lines from 38 to 17.
+
+The move was mechanical and rewrote every import specifier and every relative
+path computation by resolving and recomputing it, rather than by text
+substitution. 4,089 relative specifiers were checked afterwards and all
+resolve.
+
+The largest verb modules are now `itinerary_media.mjs` (2,098),
+`qwen_say.mjs` (1,622) and `command.mjs` (1,072). The compile verb's
+implementation folder (`program/verbs/exchange/compile/`, 37 modules) is the
+next candidate for the same treatment.
+
+**4.3 Re-evaluate the largest peripheral file.** *(decided)*
+
+`agenda-stage3-summary-renderer.mjs` (6,675 lines) is already in
+`program/library/`, so it is not part of the verb surface. It is one file,
+one concern, and splitting it on a domain boundary is a separate tranche with
+its own test surface; it is left alone here and recorded as a candidate in
+`documentation/state.md`.
 
 Acceptance: no verb module exceeds a few hundred lines; the domain logic that
 was in `program/verbs/` has moved to `program/library/` with tests intact.

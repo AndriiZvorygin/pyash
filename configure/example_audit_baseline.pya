@@ -1,0 +1,12 @@
+# Examples that are known to fail the audit.
+#
+# The audit runs every example in examples/pyash through the real runner and
+# gates on regressions: a failure that is listed here keeps being reported but
+# does not fail the run, and any failure that is not listed fails the run.
+#
+# Remove an entry once its example passes; the audit reports the ones that
+# have been fixed so the list stays honest.
+#
+# su name known_failures ob ve text "example.pya" ya
+su name known_failures ob ve text ya
+prah

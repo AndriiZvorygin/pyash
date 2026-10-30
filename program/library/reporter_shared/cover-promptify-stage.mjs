@@ -194,6 +194,9 @@ export async function runCoverPromptifyStage({
   style = "",
   overlayText = "",
   reportPath = "",
+  // The model call is injectable so a caller can pin the prompt instead of
+  // depending on live model output.
+  llm = callPromptifyLlmWithRetry,
 } = {}) {
   const host = process.env.OLLAMA_HOST || "http://mriczo:11434";
   const model = resolveTextModel();
@@ -202,7 +205,7 @@ export async function runCoverPromptifyStage({
   let positivePrompt = "";
   let llmError = "";
   try {
-    positivePrompt = await callPromptifyLlmWithRetry({ host, model, prompt: req });
+    positivePrompt = await llm({ host, model, prompt: req });
   } catch (err) {
     llmError = String(err?.message || err);
   }
@@ -216,7 +219,7 @@ export async function runCoverPromptifyStage({
   let check = positivePromptPasses(positivePrompt, overlayText);
   if (!check.pass) {
     const repairReq = buildPromptRepairRequest({ invalidPrompt: positivePrompt, warnings: check.warnings });
-    const repaired = await callPromptifyLlmWithRetry({ host, model, prompt: repairReq });
+    const repaired = await llm({ host, model, prompt: repairReq });
     positivePrompt = sanitizePositivePrompt(repaired, overlayText);
     check = positivePromptPasses(positivePrompt, overlayText);
   }

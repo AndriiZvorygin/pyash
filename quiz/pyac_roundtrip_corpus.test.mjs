@@ -14,7 +14,12 @@ import {
 } from "../program/library/vliw/index.mjs";
 import { renderLegacyNumericPlusCodelet } from "../program/library/vliw/quotes.mjs";
 
-const sourcePath = fileURLToPath(new URL("../examples/pyash/pyac-corpus.pya", import.meta.url));
+// The pack corpus lives in quiz/fixtures rather than in the example: the
+// named-literal codelet has no slot for the `exists` keyword, so the proven
+// vectors keep the legacy declaration spelling. The runtime example in
+// examples/pyash/pyac-corpus.pya uses `exists`, because the interpreter
+// requires it to create a name.
+const sourcePath = fileURLToPath(new URL("./fixtures/pyac_roundtrip_corpus.pya", import.meta.url));
 
 function corpusSentences() {
   return buildProgram(readFileSync(sourcePath, "utf8")).sentences.filter((sentence) => (
