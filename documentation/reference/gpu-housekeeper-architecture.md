@@ -136,6 +136,17 @@ submitting Pyash host. Source identity is diagnostic metadata, not an
 authentication claim. For compatibility, `queueDepth` retains its existing
 running-job count; `queuedCount` and `runningCount` provide explicit counts.
 
+Ollama chat/generate and Strata chat jobs may be retried on another eligible
+Housekeeper host after the selected provider returns a terminal response
+timeout. The entry Housekeeper retains the original job ID, tracks attempted
+hosts, and makes bounded one-hop attempts without revisiting a host. Ollama's
+response deadline comes from `jobSpec.timeoutSec` or
+`OLLAMA_RUNTIME_TIMEOUT_SEC`; Strata uses `jobSpec.timeoutSec` or
+`STRATA_RUNTIME_TIMEOUT_SEC`. Other failures are returned directly. A peer
+whose job-status endpoint is unreachable is not retried because its execution
+outcome is ambiguous, and ComfyUI jobs are not automatically retried because a
+timed-out workflow may still be running in ComfyUI.
+
 The default managed runtimes are:
 
 - `ollama`
@@ -414,7 +425,9 @@ prah
 
 ### 6.1 Forwarding Rule
 
-Forwarding should be at most one hop in v1.
+Each forwarding attempt is at most one hop in v1. The entry Housekeeper may
+make a bounded alternate-host attempt after a terminal Ollama or Strata
+inference response timeout; a receiving peer never forwards the job again.
 
 A forwarded request should include a guard such as:
 
@@ -518,8 +531,10 @@ GPU_HOUSEKEEPER_PEERS='mriczo=http://mriczo:18886'
 
 Forwarded requests carry `forwardDepth` and `visitedHosts`. A peer executes a
 forwarded request locally or rejects it; it never forwards again. Forwarded
-job status is reflected through the original `/job/<id>` endpoint, and a peer
-failure never triggers an unsafe duplicate submission.
+job status is reflected through the original `/job/<id>` endpoint. Only an
+explicit terminal provider response timeout for Ollama/Strata inference can
+trigger another host attempt; non-timeout failures and unreachable peer status
+remain terminal or fail closed rather than risking duplicate work.
 
 Useful live checks:
 

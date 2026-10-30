@@ -1135,11 +1135,18 @@ def peer_route_candidate(
   return max(candidates, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
 
 
-def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], host_id: str) -> Dict[str, Any]:
+def select_route(
+  payload: Dict[str, Any],
+  job: Dict[str, Any],
+  runtime_registry: Dict[str, Dict[str, Any]],
+  host_id: str,
+  excluded_hosts: Optional[set] = None
+) -> Dict[str, Any]:
   depth = route_forward_depth(payload)
-  visited = set(route_visited_hosts(payload))
+  excluded = {normalize_text(item) for item in (excluded_hosts or set()) if normalize_text(item)}
+  visited = set(route_visited_hosts(payload)) | excluded
   local = local_route_state(job, runtime_registry, host_id)
-  candidates = [local]
+  candidates = [] if normalize_text(host_id) in excluded else [local]
   if depth == 0:
     for peer_host_id, peer_url in configured_peers().items():
       if peer_host_id == host_id or peer_host_id in visited:
@@ -1167,8 +1174,13 @@ def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry:
       item.get("hostId") == host_id
     ))
     return {"selected": selected, "candidates": candidates, "forwarded": selected.get("hostId") != host_id}
-  if local.get("available"):
+  if host_id not in excluded and local.get("available"):
     return {"selected": local, "candidates": candidates, "forwarded": False, "reason": "no peer has an immediate free slot"}
+  if excluded:
+    available = [item for item in candidates if item.get("available")]
+    if available:
+      selected = max(available, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("hostId") == host_id))
+      return {"selected": selected, "candidates": candidates, "forwarded": selected.get("hostId") != host_id}
   return {"selected": None, "candidates": candidates, "forwarded": False, "reason": "no local or peer route is executable"}
 
 
@@ -1230,6 +1242,11 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
   origin = normalize_text((payload.get("routing") or {}).get("originHostId")) if isinstance(payload.get("routing"), dict) else ""
   if not origin:
     origin = normalize_text(Handler.host_id)
+  attempted_hosts = list(job.get("attemptedHosts", [])) if isinstance(job.get("attemptedHosts"), list) else []
+  peer_host_id = normalize_text(selected.get("hostId"))
+  if peer_host_id and peer_host_id not in attempted_hosts:
+    attempted_hosts.append(peer_host_id)
+  job["attemptedHosts"] = attempted_hosts
   forwarded_payload = {
     "handleId": job["handleId"],
     "runtimeName": job["runtimeName"],
@@ -1263,7 +1280,8 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
     "originHostId": origin,
     "executionHostId": normalize_text(selected.get("hostId")),
     "score": int(selected.get("score") or 0),
-    "reason": selected.get("reason") or "peer selected"
+    "reason": selected.get("reason") or "peer selected",
+    "attemptedHosts": attempted_hosts
   }
   with _LOCK:
     _JOBS[job["remoteJobId"]] = job
@@ -1427,6 +1445,9 @@ def submit_job(
     "finishedAt": "",
     "source": source,
     "executionHostId": selected_host,
+    "routeDepth": route_forward_depth(payload),
+    "attemptedHosts": route_visited_hosts(payload),
+    "failoverInProgress": False,
     "forwarded": False,
     "route": {
       "forwarded": False,
@@ -1457,12 +1478,17 @@ def submit_job(
     selected_device = normalize_text(selected.get("deviceId"))
     if selected_device:
       job["deviceId"] = selected_device
+    attempted_hosts = list(job.get("attemptedHosts", []))
+    if selected_host not in attempted_hosts:
+      attempted_hosts.append(selected_host)
+    job["attemptedHosts"] = attempted_hosts
     job["route"] = {
       "forwarded": False,
       "originHostId": selected_host,
       "executionHostId": selected_host,
       "score": int(selected.get("score") or 0),
-      "reason": selected.get("reason") or route.get("reason") or "local candidate"
+      "reason": selected.get("reason") or route.get("reason") or "local candidate",
+      "attemptedHosts": attempted_hosts
     }
 
     with _LOCK:
@@ -1485,10 +1511,153 @@ def submit_job(
   }
 
 
+def response_timeout_message(job: Dict[str, Any], error: Any) -> str:
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  kind = normalize_text(job_spec.get("kind")).lower()
+  retryable_kind = (
+    runtime_name == "ollama" and kind in {"ollama-chat", "ollama-generate"}
+  ) or (runtime_name == "strata" and kind == "strata-chat")
+  if not retryable_kind:
+    return ""
+  if isinstance(error, dict):
+    error = error.get("message") or error.get("error") or ""
+  message = normalize_text(error)
+  if re.search(r"\b(?:timeout|timed out|time out|deadline exceeded|startup deadline)\b", message, re.IGNORECASE):
+    return message
+  return ""
+
+
+def reroute_timed_out_job(
+  remote_job_id: str,
+  error: Any,
+  expected_peer_job_id: str = ""
+) -> bool:
+  failure = normalize_text(error.get("message") or error.get("error") or "") if isinstance(error, dict) else normalize_text(error)
+  origin_host = normalize_text(Handler.host_id)
+  with _LOCK:
+    job = _JOBS.get(remote_job_id)
+    if not job:
+      return False
+    if job.get("failoverInProgress"):
+      return True
+    if job.get("status") in {"success", "fail"}:
+      return True
+    if expected_peer_job_id and normalize_text(job.get("peerJobId")) != expected_peer_job_id:
+      return True
+    if int(job.get("routeDepth") or 0) > 0 or not response_timeout_message(job, failure):
+      return False
+
+    failed_host = normalize_text(job.get("executionHostId")) or origin_host
+    attempted_hosts = list(job.get("attemptedHosts", [])) if isinstance(job.get("attemptedHosts"), list) else []
+    if failed_host and failed_host not in attempted_hosts:
+      attempted_hosts.append(failed_host)
+    job["attemptedHosts"] = attempted_hosts
+    job["failoverInProgress"] = True
+
+  payload = {
+    "routing": {
+      "originHostId": origin_host,
+      "forwardDepth": 0,
+      "visitedHosts": attempted_hosts
+    }
+  }
+  try:
+    while True:
+      route = select_route(
+        payload,
+        job,
+        Handler.runtime_registry,
+        origin_host,
+        excluded_hosts=set(attempted_hosts)
+      )
+      selected = route.get("selected") or {}
+      selected_host = normalize_text(selected.get("hostId"))
+      if not selected_host:
+        route_reason = normalize_text(route.get("reason")) or "no eligible route"
+        raise RuntimeError(f"no alternate Housekeeper route is available ({route_reason})")
+
+      if selected_host == origin_host:
+        with _LOCK:
+          current = _JOBS.get(remote_job_id)
+          if not current:
+            return True
+          current["forwarded"] = False
+          current.pop("peerUrl", None)
+          current.pop("peerJobId", None)
+          current["executionHostId"] = origin_host
+          current["status"] = "queued"
+          current["message"] = f"response timed out on {failed_host}; retrying locally"
+          current["error"] = None
+          current["result"] = None
+          current["finishedAt"] = ""
+          current["failoverInProgress"] = False
+          current["retryCount"] = int(current.get("retryCount") or 0) + 1
+          current["route"] = {
+            "forwarded": False,
+            "originHostId": origin_host,
+            "executionHostId": origin_host,
+            "reason": "rerouted after provider response timeout",
+            "attemptedHosts": attempted_hosts,
+            "failover": {"fromHost": failed_host, "reason": "provider response timeout"}
+          }
+        start_registered_job(remote_job_id, Handler.runtime_registry)
+        print(
+          f"[gpu-housekeeper] response timeout; rerouted handle={job.get('handleId', '')} "
+          f"runtime={job.get('runtimeName', '')} from={failed_host} to={origin_host}",
+          flush=True
+        )
+        return True
+
+      if selected_host not in attempted_hosts:
+        attempted_hosts.append(selected_host)
+      job["attemptedHosts"] = attempted_hosts
+      result = forward_job_to_peer(payload, job, route)
+      if not result.get("accepted"):
+        raise RuntimeError(result.get("error") or f"alternate host {selected_host} rejected the job")
+      with _LOCK:
+        current = _JOBS.get(remote_job_id)
+        if current:
+          current["failoverInProgress"] = False
+          current["error"] = None
+          current["result"] = None
+          current["finishedAt"] = ""
+          current["retryCount"] = int(current.get("retryCount") or 0) + 1
+          current["message"] = f"response timed out on {failed_host}; rerouted to {selected_host}"
+          current.setdefault("route", {})["failover"] = {
+            "fromHost": failed_host,
+            "reason": "provider response timeout"
+          }
+          current["route"]["attemptedHosts"] = attempted_hosts
+      print(
+        f"[gpu-housekeeper] response timeout; rerouted handle={job.get('handleId', '')} "
+        f"runtime={job.get('runtimeName', '')} from={failed_host} to={selected_host}",
+        flush=True
+      )
+      return True
+  except Exception as err:
+    reason = f"{failure}; alternate route unavailable: {normalize_text(err)}"
+    with _LOCK:
+      current = _JOBS.get(remote_job_id)
+      if current:
+        current["status"] = "fail"
+        current["message"] = reason
+        current["result"] = None
+        current["error"] = {"message": reason}
+        current["finishedAt"] = utc_now_iso()
+        current["failoverInProgress"] = False
+    print(
+      f"[gpu-housekeeper] response timeout; no alternate route for "
+      f"handle={job.get('handleId', '')} runtime={job.get('runtimeName', '')}: {normalize_text(err)}",
+      flush=True
+    )
+    return True
+
+
 def refresh_forwarded_job(remote_job_id: str) -> None:
   with _LOCK:
     job = _JOBS.get(remote_job_id)
-    if not job or not job.get("forwarded") or job.get("status") in {"success", "fail"}:
+    if not job or not job.get("forwarded") or job.get("status") in {"success", "fail"} or job.get("failoverInProgress"):
       return
     peer_url = normalize_text(job.get("peerUrl"))
     peer_job_id = normalize_text(job.get("peerJobId"))
@@ -1496,14 +1665,25 @@ def refresh_forwarded_job(remote_job_id: str) -> None:
     return
   try:
     remote = peer_request_json(peer_url, f"/job/{peer_job_id}", timeout_ms=peer_timeout_ms())
+    status = normalize_text(remote.get("status")).lower()
+    if status == "fail":
+      remote_error = remote.get("error") or remote.get("message") or "peer job failed"
+      if reroute_timed_out_job(remote_job_id, remote_error, expected_peer_job_id=peer_job_id):
+        return
     with _LOCK:
       current = _JOBS.get(remote_job_id)
-      if not current:
+      if not current or current.get("failoverInProgress") or normalize_text(current.get("peerJobId")) != peer_job_id:
         return
-      status = normalize_text(remote.get("status")).lower()
       if status in {"queued", "running", "success", "fail"}:
         current["status"] = status
-      current["message"] = normalize_text(remote.get("message")) or current.get("message") or "forwarded"
+      remote_message = normalize_text(remote.get("message"))
+      if status == "fail" and not remote_message:
+        remote_error = remote.get("error")
+        remote_message = (
+          normalize_text(remote_error.get("message") or remote_error.get("error"))
+          if isinstance(remote_error, dict) else normalize_text(remote_error)
+        )
+      current["message"] = remote_message or current.get("message") or "forwarded"
       current["result"] = remote.get("result")
       current["error"] = remote.get("error")
       current["startedAt"] = remote.get("startedAt") or current.get("startedAt", "")
@@ -1512,7 +1692,7 @@ def refresh_forwarded_job(remote_job_id: str) -> None:
   except Exception as err:
     with _LOCK:
       current = _JOBS.get(remote_job_id)
-      if not current:
+      if not current or current.get("failoverInProgress") or normalize_text(current.get("peerJobId")) != peer_job_id:
         return
       failures = int(current.get("peerFailureCount") or 0) + 1
       current["peerFailureCount"] = failures
@@ -3700,7 +3880,11 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
     loading_sample = ensure_ollama_model_gpu_resident(target_model, runtime_registry)
 
   endpoint = "/api/chat" if kind == "ollama-chat" else "/api/generate"
-  timeout_sec = int(os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900"))
+  timeout_sec = int(
+    job_spec.get("timeoutSec")
+    or job_spec.get("timeout_sec")
+    or os.environ.get("OLLAMA_RUNTIME_TIMEOUT_SEC", "900")
+  )
   if gpu_expected:
     # A cold model is verified by ensure_ollama_model_gpu_resident immediately
     # before inference. Preserve that evidence for fast jobs that unload at
@@ -4222,6 +4406,8 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           current["error"] = None
           current["finishedAt"] = utc_now_iso()
     except Exception as err:
+      if reroute_timed_out_job(remote_job_id, err):
+        return
       with _LOCK:
         current = _JOBS.get(remote_job_id)
         if current:

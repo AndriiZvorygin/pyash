@@ -315,6 +315,29 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(result, {"response": "ok"})
     self.assertFalse(server._PROFILES[model]["loaded"])
 
+  def test_ollama_job_uses_its_configured_response_timeout(self):
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": False, "gpuObserved": None
+    }
+    server.ollama_running_model_status = lambda: {"available": True, "models": []}
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      calls.append((pathname, timeout_sec)) or {"response": "ok"}
+    )
+
+    result = server.execute_ollama_job({
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {
+        "kind": "ollama-generate",
+        "timeoutSec": 37,
+        "payload": {"model": "qwen-test", "prompt": "respond"}
+      }
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": False}})
+
+    self.assertEqual(result, {"response": "ok"})
+    self.assertEqual(calls, [("/api/generate", 37)])
+
   def test_cold_model_is_gpu_verified_before_real_prompt_is_sent(self):
     model = "qwen3.5:9b"
     loaded = {"gpu": False}
@@ -2352,6 +2375,150 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertEqual(result["status"], "success")
     self.assertEqual(result["result"], {"response": "ok"})
     self.assertEqual(calls, [("http://swac:8090", "/job/job-peer", None)])
+
+  def test_terminal_inference_timeout_reroutes_forwarded_job_to_an_untried_peer(self):
+    server._JOBS["job-root"] = {
+      "remoteJobId": "job-root",
+      "handleId": "timeout-handle",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen-test", "messages": []}},
+      "routeDepth": 0,
+      "attemptedHosts": ["swac"],
+      "status": "running",
+      "forwarded": True,
+      "peerUrl": "http://swac:18886",
+      "peerJobId": "job-swac",
+      "executionHostId": "swac",
+      "source": {"hostId": "debtcollecting", "username": "htaf"},
+      "route": {"forwarded": True, "executionHostId": "swac"}
+    }
+    server.configured_peers = lambda: {
+      "swac": "http://swac:18886",
+      "macstudio": "http://macstudio:18886"
+    }
+    server.local_route_state = lambda *_args: {
+      "hostId": "mriczo", "available": True, "immediate": False, "score": 0
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True,
+      "immediate": True, "score": 20
+    }
+    forwarded_payloads = []
+
+    def fake_peer_request(url, pathname, payload=None, timeout_ms=1500):
+      if pathname == "/job/job-swac":
+        return {"status": "fail", "error": {"message": "Ollama inference request failed: timed out"}}
+      forwarded_payloads.append((url, payload))
+      return {"accepted": True, "remoteJobId": "job-macstudio"}
+
+    server.peer_request_json = fake_peer_request
+    server.refresh_forwarded_job("job-root")
+
+    current = server._JOBS["job-root"]
+    self.assertEqual(current["status"], "running")
+    self.assertEqual(current["executionHostId"], "macstudio")
+    self.assertEqual(current["peerJobId"], "job-macstudio")
+    self.assertEqual(current["attemptedHosts"], ["swac", "macstudio"])
+    self.assertEqual(current["route"]["failover"]["fromHost"], "swac")
+    self.assertEqual(forwarded_payloads[0][0], "http://macstudio:18886")
+    self.assertEqual(forwarded_payloads[0][1]["source"]["hostId"], "debtcollecting")
+    self.assertEqual(forwarded_payloads[0][1]["routing"]["visitedHosts"], ["swac", "macstudio", "mriczo"])
+
+  def test_local_inference_timeout_retries_on_a_configured_peer(self):
+    server._JOBS["job-local-timeout"] = {
+      "remoteJobId": "job-local-timeout",
+      "handleId": "local-timeout",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen-test", "messages": []}},
+      "routeDepth": 0,
+      "attemptedHosts": ["mriczo"],
+      "status": "queued",
+      "executionHostId": "mriczo",
+      "source": {"hostId": "debtcollecting", "username": "htaf"}
+    }
+    server.configured_peers = lambda: {"swac": "http://swac:18886"}
+    server.local_route_state = lambda *_args: {
+      "hostId": "mriczo", "available": True, "immediate": False, "score": 0
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True,
+      "immediate": True, "score": 20
+    }
+    server.peer_request_json = lambda *_args, **_kwargs: {
+      "accepted": True, "remoteJobId": "job-swac-retry"
+    }
+
+    with patch.object(server, "execute_job", side_effect=RuntimeError("Ollama inference request failed: timed out")):
+      server.execute_registered_job("job-local-timeout", {"ollama": {"runtimeName": "ollama"}})
+
+    job = server._JOBS["job-local-timeout"]
+    self.assertEqual(job["status"], "running")
+    self.assertEqual(job["executionHostId"], "swac")
+    self.assertEqual(job["peerJobId"], "job-swac-retry")
+    self.assertEqual(job["route"]["failover"]["fromHost"], "mriczo")
+
+  def test_timeout_is_terminal_when_no_alternate_route_exists(self):
+    server._JOBS["job-no-alternate"] = {
+      "remoteJobId": "job-no-alternate",
+      "handleId": "no-alternate",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen-test", "messages": []}},
+      "routeDepth": 0,
+      "attemptedHosts": ["mriczo"],
+      "status": "running",
+      "executionHostId": "mriczo"
+    }
+    server.configured_peers = lambda: {}
+    server.local_route_state = lambda *_args: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 10
+    }
+
+    self.assertTrue(server.reroute_timed_out_job("job-no-alternate", "request timed out"))
+    self.assertEqual(server._JOBS["job-no-alternate"]["status"], "fail")
+    self.assertIn("no alternate Housekeeper route", server._JOBS["job-no-alternate"]["message"])
+
+  def test_non_timeout_peer_failure_is_not_retried(self):
+    server._JOBS["job-no-retry"] = {
+      "remoteJobId": "job-no-retry",
+      "handleId": "no-retry",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen-test", "messages": []}},
+      "routeDepth": 0,
+      "attemptedHosts": ["swac"],
+      "status": "running",
+      "forwarded": True,
+      "peerUrl": "http://swac:18886",
+      "peerJobId": "job-swac",
+      "executionHostId": "swac"
+    }
+    server.peer_request_json = lambda *_args, **_kwargs: {
+      "status": "fail", "error": {"message": "model is not installed"}
+    }
+    server.configured_peers = lambda: self.fail("non-timeout errors must not route again")
+
+    server.refresh_forwarded_job("job-no-retry")
+
+    self.assertEqual(server._JOBS["job-no-retry"]["status"], "fail")
+    self.assertEqual(server._JOBS["job-no-retry"]["message"], "model is not installed")
+
+  def test_forwarded_child_does_not_start_a_second_failover(self):
+    job = {
+      "remoteJobId": "job-child",
+      "runtimeName": "ollama",
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen-test", "messages": []}},
+      "routeDepth": 1,
+      "attemptedHosts": ["mriczo"],
+      "status": "running",
+      "executionHostId": "swac"
+    }
+    server._JOBS["job-child"] = job
+
+    self.assertFalse(server.reroute_timed_out_job("job-child", "request timed out"))
+    self.assertFalse(job.get("failoverInProgress", False))
 
   def test_peer_route_uses_execution_slot_reservation_not_only_running_queue(self):
     responses = iter([
