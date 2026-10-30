@@ -5,6 +5,8 @@ import {
   parseBoundedVerificationResponse
 } from "./english_verification.mjs";
 
+const MAX_QUEUED_MIND_ENVELOPE_CHARS = 256000;
+
 function invalid(message, details = {}) {
   const error = new Error(message);
   error.code = "invalid-english-sentence-verification";
@@ -14,6 +16,31 @@ function invalid(message, details = {}) {
 
 function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
+}
+
+function queuedMindAnswer(value) {
+  const raw = String(value ?? "");
+  if (raw.length > MAX_QUEUED_MIND_ENVELOPE_CHARS) {
+    return "provider response envelope exceeds the bounded limit";
+  }
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return raw;
+  const choice = Array.isArray(payload.choices) ? payload.choices[0] : null;
+  const answer = [
+    payload.response,
+    payload.output_text,
+    payload.output,
+    payload.text,
+    payload.message?.content,
+    choice?.message?.content,
+    choice?.text
+  ].find((candidate) => typeof candidate === "string");
+  return answer ?? raw;
 }
 
 function candidateId(candidate) {
@@ -129,6 +156,7 @@ export function buildEnglishPhraseCoordinationPrompt({ sourceText, coordination 
     "Choose the supplied phrase-list factorization and target cases for one English sentence.",
     "Use only the listed ids. Keep the shared lexical head after the coordinated members.",
     "For each directional target, choose the destination case that matches its semantic role.",
+    "Keep the rationale to one short sentence, at most 200 characters.",
     "Return one JSON object only:",
     '{"verdict":"accept|uncertain","factorizationId":"...","targetCases":[{"itemId":"...","caseId":"..."}],"rationale":"..."}',
     "SOURCE SENTENCE:",
@@ -261,8 +289,16 @@ export function createQueuedMindEnglishSentenceVerifier({ interpret, parse, time
   const waitMs = Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000));
   return async ({ sourceText, prompt, attempt = 1, coordination } = {}) => {
     const handleId = queuedHandle(sourceText, attempt, coordination?.decision?.factorizationId);
+    const jobSpec = JSON.stringify({
+      kind: "ollama-generate",
+      prompt: String(prompt ?? ""),
+      stream: false,
+      think: false,
+      format: "json",
+      options: { num_predict: 512 }
+    });
     const start = await interpret(parse(
-      `su name ${JSON.stringify(handleId)} ob text ${JSON.stringify(String(prompt ?? ""))} vyah start future be gpu mind do`
+      `su name ${JSON.stringify(handleId)} ob text ${JSON.stringify(jobSpec)} vyah start future be gpu mind do`
     ));
     if (String(start?.ob?.text ?? "").trim() !== "queued") {
       throw invalid("queued English sentence verifier did not receive a queued duty", { handleId, start });
@@ -273,7 +309,7 @@ export function createQueuedMindEnglishSentenceVerifier({ interpret, parse, time
     if (String(completed?.ob?.text ?? "").trim() !== "success") {
       throw invalid("queued English sentence verifier duty did not complete successfully", { handleId, completed });
     }
-    return String(completed?.result?.text ?? "");
+    return queuedMindAnswer(completed?.result?.text ?? "");
   };
 }
 
