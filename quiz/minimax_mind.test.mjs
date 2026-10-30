@@ -104,6 +104,8 @@ test("MiniMax API key resolves from environment or Pyash secret fact", async () 
     await fs.writeFile(secretPath, 'exists su name minimax api key ob text "pya-secret-key" be default ya\n');
     assert.equal(resolveMiniMaxApiKey({ env: { MINIMAX_API_KEY: "env-key" }, secretFilePath: secretPath }), "env-key");
     assert.equal(resolveMiniMaxApiKey({ env: {}, secretFilePath: secretPath }), "pya-secret-key");
+    await fs.writeFile(secretPath, 'exists su name minimax key ob text "legacy-secret-key" be default ya\n');
+    assert.equal(resolveMiniMaxApiKey({ env: {}, secretFilePath: secretPath }), "legacy-secret-key");
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }

@@ -20,6 +20,8 @@ MiniMax is selectable per mind and does not change Pyash's Ollama default. Put a
 exists su name minimax api key ob text "<MiniMax API key>" be default ya
 ```
 
+The existing fact name `minimax key` is also accepted; `minimax api key` is preferred for new configuration.
+
 `configure/default.pya` provides the named `minimax` mind using `https://api.minimax.io/v1` and `MiniMax-M3.1-Flash`. The shared Chat Completions adapter calls `/v1/chat/completions`; streaming, tools, and image inputs use Pyash's existing OpenAI-compatible request shape. The model picker queries `/v1/models` with the same key. The key can instead be supplied through `MINIMAX_API_KEY`.
 
 The equivalent Pyash mind declaration is:

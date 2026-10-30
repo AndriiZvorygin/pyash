@@ -95,7 +95,7 @@ export function createCollectMindInteractive(deps) {
         textOut("- auth note: openai-api expects OPENAI_API_KEY in runtime environment.");
       }
       if (selectedChoice?.key === "minimax") {
-        textOut("- auth note: add `exists su name minimax api key ob text \"...\" be default ya` to configure/secret.pya, or set MINIMAX_API_KEY.");
+        textOut("- auth note: add `minimax api key` (also accepts `minimax key`) to configure/secret.pya, or set MINIMAX_API_KEY.");
       }
       if (selectedChoice?.key === "openai-codex") {
         textOut("- auth note: openai-codex can run Codex OAuth now via codex app-server.");

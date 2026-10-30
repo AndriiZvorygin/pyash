@@ -321,7 +321,7 @@ async function main() {
   const explicitApiKey = String(payload.apiKey ?? "").trim();
   const minimaxApiKey = explicitApiKey || (minimax ? resolveMiniMaxApiKey() : "");
   if (minimax && !minimaxApiKey) {
-    throw new Error('MiniMax API key missing: add `exists su name minimax api key ob text "..." be default ya` to configure/secret.pya or set MINIMAX_API_KEY');
+    throw new Error('MiniMax API key missing: add `exists su name minimax api key ob text "..." be default ya` (or `minimax key`) to configure/secret.pya, or set MINIMAX_API_KEY');
   }
   const usesZaiApi = !strata && hostName === "api.z.ai";
   const zaiApiKey = usesZaiApi ? resolveZaiApiKey() : "";

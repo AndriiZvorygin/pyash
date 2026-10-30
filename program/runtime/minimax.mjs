@@ -11,7 +11,8 @@ function readSecretValue(secretFilePath, name) {
 
 export function resolveMiniMaxApiKey({ env = process.env, secretFilePath = defaultSecretPath } = {}) {
   return String(env?.MINIMAX_API_KEY ?? "").trim()
-    || readSecretValue(secretFilePath, "minimax api key");
+    || readSecretValue(secretFilePath, "minimax api key")
+    || readSecretValue(secretFilePath, "minimax key");
 }
 
 function normalizeMiniMaxApiBase(host = "https://api.minimax.io/v1") {
