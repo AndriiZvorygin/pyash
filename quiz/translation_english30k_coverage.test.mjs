@@ -332,6 +332,19 @@ test("durable lemma morphology keeps lexical roots separate from particles", asy
   assert.equal(index.preferredSurfaceForSequence(["xyek", "pu"]), "feelings");
 });
 
+test("curated lexical families resolve romance and distract surfaces to existing atoms", async () => {
+  const catalog = await loadEnglishLemmaCatalog();
+  const index = buildEnglishLemmaIndex({ atomicEntries: pyashWords, catalogEntries: catalog.entries });
+  assert.deepEqual(index.resolve("romance")?.pyashSequence, ["hram"]);
+  assert.equal(index.resolve("romance")?.canonicalEnglish, "romantic");
+  assert.equal(index.resolve("romance")?.kind, "derivational");
+  assert.deepEqual(index.resolve("distract")?.pyashSequence, ["dr6t"]);
+  assert.equal(index.resolve("distract")?.canonicalEnglish, "distractor");
+  assert.equal(index.resolve("distract")?.kind, "derivational");
+  assert.deepEqual(index.resolve("distracted")?.pyashSequence, ["dr6t"]);
+  assert.equal(index.resolve("distracted")?.lemma, "distract");
+});
+
 test("lemma equivalence can carry an explicit Pyash grammar suffix", () => {
   const index = buildEnglishLemmaIndex({
     atomicEntries: [{ en: "emotionally", pya: "xyek" }],
