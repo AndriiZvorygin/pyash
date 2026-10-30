@@ -17,6 +17,6 @@ test("Z.AI has a selectable GLM Coding Plan mind profile", () => {
   assert.equal(normalizeSaddleBackend("zai command mind"), "zai");
   assert.ok(MIND_BACKEND_CHOICES.some((choice) => choice.key === "zai"));
   assert.equal(defaultMindHostForSource("zai"), "https://api.z.ai/api/v1");
-  assert.equal(defaultMindModelForSource("zai"), "glm-5.3");
-  assert.equal(suggestMindRelayName({ source: "zai", model: "glm-5.3" }), "zai-coder");
+  assert.equal(defaultMindModelForSource("zai"), "glm-5.3-flash");
+  assert.equal(suggestMindRelayName({ source: "zai", model: "glm-5.3-flash" }), "zai-coder");
 });

@@ -145,10 +145,10 @@ test("coding saddle selects named Pyash minds without changing global defaults",
     });
     assert.equal(zai.mindName, "zai");
     assert.equal(zai.backend, "zai");
-    assert.equal(zai.model, "glm-5.3");
+    assert.equal(zai.model, "glm-5.3-flash");
     assert.equal(zai.host, "https://api.z.ai/api/v1");
     assert.equal(remember("coding saddle")?.fromstate?.text, "zai");
-    assert.equal(remember("coding saddle")?.as?.name, "glm-5.3");
+    assert.equal(remember("coding saddle")?.as?.name, "glm-5.3-flash");
     const zaiCall = await runSaddleTurn({
       input: "test selected Z.AI mind",
       model: zai.model,
@@ -212,12 +212,12 @@ test("coding saddle resolves Pyash mind cases and rejects non-mind facts", () =>
       be: "mind",
       fromstate: { name: "zai" },
       from: { name: "https://api.z.ai/api/v1" },
-      as: { name: "glm-5.3" }
+      as: { name: "glm-5.3-flash" }
     }
   }), {
     mindName: "zai",
     backend: "zai",
-    model: "glm-5.3",
+    model: "glm-5.3-flash",
     host: "https://api.z.ai/api/v1"
   });
   assert.throws(() => resolveSaddleMindProfile({ mindName: "ordinary fact", profile: { be: "text" } }), /Pyash mind not found/);

@@ -296,7 +296,7 @@ async function main() {
     try {
       codexHome = createZaiCodexHome({
         apiKey,
-        model: payload.model || "glm-5.3",
+        model: payload.model || "glm-5.3-flash",
         reasoningEffort: payload.reasoningEffort || "max",
         projectRoot: process.cwd()
       });

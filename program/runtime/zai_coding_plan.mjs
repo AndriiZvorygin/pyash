@@ -28,12 +28,15 @@ function quoted(value) {
   return JSON.stringify(String(value ?? ""));
 }
 
-export function createZaiCodexHome({ apiKey, model = "glm-5.3", reasoningEffort = "max", projectRoot = process.cwd() } = {}) {
-  const selectedModel = String(model || "glm-5.3").trim();
+export function createZaiCodexHome({ apiKey, model = "glm-5.3-flash", reasoningEffort = "max", projectRoot = process.cwd() } = {}) {
+  const selectedModel = String(model || "glm-5.3-flash").trim();
   const selectedEffort = ["low", "high", "max"].includes(String(reasoningEffort).trim())
     ? String(reasoningEffort).trim()
     : "max";
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-zai-codex-"));
+  const homeBase = path.join(os.homedir(), ".local", "state", "pyash", "codex-home");
+  fs.mkdirSync(homeBase, { recursive: true, mode: 0o700 });
+  fs.chmodSync(homeBase, 0o700);
+  const home = fs.mkdtempSync(path.join(homeBase, "zai-"));
   fs.chmodSync(home, 0o700);
   const modelsPath = path.join(home, "models.json");
   const models = {

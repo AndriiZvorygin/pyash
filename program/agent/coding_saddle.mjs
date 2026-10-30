@@ -54,7 +54,7 @@ export function resolveSaddleMindProfile({
   const declaredBackend = mindFieldValue(profile.fromstate);
   const backend = normalizeSaddleBackend(declaredBackend || defaultBackend);
   const model = normalizeSaddleModel(
-    mindFieldValue(profile.as) || (backend === "zai" ? "glm-5.3" : defaultModel)
+    mindFieldValue(profile.as) || (backend === "zai" ? "glm-5.3-flash" : defaultModel)
   );
   const declaredHost = mindFieldValue(profile.from);
   const host = normalizeSaddleHost(declaredHost || hostForBackend(backend), defaultHost);

@@ -53,7 +53,7 @@ test("coding saddle usage records are durable, replayable, and idempotent", asyn
       turnId: "turn-000001-abc",
       mindName: "zai",
       backend: "zai",
-      model: "glm-5.3",
+      model: "glm-5.3-flash",
       usage,
       now
     });
@@ -63,7 +63,7 @@ test("coding saddle usage records are durable, replayable, and idempotent", asyn
       turnId: "turn-000001-abc",
       mindName: "zai",
       backend: "zai",
-      model: "glm-5.3",
+      model: "glm-5.3-flash",
       usage,
       now: new Date("2026-10-31T12:00:00.000Z")
     });
@@ -74,13 +74,13 @@ test("coding saddle usage records are durable, replayable, and idempotent", asyn
     assert.equal(records[0].turnId, "turn-000001-abc");
     assert.equal(records[0].mindName, "zai");
     assert.equal(records[0].backend, "zai");
-    assert.equal(records[0].model, "glm-5.3");
+    assert.equal(records[0].model, "glm-5.3-flash");
     assert.equal(records[0].usage.totalTokens, 120);
 
     const summary = await readSaddleUsageSummary({ worldRoot });
     assert.equal(summary.length, 1);
     assert.equal(summary[0].turns, 1);
-    assert.match(formatSaddleUsageSummary(summary), /usage: zai\/glm-5\.3 · turns 1 · input 100 \(cached 40, cache write 0\) · output 20 \(reasoning 6\) · total 120/);
+    assert.match(formatSaddleUsageSummary(summary), /usage: zai\/glm-5\.3-flash · turns 1 · input 100 \(cached 40, cache write 0\) · output 20 \(reasoning 6\) · total 120/);
   } finally {
     await fs.rm(worldRoot, { recursive: true, force: true });
   }

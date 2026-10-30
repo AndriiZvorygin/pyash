@@ -313,7 +313,7 @@ export function defaultMindHostForSource(source = "") {
 export function defaultMindModelForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
   if (key === "strata") return "strata";
-  if (key === "zai") return "glm-5.3";
+  if (key === "zai") return "glm-5.3-flash";
   if (key === "openai-api" || key === "openai-codex") return "gpt-5-codex";
   if (key === "openrouter") return "openrouter/auto";
   return "gpt-oss:latest";

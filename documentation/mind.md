@@ -25,12 +25,12 @@ The standard API key is used for Chat Completions when a mind targets `api.z.ai`
 
 On this host, the regular Codex CLI also has a separate `zai` profile. Start it with `codex --profile zai`; plain `codex` keeps using the existing OpenAI default. Its auth command reads the Coding Plan key from `configure/secret.pya`, so the credential is not duplicated in `~/.codex`. In the Pyash coding saddle, `/mind` lists configured Pyash minds and `/mind zai` or `/mind openai` selects one. `/model` then changes the model within that selected mind; the configured Z.AI and OpenAI mind facts are in `configure/default.pya`.
 
-The runner launches the installed Codex CLI with an ephemeral, isolated `CODEX_HOME` configured for the OpenAI Responses protocol at `https://api.z.ai/api/v1`, model `glm-5.3`, and the supplied Coding Plan key. The temporary profile is permission-restricted and deleted after each request; your existing `~/.codex` configuration is not changed. The coding saddle keeps its configured default mind unless you select another one with `/mind`. Z.AI's Coding Plan is limited to officially supported tools; this route uses Codex CLI rather than Pyash's direct Chat Completions client.
+The runner launches the installed Codex CLI with an ephemeral, isolated `CODEX_HOME` configured for the OpenAI Responses protocol at `https://api.z.ai/api/v1`, model `glm-5.3-flash`, and the supplied Coding Plan key. The temporary profile is permission-restricted and deleted after each request; your existing `~/.codex` configuration is not changed. The coding saddle keeps its configured default mind unless you select another one with `/mind`. Z.AI's Coding Plan is limited to officially supported tools; this route uses Codex CLI rather than Pyash's direct Chat Completions client.
 
 To add a named Z.AI mind relay without changing the global default:
 
 ```sh
-node command/pyash.mjs configure mind --non-interactive --relay zai-coder --backend zai --host https://api.z.ai/api/v1 --model glm-5.3 --set-default lie --test-now lie
+node command/pyash.mjs configure mind --non-interactive --relay zai-coder --backend zai --host https://api.z.ai/api/v1 --model glm-5.3-flash --set-default lie --test-now lie
 ```
 
 Select Z.AI for the coding saddle without changing Pyash's global default:
@@ -39,7 +39,7 @@ Select Z.AI for the coding saddle without changing Pyash's global default:
 PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs
 ```
 
-This selects the Pyash mind named `zai`, whose defaults are `glm-5.3` and `https://api.z.ai/api/v1`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` selects a model for the active mind. Other minds continue using their existing configuration. GLM-5.3 is text-only; the model can still use the Pyash tools exposed through the Codex MCP bridge.
+This selects the Pyash mind named `zai`, whose defaults are `glm-5.3-flash` and `https://api.z.ai/api/v1`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` selects a model for the active mind. Other minds continue using their existing configuration. Z.AI's model list for this account confirmed the exact ID `glm-5.3-flash`; Z.AI describes Flash as multimodal and available to Coding Plan users. The isolated Codex catalog currently declares text input only for this path, while Pyash tools remain available through the Codex MCP bridge.
 
 The Codex route preserves the CLI's `turn.completed` token accounting. The
 saddle prints that total after each reply and appends a durable usage map to the

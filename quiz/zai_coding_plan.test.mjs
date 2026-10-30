@@ -45,7 +45,6 @@ test("Codex auth helper emits the configured key only on stdout", () => {
 test("isolated Codex profile uses Z.AI Responses and trusts only the active project", () => {
   const home = createZaiCodexHome({
     apiKey: "test-only-key",
-    model: "glm-5.3",
     reasoningEffort: "max",
     projectRoot: "/workspace/pyash"
   });
@@ -58,7 +57,8 @@ test("isolated Codex profile uses Z.AI Responses and trusts only the active proj
     assert.match(config, /wire_api = "responses"/u);
     assert.match(config, /experimental_bearer_token = "test-only-key"/u);
     assert.match(config, /\[projects\."\/workspace\/pyash"\]\s+trust_level = "trusted"/u);
-    assert.equal(models.models[0].slug, "glm-5.3");
+    assert.equal(models.models[0].slug, "glm-5.3-flash");
+    assert.equal(home.startsWith(os.tmpdir()), false);
     assert.equal(models.models[0].context_window, 1048576);
     assert.equal(fs.statSync(home).mode & 0o777, 0o700);
     assert.equal(fs.statSync(configPath).mode & 0o777, 0o600);

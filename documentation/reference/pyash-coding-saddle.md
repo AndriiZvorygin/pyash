@@ -28,7 +28,7 @@ For the Z.AI GLM Coding Plan, add `exists su name zai coding api key ob text
 "<your key>" be default ya` to the ignored, permission-restricted
 `configure/secret.pya`, then launch with
 `PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs`. The saddle defaults to
-`glm-5.3` and Z.AI's Responses API endpoint for this mind. This uses the
+`glm-5.3-flash` and Z.AI's Responses API endpoint for this mind. This uses the
 official Codex CLI route through Pyash's existing mind tools; see
 [`mind.md`](../mind.md#zai-glm-coding-plan) for details.
 

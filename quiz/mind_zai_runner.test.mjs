@@ -46,7 +46,6 @@ process.stdout.write(JSON.stringify({ type: "turn.completed", usage: { input_tok
   await fs.chmod(fakeCodexPath, 0o700);
   try {
     const result = await runRunner(["--zai-codex"], {
-      model: "glm-5.3",
       reasoningEffort: "max",
       messages: [{ role: "user", content: "Reply with a short readiness check." }]
     }, {
@@ -68,7 +67,7 @@ process.stdout.write(JSON.stringify({ type: "turn.completed", usage: { input_tok
       totalTokens: 124
     });
     const probe = JSON.parse(await fs.readFile(probePath, "utf8"));
-    assert.equal(probe.model, "glm-5.3");
+    assert.equal(probe.model, "glm-5.3-flash");
     assert.equal(probe.hasCodingKey, true);
     assert.equal(probe.correctProtocol, true);
     assert.equal(probe.correctBaseUrl, true);
