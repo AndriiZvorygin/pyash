@@ -14,7 +14,14 @@ The default backend remains Ollama. Optional OpenAI-compatible backends use the 
 
 ## Z.AI GLM Coding Plan
 
-Pyash exposes `zai` as an optional coding mind using Z.AI's documented Codex CLI integration. GLM Coding Plan keys are separate from standard Z.AI API keys. Put the Coding Plan key in the local, ignored `configure/.env` as `Z_AI_CODING_API_KEY` (see `configure/.env.example`) and restrict the file to mode `600`. Do not use `Z_AI_API_KEY` for this profile.
+Pyash exposes `zai` as an optional coding mind using Z.AI's documented Codex CLI integration. Store credentials as local Pyash facts in the ignored `configure/secret.pya`, with file mode `600`:
+
+```pya
+exists su name zai api key ob text "<standard Z.AI API key>" be default ya
+exists su name zai coding api key ob text "<GLM Coding Plan key>" be default ya
+```
+
+The standard API key is used for Chat Completions when a mind targets `api.z.ai`. The distinct Coding Plan key is used only by the Codex CLI Responses profile; it does not fall back to the standard API key.
 
 The runner launches the installed Codex CLI with an ephemeral, isolated `CODEX_HOME` configured for the OpenAI Responses protocol at `https://api.z.ai/api/v1`, model `glm-5.3`, and the supplied Coding Plan key. The temporary profile is permission-restricted and deleted after each request; your existing `~/.codex` configuration is not changed. Pyash keeps its existing default backend unless you explicitly select Z.AI. Z.AI's Coding Plan is limited to officially supported tools; this route uses Codex CLI rather than Pyash's direct Chat Completions client.
 
