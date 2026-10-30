@@ -9,7 +9,7 @@ import {
   loadCompoundTranslationCache,
   parseCompoundTranslationResponse,
   selectCompoundDemands
-} from "../program/verbs/exchange/translation/compound_translation_cache.mjs";
+} from "../program/library/translation/compound_translation_cache.mjs";
 
 async function tempCache() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-compound-translation-"));

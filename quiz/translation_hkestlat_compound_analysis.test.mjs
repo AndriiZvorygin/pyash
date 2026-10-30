@@ -9,7 +9,7 @@ import {
   analyzeHkestlatCompounds,
   buildLordPrayerAnalysis,
   renderLordPrayerAnalysisPya
-} from "../program/verbs/exchange/translation/hkestlat_compound_analysis.mjs";
+} from "../program/library/translation/hkestlat_compound_analysis.mjs";
 
 function dictionaryRows() {
   return [
@@ -144,7 +144,7 @@ test("committed Lord's Prayer analysis preserves source hashes and mapped gaps",
 
 test("Lord's Prayer source manifest separates canonical, critical, and YLT layers", async () => {
   const source = await fs.readFile(
-    new URL("../program/verbs/exchange/translation/lord_prayer_sources.pya", import.meta.url),
+    new URL("../program/library/translation/lord_prayer_sources.pya", import.meta.url),
     "utf8"
   );
   const program = buildProgram(source);
@@ -162,7 +162,7 @@ test("Lord's Prayer source manifest separates canonical, critical, and YLT layer
   );
   assert.equal(facts.get("critical-companion"), "SBL Greek New Testament (SBLGNT)");
   assert.equal(facts.get("ylt-source"), "Received Text (Textus Receptus tradition)");
-  assert.equal(facts.get("greek-lexicon"), "program/verbs/exchange/translation/lord_prayer_lexicon.pya");
+  assert.equal(facts.get("greek-lexicon"), "program/library/translation/lord_prayer_lexicon.pya");
   assert.equal(facts.get("greek-lexicon-format"), "lord-prayer-lexicon-v1");
   assert.equal(facts.get("syriac-comparison"), "Syriac Peshitta; attested translation witness, while exact Galilean wording remains reconstructed");
   assert.equal(facts.get("syriac-role"), "Aramaic/Syriac comparison for the kingdom/reign noun and possessive form");

@@ -15,7 +15,11 @@
 
 export const TIERS = ["t1", "t2", "t3"];
 
-const HOUSE_PROGRAM_PATH = /world\/house\/([^/"'`\s]+)\/program\//gu;
+// A house dependency is a relative module path that points into a house
+// program folder. A fixture string that merely mentions a house path is not a
+// dependency on that house being present, and a template placeholder is not a
+// house name.
+const HOUSE_PROGRAM_PATH = /(?:\.\.\/|\.\/)[^"'\s]*world\/house\/([^/"'`\s{}]+)\/program\//gu;
 
 export function detectHouseDependencies(source) {
   const houses = new Set();

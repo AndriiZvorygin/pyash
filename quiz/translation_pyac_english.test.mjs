@@ -5,7 +5,7 @@ import {
   decodePyacSentence,
   renderEnglishFromVliw,
   translatePyacToEnglishPyash
-} from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
+} from "../program/library/translation/pyac_to_english_pyash.mjs";
 import {
   decodePhraseVliw,
   lowerPhraseVliw,

@@ -7,7 +7,7 @@ import {
   parseOpenEnglishWordNetJsonFiles,
   parseEnglishWordNetConfig,
   parseEnglishWordNetText
-} from "../program/verbs/exchange/translation/english_wordnet.mjs";
+} from "../program/library/translation/english_wordnet.mjs";
 
 test("WordNet parser preserves part of speech, synset identity, lemma, and gloss", () => {
   const parsed = parseEnglishWordNetText([

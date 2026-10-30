@@ -10,7 +10,7 @@ import {
   loadPyacWordLayerIndex,
   parsePyacComplexityLayers,
   classifyPyacWord
-} from "../program/verbs/exchange/translation/pyac_complexity.mjs";
+} from "../program/library/translation/pyac_complexity.mjs";
 
 const layerLists = {
   16: "hnuc\nhcas\n",
@@ -22,7 +22,7 @@ const layerLists = {
 
 test("Pyac complexity manifest preserves the five cumulative layers", async () => {
   const source = await fs.readFile(
-    new URL("../program/verbs/exchange/translation/pyac_complexity_layers.pya", import.meta.url),
+    new URL("../program/library/translation/pyac_complexity_layers.pya", import.meta.url),
     "utf8"
   );
   const parsed = parsePyacComplexityLayers(source);

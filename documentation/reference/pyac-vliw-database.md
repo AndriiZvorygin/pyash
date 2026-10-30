@@ -154,24 +154,24 @@ human text
 ```
 
 Chinese compound words provide the first morphology corpus at
-`program/verbs/exchange/translation/compound_lexicon_chinese.pya`. The same
+`program/library/translation/compound_lexicon_chinese.pya`. The same
 layer-aware catalog contract now covers bounded compound samples from French,
 Russian, Hindi, and Interlingua at:
 
 ```text
-program/verbs/exchange/translation/compound_lexicon_french.pya
-program/verbs/exchange/translation/compound_lexicon_russian.pya
-program/verbs/exchange/translation/compound_lexicon_hindi.pya
-program/verbs/exchange/translation/compound_lexicon_interlingua.pya
+program/library/translation/compound_lexicon_french.pya
+program/library/translation/compound_lexicon_russian.pya
+program/library/translation/compound_lexicon_hindi.pya
+program/library/translation/compound_lexicon_interlingua.pya
 ```
 
 Each catalog stores
 the surface compound, ordered morphemes, canonical Pyash target, optional
 English gloss, provenance, confidence, and lowering status in parser-readable
 map rows. The loader and query helpers live in
-`program/verbs/exchange/translation/compound_lexicon.mjs`; the shared
+`program/library/translation/compound_lexicon.mjs`; the shared
 language-specific loaders live in
-`program/verbs/exchange/translation/compound_lexicons.mjs` and are re-exported
+`program/library/translation/compound_lexicons.mjs` and are re-exported
 by the Chinese, French, Russian, Hindi, and Interlingua translation adapters.
 
 The compound surface is evidence for translation; canonical Pyash identity
@@ -181,7 +181,7 @@ and value fit a proven VLIW adapter; automatic HNUC allocation remains outside
 this contract.
 
 Compound lowering follows the cumulative Pyac word layers recorded in
-`program/verbs/exchange/translation/pyac_complexity_layers.pya`. The source
+`program/library/translation/pyac_complexity_layers.pya`. The source
 inventories are `pyachso2n`'s `16GlyphWordList.txt`, `19GlyphWordList.txt`,
 `24GlyphWordList.txt`, `28GlyphWordList.txt`, and `32GlyphWordList.txt`.
 Candidates are ranked progressively from layer 16 through layer 32, with exact
@@ -199,7 +199,7 @@ Chinese database candidate is:
 The existing atomic `database` word remains `hdes` at layer 24. The existing
 `data_mining` word `dxak` is layer 28, so it remains a recorded higher-layer
 word rather than a preferred database component. The durable row is in
-`program/verbs/exchange/translation/compound_lexicon_chinese.pya`; its
+`program/library/translation/compound_lexicon_chinese.pya`; its
 `evidence` field records the curated Kwon decomposition.
 
 The external-language rows use curated English target decompositions such as
@@ -211,9 +211,9 @@ Every current external-language sample lowers through the same canonical Pyac
 words and records the higher-layer atomic alternative in `rejectedCandidates`.
 
 Broader derived coverage uses
-`program/verbs/exchange/translation/compound_coverage.mjs` and the durable
+`program/library/translation/compound_coverage.mjs` and the durable
 curated decompositions in
-`program/verbs/exchange/translation/compound_coverage_curated.pya`. The
+`program/library/translation/compound_coverage_curated.pya`. The
 current source projection finds 7,830 existing atomic targets, 393 accepted
 derived compounds, and 411 closed-compound candidates across the Chinese,
 French, Russian, Hindi, and Interlingua dictionaries. Existing atomic targets
@@ -248,21 +248,21 @@ pipeline selects only accepted lexical compounds that occur in the source;
 grammar rows, unresolved candidates, and unused compounds do not trigger a
 model request. Missing language surfaces are requested through the existing
 durable GPU worker and configured Housekeeper, using the model and five-language
-set in `program/verbs/exchange/translation/compound_translation_config.pya`.
+set in `program/library/translation/compound_translation_config.pya`.
 Successful responses are appended to the parser-readable cache at
-`program/verbs/exchange/translation/compound_translation_cache.pya` and later
+`program/library/translation/compound_translation_cache.pya` and later
 integrations reuse the stable compound request identity. The cache is evidence
 for translation integration, not a second accepted-vocabulary catalog.
 
 English document refineries also run
-`program/verbs/exchange/translation/english_wordnet_refinery.mjs`. Encountered
+`program/library/translation/english_wordnet_refinery.mjs`. Encountered
 lexical gaps receive stable WordNet sense rows; existing-atom or accepted-compound
 leaf/edge links are recorded deterministically, while ambiguous senses enter the
 existing durable Housekeeper `mind` queue. Source context is compacted by unresolved term and
 sent once for a paragraph-sized group where the prompt fits; a larger group is split between
 complete sense rows. Each prompt is capped at 12,000 characters. The model-specific safe input
 and provider context values are durable in
-`program/verbs/exchange/translation/translation_model_cards.pya`; the Qwen3.5 9B card declares
+`program/library/translation/translation_model_cards.pya`; the Qwen3.5 9B card declares
 32,768 context tokens, a 3,900-token safe input budget, and an 8,192-token safe output budget.
 This keeps requests within the rough input budget without truncating ids or exhausting the
 response before every sense decision is returned. Conservative output budgeting keeps each batch
@@ -275,7 +275,7 @@ in the translation `.pya` catalog preserves the sense batches, queue handles, re
 decisions, and outcomes without inventing vocabulary or creating a parallel transcript.
 
 Closed-word review also carries morphology metadata from
-`program/verbs/exchange/translation/compound_morphology.pya` and the
+`program/library/translation/compound_morphology.pya` and the
 underscore-marked affix rows in `program/library/pyashWords.json`. Each record
 stores `componentRoles`, `morphologyStatus`, and `morphologySignals`. An
 ending that matches a component, such as `ant` in `acceptant`, receives an
@@ -307,7 +307,7 @@ checkpoint in place.
 
 The first external compound analysis uses the historical `hkestlat` source
 shapes `mwonkwon.json` and `chinese_dictionary_stems.json`. The host-side
-normalizer is `program/verbs/exchange/translation/hkestlat_compound_analysis.mjs`.
+normalizer is `program/library/translation/hkestlat_compound_analysis.mjs`.
 It hashes the source files, normalizes Unicode and row ordering, joins direct
 Chinese/English/Pyash candidates with ordered component hints, and gives every
 mapping a content-derived identity. Duplicate targets remain
@@ -331,7 +331,7 @@ for the next vocabulary pass.
 ### Lord's Prayer Greek source policy
 
 The durable source policy is recorded in
-`program/verbs/exchange/translation/lord_prayer_sources.pya` for Matthew
+`program/library/translation/lord_prayer_sources.pya` for Matthew
 6:9-13. The project uses three explicitly separated layers:
 
 - **Canonical Greek text:** Nestle-Aland 28 (NA28), edited by the Institute for
@@ -371,7 +371,7 @@ contextual divine-rule expansion, with the prayer's possessive context
 supplying the divine subject.
 
 The bounded Matthew 6:9-13 lexical pilot is stored in
-`program/verbs/exchange/translation/lord_prayer_lexicon.pya`, linked from the
+`program/library/translation/lord_prayer_lexicon.pya`, linked from the
 source manifest. It records 27 source terms with Greek lemmas and inflected
 forms, YLT/KJV comparison surfaces, stable semantic candidate identities, and
 accepted-existing, review, or unresolved Pyash targets. The runtime parser and
@@ -382,7 +382,7 @@ New Testament path remains a later scope that will add sentence-level Greek
 morphology and clause resolution after this evidence contract is extended.
 
 The executable NA28 clause lowering is stored separately in
-`program/verbs/exchange/translation/lord_prayer_lowering.pya`. Each clause row
+`program/library/translation/lord_prayer_lowering.pya`. Each clause row
 contains its source locator and ordered term/marker sequence; the JavaScript
 adapter resolves selected lexicon candidates, lowers those sequences through
 the shared VLIW phrase encoder, and derives the structural signatures from the
@@ -393,12 +393,12 @@ assertions.
 
 The ranked lexical target is the Gutenberg-derived source
 `/home/htaf/pyachso2n/English30k.txt`. The durable source contract is recorded
-in `program/verbs/exchange/translation/english30k_coverage.pya`: the cutoff is
+in `program/library/translation/english30k_coverage.pya`: the cutoff is
 ranks 1 through 30,000, the source hash is retained, and rank 6,897 is absent
 from the source. The file contains 36,662 rows overall; the selected cutoff
 contains 29,999 parseable rows.
 
-`program/verbs/exchange/translation/english30k_coverage.mjs` preserves source
+`program/library/translation/english30k_coverage.mjs` preserves source
 rank and frequency score and classifies each target as `atomic`, `alias`,
 `grammar`, `compound`, `dictionary-alias`, `lemma`, or `unresolved`. Only
 executable Pyash lowerings count as covered. Exact atomic mappings take
@@ -427,9 +427,9 @@ GPU/housekeeper compound verifier before entering the accepted catalog.
 
 The lemma layer keeps ranked surface rows and adds a canonical English lookup
 over them. Its durable Pyash catalog is
-`program/verbs/exchange/translation/english_lemmas.pya`, with the same
+`program/library/translation/english_lemmas.pya`, with the same
 English30k source hash and cutoff as the coverage manifest. Runtime indexing
-lives in `program/verbs/exchange/translation/english_lemmas.mjs`.
+lives in `program/library/translation/english_lemmas.mjs`.
 
 Exact atoms remain identity mappings. Existing anchor forms and curated
 irregular forms resolve to their canonical Pyash sequence. Regular
@@ -446,7 +446,7 @@ total, 5,778 unique canonical lemmas, and 16,093 unresolved rows. The lemma
 count is a surface-row count; dictionary aliases are reported separately
 before this layer.
 Ambiguous inflection candidates use
-`program/verbs/exchange/translation/english_lemma_verification.mjs`; its
+`program/library/translation/english_lemma_verification.mjs`; its
 default verifier submits through the existing future GPU duty and await path,
 accepts one bounded repair response, and retains malformed or uncertain
 responses as review evidence. The live review command is
@@ -457,7 +457,7 @@ parser-readable `translation_english30k_lemma_review` catalog.
 
 Word analysis supplies lexical roots and grammatical particle candidates. The
 sentence layer in
-`program/verbs/exchange/translation/english_sentence.mjs` uses plain English
+`program/library/translation/english_sentence.mjs` uses plain English
 context to select finite tense and aspect. Its first supported slice covers
 simple finite forms, progressive auxiliaries, and the first noun-phrase
 grammar layer. For example, the durable catalog records `walked` as `pfin ki`,
@@ -497,9 +497,9 @@ surface form `hcasputwih`; names and variables carry `gi` before their final
 case marker, while natural lexical objects use the case directly when no
 compositional case already closes the phrase.
 The reusable surface renderer is
-`program/verbs/exchange/translation/pyash_surface.mjs`. The bounded Greek
+`program/library/translation/pyash_surface.mjs`. The bounded Greek
 Lord's Prayer pilot uses it through
-`program/verbs/exchange/translation/lord_prayer_translation.mjs`; its daily
+`program/library/translation/lord_prayer_translation.mjs`; its daily
 bread clause renders as `nyahyi trenmyah nyahye dlatci hpupka kwinpcih`.
 
 Standalone `vocab_suggest` output keeps the lexical lemma line and adds a

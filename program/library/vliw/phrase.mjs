@@ -1,5 +1,5 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
-import { renderPyashSurface } from "../../verbs/exchange/translation/pyash_surface.mjs";
+import { renderPyashSurface } from "../translation/pyash_surface.mjs";
 import { decodePyacWord, encodePyacWord } from "./word_code.mjs";
 import {
   matchVliwCompound,

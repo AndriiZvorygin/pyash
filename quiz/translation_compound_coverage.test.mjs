@@ -13,12 +13,12 @@ import {
   segmentClosedCompound,
   segmentDelimitedCompound,
   sourceTermsFromDictionaryRows
-} from "../program/verbs/exchange/translation/compound_coverage.mjs";
-import { buildCompoundMorphologyIndex, loadCompoundMorphology } from "../program/verbs/exchange/translation/compound_morphology.mjs";
+} from "../program/library/translation/compound_coverage.mjs";
+import { buildCompoundMorphologyIndex, loadCompoundMorphology } from "../program/library/translation/compound_morphology.mjs";
 import {
   loadPyacComplexityLayers,
   loadPyacWordLayerIndex
-} from "../program/verbs/exchange/translation/pyac_complexity.mjs";
+} from "../program/library/translation/pyac_complexity.mjs";
 import {
   classifyCompoundCoverage,
   createDefaultMindCompoundVerifier,
@@ -26,12 +26,12 @@ import {
   createMindCompoundVerifier,
   parseCompoundVerificationResponse,
   verifyCompoundCoverage
-} from "../program/verbs/exchange/translation/compound_verification.mjs";
+} from "../program/library/translation/compound_verification.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import {
   loadCompoundLexicon,
   parseCompoundLexicon
-} from "../program/verbs/exchange/translation/compound_lexicon.mjs";
+} from "../program/library/translation/compound_lexicon.mjs";
 
 const atomicEntries = [
   { en: "snake", pya: "snak" },
@@ -107,7 +107,7 @@ test("compound coverage keeps Pyash compounds head-final", () => {
 
 test("curated prayer constructions enter the shared compound catalog", async () => {
   const entries = await loadCompoundLexicon({
-    url: new URL("../program/verbs/exchange/translation/compound_coverage_curated.pya", import.meta.url),
+    url: new URL("../program/library/translation/compound_coverage_curated.pya", import.meta.url),
     name: "translation_compounds_derived_curated",
     language: "canonical"
   });

@@ -41,7 +41,7 @@ const WHISPER = {
 
 // Open English WordNet 2025 JSON: read-only semantic evidence for translation.
 // The source URL, license, and the loader's own content hash are recorded in
-// program/verbs/exchange/translation/english_wordnet.pya.
+// program/library/translation/english_wordnet.pya.
 const WORDNET = {
   url: "https://en-word.net/static/english-wordnet-2025-json.zip",
   sha256: "7d749f6e2c39e6970e4997839dcf6e42fd281f3c2fae0171d2192bae8cfa4b51",

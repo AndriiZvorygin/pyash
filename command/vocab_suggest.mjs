@@ -7,27 +7,27 @@ import { fileURLToPath } from "node:url";
 import { buildProgram } from "../program/program.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { loadCoverage } from "./compound_coverage.mjs";
-import { loadAllCompoundAtomLinks } from "../program/verbs/exchange/translation/compound_lexicons.mjs";
-import { renderPyacSurface } from "../program/verbs/exchange/translation/pyash_surface.mjs";
+import { loadAllCompoundAtomLinks } from "../program/library/translation/compound_lexicons.mjs";
+import { renderPyacSurface } from "../program/library/translation/pyash_surface.mjs";
 import {
   buildEnglishDictionaryAliases,
   loadEnglishDictionaryBlacklist
-} from "../program/verbs/exchange/translation/english_dictionary_aliases.mjs";
+} from "../program/library/translation/english_dictionary_aliases.mjs";
 import {
   buildEnglishLemmaIndex,
   inflectionCandidates,
   loadEnglishLemmaCatalog
-} from "../program/verbs/exchange/translation/english_lemmas.mjs";
-import { loadAnchorWordForms } from "../program/verbs/exchange/translation/anchor_words.mjs";
+} from "../program/library/translation/english_lemmas.mjs";
+import { loadAnchorWordForms } from "../program/library/translation/anchor_words.mjs";
 import {
   loadDefaultEnglish30kCoverage,
   loadEnglish30k,
   english30kLookupVariants,
   lookupEnglish30kCoverage
-} from "../program/verbs/exchange/translation/english30k_coverage.mjs";
-import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
+} from "../program/library/translation/english30k_coverage.mjs";
+import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/library/translation/english_grammar.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
-import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
+import { resolveEnglishAlias } from "../program/library/translation/english_aliases.mjs";
 import {
   MOODS,
   ROLE_KEYS,
@@ -220,7 +220,7 @@ async function loadDefaultAcceptedCompounds() {
 async function loadDefaultCuratedAcceptedCompounds() {
   if (!curatedAcceptedCoveragePromise) {
     curatedAcceptedCoveragePromise = fs
-      .readFile(new URL("../program/verbs/exchange/translation/compound_coverage_curated.pya", import.meta.url), "utf8")
+      .readFile(new URL("../program/library/translation/compound_coverage_curated.pya", import.meta.url), "utf8")
       .then((source) => parseAcceptedCompoundRows(buildProgram(source)))
       .catch((error) => {
         if (error?.code === "ENOENT") return new Map();

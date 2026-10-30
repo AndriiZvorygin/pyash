@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildProgram } from "../program/program.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
-import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
+import { resolveEnglishAlias } from "../program/library/translation/english_aliases.mjs";
 
 const files = process.argv.slice(2);
 if (files.length === 0) {

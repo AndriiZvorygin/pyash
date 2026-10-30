@@ -11,13 +11,13 @@ import {
   buildEnglishLemmaCandidates,
   loadEnglishLemmaCatalog,
   renderEnglishLemmaCatalogPya
-} from "../program/verbs/exchange/translation/english_lemmas.mjs";
-import { loadEnglish30k } from "../program/verbs/exchange/translation/english30k_coverage.mjs";
-import { loadAnchorWordForms } from "../program/verbs/exchange/translation/anchor_words.mjs";
+} from "../program/library/translation/english_lemmas.mjs";
+import { loadEnglish30k } from "../program/library/translation/english30k_coverage.mjs";
+import { loadAnchorWordForms } from "../program/library/translation/anchor_words.mjs";
 import {
   createDefaultQueuedMindEnglishLemmaVerifier,
   verifyEnglishLemmaCandidates
-} from "../program/verbs/exchange/translation/english_lemma_verification.mjs";
+} from "../program/library/translation/english_lemma_verification.mjs";
 
 function configureVerifierMind(mindName) {
   const backend = String(resolveConfigText("mind backend", { rememberFn: remember }) || "ollama command mind").trim();

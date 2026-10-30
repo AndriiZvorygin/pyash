@@ -13,7 +13,7 @@ import {
   parseAtomWordLists,
   parseLegacyPyashWords,
   parsePhoneticCatalog
-} from "../program/verbs/exchange/translation/atom_word_generation.mjs";
+} from "../program/library/translation/atom_word_generation.mjs";
 
 test("atom phonetic projection follows the cumulative glyph layers", () => {
   assert.equal(normalizeIpaToLayer(" lˈʌv\n", 16), "luw");

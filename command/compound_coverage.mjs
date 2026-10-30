@@ -8,13 +8,13 @@ import {
   loadCuratedCompoundDecompositions,
   renderDerivedCompoundCoveragePya,
   sourceTermsFromDictionaryRows
-} from "../program/verbs/exchange/translation/compound_coverage.mjs";
-import { loadCompoundMorphology } from "../program/verbs/exchange/translation/compound_morphology.mjs";
-import { classifyCompoundCoverage } from "../program/verbs/exchange/translation/compound_verification.mjs";
+} from "../program/library/translation/compound_coverage.mjs";
+import { loadCompoundMorphology } from "../program/library/translation/compound_morphology.mjs";
+import { classifyCompoundCoverage } from "../program/library/translation/compound_verification.mjs";
 import {
   loadPyacComplexityLayers,
   loadPyacWordLayerIndex
-} from "../program/verbs/exchange/translation/pyac_complexity.mjs";
+} from "../program/library/translation/pyac_complexity.mjs";
 
 const commandDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(commandDirectory, "..");

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
+import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
 import {
   applyEnglishWordNetSenseLinkResponse,
   buildEnglishWordNetSenseAnchorCandidates,
@@ -18,13 +18,13 @@ import {
   renderEnglishWordNetSenseLinksPya,
   submitEnglishWordNetSenseLinks,
   wordNetSenseLinkQueueHandle
-} from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
-import { parseEnglishWordNetBridgeCatalog } from "../program/verbs/exchange/translation/english_wordnet_bridges.mjs";
+} from "../program/library/translation/english_wordnet_linker.mjs";
+import { parseEnglishWordNetBridgeCatalog } from "../program/library/translation/english_wordnet_bridges.mjs";
 import {
   loadTranslationModelCard,
   parseTranslationModelCards,
   selectTranslationModelCard
-} from "../program/verbs/exchange/translation/translation_model_cards.mjs";
+} from "../program/library/translation/translation_model_cards.mjs";
 
 function fixtureIndex() {
   return buildEnglishWordNetIndex({

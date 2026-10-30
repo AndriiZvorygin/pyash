@@ -9,8 +9,8 @@ import {
   parseCompoundLexicon,
   parseChineseCompoundLexicon,
   queryChineseCompoundLexicon
-} from "../program/verbs/exchange/translation/compound_lexicon.mjs";
-import { buildCompoundAtomLinks } from "../program/verbs/exchange/translation/compound_atom_links.mjs";
+} from "../program/library/translation/compound_lexicon.mjs";
+import { buildCompoundAtomLinks } from "../program/library/translation/compound_atom_links.mjs";
 
 test("Chinese compound lexicon preserves ordered morphemes and stable identities", async () => {
   const entries = await loadChineseCompoundLexicon();
@@ -64,7 +64,7 @@ test("Chinese compound lexicon preserves ordered morphemes and stable identities
   assert.equal(brainstorming.specificAtom, "brain_storming");
 
   const curated = await loadCompoundLexicon({
-    url: new URL("../program/verbs/exchange/translation/compound_coverage_curated.pya", import.meta.url),
+    url: new URL("../program/library/translation/compound_coverage_curated.pya", import.meta.url),
     name: "translation_compounds_derived_curated",
     language: "canonical"
   });

@@ -3,12 +3,12 @@ import fsp from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runTranslationSourceToVliwRefinery } from "../program/verbs/exchange/translation/translation_to_vliw_refinery.mjs";
+import { runTranslationSourceToVliwRefinery } from "../program/library/translation/translation_to_vliw_refinery.mjs";
 import {
   awaitTranslationGpuDuty,
   createDefaultTranslationVliwDependencies,
   rebindTranslationOutputCheckpoint
-} from "../program/verbs/exchange/translation/translation_to_vliw_job.mjs";
+} from "../program/library/translation/translation_to_vliw_job.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import {

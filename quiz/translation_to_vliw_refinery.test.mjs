@@ -6,20 +6,20 @@ import { tmpdir } from "node:os";
 
 import { parseVliwCatalogPya } from "../program/library/vliw/index.mjs";
 import { getRefinery } from "../program/bridge/refinery.mjs";
-import { analyzeEnglishSentence } from "../program/verbs/exchange/translation/english_sentence.mjs";
-import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
+import { analyzeEnglishSentence } from "../program/library/translation/english_sentence.mjs";
+import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
 import {
   projectTranslationSentence,
   segmentTranslationDocument,
   translateDocumentSegments
-} from "../program/verbs/exchange/translation/translation_pipeline.mjs";
+} from "../program/library/translation/translation_pipeline.mjs";
 import {
   TRANSLATION_SOURCE_TO_VLIW_REFINERY_NAME,
   occurrenceCoverageOverrides,
   runTranslationSourceToVliwRefinery
-} from "../program/verbs/exchange/translation/translation_to_vliw_refinery.mjs";
-import { translationOccurrenceKey } from "../program/verbs/exchange/translation/translation_occurrence.mjs";
-import { inspectTranslationRefineryArtifacts } from "../program/verbs/exchange/translation/translation_refinery_artifacts.mjs";
+} from "../program/library/translation/translation_to_vliw_refinery.mjs";
+import { translationOccurrenceKey } from "../program/library/translation/translation_occurrence.mjs";
+import { inspectTranslationRefineryArtifacts } from "../program/library/translation/translation_refinery_artifacts.mjs";
 
 test("source-to-VLIW refinery declares the complete Pyash stage graph", async () => {
   const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-"));

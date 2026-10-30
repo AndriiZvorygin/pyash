@@ -1,16 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
+import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
 import {
   buildEnglishWordNetSenseSelectionPrompt,
   parseEnglishWordNetSenseSelectionResponse
-} from "../program/verbs/exchange/translation/english_wordnet_selection.mjs";
+} from "../program/library/translation/english_wordnet_selection.mjs";
 import {
   buildEnglishWordNetSenseLinkRecords,
   linkEnglishWordNetSense
-} from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
-import { refineEnglishWordNet } from "../program/verbs/exchange/translation/english_wordnet_refinery.mjs";
+} from "../program/library/translation/english_wordnet_linker.mjs";
+import { refineEnglishWordNet } from "../program/library/translation/english_wordnet_refinery.mjs";
 
 function senseResources(rows) {
   const wordnet = buildEnglishWordNetIndex({ rows });

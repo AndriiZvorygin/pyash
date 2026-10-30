@@ -2,7 +2,7 @@ import pyashWords from "../program/library/pyashWords.json" with { type: "json" 
 import {
   buildGrammarWordProposal,
   loadAtomWordGenerationInputs
-} from "../program/verbs/exchange/translation/atom_word_generation.mjs";
+} from "../program/library/translation/atom_word_generation.mjs";
 
 export async function runGrammarWordSuggestion(args = process.argv.slice(2), {
   report = console.log,

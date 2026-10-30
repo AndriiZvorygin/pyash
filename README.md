@@ -158,7 +158,7 @@ node command/read_translation_refinery.mjs love-paragraph-vliw .
 node command/pya_to_json.mjs artifacts/love-paragraph-vliw/translation.pya --pretty
 ```
 
-See `program/verbs/exchange/translation/README.md` for the source-to-VLIW
+See `program/library/translation/README.md` for the source-to-VLIW
 pipeline contract and the distinction between canonical conversation/evidence
 artifacts and derived machine outputs.
 

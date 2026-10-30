@@ -38,7 +38,7 @@ answered: **fetch from the pinned upstream**.
   plus the Princeton WordNet license). Confirmed live and listed at
   `https://en-word.net/downloads`.
 - The repository already recorded the source URL, license, and expected content
-  hash in `program/verbs/exchange/translation/english_wordnet.pya`.
+  hash in `program/library/translation/english_wordnet.pya`.
 - The loader's pinned hash
   `4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba`
   was independently recomputed from the downloaded archive and matches exactly.
