@@ -719,6 +719,7 @@ def minimal_jobs() -> List[Dict[str, Any]]:
       "handleId": job.get("handleId"),
       "runtimeName": job.get("runtimeName"),
       "profileName": job.get("profileName"),
+      "deviceId": job.get("deviceId") or "",
       "status": job.get("status"),
       "submittedAt": job.get("submittedAt") or "",
       "startedAt": job.get("startedAt") or "",
@@ -1238,6 +1239,7 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
   peer_url = normalize_text(selected.get("url"))
   if not peer_url:
     return {"accepted": False, "error": "selected peer has no URL"}
+  selected_device = normalize_text(selected.get("deviceId")) or execution_device_id(job)
   visited = route_visited_hosts(payload)
   origin = normalize_text((payload.get("routing") or {}).get("originHostId")) if isinstance(payload.get("routing"), dict) else ""
   if not origin:
@@ -1252,7 +1254,7 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
     "runtimeName": job["runtimeName"],
     "profileName": job["profileName"],
     "jobSpec": job["jobSpec"],
-    "deviceId": job.get("deviceId", ""),
+    "deviceId": selected_device,
     "dischargeAllowed": job.get("dischargeAllowed", True),
     "source": job.get("source") or {"hostId": "unknown"},
     "routing": {
@@ -1275,10 +1277,12 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
   job["peerUrl"] = peer_url
   job["peerJobId"] = peer_job_id
   job["executionHostId"] = normalize_text(selected.get("hostId"))
+  job["deviceId"] = selected_device
   job["route"] = {
     "forwarded": True,
     "originHostId": origin,
     "executionHostId": normalize_text(selected.get("hostId")),
+    "deviceId": selected_device,
     "score": int(selected.get("score") or 0),
     "reason": selected.get("reason") or "peer selected",
     "attemptedHosts": attempted_hosts
@@ -1498,9 +1502,8 @@ def submit_job(
         "error": route.get("reason") or "no executable local or peer GPU target",
         "route": {"candidates": route.get("candidates", [])}
       }
-    selected_device = normalize_text(selected.get("deviceId"))
-    if selected_device:
-      job["deviceId"] = selected_device
+    selected_device = normalize_text(selected.get("deviceId")) or execution_device_id(job)
+    job["deviceId"] = selected_device
     attempted_hosts = list(job.get("attemptedHosts", []))
     if selected_host not in attempted_hosts:
       attempted_hosts.append(selected_host)
@@ -1509,6 +1512,7 @@ def submit_job(
       "forwarded": False,
       "originHostId": origin_host,
       "executionHostId": selected_host,
+      "deviceId": selected_device,
       "score": int(selected.get("score") or 0),
       "reason": selected.get("reason") or route.get("reason") or "local candidate",
       "attemptedHosts": attempted_hosts
@@ -1745,6 +1749,7 @@ def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
       "startedAt": job.get("startedAt") or "",
       "finishedAt": job.get("finishedAt") or "",
       "executionHostId": job.get("executionHostId") or "",
+      "deviceId": job.get("deviceId") or "",
       "source": job.get("source") or {"hostId": "unknown"},
       "route": job.get("route") or {},
       "forwarded": bool(job.get("forwarded", False))

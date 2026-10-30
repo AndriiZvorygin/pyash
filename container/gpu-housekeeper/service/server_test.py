@@ -2449,7 +2449,7 @@ class HousekeeperFederationTests(unittest.TestCase):
       "handleId": "forwarded-quick-ack",
       "runtimeName": "ollama",
       "profileName": "qwen-test",
-      "deviceId": "gpu0",
+      "deviceId": "gpu1",
       "source": {"hostId": "debtcollecting", "username": "htaf"},
       "jobSpec": {
         "kind": "ollama-chat",
@@ -2474,7 +2474,54 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertEqual(result["route"]["attemptedHosts"], ["mriczo", "swac"])
     queued = server._JOBS[result["remoteJobId"]]
     self.assertEqual(queued["status"], "queued")
-    self.assertEqual(queued["deviceId"], "gpu0")
+    self.assertEqual(queued["deviceId"], "gpu1")
+    self.assertEqual(server.job_status(result["remoteJobId"])["deviceId"], "gpu1")
+
+  def test_submit_forwards_the_selected_peer_device(self):
+    payload = {
+      "handleId": "peer-device-selection",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "jobSpec": {
+        "kind": "ollama-chat",
+        "payload": {"model": "qwen-test", "messages": [{"role": "user", "content": "hello"}]}
+      },
+      "source": {"hostId": "debtcollecting", "username": "htaf"}
+    }
+    forwarded_payloads = []
+
+    def fake_peer_request(_url, _path, forwarded_payload, **_kwargs):
+      forwarded_payloads.append(forwarded_payload)
+      return {"accepted": True, "remoteJobId": "peer-device-job"}
+
+    selected = {
+      "hostId": "swac",
+      "url": "http://swac:18886",
+      "deviceId": "gpu1",
+      "available": True,
+      "immediate": True,
+      "score": 30,
+      "reason": "idle peer GPU"
+    }
+    with patch.object(server, "select_route", return_value={
+      "forwarded": True,
+      "selected": selected,
+      "candidates": [selected]
+    }), patch.object(server, "peer_request_json", side_effect=fake_peer_request):
+      result = server.submit_job(payload, {"ollama": {"runtimeName": "ollama"}}, "mriczo")
+
+    self.assertTrue(result["accepted"])
+    self.assertTrue(result["forwarded"])
+    self.assertEqual(forwarded_payloads[0]["deviceId"], "gpu1")
+    self.assertEqual(result["route"]["deviceId"], "gpu1")
+    parent = server._JOBS[result["remoteJobId"]]
+    self.assertEqual(parent["deviceId"], "gpu1")
+    queued = next(
+      job for job in server.queue_view()["jobs"]
+      if job["remoteJobId"] == result["remoteJobId"]
+    )
+    self.assertEqual(queued["deviceId"], "gpu1")
+    self.assertEqual(server.job_status(result["remoteJobId"])["deviceId"], "gpu1")
 
   def test_forwarded_submit_http_ack_is_independent_of_route_probe_latency(self):
     payload = {
@@ -3085,6 +3132,7 @@ class HousekeeperSourceTraceTests(unittest.TestCase):
       "handleId": "trace-handle",
       "runtimeName": "ollama",
       "profileName": "qwen-test",
+      "deviceId": "gpu0",
       "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen-test", "prompt": "hello"}},
       "source": source
     }
@@ -3092,11 +3140,13 @@ class HousekeeperSourceTraceTests(unittest.TestCase):
       result = server.forward_job_to_peer(
         {"routing": {"originHostId": "mriczo", "forwardDepth": 0, "visitedHosts": []}},
         job,
-        {"selected": {"hostId": "swac", "url": "http://swac:8090", "score": 20}}
+        {"selected": {"hostId": "swac", "url": "http://swac:8090", "deviceId": "gpu1", "score": 20}}
       )
 
     self.assertTrue(result["accepted"])
     self.assertEqual(forwarded_payloads[0]["source"], source)
+    self.assertEqual(forwarded_payloads[0]["deviceId"], "gpu1")
+    self.assertEqual(result["route"]["deviceId"], "gpu1")
     self.assertEqual(result["route"]["originHostId"], "mriczo")
 
 

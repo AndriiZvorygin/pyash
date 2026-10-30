@@ -127,8 +127,11 @@ peer cannot receive an unsupported `ollama-ensure-model` job.
 Different physical devices can execute concurrently without sharing a gate.
 
 `/queue` lists queued and running jobs with `source` metadata and the selected
-`executionHostId`; `/job/<id>` includes the same source record plus the Pyash
-handle and runtime/profile. `source.hostId` and `source.workerId` are reported
+`executionHostId` and `deviceId`; `/job/<id>` includes the same source record,
+assigned device, Pyash handle, and runtime/profile. Device assignments are
+preserved when a job is forwarded to a peer, so the receiving host queues it on
+the GPU whose capacity was previewed by the origin. `source.hostId` and
+`source.workerId` are reported
 by the submitting worker; `source.username` is the submitting OS account, and
 `source.peerAddress` is the TCP peer address observed by the first housekeeper.
 The username defaults to the current OS account and can be explicitly set with
