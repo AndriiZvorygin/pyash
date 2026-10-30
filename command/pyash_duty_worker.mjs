@@ -9,6 +9,8 @@ import { prepareSaddle, runSaddleTurn } from "./pyash_saddle.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { readSessionReplay } from "../program/agent/session.mjs";
 import { parseDutyRepositories } from "../program/agent/coding_duty.mjs";
+import { appendSaddleUsage } from "../program/agent/coding_saddle_usage.mjs";
+import { sumMindUsages } from "../program/verbs/mind/usage.mjs";
 
 const pyashRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const POLL_MS = 4000;
@@ -136,6 +138,7 @@ export async function processDutyAssignment(config, repositories, assignment, {
   const session = await syncSessionBeforeTurn({ assignment, localSessionFile });
   let output = completedAssistantText(session.existing);
   let heartbeatTimer = null;
+  const turnUsages = [];
   if (!output) {
     await prepareFn({
       cwd: workingRoot,
@@ -163,9 +166,24 @@ export async function processDutyAssignment(config, repositories, assignment, {
         host: duty.host,
         sessionFile: localSessionFile,
         sessionUserMetadata: { payloadId: message.id },
+        onUsage: (usage) => {
+          turnUsages.push(usage);
+          return usage;
+        },
         mindFn
       });
       output = String(result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "").trim();
+      const usage = sumMindUsages(turnUsages);
+      if (usage) {
+        await appendSaddleUsage({
+          worldRoot: path.join(config.stateRoot, "world"),
+          turnId: result?.accordingto?.text || message.id,
+          mindName: duty.mindName || "coding duty",
+          backend: duty.backend,
+          model: duty.model,
+          usage
+        }).catch((error) => log(`duty ${duty.id}: usage record failed: ${error.message}`));
+      }
     } finally {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       heartbeatTimer = null;

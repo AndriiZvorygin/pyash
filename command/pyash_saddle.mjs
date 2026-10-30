@@ -17,6 +17,12 @@ import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import {
+  appendSaddleUsage,
+  formatSaddleUsageSummary,
+  readSaddleUsageSummary
+} from "../program/agent/coding_saddle_usage.mjs";
+import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
+import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
@@ -159,6 +165,7 @@ export async function runSaddleTurn({
   sessionName = SESSION_NAME,
   sessionFile = "",
   sessionUserMetadata = null,
+  onUsage,
   onToolCall,
   mindFn = mind_to_name_text
 } = {}) {
@@ -172,8 +179,15 @@ export async function runSaddleTurn({
     sessionName,
     sessionFile
   });
+  const emitUsage = (usage) => {
+    const normalized = normalizeMindUsage(usage);
+    if (!normalized) return null;
+    if (typeof onUsage !== "function") return normalized;
+    return onUsage(normalized);
+  };
   return mindFn(sentence, {
     onToolCall,
+    onUsage: emitUsage,
     sessionUserContent: String(input ?? ""),
     sessionUserMetadata
   });
@@ -415,7 +429,13 @@ async function main() {
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /mind [name]  /model <name>  /host <url>  /discharge  /exit");
+      writeLine("/status  /mind [name]  /model <name>  /host <url>  /usage  /discharge  /exit");
+      prompt({ clear: false });
+      return;
+    }
+    if (input.trim() === "/usage") {
+      const usage = await readSaddleUsageSummary({ worldRoot: config.worldRoot });
+      writeLine(formatSaddleUsageSummary(usage));
       prompt({ clear: false });
       return;
     }
@@ -483,12 +503,17 @@ async function main() {
     clearRenderedInput(renderedRows);
     writeLine(`you> ${input}`);
     writeLine(`saddle: queued ${model} via ${backend}`);
+    const turnUsages = [];
     try {
       const result = await runSaddleTurn({
         input,
         model,
         backend,
         host,
+        onUsage: (usage) => {
+          turnUsages.push(usage);
+          return usage;
+        },
         onToolCall: async (event) => {
           if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
             writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
@@ -497,6 +522,18 @@ async function main() {
       });
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
       writeLine(`saddle> ${String(text).trim() || "(no response text)"}`);
+      const usage = sumMindUsages(turnUsages);
+      if (usage) {
+        writeLine(formatMindUsage(usage));
+        await appendSaddleUsage({
+          worldRoot: config.worldRoot,
+          turnId: result?.accordingto?.text ?? "",
+          mindName,
+          backend,
+          model,
+          usage
+        }).catch((error) => writeLine(`usage record failed: ${error.message}`));
+      }
     } catch (error) {
       writeLine(`saddle error> ${error?.message ?? error}`);
     } finally {

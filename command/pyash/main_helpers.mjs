@@ -6,6 +6,7 @@ export function usage({ DEFAULT_MATRIX_APPSERVICE_REGISTRATION }) {
     "Usage:",
     "  pyash run <file.pya> [run flags...]",
     "  pyash <file.pya> [run flags...]",
+    "  pyash saddle",
     "  pyash repl",
     "  pyash resume <duty-id>",
     "  pyash configure",

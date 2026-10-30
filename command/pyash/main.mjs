@@ -479,6 +479,7 @@ export async function main() {
   const first=args[0] ?? "";
   if (!first || first === "--help" || first === "-h" || first === "help") return void textOut(usage());
   if (first === "run") return void process.exit(await runNodeScript(runProgramPath, args.slice(1)));
+  if (first === "saddle") return void process.exit(await runNodeScript(saddlePath, []));
   if (first === "resume") {
     if (!args[1]) {
       textOut("Usage: pyash resume <duty-id>");

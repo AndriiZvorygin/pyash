@@ -191,6 +191,19 @@ Session loop cycle:
 4. append session records
 5. surface response or typed error
 
+### 5.1 Mind usage newspaper records
+
+When a selected backend reports token usage on a tool-backed mind call, the
+mind loop MUST normalize the provider fields and expose them as a usage
+observer before surfacing the reply.
+The coding saddle MUST append exactly one flat `be json map` record per completed
+turn to `world/newspaper/*-coding-saddle-usage.pya`. The record name contains
+the stable turn id and the map carries the mind name, backend, model, input,
+cached input, cache-write input, output, reasoning output, total tokens, and
+recording timestamp. Re-observing the same completed turn MUST NOT append a
+duplicate record. Usage records are audit/accounting evidence; they are not
+automatically injected into prompt history.
+
 ## 6. Scheduler and heartbeat
 
 Scheduler controls recurring services.

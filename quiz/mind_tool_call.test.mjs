@@ -82,6 +82,7 @@ test("mind tool chat forwards observed codex tool events without local re-execut
   resetMindLogs();
 
   const observed = [];
+  const usages = [];
   const responseText = await runToolChat({
     sentence: parse('be write ob text "hi" for name helper to name text helper-out do'),
     ob: {},
@@ -99,10 +100,12 @@ test("mind tool chat forwards observed codex tool events without local re-execut
     reasoningEffort: "",
     mindDebug: false,
     debugMind: () => {},
+    onUsage: async (usage) => { usages.push(usage); },
     onToolCall: async (payload) => { observed.push(payload); },
     inputs: {
       inputText: "hi",
       mockResponseRaw: JSON.stringify({
+        usage: { input_tokens: 17, output_tokens: 4, cached_input_tokens: 9 },
         message: {
           content: "done",
           observed_tool_events: [
@@ -128,6 +131,14 @@ test("mind tool chat forwards observed codex tool events without local re-execut
   });
 
   assert.equal(responseText, "done");
+  assert.deepEqual(usages, [{
+    inputTokens: 17,
+    cachedInputTokens: 9,
+    cacheWriteInputTokens: 0,
+    outputTokens: 4,
+    reasoningOutputTokens: 0,
+    totalTokens: 21
+  }]);
   assert.equal(observed.length, 2);
   assert.equal(observed[0]?.stage, "call");
   assert.equal(observed[0]?.toolName, "command");

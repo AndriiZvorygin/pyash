@@ -10,6 +10,7 @@ import { buildToolSentence } from "./tooling.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
+import { normalizeMindUsage } from "./usage.mjs";
 
 function buildPromptText(messages) {
   if (!Array.isArray(messages)) return "";
@@ -210,6 +211,7 @@ export async function runToolChat({
   mindDebug,
   debugMind,
   inputs,
+  onUsage,
   onToolCall,
   checkInterrupted
 } = {}) {
@@ -295,6 +297,14 @@ export async function runToolChat({
       // Tool-call observers are best-effort and should not break response generation.
     }
   };
+  const emitUsage = async (usage) => {
+    if (typeof onUsage !== "function") return;
+    try {
+      await onUsage(usage);
+    } catch {
+      // Usage observers are audit projections and must not break generation.
+    }
+  };
 
   while (turns < maxToolTurns) {
     if (typeof checkInterrupted === "function") {
@@ -331,6 +341,8 @@ export async function runToolChat({
       lastResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
     }
     recordMindJson({ targetName: mindName, label: "response", payload: stripContext(lastResponse) });
+    const usage = normalizeMindUsage(lastResponse?.usage ?? lastResponse?.message?.usage);
+    if (usage) await emitUsage(usage);
     if (mindDebug) {
       // eslint-disable-next-line no-console
       console.error(`[mind debug] ${JSON.stringify({ label: "response", hasToolCalls: Array.isArray(lastResponse?.message?.tool_calls), contentLength: (lastResponse?.message?.content ?? "").length })}`);

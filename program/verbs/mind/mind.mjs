@@ -287,7 +287,8 @@ export async function mind_to_name_text(sentence, {
   onToolCall,
   sessionUserContent = "",
   sessionUserMetadata = null,
-  sessionAssistantMetadata = null
+  sessionAssistantMetadata = null,
+  onUsage
 } = {}) {
   const ob = sentence?.ob ?? {};
   const mindName = sentence?.for?.name ?? sentence?.to?.name ?? sentence?.su?.name ?? "mind";
@@ -743,6 +744,7 @@ export async function mind_to_name_text(sentence, {
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },
+      onUsage,
       onToolCall,
       checkInterrupted: assertNotInterrupted
     });

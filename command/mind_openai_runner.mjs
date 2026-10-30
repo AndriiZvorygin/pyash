@@ -10,6 +10,7 @@ import {
   requestJson,
   requestStream
 } from "../program/motor/openai_mind.mjs";
+import { normalizeMindUsage } from "../program/verbs/mind/usage.mjs";
 import { submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 import {
   createZaiCodexHome,
@@ -140,11 +141,17 @@ function normalizeToolCallPayload(item = {}) {
 function mapCodexEvents(events = []) {
   const observedToolEvents = [];
   const agentMessages = [];
+  let usage = null;
   const seenCallIds = new Set();
   for (const event of events) {
     const type = String(event?.type ?? "").trim();
     const item = event?.item ?? {};
     const itemType = String(item?.type ?? "").trim();
+
+    if (type === "turn.completed") {
+      usage = normalizeMindUsage(event?.usage);
+      continue;
+    }
 
     if (type === "item.completed" && itemType === "agent_message") {
       const text = clipText(item?.text ?? item?.content ?? "");
@@ -214,7 +221,7 @@ function mapCodexEvents(events = []) {
     }
   }
   const responseText = clipText(agentMessages.at(-1) ?? "");
-  return { responseText, observedToolEvents };
+  return { responseText, observedToolEvents, usage };
 }
 
 function tomlString(value = "") {
@@ -253,7 +260,7 @@ async function runCodexFallback(payload = {}, { stream = false, codexHome = "" }
     throw new Error(`codex exec failed: status=${proc.status}${stderr ? ` stderr=${JSON.stringify(stderr)}` : ""}`);
   }
   const events = parseJsonLines(proc.stdout);
-  const { responseText, observedToolEvents } = mapCodexEvents(events);
+  const { responseText, observedToolEvents, usage } = mapCodexEvents(events);
   if (stream) {
     const chunks = responseText.split(/\s+/).filter(Boolean);
     for (const chunk of chunks) {
@@ -264,6 +271,7 @@ async function runCodexFallback(payload = {}, { stream = false, codexHome = "" }
   }
   return {
     response: responseText,
+    ...(usage ? { usage } : {}),
     message: {
       content: responseText,
       observed_tool_events: observedToolEvents

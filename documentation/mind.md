@@ -41,6 +41,11 @@ PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs
 
 This selects the Pyash mind named `zai`, whose defaults are `glm-5.3` and `https://api.z.ai/api/v1`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` selects a model for the active mind. Other minds continue using their existing configuration. GLM-5.3 is text-only; the model can still use the Pyash tools exposed through the Codex MCP bridge.
 
+The Codex route preserves the CLI's `turn.completed` token accounting. The
+saddle prints that total after each reply and appends a durable usage map to the
+coding-saddle usage newspaper. `/usage` aggregates those records by mind and
+model; it is Pyash-local accounting and does not alter Codex's own `/usage`.
+
 Durable `be gpu mind` jobs include a Housekeeper `resourceRequest.vramRequiredMb` by default (12,000 MiB). Set `PYA_OLLAMA_VRAM_REQUIRED_MB` or `PYA_GPU_VRAM_REQUIRED_MB` to adjust the default, or provide `resourceRequest.vramRequiredMb` in the job map. This declaration lets the Housekeeper safely reclaim idle managed runtimes before loading the requested model.
 
 ## Optional Local Strata Backend

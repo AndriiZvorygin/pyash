@@ -15,6 +15,9 @@ From the repository root, start a local interactive coding session:
 node command/pyash_saddle.mjs
 ```
 
+After installing the repository with `npm link`, the same surface is available
+as `pyash saddle`.
+
 The default mind/model/host come from `configure/default.pya`. Select another
 configured Pyash mind interactively with `/mind <name>`. Local startup
 overrides may be supplied through `PYA_SADDLE_MIND`, `PYA_SADDLE_MODEL`,
@@ -50,9 +53,10 @@ Enter submits the current request. Shift+Enter inserts a newline on terminals
 that report the standard modified-key sequence; `Ctrl+J` is the portable
 newline fallback. `Ctrl+C` writes the existing Pyash mind-interrupt signal and
 `Ctrl+D` exits. `/status`, `/mind [name]`, `/model <name>`, `/host <url>`,
-`/discharge`, and `/exit` are local saddle commands. `/mind` lists configured
-Pyash minds; `/mind zai` and `/mind openai` switch the active mind. `/model`
-changes the model within that mind.
+`/usage`, `/discharge`, and `/exit` are local saddle commands. `/mind` lists
+configured Pyash minds; `/mind zai` and `/mind openai` switch the active mind.
+`/model` changes the model within that mind. `/usage` aggregates durable token
+records from the selected world, including Z.AI GLM turns that report usage.
 
 ## Durable state
 

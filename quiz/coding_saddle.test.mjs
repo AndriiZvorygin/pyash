@@ -68,13 +68,23 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
 
 test("coding saddle delegates turns to the existing mind engine", async () => {
   let observed = null;
+  let observedUsage = null;
   const result = await runSaddleTurn({
     input: "run the focused test",
     model: "qwen3.5:9b",
     backend: "ollama",
     host: "http://localhost:11434",
+    onUsage: (usage) => {
+      observedUsage = usage;
+      return usage;
+    },
     mindFn: async (sentence, options) => {
       observed = { sentence, options };
+      await options.onUsage?.({
+        input_tokens: 10,
+        output_tokens: 4,
+        cached_input_tokens: 2
+      });
       return { mood: "ya", be: "text", ob: { text: "done" } };
     }
   });
@@ -83,6 +93,15 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   assert.equal(observed.sentence.ob.text, "run the focused test");
   assert.equal(observed.sentence.fromstate.text, "ollama");
   assert.equal(observed.options.sessionUserContent, "run the focused test");
+  assert.equal(typeof observed.options.onUsage, "function");
+  assert.deepEqual(observedUsage, {
+    inputTokens: 10,
+    cachedInputTokens: 2,
+    cacheWriteInputTokens: 0,
+    outputTokens: 4,
+    reasoningOutputTokens: 0,
+    totalTokens: 14
+  });
 });
 
 test("duty saddle keeps runtime root separate from its persistent world root", async () => {

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { processDutyAssignment, resolveDutyWorkerConfig, runDutyWorker } from "../command/pyash_duty_worker.mjs";
+import { readSaddleUsageRecords } from "../program/agent/coding_saddle_usage.mjs";
 
 test("duty worker requires secure hub configuration and a repository allowlist", () => {
   assert.throws(() => resolveDutyWorkerConfig({}), /PYA_DUTY_HUB_URL/u);
@@ -98,6 +99,7 @@ test("worker resumes the assigned duty session and returns its result to the hub
       },
       mindFn: async (sentence, options) => {
         assert.equal(options.sessionUserMetadata.payloadId, "message-1");
+        await options.onUsage?.({ input_tokens: 11, output_tokens: 3 });
         await fs.appendFile(sentence.fromtext.filename, "worker turn recorded\n", "utf8");
         return { ob: { text: "The project is ready for inspection." } };
       },
@@ -112,6 +114,12 @@ test("worker resumes the assigned duty session and returns its result to the hub
     assert.equal(sent[0].headers.authorization, "Bearer secret");
     assert.equal(sent[0].body.text, "The project is ready for inspection.");
     assert.match(sent[0].body.sessionText, /worker turn recorded/u);
+    const usageRecords = await readSaddleUsageRecords({ worldRoot: path.join(stateRoot, "world") });
+    assert.equal(usageRecords.length, 1);
+    assert.equal(usageRecords[0].turnId, "message-1");
+    assert.equal(usageRecords[0].mindName, "coding duty");
+    assert.equal(usageRecords[0].usage.inputTokens, 11);
+    assert.equal(usageRecords[0].usage.totalTokens, 14);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

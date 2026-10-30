@@ -41,6 +41,7 @@ fs.writeFileSync(process.env.PYA_ZAI_PROBE, JSON.stringify({
   correctBaseUrl: config.includes('https://api.z.ai/api/v1')
 }));
 process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "GLM route reached Codex CLI" } }) + "\\n");
+process.stdout.write(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 101, cached_input_tokens: 41, cache_write_input_tokens: 2, output_tokens: 23, reasoning_output_tokens: 7 } }) + "\\n");
 `);
   await fs.chmod(fakeCodexPath, 0o700);
   try {
@@ -58,6 +59,14 @@ process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "age
     assert.equal(result.code, 0, result.stderr);
     const answer = JSON.parse(result.stdout.trim());
     assert.equal(answer.response, "GLM route reached Codex CLI");
+    assert.deepEqual(answer.usage, {
+      inputTokens: 101,
+      cachedInputTokens: 41,
+      cacheWriteInputTokens: 2,
+      outputTokens: 23,
+      reasoningOutputTokens: 7,
+      totalTokens: 124
+    });
     const probe = JSON.parse(await fs.readFile(probePath, "utf8"));
     assert.equal(probe.model, "glm-5.3");
     assert.equal(probe.hasCodingKey, true);
