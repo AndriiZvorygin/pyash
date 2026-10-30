@@ -313,6 +313,29 @@ export function linkEnglishWordNetSense({
     return { ...record, status: "accepted-existing", link: existing };
   }
   record.candidates = directCandidates(record, resolveWord, wordnetIndex, edgeDegreeLimit(edgeMaxDegree));
+  const sourceCoverage = typeof resolveWord === "function" ? resolveWord(sourceTerm) : null;
+  const aliasTarget = normalized(sourceCoverage?.canonicalEnglish);
+  if (sourceCoverage?.coverageType === "dictionary-alias"
+    && aliasTarget
+    && record.lemmas.includes(aliasTarget)) {
+    const aliasSequence = sequence(sourceCoverage.pyashSequence);
+    const aliasCandidate = record.candidates.find((candidate) => (
+      candidate.sourceLemmas.includes(aliasTarget)
+      && sequenceKey(candidate.pyashSequence) === sequenceKey(aliasSequence)
+    ));
+    if (aliasCandidate) {
+      return {
+        ...record,
+        status: "accepted-deterministic",
+        link: {
+          ...aliasCandidate,
+          certainty: "deterministic",
+          evidence: `dictionary alias ${normalized(sourceTerm)} resolves to ${aliasTarget}, a lemma of selected WordNet sense ${source}`,
+          edgeEligible: false
+        }
+      };
+    }
+  }
   return { ...record, ...selectDirectLink(record, [sourceTerm]) };
 }
 
