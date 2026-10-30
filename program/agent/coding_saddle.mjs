@@ -335,6 +335,8 @@ export function buildSaddleMindSentence({
 export function formatSaddleStatus({
   mindName = "mind",
   model,
+  backend = "",
+  housekeeperUrl = "",
   contextWindow,
   thinkMode,
   host,
@@ -343,9 +345,14 @@ export function formatSaddleStatus({
   busy = false,
   session = "coding"
 } = {}) {
-  const queueValue = queue && typeof queue === "object"
-    ? (Number(queue.total ?? queue.runtime ?? queue.input ?? 0) || 0)
-    : Number(queue ?? 0) || 0;
+  const queueValue = queue?.available === false
+    ? "unavailable"
+    : queue && typeof queue === "object" && (queue.queuedCount !== undefined || queue.runningCount !== undefined)
+      ? `${Number(queue.queuedCount ?? 0) || 0} queued, ${Number(queue.runningCount ?? 0) || 0} running`
+      : queue && typeof queue === "object"
+        ? (Number(queue.total ?? queue.runtime ?? queue.input ?? queue.queueDepth ?? 0) || 0)
+        : Number(queue ?? 0) || 0;
+  const localBackend = ["ollama", "strata"].includes(normalizeSaddleBackend(backend));
   return [
     `mind: ${normalizeText(mindName) || "mind"}`,
     `model: ${normalizeSaddleModel(model)}`,
@@ -353,7 +360,12 @@ export function formatSaddleStatus({
       ? [`context: ${Number(contextWindow).toLocaleString("en-CA")} tokens`]
       : []),
     ...(normalizeText(thinkMode) ? [`thinking: ${normalizeText(thinkMode)}`] : []),
-    `host: ${normalizeSaddleHost(host)}`,
+    ...(localBackend
+      ? [
+        `route: GPU Housekeeper ${normalizeText(housekeeperUrl) || "(not configured)"}`,
+        `provider host: ${normalizeSaddleHost(host)}`
+      ]
+      : [`host: ${normalizeSaddleHost(host)}`]),
     `session: ${normalizeText(session) || "coding"}`,
     `cwd: ${path.resolve(String(cwd || process.cwd()))}`,
     `gpu queue: ${queueValue}`,

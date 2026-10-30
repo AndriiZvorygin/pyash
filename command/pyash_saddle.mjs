@@ -404,21 +404,35 @@ async function main() {
   let promptLabel = "pyash> ";
   let renderedRows = 1;
 
+  const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
   const showStatus = async () => {
-    const queue = await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
-    writeLine(formatSaddleStatus({ mindName, model, contextWindow, thinkMode: thinkSetting?.value, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
+    const queue = isLocalModelBackend(backend)
+      ? await saddleHousekeeper().getQueue().catch(() => ({ available: false }))
+      : await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
+    writeLine(formatSaddleStatus({
+      mindName,
+      model,
+      backend,
+      housekeeperUrl: config.housekeeperUrl,
+      contextWindow,
+      thinkMode: thinkSetting?.value,
+      host,
+      cwd: config.cwd,
+      queue,
+      busy,
+      session: SESSION_NAME
+    }));
   };
   const prompt = ({ clear = true, label = promptLabel } = {}) => {
     promptLabel = label;
     renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear, label });
   };
-  const strataHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
   const applyStrataContext = async (tokens) => {
     busy = true;
     writeLine(`Housekeeper is reconfiguring Strata to ${formatZaiContextWindow(tokens)} and restarting its lazy server...`);
     prompt({ clear: false, label: "restarting Strata> " });
     try {
-      const result = await strataHousekeeper().setStrataContext({ contextLength: tokens });
+      const result = await saddleHousekeeper().setStrataContext({ contextLength: tokens });
       contextWindow = Number(result.contextLength || tokens);
       writeLine(`Strata context: ${formatZaiContextWindow(contextWindow)}; Housekeeper verified the restart; model remains unloaded until its next request`);
     } catch (error) {
@@ -480,7 +494,7 @@ async function main() {
   const showContextPicker = async () => {
     if (backend === "strata") {
       try {
-        const status = await strataHousekeeper().getStrataContext();
+        const status = await saddleHousekeeper().getStrataContext();
         contextWindow = Number(status.contextLength || 0) || null;
         contextPicker = buildSaddleStrataContextOptions({
           options: status.options,
@@ -570,8 +584,6 @@ async function main() {
         reason: "terminal exit"
       }).catch(() => {});
     }
-    await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
-      .catch((error) => writeLine(`discharge: ${error.message}`));
     if (process.stdin.isRaw) process.stdin.setRawMode(false);
     process.stdin.pause();
     writeLine("saddle closed");
@@ -711,7 +723,7 @@ async function main() {
       }
       if (backend === "strata") {
         try {
-          const status = await strataHousekeeper().getStrataContext();
+          const status = await saddleHousekeeper().getStrataContext();
           const choices = buildSaddleStrataContextOptions({
             options: status.options,
             currentContextLength: status.contextLength,

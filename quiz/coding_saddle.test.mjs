@@ -252,16 +252,19 @@ test("coding saddle status exposes selected Pyash mind and queue state", () => {
   const status = formatSaddleStatus({
     mindName: "stratahelper",
     model: "qwen3.8:27b",
+    backend: "strata",
+    housekeeperUrl: "http://localhost:18886",
     host: "http://swac:8090",
     cwd: "/tmp/project",
-    queue: { total: 3 },
+    queue: { queueDepth: 3, queuedCount: 0, runningCount: 3 },
     busy: true
   });
 
   assert.match(status, /mind: stratahelper/);
   assert.match(status, /model: qwen3\.8:27b/);
-  assert.doesNotMatch(status, /backend:/);
-  assert.match(status, /gpu queue: 3/);
+  assert.match(status, /route: GPU Housekeeper http:\/\/localhost:18886/);
+  assert.match(status, /provider host: http:\/\/swac:8090/);
+  assert.match(status, /gpu queue: 0 queued, 3 running/);
   assert.match(status, /state: running/);
 });
 
