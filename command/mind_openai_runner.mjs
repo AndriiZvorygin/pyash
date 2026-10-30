@@ -14,6 +14,7 @@ import { submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 import {
   createZaiCodexHome,
   removeZaiCodexHome,
+  resolveZaiApiKey,
   resolveZaiCodingApiKey
 } from "../program/runtime/zai_coding_plan.mjs";
 
@@ -281,7 +282,7 @@ async function main() {
   if (zaiCodex) {
     const apiKey = resolveZaiCodingApiKey();
     if (!apiKey) {
-      throw new Error("Z.AI Coding Plan key missing: set Z_AI_CODING_API_KEY in configure/.env");
+      throw new Error("Z.AI Coding Plan key missing: add `exists su name zai coding api key ob text \"...\" be default ya` to configure/secret.pya");
     }
     let codexHome = "";
     try {
@@ -300,10 +301,25 @@ async function main() {
   }
 
   const host = resolveHost(payload);
+  let hostName = "";
+  try {
+    hostName = new URL(host).hostname.toLowerCase();
+  } catch {
+    // resolveHost validation reports malformed endpoints in the request path.
+  }
+  const explicitApiKey = String(payload.apiKey ?? "").trim();
+  const usesZaiApi = !strata && hostName === "api.z.ai";
+  const zaiApiKey = usesZaiApi ? resolveZaiApiKey() : "";
+  if (usesZaiApi && !explicitApiKey && !zaiApiKey) {
+    throw new Error("Z.AI API key missing: add `exists su name zai api key ob text \"...\" be default ya` to configure/secret.pya");
+  }
+  const providerPayload = !explicitApiKey && usesZaiApi
+    ? { ...payload, apiKey: zaiApiKey }
+    : payload;
   const strataKey = [payload.apiKey, process.env.STRATA_API_KEY]
     .map((value) => String(value ?? "").trim())
     .find(Boolean);
-  const apiKey = strata ? (strataKey || "pyash-local") : resolveApiKey({ host, payload });
+  const apiKey = strata ? (strataKey || "pyash-local") : resolveApiKey({ host, payload: providerPayload });
   if (!apiKey && !strata) {
     const fallback = await runCodexFallback(payload, { stream: payload.stream === true });
     if (fallback) process.stdout.write(`${JSON.stringify(fallback)}\n`);

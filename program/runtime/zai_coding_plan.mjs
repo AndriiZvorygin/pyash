@@ -2,49 +2,26 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readPyaTextValues } from "../library/pya_config.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const codingKeyNames = ["Z_AI_CODING_API_KEY", "Z_A_CODING_API_KEY", "ZAI_CODING_API_KEY"];
+const defaultSecretPath = path.join(repoRoot, "configure/secret.pya");
 
-function unquoteEnvValue(raw = "") {
-  const value = String(raw).trim();
-  if (value.length >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-    try {
-      return String(JSON.parse(value));
-    } catch {
-      return value.slice(1, -1);
-    }
-  }
-  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1);
-  return value.replace(/\s+#.*$/u, "").trim();
+function readSecretValue(secretFilePath, name) {
+  return String(readPyaTextValues(secretFilePath, [name])[name] || "").trim();
 }
 
-export function parseEnvFile(text = "") {
-  const values = {};
-  for (const line of String(text).split(/\r?\n/u)) {
-    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/u);
-    if (!match || match[1].startsWith("#")) continue;
-    values[match[1]] = unquoteEnvValue(match[2]);
-  }
-  return values;
+export function resolveZaiApiKey({ env = process.env, secretFilePath = defaultSecretPath } = {}) {
+  return String(env?.Z_AI_API_KEY ?? "").trim() || readSecretValue(secretFilePath, "zai api key");
 }
 
-export function resolveZaiCodingApiKey({ env = process.env, envFilePath = path.join(repoRoot, "configure/.env") } = {}) {
+export function resolveZaiCodingApiKey({ env = process.env, secretFilePath = defaultSecretPath } = {}) {
   for (const keyName of codingKeyNames) {
     const value = String(env?.[keyName] ?? "").trim();
     if (value) return value;
   }
-  let fileValues = {};
-  try {
-    fileValues = parseEnvFile(fs.readFileSync(envFilePath, "utf8"));
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  for (const keyName of codingKeyNames) {
-    const value = String(fileValues[keyName] ?? "").trim();
-    if (value) return value;
-  }
-  return "";
+  return readSecretValue(secretFilePath, "zai coding api key");
 }
 
 function quoted(value) {

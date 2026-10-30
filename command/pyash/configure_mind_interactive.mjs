@@ -97,7 +97,7 @@ export function createCollectMindInteractive(deps) {
         textOut("- GPU note: Strata calls the local Pyash GPU Housekeeper before each model load.");
       }
       if (selectedChoice?.key === "zai") {
-        textOut("- auth note: set Z_AI_CODING_API_KEY in configure/.env; this uses the documented Codex CLI Responses integration.");
+        textOut("- auth note: configure `zai coding api key` in configure/secret.pya; this uses the documented Codex CLI Responses integration.");
       }
 
       printer.header("B.1 Provider Endpoint");

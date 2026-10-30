@@ -6,20 +6,27 @@ import path from "node:path";
 
 import {
   createZaiCodexHome,
-  parseEnvFile,
   removeZaiCodexHome,
+  resolveZaiApiKey,
   resolveZaiCodingApiKey
 } from "../program/runtime/zai_coding_plan.mjs";
 
-test("Z.AI Coding Plan key stays distinct from the standard API key", () => {
-  const envFilePath = path.join(os.tmpdir(), `pyash-zai-env-${process.pid}`);
-  fs.writeFileSync(envFilePath, "Z_AI_API_KEY=standard-key\nZ_AI_CODING_API_KEY='coding-plan-key'\n");
+test("Z.AI standard and Coding Plan keys resolve from distinct Pyash secret facts", () => {
+  const secretFilePath = path.join(os.tmpdir(), `pyash-zai-secret-${process.pid}.pya`);
+  fs.writeFileSync(secretFilePath, [
+    'exists su name zai api key ob text "standard-key" be default ya',
+    'exists su name zai coding api key ob text "coding-plan-key" be default ya',
+    ""
+  ].join("\n"), { mode: 0o600 });
   try {
-    assert.equal(resolveZaiCodingApiKey({ env: {}, envFilePath }), "coding-plan-key");
-    assert.equal(resolveZaiCodingApiKey({ env: { Z_AI_CODING_API_KEY: "runtime-key" }, envFilePath }), "runtime-key");
-    assert.equal(resolveZaiCodingApiKey({ env: { Z_AI_API_KEY: "standard-key" }, envFilePath: `${envFilePath}.missing` }), "");
+    assert.equal(resolveZaiApiKey({ env: {}, secretFilePath }), "standard-key");
+    assert.equal(resolveZaiApiKey({ env: { Z_AI_API_KEY: "runtime-standard" }, secretFilePath }), "runtime-standard");
+    assert.equal(resolveZaiCodingApiKey({ env: {}, secretFilePath }), "coding-plan-key");
+    assert.equal(resolveZaiCodingApiKey({ env: { Z_AI_CODING_API_KEY: "runtime-coding" }, secretFilePath }), "runtime-coding");
+    assert.equal(resolveZaiCodingApiKey({ env: { Z_AI_API_KEY: "standard-key" }, secretFilePath: `${secretFilePath}.missing` }), "");
+    assert.equal(resolveZaiApiKey({ env: { Z_AI_CODING_API_KEY: "coding-plan-key" }, secretFilePath: `${secretFilePath}.missing` }), "");
   } finally {
-    fs.rmSync(envFilePath, { force: true });
+    fs.rmSync(secretFilePath, { force: true });
   }
 });
 
@@ -48,10 +55,4 @@ test("isolated Codex profile uses Z.AI Responses and trusts only the active proj
     removeZaiCodexHome(home);
   }
   assert.equal(fs.existsSync(home), false);
-});
-
-test("dotenv parser handles quoted credentials without evaluating shell text", () => {
-  const parsed = parseEnvFile('Z_AI_CODING_API_KEY="abc\\ndef"\nexport OTHER=value # comment\n');
-  assert.equal(parsed.Z_AI_CODING_API_KEY, "abc\ndef");
-  assert.equal(parsed.OTHER, "value");
 });

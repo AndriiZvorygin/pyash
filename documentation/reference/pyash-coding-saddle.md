@@ -20,8 +20,9 @@ overrides may be supplied through `PYA_SADDLE_MODEL`, `PYA_SADDLE_BACKEND`,
 `PYA_SADDLE_HOST`, and `PYA_SADDLE_CWD`; these select an existing provider and
 coding root, they do not start a separate model runtime.
 
-For the Z.AI GLM Coding Plan, place `Z_AI_CODING_API_KEY` in the ignored,
-permission-restricted `configure/.env`, then launch with
+For the Z.AI GLM Coding Plan, add `exists su name zai coding api key ob text
+"<your key>" be default ya` to the ignored, permission-restricted
+`configure/secret.pya`, then launch with
 `PYA_SADDLE_BACKEND=zai node command/pyash_saddle.mjs`. The saddle defaults to
 `glm-5.3` and Z.AI's Responses API endpoint for this backend. This uses the
 official Codex CLI route through Pyash's existing mind tools; see
