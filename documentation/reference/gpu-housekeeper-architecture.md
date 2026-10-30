@@ -123,6 +123,10 @@ Housekeeper snapshots advertise protocol capabilities; model provisioning is
 forwarded only to peers that advertise `ollamaModelProvisioning`, so an older
 peer cannot receive an unsupported `ollama-ensure-model` job.
 Different physical devices can execute concurrently without sharing a gate.
+For inference routing, an eligible warm model host is preferred over a cold
+host that could start immediately. A warm peer whose execution slot is occupied
+can accept the duty and wait behind its device gate; the gate serializes
+execution while preserving the resident model.
 
 `/queue` lists queued and running jobs with `source` metadata and the selected
 `executionHostId`; `/job/<id>` includes the same source record plus the Pyash

@@ -2662,6 +2662,26 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertTrue(route["forwarded"])
     self.assertEqual(route["selected"]["hostId"], "swac")
 
+  def test_route_queues_on_warm_peer_ahead_of_cold_immediate_candidate(self):
+    server.configured_peers = lambda: {"macstudio": "http://macstudio:18886"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True,
+      "score": 30, "warm": False, "estimatedLoadSeconds": 22.0
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": False,
+      "busy": True, "score": 120, "warm": True, "queueDepth": 1,
+      "estimatedLoadSeconds": 0
+    }
+
+    route = server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
+    )
+
+    self.assertTrue(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "macstudio")
+
   def test_pya_load_observations_are_durable_and_estimate_median(self):
     with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {"GPU_HOUSEKEEPER_PYA_DIR": observation_dir}):
       server.record_model_loading(

@@ -1162,13 +1162,17 @@ def select_route(
         }
       candidates.append(candidate)
 
-  immediate = [item for item in candidates if item.get("available") and item.get("immediate")]
-  if immediate:
-    load_comparable = len(immediate) > 1 and all(
+  available = [item for item in candidates if item.get("available")]
+  warm = [item for item in available if item.get("warm") is True]
+  immediate = [item for item in available if item.get("immediate")]
+  preferred = warm or immediate
+  if preferred:
+    load_comparable = len(preferred) > 1 and all(
       item.get("warm") is True or isinstance(item.get("estimatedLoadSeconds"), (int, float))
-      for item in immediate
+      for item in preferred
     )
-    selected = max(immediate, key=lambda item: (
+    selected = max(preferred, key=lambda item: (
+      bool(item.get("immediate")),
       int(item.get("score") or 0),
       -float(item.get("estimatedLoadSeconds") or 0) if load_comparable else 0,
       item.get("hostId") == host_id
