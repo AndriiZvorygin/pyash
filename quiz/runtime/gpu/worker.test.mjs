@@ -236,6 +236,16 @@ test("bounded GPU worker batch fans out independent duties through the existing 
 
   let active = 0;
   let maximum = 0;
+  let arrived = 0;
+  let releaseGate = () => {};
+  const gate = new Promise((resolve) => {
+    releaseGate = resolve;
+  });
+  // The gate only opens once every duty has reached the adapter, so the
+  // overlap is measured deterministically. Racing a fixed sleep instead makes
+  // the assertion depend on how fast the machine happens to do file work.
+  const gateSafety = setTimeout(() => releaseGate(), 15000);
+  const expectedConcurrency = 10;
   const result = await runGpuWorkerBatch({
     worldRoot,
     concurrency: 10,
@@ -248,16 +258,20 @@ test("bounded GPU worker batch fans out independent duties through the existing 
       async getJobStatus() {
         active += 1;
         maximum = Math.max(maximum, active);
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        arrived += 1;
+        if (arrived >= expectedConcurrency) releaseGate();
+        await gate;
         active -= 1;
         return { status: "success", result: { response: "ok" } };
       }
     }
   });
+  clearTimeout(gateSafety);
 
   assert.equal(result.received, 10);
   assert.equal(result.handled, 10);
-  assert.equal(maximum, 10);
+  assert.equal(arrived, expectedConcurrency, "every duty should reach the adapter exactly once");
+  assert.equal(maximum, expectedConcurrency, "all duties should be in flight at the same time");
   assert.equal((await queueDepth(worldRoot)).total, 0);
 });
 
