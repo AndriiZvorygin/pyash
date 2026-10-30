@@ -149,6 +149,7 @@ test("accepted occurrence sense resumes without re-submitting to the selector", 
   assert.equal(submissions, 1);
   assert.equal(resumed.queues.length, 0);
   assert.equal(resumed.records[0].selectedSenseId, first.records[0].selectedSenseId);
+  assert.equal(resumed.records[0].selectedSenseWord, "florp");
   assert.equal(resumed.records[0].occurrenceId, first.records[0].occurrenceId);
 });
 
@@ -406,6 +407,7 @@ test("selected WordNet senses become bounded anchor candidates", () => {
   assert.equal(translation.vocabularyCandidates.length, 1);
   assert.equal(translation.vocabularyCandidates[0].kind, "wordnet-sense-attachment");
   assert.equal(translation.vocabularyCandidates[0].senseId, "v:01775456");
+  assert.equal(translation.vocabularyCandidates[0].senseWord, "feel");
   assert.equal(translation.vocabularyCandidates[0].sense.gloss, "undergo an emotional state");
   assert.deepEqual(translation.vocabularyCandidates[0].sense.lemmas, ["feel", "experience"]);
   assert.deepEqual(translation.vocabularyCandidates[0].anchorCandidates[0].pyashSequence, ["nrec"]);
