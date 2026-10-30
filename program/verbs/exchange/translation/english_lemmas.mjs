@@ -7,7 +7,7 @@ export const ENGLISH_LEMMA_FORMAT = "english-lemma-v1";
 export const ENGLISH_LEMMA_NAME = "translation_english30k_lemmas";
 
 const ACCEPTED_STATUSES = new Set(["accepted-deterministic", "accepted-curated", "accepted-llm", "repaired-llm"]);
-const MAPPING_KINDS = new Set(["irregular", "inflectional", "anchor"]);
+const MAPPING_KINDS = new Set(["irregular", "inflectional", "derivational", "anchor"]);
 const MORPHOLOGY_KINDS = new Set([
   "finite-past",
   "finite-present",
@@ -320,7 +320,8 @@ export function buildEnglishLemmaIndex({
     ["anchor", 0],
     ["irregular", 1],
     ["identity", 2],
-    ["inflectional", 3]
+    ["derivational", 3],
+    ["inflectional", 4]
   ]);
   const preferredSurfaceForSequence = (sequence) => {
     if (!Array.isArray(sequence) || sequence.length === 0) return "";
