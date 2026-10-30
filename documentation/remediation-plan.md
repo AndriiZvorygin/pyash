@@ -125,6 +125,24 @@ This plan fixes the enforcement gaps rather than the design. The language design
 is sound; what is missing is the machinery that keeps the repo honest as it
 grows.
 
+## Phase 1 findings
+
+**The prose guard flagged its own documentation.** The check shipped in
+`7a5afffa` and was reported as passing, but it had never actually been run
+against the two files added in that same commit: `AGENTS.md` and the
+doc-integrity skill both quote corrupted passages on purpose, and the guard
+had no way to tell an example from an accident. It has been failing since it
+was added.
+
+The fix gives the guard an explicit, visible escape hatch: a line carrying
+`prose-check: ignore` outside inline code spans is exempt, and exempt lines
+are counted in the output so they never hide silently. The rules are pinned by
+`quiz/doc_prose_guard.test.mjs`, which also checks that the guard still
+catches a deliberately reintroduced corruption.
+
+The skill's claim that "both defects are still present in
+`documentation/design.md`" was also stale — they were repaired in `7a5afffa`.
+
 ## Findings this plan is based on
 
 | # | Finding | Evidence |

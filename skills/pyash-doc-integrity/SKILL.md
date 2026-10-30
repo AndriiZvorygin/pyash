@@ -17,24 +17,36 @@ also ordinary English words, so a blanket replace hits prose too.
 Observed instance: commit `28b392eb` ("migrate loops to sequence registers")
 replaced `until` with `toindex` across 44 files, which rewrote sentences like
 "remain as history until garbage collection chooses to purge them" into
-"remain as history toindex garbage collection chooses to purge them".
+"remain as history toindex garbage collection chooses to purge them". <!-- prose-check: ignore -->
 
 A later commit (`9a665afe`, "normalize su ob and update signatures") replaced
 `subj`/`obj` with `su`/`ob`, which mangled the design doc phrase
-"The subject (`su` / `subj`)" into "The subject (`su` / `su`)".
+"The subject (`su` / `subj`)" into "The subject (`su` / `su`)". <!-- prose-check: ignore -->
 
-Both defects are still present in `documentation/design.md`.
+Both defects were repaired in `documentation/design.md` by commit `7a5afffa`;
+the originals were recovered from git history with `git log -L`.
 
 ## Audit commands
 
-Find prose that swallowed a keyword:
+Run the guard first — it detects both shapes and is wired into CI:
+
+```bash
+node command/check_doc_prose.mjs
+```
+
+A line that quotes a corrupted passage on purpose opts out with
+`prose-check: ignore` on the same line. The marker is read outside inline code
+spans, so put it in an HTML comment rather than in backticks. Exempt lines are
+counted in the output, so an exemption never hides silently.
+
+To search by hand:
 
 ```bash
 # keyword sitting between two lowercase words = prose corruption
 git grep -nE '\b[a-z]+ (until|toindex|fromindex|subj|obj) [a-z]+' -- '*.md' '*.txt'
 ```
 
-Find the tell-tale `su` / `su` or `obj` / `obj` duplication:
+Find the tell-tale `su` / `su` or `obj` / `obj` duplication: <!-- prose-check: ignore -->
 
 ```bash
 git grep -nE '\((or )?`(su|obj)`\)' -- '*.md'

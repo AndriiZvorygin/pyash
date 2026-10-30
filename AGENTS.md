@@ -19,7 +19,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - `node command/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
 - `node command/pya_to_json.mjs path/to/file.pya --pretty` converts `.pya` to JSON (`memory`, `sandpits`, and indexed names) for robust machine reads.
 - `node command/vocab_suggest.mjs examples/pyash` checks files for non-Pyash vocabulary and suggests replacements; `node command/vocab_suggest.mjs "word"` checks a proposed token without scanning files.
-- `node command/check_doc_prose.mjs` guards documentation against prose corrupted by bulk keyword replacement (a keyword between two lowercase words, or a duplicated alias such as `` `su` / `su` ``). Run it after any vocabulary or alias rename.
+- `node command/check_doc_prose.mjs` guards documentation against prose corrupted by bulk keyword replacement (a keyword between two lowercase words, or a duplicated alias such as `` `su` / `su` ``). Run it after any vocabulary or alias rename. <!-- prose-check: ignore -->
 - `node command/audit_examples.mjs` executes every `examples/pyash/*.pya` through the real runner and reports `passed` / `needs input` / `needs backend` / `failed`. Use it to catch example drift.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 

@@ -14,8 +14,18 @@
 //
 // Usage: node command/check_doc_prose.mjs [paths...]
 // Exit code: 0 when clean, 1 when corruption is found.
+//
+// A line that quotes a corrupted passage on purpose is exempt. Mark it with
+// `prose-check: ignore` on the same line, usually inside an HTML comment, so
+// the exemption is visible to a reviewer:
+//
+//   "remain as history toindex garbage collection chooses to purge them".
+//   <!-- prose-check: ignore -->
+//
+// Exempt lines are counted and reported, so they never hide silently.
 
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -73,19 +83,36 @@ const patterns = targets.length
   : ["*.md", "*.txt"];
 
 const files = [];
+const seen = new Set();
+const addFile = (file) => {
+  const absolute = path.resolve(root, file);
+  const relative = path.relative(root, absolute).split(path.sep).join("/");
+  const insideRepo = relative !== ".." && !relative.startsWith("../");
+  if (insideRepo && isExcluded(relative)) return;
+  const key = insideRepo ? relative : absolute;
+  if (seen.has(key)) return;
+  seen.add(key);
+  files.push(key);
+};
 for (const pattern of patterns) {
+  // An explicit path is checked as given; a pattern is expanded through git.
+  if (fs.existsSync(path.resolve(root, pattern)) && fs.statSync(path.resolve(root, pattern)).isFile()) {
+    addFile(pattern);
+    continue;
+  }
   for (const line of gitLines(["ls-files", "--", pattern])) {
-    if (!isExcluded(line)) files.push(line);
+    addFile(line);
   }
 }
 
 const findings = [];
+const exempt = [];
 
 for (const file of files) {
   // Read the working tree, so uncommitted edits are checked too.
   let content = [];
   try {
-    content = execFileSync("cat", [path.join(root, file)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n");
+    content = execFileSync("cat", [path.resolve(root, file)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n");
   } catch {
     continue;
   }
@@ -98,6 +125,15 @@ for (const file of files) {
       return;
     }
     if (inFence) return;
+
+    // A line that quotes a corrupted passage on purpose opts out. The marker
+    // is read outside inline code spans, so a line that merely documents the
+    // marker does not exempt itself.
+    const withoutCode = line.replace(/`[^`]*`/gu, "``");
+    if (withoutCode.includes("prose-check: ignore")) {
+      exempt.push({ file, line: index + 1 });
+      return;
+    }
 
     // Shape 2: a duplicated alias token, "`su` / `su`".
     const aliasPattern = new RegExp("`(" + ALIAS_TOKENS.join("|") + ")`\\s*/\\s*`\\1`", "u");
@@ -117,7 +153,8 @@ for (const file of files) {
 }
 
 if (findings.length === 0) {
-  console.log(`doc prose check: pass (${files.length} files scanned)`);
+  const exemptNote = exempt.length > 0 ? `, ${exempt.length} exempt line(s)` : "";
+  console.log(`doc prose check: pass (${files.length} files scanned${exemptNote})`);
   process.exit(0);
 }
 
