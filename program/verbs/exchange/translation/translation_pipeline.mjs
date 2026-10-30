@@ -147,6 +147,7 @@ export function projectTranslationSentence(record) {
   }
   if (record?.construction) projection.construction = record.construction;
   if (record?.existential) projection.existential = record.existential;
+  if (record?.phraseCoordination) projection.phraseCoordination = record.phraseCoordination;
   if (Array.isArray(record?.reviewReasons) && record.reviewReasons.length > 0) {
     projection.reviewReasons = [...record.reviewReasons];
   }
@@ -536,6 +537,33 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     ...(structural && !sentence ? { structuralPreview: structural } : {}),
     ...(analysis.construction ? { construction: analysis.construction } : {}),
     ...(analysis.existential ? { existential: analysis.existential } : {}),
+    ...(analysis.phraseCoordination ? {
+      phraseCoordination: {
+        kind: text(analysis.phraseCoordination.kind),
+        scope: text(analysis.phraseCoordination.scope),
+        evidence: text(analysis.phraseCoordination.evidence),
+        items: (analysis.phraseCoordination.items ?? []).map((item) => ({
+          surface: text(item?.surface),
+          start: Number.isInteger(item?.start) ? item.start : null,
+          end: Number.isInteger(item?.end) ? item.end : null,
+          startOffset: Number.isInteger(item?.startOffset) ? item.startOffset : null,
+          endOffset: Number.isInteger(item?.endOffset) ? item.endOffset : null,
+          separator: text(item?.separator) || null,
+          ...(item?.connector ? {
+            connector: {
+              surface: text(item.connector.surface),
+              pyashSequence: cloneSequence(item.connector.pyashSequence)
+            }
+          } : {}),
+          pyashSequence: cloneSequence(item?.pyashSequence),
+          internalConnectors: (item?.internalConnectors ?? []).map((connector) => ({
+            surface: text(connector?.surface),
+            pyashSequence: cloneSequence(connector?.pyashSequence),
+            tokenIndex: Number.isInteger(connector?.tokenIndex) ? connector.tokenIndex : null
+          }))
+        }))
+      }
+    } : {}),
     ...(Array.isArray(analysis.reviewReasons) && analysis.reviewReasons.length > 0
       ? { reviewReasons: [...analysis.reviewReasons] }
       : {}),

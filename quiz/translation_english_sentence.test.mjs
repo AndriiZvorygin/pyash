@@ -776,17 +776,34 @@ test("existential can composes with potential mood and keeps self-love readable"
   assert.deepEqual(couldAnalysis.existential.pyashSequence, ["tseh", "syi7h"]);
 });
 
-test("comma-separated existential lists stay reviewable until coordination is composed", async () => {
+test("existential lists keep phrase coordination separate from clause connectors", async () => {
   const analysis = await analyzeDefaultEnglishSentence(
-    "There can be self-love, platonic love."
+    "There can be self-love, love towards a friend (such as platonic love), love in romance, towards family, toward God(s), or towards an object or idea."
   );
 
   assert.equal(analysis.status, "review");
   assert.deepEqual(analysis.reviewReasons, [
-    "comma-separated existential content is not yet composed as a coordinated phrase"
+    "phrase-level existential list is segmented but not yet lowered as a coordinated phrase"
   ]);
+  assert.deepEqual(analysis.phraseCoordination.items.map((item) => item.surface), [
+    "self-love",
+    "love towards a friend (such as platonic love)",
+    "love in romance",
+    "towards family",
+    "toward God(s)",
+    "towards an object or idea"
+  ]);
+  assert.equal(analysis.phraseCoordination.scope, "existential-content");
+  assert.deepEqual(analysis.phraseCoordination.items.at(-1).connector, {
+    surface: "or",
+    pyashSequence: ["ba"]
+  });
   assert.deepEqual(
-    analysis.tokens.find((token) => token.surface === "self-love").pyashSequence,
+    analysis.phraseCoordination.items.at(-1).internalConnectors.map(({ surface }) => surface),
+    ["or"]
+  );
+  assert.deepEqual(
+    analysis.phraseCoordination.items[0].pyashSequence,
     ["pyan", "fyoh"]
   );
 });

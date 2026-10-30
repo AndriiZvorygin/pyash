@@ -143,6 +143,33 @@ test("partial English projection preserves a self compound as one readable word"
   assert.deepEqual(projection.reviewReasons, ["list coordination needs review"]);
 });
 
+test("sentence projection preserves phrase-level existential list structure", () => {
+  const phraseCoordination = {
+    kind: "phrase-list",
+    scope: "existential-content",
+    evidence: "top-level commas delimit phrase items",
+    items: [{
+      surface: "towards an object or idea",
+      start: 12,
+      end: 16,
+      startOffset: 48,
+      endOffset: 74,
+      separator: "comma",
+      connector: { surface: "or", pyashSequence: ["ba"] },
+      pyashSequence: ["tcan", "tlih", "hnuc", "ba", "hcik"],
+      internalConnectors: [{ surface: "or", pyashSequence: ["ba"], tokenIndex: 15 }]
+    }]
+  };
+  const projection = projectTranslationSentence({
+    status: "provisional",
+    source: { text: "There can be ..." },
+    phraseCoordination,
+    tokens: []
+  });
+
+  assert.deepEqual(projection.phraseCoordination, phraseCoordination);
+});
+
 test("source-to-VLIW refinery surfaces the current stage failure", async () => {
   const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-error-"));
   const paths = {

@@ -509,7 +509,7 @@ function findModalAction(records, startIndex = subjectActionStart(records)) {
 }
 
 function englishTokenSpans(source) {
-  return [...source.matchAll(/[A-Za-z]+(?:'[A-Za-z]+)?/gu)].map((match) => ({
+  return [...source.matchAll(/[A-Za-z]+(?:'[A-Za-z]+)?(?:-[A-Za-z]+(?:'[A-Za-z]+)?)*/gu)].map((match) => ({
     surface: match[0].toLowerCase(),
     start: match.index ?? 0,
     end: (match.index ?? 0) + match[0].length
@@ -525,6 +525,78 @@ function trimClauseBounds(value, offset) {
     text: value.slice(leading, endTrim),
     startOffset: offset + leading,
     endOffset: offset + endTrim
+  };
+}
+
+function existentialPhraseCoordination(source, records, startIndex, endIndex) {
+  const spans = englishTokenSpans(source);
+  if (startIndex >= endIndex || !spans[startIndex] || !spans[endIndex - 1]) return null;
+  const startOffset = spans[startIndex].start;
+  const endOffset = spans[endIndex - 1].end;
+  const segments = [];
+  let segmentStart = startOffset;
+  let nesting = 0;
+  for (let offset = startOffset; offset < endOffset; offset += 1) {
+    if (source[offset] === "(") nesting += 1;
+    else if (source[offset] === ")") nesting = Math.max(0, nesting - 1);
+    else if (source[offset] === "," && nesting === 0) {
+      const bounds = trimClauseBounds(source.slice(segmentStart, offset), segmentStart);
+      if (bounds) segments.push(bounds);
+      segmentStart = offset + 1;
+    }
+  }
+  const final = trimClauseBounds(source.slice(segmentStart, endOffset), segmentStart);
+  if (final) segments.push(final);
+  if (segments.length < 2) return null;
+
+  const items = segments.map((bounds, segmentIndex) => {
+    const tokenIndexes = spans.flatMap((span, index) => (
+      span.start >= bounds.startOffset && span.end <= bounds.endOffset ? [index] : []
+    ));
+    let firstTokenIndex = tokenIndexes[0] ?? startIndex;
+    const lastTokenIndex = tokenIndexes.at(-1) ?? firstTokenIndex - 1;
+    const firstRecord = records[firstTokenIndex];
+    const connector = segmentIndex > 0 && firstRecord?.grammar?.kind === "conjunction"
+      ? {
+        surface: firstRecord.surface,
+        pyashSequence: recordSequence(firstRecord)
+      }
+      : null;
+    if (connector) firstTokenIndex += 1;
+    const memberSpans = spans.slice(firstTokenIndex, lastTokenIndex + 1);
+    const surfaceStart = memberSpans[0]?.start ?? bounds.startOffset;
+    const surfaceBounds = memberSpans.length > 0
+      ? trimClauseBounds(source.slice(surfaceStart, bounds.endOffset), surfaceStart)
+      : bounds;
+    const memberRecords = records.slice(firstTokenIndex, lastTokenIndex + 1);
+    const internalConnectors = memberRecords.flatMap((record, index) => (
+      record.grammar?.kind === "conjunction"
+        ? [{
+          surface: record.surface,
+          pyashSequence: recordSequence(record),
+          tokenIndex: firstTokenIndex + index
+        }]
+        : []
+    ));
+    return {
+      surface: surfaceBounds?.text ?? bounds.text,
+      start: firstTokenIndex,
+      end: lastTokenIndex + 1,
+      startOffset: surfaceBounds?.startOffset ?? bounds.startOffset,
+      endOffset: surfaceBounds?.endOffset ?? bounds.endOffset,
+      separator: segmentIndex > 0 ? "comma" : null,
+      ...(connector ? { connector } : {}),
+      pyashSequence: memberRecords
+        .filter((record) => !record.consumedBy)
+        .flatMap(recordSequence),
+      internalConnectors
+    };
+  });
+  return {
+    kind: "phrase-list",
+    scope: "existential-content",
+    items,
+    evidence: "top-level commas delimit phrase items; conjunctions inside parentheses and items stay within their phrase"
   };
 }
 
@@ -863,6 +935,12 @@ function projectRelativeClauseTokens(records, projection) {
 
 function analyzeExistentialClause({ source, tokens, records, existential }) {
   const content = existentialContent(records, existential);
+  const phraseCoordination = existentialPhraseCoordination(
+    source,
+    records,
+    content.contentStart,
+    content.contentEnd
+  );
   const relativeRecords = projectRelativeClauseTokens(records, content.relativeProjection);
   const connector = existential.connectorIndex === null
     ? null
@@ -916,17 +994,11 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
     && structuralSequence.length > 0
     && existentialSequence.length > 0
     && (content.relativeIndex < 0 || Boolean(content.relativeProjection.action));
-  const normalizedSource = source.normalize("NFC").toLowerCase();
-  const existentialStart = normalizedSource.indexOf(existential.entry.surface.toLowerCase());
-  const existentialEnd = existentialStart < 0
-    ? 0
-    : existentialStart + existential.entry.surface.length;
-  const hasUncomposedCoordination = /[,;]/u.test(normalizedSource.slice(existentialEnd));
-  const reviewReasons = hasUncomposedCoordination
-    ? ["comma-separated existential content is not yet composed as a coordinated phrase"]
+  const reviewReasons = phraseCoordination
+    ? ["phrase-level existential list is segmented but not yet lowered as a coordinated phrase"]
     : [];
   const sentence = canResolve
-    && !hasUncomposedCoordination
+    && !phraseCoordination
     ? {
       mood: existentialSequence.at(-1),
       su: { name: structuralSequence.slice(0, -1).join(" ") }
@@ -949,6 +1021,7 @@ function analyzeExistentialClause({ source, tokens, records, existential }) {
       evidence: connector.construction?.evidence ?? "additive connector scopes the existential clause"
     }] : [],
     subject: content.subject,
+    ...(phraseCoordination ? { phraseCoordination } : {}),
     verbPhrase: null,
     ...(sentence ? { sentence } : {}),
     verbIndex: existential.auxiliaryIndex,
