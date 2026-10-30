@@ -2,6 +2,7 @@ import { plus, signatures as plusSignatures } from "./mathematics/plus.mjs";
 import { subtract, signatures as subtractSignatures } from "./mathematics/subtract.mjs";
 import { invert, signatures as invertSignatures } from "./mathematics/invert.mjs";
 import { exponential, signatures as exponentialSignatures } from "./mathematics/exponential.mjs";
+import { xor, signatures as xorSignatures } from "./mathematics/xor.mjs";
 import { multiply, signatures as multiplySignatures } from "./mathematics/multiply.mjs";
 import { divide, signatures as divideSignatures } from "./mathematics/divide.mjs";
 import { produce, signatures as produceSignatures } from "./mathematics/produce.mjs";
@@ -105,6 +106,7 @@ export {
   subtract,
   invert,
   exponential,
+  xor,
   multiply,
   divide,
   produce,
@@ -199,6 +201,7 @@ export const builtInSignatures = [
   ...subtractSignatures,
   ...invertSignatures,
   ...exponentialSignatures,
+  ...xorSignatures,
   ...produceSignatures,
   ...neuronSignatures,
   ...twiceCrescentSignatures,

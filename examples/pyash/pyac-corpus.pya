@@ -6,9 +6,9 @@ ob num 7 to num 3 be xor do
 ob num 7 be number ya
 ob text "Pyash" be text ya
 ob bool truth ya
-su name collector ob num 7 be number ya
-su name collector ob text "A" be text ya
-su name collector answer ob bool lie ya
+exists su name collector ob num 7 be number ya
+exists su name collector ob text "A" be text ya
+exists su name collector answer ob bool lie ya
 ob text "opaque" to name collector be plus do
 ob num 2 be invert do
 ob num 2 from num 3 be exponential do
