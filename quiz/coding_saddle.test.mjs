@@ -11,8 +11,10 @@ import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
   discoverSaddleModels,
+  formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  listSaddleBackendOptions,
   listSaddleMindNames,
   normalizeSaddleThinkSelection,
   SADDLE_OLLAMA_CONTEXT_PRESETS,
@@ -263,7 +265,7 @@ test("coding saddle status exposes selected Pyash mind and queue state", () => {
   assert.match(status, /mind: stratahelper/);
   assert.match(status, /model: qwen3\.8:27b/);
   assert.match(status, /route: GPU Housekeeper http:\/\/localhost:18886/);
-  assert.match(status, /provider host: http:\/\/swac:8090/);
+  assert.doesNotMatch(status, /swac:8090|localhost:11434/);
   assert.match(status, /gpu queue: 0 queued, 3 running/);
   assert.match(status, /state: running/);
 });
@@ -308,6 +310,33 @@ test("coding saddle discovers and selects models from the active backend", async
   assert.deepEqual(ollama.models, ["qwen3.5:9b", "qwen3.8:27b"]);
   assert.equal(resolveSaddleModelSelection("2", ollama.models), "qwen3.8:27b");
   assert.match(formatSaddleModelPicker({ models: ollama.models, currentModel: ollama.models[0] }), /1\. qwen3\.5:9b \(current\)/);
+});
+
+test("coding saddle lists each configured backend once with its default mind and model", () => {
+  const backends = listSaddleBackendOptions({
+    minds: [
+      { su: { name: "mind" }, be: "mind" },
+      { su: { name: "zai" }, be: "mind", fromstate: { text: "zai" }, as: { text: "glm-5.3-flash" }, from: { text: "https://api.z.ai/api/v1" } },
+      { su: { name: "openai" }, be: "mind", fromstate: { text: "openai" }, as: { text: "gpt-5.3-codex" }, from: { text: "https://api.openai.com" } },
+      { su: { name: "minimax" }, be: "mind", fromstate: { text: "minimax" }, as: { text: "MiniMax-M3.1-Flash" }, from: { text: "https://api.minimax.io/v1" } },
+      { su: { name: "alternate zai" }, be: "mind", fromstate: { text: "zai" }, as: { text: "glm-5.3" } }
+    ],
+    defaultBackend: "ollama",
+    defaultModel: "qwen3.5:9b",
+    hostForBackend: (backend) => backend === "ollama" ? "http://localhost:11434" : "https://api.example.test",
+    currentBackend: "ollama",
+    currentMindName: "mind"
+  });
+
+  assert.deepEqual(backends.map(({ backend, mindName, model }) => [backend, mindName, model]), [
+    ["ollama", "mind", "qwen3.5:9b"],
+    ["zai", "zai", "glm-5.3-flash"],
+    ["openai", "openai", "gpt-5.3-codex"],
+    ["minimax", "minimax", "MiniMax-M3.1-Flash"]
+  ]);
+  const menu = formatSaddleBackendPicker({ backends });
+  assert.match(menu, /1\. Ollama — qwen3\.5:9b \(current\)/);
+  assert.match(menu, /2\. Z\.AI — glm-5\.3-flash/);
 });
 
 test("coding saddle discovers Strata models through Housekeeper, never its provider endpoint", async () => {
@@ -369,12 +398,28 @@ test("coding saddle maps Ollama thinking to boolean and Strata thinking to suppo
   assert.deepEqual(normalizeSaddleThinkSelection("on", "strata"), {
     value: "high", think: null, reasoningEffort: "high"
   });
+  assert.deepEqual(normalizeSaddleThinkSelection("low", "zai"), {
+    value: "low", think: null, reasoningEffort: "low"
+  });
+  assert.deepEqual(normalizeSaddleThinkSelection("high", "zai"), {
+    value: "high", think: null, reasoningEffort: "high"
+  });
+  assert.deepEqual(normalizeSaddleThinkSelection("max", "zai"), {
+    value: "max", think: null, reasoningEffort: "max"
+  });
+  assert.equal(normalizeSaddleThinkSelection("medium", "zai"), null);
   const strataSentence = buildSaddleMindSentence({
     input: "think this through",
     backend: "strata",
     reasoningEffort: "low"
   });
   assert.equal(strataSentence.reasoningEffort, "low");
+  const zaiSentence = buildSaddleMindSentence({
+    input: "compare effort levels",
+    backend: "zai",
+    reasoningEffort: "high"
+  });
+  assert.equal(zaiSentence.reasoningEffort, "high");
 });
 
 test("coding saddle builds Strata context choices from Housekeeper-supported sizes", () => {
@@ -444,6 +489,7 @@ test("coding saddle picker keeps Strata targets distinct from Ollama models", ()
     { value: "strata::qwen3.8-flash-next-coder-iq1_m", model: "qwen3.8-flash-next-coder-iq1_m", backend: "strata", host: "http://swac:8081", label: "Strata: qwen3.8-flash-next-coder-iq1_m" }
   ];
   const picker = formatSaddleModelPicker({ models: options, currentModel: "qwen3.5:9b", currentBackend: "ollama" });
-  assert.match(picker, /2\. Strata: qwen3\.8-flash-next-coder-iq1_m @ http:\/\/swac:8081/);
+  assert.match(picker, /2\. Strata: qwen3\.8-flash-next-coder-iq1_m/);
+  assert.doesNotMatch(picker, /swac:8081/);
   assert.deepEqual(resolveSaddleModelOption("2", options), options[1]);
 });

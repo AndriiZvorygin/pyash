@@ -37,8 +37,10 @@ import {
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
+  formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  listSaddleBackendOptions,
   listSaddleMindNames,
   normalizeSaddleBackend,
   normalizeSaddleHost,
@@ -397,7 +399,10 @@ async function main() {
   let thinkSetting = null;
   let busy = false;
   let closing = false;
+  let backendPicker = null;
   let modelPicker = null;
+  let modelPickerTarget = null;
+  let modelPickerAllowCustom = false;
   let modelPickerLoading = false;
   let contextPicker = null;
   let thinkPicker = null;
@@ -439,11 +444,35 @@ async function main() {
       writeLine(`Strata context change failed: ${error.message}`);
     } finally {
       busy = false;
+      promptLabel = "pyash> ";
       prompt({ clear: false });
     }
   };
-  const showModelPicker = async () => {
+  const getBackendOptions = () => listSaddleBackendOptions({
+    minds: allRemember(),
+    defaultBackend: normalizeSaddleBackend(configValue("mind backend", "ollama")),
+    defaultModel: configValue("mind model", "qwen3.5:9b"),
+    hostForBackend: resolveSaddleHost,
+    currentBackend: backend,
+    currentMindName: mindName,
+    currentModel: model,
+    currentHost: host
+  });
+  const showBackendPicker = () => {
+    backendPicker = getBackendOptions();
+    modelPicker = null;
+    modelPickerTarget = null;
+    writeLine(formatSaddleBackendPicker({ backends: backendPicker }));
+    prompt({ clear: false, label: "select backend> " });
+  };
+  const showModelPicker = async (target = null) => {
+    const selection = target || { backend, host, model, mindName };
+    const targetBackend = normalizeSaddleBackend(selection.backend || backend);
+    const targetHost = normalizeSaddleHost(selection.host || host);
+    const targetModel = normalizeSaddleModel(selection.model || model);
     modelPickerLoading = true;
+    backendPicker = null;
+    modelPickerTarget = { ...selection, backend: targetBackend, host: targetHost, model: targetModel };
     writeLine("discovering models...");
     prompt({ clear: false, label: "model loading> " });
     const fallbackModels = String(process.env.PYA_SADDLE_MODELS || "")
@@ -451,13 +480,13 @@ async function main() {
       .map((value) => value.trim())
       .filter(Boolean);
     const discovered = await discoverSaddleModels({
-      backend,
-      host,
-      housekeeperUrl: isLocalModelBackend(backend) ? config.housekeeperUrl : "",
-      currentModel: model,
+      backend: targetBackend,
+      host: targetHost,
+      housekeeperUrl: isLocalModelBackend(targetBackend) ? config.housekeeperUrl : "",
+      currentModel: targetModel,
       fallbackModels
     });
-    if (backend === "zai" && discovered.available && discovered.catalogModels?.length) {
+    if (targetBackend === "zai" && discovered.available && discovered.catalogModels?.length) {
       try {
         const refreshed = syncZaiCodexModelCatalog({ models: discovered.catalogModels });
         if (refreshed.updated) writeLine(`Codex Z.AI catalog refreshed: ${refreshed.models.length} models`);
@@ -468,8 +497,9 @@ async function main() {
     const discoveredOptions = discovered.models.map((entry) => ({
       model: entry,
       value: entry,
-      backend,
-      host,
+      backend: targetBackend,
+      host: targetHost,
+      mindName: selection.mindName || mindName,
       label: entry
     }));
     const options = [
@@ -480,15 +510,17 @@ async function main() {
       .map((entry) => [entry.value || `${entry.backend || backend}::${entry.model}`, entry]))
       .values()];
     if (!modelPicker.length) {
-      modelPicker = [{ model, value: model, backend, host, label: model }];
+      modelPicker = [{ model: targetModel, value: targetModel, backend: targetBackend, host: targetHost, mindName: selection.mindName || mindName, label: targetModel }];
     }
+    modelPickerAllowCustom = ["openai", "litellm", "openrouter", "vllm"].includes(targetBackend);
     modelPickerLoading = false;
     writeLine(formatSaddleModelPicker({
       models: modelPicker,
-      currentModel: model,
-      currentBackend: backend,
+      currentModel: targetModel,
+      currentBackend: targetBackend,
       error: discovered.available ? "" : discovered.error
     }));
+    if (modelPickerAllowCustom) writeLine("For this backend, you can also enter a model ID directly.");
     prompt({ clear: false, label: "select model> " });
   };
   const showContextPicker = async () => {
@@ -549,8 +581,8 @@ async function main() {
     prompt({ clear: false, label: "select context> " });
   };
   const showThinkPicker = () => {
-    if (!["ollama", "strata", "minimax"].includes(backend)) {
-      writeLine("/think controls are available for Ollama, Strata, and MiniMax minds");
+    if (!["ollama", "strata", "minimax", "zai"].includes(backend)) {
+      writeLine("/think controls are available for Ollama, Strata, Z.AI, and MiniMax minds");
       prompt({ clear: false });
       return;
     }
@@ -558,11 +590,18 @@ async function main() {
       ? ["off", "on"]
       : backend === "minimax"
         ? ["low", "medium", "high", "xhigh", "max"]
-        : ["none", "low", "medium", "high"];
+        : backend === "zai"
+          ? ["low", "high", "max"]
+          : ["none", "low", "medium", "high"];
     thinkPicker = options.map((value) => ({ model: value, value, label: value }));
+    const defaultEffortLabel = backend === "minimax"
+      ? "provider default"
+      : backend === "zai"
+        ? "max (provider default)"
+        : "Strata default";
     writeLine(backend === "ollama"
       ? `thinking for ${model}: current ${thinkSetting?.value ?? "model default"}`
-      : `reasoning effort for ${model}: current ${thinkSetting?.value ?? (backend === "minimax" ? "provider default" : "Strata default")}`);
+      : `reasoning effort for ${model}: current ${thinkSetting?.value ?? defaultEffortLabel}`);
     for (const [index, option] of thinkPicker.entries()) {
       writeLine(`${index + 1}. ${option.label}${option.value === thinkSetting?.value ? " (current)" : ""}`);
     }
@@ -570,8 +609,11 @@ async function main() {
       ? "Choose whether to request thinking; model support varies."
       : backend === "minimax"
         ? "Choose MiniMax reasoning effort. MiniMax M3.1 Flash does not support disabling thinking."
-        : "Choose the Strata reasoning effort for subsequent requests.");
-    prompt({ clear: false, label: "select thinking> " });
+          : backend === "zai"
+            ? "Choose Z.AI Coding Plan reasoning effort for subsequent saddle requests."
+            : "Choose the Strata reasoning effort for subsequent requests.");
+    promptLabel = "select thinking> ";
+    prompt({ clear: false });
   };
   const shutdown = async () => {
     if (closing) return;
@@ -603,6 +645,16 @@ async function main() {
       prompt({ clear: false, label: "model loading> " });
       return;
     }
+    if (backendPicker) {
+      const selected = resolveSaddleModelOption(input, backendPicker);
+      if (!selected) {
+        writeLine("invalid backend selection");
+        prompt({ clear: false, label: "select backend> " });
+        return;
+      }
+      await showModelPicker(selected);
+      return;
+    }
     if (contextPicker) {
       const selected = resolveSaddleModelOption(input, contextPicker);
       if (!selected) {
@@ -619,6 +671,7 @@ async function main() {
         const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
         if (!saved.updated) {
           contextPicker = null;
+          promptLabel = "pyash> ";
           writeLine(`could not save context window: ${saved.reason}`);
           prompt({ clear: false });
           return;
@@ -626,6 +679,7 @@ async function main() {
       }
       contextWindow = selected.tokens == null ? null : Number(selected.tokens);
       contextPicker = null;
+      promptLabel = "pyash> ";
       writeLine(backend === "zai"
         ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
         : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
@@ -641,6 +695,7 @@ async function main() {
       }
       thinkSetting = normalizeSaddleThinkSelection(selected.value, backend);
       thinkPicker = null;
+      promptLabel = "pyash> ";
       writeLine(backend === "ollama"
         ? `thinking: ${thinkSetting.value} for ${model}`
         : `reasoning effort: ${thinkSetting.value} for ${model}`);
@@ -648,13 +703,28 @@ async function main() {
       return;
     }
     if (modelPicker) {
-      const selected = resolveSaddleModelOption(input, modelPicker);
+      const selected = resolveSaddleModelOption(input, modelPicker)
+        || (modelPickerAllowCustom && input.trim()
+          ? {
+            model: input.trim(),
+            backend: modelPickerTarget?.backend,
+            host: modelPickerTarget?.host,
+            mindName: modelPickerTarget?.mindName
+          }
+          : null);
       if (!selected) {
         writeLine("invalid model selection");
         prompt({ clear: false, label: "select model> " });
         return;
       }
       modelPicker = null;
+      modelPickerAllowCustom = false;
+      const nextBackend = normalizeSaddleBackend(selected.backend || modelPickerTarget?.backend || backend);
+      const nextMindName = String(selected.mindName || modelPickerTarget?.mindName || mindName).trim();
+      backend = nextBackend;
+      mindName = nextMindName;
+      host = normalizeSaddleHost(selected.host || modelPickerTarget?.host || host);
+      modelPickerTarget = null;
       model = normalizeSaddleModel(selected.model, model);
       mindModels.set(mindName, model);
       if (backend === "zai") {
@@ -665,12 +735,12 @@ async function main() {
       thinkSetting = null;
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
-      writeLine(`model: ${model} (mind ${mindName})`);
+      writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /mind [name]  /model <name>  /context [size]  /think [mode]  /host <url>  /usage  /discharge  /exit");
+      writeLine("/status  /mind [name]  /model [backend|model-id]  /context [size]  /think [mode]  /host <url>  /usage  /discharge  /exit");
       prompt({ clear: false });
       return;
     }
@@ -712,7 +782,7 @@ async function main() {
       return;
     }
     if (input.trim() === "/model") {
-      await showModelPicker();
+      showBackendPicker();
       return;
     }
     const contextMatch = input.trim().match(/^\/context(?:\s+(.+))?$/i);
@@ -795,11 +865,14 @@ async function main() {
             ? "Strata accepts /think none, low, medium, high, on, or off"
             : backend === "minimax"
               ? "MiniMax accepts /think low, medium, high, xhigh, or max; thinking cannot be disabled for M3.1 Flash"
-              : "/think is available for Ollama, Strata, and MiniMax minds");
+              : backend === "zai"
+                ? "Z.AI accepts /think low, high, or max"
+                : "/think is available for Ollama, Strata, Z.AI, and MiniMax minds");
         prompt({ clear: false });
         return;
       }
       thinkSetting = selected;
+      promptLabel = "pyash> ";
       writeLine(backend === "ollama"
         ? `thinking: ${selected.value} for ${model}`
         : `reasoning effort: ${selected.value} for ${model}`);
@@ -820,7 +893,14 @@ async function main() {
     }
     const modelMatch = input.trim().match(/^\/model\s+(.+)$/i);
     if (modelMatch) {
-      model = normalizeSaddleModel(modelMatch[1], model);
+      const requested = modelMatch[1].trim();
+      const targetBackend = getBackendOptions().find((entry) => [entry.backend, entry.label]
+        .some((value) => value.toLowerCase() === requested.toLowerCase()));
+      if (targetBackend) {
+        await showModelPicker(targetBackend);
+        return;
+      }
+      model = normalizeSaddleModel(requested, model);
       mindModels.set(mindName, model);
       contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
       thinkSetting = null;

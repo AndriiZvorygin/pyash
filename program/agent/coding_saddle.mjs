@@ -103,6 +103,11 @@ export function normalizeSaddleThinkSelection(value, backend) {
       return { value: selected, think: null, reasoningEffort: selected };
     }
   }
+  if (provider === "zai") {
+    if (["low", "high", "max"].includes(selected)) {
+      return { value: selected, think: null, reasoningEffort: selected };
+    }
+  }
   return null;
 }
 
@@ -144,6 +149,82 @@ export function listSaddleMindNames({ minds = [], activeMindName = "coding saddl
     if (right.toLowerCase() === "mind") return 1;
     return left.localeCompare(right);
   });
+}
+
+const SADDLE_BACKEND_LABELS = new Map([
+  ["ollama", "Ollama"],
+  ["strata", "Strata"],
+  ["zai", "Z.AI"],
+  ["openai", "OpenAI"],
+  ["minimax", "MiniMax"],
+  ["openrouter", "OpenRouter"],
+  ["litellm", "LiteLLM"],
+  ["vllm", "vLLM"]
+]);
+
+const SADDLE_BACKEND_ORDER = ["ollama", "strata", "zai", "openai", "minimax", "openrouter", "litellm", "vllm"];
+
+export function listSaddleBackendOptions({
+  minds = [],
+  defaultBackend = "ollama",
+  defaultModel = "qwen3.5:9b",
+  hostForBackend = () => "http://localhost:11434",
+  currentBackend = "",
+  currentMindName = "",
+  currentModel = "",
+  currentHost = ""
+} = {}) {
+  const profilesByName = new Map();
+  for (const fact of Array.isArray(minds) ? minds : []) {
+    if (fact?.be !== "mind" || !fact?.su?.name) continue;
+    profilesByName.set(normalizeText(fact.su.name).toLowerCase(), fact);
+  }
+
+  const profiles = [...profilesByName.values()]
+    .filter((profile) => normalizeText(profile.su.name).toLowerCase() === "mind" || mindFieldValue(profile.fromstate))
+    .map((profile) => resolveSaddleMindProfile({
+      mindName: profile.su.name,
+      profile,
+      defaultBackend,
+      defaultModel,
+      hostForBackend
+    }));
+
+  const normalizedCurrentBackend = normalizeSaddleBackend(currentBackend, "");
+  if (normalizedCurrentBackend && !profiles.some((profile) => profile.backend === normalizedCurrentBackend)) {
+    profiles.push({
+      mindName: normalizeText(currentMindName) || normalizedCurrentBackend,
+      backend: normalizedCurrentBackend,
+      model: normalizeSaddleModel(currentModel, defaultModel),
+      host: normalizeSaddleHost(currentHost || hostForBackend(normalizedCurrentBackend))
+    });
+  }
+
+  const byBackend = new Map();
+  for (const profile of profiles) {
+    const backend = normalizeSaddleBackend(profile.backend, "");
+    if (!backend) continue;
+    const priority = (profile.mindName.toLowerCase() === normalizeText(currentMindName).toLowerCase() && backend === normalizedCurrentBackend ? 0 : 10)
+      + (profile.mindName.toLowerCase() === backend ? 0 : 1)
+      + (profile.mindName.toLowerCase() === "mind" ? 0 : 1);
+    const existing = byBackend.get(backend);
+    if (!existing || priority < existing.priority) byBackend.set(backend, { ...profile, backend, priority });
+  }
+
+  return [...byBackend.values()]
+    .sort((left, right) => {
+      const leftOrder = SADDLE_BACKEND_ORDER.indexOf(left.backend);
+      const rightOrder = SADDLE_BACKEND_ORDER.indexOf(right.backend);
+      return (leftOrder < 0 ? SADDLE_BACKEND_ORDER.length : leftOrder)
+        - (rightOrder < 0 ? SADDLE_BACKEND_ORDER.length : rightOrder)
+        || left.backend.localeCompare(right.backend);
+    })
+    .map(({ priority, ...profile }) => ({
+      ...profile,
+      value: profile.backend,
+      label: SADDLE_BACKEND_LABELS.get(profile.backend) || profile.backend,
+      current: profile.backend === normalizedCurrentBackend
+    }));
 }
 
 export function parseSaddleMindCommand(value) {
@@ -282,7 +363,7 @@ export function formatSaddleModelPicker({ models = [], currentModel = "", curren
     const label = normalizeText(entry.label)
       || (backend && backend !== "ollama" ? `${backend}: ${model}` : model);
     const host = normalizeText(entry.host);
-    const location = backend && backend !== "ollama" && host ? ` @ ${host}` : "";
+    const location = backend && !["ollama", "strata"].includes(backend) && host ? ` @ ${host}` : "";
     const marker = model === normalizeText(currentModel)
       && (!normalizeText(currentBackend) || !backend || backend === normalizeText(currentBackend).toLowerCase())
       ? " (current)"
@@ -291,6 +372,19 @@ export function formatSaddleModelPicker({ models = [], currentModel = "", curren
   });
   if (error) lines.push(`discovery: ${error}`);
   lines.push("Enter a number or exact model name; Ctrl+C cancels.");
+  return lines.join("\n");
+}
+
+export function formatSaddleBackendPicker({ backends = [] } = {}) {
+  const choices = Array.isArray(backends) ? backends : [];
+  const lines = ["available backends:"];
+  choices.forEach((entry, index) => {
+    const label = normalizeText(entry?.label || entry?.backend);
+    const model = normalizeText(entry?.model);
+    const current = entry?.current ? " (current)" : "";
+    lines.push(`${index + 1}. ${label}${model ? ` — ${model}` : ""}${current}`);
+  });
+  lines.push("Enter a number or backend name; Ctrl+C cancels.");
   return lines.join("\n");
 }
 
@@ -361,10 +455,7 @@ export function formatSaddleStatus({
       : []),
     ...(normalizeText(thinkMode) ? [`thinking: ${normalizeText(thinkMode)}`] : []),
     ...(localBackend
-      ? [
-        `route: GPU Housekeeper ${normalizeText(housekeeperUrl) || "(not configured)"}`,
-        `provider host: ${normalizeSaddleHost(host)}`
-      ]
+      ? [`route: GPU Housekeeper ${normalizeText(housekeeperUrl) || "(not configured)"}`]
       : [`host: ${normalizeSaddleHost(host)}`]),
     `session: ${normalizeText(session) || "coding"}`,
     `cwd: ${path.resolve(String(cwd || process.cwd()))}`,
