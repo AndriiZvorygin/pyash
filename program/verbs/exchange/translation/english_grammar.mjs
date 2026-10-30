@@ -21,7 +21,8 @@ const GRAMMAR_KINDS = new Set([
   "referential",
   "exemplifier",
   "existential-clause",
-  "modal-mood"
+  "modal-mood",
+  "reflexive-marker"
 ]);
 
 function invalid(message, details = {}) {
