@@ -365,6 +365,7 @@ function selectedDecisionRecord(decision, sense, selection = {}) {
     ...decision,
     selectionStatus: "selected",
     selectedSenseId: `${text(sense?.pos)}:${text(sense?.synset)}`,
+    selectedSenseWord: text(sense?.lemma) || text(sense?.lemmas?.[0]),
     selectedSense: sense,
     selectionConfidence: selection.confidence || "deterministic",
     selectionRationale: selection.rationale || decision.selectionEvidence || "deterministic WordNet sense selection"
@@ -388,6 +389,9 @@ function attachmentCandidate(record) {
     occurrenceId: record.occurrenceId,
     context: [record.sentence],
     senseId: record.selectedSenseId,
+    senseWord: text(record.selectedSenseWord)
+      || text(selectedSense.lemma)
+      || text(selectedSense.lemmas?.[0]),
     sense: {
       pos: text(selectedSense.pos),
       synset: text(selectedSense.synset),
@@ -672,6 +676,9 @@ export async function refineEnglishWordNet({
         surface: selected.surface,
         sentence: selected.sentence,
         selectedSenseId: selected.selectedSenseId,
+        selectedSenseWord: selected.selectedSenseWord
+          || text(selected.selectedSense?.lemma)
+          || text(selected.selectedSense?.lemmas?.[0]),
         selectedSense: selected.selectedSense,
         selectionConfidence: selected.selectionConfidence,
         selectionRationale: selected.selectionRationale,
