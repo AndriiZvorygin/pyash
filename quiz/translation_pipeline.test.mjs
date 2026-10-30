@@ -688,7 +688,7 @@ test("English zero-copula clauses lower through the VLIW projection", async () =
   assert.equal(result.records[0].status, "resolved");
   assert.equal(result.records[0].sentence.be, undefined);
   assert.equal(result.records[0].pyac, "pyanna xyekpu wa twotti mrattlihkaya");
-  assert.equal(result.records[0].englishPyash, "ya su love ob a mixed of emotionallys and activity.");
+  assert.equal(result.records[0].englishPyash, "ya su love ob a mix of feelings and activity.");
   assert.deepEqual(result.records[0].phrases.map((phrase) => [phrase.slot, phrase.start, phrase.end]), [
     ["su", 0, 1],
     ["ob", 2, 8]

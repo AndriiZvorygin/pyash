@@ -149,6 +149,7 @@ test("accepted occurrence sense resumes without re-submitting to the selector", 
   assert.equal(submissions, 1);
   assert.equal(resumed.queues.length, 0);
   assert.equal(resumed.records[0].selectedSenseId, first.records[0].selectedSenseId);
+  assert.equal(resumed.records[0].selectedSenseWord, "florp");
   assert.equal(resumed.records[0].occurrenceId, first.records[0].occurrenceId);
 });
 
@@ -286,6 +287,87 @@ test("persisted mixed-part-of-speech senses retain surrounding noun evidence", a
   assert.deepEqual(refined.decisions[0].senses.map((sense) => sense.pos), ["n"]);
 });
 
+test("weak POS filtering does not collapse an unresolved ambiguous sense set", async () => {
+  const senses = [
+    {
+      pos: "n",
+      synset: "florp-noun",
+      lemma: "florp",
+      lemmas: ["florp"],
+      gloss: "a named object"
+    },
+    {
+      pos: "v",
+      synset: "florp-verb",
+      lemma: "florp",
+      lemmas: ["florp"],
+      gloss: "perform an action"
+    }
+  ];
+  const sourceRecord = {
+    id: "modal-ambiguous-record",
+    source: { text: "The florps.", sentenceIndex: 0 },
+    tokens: [{
+      surface: "the",
+      tokenIndex: 0,
+      pyashSequence: ["dlih"],
+      senseCandidates: []
+    }, {
+      surface: "florps",
+      tokenIndex: 1,
+      pyashSequence: [],
+      senseCandidates: senses
+    }],
+    unresolved: ["florps"]
+  };
+  const submissions = [];
+  const refined = await refineEnglishWordNet({
+    result: {
+      language: "english",
+      sourceHash: "pos-filter-source",
+      senseStateFormat: TRANSLATION_SENSE_STATE_FORMAT,
+      records: [sourceRecord],
+      vocabularyCandidates: [{
+        id: "translation-occurrence-florps",
+        occurrenceId: "translation-occurrence-florps",
+        surface: "florps",
+        kind: "lexical-gap",
+        sourceRecordId: sourceRecord.id,
+        tokenIndex: 1,
+        senseCandidates: senses,
+        context: [sourceRecord.source.text]
+      }]
+    },
+    resources: {
+      coverage: { byVariant: new Map() },
+      grammarCatalog: { entries: [] },
+      wordnet: {
+        index: buildEnglishWordNetIndex({
+          rows: senses.map((sense) => ({
+            id: `${sense.pos}:${sense.synset}`,
+            pos: sense.pos,
+            synset: sense.synset,
+            senseKey: sense.synset,
+            lemma: sense.lemma,
+            gloss: sense.gloss
+          }))
+        })
+      }
+    },
+    config: { maxBatch: 200, edgeMaxDegree: 1 },
+    submit: async (request) => {
+      submissions.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.equal(refined.counts.errors, 0);
+  assert.equal(refined.decisions[0].availableSenseCount, 2);
+  assert.deepEqual(refined.decisions[0].senses.map((sense) => sense.pos), ["n", "v"]);
+  assert.equal(submissions.length, 1);
+  assert.equal(submissions[0].candidates.length, 2);
+  assert.equal(refined.records[0].status, "review");
+});
+
 test("accepted compound aliases link the selected involve inclusion sense", async () => {
   const sourceRecord = {
     id: "sentence-involve",
@@ -406,6 +488,7 @@ test("selected WordNet senses become bounded anchor candidates", () => {
   assert.equal(translation.vocabularyCandidates.length, 1);
   assert.equal(translation.vocabularyCandidates[0].kind, "wordnet-sense-attachment");
   assert.equal(translation.vocabularyCandidates[0].senseId, "v:01775456");
+  assert.equal(translation.vocabularyCandidates[0].senseWord, "feel");
   assert.equal(translation.vocabularyCandidates[0].sense.gloss, "undergo an emotional state");
   assert.deepEqual(translation.vocabularyCandidates[0].sense.lemmas, ["feel", "experience"]);
   assert.deepEqual(translation.vocabularyCandidates[0].anchorCandidates[0].pyashSequence, ["nrec"]);

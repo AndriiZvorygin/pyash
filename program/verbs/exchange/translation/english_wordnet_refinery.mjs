@@ -129,6 +129,49 @@ function persistedToken(token) {
   };
 }
 
+function decisionContext(tokens, index) {
+  const rows = Array.isArray(tokens) ? tokens : [];
+  const token = rows[index] ?? {};
+  const previous = rows[index - 1] ?? null;
+  const next = rows[index + 1] ?? null;
+  const surface = normalized(token.surface);
+  const nextSurface = normalized(next?.surface);
+  const previousSurface = normalized(previous?.surface);
+  const partsOfSpeech = new Set(token.wordnet?.partsOfSpeech ?? []);
+  const nextPartsOfSpeech = new Set(next?.wordnet?.partsOfSpeech ?? []);
+  let grammaticalRole = "lexical word in sentence";
+  let headWord = nextSurface || previousSurface;
+  if (token.grammar?.kind === "modal-mood") {
+    grammaticalRole = "modal mood marking the following action";
+  } else if (token.grammar?.kind === "case-marker") {
+    grammaticalRole = "case marker linking the following phrase";
+  } else if ((partsOfSpeech.has("r") && nextSurface)
+    || (partsOfSpeech.has("r") && nextPartsOfSpeech.size > 0)) {
+    grammaticalRole = "adverb modifying the following word or phrase";
+  } else if (nextPartsOfSpeech.has("n") && (partsOfSpeech.has("a") || partsOfSpeech.has("s"))) {
+    grammaticalRole = "adjective modifying the following noun";
+  } else if (previous?.grammar?.kind === "case-marker" && partsOfSpeech.has("n")) {
+    grammaticalRole = "noun inside a case-marked phrase";
+    headWord = surface;
+  } else if (partsOfSpeech.has("v")) {
+    grammaticalRole = "verb or action word";
+  } else if (partsOfSpeech.has("n")) {
+    grammaticalRole = "noun or noun phrase head";
+  }
+  const start = Math.max(0, index - 3);
+  const end = Math.min(rows.length, index + 4);
+  const nearbyWords = rows
+    .slice(start, end)
+    .map((row) => normalized(row?.surface))
+    .filter(Boolean);
+  return {
+    localPhrase: nearbyWords.join(" "),
+    grammaticalRole,
+    headWord,
+    nearbyWords
+  };
+}
+
 function occurrenceDecisions(result, resources, compounds, terms) {
   const decisions = [];
   const termSet = new Set(terms);
@@ -151,13 +194,20 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         surface,
         wordnet: { senses: senseRows }
       };
+      const context = decisionContext(
+        persistedTokens.length > 0 ? persistedTokens : [token],
+        Math.min(tokenIndex, Math.max(0, persistedTokens.length - 1))
+      );
       const selection = selectEnglishWordNetSenses(
         token,
         persistedTokens.length > 0 ? persistedTokens : [token],
         Math.min(tokenIndex, Math.max(0, persistedTokens.length - 1)),
         resources.wordnet?.index
       );
-      const senses = selection.senses.length > 0 ? selection.senses : senseRows;
+      const availableSenses = token.wordnet?.senses ?? senseRows;
+      const senses = selection.evidence || selection.senses.length > 1 || availableSenses.length <= 1
+        ? (selection.senses.length > 0 ? selection.senses : senseRows)
+        : availableSenses;
       if (senses.length === 0) continue;
       const id = englishWordNetSelectionId({
         sourceHash: result.sourceHash,
@@ -178,6 +228,8 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         surface,
         sentence,
         senses,
+        availableSenseCount: availableSenses.length,
+        ...context,
         selectionEvidence: selection.evidence,
         stateSource: "translation-token-state"
       });
@@ -203,6 +255,10 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         resources.wordnet?.index
       );
       if (!Array.isArray(selection.senses) || selection.senses.length === 0) continue;
+      const availableSenses = token.wordnet?.senses ?? selection.senses;
+      const senses = selection.evidence || selection.senses.length > 1 || availableSenses.length <= 1
+        ? selection.senses
+        : availableSenses;
       const id = englishWordNetSelectionId({
         sourceHash: result.sourceHash,
         sourceRecordId: candidate.sourceRecordId || sourceRecord?.id,
@@ -221,7 +277,9 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         tokenIndex: legacyTokenIndex,
         surface,
         sentence,
-        senses: selection.senses,
+        senses,
+        availableSenseCount: availableSenses.length,
+        ...decisionContext(analysis.tokens, legacyTokenIndex),
         selectionEvidence: selection.evidence,
         stateSource: "legacy-surface-reanalysis"
       });
@@ -257,6 +315,10 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         tokenIndex,
         surface
       });
+      const availableSenses = token.wordnet?.senses ?? selection.senses;
+      const senses = selection.evidence || selection.senses.length > 1 || availableSenses.length <= 1
+        ? selection.senses
+        : availableSenses;
       decisions.push({
         id,
         occurrenceId: translationOccurrenceId({
@@ -269,7 +331,9 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         tokenIndex,
         surface,
         sentence,
-        senses: selection.senses,
+        senses,
+        availableSenseCount: availableSenses.length,
+        ...decisionContext(analysis.tokens, tokenIndex),
         selectionEvidence: selection.evidence
       });
     }
@@ -283,6 +347,10 @@ async function queueSelectionWithoutAwait({ decision, sourceHash, submit, config
     surface: decision.surface,
     sentence: decision.sentence,
     senses: decision.senses,
+    localPhrase: decision.localPhrase,
+    grammaticalRole: decision.grammaticalRole,
+    headWord: decision.headWord,
+    nearbyWords: decision.nearbyWords,
     maxChars: config.promptMaxChars,
     maxTokens: config.promptMaxTokens
   });
@@ -311,6 +379,7 @@ function selectedDecisionRecord(decision, sense, selection = {}) {
     ...decision,
     selectionStatus: "selected",
     selectedSenseId: `${text(sense?.pos)}:${text(sense?.synset)}`,
+    selectedSenseWord: text(sense?.lemma) || text(sense?.lemmas?.[0]),
     selectedSense: sense,
     selectionConfidence: selection.confidence || "deterministic",
     selectionRationale: selection.rationale || decision.selectionEvidence || "deterministic WordNet sense selection"
@@ -334,6 +403,9 @@ function attachmentCandidate(record) {
     occurrenceId: record.occurrenceId,
     context: [record.sentence],
     senseId: record.selectedSenseId,
+    senseWord: text(record.selectedSenseWord)
+      || text(selectedSense.lemma)
+      || text(selectedSense.lemmas?.[0]),
     sense: {
       pos: text(selectedSense.pos),
       synset: text(selectedSense.synset),
@@ -520,6 +592,7 @@ export async function refineEnglishWordNet({
         continue;
       }
       let selected = decision.senses.length === 1
+        && (decision.availableSenseCount === 1 || decision.selectionEvidence)
         ? selectedDecisionRecord(decision, decision.senses[0])
         : null;
       if (!selected && typeof submit === "function" && typeof awaitHandle === "function") {
@@ -618,6 +691,9 @@ export async function refineEnglishWordNet({
         surface: selected.surface,
         sentence: selected.sentence,
         selectedSenseId: selected.selectedSenseId,
+        selectedSenseWord: selected.selectedSenseWord
+          || text(selected.selectedSense?.lemma)
+          || text(selected.selectedSense?.lemmas?.[0]),
         selectedSense: selected.selectedSense,
         selectionConfidence: selected.selectionConfidence,
         selectionRationale: selected.selectionRationale,
