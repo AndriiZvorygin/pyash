@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fetchZaiCodingPlanModels } from "../runtime/zai_coding_plan.mjs";
+import { fetchMiniMaxModels } from "../runtime/minimax.mjs";
 
 export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536];
 
@@ -67,6 +68,7 @@ export function normalizeSaddleBackend(value, fallback = "ollama") {
     ["openai command mind", "openai"],
     ["litellm command mind", "litellm"],
     ["openrouter command mind", "openrouter"],
+    ["minimax command mind", "minimax"],
     ["zai command mind", "zai"],
     ["vllm command mind", "vllm"],
     ["strata command mind", "strata"]
@@ -96,6 +98,11 @@ export function normalizeSaddleThinkSelection(value, backend) {
       return { value: effort, think: null, reasoningEffort: effort };
     }
   }
+  if (provider === "minimax") {
+    if (["low", "medium", "high", "xhigh", "max"].includes(selected)) {
+      return { value: selected, think: null, reasoningEffort: selected };
+    }
+  }
   return null;
 }
 
@@ -118,7 +125,7 @@ export function resolveSaddleMindProfile({
   const declaredBackend = mindFieldValue(profile.fromstate);
   const backend = normalizeSaddleBackend(declaredBackend || defaultBackend);
   const model = normalizeSaddleModel(
-    mindFieldValue(profile.as) || (backend === "zai" ? "glm-5.3-flash" : defaultModel)
+    mindFieldValue(profile.as) || (backend === "zai" ? "glm-5.3-flash" : backend === "minimax" ? "MiniMax-M3.1-Flash" : defaultModel)
   );
   const declaredHost = mindFieldValue(profile.from);
   const host = normalizeSaddleHost(declaredHost || hostForBackend(backend), defaultHost);
@@ -183,6 +190,20 @@ export async function discoverSaddleModels({
   const configured = [currentModel, ...fallbackModels].map(normalizeText).filter(Boolean);
   if (normalizedBackend === "zai") {
     const discovered = await fetchZaiCodingPlanModels({
+      host: normalizedHost,
+      apiKey,
+      fetchFn,
+      timeoutMs
+    });
+    return {
+      models: [...new Set([...configured, ...discovered.models])],
+      catalogModels: discovered.models,
+      available: discovered.ok,
+      error: discovered.error || null
+    };
+  }
+  if (normalizedBackend === "minimax") {
+    const discovered = await fetchMiniMaxModels({
       host: normalizedHost,
       apiKey,
       fetchFn,
@@ -288,7 +309,7 @@ export function buildSaddleMindSentence({
     sentence.contextWindow = Number(contextWindow);
   }
   if (typeof think === "boolean") sentence.think = think;
-  if (["none", "low", "medium", "high"].includes(String(reasoningEffort ?? "").trim().toLowerCase())) {
+  if (["none", "low", "medium", "high", "xhigh", "max"].includes(String(reasoningEffort ?? "").trim().toLowerCase())) {
     sentence.reasoningEffort = String(reasoningEffort).trim().toLowerCase();
   }
   return sentence;

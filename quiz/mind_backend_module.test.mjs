@@ -77,6 +77,23 @@ test("Z.AI mind backend routes through its isolated Codex runner", async () => {
   }
 });
 
+test("MiniMax mind backend module exposes its selectable signature", async () => {
+  forget();
+  process.env.PYA_COMMAND_RESPONSE = "{\"response\":\"MiniMax module ok\"}";
+
+  try {
+    await run('from filename "./module/mind_minimax.pya" ob name minimax command mind be import do');
+    await run("exists su name mind backend be default ob name minimax command mind ya");
+    await run("exists su name mind be mind ya");
+
+    const res = await run('su name prompt ob text "Hello" for name mind to name text out be write do');
+    assert.equal(res?.ob?.text, "MiniMax module ok");
+  } finally {
+    delete process.env.PYA_COMMAND_RESPONSE;
+    forget();
+  }
+});
+
 
 test("katago mind backend module exposes configured signature", async () => {
   forget();

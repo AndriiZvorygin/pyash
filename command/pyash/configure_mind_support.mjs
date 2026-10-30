@@ -3,6 +3,7 @@ import {
   looksLikeOllamaBackend,
   fetchOllamaModels,
   fetchStrataHealth,
+  fetchMiniMaxModels,
   backendChoiceKey,
   resolveMindBackendSource,
   defaultMindHostForSource,
@@ -103,6 +104,14 @@ export function createConfigureMindSupport(deps) {
         loaded: health.health?.loaded
       });
       return { ok: health.ok, checks };
+    }
+    if (backend === "minimax command mind") {
+      const catalog = await fetchMiniMaxModels({ host: cfg.host });
+      const selectedModel = String(cfg.model ?? "").trim();
+      const modelAvailable = catalog.ok && catalog.models.includes(selectedModel);
+      checks.push({ name: "MiniMax model catalog reachable", ok: catalog.ok, error: catalog.error || "" });
+      checks.push({ name: "model available", ok: modelAvailable, model: selectedModel });
+      return { ok: modelAvailable, checks };
     }
     checks.push({
       name: "provider live check",

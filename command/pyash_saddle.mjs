@@ -493,22 +493,28 @@ async function main() {
     prompt({ clear: false, label: "select context> " });
   };
   const showThinkPicker = () => {
-    if (!["ollama", "strata"].includes(backend)) {
-      writeLine("/think controls are available for Ollama and Strata minds");
+    if (!["ollama", "strata", "minimax"].includes(backend)) {
+      writeLine("/think controls are available for Ollama, Strata, and MiniMax minds");
       prompt({ clear: false });
       return;
     }
-    const options = backend === "ollama" ? ["off", "on"] : ["none", "low", "medium", "high"];
+    const options = backend === "ollama"
+      ? ["off", "on"]
+      : backend === "minimax"
+        ? ["low", "medium", "high", "xhigh", "max"]
+        : ["none", "low", "medium", "high"];
     thinkPicker = options.map((value) => ({ model: value, value, label: value }));
     writeLine(backend === "ollama"
       ? `thinking for ${model}: current ${thinkSetting?.value ?? "model default"}`
-      : `reasoning effort for ${model}: current ${thinkSetting?.value ?? "Strata default"}`);
+      : `reasoning effort for ${model}: current ${thinkSetting?.value ?? (backend === "minimax" ? "provider default" : "Strata default")}`);
     for (const [index, option] of thinkPicker.entries()) {
       writeLine(`${index + 1}. ${option.label}${option.value === thinkSetting?.value ? " (current)" : ""}`);
     }
     writeLine(backend === "ollama"
       ? "Choose whether to request thinking; model support varies."
-      : "Choose the Strata reasoning effort for subsequent requests.");
+      : backend === "minimax"
+        ? "Choose MiniMax reasoning effort. MiniMax M3.1 Flash does not support disabling thinking."
+        : "Choose the Strata reasoning effort for subsequent requests.");
     prompt({ clear: false, label: "select thinking> " });
   };
   const shutdown = async () => {
@@ -731,7 +737,9 @@ async function main() {
           ? "Ollama accepts /think on or /think off"
           : backend === "strata"
             ? "Strata accepts /think none, low, medium, high, on, or off"
-            : "/think is available for Ollama and Strata minds");
+            : backend === "minimax"
+              ? "MiniMax accepts /think low, medium, high, xhigh, or max; thinking cannot be disabled for M3.1 Flash"
+              : "/think is available for Ollama, Strata, and MiniMax minds");
         prompt({ clear: false });
         return;
       }

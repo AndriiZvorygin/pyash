@@ -191,7 +191,26 @@ test("coding saddle selects named Pyash minds without changing global defaults",
     });
     assert.equal(openaiCall.fromstate.text, "openai");
 
-    assert.deepEqual(listSaddleMindNames({ minds: allRemember() }), ["mind", "openai", "zai"]);
+    const minimax = await prepareSaddle({
+      cwd: root,
+      runtimeRoot,
+      worldRoot,
+      mindName: "minimax"
+    });
+    assert.equal(minimax.mindName, "minimax");
+    assert.equal(minimax.backend, "minimax");
+    assert.equal(minimax.model, "MiniMax-M3.1-Flash");
+    assert.equal(minimax.host, "https://api.minimax.io/v1");
+    const minimaxCall = await runSaddleTurn({
+      input: "test selected MiniMax mind",
+      model: minimax.model,
+      backend: minimax.backend,
+      host: minimax.host,
+      mindFn: async (sentence) => sentence
+    });
+    assert.equal(minimaxCall.fromstate.text, "minimax");
+
+    assert.deepEqual(listSaddleMindNames({ minds: allRemember() }), ["mind", "minimax", "openai", "zai"]);
     await assert.rejects(prepareSaddle({ cwd: root, runtimeRoot, worldRoot, mindName: "missing" }), /Pyash mind not found: missing/);
   } finally {
     forget();

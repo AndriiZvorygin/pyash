@@ -7,6 +7,7 @@ const MIND_BACKEND_ALIASES = new Map([
   ["openai-api", "openai command mind"],
   ["openai-codex", "openai command mind"],
   ["openrouter", "openrouter command mind"],
+  ["minimax", "minimax command mind"],
   ["zai", "zai command mind"],
   ["z.ai", "zai command mind"],
   ["zai-codex", "zai command mind"],

@@ -1,0 +1,25 @@
+su name minimax mind runner ob text payload be ceremony def
+  exists su name cmd ob text "node command/mind_openai_runner.mjs --minimax" be text ya
+  ob text of ob of this to name text payload text local be text do
+  su name run ob text of cmd fromtext name payload text local be command do
+  su name run ret
+prah
+
+su name minimax mind runner ob text payload vyah stream be ceremony def
+  exists su name cmd ob text "node command/mind_openai_runner.mjs --minimax --stream" be text ya
+  ob text of ob of this to name text payload text local be text do
+  su name run ob text of cmd fromtext name payload text local vyah stream be command do
+  su name run ret
+prah
+
+su name minimax command mind ob text payload be ceremony def
+  su name run ob text of ob of this be minimax mind runner do
+  su name run ret
+prah
+
+su name minimax command mind ob text payload vyah stream be ceremony def
+  su name run ob text of ob of this vyah stream be minimax mind runner do
+  su name run ret
+prah
+
+exists su name minimax command mind be export ya

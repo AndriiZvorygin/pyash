@@ -1,9 +1,12 @@
+import { fetchMiniMaxModels } from "../../program/runtime/minimax.mjs";
+
 export const MIND_BACKEND_CHOICES = [
   { key: "ollama", value: "ollama command mind", label: "Ollama" },
   { key: "litellm", value: "litellm command mind", label: "LiteLLM" },
   { key: "openai-api", value: "openai command mind", label: "OpenAI API key" },
   { key: "openai-codex", value: "openai command mind", label: "OpenAI Codex OAuth" },
   { key: "openrouter", value: "openrouter command mind", label: "OpenRouter" },
+  { key: "minimax", value: "minimax command mind", label: "MiniMax" },
   { key: "zai", value: "zai command mind", label: "Z.AI GLM Coding Plan (Codex CLI)" },
   { key: "vllm", value: "vllm command mind", label: "vLLM" },
   { key: "strata", value: "strata command mind", label: "Strata (local, GPU-managed)" }
@@ -18,6 +21,7 @@ export function canonicalizeMindBackend(raw) {
   if (text === "ollama") return "ollama command mind";
   if (text === "litellm") return "litellm command mind";
   if (text === "openrouter") return "openrouter command mind";
+  if (text === "minimax" || text === "mini-max") return "minimax command mind";
   if (text === "zai" || text === "z.ai" || text === "zai-codex") return "zai command mind";
   if (text === "vllm") return "vllm command mind";
   if (text === "strata") return "strata command mind";
@@ -215,6 +219,8 @@ export function backendChoiceKey(backend) {
   return String(backend ?? "").trim().toLowerCase() || "ollama";
 }
 
+export { fetchMiniMaxModels };
+
 export function resolveMindBackendSource(raw, fallbackBackend = "ollama command mind") {
   const selected = findMindBackendChoice(raw);
   if (selected) return selected.key;
@@ -286,6 +292,7 @@ export function suggestMindRelayName({ source = "", model = "", fallback = "defa
   }
   if (sourceKey === "openai-api") return "openai";
   if (sourceKey === "openrouter") return "openrouter";
+  if (sourceKey === "minimax") return "minimax";
   if (sourceKey === "zai") return "zai-coder";
   if (sourceKey === "litellm") return "litellm";
   if (sourceKey === "vllm") return "vllm";
@@ -301,6 +308,7 @@ export function defaultMindHostForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
   if (key === "strata") return "http://127.0.0.1:8081";
   if (key === "zai") return "https://api.z.ai/api/v1";
+  if (key === "minimax") return "https://api.minimax.io/v1";
   if (key === "openai-api" || key === "openai-codex") {
     return "https://api.openai.com";
   }
@@ -314,6 +322,7 @@ export function defaultMindModelForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
   if (key === "strata") return "strata";
   if (key === "zai") return "glm-5.3-flash";
+  if (key === "minimax") return "MiniMax-M3.1-Flash";
   if (key === "openai-api" || key === "openai-codex") return "gpt-5-codex";
   if (key === "openrouter") return "openrouter/auto";
   return "gpt-oss:latest";

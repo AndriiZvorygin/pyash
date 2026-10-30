@@ -7,6 +7,7 @@ from filename "./module/mind_openai.pya" ob name openrouter command mind be impo
 from filename "./module/mind_openai.pya" ob name vllm command mind be import do
 from filename "./module/mind_strata.pya" ob name strata command mind be import do
 from filename "./module/mind_zai.pya" ob name zai command mind be import do
+from filename "./module/mind_minimax.pya" ob name minimax command mind be import do
 from filename "./module/mind_katago.pya" ob name katago command mind be import do
 from filename "./module/mind_katago.pya" ob name katago analyze be import do
 from filename "./module/verify.pya" ob name verify be import do
@@ -47,6 +48,7 @@ exists su name mind model ob text "qwen3.5:9b" be default ya
 exists su name coding saddle mind ob text "mind" be default ya
 exists su name zai be mind from state "zai" from space "https://api.z.ai/api/v1" via state "glm-5.3-flash" ya
 exists su name openai be mind from state "openai" from space "https://api.openai.com" via state "gpt-5.3-codex" ya
+exists su name minimax be mind from state "minimax" from space "https://api.minimax.io/v1" via state "MiniMax-M3.1-Flash" ya
 exists su name katago profile ob text "default" be default ya
 su name mind configure be map def
   su name think ob bool lie ya

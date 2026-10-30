@@ -18,18 +18,20 @@ import {
   resolveZaiApiKey,
   resolveZaiCodingApiKey
 } from "../program/runtime/zai_coding_plan.mjs";
+import { resolveMiniMaxApiKey } from "../program/runtime/minimax.mjs";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
   const stream = args.includes("--stream");
   const strata = args.includes("--strata");
   const zaiCodex = args.includes("--zai-codex");
+  const minimax = args.includes("--minimax");
   const managed = args.includes("--managed");
   const payloadIndex = args.indexOf("--payload");
   const payloadFileIndex = args.indexOf("--payload-file");
   const payload = payloadIndex !== -1 ? args[payloadIndex + 1] ?? "" : null;
   const payloadFile = payloadFileIndex !== -1 ? args[payloadFileIndex + 1] ?? "" : null;
-  return { stream, strata, managed, zaiCodex, payload, payloadFile };
+  return { stream, strata, managed, zaiCodex, minimax, payload, payloadFile };
 }
 
 function readStdin() {
@@ -41,7 +43,7 @@ function readStdin() {
 }
 
 async function parsePayload() {
-  const { stream, strata, managed, zaiCodex, payload: payloadArg, payloadFile } = parseArgs(process.argv);
+  const { stream, strata, managed, zaiCodex, minimax, payload: payloadArg, payloadFile } = parseArgs(process.argv);
   let raw = "";
   if (payloadArg != null) raw = payloadArg;
   else if (payloadFile) raw = await fs.promises.readFile(payloadFile, "utf8");
@@ -54,7 +56,7 @@ async function parsePayload() {
     throw new Error(`mind_openai_runner: invalid JSON payload (${err?.message ?? err})`);
   }
   payload.stream = stream || payload.stream === true;
-  return { payload, strata, managed, zaiCodex };
+  return { payload, strata, managed, zaiCodex, minimax };
 }
 
 function textPart(part) {
@@ -280,7 +282,7 @@ async function runCodexFallback(payload = {}, { stream = false, codexHome = "" }
 }
 
 async function main() {
-  const { payload, strata, managed, zaiCodex } = await parsePayload();
+  const { payload, strata, managed, zaiCodex, minimax } = await parsePayload();
 
   if (process.env.PYA_COMMAND_RESPONSE) {
     process.stdout.write(`${process.env.PYA_COMMAND_RESPONSE}\n`);
@@ -317,6 +319,10 @@ async function main() {
     // resolveHost validation reports malformed endpoints in the request path.
   }
   const explicitApiKey = String(payload.apiKey ?? "").trim();
+  const minimaxApiKey = explicitApiKey || (minimax ? resolveMiniMaxApiKey() : "");
+  if (minimax && !minimaxApiKey) {
+    throw new Error('MiniMax API key missing: add `exists su name minimax api key ob text "..." be default ya` to configure/secret.pya or set MINIMAX_API_KEY');
+  }
   const usesZaiApi = !strata && hostName === "api.z.ai";
   const zaiApiKey = usesZaiApi ? resolveZaiApiKey() : "";
   if (usesZaiApi && !explicitApiKey && !zaiApiKey) {
@@ -328,7 +334,11 @@ async function main() {
   const strataKey = [payload.apiKey, process.env.STRATA_API_KEY]
     .map((value) => String(value ?? "").trim())
     .find(Boolean);
-  const apiKey = strata ? (strataKey || "pyash-local") : resolveApiKey({ host, payload: providerPayload });
+  const apiKey = minimax
+    ? minimaxApiKey
+    : strata
+      ? (strataKey || "pyash-local")
+      : resolveApiKey({ host, payload: providerPayload });
   if (!apiKey && !strata) {
     const fallback = await runCodexFallback(payload, { stream: payload.stream === true });
     if (fallback) process.stdout.write(`${JSON.stringify(fallback)}\n`);
@@ -365,6 +375,7 @@ async function main() {
       host,
       apiKey,
       body,
+      providerLabel: minimax ? "MiniMax" : undefined,
       onChunk: (chunk) => {
         process.stdout.write(`${JSON.stringify(String(chunk))}\n`);
       }
@@ -373,7 +384,7 @@ async function main() {
     return;
   }
 
-  const result = await requestJson({ host, apiKey, body });
+  const result = await requestJson({ host, apiKey, body, providerLabel: minimax ? "MiniMax" : undefined });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

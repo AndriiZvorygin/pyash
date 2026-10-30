@@ -392,6 +392,9 @@ export async function runToolChat({
       content: textToolCalls.length > 0 ? "" : lastResponse?.message?.content ?? "",
       tool_calls: toolCalls
     };
+    if (typeof lastResponse?.message?.reasoning_content === "string") {
+      assistantMessage.reasoning_content = lastResponse.message.reasoning_content;
+    }
     messages.push(assistantMessage);
     appendLog(dialogue, { role: "assistant", content: assistantMessage.content });
 

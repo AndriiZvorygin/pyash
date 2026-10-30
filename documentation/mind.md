@@ -12,6 +12,30 @@ This document defines how a **mind** (an LLM endpoint) is configured, how Pyash 
 
 The default backend remains Ollama. Optional OpenAI-compatible backends use the same conversation and tool-call payloads through the OpenAI Chat Completions API.
 
+## Optional MiniMax Mind
+
+MiniMax is selectable per mind and does not change Pyash's Ollama default. Put a MiniMax API or M Plan key in the ignored `configure/secret.pya` file (mode `600`):
+
+```pya
+exists su name minimax api key ob text "<MiniMax API key>" be default ya
+```
+
+`configure/default.pya` provides the named `minimax` mind using `https://api.minimax.io/v1` and `MiniMax-M3.1-Flash`. The shared Chat Completions adapter calls `/v1/chat/completions`; streaming, tools, and image inputs use Pyash's existing OpenAI-compatible request shape. The model picker queries `/v1/models` with the same key. The key can instead be supplied through `MINIMAX_API_KEY`.
+
+The equivalent Pyash mind declaration is:
+
+```pya
+exists su name minimax be mind
+  from state "minimax"
+  from space "https://api.minimax.io/v1"
+  via state "MiniMax-M3.1-Flash"
+ya
+```
+
+Select it in the coding saddle with `/mind minimax`; use `/model` to choose from the account's model catalog. MiniMax M3.1 Flash always uses reasoning; `/think low|medium|high|xhigh|max` selects its reasoning effort rather than disabling thinking. `pyash configure mind --backend minimax` also offers those levels and saves the chosen setting.
+
+MiniMax setup references: [Chat Completions API](https://platform.minimax.io/docs/api-reference/text-chat-openai), [OpenAI-compatible Text API](https://platform.minimax.io/docs/api-reference/text-openai-api), and [List Models](https://platform.minimax.io/docs/api-reference/models/openai/list-models).
+
 ## Z.AI GLM Coding Plan
 
 Pyash exposes `zai` as an optional coding mind using Z.AI's documented Codex CLI integration. Store credentials as local Pyash facts in the ignored `configure/secret.pya`, with file mode `600`:

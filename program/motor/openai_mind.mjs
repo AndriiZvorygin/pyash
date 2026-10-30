@@ -62,6 +62,8 @@ async function normalizeMessage(message = {}) {
 
   const toolCallId = asText(message.tool_call_id);
   if (toolCallId) out.tool_call_id = toolCallId;
+  const reasoningContent = asText(message.reasoning_content);
+  if (reasoningContent) out.reasoning_content = reasoningContent;
 
   if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
     out.tool_calls = message.tool_calls.map((item) => {
@@ -155,7 +157,9 @@ function parseChatCompletionsResponse(payload = {}) {
   const message = payload?.choices?.[0]?.message ?? {};
   const content = parseMessageContent(message);
   const toolCalls = normalizeToolCalls(message.tool_calls);
-  const outMessage = { content };
+  const outMessage = { role: asText(message.role) || "assistant", content };
+  const reasoningContent = asText(message.reasoning_content);
+  if (reasoningContent) outMessage.reasoning_content = reasoningContent;
   if (toolCalls.length > 0) outMessage.tool_calls = toolCalls;
   return {
     response: content,
@@ -164,8 +168,13 @@ function parseChatCompletionsResponse(payload = {}) {
   };
 }
 
-async function requestJson({ host, apiKey, body }) {
-  const endpoint = `${normalizeHost(host)}/v1/chat/completions`;
+function chatCompletionsEndpoint(host) {
+  const base = normalizeHost(host);
+  return /\/v1$/iu.test(base) ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+}
+
+async function requestJson({ host, apiKey, body, providerLabel = "OpenAI-compatible" }) {
+  const endpoint = chatCompletionsEndpoint(host);
   const res = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -184,13 +193,13 @@ async function requestJson({ host, apiKey, body }) {
   if (!res.ok) {
     const code = asText(parsed?.error?.code);
     const msg = asText(parsed?.error?.message || res.statusText || "request failed");
-    throw new Error(`openai request failed: status=${res.status}${code ? ` code=${code}` : ""} error=${msg}`);
+    throw new Error(`${providerLabel} request failed: status=${res.status}${code ? ` code=${code}` : ""} error=${msg}`);
   }
   return parseChatCompletionsResponse(parsed);
 }
 
-async function requestStream({ host, apiKey, body, onChunk }) {
-  const endpoint = `${normalizeHost(host)}/v1/chat/completions`;
+async function requestStream({ host, apiKey, body, onChunk, providerLabel = "OpenAI-compatible" }) {
+  const endpoint = chatCompletionsEndpoint(host);
   const res = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -209,7 +218,7 @@ async function requestStream({ host, apiKey, body, onChunk }) {
     }
     const code = asText(parsed?.error?.code);
     const msg = asText(parsed?.error?.message || res.statusText || "request failed");
-    throw new Error(`openai request failed: status=${res.status}${code ? ` code=${code}` : ""} error=${msg}`);
+    throw new Error(`${providerLabel} request failed: status=${res.status}${code ? ` code=${code}` : ""} error=${msg}`);
   }
   const decoder = new TextDecoder();
   let buffer = "";
