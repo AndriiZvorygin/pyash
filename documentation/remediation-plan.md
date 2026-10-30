@@ -12,7 +12,7 @@ Date: 2026-10-30
 | 2 — Example correctness | in progress | `until-loop.pya` fix verified; module manuscript score fix landed; remaining failures need owner decisions |
 | 3 — CI coverage | partly done | WordNet provisioning added to bootstrap and CI; `doc:prose` wired into CI; quiz tiering still open |
 | 4 — Core/periphery balance | open | — |
-| 5 — Repo hygiene | open | — |
+| 5 — Repo hygiene | partly done | `push_all.sh` remote check relaxed and guarded; orphaned searxng settings and file ownership still open |
 
 ## Test baseline movement
 
@@ -375,14 +375,25 @@ config. Compose mounts `container/searxng/configure/searxng/`, whose
 `settings.yml` already had `json` in `formats` before commit `59db00b1`.
 Decide: `git rm` the orphan, or keep it and make the relationship explicit.
 
-**5.2 Relax the `push_all.sh` remote check.**
+**5.2 Relax the `push_all.sh` remote check.** *(done)*
 
-`command/push_all.sh` requires the literal
-`git@github.com:AndriiZvorygin/pyash.git` and exits 1 when the remote uses the
+`command/push_all.sh` required the literal
+`git@github.com:AndriiZvorygin/pyash.git` and exited 1 when the remote used the
 `github-andriizvorygin` SSH alias — a legitimate `~/.ssh/config` entry with its
-own key. It also exits 0 despite failing, so scripted callers read false
-success. Accept either the canonical URL or the alias, and make the exit code
-reflect the failure.
+own key. The check now lives in `command/push_all_check.mjs`: it accepts the
+canonical URL or an alias that `ssh -G` resolves to `github.com`, and rejects
+any other host or repository path before pushing. Pinned by
+`quiz/push_all_remote_guard.test.mjs`.
+
+The script's exit code always reflected failure (`set -euo pipefail` plus an
+explicit `exit 1`); an earlier report of "exits 0 despite failing" was an
+artifact of measuring the exit status of a `| tail` pipe rather than the
+script.
+
+The script also used to refuse to run at all on a dirty worktree, which made
+it unusable whenever another agent had work in progress. Since `git push` only
+publishes committed history, a dirty worktree is now reported and the push
+proceeds.
 
 **5.3 Fix container-config file ownership.**
 
