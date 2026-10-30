@@ -131,6 +131,47 @@ test("WordNet linker uses an exact source lemma dictionary alias before relation
   assert.match(linked.link.evidence, /existing Pyash dictionary alias|one meaning/u);
 });
 
+test("WordNet linker resolves a dictionary alias through the selected sense lemma", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "a:sexual-body:sexual",
+      pos: "a",
+      synset: "sexual-body",
+      senseKey: "sexual-body",
+      lemma: "sexual",
+      gloss: "having or involving sex"
+    }, {
+      id: "a:sexuality:sexual",
+      pos: "a",
+      synset: "sexuality",
+      senseKey: "sexuality",
+      lemma: "sexual",
+      gloss: "relating to sexuality"
+    }]
+  });
+  const linked = linkEnglishWordNetSense({
+    sense: { pos: "a", synset: "sexual-body", lemmas: ["sexual"] },
+    sourceTerm: "sexually",
+    wordnetIndex: index,
+    resolveWord: (word) => ({
+      sexually: {
+        coverageType: "dictionary-alias",
+        canonicalEnglish: "sexual",
+        pyashSequence: ["hjon"]
+      },
+      sexual: {
+        coverageType: "atomic",
+        canonicalEnglish: "sexual",
+        pyashSequence: ["hjon"]
+      }
+    }[word] ?? null)
+  });
+  assert.equal(linked.status, "accepted-deterministic");
+  assert.equal(linked.link.target, "sexual");
+  assert.deepEqual(linked.link.pyashSequence, ["hjon"]);
+  assert.match(linked.link.evidence, /dictionary alias sexually resolves to sexual, a lemma of selected WordNet sense/u);
+});
+
 test("WordNet sense anchors use covered relation targets only", () => {
   const index = buildEnglishWordNetIndex({
     rows: [{
