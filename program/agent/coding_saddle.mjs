@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fetchZaiCodingPlanModels } from "../runtime/zai_coding_plan.mjs";
 
 export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "You are the Pyash coding saddle: an interactive coding agent operating inside the existing Pyash runtime.",
@@ -110,13 +111,28 @@ export async function discoverSaddleModels({
   host,
   currentModel = "",
   fallbackModels = [],
+  apiKey,
   fetchFn = globalThis.fetch,
   timeoutMs = 4000
 } = {}) {
   const normalizedBackend = normalizeSaddleBackend(backend);
   const normalizedHost = normalizeSaddleHost(host);
   const configured = [currentModel, ...fallbackModels].map(normalizeText).filter(Boolean);
-  if (["zai", "openai", "litellm", "openrouter", "vllm"].includes(normalizedBackend)) {
+  if (normalizedBackend === "zai") {
+    const discovered = await fetchZaiCodingPlanModels({
+      host: normalizedHost,
+      apiKey,
+      fetchFn,
+      timeoutMs
+    });
+    return {
+      models: [...new Set([...configured, ...discovered.models])],
+      catalogModels: discovered.models,
+      available: discovered.ok,
+      error: discovered.error || null
+    };
+  }
+  if (["openai", "litellm", "openrouter", "vllm"].includes(normalizedBackend)) {
     return { models: [...new Set(configured)], available: false, error: "enter a model ID supported by the selected mind" };
   }
   if (typeof fetchFn !== "function") {

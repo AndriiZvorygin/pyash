@@ -246,6 +246,30 @@ test("coding saddle discovers and selects models from the active backend", async
   assert.match(formatSaddleModelPicker({ models: ollama.models, currentModel: ollama.models[0] }), /1\. qwen3\.5:9b \(current\)/);
 });
 
+test("coding saddle discovers all account-enabled Z.AI models for the model picker", async () => {
+  const result = await discoverSaddleModels({
+    backend: "zai",
+    host: "https://api.z.ai/api/v1",
+    currentModel: "glm-5.3-flash",
+    apiKey: "test-coding-key",
+    fetchFn: async (url, options) => {
+      assert.equal(url, "https://api.z.ai/api/coding/paas/v4/models");
+      assert.equal(options.headers.authorization, "Bearer test-coding-key");
+      return {
+        ok: true,
+        async json() {
+          return { data: [{ id: "glm-5.3" }, { id: "glm-5.3-flash" }, { id: "glm-5.3-flashx" }] };
+        }
+      };
+    }
+  });
+
+  assert.deepEqual(result.models, ["glm-5.3-flash", "glm-5.3", "glm-5.3-flashx"]);
+  assert.deepEqual(result.catalogModels, ["glm-5.3", "glm-5.3-flash", "glm-5.3-flashx"]);
+  assert.equal(result.available, true);
+  assert.equal(resolveSaddleModelSelection("3", result.models), "glm-5.3-flashx");
+});
+
 test("coding saddle preserves the current model when catalogue discovery fails", async () => {
   const result = await discoverSaddleModels({
     backend: "strata",

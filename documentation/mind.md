@@ -39,7 +39,7 @@ Select Z.AI for the coding saddle without changing Pyash's global default:
 PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs
 ```
 
-This selects the Pyash mind named `zai`, whose defaults are `glm-5.3-flash` and `https://api.z.ai/api/v1`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` selects a model for the active mind. Other minds continue using their existing configuration. Z.AI's model list for this account confirmed the exact ID `glm-5.3-flash`; Z.AI describes Flash as multimodal and available to Coding Plan users. The isolated Codex catalog currently declares text input only for this path, while Pyash tools remain available through the Codex MCP bridge.
+This selects the Pyash mind named `zai`, whose default model is `glm-5.3-flash` and endpoint is `https://api.z.ai/api/v1`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` queries the authenticated Coding Plan model catalog and offers the models returned for your account. Other minds continue using their existing configuration. After a successful refresh, Pyash also updates the local Codex `zai` profile catalog (`model_catalog_json`) from the same model IDs, so the regular Codex model selector stays in sync. Codex reads that local catalog rather than querying Z.AI itself; opening Pyash's `/model` picker refreshes it. If discovery is unavailable, the saddle keeps the configured model available and reports the lookup failure. Z.AI describes GLM-5.3-Flash as multimodal, but the current Codex profile declares text input only; Pyash tools remain available through the Codex MCP bridge.
 
 The Codex route preserves the CLI's `turn.completed` token accounting. The
 saddle prints that total after each reply and appends a durable usage map to the

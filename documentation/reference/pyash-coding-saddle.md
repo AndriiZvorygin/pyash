@@ -32,6 +32,13 @@ For the Z.AI GLM Coding Plan, add `exists su name zai coding api key ob text
 official Codex CLI route through Pyash's existing mind tools; see
 [`mind.md`](../mind.md#zai-glm-coding-plan) for details.
 
+For a Z.AI mind, `/model` queries the account's Coding Plan model catalog. When
+the lookup succeeds, Pyash also refreshes the local Codex `zai` profile's
+`model_catalog_json` file from the returned IDs. Codex itself reads that local
+catalog, so open Pyash's `/model` picker before starting regular Codex when you
+want its model selector refreshed. A failed lookup leaves the configured model
+available and reports the discovery error.
+
 The web app adds a **Duty** mode beside ordinary chat. Choose an online worker
 and one of its advertised directories, select the model in the existing model
 control, then create a duty with a concise objective and first instruction.

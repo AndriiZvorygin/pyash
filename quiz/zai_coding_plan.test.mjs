@@ -7,9 +7,11 @@ import { spawnSync } from "node:child_process";
 
 import {
   createZaiCodexHome,
+  fetchZaiCodingPlanModels,
   removeZaiCodexHome,
   resolveZaiApiKey,
-  resolveZaiCodingApiKey
+  resolveZaiCodingApiKey,
+  syncZaiCodexModelCatalog
 } from "../program/runtime/zai_coding_plan.mjs";
 
 test("Z.AI standard and Coding Plan keys resolve from distinct Pyash secret facts", () => {
@@ -40,6 +42,75 @@ test("Codex auth helper emits the configured key only on stdout", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, "fixture-coding-key\n");
   assert.equal(result.stderr, "");
+});
+
+test("Z.AI Coding Plan discovery reads model IDs from the account catalog endpoint", async () => {
+  const result = await fetchZaiCodingPlanModels({
+    host: "https://api.z.ai/api/v1",
+    apiKey: "catalog-test-key",
+    fetchFn: async (url, options) => {
+      assert.equal(url, "https://api.z.ai/api/coding/paas/v4/models");
+      assert.equal(options.headers.authorization, "Bearer catalog-test-key");
+      assert.ok(options.signal instanceof AbortSignal);
+      return {
+        ok: true,
+        async json() {
+          return {
+            object: "list",
+            data: [
+              { id: "glm-5.3-flash" },
+              { id: "glm-5.3" },
+              { id: "glm-5.3-flash" }
+            ]
+          };
+        }
+      };
+    }
+  });
+
+  assert.deepEqual(result, { ok: true, models: ["glm-5.3-flash", "glm-5.3"] });
+});
+
+test("Z.AI model discovery fails safely without a key or provider response", async () => {
+  let calls = 0;
+  const missingKey = await fetchZaiCodingPlanModels({ apiKey: "", fetchFn: async () => { calls += 1; } });
+  assert.deepEqual(missingKey, { ok: false, error: "Z.AI Coding Plan key is missing", models: [] });
+  assert.equal(calls, 0);
+
+  const unavailable = await fetchZaiCodingPlanModels({
+    apiKey: "catalog-test-key",
+    fetchFn: async () => ({ ok: false, status: 503 })
+  });
+  assert.equal(unavailable.ok, false);
+  assert.match(unavailable.error, /HTTP 503/u);
+  assert.deepEqual(unavailable.models, []);
+});
+
+test("Z.AI discovery refreshes the configured Codex catalog without losing model metadata", () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), `pyash-zai-codex-catalog-${process.pid}-`));
+  const catalogPath = path.join(codexHome, "models-zai.json");
+  const profilePath = path.join(codexHome, "zai.config.toml");
+  fs.writeFileSync(profilePath, `model_catalog_json = ${JSON.stringify(catalogPath)}\n`, { mode: 0o600 });
+  fs.writeFileSync(catalogPath, `${JSON.stringify({
+    models: [{ slug: "glm-5.3-flash", display_name: "GLM Flash", context_window: 1048576 }],
+    source: "zai"
+  })}\n`, { mode: 0o600 });
+  try {
+    const refreshed = syncZaiCodexModelCatalog({
+      codexHome,
+      models: ["glm-5.3-flash", "glm-5.3", "glm-5.3-flash"]
+    });
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+    assert.equal(refreshed.updated, true);
+    assert.deepEqual(refreshed.models, ["glm-5.3-flash", "glm-5.3"]);
+    assert.deepEqual(catalog.models.map(({ slug }) => slug), ["glm-5.3-flash", "glm-5.3"]);
+    assert.equal(catalog.models[0].display_name, "glm-5.3-flash");
+    assert.equal(catalog.models[1].context_window, 1048576);
+    assert.equal(catalog.source, "zai");
+    assert.equal(fs.statSync(catalogPath).mode & 0o777, 0o600);
+  } finally {
+    fs.rmSync(codexHome, { recursive: true, force: true });
+  }
 });
 
 test("isolated Codex profile uses Z.AI Responses and trusts only the active project", () => {

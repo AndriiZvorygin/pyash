@@ -15,6 +15,7 @@ import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
+import { syncZaiCodexModelCatalog } from "../program/runtime/zai_coding_plan.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import {
   appendSaddleUsage,
@@ -355,6 +356,14 @@ async function main() {
       .map((value) => value.trim())
       .filter(Boolean);
     const discovered = await discoverSaddleModels({ backend, host, currentModel: model, fallbackModels });
+    if (backend === "zai" && discovered.available && discovered.catalogModels?.length) {
+      try {
+        const refreshed = syncZaiCodexModelCatalog({ models: discovered.catalogModels });
+        if (refreshed.updated) writeLine(`Codex Z.AI catalog refreshed: ${refreshed.models.length} models`);
+      } catch (error) {
+        writeLine(`Codex Z.AI catalog refresh failed: ${String(error?.message ?? error)}`);
+      }
+    }
     const discoveredOptions = discovered.models.map((entry) => ({
       model: entry,
       value: entry,

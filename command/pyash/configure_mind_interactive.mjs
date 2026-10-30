@@ -1,5 +1,9 @@
 import readline from "node:readline/promises";
 import {
+  fetchZaiCodingPlanModels,
+  syncZaiCodexModelCatalog
+} from "../../program/runtime/zai_coding_plan.mjs";
+import {
   MIND_BACKEND_CHOICES,
   looksLikeOllamaBackend,
   fetchOllamaModels,
@@ -197,6 +201,26 @@ export function createCollectMindInteractive(deps) {
           }
         } else if (discovered.ok) {
           textOut("- no models reported by codex app-server");
+        } else {
+          textOut(`- model listing unavailable (${discovered.error})`);
+        }
+      } else if (source === "zai") {
+        printer.header("C.1 Z.AI Coding Plan Models");
+        printer.why("The account model catalog determines which Z.AI models are selectable.");
+        printer.how("Pyash queries the Coding Plan models endpoint using the key in configure/secret.pya.");
+        printer.examples("glm-5.3-flash");
+        const discovered = await fetchZaiCodingPlanModels({ host });
+        if (discovered.ok) {
+          discoveredModels.push(...discovered.models);
+          if (discovered.models.includes(defaultMindModelForSource(source))) {
+            discoveredDefaultModel = defaultMindModelForSource(source);
+          }
+          textOut(`- found ${discovered.models.length} model(s):`);
+          for (const line of formatNumberedRows(discovered.models, { columns: 2 })) {
+            textOut(`  ${line}`);
+          }
+          const refreshed = syncZaiCodexModelCatalog({ models: discovered.models });
+          if (refreshed.updated) textOut(`- refreshed Codex Z.AI catalog (${refreshed.models.length} models)`);
         } else {
           textOut(`- model listing unavailable (${discovered.error})`);
         }
