@@ -316,7 +316,12 @@ export async function runToolChat({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
-    if (backendName === "zai command mind" && Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
+    if (backendName === "ollama command mind" && Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
+      requestPayload.options = {
+        ...(requestPayload.options && typeof requestPayload.options === "object" ? requestPayload.options : {}),
+        num_ctx: Number(contextWindow)
+      };
+    } else if (backendName === "zai command mind" && Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
       requestPayload.contextWindow = Number(contextWindow);
     }
     applySampling(requestPayload);

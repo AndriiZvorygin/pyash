@@ -105,6 +105,32 @@ test("Z.AI tool-chat request carries the selected Codex context budget", async (
   }
 });
 
+test("Ollama tool-chat request carries num_ctx without dropping other options", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name plus num be plus ob num 1 to name num can"));
+    await interpret(parse("prah"));
+    await interpret(parse('exists su name helper be mind via state "qwen3" ya'));
+    await mind_to_name_text({
+      mood: "do", be: "write", for: { name: "helper" }, ob: { text: "use plus" }, to: { name: "text" },
+      with: { name: "tools" }, fromstate: { text: "ollama" }, contextWindow: 32768
+    });
+
+    const payload = decodeMindPayload(records, "helper");
+    assert.equal(payload.options?.num_ctx, 32768);
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test("mind tool adapter respects input markers in can sentences", async () => {
   forget();
   resetMindLogs();

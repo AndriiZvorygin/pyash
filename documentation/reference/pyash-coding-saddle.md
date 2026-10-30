@@ -51,6 +51,20 @@ not change the model's provider-side context limit. The Coding Plan model-list
 endpoint supplies model IDs only, so context ceilings are tracked separately
 from discovery.
 
+For Ollama, `/context` selects a per-request `num_ctx` preset (4K, 8K, 16K,
+32K, or 64K); `/context default` removes the override and returns to Ollama's
+configured default. This applies to both tool and non-tool turns for the
+current saddle session. Larger contexts consume more memory and must fit the
+selected model and host. Strata's context is not a per-request API setting: it
+is chosen when its server launches, so `/context` reports that limitation
+rather than changing or restarting a Housekeeper-managed server.
+
+Use `/think` to pick the supported reasoning mode. Ollama accepts `on` or
+`off` and sends its boolean `think` request option. Strata accepts `none`,
+`low`, `medium`, or `high` (with `off`/`on` aliases) and sends the documented
+OpenAI-compatible `reasoning_effort` field. Leaving the selection unset keeps
+the existing model or Strata server default.
+
 The web app adds a **Duty** mode beside ordinary chat. Choose an online worker
 and one of its advertised directories, select the model in the existing model
 control, then create a duty with a concise objective and first instruction.
@@ -72,10 +86,11 @@ Enter submits the current request. Shift+Enter inserts a newline on terminals
 that report the standard modified-key sequence; `Ctrl+J` is the portable
 newline fallback. `Ctrl+C` writes the existing Pyash mind-interrupt signal and
 `Ctrl+D` exits. `/status`, `/mind [name]`, `/model <name>`, `/host <url>`,
-`/usage`, `/discharge`, and `/exit` are local saddle commands. `/mind` lists
-configured Pyash minds; `/mind zai` and `/mind openai` switch the active mind.
-`/model` changes the model within that mind. `/usage` aggregates durable token
-records from the selected world, including Z.AI GLM turns that report usage.
+`/context [size]`, `/think [mode]`, `/usage`, `/discharge`, and `/exit` are
+local saddle commands. `/mind` lists configured Pyash minds; `/mind zai` and
+`/mind openai` switch the active mind. `/model` changes the model within that
+mind. `/usage` aggregates durable token records from the selected world,
+including Z.AI GLM turns that report usage.
 
 ## Durable state
 

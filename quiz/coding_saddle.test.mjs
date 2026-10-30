@@ -13,6 +13,8 @@ import {
   formatSaddleModelPicker,
   formatSaddleStatus,
   listSaddleMindNames,
+  normalizeSaddleThinkSelection,
+  SADDLE_OLLAMA_CONTEXT_PRESETS,
   parseSaddleMindCommand,
   resolveSaddleModelOption,
   resolveSaddleModelSelection,
@@ -56,6 +58,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
     backend: "ollama",
     host: "http://mriczo:11434",
     contextWindow: 131072,
+    think: true,
     sessionName: "coding"
   });
 
@@ -65,6 +68,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
   assert.equal(sentence.fromstate.text, "ollama");
   assert.equal(sentence.from.text, "http://mriczo:11434");
   assert.equal(sentence.contextWindow, 131072);
+  assert.equal(sentence.think, true);
   assert.equal(sentence.fromtext.name, "session name coding");
 });
 
@@ -77,6 +81,7 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
     backend: "ollama",
     host: "http://localhost:11434",
     contextWindow: 65536,
+    think: false,
     onUsage: (usage) => {
       observedUsage = usage;
       return usage;
@@ -96,6 +101,7 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   assert.equal(observed.sentence.ob.text, "run the focused test");
   assert.equal(observed.sentence.fromstate.text, "ollama");
   assert.equal(observed.sentence.contextWindow, 65536);
+  assert.equal(observed.sentence.think, false);
   assert.equal(observed.options.sessionUserContent, "run the focused test");
   assert.equal(typeof observed.options.onUsage, "function");
   assert.deepEqual(observedUsage, {
@@ -248,6 +254,32 @@ test("coding saddle discovers and selects models from the active backend", async
   assert.deepEqual(ollama.models, ["qwen3.5:9b", "qwen3.8:27b"]);
   assert.equal(resolveSaddleModelSelection("2", ollama.models), "qwen3.8:27b");
   assert.match(formatSaddleModelPicker({ models: ollama.models, currentModel: ollama.models[0] }), /1\. qwen3\.5:9b \(current\)/);
+});
+
+test("coding saddle maps Ollama thinking to boolean and Strata thinking to supported efforts", () => {
+  assert.deepEqual(SADDLE_OLLAMA_CONTEXT_PRESETS, [4096, 8192, 16384, 32768, 65536]);
+  assert.deepEqual(normalizeSaddleThinkSelection("off", "ollama"), {
+    value: "off", think: false, reasoningEffort: null
+  });
+  assert.deepEqual(normalizeSaddleThinkSelection("on", "ollama"), {
+    value: "on", think: true, reasoningEffort: null
+  });
+  assert.equal(normalizeSaddleThinkSelection("medium", "ollama"), null);
+  assert.deepEqual(normalizeSaddleThinkSelection("off", "strata"), {
+    value: "none", think: null, reasoningEffort: "none"
+  });
+  assert.deepEqual(normalizeSaddleThinkSelection("low", "strata"), {
+    value: "low", think: null, reasoningEffort: "low"
+  });
+  assert.deepEqual(normalizeSaddleThinkSelection("on", "strata"), {
+    value: "high", think: null, reasoningEffort: "high"
+  });
+  const strataSentence = buildSaddleMindSentence({
+    input: "think this through",
+    backend: "strata",
+    reasoningEffort: "low"
+  });
+  assert.equal(strataSentence.reasoningEffort, "low");
 });
 
 test("coding saddle discovers all account-enabled Z.AI models for the model picker", async () => {

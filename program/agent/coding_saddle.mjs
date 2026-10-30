@@ -1,6 +1,8 @@
 import path from "node:path";
 import { fetchZaiCodingPlanModels } from "../runtime/zai_coding_plan.mjs";
 
+export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536];
+
 export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "You are the Pyash coding saddle: an interactive coding agent operating inside the existing Pyash runtime.",
   "Use the provided Pyash tools for repository work. Do not pretend a change was made when a tool did not succeed.",
@@ -34,6 +36,27 @@ export function normalizeSaddleBackend(value, fallback = "ollama") {
 
 export function normalizeSaddleHost(value, fallback = "http://localhost:11434") {
   return normalizeText(value) || fallback;
+}
+
+export function normalizeSaddleThinkSelection(value, backend) {
+  const selected = normalizeText(value).toLowerCase();
+  const provider = normalizeSaddleBackend(backend);
+  if (provider === "ollama") {
+    if (["off", "none", "false", "0"].includes(selected)) {
+      return { value: "off", think: false, reasoningEffort: null };
+    }
+    if (["on", "think", "true", "1"].includes(selected)) {
+      return { value: "on", think: true, reasoningEffort: null };
+    }
+    return null;
+  }
+  if (provider === "strata") {
+    const effort = selected === "off" ? "none" : selected === "on" ? "high" : selected;
+    if (["none", "low", "medium", "high"].includes(effort)) {
+      return { value: effort, think: null, reasoningEffort: effort };
+    }
+  }
+  return null;
 }
 
 function mindFieldValue(value) {
@@ -199,6 +222,8 @@ export function buildSaddleMindSentence({
   backend,
   host,
   contextWindow,
+  think,
+  reasoningEffort,
   mindName = "coding saddle",
   toolMapName = "saddle tools",
   sessionName = "coding",
@@ -222,6 +247,10 @@ export function buildSaddleMindSentence({
   if (Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
     sentence.contextWindow = Number(contextWindow);
   }
+  if (typeof think === "boolean") sentence.think = think;
+  if (["none", "low", "medium", "high"].includes(String(reasoningEffort ?? "").trim().toLowerCase())) {
+    sentence.reasoningEffort = String(reasoningEffort).trim().toLowerCase();
+  }
   return sentence;
 }
 
@@ -229,6 +258,7 @@ export function formatSaddleStatus({
   mindName = "mind",
   model,
   contextWindow,
+  thinkMode,
   host,
   cwd,
   queue,
@@ -244,6 +274,7 @@ export function formatSaddleStatus({
     ...(Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0
       ? [`context: ${Number(contextWindow).toLocaleString("en-CA")} tokens`]
       : []),
+    ...(normalizeText(thinkMode) ? [`thinking: ${normalizeText(thinkMode)}`] : []),
     `host: ${normalizeSaddleHost(host)}`,
     `session: ${normalizeText(session) || "coding"}`,
     `cwd: ${path.resolve(String(cwd || process.cwd()))}`,

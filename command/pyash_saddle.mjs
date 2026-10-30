@@ -41,9 +41,11 @@ import {
   normalizeSaddleBackend,
   normalizeSaddleHost,
   normalizeSaddleModel,
+  normalizeSaddleThinkSelection,
   resolveSaddleModelOption,
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
+  SADDLE_OLLAMA_CONTEXT_PRESETS,
   saddleToolEventLabel
 } from "../program/agent/coding_saddle.mjs";
 
@@ -171,6 +173,8 @@ export async function runSaddleTurn({
   backend,
   host,
   contextWindow,
+  think,
+  reasoningEffort,
   sessionName = SESSION_NAME,
   sessionFile = "",
   sessionUserMetadata = null,
@@ -184,6 +188,8 @@ export async function runSaddleTurn({
     backend,
     host,
     contextWindow,
+    think,
+    reasoningEffort,
     mindName: AGENT_NAME,
     toolMapName: TOOL_MAP_NAME,
     sessionName,
@@ -342,17 +348,19 @@ async function main() {
   let backend = config.backend;
   let host = config.host;
   let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+  let thinkSetting = null;
   let busy = false;
   let closing = false;
   let modelPicker = null;
   let modelPickerLoading = false;
   let contextPicker = null;
+  let thinkPicker = null;
   let promptLabel = "pyash> ";
   let renderedRows = 1;
 
   const showStatus = async () => {
     const queue = await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
-    writeLine(formatSaddleStatus({ mindName, model, contextWindow, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
+    writeLine(formatSaddleStatus({ mindName, model, contextWindow, thinkMode: thinkSetting?.value, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
   };
   const prompt = ({ clear = true, label = promptLabel } = {}) => {
     promptLabel = label;
@@ -402,25 +410,62 @@ async function main() {
     prompt({ clear: false, label: "select model> " });
   };
   const showContextPicker = () => {
-    if (backend !== "zai") {
-      writeLine("context window selection is currently available for the Z.AI Codex mind");
+    if (backend === "strata") {
+      writeLine("Strata context is fixed when its server launches; Pyash cannot change it per request. Configure the Strata launch context and restart it through its normal GPU-managed process.");
       prompt({ clear: false });
       return;
     }
-    const maximum = getZaiModelContextLimit({ model });
-    const options = getZaiContextWindowOptions({ model });
-    contextPicker = options.map((tokens) => ({
-      model: String(tokens),
-      value: formatZaiContextWindow(tokens),
-      label: formatZaiContextWindow(tokens),
-      tokens
-    }));
-    writeLine(`context window for ${model}: current ${formatZaiContextWindow(contextWindow)}, model maximum ${formatZaiContextWindow(maximum)}`);
+    if (backend === "zai") {
+      const maximum = getZaiModelContextLimit({ model });
+      const options = getZaiContextWindowOptions({ model });
+      contextPicker = options.map((tokens) => ({
+        model: String(tokens),
+        value: formatZaiContextWindow(tokens),
+        label: formatZaiContextWindow(tokens),
+        tokens
+      }));
+      writeLine(`context window for ${model}: current ${formatZaiContextWindow(contextWindow)}, model maximum ${formatZaiContextWindow(maximum)}`);
+      writeLine("Choose a size by number or label; this sets the client-side budget, not the provider's model limit.");
+    } else if (backend === "ollama") {
+      contextPicker = [
+        { model: "default", value: "default", label: "Ollama default", tokens: null },
+        ...SADDLE_OLLAMA_CONTEXT_PRESETS.map((tokens) => ({
+          model: String(tokens),
+          value: formatZaiContextWindow(tokens),
+          label: formatZaiContextWindow(tokens),
+          tokens
+        }))
+      ];
+      writeLine(`Ollama context for ${model}: current ${contextWindow ? formatZaiContextWindow(contextWindow) : "Ollama default"}`);
+      writeLine("Choose a request num_ctx preset. Larger contexts use more memory; default leaves Ollama unchanged.");
+    } else {
+      writeLine("Per-request context selection is supported here only for Ollama and Z.AI; Strata context is set at server launch.");
+      prompt({ clear: false });
+      return;
+    }
     for (const [index, option] of contextPicker.entries()) {
       writeLine(`${index + 1}. ${option.label}${option.tokens === contextWindow ? " (current)" : ""}`);
     }
-    writeLine("Choose a size by number or label; this sets the client-side budget, not the provider's model limit.");
     prompt({ clear: false, label: "select context> " });
+  };
+  const showThinkPicker = () => {
+    if (!["ollama", "strata"].includes(backend)) {
+      writeLine("/think controls are available for Ollama and Strata minds");
+      prompt({ clear: false });
+      return;
+    }
+    const options = backend === "ollama" ? ["off", "on"] : ["none", "low", "medium", "high"];
+    thinkPicker = options.map((value) => ({ model: value, value, label: value }));
+    writeLine(backend === "ollama"
+      ? `thinking for ${model}: current ${thinkSetting?.value ?? "model default"}`
+      : `reasoning effort for ${model}: current ${thinkSetting?.value ?? "Strata default"}`);
+    for (const [index, option] of thinkPicker.entries()) {
+      writeLine(`${index + 1}. ${option.label}${option.value === thinkSetting?.value ? " (current)" : ""}`);
+    }
+    writeLine(backend === "ollama"
+      ? "Choose whether to request thinking; model support varies."
+      : "Choose the Strata reasoning effort for subsequent requests.");
+    prompt({ clear: false, label: "select thinking> " });
   };
   const shutdown = async () => {
     if (closing) return;
@@ -460,16 +505,35 @@ async function main() {
         prompt({ clear: false, label: "select context> " });
         return;
       }
-      const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
-      if (!saved.updated) {
-        contextPicker = null;
-        writeLine(`could not save context window: ${saved.reason}`);
-        prompt({ clear: false });
+      if (backend === "zai") {
+        const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
+        if (!saved.updated) {
+          contextPicker = null;
+          writeLine(`could not save context window: ${saved.reason}`);
+          prompt({ clear: false });
+          return;
+        }
+      }
+      contextWindow = selected.tokens == null ? null : Number(selected.tokens);
+      contextPicker = null;
+      writeLine(backend === "zai"
+        ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
+        : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
+      prompt({ clear: false });
+      return;
+    }
+    if (thinkPicker) {
+      const selected = resolveSaddleModelOption(input, thinkPicker);
+      if (!selected) {
+        writeLine("invalid thinking selection");
+        prompt({ clear: false, label: "select thinking> " });
         return;
       }
-      contextWindow = selected.tokens;
-      contextPicker = null;
-      writeLine(`context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`);
+      thinkSetting = normalizeSaddleThinkSelection(selected.value, backend);
+      thinkPicker = null;
+      writeLine(backend === "ollama"
+        ? `thinking: ${thinkSetting.value} for ${model}`
+        : `reasoning effort: ${thinkSetting.value} for ${model}`);
       prompt({ clear: false });
       return;
     }
@@ -485,7 +549,10 @@ async function main() {
       mindModels.set(mindName, model);
       if (backend === "zai") {
         contextWindow = Math.min(contextWindow || getZaiCodexContextWindow({ model }), getZaiModelContextLimit({ model }));
+      } else {
+        contextWindow = null;
       }
+      thinkSetting = null;
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model} (mind ${mindName})`);
@@ -493,7 +560,7 @@ async function main() {
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /mind [name]  /model <name>  /context [size]  /host <url>  /usage  /discharge  /exit");
+      writeLine("/status  /mind [name]  /model <name>  /context [size]  /think [mode]  /host <url>  /usage  /discharge  /exit");
       prompt({ clear: false });
       return;
     }
@@ -526,6 +593,7 @@ async function main() {
       host = nextProfile.host;
       model = normalizeSaddleModel(mindModels.get(mindName) || nextProfile.model);
       contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+      thinkSetting = null;
       mindModels.set(mindName, model);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`mind: ${mindName} | model: ${model}`);
@@ -542,31 +610,70 @@ async function main() {
         showContextPicker();
         return;
       }
-      if (backend !== "zai") {
-        writeLine("context window selection is currently available for the Z.AI Codex mind");
+      if (backend === "strata") {
+        writeLine("Strata context is fixed when its server launches; Pyash cannot change it per request. Configure the Strata launch context and restart it through its normal GPU-managed process.");
         prompt({ clear: false });
         return;
       }
-      const choices = getZaiContextWindowOptions({ model }).map((tokens) => ({
-        model: String(tokens),
-        value: formatZaiContextWindow(tokens),
-        label: formatZaiContextWindow(tokens),
-        tokens
-      }));
+      if (backend !== "zai" && backend !== "ollama") {
+        writeLine("per-request context selection is supported here only for Ollama and Z.AI");
+        prompt({ clear: false });
+        return;
+      }
+      const choices = backend === "zai"
+        ? getZaiContextWindowOptions({ model }).map((tokens) => ({
+          model: String(tokens),
+          value: formatZaiContextWindow(tokens),
+          label: formatZaiContextWindow(tokens),
+          tokens
+        }))
+        : ["default", ...SADDLE_OLLAMA_CONTEXT_PRESETS].map((tokens) => ({
+          model: String(tokens),
+          value: typeof tokens === "number" ? formatZaiContextWindow(tokens) : "default",
+          label: typeof tokens === "number" ? formatZaiContextWindow(tokens) : "default",
+          tokens: typeof tokens === "number" ? tokens : null
+        }));
       const selected = resolveSaddleModelOption(contextMatch[1], choices);
       if (!selected) {
         writeLine(`unknown context size; available: ${choices.map((choice) => choice.label).join(", ")}`);
         prompt({ clear: false });
         return;
       }
-      const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
-      if (!saved.updated) {
-        writeLine(`could not save context window: ${saved.reason}`);
+      if (backend === "zai") {
+        const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
+        if (!saved.updated) {
+          writeLine(`could not save context window: ${saved.reason}`);
+          prompt({ clear: false });
+          return;
+        }
+      }
+      contextWindow = selected.tokens == null ? null : Number(selected.tokens);
+      writeLine(backend === "zai"
+        ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
+        : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
+      prompt({ clear: false });
+      return;
+    }
+    const thinkMatch = input.trim().match(/^\/think(?:\s+(.+))?$/i);
+    if (thinkMatch) {
+      if (!thinkMatch[1]) {
+        showThinkPicker();
+        return;
+      }
+      const selected = normalizeSaddleThinkSelection(thinkMatch[1], backend);
+      if (!selected) {
+        writeLine(backend === "ollama"
+          ? "Ollama accepts /think on or /think off"
+          : backend === "strata"
+            ? "Strata accepts /think none, low, medium, high, on, or off"
+            : "/think is available for Ollama and Strata minds");
         prompt({ clear: false });
         return;
       }
-      contextWindow = selected.tokens;
-      writeLine(`context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`);
+      thinkSetting = selected;
+      writeLine(backend === "ollama"
+        ? `thinking: ${selected.value} for ${model}`
+        : `reasoning effort: ${selected.value} for ${model}`);
       prompt({ clear: false });
       return;
     }
@@ -584,6 +691,8 @@ async function main() {
     if (modelMatch) {
       model = normalizeSaddleModel(modelMatch[1], model);
       mindModels.set(mindName, model);
+      contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+      thinkSetting = null;
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model}`);
       prompt({ clear: false });
@@ -610,6 +719,8 @@ async function main() {
         backend,
         host,
         contextWindow,
+        think: thinkSetting?.think,
+        reasoningEffort: thinkSetting?.reasoningEffort,
         onUsage: (usage) => {
           turnUsages.push(usage);
           return usage;

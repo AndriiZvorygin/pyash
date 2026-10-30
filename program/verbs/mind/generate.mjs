@@ -137,7 +137,12 @@ export async function runGenerate({
   };
   const applyContextWindow = (payload) => {
     const value = Number(contextWindow);
-    if (backendName === "zai command mind" && Number.isSafeInteger(value) && value > 0) {
+    if (backendName === "ollama command mind" && Number.isSafeInteger(value) && value > 0) {
+      payload.options = {
+        ...(payload.options && typeof payload.options === "object" ? payload.options : {}),
+        num_ctx: value
+      };
+    } else if (backendName === "zai command mind" && Number.isSafeInteger(value) && value > 0) {
       payload.contextWindow = value;
     }
   };

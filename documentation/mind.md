@@ -60,6 +60,15 @@ node command/pyash.mjs configure mind --backend strata --host http://127.0.0.1:8
 
 Pyash sends requests to `http://127.0.0.1:8081/v1/chat/completions`. The Strata runner uses a local placeholder bearer token by default so it never falls through to Codex OAuth; if Strata API-key auth is enabled, provide that key through `STRATA_API_KEY` outside the repository.
 
+In the coding saddle, `/think none|low|medium|high` controls Strata's
+per-request reasoning effort; `off` and `on` are aliases for `none` and
+`high`. `/context` cannot resize a running Strata server: context is fixed by
+the Strata launch profile and requires its normal GPU-managed restart. For
+Ollama, `/context` selects a request-level `num_ctx` preset (4K through 64K),
+and `/think on|off` sends Ollama's boolean thinking option. These saddle
+overrides apply for the current interactive session only; no selection keeps
+the existing provider/model defaults.
+
 ### GPU manager handoff
 
 Strata must be installed outside this repository. Keep its API process available but start it **lazy and loopback-only**; the Housekeeper loads the model only after admitting a Strata job, and unloads it for another managed runtime when needed. A host `systemd --user` service can supervise this lightweight, unloaded API process:
