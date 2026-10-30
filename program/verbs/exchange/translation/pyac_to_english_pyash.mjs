@@ -51,6 +51,7 @@ const PYASH_LEMMA_INDEX = buildEnglishLemmaIndex({
 const TENSE_MARKERS = new Set(["ki", "ra", "pfih"]);
 const ENGLISH_GRAMMAR_SURFACES = new Map();
 const ENGLISH_GRAMMAR_SEQUENCE_SURFACES = [];
+const ENGLISH_EXISTENTIAL_MOOD_SEQUENCES = [];
 try {
   const grammarSource = readFileSync(new URL("./english_grammar.pya", import.meta.url), "utf8");
   const grammarCatalog = parseEnglishGrammarCatalog(grammarSource);
@@ -61,11 +62,19 @@ try {
     if (entry.pyashSequence.length > 1 && entry.kind !== "case-marker") {
       ENGLISH_GRAMMAR_SEQUENCE_SURFACES.push({
         pya: [...entry.pyashSequence],
+        surface: entry.surface,
+        kind: entry.kind
+      });
+    }
+    if (entry.kind === "existential-clause" && entry.pyashSequence.length > 1) {
+      ENGLISH_EXISTENTIAL_MOOD_SEQUENCES.push({
+        pya: [...entry.pyashSequence],
         surface: entry.surface
       });
     }
   }
   ENGLISH_GRAMMAR_SEQUENCE_SURFACES.sort((left, right) => right.pya.length - left.pya.length);
+  ENGLISH_EXISTENTIAL_MOOD_SEQUENCES.sort((left, right) => right.pya.length - left.pya.length);
 } catch {
   // The vocabulary fallback below keeps Pyac decoding available in packaged runs.
 }
@@ -345,6 +354,23 @@ function grammarSequenceSurface(parts, index) {
   return null;
 }
 
+function composedExistentialMood(decoded) {
+  const tokens = decoded.tokens.map((token) => token.pya);
+  return ENGLISH_EXISTENTIAL_MOOD_SEQUENCES.find(({ pya }) => (
+    pya.length <= tokens.length
+      && pya.every((token, index) => tokens[tokens.length - pya.length + index] === token)
+  )) ?? null;
+}
+
+function composedExistentialSubject(parts, glosses) {
+  const subjectPhrase = selectSubjectPhrase(parts);
+  if (!subjectPhrase) return "";
+  return renderPhrase(
+    subjectPhrase.tokens.map((token) => decodedPart(token, glosses)),
+    { subject: true }
+  );
+}
+
 function renderCasePrepositions(parts, words, { vocativeMarker = false } = {}) {
   if (!words) return [];
   const caseNames = parts.filter((part) => part.kind === "case").map((part) => part.pya);
@@ -606,6 +632,10 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       possessivePya = words.length > 0 ? parts[index - 1]?.pya : null;
       continue;
     }
+    if (part.pya === "fyoh" && words.length > 0) {
+      words[words.length - 1] = `self-${words.at(-1)}`;
+      continue;
+    }
     if (part.pya === "gi") continue;
     if (part.pya === "pu" && words.length > 0) {
       words[words.length - 1] = words.at(-1).endsWith("s") ? words.at(-1) : `${words.at(-1)}s`;
@@ -661,6 +691,11 @@ function decodedPart(token, glosses) {
 
 export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map()) {
   const parts = phraseParts(decoded);
+  const existential = composedExistentialMood(decoded);
+  if (existential) {
+    const subject = composedExistentialSubject(parts, glosses);
+    return finishEnglishPyash(existential.surface, subject ? `su ${subject}` : "");
+  }
   const sourceMood = sentence.mood;
   const mood = ENGLISH_MOOD_GLOSSES.get(sourceMood) ?? sourceMood;
   if (parts.phrases.length === 0) {
@@ -768,6 +803,12 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
 
 function renderEnglish(sentence, tokens, decoded, glosses) {
   const decodedParts = phraseParts(decoded);
+  const existential = composedExistentialMood(decoded);
+  if (existential) {
+    const subject = composedExistentialSubject(decodedParts, glosses);
+    const rendered = [existential.surface, subject].filter(Boolean).join(" ");
+    return `${rendered[0].toUpperCase()}${rendered.slice(1)}.`;
+  }
   if (decodedParts.phrases.length === 0) {
     const standalone = renderPhrase(decodedParts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true });
     return `${standalone[0].toUpperCase()}${standalone.slice(1)}.`;

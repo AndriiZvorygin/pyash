@@ -122,6 +122,27 @@ test("sentence output preserves approved partial Pyash and Pyac parts", () => {
   ]);
 });
 
+test("partial English projection preserves a self compound as one readable word", () => {
+  const projection = projectTranslationSentence({
+    status: "provisional",
+    source: { text: "self-love" },
+    reviewReasons: ["list coordination needs review"],
+    tokens: [{
+      surface: "self-love",
+      coverageType: "compound",
+      pyashSequence: ["pyan", "fyoh"]
+    }]
+  });
+
+  assert.deepEqual(projection.pyash, [
+    { source: "self-love", value: "self-love", sequence: ["pyan", "fyoh"] }
+  ]);
+  assert.deepEqual(projection.pyac, [
+    { source: "self-love", value: "pyanfyoh", sequence: ["pyan", "fyoh"] }
+  ]);
+  assert.deepEqual(projection.reviewReasons, ["list coordination needs review"]);
+});
+
 test("source-to-VLIW refinery surfaces the current stage failure", async () => {
   const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-error-"));
   const paths = {

@@ -147,6 +147,9 @@ export function projectTranslationSentence(record) {
   }
   if (record?.construction) projection.construction = record.construction;
   if (record?.existential) projection.existential = record.existential;
+  if (Array.isArray(record?.reviewReasons) && record.reviewReasons.length > 0) {
+    projection.reviewReasons = [...record.reviewReasons];
+  }
   if (Array.isArray(record?.discourseConnectors) && record.discourseConnectors.length > 0) {
     projection.discourseConnectors = record.discourseConnectors;
   }
@@ -533,6 +536,9 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     ...(structural && !sentence ? { structuralPreview: structural } : {}),
     ...(analysis.construction ? { construction: analysis.construction } : {}),
     ...(analysis.existential ? { existential: analysis.existential } : {}),
+    ...(Array.isArray(analysis.reviewReasons) && analysis.reviewReasons.length > 0
+      ? { reviewReasons: [...analysis.reviewReasons] }
+      : {}),
     ...(Array.isArray(analysis.discourseConnectors) && analysis.discourseConnectors.length > 0
       ? { discourseConnectors: analysis.discourseConnectors }
       : {}),
