@@ -92,6 +92,7 @@ _EXECUTION_GATES: Dict[str, DeviceExecutionGate] = {}
 
 DEFAULT_IDLE_GRACE_SECONDS = 300
 DEFAULT_CAPACITY_WAIT_SECONDS = 1800
+CAPACITY_WAIT_IDLE_GRACE_BUFFER_SECONDS = 30
 DEFAULT_CAPACITY_POLL_SECONDS = 2
 DEFAULT_PEER_TIMEOUT_MS = 1500
 DEFAULT_PEER_FAILURE_LIMIT = 3
@@ -519,13 +520,25 @@ def queue_depth() -> int:
 
 def capacity_wait_seconds(job: Optional[Dict[str, Any]] = None) -> float:
   job_spec = (job or {}).get("jobSpec") if isinstance((job or {}).get("jobSpec"), dict) else {}
-  raw = job_spec.get("capacityWaitSec") or job_spec.get("capacity_wait_sec")
+  raw = job_spec.get("capacityWaitSec")
   if raw is None:
-    raw = os.environ.get("GPU_HOUSEKEEPER_CAPACITY_WAIT_SEC", str(DEFAULT_CAPACITY_WAIT_SECONDS))
+    raw = job_spec.get("capacity_wait_sec")
+  if raw is None:
+    raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_CAPACITY_WAIT_SEC")) or None
+  if raw is None:
+    return (
+      DEFAULT_CAPACITY_WAIT_SECONDS
+      + idle_grace_seconds()
+      + CAPACITY_WAIT_IDLE_GRACE_BUFFER_SECONDS
+    )
   try:
     return max(0.0, float(raw))
   except (TypeError, ValueError):
-    return float(DEFAULT_CAPACITY_WAIT_SECONDS)
+    return (
+      DEFAULT_CAPACITY_WAIT_SECONDS
+      + idle_grace_seconds()
+      + CAPACITY_WAIT_IDLE_GRACE_BUFFER_SECONDS
+    )
 
 
 def capacity_poll_seconds() -> float:

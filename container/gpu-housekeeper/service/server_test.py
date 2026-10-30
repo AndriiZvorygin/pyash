@@ -19,6 +19,16 @@ class HousekeeperServerConfigTests(unittest.TestCase):
     self.assertEqual(server.parse_server_args([]).port, 18886)
     self.assertEqual(server.parse_server_args(["--port", "8090"]).port, 8090)
 
+  def test_default_capacity_wait_includes_idle_grace_and_buffer(self):
+    with patch.dict(os.environ, {"GPU_HOUSEKEEPER_IDLE_GRACE_SEC": "300"}, clear=True):
+      self.assertEqual(server.capacity_wait_seconds(), 2130)
+
+  def test_explicit_capacity_wait_is_preserved(self):
+    with patch.dict(os.environ, {"GPU_HOUSEKEEPER_IDLE_GRACE_SEC": "300"}, clear=True):
+      self.assertEqual(server.capacity_wait_seconds({"jobSpec": {"capacityWaitSec": 45}}), 45)
+      os.environ["GPU_HOUSEKEEPER_CAPACITY_WAIT_SEC"] = "90"
+      self.assertEqual(server.capacity_wait_seconds(), 90)
+
 
 class HousekeeperOllamaTests(unittest.TestCase):
   def setUp(self):
