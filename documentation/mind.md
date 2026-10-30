@@ -12,6 +12,26 @@ This document defines how a **mind** (an LLM endpoint) is configured, how Pyash 
 
 The default backend remains Ollama. Optional OpenAI-compatible backends use the same conversation and tool-call payloads through the OpenAI Chat Completions API.
 
+## Z.AI GLM Coding Plan
+
+Pyash exposes `zai` as an optional coding mind using Z.AI's documented Codex CLI integration. GLM Coding Plan keys are separate from standard Z.AI API keys. Put the Coding Plan key in the local, ignored `configure/.env` as `Z_AI_CODING_API_KEY` (see `configure/.env.example`) and restrict the file to mode `600`. Do not use `Z_AI_API_KEY` for this profile.
+
+The runner launches the installed Codex CLI with an ephemeral, isolated `CODEX_HOME` configured for the OpenAI Responses protocol at `https://api.z.ai/api/v1`, model `glm-5.3`, and the supplied Coding Plan key. The temporary profile is permission-restricted and deleted after each request; your existing `~/.codex` configuration is not changed. Pyash keeps its existing default backend unless you explicitly select Z.AI. Z.AI's Coding Plan is limited to officially supported tools; this route uses Codex CLI rather than Pyash's direct Chat Completions client.
+
+To add a named Z.AI mind relay without changing the global default:
+
+```sh
+node command/pyash.mjs configure mind --non-interactive --relay zai-coder --backend zai --host https://api.z.ai/api/v1 --model glm-5.3 --set-default lie --test-now lie
+```
+
+Select Z.AI for the coding saddle without changing Pyash's global default:
+
+```sh
+PYA_SADDLE_BACKEND=zai node command/pyash_saddle.mjs
+```
+
+This selects `glm-5.3` and `https://api.z.ai/api/v1` by default. Override them with `PYA_SADDLE_MODEL` and `PYA_SADDLE_HOST` when needed. The saddle can also switch providers interactively with `/backend zai` and select a model with `/model glm-5.3`. Other minds continue using their existing relay. GLM-5.3 is text-only; the model can still use the Pyash tools exposed through the Codex MCP bridge.
+
 Durable `be gpu mind` jobs include a Housekeeper `resourceRequest.vramRequiredMb` by default (12,000 MiB). Set `PYA_OLLAMA_VRAM_REQUIRED_MB` or `PYA_GPU_VRAM_REQUIRED_MB` to adjust the default, or provide `resourceRequest.vramRequiredMb` in the job map. This declaration lets the Housekeeper safely reclaim idle managed runtimes before loading the requested model.
 
 ## Optional Local Strata Backend
@@ -19,7 +39,7 @@ Durable `be gpu mind` jobs include a Housekeeper `resourceRequest.vramRequiredMb
 Pyash can use Strata as a selectable local backend without changing the default Ollama profile. Configure it with the backend key `strata`; its default host is `http://127.0.0.1:8081` and its OpenAI-compatible model alias is `strata`.
 
 ```sh
-./run pyash configure mind --backend strata --host http://127.0.0.1:8081 --model strata
+node command/pyash.mjs configure mind --backend strata --host http://127.0.0.1:8081 --model strata
 ```
 
 Pyash sends requests to `http://127.0.0.1:8081/v1/chat/completions`. The Strata runner uses a local placeholder bearer token by default so it never falls through to Codex OAuth; if Strata API-key auth is enabled, provide that key through `STRATA_API_KEY` outside the repository.

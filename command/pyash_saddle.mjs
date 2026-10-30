@@ -42,6 +42,7 @@ function configValue(name, fallback = "") {
 
 function resolveSaddleHost(backend) {
   if (backend === "ollama") return configValue("ollama host", "http://localhost:11434");
+  if (backend === "zai") return "https://api.z.ai/api/v1";
   return configValue("ai host", configValue("ollama host", "http://localhost:11434"));
 }
 
@@ -105,7 +106,8 @@ export async function prepareSaddle({
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
   await importSaddleTools();
   const resolvedBackend = normalizeSaddleBackend(backend || configValue("mind backend", "ollama"));
-  const resolvedModel = normalizeSaddleModel(model || configValue("mind model", "qwen3.5:9b"));
+  const defaultModel = resolvedBackend === "zai" ? "glm-5.3" : configValue("mind model", "qwen3.5:9b");
+  const resolvedModel = normalizeSaddleModel(model || defaultModel);
   const resolvedHost = normalizeSaddleHost(host || resolveSaddleHost(resolvedBackend));
   configureSaddle({
     cwd: resolvedCwd,
