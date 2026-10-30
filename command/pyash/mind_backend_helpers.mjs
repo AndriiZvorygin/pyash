@@ -4,6 +4,7 @@ export const MIND_BACKEND_CHOICES = [
   { key: "openai-api", value: "openai command mind", label: "OpenAI API key" },
   { key: "openai-codex", value: "openai command mind", label: "OpenAI Codex OAuth" },
   { key: "openrouter", value: "openrouter command mind", label: "OpenRouter" },
+  { key: "zai", value: "zai command mind", label: "Z.AI GLM Coding Plan (Codex CLI)" },
   { key: "vllm", value: "vllm command mind", label: "vLLM" },
   { key: "strata", value: "strata command mind", label: "Strata (local, GPU-managed)" }
 ];
@@ -17,6 +18,7 @@ export function canonicalizeMindBackend(raw) {
   if (text === "ollama") return "ollama command mind";
   if (text === "litellm") return "litellm command mind";
   if (text === "openrouter") return "openrouter command mind";
+  if (text === "zai" || text === "z.ai" || text === "zai-codex") return "zai command mind";
   if (text === "vllm") return "vllm command mind";
   if (text === "strata") return "strata command mind";
   return text;
@@ -284,6 +286,7 @@ export function suggestMindRelayName({ source = "", model = "", fallback = "defa
   }
   if (sourceKey === "openai-api") return "openai";
   if (sourceKey === "openrouter") return "openrouter";
+  if (sourceKey === "zai") return "zai-coder";
   if (sourceKey === "litellm") return "litellm";
   if (sourceKey === "vllm") return "vllm";
   if (sourceKey === "ollama") {
@@ -297,6 +300,7 @@ export function suggestMindRelayName({ source = "", model = "", fallback = "defa
 export function defaultMindHostForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
   if (key === "strata") return "http://127.0.0.1:8081";
+  if (key === "zai") return "https://api.z.ai/api/v1";
   if (key === "openai-api" || key === "openai-codex") {
     return "https://api.openai.com";
   }
@@ -309,6 +313,7 @@ export function defaultMindHostForSource(source = "") {
 export function defaultMindModelForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
   if (key === "strata") return "strata";
+  if (key === "zai") return "glm-5.3";
   if (key === "openai-api" || key === "openai-codex") return "gpt-5-codex";
   if (key === "openrouter") return "openrouter/auto";
   return "gpt-oss:latest";

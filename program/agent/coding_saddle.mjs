@@ -24,6 +24,7 @@ export function normalizeSaddleBackend(value, fallback = "ollama") {
     ["openai command mind", "openai"],
     ["litellm command mind", "litellm"],
     ["openrouter command mind", "openrouter"],
+    ["zai command mind", "zai"],
     ["vllm command mind", "vllm"],
     ["strata command mind", "strata"]
   ]);
@@ -68,6 +69,9 @@ export async function discoverSaddleModels({
   const normalizedBackend = normalizeSaddleBackend(backend);
   const normalizedHost = normalizeSaddleHost(host);
   const configured = [currentModel, ...fallbackModels].map(normalizeText).filter(Boolean);
+  if (normalizedBackend === "zai") {
+    return { models: [...new Set(configured)], available: false, error: "select a GLM model by its Z.AI model ID" };
+  }
   if (typeof fetchFn !== "function") {
     return { models: [...new Set(configured)], available: false, error: "model discovery is unavailable" };
   }

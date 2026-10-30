@@ -20,6 +20,13 @@ overrides may be supplied through `PYA_SADDLE_MODEL`, `PYA_SADDLE_BACKEND`,
 `PYA_SADDLE_HOST`, and `PYA_SADDLE_CWD`; these select an existing provider and
 coding root, they do not start a separate model runtime.
 
+For the Z.AI GLM Coding Plan, place `Z_AI_CODING_API_KEY` in the ignored,
+permission-restricted `configure/.env`, then launch with
+`PYA_SADDLE_BACKEND=zai node command/pyash_saddle.mjs`. The saddle defaults to
+`glm-5.3` and Z.AI's Responses API endpoint for this backend. This uses the
+official Codex CLI route through Pyash's existing mind tools; see
+[`mind.md`](../mind.md#zai-glm-coding-plan) for details.
+
 The web app adds a **Duty** mode beside ordinary chat. Choose an online worker
 and one of its advertised directories, select the model in the existing model
 control, then create a duty with a concise objective and first instruction.

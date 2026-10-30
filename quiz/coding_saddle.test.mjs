@@ -105,6 +105,36 @@ test("duty saddle keeps runtime root separate from its persistent world root", a
   }
 });
 
+test("coding saddle selects GLM defaults for Z.AI without changing other providers", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-zai-"));
+  const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  try {
+    const zai = await prepareSaddle({
+      cwd: root,
+      runtimeRoot,
+      backend: "zai",
+      model: "",
+      host: ""
+    });
+    assert.equal(zai.backend, "zai");
+    assert.equal(zai.model, "glm-5.3");
+    assert.equal(zai.host, "https://api.z.ai/api/v1");
+
+    const ollama = await prepareSaddle({
+      cwd: root,
+      runtimeRoot,
+      backend: "ollama",
+      model: "",
+      host: ""
+    });
+    assert.equal(ollama.model, "qwen3.5:9b");
+    assert.equal(ollama.host, "http://localhost:11434");
+  } finally {
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("coding saddle status exposes provider and queue state", () => {
   const status = formatSaddleStatus({
     model: "qwen3.8:27b",

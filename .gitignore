@@ -56,6 +56,7 @@ quiz/sandpit/
 documentation/parity/
 configure/secret.pya
 configure/secret/
+configure/.env
 .configure/secret/
 configure/workplace.pya
 configure/container.pya
