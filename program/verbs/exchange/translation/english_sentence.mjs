@@ -7,7 +7,8 @@ import {
   buildEnglish30kCoverage,
   loadEnglish30k,
   english30kLookupVariants,
-  lookupEnglish30kCoverage
+  lookupEnglish30kCoverage,
+  normalizeEnglish30kWord
 } from "./english30k_coverage.mjs";
 import { loadAnchorWordForms } from "./anchor_words.mjs";
 import {
@@ -98,7 +99,7 @@ function invalid(message) {
 }
 export function tokenizeEnglishSentence(source) {
   if (typeof source !== "string") throw invalid("English sentence must be text");
-  return source.normalize("NFC").match(/[A-Za-z]+(?:'[A-Za-z]+)?/gu) ?? [];
+  return source.normalize("NFC").match(/[A-Za-z]+(?:'[A-Za-z]+)?(?:-[A-Za-z]+(?:'[A-Za-z]+)?)*/gu) ?? [];
 }
 
 function cloneMorphology(morphology) {
@@ -140,6 +141,17 @@ function wordNetTerms(value) {
 function wordNetMetadata(surface, wordnetIndex) {
   if (!wordnetIndex?.lookup) return null;
   const variants = wordNetLookupVariants(surface);
+  const normalizedSurface = surface.toLowerCase();
+  if (normalizedSurface.endsWith("ly")) {
+    const baseCandidates = [normalizedSurface.slice(0, -2)];
+    const base = baseCandidates[0];
+    if (base.endsWith("i")) baseCandidates.push(`${base.slice(0, -1)}y`);
+    for (const candidate of baseCandidates) {
+      if (!candidate || variants.includes(candidate)) continue;
+      const rows = wordnetIndex.lookup(candidate);
+      if (rows.some((row) => ["a", "s"].includes(row.pos))) variants.push(candidate);
+    }
+  }
   const rowsByVariant = variants.map((variant) => wordnetIndex.lookup(variant));
   const inflectionRows = rowsByVariant.slice(1).flat();
   const preferInflectedVerb = surface.toLowerCase().endsWith("ing")
@@ -257,11 +269,41 @@ function expectedWordNetPartsOfSpeech(records, index) {
   if (record.surface.endsWith("ing") && previous?.copula) {
     expected.add("v");
   }
+  if (record.surface.endsWith("ly")
+    && record.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))) {
+    expected.add("a");
+    expected.add("s");
+  }
   if (record.surface.endsWith("s") && !WORDNET_MODAL_PRECEDERS.has(previous?.surface)
     && previous?.surface !== "to" && !expected.has("v")) {
     expected.add("n");
   }
   return expected;
+}
+
+function hasStrongWordNetPartOfSpeechCue(records, index) {
+  const record = records[index];
+  const previous = records[index - 1];
+  const previousTwo = records[index - 2];
+  const next = records[index + 1];
+  if (!record) return false;
+  if (WORDNET_MODAL_PRECEDERS.has(previous?.surface)
+    || WORDNET_MODAL_PRECEDERS.has(previousTwo?.surface)) return true;
+  if (["number-marker", "case-marker", "possessive-determiner", "pronoun"]
+    .includes(previous?.grammar?.kind)) return true;
+  if (previous?.grammar?.kind === "conjunction"
+    && previousTwo?.wordnet?.partsOfSpeech?.includes("n")) return true;
+  if (previous?.wordnet?.partsOfSpeech?.includes("a")) return true;
+  if (["number-marker", "pronoun"].includes(next?.grammar?.kind)
+    && !hasRelativeClauseAfter(records, index)) return true;
+  if (next?.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))) {
+    return true;
+  }
+  if (next?.wordnet?.partsOfSpeech?.includes("n")
+    && record.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))) {
+    return true;
+  }
+  return Boolean(record.surface.endsWith("ing") && previous?.copula);
 }
 
 function wordNetSenseContext(sense, contextTerms, records, index, wordnetIndex) {
@@ -286,7 +328,12 @@ export function selectEnglishWordNetSenses(record, records, index, wordnetIndex)
   const expectedPartsOfSpeech = expectedWordNetPartsOfSpeech(records, index);
   const filteredSenses = allSenses.filter((sense) => expectedPartsOfSpeech.has(sense.pos));
   const senses = filteredSenses.length > 0 ? filteredSenses : allSenses;
-  if (senses.length < 2) return { senses, evidence: "" };
+  const grammaticalEvidence = filteredSenses.length === 1
+    && allSenses.length > 1
+    && hasStrongWordNetPartOfSpeechCue(records, index)
+    ? `grammatical role selected the only ${filteredSenses[0].pos} WordNet sense`
+    : "";
+  if (senses.length < 2) return { senses, evidence: grammaticalEvidence };
   const contextTerms = wordNetContextTerms(records, index);
   if (contextTerms.size === 0) return { senses, evidence: "" };
   const scored = senses.map((sense) => ({
@@ -333,6 +380,7 @@ function wordRecord(surface, {
   let coverage = typeof resolveWord === "function" ? resolveWord(normalized, tokenIndex) : null;
   const lemma = lemmaBySurface?.get(normalized) ?? null;
   const catalogGrammar = grammarIndex?.resolve(normalized) ?? null;
+  const compoundOnlyGrammar = catalogGrammar?.position === "compound-only";
   const catalogCase = catalogGrammar?.kind === "case-marker"
     && catalogGrammar.pyashSequence?.length > 0
     ? {
@@ -346,7 +394,7 @@ function wordRecord(surface, {
     ?? COMPOSITIONAL_CASE_INDEX.get(normalized)
     ?? COMPOSITIONAL_CASE_INDEX.get(COMPOSITIONAL_CASE_ALIASES.get(normalized))
     ?? null;
-  const grammar = catalogGrammar ?? (compositionalCase ? {
+  const grammar = compoundOnlyGrammar ? null : catalogGrammar ?? (compositionalCase ? {
     kind: "case-marker",
     components: [compositionalCase.case],
     pyashSequence: [compositionalCase.pya],
@@ -1134,15 +1182,13 @@ function makeCandidate({ phrase, lemma, lexicalSequence, morphologySequence, mar
   };
 }
 
-function wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex, wordnetBridges) {
+function wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex, wordnetBridges, selection = null) {
   if (record?.consumedBy || record?.pyashSequence?.length || !record?.wordnet?.senses || typeof resolveWord !== "function") return [];
-  const selection = selectEnglishWordNetSenses(record, records, index, wordnetIndex);
+  const selected = selection ?? selectEnglishWordNetSenses(record, records, index, wordnetIndex);
   const dynamicSenses = record.wordnet.senses.filter((sense) => (
     wordnetBridges?.has?.(wordNetSenseKey(sense))
   ));
-  const senses = dynamicSenses.length > 0
-    ? dynamicSenses
-    : selection.senses;
+  const senses = dynamicSenses.length > 0 ? dynamicSenses : selected.senses;
   return senses.map((sense) => {
     const candidates = new Map();
     const bridge = wordnetBridges?.get?.(wordNetSenseKey(sense))
@@ -1193,12 +1239,19 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
 
 function addWordNetCandidates(records, resolveWord, wordnetIndex, wordnetBridges) {
   return records.map((record, index) => {
-    const candidateSets = wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex, wordnetBridges);
+    const selection = selectEnglishWordNetSenses(record, records, index, wordnetIndex);
+    const candidateSets = wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex, wordnetBridges, selection);
     const candidates = candidateSets.flat();
     const uniqueSequences = new Map(candidates.map((candidate) => [candidate.pyashSequence.join(" "), candidate]));
+    const hasAcceptedSenseBridge = record.wordnet?.senses?.some((sense) => (
+      wordnetBridges?.has?.(wordNetSenseKey(sense))
+    ));
     if (candidateSets.length > 0
       && candidateSets.every((set) => set.length === 1)
-      && uniqueSequences.size === 1) {
+      && uniqueSequences.size === 1
+      && (hasAcceptedSenseBridge
+        || (record.wordnet?.senses?.length === 1 && selection.senses.length === 1)
+        || selection.evidence)) {
       const candidate = [...uniqueSequences.values()][0];
       return {
         ...record,
@@ -1845,6 +1898,28 @@ export async function loadEnglishSentenceResources() {
   return sentenceResourcesPromise;
 }
 
+function reflexiveCompoundCoverage(resources, word) {
+  const normalizedWord = normalizeEnglish30kWord(word);
+  if (!normalizedWord.includes("-")) return null;
+  const parts = normalizedWord.split("-").filter(Boolean);
+  if (parts.length < 2) return null;
+  const modifier = parts.slice(0, -1).join(" ");
+  const head = parts.at(-1);
+  const marker = resources.grammarIndex?.resolve(modifier);
+  if (marker?.kind !== "reflexive-marker" || marker.position !== "compound-only") return null;
+  const headCoverage = stagedEnglishCoverage(resources, head);
+  if (!headCoverage?.pyashSequence?.length) return null;
+  return {
+    coverageType: "compound",
+    status: "covered-compound",
+    canonicalEnglish: headCoverage.canonicalEnglish ?? head,
+    pyashSequence: [...headCoverage.pyashSequence, ...marker.pyashSequence],
+    compoundModifier: modifier,
+    compoundHead: head,
+    evidence: `${modifier}- compound lowers through ${marker.components.join(" ")} onto lexical head ${head}`
+  };
+}
+
 function stagedEnglishCoverage(resources, word) {
   const variants = english30kLookupVariants(word);
   const row = variants.map((variant) => resources.sourceByVariant.get(variant)).find(Boolean);
@@ -1854,6 +1929,8 @@ function stagedEnglishCoverage(resources, word) {
     rank: null,
     score: null
   };
+  const reflexiveCompound = reflexiveCompoundCoverage(resources, word);
+  if (reflexiveCompound) return { ...sourceRow, ...reflexiveCompound };
   const grammarOverride = variants.map((variant) => resources.grammarOverrides.get(variant)).find(Boolean);
   if (grammarOverride) {
     return {

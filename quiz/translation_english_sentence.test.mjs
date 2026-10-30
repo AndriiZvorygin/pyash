@@ -737,6 +737,34 @@ test("WordNet preserves adjective senses when graph evidence alone is weak", asy
   assert.ok(selection.senses.every((sense) => ["a", "s"].includes(sense.pos)));
 });
 
+test("hyphenated self-love is one reflexive compound", async () => {
+  const analysis = await analyzeDefaultEnglishSentence("There can be self-love.");
+  const selfLove = analysis.tokens.find((token) => token.surface === "self-love");
+  assert.ok(selfLove);
+  assert.equal(selfLove.coverageType, "compound");
+  assert.deepEqual(selfLove.pyashSequence, ["pyan", "fyoh"]);
+  assert.equal(analysis.unresolved.includes("self"), false);
+  assert.equal(analysis.unresolved.includes("self-love"), false);
+});
+
+test("physically keeps bodily WordNet senses reviewable instead of deterministic collapse", async () => {
+  const source = "Being sexually or physically attracted is the feeling of lust.";
+  const analysis = await analyzeDefaultEnglishSentence(source);
+  const physically = analysis.tokens.find((token) => token.surface === "physically");
+  assert.ok(physically);
+  assert.ok(physically.wordnet.senses.some((sense) => sense.synset === "01782757-a"));
+  const resources = await loadEnglishSentenceResources();
+  const selection = selectEnglishWordNetSenses(
+    physically,
+    analysis.tokens,
+    analysis.tokens.indexOf(physically),
+    resources.wordnet.index
+  );
+  assert.equal(selection.evidence, "");
+  assert.ok(selection.senses.length > 1);
+  assert.notEqual(physically.coverageType, "semantic-wordnet");
+});
+
 test("English may is a grammar mood before WordNet", async () => {
   const analysis = await analyzeDefaultEnglishSentence("Lust and love may be thought of as different.");
   const may = analysis.tokens.find((token) => token.surface === "may");

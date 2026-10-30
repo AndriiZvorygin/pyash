@@ -204,7 +204,10 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         Math.min(tokenIndex, Math.max(0, persistedTokens.length - 1)),
         resources.wordnet?.index
       );
-      const senses = selection.senses.length > 0 ? selection.senses : senseRows;
+      const availableSenses = token.wordnet?.senses ?? senseRows;
+      const senses = selection.evidence || selection.senses.length > 1 || availableSenses.length <= 1
+        ? (selection.senses.length > 0 ? selection.senses : senseRows)
+        : availableSenses;
       if (senses.length === 0) continue;
       const id = englishWordNetSelectionId({
         sourceHash: result.sourceHash,
@@ -225,6 +228,7 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         surface,
         sentence,
         senses,
+        availableSenseCount: availableSenses.length,
         ...context,
         selectionEvidence: selection.evidence,
         stateSource: "translation-token-state"
@@ -251,6 +255,10 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         resources.wordnet?.index
       );
       if (!Array.isArray(selection.senses) || selection.senses.length === 0) continue;
+      const availableSenses = token.wordnet?.senses ?? selection.senses;
+      const senses = selection.evidence || selection.senses.length > 1 || availableSenses.length <= 1
+        ? selection.senses
+        : availableSenses;
       const id = englishWordNetSelectionId({
         sourceHash: result.sourceHash,
         sourceRecordId: candidate.sourceRecordId || sourceRecord?.id,
@@ -269,7 +277,8 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         tokenIndex: legacyTokenIndex,
         surface,
         sentence,
-        senses: selection.senses,
+        senses,
+        availableSenseCount: availableSenses.length,
         ...decisionContext(analysis.tokens, legacyTokenIndex),
         selectionEvidence: selection.evidence,
         stateSource: "legacy-surface-reanalysis"
@@ -306,6 +315,10 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         tokenIndex,
         surface
       });
+      const availableSenses = token.wordnet?.senses ?? selection.senses;
+      const senses = selection.evidence || selection.senses.length > 1 || availableSenses.length <= 1
+        ? selection.senses
+        : availableSenses;
       decisions.push({
         id,
         occurrenceId: translationOccurrenceId({
@@ -318,7 +331,8 @@ function occurrenceDecisions(result, resources, compounds, terms) {
         tokenIndex,
         surface,
         sentence,
-        senses: selection.senses,
+        senses,
+        availableSenseCount: availableSenses.length,
         ...decisionContext(analysis.tokens, tokenIndex),
         selectionEvidence: selection.evidence
       });
@@ -578,6 +592,7 @@ export async function refineEnglishWordNet({
         continue;
       }
       let selected = decision.senses.length === 1
+        && (decision.availableSenseCount === 1 || decision.selectionEvidence)
         ? selectedDecisionRecord(decision, decision.senses[0])
         : null;
       if (!selected && typeof submit === "function" && typeof awaitHandle === "function") {
