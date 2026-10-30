@@ -73,11 +73,12 @@ function partOfSpeechName(value) {
 
 function senseOption(sense, number) {
   const row = senseRow(sense);
+  const definition = row.gloss.split(/\s*;\s*/u, 1)[0].trim();
   return [
     `OPTION ${number}`,
     `part of speech: ${partOfSpeechName(row.pos)}`,
     `lemmas: ${row.lemmas.join(", ") || "(none)"}`,
-    `meaning: ${row.gloss || "(no gloss supplied)"}`
+    `meaning: ${definition || "(no gloss supplied)"}`
   ].join("\n");
 }
 
@@ -101,6 +102,10 @@ export function buildEnglishWordNetSenseSelectionPrompt({
   surface,
   sentence,
   senses = [],
+  localPhrase = "",
+  grammaticalRole = "",
+  headWord = "",
+  nearbyWords = [],
   source = "Open English WordNet",
   maxChars = 12000,
   maxTokens = 3900,
@@ -120,11 +125,18 @@ export function buildEnglishWordNetSenseSelectionPrompt({
     '{"verdict":"accept|uncertain","option":1,"confidence":"high|medium|low","rationale":"under 120 characters"}',
     `WORD TO CLASSIFY: ${bounded(surface, 80)}`,
     `SENTENCE: ${bounded(sentence, 1200)}`,
+    `LOCAL PHRASE: ${bounded(localPhrase, 240) || "(not supplied)"}`,
+    `GRAMMATICAL ROLE: ${bounded(grammaticalRole, 160) || "(not supplied)"}`,
+    `HEAD OR MODIFIED WORD: ${bounded(headWord, 80) || "(not supplied)"}`,
+    `NEARBY WORDS: ${bounded(Array.isArray(nearbyWords) ? nearbyWords.join(" ") : nearbyWords, 180) || "(not supplied)"}`,
     `DATASET: ${bounded(source, 80) || "Open English WordNet"}`,
     "OPTIONS:",
     options,
     "ANSWER RULES:",
     "- option must be one option number shown above.",
+    "- Determine the word's grammatical role before comparing meanings.",
+    "- Prefer an option whose part of speech and meaning fit the local phrase.",
+    "- Do not use a sense whose examples describe a different grammatical role or domain.",
     "- For accept, use high or medium confidence only.",
     "- For uncertain, still return the closest option number and use low confidence.",
     "- Keep rationale short and name the sentence clue.",
@@ -249,6 +261,10 @@ export async function selectEnglishWordNetSense({
     surface: decision.surface,
     sentence: decision.sentence,
     senses: decision.senses,
+    localPhrase: decision.localPhrase,
+    grammaticalRole: decision.grammaticalRole,
+    headWord: decision.headWord,
+    nearbyWords: decision.nearbyWords,
     source,
     maxChars,
     maxTokens
@@ -275,6 +291,10 @@ export async function selectEnglishWordNetSense({
       surface: decision.surface,
       sentence: decision.sentence,
       senses: decision.senses,
+      localPhrase: decision.localPhrase,
+      grammaticalRole: decision.grammaticalRole,
+      headWord: decision.headWord,
+      nearbyWords: decision.nearbyWords,
       source,
       maxChars,
       maxTokens,

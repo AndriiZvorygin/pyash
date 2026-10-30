@@ -72,6 +72,7 @@ try {
 const ENGLISH_MOOD_GLOSSES = new Map([
   ["pcih", "do"],
   ["jwih", "may"],
+  ["mwih", "may"],
   ["li", "ya"],
   ["tseh", "can"],
   ["syi7h", "there are"]
@@ -367,6 +368,25 @@ function rootEnglish(part) {
   return word === "hodiernal_tense" ? "today" : word;
 }
 
+function lemmaSurfaceForPhrase(parts, index) {
+  const root = parts[index];
+  if (root?.kind !== "root") return null;
+  let end = index + 1;
+  let best = PYASH_LEMMA_INDEX.preferredSurfaceForSequence([root.pya]);
+  let bestEnd = index + 1;
+  while (end < parts.length && parts[end]?.kind === "grammar") {
+    const candidate = PYASH_LEMMA_INDEX.preferredSurfaceForSequence(
+      parts.slice(index, end + 1).map((part) => part.pya)
+    );
+    if (candidate) {
+      best = candidate;
+      bestEnd = end + 1;
+    }
+    end += 1;
+  }
+  return best ? { surface: best, end: bestEnd } : null;
+}
+
 function lemmaEntry(surface) {
   return PYASH_LEMMA_INDEX.resolve(surface);
 }
@@ -564,7 +584,10 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
     }
     if (part.kind === "root" || isPronoun(part)) {
       const adjective = parts[index + 1]?.pya === "ci";
-      let word = part.pya === "dlat" && adjective ? "daily" : rootEnglish(part);
+      const lemmaSurface = isPronoun(part) ? null : lemmaSurfaceForPhrase(parts, index);
+      let word = part.pya === "dlat" && adjective
+        ? "daily"
+        : lemmaSurface?.surface ?? rootEnglish(part);
       if (isPronoun(part)) word = pronounForm(part, subject ? "subject" : "object");
       if (possessive) {
         const owner = PRONOUN_FORMS.get(possessivePya);
@@ -575,6 +598,7 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       }
       words.push(word);
       if (adjective) index += 1;
+      else if (lemmaSurface) index = lemmaSurface.end - 1;
       continue;
     }
     if (part.pya === "ye") {
@@ -815,7 +839,7 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
   if (decoded.tokens?.some((token) => token.pya === "no")) verb = `do not ${verb}`;
   if (decoded.tokens?.some((token) => token.pya === "pcah")) verb = `also ${verb}`;
   let result = [subject, verb, objectText].filter(Boolean).join(" ") + ".";
-  if (decodedParts.mood === "jwih") result = `may ${result}`;
+  if (["jwih", "mwih"].includes(decodedParts.mood)) result = `may ${result}`;
   if (addressPhrases.length > 0) {
     const address = addressPhrases
       .map((phrase) => renderPhrase(phrase.tokens.map((token) => decodedPart(token, glosses))))

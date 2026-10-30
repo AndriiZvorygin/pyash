@@ -7,7 +7,7 @@ export const ENGLISH_LEMMA_FORMAT = "english-lemma-v1";
 export const ENGLISH_LEMMA_NAME = "translation_english30k_lemmas";
 
 const ACCEPTED_STATUSES = new Set(["accepted-deterministic", "accepted-curated", "accepted-llm", "repaired-llm"]);
-const MAPPING_KINDS = new Set(["irregular", "inflectional", "anchor"]);
+const MAPPING_KINDS = new Set(["irregular", "inflectional", "derivational", "anchor"]);
 const MORPHOLOGY_KINDS = new Set([
   "finite-past",
   "finite-present",
@@ -244,6 +244,7 @@ function buildAtomicLookup(atomicEntries) {
     const pya = typeof entry?.pya === "string" ? entry.pya.trim() : "";
     if (!english || !pya) continue;
     const row = {
+      surface: english,
       lemma: english,
       canonicalEnglish: english,
       pyashSequence: [pya],
@@ -265,6 +266,7 @@ function addExplicitRows(lookup, entries, atomicLookup, aliases) {
     if (!canonical) continue;
     const row = {
       ...canonical,
+      surface: entry.surface,
       lemma: entry.lemma,
       canonicalEnglish: canonical.canonicalEnglish,
       kind: entry.kind,
@@ -304,6 +306,33 @@ export function buildEnglishLemmaIndex({
   const atomicLookup = buildAtomicLookup(atomicEntries);
   const lookup = new Map(atomicLookup);
   addExplicitRows(lookup, catalogEntries, atomicLookup, aliases);
+  const sequenceLookup = new Map();
+  for (const row of lookup.values()) {
+    if (!Array.isArray(row?.pyashSequence) || row.pyashSequence.length === 0) continue;
+    const key = row.pyashSequence.join("\u0000");
+    const candidates = sequenceLookup.get(key) ?? [];
+    if (!candidates.some((candidate) => candidate.surface === row.surface)) {
+      candidates.push(row);
+      sequenceLookup.set(key, candidates);
+    }
+  }
+  const sequenceKindRank = new Map([
+    ["anchor", 0],
+    ["irregular", 1],
+    ["identity", 2],
+    ["derivational", 3],
+    ["inflectional", 4]
+  ]);
+  const preferredSurfaceForSequence = (sequence) => {
+    if (!Array.isArray(sequence) || sequence.length === 0) return "";
+    const candidates = sequenceLookup.get(sequence.join("\u0000")) ?? [];
+    return [...candidates]
+      .sort((left, right) => (
+        (sequenceKindRank.get(left.kind) ?? 9) - (sequenceKindRank.get(right.kind) ?? 9)
+        || String(left.surface).localeCompare(String(right.surface))
+      ))
+      .at(0)?.surface ?? "";
+  };
   const lookupRoot = (lemma) => {
     const variants = englishLemmaLookupVariants(lemma);
     return variants.map((variant) => lookup.get(variant)).find(Boolean) ?? null;
@@ -336,6 +365,7 @@ export function buildEnglishLemmaIndex({
   return {
     lookup,
     resolve,
+    preferredSurfaceForSequence,
     entries: [...lookup.values()]
   };
 }

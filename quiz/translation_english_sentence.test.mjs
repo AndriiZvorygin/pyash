@@ -693,6 +693,25 @@ test("WordNet graph relations rank a connected sense when glosses provide no ove
   assert.match(bank.evidence, /graph:water \(0\.5\)/u);
 });
 
+test("WordNet keeps weak multi-edge graph evidence as alternatives", async () => {
+  const analysis = await analyzeDefaultEnglishSentence(
+    "Normal friendship is a form of love that can be distracted by lust and misunderstanding."
+  );
+  const distracted = analysis.tokens.find((token) => token.surface === "distracted");
+  const resources = await loadEnglishSentenceResources();
+  const selection = selectEnglishWordNetSenses(
+    distracted,
+    analysis.tokens,
+    analysis.tokens.indexOf(distracted),
+    resources.wordnet.index
+  );
+  assert.equal(selection.evidence, "");
+  assert.deepEqual(
+    selection.senses.map((sense) => `${sense.pos}:${sense.synset}`).sort(),
+    ["v:01768023-v", "v:01795785-v"]
+  );
+});
+
 test("WordNet leaves a graph-only near tie for the focused sense selector", async () => {
   const result = await analyzeDefaultEnglishSentence(
     "Romantic love can lead to things such as dating and marriage, but a person can also feel for friends, such as platonic love, or family."
@@ -700,6 +719,59 @@ test("WordNet leaves a graph-only near tie for the focused sense selector", asyn
   const feel = result.tokens.find((token) => token.surface === "feel");
   assert.notEqual(feel?.coverageType, "semantic-wordnet");
   assert.ok((feel?.semanticCandidates?.length ?? 0) > 1);
+});
+
+test("WordNet preserves adjective senses when graph evidence alone is weak", async () => {
+  const source = "Normal friendship is a form of love that can be distracted by lust and misunderstanding.";
+  const analysis = await analyzeDefaultEnglishSentence(source);
+  const normal = analysis.tokens.find((token) => token.surface === "normal");
+  const resources = await loadEnglishSentenceResources();
+  const selection = selectEnglishWordNetSenses(
+    normal,
+    analysis.tokens,
+    analysis.tokens.indexOf(normal),
+    resources.wordnet.index
+  );
+  assert.equal(selection.evidence, "");
+  assert.ok(selection.senses.length > 1);
+  assert.ok(selection.senses.every((sense) => ["a", "s"].includes(sense.pos)));
+});
+
+test("hyphenated self-love is one reflexive compound", async () => {
+  const analysis = await analyzeDefaultEnglishSentence("There can be self-love.");
+  const selfLove = analysis.tokens.find((token) => token.surface === "self-love");
+  assert.ok(selfLove);
+  assert.equal(selfLove.coverageType, "compound");
+  assert.deepEqual(selfLove.pyashSequence, ["pyan", "fyoh"]);
+  assert.equal(analysis.unresolved.includes("self"), false);
+  assert.equal(analysis.unresolved.includes("self-love"), false);
+});
+
+test("physically keeps bodily WordNet senses reviewable instead of deterministic collapse", async () => {
+  const source = "Being sexually or physically attracted is the feeling of lust.";
+  const analysis = await analyzeDefaultEnglishSentence(source);
+  const physically = analysis.tokens.find((token) => token.surface === "physically");
+  assert.ok(physically);
+  assert.ok(physically.wordnet.senses.some((sense) => sense.synset === "01782757-a"));
+  const resources = await loadEnglishSentenceResources();
+  const selection = selectEnglishWordNetSenses(
+    physically,
+    analysis.tokens,
+    analysis.tokens.indexOf(physically),
+    resources.wordnet.index
+  );
+  assert.equal(selection.evidence, "");
+  assert.ok(selection.senses.length > 1);
+  assert.notEqual(physically.coverageType, "semantic-wordnet");
+});
+
+test("English may is a grammar mood before WordNet", async () => {
+  const analysis = await analyzeDefaultEnglishSentence("Lust and love may be thought of as different.");
+  const may = analysis.tokens.find((token) => token.surface === "may");
+  assert.equal(may.coverageType, "grammar");
+  assert.equal(may.grammar.kind, "modal-mood");
+  assert.deepEqual(may.pyashSequence, ["mwih"]);
+  assert.equal(may.wordnet.senses.length, 2);
 });
 
 test("modal capacity keeps the full action phrase and preceding noun phrase together", async () => {

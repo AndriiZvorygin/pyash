@@ -62,7 +62,8 @@ function pendingSenseLinks(artifact) {
       status: text(record?.status),
       selectionStatus: text(record?.selectionStatus),
       selectedSenseId: text(record?.selectedSenseId),
-      selectedSenseWord: text(record?.selectedSense?.lemma)
+      selectedSenseWord: text(record?.selectedSenseWord)
+        || text(record?.selectedSense?.lemma)
         || text(record?.selectedSense?.lemmas?.[0])
         || text(record?.surface),
       selectedSense: record?.selectedSense ?? null,

@@ -88,20 +88,20 @@ test("relative clauses retain the parent phrase before their dependent action", 
   const result = decodePyacSentence(
     "pyanna mrattlihka xyekpu wa twot la drenra kcin lyastlihti cyahtlih ba yatlihpwahya"
   );
-  assert.match(result.englishPyash, /ob a mixed emotionallys and activity that demonstrates/u);
+  assert.match(result.englishPyash, /ob a mix(?: of)? feelings and activity that demonstrates/u);
   assert.match(result.englishPyash, /someone for something/u);
 });
 
 test("head-final genitive object phrases keep the head at the end", () => {
   const result = decodePyacSentence("pyanna xyekpu wa twotti mrattlihkaya");
-  assert.equal(result.englishPyash, "ya su love ob a mixed of emotionallys and activity.");
+  assert.equal(result.englishPyash, "ya su love ob a mix of feelings and activity.");
 });
 
 test("relative clauses precede their head-final parent phrase", () => {
   const result = decodePyacSentence(
     "pyanna la drenra kcin lyas tlih ka cyah tlih ba ya tlih pwah ba xyekpu wa twotti mrattlihkaya"
   );
-  assert.match(result.englishPyash, /ob a mixed of emotionallys and activity that demonstrates a deep interest/u);
+  assert.match(result.englishPyash, /ob a mix of feelings and activity that demonstrates a deep interest/u);
   assert.match(result.englishPyash, /for someone or something/u);
 });
 
