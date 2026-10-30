@@ -12,7 +12,7 @@ Date: 2026-10-30
 | 2 — Example correctness | done | `until-loop.pya` fixed, the two unimplemented signatures implemented, the example audit gates on regressions |
 | 3 — CI coverage | done | Every quiz file is tiered by resource need; `test:ci` now gates 748 of 752 files instead of 28 |
 | 4 — Core/periphery balance | partly done | translation domain moved out of `program/verbs`; the legacy `kind` alias is purged from Pyash names; 17 verb modules over 400 lines remain |
-| 5 — Repo hygiene | partly done | `push_all.sh` remote check relaxed and guarded; orphaned searxng settings and file ownership still open |
+| 5 — Repo hygiene | done | `push_all.sh` remote check relaxed and guarded; the orphaned searxng settings removed and container-config ownership aligned; `documentation/state.md` refreshed |
 
 ## Test baseline movement
 
@@ -552,12 +552,26 @@ was in `program/verbs/` has moved to `program/library/` with tests intact.
 
 Goal: no stale or misleading artefacts.
 
-**5.1 Remove or fix the orphaned searxng settings file.**
+**5.1 Remove the orphaned searxng settings file.** *(done)*
 
-`container/searxng/configure/settings.yml` (2,826 lines) is not the mounted
-config. Compose mounts `container/searxng/configure/searxng/`, whose
-`settings.yml` already had `json` in `formats` before commit `59db00b1`.
-Decide: `git rm` the orphan, or keep it and make the relationship explicit.
+`container/searxng/configure/settings.yml` (2,826 lines) was not the mounted
+config and has been removed with `git rm`.
+
+The evidence was decisive:
+
+- `container/searxng/service/compose.yaml` mounts `"../configure/searxng:/etc/searxng"`,
+  so the live config is `container/searxng/configure/searxng/settings.yml`
+  (49 lines, with `json` in `formats` since commit `59db00b1`);
+- `container/searxng/README.md` points at `configure/searxng/settings.yml`, not
+  at the orphan;
+- the orphan was a verbatim copy of the upstream SearXNG default settings,
+  which the live config explicitly does not use — it sets
+  `use_default_settings: true` and lets SearXNG inherit those defaults at
+  runtime;
+- the only references to the orphan anywhere in the repo were in this plan.
+
+The removal was blocked on ownership (see 5.3), which is why it took a second
+pass.
 
 **5.2 Relax the `push_all.sh` remote check.** *(done)*
 
@@ -579,12 +593,18 @@ it unusable whenever another agent had work in progress. Since `git push` only
 publishes committed history, a dirty worktree is now reported and the push
 proceeds.
 
-**5.3 Fix container-config file ownership.**
+**5.3 Fix container-config file ownership.** *(done)*
 
-`container/searxng/configure/settings.yml` is owned by uid 977, not the
-developer's uid. Git can commit it but it cannot be edited in place, which
-broke a `git revert` during this review. Align ownership on the repo's normal
-uid.
+`container/searxng/configure/` and everything under it was owned by uid 977,
+not the developer's uid. Git could commit those files but could not edit them
+in place, which broke a `git revert` during this review. Ownership has been
+aligned on the repo's normal uid with
+`sudo chown -R htaf:htaf container/searxng/configure/`.
+
+A sweep of every tracked file confirmed the searxng tree was the only place
+with foreign ownership; the remaining foreign-owned files in the working
+directory are all under the git-ignored `artifacts/` and `newspaper/` output
+directories, which are run output rather than repo content.
 
 **5.4 Refresh stale status docs.**
 
