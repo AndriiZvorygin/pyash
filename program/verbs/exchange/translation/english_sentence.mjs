@@ -70,6 +70,7 @@ const RELATIVE_CLAUSE_OPEN_PYA = "la";
 const RELATIVE_CLAUSE_CLOSE_PYA = "ba";
 const INDEPENDENT_CLAUSE_CONNECTORS = new Set(["and", "but", "or"]);
 const WORDNET_GRAPH_SELECTION_MIN_MARGIN = 0.3;
+const WORDNET_GRAPH_SELECTION_MIN_EDGE = 0.3;
 
 let defaultResourcesPromise = null;
 let sentenceResourcesPromise = null;
@@ -189,9 +190,10 @@ export function wordNetSenseKey(sense) {
 }
 
 function wordNetGraphContext(sense, records, index, wordnetIndex) {
-  if (typeof wordnetIndex?.relatedness !== "function") return { score: 0, matched: [] };
+  if (typeof wordnetIndex?.relatedness !== "function") return { score: 0, maxScore: 0, matched: [] };
   const matched = [];
   let score = 0;
+  let maxScore = 0;
   for (let contextIndex = 0; contextIndex < records.length; contextIndex += 1) {
     if (contextIndex === index) continue;
     const contextRecord = records[contextIndex];
@@ -204,9 +206,10 @@ function wordNetGraphContext(sense, records, index, wordnetIndex) {
       .sort((left, right) => right.score - left.score)[0];
     if (!related) continue;
     score += related.score;
+    maxScore = Math.max(maxScore, related.score);
     matched.push(`${related.surface} (${related.score})`);
   }
-  return { score, matched };
+  return { score, maxScore, matched };
 }
 
 function hasRelativeClauseAfter(records, index) {
@@ -270,6 +273,7 @@ function wordNetSenseContext(sense, contextTerms, records, index, wordnetIndex) 
   const graph = wordNetGraphContext(sense, records, index, wordnetIndex);
   return {
     score: (matched.length * 2) + graph.score,
+    graphMaxScore: graph.maxScore,
     matched: [
       ...matched,
       ...graph.matched.map((term) => `graph:${term}`)
@@ -302,8 +306,10 @@ export function selectEnglishWordNetSenses(record, records, index, wordnetIndex)
   if (directMatches.length === 0 && modifierSelection) {
     return { senses, evidence: "" };
   }
-  if (directMatches.length === 0
-    && (bestScore - secondBestScore) < WORDNET_GRAPH_SELECTION_MIN_MARGIN) {
+  if (directMatches.length === 0 && (
+    selected[0].context.graphMaxScore < WORDNET_GRAPH_SELECTION_MIN_EDGE
+    || (bestScore - secondBestScore) < WORDNET_GRAPH_SELECTION_MIN_MARGIN
+  )) {
     return { senses, evidence: "" };
   }
   return {

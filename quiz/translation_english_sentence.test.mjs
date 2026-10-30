@@ -693,6 +693,25 @@ test("WordNet graph relations rank a connected sense when glosses provide no ove
   assert.match(bank.evidence, /graph:water \(0\.5\)/u);
 });
 
+test("WordNet keeps weak multi-edge graph evidence as alternatives", async () => {
+  const analysis = await analyzeDefaultEnglishSentence(
+    "Normal friendship is a form of love that can be distracted by lust and misunderstanding."
+  );
+  const distracted = analysis.tokens.find((token) => token.surface === "distracted");
+  const resources = await loadEnglishSentenceResources();
+  const selection = selectEnglishWordNetSenses(
+    distracted,
+    analysis.tokens,
+    analysis.tokens.indexOf(distracted),
+    resources.wordnet.index
+  );
+  assert.equal(selection.evidence, "");
+  assert.deepEqual(
+    selection.senses.map((sense) => `${sense.pos}:${sense.synset}`).sort(),
+    ["v:01768023-v", "v:01795785-v"]
+  );
+});
+
 test("WordNet leaves a graph-only near tie for the focused sense selector", async () => {
   const result = await analyzeDefaultEnglishSentence(
     "Romantic love can lead to things such as dating and marriage, but a person can also feel for friends, such as platonic love, or family."
