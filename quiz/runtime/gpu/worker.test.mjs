@@ -11,6 +11,7 @@ import {
   DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS,
   reclaimStaleGpuRuntime,
   resolveGpuWorkerMaxPolls,
+  resolveGpuRemoteJobTimeoutMs,
   resolveGpuQueueWaitTimeoutMs,
   runGpuWorkerBatch,
   runGpuWorkerOnce
@@ -24,8 +25,16 @@ function payload(text) {
   };
 }
 
-test("GPU worker default remote wait exceeds Housekeeper inference timeout", () => {
-  assert.ok(DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS > 15 * 60 * 1000);
+test("GPU worker deadline covers Housekeeper admission and inference", () => {
+  const housekeeperCapacityWaitMs = (30 * 60 + 300 + 30) * 1000;
+  const housekeeperInferenceTimeoutMs = 15 * 60 * 1000;
+  assert.ok(DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS >= housekeeperCapacityWaitMs + housekeeperInferenceTimeoutMs);
+  assert.equal(DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS, 60 * 60 * 1000);
+  assert.equal(resolveGpuRemoteJobTimeoutMs(), DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS);
+  assert.equal(
+    resolveGpuRemoteJobTimeoutMs({ jobSpec: { capacityWaitSec: 3600, timeoutSec: 1200 } }),
+    (3600 + 1200 + 300) * 1000
+  );
   assert.equal(resolveGpuWorkerMaxPolls(), Math.ceil(DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS / 250));
   assert.equal(resolveGpuWorkerMaxPolls({ pollIntervalMs: 1000, timeoutMs: 5000 }), 5);
   assert.equal(resolveGpuWorkerMaxPolls({ pollIntervalMs: 1000, timeoutMs: 5000, maxPolls: 3 }), 3);

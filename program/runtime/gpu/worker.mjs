@@ -10,9 +10,16 @@ import { isTerminalHandleStatus, readGpuHandleStatus, writeGpuHandleStatus } fro
 import { createGpuHousekeeperAdapter } from "./housekeeper_adapter.mjs";
 import { gpuEnvelopeDependencyStatus } from "./readiness.mjs";
 
-export const DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS = 20 * 60 * 1000;
+// Housekeeper's default admission can take 35.5 minutes before its 15-minute
+// Ollama request timeout starts. Keep a margin so the local worker does not
+// fail and re-submit a still-active remote job.
+export const DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS = 60 * 60 * 1000;
 export const DEFAULT_GPU_RUNTIME_STALE_MS = 60 * 60 * 1000;
 export const DEFAULT_GPU_RUNTIME_GC_INTERVAL_MS = 60 * 1000;
+
+const HOUSEKEEPER_DEFAULT_CAPACITY_WAIT_MS = (30 * 60 + 300 + 30) * 1000;
+const HOUSEKEEPER_DEFAULT_INFERENCE_TIMEOUT_MS = 15 * 60 * 1000;
+const REMOTE_JOB_TIMEOUT_MARGIN_MS = 5 * 60 * 1000;
 
 const runtimeGcState = new Map();
 
@@ -227,6 +234,25 @@ export function resolveGpuWorkerMaxPolls({
   return Math.max(1, Math.ceil(safeTimeout / interval));
 }
 
+export function resolveGpuRemoteJobTimeoutMs({
+  jobSpec = {},
+  timeoutMs = DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS
+} = {}) {
+  const capacityWaitSeconds = Number(jobSpec?.capacityWaitSec ?? jobSpec?.capacity_wait_sec);
+  const capacityWaitMs = Number.isFinite(capacityWaitSeconds) && capacityWaitSeconds >= 0
+    ? capacityWaitSeconds * 1000
+    : HOUSEKEEPER_DEFAULT_CAPACITY_WAIT_MS;
+  const requestTimeoutSeconds = Number(jobSpec?.timeoutSec ?? jobSpec?.timeout_sec);
+  const requestTimeoutMs = Number.isFinite(requestTimeoutSeconds) && requestTimeoutSeconds > 0
+    ? requestTimeoutSeconds * 1000
+    : HOUSEKEEPER_DEFAULT_INFERENCE_TIMEOUT_MS;
+  const configuredTimeoutMs = parsePositiveMs(timeoutMs, DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS);
+  return Math.max(
+    configuredTimeoutMs,
+    capacityWaitMs + requestTimeoutMs + REMOTE_JOB_TIMEOUT_MARGIN_MS
+  );
+}
+
 export function resolveGpuQueueWaitTimeoutMs({
   queueDepth = 1,
   baseTimeoutMs = 15 * 60 * 1000,
@@ -396,10 +422,14 @@ export async function runGpuWorkerOnce({
     const remoteJobId = remoteJobIdFromSubmit(submit);
     if (!remoteJobId) throw new Error("gpu worker defective: housekeeper did not return remoteJobId");
 
+    const effectiveRemoteJobTimeoutMs = resolveGpuRemoteJobTimeoutMs({
+      jobSpec,
+      timeoutMs: remoteJobTimeoutMs
+    });
     const effectiveMaxPolls = resolveGpuWorkerMaxPolls({
       pollIntervalMs,
       maxPolls,
-      timeoutMs: remoteJobTimeoutMs
+      timeoutMs: effectiveRemoteJobTimeoutMs
     });
     const remote = await pollRemoteJob({
       adapter: housekeeper,

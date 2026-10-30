@@ -384,7 +384,11 @@ Each GPU machine runs its own housekeeper. A housekeeper may know peers such as:
 - future GPU hosts
 
 When a local worker claims a Pyash holding duty and submits it, the entry
-housekeeper decides whether to:
+housekeeper prefers a peer that already has the requested model warm. A warm
+peer can accept the request while another job occupies its device; its device
+gate serializes execution. This avoids waiting for a cold local runtime's
+cooldown when a warm peer can serve the request. Otherwise the entry housekeeper
+decides whether to:
 
 1. accept and run locally,
 2. forward once to a better peer,
@@ -485,11 +489,18 @@ A simple first routing score could be:
 -20 health degraded
 ```
 
-The housekeeper chooses the highest-scoring immediately executable target. A
-busy local execution slot is skipped when a capable peer is available, so two
-hosts can run independent jobs at the same time. If no peer can execute
-immediately, the local housekeeper retains the existing queued-job behavior.
-Equal scores prefer the local host.
+The housekeeper prefers warm residency first, including a warm peer whose device
+is busy; that peer accepts the job and serializes it behind current device work.
+Among warm candidates, immediately executable hosts rank first. If no warm
+candidate is available, the housekeeper chooses an immediately executable cold
+route when possible, then retains the local queued-job behavior. Equal scores
+prefer the local host.
+
+The local GPU worker's default remote-job deadline is 60 minutes. This covers
+Housekeeper's default 35.5-minute capacity-admission window, the default
+15-minute Ollama request timeout, and a margin. A job-specific
+`capacityWaitSec` or `timeoutSec` raises that deadline when needed, preventing a
+local retry from duplicating work that Housekeeper still owns.
 
 ## 7. Dependency-ready dispatch
 
