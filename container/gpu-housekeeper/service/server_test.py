@@ -7,6 +7,7 @@ import threading
 import time
 import unittest
 from unittest.mock import patch
+from urllib.request import Request, urlopen
 
 SERVER_PATH = pathlib.Path(__file__).with_name("server.py")
 spec = importlib.util.spec_from_file_location("gpu_housekeeper_server", SERVER_PATH)
@@ -2343,6 +2344,76 @@ class HousekeeperFederationTests(unittest.TestCase):
     )
     self.assertFalse(route["forwarded"])
     self.assertEqual(route["selected"]["hostId"], "swac")
+
+  def test_forwarded_submit_acknowledges_without_synchronous_route_probes(self):
+    payload = {
+      "handleId": "forwarded-quick-ack",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "deviceId": "gpu0",
+      "source": {"hostId": "debtcollecting", "username": "htaf"},
+      "jobSpec": {
+        "kind": "ollama-chat",
+        "payload": {"model": "qwen-test", "messages": [{"role": "user", "content": "hello"}]}
+      },
+      "routing": {
+        "originHostId": "mriczo",
+        "forwardDepth": 1,
+        "visitedHosts": ["mriczo"]
+      }
+    }
+    with patch.object(server, "select_route", side_effect=AssertionError(
+      "forwarded acceptance must not synchronously probe GPU/provider state"
+    )):
+      result = server.submit_job(payload, {"ollama": {"runtimeName": "ollama"}}, "swac")
+
+    self.assertTrue(result["accepted"])
+    self.assertFalse(result["forwarded"])
+    self.assertEqual(result["executionHostId"], "swac")
+    self.assertEqual(result["source"]["hostId"], "debtcollecting")
+    self.assertEqual(result["route"]["originHostId"], "mriczo")
+    self.assertEqual(result["route"]["attemptedHosts"], ["mriczo", "swac"])
+    queued = server._JOBS[result["remoteJobId"]]
+    self.assertEqual(queued["status"], "queued")
+    self.assertEqual(queued["deviceId"], "gpu0")
+
+  def test_forwarded_submit_http_ack_is_independent_of_route_probe_latency(self):
+    payload = {
+      "handleId": "forwarded-http-quick-ack",
+      "runtimeName": "ollama",
+      "profileName": "qwen-test",
+      "deviceId": "gpu0",
+      "source": {"hostId": "debtcollecting", "username": "htaf"},
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen-test", "messages": []}},
+      "routing": {"originHostId": "mriczo", "forwardDepth": 1, "visitedHosts": ["mriczo"]}
+    }
+    old_registry = server.Handler.runtime_registry
+    old_host_id = server.Handler.host_id
+    server.Handler.runtime_registry = {"ollama": {"runtimeName": "ollama"}}
+    server.Handler.host_id = "swac"
+    httpd = server.create_housekeeper_server("127.0.0.1", 0)
+    worker = threading.Thread(target=httpd.serve_forever, daemon=True)
+    worker.start()
+    try:
+      with patch.object(server, "select_route", side_effect=AssertionError(
+        "HTTP acknowledgement must not wait for route probes"
+      )), patch.object(server, "start_registered_job"):
+        request = Request(
+          f"http://127.0.0.1:{httpd.server_address[1]}/submit",
+          data=json.dumps(payload).encode("utf-8"),
+          headers={"Content-Type": "application/json"}
+        )
+        with urlopen(request, timeout=1) as response:
+          result = json.loads(response.read().decode("utf-8"))
+      self.assertTrue(result["accepted"])
+      self.assertFalse(result["forwarded"])
+      self.assertEqual(result["executionHostId"], "swac")
+    finally:
+      httpd.shutdown()
+      httpd.server_close()
+      worker.join(timeout=2)
+      server.Handler.runtime_registry = old_registry
+      server.Handler.host_id = old_host_id
 
   def test_forwarded_job_status_mirrors_peer_without_resubmitting(self):
     server._JOBS["job-proxy"] = {

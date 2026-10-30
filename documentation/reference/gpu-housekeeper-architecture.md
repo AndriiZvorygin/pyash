@@ -531,7 +531,10 @@ GPU_HOUSEKEEPER_PEERS='mriczo=http://mriczo:18886'
 
 Forwarded requests carry `forwardDepth` and `visitedHosts`. A peer executes a
 forwarded request locally or rejects it; it never forwards again. Forwarded
-job status is reflected through the original `/job/<id>` endpoint. Only an
+job submissions are recorded and acknowledged without rerunning synchronous
+GPU/provider route probes; the background worker performs authoritative
+capacity admission after acceptance. Job status is reflected through the
+original `/job/<id>` endpoint. Only an
 explicit terminal provider response timeout for Ollama/Strata inference can
 trigger another host attempt; non-timeout failures and unreachable peer status
 remain terminal or fail closed rather than risking duplicate work.

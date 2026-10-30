@@ -1422,10 +1422,16 @@ def submit_job(
   runtime_registry = runtime_registry or Handler.runtime_registry
   selected_host = normalize_text(host_id) or normalize_text(Handler.host_id)
   source = normalize_job_source(payload, source_address)
-  if route_forward_depth(payload) > 0 and not parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True):
+  forward_depth = route_forward_depth(payload)
+  if forward_depth > 0 and not parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True):
     return {
       "accepted": False,
       "error": "forwarded jobs are disabled on this housekeeper"
+    }
+  if runtime_lower not in runtime_registry:
+    return {
+      "accepted": False,
+      "error": f"runtime not managed: {runtime_lower}"
     }
 
   remote_job_id = f"job-{uuid.uuid4().hex[:12]}"
@@ -1458,7 +1464,24 @@ def submit_job(
   }
 
   with _SUBMISSION_LOCK:
-    route = select_route(payload, job, runtime_registry, selected_host)
+    if forward_depth > 0:
+      # The origin already selected this peer using its capacity preview.
+      # Keep the receive/ack path independent of GPU and provider probes; the
+      # worker performs authoritative capacity checks after acceptance.
+      routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
+      selected = {
+        "hostId": selected_host,
+        "deviceId": normalize_text(payload.get("deviceId")),
+        "available": True,
+        "immediate": False,
+        "score": 0,
+        "reason": "forwarded job accepted for local execution"
+      }
+      route = {"selected": selected, "candidates": [selected], "forwarded": False}
+      origin_host = normalize_text(routing.get("originHostId")) or selected_host
+    else:
+      route = select_route(payload, job, runtime_registry, selected_host)
+      origin_host = selected_host
     selected = route.get("selected") or {}
     if route.get("forwarded"):
       try:
@@ -1484,7 +1507,7 @@ def submit_job(
     job["attemptedHosts"] = attempted_hosts
     job["route"] = {
       "forwarded": False,
-      "originHostId": selected_host,
+      "originHostId": origin_host,
       "executionHostId": selected_host,
       "score": int(selected.get("score") or 0),
       "reason": selected.get("reason") or route.get("reason") or "local candidate",
