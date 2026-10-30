@@ -15,23 +15,24 @@ From the repository root, start a local interactive coding session:
 node command/pyash_saddle.mjs
 ```
 
-The default model/backend/host come from `configure/default.pya`. Local
-overrides may be supplied through `PYA_SADDLE_MODEL`, `PYA_SADDLE_BACKEND`,
-`PYA_SADDLE_HOST`, and `PYA_SADDLE_CWD`; these select an existing provider and
-coding root, they do not start a separate model runtime.
+The default mind/model/host come from `configure/default.pya`. Select another
+configured Pyash mind interactively with `/mind <name>`. Local startup
+overrides may be supplied through `PYA_SADDLE_MIND`, `PYA_SADDLE_MODEL`,
+`PYA_SADDLE_HOST`, and `PYA_SADDLE_CWD`; these select an existing Pyash mind
+and coding root, they do not start a separate model runtime.
 
 For the Z.AI GLM Coding Plan, add `exists su name zai coding api key ob text
 "<your key>" be default ya` to the ignored, permission-restricted
 `configure/secret.pya`, then launch with
-`PYA_SADDLE_BACKEND=zai node command/pyash_saddle.mjs`. The saddle defaults to
-`glm-5.3` and Z.AI's Responses API endpoint for this backend. This uses the
+`PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs`. The saddle defaults to
+`glm-5.3` and Z.AI's Responses API endpoint for this mind. This uses the
 official Codex CLI route through Pyash's existing mind tools; see
 [`mind.md`](../mind.md#zai-glm-coding-plan) for details.
 
 The web app adds a **Duty** mode beside ordinary chat. Choose an online worker
 and one of its advertised directories, select the model in the existing model
 control, then create a duty with a concise objective and first instruction.
-Later messages append to that same duty and session. The model/backend/host
+Later messages append to that same duty and session. The mind/model/host
 choice is fixed when the duty is created. Use **Accept duty** only after
 reviewing the result; acceptance is an operator decision, not an automatic
 claim that tests or integration succeeded.
@@ -48,8 +49,10 @@ implicitly. There is no sudo access.
 Enter submits the current request. Shift+Enter inserts a newline on terminals
 that report the standard modified-key sequence; `Ctrl+J` is the portable
 newline fallback. `Ctrl+C` writes the existing Pyash mind-interrupt signal and
-`Ctrl+D` exits. `/status`, `/model <name>`, `/backend <name>`, `/host <url>`,
-`/discharge`, and `/exit` are local saddle commands.
+`Ctrl+D` exits. `/status`, `/mind [name]`, `/model <name>`, `/host <url>`,
+`/discharge`, and `/exit` are local saddle commands. `/mind` lists configured
+Pyash minds; `/mind zai` and `/mind openai` switch the active mind. `/model`
+changes the model within that mind.
 
 ## Durable state
 

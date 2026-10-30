@@ -5,15 +5,18 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { forget, remember } from "../program/remember/index.mjs";
+import { allRemember, forget, remember } from "../program/remember/index.mjs";
 import {
   buildSaddleMindSentence,
   createSaddleInputDecoder,
   discoverSaddleModels,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  listSaddleMindNames,
+  parseSaddleMindCommand,
   resolveSaddleModelOption,
-  resolveSaddleModelSelection
+  resolveSaddleModelSelection,
+  resolveSaddleMindProfile
 } from "../program/agent/coding_saddle.mjs";
 import { prepareSaddle, runSaddleTurn } from "../command/pyash_saddle.mjs";
 
@@ -105,50 +108,107 @@ test("duty saddle keeps runtime root separate from its persistent world root", a
   }
 });
 
-test("coding saddle selects GLM defaults for Z.AI without changing other providers", async () => {
+test("coding saddle selects named Pyash minds without changing global defaults", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-zai-"));
   const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const worldRoot = path.join(root, "world");
   try {
+    const defaultMind = await prepareSaddle({ cwd: root, runtimeRoot, worldRoot });
+    assert.equal(defaultMind.mindName, "mind");
+    assert.equal(defaultMind.backend, "ollama");
+    assert.equal(defaultMind.model, "qwen3.5:9b");
+
     const zai = await prepareSaddle({
       cwd: root,
       runtimeRoot,
-      backend: "zai",
-      model: "",
-      host: ""
+      worldRoot,
+      mindName: "zai"
     });
+    assert.equal(zai.mindName, "zai");
     assert.equal(zai.backend, "zai");
     assert.equal(zai.model, "glm-5.3");
     assert.equal(zai.host, "https://api.z.ai/api/v1");
+    assert.equal(remember("coding saddle")?.fromstate?.text, "zai");
+    assert.equal(remember("coding saddle")?.as?.name, "glm-5.3");
+    const zaiCall = await runSaddleTurn({
+      input: "test selected Z.AI mind",
+      model: zai.model,
+      backend: zai.backend,
+      host: zai.host,
+      mindFn: async (sentence) => sentence
+    });
+    assert.equal(zaiCall.for.name, "coding saddle");
+    assert.equal(zaiCall.fromstate.text, "zai");
 
-    const ollama = await prepareSaddle({
+    const openai = await prepareSaddle({
       cwd: root,
       runtimeRoot,
-      backend: "ollama",
-      model: "",
-      host: ""
+      worldRoot,
+      mindName: "openai"
     });
-    assert.equal(ollama.model, "qwen3.5:9b");
-    assert.equal(ollama.host, "http://localhost:11434");
+    assert.equal(openai.mindName, "openai");
+    assert.equal(openai.backend, "openai");
+    assert.equal(openai.model, "gpt-5.3-codex");
+    assert.equal(openai.host, "https://api.openai.com");
+    assert.equal(remember("coding saddle")?.fromstate?.text, "openai");
+    assert.equal(remember("coding saddle")?.as?.name, "gpt-5.3-codex");
+    const openaiCall = await runSaddleTurn({
+      input: "test selected OpenAI mind",
+      model: openai.model,
+      backend: openai.backend,
+      host: openai.host,
+      mindFn: async (sentence) => sentence
+    });
+    assert.equal(openaiCall.fromstate.text, "openai");
+
+    assert.deepEqual(listSaddleMindNames({ minds: allRemember() }), ["mind", "openai", "zai"]);
+    await assert.rejects(prepareSaddle({ cwd: root, runtimeRoot, worldRoot, mindName: "missing" }), /Pyash mind not found: missing/);
   } finally {
     forget();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test("coding saddle status exposes provider and queue state", () => {
+test("coding saddle status exposes selected Pyash mind and queue state", () => {
   const status = formatSaddleStatus({
+    mindName: "stratahelper",
     model: "qwen3.8:27b",
-    backend: "strata",
     host: "http://swac:8090",
     cwd: "/tmp/project",
     queue: { total: 3 },
     busy: true
   });
 
+  assert.match(status, /mind: stratahelper/);
   assert.match(status, /model: qwen3\.8:27b/);
-  assert.match(status, /backend: strata/);
+  assert.doesNotMatch(status, /backend:/);
   assert.match(status, /gpu queue: 3/);
   assert.match(status, /state: running/);
+});
+
+test("coding saddle resolves Pyash mind cases and rejects non-mind facts", () => {
+  assert.deepEqual(resolveSaddleMindProfile({
+    mindName: "zai",
+    profile: {
+      be: "mind",
+      fromstate: { name: "zai" },
+      from: { name: "https://api.z.ai/api/v1" },
+      as: { name: "glm-5.3" }
+    }
+  }), {
+    mindName: "zai",
+    backend: "zai",
+    model: "glm-5.3",
+    host: "https://api.z.ai/api/v1"
+  });
+  assert.throws(() => resolveSaddleMindProfile({ mindName: "ordinary fact", profile: { be: "text" } }), /Pyash mind not found/);
+});
+
+test("coding saddle recognizes /mind list and selection commands, not provider commands", () => {
+  assert.deepEqual(parseSaddleMindCommand("/mind"), { type: "list" });
+  assert.deepEqual(parseSaddleMindCommand("/mind ZAI"), { type: "select", mindName: "ZAI" });
+  assert.equal(parseSaddleMindCommand("/backend zai"), null);
+  assert.equal(parseSaddleMindCommand("ordinary prompt mentioning /mind zai"), null);
 });
 
 test("coding saddle discovers and selects models from the active backend", async () => {

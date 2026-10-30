@@ -23,9 +23,9 @@ exists su name zai coding api key ob text "<GLM Coding Plan key>" be default ya
 
 The standard API key is used for Chat Completions when a mind targets `api.z.ai`. The distinct Coding Plan key is used only by the Codex CLI Responses profile; it does not fall back to the standard API key.
 
-On this host, the regular Codex CLI also has a separate `zai` profile. Start it with `codex --profile zai`; plain `codex` keeps using the existing OpenAI default. Its auth command reads the Coding Plan key from `configure/secret.pya`, so the credential is not duplicated in `~/.codex`. In the Pyash coding saddle, switch providers with `/backend zai` or `/backend openai`, then select that provider's model with `/model glm-5.3` or `/model gpt-6-luna`. `/model` changes the model, not the provider.
+On this host, the regular Codex CLI also has a separate `zai` profile. Start it with `codex --profile zai`; plain `codex` keeps using the existing OpenAI default. Its auth command reads the Coding Plan key from `configure/secret.pya`, so the credential is not duplicated in `~/.codex`. In the Pyash coding saddle, `/mind` lists configured Pyash minds and `/mind zai` or `/mind openai` selects one. `/model` then changes the model within that selected mind; the configured Z.AI and OpenAI mind facts are in `configure/default.pya`.
 
-The runner launches the installed Codex CLI with an ephemeral, isolated `CODEX_HOME` configured for the OpenAI Responses protocol at `https://api.z.ai/api/v1`, model `glm-5.3`, and the supplied Coding Plan key. The temporary profile is permission-restricted and deleted after each request; your existing `~/.codex` configuration is not changed. Pyash keeps its existing default backend unless you explicitly select Z.AI. Z.AI's Coding Plan is limited to officially supported tools; this route uses Codex CLI rather than Pyash's direct Chat Completions client.
+The runner launches the installed Codex CLI with an ephemeral, isolated `CODEX_HOME` configured for the OpenAI Responses protocol at `https://api.z.ai/api/v1`, model `glm-5.3`, and the supplied Coding Plan key. The temporary profile is permission-restricted and deleted after each request; your existing `~/.codex` configuration is not changed. The coding saddle keeps its configured default mind unless you select another one with `/mind`. Z.AI's Coding Plan is limited to officially supported tools; this route uses Codex CLI rather than Pyash's direct Chat Completions client.
 
 To add a named Z.AI mind relay without changing the global default:
 
@@ -36,10 +36,10 @@ node command/pyash.mjs configure mind --non-interactive --relay zai-coder --back
 Select Z.AI for the coding saddle without changing Pyash's global default:
 
 ```sh
-PYA_SADDLE_BACKEND=zai node command/pyash_saddle.mjs
+PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs
 ```
 
-This selects `glm-5.3` and `https://api.z.ai/api/v1` by default. Override them with `PYA_SADDLE_MODEL` and `PYA_SADDLE_HOST` when needed. The saddle can also switch providers interactively with `/backend zai` and select a model with `/model glm-5.3`. Other minds continue using their existing relay. GLM-5.3 is text-only; the model can still use the Pyash tools exposed through the Codex MCP bridge.
+This selects the Pyash mind named `zai`, whose defaults are `glm-5.3` and `https://api.z.ai/api/v1`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` selects a model for the active mind. Other minds continue using their existing configuration. GLM-5.3 is text-only; the model can still use the Pyash tools exposed through the Codex MCP bridge.
 
 Durable `be gpu mind` jobs include a Housekeeper `resourceRequest.vramRequiredMb` by default (12,000 MiB). Set `PYA_OLLAMA_VRAM_REQUIRED_MB` or `PYA_GPU_VRAM_REQUIRED_MB` to adjust the default, or provide `resourceRequest.vramRequiredMb` in the job map. This declaration lets the Housekeeper safely reclaim idle managed runtimes before loading the requested model.
 
