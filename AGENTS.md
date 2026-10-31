@@ -22,6 +22,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - `node command/check_doc_prose.mjs` guards documentation against prose corrupted by bulk keyword replacement (a keyword between two lowercase words, or a duplicated alias such as `` `su` / `su` ``). Run it after any vocabulary or alias rename. <!-- prose-check: ignore -->
 - `node command/audit_examples.mjs` executes every `examples/pyash/*.pya` through the real runner and reports `passed` / `needs input` / `needs backend` / `failed`. Use it to catch example drift.
   It runs one process per example and takes about twelve minutes, so it is **not** a per-change check: run it when a month has passed or a hundred commits have landed since the last one, whichever comes first (the CI workflow enforces the same cadence). It prints the summary and the failures only; the per-example detail lands in `examples/out/example-audit.json`.
+- `node command/example_audit_due.mjs --event push --last <sha>` reports whether the audit is due (`run=true` / `run=false` on the first line). It is the rule the CI workflow uses, and an unknown last audit makes it run rather than skip.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 
 ## Coding Style & Naming Conventions

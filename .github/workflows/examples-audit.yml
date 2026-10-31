@@ -25,7 +25,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          last="$(gh api "repos/${{ github.repository }}/actions/workflows/examples-audit.yml/runs?status=success&per_page=1" --jq '.[0].head_sha // ""')"
+          # The listing is an object with the runs under workflow_runs. A
+          # lookup that fails is not fatal: an unknown last audit means the
+          # gate below runs the audit rather than skipping it.
+          last="$(gh api "repos/${{ github.repository }}/actions/workflows/examples-audit.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha // ""' 2>/dev/null || true)"
           echo "the last successful audit ran at ${last:-no commit}"
           echo "sha=$last" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
@@ -33,33 +36,15 @@ jobs:
           # The whole history is needed to count the commits since the last
           # audit.
           fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Is the audit due?
         id: gate
         run: |
-          if [ "${{ github.event_name }}" != "push" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "the audit runs on the monthly schedule and on demand"
-            exit 0
-          fi
-          last="${{ steps.last.outputs.sha }}"
-          if [ -z "$last" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "no earlier audit is recorded, so the audit runs"
-            exit 0
-          fi
-          if ! git cat-file -e "$last^{commit}" 2>/dev/null || ! git merge-base --is-ancestor "$last" HEAD; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "the last audit is not on this branch, so the audit runs"
-            exit 0
-          fi
-          count="$(git rev-list --count "$last"..HEAD)"
-          echo "commits since the last audit: $count"
-          if [ "$count" -ge 100 ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "the audit is not due yet"
-          fi
+          verdict="$(node command/example_audit_due.mjs --event "${{ github.event_name }}" --last "${{ steps.last.outputs.sha }}")"
+          echo "$verdict"
+          echo "run=$(printf '%s\n' "$verdict" | head -1 | cut -d= -f2)" >> "$GITHUB_OUTPUT"
       - name: Install dependencies
         if: steps.gate.outputs.run == 'true'
         run: npm install

@@ -477,7 +477,9 @@ comes first. It is not on the per-push path because the audit spawns one
 process per example and takes about twelve minutes. The workflow keeps that
 cadence honest: a push that is not due skips the job before it installs
 anything, and a run that cannot tell how many commits have landed runs the
-audit rather than skipping it.
+audit rather than skipping it. The rule itself lives in
+`command/example_audit_due.mjs`, so it can be tested without a repository,
+and `quiz/example_audit_due.test.mjs` pins it.
 
 The audit itself prints the summary and the failures, not one line per
 example, so a run with nothing to report costs one line to read. The
