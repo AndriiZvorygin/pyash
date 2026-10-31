@@ -16,9 +16,6 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
     steps:
       - name: Find the last successful audit
         id: last
@@ -26,9 +23,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The listing is an object with the runs under workflow_runs. A
-          # lookup that fails is not fatal: an unknown last audit means the
-          # gate below runs the audit rather than skipping it.
-          last="$(gh api "repos/${{ github.repository }}/actions/workflows/examples-audit.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha // ""' 2>/dev/null || true)"
+          # lookup that does not answer with a commit is not fatal, but it is
+          # reported: a silent failure here would quietly turn the cadence off
+          # and run the audit on every push.
+          raw="$(gh api "repos/${{ github.repository }}/actions/workflows/examples-audit.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha // ""' 2>&1 || true)"
+          if printf '%s' "$raw" | grep -Eq '^[0-9a-f]{40}$'; then
+            last="$raw"
+          else
+            echo "the last successful audit could not be read: $raw"
+            last=""
+          fi
           echo "the last successful audit ran at ${last:-no commit}"
           echo "sha=$last" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
