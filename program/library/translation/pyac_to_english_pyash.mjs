@@ -681,7 +681,8 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       const adjective = parts[index + 1]?.pya === "ci";
       const selfReferent = part.pya === "fyif" && part.english === "self";
       const lemmaSurface = isPronoun(part) || selfReferent ? null : lemmaSurfaceForPhrase(parts, index);
-      const nominalSurface = hasNominalCase && !adjective
+      const hasFollowingLexicalHead = parts.slice(index + 1).some((candidate) => candidate.kind === "root");
+      const nominalSurface = hasNominalCase && !adjective && !hasFollowingLexicalHead
         ? nominalEnglishForRoot(part)
         : "";
       let word = part.pya === "dlat" && adjective
