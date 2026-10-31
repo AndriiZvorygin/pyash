@@ -1,28 +1,74 @@
 name: Examples audit
 
 # The example audit runs every example in examples/pyash through the real
-# runner, one process per example. That takes long enough to be worth keeping
-# off the per-push path, so it runs on a schedule and on demand.
+# runner, one process per example. That takes about twelve minutes, so it is
+# not on the per-push path: it runs monthly, and on a push once a hundred
+# commits have landed since the last audit, whichever comes first. A run can
+# also be started on demand.
 on:
   schedule:
-    - cron: "23 4 * * *"
+    - cron: "23 4 1 * *"
   workflow_dispatch:
+  push:
+    branches:
+      - master
 
 jobs:
   audit:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
+      - name: Find the last successful audit
+        id: last
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last="$(gh api "repos/${{ github.repository }}/actions/workflows/examples-audit.yml/runs?status=success&per_page=1" --jq '.[0].head_sha // ""')"
+          echo "the last successful audit ran at ${last:-no commit}"
+          echo "sha=$last" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # The whole history is needed to count the commits since the last
+          # audit.
+          fetch-depth: 0
+      - name: Is the audit due?
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "the audit runs on the monthly schedule and on demand"
+            exit 0
+          fi
+          last="${{ steps.last.outputs.sha }}"
+          if [ -z "$last" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "no earlier audit is recorded, so the audit runs"
+            exit 0
+          fi
+          if ! git cat-file -e "$last^{commit}" 2>/dev/null || ! git merge-base --is-ancestor "$last" HEAD; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "the last audit is not on this branch, so the audit runs"
+            exit 0
+          fi
+          count="$(git rev-list --count "$last"..HEAD)"
+          echo "commits since the last audit: $count"
+          if [ "$count" -ge 100 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "the audit is not due yet"
+          fi
       - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
         run: npm install
       - name: Install the external tools the examples shell out to
         # The audit runs the examples for real, so it needs the same tools a
         # developer has: ffmpeg to record and burn, espeak-ng to speak, pandoc
         # to convert, and poppler to read PDFs. Without them the audit reports
         # a gap instead of exercising the example.
+        if: steps.gate.outputs.run == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -32,6 +78,7 @@ jobs:
         # from the pyachso2n checkout that sits next to this repository.
         # A clone can fail on a flaky network, so it is retried: a run that
         # dies here has tested nothing at all.
+        if: steps.gate.outputs.run == 'true'
         run: |
           for attempt in 1 2 3; do
             if git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n; then
@@ -45,6 +92,18 @@ jobs:
             sleep 10
           done
       - name: Bootstrap external toolchains
+        if: steps.gate.outputs.run == 'true'
         run: npm run bootstrap
       - name: Audit examples
+        if: steps.gate.outputs.run == 'true'
         run: node command/audit_examples.mjs
+      - name: Keep the per-example detail
+        # The audit prints only the failures. The per-example detail is kept
+        # here so a reader who wants the whole picture does not have to run
+        # the audit again.
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-audit-report
+          path: examples/out/example-audit.json
+          if-no-files-found: warn

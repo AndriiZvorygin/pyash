@@ -10,6 +10,12 @@
 // Usage: node command/audit_examples.mjs [--dir examples/pyash] [--json] [--timeout-ms N]
 // Exit code: 0 when no example fails beyond the recorded baseline, 1 when a
 // new failure appears.
+//
+// The report is quiet by default: the audit takes about twelve minutes and
+// prints one line per example, which is a lot of text to read for a run that
+// usually has nothing to say. It prints the summary and the failures, and
+// leaves the per-example detail in the report file next to the audited
+// folder, so a run with nothing wrong costs one line to read.
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -126,6 +132,11 @@ const dir = path.resolve(root, targetDir);
 const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".pya")).sort();
 const results = [];
 
+// The report lands in the output folder beside the audited examples, which is
+// where the examples write their own artifacts. For the repository examples
+// that is examples/out, which is not tracked.
+const reportPath = path.join(path.dirname(dir), "out", "example-audit.json");
+
 for (const file of files) {
   const filePath = path.join(dir, file);
   let source;
@@ -153,7 +164,6 @@ for (const file of files) {
     ms: Date.now() - started,
     detail: outcome.detail
   });
-  if (!asJson) console.log(`  ${outcome.status === "ok" ? "ok" : "FAIL"} ${file}${outcome.detail ? ` :: ${outcome.detail}` : ""}`);
 }
 
 const { passed, failed, needsBackend, needsInput, timedOut, skipped } = summarize(results);
@@ -171,20 +181,25 @@ const { fixed, noLongerFailing } = splitRecordedFailures({
   results
 });
 
+const report = {
+  dir: targetDir,
+  total: results.length,
+  passed,
+  failed: failed.length,
+  knownFailures: known.length,
+  regressions: regressions.length,
+  needsBackend: needsBackend.length,
+  needsInput: needsInput.length,
+  timedOut: timedOut.length,
+  skipped: skipped.length,
+  results
+};
+
+await fs.mkdir(path.dirname(reportPath), { recursive: true });
+await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
 if (asJson) {
-  console.log(JSON.stringify({
-    dir: targetDir,
-    total: results.length,
-    passed,
-    failed: failed.length,
-    knownFailures: known.length,
-    regressions: regressions.length,
-    needsBackend: needsBackend.length,
-    needsInput: needsInput.length,
-    timedOut: timedOut.length,
-    skipped: skipped.length,
-    results
-  }, null, 2));
+  console.log(JSON.stringify(report, null, 2));
 } else {
   console.log(`examples audit: ${passed} passed, ${failed.length} failed, ${needsBackend.length} need backend, ${needsInput.length} need input, ${timedOut.length} timed out, ${skipped.length} skipped (of ${results.length})`);
   if (timedOut.length > 0) {
@@ -207,6 +222,12 @@ if (asJson) {
     console.log(`  ${regressions.length} new failure(s):`);
     for (const entry of regressions) console.log(`    ${entry.file}  :: ${entry.detail}`);
   }
+  // The report path is shown relative to the repository when it is inside it,
+  // and absolute when the audited folder is somewhere else entirely.
+  const shownReportPath = reportPath.startsWith(`${root}${path.sep}`)
+    ? path.relative(root, reportPath)
+    : reportPath;
+  console.log(`  per-example detail: ${shownReportPath}`);
 }
 
 process.exit(regressions.length ? 1 : 0);
