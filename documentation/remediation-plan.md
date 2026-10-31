@@ -953,8 +953,8 @@ A read of the repository after the five phases, with the numbers that back it.
 | Verb layer | 29,571 lines / 151 modules |
 | Applications | ~173,100 lines / ~690 files |
 | Specifications | 24 files, each <= 16KB |
-| Gating quiz files | 759 (749 tier 1, 10 tier 2; 1 tier 3 excluded) |
-| Tests | 3,051, zero failures |
+| Gating quiz files | 763 in the gating tiers (698 tier 1, 65 tier 2); 1 tier 3 excluded |
+| Tests | 3,083, zero failures |
 | Examples | 357 top-level in `examples/pyash/` |
 | Skills | 24 |
 
@@ -993,8 +993,8 @@ counted in the *passed* total. Timeouts are now their own bucket.
    `audit_examples.mjs` with its baseline and `example_audit_rules.mjs`
    pinned by `quiz/example_audit_guard.test.mjs`, and `push_all_check.mjs`.
    The repository now fails on drift instead of relying on someone noticing.
-2. **The CI gate is the whole suite.** From 28 files and 254 tests to 758
-   files and 3,038 tests, and the tiering is honest: a missing resource is
+2. **The CI gate is the whole suite.** From 28 files and 254 tests to 763
+   files and 3,083 tests, and the tiering is honest: a missing resource is
    reported with its reason, never silently failed.
 3. **The language core stayed small and central.** 6,393 lines for
    parser, bridge, memory and program, while the applications grew around
@@ -1018,24 +1018,27 @@ counted in the *passed* total. Timeouts are now their own bucket.
 
 ### What is still weak
 
-1. **The house contract is only checked where a checkout is present.** CI can
-   verify that the declared surface exists, but the cross-repository import
-   check needs a house checkout under `world/house/`, which this repository
-   does not track. Owen's broken import was found by reading the published
-   house repositories, not by the guard; a check that also ran against the
-   published repositories would have caught it earlier.
+1. **The house contract is checked against the published houses, but not
+   against a local checkout.** `command/check_house_api.mjs` clones the three
+   published reporter repositories into `artifacts/house-repos/` and resolves
+   their imports the same way it resolves a local checkout's, so the contract
+   is verified against what the houses actually contain. What it still cannot
+   see is a house that is not published, and the imports a house builds at run
+   time by joining a repository root, which are found by reading the houses
+   rather than by the guard.
 2. **Four oversized modules.** `itinerary_media.mjs` (2,098),
    `qwen_say.mjs` (1,622), `command.mjs` (1,072) and
    `agenda-stage3-summary-renderer.mjs` (6,675). Each is internally
    coherent — one concern, many small functions — so a split would follow
    internal seams, not a domain line.
-3. **The domain vocabulary is not in the dictionary.** The repository's own
-   `vocab_suggest` reports 181 distinct tokens across `examples/pyash/`
-   with no Pyash coverage: `android`, `adb`, `bpm`, `andrii`,
-   `awakehymns`, `backend`. These are legitimate domain compounds, but it
-   means the language's dictionary does not cover the domain the repository
-   actually works in. The `kind` class of problem is guarded; this larger
-   class is not.
+3. **A few domain words are still uncovered.** The vocabulary checker now
+   tells names from words, so most of what it used to report is not a gap at
+   all: over `examples/pyash/` it reports 273 tokens as names without
+   coverage and seven as words still missing. Six of the seven sit in
+   compound predicate phrases where the checker cannot tell a name from a
+   word by shape; one, `divide`, is unambiguous — a registered verb with no
+   English-to-Pyash word, while `plus`, `subtract` and `multiply` all have
+   one. The entry belongs upstream in the `pyac/kwon` dictionary. See 4.6.
 4. **The example audit is a nightly job, not a per-push gate.** It takes
    about 17 minutes for 357 examples, so a broken example surfaces a day
    later.
