@@ -79,12 +79,13 @@ Two fixes are possible:
   Making that change correctly requires revisiting the promote ceremony's
   arithmetic as well, which is a language-semantics decision, not a bug fix.
 
-**An agent turn id is not unique across runs.** The scheduled example audit
-found this, and it is a defect in the agent layer rather than in an example.
+**An agent turn id is not unique across runs.** *(fixed)* The scheduled example
+audit found this, and it is a defect in the agent layer rather than in an
+example.
 
-A turn id is derived from the exchange sentence id, and the exchange sentence
+A turn id was derived from the exchange sentence id, and the exchange sentence
 id is `evoke-<n>` — the index of the sentence in the run. Two different runs
-that reach the same sentence index therefore claim the same turn id:
+that reached the same sentence index therefore claimed the same turn id:
 
 ```
 turn-exchange-evoke-2-a7f24ee7
@@ -92,30 +93,20 @@ turn-exchange-evoke-2-a7f24ee7
 
 The agent session ledger is a long-lived append-only file
 (`world/house/agent-helper/session/<date>-<name>.pya`), so the second run
-finds a turn recorded under that id with different evidence and reports
+found a turn recorded under that id with different evidence and reported
 `session replay defective: conflicting request for ...` or `conflicting
-assistant records for ...`. The spec calls this state defective, and it is —
-but the defect is in the id, not in the evidence. The recorded evidence is
-correct; two different exchanges were given one identity.
+assistant records for ...`. The spec calls this state defective, and it was —
+but the defect was in the id, not in the evidence. The recorded evidence was
+correct; two different exchanges had been given one identity.
 
-Two fixes are possible:
+The fix follows the rule the repository already used for a turn with no
+identity of its own: an exchange sentence id names a position in a run, so the
+turn id now adds the session-local ordinal and every ask gets its own turn.
+A payload id still names one work item, so a re-presented payload is still the
+same turn and still replays its recorded response. The behaviour is pinned by
+`quiz/agent_session.test.mjs`.
 
-- **Make the exchange sentence id unique per run** (the spec's own words:
-  "Payload ids and exchange sentence ids are preferred"). The run id is
-  already available in `command/run_pya_program.mjs`. This costs the
-  cross-run replay of a resumed turn, because a resumed run has a different
-  run id.
-- **Mix the canonical request hash into the turn id** that the exchange
-  sentence id produces. Two different exchanges at the same sentence index
-  then differ, while the same exchange resumed with the same request still
-  replays. This departs from the spec's wording, which prefers the bare
-  exchange sentence id, and it needs the spec text updated with it.
-
-Both change the identity contract in
-`documentation/specifications/18-pyash-agent.md`, so this is an owner
-decision rather than a fix to make here. Until it is made, the affected
-examples are listed in the audit baseline so the nightly audit reports them
-as known failures instead of as regressions.
+The three examples that failed for this are no longer in the audit baseline.
 
 **An interactive session example hangs instead of saying it cannot run.**
 *(fixed)* `program/verbs/session.mjs` fell into the `readline` loop whenever
@@ -934,8 +925,7 @@ Per `AGENTS.md`:
    modules, not implementation folders, so bounding them is a separate tranche.
 4. **Container-path examples** — *resolved.* `/workplace/...` paths only exist
    inside the container image; the audit classifies them as *needs backend*
-   rather than failed, and `configure/example_audit_baseline.pya` records the
-   known ones.
+   rather than failed, so the baseline holds no entry for them.
 5. **The genuine example failures** — *resolved.* The four examples were
    intermediate pipeline fragments rather than working examples, and were
    removed. See 2.6 below.
@@ -1095,8 +1085,8 @@ counted in the *passed* total. Timeouts are now their own bucket.
    later. The scheduled workflow now provisions the tools the examples shell
    out to and the sibling dictionary checkout, and a missing tool is reported
    as a gap rather than as a defect, so the audit only fails on a real
-   regression. Three examples are in the baseline for the agent turn-id
-   defect described above.
+   regression. The audit baseline is empty again now that the agent turn-id
+   defect is fixed.
 5. **The audit classifier is pattern-based, and its buckets are not stable
    across runs.** It recognises specific backend signatures; a GPU-duty
    failure (`gpu duty defective: unknown handle`) was not among them, which

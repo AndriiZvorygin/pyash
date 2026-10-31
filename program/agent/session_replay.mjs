@@ -85,6 +85,20 @@ export function deriveTurnIdentity({
 } = {}) {
   const requestHash = canonicalRequestHash(request);
   const source = readSource({ payloadId, exchangeSentenceId });
+  const ordinal = Math.max(1, Math.trunc(Number(sessionOrdinal) || 1));
+  if (source?.kind === "exchange") {
+    // An exchange sentence id names the position of a sentence in a run, not
+    // the exchange itself, so it is only unique inside that run. Two runs
+    // that reach the same position must not claim one turn, so the turn
+    // carries the session-local ordinal and every ask gets its own turn.
+    return {
+      turnId: `turn-${source.kind}-${sourcePart(source.value)}-${String(ordinal).padStart(6, "0")}`,
+      requestHash,
+      ordinal,
+      source: source.kind,
+      sourceId: source.value
+    };
+  }
   if (source) {
     return {
       turnId: `turn-${source.kind}-${sourcePart(source.value)}-${sha256(source.value).slice(0, 8)}`,
@@ -94,7 +108,6 @@ export function deriveTurnIdentity({
       sourceId: source.value
     };
   }
-  const ordinal = Math.max(1, Math.trunc(Number(sessionOrdinal) || 1));
   return {
     turnId: `turn-${String(ordinal).padStart(6, "0")}-${requestHash.slice(0, 12)}`,
     requestHash,

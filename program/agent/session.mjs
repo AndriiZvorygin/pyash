@@ -579,6 +579,47 @@ export async function readSessionReplayWithFallback({
   });
 }
 
+// The base name of a session is the part of its file name after the date key.
+function sessionBaseName(sessionFile) {
+  const text = String(sessionFile ?? "");
+  const name = path.basename(text, path.extname(text) || ".pya");
+  const match = name.match(/^\d{8}-(.+)$/u);
+  return match ? match[1] : "";
+}
+
+// The turns of the whole live session.
+//
+// A live session spans the file for today and the file for yesterday, so a
+// turn ordinal has to be counted over both. Otherwise each day would hand
+// out the same ordinal, and with it the same turn id, and the two files
+// would then hold conflicting evidence for one id.
+async function sessionWindowTurns(sessionFile, replay) {
+  const baseName = sessionBaseName(sessionFile);
+  if (!baseName) return replay.turns;
+  const todayKey = formatCompactDate(new Date());
+  const sessionDir = path.dirname(sessionFile);
+  const files = [
+    path.join(sessionDir, sessionFilename({
+      sessionName: buildSessionNameForDate({ baseName, dateCompact: shiftCompactDate(todayKey, -1) })
+    })),
+    path.join(sessionDir, sessionFilename({
+      sessionName: buildSessionNameForDate({ baseName, dateCompact: todayKey })
+    }))
+  ];
+  const merged = new Map();
+  for (const turn of replay.turns) merged.set(turn.turnId, turn);
+  try {
+    for (const file of files) {
+      const window = await readSessionReplay({ sessionFile: file, historyWindow: 0 });
+      for (const turn of window.turns) merged.set(turn.turnId, turn);
+    }
+  } catch {
+    // A window that cannot be projected is already reported by the history
+    // read. Counting the file on its own keeps the write from failing twice.
+  }
+  return [...merged.values()];
+}
+
 async function appendReplaySentence(sessionFile, sentence) {
   await fs.appendFile(sessionFile, `${sentenceToPyash(sentence)}\n`, "utf8");
 }
@@ -638,7 +679,7 @@ export async function beginSessionTurn({
   const requestValue = request && typeof request === "object" ? request : { value: request };
   const meta = metadata && typeof metadata === "object" ? metadata : {};
   const requestHash = canonicalRequestHash(requestValue);
-  const ordinal = nextSessionOrdinal(replay.turns);
+  const ordinal = nextSessionOrdinal(await sessionWindowTurns(sessionFile, replay));
   const payloadId = meta.payloadId || requestValue.payloadId || requestValue.inboundPayloadId;
   const exchangeSentenceId = payloadId
     ? ""

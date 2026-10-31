@@ -7,17 +7,10 @@
 # Remove an entry once its example passes; the audit reports the ones that
 # have been fixed so the list stays honest.
 #
-# The entries below share one root cause: a turn id is derived from the
-# exchange sentence id, and the exchange sentence id is the sentence index in
-# the run, so two runs reach the same id and the shared session ledger reports
-# conflicting evidence for it.
+# The list is empty. The agent turn-id defect that once filled it is fixed:
+# an exchange sentence id names a position in a run, so the turn id now adds
+# the session-local ordinal and every ask gets its own turn.
 #
-#   agent-session.pya
-#   agent-session-fromtext-name.pya
-#   coding-loop-guarantee.pya
-#
-# su name known_failures ob ve text ya
-su name known_failures ob text "agent-session.pya" ya
-su name known_failures ob text "agent-session-fromtext-name.pya" ya
-su name known_failures ob text "coding-loop-guarantee.pya" ya
+# su name known_failures ob ve text "example.pya" ya
+su name known_failures ob ve text ya
 prah

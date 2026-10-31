@@ -18,14 +18,16 @@ test("every recorded baseline failure names an example that exists", async () =>
   );
   const program = buildProgram(text);
   const recorded = [];
+  let declarations = 0;
   for (const sentence of program.sentences) {
     if (String(sentence?.su?.name ?? "").toLowerCase() !== "known_failures") continue;
+    declarations += 1;
     const value = String(sentence?.ob?.text ?? "");
     for (const name of value.split(/[\s,]+/u)) {
       if (name.trim()) recorded.push(name.trim());
     }
   }
-  assert.ok(recorded.length > 0, "the baseline should record at least one known failure");
+  assert.ok(declarations > 0, "the baseline should declare its known failures");
   for (const name of recorded) {
     const exists = await fs
       .access(path.join(repoRoot, "examples", "pyash", name))

@@ -35,10 +35,11 @@ su name agent ob text "<response>" fromtext text "<request hash>" accordingto te
 su name checkpoint ob text "<response>" fromtext text "<request hash>" accordingto text "<turn id>" by num <ordinal> vyah success be checkpoint ya
 ```
 
-The same `accordingto` turn id identifies all three records. Payload ids and
-exchange sentence ids are preferred; otherwise the id combines a session-local
-ordinal with a canonical request hash. Timestamps are audit fields only and do
-not participate in identity or snapshot hashes. A user record is appended before
+The same `accordingto` turn id identifies all three records. A payload id names
+one work item; an exchange sentence id names a run position and adds the session
+ordinal. Otherwise the id is a session ordinal and a canonical request hash.
+Timestamps are audit fields only and do not participate in identity or snapshot
+hashes. A user record is appended before
 mind invocation. Pending tails remain auditable but are omitted from resumed
 history; a successful checkpoint is required before a pair enters prompt history.
 Completed turns replay from their recorded response without appending a second
