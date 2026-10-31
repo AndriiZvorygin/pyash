@@ -48,6 +48,17 @@ const PYASH_LEMMA_INDEX = buildEnglishLemmaIndex({
     readFileSync(new URL("./english_lemmas.pya", import.meta.url), "utf8")
   ).entries
 });
+const NOMINAL_ENGLISH_SURFACES = new Map();
+const nominalEnglishCandidates = new Map();
+for (const entry of PYASH_LEMMA_INDEX.entries) {
+  if (entry.kind === "identity" || entry.lemma !== entry.surface || !entry.canonicalEnglish) continue;
+  const candidates = nominalEnglishCandidates.get(entry.canonicalEnglish) ?? new Set();
+  candidates.add(entry.surface);
+  nominalEnglishCandidates.set(entry.canonicalEnglish, candidates);
+}
+for (const [canonicalEnglish, candidates] of nominalEnglishCandidates) {
+  if (candidates.size === 1) NOMINAL_ENGLISH_SURFACES.set(canonicalEnglish, [...candidates][0]);
+}
 const TENSE_MARKERS = new Set(["ki", "ra", "pfih"]);
 const ENGLISH_GRAMMAR_SURFACES = new Map();
 const ENGLISH_GRAMMAR_SEQUENCE_SURFACES = [];
@@ -346,7 +357,7 @@ function grammarSequenceSurface(parts, index) {
     const candidate = parts.slice(index, index + entry.pya.length);
     if (candidate.length !== entry.pya.length) continue;
     if (!candidate.every((part, offset) => (
-      (part.kind === "grammar" || isPronoun(part))
+      (part.kind === "grammar" || part.kind === "case" || isPronoun(part))
       && part.pya === entry.pya[offset]
     ))) continue;
     return entry;
@@ -365,10 +376,59 @@ function composedExistentialMood(decoded) {
 function composedExistentialSubject(parts, glosses) {
   const subjectPhrase = selectSubjectPhrase(parts);
   if (!subjectPhrase) return "";
+  const sharedHeadList = renderSharedHeadPhraseList(parts, glosses, subjectPhrase);
+  if (sharedHeadList) return sharedHeadList;
   return renderPhrase(
     subjectPhrase.tokens.map((token) => decodedPart(token, glosses)),
     { subject: true }
   );
+}
+
+function renderSharedHeadPhraseList(parts, glosses, headPhrase) {
+  const headIndex = parts.phrases.indexOf(headPhrase);
+  if (headIndex < 2 || !["na", "ka"].includes(headPhrase.case)) return "";
+  const groups = [];
+  for (const phrase of parts.phrases.slice(0, headIndex)) {
+    let firstContentToken = 0;
+    while (["ba", "wa"].includes(phrase.tokens[firstContentToken]?.pya)) {
+      firstContentToken += 1;
+    }
+    const connector = firstContentToken > 0
+      ? phrase.tokens[firstContentToken - 1].pya
+      : null;
+    if (groups.length === 0 || connector) {
+      groups.push({
+        connector: groups.length === 0 ? null : connector,
+        tokens: phrase.tokens.slice(firstContentToken)
+      });
+      continue;
+    }
+    groups.at(-1).tokens.push(...phrase.tokens);
+  }
+  if (groups.length < 2) return "";
+  if (!parts.phrases.slice(0, headIndex).some((phrase) => (
+    phrase.case && !["na", "ka"].includes(phrase.case)
+  ))) return "";
+  const targetTexts = groups.map((group) => {
+    const memberParts = group.tokens.map((token) => {
+      const part = decodedPart(token, glosses);
+      return part.pya === "fyif" ? { ...part, english: "self" } : part;
+    });
+    return renderPhrase(memberParts);
+  }).filter(Boolean);
+  const head = renderPhrase(headPhrase.tokens.map((token) => decodedPart(token, glosses)), {
+    subject: headPhrase.case === "na"
+  });
+  if (!head || targetTexts.length !== groups.length) return "";
+  const connectors = groups.slice(1).map((group) => group.connector === "wa" ? "and" : "or");
+  const coordinatedTargets = connectors.length > 1
+      && connectors.every((connector) => connector === connectors[0])
+    ? `${targetTexts.slice(0, -1).join(", ")}, ${connectors[0]} ${targetTexts.at(-1)}`
+    : targetTexts.slice(1).reduce(
+      (result, target, index) => `${result} ${connectors[index]} ${target}`,
+      targetTexts[0]
+    );
+  return `${head} ${coordinatedTargets}`;
 }
 
 function renderCasePrepositions(parts, words, { vocativeMarker = false } = {}) {
@@ -392,6 +452,10 @@ function renderCasePrepositions(parts, words, { vocativeMarker = false } = {}) {
 function rootEnglish(part) {
   const word = part.english.replace(/_$/u, "");
   return word === "hodiernal_tense" ? "today" : word;
+}
+
+function nominalEnglishForRoot(part) {
+  return NOMINAL_ENGLISH_SURFACES.get(rootEnglish(part)) ?? "";
 }
 
 function lemmaSurfaceForPhrase(parts, index) {
@@ -597,6 +661,8 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
   }
   parts = collapseVliwCompounds(parts);
   const words = [];
+  const consumedCaseIndexes = new Set();
+  const hasNominalCase = parts.some((part) => part.kind === "case");
   let possessive = false;
   let possessivePya = null;
   for (let index = 0; index < parts.length; index += 1) {
@@ -605,15 +671,24 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
     if (grammarSequence) {
       if (ENGLISH_NUMBER_MARKERS.has(grammarSequence.surface)) words.unshift(grammarSequence.surface);
       else words.push(grammarSequence.surface);
+      grammarSequence.pya.forEach((_, offset) => {
+        if (parts[index + offset]?.kind === "case") consumedCaseIndexes.add(index + offset);
+      });
       index += grammarSequence.pya.length - 1;
       continue;
     }
     if (part.kind === "root" || isPronoun(part)) {
       const adjective = parts[index + 1]?.pya === "ci";
-      const lemmaSurface = isPronoun(part) ? null : lemmaSurfaceForPhrase(parts, index);
+      const selfReferent = part.pya === "fyif" && part.english === "self";
+      const lemmaSurface = isPronoun(part) || selfReferent ? null : lemmaSurfaceForPhrase(parts, index);
+      const nominalSurface = hasNominalCase && !adjective
+        ? nominalEnglishForRoot(part)
+        : "";
       let word = part.pya === "dlat" && adjective
         ? "daily"
-        : lemmaSurface?.surface ?? rootEnglish(part);
+        : selfReferent
+          ? "self"
+          : nominalSurface || lemmaSurface?.surface || rootEnglish(part);
       if (isPronoun(part)) word = pronounForm(part, subject ? "subject" : "object");
       if (possessive) {
         const owner = PRONOUN_FORMS.get(possessivePya);
@@ -659,11 +734,13 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       : `${words.at(-1)}'s`;
   }
   const rendered = words.join(" ");
-  const caseParts = parts.filter((part) => part.kind === "case");
+  const caseParts = parts.filter((part, index) => (
+    part.kind === "case" && !consumedCaseIndexes.has(index)
+  ));
   const trailingComparison = caseParts.length > 1 && caseParts.at(-1)?.pya === "swih";
   const prepositionParts = trailingComparison
-    ? parts.filter((part) => part.pya !== "swih")
-    : parts;
+    ? parts.filter((part, index) => part.pya !== "swih" && !consumedCaseIndexes.has(index))
+    : parts.filter((part, index) => !consumedCaseIndexes.has(index));
   const prepositions = renderCasePrepositions(prepositionParts, rendered, { vocativeMarker });
   const conjunction = words[0] === "and" || words[0] === "also" ? words.shift() : "";
   const content = words.join(" ");
@@ -703,6 +780,9 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
     return finishEnglishPyash(mood, standalone);
   }
   const subjectPhrase = selectSubjectPhrase(parts);
+  const sharedHeadList = subjectPhrase
+    ? renderSharedHeadPhraseList(parts, glosses, subjectPhrase)
+    : "";
   const zeroVerb = parts.trailing.length === 0 && Boolean(subjectPhrase);
   const nominalPredicate = parts.trailing.some((part) => ["ye", "sa", "mi", "nyah", "ya"].includes(part.pya))
     && !parts.trailing.some((part) => part.kind === "root");
@@ -720,7 +800,7 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
     ? renderPhrase(parts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true })
     : isImperative(sourceMood) && !subjectPhrase
       ? "you"
-      : headFinalSubject || renderPhrase(
+      : sharedHeadList || headFinalSubject || renderPhrase(
         subjectPhrase.tokens.map((token) => decodedPart(token, glosses)),
         { subject: true }
       );
@@ -814,6 +894,9 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
     return `${standalone[0].toUpperCase()}${standalone.slice(1)}.`;
   }
   const subjectPhrase = selectSubjectPhrase(decodedParts);
+  const sharedHeadList = subjectPhrase
+    ? renderSharedHeadPhraseList(decodedParts, glosses, subjectPhrase)
+    : "";
   const nominalPredicate = decodedParts.trailing.some((part) => ["ye", "sa", "mi", "nyah", "ya"].includes(part.pya))
     && !decodedParts.trailing.some((part) => part.kind === "root");
   const implicitImperative = isImperative(decodedParts.mood) && !subjectPhrase;
@@ -831,7 +914,7 @@ function renderEnglish(sentence, tokens, decoded, glosses) {
     ? renderPhrase(decodedParts.trailing.map((token) => decodedPart(token, glosses)), { standalone: true })
     : implicitImperative
       ? ""
-      : headFinalSubject || renderPhrase(
+      : sharedHeadList || headFinalSubject || renderPhrase(
         subjectPhrase.tokens.map((token) => decodedPart(token, glosses)),
         { subject: true }
       );
