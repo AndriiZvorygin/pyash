@@ -70,6 +70,10 @@ Retrieved 2026-10-31. Raw upstream files are tracked where redistribution terms 
 - Ke (2024), an ancient Chinese segmentation/POS methodology paper, is preserved under its post-2016 ACL CC BY 4.0 terms in [`sources/classical-chinese/references/`](sources/classical-chinese/references/). The paper describes an annotated corpus but does not provide a corpus download in its Anthology record; availability of the annotations remains unverified.
 - CText, PKU CCL, and Kroll are linked as lookup resources, not mirrored. See the access notes in [`CLASSICAL-CORPUS.md`](CLASSICAL-CORPUS.md).
 
+## Word-order references
+
+- Clause-level order observations for the acquired Ket, Tibetan, Caucasus, Basque, Sinitic, and Uralic comparison samples are recorded in [`WORD-ORDER.md`](WORD-ORDER.md). Profiles are tied to individual varieties and sources; they are not phonetic-proximity scores or compound-head rules.
+
 ## Source follow-up
 
 - Unihan's `kTGH` property already provides each character's official *Table of General Standard Chinese Characters* index and the index ranges identify its level. No additional table download is needed for level membership.
