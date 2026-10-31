@@ -62,6 +62,14 @@ Retrieved 2026-10-31. Raw upstream files are tracked where redistribution terms 
 - Includes Mandarin; Central, Lhasa, and Written Tibetan; Burmese; Yeniseian lists for Ket, Yugh, Arin, Assan, Kott-Assan, and Pumpokol; Chechen, Abkhaz, and Lezgian; Burushaski, Basque, Navajo, Eyak, and Tlingit; plus Georgian, Finnish, and Hungarian comparison lists. Coverage varies by source list; see [`languages.csv`](sources/asjp-v21/languages.csv).
 - The ASJP words are concept-aligned translations and do not by themselves show cognacy or family relationships. Family/proposal labels are separated in [`LANGUAGE-PROXIMITY.md`](LANGUAGE-PROXIMITY.md) and [`WORDLISTS.md`](WORDLISTS.md).
 
+## Classical Chinese corpus and references
+
+- Corpus scope, acquired files, source editions, and access constraints are documented in [`CLASSICAL-CORPUS.md`](CLASSICAL-CORPUS.md).
+- The first corpus layer is the *Analects* as a distinct Confucian text. The preserved Legge witness and the separately labeled Wen Yen transcription are in [`sources/classical-chinese/analects/`](sources/classical-chinese/analects/); they are not merged into one normalized text.
+- The Taiwan Ministry of Education idiom data archive is stored unchanged in [`sources/classical-chinese/moe-idioms/`](sources/classical-chinese/moe-idioms/). Its CC BY-ND terms mean the original archive is a reference source, not an input for a modified/repackaged derived database.
+- Ke (2024), an ancient Chinese segmentation/POS methodology paper, is preserved under its post-2016 ACL CC BY 4.0 terms in [`sources/classical-chinese/references/`](sources/classical-chinese/references/). The paper describes an annotated corpus but does not provide a corpus download in its Anthology record; availability of the annotations remains unverified.
+- CText, PKU CCL, and Kroll are linked as lookup resources, not mirrored. See the access notes in [`CLASSICAL-CORPUS.md`](CLASSICAL-CORPUS.md).
+
 ## Source follow-up
 
 - Unihan's `kTGH` property already provides each character's official *Table of General Standard Chinese Characters* index and the index ranges identify its level. No additional table download is needed for level membership.
