@@ -241,7 +241,7 @@ test("zero-copula clauses keep a nominal complement before a relative action", a
   assert.equal(result.sentence.su.name, "pyan na");
   assert.equal(
     result.sentence.ob.name,
-    "la dren kcin lyas tlih ka cyah tlih ba ya tlih pwah ba xyek pu wa twot ti mrat tlih ka"
+    "la dren kcin ci lyas tlih ka cyah tlih ba ya tlih pwah ba xyek pu wa twot ti mrat tlih ka"
   );
 });
 
@@ -466,10 +466,10 @@ test("there are also is an additive existential clause", async () => {
   assert.equal(resolved.sentence.mood, "syi7h");
   assert.equal(
     resolved.sentence.su.name,
-    "pcah nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu na twum dlih lwah"
+    "pcah nros ci nyit pu dlih pyan ti je txak pyoh tseh ba ryik ci ryak pu na twum dlih lwah"
   );
   assert.deepEqual(resolved.relativeClauses[0].pyashSequence, [
-    "nros", "nyit", "pu", "dlih", "pyan", "ti", "je", "txak", "pyoh", "tseh", "ba"
+    "nros", "ci", "nyit", "pu", "dlih", "pyan", "ti", "je", "txak", "pyoh", "tseh", "ba"
   ]);
   const lowered = lowerPhraseVliw({ tokens: [
     "pcah",
@@ -477,7 +477,7 @@ test("there are also is an additive existential clause", async () => {
     "ryik", "ryak", "pu", "lwah", "twum", "dlih", "na", "syi7h"
   ] });
   assert.deepEqual(lowered.tokens.slice(0, 12), [
-    "pcah", "nros", "nyit", "pu", "dlih", "pyan", "ti", "je", "txak", "pyoh", "tseh", "ba"
+    "pcah", "nros", "ci", "nyit", "pu", "dlih", "pyan", "ti", "je", "txak", "pyoh", "tseh"
   ]);
   assert.equal(lowered.tokens.at(-1), "syi7h");
 });
@@ -1022,8 +1022,9 @@ test("modal capacity keeps the full action phrase and preceding noun phrase toge
     ["be", "can lead"],
     ["ob", "to dating"]
   ]);
+  assert.deepEqual(analysis.tokens[0].pyashSequence, ["hram", "ci"]);
   assert.deepEqual(analysis.tokens[2].pyashSequence, ["tseh"]);
-  assert.equal(analysis.pyash, "su name hram pyan na ob name dxek ma be tyip tseh");
+  assert.equal(analysis.pyash, "su name hram ci pyan na ob name dxek ma be tyip tseh");
 
   const resolved = await resolveEnglishSentence(source, { analyze: async () => analysis });
   assert.equal(resolved.status, "resolved");
@@ -1032,7 +1033,7 @@ test("modal capacity keeps the full action phrase and preceding noun phrase toge
   assert.match(resolved.pyash, / tseh$/u);
   const lowered = lowerSentencePhraseVliw(resolved.sentence);
   const decoded = decodePhraseVliw(lowered.vectors);
-  assert.equal(renderVliwPyac(decoded), "hram pyanna dxekma tyiptseh");
+  assert.equal(renderVliwPyac(decoded), "hramci pyanna dxekma tyiptseh");
   assert.equal(
     renderEnglishPyash(resolved.sentence, [], decoded, new Map()),
     "can su romantic love be lead to dating."

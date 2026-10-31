@@ -270,12 +270,12 @@ test("accepted existential coverage produces complete Pyash, Pyac, and VLIW outp
   assert.equal(record.sentence.mood, "syi7h");
   assert.equal(
     record.structural,
-    "pcah nros nyit pu dlih pyan ti je txak pyoh tseh ba ryik ryak pu na twum dlih lwah syi7h"
+    "pcah nros ci nyit pu dlih pyan ti je txak pyoh tseh ba ryik ci ryak pu na twum dlih lwah syi7h"
   );
   assert.equal(record.structuralPreview, undefined);
   assert.equal(
     record.pyac,
-    "pcah nros nyitpudlih pyantije txakpyoh tseh ba ryik ryakpuna twumdlihlwahsyi7h"
+    "pcah nrosci nyitpudlih pyantije txakpyoh tseh ba ryikci ryakpuna twumdlihlwahsyi7h"
   );
   assert.equal(
     record.pyash,

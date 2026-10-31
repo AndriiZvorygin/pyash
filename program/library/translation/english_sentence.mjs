@@ -1228,6 +1228,27 @@ function applyContextualEnglishGrammar(records, grammarIndex) {
         };
       }
     }
+    const next = records[index + 1];
+    const isMappedPrenominalAdjective = Boolean(
+      record.pyashSequence?.length
+      && !record.grammar
+      && !record.morphology
+      && !record.consumedBy
+      && !record.pyashSequence.includes("ci")
+      && record.wordnet?.partsOfSpeech?.some((partOfSpeech) => ["a", "s"].includes(partOfSpeech))
+      && next?.pyashSequence?.length
+      && !next.grammar
+      && next.wordnet?.partsOfSpeech?.includes("n")
+    );
+    if (isMappedPrenominalAdjective) {
+      return {
+        ...record,
+        pyashSequence: [...record.pyashSequence, "ci"],
+        evidence: [record.evidence, "mapped pre-nominal adjective marked with adjective_ ci"]
+          .filter(Boolean)
+          .join("; ")
+      };
+    }
     if (record.surface === "such" && records[index + 1]?.surface === "as") {
       return {
         ...record,
