@@ -1,0 +1,43 @@
+# Sino-Pyash Character Codebook Plan
+
+**Status:** design for review; implementation is deferred until two Chinese AI reviewers have reviewed this plan.
+
+## Goal
+
+Create a Chinese-facing Pyash layer that maps each of the 8,105 characters in mainland China's *Table of General Standard Chinese Characters* to one unique, speakable Pyac syllable. Keep the character code, its pronunciation evidence, and its semantic links distinct. The codebook provides reversible character encoding; semantic anchors and Chinese compound meanings remain connected to the shared Pyash lexicon.
+
+The official table contains three levels: 3,500, 3,000, and 1,605 characters. Unicode's Unihan `kTGHZ2013` property records that inventory and its order. [MOE](https://www.moe.gov.cn/jyb_xxgk/xxgk_jyta/jyta_yxs/202208/t20220819_654014.html) · [Unicode UAX #38](https://www.unicode.org/reports/tr38/tr38-37.html)
+
+## Evidence and syllable selection
+
+Use a tiered evidence policy:
+
+1. Old/Middle Chinese reconstructions and documented Sinitic readings, including Mandarin and dialect forms.
+2. Attested Sino-Tibetan cognates or loans; where no relationship is attested, translation equivalents may contribute phonetic evidence but must be labeled as translations.
+3. Wider-language translation evidence for remaining gaps.
+
+Record source, period or variety, reading, and confidence for every evidence item. Within a tier, reuse the existing atom-generation phonetic scoring and candidate-ranking approach. A reconstruction is a scholarly hypothesis, not a directly recorded pronunciation: keep its system and uncertainty explicit. Baxter–Sagart covers nearly 5,000 items, not the full character inventory. [Baxter–Sagart data](https://ocbaxtersagart.lsait.lsa.umich.edu/BaxterSagartOCbyMandarinMC2014-09-20.pdf)
+
+WikiHan provides structured IPA data across eight Chinese varieties and Middle Chinese. Unihan contains Mandarin, Cantonese, Tang, Hanyu Pinyin, definition, and other character properties. STEDT supplies lexical and etymological material for Sino-Tibetan languages; use documented relationships as such, not as a synonym for translation. [WikiHan](https://aclanthology.org/2022.coling-1.314/) · [STEDT data release](https://stedt.johnblowe.com/node/124.html)
+
+Extend the current atom-generation workflow with a deterministic batch allocator. It must assign one distinct legal syllable to every standard character, exclude collisions with current Pyash words and VLIW codes, and reserve allocated code syllables from later allocation. Prioritize lower-complexity candidates for Level 1 characters, then use expanded Pyac layers to complete the inventory while preserving evidence ranking within each eligible set. Current local inventory inspection found about 10,210 unreserved forms in the expanded 32-letter list, enough for 8,105 assignments with about 2,105 remaining. Recompute this at implementation time and fail with a clear report if the real candidate set cannot meet the uniqueness constraint.
+
+## Codebook and semantic use
+
+Store the canonical mapping and provenance in a Pyash `.pya` codebook. Each character has one stable code syllable and may retain multiple readings and senses. Link character meanings to existing shared Pyash anchors when supported; leave multiple valid senses linked rather than forcing one meaning per character. Use the existing Chinese dictionary, compound lexicon, and sense-linking workflow for semantics.
+
+Encoding a Chinese character string concatenates its per-character code syllables and must round-trip back to the original standard characters. Word-level translation is a separate step: identify Chinese compounds from lexical evidence, then map their meanings and head/modifier relations into Pyash composition. Character order alone does not determine Pyash compound order.
+
+The first scope is exactly the 8,105 standard mainland forms. Other variants require explicit variant records; do not silently normalize an unmapped character.
+
+## Review before implementation
+
+Ask both reviewers to assess:
+
+- Whether the source tiers and the distinction between reconstruction, dialect reading, cognate, and translation are linguistically sound.
+- Whether the evidence sources cover the 8,105-character inventory adequately, including polyphonic characters and historical gaps.
+- Whether the unique-syllable allocation preserves speakability, Pyac layer rules, and unambiguous reverse decoding.
+- Whether character senses, Chinese compounds, and Pyash head/modifier composition are represented without assuming one meaning per character.
+- Data licensing, attribution, and any missing primary sources.
+
+After both reviews, record the feedback and resolved decisions here. Begin implementation only after those decisions are incorporated into this plan.
