@@ -18,6 +18,19 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Install the external tools the examples shell out to
+        # The audit runs the examples for real, so it needs the same tools a
+        # developer has: ffmpeg to record and burn, espeak-ng to speak, pandoc
+        # to convert, and poppler to read PDFs. Without them the audit reports
+        # a gap instead of exercising the example.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg espeak-ng pandoc poppler-utils
+      - name: Provision the sibling dictionary checkout
+        # The translation subsystem reads its dictionary and glyph word lists
+        # from the pyachso2n checkout that sits next to this repository.
+        run: git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n
       - name: Bootstrap external toolchains
         run: npm run bootstrap
       - name: Audit examples

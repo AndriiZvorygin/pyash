@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
-import { backendPattern, classify, networkPattern, summarize } from "./example_audit_rules.mjs";
+import { backendPattern, classify, networkPattern, splitRecordedFailures, summarize } from "./example_audit_rules.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -161,7 +161,15 @@ const { passed, failed, needsBackend, needsInput, timedOut, skipped } = summariz
 const baseline = await readBaseline();
 const regressions = failed.filter((r) => !baseline.has(r.file));
 const known = failed.filter((r) => baseline.has(r.file));
-const fixed = [...baseline].filter((name) => !failed.some((r) => r.file === name));
+// A recorded failure is only "fixed" when the example actually passes. An
+// example that stopped failing because it became a gap is reported as a gap,
+// not as a pass: the two are different states and the difference matters when
+// the environment changes.
+const { fixed, noLongerFailing } = splitRecordedFailures({
+  baseline: [...baseline],
+  failed,
+  results
+});
 
 if (asJson) {
   console.log(JSON.stringify({
@@ -190,6 +198,10 @@ if (asJson) {
   if (fixed.length > 0) {
     console.log(`  ${fixed.length} recorded failure(s) now pass; remove them from ${baselineFile}:`);
     for (const name of fixed) console.log(`    ${name}`);
+  }
+  if (noLongerFailing.length > 0) {
+    console.log(`  ${noLongerFailing.length} recorded failure(s) no longer fail; remove them from ${baselineFile}:`);
+    for (const name of noLongerFailing) console.log(`    ${name}`);
   }
   if (regressions.length > 0) {
     console.log(`  ${regressions.length} new failure(s):`);

@@ -165,6 +165,13 @@ folder (132 modules, 15,728 lines) moved the same way, into
   missing. A word that names a physical thing with a plain-English reading
   (a video processor module) is recorded as a compound instead, which is how
   `gpu` is covered.
+- The scheduled example audit provisions the same resources the CI gate does,
+  plus the tools the examples shell out to (ffmpeg, espeak-ng, pandoc and
+  poppler), so the audit exercises those examples instead of reporting them as
+  gaps. A binary that cannot be spawned, a shell tool that is not installed,
+  a device that is not attached and a missing sibling dictionary checkout are
+  all gaps rather than defects. The examples that fail for the two
+  agent-session defects are recorded in `configure/example_audit_baseline.pya`.
 
 ## Tried and rejected
 

@@ -28,7 +28,20 @@ export function classify(output) {
   if (/localhost:11434|localhost:8000|localhost:8188|ollama request failed|whisperx|fetch failed|ECONNREFUSED/i.test(output)) return "needs backend";
   if (/gpu-managed comfyui job failed/i.test(output)) return "needs backend";
   if (/aplay:.*audio open error/i.test(output)) return "needs backend";
-  if (/spawn caterer\/.*ENOENT/i.test(output)) return "needs backend";
+  // A binary that cannot be spawned is missing from the machine, not broken
+  // in the example. The tool name is built from parts so this quiz does not
+  // register a dependency on the resource it names.
+  if (/spawn \S+ ENOENT/i.test(output)) return "needs backend";
+  // A tool the example shells out to is not installed on the machine. The
+  // shell reports it by name, and it exits 127, which is the shell's own
+  // "command not found" status.
+  if (/(^|[\s"'])(?!error\b)[a-z0-9][a-z0-9._-]*: (not found|command not found)\b/i.test(output)) return "needs backend";
+  if (/status=127\b/.test(output)) return "needs backend";
+  // A device the example talks to is not attached to the machine.
+  if (/missing device id/i.test(output)) return "needs backend";
+  // The sibling dictionary checkout that sits next to this repository holds
+  // the glyph word lists the translation subsystem reads.
+  if (/no such file or directory.*(pyachso2n|English30k|16GlyphWordList)/i.test(output)) return "needs backend";
   // An interactive session example waits for a live session that never arrives.
   if (/Detected unsettled top-level await/i.test(output)) return "needs backend";
 
@@ -48,4 +61,19 @@ export function summarize(results = []) {
   const skipped = results.filter((r) => r.status === "skipped");
   const passed = results.filter((r) => r.status === "ok").length;
   return { passed, failed, needsBackend, needsInput, timedOut, skipped };
+}
+
+// Split the recorded failures into the ones that no longer fail and the ones
+// that now actually pass.
+//
+// A recorded failure is only fixed when the example passes. An example that
+// stopped failing because it became a gap is reported as a gap, not as a
+// pass: the two are different states, and the difference matters when the
+// environment changes underneath the audit.
+export function splitRecordedFailures({ baseline = [], failed = [], results = [] } = {}) {
+  const failedFiles = new Set(failed.map((entry) => entry.file));
+  const recorded = [...baseline].filter((name) => !failedFiles.has(name));
+  const fixed = recorded.filter((name) => results.some((r) => r.file === name && r.status === "ok"));
+  const noLongerFailing = recorded.filter((name) => !fixed.includes(name));
+  return { fixed, noLongerFailing };
 }

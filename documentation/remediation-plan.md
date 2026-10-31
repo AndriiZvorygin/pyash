@@ -79,6 +79,51 @@ Two fixes are possible:
   Making that change correctly requires revisiting the promote ceremony's
   arithmetic as well, which is a language-semantics decision, not a bug fix.
 
+**An agent turn id is not unique across runs.** The scheduled example audit
+found this, and it is a defect in the agent layer rather than in an example.
+
+A turn id is derived from the exchange sentence id, and the exchange sentence
+id is `evoke-<n>` — the index of the sentence in the run. Two different runs
+that reach the same sentence index therefore claim the same turn id:
+
+```
+turn-exchange-evoke-2-a7f24ee7
+```
+
+The agent session ledger is a long-lived append-only file
+(`world/house/agent-helper/session/<date>-<name>.pya`), so the second run
+finds a turn recorded under that id with different evidence and reports
+`session replay defective: conflicting request for ...` or `conflicting
+assistant records for ...`. The spec calls this state defective, and it is —
+but the defect is in the id, not in the evidence. The recorded evidence is
+correct; two different exchanges were given one identity.
+
+Two fixes are possible:
+
+- **Make the exchange sentence id unique per run** (the spec's own words:
+  "Payload ids and exchange sentence ids are preferred"). The run id is
+  already available in `command/run_pya_program.mjs`. This costs the
+  cross-run replay of a resumed turn, because a resumed run has a different
+  run id.
+- **Mix the canonical request hash into the turn id** that the exchange
+  sentence id produces. Two different exchanges at the same sentence index
+  then differ, while the same exchange resumed with the same request still
+  replays. This departs from the spec's wording, which prefers the bare
+  exchange sentence id, and it needs the spec text updated with it.
+
+Both change the identity contract in
+`documentation/specifications/18-pyash-agent.md`, so this is an owner
+decision rather than a fix to make here. Until it is made, the affected
+examples are listed in the audit baseline so the nightly audit reports them
+as known failures instead of as regressions.
+
+**An interactive session example hangs instead of saying it cannot run.**
+`program/verbs/session.mjs` falls into the `readline` loop whenever there is
+no scripted input, even when the process has no terminal (`input.isTTY` is
+false). The audit runs examples with no stdin, so the example prints the `> `
+prompt and then dies on an unsettled promise. The verb already knows whether
+it can read interactively; it should say so instead of hanging.
+
 ## Phase 3 findings
 
 The per-file sweep (`command/sweep_quiz_files.mjs`, 752 files run one at a
@@ -1041,7 +1086,11 @@ counted in the *passed* total. Timeouts are now their own bucket.
    one. The entry belongs upstream in the `pyac/kwon` dictionary. See 4.6.
 4. **The example audit is a nightly job, not a per-push gate.** It takes
    about 17 minutes for 357 examples, so a broken example surfaces a day
-   later.
+   later. The scheduled workflow now provisions the tools the examples shell
+   out to and the sibling dictionary checkout, and a missing tool is reported
+   as a gap rather than as a defect, so the audit only fails on a real
+   regression. Five examples are in the baseline for the two agent-session
+   defects described above.
 5. **The audit classifier is pattern-based, and its buckets are not stable
    across runs.** It recognises specific backend signatures; a GPU-duty
    failure (`gpu duty defective: unknown handle`) was not among them, which
