@@ -6,7 +6,7 @@
 
 Create a Chinese-facing Pyash layer that maps each of the 8,105 characters in mainland China's *Table of General Standard Chinese Characters* to one unique, speakable Pyac syllable. The character codebook provides reversible character encoding. Chinese dictionary words and their senses provide the semantic anchors; an individual character may have multiple readings or meanings and does not have to stand for one Pyash concept by itself.
 
-The official table contains three levels: 3,500, 3,000, and 1,605 characters. Unicode's Unihan `kTGHZ2013` property records that inventory and its order. [MOE](https://www.moe.gov.cn/jyb_xxgk/xxgk_jyta/jyta_yxs/202208/t20220819_654014.html) · [Unicode UAX #38](https://www.unicode.org/reports/tr38/tr38-37.html)
+The official table contains three levels: 3,500, 3,000, and 1,605 characters. The downloaded Unihan `kTGHZ2013` property identifies the 8,105 characters and provides Pinyin readings with dictionary page locations; those locations do not encode the official level or list rank. Preserve level and rank from the official table when that source is acquired. [MOE table download page](https://www.moe.gov.cn/jyb_sjzl/ziliao/A19/201306/t20130601_186002.html) · [Unicode UAX #38](https://www.unicode.org/reports/tr38/)
 
 ## Evidence and syllable selection
 
