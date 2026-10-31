@@ -902,7 +902,7 @@ test("queued phrase-list decision factors one shared head and applies target-rol
   const phraseVliw = lowerSentencePhraseVliw(resolved.sentence);
   const pyac = renderVliwPyac(decodePhraseVliw(phraseVliw.vectors));
   const decoded = decodePyacSentence(pyac);
-  assert.match(decoded.englishPyash, /love to self or to a friend/u);
+  assert.match(decoded.englishPyash, /love to self, to a friend, within romance, or for family/u);
   assert.match(decoded.englishPyash, /family/u);
 });
 
